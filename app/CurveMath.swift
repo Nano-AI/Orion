@@ -65,4 +65,24 @@ enum CurveMath {
         t[n - 1] = m[n - 2]
         return t
     }
+
+    /// Where a new point goes, and at what x, or nil when there is no room.
+    ///
+    /// Static and free of view state so the tests can exercise every click
+    /// position without a live engine — the ordering invariant is the thing
+    /// that breaks, and it breaks silently.
+    static func insertion(of fraction: Float,
+                          into points: [CurvePoint]) -> (index: Int, x: Float)? {
+        guard points.count >= 2 else { return nil }
+
+        let raw = min(max(fraction, 0), 1)
+        let at = min(max(points.firstIndex { $0.x > raw } ?? points.count, 1),
+                     points.count - 1)
+
+        let lower = points[at - 1].x
+        let upper = points[at].x
+        guard upper - lower > 0.02 else { return nil }
+
+        return (at, min(max(raw, lower + 0.01), upper - 0.01))
+    }
 }

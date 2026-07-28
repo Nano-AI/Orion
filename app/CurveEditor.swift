@@ -187,12 +187,22 @@ struct CurveEditor: View {
                     if let hit = nearest(to: value.location, in: points) {
                         dragging = hit
                     } else {
-                        let x = clamp01(Float(value.location.x / size))
-                        let inserted = points.firstIndex { $0.x > x } ?? points.count
-                        guard points.count < 16 else { return }
-                        points.insert(CurvePoint(x: x, y: CurveMath.evaluate(points, at: x)),
-                                      at: inserted)
-                        dragging = inserted
+                        guard points.count < 16, points.count >= 2 else { return }
+
+                        // Strictly between the two points it lands between —
+                        // not merely inside the endpoints. The engine treats a
+                        // non-ascending curve as malformed and falls back to
+                        // the identity, so a duplicated x makes the whole curve
+                        // silently snap back, which reads as the panel being
+                        // broken rather than as input being rejected.
+                        guard let placed = CurveMath.insertion(
+                            of: Float(value.location.x / size), into: points)
+                        else { return }
+
+                        points.insert(CurvePoint(x: placed.x,
+                                                 y: CurveMath.evaluate(points, at: placed.x)),
+                                      at: placed.index)
+                        dragging = placed.index
                         engine.curve[channel] = points
                     }
                 }

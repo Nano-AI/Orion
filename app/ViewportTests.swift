@@ -45,6 +45,7 @@ enum ViewportTests {
         testCanvasIgnoresTheCrop()
         testCornerHandlePositions()
         testCurveMatchesTheEngine()
+        testCurvePointsStayOrdered()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -497,6 +498,51 @@ enum ViewportTests {
             previous = y
         }
         report(monotone, "a steep curve never reverses")
+    }
+
+    /// A curve's control points must strictly ascend in x.
+    ///
+    /// The engine treats a non-ascending curve as malformed and falls back to
+    /// the identity — correctly, since the interpolator assumes ordering. But
+    /// the panel could produce one: clicking near the right edge appended a
+    /// second point at x = 1, and the whole curve silently snapped back, which
+    /// reads as the panel being broken rather than as input being rejected.
+    static func testCurvePointsStayOrdered() {
+        var points = ToneCurve.identity
+
+        // Every click position, twice over, including the edges that broke it
+        // and the repeats that broke the first fix.
+        let clicks: [Float] = [-0.5, 0, 0.001, 0.25, 0.5, 0.75, 0.999, 1, 1.5,
+                               0, 0.001, 1, 0.999, 0.5, 0.5, 0.25]
+
+        for f in clicks {
+            guard let placed = CurveMath.insertion(of: f, into: points) else { continue }
+            points.insert(CurvePoint(x: placed.x,
+                                     y: CurveMath.evaluate(points, at: placed.x)),
+                          at: placed.index)
+
+            var ascending = true
+            for i in 1..<points.count where points[i].x <= points[i - 1].x {
+                ascending = false
+            }
+            report(ascending, "points ascend after a click at \(f)")
+            report(points[0].x == 0 && points[points.count - 1].x == 1,
+                   "the endpoints survive a click at \(f)")
+        }
+
+        // And a curve packed with points must decline rather than duplicate.
+        var packed = ToneCurve.identity
+        for i in 1..<40 {
+            let f = Float(i) / 40
+            if let placed = CurveMath.insertion(of: f, into: packed) {
+                packed.insert(CurvePoint(x: placed.x, y: placed.x), at: placed.index)
+            }
+        }
+        var stillAscending = true
+        for i in 1..<packed.count where packed[i].x <= packed[i - 1].x {
+            stillAscending = false
+        }
+        report(stillAscending, "a densely packed curve still ascends")
     }
 
     /// The percentage in the toolbar is true magnification, not zoom.
