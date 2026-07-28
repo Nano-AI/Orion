@@ -5,8 +5,8 @@
 ---
 
 **Last updated:** 2026-07-28 (overnight run, in progress)
-**Phase:** M0 done. M1 ~96%, M2 ~97%.
-**Next story:** 16-bit output, then the colour-space picker
+**Phase:** M0 done. M1 ~98%, M2 ~97%.
+**Next story:** the colour-space picker, then a lens database
 
 ## Overnight run — 2026-07-28
 
@@ -25,19 +25,23 @@ been needed so far.
 | Highlight reconstruction; fast guided filter (90 ms → 19.6 ms); a bench that stops crying wolf | `a4ac2fa` |
 | Lens corrections — distortion, TCA, vignetting | `bd8c23c` |
 | Export panel: measured file size, typed dimensions | `06fff34` |
+| 16-bit output end to end; red/blue swap in the screenshot harness | `a50908c` |
 
 **Still to do, in order**
 
-1. **16-bit output.** The graph ends in `RGBA8Unorm`, so every export is eight
-   bits per channel whatever the container. Needs `develop:display` and
-   `geometry` moved to a 16-bit format, `ImageWriter` taught to build a 16-bit
-   `CGImage`, and the canvas blit and screenshot readback checked — both assume
-   8-bit BGRA today.
-2. **Colour space on export.** sRGB only. The display transform hard-codes
-   Rec.2020 → Rec.709; P3 and Adobe RGB want that matrix as a parameter.
-3. **A lens database.** The corrections are built and manual. lensfun would set
+1. **Colour space on export.** sRGB only. The display transform hard-codes
+   Rec.2020 → Rec.709; P3 and Adobe RGB want that matrix as a parameter, and
+   the encoder wants the matching `CGColorSpace`.
+2. **A lens database.** The corrections are built and manual. lensfun would set
    the coefficients from what the EXIF names; the maths does not change.
-4. **Metadata on export** — EXIF and the XMP rating are not carried through.
+3. **Metadata on export** — EXIF and the XMP rating are not carried through.
+4. **Temperature drag is 43 ms.** Structural: white balance rewrites the head of
+   the graph, so the demosaic reruns. The fix is degrade-then-refine (a cheap
+   demosaic mid-drag) or the preview-ROI path in `ARCHITECTURE.md`. Neither is
+   built, and neither is small.
+
+Verified 2026-07-28: a TIFF export reports `bitsPerSample: 16`, 6024×4024,
+145 MB — which is exactly 6024·4024·3·2 bytes.
 
 ### Latency, re-measured 2026-07-28 (Sony ILCE-7M3, 6024×4024, M4)
 
