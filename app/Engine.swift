@@ -42,7 +42,58 @@ final class Engine {
 
     /// Extra quarter turns clockwise, on top of the camera's own orientation.
     var rotateQuarters: Int32 = 0  { didSet { pushAndRender() } }
-    var straightenDeg: Float = 0   { didSet { pushAndRender() } }
+    var straightenDeg: Float = 0   { didSet { shrinkCropForAngle(); pushAndRender() } }
+
+    /// Straightening rotates the crop inside the frame, so the crop has to
+    /// shrink or its corners fall outside and sample nothing. This is the
+    /// largest rectangle of the current aspect that fits at this angle —
+    /// the standard "auto-crop on straighten" behaviour.
+    private func shrinkCropForAngle() {
+        guard isLoaded, !suspended else { return }
+        let a = abs(Double(straightenDeg) * .pi / 180)
+        guard a > 1e-6 else { return }
+
+        let w = Double(cropW), h = Double(cropH)
+        guard w > 0, h > 0 else { return }
+
+        // Largest inscribed rectangle of the same aspect in a rotated frame.
+        let ar = w / h
+        let cosA = cos(a), sinA = sin(a)
+        let scale = 1.0 / (cosA + sinA / ar)
+
+        let nw = min(1.0, w * scale)
+        let nh = min(1.0, h * scale)
+
+        suspended = true
+        cropX = Float(min(max(Double(cropX) + (w - nw) / 2, 0), 1 - nw))
+        cropY = Float(min(max(Double(cropY) + (h - nh) / 2, 0), 1 - nh))
+        cropW = Float(nw)
+        cropH = Float(nh)
+        suspended = false
+    }
+
+    /// Sets the crop in one push, so a drag is a single render rather than four.
+    func setCrop(x: Float, y: Float, w: Float, h: Float) {
+        guard isLoaded else { return }
+        suspended = true
+        cropW = w; cropH = h; cropX = x; cropY = y
+        suspended = false
+        pushAndRender()
+    }
+
+    /// Records one history entry when a crop drag finishes, rather than one per
+    /// frame of the drag.
+    func commitCropEdit() { history.record(state, label: "Crop") }
+
+    /// Moves the crop without changing its size, clamped to the frame.
+    func moveCrop(dx: Float, dy: Float) {
+        guard isLoaded else { return }
+        suspended = true
+        cropX = min(max(cropX + dx, 0), 1 - cropW)
+        cropY = min(max(cropY + dy, 0), 1 - cropH)
+        suspended = false
+        pushAndRender()
+    }
     var cropX: Float = 0           { didSet { pushAndRender() } }
     var cropY: Float = 0           { didSet { pushAndRender() } }
     var cropW: Float = 1           { didSet { pushAndRender() } }

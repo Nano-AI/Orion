@@ -242,6 +242,14 @@ private struct Editor: View {
                     ImageCanvas(engine: engine, viewport: viewport,
                                 targeted: targeted, generation: engine.generation)
                         .padding(20)
+                        .overlay {
+                            if tab == .crop {
+                                GeometryReader { canvasGeo in
+                                    CropOverlay(engine: engine,
+                                                frame: photoFrame(in: canvasGeo.size))
+                                }
+                            }
+                        }
                         .overlay { ColorLoupe(targeted: targeted) }
                         .onChange(of: targeted.lastPicked) { _, picked in
                             // Follow the pick, so the sliders below act on the
@@ -296,6 +304,22 @@ private struct Editor: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// The photo's rectangle within the canvas, matching the renderer's
+    /// letterbox exactly so the overlay lines up with the pixels.
+    private func photoFrame(in size: CGSize) -> CGRect {
+        guard engine.imageWidth > 0, engine.imageHeight > 0,
+              size.width > 0, size.height > 0 else { return .zero }
+
+        let imageAspect = CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight)
+        let viewAspect = size.width / size.height
+
+        var w = size.width, h = size.height
+        if imageAspect > viewAspect { h = w / imageAspect } else { w = h * imageAspect }
+
+        return CGRect(x: (size.width - w) / 2, y: (size.height - h) / 2,
+                      width: w, height: h)
     }
 
     private var hint: String {
@@ -356,10 +380,13 @@ private struct Editor: View {
                                     .buttonStyle(.plain)
                                     .font(.system(size: 10))
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 5)
+                                    .padding(.vertical, 6)
                                     .foregroundStyle(Palette.dim)
                                     .background(Palette.raised,
                                                 in: RoundedRectangle(cornerRadius: 4))
+                                    // Without this the tile is decoration and
+                                    // only the glyphs are clickable.
+                                    .contentShape(RoundedRectangle(cornerRadius: 4))
                                 }
                             }
                         }

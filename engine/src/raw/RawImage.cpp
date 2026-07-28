@@ -29,6 +29,54 @@ std::string BayerImage::patternString() const {
             channelLetter(channelAt(0, 1)), channelLetter(channelAt(1, 1))};
 }
 
+RawInfo readInfo(const std::string& path) {
+    LibRaw proc;
+    if (proc.open_file(path.c_str()) != LIBRAW_SUCCESS) {
+        throw std::runtime_error("could not open " + path);
+    }
+
+    const auto& sizes = proc.imgdata.sizes;
+    const auto& idata = proc.imgdata.idata;
+    const auto& other = proc.imgdata.other;
+
+    // A quarter turn means the frame is displayed with width and height
+    // swapped, and a browser wants the displayed shape.
+    const bool swaps = (sizes.flip == 5 || sizes.flip == 6);
+
+    RawInfo info;
+    info.width       = swaps ? sizes.height : sizes.width;
+    info.height      = swaps ? sizes.width  : sizes.height;
+    info.camera      = std::string(idata.make) + " " + idata.model;
+    info.lens        = proc.imgdata.lens.Lens;
+    info.isoSpeed    = other.iso_speed;
+    info.shutter     = other.shutter;
+    info.aperture    = other.aperture;
+    info.focalLength = other.focal_len;
+    info.timestamp   = static_cast<std::int64_t>(other.timestamp);
+
+    proc.recycle();
+    return info;
+}
+
+std::vector<std::uint8_t> extractThumbnail(const std::string& path) {
+    LibRaw proc;
+    if (proc.open_file(path.c_str()) != LIBRAW_SUCCESS) return {};
+    if (proc.unpack_thumb() != LIBRAW_SUCCESS) { proc.recycle(); return {}; }
+
+    const auto& t = proc.imgdata.thumbnail;
+
+    // Only the JPEG form is useful directly; the bitmap forms would need
+    // wrapping in a container before anything could display them.
+    if (t.tformat != LIBRAW_THUMBNAIL_JPEG || t.thumb == nullptr || t.tlength == 0) {
+        proc.recycle();
+        return {};
+    }
+
+    std::vector<std::uint8_t> out(t.thumb, t.thumb + t.tlength);
+    proc.recycle();
+    return out;
+}
+
 BayerImage decodeBayer(const std::string& path) {
     LibRaw proc;
 

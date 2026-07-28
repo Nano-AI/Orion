@@ -195,6 +195,38 @@ OrionStatus orion_engine_histogram(const OrionEngine* engine,
     });
 }
 
+OrionStatus orion_read_info(const char* path, OrionRawInfo* out) {
+    if (path == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(nullptr, [&]() -> OrionStatus {
+        const auto info = orion::raw::readInfo(path);
+        *out = OrionRawInfo{};
+        out->width  = info.width;
+        out->height = info.height;
+        copyInto(out->camera, sizeof out->camera, info.camera);
+        copyInto(out->lens, sizeof out->lens, info.lens);
+        out->iso          = info.isoSpeed;
+        out->shutter      = info.shutter;
+        out->aperture     = info.aperture;
+        out->focal_length = info.focalLength;
+        out->timestamp    = info.timestamp;
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
+                                 uint32_t capacity, uint32_t* out_size) {
+    if (path == nullptr || out_size == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(nullptr, [&]() -> OrionStatus {
+        const auto jpeg = orion::raw::extractThumbnail(path);
+        *out_size = static_cast<uint32_t>(jpeg.size());
+        if (jpeg.empty()) return ORION_ERR_INTERNAL;
+        if (buffer == nullptr) return ORION_OK;          // size query
+        if (capacity < jpeg.size()) return ORION_ERR_BAD_ARG;
+        std::memcpy(buffer, jpeg.data(), jpeg.size());
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
                                 const OrionExportOptions* options) {
     if (engine == nullptr || path == nullptr) return ORION_ERR_BAD_ARG;

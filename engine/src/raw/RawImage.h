@@ -59,6 +59,28 @@ struct BayerImage {
     }
 };
 
+/// Basic facts about a raw file, read without decoding the sensor data.
+struct RawInfo {
+    std::uint32_t width = 0, height = 0;
+    std::string   camera;
+    std::string   lens;
+    float         isoSpeed = 0;
+    float         shutter = 0;
+    float         aperture = 0;
+    float         focalLength = 0;
+    std::int64_t  timestamp = 0;
+};
+
+/// Metadata only. Orders of magnitude cheaper than decodeBayer — this is what a
+/// folder scan uses, so opening a directory of 500 frames stays instant.
+RawInfo readInfo(const std::string& path);
+
+/// The JPEG preview the camera embedded. Every raw file carries one, and it is
+/// what makes a filmstrip viable: decoding 500 mosaics to build thumbnails
+/// would take minutes, extracting 500 JPEGs takes about a second.
+/// Returns an empty vector when the file has no usable preview.
+std::vector<std::uint8_t> extractThumbnail(const std::string& path);
+
 /// Decodes the CFA mosaic and metadata from a raw file.
 /// Throws std::runtime_error with LibRaw's message on failure.
 BayerImage decodeBayer(const std::string& path);

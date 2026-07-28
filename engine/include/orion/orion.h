@@ -108,6 +108,26 @@ OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
 OrionStatus orion_engine_histogram(const OrionEngine* engine,
                                    uint32_t* out_bins, uint32_t bins);
 
+/* Metadata for a raw file, without decoding it. Strings are NUL-terminated
+ * and sized by the caller. */
+typedef struct OrionRawInfo {
+    uint32_t width, height;
+    char     camera[128];
+    char     lens[128];
+    float    iso;
+    float    shutter;
+    float    aperture;
+    float    focal_length;
+    int64_t  timestamp;
+} OrionRawInfo;
+
+OrionStatus orion_read_info(const char* path, OrionRawInfo* out);
+
+/* Copies the camera's embedded JPEG preview into `buffer`. Pass a NULL buffer
+ * to query the size first. *out_size receives the byte count needed or written. */
+OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
+                                 uint32_t capacity, uint32_t* out_size);
+
 /* Export. Renders at full resolution and writes the file. */
 typedef enum OrionImageFormat {
     ORION_FORMAT_PNG  = 0,

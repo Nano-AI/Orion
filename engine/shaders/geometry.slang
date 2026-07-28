@@ -24,10 +24,18 @@ struct GeometryParams
     float2 _pad;
 };
 
-/// Bilinear fetch with edge clamping.
+/// Bilinear fetch. Outside the frame returns transparent black rather than
+/// clamping — clamping replicates the edge pixel along the rotation direction,
+/// which is the streaking a straightened image showed before this.
 float4 sampleBilinear(Texture2D<float4> src, float2 p, uint2 size)
 {
     const float2 maxCoord = float2(size) - 1.0f;
+
+    if (p.x < -0.5f || p.y < -0.5f || p.x > maxCoord.x + 0.5f || p.y > maxCoord.y + 0.5f)
+    {
+        return float4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
     p = clamp(p, float2(0.0f, 0.0f), maxCoord);
 
     const int2 i0 = int2(floor(p));
