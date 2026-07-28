@@ -29,8 +29,9 @@ double Engine::render() {
     return develop_->render();
 }
 
-void Engine::sampleAt(float u, float v, float outRgb[3]) const {
-    outRgb[0] = outRgb[1] = outRgb[2] = 0.0f;
+void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) const {
+    if (outDisplay) outDisplay[0] = outDisplay[1] = outDisplay[2] = 0.0f;
+    if (outScene)   outScene[0]   = outScene[1]   = outScene[2]   = 0.0f;
     if (!develop_) return;
 
     const std::uint32_t w = develop_->outputWidth();
@@ -41,21 +42,65 @@ void Engine::sampleAt(float u, float v, float outRgb[3]) const {
     const auto x = static_cast<std::uint32_t>(clamp01(u) * float(w - 1));
     const auto y = static_cast<std::uint32_t>(clamp01(v) * float(h - 1));
 
-    // Reference image is unoriented, so undo the rotation to find the pixel.
-    // The caller works in oriented coordinates because that is what it sees.
-    const std::uint32_t rw = develop_->width();
-    const std::uint32_t rh = develop_->height();
-    const std::uint32_t rx = (rw == w) ? x : std::min(y, rw - 1);
-    const std::uint32_t ry = (rw == w) ? y : std::min(x, rh - 1);
+    // What is on screen.
+    if (outDisplay) {
+        std::uint8_t px[4]{};
+        develop_->output().readPixel(x, y, px);
+        for (int i = 0; i < 3; ++i) outDisplay[i] = float(px[i]) / 255.0f;
+    }
 
-    __fp16 px[4]{};
-    develop_->referenceImage().readPixel(std::min(rx, rw - 1),
-                                         std::min(ry, rh - 1), px);
+    // The unedited scene colour. The reference image is unrotated, so invert
+    // the orientation exactly as orient.slang applies it — a naive transpose
+    // is wrong for every quarter turn and samples a mirrored pixel.
+    if (outScene) {
+        const std::uint32_t rw = develop_->width();
+        const std::uint32_t rh = develop_->height();
 
-    // Scene-linear and unbounded. Normalise by the peak so hue survives; the
-    // caller only needs the ratio between channels.
-    const float peak = std::max({float(px[0]), float(px[1]), float(px[2]), 1e-6f});
-    for (int i = 0; i < 3; ++i) outRgb[i] = std::max(float(px[i]), 0.0f) / peak;
+        std::uint32_t sx = x, sy = y;
+        switch (develop_->quarterTurns()) {
+            case 1: sx = y;              sy = rh - 1 - x; break;
+            case 2: sx = rw - 1 - x;     sy = rh - 1 - y; break;
+            case 3: sx = rw - 1 - y;     sy = x;          break;
+            default: break;
+        }
+        sx = std::min(sx, rw - 1);
+        sy = std::min(sy, rh - 1);
+
+        __fp16 px[4]{};
+        develop_->referenceImage().readPixel(sx, sy, px);
+
+        // Scene-linear and unbounded. Normalise by the peak: the caller wants
+        // hue, and hue is scale-invariant.
+        const float peak = std::max({float(px[0]), float(px[1]), float(px[2]), 1e-6f});
+        for (int i = 0; i < 3; ++i) outScene[i] = std::max(float(px[i]), 0.0f) / peak;
+    }
+}
+
+void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
+    if (out == nullptr || bins == 0) return;
+    std::fill_n(out, std::size_t(bins) * 3, 0u);
+    if (!develop_) return;
+
+    const std::uint32_t w = develop_->outputWidth();
+    const std::uint32_t h = develop_->outputHeight();
+    if (w == 0 || h == 0) return;
+
+    const std::size_t rowBytes = std::size_t(w) * 4;
+    std::vector<std::uint8_t> pixels(rowBytes * h);
+    develop_->output().download(pixels.data(), rowBytes, w, h);
+
+    // A prime stride decorrelates from any repeating structure in the image,
+    // so a picket fence cannot alias into a false peak.
+    constexpr std::size_t kStride = 31;
+    const std::size_t count = std::size_t(w) * h;
+
+    for (std::size_t i = 0; i < count; i += kStride) {
+        for (std::uint32_t c = 0; c < 3; ++c) {
+            const std::uint32_t bin =
+                std::min<std::uint32_t>(bins - 1, pixels[i * 4 + c] * bins / 256);
+            ++out[c * bins + bin];
+        }
+    }
 }
 
 void Engine::exportImage(const std::string& path, const util::ExportOptions& options) {

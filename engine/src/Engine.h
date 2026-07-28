@@ -26,7 +26,20 @@ public:
     double render();
 
     /// Rendered colour at normalised image coordinates, 0..1 per channel.
-    void sampleAt(float u, float v, float outRgb[3]) const;
+    /// Samples at normalised *oriented* coordinates.
+    ///
+    /// Returns two things because they answer different questions.
+    /// `outDisplay` is what is on screen, which is what a swatch must show.
+    /// `outScene` is the image before any user adjustment, which is what the
+    /// hue band must be derived from — reading the edited result would mean
+    /// adjusting a band changes which band you would pick next time.
+    /// Either pointer may be null.
+    void sampleAt(float u, float v, float* outDisplay, float* outScene) const;
+
+    /// Per-channel histogram of the rendered image, `bins` entries each,
+    /// packed R then G then B. Sampled on a stride: this drives a 90-pixel-tall
+    /// readout, not a measurement, and 24 million samples would be waste.
+    void histogram(std::uint32_t* out, std::uint32_t bins) const;
     void exportImage(const std::string& path, const util::ExportOptions&);
 
     [[nodiscard]] bool hasImage() const noexcept { return develop_ != nullptr; }

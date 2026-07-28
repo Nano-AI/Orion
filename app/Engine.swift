@@ -59,6 +59,9 @@ final class Engine {
     /// Bumped after every successful render so the view knows to redraw.
     private(set) var generation: UInt64 = 0
 
+    /// 128 bins per channel, packed R then G then B.
+    private(set) var histogramBins: [UInt32] = []
+
     private var handle: OpaquePointer?
 
     init() throws {
@@ -138,12 +141,34 @@ final class Engine {
         pushAndRender()
     }
 
-    /// Rendered colour at normalised image coordinates.
-    func sample(u: Float, v: Float) -> (r: Double, g: Double, b: Double)? {
+    struct Sample {
+        /// What is on screen. This is what a swatch must show.
+        var display: (r: Double, g: Double, b: Double)
+        /// The colour before any user adjustment. Hue bands derive from this,
+        /// so adjusting a band cannot change which band you pick next.
+        var scene: (r: Double, g: Double, b: Double)
+    }
+
+    func sample(u: Float, v: Float) -> Sample? {
         guard let handle, isLoaded else { return nil }
-        var rgb = [Float](repeating: 0, count: 3)
-        guard orion_engine_sample(handle, u, v, &rgb) == ORION_OK else { return nil }
-        return (Double(rgb[0]), Double(rgb[1]), Double(rgb[2]))
+        var display = [Float](repeating: 0, count: 3)
+        var scene = [Float](repeating: 0, count: 3)
+        guard orion_engine_sample(handle, u, v, &display, &scene) == ORION_OK else {
+            return nil
+        }
+        return Sample(
+            display: (Double(display[0]), Double(display[1]), Double(display[2])),
+            scene: (Double(scene[0]), Double(scene[1]), Double(scene[2])))
+    }
+
+    /// Per-channel histogram of the rendered image.
+    func histogram(bins: Int = 128) -> [UInt32]? {
+        guard let handle, isLoaded else { return nil }
+        var out = [UInt32](repeating: 0, count: bins * 3)
+        guard orion_engine_histogram(handle, &out, UInt32(bins)) == ORION_OK else {
+            return nil
+        }
+        return out
     }
 
     func export(to path: String, quality: Float = 0.92, maxDimension: UInt32 = 0) throws {
@@ -186,6 +211,7 @@ final class Engine {
         }
 
         lastRenderMs = ms
+        histogramBins = histogram() ?? histogramBins
         generation &+= 1
     }
 

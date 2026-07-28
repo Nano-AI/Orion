@@ -109,9 +109,12 @@ private struct Editor: View {
 
     private var toolbar: some View {
         HStack(spacing: 18) {
-            Text("ORION")
-                .font(.system(size: 13, weight: .semibold))
-                .tracking(2.2)
+            // Serif wordmark against a sans interface. The instrument is
+            // sans because it is read at a glance; the name is serif because
+            // it is read once. Both faces ship with macOS.
+            Text("Orion")
+                .font(.system(size: 17, weight: .regular, design: .serif))
+                .tracking(0.5)
                 .foregroundStyle(Palette.text)
 
             Text(engine.isLoaded ? engine.camera : "")
@@ -203,9 +206,31 @@ private struct Editor: View {
                     }
                     .padding(14)
                 } else {
-                    VStack(spacing: 12) {
-                        Text("No photo open").foregroundStyle(Palette.dim)
-                        Button("Open a RAW file…") { openFile() }
+                    VStack(spacing: 0) {
+                        Text("Orion")
+                            .font(.system(size: 52, weight: .regular, design: .serif))
+                            .foregroundStyle(Palette.text)
+
+                        Text("A darkroom for raw files.")
+                            .font(.system(size: 13, design: .serif))
+                            .italic()
+                            .foregroundStyle(Palette.dim)
+                            .padding(.top, 6)
+
+                        Button("Open a raw file") { openFile() }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.accent)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7)
+                            .overlay(RoundedRectangle(cornerRadius: 5)
+                                .stroke(Palette.accent.opacity(0.5), lineWidth: 1))
+                            .padding(.top, 28)
+
+                        Text("Sony ARW today. More cameras as they are tested.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.faint)
+                            .padding(.top, 14)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -224,6 +249,25 @@ private struct Editor: View {
 
     private var tools: some View {
         VStack(spacing: 0) {
+            if engine.isLoaded && !engine.histogramBins.isEmpty {
+                Histogram(bins: engine.histogramBins, height: 84)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
+
+                HStack {
+                    Text("shadows").tracking(0.4)
+                    Spacer()
+                    Text("midtones").tracking(0.4)
+                    Spacer()
+                    Text("highlights").tracking(0.4)
+                }
+                .font(.system(size: 9))
+                .foregroundStyle(Palette.faint)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 10)
+            }
+
             tabBar
 
             ScrollView {

@@ -67,6 +67,9 @@ public:
     double render();
 
     /// Output dimensions after orientation, which is what the UI should show.
+    /// Total clockwise quarter turns currently applied.
+    [[nodiscard]] int quarterTurns() const noexcept { return turns_; }
+
     [[nodiscard]] std::uint32_t outputWidth()  const noexcept;
     [[nodiscard]] std::uint32_t outputHeight() const noexcept;
 

@@ -93,10 +93,17 @@ void* orion_engine_output_texture(const OrionEngine* engine);
 /* The engine's id<MTLDevice>, so the view can share it. */
 void* orion_engine_metal_device(const OrionEngine* engine);
 
-/* Rendered colour at normalised image coordinates. out_rgb takes 3 floats.
- * Used by the targeted adjustment tool to find which hue band was clicked. */
+/* Samples the image at normalised oriented coordinates.
+/* out_display is the rendered colour (what a swatch should show); out_scene is
+ * the colour before any user adjustment (what a hue band must be derived from).
+ * Each takes 3 floats; either may be NULL. */
 OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
-                                float* out_rgb);
+                                float* out_display, float* out_scene);
+
+/* Per-channel histogram of the rendered image. out_bins takes bins*3 entries,
+ * packed red then green then blue. */
+OrionStatus orion_engine_histogram(const OrionEngine* engine,
+                                   uint32_t* out_bins, uint32_t bins);
 
 /* Export. Renders at full resolution and writes the file. */
 typedef enum OrionImageFormat {

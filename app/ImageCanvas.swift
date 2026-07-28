@@ -251,8 +251,8 @@ struct ImageCanvas: NSViewRepresentable {
 
             guard targeted.isActive,
                   let uv = imageUV(point, in: view),
-                  let rgb = engine.sample(u: Float(uv.x), v: Float(uv.y)),
-                  let hue = TargetedAdjust.hue(r: rgb.r, g: rgb.g, b: rgb.b)
+                  let s = engine.sample(u: Float(uv.x), v: Float(uv.y)),
+                  let hue = TargetedAdjust.hue(r: s.scene.r, g: s.scene.g, b: s.scene.b)
             else { return }
 
             targeted.begin(band: TargetedAdjust.band(forHue: hue), hue: hue)
@@ -296,18 +296,22 @@ struct ImageCanvas: NSViewRepresentable {
                 return
             }
             guard let uv = imageUV(point, in: view),
-                  let rgb = engine.sample(u: Float(uv.x), v: Float(uv.y)) else {
+                  let s = engine.sample(u: Float(uv.x), v: Float(uv.y)) else {
                 targeted.clearHover()
                 return
             }
 
             targeted.hoverPoint = point
-            // Approximate display encode, so the swatch reads like the photo
-            // rather than like scene-linear data.
-            let g = { (v: Double) in pow(max(v, 0), 1.0 / 2.2) }
-            targeted.hoverColor = CGColor(red: g(rgb.r), green: g(rgb.g), blue: g(rgb.b), alpha: 1)
 
-            if let hue = TargetedAdjust.hue(r: rgb.r, g: rgb.g, b: rgb.b) {
+            // The swatch shows the *rendered* colour, already display-encoded,
+            // so it matches the pixel under the cursor exactly. Showing the
+            // scene-linear value instead would look nothing like the photo.
+            targeted.hoverColor = CGColor(red: s.display.r, green: s.display.g,
+                                          blue: s.display.b, alpha: 1)
+
+            // The band comes from the scene colour, which does not move as you
+            // edit.
+            if let hue = TargetedAdjust.hue(r: s.scene.r, g: s.scene.g, b: s.scene.b) {
                 targeted.hoverBand = TargetedAdjust.band(forHue: hue)
                 targeted.hoverIsNeutral = false
             } else {

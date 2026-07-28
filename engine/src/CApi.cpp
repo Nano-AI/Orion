@@ -173,10 +173,19 @@ void* orion_engine_metal_device(const OrionEngine* engine) {
 }
 
 OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
-                                float* out_rgb) {
-    if (engine == nullptr || out_rgb == nullptr) return ORION_ERR_BAD_ARG;
+                                float* out_display, float* out_scene) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
     return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
-        engine->impl.sampleAt(u, v, out_rgb);
+        engine->impl.sampleAt(u, v, out_display, out_scene);
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_histogram(const OrionEngine* engine,
+                                   uint32_t* out_bins, uint32_t bins) {
+    if (engine == nullptr || out_bins == nullptr || bins == 0) return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        engine->impl.histogram(out_bins, bins);
         return ORION_OK;
     });
 }
