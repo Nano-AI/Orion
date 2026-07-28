@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shows the colour under the cursor while the targeted tool is armed.
+/// Shows the color under the cursor while the targeted tool is armed.
 ///
 /// Without it you are clicking blind: the bands are 60° wide and a sky can
 /// cross from aqua into blue without looking like it changed. This makes the

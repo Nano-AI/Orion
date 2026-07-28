@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The compare divider — draggable, with the two sides named.
 ///
-/// Labelling matters more than it looks. A split with no labels makes you stop
+/// Labeling matters more than it looks. A split with no labels makes you stop
 /// and work out which half is which every time you glance at it, and on a
 /// subtle edit the two sides can be genuinely hard to tell apart.
 struct CompareOverlay: View {
@@ -38,7 +38,7 @@ struct CompareOverlay: View {
             : CGPoint(x: frame.midX, y: frame.minY + frame.height * split)
     }
 
-    /// Centred in each half, so a label never sits under the divider.
+    /// Centered in each half, so a label never sits under the divider.
     private var beforeAnchor: CGPoint {
         engine.compareVertical
             ? CGPoint(x: frame.minX + frame.width * split * 0.5, y: frame.minY + 22)

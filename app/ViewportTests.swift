@@ -48,6 +48,7 @@ enum ViewportTests {
         testCurvePointsStayOrdered()
         testModifiedTracksTheReadout()
         testDrawnRectFollowsTheZoom()
+        testSidecarSurvivesAMissingField()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -128,7 +129,7 @@ enum ViewportTests {
         v.zoomBy(4.0, anchor: CGPoint(x: 0.5, y: 0.5), visible: CGSize(width: 1, height: 1))
         let visible = v.visibleFraction(imageAspect: landscape, viewAspect: 1.0)
 
-        // Shove the centre far outside, then clamp.
+        // Shove the center far outside, then clamp.
         v.pan(by: CGSize(width: -10, height: -10), visible: visible)
         v.clamp(to: visible)
         report(v.center.x + visible.width / 2 <= 1.0 + 1e-6, "right edge stays inside")
@@ -139,13 +140,13 @@ enum ViewportTests {
         report(v.center.x - visible.width / 2 >= -1e-6, "left edge stays inside")
         report(v.center.y - visible.height / 2 >= -1e-6, "top edge stays inside")
 
-        // At fit the centre is pinned, so there is nothing to pan to.
+        // At fit the center is pinned, so there is nothing to pan to.
         let f = Viewport()
         let full = f.visibleFraction(imageAspect: landscape, viewAspect: 1.0)
         f.pan(by: CGSize(width: 0.4, height: 0.4), visible: full)
         f.clamp(to: full)
-        near(f.center.x, 0.5, 1e-6, "fit pins the centre horizontally")
-        near(f.center.y, 0.5, 1e-6, "fit pins the centre vertically")
+        near(f.center.x, 0.5, 1e-6, "fit pins the center horizontally")
+        near(f.center.y, 0.5, 1e-6, "fit pins the center vertically")
     }
 
     /// Zooming about a point keeps that point where it was.
@@ -155,9 +156,9 @@ enum ViewportTests {
         let anchor = CGPoint(x: 0.25, y: 0.75)
 
         v.zoomBy(2.0, anchor: anchor, visible: visible)
-        // Centre moves toward the anchor, not away from it.
-        report(v.center.x < 0.5, "zoom moves the centre toward the anchor (x)")
-        report(v.center.y > 0.5, "zoom moves the centre toward the anchor (y)")
+        // Center moves toward the anchor, not away from it.
+        report(v.center.x < 0.5, "zoom moves the center toward the anchor (x)")
+        report(v.center.y > 0.5, "zoom moves the center toward the anchor (y)")
 
         // Zoom is bounded: never below fit, never absurdly far in.
         let w = Viewport()
@@ -170,14 +171,14 @@ enum ViewportTests {
         report(w.zoom <= 64.0 + 1e-6, "zoom is capped")
     }
 
-    /// Hue to band. If this drifts from the centres in hsl_ops.slang, the
+    /// Hue to band. If this drifts from the centers in hsl_ops.slang, the
     /// targeted tool adjusts a band you did not click.
     static func testHueBands() {
-        // Each band centre must map to its own band.
-        for (i, centre) in TargetedAdjust.centres.enumerated() {
-            let got = TargetedAdjust.band(forHue: centre)
+        // Each band center must map to its own band.
+        for (i, center) in TargetedAdjust.centers.enumerated() {
+            let got = TargetedAdjust.band(forHue: center)
             report(got.rawValue == i,
-                   "hue \(Int(centre))deg maps to \(HueBand(rawValue: i)!.name)",
+                   "hue \(Int(center))deg maps to \(HueBand(rawValue: i)!.name)",
                    got.rawValue == i ? "" : "got \(got.name)")
         }
 
@@ -194,14 +195,14 @@ enum ViewportTests {
         near(TargetedAdjust.hue(r: 0, g: 1, b: 0) ?? -1, 120, 1e-6, "pure green is 120deg")
         near(TargetedAdjust.hue(r: 0, g: 0, b: 1) ?? -1, 240, 1e-6, "pure blue is 240deg")
 
-        // Grey has no hue, and must refuse rather than pick one at random —
+        // Gray has no hue, and must refuse rather than pick one at random —
         // otherwise clicking a wall silently adjusts some band.
-        report(TargetedAdjust.hue(r: 0.5, g: 0.5, b: 0.5) == nil, "grey has no hue")
+        report(TargetedAdjust.hue(r: 0.5, g: 0.5, b: 0.5) == nil, "gray has no hue")
         report(TargetedAdjust.hue(r: 0.5, g: 0.505, b: 0.5) == nil,
-               "near-grey has no hue")
+               "near-gray has no hue")
 
-        // Scale invariance: the picker normalises by peak, so a dark and a
-        // bright version of the same colour must land in the same band.
+        // Scale invariance: the picker normalizes by peak, so a dark and a
+        // bright version of the same color must land in the same band.
         let bright = TargetedAdjust.hue(r: 0.2, g: 0.4, b: 0.9)
         let dark = TargetedAdjust.hue(r: 0.02, g: 0.04, b: 0.09)
         if let b = bright, let d = dark {
@@ -258,8 +259,8 @@ enum ViewportTests {
                      "frame width matches the renderer (\(image), \(view))")
                 near(frame.height, view.height * quad.height, 1e-6,
                      "frame height matches the renderer (\(image), \(view))")
-                near(frame.midX, view.width / 2, 1e-6, "frame is centred horizontally")
-                near(frame.midY, view.height / 2, 1e-6, "frame is centred vertically")
+                near(frame.midX, view.width / 2, 1e-6, "frame is centered horizontally")
+                near(frame.midY, view.height / 2, 1e-6, "frame is centered vertically")
                 near(frame.width / frame.height, image, 1e-4,
                      "frame keeps the image's aspect")
             }
@@ -270,7 +271,7 @@ enum ViewportTests {
     ///
     /// The crop is what gets sampled, so anything it reaches past the turned
     /// frame has nothing behind it. This checks the constraint directly: take
-    /// the crop's four corners, turn them about the crop's own centre by the
+    /// the crop's four corners, turn them about the crop's own center by the
     /// straighten angle, and require every one to land inside the frame.
     static func testCropStaysInsideTurnedFrame() {
         let aspects: [CGFloat] = [landscape, portrait, 1.0, 16.0 / 9.0]
@@ -303,7 +304,7 @@ enum ViewportTests {
     }
 
     /// The crop's corners after the straighten, in frame coordinates. The
-    /// picture turns about the frame's centre, so that is what the rectangle
+    /// picture turns about the frame's center, so that is what the rectangle
     /// turns about too.
     static func turnedCorners(_ r: CGRect, aspect a: CGFloat,
                               angleDeg: CGFloat) -> [CGPoint] {
@@ -395,7 +396,7 @@ enum ViewportTests {
 
     /// Moving or resizing the crop must not move the picture.
     ///
-    /// The preview canvas once followed the crop's centre, so dragging the
+    /// The preview canvas once followed the crop's center, so dragging the
     /// rectangle re-rotated the frame underneath it and the image came unstuck
     /// from the box. The canvas depends on the angle and the aspect, and on
     /// nothing else.
@@ -421,9 +422,9 @@ enum ViewportTests {
                 // And it is concentric with the frame, which is what the
                 // engine turns the picture about.
                 near(reference.origin.x + reference.size / 2, CanvasLayout.pivot.x, 1e-9,
-                     "canvas is centred on the pivot horizontally — aspect \(a), \(angle)°")
+                     "canvas is centered on the pivot horizontally — aspect \(a), \(angle)°")
                 near(reference.origin.y + reference.size / 2, CanvasLayout.pivot.y, 1e-9,
-                     "canvas is centred on the pivot vertically — aspect \(a), \(angle)°")
+                     "canvas is centered on the pivot vertically — aspect \(a), \(angle)°")
             }
         }
     }
@@ -547,6 +548,79 @@ enum ViewportTests {
         report(stillAscending, "a densely packed curve still ascends")
     }
 
+    /// A sidecar missing keys still restores the ones it has.
+    ///
+    /// Swift's synthesized decoder throws on a missing key rather than falling
+    /// back to the property's default, and `Engine.restore` swallows that with a
+    /// `try?`. Adding one field to `DevelopState` would therefore have discarded
+    /// *every* adjustment in *every* sidecar already on disk, and the photo
+    /// would simply have opened unedited with nothing said.
+    static func testSidecarSurvivesAMissingField() {
+        func decode(_ json: String) -> DevelopState? {
+            guard let data = json.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode(DevelopState.self, from: data)
+        }
+
+        // A sidecar from a build that had only three of the fields.
+        guard let sparse = decode(#"{"exposureEv":1.5,"contrast":1.4,"cropW":0.5}"#) else {
+            report(false, "a sparse sidecar decodes at all")
+            return
+        }
+        report(true, "a sparse sidecar decodes at all")
+        near(CGFloat(sparse.exposureEv), 1.5, 1e-6, "the exposure it carried survives")
+        near(CGFloat(sparse.contrast), 1.4, 1e-6, "the contrast it carried survives")
+        near(CGFloat(sparse.cropW), 0.5, 1e-6, "the crop it carried survives")
+        near(CGFloat(sparse.sharpenRadius), 1.0, 1e-6,
+             "a field it never had falls back to its default, not to zero")
+        report(sparse.hueShift.count == 8, "the bands are still the right length")
+
+        // Empty and malformed both have to land on the defaults rather than
+        // throwing, or one bad sidecar makes a photo look unopenable.
+        guard let empty = decode("{}") else {
+            report(false, "an empty sidecar decodes")
+            return
+        }
+        report(true, "an empty sidecar decodes")
+        report(empty == DevelopState(), "an empty sidecar is exactly the defaults")
+
+        if let junk = decode(#"{"exposureEv":"not a number","tint":0.3}"#) {
+            near(CGFloat(junk.tint), 0.3, 1e-6, "a bad field does not poison a good one")
+            near(CGFloat(junk.exposureEv), 0, 1e-6, "a bad field falls back to its default")
+        } else {
+            report(false, "a sidecar with one bad field still decodes")
+        }
+
+        // A band of the wrong length would index out of bounds in the panel.
+        if let short = decode(#"{"hueShift":[0.1,0.2]}"#) {
+            report(short.hueShift.count == 8, "a short band array is refused, not trusted")
+        } else {
+            report(false, "a sidecar with a short band array still decodes")
+        }
+
+        // The pre-rename spelling. A photo finished before the interface moved
+        // to American spelling must not lose its noise reduction.
+        if let old = decode(#"{"denoiseColour":2.4}"#) {
+            near(CGFloat(old.denoiseColor), 2.4, 1e-6,
+                 "a sidecar written as denoiseColour still restores")
+        } else {
+            report(false, "a pre-rename sidecar decodes")
+        }
+
+        // And a full round trip has to be exact, or undo and the sidecar would
+        // disagree about what was saved.
+        var full = DevelopState()
+        full.exposureEv = -1.25
+        full.denoiseColor = 3.1
+        full.curve.master = [CurvePoint(x: 0, y: 0.1), CurvePoint(x: 1, y: 0.9)]
+        full.satShift[3] = 0.42
+        if let data = try? JSONEncoder().encode(full),
+           let back = try? JSONDecoder().decode(DevelopState.self, from: data) {
+            report(back == full, "a full state round-trips unchanged")
+        } else {
+            report(false, "a full state round-trips at all")
+        }
+    }
+
     /// The compare divider has to be placed against the rectangle the picture
     /// actually covers, which is not the one it covers at fit.
     ///
@@ -601,8 +675,8 @@ enum ViewportTests {
                        "the drawn rect stays inside the view (image \(image), zoom \(z))")
                 report(r.width > 0 && r.height > 0,
                        "the drawn rect is not empty (image \(image), zoom \(z))")
-                near(r.midX, view.width / 2, 1e-6, "the drawn rect stays centred (x, zoom \(z))")
-                near(r.midY, view.height / 2, 1e-6, "the drawn rect stays centred (y, zoom \(z))")
+                near(r.midX, view.width / 2, 1e-6, "the drawn rect stays centered (x, zoom \(z))")
+                near(r.midY, view.height / 2, 1e-6, "the drawn rect stays centered (y, zoom \(z))")
             }
         }
     }
@@ -610,7 +684,7 @@ enum ViewportTests {
     /// A control is marked modified when, and only when, its readout differs
     /// from the one it would show at its base.
     ///
-    /// The accent colour is the only thing telling you which controls you have
+    /// The accent color is the only thing telling you which controls you have
     /// touched, and the only thing telling you the number is clickable. Get the
     /// comparison wrong in one direction and half the panel glows for edits
     /// nobody made; get it wrong in the other and a moved slider offers no way
@@ -657,7 +731,7 @@ enum ViewportTests {
             ("vibrance", fresh.vibrance, 2), ("saturation", fresh.saturation, 2),
             ("recovery", fresh.highlightRecovery, 2),
             ("denoise luma", fresh.denoiseLuma, 2),
-            ("denoise colour", fresh.denoiseColour, 2),
+            ("denoise color", fresh.denoiseColor, 2),
             ("distortion", fresh.lensDistortion, 2),
             ("vignetting", fresh.lensVignette, 2),
             ("sharpen amount", fresh.sharpenAmount, 2),
@@ -683,7 +757,7 @@ enum ViewportTests {
 
         v.toggleFitAndActual()
         report(v.isFit, "toggling again returns to fit")
-        near(v.center.x, 0.5, 1e-6, "returning to fit recentres")
+        near(v.center.x, 0.5, 1e-6, "returning to fit recenters")
     }
 }
 

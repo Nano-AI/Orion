@@ -148,7 +148,7 @@ BayerImage decodeBayer(const std::string& path) {
 
     // LibRaw stores cam_xyz as XYZ->camera; we want camera->XYZ, so transpose
     // is not enough — but for the 3x3 case rgb_cam already carries the useful
-    // camera->sRGB form. Keep cam_xyz here and invert in the colour node.
+    // camera->sRGB form. Keep cam_xyz here and invert in the color node.
     for (int r = 0; r < 3; ++r) {
         for (int c = 0; c < 3; ++c) out.camToXyz[r * 3 + c] = color.cam_xyz[r][c];
     }

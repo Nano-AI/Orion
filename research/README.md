@@ -4,7 +4,7 @@
 If it does not appear in these files, it is invention and belongs in
 [`UNSOURCED.md`](UNSOURCED.md) until it is either replaced or defended.
 
-This folder exists because the colour pipeline shipped a bug — a purple cast on
+This folder exists because the color pipeline shipped a bug — a purple cast on
 every image — caused by matrices that looked plausible and were wrong. That
 class of error is invisible to inspection and obvious to arithmetic. Citing the
 source makes the constants checkable; testing the invariant makes them stay
@@ -28,7 +28,7 @@ support what it is attached to.
 
 | File | Covers |
 |---|---|
-| [`colour-pipeline.md`](colour-pipeline.md) | Scene-referred design, camera matrices, white balance, AgX display transform |
+| [`color-pipeline.md`](color-pipeline.md) | Scene-referred design, camera matrices, white balance, AgX display transform |
 | [`demosaic.md`](demosaic.md) | CFA interpolation, and the gap between what we ship and RCD proper |
 | [`tone-and-local-contrast.md`](tone-and-local-contrast.md) | Guided filter, local shadows/highlights, curves |
 | [`detail.md`](detail.md) | Sharpening and denoising |

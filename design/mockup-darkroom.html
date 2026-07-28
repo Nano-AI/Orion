@@ -2,7 +2,7 @@
 <style>
 /* TOKENS:START — generated from tokens.json, do not edit by hand */
   :root {
-    /* Colour */
+    /* Color */
     --ground: #141416;  /* App background, outermost shell */
     --panel: #1B1B1D;  /* Tool panels, toolbar, filmstrip */
     --raised: #232326;  /* Controls, cells, inset wells */
@@ -420,9 +420,9 @@
         <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.4"/><path d="M10 2.4v1.7M10 15.9v1.7M17.6 10h-1.7M4.1 10H2.4M15.4 4.6l-1.2 1.2M5.8 14.2l-1.2 1.2M15.4 15.4l-1.2-1.2M5.8 5.8L4.6 4.6"/></svg>
         <span class="tab-label">Light</span>
       </button>
-      <button class="tab" role="tab" aria-selected="false" data-target="color" title="Colour">
+      <button class="tab" role="tab" aria-selected="false" data-target="color" title="Color">
         <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.2"/><path d="M10 2.8a7.2 7.2 0 0 1 0 14.4z" fill="currentColor" stroke="none"/></svg>
-        <span class="tab-label">Colour</span>
+        <span class="tab-label">Color</span>
       </button>
       <button class="tab" role="tab" aria-selected="false" data-target="detail" title="Detail">
         <svg viewBox="0 0 20 20"><circle cx="8.6" cy="8.6" r="5.4"/><path d="M12.6 12.6l4.4 4.4"/><path d="M6.2 8.6h4.8"/></svg>
@@ -512,7 +512,7 @@
         </section>
       </div>
 
-      <!-- ── COLOUR ────────────────────────────────────────────────────── -->
+      <!-- ── COLOR ────────────────────────────────────────────────────── -->
       <div class="panel-group" data-panel="color" hidden>
 
         <section class="section" data-open="true">
@@ -590,7 +590,7 @@
         <section class="section" data-open="true">
           <button class="section-head">
             <svg class="caret" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5"/></svg>
-            Colour Mixer <span class="section-reset">Reset</span>
+            Color Mixer <span class="section-reset">Reset</span>
           </button>
           <div class="section-body">
             <div class="slider" data-min="-100" data-max="100" data-val="24" data-name="Vibrance"></div>
@@ -616,7 +616,7 @@
 <aside class="note" id="note">
   <button id="note-x" aria-label="Dismiss">×</button>
   <b>Folder tabs.</b> The selected tab grows to show its label and merges into the
-  panel below. Try <b>Colour</b> for the tone curve — drag the dots, click to add.
+  panel below. Try <b>Color</b> for the tone curve — drag the dots, click to add.
 </aside>
 
 <script>
@@ -680,7 +680,7 @@
   const SVGNS = "http://www.w3.org/2000/svg";
   const flat = () => [{ x: 0, y: 0 }, { x: 1, y: 1 }];
   const CURVES = { RGB: flat(), R: flat(), G: flat(), B: flat() };
-  const CHAN_COLOUR = {
+  const CHAN_COLOR = {
     RGB: "var(--text)", R: "var(--chanR)", G: "var(--chanG)", B: "var(--chanB)"
   };
   let chanNow = "RGB", dragIdx = -1;
@@ -734,7 +734,7 @@
       d += (i ? " L" : "M") + (x * 100).toFixed(2) + "," + ((1 - y) * 100).toFixed(2);
     }
     cvLine.setAttribute("d", d);
-    cvLine.style.stroke = CHAN_COLOUR[chanNow];
+    cvLine.style.stroke = CHAN_COLOR[chanNow];
 
     cvPts.textContent = "";
     p.forEach((q, i) => {
@@ -744,7 +744,7 @@
       c.setAttribute("cy", ((1 - q.y) * 100).toFixed(2));
       c.setAttribute("r", 2.8);
       c.setAttribute("class", "curve-pt" + (end ? " locked" : "") + (i === dragIdx ? " dragging" : ""));
-      c.style.fill = CHAN_COLOUR[chanNow];
+      c.style.fill = CHAN_COLOR[chanNow];
       c.dataset.i = i;
       cvPts.appendChild(c);
     });

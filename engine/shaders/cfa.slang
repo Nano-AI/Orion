@@ -1,4 +1,4 @@
-// Shared colour-filter-array helpers.
+// Shared color-filter-array helpers.
 
 #ifndef ORION_CFA_SLANG
 #define ORION_CFA_SLANG

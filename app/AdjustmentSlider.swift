@@ -3,7 +3,7 @@ import SwiftUI
 /// One adjustment: a name, a value that can be put back, and a slider.
 ///
 /// The readout doubles as the reset. A control that has been moved shows its
-/// number in the accent colour, so the panel can be scanned for what has been
+/// number in the accent color, so the panel can be scanned for what has been
 /// touched, and clicking that number returns it to where the photo started.
 /// Hovering adds the revert glyph to the left of it.
 ///
@@ -12,7 +12,7 @@ import SwiftUI
 /// move when it appears. A control that shifts under the pointer on hover is
 /// one you miss on the click.
 ///
-/// One affordance rather than two: the colour says which controls are modified
+/// One affordance rather than two: the color says which controls are modified
 /// *and* marks what is clickable, which a separate change dot in the margin
 /// would have said again in a smaller, harder-to-hit way.
 struct AdjustmentSlider: View {
@@ -48,7 +48,7 @@ struct AdjustmentSlider: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 0) {
                 Text(name)
                     .font(.system(size: 12))
@@ -61,52 +61,64 @@ struct AdjustmentSlider: View {
             // by the same amount keeps the number itself aligned with the end
             // of the track below it, and lets the background hang into the
             // panel's margin instead of indenting the column.
-            .padding(.trailing, -4)
+            .padding(.trailing, -5)
 
-            Slider(value: Binding(
-                get: { value },
+            AnalogTrack(value: value, range: range, base: base) { v in
                 // Route through history so each control's drags coalesce into
                 // one undo step rather than a hundred.
-                set: { v in engine.edit(name) { value = v } }
-            ), in: range)
-                .controlSize(.small)
-                .tint(Palette.accent)
+                engine.edit(name) { value = v }
+            }
+            .accessibilityLabel(Text(name))
         }
     }
 
+    /// The value, in a recessed window — the distance scale in a lens barrel
+    /// rather than a caption floating on the panel.
+    ///
+    /// It is also the reset. A control that has moved shows its number in the
+    /// accent and the window becomes a button; hovering adds the revert glyph
+    /// to its left, growing into the gap the spacer already holds so nothing
+    /// the eye is tracking moves.
     @ViewBuilder private var readout: some View {
         if modified {
             Button {
                 engine.edit("Reset \(name)") { value = base }
             } label: {
-                HStack(spacing: 3) {
-                    if hovering {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 9, weight: .semibold))
-                    }
-                    Text(text(value))
-                        .font(.system(size: 11))
-                        .monospacedDigit()
-                }
-                .foregroundStyle(Palette.accent)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
-                .background(hovering ? Palette.raised : .clear,
-                            in: RoundedRectangle(cornerRadius: 3))
-                .contentShape(RoundedRectangle(cornerRadius: 3))
+                window(accent: true)
             }
             .buttonStyle(.plain)
             .onHover { pointerInside = $0 }
             .help("Reset \(name) to \(text(base))")
         } else {
-            // Same padding as the button, so the number does not jump sideways
-            // the moment a control stops being at its default.
+            window(accent: false)
+        }
+    }
+
+    private func window(accent: Bool) -> some View {
+        HStack(spacing: 3) {
+            if accent && hovering {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 9, weight: .semibold))
+            }
             Text(text(value))
                 .font(.system(size: 11))
                 .monospacedDigit()
-                .foregroundStyle(Palette.text)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
         }
+        .foregroundStyle(accent ? Palette.accent : Palette.text)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1.5)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(hovering && accent ? Palette.raised : Palette.ground)
+        )
+        .overlay(
+            // Hairline on the upper edge only, which is where a recess catches
+            // the light. All four sides would read as a raised chip instead.
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(Palette.line, lineWidth: 0.5)
+                .mask(LinearGradient(colors: [.black, .black.opacity(0.15)],
+                                     startPoint: .top, endPoint: .bottom))
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
     }
 }

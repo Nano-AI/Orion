@@ -76,7 +76,7 @@ void writeOut(const orion::pipe::DevelopPipeline& d, const std::string& path) {
 /// wolf trains you to ignore it, which is worse than not having one.
 enum class Metric { Luma, Chroma };
 
-/// Mean luma, or mean distance from grey, for asserting that an adjustment
+/// Mean luma, or mean distance from gray, for asserting that an adjustment
 /// actually did something rather than silently no-op'ing.
 double meanOf(const orion::pipe::DevelopPipeline& d, Metric metric) {
     const std::uint32_t tw = d.outputWidth(), th = d.outputHeight();
@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
 
         // ── The slider case ───────────────────────────────────────────────
         // Only exposure moves, so linearize, all three demosaic passes and the
-        // colour matrix stay cached. This is the number the budget is about.
+        // color matrix stay cached. This is the number the budget is about.
         constexpr int kIterations = 60;
         std::vector<double> warm;
         warm.reserve(kIterations);

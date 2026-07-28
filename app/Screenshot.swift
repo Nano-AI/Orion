@@ -13,7 +13,7 @@ import SwiftUI
 /// ```
 ///
 /// What it does and does not prove: the view hierarchy is the shipping one, so
-/// layout, type, spacing and colour are real. The canvas is the engine's own
+/// layout, type, spacing and color are real. The canvas is the engine's own
 /// developed output, read back through the export path, drawn as a still rather
 /// than through `MTKView` — AppKit's `cacheDisplay` does not capture a Metal
 /// layer. Canvas-specific geometry stays the viewport suite's job.
@@ -24,7 +24,7 @@ enum Screenshot {
         var photo: String?
         var scene = "light"
         var size = CGSize(width: 1680, height: 1050)
-        /// Region to report statistics for, normalised. Empty means no report.
+        /// Region to report statistics for, normalized. Empty means no report.
         var measure: CGRect?
     }
 
@@ -139,8 +139,8 @@ enum Screenshot {
 
     private static func tab(for scene: String) -> ToolTab {
         switch scene {
-        case "colour":
-            return .colour
+        case "color":
+            return .color
         case "detail", "noisy", "denoise-off", "denoise-luma", "denoise-both":
             return .detail
         case "crop", "crop-angle":
@@ -167,14 +167,14 @@ enum Screenshot {
             engine.exposureEv = 2.6
             engine.curve.master = [CurvePoint(x: 0, y: 0.04), CurvePoint(x: 0.28, y: 0.19),
                                    CurvePoint(x: 0.68, y: 0.79), CurvePoint(x: 1, y: 1)]
-        case "colour":
+        case "color":
             engine.exposureEv = 2.6
             engine.vibrance = 0.3
             engine.satShift[HueBand.blue.rawValue] = 0.4
         case "detail":
             engine.exposureEv = 2.6
             engine.denoiseLuma = 1.6
-            engine.denoiseColour = 2.4
+            engine.denoiseColor = 2.4
             engine.sharpenAmount = 0.8
             engine.sharpenMasking = 0.4
         case "crop":
@@ -211,7 +211,7 @@ enum Screenshot {
         case "denoise-both":
             engine.exposureEv = 2.6
             engine.denoiseLuma = 2.0
-            engine.denoiseColour = 3.0
+            engine.denoiseColor = 3.0
         case "compare":
             engine.exposureEv = 2.6
             engine.setCompare(split: 0.5)
@@ -225,7 +225,7 @@ enum Screenshot {
     /// Straight off rather than through the export path, because export flattens
     /// alpha — and alpha is exactly what says "no picture here" outside a turned
     /// frame. Flattened, the crop preview's surround came out black instead of
-    /// the interface's own grey, which would have made every straighten
+    /// the interface's own gray, which would have made every straighten
     /// screenshot a lie.
     private static func developed(_ engine: Engine) -> NSImage? {
         guard let src = engine.outputTexture else { return nil }
@@ -294,7 +294,7 @@ enum Screenshot {
         }
 
         // Mean saturation, the same way a camera JPEG would be measured, so
-        // "the colours look washed" can be answered with a number instead of an
+        // "the colors look washed" can be answered with a number instead of an
         // impression.
         var saturation = 0.0
         var luma = 0.0

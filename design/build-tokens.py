@@ -34,7 +34,7 @@ def strip_comments(d):
 def css_block(t):
     lines = [START, "  :root {"]
 
-    lines.append("    /* Colour */")
+    lines.append("    /* Color */")
     for name, spec in strip_comments(t["color"]).items():
         lines.append(f"    --{name}: {spec['hex']};  /* {spec['use']} */")
 
@@ -85,7 +85,7 @@ def swift_file(t):
         "    // MARK: Palette",
         "    //",
         "    // Neutrals are deliberately near-perfectly neutral: a tinted interface",
-        "    // reads as a colour cast and corrupts the judgement the app exists to support.",
+        "    // reads as a color cast and corrupts the judgment the app exists to support.",
         "    public enum Palette {",
     ]
     for name, spec in strip_comments(t["color"]).items():

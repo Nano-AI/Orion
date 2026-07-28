@@ -10,7 +10,7 @@
 [`UNSOURCED.md`](UNSOURCED.md).
 
 **What it does:** unsharp mask — subtract a binomial-weighted blur from the
-centre pixel and add back a scaled difference. Radius scales the tap offsets
+center pixel and add back a scaled difference. Radius scales the tap offsets
 rather than the tap count, so cost stays constant.
 
 **The masking control** suppresses sharpening where local contrast is low. That
@@ -75,9 +75,9 @@ the strength adapt correctly across the tonal range.
   textures — 388 MB a scale at 24 MP. The fifth scale's norm is 0.0202, a
   fifth of the fourth's, so it removes very little for another 388 MB.
 - **Luminance/chroma split with Rec.2020 weights, applied to camera RGB.** The
-  denoise runs before the colour matrix, because the noise model only holds in
+  denoise runs before the color matrix, because the noise model only holds in
   linear camera RGB. The weights are therefore approximate. Camera primaries
-  are close enough to the working space's for the split to separate colour
+  are close enough to the working space's for the split to separate color
   blotches from luminance grain, which is all the split is for.
 
 **Measured**, Sony ILCE-7M3 night frame at +2.6 EV, flat sky region 903×603:
@@ -86,10 +86,10 @@ the strength adapt correctly across the tonal range.
 |---|---|---|---|
 | Off | 0.1409 | 0.1276 | 0.1521 |
 | Luminance 2.0 | 0.1213 | 0.1000 | 0.1309 |
-| Luminance 2.0, Colour 3.0 | 0.0558 | 0.0532 | 0.0516 |
+| Luminance 2.0, Color 3.0 | 0.0558 | 0.0532 | 0.0516 |
 
 The three channels converging is the chroma scatter going, which is what the
-colour control is for.
+color control is for.
 
 **Explicitly rejected — BM3D.** Dabov, Foi, Katkovnik & Egiazarian, *Image
 denoising by sparse 3-D transform-domain collaborative filtering*,
@@ -122,7 +122,7 @@ focal length. LGPL-3; the database itself is CC-BY-SA.
 ## Lens corrections — 2026-07-28
 
 lensfun's model definitions, as set out in `deep-research-2026-07-27.md` §4.
-Radii normalised against `R_norm = ½·sqrt(width² + height²)`, which is
+Radii normalized against `R_norm = ½·sqrt(width² + height²)`, which is
 lensfun's convention and what every published coefficient assumes.
 
 | Correction | Model | Note |

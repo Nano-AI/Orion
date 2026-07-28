@@ -62,7 +62,7 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
         }
     }
 
-    // The unedited scene colour. The reference image is unrotated, so invert
+    // The unedited scene color. The reference image is unrotated, so invert
     // the orientation exactly as orient.slang applies it — a naive transpose
     // is wrong for every quarter turn and samples a mirrored pixel.
     if (outScene) {
@@ -82,7 +82,7 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
         __fp16 px[4]{};
         develop_->referenceImage().readPixel(sx, sy, px);
 
-        // Scene-linear and unbounded. Normalise by the peak: the caller wants
+        // Scene-linear and unbounded. Normalize by the peak: the caller wants
         // hue, and hue is scale-invariant.
         const float peak = std::max({float(px[0]), float(px[1]), float(px[2]), 1e-6f});
         for (int i = 0; i < 3; ++i) outScene[i] = std::max(float(px[i]), 0.0f) / peak;

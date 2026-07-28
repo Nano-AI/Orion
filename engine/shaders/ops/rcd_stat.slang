@@ -18,7 +18,7 @@
 static const float kRcdEps   = 1e-5f;
 static const float kRcdEpsSq = 1e-10f;
 
-/// Samples are ordered m4, m3, m2, m1, centre, p1, p2, p3, p4.
+/// Samples are ordered m4, m3, m2, m1, center, p1, p2, p3, p4.
 float rcdDirectionStat(float m4, float m3, float m2, float m1, float c0,
                        float p1, float p2, float p3, float p4)
 {

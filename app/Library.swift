@@ -3,7 +3,7 @@ import Foundation
 
 /// A folder of raw files, with ratings and flags.
 ///
-/// Folder-first by design: no catalogue, no import step. Point Orion at a
+/// Folder-first by design: no catalog, no import step. Point Orion at a
 /// directory and it reads what is there. Ratings and flags live in XMP sidecars
 /// next to each file, so they survive Orion being deleted and are readable by
 /// other software.

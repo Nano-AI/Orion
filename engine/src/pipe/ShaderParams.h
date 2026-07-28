@@ -14,7 +14,7 @@ namespace orion::pipe::params {
 
 struct alignas(16) Linearize {
     float         black[4];        // per CFA channel, sensor counts
-    float         whiteBalance[4]; // per CFA channel, normalised to green
+    float         whiteBalance[4]; // per CFA channel, normalized to green
     float         invRange;        // 1 / (white - black)
     std::uint32_t filters;         // CFA bitmask
     std::uint32_t size[2];
@@ -128,7 +128,7 @@ static_assert(sizeof(Display) == 32);
 /// Lens corrections. Mirrors LensParams in lens.slang.
 struct Lens {
     std::uint32_t size[2];
-    float centreX, centreY;
+    float centerX, centerY;
     float k1;
     float caRed, caBlue;
     float vignetteA;
@@ -182,8 +182,8 @@ struct Geometry {
     float         straightenRad;
     float         cropOrigin[2];
     float         cropSize[2];
-    /// Straighten centre, normalised in post-rotation frame space. Always the
-    /// centre of the user's crop rectangle, whether or not the crop tool's
+    /// Straighten center, normalized in post-rotation frame space. Always the
+    /// center of the user's crop rectangle, whether or not the crop tool's
     /// enlarged preview canvas is in play.
     float         pivot[2];
 };

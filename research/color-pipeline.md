@@ -1,4 +1,4 @@
-# Colour Pipeline
+# Color Pipeline
 
 Covers everything from sensor values to display pixels: linearisation, white
 balance, the camera matrix, working space, and the display transform.
@@ -26,21 +26,21 @@ pixels.
 
 ---
 
-## Camera colour matrix
+## Camera color matrix
 
 **Where:** `DevelopPipeline.cpp`, `camToWorking`.
 
 **Source:** dcraw's `adobe_coeff` lineage, as carried by LibRaw and documented by
 darktable and RawTherapee.
-- [darktable — input colour profile](https://docs.darktable.org/usermanual/development/en/module-reference/processing-modules/input-color-profile/)
-- [RawPedia — Colour Management](https://rawpedia.rawtherapee.com/Color_Management)
+- [darktable — input color profile](https://docs.darktable.org/usermanual/development/en/module-reference/processing-modules/input-color-profile/)
+- [RawPedia — Color Management](https://rawpedia.rawtherapee.com/Color_Management)
 
 **What we implement:** LibRaw supplies `cam_xyz` (XYZ → camera). We invert it to
-get camera → XYZ, compose with XYZ → linear Rec.2020, then **normalise each row
+get camera → XYZ, compose with XYZ → linear Rec.2020, then **normalize each row
 to sum to 1**.
 
-**Why the normalisation matters:** after white balance the data is already
-neutral, so a matrix whose rows do not sum to 1 re-tints it. dcraw normalises
+**Why the normalization matters:** after white balance the data is already
+neutral, so a matrix whose rows do not sum to 1 re-tints it. dcraw normalizes
 `rgb_cam` for exactly this reason. Omitting it produced a visible magenta cast
 during development.
 
@@ -55,7 +55,7 @@ limit, not an error.
 
 ---
 
-## White balance from colour temperature
+## White balance from color temperature
 
 **Where:** `WhiteBalance.cpp`.
 
@@ -65,7 +65,7 @@ locus in CIE 1931 xy, valid 1667 K–25000 K.
 - [Planckian locus — approximation](https://en.wikipedia.org/wiki/Planckian_locus#Approximation) (carries the coefficients and the citation)
 
 **What we implement:** temperature → xy on the locus → XYZ at unit luminance →
-camera RGB via `xyzToCam` → reciprocal, normalised to green.
+camera RGB via `xyzToCam` → reciprocal, normalized to green.
 
 **Important design choice:** the temperature is a *handle*, not the source of
 truth. "As shot" uses the camera's own multipliers directly, and moving the
@@ -80,7 +80,7 @@ Adequate over photographic range; worth revisiting.
 **Confidence:** high for temperature, medium for tint.
 
 **Tests:** `orion-tests` checks direction (warmer needs more blue gain), green
-normalisation, and round-trip accuracy within 60 K.
+normalization, and round-trip accuracy within 60 K.
 
 ---
 
@@ -97,8 +97,8 @@ and the convention LibRaw inherits along with the rest of dcraw's front end.
 **The problem.** A sensor saturates at one count for every channel, so a blown
 highlight arrives as (S, S, S). White balance then multiplies each channel by
 its own gain — for a warm scene something like (2.2, 1.0, 1.6) — and what was a
-white light now carries the gains themselves as a colour. Nothing downstream can
-undo it: the tone curve, the colour matrix and AgX all preserve ratios, so they
+white light now carries the gains themselves as a color. Nothing downstream can
+undo it: the tone curve, the color matrix and AgX all preserve ratios, so they
 preserve the cast, and it lands on every clipped light in the frame.
 
 **What we implement.** Clip all three channels to one ceiling, in the mosaic,
@@ -147,18 +147,18 @@ would fail rather than pass.
 - [Explainer: AgX and the "notorious six"](https://avidandrew.com/agx-color.html)
 
 **What we implement:** convert Rec.2020 → Rec.709, apply the inset matrix, map to
-normalised log2 exposure over [−12.47, +4.03] EV, apply contrast about the middle
-grey pivot, run the six-term sigmoid fit per channel, then the outset matrix.
+normalized log2 exposure over [−12.47, +4.03] EV, apply contrast about the middle
+gray pivot, run the six-term sigmoid fit per channel, then the outset matrix.
 
 **Why the inset matters:** applying a sigmoid per channel in the working
 primaries skews hue as channels clip at different points — the "notorious six"
-failure, where bright saturated colours rotate toward the nearest primary. AgX
+failure, where bright saturated colors rotate toward the nearest primary. AgX
 compresses the gamut inward first, so saturated highlights desaturate toward
 white instead.
 
 **⚠️ The bug this documentation exists to prevent.** An earlier revision used
 inset/outset matrices whose rows did **not** sum to 1. The outset mapped neutral
-grey (1,1,1) to roughly (0.84, 0.94, 1.22), lifting blue above green, and cast
+gray (1,1,1) to roughly (0.84, 0.94, 1.22), lifting blue above green, and cast
 **every image purple**. A gamut matrix in a tone mapper must preserve the
 achromatic axis; row-sum-to-1 is that property, and it is checkable in one line.
 
@@ -167,9 +167,9 @@ asserts the output stays neutral within 8-bit rounding.
 
 **Second bug worth recording:** the AgX polynomial is a fit of the *display*
 transform, so its output is already display-referred. Applying an sRGB transfer
-function on top encoded the signal twice — middle grey landed at 189/255 instead
-of ~128, washing out tone and colour together. The neutrality test also checks
-middle grey lands mid-range.
+function on top encoded the signal twice — middle gray landed at 189/255 instead
+of ~128, washing out tone and color together. The neutrality test also checks
+middle gray lands mid-range.
 
 **Gap:** the sigmoid is a polynomial approximation, not the full AgX with its
 per-channel look transforms. Output is sRGB-encoded; the EDR/P3 path the native

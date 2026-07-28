@@ -5,12 +5,12 @@ import Foundation
 /// One `.xmp` next to each raw file. This is deliberate and load-bearing:
 /// sidecars are portable, survive the folder being moved or backed up, are
 /// readable by Lightroom and darktable, and mean deleting Orion does not delete
-/// your work. A catalogue database would be faster to query and would own your
+/// your work. A catalog database would be faster to query and would own your
 /// edits; this does not.
 ///
 /// The format follows the Adobe XMP convention that other editors already read:
 /// `xmp:Rating` from -1 to 5, where -1 means rejected, and `xmp:Label` for a
-/// colour label. Orion's own settings go in a private namespace so they neither
+/// color label. Orion's own settings go in a private namespace so they neither
 /// confuse other software nor get clobbered by it.
 struct Sidecar: Sendable {
     var rating: Int = 0

@@ -28,7 +28,7 @@ already in a texture.
 
 ```
 decode → white balance → demosaic → camera matrix
-       → guided filter → tone, colour, curve
+       → guided filter → tone, color, curve
        → AgX display transform → orientation
 ```
 

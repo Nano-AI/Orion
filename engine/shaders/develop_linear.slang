@@ -25,7 +25,7 @@ struct LinearAdjustParams
     /// Subsampled dimensions of the guide coefficients, and the ratio to this
     /// kernel's own grid. See guide_down.slang.
     uint2 guideSize;
-    // Colour mixer: eight hue bands, three shifts each.
+    // Color mixer: eight hue bands, three shifts each.
     float hueShift[8];
     float satShift[8];
     float lumShift[8];
@@ -37,7 +37,7 @@ float2 sampleAbBilinear(Texture2D<float2> ab, uint2 at, uint2 full, uint2 small)
     if (small.x == 0u || small.y == 0u) return ab[at];
     if (small.x == full.x && small.y == full.y) return ab[at];
 
-    // Pixel centres on both grids, so the lift has no half-pixel drift.
+    // Pixel centers on both grids, so the lift has no half-pixel drift.
     const float2 scale = float2(small) / float2(full);
     const float2 q = (float2(at) + 0.5f) * scale - 0.5f;
 

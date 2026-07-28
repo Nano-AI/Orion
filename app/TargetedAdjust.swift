@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import SwiftUI
 
-/// Colour mixer bands, in the order the engine expects.
+/// Color mixer bands, in the order the engine expects.
 enum HueBand: Int, CaseIterable, Identifiable {
     case red, orange, yellow, green, aqua, blue, purple, magenta
     var id: Int { rawValue }
@@ -20,7 +20,7 @@ enum HueBand: Int, CaseIterable, Identifiable {
         }
     }
 
-    /// Swatch hue, matching the band centres in hsl_ops.slang.
+    /// Swatch hue, matching the band centers in hsl_ops.slang.
     var swatch: Color {
         Color(hue: Double([0, 30, 60, 120, 180, 240, 285, 320][rawValue]) / 360.0,
               saturation: 0.75, brightness: 0.85)
@@ -29,8 +29,8 @@ enum HueBand: Int, CaseIterable, Identifiable {
 
 /// The targeted adjustment tool.
 ///
-/// Click a colour in the photo and drag: it finds which hue band that pixel
-/// belongs to and adjusts it. This is how people actually use a colour mixer —
+/// Click a color in the photo and drag: it finds which hue band that pixel
+/// belongs to and adjusts it. This is how people actually use a color mixer —
 /// "make *that* blue deeper" — rather than guessing which of eight swatches the
 /// sky happens to fall into.
 @Observable
@@ -81,15 +81,15 @@ final class TargetedAdjust {
         hoverIsNeutral = false
     }
 
-    /// Which band a hue in degrees belongs to. Mirrors the band centres in
+    /// Which band a hue in degrees belongs to. Mirrors the band centers in
     /// hsl_ops.slang — if these drift apart, the tool adjusts the wrong band.
-    static let centres: [Double] = [0, 30, 60, 120, 180, 240, 285, 320]
+    static let centers: [Double] = [0, 30, 60, 120, 180, 240, 285, 320]
 
     static func band(forHue hue: Double) -> HueBand {
         var best = 0
         var bestDistance = Double.greatestFiniteMagnitude
-        for (i, centre) in centres.enumerated() {
-            let raw = abs(hue - centre)
+        for (i, center) in centers.enumerated() {
+            let raw = abs(hue - center)
             let d = min(raw, 360 - raw)
             if d < bestDistance { bestDistance = d; best = i }
         }
@@ -102,7 +102,7 @@ final class TargetedAdjust {
         let minc = min(r, min(g, b))
         let delta = maxc - minc
 
-        // Near-grey has no meaningful hue; refuse rather than pick one at random.
+        // Near-gray has no meaningful hue; refuse rather than pick one at random.
         guard delta > 0.02 else { return nil }
 
         var h: Double

@@ -130,7 +130,7 @@ struct ImageCanvas: NSViewRepresentable {
             super.init()
         }
 
-        /// View point to normalised image coordinates, honouring letterbox and
+        /// View point to normalized image coordinates, honouring letterbox and
         /// zoom. Returns nil outside the image.
         private func imageUV(_ point: CGPoint, in view: NSView) -> CGPoint? {
             guard engine.imageWidth > 0, view.bounds.width > 0 else { return nil }
@@ -260,7 +260,7 @@ struct ImageCanvas: NSViewRepresentable {
 
         // MARK: Input
 
-        private func normalisedPoint(_ event: NSEvent, in view: NSView) -> CGPoint {
+        private func normalizedPoint(_ event: NSEvent, in view: NSView) -> CGPoint {
             let p = view.convert(event.locationInWindow, from: nil)
             // The view is flipped, so y already grows downward like image space.
             return CGPoint(x: p.x / max(view.bounds.width, 1),
@@ -271,7 +271,7 @@ struct ImageCanvas: NSViewRepresentable {
             let visible = currentVisible(for: view)
             if event.modifierFlags.contains(.command) || event.hasPreciseScrollingDeltas == false {
                 let factor = 1 + event.scrollingDeltaY * 0.01
-                viewport.zoomBy(factor, anchor: normalisedPoint(event, in: view), visible: visible)
+                viewport.zoomBy(factor, anchor: normalizedPoint(event, in: view), visible: visible)
             } else {
                 // Two-finger scroll pans, which is what a trackpad user expects
                 // once they are zoomed in.
@@ -285,7 +285,7 @@ struct ImageCanvas: NSViewRepresentable {
 
         func handleMagnify(_ event: NSEvent, in view: NSView) {
             viewport.zoomBy(1 + event.magnification,
-                            anchor: normalisedPoint(event, in: view),
+                            anchor: normalizedPoint(event, in: view),
                             visible: currentVisible(for: view))
             viewport.clamp(to: currentVisible(for: view))
             view.needsDisplay = true
@@ -336,7 +336,7 @@ struct ImageCanvas: NSViewRepresentable {
             view.needsDisplay = true
         }
 
-        /// Publishes the colour under the cursor so the loupe can show it.
+        /// Publishes the color under the cursor so the loupe can show it.
         func hover(at point: CGPoint, in view: NSView) {
             guard targeted.isActive else {
                 if targeted.hoverPoint != nil { targeted.clearHover() }
@@ -350,13 +350,13 @@ struct ImageCanvas: NSViewRepresentable {
 
             targeted.hoverPoint = point
 
-            // The swatch shows the *rendered* colour, already display-encoded,
+            // The swatch shows the *rendered* color, already display-encoded,
             // so it matches the pixel under the cursor exactly. Showing the
             // scene-linear value instead would look nothing like the photo.
             targeted.hoverColor = CGColor(red: s.display.r, green: s.display.g,
                                           blue: s.display.b, alpha: 1)
 
-            // The band comes from the scene colour, which does not move as you
+            // The band comes from the scene color, which does not move as you
             // edit.
             if let hue = TargetedAdjust.hue(r: s.scene.r, g: s.scene.g, b: s.scene.b) {
                 targeted.hoverBand = TargetedAdjust.band(forHue: hue)

@@ -19,7 +19,7 @@
 // point the research file marks as the part that must not be got wrong: white
 // balance scales red and blue *upward* relative to green, so their clipping
 // levels routinely exceed 1.0. Testing against a single level after white
-// balance is itself a source of false colour.
+// balance is itself a source of false color.
 
 struct HighlightParams
 {
@@ -37,7 +37,7 @@ static const int kRadius = 12;
 static const int kStride = 3;
 
 /// Below this many valid pixels the fit says more about luck than about the
-/// scene, and a bad fit invents colour rather than recovering it.
+/// scene, and a bad fit invents color rather than recovering it.
 static const float kMinSamples = 8.0f;
 
 /// A reconstructed channel is allowed this much headroom above its clipping
@@ -46,13 +46,13 @@ static const float kMinSamples = 8.0f;
 static const float kMaxGain = 2.0f;
 
 /// How bright a valid pixel must be, as a fraction of where it would clip, to
-/// count towards the fit.
+/// count toward the fit.
 ///
 /// This is Masood et al.'s Ω: the *boundary* of the saturated region, not the
 /// general neighbourhood. Around a small light at night the neighbourhood is
 /// almost all dark background, and a relation fitted on background pixels
 /// describes the background — extrapolating it out to highlight brightness
-/// produced a coloured halo round every light in the frame.
+/// produced a colored halo round every light in the frame.
 static const float kShoulder = 0.35f;
 
 /// How far past the brightest pixel that informed the fit the estimate may
@@ -181,7 +181,7 @@ void highlightRecover(uint3 tid : SV_DispatchThreadID,
 
     // No channel may end up in a ratio to the reference that the neighbourhood
     // never showed. This is the guard that actually kills the halo: a fit can
-    // be well conditioned and still imply a colour nothing nearby exhibits.
+    // be well conditioned and still imply a color nothing nearby exhibits.
     const float3 ceiling = min(float3(clip.r, clip.g, clip.b) * kMaxGain,
                                maxRatio * reference);
 

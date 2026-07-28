@@ -39,18 +39,18 @@ Rule: every milestone ends with something you can actually shoot with. No milest
 - **Epic: Interaction** — per-node caching, degrade-then-refine during drags
 - **Epic: Look** — neutral-gray dark theme, panel layout
 
-### Export panel — modelled on macOS Preview's export sheet
+### Export panel — modeled on macOS Preview's export sheet
 
 Basic export works (JPEG/PNG/TIFF, quality, longest-edge resize) but has no UI
 beyond a save dialog. Preview's sheet is the right reference because it is the
 one every Mac user already understands.
 
-| Control | Behaviour |
+| Control | Behavior |
 |---|---|
 | **Format** | JPEG · PNG · TIFF · HEIF. Changing it swaps the options below and updates the extension in the filename. |
 | **Quality** | JPEG and HEIF only. Slider with a live **estimated file size** beside it — the number is why the slider is legible. |
 | **Resolution** | Preset menu (Full · 4096 · 2048 · 1024 px long edge · Custom) plus explicit width/height fields that respect the aspect ratio. Shows the resulting pixel dimensions. |
-| **Colour space** | sRGB · Display P3 · Adobe RGB. sRGB default, since it is what survives the web. |
+| **Color space** | sRGB · Display P3 · Adobe RGB. sRGB default, since it is what survives the web. |
 | **Bit depth** | 8-bit · 16-bit, TIFF and PNG only. ⚠️ Needs the pipeline to end in `rgba16f` rather than `rgba8`. |
 | **Metadata** | Keep all · Strip location · Strip everything. |
 | **Output sharpening** | None · Screen · Print. Resampling softens; this is the standard correction. |
@@ -77,7 +77,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 **Definition of done:** Orion handles a difficult image (harsh light, high ISO, bad lens) as well as Lightroom would.
 
 - ✅ Tone curve (monotone cubic Hermite, per-channel LUT)
-- ✅ HSL / colour mixer, 8 hue bands, with targeted adjustment
+- ✅ HSL / color mixer, 8 hue bands, with targeted adjustment
 - ✅ Sharpening (amount / radius / masking)
 - ✅ Guided filter → local highlights and shadows *(He, Sun & Tang)*
 - ⬜ Profiled wavelet denoise + per-camera noise profile
@@ -147,7 +147,7 @@ honest picture rather than the plan.
 ### What works today
 Open a raw file · white balance in Kelvin · exposure, contrast, and four tone
 controls with *local* highlights and shadows · vibrance and saturation · an
-eight-band colour mixer with a targeted picker · tone curve · sharpening ·
+eight-band color mixer with a targeted picker · tone curve · sharpening ·
 rotation · pan, zoom and navigator · histogram · export to JPEG, PNG and TIFF.
 
 ### The three biggest gaps, in order

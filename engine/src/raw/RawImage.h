@@ -14,7 +14,7 @@
 
 namespace orion::raw {
 
-/// Colour filter array layout, normalised so (0,0) is the top-left of the
+/// Color filter array layout, normalized so (0,0) is the top-left of the
 /// visible area. Values are LibRaw's channel indices.
 enum class Channel : std::uint8_t { R = 0, G = 1, B = 2, G2 = 3 };
 

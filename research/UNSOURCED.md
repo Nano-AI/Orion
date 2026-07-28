@@ -19,12 +19,12 @@ implementation — see [demosaic.md](demosaic.md).
 
 **Not sourced:** the smoothstep knee positions (−4…+1 EV for highlights,
 −7…−1.5 EV for shadows, −2…+2.5 for whites, −9…−3.5 for blacks) and the 1.5×
-gain scaling. I chose these by reasoning about where middle grey sits and what
+gain scaling. I chose these by reasoning about where middle gray sits and what
 felt proportionate.
 
 **Cost:** the controls will not agree numerically with Lightroom or darktable.
 Now that the structure is right this is a tuning difference rather than a
-behavioural one, but "+50 shadows" still will not mean the same thing.
+behavioral one, but "+50 shadows" still will not mean the same thing.
 
 **To fix:** derive knees from a published tone-mapping operator, or calibrate
 against reference renders of the same file.
@@ -37,29 +37,29 @@ against reference renders of the same file.
 
 **Not sourced:** vibrance backs off in proportion to `1 − chroma`, where chroma
 is `(max − min) / max`. The *idea* — weight the boost by how unsaturated a
-colour already is — is universal and correct. The specific weighting is mine.
+color already is — is universal and correct. The specific weighting is mine.
 
 **Cost:** low. It behaves sensibly; it just is not anyone's published curve.
 
 ---
 
-## 4. Colour mixer band weighting
+## 4. Color mixer band weighting
 
 **Where:** `ops/hsl_ops.slang`.
 
 **Not sourced:** eight bands at 0/30/60/120/180/240/285/320°, weighted by
-`(1 − distance/60°)²` and normalised.
+`(1 − distance/60°)²` and normalized.
 
 **Reasoned, not arbitrary:** the 60° falloff makes neighbouring bands overlap so
 a gradient crossing between them does not band, and squaring sharpens the
-attribution. Band names and centres follow Lightroom's Color Mixer so a user's
+attribution. Band names and centers follow Lightroom's Color Mixer so a user's
 existing instincts transfer.
 
 **Cost:** low.
 
 **One real subtlety, handled:** HSL is bounded to 0–1 but the working data is
 not. Clamping into range would crush every highlight above 1.0 to white and
-strip its colour — an actual bug that shipped. It now normalises by the peak
+strip its color — an actual bug that shipped. It now normalizes by the peak
 channel and restores magnitude afterwards, which is safe because hue and
 saturation are scale-invariant.
 

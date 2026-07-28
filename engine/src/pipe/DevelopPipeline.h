@@ -36,7 +36,7 @@ struct Adjustments {
     float vibrance   = 0.0f;   // -1..1
     float saturation = 0.0f;   // -1..1, 0 is untouched
 
-    // Colour mixer, eight bands: red, orange, yellow, green, aqua, blue,
+    // Color mixer, eight bands: red, orange, yellow, green, aqua, blue,
     // purple, magenta. Each -1..1.
     std::array<float, 8> hueShift{};
     std::array<float, 8> satShift{};
@@ -49,7 +49,7 @@ struct Adjustments {
     /// rotates the image clockwise, which is what a "straighten" control means.
     float straightenDeg = 0.0f;
 
-    /// Crop rectangle in normalised post-rotation coordinates. The full frame
+    /// Crop rectangle in normalized post-rotation coordinates. The full frame
     /// is origin (0,0) size (1,1).
     float cropX = 0.0f, cropY = 0.0f;
     float cropW = 1.0f, cropH = 1.0f;
@@ -87,7 +87,7 @@ struct Adjustments {
     /// rather than an arbitrary amount — which is what makes the same setting
     /// behave the same way on a clean frame and a very noisy one.
     float denoiseLuma   = 0.0f;   // 0..4, 0 disables the whole chain
-    float denoiseColour = 0.0f;   // 0..4, applied on top of luma
+    float denoiseColor = 0.0f;   // 0..4, applied on top of luma
 
     // Capture sharpening. Sits just after the demosaic.
     float sharpenAmount  = 0.0f;   // 0..2
@@ -128,7 +128,7 @@ public:
     [[nodiscard]] std::uint32_t outputHeight() const noexcept;
 
     /// The whole frame after rotation, before any crop — what the crop
-    /// rectangle is normalised against.
+    /// rectangle is normalized against.
     [[nodiscard]] std::uint32_t frameWidth()  const noexcept;
     [[nodiscard]] std::uint32_t frameHeight() const noexcept;
 
@@ -138,7 +138,7 @@ public:
     [[nodiscard]] const gpu::Texture& output() const { return pipeline_.output(); }
 
     /// The image after white balance and the camera matrix, but before any user
-    /// adjustment. This is what the colour picker must sample: reading the
+    /// adjustment. This is what the color picker must sample: reading the
     /// edited result would mean adjusting a band changes which band you would
     /// pick next time, which is a feedback loop, not a tool.
     [[nodiscard]] const gpu::Texture& referenceImage() const {
@@ -190,7 +190,7 @@ private:
     /// The brightest neutral this frame can describe, once white balance has
     /// been applied — the lowest of the three per-channel saturation levels.
     /// Linearize clips to it so a blown highlight comes out white instead of
-    /// carrying the white-balance gains as a colour cast.
+    /// carrying the white-balance gains as a color cast.
     [[nodiscard]] float whiteClipFor(const float multipliers[3]) const noexcept;
 };
 

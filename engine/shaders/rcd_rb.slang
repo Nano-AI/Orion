@@ -2,15 +2,15 @@
 //
 // Reference: Luis Sanz Rodríguez, https://github.com/LuisSR/RCD-Demosaicing (MIT).
 //
-// Two cases, both interpolating the colour *difference* C − G rather than the
+// Two cases, both interpolating the color *difference* C − G rather than the
 // channel itself. Chroma varies slowly compared with luminance, so this keeps
 // the detail green already resolved.
 //
 //   4.1 At a red or blue site, the missing opposite channel sits on the
 //       diagonals. A P/Q discrimination — the same statistic as step 1, sampled
-//       diagonally — decides which diagonal to favour. The previous version
+//       diagonally — decides which diagonal to favor. The previous version
 //       averaged a 3x3 with no directionality at all, which is why edges showed
-//       colour fringing.
+//       color fringing.
 //
 //   4.2 At a green site, both red and blue sit on the cardinal neighbours, and
 //       the step-1 discrimination already computed is reused.
@@ -24,7 +24,7 @@ struct RBParams
     uint  filters;
 };
 
-// Colour difference (sample − green) at an offset.
+// Color difference (sample − green) at an offset.
 float diffAt(Texture2D<float> cfa, Texture2D<float> green, int2 c, int2 d, uint2 sz)
 {
     const int2 q = clampToImage(c + d, sz);

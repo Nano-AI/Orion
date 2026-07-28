@@ -27,6 +27,25 @@ struct Filmstrip: View {
     }
 
     private var filterBar: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            controls
+            // On its own line, below the controls. Beside them it sat level
+            // with the thumbnails and read as a caption on the first one.
+            Text(library.summary)
+                .font(.system(size: 10))
+                .monospacedDigit()
+                .foregroundStyle(Palette.faint)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14)
+        // Fixed, because the summary's width changes the moment you reject
+        // something — and a filter bar that grows shoves the whole strip
+        // sideways, so the thumbnail under the cursor is no longer the one you
+        // were about to click.
+        .frame(width: 300, alignment: .leading)
+    }
+
+    private var controls: some View {
         HStack(spacing: 8) {
             Picker("", selection: $library.filter) {
                 ForEach(Library.Filter.allCases) { Text($0.title).tag($0) }
@@ -60,18 +79,8 @@ struct Filmstrip: View {
                 .help("Reject or keep this photo (R)")
             }
 
-            Text(library.summary)
-                .font(.system(size: 10))
-                .monospacedDigit()
-                .foregroundStyle(Palette.faint)
-                .lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        // Fixed, because the summary's width changes the moment you reject
-        // something — and a filter bar that grows shoves the whole strip
-        // sideways, so the thumbnail under the cursor is no longer the one you
-        // were about to click.
-        .frame(width: 300, alignment: .leading)
     }
 
     private var strip: some View {

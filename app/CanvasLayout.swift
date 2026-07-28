@@ -36,7 +36,7 @@ enum CanvasLayout {
     /// was not.
     ///
     /// `quadScale` is the renderer's own, in NDC half-extents: the quad spans
-    /// −q…+q about the centre, so it covers `q` of the view on each axis.
+    /// −q…+q about the center, so it covers `q` of the view on each axis.
     static func drawnRect(quadScale q: CGSize, in size: CGSize) -> CGRect {
         guard size.width > 0, size.height > 0 else { return .zero }
 
@@ -51,10 +51,10 @@ enum CanvasLayout {
     /// How far a frame of aspect `a` reaches on each axis once turned by
     /// `angleDeg`, as a multiple of a rectangle of size (w, h).
     ///
-    /// Rotating a Wc x Hc rectangle about its own centre gives an axis-aligned
+    /// Rotating a Wc x Hc rectangle about its own center gives an axis-aligned
     /// bounding box of Wc|cos| + Hc|sin| by Wc|sin| + Hc|cos|. Everything below
-    /// is that identity, expressed in coordinates normalised to the frame — so
-    /// the aspect has to appear, because normalised x and y are not the same
+    /// is that identity, expressed in coordinates normalized to the frame — so
+    /// the aspect has to appear, because normalized x and y are not the same
     /// number of pixels.
     private static func extent(w: CGFloat, h: CGFloat,
                                aspect a: CGFloat, angleDeg: CGFloat) -> CGSize {
@@ -64,11 +64,11 @@ enum CanvasLayout {
                       height: w * s * a + h * c)
     }
 
-    /// The picture turns about the frame's centre, never the crop's.
+    /// The picture turns about the frame's center, never the crop's.
     ///
     /// Pivoting on the crop meant that dragging the rectangle re-rotated the
     /// picture beneath it — the image visibly swam out from under the box.
-    /// About the frame's centre the turned frame is a fixed quadrilateral and
+    /// About the frame's center the turned frame is a fixed quadrilateral and
     /// the crop is simply a window onto it, which is what Photoshop and
     /// Lightroom both do.
     static let pivot = CGPoint(x: 0.5, y: 0.5)
@@ -86,7 +86,7 @@ enum CanvasLayout {
         guard a > 0 else { return crop }
 
         var r = clampedCrop(crop)
-        let centre = CGPoint(x: r.midX, y: r.midY)
+        let center = CGPoint(x: r.midX, y: r.midY)
 
         // Size first. A rectangle fits inside an axis-aligned box only if its
         // bounding box does, so this condition is exact rather than a bound.
@@ -95,8 +95,8 @@ enum CanvasLayout {
         if scale < 1 {
             r.size.width *= scale
             r.size.height *= scale
-            r.origin.x = centre.x - r.width / 2
-            r.origin.y = centre.y - r.height / 2
+            r.origin.x = center.x - r.width / 2
+            r.origin.y = center.y - r.height / 2
         }
 
         // Then position. The crop is axis-aligned where it is drawn, but the
@@ -128,7 +128,7 @@ enum CanvasLayout {
 
     // MARK: The crop tool's preview canvas
 
-    /// The region the crop preview renders, in the same normalised coordinates
+    /// The region the crop preview renders, in the same normalized coordinates
     /// as the crop rectangle.
     ///
     /// It has to cover the frame's rotated bounding box. A fixed multiple
@@ -148,7 +148,7 @@ enum CanvasLayout {
         let m = max(reach.width, reach.height) * 1.06
 
         // Concentric with the frame, because the frame turns about its own
-        // centre. Nothing here depends on the crop — that is deliberate. When
+        // center. Nothing here depends on the crop — that is deliberate. When
         // the canvas followed the crop, dragging the rectangle moved the
         // picture underneath it, which is the "it comes unlocked from the
         // image" everyone hits within about ten seconds of trying it.
@@ -167,7 +167,7 @@ enum CanvasLayout {
                       height: r.height / canvasSize)
     }
 
-    /// A normalised rectangle placed inside a view rectangle.
+    /// A normalized rectangle placed inside a view rectangle.
     static func inView(_ unit: CGRect, in frame: CGRect) -> CGRect {
         CGRect(x: frame.minX + unit.origin.x * frame.width,
                y: frame.minY + unit.origin.y * frame.height,
@@ -175,7 +175,7 @@ enum CanvasLayout {
                height: unit.height * frame.height)
     }
 
-    /// A crop cannot invert or leave the frame. Normalised in, normalised out.
+    /// A crop cannot invert or leave the frame. Normalized in, normalized out.
     static func clampedCrop(_ r: CGRect) -> CGRect {
         var r = r
         r.size.width = min(max(r.size.width, 0.05), 1)

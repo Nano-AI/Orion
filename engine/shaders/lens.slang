@@ -1,7 +1,7 @@
 // Lens corrections — distortion, transverse chromatic aberration, vignetting.
 //
 // Reference: lensfun's model definitions, as set out in
-// research/deep-research-2026-07-27.md §4. Radii are normalised against
+// research/deep-research-2026-07-27.md §4. Radii are normalized against
 // R_norm = ½·sqrt(width² + height²), which is lensfun's convention and the one
 // every published coefficient assumes.
 //
@@ -25,7 +25,7 @@
 struct LensParams
 {
     uint2 size;
-    float centreX, centreY;   // optical centre, normalised
+    float centerX, centerY;   // optical center, normalized
     float k1;                 // poly3 distortion
     float caRed, caBlue;      // TCA, as a fractional radial scale
     float vignetteA;          // p_a; p_b and p_c stay zero for a manual control
@@ -59,12 +59,12 @@ void lensCorrect(uint3 tid : SV_DispatchThreadID,
     if (tid.x >= p.size.x || tid.y >= p.size.y) return;
 
     const float2 size = float2(p.size);
-    const float2 centre = float2(p.centreX, p.centreY) * size;
+    const float2 center = float2(p.centerX, p.centerY) * size;
 
-    // lensfun's normalising radius: half the diagonal, so r = 1 at the corners.
+    // lensfun's normalizing radius: half the diagonal, so r = 1 at the corners.
     const float rNorm = 0.5f * length(size);
 
-    const float2 d = (float2(tid.xy) + 0.5f) - centre;
+    const float2 d = (float2(tid.xy) + 0.5f) - center;
     const float ru = length(d) / rNorm;
 
     // poly3. The (1 − k₁) term is what pins r_d(1) = 1, so the frame corners
@@ -81,9 +81,9 @@ void lensCorrect(uint3 tid : SV_DispatchThreadID,
                                 distort * (1.0f - p.caBlue * ru * ru));
 
     float3 c;
-    c.r = sampleClamped(src, centre + d * scale.r, p.size).r;
-    c.g = sampleClamped(src, centre + d * scale.g, p.size).g;
-    c.b = sampleClamped(src, centre + d * scale.b, p.size).b;
+    c.r = sampleClamped(src, center + d * scale.r, p.size).r;
+    c.g = sampleClamped(src, center + d * scale.g, p.size).g;
+    c.b = sampleClamped(src, center + d * scale.b, p.size).b;
 
     // Vignetting is measured at the *corrected* radius, because that is where
     // the light actually fell on the sensor.

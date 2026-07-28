@@ -5,7 +5,7 @@ import Foundation
 ///
 /// Zoom is expressed as a multiple of "fit": 1.0 shows the whole frame, and
 /// `fitScale` converts that into actual pixel magnification so the toolbar can
-/// report a true percentage. Centre is in normalised image coordinates, so it
+/// report a true percentage. Center is in normalized image coordinates, so it
 /// survives a window resize without the view jumping.
 @Observable
 final class Viewport {
@@ -47,10 +47,10 @@ final class Viewport {
         } else {
             reset()
         }
-        clampCentre()
+        clampCenter()
     }
 
-    /// Zooms about a point given in normalised *view* coordinates (0..1), so
+    /// Zooms about a point given in normalized *view* coordinates (0..1), so
     /// the pixel under the cursor stays under the cursor.
     func zoomBy(_ factor: CGFloat, anchor: CGPoint, visible: CGSize) {
         guard !locked else { return }
@@ -58,22 +58,22 @@ final class Viewport {
         zoom = min(max(zoom * factor, 1.0), 64.0)
         guard zoom != old else { return }
 
-        // The anchor's offset from centre, in image space, shrinks by exactly
+        // The anchor's offset from center, in image space, shrinks by exactly
         // the ratio of the two zoom levels.
         let dx = (anchor.x - 0.5) * visible.width
         let dy = (anchor.y - 0.5) * visible.height
         let shrink = 1 - (old / zoom)
         center.x += dx * shrink
         center.y += dy * shrink
-        clampCentre()
+        clampCenter()
     }
 
-    /// Pans by a delta in normalised view coordinates.
+    /// Pans by a delta in normalized view coordinates.
     func pan(by delta: CGSize, visible: CGSize) {
         guard !locked else { return }
         center.x -= delta.width * visible.width
         center.y -= delta.height * visible.height
-        clampCentre()
+        clampCenter()
     }
 
     /// Fraction of the view each axis of the image covers at zoom 1. The
@@ -103,7 +103,7 @@ final class Viewport {
                       height: min(1.0, 1.0 / (zoom * base.height)))
     }
 
-    private func clampCentre() {
+    private func clampCenter() {
         // Kept generous here; the renderer clamps precisely once it knows the
         // visible fraction, because that depends on the view's aspect.
         center.x = min(max(center.x, 0), 1)

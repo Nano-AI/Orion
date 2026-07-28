@@ -14,7 +14,7 @@ per section.
 
 ### Cross-channel correlation (Masood, Zhu & Tang, 2009)
 
-Operates in **linear camera RGB**, before white balance scaling and colour
+Operates in **linear camera RGB**, before white balance scaling and color
 transforms.
 
 For a saturated region *S*, take a boundary neighbourhood Ω of valid pixels
@@ -53,7 +53,7 @@ of the valid channels as a baseline:
 C_ref(p) = (1/|U(p)|) Σ_{k in U(p)} C_k(p)
 ```
 
-Then for each clipped channel c, propagate the *colour offset* relative to that
+Then for each clipped channel c, propagate the *color offset* relative to that
 baseline from surrounding valid pixels:
 
 ```
@@ -63,7 +63,7 @@ w(p,q)  = exp( −‖p − q‖² / (2 σ_spatial²) )
 
 This keeps the high-frequency luminance from the valid channel at p while
 taking chromaticity from the valid boundary — which is why it holds detail
-rather than flooding the region with flat colour.
+rather than flooding the region with flat color.
 
 **Cost:** O(R²) per clipped pixel, radius 3–9. **GPU:** high, 2D stencil.
 
@@ -183,7 +183,7 @@ geometry below supersedes the invented constants** currently in
 
 `EV(Y) = log₂(Y / 0.18)`
 
-| Control | Centre μ | Active range | Knee band |
+| Control | Center μ | Active range | Knee band |
 |---|---|---|---|
 | Blacks | −5.5 EV | −∞ … −4.0 | −4.5 … −3.5 |
 | Shadows | −2.5 EV | −4.0 … −1.0 | −1.5 … −0.5 |
@@ -197,7 +197,7 @@ w_k(EV) = exp( −(EV − μ_k)² / (2σ_k²) )
 ŵ_k(EV) = w_k(EV) / Σ_j w_j(EV)
 ```
 
-Normalising so the weights **sum to 1** is what prevents double-counting where
+Normalizing so the weights **sum to 1** is what prevents double-counting where
 bands overlap. Orion currently multiplies independent smoothstep masks, which
 double-counts in the overlap and produces brightness spikes.
 
@@ -242,8 +242,8 @@ This confirms Orion's existing split as correct.
 
 ## 4. Lens corrections — ⬜ not yet implemented
 
-Lensfun conventions. `R_norm = ½·sqrt(width² + height²)`, `r_u` normalised
-radius from the optical centre.
+Lensfun conventions. `R_norm = ½·sqrt(width² + height²)`, `r_u` normalized
+radius from the optical center.
 
 ### Distortion
 

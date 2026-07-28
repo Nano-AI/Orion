@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Export settings, modelled on macOS Preview's export sheet.
+/// Export settings, modeled on macOS Preview's export sheet.
 ///
 /// Preview is the right reference because every Mac user already knows it. The
 /// part that matters most is the **live size estimate**: a quality slider with
@@ -243,7 +243,7 @@ struct ExportPanel: View {
 
             Text(settings.measuredBytes == nil
                  ? "Measuring the encoded size…"
-                 : "Encoded size, measured. Colour space is sRGB.")
+                 : "Encoded size, measured. Color space is sRGB.")
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)

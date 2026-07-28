@@ -19,9 +19,9 @@ struct GeometryParams
 
     uint  quarterTurns;   // 0..3, clockwise, camera orientation plus user
     float straightenRad;  // fine rotation, applied after the quarter turns
-    float2 cropOrigin;    // normalised, in post-rotation space
-    float2 cropSize;      // normalised
-    float2 pivot;         // straighten centre, normalised in post-rotation space
+    float2 cropOrigin;    // normalized, in post-rotation space
+    float2 cropSize;      // normalized
+    float2 pivot;         // straighten center, normalized in post-rotation space
 };
 
 /// Bilinear fetch. Outside the frame returns transparent black rather than
@@ -63,21 +63,21 @@ void geometry(uint3 tid : SV_DispatchThreadID,
     // Output pixel to a point in the cropped region, then to the full rotated
     // frame. Working backwards means every output pixel is written once.
     // The 0.5 offsets convert between pixel indices and continuous
-    // coordinates: output pixel i covers [i, i+1) with its centre at i+0.5, and
-    // the source pixel at that centre is index i, not i+0.5. Dropping the
+    // coordinates: output pixel i covers [i, i+1) with its center at i+0.5, and
+    // the source pixel at that center is index i, not i+0.5. Dropping the
     // second subtraction shifts the whole image half a pixel and softens it,
     // which is invisible by eye and obvious to a test.
     const float2 t = (float2(tid.xy) + 0.5f) / float2(p.outSize);
     float2 r = (p.cropOrigin + t * p.cropSize) * rotated - 0.5f;
 
-    // Straighten about the centre of the crop, not the frame — rotating about
-    // the frame centre would slide the composition out from under the crop.
+    // Straighten about the center of the crop, not the frame — rotating about
+    // the frame center would slide the composition out from under the crop.
     //
     // The pivot is passed in rather than derived from cropOrigin and cropSize,
     // because those two describe the *canvas* while the crop tool is open, not
     // the user's rectangle. Deriving it meant the preview turned about the
-    // frame centre and the committed render about the crop centre, so an
-    // off-centre crop delivered a different picture than the box had shown.
+    // frame center and the committed render about the crop center, so an
+    // off-center crop delivered a different picture than the box had shown.
     if (abs(p.straightenRad) > 1e-6f)
     {
         const float2 pivot = p.pivot * rotated;

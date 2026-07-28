@@ -50,7 +50,7 @@ std::array<float, 3> multipliersFor(const WhiteBalance& wb, const float xyzToCam
     // xy at unit luminance -> XYZ.
     const std::array<float, 3> xyz{x / y, 1.0f, (1.0f - x - y) / y};
 
-    // The illuminant as the camera sees it. Neutralising means dividing by it.
+    // The illuminant as the camera sees it. Neutralizing means dividing by it.
     const auto cam = applyMatrix(xyzToCam, xyz);
 
     std::array<float, 3> mul{};
@@ -58,7 +58,7 @@ std::array<float, 3> multipliersFor(const WhiteBalance& wb, const float xyzToCam
         mul[i] = (std::abs(cam[i]) > 1e-6f) ? 1.0f / cam[i] : 1.0f;
     }
 
-    // Normalise to green, matching what the linearize shader expects.
+    // Normalize to green, matching what the linearize shader expects.
     const float g = (mul[1] != 0.0f) ? mul[1] : 1.0f;
     for (auto& m : mul) m /= g;
     return mul;

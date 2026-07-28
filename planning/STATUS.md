@@ -6,7 +6,7 @@
 
 **Last updated:** 2026-07-28 (overnight run, in progress)
 **Phase:** M0 done. M1 ~98%, M2 ~97%.
-**Next story:** the colour-space picker, then a lens database
+**Next story:** the color-space picker, then a lens database
 
 ## Overnight run — 2026-07-28
 
@@ -19,7 +19,7 @@ been needed so far.
 
 | | Commit |
 |---|---|
-| Crop constrained to the turned frame; straighten opens to ±90; pivot is the frame centre; corner marks in a fixed box; culling moved to a Photo menu | `28ca074` |
+| Crop constrained to the turned frame; straighten opens to ±90; pivot is the frame center; corner marks in a fixed box; culling moved to a Photo menu | `28ca074` |
 | Tone curve panel — the engine's spline had been unreachable through the facade since M2 | `829e565` |
 | Profiled wavelet denoise, with a per-frame Poisson–Gaussian fit | `bb06700` |
 | Highlight reconstruction; fast guided filter (90 ms → 19.6 ms); a bench that stops crying wolf | `a4ac2fa` |
@@ -36,13 +36,13 @@ The one that mattered. `linearize` scaled each channel by its white-balance gain
 and clamped only at zero, so a blown pixel — which the sensor delivers as
 (S, S, S) — left the node as the gains themselves, about (2.2, 1.0, 1.6) on a
 warm frame. Everything downstream preserves ratios, so the tone curve, the
-colour matrix and AgX all carried it faithfully to the screen. Every clipped
+color matrix and AgX all carried it faithfully to the screen. Every clipped
 light in a night shot rendered magenta.
 
 Clipping all three to one ceiling is dcraw's default, and it belongs in the
 mosaic for dcraw's reason: RCD interpolates across an unclipped neighbour, so
 clipping afterwards leaves a fringe instead of a clean edge. Written up in
-`research/colour-pipeline.md`.
+`research/color-pipeline.md`.
 
 Measured over the blown sign in `_PIC8220.ARW`: mean saturation **0.242 → 0.015**,
 R/G/B 0.878/0.677/0.896 → 0.800/0.809/0.811.
@@ -59,7 +59,7 @@ against a cast that was on every frame.
 
 **Still to do, in order**
 
-1. **Colour space on export.** sRGB only. The display transform hard-codes
+1. **Color space on export.** sRGB only. The display transform hard-codes
    Rec.2020 → Rec.709; P3 and Adobe RGB want that matrix as a parameter, and
    the encoder wants the matching `CGColorSpace`.
 2. **A lens database.** The corrections are built and manual. lensfun would set
@@ -83,7 +83,7 @@ to watch on a lesser GPU.
 |---|---|---|
 | Exposure | 3 | 11.5 ms |
 | Highlights / shadows | 10 | **23.6 ms** (was 90.1) |
-| Colour mixer | 5 | 19.2 ms |
+| Color mixer | 5 | 19.2 ms |
 | Temperature / tint / sharpen | 11 | ~50 ms |
 
 **M0 gate passes at 11.67 ms p95**, against 16 ms. Re-measured 2026-07-28 after
@@ -135,7 +135,7 @@ the viewport suite's job.
 **M0 is done and the gate passed with room to spare.** A 24 MP Sony ARW goes
 through a seven-node GPU pipeline and an exposure change re-renders in
 **8.15 ms at p95 — at full resolution**, against a 16 ms budget. The preview-ROI
-optimisation the architecture assumes we would need is not needed yet.
+optimization the architecture assumes we would need is not needed yet.
 
 ```
 Source          Sony ILCE-7M3, 6024 x 4024 (24.2 MP, RGGB)
@@ -149,7 +149,7 @@ M0 gate         PASS
 ```
 
 **The pipeline is bandwidth-bound, not compute-bound.** An `rgba16f` texture at
-24 MP is 194 MB. Adding tone and colour as separate pointwise nodes pushed
+24 MP is 194 MB. Adding tone and color as separate pointwise nodes pushed
 exposure drag to 19 ms and *failed the gate*; fusing all the scene-linear
 pointwise work into one kernel, and AgX + curve into another, brought it back to
 6.7 ms. Each operation still lives in its own function in
@@ -166,7 +166,7 @@ degrade-then-refine (cheap demosaic mid-drag, full quality on release), or the
 preview-ROI path. Neither is built yet.
 
 Per-node caching works: moving exposure dirties only exposure + AgX, so
-linearize, all three RCD passes and the colour matrix are served from cache.
+linearize, all three RCD passes and the color matrix are served from cache.
 
 ### Dev machine (measured, not assumed)
 Apple **M4**, macOS 26.4.1, arm64 · Xcode 26.6 / clang 21 · 17.8 GiB recommended working set · 13.3 GiB max buffer · **unified memory** · Apple7 GPU family supported.
@@ -207,10 +207,10 @@ design/                             tokens.json -> CSS + Swift; darkroom mockup
    kernels into one metallib gave kernel 2 textures at index 2/3 and kernel 3 at
    4/5, while the host binds from 0 every dispatch — so every kernel after the
    first read unbound slots and produced black. Fix: **one metallib per kernel**.
-   Do not "optimise" that back into a single module.
-2. **The camera matrix must be row-normalised.** Without it, white balance and
-   the colour matrix fight: the data is already neutral after WB, and an
-   unnormalised matrix re-tints it (we had a magenta cast). dcraw normalises
+   Do not "optimize" that back into a single module.
+2. **The camera matrix must be row-normalized.** Without it, white balance and
+   the color matrix fight: the data is already neutral after WB, and an
+   unnormalized matrix re-tints it (we had a magenta cast). dcraw normalizes
    rgb_cam for the same reason.
 3. **One geometry, one function.** The renderer, the crop overlay and hit
    testing each computed the photo's on-screen rectangle for themselves, and
@@ -219,18 +219,18 @@ design/                             tokens.json -> CSS + Swift; darkroom mockup
    the preview canvas rather than deriving a second one. Same class of bug in
    the shader: the straighten pivot was derived from cropOrigin/cropSize,
    which describe the canvas rather than the user's rectangle, so the preview
-   turned about the frame centre and the committed render about the crop
-   centre. Pass the pivot, do not derive it.
+   turned about the frame center and the committed render about the crop
+   center. Pass the pivot, do not derive it.
 4. **The crop must stay inside the turned frame.** Nothing enforced it, so a
    straightened export had transparent wedges in its corners — the crop is
    what gets sampled, and it reached past the picture. `constrainedCrop`
-   shrinks and recentres it, which is what Lightroom does. A fixed preview
+   shrinks and recenters it, which is what Lightroom does. A fixed preview
    canvas could not hold a steep angle either: a 3:2 frame at 45 degrees
    reaches 1.77x its short side, so the old constant 1.42 clipped corners past
    about 17 degrees. The canvas is now computed per angle and aspect, and
    sampled into a frame-sized texture so its cost stays flat.
 5. **A `Path` view takes the size it is offered.** An unsized one inside a
-   `.position()` grows to the whole overlay, and `.position` then centres
+   `.position()` grows to the whole overlay, and `.position` then centers
    *that* — which threw the crop corner marks into the middle of the window.
    Give hand-drawn marks a fixed `.frame`.
 
@@ -279,7 +279,7 @@ filtering · the SQLite index.
 1. ✅ **Tone curve** — `pipe/ToneCurve.{h,cpp}` evaluates the same monotone cubic
    Hermite spline as the mockup into a 256x4 LUT (master, R, G, B); the shader
    samples it. Runs after AgX, in display space.
-2. ✅ **Colour mixer** — eight hue bands with hue/saturation/luminance each,
+2. ✅ **Color mixer** — eight hue bands with hue/saturation/luminance each,
    in `shaders/ops/hsl_ops.slang`. Weights overlap smoothly (60° falloff, squared)
    so a gradient crossing between bands does not band. Folded into the fused
    scene-linear kernel, so it costs no extra pass.

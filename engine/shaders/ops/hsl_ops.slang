@@ -1,8 +1,8 @@
-// The colour mixer — eight hue bands, each with hue, saturation and luminance.
+// The color mixer — eight hue bands, each with hue, saturation and luminance.
 //
 // Lightroom's Color Mixer is the UX benchmark here, and the maths behind it is
 // unglamorous: find the pixel's hue, weight each band by how close that hue is
-// to the band's centre, and blend the offsets. The only subtlety is the
+// to the band's center, and blend the offsets. The only subtlety is the
 // weighting. Hard band edges produce visible seams where a gradient crosses
 // from one band to the next, so the weights overlap smoothly and always sum
 // to roughly one.
@@ -10,10 +10,10 @@
 #ifndef ORION_HSL_OPS_SLANG
 #define ORION_HSL_OPS_SLANG
 
-// Band centres in degrees: red, orange, yellow, green, aqua, blue, purple,
+// Band centers in degrees: red, orange, yellow, green, aqua, blue, purple,
 // magenta. Matching Lightroom's naming means a user's existing instincts
 // transfer.
-static const float kBandCentres[8] = { 0.0f, 30.0f, 60.0f, 120.0f,
+static const float kBandCenters[8] = { 0.0f, 30.0f, 60.0f, 120.0f,
                                        180.0f, 240.0f, 285.0f, 320.0f };
 
 float3 rgbToHsl(float3 c)
@@ -89,7 +89,7 @@ float3 applyColorMixer(float3 c,
 
     // HSL is defined on 0..1, but scene-linear data is unbounded — a bright
     // specular can sit well above 1. Clamping into range would crush every
-    // highlight to white and strip its colour, so normalise by the peak
+    // highlight to white and strip its color, so normalize by the peak
     // channel instead and restore the magnitude afterwards. Hue and saturation
     // are scale-invariant, which is what makes this safe.
     const float peak = max(c.r, max(c.g, c.b));
@@ -98,7 +98,7 @@ float3 applyColorMixer(float3 c,
     const float scale = max(peak, 1.0f);
     float3 hsl = rgbToHsl(c / scale);
 
-    // A near-grey pixel has no meaningful hue, so leave it alone rather than
+    // A near-gray pixel has no meaningful hue, so leave it alone rather than
     // letting numerical noise pick a band for it.
     if (hsl.y < 1e-3f) return c;
 
@@ -109,7 +109,7 @@ float3 applyColorMixer(float3 c,
     {
         // 60 degrees of falloff gives neighbouring bands real overlap, which is
         // what keeps a sky gradient from banding as it crosses aqua into blue.
-        const float d = hueDistance(hsl.x, kBandCentres[i]);
+        const float d = hueDistance(hsl.x, kBandCenters[i]);
         const float w = max(0.0f, 1.0f - d / 60.0f);
         const float w2 = w * w;
 

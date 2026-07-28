@@ -9,8 +9,8 @@
 
 struct DisplayParams
 {
-    float contrast;     // slope of the sigmoid at middle grey
-    float pivot;        // middle grey in log2, typically -2.5
+    float contrast;     // slope of the sigmoid at middle gray
+    float pivot;        // middle gray in log2, typically -2.5
     uint  curveIdentity;// skip the LUT entirely when the curve is untouched
     uint  resolution;   // LUT entries per row
     uint2 size;
@@ -31,7 +31,7 @@ static const float3x3 kRec2020ToRec709 = float3x3(
 // AgX inset and outset, from Troy Sobotka's reference implementation.
 //
 // Every row sums to 1, which is the property that matters: it means neutral
-// grey stays neutral. An earlier pair of matrices here did not have it — the
+// gray stays neutral. An earlier pair of matrices here did not have it — the
 // outset mapped (1,1,1) to roughly (0.84, 0.94, 1.22), lifting blue well above
 // green and casting the whole image purple. The test in orion-tests asserts
 // neutrality now, so that cannot recur silently.
@@ -45,7 +45,7 @@ static const float3x3 kOutset = float3x3(
     -0.0528968517574562f,  1.15190312990417f,   -0.0989611768448433f,
     -0.0529716355144438f, -0.0980434501171241f,  1.15107367264116f);
 
-// Six-term polynomial fit of the AgX sigmoid over the normalised range.
+// Six-term polynomial fit of the AgX sigmoid over the normalized range.
 float agxCurve(float x)
 {
     const float x2 = x * x;
@@ -88,7 +88,7 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
     c = clamp(log2(max(c, 1e-10f)), kMinEv, kMaxEv);
     c = (c - kMinEv) / (kMaxEv - kMinEv);
 
-    // Contrast pivots about middle grey, so raising it does not also shift
+    // Contrast pivots about middle gray, so raising it does not also shift
     // overall brightness.
     const float pivotNorm = (p.pivot - kMinEv) / (kMaxEv - kMinEv);
     c = saturate((c - pivotNorm) * p.contrast + pivotNorm);
@@ -113,7 +113,7 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
     // No sRGB encode here. The AgX polynomial is a fit of the *display*
     // rendering transform — its output is already display-referred, so
     // applying a transfer function on top encodes the signal twice. That is
-    // what washed the image out: middle grey landed at 0.74 instead of 0.50,
-    // lifting everything and flattening colour along with it.
+    // what washed the image out: middle gray landed at 0.74 instead of 0.50,
+    // lifting everything and flattening color along with it.
     dst[tid.xy] = float4(saturate(c), 1.0f);
 }

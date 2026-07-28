@@ -34,7 +34,7 @@ struct Histogram: View {
 
                         ForEach(0..<3, id: \.self) { channel in
                             channelPath(channel, in: geo.size, ceiling: ceiling)
-                                .fill(colour(channel).opacity(0.85))
+                                .fill(color(channel).opacity(0.85))
                                 .blendMode(.screen)
                         }
                     }
@@ -46,7 +46,7 @@ struct Histogram: View {
         .accessibilityLabel("Histogram")
     }
 
-    private func colour(_ channel: Int) -> Color {
+    private func color(_ channel: Int) -> Color {
         switch channel {
         case 0:  Color(red: 0.769, green: 0.263, blue: 0.227)
         case 1:  Color(red: 0.227, green: 0.659, blue: 0.310)

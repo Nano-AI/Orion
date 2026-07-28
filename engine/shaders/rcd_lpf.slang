@@ -4,7 +4,7 @@
 //
 //     lpf = 0.25·c + 0.125·(4-neighbours) + 0.0625·(diagonals)
 //
-// A 3x3 binomial kernel over the mosaic, mixing all three colours. That is the
+// A 3x3 binomial kernel over the mosaic, mixing all three colors. That is the
 // point: it estimates local *luminance* regardless of which CFA channel each
 // sample happens to carry, and step 3 uses ratios of it to correct the green
 // estimate. Without this, there is no ratio correction and the algorithm
@@ -29,7 +29,7 @@ void rcdLpf(uint3 tid : SV_DispatchThreadID,
     const int2  c  = int2(tid.xy);
     const uint2 sz = p.size;
 
-    const float centre = tapClamped(cfa, c, sz);
+    const float center = tapClamped(cfa, c, sz);
 
     const float cross =
           tapClamped(cfa, c + int2( 0, -1), sz)
@@ -43,5 +43,5 @@ void rcdLpf(uint3 tid : SV_DispatchThreadID,
         + tapClamped(cfa, c + int2(-1,  1), sz)
         + tapClamped(cfa, c + int2( 1,  1), sz);
 
-    lpf[tid.xy] = 0.25f * centre + 0.125f * cross + 0.0625f * diag;
+    lpf[tid.xy] = 0.25f * center + 0.125f * cross + 0.0625f * diag;
 }

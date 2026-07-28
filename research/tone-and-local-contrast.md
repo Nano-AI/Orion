@@ -157,7 +157,7 @@ Photographs using Cross-Channel Correlation*, Computer Graphics Forum 28(7),
 1861–1869. Restated in `deep-research-2026-07-27.md` §1.
 
 A sensor clips per channel, not per pixel. For a neutral subject every channel
-stops at the same scene brightness and only brightness is lost; for a coloured
+stops at the same scene brightness and only brightness is lost; for a colored
 one the strongest channel stops first, the ratio between channels changes, and a
 warm cloud comes out cyan. Within a small neighbourhood the channels are close
 to linearly related, so fitting `C_c = α·C_u + β` by ordinary least squares over
@@ -166,7 +166,7 @@ the still-valid pixels says what the clipped channel would have read.
 **The per-channel threshold** — `deep-research-2026-07-27.md` §1 ★, marked there
 as the part Orion lacked entirely. White balance scales red and blue *upward*
 relative to green, so their clipping levels routinely exceed 1.0. Testing
-against a single level after white balance is itself a source of false colour.
+against a single level after white balance is itself a source of false color.
 `T_k = (W − B_k)·invRange·m_k`, and γ = 0.97, mid-range of the 0.95–0.99 given.
 
 **Deliberate deviations.**
@@ -177,7 +177,7 @@ against a single level after white balance is itself a source of false colour.
   model with a cruder Ω, and it is one shader of 150 lines rather than a
   multi-pass region solver. The cost is reach: a highlight wider than the window
   has no valid neighbours to fit against, and the shader declines rather than
-  inventing colour.
+  inventing color.
 - **All three channels clipped goes neutral.** There is nothing left to
   correlate against. A blown sun is white; inventing a hue for it is worse than
   declining to.

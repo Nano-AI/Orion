@@ -69,7 +69,7 @@ void atrousShrink(uint3 tid : SV_DispatchThreadID,
     const float y = max(luminance2020(cj1), 0.0f);
     const float sigma = p.scaleNorm * sqrt(max(p.noiseA * y + p.noiseB, 0.0f));
 
-    // Split into luma and chroma. Chroma noise is the ugly kind — coloured
+    // Split into luma and chroma. Chroma noise is the ugly kind — colored
     // blotches — and chroma detail is scarce, so it tolerates a much harder
     // threshold than luma without visible loss.
     const float dLuma = luminance2020(detail);

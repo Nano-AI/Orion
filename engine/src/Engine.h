@@ -28,8 +28,8 @@ public:
     void setAdjustments(const pipe::Adjustments&);
     double render();
 
-    /// Rendered colour at normalised image coordinates, 0..1 per channel.
-    /// Samples at normalised *oriented* coordinates.
+    /// Rendered color at normalized image coordinates, 0..1 per channel.
+    /// Samples at normalized *oriented* coordinates.
     ///
     /// Returns two things because they answer different questions.
     /// `outDisplay` is what is on screen, which is what a swatch must show.

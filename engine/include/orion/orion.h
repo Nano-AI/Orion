@@ -74,11 +74,11 @@ typedef struct OrionAdjustments {
 
     int32_t rotate_quarters; /* extra quarter turns clockwise    */
     float   straighten_deg;  /* fine rotation after the turns    */
-    float   crop_x, crop_y;  /* normalised, post-rotation        */
+    float   crop_x, crop_y;  /* normalized, post-rotation        */
     float   crop_w, crop_h;
     int32_t crop_preview;    /* show the whole frame while cropping */
 
-    /* The crop tool's preview canvas, in the same normalised post-rotation
+    /* The crop tool's preview canvas, in the same normalized post-rotation
      * coordinates as crop_x/crop_y. It has to cover the frame's rotated
      * bounding box, which depends on the angle and the frame's aspect.
      *
@@ -104,13 +104,13 @@ typedef struct OrionAdjustments {
      * level, not arbitrary amounts, so one setting behaves the same way on a
      * clean frame and a very noisy one. Zero switches the chain off entirely. */
     float denoise_luma;     /* 0..4                       */
-    float denoise_colour;   /* 0..4                       */
+    float denoise_color;   /* 0..4                       */
 
     float sharpen_amount;   /* 0..2                       */
     float sharpen_radius;   /* pixels                     */
     float sharpen_masking;  /* 0..1, protects flat areas  */
 
-    /* Colour mixer: red, orange, yellow, green, aqua, blue, purple, magenta. */
+    /* Color mixer: red, orange, yellow, green, aqua, blue, purple, magenta. */
     float hue_shift[8];
     float sat_shift[8];
     float lum_shift[8];
@@ -142,7 +142,7 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
                                     uint32_t* out_width, uint32_t* out_height);
 
 /* Dimensions of the whole frame after rotation, before any crop. This is what
- * the crop rectangle is normalised against, and what the UI needs to work out
+ * the crop rectangle is normalized against, and what the UI needs to work out
  * how far a straightened frame reaches. */
 OrionStatus orion_engine_frame_size(const OrionEngine* engine,
                                     uint32_t* out_width, uint32_t* out_height);
@@ -154,9 +154,9 @@ void* orion_engine_output_texture(const OrionEngine* engine);
 /* The engine's id<MTLDevice>, so the view can share it. */
 void* orion_engine_metal_device(const OrionEngine* engine);
 
-/* Samples the image at normalised oriented coordinates.
-   out_display is the rendered colour (what a swatch should show); out_scene is
- * the colour before any user adjustment (what a hue band must be derived from).
+/* Samples the image at normalized oriented coordinates.
+   out_display is the rendered color (what a swatch should show); out_scene is
+ * the color before any user adjustment (what a hue band must be derived from).
  * Each takes 3 floats; either may be NULL. */
 OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
                                 float* out_display, float* out_scene);

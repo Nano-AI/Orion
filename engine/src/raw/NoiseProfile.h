@@ -16,7 +16,7 @@
  *  GPL and therefore off limits here.
  *
  *  The estimate is made on the mosaic, before white balance and before any
- *  colour transform, because that is the only place the model holds: both
+ *  color transform, because that is the only place the model holds: both
  *  scale the channels by different amounts and would scale their variances
  *  with them.
  */
@@ -28,7 +28,7 @@
 namespace orion::raw {
 
 struct NoiseProfile {
-    /// Signal-dependent term, in normalised units where 1.0 is saturation.
+    /// Signal-dependent term, in normalized units where 1.0 is saturation.
     float a = 0.0f;
     /// Constant term, same units.
     float b = 0.0f;
@@ -40,7 +40,7 @@ struct NoiseProfile {
 
 /// Fits the model to a mosaic.
 ///
-/// Same-colour neighbours two pixels apart are *second*-differenced, which
+/// Same-color neighbours two pixels apart are *second*-differenced, which
 /// cancels the scene and leaves noise. Second rather than first because a first
 /// difference measures the local gradient as though it were noise — on a frame
 /// with a sky in it that is most of what it measures. A second difference

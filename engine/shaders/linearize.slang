@@ -1,4 +1,4 @@
-// Sensor samples -> normalised linear CFA.
+// Sensor samples -> normalized linear CFA.
 //
 // Subtracts the per-channel black point, scales to 0..1 against the saturation
 // point, applies the as-shot white balance, and clips to the white level.
@@ -18,10 +18,10 @@
 // mode, and the ceiling is the *lowest* of the per-channel saturation levels,
 // because that is the brightest neutral the sensor can still describe. A
 // channel above it says "more of this primary than a white at full brightness",
-// which is not a colour the white point admits.
+// which is not a color the white point admits.
 //
 // Reference: Coffin, dcraw `scale_colors()`, highlight mode 0; the same
-// convention LibRaw inherits. Restated in research/colour-pipeline.md.
+// convention LibRaw inherits. Restated in research/color-pipeline.md.
 //
 // It has to happen here, before demosaic, for the same reason dcraw does it
 // here: RCD interpolates the mosaic, so an unclipped neighbour at 2.2 would
@@ -33,7 +33,7 @@
 struct LinearizeParams
 {
     float4 black;        // per CFA channel, in sensor counts
-    float4 whiteBalance; // per CFA channel, normalised to green
+    float4 whiteBalance; // per CFA channel, normalized to green
     float  invRange;     // 1 / (white - black)
     uint   filters;      // CFA pattern bitmask
     uint2  size;

@@ -95,7 +95,7 @@ private struct PhotoCommands: Commands {
 /// What the Photo menu acts on. Equatable by state rather than by closure, so
 /// SwiftUI can tell when the menu's titles need to change.
 struct CullActions: Equatable {
-    /// nil when nothing is open, which is what greys the menu out.
+    /// nil when nothing is open, which is what grays the menu out.
     let url: URL?
     let isRejected: Bool
     let rating: Int
@@ -130,7 +130,7 @@ extension FocusedValues {
 }
 
 // Mirrors design/tokens.json. Neutrals are deliberately near-neutral: a tinted
-// interface reads as a colour cast and corrupts the judgement the app exists
+// interface reads as a color cast and corrupts the judgment the app exists
 // to support.
 enum Palette {
     static let ground   = Color(red: 0.078, green: 0.078, blue: 0.086)
@@ -147,13 +147,13 @@ enum Palette {
 }
 
 enum ToolTab: String, CaseIterable, Identifiable {
-    case light, colour, detail, crop
+    case light, color, detail, crop
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .light:  "Light"
-        case .colour: "Colour"
+        case .color: "Color"
         case .detail: "Detail"
         case .crop:   "Crop"
         }
@@ -162,7 +162,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .light:  "sun.max"
-        case .colour: "circle.lefthalf.filled"
+        case .color: "circle.lefthalf.filled"
         case .detail: "magnifyingglass"
         case .crop:   "crop"
         }
@@ -439,7 +439,7 @@ struct Editor: View {
 
                             // Anything armed and waiting for a click on the
                             // photo belongs to the panel that armed it. Leaving
-                            // that panel with the colour picker still live means
+                            // that panel with the color picker still live means
                             // the next click on the picture does something the
                             // visible controls no longer explain.
                             targeted.isActive = false
@@ -578,7 +578,7 @@ struct Editor: View {
                 VStack(alignment: .leading, spacing: 18) {
                     switch tab {
                     case .light:  lightPanel
-                    case .colour: colourPanel
+                    case .color: colorPanel
                     case .detail: detailPanel
                     case .crop:
                         section("Aspect") {
@@ -619,7 +619,7 @@ struct Editor: View {
 
                         section("Straighten") {
                             slider("Angle", $engine.straightenDeg, -90...90, "°", 1, resetsTo: engine.defaults.straightenDeg)
-                            Text("Turns the picture about the frame's centre. "
+                            Text("Turns the picture about the frame's center. "
                                  + "The rectangle shrinks to stay inside the "
                                  + "turned frame, so a corner is never empty.")
                                 .font(.system(size: 10))
@@ -666,7 +666,7 @@ struct Editor: View {
         .disabled(!engine.isLoaded)
     }
 
-    /// File-folder tabs: the selected one is filled with the panel's own colour
+    /// File-folder tabs: the selected one is filled with the panel's own color
     /// and covers the strip's rule, so tab and panel read as one surface.
     private var tabBar: some View {
         HStack(alignment: .bottom, spacing: 2) {
@@ -735,14 +735,14 @@ struct Editor: View {
         }
     }
 
-    private var colourPanel: some View {
+    private var colorPanel: some View {
         Group {
             section("Presence") {
                 slider("Vibrance", $engine.vibrance, -1...1, "", 2, resetsTo: engine.defaults.vibrance)
                 slider("Saturation", $engine.saturation, -1...1, "", 2, resetsTo: engine.defaults.saturation)
             }
-            section("Colour Mixer") {
-                // Targeted adjustment: click a colour in the photo and drag.
+            section("Color Mixer") {
+                // Targeted adjustment: click a color in the photo and drag.
                 // Beats guessing which of eight swatches the sky falls into.
                 HStack(spacing: 6) {
                     Button {
@@ -770,7 +770,7 @@ struct Editor: View {
                         .controlSize(.small)
                         .labelsHidden()
                     } else {
-                        Text("Drag on the photo to adjust its colour")
+                        Text("Drag on the photo to adjust its color")
                             .font(.system(size: 10))
                             .foregroundStyle(Palette.faint)
                     }
@@ -807,7 +807,7 @@ struct Editor: View {
         Group {
         section("Noise Reduction") {
             slider("Luminance", $engine.denoiseLuma, 0...4, "", 2, resetsTo: engine.defaults.denoiseLuma)
-            slider("Colour", $engine.denoiseColour, 0...4, "", 2, resetsTo: engine.defaults.denoiseColour)
+            slider("Color", $engine.denoiseColor, 0...4, "", 2, resetsTo: engine.defaults.denoiseColor)
             Text("Measured from this frame, so 1.00 means \"remove what is "
                  + "smaller than one standard deviation of its own noise\" "
                  + "rather than a fixed amount.")
@@ -823,7 +823,7 @@ struct Editor: View {
             Text("Negative distortion pulls the barrel out of a wide lens; "
                  + "negative vignetting lifts the corners. The fringe controls "
                  + "rescale red and blue against green, which is what removes "
-                 + "the coloured edges at the frame's corners.")
+                 + "the colored edges at the frame's corners.")
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)

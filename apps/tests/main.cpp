@@ -59,7 +59,7 @@ constexpr float kSonyXyzToCam[9] = {
 void testWhiteBalance() {
     section("White balance");
 
-    // Warmer light needs more blue gain to neutralise, cooler needs more red.
+    // Warmer light needs more blue gain to neutralize, cooler needs more red.
     // If this inverts, every image comes out with the cast backwards.
     const auto warm = orion::pipe::multipliersFor({2800.0f, 0.0f}, kSonyXyzToCam);
     const auto cool = orion::pipe::multipliersFor({9000.0f, 0.0f}, kSonyXyzToCam);
@@ -69,7 +69,7 @@ void testWhiteBalance() {
     // Green is the reference channel throughout the pipeline.
     for (float k : {2500.0f, 5500.0f, 12000.0f}) {
         const auto m = orion::pipe::multipliersFor({k, 0.0f}, kSonyXyzToCam);
-        checkNear(m[1], 1.0, 1e-5, "green normalised at " + std::to_string(int(k)) + "K");
+        checkNear(m[1], 1.0, 1e-5, "green normalized at " + std::to_string(int(k)) + "K");
     }
 
     // Round trip: estimating a temperature from its own multipliers must give
@@ -151,7 +151,7 @@ void testCfa() {
     section("CFA pattern");
 
     // RGGB, LibRaw's encoding. The shader mirrors channelAt exactly; if the
-    // two ever disagree the demosaic reads the wrong colour everywhere.
+    // two ever disagree the demosaic reads the wrong color everywhere.
     orion::raw::BayerImage img;
     img.filters = 0x94949494u;
     img.width = 4;
@@ -343,7 +343,7 @@ void testOrientGpu() {
 
 // ── Neutrality of the display transform ────────────────────────────────────
 
-/// Grey in, grey out.
+/// Gray in, gray out.
 ///
 /// This is the single most valuable check in the file. A tone mapper's inset
 /// and outset matrices must each preserve the achromatic axis; if they do not,
@@ -365,7 +365,7 @@ void testDisplayNeutrality() {
         *device, std::string(ORION_SHADER_DIR) + "/developDisplay.metallib");
     auto kernel = orion::gpu::Kernel::create(*device, *library, "developDisplay");
 
-    // A ramp of neutral greys spanning 12 stops, from deep shadow to well
+    // A ramp of neutral grays spanning 12 stops, from deep shadow to well
     // above diffuse white.
     constexpr std::uint32_t kN = 24;
     std::vector<__fp16> input(std::size_t(kN) * 4);
@@ -425,12 +425,12 @@ void testDisplayNeutrality() {
     std::snprintf(detail, sizeof detail,
                   "worst channel spread %d/255 at scene level %.4f", worst, worstLevel);
     // 2/255 covers 8-bit rounding; anything beyond that is a genuine cast.
-    report(worst <= 2, "neutral grey stays neutral through the display transform",
+    report(worst <= 2, "neutral gray stays neutral through the display transform",
            worst <= 2 ? "" : detail);
 
     report(monotone, "brighter input never produces a darker output");
 
-    // Middle grey must land near the middle of the display range. This is what
+    // Middle gray must land near the middle of the display range. This is what
     // catches a double encode: applying a transfer function on top of AgX put
     // 0.18 at 189/255 instead of about 128.
     const float target = 0.18f;
@@ -440,7 +440,7 @@ void testDisplayNeutrality() {
     }
     const int mid = out[nearest * 4 + 1];
     std::snprintf(detail, sizeof detail, "scene %.3f -> %d/255", levels[nearest], mid);
-    report(mid > 95 && mid < 165, "middle grey lands mid-range", detail);
+    report(mid > 95 && mid < 165, "middle gray lands mid-range", detail);
 }
 
 /// Crop selects the requested region, not merely a smaller one.
@@ -499,7 +499,7 @@ void testCropGpu() {
     std::vector<__fp16> out(std::size_t(ow) * oh * 4);
     dst->download(out.data(), std::size_t(ow) * 4 * sizeof(__fp16), ow, oh);
 
-    // The crop's top-left must be the source's centre, within half a pixel of
+    // The crop's top-left must be the source's center, within half a pixel of
     // bilinear positioning.
     const double x0 = double(out[0]);
     const double y0 = double(out[1]);
@@ -539,8 +539,8 @@ void testCropGpu() {
 /// While the crop tool is open the geometry node renders onto a canvas larger
 /// than the frame, so cropOrigin and cropSize describe the canvas rather than
 /// the user's rectangle. The pivot was derived from those two, which meant the
-/// preview turned the picture about the frame centre and the committed render
-/// turned it about the crop centre. With an off-centre crop the two disagree,
+/// preview turned the picture about the frame center and the committed render
+/// turned it about the crop center. With an off-center crop the two disagree,
 /// and the picture you got was not the picture the white box had shown.
 void testStraightenPivot() {
     section("Straighten pivot (GPU)");
@@ -549,7 +549,7 @@ void testStraightenPivot() {
     constexpr float kCanvas = 1.42f;
     constexpr float kAngle  = 8.0f * 3.14159265358979f / 180.0f;
 
-    // An off-centre crop — the case the two paths disagreed on.
+    // An off-center crop — the case the two paths disagreed on.
     constexpr float cx = 0.10f, cy = 0.15f, cw = 0.40f, ch = 0.35f;
 
     std::unique_ptr<orion::gpu::Device> device;
@@ -567,7 +567,7 @@ void testStraightenPivot() {
     auto src = orion::gpu::Texture::create(*device, kW, kH,
                                            orion::gpu::PixelFormat::RGBA16Float);
 
-    // Coordinates as colour, so every output pixel names the source pixel it
+    // Coordinates as color, so every output pixel names the source pixel it
     // came from and the two renders can be compared exactly.
     std::vector<__fp16> input(std::size_t(kW) * kH * 4);
     for (std::uint32_t y = 0; y < kH; ++y) {
@@ -585,7 +585,7 @@ void testStraightenPivot() {
     base.inSize[0] = kW; base.inSize[1] = kH;
     base.quarterTurns  = 0;
     base.straightenRad = kAngle;
-    // The frame's centre, which is what the app sends. An off-centre crop is
+    // The frame's center, which is what the app sends. An off-center crop is
     // the case the two paths used to disagree on.
     base.pivot[0] = 0.5f;
     base.pivot[1] = 0.5f;
@@ -657,21 +657,21 @@ void testStraightenPivot() {
            "the straighten preview shows what committing produces",
            "worst disagreement " + std::to_string(worst) + " px");
 
-    // And with no crop the pivot is the frame centre, which must leave the
-    // centre pixel exactly where it started.
-    orion::pipe::params::Geometry centred{};
-    centred.inSize[0] = kW; centred.inSize[1] = kH;
-    centred.outSize[0] = kW; centred.outSize[1] = kH;
-    centred.straightenRad = kAngle;
-    centred.cropSize[0] = 1.0f; centred.cropSize[1] = 1.0f;
-    centred.pivot[0] = 0.5f; centred.pivot[1] = 0.5f;
-    const auto whole = render(centred);
+    // And with no crop the pivot is the frame center, which must leave the
+    // center pixel exactly where it started.
+    orion::pipe::params::Geometry centered{};
+    centered.inSize[0] = kW; centered.inSize[1] = kH;
+    centered.outSize[0] = kW; centered.outSize[1] = kH;
+    centered.straightenRad = kAngle;
+    centered.cropSize[0] = 1.0f; centered.cropSize[1] = 1.0f;
+    centered.pivot[0] = 0.5f; centered.pivot[1] = 0.5f;
+    const auto whole = render(centered);
 
     const std::size_t mid = (std::size_t(kH / 2) * kW + kW / 2) * 4;
     checkNear(double(whole[mid + 0]), kW / 2.0, 0.6,
-              "rotating about the centre leaves the centre column put");
+              "rotating about the center leaves the center column put");
     checkNear(double(whole[mid + 1]), kH / 2.0, 0.6,
-              "rotating about the centre leaves the centre row put");
+              "rotating about the center leaves the center row put");
 }
 
 /// The noise estimator, against noise we made ourselves.
@@ -944,7 +944,7 @@ void testDenoiseGpu() {
 ///
 /// The defect: a sensor clips per channel. For a *neutral* subject that happens
 /// in every channel at once and costs only brightness — the interesting case is
-/// a coloured one. A warm cloud drives red hardest, so red reaches its stop
+/// a colored one. A warm cloud drives red hardest, so red reaches its stop
 /// while green and blue are still reading, the ratio between the channels
 /// changes, and the cloud turns cyan. This builds exactly that.
 void testHighlightRecoveryGpu() {
@@ -1112,7 +1112,7 @@ void testHighlightRecoveryGpu() {
 ///
 /// The test is worth its length because the failure is invisible to inspection:
 /// the shader was three correct lines and one missing clamp, and the output was
-/// a perfectly plausible image with coloured lights in it.
+/// a perfectly plausible image with colored lights in it.
 void testLinearizeClipsToWhite() {
     section("Linearize clips a blown highlight to white");
 
@@ -1120,7 +1120,7 @@ void testLinearizeClipsToWhite() {
     constexpr float kWhite = 16383.0f, kBlack = 512.0f;
 
     // Gains of the shape a warm scene gives: red and blue lifted against green.
-    // These are what a blown pixel would wear as a colour if nothing clipped.
+    // These are what a blown pixel would wear as a color if nothing clipped.
     constexpr float kGainR = 2.2f, kGainG = 1.0f, kGainB = 1.6f;
 
     std::unique_ptr<orion::gpu::Device> device;
@@ -1243,7 +1243,7 @@ void testLensGpu() {
     auto dst = orion::gpu::Texture::create(*device, kW, kH,
                                            orion::gpu::PixelFormat::RGBA16Float);
 
-    // Coordinates as colour again, so an output pixel names where it came from.
+    // Coordinates as color again, so an output pixel names where it came from.
     // Blue carries a constant, which is what the vignetting check reads.
     std::vector<__fp16> input(std::size_t(kW) * kH * 4);
     for (std::uint32_t y = 0; y < kH; ++y) {
@@ -1259,7 +1259,7 @@ void testLensGpu() {
 
     orion::pipe::params::Lens lens{};
     lens.size[0] = kW; lens.size[1] = kH;
-    lens.centreX = 0.5f; lens.centreY = 0.5f;
+    lens.centerX = 0.5f; lens.centerY = 0.5f;
 
     const auto run = [&](std::vector<__fp16>& out) {
         orion::gpu::CommandBuffer cb(*device);
@@ -1294,10 +1294,10 @@ void testLensGpu() {
     checkNear(double(out[corner + 1]), double(input[corner + 1]), 0.01,
               "the frame corner does not move vertically either");
 
-    // The centre never moves under a radial model, at any coefficient.
-    const std::size_t centre = (std::size_t(kH / 2) * kW + kW / 2) * 4;
-    checkNear(double(out[centre + 0]), double(input[centre + 0]), 0.01,
-              "the optical centre is fixed");
+    // The center never moves under a radial model, at any coefficient.
+    const std::size_t center = (std::size_t(kH / 2) * kW + kW / 2) * 4;
+    checkNear(double(out[center + 0]), double(input[center + 0]), 0.01,
+              "the optical center is fixed");
 
     // Between them it must actually move something, or the control is inert.
     const std::size_t mid = (std::size_t(kH / 2) * kW + (3 * kW / 4)) * 4;
@@ -1313,10 +1313,10 @@ void testLensGpu() {
     lens.vignetteA = -0.4f;
     run(out);
     const double cornerBlue = double(out[corner + 2]);
-    const double centreBlue = double(out[centre + 2]);
+    const double centerBlue = double(out[center + 2]);
     report(cornerBlue > 0.5 + 1e-3, "negative vignetting brightens the corner",
            "corner " + std::to_string(cornerBlue));
-    checkNear(centreBlue, 0.5, 5e-3, "vignetting leaves the centre alone");
+    checkNear(centerBlue, 0.5, 5e-3, "vignetting leaves the center alone");
 
     // 1 + p_a·r² at r = 1 is 0.6, and 0.5 / 0.6 = 0.8333.
     checkNear(cornerBlue, 0.5 / 0.6, 0.02, "the vignette follows 1 + p_a·r²");
@@ -1432,7 +1432,7 @@ void testOutputDepth() {
     report(monotone, "the output ramp is monotone");
 }
 
-/// A bright highlight on a dark, colour-cast background.
+/// A bright highlight on a dark, color-cast background.
 ///
 /// The case that produced a purple halo around every light in a night shot.
 /// The fit that recovers a clipped channel has to be anchored on pixels near

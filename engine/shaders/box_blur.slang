@@ -23,7 +23,7 @@ void boxBlur(uint3 tid : SV_DispatchThreadID,
 {
     if (tid.x >= p.size.x || tid.y >= p.size.y) return;
 
-    const int2 centre = int2(tid.xy);
+    const int2 center = int2(tid.xy);
     const int2 step = (p.horizontal != 0) ? int2(1, 0) : int2(0, 1);
 
     float2 sum = float2(0.0f, 0.0f);
@@ -31,7 +31,7 @@ void boxBlur(uint3 tid : SV_DispatchThreadID,
 
     for (int i = -p.radius; i <= p.radius; ++i)
     {
-        const int2 q = clampToImage(centre + step * i, p.size);
+        const int2 q = clampToImage(center + step * i, p.size);
         sum += src[q];
         count += 1.0f;
     }

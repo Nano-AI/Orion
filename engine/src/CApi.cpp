@@ -145,7 +145,7 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.lensCaBlue     = adj->lens_ca_blue;
         a.highlightRecovery = adj->highlight_recovery;
         a.denoiseLuma   = adj->denoise_luma;
-        a.denoiseColour = adj->denoise_colour;
+        a.denoiseColor = adj->denoise_color;
 
         a.curve.master = toChannel(adj->curve_master);
         a.curve.red    = toChannel(adj->curve_red);
@@ -332,7 +332,7 @@ const char* orion_status_string(OrionStatus status) {
         case ORION_ERR_BAD_ARG:  return "invalid argument";
         case ORION_ERR_INTERNAL: return "internal error";
     }
-    return "unrecognised status";
+    return "unrecognized status";
 }
 
 const char* orion_last_error(const OrionEngine* engine) {

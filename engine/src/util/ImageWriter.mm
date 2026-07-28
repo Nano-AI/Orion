@@ -43,7 +43,7 @@ struct CFHolder {
 CGImageRef makeImage(const std::uint16_t* rgba, std::uint32_t width,
                      std::uint32_t height, std::size_t bytesPerRow) {
     CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    if (space == nullptr) throw std::runtime_error("could not create colour space");
+    if (space == nullptr) throw std::runtime_error("could not create color space");
 
     // Little-endian, because that is how the sixteen-bit samples were written.
     CGContextRef ctx = CGBitmapContextCreate(

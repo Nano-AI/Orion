@@ -30,7 +30,7 @@ final class Engine {
     private(set) var imageHeight: UInt32 = 0
 
     /// The whole frame after rotation, before any crop. The crop rectangle is
-    /// normalised against this, and the crop tool's canvas is sized from it —
+    /// normalized against this, and the crop tool's canvas is sized from it —
     /// `imageWidth` cannot stand in, because it is the *cropped* result.
     private(set) var frameWidth: UInt32 = 0
     private(set) var frameHeight: UInt32 = 0
@@ -58,7 +58,7 @@ final class Engine {
     /// AgX is a *neutral* scene-referred transform, so straight out of it a
     /// photograph looks flatter than the camera's own JPEG — which is the
     /// picture the photographer saw on the back of the camera and thinks of as
-    /// "the original colours". Every raw editor answers this the same way, by
+    /// "the original colors". Every raw editor answers this the same way, by
     /// shipping a base contrast rather than showing the neutral transform raw.
     ///
     /// 1.15 was measured, not chosen by eye: against the embedded JPEG of the
@@ -146,7 +146,7 @@ final class Engine {
         guard let ratio else { return }
 
         // Fit the largest rectangle of this ratio inside the current frame,
-        // centred, so choosing a ratio never crops information the user has
+        // centered, so choosing a ratio never crops information the user has
         // not asked to lose beyond what the ratio requires.
         let frame = Float(frameAspect)
         var w: Float = 1, h: Float = 1
@@ -196,13 +196,13 @@ final class Engine {
     /// noise level. Zero switches eight nodes off rather than running them at
     /// no strength.
     var denoiseLuma: Float = 0     { didSet { pushAndRender() } }
-    var denoiseColour: Float = 0   { didSet { pushAndRender() } }
+    var denoiseColor: Float = 0   { didSet { pushAndRender() } }
 
     var sharpenAmount: Float = 0   { didSet { pushAndRender() } }
     var sharpenRadius: Float = 1   { didSet { pushAndRender() } }
     var sharpenMasking: Float = 0  { didSet { pushAndRender() } }
 
-    /// Colour mixer, eight bands. Index order matches HueBand.allCases.
+    /// Color mixer, eight bands. Index order matches HueBand.allCases.
     var hueShift = [Float](repeating: 0, count: 8) { didSet { pushAndRender() } }
     var satShift = [Float](repeating: 0, count: 8) { didSet { pushAndRender() } }
     var lumShift = [Float](repeating: 0, count: 8) { didSet { pushAndRender() } }
@@ -333,7 +333,7 @@ final class Engine {
     struct Sample {
         /// What is on screen. This is what a swatch must show.
         var display: (r: Double, g: Double, b: Double)
-        /// The colour before any user adjustment. Hue bands derive from this,
+        /// The color before any user adjustment. Hue bands derive from this,
         /// so adjusting a band cannot change which band you pick next.
         var scene: (r: Double, g: Double, b: Double)
     }
@@ -394,7 +394,7 @@ final class Engine {
             lensDistortion: lensDistortion, lensVignette: lensVignette,
             lensCaRed: lensCaRed, lensCaBlue: lensCaBlue,
             highlightRecovery: highlightRecovery,
-            denoiseLuma: denoiseLuma, denoiseColour: denoiseColour,
+            denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
@@ -416,7 +416,7 @@ final class Engine {
         lensDistortion = s.lensDistortion; lensVignette = s.lensVignette
         lensCaRed = s.lensCaRed; lensCaBlue = s.lensCaBlue
         highlightRecovery = s.highlightRecovery
-        denoiseLuma = s.denoiseLuma; denoiseColour = s.denoiseColour
+        denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
         sharpenMasking = s.sharpenMasking; curve = s.curve
         hueShift = s.hueShift; satShift = s.satShift; lumShift = s.lumShift
@@ -552,7 +552,7 @@ final class Engine {
             lens_distortion: lensDistortion, lens_vignette: lensVignette,
             lens_ca_red: lensCaRed, lens_ca_blue: lensCaBlue,
             highlight_recovery: highlightRecovery,
-            denoise_luma: denoiseLuma, denoise_colour: denoiseColour,
+            denoise_luma: denoiseLuma, denoise_color: denoiseColor,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),

@@ -27,7 +27,7 @@ void cameraToWorking(uint3 tid : SV_DispatchThreadID,
                                   dot(p.row1.rgb, c),
                                   dot(p.row2.rgb, c));
 
-    // Negative values are legitimate here — they are colours outside the
+    // Negative values are legitimate here — they are colors outside the
     // working gamut, and clipping them now would bake in a hue shift the tone
     // mapper could otherwise resolve gracefully.
     dst[tid.xy] = float4(working, 1.0f);

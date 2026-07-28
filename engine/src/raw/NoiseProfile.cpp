@@ -49,7 +49,7 @@ NoiseProfile estimateNoise(const BayerImage& image) {
         return profile;
     }
 
-    // Normalise out of sensor counts. A per-channel black point would be more
+    // Normalize out of sensor counts. A per-channel black point would be more
     // exact, but the CFA phase is not known here and the black points of one
     // sensor's channels differ by a few counts out of thousands.
     const float black = static_cast<float>(
@@ -66,7 +66,7 @@ NoiseProfile estimateNoise(const BayerImage& image) {
         const std::uint16_t* row = image.samples.data() + static_cast<std::size_t>(y) * w;
 
         for (std::uint32_t x = 0; x + 4 < w; x += 4) {
-            // Three samples two apart, so all three are the same colour in any
+            // Three samples two apart, so all three are the same color in any
             // 2x2 CFA.
             const float p = (static_cast<float>(row[x]) - black) / range;
             const float q = (static_cast<float>(row[x + 2]) - black) / range;

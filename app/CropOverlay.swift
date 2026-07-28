@@ -8,7 +8,7 @@ import SwiftUI
 ///
 /// The rectangle moves and resizes by drag. Corner handles resize freely;
 /// dragging the interior pans the crop across the frame, which is what you
-/// want after picking an aspect ratio and finding it centred on the wrong part
+/// want after picking an aspect ratio and finding it centered on the wrong part
 /// of the picture.
 struct CropOverlay: View {
     @Bindable var engine: Engine
@@ -37,7 +37,7 @@ struct CropOverlay: View {
     }
 
     /// Crop rectangle in view coordinates. The engine stores the crop
-    /// normalised to the frame, so this is the one conversion.
+    /// normalized to the frame, so this is the one conversion.
     private var rect: CGRect {
         let canvas = engine.previewCanvas
         let crop = CGRect(x: CGFloat(engine.cropX), y: CGFloat(engine.cropY),
@@ -114,7 +114,7 @@ struct CropOverlay: View {
             ZStack {
                 // Drawn inside a fixed box, never an unsized one. A Path view
                 // takes the size it is offered, so an unsized path here became
-                // as large as the whole overlay and `.position` then centred
+                // as large as the whole overlay and `.position` then centered
                 // *that* — which threw the corner marks into the middle of the
                 // window while the crop rectangle stayed where it was.
                 cornerPath(h)
@@ -132,7 +132,7 @@ struct CropOverlay: View {
 
     /// An L of two arms, the way every crop tool draws a corner: it reads as a
     /// corner rather than a dot, and shows which two edges the handle moves.
-    /// Coordinates are local to the handle's box, with the corner at its centre.
+    /// Coordinates are local to the handle's box, with the corner at its center.
     private func cornerPath(_ h: Handle) -> Path {
         let c = CGPoint(x: handleBox / 2, y: handleBox / 2)
         let hx: CGFloat = (h == .topLeft || h == .bottomLeft) ? 1 : -1

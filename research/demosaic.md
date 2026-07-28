@@ -36,7 +36,7 @@ VH_Dir = V_Stat / (V_Stat + H_Stat)
 lpf = 0.25·c + 0.125·(4-neighbours) + 0.0625·(diagonals)
 ```
 
-It deliberately mixes all three colours, because it is estimating local
+It deliberately mixes all three colors, because it is estimating local
 *luminance* regardless of which channel each sample carries. Step 3 needs it.
 
 **3 — Green, with ratio correction.** This is the step the algorithm is named
@@ -54,9 +54,9 @@ correctly where an additive term overshoots it. And the directional estimates
 are combined with **opposing** weights: `N_Est` is weighted by `S_Grad`, so an
 estimate coming from the calmer direction is trusted more.
 
-**4 — Red and blue.** Both interpolate the colour difference C − G. At a red or
+**4 — Red and blue.** Both interpolate the color difference C − G. At a red or
 blue site the missing channel sits on the diagonals, and a P/Q discrimination —
-the same statistic, sampled diagonally — chooses which diagonal to favour. At a
+the same statistic, sampled diagonally — chooses which diagonal to favor. At a
 green site the cardinal neighbours carry them and step 1's discrimination is
 reused.
 
@@ -66,7 +66,7 @@ The previous implementation was RCD-*family*: directional and
 gradient-corrected, but using **Hamilton–Adams additive** correction with a
 clamp to suppress the overshoot, and a plain 3×3 average for red and blue with
 no directionality at all. The visible differences were softer fine texture and
-colour fringing on hard edges.
+color fringing on hard edges.
 
 **Confidence:** high. Ported from the reference with its own coefficients.
 
@@ -97,7 +97,7 @@ feature, not a tuning difference.
 1. **Inpaint opposed** — estimate clipped channels from adjacent unclipped ones.
    Cheap, stable, and darktable's current default.
 2. **Segmentation based** — reconstruct whole clipped regions from surrounding
-   colour ratios. Best on large blown areas.
+   color ratios. Best on large blown areas.
 3. **Guided laplacians** — multi-scale, Bayer-only, expensive.
    [Maths writeup](https://ansel.photos/en/resources/guided-laplacian-highlights/)
 
@@ -112,7 +112,7 @@ All documented in [darktable's highlight reconstruction module](https://docs.dar
 **Source:** LibRaw's `FC` macro and `filters` bitmask, inherited from dcraw.
 
 The shader and the C++ side must agree exactly; if they drift, the demosaic
-reads the wrong colour everywhere. `orion-tests` checks the pattern for RGGB
+reads the wrong color everywhere. `orion-tests` checks the pattern for RGGB
 including the 2×2 repeat.
 
 Note LibRaw's `0x94949494` encodes both greens as index 1; the distinct G2 index

@@ -40,11 +40,11 @@ void sharpen(uint3 tid : SV_DispatchThreadID,
     if (tid.x >= p.size.x || tid.y >= p.size.y) return;
 
     const int2 c = int2(tid.xy);
-    const float3 centre = src[tid.xy].rgb;
+    const float3 center = src[tid.xy].rgb;
 
     if (p.amount <= 0.0f)
     {
-        dst[tid.xy] = float4(centre, 1.0f);
+        dst[tid.xy] = float4(center, 1.0f);
         return;
     }
 
@@ -71,9 +71,9 @@ void sharpen(uint3 tid : SV_DispatchThreadID,
     }
     blur /= weight;
 
-    const float3 detail = centre - blur;
+    const float3 detail = center - blur;
 
-    // Detail mask: how much local contrast there is, normalised. Below the
+    // Detail mask: how much local contrast there is, normalized. Below the
     // threshold we are almost certainly looking at noise.
     const float localContrast = abs(luma(detail));
     const float threshold = p.masking * 0.02f;
@@ -81,5 +81,5 @@ void sharpen(uint3 tid : SV_DispatchThreadID,
         ? 1.0f
         : smoothstep(threshold * 0.25f, threshold, localContrast);
 
-    dst[tid.xy] = float4(max(centre + detail * p.amount * mask, 0.0f), 1.0f);
+    dst[tid.xy] = float4(max(center + detail * p.amount * mask, 0.0f), 1.0f);
 }

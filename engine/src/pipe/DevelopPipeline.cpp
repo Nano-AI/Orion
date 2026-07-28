@@ -47,10 +47,10 @@ void multiply3x3(const float a[9], const float b[9], float out[9]) {
 }
 
 /// Scales each row to sum to 1 so camera (1,1,1) maps to working (1,1,1).
-/// Without this the white balance and the colour matrix fight each other: the
-/// data is already neutral after WB, and an unnormalised matrix then tints it.
-/// dcraw normalises rgb_cam for exactly this reason.
-void normaliseRows(float m[9]) {
+/// Without this the white balance and the color matrix fight each other: the
+/// data is already neutral after WB, and an unnormalized matrix then tints it.
+/// dcraw normalizes rgb_cam for exactly this reason.
+void normalizeRows(float m[9]) {
     for (int r = 0; r < 3; ++r) {
         const float sum = m[r * 3 + 0] + m[r * 3 + 1] + m[r * 3 + 2];
         if (std::abs(sum) < 1e-9f) continue;
@@ -104,7 +104,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // ── Highlight reconstruction (Masood, Zhu & Tang) ─────────────────────
     //
     // Straight after the demosaic, so it has all three channels per pixel, and
-    // before everything else, so no later stage ever sees the false colour that
+    // before everything else, so no later stage ever sees the false color that
     // per-channel clipping produces. Still in linear camera RGB, which is where
     // the clipping levels are known.
     nHighlights_ = pipeline_.add({"highlights", "highlightRecover", {nRgb_},
@@ -112,7 +112,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     // ── Profiled wavelet denoise (Starck et al., starlet) ─────────────────
     //
-    // Before the colour matrix and before sharpening, because the noise model
+    // Before the color matrix and before sharpening, because the noise model
     // var = a·x + b only holds in linear camera RGB — the matrix mixes the
     // channels and would mix their variances with them — and because sharpening
     // noise and then denoising it is a way to end up with neither.
@@ -234,7 +234,7 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
     applyImageParams(image);
 
     // Force every parameter block to be re-pushed: the new file has different
-    // black levels, white balance and colour matrix, and `primed_` would
+    // black levels, white balance and color matrix, and `primed_` would
     // otherwise suppress writes whose values happen to match.
     primed_ = false;
     Adjustments initial;
@@ -303,11 +303,11 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     float xyzToCam[9], camToXyz[9], camToWorking[9];
     std::copy_n(image.camToXyz.begin(), 9, xyzToCam);
     if (!invert3x3(xyzToCam, camToXyz)) {
-        throw std::runtime_error("camera colour matrix is singular");
+        throw std::runtime_error("camera color matrix is singular");
     }
     std::copy_n(xyzToCam, 9, xyzToCam_);
     multiply3x3(kXyzToRec2020, camToXyz, camToWorking);
-    normaliseRows(camToWorking);
+    normalizeRows(camToWorking);
 
     params::ColorMatrix mat{};
     for (int c = 0; c < 3; ++c) {
@@ -350,7 +350,7 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     // Anchor on the camera's actual multipliers, not on a temperature we
     // inferred from them. The temperature is only a handle for the user to
     // turn; routing "as shot" through it would bake every estimation error
-    // into the image as a colour cast.
+    // into the image as a color cast.
     const float gRef = (image.camMul[1] != 0.0f) ? image.camMul[1] : 1.0f;
     asShotMul_ = {image.camMul[0] / gRef, 1.0f, image.camMul[2] / gRef};
 
@@ -413,7 +413,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     // saturates at is scaled with it — and because white balance raises red and
     // blue relative to green, those levels routinely sit above 1.0. Testing
     // against a single level after white balance is itself a source of the
-    // false colour this node exists to remove.
+    // false color this node exists to remove.
     const bool highlightsMoved =
         first ||
         adj.highlightRecovery != lastAdj_.highlightRecovery ||
@@ -471,8 +471,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         params::Lens lens{};
         lens.size[0] = width_;
         lens.size[1] = height_;
-        lens.centreX = 0.5f;
-        lens.centreY = 0.5f;
+        lens.centerX = 0.5f;
+        lens.centerY = 0.5f;
         // The sliders run -1..1; the coefficients they drive are much smaller.
         // These ranges cover what a real lens needs without letting the control
         // fold the picture through itself at the extremes.
@@ -493,11 +493,11 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     // has to be re-pushed when white balance moves: linearize scales each
     // channel by its multiplier, and a variance scales by the square of that.
     const bool denoising = noise_.measured &&
-                           (adj.denoiseLuma > 0.0f || adj.denoiseColour > 0.0f);
+                           (adj.denoiseLuma > 0.0f || adj.denoiseColor > 0.0f);
     const bool denoiseMoved =
         first ||
         adj.denoiseLuma != lastAdj_.denoiseLuma ||
-        adj.denoiseColour != lastAdj_.denoiseColour ||
+        adj.denoiseColor != lastAdj_.denoiseColor ||
         adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
         adj.wb.tint != lastAdj_.wb.tint;
 
@@ -543,15 +543,15 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             shrink.noiseB = bLum;
             shrink.scaleNorm = kScaleNorm[j];
             shrink.strength = adj.denoiseLuma;
-            // Colour is expressed relative to luma so that raising Colour alone
+            // Color is expressed relative to luma so that raising Color alone
             // still does something when Luminance is zero.
             shrink.chromaBoost = adj.denoiseLuma > 1e-6f
-                ? std::max(adj.denoiseColour / adj.denoiseLuma, 0.0f)
+                ? std::max(adj.denoiseColor / adj.denoiseLuma, 0.0f)
                 : 0.0f;
             if (adj.denoiseLuma <= 1e-6f) {
-                // Colour only: shrink chroma against the measured sigma and
+                // Color only: shrink chroma against the measured sigma and
                 // leave luma untouched.
-                shrink.strength = adj.denoiseColour;
+                shrink.strength = adj.denoiseColor;
                 shrink.chromaBoost = 1.0f;
             }
             pipeline_.setParams(nAtrousShrink_[j], &shrink, sizeof shrink);
@@ -647,7 +647,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         const float cx = std::clamp(adj.cropX, 0.0f, 1.0f - cw);
         const float cy = std::clamp(adj.cropY, 0.0f, 1.0f - ch);
 
-        // The picture turns about the frame's centre, and the pivot is passed
+        // The picture turns about the frame's center, and the pivot is passed
         // rather than derived so the preview and the committed render cannot
         // disagree. Pivoting on the crop instead — which this did briefly —
         // re-rotates the picture every time the rectangle is dragged, and the

@@ -1,4 +1,4 @@
-// Scene-linear tone and colour operations.
+// Scene-linear tone and color operations.
 //
 // One function per adjustment, so each stays readable and testable on its own,
 // but they are *called* from a single fused kernel rather than each getting its
@@ -29,16 +29,16 @@ float3 applyExposure(float3 c, float ev)
 //
 // Mask geometry and gain mapping follow research/deep-research-2026-07-27.md §3.
 //
-// Four Gaussian masks centred on the exposure bands photographers reason in:
+// Four Gaussian masks centered on the exposure bands photographers reason in:
 //
 //     Blacks     −5.5 EV      Shadows    −2.5 EV
 //     Highlights +2.5 EV      Whites     +5.5 EV
 //
-// ★ The masks are normalised to a **partition of unity** — they sum to 1 at
+// ★ The masks are normalized to a **partition of unity** — they sum to 1 at
 // every exposure — and the four exposure offsets are summed into a *single*
 // exponent. Both matter. Multiplying independent masks, which is what this did
 // before, double-counts wherever two bands overlap and produces a brightness
-// spike there. Summing exponents under normalised weights cannot.
+// spike there. Summing exponents under normalized weights cannot.
 //
 // Highlights and shadows read the guided-filter estimate of the neighbourhood;
 // whites and blacks read the pixel. That split is confirmed correct by the
@@ -57,9 +57,9 @@ static const float kBandSigma = 1.6f;
 // A slider at full travel is worth two stops.
 static const float kEvPerUnit = 2.0f;
 
-float bandWeight(float ev, float centre)
+float bandWeight(float ev, float center)
 {
-    const float d = (ev - centre) / kBandSigma;
+    const float d = (ev - center) / kBandSigma;
     return exp(-0.5f * d * d);
 }
 
@@ -68,7 +68,7 @@ float3 applyTone(float3 c, float guideEv,
 {
     const float y = max(luminance2020(c), 1e-6f);
 
-    // EV relative to middle grey, which is where the band centres are defined.
+    // EV relative to middle gray, which is where the band centers are defined.
     const float ev      = log2(y / 0.18f);
     const float evLocal = guideEv - log2(0.18f);
 
@@ -78,7 +78,7 @@ float3 applyTone(float3 c, float guideEv,
     const float wBlacks     = bandWeight(ev, kEvBlacks);
     const float wWhites     = bandWeight(ev, kEvWhites);
 
-    // Partition of unity: normalise so the weights sum to 1.
+    // Partition of unity: normalize so the weights sum to 1.
     const float total = wBlacks + wShadows + wHighlights + wWhites + 1e-6f;
 
     const float deltaEv =
@@ -92,8 +92,8 @@ float3 applyTone(float3 c, float guideEv,
 }
 
 // ── Vibrance / saturation ──────────────────────────────────────────────────
-// Saturation scales every colour's distance from grey equally. Vibrance
-// weights that by how unsaturated a colour already is, so muted tones move and
+// Saturation scales every color's distance from gray equally. Vibrance
+// weights that by how unsaturated a color already is, so muted tones move and
 // vivid ones barely do — which is why it flatters skin and skies where a flat
 // saturation boost turns them lurid.
 float3 applyColor(float3 c, float vibrance, float saturation)

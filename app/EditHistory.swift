@@ -117,7 +117,7 @@ struct DevelopState: Equatable, Codable {
     /// Off by default. See Engine.highlightRecovery.
     var highlightRecovery: Float = 0
     var denoiseLuma: Float = 0
-    var denoiseColour: Float = 0
+    var denoiseColor: Float = 0
     var sharpenAmount: Float = 0
     var sharpenRadius: Float = 1
     var sharpenMasking: Float = 0
@@ -125,4 +125,92 @@ struct DevelopState: Equatable, Codable {
     var hueShift = [Float](repeating: 0, count: 8)
     var satShift = [Float](repeating: 0, count: 8)
     var lumShift = [Float](repeating: 0, count: 8)
+}
+
+/// Decoding takes what the sidecar has and leaves the rest at its default.
+///
+/// Swift's synthesized decoder does not fall back to a property's default — it
+/// throws on a missing key. `Engine.restore` swallows that with a `try?`, so
+/// adding one field to this struct would have silently discarded *every*
+/// adjustment in *every* sidecar written before it, and the only symptom would
+/// have been photos quietly opening unedited.
+///
+/// Each field is optional on the way in instead. Adding one now costs nothing,
+/// and a sidecar written by a newer build stays readable by an older one.
+///
+/// Written out in an extension so the memberwise initializer survives —
+/// `Engine.state` builds one field by field.
+extension DevelopState {
+
+    /// Mirrors the implicit keys the synthesized encoder writes. Encoding stays
+    /// synthesized; only reading is forgiving.
+    private enum Key: String, CodingKey {
+        case temperatureK, tint, exposureEv, highlights, shadows, whites, blacks
+        case vibrance, saturation, contrast, rotateQuarters, straightenDeg
+        case cropX, cropY, cropW, cropH
+        case lensDistortion, lensVignette, lensCaRed, lensCaBlue
+        case highlightRecovery, denoiseLuma, denoiseColor
+        case sharpenAmount, sharpenRadius, sharpenMasking
+        case curve, hueShift, satShift, lumShift
+
+        /// What `denoiseColor` was called before the interface moved to
+        /// American spelling. Read, never written: a sidecar from before the
+        /// rename still says so, and dropping it would reset the control on a
+        /// photo that had already been finished.
+        ///
+        /// The raw value carries the old spelling; the case is named apart from
+        /// it so a future rename sweep cannot collide the two into one key.
+        case legacyDenoiseColour = "denoiseColour"
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init()
+        guard let c = try? decoder.container(keyedBy: Key.self) else { return }
+
+        func float(_ key: Key) -> Float? {
+            (try? c.decodeIfPresent(Float.self, forKey: key)).flatMap { $0 }
+        }
+
+        temperatureK = float(.temperatureK) ?? temperatureK
+        tint = float(.tint) ?? tint
+        exposureEv = float(.exposureEv) ?? exposureEv
+        highlights = float(.highlights) ?? highlights
+        shadows = float(.shadows) ?? shadows
+        whites = float(.whites) ?? whites
+        blacks = float(.blacks) ?? blacks
+        vibrance = float(.vibrance) ?? vibrance
+        saturation = float(.saturation) ?? saturation
+        contrast = float(.contrast) ?? contrast
+        rotateQuarters =
+            (try? c.decodeIfPresent(Int32.self, forKey: .rotateQuarters)).flatMap { $0 }
+            ?? rotateQuarters
+        straightenDeg = float(.straightenDeg) ?? straightenDeg
+        cropX = float(.cropX) ?? cropX
+        cropY = float(.cropY) ?? cropY
+        cropW = float(.cropW) ?? cropW
+        cropH = float(.cropH) ?? cropH
+        lensDistortion = float(.lensDistortion) ?? lensDistortion
+        lensVignette = float(.lensVignette) ?? lensVignette
+        lensCaRed = float(.lensCaRed) ?? lensCaRed
+        lensCaBlue = float(.lensCaBlue) ?? lensCaBlue
+        highlightRecovery = float(.highlightRecovery) ?? highlightRecovery
+        denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
+        denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
+        sharpenAmount = float(.sharpenAmount) ?? sharpenAmount
+        sharpenRadius = float(.sharpenRadius) ?? sharpenRadius
+        sharpenMasking = float(.sharpenMasking) ?? sharpenMasking
+        curve = (try? c.decodeIfPresent(ToneCurve.self, forKey: .curve))
+            .flatMap { $0 } ?? curve
+
+        // A band array of the wrong length would index out of bounds in the
+        // panel, so a malformed one is refused rather than trusted.
+        func band(_ key: Key) -> [Float]? {
+            guard let v = (try? c.decodeIfPresent([Float].self, forKey: key)).flatMap({ $0 }),
+                  v.count == 8 else { return nil }
+            return v
+        }
+        hueShift = band(.hueShift) ?? hueShift
+        satShift = band(.satShift) ?? satShift
+        lumShift = band(.lumShift) ?? lumShift
+    }
 }
