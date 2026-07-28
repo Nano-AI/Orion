@@ -188,6 +188,12 @@ enum Screenshot {
             engine.setCrop(x: 0.1, y: 0.08, w: 0.62, h: 0.7)
         case "noisy":
             engine.exposureEv = 2.6
+        case "asshot":
+            break
+        case "c110": engine.contrast = 1.10
+        case "c120": engine.contrast = 1.20
+        case "c130": engine.contrast = 1.30
+        case "c140": engine.contrast = 1.40
         case "denoise-off":
             engine.exposureEv = 2.6
         case "denoise-luma":
@@ -278,6 +284,20 @@ enum Screenshot {
             }
         }
 
+        // Mean saturation, the same way a camera JPEG would be measured, so
+        // "the colours look washed" can be answered with a number instead of an
+        // impression.
+        var saturation = 0.0
+        var luma = 0.0
+        for i in 0..<(rw * rh) {
+            let r = Double(min(max(Float(pixels[i * 4 + 0]), 0), 1))
+            let g = Double(min(max(Float(pixels[i * 4 + 1]), 0), 1))
+            let b = Double(min(max(Float(pixels[i * 4 + 2]), 0), 1))
+            let mx = max(r, max(g, b)), mn = min(r, min(g, b))
+            saturation += mx > 0.001 ? (mx - mn) / mx : 0
+            luma += 0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
+
         var report = "orion: region \(rw)x\(rh) at (\(x0),\(y0))\n"
         for (c, name) in ["R", "G", "B"].enumerated() {
             let mean = sums[c] / n
@@ -285,6 +305,8 @@ enum Screenshot {
             report += String(format: "  %@  mean %.5f  sd %.5f\n",
                              name, mean, variance.squareRoot())
         }
+        report += String(format: "  mean saturation %.4f  mean luma %.4f\n",
+                         saturation / n, luma / n)
         FileHandle.standardError.write(Data(report.utf8))
     }
 

@@ -39,11 +39,11 @@ private struct PhotoCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .sidebar) {
-            Button("Fit in Window") { cull?.fit() }
-                .keyboardShortcut("0", modifiers: [])
+            Button("Fit in Window  (0)") { cull?.fit() }
+                .keyboardShortcut("0", modifiers: [.command])
                 .disabled(idle)
-            Button("Actual Size") { cull?.actualSize() }
-                .keyboardShortcut("9", modifiers: [])
+            Button("Actual Size  (9)") { cull?.actualSize() }
+                .keyboardShortcut("9", modifiers: [.command])
                 .disabled(idle)
         }
 
@@ -54,39 +54,39 @@ private struct PhotoCommands: Commands {
         }
 
         CommandMenu("Photo") {
-            Button(cull?.isRejected == true ? "Keep" : "Reject") {
+            // The bare keys are handled by the canvas, which only has them
+            // while it is first responder. As menu key equivalents they fired
+            // in every window, including the Open panel — where "r" and the
+            // digits ate the type-ahead and Return and Escape took the
+            // buttons, so a raw file could not be opened at all.
+            Button(cull?.isRejected == true ? "Keep  (R)" : "Reject  (R)") {
                 cull?.toggleReject()
             }
-            .keyboardShortcut("r", modifiers: [])
             .disabled(idle)
 
             Divider()
 
             ForEach(1...5, id: \.self) { n in
-                Button("\(n) Star\(n == 1 ? "" : "s")") { cull?.rate(n) }
-                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: [])
+                Button("\(n) Star\(n == 1 ? "" : "s")  (\(n))") { cull?.rate(n) }
                     .disabled(idle)
             }
-            Button("No Rating") { cull?.rate(0) }
-                .keyboardShortcut("0", modifiers: [.command])
+            Button("No Rating  (`)") { cull?.rate(0) }
                 .disabled(idle)
 
             Divider()
 
-            Button("Next Photo") { cull?.step(1) }
-                .keyboardShortcut(.rightArrow, modifiers: [])
+            Button("Next Photo  (→)") { cull?.step(1) }
+                .keyboardShortcut(.rightArrow, modifiers: [.command])
                 .disabled(idle)
-            Button("Previous Photo") { cull?.step(-1) }
-                .keyboardShortcut(.leftArrow, modifiers: [])
+            Button("Previous Photo  (←)") { cull?.step(-1) }
+                .keyboardShortcut(.leftArrow, modifiers: [.command])
                 .disabled(idle)
 
             Divider()
 
-            Button("Apply Crop") { cull?.applyCrop() }
-                .keyboardShortcut(.return, modifiers: [])
+            Button("Apply Crop  (⏎)") { cull?.applyCrop() }
                 .disabled(cull?.cropping != true)
-            Button("Cancel Crop") { cull?.cancelCrop() }
-                .keyboardShortcut(.escape, modifiers: [])
+            Button("Cancel Crop  (⎋)") { cull?.cancelCrop() }
                 .disabled(cull?.cropping != true)
         }
     }
@@ -235,24 +235,11 @@ struct Editor: View {
             press.modifiers.contains(.shift) ? engine.redo() : engine.undo()
             return .handled
         }
-        // Hold backslash for the original — Lightroom's muscle memory.
-        .onKeyPress(.init("\\")) {
-            engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
-            return .handled
-        }
         // Culling, rating, stepping and zoom live in the Photo and View menus.
         // Their shortcuts go through the responder chain, so they keep working
         // once the Metal canvas has taken first responder — which is what a
         // bare onKeyPress here could not do.
         .focusedSceneValue(\.cull, cullActions)
-        .onKeyPress(.init("[")) {
-            guard engine.isLoaded else { return .ignored }
-            engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset(); return .handled
-        }
-        .onKeyPress(.init("]")) {
-            guard engine.isLoaded else { return .ignored }
-            engine.edit("Rotate") { engine.rotate(1) }; viewport.reset(); return .handled
-        }
         .sheet(isPresented: $showingExport) {
             ExportPanel(settings: exportSettings,
                         sourceWidth: engine.imageWidth,
@@ -402,7 +389,8 @@ struct Editor: View {
 
                 if engine.isLoaded {
                     ImageCanvas(engine: engine, viewport: viewport,
-                                targeted: targeted, generation: engine.generation)
+                                targeted: targeted, generation: engine.generation,
+                                onKey: handleKey)
                         // Held while a new photo decodes, and what the
                         // screenshot harness draws into — AppKit cannot capture
                         // a Metal layer, so the canvas has to be a still there.
@@ -421,6 +409,18 @@ struct Editor: View {
                         // coordinate space is the Metal view's exactly. Applied
                         // after, it measured the padded box and every handle
                         // sat a few points off the pixels.
+                        // The divider and its labels. Written weeks ago and
+                        // never placed in the view, which is why compare had no
+                        // handle to drag and nothing naming the two sides — the
+                        // split itself was happening in the shader all along.
+                        .overlay {
+                            if engine.comparing {
+                                GeometryReader { canvasGeo in
+                                    CompareOverlay(engine: engine,
+                                                   frame: photoFrame(in: canvasGeo.size))
+                                }
+                            }
+                        }
                         .overlay {
                             if tab == .crop {
                                 GeometryReader { canvasGeo in
@@ -901,12 +901,6 @@ struct Editor: View {
         // new frame, which is what produced the doubled, offset picture.
         engine.resetCrop()
 
-        // Show the camera's embedded preview straight away, then decode. The
-        // decode is ~50ms plus a full-resolution render; without this the view
-        // holds the previous photo for the whole of it, which reads as lag even
-        // though the work is unavoidable.
-        engine.showPlaceholder(library.photos.first { $0.url == url }?.thumbnail)
-
         Task { @MainActor in
             // One runloop turn, so the placeholder actually paints before the
             // synchronous decode begins.
@@ -917,7 +911,6 @@ struct Editor: View {
             } catch {
                 message = error.localizedDescription
             }
-            engine.clearPlaceholder()
         }
     }
 
@@ -940,6 +933,59 @@ struct Editor: View {
             // and the engine renders the crop itself.
             applyCrop: { tab = .light },
             cancelCrop: { engine.edit("Crop") { engine.resetCrop() }; tab = .light })
+    }
+
+    /// Single keys, delivered by the canvas rather than by the menu.
+    ///
+    /// The canvas only receives these while it is first responder, so an Open
+    /// panel, a save sheet or a text field keeps its own keystrokes — which is
+    /// what a bare menu key equivalent cannot promise.
+    private func handleKey(_ press: ImageCanvas.KeyPress) -> Bool {
+        guard !press.modifiers.contains(.command) else { return false }
+
+        // Escape and Return, by key code: their characters are control
+        // sequences that do not compare well.
+        switch press.keyCode {
+        case 53:   // escape
+            guard tab == .crop else { return false }
+            engine.edit("Crop") { engine.resetCrop() }
+            tab = .light
+            return true
+        case 36, 76:   // return, enter
+            guard tab == .crop else { return false }
+            tab = .light
+            return true
+        case 123:  // left arrow
+            step(-1); return true
+        case 124:  // right arrow
+            step(1); return true
+        default:
+            break
+        }
+
+        switch press.characters.lowercased() {
+        case "r":
+            guard let current else { return false }
+            library.toggleRejected(current); return true
+        case "1", "2", "3", "4", "5":
+            guard let n = Int(press.characters) else { return false }
+            rate(n); return true
+        case "`":
+            rate(0); return true
+        case "0":
+            viewport.reset(); return true
+        case "9":
+            viewport.toggleFitAndActual(); return true
+        case "\\":
+            engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
+            return true
+        case "[":
+            engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset(); return true
+        case "]":
+            engine.edit("Rotate") { engine.rotate(1) }; viewport.reset(); return true
+        default:
+            return false
+        }
     }
 
     private func rate(_ stars: Int) {

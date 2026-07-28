@@ -53,7 +53,19 @@ final class Engine {
     var blacks: Float = 0          { didSet { pushAndRender() } }
     var vibrance: Float = 0        { didSet { pushAndRender() } }
     var saturation: Float = 0      { didSet { pushAndRender() } }
-    var contrast: Float = 1        { didSet { pushAndRender() } }
+    /// The base rendering a file opens with.
+    ///
+    /// AgX is a *neutral* scene-referred transform, so straight out of it a
+    /// photograph looks flatter than the camera's own JPEG — which is the
+    /// picture the photographer saw on the back of the camera and thinks of as
+    /// "the original colours". Every raw editor answers this the same way, by
+    /// shipping a base contrast rather than showing the neutral transform raw.
+    ///
+    /// 1.15 was measured, not chosen by eye: against the embedded JPEG of the
+    /// test frame it puts mean luma at 0.051 against the camera's 0.052, and
+    /// mean saturation at 0.81 against 0.85. Drag the slider to 1.00 for the
+    /// neutral transform.
+    var contrast: Float = 1.15     { didSet { pushAndRender() } }
 
     /// Extra quarter turns clockwise, on top of the camera's own orientation.
     var rotateQuarters: Int32 = 0  { didSet { constrainCrop(); pushAndRender() } }
@@ -243,12 +255,7 @@ final class Engine {
         // Reset to the camera's own settings before marking loaded, so the
         // didSet observers don't each trigger a render on a half-set model.
         suspended = true
-        var asShot = OrionAdjustments()
-        orion_engine_as_shot(handle, &asShot)
-        temperatureK = asShot.temperature_k
-        tint = asShot.tint
-        exposureEv = 0; highlights = 0; shadows = 0; whites = 0; blacks = 0
-        vibrance = 0; saturation = 0; contrast = 1
+        assign(asShotState())
         suspended = false
 
         isLoaded = true
@@ -273,22 +280,12 @@ final class Engine {
     /// Returns every adjustment to its default, with white balance back to
     /// what the camera chose. One push, one render.
     func resetEdits() {
-        guard isLoaded, let handle else { return }
+        guard isLoaded else { return }
         suspended = true
-        var asShot = OrionAdjustments()
-        orion_engine_as_shot(handle, &asShot)
-        temperatureK = asShot.temperature_k
-        tint = asShot.tint
-        exposureEv = 0; highlights = 0; shadows = 0; whites = 0; blacks = 0
-        vibrance = 0; saturation = 0; contrast = 1
-        sharpenAmount = 0; sharpenRadius = 1; sharpenMasking = 0
-        rotateQuarters = 0; straightenDeg = 0
-        cropX = 0; cropY = 0; cropW = 1; cropH = 1
-        hueShift = [Float](repeating: 0, count: 8)
-        satShift = [Float](repeating: 0, count: 8)
-        lumShift = [Float](repeating: 0, count: 8)
+        assign(asShotState())
         suspended = false
         pushAndRender()
+        history.record(state, label: "Reset")
     }
 
     struct Sample {
@@ -361,9 +358,13 @@ final class Engine {
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
     }
 
-    private func apply(_ s: DevelopState) {
-        restoring = true
-        suspended = true
+    /// Assigns every adjustment from a state, without rendering.
+    ///
+    /// The only place that lists the fields. Open and Reset each used to carry
+    /// their own list, and each was missing whatever had been added since —
+    /// Reset left denoise, the lens corrections and the curve applied, which
+    /// makes a Reset button that does not reset.
+    private func assign(_ s: DevelopState) {
         temperatureK = s.temperatureK; tint = s.tint; exposureEv = s.exposureEv
         highlights = s.highlights; shadows = s.shadows
         whites = s.whites; blacks = s.blacks
@@ -377,9 +378,27 @@ final class Engine {
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
         sharpenMasking = s.sharpenMasking; curve = s.curve
         hueShift = s.hueShift; satShift = s.satShift; lumShift = s.lumShift
+    }
+
+    private func apply(_ s: DevelopState) {
+        restoring = true
+        suspended = true
+        assign(s)
         suspended = false
         restoring = false
         pushAndRender()
+    }
+
+    /// A fresh state carrying the camera's own white balance, which is the
+    /// starting point rather than an edit.
+    private func asShotState() -> DevelopState {
+        var fresh = DevelopState()
+        guard let handle else { return fresh }
+        var asShot = OrionAdjustments()
+        orion_engine_as_shot(handle, &asShot)
+        fresh.temperatureK = asShot.temperature_k
+        fresh.tint = asShot.tint
+        return fresh
     }
 
     /// Split compare: 1.0 means no split, lower values reveal the original
@@ -433,8 +452,12 @@ final class Engine {
     }
 
     func setCompare(split: Double) {
-        if originalTexture == nil && split < 0.999 { captureOriginal() }
+        // The split goes first. captureOriginal re-renders twice, and every
+        // render calls invalidateOriginal, which drops the held texture while
+        // the split still reads 1.0 — so the original was captured and thrown
+        // away in the same call, and compare showed the edit on both sides.
         compareSplit = min(max(split, 0), 1)
+        if originalTexture == nil && comparing { captureOriginal() }
         generation &+= 1
     }
 
@@ -518,7 +541,15 @@ final class Engine {
         scheduleHistogram()
     }
 
-    /// A stand-in shown while the next photo decodes.
+    /// A still of the developed image, drawn in place of the Metal canvas.
+    ///
+    /// Only the screenshot harness sets this: AppKit cannot capture a Metal
+    /// layer, so a still is the only way to photograph the interface. It used
+    /// to double as a stand-in during a photo switch, showing the camera's
+    /// embedded JPEG until the render landed — but that preview carries its own
+    /// orientation, so opening a portrait frame drew it landscape and then
+    /// snapped. Holding the previous frame for the 26 ms decode is calmer than
+    /// showing a picture that turns.
     private(set) var placeholder: NSImage?
 
     func showPlaceholder(_ image: NSImage?) {
