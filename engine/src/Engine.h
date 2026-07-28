@@ -42,6 +42,11 @@ public:
     void histogram(std::uint32_t* out, std::uint32_t bins) const;
     void exportImage(const std::string& path, const util::ExportOptions&);
 
+    /// Encodes with these options and reports the byte count without writing.
+    /// The export panel shows a measured size rather than an estimate, which
+    /// is the whole reason the number is worth showing.
+    [[nodiscard]] std::size_t exportedSize(const util::ExportOptions&);
+
     [[nodiscard]] bool hasImage() const noexcept { return develop_ != nullptr; }
     [[nodiscard]] const pipe::DevelopPipeline& develop() const;
     [[nodiscard]] const std::string& camera() const noexcept { return camera_; }

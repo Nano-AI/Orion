@@ -330,6 +330,20 @@ final class Engine {
         guard status == ORION_OK else { throw Failure.export(errorText(status)) }
     }
 
+    /// Encodes with these options and reports the byte count without writing.
+    /// Real work — a 24 MP JPEG is about a sixth of a second — so callers
+    /// debounce it.
+    func exportedSize(format: Int32, quality: Float, maxDimension: UInt32) -> Int? {
+        guard let handle else { return nil }
+        var options = OrionExportOptions(format: format, quality: quality,
+                                         max_dimension: maxDimension)
+        var bytes: UInt64 = 0
+        guard orion_engine_export_size(handle, &options, &bytes) == ORION_OK else {
+            return nil
+        }
+        return Int(bytes)
+    }
+
     /// Captures every setting as a value, for undo.
     var state: DevelopState {
         DevelopState(

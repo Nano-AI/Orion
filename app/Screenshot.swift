@@ -80,6 +80,44 @@ enum Screenshot {
             engine.showPlaceholder(image)
         }
 
+        // The export sheet is not reachable from the editor's own hierarchy in
+        // a still, so it is rendered on its own.
+        if o.scene == "export" {
+            let settings = ExportSettings()
+            settings.quality = 0.82
+            settings.size = .custom
+            settings.setCustom(width: 3000, sourceWidth: engine.imageWidth,
+                               sourceHeight: engine.imageHeight)
+            let measured = engine.exportedSize(
+                format: settings.format.code, quality: Float(settings.quality),
+                maxDimension: settings.longestEdge(sourceWidth: engine.imageWidth,
+                                                   sourceHeight: engine.imageHeight))
+            settings.measuredBytes = measured
+
+            // Captured, not read back off the settings the panel is about to
+            // clear — otherwise the panel measures the value it just erased.
+            let estimate = settings.estimatedBytes(sourceWidth: engine.imageWidth,
+                                                   sourceHeight: engine.imageHeight)
+            FileHandle.standardError.write(Data(
+                "orion: estimate \(estimate) bytes, measured \(measured ?? -1) bytes\n".utf8))
+
+            let panel = ExportPanel(settings: settings,
+                                    sourceWidth: engine.imageWidth,
+                                    sourceHeight: engine.imageHeight,
+                                    measure: { measured },
+                                    onExport: {}, onCancel: {})
+                .preferredColorScheme(.dark)
+
+            let sheetSize = CGSize(width: 380, height: 520)
+            guard let sheet = render(panel, size: sheetSize) else {
+                fail("the export panel produced no image")
+            }
+            do { try sheet.write(to: URL(fileURLWithPath: o.output)) }
+            catch { fail("could not write \(o.output)") }
+            FileHandle.standardError.write(Data("orion: wrote \(o.output) (export)\n".utf8))
+            exit(0)
+        }
+
         let view = Editor(engine: engine, startTab: tab(for: o.scene))
             .frame(width: o.size.width, height: o.size.height)
             .preferredColorScheme(.dark)

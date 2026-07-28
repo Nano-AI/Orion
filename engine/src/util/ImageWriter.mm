@@ -126,6 +126,33 @@ void writeImage(const std::string& path, const std::uint8_t* rgba,
     }
 }
 
+std::size_t encodedSize(const std::uint8_t* rgba,
+                        std::uint32_t width, std::uint32_t height,
+                        std::size_t bytesPerRow, const ExportOptions& options) {
+    @autoreleasepool {
+        CFHolder<CGImageRef> full(makeImage(rgba, width, height, bytesPerRow));
+        CFHolder<CGImageRef> scaled(resample(full.ref, options.maxDimension));
+        CGImageRef image = scaled ? scaled.ref : full.ref;
+
+        // To memory, not to a file. An estimate from bytes-per-pixel was off by
+        // enough to be misleading — the whole point of the number is that you
+        // can trust it before committing to the write.
+        NSMutableData* data = [NSMutableData data];
+        CFHolder<CGImageDestinationRef> dest(CGImageDestinationCreateWithData(
+            (__bridge CFMutableDataRef)data, uti(options.format), 1, nullptr));
+        if (!dest) return 0;
+
+        NSDictionary* props = @{
+            (__bridge NSString*)kCGImageDestinationLossyCompressionQuality :
+                @(std::clamp(options.quality, 0.0f, 1.0f))
+        };
+        CGImageDestinationAddImage(dest.ref, image, (__bridge CFDictionaryRef)props);
+        if (!CGImageDestinationFinalize(dest.ref)) return 0;
+
+        return static_cast<std::size_t>(data.length);
+    }
+}
+
 void writePng(const std::string& path, const std::uint8_t* rgba,
               std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow) {
     writeImage(path, rgba, width, height, bytesPerRow, {ImageFormat::Png, 1.0f, 0});

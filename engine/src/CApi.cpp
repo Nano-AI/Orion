@@ -304,6 +304,24 @@ OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
     });
 }
 
+OrionStatus orion_engine_export_size(OrionEngine* engine,
+                                     const OrionExportOptions* options,
+                                     uint64_t* out_bytes) {
+    if (engine == nullptr || options == nullptr || out_bytes == nullptr) {
+        return ORION_ERR_BAD_ARG;
+    }
+    return guard(engine, [&]() -> OrionStatus {
+        orion::util::ExportOptions o{};
+        o.format = (options->format < 0)
+            ? orion::util::ImageFormat::Jpeg
+            : static_cast<orion::util::ImageFormat>(options->format);
+        o.quality = options->quality;
+        o.maxDimension = options->max_dimension;
+        *out_bytes = static_cast<uint64_t>(engine->impl.exportedSize(o));
+        return ORION_OK;
+    });
+}
+
 const char* orion_engine_camera(const OrionEngine* engine) {
     return engine ? engine->impl.camera().c_str() : "";
 }

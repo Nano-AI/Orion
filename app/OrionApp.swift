@@ -257,6 +257,14 @@ struct Editor: View {
             ExportPanel(settings: exportSettings,
                         sourceWidth: engine.imageWidth,
                         sourceHeight: engine.imageHeight,
+                        measure: {
+                            engine.exportedSize(
+                                format: exportSettings.format.code,
+                                quality: Float(exportSettings.quality),
+                                maxDimension: exportSettings.longestEdge(
+                                    sourceWidth: engine.imageWidth,
+                                    sourceHeight: engine.imageHeight))
+                        },
                         onExport: { showingExport = false; exportFile() },
                         onCancel: { showingExport = false })
         }
@@ -956,7 +964,9 @@ struct Editor: View {
         do {
             try engine.export(to: url.path,
                               quality: Float(exportSettings.quality),
-                              maxDimension: exportSettings.size.longestEdge)
+                              maxDimension: exportSettings.longestEdge(
+                                  sourceWidth: engine.imageWidth,
+                                  sourceHeight: engine.imageHeight))
         } catch {
             message = error.localizedDescription
         }

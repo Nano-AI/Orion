@@ -25,6 +25,14 @@ void writeImage(const std::string& path, const std::uint8_t* rgba,
                 const ExportOptions& options);
 
 /// Convenience for the PNG case, used by the bench harness.
+/// Encodes to memory and reports the byte count, without writing anything.
+/// The export panel needs a size it can trust before you commit to the write,
+/// and only a real encode gives one.
+[[nodiscard]] std::size_t encodedSize(const std::uint8_t* rgba,
+                                      std::uint32_t width, std::uint32_t height,
+                                      std::size_t bytesPerRow,
+                                      const ExportOptions& options);
+
 void writePng(const std::string& path, const std::uint8_t* rgba,
               std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow);
 

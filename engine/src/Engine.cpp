@@ -132,6 +132,21 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     util::writeImage(path, pixels.data(), w, h, rowBytes, options);
 }
 
+std::size_t Engine::exportedSize(const util::ExportOptions& options) {
+    if (!develop_) throw std::runtime_error("no image open");
+
+    develop_->render();
+
+    const std::uint32_t w = develop_->outputWidth();
+    const std::uint32_t h = develop_->outputHeight();
+    const std::size_t rowBytes = static_cast<std::size_t>(w) * 4;
+
+    std::vector<std::uint8_t> pixels(rowBytes * h);
+    develop_->output().download(pixels.data(), rowBytes, w, h);
+
+    return util::encodedSize(pixels.data(), w, h, rowBytes, options);
+}
+
 const pipe::DevelopPipeline& Engine::develop() const {
     if (!develop_) throw std::runtime_error("no image open");
     return *develop_;

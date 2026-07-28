@@ -203,6 +203,13 @@ typedef struct OrionExportOptions {
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
                                 const OrionExportOptions* options);
 
+/* Encodes with these options and reports the byte count without writing
+ * anything. A real encode rather than an estimate: the number is only worth
+ * showing if it can be trusted before committing to the write. */
+OrionStatus orion_engine_export_size(OrionEngine* engine,
+                                     const OrionExportOptions* options,
+                                     uint64_t* out_bytes);
+
 /* Camera make and model of the open image, or "" when none. */
 const char* orion_engine_camera(const OrionEngine* engine);
 
