@@ -6,6 +6,7 @@ add_library(orion_engine STATIC
     src/Engine.cpp
     src/gpu/MetalDevice.mm
     src/raw/RawImage.cpp
+    src/raw/NoiseProfile.cpp
     src/gpu/Resources.mm
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp

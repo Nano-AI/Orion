@@ -89,6 +89,12 @@ typedef struct OrionAdjustments {
     float   preview_x, preview_y;  /* canvas origin  */
     float   preview_size;          /* canvas extent, both axes, >= 1 */
 
+    /* Profiled wavelet denoise. Strengths are multiples of the measured noise
+     * level, not arbitrary amounts, so one setting behaves the same way on a
+     * clean frame and a very noisy one. Zero switches the chain off entirely. */
+    float denoise_luma;     /* 0..4                       */
+    float denoise_colour;   /* 0..4                       */
+
     float sharpen_amount;   /* 0..2                       */
     float sharpen_radius;   /* pixels                     */
     float sharpen_masking;  /* 0..1, protects flat areas  */

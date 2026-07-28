@@ -4,7 +4,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
+#include <string>
 
 namespace orion::pipe {
 namespace {
@@ -98,9 +101,42 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     nRgb_       = pipeline_.add({"rcd:red/blue", "rcdRedBlue",
                                  {nLinearize_, nGreen_, nDirs_},
                                  PixelFormat::RGBA16Float, {}});
-    // Capture sharpening belongs right after the demosaic, and keeping it
+    // ── Profiled wavelet denoise (Starck et al., starlet) ─────────────────
+    //
+    // Before the colour matrix and before sharpening, because the noise model
+    // var = a·x + b only holds in linear camera RGB — the matrix mixes the
+    // channels and would mix their variances with them — and because sharpening
+    // noise and then denoising it is a way to end up with neither.
+    //
+    // Four blurs give c_1..c_4 at taps 1, 2, 4, 8. The shrink chain then runs
+    // coarse to fine, starting from c_4 as the base and adding back each scale's
+    // shrunk detail. Reconstruction is exact when nothing is shrunk:
+    //
+    //     I = c_J + Σ_j w_j,   w_j = c_j − c_{j+1}
+    for (int j = 0; j < kDenoiseScales; ++j) {
+        const int input = (j == 0) ? nRgb_ : nAtrousBlur_[j - 1];
+        nAtrousBlur_[j] = pipeline_.add({"denoise:blur " + std::to_string(j),
+                                         "atrousBlur", {input},
+                                         PixelFormat::RGBA16Float, {}});
+    }
+    for (int j = kDenoiseScales - 1; j >= 0; --j) {
+        const int fine   = (j == 0) ? nRgb_ : nAtrousBlur_[j - 1];
+        const int coarse = nAtrousBlur_[j];
+        // The coarsest scale accumulates onto the residual itself; every finer
+        // one accumulates onto the scale below it.
+        const int accum  = (j == kDenoiseScales - 1) ? nAtrousBlur_[j]
+                                                     : nAtrousShrink_[j + 1];
+        nAtrousShrink_[j] = pipeline_.add({"denoise:shrink " + std::to_string(j),
+                                           "atrousShrink", {fine, coarse, accum},
+                                           PixelFormat::RGBA16Float, {}});
+    }
+
+    // Capture sharpening belongs right after the denoise, and keeping it
     // upstream of the tone controls means an exposure drag never recomputes it.
-    nSharpen_   = pipeline_.add({"sharpen", "sharpen", {nRgb_},
+    // Note the input: a disabled node passes its *first* input through, and
+    // shrink 0's first input is the demosaic — so switching the whole chain off
+    // hands sharpen exactly what it used to get.
+    nSharpen_   = pipeline_.add({"sharpen", "sharpen", {nAtrousShrink_[0]},
                                  PixelFormat::RGBA16Float, {}});
     nMatrix_    = pipeline_.add({"camera->working", "cameraToWorking", {nSharpen_},
                                  PixelFormat::RGBA16Float, {}});
@@ -245,6 +281,14 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     const float gRef = (image.camMul[1] != 0.0f) ? image.camMul[1] : 1.0f;
     asShotMul_ = {image.camMul[0] / gRef, 1.0f, image.camMul[2] / gRef};
 
+    // Measured from this frame rather than looked up per camera and ISO. See
+    // raw/NoiseProfile.h for why, and for the citation.
+    noise_ = estimateNoise(image);
+    if (const char* v = std::getenv("ORION_DEBUG_NOISE"); v != nullptr && *v == '1') {
+        std::fprintf(stderr, "orion: noise a=%.3e b=%.3e measured=%d\n",
+                     noise_.a, noise_.b, noise_.measured ? 1 : 0);
+    }
+
     asShot_    = estimateFrom(asShotMul_, xyzToCam_);
     asShotRef_ = multipliersFor(asShot_, xyzToCam_);
 
@@ -280,6 +324,78 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         lin.whiteBalance[2] = asShotMul_[2] * want[2] / std::max(asShotRef_[2], 1e-6f);
         lin.whiteBalance[3] = 1.0f;   // second green
         pipeline_.setParams(nLinearize_, &lin, sizeof lin);
+    }
+
+    // ── Denoise ──────────────────────────────────────────────────────────
+    //
+    // Eight nodes, so like the guided filter it is switched off entirely when
+    // unused rather than run at zero strength. Unlike the guided filter it also
+    // has to be re-pushed when white balance moves: linearize scales each
+    // channel by its multiplier, and a variance scales by the square of that.
+    const bool denoising = noise_.measured &&
+                           (adj.denoiseLuma > 0.0f || adj.denoiseColour > 0.0f);
+    const bool denoiseMoved =
+        first ||
+        adj.denoiseLuma != lastAdj_.denoiseLuma ||
+        adj.denoiseColour != lastAdj_.denoiseColour ||
+        adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
+        adj.wb.tint != lastAdj_.wb.tint;
+
+    if (denoiseMoved) {
+        for (int j = 0; j < kDenoiseScales; ++j) {
+            pipeline_.setEnabled(nAtrousBlur_[j], denoising);
+            pipeline_.setEnabled(nAtrousShrink_[j], denoising);
+        }
+    }
+
+    if (denoising && denoiseMoved) {
+        // ‖W_j‖₂ for the 5x5 starlet. Noise falls away fast at coarse scales,
+        // which is why one threshold across all of them over-smooths the fine
+        // scales and under-smooths the coarse.
+        constexpr float kScaleNorm[kDenoiseScales] = {0.8907f, 0.2007f, 0.0855f, 0.0412f};
+
+        // The model was fitted on the mosaic, before white balance. Linearize
+        // multiplies channel c by m_c, so its variance is multiplied by m_c².
+        // Luminance is a weighted sum of independent channels, so its variance
+        // is the weight-squared sum of theirs.
+        const auto want = multipliersFor(adj.wb, xyzToCam_);
+        const float mR = asShotMul_[0] * want[0] / std::max(asShotRef_[0], 1e-6f);
+        const float mG = 1.0f;
+        const float mB = asShotMul_[2] * want[2] / std::max(asShotRef_[2], 1e-6f);
+
+        // Rec.2020 luminance weights, matching the shader.
+        constexpr float wR = 0.2627f, wG = 0.6780f, wB = 0.0593f;
+        const float aLum = noise_.a * (wR * wR * mR + wG * wG * mG + wB * wB * mB);
+        const float bLum = noise_.b * (wR * wR * mR * mR + wG * wG * mG * mG +
+                                       wB * wB * mB * mB);
+
+        for (int j = 0; j < kDenoiseScales; ++j) {
+            params::AtrousBlur blur{};
+            blur.size[0] = width_;
+            blur.size[1] = height_;
+            blur.step = 1 << j;
+            pipeline_.setParams(nAtrousBlur_[j], &blur, sizeof blur);
+
+            params::AtrousShrink shrink{};
+            shrink.size[0] = width_;
+            shrink.size[1] = height_;
+            shrink.noiseA = aLum;
+            shrink.noiseB = bLum;
+            shrink.scaleNorm = kScaleNorm[j];
+            shrink.strength = adj.denoiseLuma;
+            // Colour is expressed relative to luma so that raising Colour alone
+            // still does something when Luminance is zero.
+            shrink.chromaBoost = adj.denoiseLuma > 1e-6f
+                ? std::max(adj.denoiseColour / adj.denoiseLuma, 0.0f)
+                : 0.0f;
+            if (adj.denoiseLuma <= 1e-6f) {
+                // Colour only: shrink chroma against the measured sigma and
+                // leave luma untouched.
+                shrink.strength = adj.denoiseColour;
+                shrink.chromaBoost = 1.0f;
+            }
+            pipeline_.setParams(nAtrousShrink_[j], &shrink, sizeof shrink);
+        }
     }
 
     const bool linearMoved =

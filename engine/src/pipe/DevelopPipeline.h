@@ -12,6 +12,7 @@
 #include "pipe/Pipeline.h"
 #include "pipe/ToneCurve.h"
 #include "pipe/WhiteBalance.h"
+#include "raw/NoiseProfile.h"
 #include "raw/RawImage.h"
 
 #include <array>
@@ -69,6 +70,13 @@ struct Adjustments {
     /// handles and the pixels drifted apart before.
     float previewX = 0.0f, previewY = 0.0f;
     float previewSize = 1.0f;
+
+    /// Profiled wavelet denoise. Strengths are multiples of the measured
+    /// noise level, so 1.0 means "shrink coefficients smaller than one sigma"
+    /// rather than an arbitrary amount — which is what makes the same setting
+    /// behave the same way on a clean frame and a very noisy one.
+    float denoiseLuma   = 0.0f;   // 0..4, 0 disables the whole chain
+    float denoiseColour = 0.0f;   // 0..4, applied on top of luma
 
     // Capture sharpening. Sits just after the demosaic.
     float sharpenAmount  = 0.0f;   // 0..2
@@ -137,6 +145,10 @@ private:
     int nLinearize_ = -1, nDirs_ = -1, nLpf_ = -1, nGreen_ = -1, nRgb_ = -1;
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
     int nGeometry_ = -1;
+    static constexpr int kDenoiseScales = 4;
+    int nAtrousBlur_[kDenoiseScales]{-1, -1, -1, -1};
+    int nAtrousShrink_[kDenoiseScales]{-1, -1, -1, -1};
+    raw::NoiseProfile noise_{};
     int nGuidePrep_ = -1, nGuideH1_ = -1, nGuideV1_ = -1;
     int nGuideAb_ = -1, nGuideH2_ = -1, nGuideV2_ = -1;
     int exifQuarters_ = 0;

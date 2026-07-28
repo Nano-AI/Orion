@@ -24,6 +24,8 @@ enum Screenshot {
         var photo: String?
         var scene = "light"
         var size = CGSize(width: 1680, height: 1050)
+        /// Region to report statistics for, normalised. Empty means no report.
+        var measure: CGRect?
     }
 
     /// Parses the command line. Returns nil when this is an ordinary launch.
@@ -39,6 +41,14 @@ enum Screenshot {
             case "--screenshot": if let next { o.output = next; i += 1 }
             case "--photo":      if let next { o.photo = next; i += 1 }
             case "--scene":      if let next { o.scene = next; i += 1 }
+            case "--measure":
+                if let next {
+                    let n = next.split(separator: ",").compactMap { Double($0) }
+                    if n.count == 4 {
+                        o.measure = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
+                    }
+                    i += 1
+                }
             case "--size":
                 if let next {
                     let parts = next.split(separator: "x").compactMap { Double($0) }
@@ -65,7 +75,9 @@ enum Screenshot {
             do { try engine.open(path: photo) }
             catch { fail("could not open \(photo) — \(error.localizedDescription)") }
             apply(scene: o.scene, to: engine)
-            engine.showPlaceholder(developed(engine))
+            let image = developed(engine)
+            if let region = o.measure { measure(engine, region: region) }
+            engine.showPlaceholder(image)
         }
 
         let view = Editor(engine: engine, startTab: tab(for: o.scene))
@@ -91,7 +103,7 @@ enum Screenshot {
         switch scene {
         case "colour":                 .colour
         case "curve":                  .light
-        case "detail":                 .detail
+        case "detail", "noisy", "denoise-off", "denoise-luma", "denoise-both": .detail
         case "crop", "crop-angle":     .crop
         default:                       .light
         }
@@ -115,6 +127,8 @@ enum Screenshot {
             engine.satShift[HueBand.blue.rawValue] = 0.4
         case "detail":
             engine.exposureEv = 2.6
+            engine.denoiseLuma = 1.6
+            engine.denoiseColour = 2.4
             engine.sharpenAmount = 0.8
             engine.sharpenMasking = 0.4
         case "crop":
@@ -126,6 +140,17 @@ enum Screenshot {
             engine.cropPreview = true
             engine.straightenDeg = 12
             engine.setCrop(x: 0.1, y: 0.08, w: 0.62, h: 0.7)
+        case "noisy":
+            engine.exposureEv = 2.6
+        case "denoise-off":
+            engine.exposureEv = 2.6
+        case "denoise-luma":
+            engine.exposureEv = 2.6
+            engine.denoiseLuma = 2.0
+        case "denoise-both":
+            engine.exposureEv = 2.6
+            engine.denoiseLuma = 2.0
+            engine.denoiseColour = 3.0
         case "compare":
             engine.exposureEv = 2.6
             engine.setCompare(split: 0.5)
@@ -169,6 +194,55 @@ enum Screenshot {
         else { return nil }
 
         return NSImage(cgImage: cg, size: NSSize(width: w, height: h))
+    }
+
+    /// Prints the mean and standard deviation of a region of the engine's
+    /// output.
+    ///
+    /// Whether a filter works is a question about pixels, and a screenshot
+    /// scaled to fit a review pane cannot answer it — noise that is obvious at
+    /// 100% disappears into the downsampling. This reads the numbers.
+    private static func measure(_ engine: Engine, region: CGRect) {
+        guard let src = engine.outputTexture else { return }
+        let w = Int(engine.imageWidth), h = Int(engine.imageHeight)
+        guard w > 0, h > 0 else { return }
+
+        let x0 = max(0, min(w - 1, Int(region.minX * CGFloat(w))))
+        let y0 = max(0, min(h - 1, Int(region.minY * CGFloat(h))))
+        let rw = max(1, min(w - x0, Int(region.width * CGFloat(w))))
+        let rh = max(1, min(h - y0, Int(region.height * CGFloat(h))))
+
+        let stride = rw * 4
+        var pixels = [UInt8](repeating: 0, count: stride * rh)
+        pixels.withUnsafeMutableBytes { raw in
+            src.getBytes(raw.baseAddress!, bytesPerRow: stride,
+                         from: MTLRegionMake2D(x0, y0, rw, rh), mipmapLevel: 0)
+        }
+
+        // BGRA, and the alpha channel is not a measurement.
+        var sums = [Double](repeating: 0, count: 3)
+        var squares = [Double](repeating: 0, count: 3)
+        let n = Double(rw * rh)
+        for i in stride_pixels(count: rw * rh) {
+            for c in 0..<3 {
+                let v = Double(pixels[i * 4 + (2 - c)]) / 255
+                sums[c] += v
+                squares[c] += v * v
+            }
+        }
+
+        var report = "orion: region \(rw)x\(rh) at (\(x0),\(y0))\n"
+        for (c, name) in ["R", "G", "B"].enumerated() {
+            let mean = sums[c] / n
+            let variance = max(0, squares[c] / n - mean * mean)
+            report += String(format: "  %@  mean %.5f  sd %.5f\n",
+                             name, mean, variance.squareRoot())
+        }
+        FileHandle.standardError.write(Data(report.utf8))
+    }
+
+    private static func stride_pixels(count: Int) -> StrideTo<Int> {
+        stride(from: 0, to: count, by: 1)
     }
 
     // MARK: Rendering

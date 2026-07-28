@@ -751,6 +751,17 @@ struct Editor: View {
     }
 
     private var detailPanel: some View {
+        Group {
+        section("Noise Reduction") {
+            slider("Luminance", $engine.denoiseLuma, 0...4, "", 2)
+            slider("Colour", $engine.denoiseColour, 0...4, "", 2)
+            Text("Measured from this frame, so 1.00 means \"remove what is "
+                 + "smaller than one standard deviation of its own noise\" "
+                 + "rather than a fixed amount.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Sharpening") {
             slider("Amount", $engine.sharpenAmount, 0...2, "", 2)
             slider("Radius", $engine.sharpenRadius, 0.5...3, " px", 1)
@@ -759,6 +770,7 @@ struct Editor: View {
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
+        }
         }
     }
 

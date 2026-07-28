@@ -8,6 +8,7 @@
 
 #include "pipe/ToneCurve.h"
 #include "pipe/WhiteBalance.h"
+#include "raw/NoiseProfile.h"
 #include "raw/RawImage.h"
 #include "gpu/MetalDevice.h"
 #include "gpu/Resources.h"
@@ -16,7 +17,9 @@
 
 #include <vector>
 
+#include <algorithm>
 #include <cmath>
+#include <random>
 #include <cstdio>
 #include <string>
 
@@ -671,6 +674,272 @@ void testStraightenPivot() {
               "rotating about the centre leaves the centre row put");
 }
 
+/// The noise estimator, against noise we made ourselves.
+///
+/// A fitted a and b are only useful if they are close to the truth, and a
+/// synthetic frame is the only place the truth is known. The generator is a
+/// smooth ramp plus Poisson-Gaussian noise at a chosen a and b.
+void testNoiseEstimator() {
+    section("Noise profile");
+
+    constexpr std::uint32_t kW = 512, kH = 512;
+    constexpr float kWhite = 16383.0f;
+    constexpr double kTrueA = 4.0e-5, kTrueB = 9.0e-6;
+
+    // A fixed generator: a flaky test that depends on the weather is worse
+    // than no test.
+    std::mt19937 rng(12345);
+    std::normal_distribution<double> gauss(0.0, 1.0);
+
+    orion::raw::BayerImage image;
+    image.width = kW;
+    image.height = kH;
+    image.white = static_cast<std::uint16_t>(kWhite);
+    image.black = {0, 0, 0, 0};
+    image.samples.resize(static_cast<std::size_t>(kW) * kH);
+
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            // A horizontal ramp, so every brightness bin is populated. Locally
+            // smooth, which is what the differencing estimator assumes.
+            const double signal = 0.02 + 0.9 * (double(x) / (kW - 1));
+            const double sigma = std::sqrt(kTrueA * signal + kTrueB);
+            const double v = std::clamp(signal + sigma * gauss(rng), 0.0, 1.0);
+            image.samples[std::size_t(y) * kW + x] =
+                static_cast<std::uint16_t>(v * kWhite);
+        }
+    }
+
+    const auto profile = orion::raw::estimateNoise(image);
+    report(profile.measured, "the estimator produced a fit");
+
+    // Twenty percent: this is a robust median-based fit over twelve bins from
+    // one frame, not a laboratory measurement, and the denoise threshold moves
+    // with the square root of it.
+    checkNear(profile.a, kTrueA, kTrueA * 0.2, "the shot-noise term is recovered");
+    checkNear(profile.b, kTrueB, kTrueB * 0.35, "the read-noise term is recovered");
+
+    // A clean frame must not be reported as noisy, or denoise would smooth an
+    // image that has nothing to remove.
+    orion::raw::BayerImage clean = image;
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const double signal = 0.02 + 0.9 * (double(x) / (kW - 1));
+            clean.samples[std::size_t(y) * kW + x] =
+                static_cast<std::uint16_t>(signal * kWhite);
+        }
+    }
+    const auto quiet = orion::raw::estimateNoise(clean);
+    report(quiet.a < kTrueA * 0.05 && quiet.b < kTrueB * 0.2,
+           "a noiseless frame measures as noiseless",
+           "a = " + std::to_string(quiet.a) + ", b = " + std::to_string(quiet.b));
+
+    // A frame with almost no brightness range — a night sky, which is exactly
+    // the kind of frame that needs denoising. Equal-width bins put every pixel
+    // in the bottom twelfth, eleven bins came back empty, and the fit was
+    // abandoned: the denoiser silently did nothing on the frames that needed it
+    // most. It must now come back measured, with the constant term carrying the
+    // model and no slope invented from a lever arm that is not there.
+    orion::raw::BayerImage dark;
+    dark.width = kW; dark.height = kH; dark.white = static_cast<std::uint16_t>(kWhite);
+    dark.black = {0, 0, 0, 0};
+    dark.samples.resize(static_cast<std::size_t>(kW) * kH);
+    {
+        std::mt19937 darkRng(4242);
+        std::normal_distribution<double> g(0.0, 1.0);
+        const double signal = 0.03;
+        const double sigma = std::sqrt(kTrueA * signal + kTrueB);
+        for (auto& sample : dark.samples) {
+            const double v = std::clamp(signal + sigma * g(darkRng), 0.0, 1.0);
+            sample = static_cast<std::uint16_t>(v * kWhite);
+        }
+    }
+    const auto night = orion::raw::estimateNoise(dark);
+    report(night.measured, "a frame with no brightness range is still measured");
+    checkNear(night.b, kTrueA * 0.03 + kTrueB, (kTrueA * 0.03 + kTrueB) * 0.35,
+              "the constant term carries a flat frame's whole noise level");
+
+    // Too small to fit is reported as unmeasured rather than guessed at.
+    orion::raw::BayerImage tiny;
+    tiny.width = 8; tiny.height = 8; tiny.white = 4095;
+    tiny.samples.assign(64, 1000);
+    report(!orion::raw::estimateNoise(tiny).measured,
+           "a frame too small to fit is not fitted");
+}
+
+/// The wavelet denoise, on a real GPU.
+///
+/// Two things have to be true at once, and each is easy to get alone: noise in
+/// a flat area has to fall, and an edge has to survive. A denoiser that only
+/// does the first is a blur.
+void testDenoiseGpu() {
+    section("Wavelet denoise (GPU)");
+
+    constexpr std::uint32_t kW = 256, kH = 256;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto blurLib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/atrousBlur.metallib");
+    auto blurKernel = orion::gpu::Kernel::create(*device, *blurLib, "atrousBlur");
+    auto shrinkLib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/atrousShrink.metallib");
+    auto shrinkKernel = orion::gpu::Kernel::create(*device, *shrinkLib, "atrousShrink");
+
+    // Left half dark, right half bright, plus noise. The step down the middle
+    // is the edge that must survive.
+    constexpr float kDark = 0.20f, kBright = 0.60f, kSigma = 0.03f;
+    std::mt19937 rng(999);
+    std::normal_distribution<float> gauss(0.0f, kSigma);
+
+    std::vector<__fp16> input(std::size_t(kW) * kH * 4);
+    std::vector<float> cleanSignal(std::size_t(kW) * kH);
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = std::size_t(y) * kW + x;
+            const float base = (x < kW / 2) ? kDark : kBright;
+            cleanSignal[i] = base;
+            const float v = base + gauss(rng);
+            input[i * 4 + 0] = static_cast<__fp16>(v);
+            input[i * 4 + 1] = static_cast<__fp16>(v);
+            input[i * 4 + 2] = static_cast<__fp16>(v);
+            input[i * 4 + 3] = 1;
+        }
+    }
+
+    const auto make = [&] {
+        return orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    };
+    auto c0 = make();
+    c0->upload(input.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+    constexpr int kScales = 4;
+    constexpr float kScaleNorm[kScales] = {0.8907f, 0.2007f, 0.0855f, 0.0412f};
+
+    std::vector<std::unique_ptr<orion::gpu::Texture>> blurs;
+    for (int j = 0; j < kScales; ++j) blurs.push_back(make());
+
+    // Blur chain: c_1..c_4.
+    for (int j = 0; j < kScales; ++j) {
+        orion::pipe::params::AtrousBlur bp{};
+        bp.size[0] = kW; bp.size[1] = kH;
+        bp.step = 1 << j;
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*blurKernel,
+                    {j == 0 ? c0.get() : blurs[std::size_t(j - 1)].get(),
+                     blurs[std::size_t(j)].get()},
+                    &bp, sizeof bp, kW, kH);
+        cb.commitAndWait();
+    }
+
+    // Shrink chain, coarse to fine, starting from the residual.
+    std::vector<std::unique_ptr<orion::gpu::Texture>> shrinks;
+    for (int j = 0; j < kScales; ++j) shrinks.push_back(make());
+
+    for (int j = kScales - 1; j >= 0; --j) {
+        orion::pipe::params::AtrousShrink sp{};
+        sp.size[0] = kW; sp.size[1] = kH;
+        // The synthetic noise is constant, so it is all in the b term.
+        sp.noiseA = 0.0f;
+        sp.noiseB = kSigma * kSigma;
+        sp.scaleNorm = kScaleNorm[j];
+        sp.strength = 2.0f;
+        sp.chromaBoost = 1.0f;
+
+        const orion::gpu::Texture* fine =
+            (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
+        const orion::gpu::Texture* coarse = blurs[std::size_t(j)].get();
+        const orion::gpu::Texture* accum =
+            (j == kScales - 1) ? blurs[std::size_t(j)].get()
+                               : shrinks[std::size_t(j + 1)].get();
+
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*shrinkKernel,
+                    {fine, coarse, accum, shrinks[std::size_t(j)].get()},
+                    &sp, sizeof sp, kW, kH);
+        cb.commitAndWait();
+    }
+
+    std::vector<__fp16> out(std::size_t(kW) * kH * 4);
+    shrinks[0]->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+
+    // Residual against the clean signal, well away from the edge and the
+    // border, where the transform has nothing either side to work with.
+    const auto residual = [&](const std::vector<__fp16>& img) {
+        double sum = 0.0; int n = 0;
+        for (std::uint32_t y = 24; y < kH - 24; ++y) {
+            for (std::uint32_t x = 24; x < kW / 2 - 24; ++x) {
+                const std::size_t i = std::size_t(y) * kW + x;
+                const double d = double(img[i * 4]) - double(cleanSignal[i]);
+                sum += d * d; ++n;
+            }
+        }
+        return std::sqrt(sum / std::max(n, 1));
+    };
+
+    const double before = residual(input);
+    const double after = residual(out);
+
+    report(after < before * 0.5,
+           "denoise halves the error in a flat area",
+           "before " + std::to_string(before) + ", after " + std::to_string(after));
+
+    // The edge must still be an edge. Compare the mean either side, two pixels
+    // clear of the boundary so the transform's own support is not the subject.
+    const auto meanNear = [&](const std::vector<__fp16>& img, std::uint32_t x0,
+                              std::uint32_t x1) {
+        double sum = 0.0; int n = 0;
+        for (std::uint32_t y = 40; y < kH - 40; ++y) {
+            for (std::uint32_t x = x0; x < x1; ++x) {
+                sum += double(img[(std::size_t(y) * kW + x) * 4]); ++n;
+            }
+        }
+        return sum / std::max(n, 1);
+    };
+
+    const double left = meanNear(out, kW / 2 - 12, kW / 2 - 4);
+    const double right = meanNear(out, kW / 2 + 4, kW / 2 + 12);
+    checkNear(left, kDark, 0.02, "the dark side of the edge keeps its level");
+    checkNear(right, kBright, 0.02, "the bright side of the edge keeps its level");
+    report(right - left > (kBright - kDark) * 0.9,
+           "the edge survives denoising",
+           "step " + std::to_string(right - left));
+
+    // Strength zero must reconstruct exactly: I = c_J + sum of w_j. If that is
+    // not an identity, every other setting is built on sand.
+    for (int j = kScales - 1; j >= 0; --j) {
+        orion::pipe::params::AtrousShrink sp{};
+        sp.size[0] = kW; sp.size[1] = kH;
+        sp.strength = 0.0f;
+        const orion::gpu::Texture* fine =
+            (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
+        const orion::gpu::Texture* accum =
+            (j == kScales - 1) ? blurs[std::size_t(j)].get()
+                               : shrinks[std::size_t(j + 1)].get();
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*shrinkKernel,
+                    {fine, blurs[std::size_t(j)].get(), accum,
+                     shrinks[std::size_t(j)].get()},
+                    &sp, sizeof sp, kW, kH);
+        cb.commitAndWait();
+    }
+    shrinks[0]->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+
+    double worst = 0.0;
+    for (std::uint32_t i = 0; i < kW * kH; ++i) {
+        worst = std::max(worst, std::abs(double(out[i * 4]) - double(input[i * 4])));
+    }
+    report(worst < 0.01, "the transform reconstructs exactly at zero strength",
+           "worst " + std::to_string(worst));
+}
+
 }  // namespace
 
 int main() {
@@ -684,6 +953,8 @@ int main() {
     testDisplayNeutrality();
     testCropGpu();
     testStraightenPivot();
+    testNoiseEstimator();
+    testDenoiseGpu();
     testExportFormats();
 
     std::printf("\n%d checks, %d failures\n", checks, failures);

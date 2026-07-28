@@ -139,6 +139,9 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.previewY = adj->preview_y;
         a.previewSize = adj->preview_size;
 
+        a.denoiseLuma   = adj->denoise_luma;
+        a.denoiseColour = adj->denoise_colour;
+
         a.curve.master = toChannel(adj->curve_master);
         a.curve.red    = toChannel(adj->curve_red);
         a.curve.green  = toChannel(adj->curve_green);

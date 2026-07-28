@@ -121,6 +121,26 @@ struct Display {
 };
 static_assert(sizeof(Display) == 32);
 
+/// À-trous blur, one scale. Mirrors AtrousParams in denoise_blur.slang.
+struct AtrousBlur {
+    std::uint32_t size[2];
+    std::int32_t  step;     // 2^j
+    std::int32_t  _pad;
+};
+static_assert(sizeof(AtrousBlur) == 16);
+
+/// Shrinkage at one scale. Mirrors ShrinkParams in denoise_accum.slang.
+struct AtrousShrink {
+    std::uint32_t size[2];
+    float noiseA;
+    float noiseB;
+    float scaleNorm;
+    float strength;
+    float chromaBoost;
+    float _pad;
+};
+static_assert(sizeof(AtrousShrink) == 32);
+
 struct Geometry {
     std::uint32_t outSize[2];
     std::uint32_t inSize[2];

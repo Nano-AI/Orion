@@ -159,6 +159,12 @@ final class Engine {
     /// spline and the LUT since M2; nothing reached them until now.
     var curve = ToneCurve()       { didSet { pushAndRender() } }
 
+    /// Profiled wavelet denoise, in multiples of the frame's own measured
+    /// noise level. Zero switches eight nodes off rather than running them at
+    /// no strength.
+    var denoiseLuma: Float = 0     { didSet { pushAndRender() } }
+    var denoiseColour: Float = 0   { didSet { pushAndRender() } }
+
     var sharpenAmount: Float = 0   { didSet { pushAndRender() } }
     var sharpenRadius: Float = 1   { didSet { pushAndRender() } }
     var sharpenMasking: Float = 0  { didSet { pushAndRender() } }
@@ -321,6 +327,7 @@ final class Engine {
             vibrance: vibrance, saturation: saturation, contrast: contrast,
             rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
             cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
+            denoiseLuma: denoiseLuma, denoiseColour: denoiseColour,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
@@ -335,6 +342,7 @@ final class Engine {
         vibrance = s.vibrance; saturation = s.saturation; contrast = s.contrast
         rotateQuarters = s.rotateQuarters; straightenDeg = s.straightenDeg
         cropX = s.cropX; cropY = s.cropY; cropW = s.cropW; cropH = s.cropH
+        denoiseLuma = s.denoiseLuma; denoiseColour = s.denoiseColour
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
         sharpenMasking = s.sharpenMasking; curve = s.curve
         hueShift = s.hueShift; satShift = s.satShift; lumShift = s.lumShift
@@ -437,6 +445,7 @@ final class Engine {
             preview_x: Float(previewCanvas.origin.x),
             preview_y: Float(previewCanvas.origin.y),
             preview_size: Float(previewCanvas.size),
+            denoise_luma: denoiseLuma, denoise_colour: denoiseColour,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),
