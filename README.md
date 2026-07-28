@@ -75,16 +75,3 @@ open build/Orion.app
 
 The GPU tests matter most. Pure maths tests pass happily on code that renders
 garbage, because they never touch a texture — two shipped bugs proved it.
-
----
-
-## Authorship
-
-Written by [Nano-AI](https://github.com/Nano-AI) with
-[Claude](https://claude.com/claude-code) (Opus 5) as a pair. Every commit carries
-a `Co-Authored-By` trailer recording that, because it is true and worth being
-plain about.
-
-Direction, review, and every design and product decision are the author's.
-Claude did the bulk of the typing and the research legwork, and got several
-things wrong along the way that review caught.
