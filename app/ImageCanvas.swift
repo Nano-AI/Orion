@@ -118,9 +118,14 @@ struct ImageCanvas: NSViewRepresentable {
                 float2 uv;
             };
 
+            // A quad as a triangle strip, NOT the usual oversized fullscreen
+            // triangle. That trick relies on the triangle extending past the
+            // viewport so its hypotenuse is clipped away — scale it down to
+            // letterbox and the hypotenuse becomes visible as a diagonal edge
+            // with black on the far side.
             vertex VOut orionBlitVertex(uint vid [[vertex_id]],
                                         constant Transform& t [[buffer(0)]]) {
-                const float2 p = float2((vid << 1) & 2, vid & 2);
+                const float2 p = float2(float(vid & 1u), float(vid >> 1u));
                 VOut out;
                 out.pos = float4((p * 2.0 - 1.0) * t.quadScale, 0.0, 1.0);
                 out.uv  = t.uvMin + float2(p.x, 1.0 - p.y) * t.uvSize;
@@ -280,7 +285,7 @@ struct ImageCanvas: NSViewRepresentable {
             encoder.setVertexBytes(&t, length: MemoryLayout<Transform>.stride, index: 0)
             encoder.setFragmentTexture(texture, index: 0)
             encoder.setFragmentSamplerState(samp, index: 0)
-            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
             encoder.endEncoding()
 
             buffer.present(drawable)

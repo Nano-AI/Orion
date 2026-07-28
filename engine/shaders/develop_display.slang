@@ -97,12 +97,10 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
         c.b = sampleLut(lut, c.b, 3u, p.resolution);
     }
 
-    // ── Display encode ─────────────────────────────────────────────────────
-    // sRGB transfer. Swap for PQ when the EDR path lands.
-    c = saturate(c);
-    c = select(c <= 0.0031308f,
-               c * 12.92f,
-               1.055f * pow(c, 1.0f / 2.4f) - 0.055f);
-
-    dst[tid.xy] = float4(c, 1.0f);
+    // No sRGB encode here. The AgX polynomial is a fit of the *display*
+    // rendering transform — its output is already display-referred, so
+    // applying a transfer function on top encodes the signal twice. That is
+    // what washed the image out: middle grey landed at 0.74 instead of 0.50,
+    // lifting everything and flattening colour along with it.
+    dst[tid.xy] = float4(saturate(c), 1.0f);
 }

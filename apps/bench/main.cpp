@@ -44,24 +44,26 @@ Stats summarise(std::vector<double> v) {
             std::accumulate(v.begin(), v.end(), 0.0) / static_cast<double>(v.size())};
 }
 
-void writeOut(const orion::gpu::Texture& tex, const std::string& path) {
-    const std::size_t rowBytes = static_cast<std::size_t>(tex.width()) * 4;
-    std::vector<std::uint8_t> pixels(rowBytes * tex.height());
-    tex.download(pixels.data(), rowBytes);
-    orion::util::writePng(path, pixels.data(), tex.width(), tex.height(), rowBytes);
-    std::printf("  wrote %s\n", path.c_str());
+void writeOut(const orion::pipe::DevelopPipeline& d, const std::string& path) {
+    const std::uint32_t w = d.outputWidth(), h = d.outputHeight();
+    const std::size_t rowBytes = static_cast<std::size_t>(w) * 4;
+    std::vector<std::uint8_t> pixels(rowBytes * h);
+    d.output().download(pixels.data(), rowBytes, w, h);
+    orion::util::writePng(path, pixels.data(), w, h, rowBytes);
+    std::printf("  wrote %s  (%u x %u)\n", path.c_str(), w, h);
 }
 
 /// Mean luma of the output, for asserting that an adjustment actually did
 /// something rather than silently no-op'ing.
-double meanLuma(const orion::gpu::Texture& tex) {
-    const std::size_t rowBytes = static_cast<std::size_t>(tex.width()) * 4;
-    std::vector<std::uint8_t> pixels(rowBytes * tex.height());
-    tex.download(pixels.data(), rowBytes);
+double meanLuma(const orion::pipe::DevelopPipeline& d) {
+    const std::uint32_t tw = d.outputWidth(), th = d.outputHeight();
+    const std::size_t rowBytes = static_cast<std::size_t>(tw) * 4;
+    std::vector<std::uint8_t> pixels(rowBytes * th);
+    d.output().download(pixels.data(), rowBytes, tw, th);
 
     double sum = 0.0;
     std::size_t n = 0;
-    for (std::size_t i = 0; i < static_cast<std::size_t>(tex.width()) * tex.height(); i += 37) {
+    for (std::size_t i = 0; i < static_cast<std::size_t>(tw) * th; i += 37) {
         sum += 0.2126 * pixels[i * 4 + 0]
              + 0.7152 * pixels[i * 4 + 1]
              + 0.0722 * pixels[i * 4 + 2];
@@ -145,7 +147,7 @@ int main(int argc, char** argv) {
             base.wb = develop.asShotWhiteBalance();
             develop.apply(base);
             develop.render();
-            return meanLuma(develop.output());
+            return meanLuma(develop);
         }());
 
         {
@@ -171,7 +173,7 @@ int main(int argc, char** argv) {
 
             develop.apply(base);
             develop.render();
-            const double ref = meanLuma(develop.output());
+            const double ref = meanLuma(develop);
 
             // Starred probes are measured against a +3 EV baseline: this frame
             // is a night sky, and highlight recovery correctly does nothing
@@ -180,14 +182,14 @@ int main(int argc, char** argv) {
             lifted.exposureEv = 5.5f;
             develop.apply(lifted);
             develop.render();
-            const double liftedRef = meanLuma(develop.output());
+            const double liftedRef = meanLuma(develop);
 
             for (const auto& probe : probes) {
                 auto a = base;
                 probe.set(a);
                 develop.apply(a);
                 const double ms = develop.render();
-                const double luma = meanLuma(develop.output());
+                const double luma = meanLuma(develop);
                 const bool starred = std::string(probe.name).find('*') != std::string::npos;
                 const double against = starred ? liftedRef : ref;
                 int nodes = 0;
@@ -207,8 +209,8 @@ int main(int argc, char** argv) {
         adj.wb = develop.asShotWhiteBalance();
         develop.apply(adj);
         develop.render();
-        const double flatLuma = meanLuma(develop.output());
-        writeOut(develop.output(), prefix + "-flat.png");
+        const double flatLuma = meanLuma(develop);
+        writeOut(develop, prefix + "-flat.png");
 
         // A film-style S: lift the shoulder, drop the toe.
         adj.curve.master = {{0.0f, 0.0f}, {0.25f, 0.14f}, {0.75f, 0.86f}, {1.0f, 1.0f}};
@@ -222,8 +224,8 @@ int main(int argc, char** argv) {
             curveTimes.push_back(develop.render());
         }
         const Stats cs = summarise(curveTimes);
-        const double curvedLuma = meanLuma(develop.output());
-        writeOut(develop.output(), prefix + "-curved.png");
+        const double curvedLuma = meanLuma(develop);
+        writeOut(develop, prefix + "-curved.png");
 
         std::printf("  curve drag     %.2f ms median, %.2f ms p95  (1 of 8 nodes)\n",
                     cs.median, cs.p95);
@@ -240,10 +242,11 @@ int main(int argc, char** argv) {
             develop.apply(base);
             develop.render();
 
-            const auto& tex = develop.output();
-            const std::size_t rowBytes = static_cast<std::size_t>(tex.width()) * 4;
-            std::vector<std::uint8_t> pixels(rowBytes * tex.height());
-            tex.download(pixels.data(), rowBytes);
+            const std::uint32_t ew = develop.outputWidth();
+            const std::uint32_t eh = develop.outputHeight();
+            const std::size_t rowBytes = static_cast<std::size_t>(ew) * 4;
+            std::vector<std::uint8_t> pixels(rowBytes * eh);
+            develop.output().download(pixels.data(), rowBytes, ew, eh);
 
             struct Case { const char* suffix; orion::util::ExportOptions opts; };
             const Case cases[] = {
@@ -255,8 +258,7 @@ int main(int argc, char** argv) {
             for (const auto& c : cases) {
                 const std::string out = prefix + c.suffix;
                 const auto t = Clock::now();
-                orion::util::writeImage(out, pixels.data(), tex.width(), tex.height(),
-                                        rowBytes, c.opts);
+                orion::util::writeImage(out, pixels.data(), ew, eh, rowBytes, c.opts);
                 std::printf("  %-14s %6.0f ms\n", c.suffix, msSince(t));
             }
         }

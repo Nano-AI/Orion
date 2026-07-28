@@ -2,6 +2,7 @@
 
 #include "gpu/Resources.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace orion::gpu {
@@ -84,6 +85,15 @@ void Texture::download(void* dst, std::size_t bytesPerRow) const {
     [impl_->tex getBytes:dst
              bytesPerRow:bytesPerRow
               fromRegion:MTLRegionMake2D(0, 0, width_, height_)
+             mipmapLevel:0];
+}
+
+void Texture::download(void* dst, std::size_t bytesPerRow,
+                       std::uint32_t width, std::uint32_t height) const {
+    [impl_->tex getBytes:dst
+             bytesPerRow:bytesPerRow
+              fromRegion:MTLRegionMake2D(0, 0, std::min(width, width_),
+                                         std::min(height, height_))
              mipmapLevel:0];
 }
 

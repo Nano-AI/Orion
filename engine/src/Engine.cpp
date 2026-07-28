@@ -34,12 +34,16 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     // Make sure what we write matches what is on screen.
     develop_->render();
 
-    const auto& tex = develop_->output();
-    const std::size_t rowBytes = static_cast<std::size_t>(tex.width()) * 4;
-    std::vector<std::uint8_t> pixels(rowBytes * tex.height());
-    tex.download(pixels.data(), rowBytes);
+    // The orientation node's texture is square; only the oriented rectangle
+    // inside it holds pixels.
+    const std::uint32_t w = develop_->outputWidth();
+    const std::uint32_t h = develop_->outputHeight();
+    const std::size_t rowBytes = static_cast<std::size_t>(w) * 4;
 
-    util::writeImage(path, pixels.data(), tex.width(), tex.height(), rowBytes, options);
+    std::vector<std::uint8_t> pixels(rowBytes * h);
+    develop_->output().download(pixels.data(), rowBytes, w, h);
+
+    util::writeImage(path, pixels.data(), w, h, rowBytes, options);
 }
 
 const pipe::DevelopPipeline& Engine::develop() const {

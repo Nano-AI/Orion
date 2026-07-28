@@ -38,6 +38,12 @@ public:
     void upload(const void* src, std::size_t bytesPerRow);
     void download(void* dst, std::size_t bytesPerRow) const;
 
+    /// Reads only the top-left width x height rectangle. The orientation node
+    /// allocates square so a rotation needs no recompile, so most of its
+    /// texture is never written — copying all of it would emit a black band.
+    void download(void* dst, std::size_t bytesPerRow,
+                  std::uint32_t width, std::uint32_t height) const;
+
     [[nodiscard]] std::uint32_t width()  const noexcept { return width_; }
     [[nodiscard]] std::uint32_t height() const noexcept { return height_; }
     [[nodiscard]] PixelFormat   format() const noexcept { return format_; }
