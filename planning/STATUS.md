@@ -45,17 +45,29 @@ Verified 2026-07-28: a TIFF export reports `bitsPerSample: 16`, 6024×4024,
 
 ### Latency, re-measured 2026-07-28 (Sony ILCE-7M3, 6024×4024, M4)
 
+**27 nodes, 4027 MiB of intermediates** — up from 16 nodes and 2.6 GiB. The M4
+recommends a 17.8 GiB working set so this is comfortable, but it is the number
+to watch on a lesser GPU.
+
 | Drag | Nodes | Time |
 |---|---|---|
-| Exposure | 3 | 9.0 ms |
-| Curve | 1 | 6.1 ms |
-| Highlights / shadows | 10 | **19.6 ms** (was 90.1) |
-| Colour mixer | 5 | 16.4 ms |
-| Temperature / tint / sharpen | 11 | 42.9 ms |
+| Exposure | 3 | 11.5 ms |
+| Highlights / shadows | 10 | **23.6 ms** (was 90.1) |
+| Colour mixer | 5 | 19.2 ms |
+| Temperature / tint / sharpen | 11 | ~50 ms |
 
-M0 gate passes at 9.04 ms p95. Temperature is the one still over budget and
-always will be: it rewrites the head of the graph, so the demosaic reruns. The
-fix is degrade-then-refine or the preview-ROI path, neither of which is built.
+**M0 gate passes at 11.67 ms p95**, against 16 ms.
+
+⚠️ It was 9.04 ms before 16-bit output. Writing `RGBA16Float` from the display
+and geometry nodes doubles the bytes those two move, and that is 2.6 ms of the
+budget spent on a capability nobody sees on screen. It is a deliberate trade —
+4.3 ms of headroom is still real headroom — but if the budget ever gets tight
+this is the first place to look, and the fix is a second display path used only
+for export rather than a wider one used always.
+
+Temperature is over budget and always will be: it rewrites the head of the
+graph, so the demosaic reruns. The fix is degrade-then-refine or the preview-ROI
+path, neither of which is built.
 
 ### The screenshot harness
 
