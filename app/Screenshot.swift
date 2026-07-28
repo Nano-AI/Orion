@@ -90,6 +90,7 @@ enum Screenshot {
     private static func tab(for scene: String) -> ToolTab {
         switch scene {
         case "colour":                 .colour
+        case "curve":                  .light
         case "detail":                 .detail
         case "crop", "crop-angle":     .crop
         default:                       .light
@@ -101,24 +102,32 @@ enum Screenshot {
     private static func apply(scene: String, to engine: Engine) {
         switch scene {
         case "light":
-            engine.exposureEv = 0.35
+            engine.exposureEv = 2.6
             engine.highlights = -0.4
-            engine.shadows = 0.3
+            engine.shadows = 0.45
+        case "curve":
+            engine.exposureEv = 2.6
+            engine.curve.master = [CurvePoint(x: 0, y: 0.04), CurvePoint(x: 0.28, y: 0.19),
+                                   CurvePoint(x: 0.68, y: 0.79), CurvePoint(x: 1, y: 1)]
         case "colour":
+            engine.exposureEv = 2.6
             engine.vibrance = 0.3
             engine.satShift[HueBand.blue.rawValue] = 0.4
         case "detail":
+            engine.exposureEv = 2.6
             engine.sharpenAmount = 0.8
             engine.sharpenMasking = 0.4
         case "crop":
+            engine.exposureEv = 2.6
             engine.cropPreview = true
             engine.setCrop(x: 0.1, y: 0.08, w: 0.62, h: 0.7)
         case "crop-angle":
+            engine.exposureEv = 2.6
             engine.cropPreview = true
             engine.straightenDeg = 12
             engine.setCrop(x: 0.1, y: 0.08, w: 0.62, h: 0.7)
         case "compare":
-            engine.exposureEv = 0.8
+            engine.exposureEv = 2.6
             engine.setCompare(split: 0.5)
         default:
             break

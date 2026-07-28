@@ -45,6 +45,21 @@ OrionStatus orion_engine_create(OrionEngine** out);
 void        orion_engine_destroy(OrionEngine* engine);
 
 /* Adjustments. Plain floats so the block is trivially bridgeable. */
+/* One channel of the tone curve.
+ *
+ * A fixed array rather than a pointer, so the whole adjustment block stays one
+ * POD value that can be memcpy'd across the facade. Sixteen points is more than
+ * any curve a person draws by hand; the engine interpolates between them with a
+ * monotone cubic Hermite, which passes through every point and cannot overshoot.
+ */
+#define ORION_CURVE_MAX_POINTS 16
+
+typedef struct OrionCurveChannel {
+    int32_t count;                       /* 0 or 1 means identity */
+    float   x[ORION_CURVE_MAX_POINTS];   /* input,  0..1, ascending */
+    float   y[ORION_CURVE_MAX_POINTS];   /* output, 0..1 */
+} OrionCurveChannel;
+
 typedef struct OrionAdjustments {
     float temperature_k;  /* white balance, Kelvin        */
     float tint;           /* -1..1, green to magenta      */
@@ -82,6 +97,13 @@ typedef struct OrionAdjustments {
     float hue_shift[8];
     float sat_shift[8];
     float lum_shift[8];
+
+    /* Tone curve, after the display transform. Master applies to all three
+     * channels, then each channel's own curve applies on top. */
+    OrionCurveChannel curve_master;
+    OrionCurveChannel curve_red;
+    OrionCurveChannel curve_green;
+    OrionCurveChannel curve_blue;
 } OrionAdjustments;
 
 /* Opens a raw file and builds the develop pipeline for it. */

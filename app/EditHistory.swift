@@ -112,6 +112,7 @@ struct DevelopState: Equatable {
     var sharpenAmount: Float = 0
     var sharpenRadius: Float = 1
     var sharpenMasking: Float = 0
+    var curve = ToneCurve()
     var hueShift = [Float](repeating: 0, count: 8)
     var satShift = [Float](repeating: 0, count: 8)
     var lumShift = [Float](repeating: 0, count: 8)

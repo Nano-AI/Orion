@@ -49,6 +49,31 @@ void copyInto(char* dst, std::size_t cap, const std::string& src) noexcept {
     dst[n] = '\0';
 }
 
+/// A curve channel out of its C form.
+///
+/// Anything malformed becomes the identity rather than an error: the curve is
+/// pushed on every slider tick, and failing a whole render because a caller
+/// sent a stray point would be a poor trade. Points are clamped to 0..1 and
+/// required to ascend, because the interpolator assumes both.
+orion::pipe::CurveChannel toChannel(const OrionCurveChannel& c) {
+    const orion::pipe::CurveChannel identity{{0.0f, 0.0f}, {1.0f, 1.0f}};
+
+    const int n = c.count;
+    if (n < 2 || n > ORION_CURVE_MAX_POINTS) return identity;
+
+    orion::pipe::CurveChannel out;
+    out.reserve(static_cast<std::size_t>(n));
+    float previousX = -1.0f;
+    for (int i = 0; i < n; ++i) {
+        const float x = std::clamp(c.x[i], 0.0f, 1.0f);
+        const float y = std::clamp(c.y[i], 0.0f, 1.0f);
+        if (x <= previousX) return identity;
+        previousX = x;
+        out.push_back({x, y});
+    }
+    return out;
+}
+
 }  // namespace
 
 OrionStatus orion_engine_create(OrionEngine** out) {
@@ -113,6 +138,11 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.previewX = adj->preview_x;
         a.previewY = adj->preview_y;
         a.previewSize = adj->preview_size;
+
+        a.curve.master = toChannel(adj->curve_master);
+        a.curve.red    = toChannel(adj->curve_red);
+        a.curve.green  = toChannel(adj->curve_green);
+        a.curve.blue   = toChannel(adj->curve_blue);
         a.sharpenAmount   = adj->sharpen_amount;
         a.sharpenRadius   = adj->sharpen_radius;
         a.sharpenMasking  = adj->sharpen_masking;

@@ -673,6 +673,12 @@ struct Editor: View {
                 slider("Whites", $engine.whites, -1...1, "", 2)
                 slider("Blacks", $engine.blacks, -1...1, "", 2)
             }
+            // Below the sliders, because it is the control you reach for when
+            // a slider was not specific enough. The engine has evaluated this
+            // spline since M2; nothing reached it until now.
+            section("Curve") {
+                CurveEditor(engine: engine, histogram: engine.histogramBins)
+            }
         }
     }
 

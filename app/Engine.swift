@@ -155,6 +155,10 @@ final class Engine {
         pushAndRender()
     }
 
+    /// Tone curve, applied after the display transform. The engine has had the
+    /// spline and the LUT since M2; nothing reached them until now.
+    var curve = ToneCurve()       { didSet { pushAndRender() } }
+
     var sharpenAmount: Float = 0   { didSet { pushAndRender() } }
     var sharpenRadius: Float = 1   { didSet { pushAndRender() } }
     var sharpenMasking: Float = 0  { didSet { pushAndRender() } }
@@ -318,7 +322,7 @@ final class Engine {
             rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
             cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
-            sharpenMasking: sharpenMasking,
+            sharpenMasking: sharpenMasking, curve: curve,
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
     }
 
@@ -332,7 +336,7 @@ final class Engine {
         rotateQuarters = s.rotateQuarters; straightenDeg = s.straightenDeg
         cropX = s.cropX; cropY = s.cropY; cropW = s.cropW; cropH = s.cropH
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
-        sharpenMasking = s.sharpenMasking
+        sharpenMasking = s.sharpenMasking; curve = s.curve
         hueShift = s.hueShift; satShift = s.satShift; lumShift = s.lumShift
         suspended = false
         restoring = false
@@ -437,7 +441,11 @@ final class Engine {
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),
             sat_shift: toTuple8(satShift),
-            lum_shift: toTuple8(lumShift))
+            lum_shift: toTuple8(lumShift),
+            curve_master: curveChannel(curve.master),
+            curve_red: curveChannel(curve.red),
+            curve_green: curveChannel(curve.green),
+            curve_blue: curveChannel(curve.blue))
         orion_engine_set_adjustments(handle, &adj)
         render()
     }
@@ -497,6 +505,24 @@ final class Engine {
     }
 
     /// Swift imports a C float[8] as a 8-tuple, and there is no nicer bridge.
+    /// A curve channel into its C form. The engine treats anything malformed
+    /// as the identity, so truncating past the cap here is safe rather than
+    /// silently wrong.
+    private func curveChannel(_ points: [CurvePoint]) -> OrionCurveChannel {
+        var c = OrionCurveChannel()
+        let n = min(points.count, 16)
+        c.count = Int32(n)
+        withUnsafeMutableBytes(of: &c.x) { raw in
+            let f = raw.bindMemory(to: Float.self)
+            for i in 0..<n { f[i] = points[i].x }
+        }
+        withUnsafeMutableBytes(of: &c.y) { raw in
+            let f = raw.bindMemory(to: Float.self)
+            for i in 0..<n { f[i] = points[i].y }
+        }
+        return c
+    }
+
     private func toTuple8(_ a: [Float]) -> (Float, Float, Float, Float,
                                             Float, Float, Float, Float) {
         let v = a.count >= 8 ? a : a + [Float](repeating: 0, count: 8 - a.count)

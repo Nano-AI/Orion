@@ -28,6 +28,9 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Filmstrip.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CompareOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/CurveEditor.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
@@ -80,12 +83,16 @@ add_custom_command(
             -target arm64-apple-macos14.0
             ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_BINARY_DIR}/main.swift
             -o ${VIEWPORT_TESTS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
