@@ -12,7 +12,7 @@ file, or a file and line you can read.
 ```sh
 cmake -S . -B build -G Ninja && cmake --build build
 
-./build/apps/tests/orion-tests            # 129 checks — engine maths + real GPU renders
+./build/apps/tests/orion-tests            # 208 checks — engine maths + real GPU renders
 ./build/orion-viewport-tests              # 2067 checks — canvas geometry, curve, sidecar
 ./build/apps/bench/orion-bench file.ARW   # latency gate + per-control effect checks
 ```
@@ -120,15 +120,19 @@ Ranked by how much damage a defect there would do.
   frames.
 - **Two things the screenshot harness cannot see**: the Metal canvas (AppKit
   cannot capture a Metal layer) and any 3D transform (`cacheDisplay` skips
-  them). The mode dial's rotation is therefore verified live and not by test.
-  The horizontal scale is deliberately redundant with the rotation so that what
-  a screenshot *can* check is still the right shape.
+  them). The second is why the camera-style mode dial built this session was
+  deleted rather than kept — a control whose whole point could not be checked by
+  the suite, on a widget with one job.
+- **The filmstrip is not screenshot-verified.** The harness renders one photo
+  and never scans a folder, so the strip does not appear in any capture. Its
+  changes are colors and Canvas drawing, which is the low-risk end, but it is
+  the one piece of this session's UI work checked only by reading.
 - **No lens database.** The corrections are built and correct; the coefficients
-  are entered by hand. See §6.
+  are entered by hand. See §8.
 - **No SQLite index.** The folder scan is live and fine to a few hundred frames.
 - **`app/OrionApp.swift` is the largest file** and is close to the 1000-line
   limit `CLAUDE.md` sets. Two components have already been lifted out of it
-  (`AdjustmentSlider`, `ModeDial`); the panel bodies should be next.
+  (`AdjustmentSlider`, `ColorWheel`); the panel bodies should be next.
 
 ---
 
