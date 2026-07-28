@@ -57,16 +57,21 @@ struct Filmstrip: View {
                     .contentShape(RoundedRectangle(cornerRadius: 4))
                 }
                 .buttonStyle(.plain)
-                .help("Reject or keep this photo (X)")
+                .help("Reject or keep this photo (R)")
             }
 
             Text(library.summary)
                 .font(.system(size: 10))
                 .monospacedDigit()
                 .foregroundStyle(Palette.faint)
-                .fixedSize()
+                .lineLimit(1)
         }
         .padding(.horizontal, 14)
+        // Fixed, because the summary's width changes the moment you reject
+        // something — and a filter bar that grows shoves the whole strip
+        // sideways, so the thumbnail under the cursor is no longer the one you
+        // were about to click.
+        .frame(width: 300, alignment: .leading)
     }
 
     private var strip: some View {

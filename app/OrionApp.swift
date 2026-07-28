@@ -212,6 +212,7 @@ struct Editor: View {
     @State private var showingExport = false
     @State private var library = Library()
     @State private var current: URL?
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -240,6 +241,7 @@ struct Editor: View {
         // once the Metal canvas has taken first responder — which is what a
         // bare onKeyPress here could not do.
         .focusedSceneValue(\.cull, cullActions)
+        .onAppear { installKeyMonitor() }
         .sheet(isPresented: $showingExport) {
             ExportPanel(settings: exportSettings,
                         sourceWidth: engine.imageWidth,
@@ -389,8 +391,7 @@ struct Editor: View {
 
                 if engine.isLoaded {
                     ImageCanvas(engine: engine, viewport: viewport,
-                                targeted: targeted, generation: engine.generation,
-                                onKey: handleKey)
+                                targeted: targeted, generation: engine.generation)
                         // Held while a new photo decodes, and what the
                         // screenshot harness draws into — AppKit cannot capture
                         // a Metal layer, so the canvas has to be a still there.
@@ -435,6 +436,20 @@ struct Editor: View {
                         .onChange(of: tab) { _, t in
                             engine.cropPreview = (t == .crop)
                             viewport.locked = (t == .crop)
+
+                            // Anything armed and waiting for a click on the
+                            // photo belongs to the panel that armed it. Leaving
+                            // that panel with the colour picker still live means
+                            // the next click on the picture does something the
+                            // visible controls no longer explain.
+                            targeted.isActive = false
+                            targeted.clearHover()
+
+                            // Compare holds a copy of the unedited render at the
+                            // current geometry. Cropping changes that geometry
+                            // under it, so the two halves stop being the same
+                            // picture.
+                            if t == .crop { engine.clearCompare() }
                         }
                         .onAppear {
                             engine.cropPreview = (tab == .crop)
@@ -896,6 +911,11 @@ struct Editor: View {
     }
 
     private func load(_ url: URL) {
+        // The photo being left keeps its edits. Without this, going to the next
+        // frame and back threw the work away — which is the whole difference
+        // between an editor and a viewer.
+        saveDevelop()
+
         current = url
 
         // Crop and straighten belong to the photo that was open, not the one
@@ -910,6 +930,9 @@ struct Editor: View {
             do {
                 try engine.open(path: url.path)
                 viewport.reset()
+                if let saved = Sidecar.read(for: url)?.develop {
+                    engine.restore(encoded: saved)
+                }
             } catch {
                 message = error.localizedDescription
             }
@@ -937,13 +960,34 @@ struct Editor: View {
             cancelCrop: { engine.edit("Crop") { engine.resetCrop() }; tab = .light })
     }
 
-    /// Single keys, delivered by the canvas rather than by the menu.
+    /// Single keys, seen before AppKit dispatches them.
     ///
-    /// The canvas only receives these while it is first responder, so an Open
-    /// panel, a save sheet or a text field keeps its own keystrokes — which is
-    /// what a bare menu key equivalent cannot promise.
-    private func handleKey(_ press: ImageCanvas.KeyPress) -> Bool {
-        guard !press.modifiers.contains(.command) else { return false }
+    /// Not menu key equivalents: a bare letter or digit on a menu item fires in
+    /// any key window, which took `r` and the digits from the Open panel's
+    /// type-ahead and Return and Escape from its buttons. Not the canvas's
+    /// keyDown either: that only arrives while the canvas is first responder,
+    /// and SwiftUI's own focus machinery holds it most of the time, so the keys
+    /// simply did nothing.
+    ///
+    /// A local monitor sees every key event and hands back the ones that belong
+    /// to somebody else — a sheet, a panel, a text field, or anything with a
+    /// modifier.
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard let window = NSApp.keyWindow, window.sheets.isEmpty,
+                  !(window is NSPanel),
+                  !(window.firstResponder is NSTextView)
+            else { return event }
+
+            return handleKey(event) ? nil : event
+        }
+    }
+
+    private func handleKey(_ event: NSEvent) -> Bool {
+        guard !event.modifierFlags.contains(.command) else { return false }
+        let press = (characters: event.charactersIgnoringModifiers ?? "",
+                     keyCode: event.keyCode)
 
         // Escape and Return, by key code: their characters are control
         // sequences that do not compare well.
@@ -964,6 +1008,8 @@ struct Editor: View {
         default:
             break
         }
+
+        guard engine.isLoaded else { return false }
 
         switch press.characters.lowercased() {
         case "r":
@@ -988,6 +1034,15 @@ struct Editor: View {
         default:
             return false
         }
+    }
+
+    /// Writes the open photo's adjustments into its sidecar, alongside the
+    /// rating and the flag that already live there.
+    private func saveDevelop() {
+        guard let current, engine.isLoaded, let encoded = engine.encodedState else {
+            return
+        }
+        Sidecar.merge(into: current) { $0.develop = encoded }
     }
 
     private func rate(_ stars: Int) {

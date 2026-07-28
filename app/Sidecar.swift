@@ -66,6 +66,18 @@ struct Sidecar: Sendable {
 
     // MARK: Writing
 
+    /// Writes these fields over whatever is already on disk, keeping the rest.
+    ///
+    /// The two writers touch different halves — culling writes the rating and
+    /// the flag, editing writes the develop state — and each used to rebuild
+    /// the whole file from its own half. Rating a photo therefore erased its
+    /// edits, silently, on a keystroke.
+    static func merge(into photo: URL, _ change: (inout Sidecar) -> Void) {
+        var sidecar = Sidecar.read(for: photo) ?? Sidecar()
+        change(&sidecar)
+        sidecar.write(for: photo)
+    }
+
     func write(for photo: URL) {
         let effectiveRating = rejected ? -1 : rating
 

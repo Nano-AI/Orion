@@ -16,19 +16,7 @@ struct ImageCanvas: NSViewRepresentable {
     let targeted: TargetedAdjust
     /// Changes whenever a new frame is ready; drives the redraw.
     let generation: UInt64
-    /// Single-key commands. Returns true when the key was used.
-    ///
-    /// Here rather than as menu key equivalents: a bare letter or digit on a
-    /// menu item fires in *any* key window, so `r` and the digits were being
-    /// eaten from the Open panel's type-ahead, and Return and Escape from its
-    /// buttons. That is why opening a raw file stopped working.
-    var onKey: (KeyPress) -> Bool = { _ in false }
 
-    struct KeyPress {
-        let characters: String
-        let keyCode: UInt16
-        let modifiers: NSEvent.ModifierFlags
-    }
 
     func makeCoordinator() -> Renderer {
         Renderer(engine: engine, viewport: viewport, targeted: targeted)
@@ -48,13 +36,11 @@ struct ImageCanvas: NSViewRepresentable {
         view.enableSetNeedsDisplay = true
         view.clearColor = MTLClearColorMake(0.165, 0.165, 0.173, 1.0)  // --surround
         view.coordinator = context.coordinator
-        context.coordinator.onKey = onKey
         context.coordinator.attach(to: view)
         return view
     }
 
     func updateNSView(_ view: MTKView, context: Context) {
-        context.coordinator.onKey = onKey
         view.needsDisplay = true
     }
 
@@ -66,20 +52,7 @@ struct ImageCanvas: NSViewRepresentable {
 
         override var acceptsFirstResponder: Bool { true }
 
-        /// Take focus as soon as there is a window to take it in, so the single
-        /// key commands work before the photo has been clicked on.
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            window?.makeFirstResponder(self)
-        }
 
-        override func keyDown(with event: NSEvent) {
-            let press = KeyPress(characters: event.charactersIgnoringModifiers ?? "",
-                                 keyCode: event.keyCode,
-                                 modifiers: event.modifierFlags)
-            if coordinator?.onKey(press) == true { return }
-            super.keyDown(with: event)
-        }
 
         /// Flipped so y grows downward, matching image coordinates. Mouse
         /// deltas in AppKit's default orientation are the reason drag felt
@@ -135,7 +108,6 @@ struct ImageCanvas: NSViewRepresentable {
         private let engine: Engine
         private let viewport: Viewport
         private let targeted: TargetedAdjust
-        var onKey: (KeyPress) -> Bool = { _ in false }
         private var queue: MTLCommandQueue?
         private var pipeline: MTLRenderPipelineState?
         private var sampler: MTLSamplerState?

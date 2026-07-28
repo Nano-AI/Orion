@@ -282,6 +282,23 @@ final class Engine {
         if comparing { captureOriginal() }
     }
 
+    /// Every adjustment as JSON, for the sidecar.
+    var encodedState: Data? { try? JSONEncoder().encode(state) }
+
+    /// Restores a state saved to a sidecar. Silent on malformed data: a
+    /// sidecar written by a newer build should leave the photo openable.
+    func restore(encoded: Data) {
+        guard let s = try? JSONDecoder().decode(DevelopState.self, from: encoded) else {
+            return
+        }
+        suspended = true
+        assign(s)
+        suspended = false
+        history.reset(to: s)
+        pushAndRender()
+        if comparing { captureOriginal() }
+    }
+
     /// Rotates by a quarter turn, wrapping. Clockwise is positive.
     /// A quarter turn swaps the frame's width and height, so a crop rectangle
     /// expressed against the old one no longer means anything. Resetting it is
@@ -294,6 +311,11 @@ final class Engine {
         if turns % 2 != 0 { swap(&frameWidth, &frameHeight) }
         suspended = false
         rotateQuarters = ((rotateQuarters + turns) % 4 + 4) % 4
+
+        // The held original is the wrong shape now — a quarter turn swaps the
+        // output's width and height, and the split was sampling a texture whose
+        // valid rectangle no longer matches.
+        if comparing { captureOriginal() }
     }
 
     /// Returns every adjustment to its default, with white balance back to

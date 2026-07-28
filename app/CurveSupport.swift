@@ -5,7 +5,7 @@ import Foundation
 // without dragging SwiftUI and the engine handle in behind it.
 
 /// One point of a tone curve. Input and output both 0..1, in display space.
-struct CurvePoint: Equatable, Hashable {
+struct CurvePoint: Equatable, Hashable, Codable {
     var x: Float
     var y: Float
 }
@@ -13,7 +13,7 @@ struct CurvePoint: Equatable, Hashable {
 /// The four channels a curve panel edits. Master applies to all three, then
 /// each channel's own curve applies on top — which is how every editor's curve
 /// panel behaves, and what the display shader already implements.
-struct ToneCurve: Equatable {
+struct ToneCurve: Equatable, Codable {
     static let identity: [CurvePoint] = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     var master = identity

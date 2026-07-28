@@ -180,8 +180,13 @@ final class Library {
     }
 
     private func persist(_ photo: Photo) {
-        Sidecar(rating: photo.rating, rejected: photo.rejected,
-                label: photo.colorLabel).write(for: photo.url)
+        // Merged, not rebuilt: the develop settings live in the same file and
+        // are none of this function's business.
+        Sidecar.merge(into: photo.url) {
+            $0.rating = photo.rating
+            $0.rejected = photo.rejected
+            $0.label = photo.colorLabel
+        }
     }
 
     func index(of url: URL) -> Int? { visible.firstIndex { $0.url == url } }

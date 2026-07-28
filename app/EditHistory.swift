@@ -92,7 +92,7 @@ final class EditHistory {
 }
 
 /// Every develop setting, as a value. Snapshotting this is what makes undo work.
-struct DevelopState: Equatable {
+struct DevelopState: Equatable, Codable {
     var temperatureK: Float = 5500
     var tint: Float = 0
     var exposureEv: Float = 0
