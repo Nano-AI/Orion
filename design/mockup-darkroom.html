@@ -1,0 +1,1026 @@
+<title>Orion — Darkroom</title>
+<style>
+/* TOKENS:START — generated from tokens.json, do not edit by hand */
+  :root {
+    /* Colour */
+    --ground: #141416;  /* App background, outermost shell */
+    --panel: #1B1B1D;  /* Tool panels, toolbar, filmstrip */
+    --raised: #232326;  /* Controls, cells, inset wells */
+    --surround: #2A2A2C;  /* Canvas surround — what the photo is judged against */
+    --line: #313135;  /* Hairlines, borders, dividers */
+    --rail: #3A3A3E;  /* Slider tracks, scrollbar thumbs */
+    --text: #E8E8EA;  /* Primary text, slider thumbs */
+    --dim: #8A8A90;  /* Labels, secondary text */
+    --faint: #5A5A60;  /* Tertiary text, inactive icons, detents */
+    --accent: #4DB6C4;  /* Interactive and active states ONLY. Never decorative. */
+    --reject: #C4574D;  /* Reject flag */
+    --star: #F0C674;  /* Star rating marks */
+    --chanR: #C4433A;  /* Histogram red channel */
+    --chanG: #3AA84F;  /* Histogram green channel */
+    --chanB: #3A6FC4;  /* Histogram blue channel */
+
+    /* Space */
+    --space-xs: 2px;
+    --space-sm: 6px;
+    --space-md: 10px;
+    --space-pad: 14px;
+    --space-lg: 18px;
+    --space-xl: 26px;
+
+    /* Radius */
+    --radius-sm: 3px;
+    --radius-md: 5px;
+
+    /* Type */
+    --type-xs: 10px;
+    --type-sm: 11px;
+    --type-base: 12px;
+    --type-md: 13px;
+    --type-trackingWide: 0.14em;
+    --type-trackingLabel: 0.07em;
+
+    /* Layout */
+    --layout-toolbar: 44px;
+    --layout-filmstrip: 98px;
+    --layout-toolCol: 322px;
+    --layout-thumbW: 96px;
+    --layout-thumbH: 66px;
+
+    /* Motion */
+    --motion-quick: 0.16s;
+  }
+  /* TOKENS:END */
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    font-size: var(--type-base);
+    line-height: 1.4;
+    color: var(--text);
+    background: var(--ground);
+    height: 100vh;
+    overflow: hidden;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Shell ──────────────────────────────────────────────────────────── */
+  .app {
+    display: grid;
+    grid-template-rows: var(--layout-toolbar) 1fr var(--layout-filmstrip);
+    grid-template-columns: 1fr var(--layout-toolCol);
+    grid-template-areas: "bar bar" "stage tools" "strip strip";
+    height: 100vh;
+  }
+
+  /* ── Toolbar ────────────────────────────────────────────────────────── */
+  .bar {
+    grid-area: bar;
+    display: flex; align-items: center; gap: var(--space-lg);
+    padding: 0 var(--space-pad);
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .wordmark {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    font-size: var(--type-md); font-weight: 600;
+    letter-spacing: var(--type-trackingWide); text-transform: uppercase;
+  }
+  .modes { display: flex; background: var(--raised); border-radius: var(--radius-md); padding: 2px; }
+  .mode {
+    padding: 3px 14px; border-radius: var(--radius-sm); color: var(--dim);
+    font-size: var(--type-sm); font-weight: 500; cursor: pointer;
+    border: 0; background: none; font-family: inherit;
+  }
+  .mode[aria-selected="true"] { background: var(--panel); color: var(--text); }
+  .mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .filename { margin-inline: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .filename b { color: var(--text); font-weight: 500; }
+
+  .bar-right { display: flex; gap: var(--space-md); align-items: center; }
+  .count { color: var(--faint); font-variant-numeric: tabular-nums; }
+
+  .chip {
+    border: 1px solid var(--line); background: transparent; color: var(--dim);
+    border-radius: var(--radius-md); padding: 4px 10px; font-size: var(--type-sm);
+    cursor: pointer; font-family: inherit;
+  }
+  .chip:hover { color: var(--text); border-color: var(--faint); }
+  .chip[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* ── Stage ──────────────────────────────────────────────────────────── */
+  .stage {
+    grid-area: stage; background: var(--surround);
+    display: grid; place-items: center;
+    padding: var(--space-xl); position: relative; min-width: 0;
+  }
+  .frame {
+    position: relative; height: 100%; aspect-ratio: 3 / 2; max-width: 100%;
+    box-shadow: 0 2px 28px rgba(0,0,0,.5); overflow: hidden;
+  }
+
+  /* Stand-in photograph. Its only job is proving the chrome recedes. */
+  .photo { position: absolute; inset: 0; background:
+      linear-gradient(#1c2733 0%, #35414d 34%, #6b6a63 62%, #8a7d68 78%, #4a4238 100%); }
+  .photo::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(60% 42% at 68% 40%, rgba(226,196,142,.42), transparent 68%),
+      radial-gradient(90% 55% at 22% 76%, rgba(20,26,32,.55), transparent 70%);
+  }
+  .photo::after {
+    content: ""; position: absolute; inset: 0;
+    background:
+      linear-gradient(160deg, transparent 52%, #232a30 52.4%, #1a2026 60%, transparent 60.4%),
+      linear-gradient(-152deg, transparent 58%, #2b3138 58.4%, #191e23 68%, transparent 68.4%);
+    opacity: .85;
+  }
+
+  /* Compare: draggable split, Space to flip */
+  .before-layer {
+    position: absolute; inset: 0; display: none;
+    clip-path: inset(0 calc(100% - var(--split, 50%)) 0 0);
+    filter: saturate(.5) contrast(.7) brightness(1.08);
+  }
+  .before-layer::after { content: ""; position: absolute; inset: 0; background: rgba(150,155,150,.09); }
+  .divider { position: absolute; inset-block: 0; left: var(--split, 50%); display: none; }
+  .divider::before {
+    content: ""; position: absolute; inset-block: 0; left: -1px;
+    width: 2px; background: rgba(255,255,255,.85);
+  }
+  .divider::after {
+    content: ""; position: absolute; top: 50%; left: -11px;
+    width: 22px; height: 22px; margin-top: -11px; border-radius: 50%;
+    background: rgba(255,255,255,.92); box-shadow: 0 1px 5px rgba(0,0,0,.55);
+  }
+  .divider-grip { position: absolute; inset-block: 0; left: -14px; width: 28px; cursor: ew-resize; z-index: 2; }
+  .cmp-tag {
+    position: absolute; top: var(--space-md); display: none;
+    background: rgba(20,20,22,.78); color: var(--text);
+    padding: 3px 8px; border-radius: var(--radius-sm);
+    font-size: var(--type-xs); letter-spacing: .08em; text-transform: uppercase;
+  }
+  .cmp-tag.is-before { left: var(--space-md); }
+  .cmp-tag.is-after  { right: var(--space-md); }
+  .frame.compare .before-layer,
+  .frame.compare .divider,
+  .frame.compare .cmp-tag { display: block; }
+  .frame.compare.flipped .divider { display: none; }
+
+  .zoom {
+    position: absolute; left: var(--space-pad); bottom: var(--space-pad);
+    display: flex; gap: var(--space-sm); align-items: center;
+    color: var(--dim); font-variant-numeric: tabular-nums;
+    background: rgba(20,20,22,.72); padding: 4px 9px; border-radius: var(--radius-md);
+  }
+
+  /* ── Tool column ────────────────────────────────────────────────────── */
+  .tools {
+    grid-area: tools; background: var(--panel);
+    border-left: 1px solid var(--line);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+
+  /* File-folder tabs. The selected tab shares the panel's fill and paints over
+     the strip's bottom rule, so tab and panel read as one continuous surface. */
+  .tabs {
+    display: flex; align-items: flex-end; gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-pad) 0;
+    background: var(--ground);
+    border-bottom: 1px solid var(--line);
+  }
+  .tab {
+    flex: 0 0 auto; width: 40px; height: 27px;
+    display: flex; align-items: center; justify-content: center; gap: var(--space-sm);
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    margin-bottom: -1px;                    /* overlap the strip's rule */
+    color: var(--faint); cursor: pointer;
+    font-family: inherit; font-size: var(--type-sm); white-space: nowrap;
+    transition: color var(--motion-quick) ease, background var(--motion-quick) ease,
+                height var(--motion-quick) ease;
+  }
+  .tab:hover { color: var(--dim); background: #2A2A2E; }
+  .tab[aria-selected="true"] {
+    flex: 1 1 auto; width: auto; height: 32px; padding: 0 var(--space-md);
+    background: var(--panel);
+    border-bottom-color: var(--panel);      /* erases the rule beneath it */
+    color: var(--accent);
+  }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+  .tab svg {
+    flex: 0 0 auto;
+    width: 17px; height: 17px; fill: none; stroke: currentColor;
+    stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .tab-label { display: none; letter-spacing: var(--type-trackingLabel); }
+  .tab[aria-selected="true"] .tab-label { display: inline; }
+
+  .scroll { overflow-y: auto; flex: 1; min-height: 0; }
+  .scroll::-webkit-scrollbar { width: 9px; }
+  .scroll::-webkit-scrollbar-thumb {
+    background: var(--rail); border-radius: var(--radius-md); border: 3px solid var(--panel); }
+
+  /* Histogram */
+  .hist { padding: var(--space-pad); border-bottom: 1px solid var(--line); }
+  .hist svg { width: 100%; height: 78px; display: block; }
+  .hist-wrap { background: #101012; border-radius: var(--radius-sm); overflow: hidden; }
+  .grid line { stroke: #ffffff; stroke-opacity: .07; stroke-width: .5; }
+  .grid line.mid { stroke-opacity: .12; }
+  .hist-legend {
+    display: flex; justify-content: space-between;
+    color: var(--faint); font-size: var(--type-xs); margin-top: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Sections */
+  .section { border-bottom: 1px solid var(--line); }
+  .section-head {
+    width: 100%; display: flex; align-items: center; gap: 7px;
+    padding: var(--space-md) var(--space-pad); background: none; border: 0; cursor: pointer;
+    color: var(--text); font-family: inherit; font-size: var(--type-sm); font-weight: 600;
+    letter-spacing: var(--type-trackingLabel); text-transform: uppercase;
+  }
+  .section-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .caret { width: 8px; height: 8px; stroke: var(--faint); stroke-width: 2; fill: none;
+    transition: transform var(--motion-quick) ease; }
+  .section[data-open="false"] .caret { transform: rotate(-90deg); }
+  .section[data-open="false"] .section-body { display: none; }
+  .section-reset {
+    margin-left: auto; color: var(--faint); font-size: var(--type-xs);
+    letter-spacing: 0; text-transform: none; font-weight: 400;
+  }
+  .section-body { padding: 0 var(--space-pad) 12px; display: flex; flex-direction: column; gap: 11px; }
+
+  /* Slider */
+  .sl-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .sl-name { color: var(--dim); }
+  .sl-val { color: var(--text); font-variant-numeric: tabular-nums; font-size: var(--type-sm); }
+  .slider.touched .sl-val { color: var(--accent); }
+  .track { position: relative; height: 16px; cursor: ew-resize; display: flex; align-items: center; }
+  .rail { position: absolute; inset-inline: 0; height: 2px; background: var(--rail); border-radius: 2px; }
+  .fill { position: absolute; height: 2px; background: var(--accent); border-radius: 2px; }
+  .detent { position: absolute; width: 1px; height: 6px; background: var(--faint); left: 50%; }
+  .thumb {
+    position: absolute; width: 11px; height: 11px; border-radius: 50%;
+    background: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.6);
+    transform: translateX(-50%); pointer-events: none;
+  }
+  .track:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+  /* Segmented control */
+  .seg { display: flex; background: var(--raised); border-radius: var(--radius-md); padding: 2px; }
+  .seg button {
+    flex: 1; padding: 3px 0; border: 0; background: none; cursor: pointer;
+    color: var(--dim); font-family: inherit; font-size: var(--type-sm);
+    border-radius: var(--radius-sm); font-variant-numeric: tabular-nums;
+  }
+  .seg button[aria-selected="true"] { background: var(--panel); color: var(--text); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .seg[data-chan="R"] button[aria-selected="true"] { color: var(--chanR); }
+  .seg[data-chan="G"] button[aria-selected="true"] { color: var(--chanG); }
+  .seg[data-chan="B"] button[aria-selected="true"] { color: var(--chanB); }
+
+  /* Tone curve — 2D graph with draggable control points */
+  .curve-wrap {
+    position: relative; background: #101012;
+    border-radius: var(--radius-sm); aspect-ratio: 1; overflow: hidden;
+  }
+  .curve-wrap svg {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    display: block; touch-action: none; cursor: crosshair;
+  }
+  .curve-grid line { stroke: #fff; stroke-opacity: .07; stroke-width: .4; }
+  .curve-grid line.mid { stroke-opacity: .12; }
+  .curve-diag { stroke: #fff; stroke-opacity: .16; stroke-width: .5; stroke-dasharray: 2 2; }
+  .curve-line { fill: none; stroke-width: 1.6; stroke-linecap: round; }
+  .curve-hit { fill: none; stroke: transparent; stroke-width: 6; cursor: crosshair; }
+  .curve-pt {
+    stroke: #101012; stroke-width: 1.2; cursor: grab;
+    transition: r var(--motion-quick) ease;
+  }
+  .curve-pt:hover, .curve-pt.dragging { r: 3.6; }
+  .curve-pt.dragging { cursor: grabbing; }
+  .curve-pt.locked { cursor: ns-resize; }
+  .curve-readout {
+    position: absolute; left: var(--space-sm); top: var(--space-sm);
+    color: var(--dim); font-size: var(--type-xs);
+    font-variant-numeric: tabular-nums; pointer-events: none;
+    background: rgba(16,16,18,.8); padding: 2px 5px; border-radius: 2px;
+  }
+  .curve-help {
+    color: var(--faint); font-size: var(--type-xs); text-align: center; margin-top: 6px;
+  }
+
+  /* Levels */
+  .levels-label {
+    display: flex; justify-content: space-between; color: var(--dim);
+    font-size: var(--type-sm); margin-bottom: 5px;
+  }
+  .levels-bar { position: relative; height: 10px; border-radius: 2px; margin-bottom: 16px; }
+  .levels-bar.input  { background: linear-gradient(90deg, #000, #fff); }
+  .levels-bar.output { background: linear-gradient(90deg, #000, #fff); }
+  .lv-handle {
+    position: absolute; top: 11px; width: 0; height: 0;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-bottom: 7px solid var(--text);
+    transform: translateX(-5px); cursor: ew-resize;
+  }
+  .lv-handle.black { border-bottom-color: #000; filter: drop-shadow(0 0 1px var(--dim)); }
+  .lv-handle.gamma { border-bottom-color: var(--dim); }
+  .lv-handle.white { border-bottom-color: #fff; }
+  .lv-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lv-nums {
+    display: flex; justify-content: space-between; color: var(--text);
+    font-size: var(--type-sm); font-variant-numeric: tabular-nums; margin-top: -6px;
+  }
+  .lv-nums span:nth-child(2) { color: var(--dim); }
+
+  /* Panels */
+  .panel-group[hidden] { display: none; }
+  .empty {
+    padding: var(--space-xl) var(--space-pad); color: var(--faint);
+    text-align: center; font-size: var(--type-sm);
+  }
+
+  /* ── Filmstrip ──────────────────────────────────────────────────────── */
+  .strip {
+    grid-area: strip; background: var(--panel);
+    border-top: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 var(--space-pad); overflow-x: auto;
+  }
+  .cell {
+    position: relative; flex: 0 0 auto;
+    width: var(--layout-thumbW); height: var(--layout-thumbH);
+    border-radius: var(--radius-sm); overflow: hidden; cursor: pointer;
+    border: 2px solid transparent; background: var(--raised); padding: 0;
+  }
+  .cell[aria-current="true"] { border-color: var(--accent); }
+  .cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cell i { position: absolute; inset: 0; display: block; }
+  .cell .marks {
+    position: absolute; left: 4px; bottom: 3px; display: flex; gap: 2px;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.8));
+  }
+  .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--star); }
+  .flag-x { color: var(--reject); font-size: 9px; line-height: 1; font-weight: 700; }
+
+  /* ── Note ───────────────────────────────────────────────────────────── */
+  .note {
+    position: fixed; right: 10px; bottom: calc(var(--layout-filmstrip) + 10px);
+    max-width: 252px; background: rgba(20,20,22,.95); border: 1px solid var(--line);
+    border-radius: var(--radius-md); padding: var(--space-md) 12px; color: var(--dim);
+    font-size: 10.5px; line-height: 1.5; z-index: 5;
+  }
+  .note b { color: var(--text); font-weight: 600; }
+  .note button {
+    background: none; border: 0; color: var(--faint); cursor: pointer;
+    float: right; font-family: inherit; font-size: var(--type-md); line-height: 1; padding: 0 0 0 8px;
+  }
+  .note button:hover { color: var(--text); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+
+  <header class="bar">
+    <span class="wordmark">Orion</span>
+    <div class="modes" role="tablist" aria-label="Workspace">
+      <button class="mode" role="tab" aria-selected="false">Library</button>
+      <button class="mode" role="tab" aria-selected="true">Develop</button>
+    </div>
+    <div class="filename"><b>DSC08412.ARW</b> &nbsp;·&nbsp; 6000 × 4000 &nbsp;·&nbsp; ISO 400 &nbsp;·&nbsp; 1/250s &nbsp;·&nbsp; f/4.0</div>
+    <div class="bar-right">
+      <span class="count">12 photos · 2 rejected</span>
+      <button class="chip" aria-pressed="false" id="ba" title="Compare (\) · hold Space to flip">Compare</button>
+      <button class="chip">Export</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="frame" id="frame">
+      <div class="photo"></div>
+      <div class="before-layer"><div class="photo"></div></div>
+      <span class="cmp-tag is-before">Before</span>
+      <span class="cmp-tag is-after">After</span>
+      <div class="divider"><div class="divider-grip"></div></div>
+    </div>
+    <div class="zoom"><span>Fit</span><span style="color:var(--faint)">·</span><span>38%</span></div>
+  </main>
+
+  <aside class="tools">
+    <nav class="tabs" role="tablist" aria-label="Tools">
+      <button class="tab" role="tab" aria-selected="true" data-target="light" title="Light">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.4"/><path d="M10 2.4v1.7M10 15.9v1.7M17.6 10h-1.7M4.1 10H2.4M15.4 4.6l-1.2 1.2M5.8 14.2l-1.2 1.2M15.4 15.4l-1.2-1.2M5.8 5.8L4.6 4.6"/></svg>
+        <span class="tab-label">Light</span>
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-target="color" title="Colour">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.2"/><path d="M10 2.8a7.2 7.2 0 0 1 0 14.4z" fill="currentColor" stroke="none"/></svg>
+        <span class="tab-label">Colour</span>
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-target="detail" title="Detail">
+        <svg viewBox="0 0 20 20"><circle cx="8.6" cy="8.6" r="5.4"/><path d="M12.6 12.6l4.4 4.4"/><path d="M6.2 8.6h4.8"/></svg>
+        <span class="tab-label">Detail</span>
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-target="lens" title="Lens">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.3"/><path d="M10 2.7v7.3l6.3-3.6M17.3 10H10l3.6 6.3M10 17.3V10l-6.3 3.6M2.7 10H10L6.4 3.7"/></svg>
+        <span class="tab-label">Lens</span>
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-target="masks" title="Masks">
+        <svg viewBox="0 0 20 20"><circle cx="7.6" cy="10" r="4.9"/><circle cx="12.4" cy="10" r="4.9"/></svg>
+        <span class="tab-label">Masks</span>
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-target="crop" title="Crop">
+        <svg viewBox="0 0 20 20"><path d="M6.2 2.2v11.6h11.6M2.2 6.2h11.6v11.6"/></svg>
+        <span class="tab-label">Crop</span>
+      </button>
+    </nav>
+
+    <div class="scroll">
+
+      <div class="hist">
+        <div class="hist-wrap">
+          <svg viewBox="0 0 300 78" preserveAspectRatio="none" aria-label="Histogram">
+            <g class="grid">
+              <line x1="75"  y1="0" x2="75"  y2="78"/>
+              <line x1="150" y1="0" x2="150" y2="78" class="mid"/>
+              <line x1="225" y1="0" x2="225" y2="78"/>
+              <line x1="0" y1="19.5" x2="300" y2="19.5"/>
+              <line x1="0" y1="39"   x2="300" y2="39" class="mid"/>
+              <line x1="0" y1="58.5" x2="300" y2="58.5"/>
+            </g>
+            <g style="mix-blend-mode:screen">
+              <path fill="var(--chanR)" d="M0,78 L0,72 C20,68 34,42 52,32 C74,19 92,47 112,53 C134,60 150,32 172,25 C196,18 214,49 238,57 C262,66 280,70 300,74 L300,78 Z"/>
+              <path fill="var(--chanG)" d="M0,78 L0,74 C22,70 40,36 60,27 C84,17 100,51 122,57 C146,63 164,27 188,21 C212,15 230,53 254,61 C274,68 288,72 300,75 L300,78 Z"/>
+              <path fill="var(--chanB)" d="M0,78 L0,70 C18,63 30,46 48,38 C70,27 88,55 110,61 C132,66 152,40 176,34 C200,27 220,57 244,63 C266,70 284,74 300,76 L300,78 Z"/>
+            </g>
+          </svg>
+        </div>
+        <div class="hist-legend"><span>0</span><span>Shadows</span><span>Midtones</span><span>Highlights</span><span>255</span></div>
+      </div>
+
+      <!-- ── LIGHT ─────────────────────────────────────────────────────── -->
+      <div class="panel-group" data-panel="light">
+        <section class="section" data-open="true">
+          <button class="section-head">
+            <svg class="caret" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5"/></svg>
+            White Balance <span class="section-reset">Reset</span>
+          </button>
+          <div class="section-body">
+            <div class="seg" role="tablist" aria-label="White balance preset">
+              <button role="tab" aria-selected="true">As Shot</button>
+              <button role="tab" aria-selected="false">Auto</button>
+              <button role="tab" aria-selected="false">Daylight</button>
+              <button role="tab" aria-selected="false">Custom</button>
+            </div>
+            <div class="slider" data-min="2000" data-max="12000" data-val="5450" data-unit=" K" data-bi="false" data-name="Temperature"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="8" data-name="Tint"></div>
+          </div>
+        </section>
+
+        <section class="section" data-open="true">
+          <button class="section-head">
+            <svg class="caret" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5"/></svg>
+            Light <span class="section-reset">Reset</span>
+          </button>
+          <div class="section-body">
+            <div class="slider" data-min="-5" data-max="5" data-val="0.35" data-name="Exposure" data-dp="2" data-unit=" EV"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="18" data-name="Contrast"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="-42" data-name="Highlights"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="30" data-name="Shadows"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="6" data-name="Whites"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="-14" data-name="Blacks"></div>
+          </div>
+        </section>
+
+        <section class="section" data-open="true">
+          <button class="section-head">
+            <svg class="caret" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5"/></svg>
+            Presence <span class="section-reset">Reset</span>
+          </button>
+          <div class="section-body">
+            <div class="slider" data-min="-100" data-max="100" data-val="22" data-name="Texture"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="15" data-name="Clarity"></div>
+            <div class="slider" data-min="0" data-max="100" data-val="10" data-name="Dehaze" data-bi="false"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── COLOUR ────────────────────────────────────────────────────── -->
+      <div class="panel-group" data-panel="color" hidden>
+
+        <section class="section" data-open="true">
+          <button class="section-head">
+            <svg class="caret" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5"/></svg>
+            Tone Curve <span class="section-reset" id="curve-reset">Reset</span>
+          </button>
+          <div class="section-body">
+            <div class="seg" role="tablist" aria-label="Curve channel" id="cv-chan" data-chan="RGB">
+              <button role="tab" aria-selected="true"  data-c="RGB">RGB</button>
+              <button role="tab" aria-selected="false" data-c="R">R</button>
+              <button role="tab" aria-selected="false" data-c="G">G</button>
+              <button role="tab" aria-selected="false" data-c="B">B</button>
+            </div>
+            <div class="curve-wrap">
+              <svg id="curve" viewBox="0 0 100 100" preserveAspectRatio="none"
+                   role="application" aria-label="Tone curve editor">
+                <g class="curve-grid">
+                  <line x1="25" y1="0" x2="25" y2="100"/>
+                  <line x1="50" y1="0" x2="50" y2="100" class="mid"/>
+                  <line x1="75" y1="0" x2="75" y2="100"/>
+                  <line x1="0" y1="25" x2="100" y2="25"/>
+                  <line x1="0" y1="50" x2="100" y2="50" class="mid"/>
+                  <line x1="0" y1="75" x2="100" y2="75"/>
+                </g>
+                <path id="cv-hist" fill="#fff" fill-opacity=".08"
+                  d="M0,100 L0,94 C20,90 34,66 52,56 C74,43 92,71 112,77 C134,84 150,56 172,49 C196,42 214,73 238,81 C262,90 280,94 300,98 L300,100 Z"
+                  transform="scale(0.3333,1)"/>
+                <line class="curve-diag" x1="0" y1="100" x2="100" y2="0"/>
+                <path id="cv-line" class="curve-line"></path>
+                <g id="cv-pts"></g>
+              </svg>
+              <span class="curve-readout" id="cv-readout">—</span>
+            </div>
+            <p class="curve-help">Click to add a point · drag to shape · double-click to remove</p>
+          </div>
+        </section>
+
+        <section class="section" data-open="false">
+          <button class="section-head">
+            <svg class="caret" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5"/></svg>
+            Levels <span class="section-reset">Reset</span>
+          </button>
+          <div class="section-body">
+            <div class="seg" role="tablist" aria-label="Channel" id="lv-chan" data-chan="RGB">
+              <button role="tab" aria-selected="true"  data-c="RGB">RGB</button>
+              <button role="tab" aria-selected="false" data-c="R">R</button>
+              <button role="tab" aria-selected="false" data-c="G">G</button>
+              <button role="tab" aria-selected="false" data-c="B">B</button>
+            </div>
+
+            <div>
+              <div class="levels-label"><span>Input</span><span class="lv-hint">Drag the markers</span></div>
+              <div class="levels-bar input" id="lv-in">
+                <div class="lv-handle black" tabindex="0" role="slider" aria-label="Black point" data-h="black"></div>
+                <div class="lv-handle gamma" tabindex="0" role="slider" aria-label="Midpoint"   data-h="gamma"></div>
+                <div class="lv-handle white" tabindex="0" role="slider" aria-label="White point" data-h="white"></div>
+              </div>
+              <div class="lv-nums">
+                <span id="lv-black">12</span><span id="lv-gamma">1.08</span><span id="lv-white">243</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="levels-label"><span>Output</span></div>
+              <div class="levels-bar output" id="lv-out">
+                <div class="lv-handle black" tabindex="0" role="slider" aria-label="Output black" data-h="oblack"></div>
+                <div class="lv-handle white" tabindex="0" role="slider" aria-label="Output white" data-h="owhite"></div>
+              </div>
+              <div class="lv-nums"><span id="lv-oblack">0</span><span id="lv-owhite">255</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" data-open="true">
+          <button class="section-head">
+            <svg class="caret" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5"/></svg>
+            Colour Mixer <span class="section-reset">Reset</span>
+          </button>
+          <div class="section-body">
+            <div class="slider" data-min="-100" data-max="100" data-val="24" data-name="Vibrance"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="0"  data-name="Saturation"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="-12" data-name="Reds"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="18" data-name="Oranges"></div>
+            <div class="slider" data-min="-100" data-max="100" data-val="0"  data-name="Blues"></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="panel-group" data-panel="detail" hidden><p class="empty">Sharpening and noise reduction — M2</p></div>
+      <div class="panel-group" data-panel="lens"   hidden><p class="empty">Lens corrections — M2</p></div>
+      <div class="panel-group" data-panel="masks"  hidden><p class="empty">Gradients, range masks, AI selection — M4</p></div>
+      <div class="panel-group" data-panel="crop"   hidden><p class="empty">Crop, rotate, straighten — M1</p></div>
+
+    </div>
+  </aside>
+
+  <footer class="strip" aria-label="Filmstrip"></footer>
+</div>
+
+<aside class="note" id="note">
+  <button id="note-x" aria-label="Dismiss">×</button>
+  <b>Folder tabs.</b> The selected tab grows to show its label and merges into the
+  panel below. Try <b>Colour</b> for the tone curve — drag the dots, click to add.
+</aside>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ── Sliders ─────────────────────────────────────────────────────────── */
+  document.querySelectorAll(".slider").forEach(el => {
+    const min = +el.dataset.min, max = +el.dataset.max;
+    const dp = +(el.dataset.dp || 0);
+    const unit = el.dataset.unit || "";
+    const bi = el.dataset.bi !== "false";
+    const name = el.dataset.name;
+    const home = +el.dataset.val;
+    let val = home;
+
+    el.innerHTML =
+      '<div class="sl-top"><span class="sl-name">' + name + '</span><span class="sl-val"></span></div>' +
+      '<div class="track" tabindex="0" role="slider" aria-label="' + name + '">' +
+        '<div class="rail"></div>' + (bi ? '<div class="detent"></div>' : '') +
+        '<div class="fill"></div><div class="thumb"></div></div>';
+
+    const track = el.querySelector(".track"), fill = el.querySelector(".fill");
+    const thumb = el.querySelector(".thumb"), out = el.querySelector(".sl-val");
+
+    const draw = () => {
+      const pct = (val - min) / (max - min) * 100;
+      const zero = bi ? (0 - min) / (max - min) * 100 : 0;
+      thumb.style.left = pct + "%";
+      fill.style.left = Math.min(pct, zero) + "%";
+      fill.style.width = Math.abs(pct - zero) + "%";
+      out.textContent = (bi && val > 0 ? "+" : "") + val.toFixed(dp) + unit;
+      el.classList.toggle("touched", Math.abs(val - home) > 1e-9);
+      track.setAttribute("aria-valuenow", val.toFixed(dp));
+      track.setAttribute("aria-valuemin", min);
+      track.setAttribute("aria-valuemax", max);
+    };
+
+    const setFromX = x => {
+      const r = track.getBoundingClientRect();
+      const t = Math.min(1, Math.max(0, (x - r.left) / r.width));
+      const step = dp ? Math.pow(10, -dp) : 1;
+      val = Math.round((min + t * (max - min)) / step) * step;
+      draw();
+    };
+
+    let drag = false;
+    track.addEventListener("pointerdown", e => { drag = true; track.setPointerCapture(e.pointerId); setFromX(e.clientX); });
+    track.addEventListener("pointermove", e => { if (drag) setFromX(e.clientX); });
+    track.addEventListener("pointerup", () => { drag = false; });
+    track.addEventListener("dblclick", () => { val = home; draw(); });
+    track.addEventListener("keydown", e => {
+      const step = (dp ? Math.pow(10, -dp) : 1) * (e.shiftKey ? 10 : 1);
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") { val = Math.min(max, val + step); draw(); e.preventDefault(); }
+      if (e.key === "ArrowLeft" || e.key === "ArrowDown") { val = Math.max(min, val - step); draw(); e.preventDefault(); }
+    });
+    draw();
+  });
+
+  /* ── Tone curve ──────────────────────────────────────────────────────── */
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const flat = () => [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+  const CURVES = { RGB: flat(), R: flat(), G: flat(), B: flat() };
+  const CHAN_COLOUR = {
+    RGB: "var(--text)", R: "var(--chanR)", G: "var(--chanG)", B: "var(--chanB)"
+  };
+  let chanNow = "RGB", dragIdx = -1;
+
+  const svg = document.getElementById("curve");
+  const cvLine = document.getElementById("cv-line");
+  const cvPts = document.getElementById("cv-pts");
+  const cvOut = document.getElementById("cv-readout");
+
+  /* Monotone cubic Hermite (Fritsch–Carlson) — the interpolation real curve
+     tools use: passes through every point and cannot overshoot into a wiggle. */
+  const tangents = p => {
+    const n = p.length, dx = [], dy = [], m = [], t = new Array(n);
+    for (let i = 0; i < n - 1; i++) {
+      dx[i] = p[i + 1].x - p[i].x;
+      dy[i] = p[i + 1].y - p[i].y;
+      m[i] = dx[i] ? dy[i] / dx[i] : 0;
+    }
+    t[0] = m[0];
+    for (let i = 1; i < n - 1; i++) {
+      if (m[i - 1] * m[i] <= 0) { t[i] = 0; continue; }
+      const w1 = 2 * dx[i] + dx[i - 1], w2 = dx[i] + 2 * dx[i - 1];
+      t[i] = (w1 + w2) / (w1 / m[i - 1] + w2 / m[i]);
+    }
+    t[n - 1] = m[n - 2];
+    return t;
+  };
+
+  const evalAt = (p, x) => {
+    const n = p.length;
+    if (n < 2) return x;
+    if (x <= p[0].x) return p[0].y;
+    if (x >= p[n - 1].x) return p[n - 1].y;
+    const t = tangents(p);
+    let i = 0;
+    while (i < n - 2 && x > p[i + 1].x) i++;
+    const h = p[i + 1].x - p[i].x, s = (x - p[i].x) / h;
+    const s2 = s * s, s3 = s2 * s;
+    return (2 * s3 - 3 * s2 + 1) * p[i].y
+         + (s3 - 2 * s2 + s) * h * t[i]
+         + (-2 * s3 + 3 * s2) * p[i + 1].y
+         + (s3 - s2) * h * t[i + 1];
+  };
+
+  const drawCurve = () => {
+    const p = CURVES[chanNow], N = 72;
+    let d = "";
+    for (let i = 0; i <= N; i++) {
+      const x = i / N;
+      const y = Math.min(1, Math.max(0, evalAt(p, x)));
+      d += (i ? " L" : "M") + (x * 100).toFixed(2) + "," + ((1 - y) * 100).toFixed(2);
+    }
+    cvLine.setAttribute("d", d);
+    cvLine.style.stroke = CHAN_COLOUR[chanNow];
+
+    cvPts.textContent = "";
+    p.forEach((q, i) => {
+      const c = document.createElementNS(SVGNS, "circle");
+      const end = i === 0 || i === p.length - 1;
+      c.setAttribute("cx", (q.x * 100).toFixed(2));
+      c.setAttribute("cy", ((1 - q.y) * 100).toFixed(2));
+      c.setAttribute("r", 2.8);
+      c.setAttribute("class", "curve-pt" + (end ? " locked" : "") + (i === dragIdx ? " dragging" : ""));
+      c.style.fill = CHAN_COLOUR[chanNow];
+      c.dataset.i = i;
+      cvPts.appendChild(c);
+    });
+  };
+
+  const local = e => {
+    const r = svg.getBoundingClientRect();
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+      y: Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height))
+    };
+  };
+
+  const readout = p => {
+    cvOut.textContent = p
+      ? "in " + Math.round(p.x * 255) + "  →  out " +
+        Math.round(Math.min(1, Math.max(0, evalAt(CURVES[chanNow], p.x))) * 255)
+      : "—";
+  };
+
+  svg.addEventListener("pointerdown", e => {
+    const p = CURVES[chanNow];
+    const hit = e.target.closest(".curve-pt");
+    if (hit) {
+      dragIdx = +hit.dataset.i;
+    } else {
+      const q = local(e);
+      /* Ignore clicks that land almost on top of an existing point */
+      if (p.some(n => Math.abs(n.x - q.x) < 0.03)) return;
+      let i = p.findIndex(n => n.x > q.x);
+      if (i < 0) i = p.length - 1;
+      p.splice(i, 0, q);
+      dragIdx = i;
+    }
+    svg.setPointerCapture(e.pointerId);
+    drawCurve();
+  });
+
+  svg.addEventListener("pointermove", e => {
+    const q = local(e);
+    readout(q);
+    if (dragIdx < 0) return;
+    const p = CURVES[chanNow];
+    if (dragIdx === 0 || dragIdx === p.length - 1) {
+      p[dragIdx].y = q.y;                     /* endpoints slide vertically only */
+    } else {
+      const lo = p[dragIdx - 1].x + 0.02, hi = p[dragIdx + 1].x - 0.02;
+      p[dragIdx].x = Math.min(hi, Math.max(lo, q.x));
+      p[dragIdx].y = q.y;
+    }
+    drawCurve();
+  });
+
+  const endDrag = () => { if (dragIdx >= 0) { dragIdx = -1; drawCurve(); } };
+  svg.addEventListener("pointerup", endDrag);
+  svg.addEventListener("pointercancel", endDrag);
+  svg.addEventListener("pointerleave", () => readout(null));
+
+  svg.addEventListener("dblclick", e => {
+    const hit = e.target.closest(".curve-pt");
+    if (!hit) return;
+    const i = +hit.dataset.i, p = CURVES[chanNow];
+    if (i === 0 || i === p.length - 1) return;
+    p.splice(i, 1);
+    dragIdx = -1;
+    drawCurve();
+  });
+
+  const cvChan = document.getElementById("cv-chan");
+  cvChan.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    cvChan.querySelectorAll("button").forEach(n => n.setAttribute("aria-selected", String(n === b)));
+    chanNow = b.dataset.c;
+    cvChan.dataset.chan = chanNow;
+    drawCurve();
+  });
+
+  document.getElementById("curve-reset").addEventListener("click", e => {
+    e.stopPropagation();
+    CURVES[chanNow] = flat();
+    drawCurve();
+  });
+
+  /* Open with a gentle S — shows the tool doing something on first sight */
+  CURVES.RGB = [{ x: 0, y: 0 }, { x: 0.25, y: 0.19 }, { x: 0.75, y: 0.82 }, { x: 1, y: 1 }];
+  drawCurve();
+
+  /* ── Levels ──────────────────────────────────────────────────────────── */
+  const LV = { black: 12, gamma: 1.08, white: 243, oblack: 0, owhite: 255 };
+  const pctOf = v => v / 255 * 100;
+  const gammaPos = () => {
+    /* Midpoint marker sits proportionally between black and white */
+    const t = 1 - (Math.log(LV.gamma) / Math.log(10) + 1) / 2;
+    return pctOf(LV.black + (LV.white - LV.black) * Math.min(1, Math.max(0, t)));
+  };
+
+  const drawLevels = () => {
+    const q = s => document.querySelector(s);
+    q('[data-h="black"]').style.left = pctOf(LV.black) + "%";
+    q('[data-h="white"]').style.left = pctOf(LV.white) + "%";
+    q('[data-h="gamma"]').style.left = gammaPos() + "%";
+    q('[data-h="oblack"]').style.left = pctOf(LV.oblack) + "%";
+    q('[data-h="owhite"]').style.left = pctOf(LV.owhite) + "%";
+    q("#lv-black").textContent = Math.round(LV.black);
+    q("#lv-white").textContent = Math.round(LV.white);
+    q("#lv-gamma").textContent = LV.gamma.toFixed(2);
+    q("#lv-oblack").textContent = Math.round(LV.oblack);
+    q("#lv-owhite").textContent = Math.round(LV.owhite);
+  };
+
+  document.querySelectorAll(".lv-handle").forEach(h => {
+    const key = h.dataset.h;
+    const bar = h.parentElement;
+
+    const setFromX = x => {
+      const r = bar.getBoundingClientRect();
+      const v = Math.min(255, Math.max(0, (x - r.left) / r.width * 255));
+      if (key === "black")  LV.black  = Math.min(v, LV.white - 2);
+      if (key === "white")  LV.white  = Math.max(v, LV.black + 2);
+      if (key === "oblack") LV.oblack = Math.min(v, LV.owhite - 2);
+      if (key === "owhite") LV.owhite = Math.max(v, LV.oblack + 2);
+      if (key === "gamma") {
+        const span = LV.white - LV.black;
+        const t = Math.min(.98, Math.max(.02, (v - LV.black) / span));
+        LV.gamma = Math.pow(10, (1 - t) * 2 - 1);
+      }
+      drawLevels();
+    };
+
+    let drag = false;
+    h.addEventListener("pointerdown", e => { drag = true; h.setPointerCapture(e.pointerId); e.preventDefault(); });
+    h.addEventListener("pointermove", e => { if (drag) setFromX(e.clientX); });
+    h.addEventListener("pointerup", () => { drag = false; });
+    h.addEventListener("keydown", e => {
+      const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!d) return;
+      const r = bar.getBoundingClientRect();
+      const cur = key === "gamma" ? gammaPos() / 100 * 255 : LV[key];
+      setFromX(r.left + (cur + d * (e.shiftKey ? 10 : 1)) / 255 * r.width);
+      e.preventDefault();
+    });
+  });
+
+  const chan = document.getElementById("lv-chan");
+  const GRAD = {
+    RGB: ["#000", "#fff"], R: ["#000", "#C4433A"], G: ["#000", "#3AA84F"], B: ["#000", "#3A6FC4"]
+  };
+  chan.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    chan.querySelectorAll("button").forEach(n => n.setAttribute("aria-selected", String(n === b)));
+    const c = b.dataset.c;
+    chan.dataset.chan = c;
+    const [from, to] = GRAD[c];
+    document.getElementById("lv-in").style.background = `linear-gradient(90deg, ${from}, ${to})`;
+  });
+
+  drawLevels();
+
+  /* ── Sections ────────────────────────────────────────────────────────── */
+  document.querySelectorAll(".section-head").forEach(head => {
+    head.addEventListener("click", e => {
+      if (e.target.classList.contains("section-reset")) { e.stopPropagation(); return; }
+      const s = head.parentElement;
+      s.dataset.open = s.dataset.open === "true" ? "false" : "true";
+    });
+  });
+
+  /* ── Segmented controls (generic) ────────────────────────────────────── */
+  document.querySelectorAll(".seg:not(#lv-chan)").forEach(seg =>
+    seg.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      seg.querySelectorAll("button").forEach(n => n.setAttribute("aria-selected", String(n === b)));
+    }));
+
+  /* ── Tabs ────────────────────────────────────────────────────────────── */
+  document.querySelectorAll(".tab").forEach(t =>
+    t.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(n => n.setAttribute("aria-selected", String(n === t)));
+      document.querySelectorAll(".panel-group").forEach(p =>
+        p.hidden = p.dataset.panel !== t.dataset.target);
+    }));
+
+  document.querySelectorAll(".mode").forEach(m =>
+    m.addEventListener("click", () =>
+      document.querySelectorAll(".mode").forEach(n => n.setAttribute("aria-selected", String(n === m)))));
+
+  /* ── Compare ─────────────────────────────────────────────────────────── */
+  const ba = document.getElementById("ba");
+  const frame = document.getElementById("frame");
+  const grip = frame.querySelector(".divider-grip");
+  let split = 50, flipped = false;
+  const applySplit = () => frame.style.setProperty("--split", split + "%");
+
+  const setCompare = on => {
+    frame.classList.toggle("compare", on);
+    ba.setAttribute("aria-pressed", String(on));
+    if (!on) { flipped = false; frame.classList.remove("flipped"); }
+    split = 50; applySplit();
+  };
+  ba.addEventListener("click", () => setCompare(!frame.classList.contains("compare")));
+
+  let sliding = false;
+  const slideTo = x => {
+    const r = frame.getBoundingClientRect();
+    split = Math.min(100, Math.max(0, (x - r.left) / r.width * 100));
+    applySplit();
+  };
+  grip.addEventListener("pointerdown", e => { sliding = true; grip.setPointerCapture(e.pointerId); e.preventDefault(); });
+  grip.addEventListener("pointermove", e => { if (sliding) slideTo(e.clientX); });
+  grip.addEventListener("pointerup", () => { sliding = false; });
+
+  document.addEventListener("keydown", e => {
+    if (e.target.closest("input, select, textarea, [role=slider]")) return;
+    if (e.key === "\\") { setCompare(!frame.classList.contains("compare")); e.preventDefault(); }
+    if (e.code === "Space" && frame.classList.contains("compare") && !flipped) {
+      flipped = true; frame.classList.add("flipped");
+      frame.style.setProperty("--split", "100%"); e.preventDefault();
+    }
+  });
+  document.addEventListener("keyup", e => {
+    if (e.code === "Space" && flipped) { flipped = false; frame.classList.remove("flipped"); applySplit(); }
+  });
+  applySplit();
+
+  /* ── Filmstrip ───────────────────────────────────────────────────────── */
+  const strip = document.querySelector(".strip");
+  const looks = [
+    "linear-gradient(#22303d,#5d6a5f 55%,#3a3128)",
+    "linear-gradient(#1c2733,#35414d 40%,#8a7d68 82%,#4a4238)",
+    "linear-gradient(#2b2118,#6e4f33 50%,#c08c4e)",
+    "linear-gradient(#101820,#2b3a46 60%,#55606a)",
+    "linear-gradient(#2a2320,#7a5f48 45%,#d0a874)",
+    "linear-gradient(#171c22,#3f4a54 58%,#7b8288)",
+    "linear-gradient(#241f2c,#4c4358 52%,#9a8fa8)",
+    "linear-gradient(#1a2420,#3c5145 55%,#7d8f76)",
+    "linear-gradient(#2c1f1f,#5e3b38 50%,#a86f63)",
+    "linear-gradient(#131820,#2e3947 60%,#616f80)",
+    "linear-gradient(#201c14,#4f452e 55%,#8f8054)",
+    "linear-gradient(#181414,#3a2e2e 55%,#6d5a56)"
+  ];
+  const ratings = [3, 5, 0, 2, 4, 0, 3, 5, 1, 0, 4, 2];
+  const rejected = new Set([5, 9]);
+
+  looks.forEach((bg, i) => {
+    const cell = document.createElement("button");
+    cell.className = "cell";
+    if (i === 1) cell.setAttribute("aria-current", "true");
+    cell.setAttribute("aria-label", "DSC0" + (8411 + i) + ".ARW");
+
+    const img = document.createElement("i");
+    img.style.background = bg;
+    cell.appendChild(img);
+
+    const marks = document.createElement("span");
+    marks.className = "marks";
+    if (rejected.has(i)) {
+      const x = document.createElement("span");
+      x.className = "flag-x"; x.textContent = "✕";
+      marks.appendChild(x);
+    } else {
+      for (let s = 0; s < ratings[i]; s++) {
+        const d = document.createElement("span");
+        d.className = "dot";
+        marks.appendChild(d);
+      }
+    }
+    cell.appendChild(marks);
+    cell.addEventListener("click", () => {
+      document.querySelectorAll(".cell").forEach(c => c.removeAttribute("aria-current"));
+      cell.setAttribute("aria-current", "true");
+    });
+    strip.appendChild(cell);
+  });
+
+  document.getElementById("note-x").addEventListener("click", () =>
+    document.getElementById("note").remove());
+})();
+</script>

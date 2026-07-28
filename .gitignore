@@ -1,0 +1,68 @@
+# --- Test images -----------------------------------------------------------
+# RAW files are 25-60 MB each. Never commit them; keep a local test/ folder.
+*.ARW
+*.arw
+*.CR2
+*.CR3
+*.NEF
+*.RAF
+*.DNG
+*.dng
+*.ORF
+*.RW2
+test-images/
+samples/
+
+# --- Build -----------------------------------------------------------------
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+compile_commands.json
+install/
+out/
+
+# --- Xcode -----------------------------------------------------------------
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+
+# --- Swift -----------------------------------------------------------------
+.build/
+.swiftpm/
+
+# --- Compiled shaders ------------------------------------------------------
+*.metallib
+*.air
+*.spv
+
+# --- Generated / runtime ---------------------------------------------------
+# SQLite index is a disposable cache, rebuilt from XMP sidecars
+*.db
+*.sqlite
+*.sqlite3
+thumbnail-cache/
+
+# --- Third-party -----------------------------------------------------------
+vendor/
+third_party/*/
+!third_party/CMakeLists.txt
+
+# --- macOS -----------------------------------------------------------------
+.DS_Store
+.AppleDouble
+._*
+
+# --- Editors ---------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+
+# --- Render output --------------------------------------------------------
+orion-out.png
+*-out.png
