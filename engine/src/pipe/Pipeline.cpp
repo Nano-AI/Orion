@@ -101,6 +101,25 @@ void Pipeline::setParams(int nodeId, const void* data, std::size_t bytes) {
     markDownstreamDirty(nodeId);
 }
 
+void Pipeline::setEnabled(int nodeId, bool enabled) {
+    if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return;
+    if (nodes_[nodeId].enabled == enabled) return;
+    nodes_[nodeId].enabled = enabled;
+    markDownstreamDirty(nodeId);
+}
+
+int Pipeline::resolve(int nodeId) const {
+    // Walk back past disabled nodes to whoever last produced real pixels.
+    int id = nodeId;
+    int guard = 0;
+    while (id >= 0 && id < static_cast<int>(nodes_.size()) &&
+           !nodes_[id].enabled && ++guard < 64) {
+        if (nodes_[id].inputs.empty()) break;
+        id = nodes_[id].inputs.front();
+    }
+    return id;
+}
+
 void Pipeline::markDownstreamDirty(int nodeId) {
     // Walk forward in topological order: once a node is dirty, anything that
     // consumes it is dirty too. Single pass, because order_ guarantees
@@ -152,14 +171,15 @@ double Pipeline::render() {
 
     for (int id : order_) {
         const Node& node = nodes_[id];
-        const bool run = dirty_[id];
+        const bool run = dirty_[id] && node.enabled;
         lastRun_.push_back({node.name, run});
         if (!run) continue;
 
         std::vector<const gpu::Texture*> textures;
         textures.reserve(node.inputs.size() + node.aux.size() + 1);
         for (int in : node.inputs) {
-            textures.push_back(in == kSource ? source_.get() : outputs_[in].get());
+            const int src = (in == kSource) ? kSource : resolve(in);
+            textures.push_back(src == kSource ? source_.get() : outputs_[src].get());
         }
         for (int a : node.aux) {
             textures.push_back(aux_[a].get());

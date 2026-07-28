@@ -728,6 +728,11 @@ private struct Editor: View {
     private func load(_ url: URL) {
         current = url
 
+        // Crop and straighten belong to the photo that was open, not the one
+        // arriving. Carrying them over composites the old geometry against the
+        // new frame, which is what produced the doubled, offset picture.
+        engine.resetCrop()
+
         // Show the camera's embedded preview straight away, then decode. The
         // decode is ~50ms plus a full-resolution render; without this the view
         // holds the previous photo for the whole of it, which reads as lag even

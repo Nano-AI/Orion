@@ -34,6 +34,9 @@ struct Node {
 
     // Output dimensions, when this node changes them — rotation swaps width
     // and height, and crop will shrink them. Zero means "same as the graph".
+    /// A disabled node copies its first input through instead of running.
+    bool enabled = true;
+
     std::uint32_t outWidth  = 0;
     std::uint32_t outHeight = 0;
 };
@@ -63,6 +66,13 @@ public:
     /// Replaces a node's parameter block and marks it — and everything
     /// downstream — for recomputation.
     void setParams(int nodeId, const void* data, std::size_t bytes);
+
+    /// Enables or disables a node. Disabled nodes are skipped entirely.
+    void setEnabled(int nodeId, bool enabled);
+
+    /// Which node's texture a consumer should read, following any
+    /// disabled nodes back to a live producer.
+    [[nodiscard]] int resolve(int nodeId) const;
 
     /// Uploads the source mosaic. Marks the whole graph dirty.
     void setSource(const void* samples, std::size_t bytesPerRow);

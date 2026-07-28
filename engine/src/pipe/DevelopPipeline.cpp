@@ -144,7 +144,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         static_cast<std::uint32_t>(std::max(width_, height_) * 1.45f);
     nGeometry_ = pipeline_.add({"geometry", "geometry", {nDisplay_},
                                 PixelFormat::RGBA8Unorm, {}, {},
-                                maxSide, maxSide});
+                                true, maxSide, maxSide});
     (void)swaps;
 
     pipeline_.compile(width_, height_);
@@ -294,6 +294,20 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         adj.blacks     != lastAdj_.blacks     ||
         adj.vibrance   != lastAdj_.vibrance   ||
         adj.saturation != lastAdj_.saturation;
+
+    // The guided filter is six nodes and only feeds the local highlight and
+    // shadow masks. With both at zero it is pure cost, and white balance —
+    // which rewrites the head of the graph and reruns everything — pays it on
+    // every tick. Skipping it takes a temperature drag from sixteen nodes to
+    // ten.
+    const bool needsGuide = adj.highlights != 0.0f || adj.shadows != 0.0f;
+    if (first || needsGuide != (lastAdj_.highlights != 0.0f ||
+                                lastAdj_.shadows != 0.0f)) {
+        for (int n : {nGuidePrep_, nGuideH1_, nGuideV1_,
+                      nGuideAb_, nGuideH2_, nGuideV2_}) {
+            pipeline_.setEnabled(n, needsGuide);
+        }
+    }
 
     if (linearMoved) {
         params::LinearAdjust la{adj.exposureEv, adj.highlights, adj.shadows,

@@ -99,6 +99,7 @@ final class Engine {
         suspended = true
         cropX = 0; cropY = 0; cropW = 1; cropH = 1; straightenDeg = 0
         suspended = false
+        guard isLoaded else { return }
         pushAndRender()
     }
 
