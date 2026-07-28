@@ -78,10 +78,9 @@ struct Adjustments {
     float lensCaRed      = 0.0f;   // -1..1
     float lensCaBlue     = 0.0f;   // -1..1
 
-    /// Highlight reconstruction, 0..1. A correction rather than an effect, so
-    /// it defaults to on: a clipped red channel under a white cloud is a defect
-    /// of the sensor, not a look.
-    float highlightRecovery = 1.0f;
+    /// Highlight reconstruction, 0..1. Off by default — see the note on
+    /// Engine.highlightRecovery in the app.
+    float highlightRecovery = 0.0f;
 
     /// Profiled wavelet denoise. Strengths are multiples of the measured
     /// noise level, so 1.0 means "shrink coefficients smaller than one sigma"

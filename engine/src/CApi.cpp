@@ -173,7 +173,6 @@ OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* ou
         out->tint          = wb.tint;
         out->contrast      = 1.0f;
         out->sharpen_radius = 1.0f;
-        out->highlight_recovery = 1.0f;
         out->crop_w = 1.0f;
         out->crop_h = 1.0f;
         return ORION_OK;

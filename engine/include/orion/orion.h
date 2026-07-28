@@ -96,9 +96,8 @@ typedef struct OrionAdjustments {
     float lens_ca_red;
     float lens_ca_blue;
 
-    /* Highlight reconstruction, 0..1. A correction rather than a look, so the
-     * app opens it at 1: a clipped red channel under a white cloud is a defect
-     * of the sensor, not a choice. */
+    /* Highlight reconstruction, 0..1. Zero by default: the reconstruction is a
+     * linear extrapolation, and one asked to reach past its data invents. */
     float highlight_recovery;
 
     /* Profiled wavelet denoise. Strengths are multiples of the measured noise

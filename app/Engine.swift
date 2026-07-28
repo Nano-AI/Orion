@@ -178,9 +178,19 @@ final class Engine {
     var lensCaRed: Float = 0      { didSet { pushAndRender() } }
     var lensCaBlue: Float = 0     { didSet { pushAndRender() } }
 
-    /// Highlight reconstruction. Defaults on, because per-channel clipping is
-    /// a defect rather than a look.
-    var highlightRecovery: Float = 1 { didSet { pushAndRender() } }
+    /// Highlight reconstruction. **Off by default.**
+    ///
+    /// It shipped defaulted on, and on a night frame it drew a magenta halo
+    /// round every blown light. The fit that recovers a clipped channel is a
+    /// linear model, and a linear model asked to reach far past the data it was
+    /// fitted on will invent whatever it likes. The guards added since —
+    /// fitting only on the highlight's shoulder, refusing to extrapolate past
+    /// the brightest pixel that informed the fit, and capping each channel at a
+    /// ratio the neighbourhood actually showed — make it much more
+    /// conservative, but "much more conservative" is not the same as verified,
+    /// and a correction that damages pictures should not be the default while
+    /// that is still true.
+    var highlightRecovery: Float = 0 { didSet { pushAndRender() } }
 
     /// Profiled wavelet denoise, in multiples of the frame's own measured
     /// noise level. Zero switches eight nodes off rather than running them at

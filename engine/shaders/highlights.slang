@@ -43,7 +43,21 @@ static const float kMinSamples = 8.0f;
 /// A reconstructed channel is allowed this much headroom above its clipping
 /// level. Real highlight detail lives within a stop or two; beyond that a
 /// runaway fit is the likelier explanation.
-static const float kMaxGain = 4.0f;
+static const float kMaxGain = 2.0f;
+
+/// How bright a valid pixel must be, as a fraction of where it would clip, to
+/// count towards the fit.
+///
+/// This is Masood et al.'s Ω: the *boundary* of the saturated region, not the
+/// general neighbourhood. Around a small light at night the neighbourhood is
+/// almost all dark background, and a relation fitted on background pixels
+/// describes the background — extrapolating it out to highlight brightness
+/// produced a coloured halo round every light in the frame.
+static const float kShoulder = 0.35f;
+
+/// How far past the brightest pixel that informed the fit the estimate may
+/// reach. A linear model is only evidence over the range it was fitted on.
+static const float kMaxExtrapolation = 1.6f;
 
 [shader("compute")]
 [numthreads(16, 16, 1)]
@@ -88,12 +102,22 @@ void highlightRecover(uint3 tid : SV_DispatchThreadID,
     if (!clipped.z) { reference += c.b; referenceCount += 1.0f; }
     reference /= referenceCount;
 
+    // Where the reference itself would clip, so "bright" can be judged against
+    // the same combination of channels the reference is made of.
+    float referenceLimit = 0.0f;
+    if (!clipped.x) referenceLimit += limit.r;
+    if (!clipped.y) referenceLimit += limit.g;
+    if (!clipped.z) referenceLimit += limit.b;
+    referenceLimit /= referenceCount;
+
     // Ordinary least squares over the valid pixels of the window. The same
     // channel combination defines the reference there as here, or the two sides
     // of the fit would not be measuring the same quantity.
     float n = 0.0f, su = 0.0f, suu = 0.0f;
+    float maxU = 0.0f;
     float3 sc = float3(0.0f, 0.0f, 0.0f);
     float3 suc = float3(0.0f, 0.0f, 0.0f);
+    float3 maxRatio = float3(0.0f, 0.0f, 0.0f);
 
     for (int dy = -kRadius; dy <= kRadius; dy += kStride)
     {
@@ -115,15 +139,30 @@ void highlightRecover(uint3 tid : SV_DispatchThreadID,
             if (!clipped.z) u += v.b;
             u /= referenceCount;
 
+            // Only the shoulder of the highlight informs the fit.
+            if (u < kShoulder * referenceLimit) continue;
+
             n += 1.0f;
             su += u;
             suu += u * u;
             sc += v;
             suc += u * v;
+
+            maxU = max(maxU, u);
+            maxRatio = max(maxRatio, v / max(u, 1e-6f));
         }
     }
 
     if (n < kMinSamples)
+    {
+        dst[tid.xy] = source;
+        return;
+    }
+
+    // A linear model is evidence only over the range it was fitted on. Reaching
+    // far past the brightest pixel that informed it is not recovery, it is
+    // invention — and invention is what the halo was.
+    if (reference > maxU * kMaxExtrapolation)
     {
         dst[tid.xy] = source;
         return;
@@ -140,13 +179,19 @@ void highlightRecover(uint3 tid : SV_DispatchThreadID,
     const float3 beta = (sc - alpha * su) / n;
     const float3 estimate = alpha * reference + beta;
 
+    // No channel may end up in a ratio to the reference that the neighbourhood
+    // never showed. This is the guard that actually kills the halo: a fit can
+    // be well conditioned and still imply a colour nothing nearby exhibits.
+    const float3 ceiling = min(float3(clip.r, clip.g, clip.b) * kMaxGain,
+                               maxRatio * reference);
+
     // A clipped channel read *at least* its clipping level, so the estimate can
     // only ever raise it. Taking the maximum also makes a poor fit harmless
     // rather than actively wrong.
     float3 recovered = c;
-    if (clipped.x) recovered.r = clamp(max(c.r, estimate.r), c.r, clip.r * kMaxGain);
-    if (clipped.y) recovered.g = clamp(max(c.g, estimate.g), c.g, clip.g * kMaxGain);
-    if (clipped.z) recovered.b = clamp(max(c.b, estimate.b), c.b, clip.b * kMaxGain);
+    if (clipped.x) recovered.r = clamp(max(c.r, estimate.r), c.r, max(ceiling.r, c.r));
+    if (clipped.y) recovered.g = clamp(max(c.g, estimate.g), c.g, max(ceiling.g, c.g));
+    if (clipped.z) recovered.b = clamp(max(c.b, estimate.b), c.b, max(ceiling.b, c.b));
 
     dst[tid.xy] = float4(lerp(c, recovered, p.strength), source.a);
 }

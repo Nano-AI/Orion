@@ -1313,6 +1313,109 @@ void testOutputDepth() {
     report(monotone, "the output ramp is monotone");
 }
 
+/// A bright highlight on a dark, colour-cast background.
+///
+/// The case that produced a purple halo around every light in a night shot.
+/// The fit that recovers a clipped channel has to be anchored on pixels near
+/// the saturation boundary — Masood et al.'s Ω. Anchored on the general
+/// neighbourhood instead, which around a small light at night is nearly all
+/// dark background, it learns the background's channel balance and then
+/// extrapolates it out to highlight brightness, which is a long way past any
+/// data it saw.
+void testHighlightHaloGpu() {
+    section("Highlight halo (GPU)");
+
+    constexpr std::uint32_t kW = 192, kH = 192;
+    constexpr float kClipR = 2.0f, kClipG = 1.0f, kClipB = 1.5f;
+    constexpr float kGamma = 0.97f;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/highlightRecover.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "highlightRecover");
+
+    auto src = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto dst = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+
+    // A neutral lamp with a smooth falloff, on a dark background that is
+    // strongly warm — a sodium-lit street, which is what teaches the fit a
+    // channel balance that has nothing to do with the lamp.
+    std::vector<__fp16> input(std::size_t(kW) * kH * 4);
+    const double cx = kW / 2.0, cy = kH / 2.0;
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = (std::size_t(y) * kW + x) * 4;
+            const double d = std::hypot(double(x) - cx, double(y) - cy);
+
+            // A warm lamp, which is what a real one is: red reaches its stop
+            // before green, and green before blue, so there is a ring around
+            // the white core where only some channels have clipped. That ring
+            // is where the halo appeared.
+            const double lamp = std::exp(-(d * d) / (2.0 * 16.0 * 16.0));
+            const double back = 0.04;
+
+            const double r = 3.2 * lamp * kClipR + back * kClipR * 1.9;
+            const double g = 2.4 * lamp * kClipG + back * kClipG * 1.0;
+            const double b = 1.7 * lamp * kClipB + back * kClipB * 0.30;
+
+            input[i + 0] = static_cast<__fp16>(std::min(r, double(kClipR)));
+            input[i + 1] = static_cast<__fp16>(std::min(g, double(kClipG)));
+            input[i + 2] = static_cast<__fp16>(std::min(b, double(kClipB)));
+            input[i + 3] = 1;
+        }
+    }
+    src->upload(input.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+    orion::pipe::params::Highlights hl{};
+    hl.size[0] = kW; hl.size[1] = kH;
+    hl.clipR = kClipR; hl.clipG = kClipG; hl.clipB = kClipB;
+    hl.gamma = kGamma;
+    hl.strength = 1.0f;
+
+    orion::gpu::CommandBuffer cb(*device);
+    cb.dispatch(*kernel, {src.get(), dst.get()}, &hl, sizeof hl, kW, kH);
+    cb.commitAndWait();
+
+    std::vector<__fp16> out(std::size_t(kW) * kH * 4);
+    dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+
+    // Magenta is red and blue running ahead of green, measured against each
+    // channel's own clipping level so the white balance is divided back out.
+    const auto magentaShift = [&](const std::vector<__fp16>& img, std::size_t i) {
+        const double r = double(img[i * 4 + 0]) / kClipR;
+        const double g = double(img[i * 4 + 1]) / kClipG;
+        const double b = double(img[i * 4 + 2]) / kClipB;
+        return (r + b) * 0.5 - g;
+    };
+
+    double worstBefore = 0.0, worstAfter = 0.0;
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = std::size_t(y) * kW + x;
+            worstBefore = std::max(worstBefore, magentaShift(input, i));
+            worstAfter = std::max(worstAfter, magentaShift(out, i));
+        }
+    }
+
+    // The lamp is neutral, so nothing anywhere should come back appreciably
+    // more magenta than it went in.
+    std::printf("  magenta shift: before %.4f, after %.4f\n",
+                worstBefore, worstAfter);
+    report(worstAfter <= worstBefore + 0.01,
+           "recovery does not tint a highlight magenta",
+           "before " + std::to_string(worstBefore) + ", after "
+               + std::to_string(worstAfter));
+}
+
 }  // namespace
 
 int main() {
@@ -1330,6 +1433,7 @@ int main() {
     testDenoiseGpu();
     testHighlightRecoveryGpu();
     testLensGpu();
+    testHighlightHaloGpu();
     testOutputDepth();
     testExportFormats();
 

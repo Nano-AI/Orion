@@ -685,7 +685,9 @@ struct Editor: View {
                 slider("Amount", $engine.highlightRecovery, 0...1, "", 2)
                 Text("A sensor clips one channel before the others, which turns "
                      + "a white cloud magenta. This rebuilds the clipped channel "
-                     + "from the ones still reading.")
+                     + "from the ones still reading. Off by default: on a frame "
+                     + "with small bright lights it can tint the edge of a "
+                     + "highlight rather than repair it.")
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.faint)
                     .fixedSize(horizontal: false, vertical: true)

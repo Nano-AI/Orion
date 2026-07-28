@@ -114,7 +114,8 @@ struct DevelopState: Equatable {
     var lensVignette: Float = 0
     var lensCaRed: Float = 0
     var lensCaBlue: Float = 0
-    var highlightRecovery: Float = 1
+    /// Off by default. See Engine.highlightRecovery.
+    var highlightRecovery: Float = 0
     var denoiseLuma: Float = 0
     var denoiseColour: Float = 0
     var sharpenAmount: Float = 0
