@@ -24,6 +24,9 @@ public:
     void openRaw(const std::string& path);
     void setAdjustments(const pipe::Adjustments&);
     double render();
+
+    /// Rendered colour at normalised image coordinates, 0..1 per channel.
+    void sampleAt(float u, float v, float outRgb[3]) const;
     void exportImage(const std::string& path, const util::ExportOptions&);
 
     [[nodiscard]] bool hasImage() const noexcept { return develop_ != nullptr; }

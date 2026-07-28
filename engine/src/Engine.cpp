@@ -28,6 +28,23 @@ double Engine::render() {
     return develop_->render();
 }
 
+void Engine::sampleAt(float u, float v, float outRgb[3]) const {
+    outRgb[0] = outRgb[1] = outRgb[2] = 0.0f;
+    if (!develop_) return;
+
+    const std::uint32_t w = develop_->outputWidth();
+    const std::uint32_t h = develop_->outputHeight();
+    if (w == 0 || h == 0) return;
+
+    const auto clamp01 = [](float x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); };
+    const auto x = static_cast<std::uint32_t>(clamp01(u) * float(w - 1));
+    const auto y = static_cast<std::uint32_t>(clamp01(v) * float(h - 1));
+
+    std::uint8_t px[4]{};
+    develop_->output().readPixel(x, y, px);
+    for (int i = 0; i < 3; ++i) outRgb[i] = float(px[i]) / 255.0f;
+}
+
 void Engine::exportImage(const std::string& path, const util::ExportOptions& options) {
     if (!develop_) throw std::runtime_error("no image open");
 

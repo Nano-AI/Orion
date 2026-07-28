@@ -85,6 +85,8 @@ private:
     std::uint32_t width_ = 0, height_ = 0;
     int nLinearize_ = -1, nDirs_ = -1, nGreen_ = -1, nRgb_ = -1;
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
+    int nGuidePrep_ = -1, nGuideH1_ = -1, nGuideV1_ = -1;
+    int nGuideAb_ = -1, nGuideH2_ = -1, nGuideV2_ = -1;
     int exifQuarters_ = 0;
     int turns_ = 0;
     int auxCurveLut_ = -1;

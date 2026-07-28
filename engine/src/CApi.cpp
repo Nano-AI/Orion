@@ -172,6 +172,15 @@ void* orion_engine_metal_device(const OrionEngine* engine) {
     }
 }
 
+OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
+                                float* out_rgb) {
+    if (engine == nullptr || out_rgb == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        engine->impl.sampleAt(u, v, out_rgb);
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
                                 const OrionExportOptions* options) {
     if (engine == nullptr || path == nullptr) return ORION_ERR_BAD_ARG;

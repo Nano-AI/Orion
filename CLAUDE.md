@@ -12,7 +12,23 @@ Everything lives in `planning/`. On a fresh session, read in this order:
 5. `planning/ROADMAP.md` — milestones, epics, stories
 6. `planning/FEATURES.md` — feature map with target milestones
 7. `planning/RESEARCH.md` — algorithm and library findings with sources
-8. `planning/UI-DECISION.md` — UI shell evaluation (open decision)
+8. `planning/UI-DECISION.md` — UI shell evaluation (settled)
+9. `research/` — **algorithm sources.** Read before touching any filter.
+
+## Algorithm sourcing — non-negotiable
+
+**Every technically non-trivial filter must cite a published reference in
+`research/`.** Anything not cited belongs in `research/UNSOURCED.md` until it is
+replaced or defended. A citation must be published, dated, and established in
+practice.
+
+This rule exists because plausible-looking constants shipped a purple cast on
+every image. Cite the source so the numbers are checkable, and test the
+invariant so they stay right.
+
+Do not copy GPL code (darktable, RawTherapee). Implementing a *published
+algorithm* from its description is fine — mathematics is not copyrightable — but
+say so in the entry.
 
 ## Hard constraints — do not violate
 
@@ -26,6 +42,18 @@ Everything lives in `planning/`. On a fresh session, read in this order:
 C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · LibRaw decode · OpenColorIO + lcms2 color · SQLite index · XMP sidecars as source of truth.
 
 **UI rules:** view models are plain `@Observable` objects with zero SwiftUI types inside, so any panel can be re-hosted in AppKit. Canvas is `MTKView` in `NSViewRepresentable`, zero-copy. The C++↔Swift boundary is a narrow hand-written POD facade — no templates, no move-only types, and **no C++ exception may escape it (it would terminate the process)**. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
+
+## Tests
+
+```
+./build/apps/tests/orion-tests     engine maths + real GPU renders
+./build/orion-viewport-tests       canvas geometry
+```
+
+Run both before claiming anything works. The GPU tests matter most: pure maths
+tests pass happily on code that renders garbage, because they never touch a
+texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
+inspection and obvious to a five-line assertion.
 
 ## Working agreement
 - One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable.

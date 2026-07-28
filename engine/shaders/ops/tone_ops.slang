@@ -26,19 +26,31 @@ float3 applyExposure(float3 c, float ev)
 }
 
 // ── Highlights / shadows / whites / blacks ─────────────────────────────────
-// Each is a gain through a smooth luminance mask, so one control lifts or
-// compresses its part of the range without stepping on the others. Masks are
-// built in log2 exposure, so a stop is a stop everywhere and the controls feel
-// the same on a dark frame as on a bright one.
-float3 applyTone(float3 c, float highlights, float shadows, float whites, float blacks)
+//
+// Highlights and shadows are *local*: their masks are built from a guided-filter
+// estimate of the neighbourhood's tone rather than from the pixel's own value.
+// This is what Lightroom and darktable do and a pointwise curve cannot: recovery
+// follows the structure of the scene, so a bright window against a dark wall is
+// pulled down as a region instead of every bright pixel everywhere being pulled
+// down individually.
+//
+// Whites and blacks stay pointwise on purpose. They set the endpoints of the
+// range, and an endpoint that moved around with local content would be
+// unpredictable to use.
+//
+// `guideEv` is the filtered neighbourhood luminance in log2 exposure, already
+// scaled for the current exposure setting.
+float3 applyTone(float3 c, float guideEv,
+                 float highlights, float shadows, float whites, float blacks)
 {
     const float y  = max(luminance2020(c), 1e-6f);
     const float ev = log2(y);
 
     // Middle grey sits near -2.5 EV. Wide, overlapping knees keep transitions
-    // invisible.
-    const float hiMask    = smoothstep(-4.0f,  1.0f, ev);
-    const float loMask    = 1.0f - smoothstep(-7.0f, -1.5f, ev);
+    // invisible. Highlights and shadows read the neighbourhood; whites and
+    // blacks read the pixel.
+    const float hiMask    = smoothstep(-4.0f,  1.0f, guideEv);
+    const float loMask    = 1.0f - smoothstep(-7.0f, -1.5f, guideEv);
     const float whiteMask = smoothstep(-2.0f,  2.5f, ev);
     const float blackMask = 1.0f - smoothstep(-9.0f, -3.5f, ev);
 

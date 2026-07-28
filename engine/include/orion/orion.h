@@ -93,6 +93,11 @@ void* orion_engine_output_texture(const OrionEngine* engine);
 /* The engine's id<MTLDevice>, so the view can share it. */
 void* orion_engine_metal_device(const OrionEngine* engine);
 
+/* Rendered colour at normalised image coordinates. out_rgb takes 3 floats.
+ * Used by the targeted adjustment tool to find which hue band was clicked. */
+OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
+                                float* out_rgb);
+
 /* Export. Renders at full resolution and writes the file. */
 typedef enum OrionImageFormat {
     ORION_FORMAT_PNG  = 0,

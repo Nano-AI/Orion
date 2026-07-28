@@ -20,6 +20,7 @@ namespace orion::gpu {
 enum class PixelFormat {
     R16Uint,      // raw sensor samples
     R32Float,     // linearised mosaic, green plane
+    RG32Float,    // guided-filter moments and coefficients
     RGBA16Float,  // the working format — scene-linear Rec.2020
     RGBA8Unorm,   // display output
 };
@@ -43,6 +44,9 @@ public:
     /// texture is never written — copying all of it would emit a black band.
     void download(void* dst, std::size_t bytesPerRow,
                   std::uint32_t width, std::uint32_t height) const;
+
+    /// Reads one pixel. Cheap on unified memory — no blit, no round trip.
+    void readPixel(std::uint32_t x, std::uint32_t y, void* dst) const;
 
     [[nodiscard]] std::uint32_t width()  const noexcept { return width_; }
     [[nodiscard]] std::uint32_t height() const noexcept { return height_; }

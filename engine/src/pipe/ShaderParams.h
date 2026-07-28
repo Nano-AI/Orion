@@ -62,6 +62,26 @@ struct LinearAdjust {
 };
 static_assert(sizeof(LinearAdjust) == 144);
 
+struct GuidePrep {
+    std::uint32_t size[2];
+    std::uint32_t _pad[2];
+};
+static_assert(sizeof(GuidePrep) == 16);
+
+struct BoxBlur {
+    std::uint32_t size[2];
+    std::int32_t  radius;
+    std::int32_t  horizontal;
+};
+static_assert(sizeof(BoxBlur) == 16);
+
+struct GuideAb {
+    std::uint32_t size[2];
+    float         epsilon;
+    float         _pad;
+};
+static_assert(sizeof(GuideAb) == 16);
+
 struct Sharpen {
     float         amount;
     float         radius;

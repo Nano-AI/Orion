@@ -16,6 +16,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ImageCanvas.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Navigator.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in

@@ -12,6 +12,7 @@ MTLPixelFormat toMetal(PixelFormat f) {
     switch (f) {
         case PixelFormat::R16Uint:     return MTLPixelFormatR16Uint;
         case PixelFormat::R32Float:    return MTLPixelFormatR32Float;
+        case PixelFormat::RG32Float:   return MTLPixelFormatRG32Float;
         case PixelFormat::RGBA16Float: return MTLPixelFormatRGBA16Float;
         case PixelFormat::RGBA8Unorm:  return MTLPixelFormatRGBA8Unorm;
     }
@@ -26,6 +27,7 @@ std::size_t bytesPerPixel(PixelFormat f) noexcept {
     switch (f) {
         case PixelFormat::R16Uint:     return 2;
         case PixelFormat::R32Float:    return 4;
+        case PixelFormat::RG32Float:   return 8;
         case PixelFormat::RGBA16Float: return 8;
         case PixelFormat::RGBA8Unorm:  return 4;
     }
@@ -36,6 +38,7 @@ const char* formatName(PixelFormat f) noexcept {
     switch (f) {
         case PixelFormat::R16Uint:     return "r16u";
         case PixelFormat::R32Float:    return "r32f";
+        case PixelFormat::RG32Float:   return "rg32f";
         case PixelFormat::RGBA16Float: return "rgba16f";
         case PixelFormat::RGBA8Unorm:  return "rgba8";
     }
@@ -94,6 +97,14 @@ void Texture::download(void* dst, std::size_t bytesPerRow,
              bytesPerRow:bytesPerRow
               fromRegion:MTLRegionMake2D(0, 0, std::min(width, width_),
                                          std::min(height, height_))
+             mipmapLevel:0];
+}
+
+void Texture::readPixel(std::uint32_t x, std::uint32_t y, void* dst) const {
+    if (x >= width_ || y >= height_) return;
+    [impl_->tex getBytes:dst
+             bytesPerRow:bytesPerPixel(format_)
+              fromRegion:MTLRegionMake2D(x, y, 1, 1)
              mipmapLevel:0];
 }
 

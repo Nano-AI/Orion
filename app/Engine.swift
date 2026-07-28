@@ -138,6 +138,14 @@ final class Engine {
         pushAndRender()
     }
 
+    /// Rendered colour at normalised image coordinates.
+    func sample(u: Float, v: Float) -> (r: Double, g: Double, b: Double)? {
+        guard let handle, isLoaded else { return nil }
+        var rgb = [Float](repeating: 0, count: 3)
+        guard orion_engine_sample(handle, u, v, &rgb) == ORION_OK else { return nil }
+        return (Double(rgb[0]), Double(rgb[1]), Double(rgb[2]))
+    }
+
     func export(to path: String, quality: Float = 0.92, maxDimension: UInt32 = 0) throws {
         guard let handle else { return }
         var options = OrionExportOptions(format: -1, quality: quality,

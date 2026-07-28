@@ -28,6 +28,9 @@ set(ORION_SHADERS
     rcd_rb:rcdRedBlue
     sharpen:sharpen
     color_matrix:cameraToWorking
+    guide_prep:guidePrep
+    box_blur:boxBlur
+    guide_ab:guideAb
     develop_linear:developLinear
     develop_display:developDisplay
     orient:orient

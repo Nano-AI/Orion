@@ -106,6 +106,7 @@ private struct Editor: View {
     @State private var viewport = Viewport()
     @State private var tab: ToolTab = .light
     @State private var band: HueBand = .blue
+    @State private var targeted = TargetedAdjust()
     @State private var message: String?
 
     var body: some View {
@@ -202,7 +203,7 @@ private struct Editor: View {
 
                 if engine.isLoaded {
                     ImageCanvas(engine: engine, viewport: viewport,
-                                generation: engine.generation)
+                                targeted: targeted, generation: engine.generation)
                         .padding(20)
 
                     HStack(alignment: .bottom, spacing: 10) {
@@ -347,6 +348,39 @@ private struct Editor: View {
                 slider("Saturation", $engine.saturation, -1...1, "", 2)
             }
             section("Colour Mixer") {
+                // Targeted adjustment: click a colour in the photo and drag.
+                // Beats guessing which of eight swatches the sky falls into.
+                HStack(spacing: 6) {
+                    Button {
+                        targeted.isActive.toggle()
+                    } label: {
+                        Image(systemName: targeted.isActive
+                              ? "scope" : "eyedropper")
+                            .font(.system(size: 12))
+                            .frame(width: 26, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(targeted.isActive ? Palette.accent : Palette.dim)
+                    .overlay(RoundedRectangle(cornerRadius: 5)
+                        .stroke(targeted.isActive ? Palette.accent : Palette.line, lineWidth: 1))
+                    .help("Targeted adjustment — drag on the photo")
+
+                    if targeted.isActive {
+                        Picker("", selection: $targeted.mode) {
+                            ForEach(TargetedAdjust.Mode.allCases) { m in
+                                Text(m.title).tag(m)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .controlSize(.small)
+                        .labelsHidden()
+                    } else {
+                        Text("Drag on the photo to adjust its colour")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.faint)
+                    }
+                }
+
                 HStack(spacing: 4) {
                     ForEach(HueBand.allCases) { b in
                         Circle()
@@ -358,7 +392,15 @@ private struct Editor: View {
                             .help(b.name)
                     }
                 }
-                Text(band.name).font(.system(size: 11)).foregroundStyle(Palette.dim)
+                HStack {
+                    Text(band.name).font(.system(size: 11)).foregroundStyle(Palette.dim)
+                    if let active = targeted.activeBand {
+                        Spacer()
+                        Text("adjusting \(active.name)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.accent)
+                    }
+                }
                 slider("Hue", bandBinding(\.hueShift), -1...1, "", 2)
                 slider("Saturation", bandBinding(\.satShift), -1...1, "", 2)
                 slider("Luminance", bandBinding(\.lumShift), -1...1, "", 2)

@@ -104,7 +104,25 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // Every scene-linear adjustment fuses into one dispatch, and the display
     // transform plus curve into another. They are all pointwise; separate
     // passes only bought a 194 MB round trip each at 24 MP.
-    nLinear_    = pipeline_.add({"develop:linear", "developLinear", {nMatrix_},
+    // ── Guided filter (He, Sun & Tang) ────────────────────────────────────
+    // Sits before exposure on purpose: exposure is a multiply, so in log2 it is
+    // an add the tone node applies for free — which keeps this whole six-pass
+    // chain cached while the exposure slider moves.
+    nGuidePrep_ = pipeline_.add({"guide:prep", "guidePrep", {nMatrix_},
+                                 PixelFormat::RG32Float, {}});
+    nGuideH1_   = pipeline_.add({"guide:blur h", "boxBlur", {nGuidePrep_},
+                                 PixelFormat::RG32Float, {}});
+    nGuideV1_   = pipeline_.add({"guide:blur v", "boxBlur", {nGuideH1_},
+                                 PixelFormat::RG32Float, {}});
+    nGuideAb_   = pipeline_.add({"guide:coeffs", "guideAb", {nGuideV1_},
+                                 PixelFormat::RG32Float, {}});
+    nGuideH2_   = pipeline_.add({"guide:blur h2", "boxBlur", {nGuideAb_},
+                                 PixelFormat::RG32Float, {}});
+    nGuideV2_   = pipeline_.add({"guide:blur v2", "boxBlur", {nGuideH2_},
+                                 PixelFormat::RG32Float, {}});
+
+    nLinear_    = pipeline_.add({"develop:linear", "developLinear",
+                                 {nMatrix_, nGuideV2_, nGuidePrep_},
                                  PixelFormat::RGBA16Float, {}});
 
     auxCurveLut_ = pipeline_.addAuxTexture(kCurveResolution, kCurveRows,
@@ -166,6 +184,26 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     }
     mat.size[0] = size[0]; mat.size[1] = size[1];
     pipeline_.setParams(nMatrix_, &mat, sizeof mat);
+
+    // Guided filter parameters. Radius scales with the frame so the effect
+    // covers the same fraction of the picture regardless of megapixels;
+    // epsilon is in squared log2-exposure units, and 0.04 is about a fifth of
+    // a stop — below that is texture and noise, above it is an edge.
+    const int guideRadius =
+        std::max(4, static_cast<int>(std::max(width_, height_) / 200));
+
+    params::GuidePrep gp{{size[0], size[1]}, {0, 0}};
+    pipeline_.setParams(nGuidePrep_, &gp, sizeof gp);
+
+    params::BoxBlur bh{{size[0], size[1]}, guideRadius, 1};
+    params::BoxBlur bv{{size[0], size[1]}, guideRadius, 0};
+    pipeline_.setParams(nGuideH1_, &bh, sizeof bh);
+    pipeline_.setParams(nGuideV1_, &bv, sizeof bv);
+    pipeline_.setParams(nGuideH2_, &bh, sizeof bh);
+    pipeline_.setParams(nGuideV2_, &bv, sizeof bv);
+
+    params::GuideAb ga{{size[0], size[1]}, 0.04f, 0.0f};
+    pipeline_.setParams(nGuideAb_, &ga, sizeof ga);
 
     // Anchor on the camera's actual multipliers, not on a temperature we
     // inferred from them. The temperature is only a handle for the user to

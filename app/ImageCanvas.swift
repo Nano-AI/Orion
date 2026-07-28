@@ -13,10 +13,13 @@ struct ImageCanvas: NSViewRepresentable {
 
     let engine: Engine
     let viewport: Viewport
+    let targeted: TargetedAdjust
     /// Changes whenever a new frame is ready; drives the redraw.
     let generation: UInt64
 
-    func makeCoordinator() -> Renderer { Renderer(engine: engine, viewport: viewport) }
+    func makeCoordinator() -> Renderer {
+        Renderer(engine: engine, viewport: viewport, targeted: targeted)
+    }
 
     func makeNSView(context: Context) -> MTKView {
         let view = TrackingMTKView()
@@ -62,7 +65,11 @@ struct ImageCanvas: NSViewRepresentable {
         }
 
         override func mouseDown(with event: NSEvent) {
-            coordinator?.beginDrag(at: convert(event.locationInWindow, from: nil))
+            coordinator?.beginDrag(at: convert(event.locationInWindow, from: nil), in: self)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            coordinator?.endDrag()
         }
 
         override func mouseDragged(with event: NSEvent) {
@@ -79,6 +86,7 @@ struct ImageCanvas: NSViewRepresentable {
     final class Renderer: NSObject, MTKViewDelegate {
         private let engine: Engine
         private let viewport: Viewport
+        private let targeted: TargetedAdjust
         private var queue: MTLCommandQueue?
         private var pipeline: MTLRenderPipelineState?
         private var sampler: MTLSamplerState?
@@ -90,10 +98,37 @@ struct ImageCanvas: NSViewRepresentable {
             var uvSize = SIMD2<Float>(1, 1)
         }
 
-        init(engine: Engine, viewport: Viewport) {
+        init(engine: Engine, viewport: Viewport, targeted: TargetedAdjust) {
             self.engine = engine
             self.viewport = viewport
+            self.targeted = targeted
             super.init()
+        }
+
+        /// View point to normalised image coordinates, honouring letterbox and
+        /// zoom. Returns nil outside the image.
+        private func imageUV(_ point: CGPoint, in view: NSView) -> CGPoint? {
+            guard engine.imageWidth > 0, view.bounds.width > 0 else { return nil }
+            let imageAspect = CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight)
+            let viewAspect = view.bounds.width / max(view.bounds.height, 1)
+
+            let quad = viewport.quadScale(imageAspect: imageAspect, viewAspect: viewAspect)
+            let visible = viewport.visibleFraction(imageAspect: imageAspect,
+                                                   viewAspect: viewAspect)
+
+            // Undo the letterbox: map the point into the drawn rectangle.
+            let nx = point.x / max(view.bounds.width, 1)
+            let ny = point.y / max(view.bounds.height, 1)
+            let insetX = (1 - quad.width) / 2
+            let insetY = (1 - quad.height) / 2
+            guard quad.width > 0, quad.height > 0 else { return nil }
+
+            let qx = (nx - insetX) / quad.width
+            let qy = (ny - insetY) / quad.height
+            guard qx >= 0, qx <= 1, qy >= 0, qy <= 1 else { return nil }
+
+            return CGPoint(x: viewport.center.x - visible.width / 2 + qx * visible.width,
+                           y: viewport.center.y - visible.height / 2 + qy * visible.height)
         }
 
         func attach(to view: MTKView) {
@@ -193,7 +228,19 @@ struct ImageCanvas: NSViewRepresentable {
 
         private var dragAnchor: CGPoint?
 
-        func beginDrag(at point: CGPoint) { dragAnchor = point }
+        func beginDrag(at point: CGPoint, in view: NSView) {
+            dragAnchor = point
+
+            guard targeted.isActive,
+                  let uv = imageUV(point, in: view),
+                  let rgb = engine.sample(u: Float(uv.x), v: Float(uv.y)),
+                  let hue = TargetedAdjust.hue(r: rgb.r, g: rgb.g, b: rgb.b)
+            else { return }
+
+            targeted.begin(band: TargetedAdjust.band(forHue: hue), hue: hue)
+        }
+
+        func endDrag() { dragAnchor = nil; targeted.end() }
 
         /// Drags move the photo with the cursor: grab it and it follows. In a
         /// flipped view both axes point the same way as image space, so the
@@ -203,6 +250,20 @@ struct ImageCanvas: NSViewRepresentable {
             let dx = (point.x - anchor.x) / max(view.bounds.width, 1)
             let dy = (point.y - anchor.y) / max(view.bounds.height, 1)
             dragAnchor = point
+
+            // With the tool armed, a vertical drag adjusts the band under the
+            // cursor rather than panning. Up increases, matching every other
+            // drag-to-adjust control on the platform.
+            if targeted.isActive, let band = targeted.activeBand {
+                let delta = Float(-dy) * 2.0
+                let i = band.rawValue
+                switch targeted.mode {
+                case .hue:        engine.hueShift[i] = clampUnit(engine.hueShift[i] + delta)
+                case .saturation: engine.satShift[i] = clampUnit(engine.satShift[i] + delta)
+                case .luminance:  engine.lumShift[i] = clampUnit(engine.lumShift[i] + delta)
+                }
+                return
+            }
 
             let visible = currentVisible(for: view)
             viewport.pan(by: CGSize(width: dx, height: dy), visible: visible)
@@ -291,6 +352,8 @@ struct ImageCanvas: NSViewRepresentable {
             buffer.present(drawable)
             buffer.commit()
         }
+
+        private func clampUnit(_ v: Float) -> Float { min(max(v, -1), 1) }
 
         private var cachedNearest: MTLSamplerState?
         private func nearestSampler(_ device: MTLDevice?) -> MTLSamplerState? {
