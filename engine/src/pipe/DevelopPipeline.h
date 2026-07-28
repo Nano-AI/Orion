@@ -41,6 +41,9 @@ struct Adjustments {
     std::array<float, 8> satShift{};
     std::array<float, 8> lumShift{};
 
+    /// Extra quarter turns clockwise on top of the camera's own orientation.
+    int rotateQuarters = 0;
+
     // Capture sharpening. Sits just after the demosaic.
     float sharpenAmount  = 0.0f;   // 0..2
     float sharpenRadius  = 1.0f;   // pixels
@@ -63,6 +66,10 @@ public:
     /// Renders every dirty node. Returns GPU-side milliseconds.
     double render();
 
+    /// Output dimensions after orientation, which is what the UI should show.
+    [[nodiscard]] std::uint32_t outputWidth()  const noexcept;
+    [[nodiscard]] std::uint32_t outputHeight() const noexcept;
+
     /// The camera's own white balance, used as the starting point.
     [[nodiscard]] WhiteBalance asShotWhiteBalance() const noexcept { return asShot_; }
 
@@ -77,7 +84,9 @@ private:
     Pipeline      pipeline_;
     std::uint32_t width_ = 0, height_ = 0;
     int nLinearize_ = -1, nDirs_ = -1, nGreen_ = -1, nRgb_ = -1;
-    int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1;
+    int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
+    int exifQuarters_ = 0;
+    int turns_ = 0;
     int auxCurveLut_ = -1;
     Adjustments  lastAdj_{};
     bool         primed_ = false;

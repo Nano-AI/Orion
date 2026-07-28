@@ -53,6 +53,7 @@ BayerImage decodeBayer(const std::string& path) {
     out.width  = sizes.width;
     out.height = sizes.height;
     out.camera = std::string(idata.make) + " " + idata.model;
+    out.flip   = sizes.flip;
 
     // Copy the visible area out of the padded sensor buffer, dropping the
     // masked border LibRaw keeps for black-level estimation.

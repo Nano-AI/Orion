@@ -38,6 +38,11 @@ struct BayerImage {
     /// Camera RGB -> CIE XYZ (D65). Row-major 3x3.
     std::array<float, 9> camToXyz{};
 
+    /// LibRaw's flip: 0 none, 3 = 180 degrees, 5 = 90 CCW, 6 = 90 CW.
+    /// A portrait frame shot on a landscape sensor arrives as landscape
+    /// pixels plus this flag — ignoring it is why portraits show sideways.
+    int flip = 0;
+
     std::string camera;
 
     /// Which CFA channel sits at (x, y). Mirrors LibRaw's FC macro.

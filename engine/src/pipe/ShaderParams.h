@@ -83,4 +83,12 @@ struct Display {
 };
 static_assert(sizeof(Display) == 32);
 
+struct Orient {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    std::uint32_t quarterTurns;
+    std::uint32_t _pad[3];
+};
+static_assert(sizeof(Orient) == 32);
+
 }  // namespace orion::pipe::params

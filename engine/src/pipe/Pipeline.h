@@ -31,6 +31,11 @@ struct Node {
     gpu::PixelFormat        format;   // this node's output format
     std::vector<std::byte>  params;   // opaque block bound at buffer(0)
     std::vector<int>        aux;      // auxiliary texture ids, bound after inputs
+
+    // Output dimensions, when this node changes them — rotation swaps width
+    // and height, and crop will shrink them. Zero means "same as the graph".
+    std::uint32_t outWidth  = 0;
+    std::uint32_t outHeight = 0;
 };
 
 struct NodeTiming {

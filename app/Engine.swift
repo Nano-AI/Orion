@@ -40,6 +40,9 @@ final class Engine {
     var saturation: Float = 0      { didSet { pushAndRender() } }
     var contrast: Float = 1        { didSet { pushAndRender() } }
 
+    /// Extra quarter turns clockwise, on top of the camera's own orientation.
+    var rotateQuarters: Int32 = 0  { didSet { pushAndRender() } }
+
     var sharpenAmount: Float = 0   { didSet { pushAndRender() } }
     var sharpenRadius: Float = 1   { didSet { pushAndRender() } }
     var sharpenMasking: Float = 0  { didSet { pushAndRender() } }
@@ -110,6 +113,31 @@ final class Engine {
         pushAndRender()
     }
 
+    /// Rotates by a quarter turn, wrapping. Clockwise is positive.
+    func rotate(_ turns: Int32) {
+        rotateQuarters = ((rotateQuarters + turns) % 4 + 4) % 4
+    }
+
+    /// Returns every adjustment to its default, with white balance back to
+    /// what the camera chose. One push, one render.
+    func resetEdits() {
+        guard isLoaded, let handle else { return }
+        suspended = true
+        var asShot = OrionAdjustments()
+        orion_engine_as_shot(handle, &asShot)
+        temperatureK = asShot.temperature_k
+        tint = asShot.tint
+        exposureEv = 0; highlights = 0; shadows = 0; whites = 0; blacks = 0
+        vibrance = 0; saturation = 0; contrast = 1
+        sharpenAmount = 0; sharpenRadius = 1; sharpenMasking = 0
+        rotateQuarters = 0
+        hueShift = [Float](repeating: 0, count: 8)
+        satShift = [Float](repeating: 0, count: 8)
+        lumShift = [Float](repeating: 0, count: 8)
+        suspended = false
+        pushAndRender()
+    }
+
     func export(to path: String, quality: Float = 0.92, maxDimension: UInt32 = 0) throws {
         guard let handle else { return }
         var options = OrionExportOptions(format: -1, quality: quality,
@@ -125,6 +153,7 @@ final class Engine {
             exposure_ev: exposureEv, highlights: highlights, shadows: shadows,
             whites: whites, blacks: blacks,
             vibrance: vibrance, saturation: saturation, contrast: contrast,
+            rotate_quarters: rotateQuarters,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),

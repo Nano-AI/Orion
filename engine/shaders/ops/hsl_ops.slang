@@ -76,7 +76,27 @@ float hueDistance(float a, float b)
 float3 applyColorMixer(float3 c,
                        float hueShift[8], float satShift[8], float lumShift[8])
 {
-    float3 hsl = rgbToHsl(saturate(c));
+    // Skip entirely when nothing is set. HSL is a bounded model and this data
+    // is not — every round trip through it costs a little precision, so don't
+    // pay for one that changes nothing.
+    float any = 0.0f;
+    [unroll]
+    for (uint k = 0; k < 8; ++k)
+    {
+        any += abs(hueShift[k]) + abs(satShift[k]) + abs(lumShift[k]);
+    }
+    if (any < 1e-6f) return c;
+
+    // HSL is defined on 0..1, but scene-linear data is unbounded — a bright
+    // specular can sit well above 1. Clamping into range would crush every
+    // highlight to white and strip its colour, so normalise by the peak
+    // channel instead and restore the magnitude afterwards. Hue and saturation
+    // are scale-invariant, which is what makes this safe.
+    const float peak = max(c.r, max(c.g, c.b));
+    if (peak < 1e-6f) return c;
+
+    const float scale = max(peak, 1.0f);
+    float3 hsl = rgbToHsl(c / scale);
 
     // A near-grey pixel has no meaningful hue, so leave it alone rather than
     // letting numerical noise pick a band for it.
@@ -109,7 +129,7 @@ float3 applyColorMixer(float3 c,
     hsl.y = saturate(hsl.y * (1.0f + sat));
     hsl.z = saturate(hsl.z * (1.0f + lum * 0.5f));
 
-    return hslToRgb(hsl);
+    return hslToRgb(hsl) * scale;
 }
 
 #endif

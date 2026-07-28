@@ -2,27 +2,36 @@ import MetalKit
 import SwiftUI
 
 /// The canvas. The engine's output MTLTexture is sampled straight into the
-/// drawable — no readback, no copy, no CPU touching pixels. This is the whole
-/// reason the shell is native (UI-DECISION.md).
+/// drawable — no readback, no copy, no CPU touching pixels.
+///
+/// Zooming needs no extra machinery: the pipeline already renders at full
+/// resolution, so magnifying is just sampling a smaller rectangle of that
+/// texture. At 100% you are looking at real pixels, not an upscale. That is
+/// what Lightroom's chunked rendering buys with far more effort — we get it for
+/// free by never working at preview resolution in the first place.
 struct ImageCanvas: NSViewRepresentable {
 
     let engine: Engine
+    let viewport: Viewport
     /// Changes whenever a new frame is ready; drives the redraw.
     let generation: UInt64
 
-    func makeCoordinator() -> Renderer { Renderer(engine: engine) }
+    func makeCoordinator() -> Renderer { Renderer(engine: engine, viewport: viewport) }
 
     func makeNSView(context: Context) -> MTKView {
-        let view = MTKView()
+        let view = TrackingMTKView()
         view.device = engine.metalDevice
         view.delegate = context.coordinator
         view.colorPixelFormat = .bgra8Unorm
         view.framebufferOnly = true
+        view.autoResizeDrawable = true
+        view.autoresizingMask = [.width, .height]
         // Redraw on demand rather than at 60 Hz forever — nothing moves unless
-        // an adjustment changed, and a photo editor idling on the GPU is rude.
+        // an adjustment or the viewport changed.
         view.isPaused = true
         view.enableSetNeedsDisplay = true
         view.clearColor = MTLClearColorMake(0.165, 0.165, 0.173, 1.0)  // --surround
+        view.coordinator = context.coordinator
         context.coordinator.attach(to: view)
         return view
     }
@@ -31,16 +40,59 @@ struct ImageCanvas: NSViewRepresentable {
         view.needsDisplay = true
     }
 
+    /// MTKView subclass that forwards scroll and magnify gestures. SwiftUI
+    /// exposes no direct trackpad magnification event, so the canvas has to be
+    /// an AppKit view to get pinch-zoom at all.
+    final class TrackingMTKView: MTKView {
+        weak var coordinator: Renderer?
+
+        override var acceptsFirstResponder: Bool { true }
+
+        /// Flipped so y grows downward, matching image coordinates. Mouse
+        /// deltas in AppKit's default orientation are the reason drag felt
+        /// inverted; working in a flipped view removes the ambiguity.
+        override var isFlipped: Bool { true }
+
+        override func scrollWheel(with event: NSEvent) {
+            coordinator?.handleScroll(event, in: self)
+        }
+
+        override func magnify(with event: NSEvent) {
+            coordinator?.handleMagnify(event, in: self)
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            coordinator?.beginDrag(at: convert(event.locationInWindow, from: nil))
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            coordinator?.handleDrag(to: convert(event.locationInWindow, from: nil), in: self)
+        }
+
+        override func rightMouseDown(with event: NSEvent) {
+            coordinator?.resetView(in: self)
+        }
+    }
+
     // MARK: - Renderer
 
     final class Renderer: NSObject, MTKViewDelegate {
         private let engine: Engine
+        private let viewport: Viewport
         private var queue: MTLCommandQueue?
         private var pipeline: MTLRenderPipelineState?
         private var sampler: MTLSamplerState?
 
-        init(engine: Engine) {
+        /// Shader-side view transform.
+        private struct Transform {
+            var quadScale = SIMD2<Float>(1, 1)
+            var uvMin = SIMD2<Float>(0, 0)
+            var uvSize = SIMD2<Float>(1, 1)
+        }
+
+        init(engine: Engine, viewport: Viewport) {
             self.engine = engine
+            self.viewport = viewport
             super.init()
         }
 
@@ -50,10 +102,16 @@ struct ImageCanvas: NSViewRepresentable {
 
             // A fullscreen triangle. Compiled at runtime because it belongs to
             // the view, not the pipeline — keeping it out of the engine's
-            // metallib keeps that library purely about pixels.
+            // shader library keeps that purely about pixels.
             let source = """
             #include <metal_stdlib>
             using namespace metal;
+
+            struct Transform {
+                float2 quadScale;
+                float2 uvMin;
+                float2 uvSize;
+            };
 
             struct VOut {
                 float4 pos [[position]];
@@ -61,11 +119,11 @@ struct ImageCanvas: NSViewRepresentable {
             };
 
             vertex VOut orionBlitVertex(uint vid [[vertex_id]],
-                                        constant float2& scale [[buffer(0)]]) {
+                                        constant Transform& t [[buffer(0)]]) {
                 const float2 p = float2((vid << 1) & 2, vid & 2);
                 VOut out;
-                out.pos = float4((p * 2.0 - 1.0) * scale, 0.0, 1.0);
-                out.uv  = float2(p.x, 1.0 - p.y);
+                out.pos = float4((p * 2.0 - 1.0) * t.quadScale, 0.0, 1.0);
+                out.uv  = t.uvMin + float2(p.x, 1.0 - p.y) * t.uvSize;
                 return out;
             }
 
@@ -89,18 +147,121 @@ struct ImageCanvas: NSViewRepresentable {
 
             let sd = MTLSamplerDescriptor()
             sd.minFilter = .linear
-            sd.magFilter = .linear
+            sd.magFilter = .linear   // swapped to nearest past 400%, below
             sd.sAddressMode = .clampToEdge
             sd.tAddressMode = .clampToEdge
             sampler = device.makeSamplerState(descriptor: sd)
         }
+
+        // MARK: Input
+
+        private func normalisedPoint(_ event: NSEvent, in view: NSView) -> CGPoint {
+            let p = view.convert(event.locationInWindow, from: nil)
+            // The view is flipped, so y already grows downward like image space.
+            return CGPoint(x: p.x / max(view.bounds.width, 1),
+                           y: p.y / max(view.bounds.height, 1))
+        }
+
+        func handleScroll(_ event: NSEvent, in view: NSView) {
+            let visible = currentVisible(for: view)
+            if event.modifierFlags.contains(.command) || event.hasPreciseScrollingDeltas == false {
+                let factor = 1 + event.scrollingDeltaY * 0.01
+                viewport.zoomBy(factor, anchor: normalisedPoint(event, in: view), visible: visible)
+            } else {
+                // Two-finger scroll pans, which is what a trackpad user expects
+                // once they are zoomed in.
+                viewport.pan(by: CGSize(width: event.scrollingDeltaX / max(view.bounds.width, 1),
+                                        height: event.scrollingDeltaY / max(view.bounds.height, 1)),
+                             visible: visible)  // trackpad scroll already matches content direction
+            }
+            viewport.clamp(to: currentVisible(for: view))
+            view.needsDisplay = true
+        }
+
+        func handleMagnify(_ event: NSEvent, in view: NSView) {
+            viewport.zoomBy(1 + event.magnification,
+                            anchor: normalisedPoint(event, in: view),
+                            visible: currentVisible(for: view))
+            viewport.clamp(to: currentVisible(for: view))
+            view.needsDisplay = true
+        }
+
+        private var dragAnchor: CGPoint?
+
+        func beginDrag(at point: CGPoint) { dragAnchor = point }
+
+        /// Drags move the photo with the cursor: grab it and it follows. In a
+        /// flipped view both axes point the same way as image space, so the
+        /// delta needs no sign juggling.
+        func handleDrag(to point: CGPoint, in view: NSView) {
+            guard let anchor = dragAnchor else { dragAnchor = point; return }
+            let dx = (point.x - anchor.x) / max(view.bounds.width, 1)
+            let dy = (point.y - anchor.y) / max(view.bounds.height, 1)
+            dragAnchor = point
+
+            let visible = currentVisible(for: view)
+            viewport.pan(by: CGSize(width: dx, height: dy), visible: visible)
+            viewport.clamp(to: visible)
+            view.needsDisplay = true
+        }
+
+        func resetView(in view: NSView) {
+            viewport.reset()
+            view.needsDisplay = true
+        }
+
+        // MARK: Geometry
+
+        private func currentVisible(for view: NSView) -> CGSize {
+            guard engine.imageHeight > 0, view.bounds.height > 0 else {
+                return CGSize(width: 1, height: 1)
+            }
+            let imageAspect = CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight)
+            let viewAspect = view.bounds.width / view.bounds.height
+            return viewport.visibleFraction(imageAspect: imageAspect, viewAspect: viewAspect)
+        }
+
+        private func transform(for view: MTKView, texture: MTLTexture) -> Transform {
+            // The orientation node writes into a square texture so a rotation
+            // never needs the graph recompiled — only the top-left rectangle is
+            // valid, and its size is what the engine reports.
+            let validW = CGFloat(engine.imageWidth)
+            let validH = CGFloat(engine.imageHeight)
+            guard validW > 0, validH > 0 else { return Transform() }
+
+            let validU = validW / CGFloat(texture.width)
+            let validV = validH / CGFloat(texture.height)
+
+            let imageAspect = validW / validH
+            let viewAspect = view.drawableSize.width / max(view.drawableSize.height, 1)
+
+            // Report true magnification so the toolbar can show a real percent.
+            viewport.fitScale = min(view.drawableSize.width / validW,
+                                    view.drawableSize.height / validH)
+
+            let visible = viewport.visibleFraction(imageAspect: imageAspect, viewAspect: viewAspect)
+            viewport.clamp(to: visible)
+
+            let quad = viewport.quadScale(imageAspect: imageAspect, viewAspect: viewAspect)
+
+            var t = Transform()
+            t.quadScale = SIMD2<Float>(Float(quad.width), Float(quad.height))
+            // Scale image-space UVs into the valid sub-rectangle of the texture.
+            t.uvSize = SIMD2<Float>(Float(visible.width * validU),
+                                    Float(visible.height * validV))
+            t.uvMin = SIMD2<Float>(Float((viewport.center.x - visible.width / 2) * validU),
+                                   Float((viewport.center.y - visible.height / 2) * validV))
+            return t
+        }
+
+        // MARK: Draw
 
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
             view.needsDisplay = true
         }
 
         func draw(in view: MTKView) {
-            guard let queue, let pipeline, let sampler,
+            guard let queue, let pipeline,
                   let texture = engine.outputTexture,
                   let descriptor = view.currentRenderPassDescriptor,
                   let drawable = view.currentDrawable,
@@ -108,26 +269,35 @@ struct ImageCanvas: NSViewRepresentable {
                   let encoder = buffer.makeRenderCommandEncoder(descriptor: descriptor)
             else { return }
 
-            // Letterbox: fit the photo inside the view without distorting it.
-            let imageAspect = Float(texture.width) / Float(texture.height)
-            let viewAspect = Float(view.drawableSize.width) /
-                             Float(max(view.drawableSize.height, 1))
-            var scale = SIMD2<Float>(1, 1)
-            if imageAspect > viewAspect {
-                scale.y = viewAspect / imageAspect
-            } else {
-                scale.x = imageAspect / viewAspect
-            }
+            var t = transform(for: view, texture: texture)
+
+            // Past 4x, linear filtering just smears — a photographer inspecting
+            // at that magnification wants to see the actual pixels.
+            let magnified = viewport.fitScale * viewport.zoom > 4.0
+            let samp = magnified ? nearestSampler(view.device) : sampler
 
             encoder.setRenderPipelineState(pipeline)
-            encoder.setVertexBytes(&scale, length: MemoryLayout<SIMD2<Float>>.size, index: 0)
+            encoder.setVertexBytes(&t, length: MemoryLayout<Transform>.stride, index: 0)
             encoder.setFragmentTexture(texture, index: 0)
-            encoder.setFragmentSamplerState(sampler, index: 0)
+            encoder.setFragmentSamplerState(samp, index: 0)
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             encoder.endEncoding()
 
             buffer.present(drawable)
             buffer.commit()
+        }
+
+        private var cachedNearest: MTLSamplerState?
+        private func nearestSampler(_ device: MTLDevice?) -> MTLSamplerState? {
+            if let cachedNearest { return cachedNearest }
+            guard let device else { return sampler }
+            let sd = MTLSamplerDescriptor()
+            sd.minFilter = .nearest
+            sd.magFilter = .nearest
+            sd.sAddressMode = .clampToEdge
+            sd.tAddressMode = .clampToEdge
+            cachedNearest = device.makeSamplerState(descriptor: sd)
+            return cachedNearest
         }
     }
 }

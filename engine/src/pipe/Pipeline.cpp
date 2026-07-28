@@ -81,7 +81,10 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
             device_, shaderDir_ + "/" + node.kernel + ".metallib");
         kernels_.push_back(gpu::Kernel::create(device_, *lib, node.kernel));
         libraries_.push_back(std::move(lib));
-        outputs_.push_back(gpu::Texture::create(device_, width_, height_, node.format));
+
+        const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;
+        const std::uint32_t h = node.outHeight ? node.outHeight : height_;
+        outputs_.push_back(gpu::Texture::create(device_, w, h, node.format));
     }
 
     dirty_.assign(n, true);
@@ -163,9 +166,13 @@ double Pipeline::render() {
         }
         textures.push_back(outputs_[id].get());
 
+        // Dispatch over the node's own output, which may differ from the
+        // graph's working size once rotation or crop is in play.
         cb.dispatch(*kernels_[id], textures,
                     node.params.empty() ? nullptr : node.params.data(),
-                    node.params.size(), width_, height_);
+                    node.params.size(),
+                    node.outWidth  ? node.outWidth  : width_,
+                    node.outHeight ? node.outHeight : height_);
     }
 
     cb.commitAndWait();

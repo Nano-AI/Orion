@@ -69,6 +69,16 @@ bool sameCurve(const ToneCurveSpec& a, const ToneCurveSpec& b) {
            sameChannel(a.green, b.green) && sameChannel(a.blue, b.blue);
 }
 
+/// LibRaw's flip flag as clockwise quarter turns.
+int quarterTurnsFor(int flip) {
+    switch (flip) {
+        case 3: return 2;   // 180
+        case 5: return 3;   // 90 anticlockwise
+        case 6: return 1;   // 90 clockwise
+        default: return 0;
+    }
+}
+
 }  // namespace
 
 DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
@@ -101,6 +111,18 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                            PixelFormat::R32Float);
     nDisplay_   = pipeline_.add({"develop:display", "developDisplay", {nLinear_},
                                  PixelFormat::RGBA8Unorm, {}, {auxCurveLut_}});
+
+    // Orientation is last, and is the only node whose output dimensions differ
+    // from its input — a quarter turn swaps them.
+    exifQuarters_ = quarterTurnsFor(image.flip);
+    const bool swaps = (exifQuarters_ % 2) != 0;
+
+    // Allocate for the worst case so a user rotation never needs a recompile.
+    const std::uint32_t maxSide = std::max(width_, height_);
+    nOrient_ = pipeline_.add({"orient", "orient", {nDisplay_},
+                              PixelFormat::RGBA8Unorm, {}, {},
+                              maxSide, maxSide});
+    (void)swaps;
 
     pipeline_.compile(width_, height_);
 
@@ -226,8 +248,29 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         pipeline_.updateAux(auxCurveLut_, lut.data(), kCurveResolution * sizeof(float));
     }
 
+    if (first || adj.rotateQuarters != lastAdj_.rotateQuarters) {
+        const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
+        const bool swap = (turns % 2) != 0;
+        params::Orient o{};
+        o.outSize[0] = swap ? height_ : width_;
+        o.outSize[1] = swap ? width_  : height_;
+        o.inSize[0]  = width_;
+        o.inSize[1]  = height_;
+        o.quarterTurns = static_cast<std::uint32_t>(turns);
+        pipeline_.setParams(nOrient_, &o, sizeof o);
+        turns_ = turns;
+    }
+
     lastAdj_ = adj;
     primed_  = true;
+}
+
+std::uint32_t DevelopPipeline::outputWidth() const noexcept {
+    return (turns_ % 2) ? height_ : width_;
+}
+
+std::uint32_t DevelopPipeline::outputHeight() const noexcept {
+    return (turns_ % 2) ? width_ : height_;
 }
 
 double DevelopPipeline::render() { return pipeline_.render(); }

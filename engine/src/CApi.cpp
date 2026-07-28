@@ -105,6 +105,7 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.vibrance        = adj->vibrance;
         a.saturation      = adj->saturation;
         a.contrast        = adj->contrast;
+        a.rotateQuarters  = adj->rotate_quarters;
         a.sharpenAmount   = adj->sharpen_amount;
         a.sharpenRadius   = adj->sharpen_radius;
         a.sharpenMasking  = adj->sharpen_masking;
@@ -147,8 +148,8 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
     }
     return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
         const auto& d = engine->impl.develop();
-        *out_width  = d.width();
-        *out_height = d.height();
+        *out_width  = d.outputWidth();
+        *out_height = d.outputHeight();
         return ORION_OK;
     });
 }

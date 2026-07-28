@@ -30,6 +30,7 @@ set(ORION_SHADERS
     color_matrix:cameraToWorking
     develop_linear:developLinear
     develop_display:developDisplay
+    orient:orient
 )
 
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR})
