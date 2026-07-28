@@ -7,12 +7,23 @@ namespace orion::util {
 
 enum class ImageFormat { Png, Jpeg, Tiff };
 
+/// What the written file is tagged as, and converted to.
+///
+/// ⚠️ The pipeline's display transform ends in Rec.709 primaries and saturates
+/// there, so today no pixel Orion produces lies outside sRGB's gamut. Choosing
+/// a wider space converts and tags correctly — which is what a print shop or a
+/// managed workflow needs — but it cannot add saturation that the transform
+/// never generated. Widening the gamut for real means giving the display node
+/// its output primaries as a parameter; see research/color-pipeline.md.
+enum class ColorSpace { Srgb, DisplayP3, AdobeRgb };
+
 struct ExportOptions {
     ImageFormat format = ImageFormat::Jpeg;
     /// JPEG only, 0..1. Ignored by PNG and TIFF, which are lossless.
     float quality = 0.9f;
     /// Longest edge in pixels; 0 keeps full resolution.
     std::uint32_t maxDimension = 0;
+    ColorSpace space = ColorSpace::Srgb;
 };
 
 /// Writes 8-bit RGBA pixels. Throws std::runtime_error on failure.

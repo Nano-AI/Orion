@@ -361,10 +361,10 @@ final class Engine {
     }
 
     func export(to path: String, quality: Float = 0.92,
-                maxDimension: UInt32 = 0) throws {
+                maxDimension: UInt32 = 0, space: Int32 = 0) throws {
         guard let handle else { return }
         var options = OrionExportOptions(format: -1, quality: quality,
-                                         max_dimension: maxDimension)
+                                         max_dimension: maxDimension, space: space)
         let status = orion_engine_export(handle, path, &options)
         guard status == ORION_OK else { throw Failure.export(errorText(status)) }
     }
@@ -372,10 +372,11 @@ final class Engine {
     /// Encodes with these options and reports the byte count without writing.
     /// Real work — a 24 MP JPEG is about a sixth of a second — so callers
     /// debounce it.
-    func exportedSize(format: Int32, quality: Float, maxDimension: UInt32) -> Int? {
+    func exportedSize(format: Int32, quality: Float, maxDimension: UInt32,
+                      space: Int32 = 0) -> Int? {
         guard let handle else { return nil }
         var options = OrionExportOptions(format: format, quality: quality,
-                                         max_dimension: maxDimension)
+                                         max_dimension: maxDimension, space: space)
         var bytes: UInt64 = 0
         guard orion_engine_export_size(handle, &options, &bytes) == ORION_OK else {
             return nil

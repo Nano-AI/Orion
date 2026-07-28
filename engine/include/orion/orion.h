@@ -193,10 +193,23 @@ typedef enum OrionImageFormat {
     ORION_FORMAT_TIFF = 2
 } OrionImageFormat;
 
+/* What the file is tagged as, and converted to.
+ *
+ * The display transform ends in Rec.709 primaries and saturates there, so no
+ * pixel Orion produces today lies outside sRGB. A wider space is converted and
+ * tagged correctly, which is what a managed workflow needs, but it cannot add
+ * saturation the transform never generated. */
+typedef enum OrionColorSpace {
+    ORION_SPACE_SRGB       = 0,
+    ORION_SPACE_DISPLAY_P3 = 1,
+    ORION_SPACE_ADOBE_RGB  = 2
+} OrionColorSpace;
+
 typedef struct OrionExportOptions {
     int32_t  format;         /* OrionImageFormat; -1 picks from the extension */
     float    quality;        /* JPEG only, 0..1                               */
     uint32_t max_dimension;  /* longest edge; 0 keeps full resolution         */
+    int32_t  space;          /* OrionColorSpace                               */
 } OrionExportOptions;
 
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,

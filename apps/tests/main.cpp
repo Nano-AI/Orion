@@ -15,6 +15,9 @@
 #include "pipe/ShaderParams.h"
 #include "util/ImageWriter.h"
 
+#include <CoreGraphics/CoreGraphics.h>
+#include <ImageIO/ImageIO.h>
+
 #include <vector>
 
 #include <algorithm>
@@ -217,6 +220,51 @@ void testOrientation() {
 
 // ── Export ─────────────────────────────────────────────────────────────────
 
+/// Bit depth and the top-left pixel of a written file, straight from ImageIO.
+///
+/// The pixel is read in the file's *own* space — the bitmap context is built
+/// from the image's color space, so nothing is converted on the way in and the
+/// numbers are the ones actually stored. Reading it in sRGB would undo the very
+/// conversion the test exists to prove happened.
+///
+/// The C API only, so this stays in a .cpp alongside the rest of the suite.
+bool readBack(const std::string& path, int& bitsPerComponent, double rgb[3]) {
+    CFStringRef p = CFStringCreateWithCString(nullptr, path.c_str(), kCFStringEncodingUTF8);
+    if (p == nullptr) return false;
+    CFURLRef url = CFURLCreateWithFileSystemPath(nullptr, p, kCFURLPOSIXPathStyle, false);
+    CFRelease(p);
+    if (url == nullptr) return false;
+
+    CGImageSourceRef src = CGImageSourceCreateWithURL(url, nullptr);
+    CFRelease(url);
+    if (src == nullptr) return false;
+
+    CGImageRef image = CGImageSourceCreateImageAtIndex(src, 0, nullptr);
+    CFRelease(src);
+    if (image == nullptr) return false;
+
+    bitsPerComponent = static_cast<int>(CGImageGetBitsPerComponent(image));
+
+    CGColorSpaceRef space = CGImageGetColorSpace(image);
+    if (space == nullptr) { CGImageRelease(image); return false; }
+
+    std::uint16_t pixel[4] = {0, 0, 0, 0};
+    CGContextRef ctx = CGBitmapContextCreate(
+        pixel, 1, 1, 16, sizeof pixel, space,
+        static_cast<CGBitmapInfo>(kCGImageAlphaNoneSkipLast) | kCGBitmapByteOrder16Little);
+    if (ctx == nullptr) { CGImageRelease(image); return false; }
+
+    // Draw the whole image scaled down to the single pixel we sample. The test
+    // image is a horizontal ramp with a constant red channel, so the average is
+    // exactly as diagnostic as any one pixel and needs no coordinate care.
+    CGContextDrawImage(ctx, CGRectMake(0, 0, 1, 1), image);
+    CGContextRelease(ctx);
+    CGImageRelease(image);
+
+    for (int i = 0; i < 3; ++i) rgb[i] = double(pixel[i]) / 65535.0;
+    return true;
+}
+
 void testExportFormats() {
     section("Export");
 
@@ -228,6 +276,104 @@ void testExportFormats() {
     report(orion::util::formatForPath("a.jpg")  == ImageFormat::Jpeg, "jpg by extension");
     report(orion::util::formatForPath("noext")  == ImageFormat::Jpeg, "no extension defaults to jpeg");
     report(orion::util::formatForPath("a.b.png") == ImageFormat::Png, "uses the last extension");
+
+    // ── Color space and depth on the way out ───────────────────────────────
+    //
+    // Both of these fail silently. A file tagged with the wrong profile opens
+    // shifted in one application and correct in another, and a resize that
+    // quietly drops to eight bits undoes the 16-bit path for exactly the
+    // exports — the smaller ones — where nobody thinks to check.
+    using orion::util::ColorSpace;
+
+    constexpr std::uint32_t kW = 64, kH = 48;
+    std::vector<std::uint16_t> pixels(std::size_t(kW) * kH * 4);
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = (std::size_t(y) * kW + x) * 4;
+            // A saturated red, which is where two profiles disagree most.
+            pixels[i + 0] = 65535;
+            pixels[i + 1] = static_cast<std::uint16_t>(x * 400);
+            pixels[i + 2] = 0;
+            pixels[i + 3] = 65535;
+        }
+    }
+    const std::size_t stride = std::size_t(kW) * 4 * sizeof(std::uint16_t);
+
+    const std::string dir = "/tmp/";
+    struct Case { ColorSpace space; const char* name; };
+    const Case cases[] = {
+        {ColorSpace::Srgb,      "sRGB"},
+        {ColorSpace::DisplayP3, "Display P3"},
+        {ColorSpace::AdobeRgb,  "Adobe RGB"},
+    };
+
+    // Read the written file back rather than inferring from its size. A PNG of
+    // a smooth ramp compresses to almost nothing at either depth, so byte
+    // counts cannot tell eight bits from sixteen — which is exactly how the
+    // resize path lost its depth without any test noticing.
+    double red[3] = {0, 0, 0};
+    for (int i = 0; i < 3; ++i) {
+        orion::util::ExportOptions o{};
+        o.format = ImageFormat::Png;
+        o.space = cases[i].space;
+
+        const std::string path = dir + "orion-space-" + std::to_string(i) + ".png";
+        try {
+            orion::util::writeImage(path, pixels.data(), kW, kH, stride, o);
+        } catch (const std::exception& e) {
+            report(false, std::string("writes ") + cases[i].name, e.what());
+            continue;
+        }
+
+        int bits = 0;
+        double rgb[3] = {0, 0, 0};
+        if (!readBack(path, bits, rgb)) {
+            report(false, std::string("reads back ") + cases[i].name);
+            continue;
+        }
+
+        report(bits == 16, std::string("a ") + cases[i].name + " export is 16-bit",
+               "got " + std::to_string(bits));
+        report(orion::util::encodedSize(pixels.data(), kW, kH, stride, o) > 0,
+               std::string("encodes to ") + cases[i].name);
+
+        red[i] = rgb[0];
+    }
+
+    // sRGB's full red is inside the gamut of both wider spaces, so expressing
+    // it there needs *less* than full red — around 0.92 in P3. A number that
+    // stayed at 1.0 would mean the file had been relabelled rather than
+    // converted, which is the failure worth catching: it opens oversaturated
+    // in every application that honours the profile.
+    report(red[0] > 0.99, "sRGB keeps a saturated red at full",
+           "got " + std::to_string(red[0]));
+    report(red[1] < 0.97 && red[1] > 0.80,
+           "the same red is inside Display P3, so it sits below full",
+           "got " + std::to_string(red[1]));
+    report(red[2] < 0.97 && red[2] > 0.70,
+           "the same red is inside Adobe RGB, so it sits below full",
+           "got " + std::to_string(red[2]));
+
+    // A resize must not cost the depth. It used to: the resize context was
+    // eight bits, so every export with a size limit quietly halved its
+    // precision — and the smaller exports are the ones nobody re-checks.
+    orion::util::ExportOptions resized{};
+    resized.format = ImageFormat::Png;
+    resized.maxDimension = 32;
+    const std::string smallPath = dir + "orion-space-small.png";
+    try {
+        orion::util::writeImage(smallPath, pixels.data(), kW, kH, stride, resized);
+        int bits = 0;
+        double rgb[3] = {0, 0, 0};
+        if (readBack(smallPath, bits, rgb)) {
+            report(bits == 16, "a resized export keeps sixteen bits",
+                   "got " + std::to_string(bits));
+        } else {
+            report(false, "a resized export reads back");
+        }
+    } catch (const std::exception& e) {
+        report(false, "a resized export writes", e.what());
+    }
 }
 
 // ── Orientation on the GPU ─────────────────────────────────────────────────

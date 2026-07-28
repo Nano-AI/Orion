@@ -282,6 +282,19 @@ OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
     });
 }
 
+namespace {
+/// An unknown value falls back to sRGB rather than throwing. A colour space the
+/// facade does not recognise is a caller from a newer build, and refusing the
+/// whole export over it would be worse than writing the safe one.
+orion::util::ColorSpace toColorSpace(int32_t v) {
+    switch (v) {
+        case 1:  return orion::util::ColorSpace::DisplayP3;
+        case 2:  return orion::util::ColorSpace::AdobeRgb;
+        default: return orion::util::ColorSpace::Srgb;
+    }
+}
+}  // namespace
+
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
                                 const OrionExportOptions* options) {
     if (engine == nullptr || path == nullptr) return ORION_ERR_BAD_ARG;
@@ -296,6 +309,7 @@ OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
             }
             opts.quality      = options->quality;
             opts.maxDimension = options->max_dimension;
+            opts.space        = toColorSpace(options->space);
         }
 
         engine->impl.exportImage(path, opts);
@@ -316,6 +330,7 @@ OrionStatus orion_engine_export_size(OrionEngine* engine,
             : static_cast<orion::util::ImageFormat>(options->format);
         o.quality = options->quality;
         o.maxDimension = options->max_dimension;
+        o.space = toColorSpace(options->space);
         *out_bytes = static_cast<uint64_t>(engine->impl.exportedSize(o));
         return ORION_OK;
     });

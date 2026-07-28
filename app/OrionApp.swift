@@ -252,7 +252,8 @@ struct Editor: View {
                                 quality: Float(exportSettings.quality),
                                 maxDimension: exportSettings.longestEdge(
                                     sourceWidth: engine.imageWidth,
-                                    sourceHeight: engine.imageHeight))
+                                    sourceHeight: engine.imageHeight),
+                                space: exportSettings.space.code)
                         },
                         onExport: { showingExport = false; exportFile() },
                         onCancel: { showingExport = false })
@@ -1078,7 +1079,8 @@ struct Editor: View {
                               quality: Float(exportSettings.quality),
                               maxDimension: exportSettings.longestEdge(
                                   sourceWidth: engine.imageWidth,
-                                  sourceHeight: engine.imageHeight))
+                                  sourceHeight: engine.imageHeight),
+                              space: exportSettings.space.code)
         } catch {
             message = error.localizedDescription
         }

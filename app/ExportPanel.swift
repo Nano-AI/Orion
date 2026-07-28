@@ -69,9 +69,49 @@ final class ExportSettings {
         }
     }
 
+    /// What the file is tagged as, and converted to on the way out.
+    ///
+    /// ⚠️ The display transform ends in Rec.709 primaries and saturates there,
+    /// so nothing Orion renders today falls outside sRGB. A wider space is
+    /// converted and tagged correctly — which is what a print shop or a managed
+    /// workflow asks for — but it cannot add saturation the transform never
+    /// produced. The panel says so rather than implying otherwise.
+    enum Space: String, CaseIterable, Identifiable {
+        case srgb, displayP3, adobeRGB
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .srgb:      "sRGB"
+            case .displayP3: "Display P3"
+            case .adobeRGB:  "Adobe RGB"
+            }
+        }
+
+        /// Matches OrionColorSpace in orion.h.
+        var code: Int32 {
+            switch self {
+            case .srgb:      0
+            case .displayP3: 1
+            case .adobeRGB:  2
+            }
+        }
+
+        var note: String {
+            switch self {
+            case .srgb:      "The safe choice. What the web and most screens expect."
+            case .displayP3: "For Apple displays and print. Converted and tagged, "
+                           + "though nothing Orion renders yet reaches past sRGB."
+            case .adobeRGB:  "What some print shops ask for. Converted and tagged, "
+                           + "though nothing Orion renders yet reaches past sRGB."
+            }
+        }
+    }
+
     var format: Format = .jpeg
     var quality: Double = 0.9
     var size: Size = .full
+    var space: Space = .srgb
 
     /// Typed dimensions, used when `size` is `.custom`. The aspect is held, so
     /// entering either one sets the other — a free pair would let you squash
@@ -193,6 +233,21 @@ struct ExportPanel: View {
                 }
             }
 
+            row("Color") {
+                VStack(alignment: .leading, spacing: 5) {
+                    Picker("", selection: $settings.space) {
+                        ForEach(ExportSettings.Space.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+
+                    Text(settings.space.note)
+                        .font(.system(size: 9))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             row("Size") {
                 VStack(alignment: .leading, spacing: 8) {
                     Picker("", selection: $settings.size) {
@@ -270,6 +325,7 @@ struct ExportPanel: View {
         .onChange(of: settings.quality) { _, _ in remeasure() }
         .onChange(of: settings.size) { _, _ in syncFields(); remeasure() }
         .onChange(of: settings.customWidth) { _, _ in remeasure() }
+        .onChange(of: settings.space) { _, _ in remeasure() }
     }
 
     /// Re-encodes after a pause. A full JPEG encode of a 24 MP frame is about a
