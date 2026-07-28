@@ -2,50 +2,75 @@
 
 ---
 
-## What Orion ships today
+## RCD — Ratio Corrected Demosaicing
 
-**Where:** `rcd_dirs.slang`, `rcd_green.slang`, `rcd_rb.slang`.
+**Where:** `rcd_dirs.slang`, `rcd_lpf.slang`, `rcd_green.slang`, `rcd_rb.slang`,
+`ops/rcd_stat.slang`.
 
-**Status:** ⚠️ **RCD-family, not RCD.** Described honestly below, and listed in
-[`UNSOURCED.md`](UNSOURCED.md).
+**Status:** ✅ **Ported from the reference implementation.**
 
-**What it does:**
-1. **Directional discrimination** — gradient energy along each axis, squared to
-   sharpen the decision on edges while leaving flat areas near 0.5 where the two
-   estimates agree anyway.
-2. **Green** — Hamilton–Adams gradient-corrected estimates, clamped to the
-   bracketing green samples. Green is interpolated first because it carries most
-   of the luminance detail and sets the quality ceiling for everything after.
-3. **Red and blue** — interpolated in the colour-difference domain (C − G) over a
-   3×3 neighbourhood, then green added back. Chroma varies slowly compared with
-   luminance, so this preserves the detail green already resolved.
+**Source:** Luis Sanz Rodríguez,
+[LuisSR/RCD-Demosaicing](https://github.com/LuisSR/RCD-Demosaicing), MIT
+licensed. Adopted as darktable's default Bayer demosaic
+([documentation](https://docs.darktable.org/usermanual/4.6/en/module-reference/processing-modules/demosaic/)),
+which is the strongest available signal that it is the right default: darktable
+ships every serious alternative and chose this one.
 
-**Partial source — the green step:** Hamilton & Adams, *Adaptive color plane
-interpolation in single sensor color electronic camera*, US Patent 5,629,734
-(1997), Eastman Kodak. Widely reimplemented and described in the demosaicing
-literature.
+MIT licensing matters here. A direct port is permitted, so the coefficients
+below are the reference's own rather than a reimplementation from a description.
 
-**What is missing versus real RCD.** The "RC" is **ratio correction**: at a red
-or blue site, RCD interpolates the *ratio* G/C rather than the *difference*
-G − C. Ratios hold up better across strong luminance steps, where the additive
-form overshoots. Our clamp suppresses the resulting artefacts rather than
-avoiding them.
+### The four steps
 
-**The reference to port:**
-- [LuisSR/RCD-Demosaicing](https://github.com/LuisSR/RCD-Demosaicing) — Luis Sanz
-  Rodríguez, **MIT licensed**, so it can be ported directly rather than
-  reimplemented from a description.
-- Adopted as darktable's default Bayer demosaic
-  ([documentation](https://docs.darktable.org/usermanual/4.6/en/module-reference/processing-modules/demosaic/)),
-  which is a strong signal it is the right default.
+**1 — Direction discrimination.** A quadratic form over nine samples along each
+axis, with the reference's exact 44 coefficients (`ops/rcd_stat.slang`). It is
+the energy of a high-pass filter along that direction, so a large value means
+the signal changes fast there and interpolation should run the other way.
 
-**Expected difference:** most visible on high-frequency texture — foliage, brick,
-fabric weave, fine branches — and in colour fringing on hard edges, where our
-3×3 chroma average is blurrier than RCD's directional handling. On smooth
-gradients and silhouettes the difference is negligible, which is why a night-sky
-test frame will not reveal it.
+```
+VH_Dir = V_Stat / (V_Stat + H_Stat)
+```
 
-**Priority:** high. This is foundational and everything downstream inherits it.
+**2 — Low-pass filter.** A 3×3 binomial over the mosaic:
+
+```
+lpf = 0.25·c + 0.125·(4-neighbours) + 0.0625·(diagonals)
+```
+
+It deliberately mixes all three colours, because it is estimating local
+*luminance* regardless of which channel each sample carries. Step 3 needs it.
+
+**3 — Green, with ratio correction.** This is the step the algorithm is named
+for, and the one Orion was missing:
+
+```
+N_Est = cfa[N] · (1 + (lpf[c] − lpf[N2]) / (eps + lpf[c] + lpf[N2]))
+V_Est = (S_Grad·N_Est + N_Grad·S_Est) / (N_Grad + S_Grad)
+green = VH_Dir·H_Est + (1 − VH_Dir)·V_Est
+```
+
+Two things to notice. The estimate is **scaled** by a ratio of local low-pass
+values rather than corrected additively — a ratio tracks a luminance step
+correctly where an additive term overshoots it. And the directional estimates
+are combined with **opposing** weights: `N_Est` is weighted by `S_Grad`, so an
+estimate coming from the calmer direction is trusted more.
+
+**4 — Red and blue.** Both interpolate the colour difference C − G. At a red or
+blue site the missing channel sits on the diagonals, and a P/Q discrimination —
+the same statistic, sampled diagonally — chooses which diagonal to favour. At a
+green site the cardinal neighbours carry them and step 1's discrimination is
+reused.
+
+### What this replaced
+
+The previous implementation was RCD-*family*: directional and
+gradient-corrected, but using **Hamilton–Adams additive** correction with a
+clamp to suppress the overshoot, and a plain 3×3 average for red and blue with
+no directionality at all. The visible differences were softer fine texture and
+colour fringing on hard edges.
+
+**Confidence:** high. Ported from the reference with its own coefficients.
+
+**Remaining gap:** X-Trans sensors need Markesteijn instead; Bayer only for now.
 
 ---
 

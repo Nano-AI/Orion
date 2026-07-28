@@ -91,9 +91,12 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::R32Float, {}});
     nDirs_      = pipeline_.add({"rcd:dirs", "rcdDirs", {nLinearize_},
                                  PixelFormat::R32Float, {}});
-    nGreen_     = pipeline_.add({"rcd:green", "rcdGreen", {nLinearize_, nDirs_},
+    nLpf_       = pipeline_.add({"rcd:lowpass", "rcdLpf", {nLinearize_},
                                  PixelFormat::R32Float, {}});
-    nRgb_       = pipeline_.add({"rcd:red/blue", "rcdRedBlue", {nLinearize_, nGreen_},
+    nGreen_     = pipeline_.add({"rcd:green", "rcdGreen", {nLinearize_, nDirs_, nLpf_},
+                                 PixelFormat::R32Float, {}});
+    nRgb_       = pipeline_.add({"rcd:red/blue", "rcdRedBlue",
+                                 {nLinearize_, nGreen_, nDirs_},
                                  PixelFormat::RGBA16Float, {}});
     // Capture sharpening belongs right after the demosaic, and keeping it
     // upstream of the tone controls means an exposure drag never recomputes it.
@@ -162,6 +165,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     params::Dirs dirs{{size[0], size[1]}};
     pipeline_.setParams(nDirs_, &dirs, sizeof dirs);
+    pipeline_.setParams(nLpf_,  &dirs, sizeof dirs);
 
     params::Green green{{size[0], size[1]}, image.filters, 0};
     pipeline_.setParams(nGreen_, &green, sizeof green);

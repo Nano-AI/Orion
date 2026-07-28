@@ -5,6 +5,9 @@ so nobody mistakes plausible code for grounded code, and so the list can shrink.
 
 Ordered by how much the gap actually costs.
 
+**Resolved 2026-07-27:** the demosaic. RCD is now ported from the reference
+implementation — see [demosaic.md](demosaic.md).
+
 ---
 
 ## 1. Highlight / shadow mask shapes
@@ -25,22 +28,6 @@ behavioural one, but "+50 shadows" still will not mean the same thing.
 
 **To fix:** derive knees from a published tone-mapping operator, or calibrate
 against reference renders of the same file.
-
----
-
-## 2. Demosaic — RCD-family rather than RCD
-
-**Where:** `rcd_green.slang`, `rcd_rb.slang`.
-
-**Missing:** the ratio-correction step that gives RCD its name.
-
-**Cost:** softer fine texture and more colour fringing on hard edges than the
-real algorithm.
-
-**To fix:** port [LuisSR/RCD-Demosaicing](https://github.com/LuisSR/RCD-Demosaicing).
-MIT licensed, so a direct port is permitted. Roughly a day.
-
-**Priority: highest.** Foundational — everything downstream inherits it.
 
 ---
 

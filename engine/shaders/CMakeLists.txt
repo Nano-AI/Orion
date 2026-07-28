@@ -24,6 +24,7 @@ endif()
 set(ORION_SHADERS
     linearize:linearize
     rcd_dirs:rcdDirs
+    rcd_lpf:rcdLpf
     rcd_green:rcdGreen
     rcd_rb:rcdRedBlue
     sharpen:sharpen
