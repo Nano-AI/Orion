@@ -53,6 +53,12 @@ struct Adjustments {
     float cropX = 0.0f, cropY = 0.0f;
     float cropW = 1.0f, cropH = 1.0f;
 
+    /// While the crop tool is open, render the whole straightened frame and let
+    /// the UI draw the crop rectangle over it. That is how Photoshop and
+    /// Lightroom behave: you see what you are cutting away, and straightening
+    /// rotates the picture under a stationary rectangle rather than zooming in.
+    bool cropPreview = false;
+
     // Capture sharpening. Sits just after the demosaic.
     float sharpenAmount  = 0.0f;   // 0..2
     float sharpenRadius  = 1.0f;   // pixels

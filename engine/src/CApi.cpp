@@ -109,6 +109,7 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.straightenDeg   = adj->straighten_deg;
         a.cropX = adj->crop_x; a.cropY = adj->crop_y;
         a.cropW = adj->crop_w; a.cropH = adj->crop_h;
+        a.cropPreview = adj->crop_preview != 0;
         a.sharpenAmount   = adj->sharpen_amount;
         a.sharpenRadius   = adj->sharpen_radius;
         a.sharpenMasking  = adj->sharpen_masking;

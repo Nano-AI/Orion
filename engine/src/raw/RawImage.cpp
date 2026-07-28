@@ -2,6 +2,7 @@
 
 #include <libraw/libraw.h>
 
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -30,7 +31,12 @@ std::string BayerImage::patternString() const {
 }
 
 RawInfo readInfo(const std::string& path) {
-    LibRaw proc;
+    // Heap, not stack. A LibRaw instance carries the whole imgdata structure —
+    // hundreds of kilobytes — and this runs on Swift's cooperative thread pool
+    // where each stack is 544K. On the stack it overflows before doing any work.
+    auto owned = std::make_unique<LibRaw>();
+    LibRaw& proc = *owned;
+
     if (proc.open_file(path.c_str()) != LIBRAW_SUCCESS) {
         throw std::runtime_error("could not open " + path);
     }
@@ -59,7 +65,10 @@ RawInfo readInfo(const std::string& path) {
 }
 
 std::vector<std::uint8_t> extractThumbnail(const std::string& path) {
-    LibRaw proc;
+    // Heap for the same reason as readInfo: this runs off the main thread.
+    auto owned = std::make_unique<LibRaw>();
+    LibRaw& proc = *owned;
+
     if (proc.open_file(path.c_str()) != LIBRAW_SUCCESS) return {};
     if (proc.unpack_thumb() != LIBRAW_SUCCESS) { proc.recycle(); return {}; }
 
@@ -78,7 +87,8 @@ std::vector<std::uint8_t> extractThumbnail(const std::string& path) {
 }
 
 BayerImage decodeBayer(const std::string& path) {
-    LibRaw proc;
+    auto owned = std::make_unique<LibRaw>();
+    LibRaw& proc = *owned;
 
     if (int rc = proc.open_file(path.c_str()); rc != LIBRAW_SUCCESS) {
         fail("could not open raw file", rc);

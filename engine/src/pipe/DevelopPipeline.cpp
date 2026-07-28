@@ -139,7 +139,10 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     const bool swaps = (exifQuarters_ % 2) != 0;
 
     // Allocate for the worst case so a user rotation never needs a recompile.
-    const std::uint32_t maxSide = std::max(width_, height_);
+    // 1.5x covers the worst-case straighten bounding box (45 degrees
+    // grows the frame by sqrt(2)).
+    const std::uint32_t maxSide =
+        static_cast<std::uint32_t>(std::max(width_, height_) * 1.45f);
     nGeometry_ = pipeline_.add({"geometry", "geometry", {nDisplay_},
                                 PixelFormat::RGBA8Unorm, {}, {},
                                 maxSide, maxSide});
@@ -307,7 +310,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         adj.rotateQuarters != lastAdj_.rotateQuarters ||
         adj.straightenDeg  != lastAdj_.straightenDeg ||
         adj.cropX != lastAdj_.cropX || adj.cropY != lastAdj_.cropY ||
-        adj.cropW != lastAdj_.cropW || adj.cropH != lastAdj_.cropH;
+        adj.cropW != lastAdj_.cropW || adj.cropH != lastAdj_.cropH ||
+        adj.cropPreview != lastAdj_.cropPreview;
 
     if (geometryMoved) {
         const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
@@ -316,25 +320,42 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         const float rotW = static_cast<float>(swap ? height_ : width_);
         const float rotH = static_cast<float>(swap ? width_  : height_);
 
-        const float cw = std::clamp(adj.cropW, 0.01f, 1.0f);
-        const float ch = std::clamp(adj.cropH, 0.01f, 1.0f);
-        const float cx = std::clamp(adj.cropX, 0.0f, 1.0f - cw);
-        const float cy = std::clamp(adj.cropY, 0.0f, 1.0f - ch);
-
         params::Geometry g{};
-        g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * cw));
-        g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * ch));
-        g.inSize[0]  = width_;
-        g.inSize[1]  = height_;
-        g.quarterTurns = static_cast<std::uint32_t>(turns);
+        g.inSize[0] = width_;
+        g.inSize[1] = height_;
+        g.quarterTurns  = static_cast<std::uint32_t>(turns);
         g.straightenRad = adj.straightenDeg * 3.14159265358979f / 180.0f;
-        g.cropOrigin[0] = cx; g.cropOrigin[1] = cy;
-        g.cropSize[0]   = cw; g.cropSize[1]   = ch;
-        pipeline_.setParams(nGeometry_, &g, sizeof g);
 
-        turns_   = turns;
-        outW_    = g.outSize[0];
-        outH_    = g.outSize[1];
+        if (adj.cropPreview) {
+            // Whole frame, expanded so a straightened picture is not clipped by
+            // its own bounding box. The corners outside the original are
+            // transparent, which is what lets the UI show them as empty.
+            const float a = std::abs(g.straightenRad);
+            const float grow = std::cos(a) + std::sin(a);
+
+            g.cropSize[0] = grow;
+            g.cropSize[1] = grow;
+            g.cropOrigin[0] = -(grow - 1.0f) * 0.5f;
+            g.cropOrigin[1] = -(grow - 1.0f) * 0.5f;
+
+            g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * grow));
+            g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * grow));
+        } else {
+            const float cw = std::clamp(adj.cropW, 0.01f, 1.0f);
+            const float ch = std::clamp(adj.cropH, 0.01f, 1.0f);
+            g.cropOrigin[0] = std::clamp(adj.cropX, 0.0f, 1.0f - cw);
+            g.cropOrigin[1] = std::clamp(adj.cropY, 0.0f, 1.0f - ch);
+            g.cropSize[0]   = cw;
+            g.cropSize[1]   = ch;
+
+            g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * cw));
+            g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * ch));
+        }
+
+        pipeline_.setParams(nGeometry_, &g, sizeof g);
+        turns_ = turns;
+        outW_  = g.outSize[0];
+        outH_  = g.outSize[1];
     }
 
     lastAdj_ = adj;

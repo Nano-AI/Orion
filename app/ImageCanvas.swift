@@ -114,6 +114,9 @@ struct ImageCanvas: NSViewRepresentable {
             var quadScale = SIMD2<Float>(1, 1)
             var uvMin = SIMD2<Float>(0, 0)
             var uvSize = SIMD2<Float>(1, 1)
+            var split: Float = 1
+            var vertical: UInt32 = 1
+            var pad = SIMD2<Float>(0, 0)
         }
 
         init(engine: Engine, viewport: Viewport, targeted: TargetedAdjust) {
@@ -164,6 +167,9 @@ struct ImageCanvas: NSViewRepresentable {
                 float2 quadScale;
                 float2 uvMin;
                 float2 uvSize;
+                float  split;      // 0..1 along the axis; 1 = no split
+                uint   vertical;   // 1 splits left/right, 0 splits top/bottom
+                float2 _pad;
             };
 
             struct VOut {
@@ -187,8 +193,27 @@ struct ImageCanvas: NSViewRepresentable {
 
             fragment float4 orionBlitFragment(VOut in [[stage_in]],
                                               texture2d<float> image [[texture(0)]],
-                                              sampler samp [[sampler(0)]]) {
-                return image.sample(samp, in.uv);
+                                              texture2d<float> original [[texture(1)]],
+                                              sampler samp [[sampler(0)]],
+                                              constant Transform& t [[buffer(0)]]) {
+                const float4 edited = image.sample(samp, in.uv);
+                if (t.split >= 0.999) return edited;
+
+                // Which side of the divider this pixel is on. The divider runs
+                // in view space, not image space, so it stays put while the
+                // image pans underneath.
+                const float pos = (t.vertical != 0u) ? in.uv.x : in.uv.y;
+                const float u = (pos - t.uvMin.x) / max(t.uvSize.x, 1e-6);
+                const float v = (pos - t.uvMin.y) / max(t.uvSize.y, 1e-6);
+                const float where_ = (t.vertical != 0u) ? u : v;
+
+                if (where_ > t.split) return edited;
+
+                // A hairline so the boundary is visible against similar tones.
+                if (abs(where_ - t.split) < 0.0015) {
+                    return float4(1.0, 1.0, 1.0, 1.0);
+                }
+                return original.sample(samp, in.uv);
             }
             """
 
@@ -393,9 +418,14 @@ struct ImageCanvas: NSViewRepresentable {
             let magnified = viewport.fitScale * viewport.zoom > 4.0
             let samp = magnified ? nearestSampler(view.device) : sampler
 
+            t.split = Float(engine.compareSplit)
+            t.vertical = engine.compareVertical ? 1 : 0
+
             encoder.setRenderPipelineState(pipeline)
             encoder.setVertexBytes(&t, length: MemoryLayout<Transform>.stride, index: 0)
+            encoder.setFragmentBytes(&t, length: MemoryLayout<Transform>.stride, index: 0)
             encoder.setFragmentTexture(texture, index: 0)
+            encoder.setFragmentTexture(engine.originalTexture ?? texture, index: 1)
             encoder.setFragmentSamplerState(samp, index: 0)
             encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
             encoder.endEncoding()

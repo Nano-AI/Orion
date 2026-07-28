@@ -1,0 +1,113 @@
+import SwiftUI
+
+/// The filmstrip — browsing and culling.
+///
+/// Ratings render as dots rather than stars. At thumbnail scale a five-pointed
+/// star is mush, while five dots are countable at a glance, which is the only
+/// thing the mark has to do here.
+struct Filmstrip: View {
+    @Bindable var library: Library
+    let selected: URL?
+    let onSelect: (URL) -> Void
+
+    private let cellHeight: CGFloat = 66
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Palette.line).frame(height: 1)
+
+            HStack(spacing: 0) {
+                filterBar
+                Rectangle().fill(Palette.line).frame(width: 1)
+                strip
+            }
+            .frame(height: 98)
+        }
+        .background(Palette.panel)
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: 8) {
+            Picker("", selection: $library.filter) {
+                ForEach(Library.Filter.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(width: 96)
+
+            Text(library.summary)
+                .font(.system(size: 10))
+                .monospacedDigit()
+                .foregroundStyle(Palette.faint)
+                .fixedSize()
+        }
+        .padding(.horizontal, 14)
+    }
+
+    private var strip: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 8) {
+                    ForEach(library.visible) { photo in
+                        cell(photo)
+                            .id(photo.url)
+                            .onTapGesture { onSelect(photo.url) }
+                    }
+                }
+                .padding(.horizontal, 14)
+            }
+            .onChange(of: selected) { _, url in
+                guard let url else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(url, anchor: .center)
+                }
+            }
+        }
+    }
+
+    private func cell(_ photo: Library.Photo) -> some View {
+        let isSelected = photo.url == selected
+
+        return ZStack(alignment: .bottomLeading) {
+            Group {
+                if let image = photo.thumbnail {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Palette.raised
+                }
+            }
+            .frame(width: cellHeight * 1.5, height: cellHeight)
+            .clipped()
+            .opacity(photo.rejected ? 0.4 : 1)
+
+            marks(photo)
+                .padding(.leading, 4)
+                .padding(.bottom, 3)
+        }
+        .overlay(
+            Rectangle()
+                .strokeBorder(isSelected ? Palette.accent : .clear, lineWidth: 2)
+        )
+        .contentShape(Rectangle())
+        .help(photo.name)
+    }
+
+    private func marks(_ photo: Library.Photo) -> some View {
+        HStack(spacing: 2) {
+            if photo.rejected {
+                Text("✕")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color(red: 0.769, green: 0.341, blue: 0.302))
+            } else {
+                ForEach(0..<photo.rating, id: \.self) { _ in
+                    Circle()
+                        .fill(Color(red: 0.941, green: 0.776, blue: 0.455))
+                        .frame(width: 4, height: 4)
+                }
+            }
+        }
+        .shadow(color: .black.opacity(0.8), radius: 1, y: 1)
+    }
+}

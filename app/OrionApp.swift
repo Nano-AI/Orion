@@ -85,6 +85,8 @@ private struct Editor: View {
     @State private var message: String?
     @State private var exportSettings = ExportSettings()
     @State private var showingExport = false
+    @State private var library = Library()
+    @State private var current: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -96,6 +98,10 @@ private struct Editor: View {
                 Rectangle().fill(Palette.line).frame(width: 1)
                 tools.frame(width: 322)
             }
+
+            if !library.photos.isEmpty {
+                Filmstrip(library: library, selected: current, onSelect: load)
+            }
         }
         .background(Palette.ground)
         .focusable()
@@ -105,12 +111,26 @@ private struct Editor: View {
             return .handled
         }
         // Hold backslash for the original — Lightroom's muscle memory.
-        .onKeyPress(.init("\\"), phases: [.down, .up]) { press in
-            press.phase == .down ? engine.beginCompare() : engine.endCompare()
+        .onKeyPress(.init("\\")) {
+            engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
             return .handled
         }
+        .onKeyPress(.leftArrow) { step(-1); return .handled }
+        .onKeyPress(.rightArrow) { step(1); return .handled }
+        .onKeyPress(.init("x")) {
+            guard let current else { return .ignored }
+            library.toggleRejected(current); return .handled
+        }
         .onKeyPress(.init("0")) { viewport.reset(); return .handled }
-        .onKeyPress(.init("1")) { viewport.toggleFitAndActual(); return .handled }
+        .onKeyPress(.init("1")) {
+            if let current, !library.photos.isEmpty { library.setRating(1, for: current) }
+            else { viewport.toggleFitAndActual() }
+            return .handled
+        }
+        .onKeyPress(.init("2")) { rate(2); return .handled }
+        .onKeyPress(.init("3")) { rate(3); return .handled }
+        .onKeyPress(.init("4")) { rate(4); return .handled }
+        .onKeyPress(.init("5")) { rate(5); return .handled }
         .onKeyPress(.init("r")) {
             guard engine.isLoaded else { return .ignored }
             engine.resetEdits(); return .handled
@@ -163,7 +183,10 @@ private struct Editor: View {
                         .foregroundStyle(Palette.faint)
                         .frame(width: 46, alignment: .trailing)
                 }
-                Button {} label: {
+                Button {
+                    engine.comparing ? engine.clearCompare()
+                                     : engine.setCompare(split: 0.5)
+                } label: {
                     Text("Compare")
                         .font(.system(size: 11))
                         .padding(.horizontal, 10).padding(.vertical, 4)
@@ -173,10 +196,17 @@ private struct Editor: View {
                 .overlay(RoundedRectangle(cornerRadius: 5)
                     .stroke(engine.comparing ? Palette.accent : Palette.line, lineWidth: 1))
                 .disabled(!engine.isLoaded)
-                .help("Hold to see the original (\\)")
-                .onLongPressGesture(minimumDuration: 0, pressing: { down in
-                    down ? engine.beginCompare() : engine.endCompare()
-                }, perform: {})
+                .help("Split the view against the original")
+
+                if engine.comparing {
+                    iconChip(engine.compareVertical
+                             ? "rectangle.split.2x1" : "rectangle.split.1x2",
+                             enabled: true) {
+                        engine.compareVertical.toggle()
+                        engine.generationBump()
+                    }
+                    .help("Swap between a vertical and horizontal split")
+                }
 
                 iconChip("arrow.uturn.backward", enabled: engine.history.canUndo) {
                     engine.undo()
@@ -250,6 +280,8 @@ private struct Editor: View {
                                 }
                             }
                         }
+                        .onChange(of: tab) { _, t in engine.cropPreview = (t == .crop) }
+                        .onAppear { engine.cropPreview = (tab == .crop) }
                         .overlay { ColorLoupe(targeted: targeted) }
                         .onChange(of: targeted.lastPicked) { _, picked in
                             // Follow the pick, so the sliders below act on the
@@ -307,7 +339,9 @@ private struct Editor: View {
     }
 
     /// The photo's rectangle within the canvas, matching the renderer's
-    /// letterbox exactly so the overlay lines up with the pixels.
+    /// letterbox exactly so the overlay lands on the pixels rather than near
+    /// them. Measured inside the padded canvas, which is the same geometry the
+    /// Metal view is given.
     private func photoFrame(in size: CGSize) -> CGRect {
         guard engine.imageWidth > 0, engine.imageHeight > 0,
               size.width > 0, size.height > 0 else { return .zero }
@@ -628,20 +662,53 @@ private struct Editor: View {
 
     // MARK: Actions
 
+    /// Opening a photo opens its folder too, so the filmstrip is populated
+    /// without a separate import step. Folder-first, as intended.
     private func openFile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
+        panel.message = "Choose a raw file, or a folder of them."
         panel.allowedContentTypes = ["arw", "dng", "nef", "cr2", "cr3", "raf", "orf", "rw2"]
             .compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
+        var isDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+
+        if isDirectory.boolValue {
+            library.open(folder: url)
+            // Wait for the scan, then open the first frame.
+            Task {
+                while library.loading { try? await Task.sleep(for: .milliseconds(40)) }
+                if let first = library.visible.first?.url { load(first) }
+            }
+        } else {
+            library.open(folder: url.deletingLastPathComponent())
+            load(url)
+        }
+    }
+
+    private func load(_ url: URL) {
         do {
             try engine.open(path: url.path)
+            current = url
             viewport.reset()
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func rate(_ stars: Int) {
+        guard let current else { return }
+        library.setRating(stars, for: current)
+    }
+
+    private func step(_ offset: Int) {
+        guard let current, let next = library.neighbour(of: current, offset: offset) else {
+            return
+        }
+        load(next)
     }
 
     private func exportFile() {

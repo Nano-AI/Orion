@@ -1,5 +1,6 @@
 import Foundation
 import Metal
+import MetalKit
 
 /// Swift-side owner of the C engine handle.
 ///
@@ -42,35 +43,10 @@ final class Engine {
 
     /// Extra quarter turns clockwise, on top of the camera's own orientation.
     var rotateQuarters: Int32 = 0  { didSet { pushAndRender() } }
-    var straightenDeg: Float = 0   { didSet { shrinkCropForAngle(); pushAndRender() } }
+    var straightenDeg: Float = 0   { didSet { pushAndRender() } }
 
-    /// Straightening rotates the crop inside the frame, so the crop has to
-    /// shrink or its corners fall outside and sample nothing. This is the
-    /// largest rectangle of the current aspect that fits at this angle —
-    /// the standard "auto-crop on straighten" behaviour.
-    private func shrinkCropForAngle() {
-        guard isLoaded, !suspended else { return }
-        let a = abs(Double(straightenDeg) * .pi / 180)
-        guard a > 1e-6 else { return }
-
-        let w = Double(cropW), h = Double(cropH)
-        guard w > 0, h > 0 else { return }
-
-        // Largest inscribed rectangle of the same aspect in a rotated frame.
-        let ar = w / h
-        let cosA = cos(a), sinA = sin(a)
-        let scale = 1.0 / (cosA + sinA / ar)
-
-        let nw = min(1.0, w * scale)
-        let nh = min(1.0, h * scale)
-
-        suspended = true
-        cropX = Float(min(max(Double(cropX) + (w - nw) / 2, 0), 1 - nw))
-        cropY = Float(min(max(Double(cropY) + (h - nh) / 2, 0), 1 - nh))
-        cropW = Float(nw)
-        cropH = Float(nh)
-        suspended = false
-    }
+    /// True while the crop tool is open.
+    var cropPreview = false        { didSet { pushAndRender() } }
 
     /// Sets the crop in one push, so a drag is a single render rather than four.
     func setCrop(x: Float, y: Float, w: Float, h: Float) {
@@ -300,34 +276,73 @@ final class Engine {
         pushAndRender()
     }
 
-    /// True while the original is being shown.
-    private(set) var comparing = false
-    private var beforeCompare: DevelopState?
+    /// Split compare: 1.0 means no split, lower values reveal the original
+    /// from the left (or top).
+    var compareSplit: Double = 1.0
+    var compareVertical = true
 
-    /// Momentarily shows the image as shot — white balance kept, every user
-    /// adjustment neutral. Deliberately momentary rather than a mode: you want
-    /// a glance at the original, not somewhere to get stuck.
-    ///
-    /// Nothing is recorded in history; this is a view, not an edit. And it is
-    /// cheap because the demosaic and colour matrix stay cached — only the
-    /// tone, display and geometry nodes recompute.
-    func beginCompare() {
-        guard isLoaded, !comparing else { return }
-        comparing = true
-        beforeCompare = state
+    /// The unedited render, held so the split can show both at once without
+    /// re-rendering on every drag of the divider.
+    private(set) var originalTexture: MTLTexture?
 
+    var comparing: Bool { compareSplit < 0.999 }
+
+    /// Renders the image as shot into a held texture, then restores the edit.
+    /// Two renders once, rather than two renders per frame of the divider.
+    func captureOriginal() {
+        guard isLoaded, let handle else { return }
+
+        let current = state
         var neutral = DevelopState()
-        neutral.temperatureK = temperatureK   // as shot is not an edit
+        neutral.temperatureK = temperatureK      // as shot is not an edit
         neutral.tint = tint
         neutral.rotateQuarters = rotateQuarters
+        neutral.straightenDeg = straightenDeg
+        neutral.cropX = cropX; neutral.cropY = cropY
+        neutral.cropW = cropW; neutral.cropH = cropH
+
         apply(neutral)
+
+        // Copy out, because the next render overwrites the pipeline's output.
+        if let src = outputTexture, let device = metalDevice {
+            let desc = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: src.pixelFormat, width: src.width, height: src.height,
+                mipmapped: false)
+            desc.usage = [.shaderRead, .shaderWrite]
+            desc.storageMode = .shared
+
+            if let copy = device.makeTexture(descriptor: desc),
+               let queue = device.makeCommandQueue(),
+               let buffer = queue.makeCommandBuffer(),
+               let blit = buffer.makeBlitCommandEncoder() {
+                blit.copy(from: src, to: copy)
+                blit.endEncoding()
+                buffer.commit()
+                buffer.waitUntilCompleted()
+                originalTexture = copy
+            }
+        }
+
+        apply(current)
     }
 
-    func endCompare() {
-        guard comparing, let restore = beforeCompare else { return }
-        comparing = false
-        beforeCompare = nil
-        apply(restore)
+    func setCompare(split: Double) {
+        if originalTexture == nil && split < 0.999 { captureOriginal() }
+        compareSplit = min(max(split, 0), 1)
+        generation &+= 1
+    }
+
+    func generationBump() { generation &+= 1 }
+
+    func clearCompare() {
+        compareSplit = 1.0
+        originalTexture = nil
+        generation &+= 1
+    }
+
+    /// The held original goes stale the moment an edit lands.
+    private func invalidateOriginal() {
+        if originalTexture != nil && compareSplit >= 0.999 { originalTexture = nil }
     }
 
     func undo() { if let s = history.undo() { apply(s) } }
@@ -351,6 +366,7 @@ final class Engine {
             vibrance: vibrance, saturation: saturation, contrast: contrast,
             rotate_quarters: rotateQuarters, straighten_deg: straightenDeg,
             crop_x: cropX, crop_y: cropY, crop_w: cropW, crop_h: cropH,
+            crop_preview: cropPreview ? 1 : 0,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),
@@ -375,6 +391,7 @@ final class Engine {
         }
 
         lastRenderMs = ms
+        invalidateOriginal()
         histogramBins = histogram() ?? histogramBins
         generation &+= 1
     }

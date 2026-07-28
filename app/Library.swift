@@ -7,6 +7,7 @@ import Foundation
 /// directory and it reads what is there. Ratings and flags live in XMP sidecars
 /// next to each file, so they survive Orion being deleted and are readable by
 /// other software.
+@MainActor
 @Observable
 final class Library {
 
@@ -72,7 +73,7 @@ final class Library {
             : "\(total) photos"
     }
 
-    private static let rawExtensions: Set<String> =
+    private nonisolated static let rawExtensions: Set<String> =
         ["arw", "dng", "nef", "cr2", "cr3", "raf", "orf", "rw2", "pef", "srw"]
 
     // MARK: Scanning
@@ -82,44 +83,48 @@ final class Library {
         photos = []
         loading = true
 
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let found = Self.scan(url)
+        Task {
+            // Directory listing off the main thread; the folder may be on a
+            // slow volume and the window must stay responsive.
+            let found = await Task.detached(priority: .userInitiated) {
+                Self.scan(url)
+            }.value
 
-            await MainActor.run {
-                self?.photos = found
-                self?.loading = false
-            }
+            photos = found
+            loading = false
 
             // Metadata and thumbnails stream in afterwards, so a folder of 500
             // frames appears immediately rather than after every file is read.
             for (index, photo) in found.enumerated() {
-                let info = Self.readInfo(photo.url)
-                let thumb = Self.readThumbnail(photo.url)
-                let sidecar = Sidecar.read(for: photo.url)
+                let loaded = await Task.detached(priority: .utility) {
+                    (info: Self.readInfo(photo.url),
+                     thumb: Self.readThumbnail(photo.url),
+                     sidecar: Sidecar.read(for: photo.url))
+                }.value
 
-                await MainActor.run {
-                    guard let self, self.photos.indices.contains(index),
-                          self.photos[index].url == photo.url else { return }
-                    if let info {
-                        self.photos[index].width = info.width
-                        self.photos[index].height = info.height
-                        self.photos[index].camera = info.camera
-                        self.photos[index].iso = info.iso
-                        self.photos[index].shutter = info.shutter
-                        self.photos[index].aperture = info.aperture
-                    }
-                    self.photos[index].thumbnail = thumb
-                    if let sidecar {
-                        self.photos[index].rating = sidecar.rating
-                        self.photos[index].rejected = sidecar.rejected
-                        self.photos[index].colorLabel = sidecar.label
-                    }
+                // The folder may have changed under us while this was loading.
+                guard photos.indices.contains(index),
+                      photos[index].url == photo.url else { return }
+
+                if let info = loaded.info {
+                    photos[index].width = info.width
+                    photos[index].height = info.height
+                    photos[index].camera = info.camera
+                    photos[index].iso = info.iso
+                    photos[index].shutter = info.shutter
+                    photos[index].aperture = info.aperture
+                }
+                photos[index].thumbnail = loaded.thumb
+                if let sidecar = loaded.sidecar {
+                    photos[index].rating = sidecar.rating
+                    photos[index].rejected = sidecar.rejected
+                    photos[index].colorLabel = sidecar.label
                 }
             }
         }
     }
 
-    private static func scan(_ url: URL) -> [Photo] {
+    private nonisolated static func scan(_ url: URL) -> [Photo] {
         let keys: [URLResourceKey] = [.isRegularFileKey]
         guard let items = try? FileManager.default.contentsOfDirectory(
             at: url, includingPropertiesForKeys: keys,
@@ -133,7 +138,7 @@ final class Library {
             .map { Photo(url: $0) }
     }
 
-    private static func readInfo(_ url: URL)
+    private nonisolated static func readInfo(_ url: URL)
         -> (width: UInt32, height: UInt32, camera: String,
             iso: Float, shutter: Float, aperture: Float)? {
         var info = OrionRawInfo()
@@ -146,7 +151,7 @@ final class Library {
 
     /// Uses the camera's embedded JPEG preview. Decoding the mosaic for a
     /// thumbnail would take ~50ms per frame; this takes about two.
-    private static func readThumbnail(_ url: URL) -> NSImage? {
+    private nonisolated static func readThumbnail(_ url: URL) -> NSImage? {
         var size: UInt32 = 0
         guard orion_read_thumbnail(url.path, nil, 0, &size) == ORION_OK, size > 0 else {
             return nil

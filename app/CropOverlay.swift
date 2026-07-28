@@ -24,12 +24,31 @@ struct CropOverlay: View {
         case topLeft, topRight, bottomLeft, bottomRight
     }
 
+    /// While straightening, the previewed frame is grown to hold the rotated
+    /// picture, so the crop's normalised coordinates map into a sub-rectangle
+    /// of what is on screen. Without this the rectangle drifts outside the
+    /// image as the angle changes.
+    private var growth: CGFloat {
+        let a = abs(CGFloat(engine.straightenDeg) * .pi / 180)
+        return cos(a) + sin(a)
+    }
+
+    /// The original frame's rectangle inside the (possibly grown) preview.
+    private var imageRect: CGRect {
+        let g = growth
+        guard g > 1.0001 else { return frame }
+        let w = frame.width / g
+        let h = frame.height / g
+        return CGRect(x: frame.midX - w / 2, y: frame.midY - h / 2, width: w, height: h)
+    }
+
     /// Crop rectangle in view coordinates.
     private var rect: CGRect {
-        CGRect(x: frame.minX + CGFloat(engine.cropX) * frame.width,
-               y: frame.minY + CGFloat(engine.cropY) * frame.height,
-               width: CGFloat(engine.cropW) * frame.width,
-               height: CGFloat(engine.cropH) * frame.height)
+        let base = imageRect
+        return CGRect(x: base.minX + CGFloat(engine.cropX) * base.width,
+                      y: base.minY + CGFloat(engine.cropY) * base.height,
+                      width: CGFloat(engine.cropW) * base.width,
+                      height: CGFloat(engine.cropH) * base.height)
     }
 
     private let handleSize: CGFloat = 22
@@ -128,10 +147,11 @@ struct CropOverlay: View {
                                        width: CGFloat(engine.cropW),
                                        height: CGFloat(engine.cropH))
                 }
-                guard let start = startRect, frame.width > 0, frame.height > 0 else { return }
+                let base = imageRect
+                guard let start = startRect, base.width > 0, base.height > 0 else { return }
 
-                let dx = value.translation.width / frame.width
-                let dy = value.translation.height / frame.height
+                let dx = value.translation.width / base.width
+                let dy = value.translation.height / base.height
 
                 var r = start
                 switch handle {

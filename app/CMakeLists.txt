@@ -22,6 +22,9 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CropOverlay.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Library.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Filmstrip.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in

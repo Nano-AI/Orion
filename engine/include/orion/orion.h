@@ -61,6 +61,7 @@ typedef struct OrionAdjustments {
     float   straighten_deg;  /* fine rotation after the turns    */
     float   crop_x, crop_y;  /* normalised, post-rotation        */
     float   crop_w, crop_h;
+    int32_t crop_preview;    /* show the whole frame while cropping */
 
     float sharpen_amount;   /* 0..2                       */
     float sharpen_radius;   /* pixels                     */
