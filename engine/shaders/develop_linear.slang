@@ -9,6 +9,7 @@
 // Everything here is unbounded linear Rec.2020.
 
 #include "ops/tone_ops.slang"
+#include "ops/hsl_ops.slang"
 
 struct LinearAdjustParams
 {
@@ -22,6 +23,10 @@ struct LinearAdjustParams
     float _pad;
     uint2 size;
     uint2 _pad2;
+    // Colour mixer: eight hue bands, three shifts each.
+    float hueShift[8];
+    float satShift[8];
+    float lumShift[8];
 };
 
 [shader("compute")]
@@ -38,6 +43,7 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     c = applyExposure(c, p.exposureEv);
     c = applyTone(c, p.highlights, p.shadows, p.whites, p.blacks);
     c = applyColor(c, p.vibrance, p.saturation);
+    c = applyColorMixer(c, p.hueShift, p.satShift, p.lumShift);
 
     dst[tid.xy] = float4(c, 1.0f);
 }

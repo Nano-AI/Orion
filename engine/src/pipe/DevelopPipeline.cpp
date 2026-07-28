@@ -85,7 +85,11 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::R32Float, {}});
     nRgb_       = pipeline_.add({"rcd:red/blue", "rcdRedBlue", {nLinearize_, nGreen_},
                                  PixelFormat::RGBA16Float, {}});
-    nMatrix_    = pipeline_.add({"camera->working", "cameraToWorking", {nRgb_},
+    // Capture sharpening belongs right after the demosaic, and keeping it
+    // upstream of the tone controls means an exposure drag never recomputes it.
+    nSharpen_   = pipeline_.add({"sharpen", "sharpen", {nRgb_},
+                                 PixelFormat::RGBA16Float, {}});
+    nMatrix_    = pipeline_.add({"camera->working", "cameraToWorking", {nSharpen_},
                                  PixelFormat::RGBA16Float, {}});
     // Every scene-linear adjustment fuses into one dispatch, and the display
     // transform plus curve into another. They are all pointwise; separate
@@ -176,6 +180,9 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
     const bool linearMoved =
         first ||
+        adj.hueShift != lastAdj_.hueShift ||
+        adj.satShift != lastAdj_.satShift ||
+        adj.lumShift != lastAdj_.lumShift ||
         adj.exposureEv != lastAdj_.exposureEv ||
         adj.highlights != lastAdj_.highlights ||
         adj.shadows    != lastAdj_.shadows    ||
@@ -187,8 +194,20 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     if (linearMoved) {
         params::LinearAdjust la{adj.exposureEv, adj.highlights, adj.shadows,
                                 adj.whites, adj.blacks, adj.vibrance,
-                                adj.saturation, 0.0f, {size[0], size[1]}, {0, 0}};
+                                adj.saturation, 0.0f, {size[0], size[1]}, {0, 0},
+                                {}, {}, {}};
+        std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
+        std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);
+        std::copy(adj.lumShift.begin(), adj.lumShift.end(), la.lumShift);
         pipeline_.setParams(nLinear_, &la, sizeof la);
+    }
+
+    if (first || adj.sharpenAmount != lastAdj_.sharpenAmount ||
+        adj.sharpenRadius != lastAdj_.sharpenRadius ||
+        adj.sharpenMasking != lastAdj_.sharpenMasking) {
+        params::Sharpen sh{adj.sharpenAmount, adj.sharpenRadius,
+                           adj.sharpenMasking, 0.0f, {size[0], size[1]}, {0, 0}};
+        pipeline_.setParams(nSharpen_, &sh, sizeof sh);
     }
 
     const bool curveMoved = first || !sameCurve(adj.curve, lastAdj_.curve);

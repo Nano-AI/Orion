@@ -105,6 +105,14 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.vibrance        = adj->vibrance;
         a.saturation      = adj->saturation;
         a.contrast        = adj->contrast;
+        a.sharpenAmount   = adj->sharpen_amount;
+        a.sharpenRadius   = adj->sharpen_radius;
+        a.sharpenMasking  = adj->sharpen_masking;
+        for (int i = 0; i < 8; ++i) {
+            a.hueShift[i] = adj->hue_shift[i];
+            a.satShift[i] = adj->sat_shift[i];
+            a.lumShift[i] = adj->lum_shift[i];
+        }
         engine->impl.setAdjustments(a);
         return ORION_OK;
     });
@@ -118,6 +126,7 @@ OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* ou
         out->temperature_k = wb.temperatureK;
         out->tint          = wb.tint;
         out->contrast      = 1.0f;
+        out->sharpen_radius = 1.0f;
         return ORION_OK;
     });
 }

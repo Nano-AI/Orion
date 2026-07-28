@@ -66,9 +66,31 @@ struct RootView: View {
     }
 }
 
+/// Colour mixer bands, in the order the engine expects.
+enum HueBand: Int, CaseIterable, Identifiable {
+    case red, orange, yellow, green, aqua, blue, purple, magenta
+    var id: Int { rawValue }
+
+    var name: String {
+        switch self {
+        case .red: "Red";     case .orange: "Orange"
+        case .yellow: "Yellow"; case .green: "Green"
+        case .aqua: "Aqua";   case .blue: "Blue"
+        case .purple: "Purple"; case .magenta: "Magenta"
+        }
+    }
+
+    /// Swatch hue in degrees, matching the band centres in hsl_ops.slang.
+    var swatch: Color {
+        Color(hue: Double([0, 30, 60, 120, 180, 240, 285, 320][rawValue]) / 360.0,
+              saturation: 0.75, brightness: 0.85)
+    }
+}
+
 private struct Editor: View {
     @Bindable var engine: Engine
     @Binding var openError: String?
+    @State private var band: HueBand = .blue
 
     var body: some View {
         HStack(spacing: 0) {
@@ -129,6 +151,41 @@ private struct Editor: View {
                         slider("Saturation", value: $engine.saturation,
                                range: -1...1, unit: "", decimals: 2)
                     }
+                    section("Colour Mixer") {
+                        // A band picker rather than 24 stacked sliders: only
+                        // one band is ever being adjusted at a time.
+                        HStack(spacing: 4) {
+                            ForEach(HueBand.allCases) { b in
+                                Circle()
+                                    .fill(b.swatch)
+                                    .frame(width: 18, height: 18)
+                                    .overlay(
+                                        Circle().strokeBorder(
+                                            band == b ? Palette.text : .clear,
+                                            lineWidth: 1.5)
+                                    )
+                                    .onTapGesture { band = b }
+                                    .help(b.name)
+                            }
+                        }
+                        Text(band.name)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.dim)
+                        slider("Hue", value: bandBinding(\.hueShift),
+                               range: -1...1, unit: "", decimals: 2)
+                        slider("Saturation", value: bandBinding(\.satShift),
+                               range: -1...1, unit: "", decimals: 2)
+                        slider("Luminance", value: bandBinding(\.lumShift),
+                               range: -1...1, unit: "", decimals: 2)
+                    }
+                    section("Detail") {
+                        slider("Sharpening", value: $engine.sharpenAmount,
+                               range: 0...2, unit: "", decimals: 2)
+                        slider("Radius", value: $engine.sharpenRadius,
+                               range: 0.5...3, unit: " px", decimals: 1)
+                        slider("Masking", value: $engine.sharpenMasking,
+                               range: 0...1, unit: "", decimals: 2)
+                    }
                 }
                 .padding(14)
             }
@@ -182,6 +239,15 @@ private struct Editor: View {
             Button("Export…") { exportFile() }
                 .disabled(!engine.isLoaded)
         }
+    }
+
+    /// One band's slot in an eight-element array, as a Binding.
+    private func bandBinding(_ key: ReferenceWritableKeyPath<Engine, [Float]>)
+        -> Binding<Float> {
+        Binding(
+            get: { engine[keyPath: key][band.rawValue] },
+            set: { engine[keyPath: key][band.rawValue] = $0 }
+        )
     }
 
     private func section<Content: View>(_ title: String,

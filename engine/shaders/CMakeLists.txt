@@ -26,6 +26,7 @@ set(ORION_SHADERS
     rcd_dirs:rcdDirs
     rcd_green:rcdGreen
     rcd_rb:rcdRedBlue
+    sharpen:sharpen
     color_matrix:cameraToWorking
     develop_linear:developLinear
     develop_display:developDisplay

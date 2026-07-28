@@ -5,8 +5,8 @@
 ---
 
 **Last updated:** 2026-07-27
-**Phase:** M0 complete. **M1 in progress — develop controls done.**
-**Next story:** M1 — crop/rotate, then XMP sidecars, then browse/cull
+**Phase:** M0 complete. **M1 and M2 both in progress.**
+**Next story:** crop/rotate and XMP sidecars (M1) · denoise and lens corrections (M2)
 
 ---
 
@@ -133,17 +133,18 @@ Remaining in M1: crop/rotate/straighten · XMP sidecars and the non-destructive
 op stack · undo/redo and history · folder browse, filmstrip, ratings and
 filtering · the SQLite index.
 
-## Next actions — M2
-
-M0 stories S0.1–S0.8 are all complete. M1 (browse, cull, crop, export, sidecars)
-is deliberately skipped for now per the goal.
+## M2 progress
 
 1. ✅ **Tone curve** — `pipe/ToneCurve.{h,cpp}` evaluates the same monotone cubic
    Hermite spline as the mockup into a 256x4 LUT (master, R, G, B); the shader
-   just samples it. Runs after AgX in display space. Verified: mean luma
-   0.248 -> 0.154 with a film S-curve.
-2. HSL / colour mixer, 8 hue bands
-3. Sharpening (amount / radius / masking)
+   samples it. Runs after AgX, in display space.
+2. ✅ **Colour mixer** — eight hue bands with hue/saturation/luminance each,
+   in `shaders/ops/hsl_ops.slang`. Weights overlap smoothly (60° falloff, squared)
+   so a gradient crossing between bands does not band. Folded into the fused
+   scene-linear kernel, so it costs no extra pass.
+3. ✅ **Sharpening** — unsharp mask with detail masking, placed immediately after
+   the demosaic. Upstream position is deliberate: dirt only flows downstream, so
+   an exposure drag never recomputes it.
 4. Profiled wavelet denoise + a per-camera noise profile
 5. Lens corrections via lensfun
 6. Before/after split — the mockup's Compare interaction

@@ -56,6 +56,15 @@ typedef struct OrionAdjustments {
     float vibrance;
     float saturation;     /* -1..1, 0 is untouched        */
     float contrast;       /* display transform slope      */
+
+    float sharpen_amount;   /* 0..2                       */
+    float sharpen_radius;   /* pixels                     */
+    float sharpen_masking;  /* 0..1, protects flat areas  */
+
+    /* Colour mixer: red, orange, yellow, green, aqua, blue, purple, magenta. */
+    float hue_shift[8];
+    float sat_shift[8];
+    float lum_shift[8];
 } OrionAdjustments;
 
 /* Opens a raw file and builds the develop pipeline for it. */

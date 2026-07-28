@@ -14,6 +14,7 @@
 #include "pipe/WhiteBalance.h"
 #include "raw/RawImage.h"
 
+#include <array>
 #include <memory>
 #include <string>
 
@@ -33,6 +34,17 @@ struct Adjustments {
 
     float vibrance   = 0.0f;   // -1..1
     float saturation = 0.0f;   // -1..1, 0 is untouched
+
+    // Colour mixer, eight bands: red, orange, yellow, green, aqua, blue,
+    // purple, magenta. Each -1..1.
+    std::array<float, 8> hueShift{};
+    std::array<float, 8> satShift{};
+    std::array<float, 8> lumShift{};
+
+    // Capture sharpening. Sits just after the demosaic.
+    float sharpenAmount  = 0.0f;   // 0..2
+    float sharpenRadius  = 1.0f;   // pixels
+    float sharpenMasking = 0.0f;   // 0..1, higher protects flat areas
 
     // Display transform and look.
     float contrast   = 1.0f;
@@ -65,7 +77,7 @@ private:
     Pipeline      pipeline_;
     std::uint32_t width_ = 0, height_ = 0;
     int nLinearize_ = -1, nDirs_ = -1, nGreen_ = -1, nRgb_ = -1;
-    int nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1;
+    int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1;
     int auxCurveLut_ = -1;
     Adjustments  lastAdj_{};
     bool         primed_ = false;

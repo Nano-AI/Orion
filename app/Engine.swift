@@ -40,6 +40,15 @@ final class Engine {
     var saturation: Float = 0      { didSet { pushAndRender() } }
     var contrast: Float = 1        { didSet { pushAndRender() } }
 
+    var sharpenAmount: Float = 0   { didSet { pushAndRender() } }
+    var sharpenRadius: Float = 1   { didSet { pushAndRender() } }
+    var sharpenMasking: Float = 0  { didSet { pushAndRender() } }
+
+    /// Colour mixer, eight bands. Index order matches HueBand.allCases.
+    var hueShift = [Float](repeating: 0, count: 8) { didSet { pushAndRender() } }
+    var satShift = [Float](repeating: 0, count: 8) { didSet { pushAndRender() } }
+    var lumShift = [Float](repeating: 0, count: 8) { didSet { pushAndRender() } }
+
     /// True while a slider is being dragged, so pushes are suppressed until
     /// the value settles. Not used yet — hook for degrade-then-refine.
     private var suspended = false
@@ -115,7 +124,12 @@ final class Engine {
             temperature_k: temperatureK, tint: tint,
             exposure_ev: exposureEv, highlights: highlights, shadows: shadows,
             whites: whites, blacks: blacks,
-            vibrance: vibrance, saturation: saturation, contrast: contrast)
+            vibrance: vibrance, saturation: saturation, contrast: contrast,
+            sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
+            sharpen_masking: sharpenMasking,
+            hue_shift: toTuple8(hueShift),
+            sat_shift: toTuple8(satShift),
+            lum_shift: toTuple8(lumShift))
         orion_engine_set_adjustments(handle, &adj)
         render()
     }
@@ -127,6 +141,13 @@ final class Engine {
             lastRenderMs = ms
             generation &+= 1
         }
+    }
+
+    /// Swift imports a C float[8] as a 8-tuple, and there is no nicer bridge.
+    private func toTuple8(_ a: [Float]) -> (Float, Float, Float, Float,
+                                            Float, Float, Float, Float) {
+        let v = a.count >= 8 ? a : a + [Float](repeating: 0, count: 8 - a.count)
+        return (v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7])
     }
 
     private func errorText(_ status: OrionStatus) -> String {

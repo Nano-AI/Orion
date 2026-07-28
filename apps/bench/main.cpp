@@ -164,6 +164,9 @@ int main(int argc, char** argv) {
                 {"contrast 1.5",   [](auto& a) { a.contrast = 1.5f; }},
                 {"temp 3000K",     [](auto& a) { a.wb.temperatureK = 3000.0f; }},
                 {"tint +0.5",      [](auto& a) { a.wb.tint += 0.5f; }},
+                {"sharpen 1.0",    [](auto& a) { a.sharpenAmount = 1.0f; }},
+                {"mixer blue lum", [](auto& a) { a.lumShift[5] = -1.0f; }},
+                {"mixer blue sat", [](auto& a) { a.satShift[5] = 1.0f; }},
             };
 
             develop.apply(base);

@@ -56,8 +56,21 @@ struct LinearAdjust {
     float         _pad;
     std::uint32_t size[2];
     std::uint32_t _pad2[2];
+    float         hueShift[8];
+    float         satShift[8];
+    float         lumShift[8];
 };
-static_assert(sizeof(LinearAdjust) == 48);
+static_assert(sizeof(LinearAdjust) == 144);
+
+struct Sharpen {
+    float         amount;
+    float         radius;
+    float         masking;
+    float         _pad;
+    std::uint32_t size[2];
+    std::uint32_t _pad2[2];
+};
+static_assert(sizeof(Sharpen) == 32);
 
 /// AgX plus the tone curve plus the display encode.
 struct Display {
