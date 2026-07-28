@@ -82,6 +82,24 @@ struct GuideAb {
 };
 static_assert(sizeof(GuideAb) == 16);
 
+struct Atrous {
+    std::uint32_t size[2];
+    std::int32_t  step;
+    std::int32_t  _pad;
+};
+static_assert(sizeof(Atrous) == 16);
+
+struct Shrink {
+    std::uint32_t size[2];
+    float         noiseA;
+    float         noiseB;
+    float         scaleNorm;
+    float         strength;
+    float         chromaBoost;
+    float         _pad;
+};
+static_assert(sizeof(Shrink) == 32);
+
 struct Sharpen {
     float         amount;
     float         radius;

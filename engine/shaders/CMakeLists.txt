@@ -27,6 +27,8 @@ set(ORION_SHADERS
     rcd_lpf:rcdLpf
     rcd_green:rcdGreen
     rcd_rb:rcdRedBlue
+    denoise_blur:atrousBlur
+    denoise_accum:atrousShrink
     sharpen:sharpen
     color_matrix:cameraToWorking
     guide_prep:guidePrep

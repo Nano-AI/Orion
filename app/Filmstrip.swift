@@ -35,6 +35,19 @@ struct Filmstrip: View {
             .labelsHidden()
             .frame(width: 96)
 
+            if let selected {
+                Button {
+                    library.toggleRejected(selected)
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 12))
+                        .frame(width: 24, height: 20)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Palette.dim)
+                .help("Reject or keep this photo (X)")
+            }
+
             Text(library.summary)
                 .font(.system(size: 10))
                 .monospacedDigit()
@@ -92,6 +105,18 @@ struct Filmstrip: View {
         )
         .contentShape(Rectangle())
         .help(photo.name)
+        .contextMenu {
+            Button(photo.rejected ? "Keep" : "Reject") {
+                library.toggleRejected(photo.url)
+            }
+            Divider()
+            ForEach(1...5, id: \.self) { n in
+                Button("\(n) star\(n == 1 ? "" : "s")") {
+                    library.setRating(n, for: photo.url)
+                }
+            }
+            Button("No rating") { library.setRating(0, for: photo.url) }
+        }
     }
 
     private func marks(_ photo: Library.Photo) -> some View {

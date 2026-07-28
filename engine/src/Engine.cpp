@@ -12,8 +12,19 @@ Engine::~Engine() = default;
 
 void Engine::openRaw(const std::string& path) {
     const auto image = raw::decodeBayer(path);
-    // Replace only once decode and pipeline construction have both succeeded,
-    // so a failed open leaves the previously open image intact.
+
+    // Reuse the compiled graph whenever the new frame has the same shape.
+    // Rebuilding recompiles sixteen shaders and reallocates roughly 2.5 GiB of
+    // textures — for a folder of frames from one camera, all of that is
+    // identical work repeated per photo.
+    if (develop_ && develop_->canReload(image)) {
+        develop_->reload(image);
+        camera_ = image.camera;
+        return;
+    }
+
+    // Replace only once decode and construction have both succeeded, so a
+    // failed open leaves the previously open image intact.
     auto next = std::make_unique<pipe::DevelopPipeline>(*device_, ORION_SHADER_DIR, image);
     develop_ = std::move(next);
     camera_  = image.camera;

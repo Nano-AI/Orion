@@ -74,6 +74,15 @@ public:
     DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
                     const raw::BayerImage& image);
 
+    /// True when this pipeline can be reused for `image` — same dimensions and
+    /// same CFA layout. Rebuilding costs sixteen shader compiles and about
+    /// 2.5 GiB of texture allocation, so reusing is the difference between
+    /// switching photos in milliseconds and in seconds.
+    [[nodiscard]] bool canReload(const raw::BayerImage& image) const noexcept;
+
+    /// Swaps in a new image without touching the compiled graph.
+    void reload(const raw::BayerImage& image);
+
     /// Pushes the current adjustments into the graph, dirtying only what they
     /// affect. Cheap — call it freely on every slider tick.
     void apply(const Adjustments&);
@@ -125,6 +134,8 @@ private:
     std::array<float, 3> asShotRef_{1.0f, 1.0f, 1.0f};
     float        xyzToCam_[9]{};
     params::Linearize linBase_{};
+    std::uint32_t filters_ = 0;
+    void applyImageParams(const raw::BayerImage&);
 };
 
 }  // namespace orion::pipe

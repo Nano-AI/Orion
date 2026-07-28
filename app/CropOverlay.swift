@@ -24,14 +24,11 @@ struct CropOverlay: View {
         case topLeft, topRight, bottomLeft, bottomRight
     }
 
-    /// While straightening, the previewed frame is grown to hold the rotated
-    /// picture, so the crop's normalised coordinates map into a sub-rectangle
-    /// of what is on screen. Without this the rectangle drifts outside the
-    /// image as the angle changes.
-    private var growth: CGFloat {
-        let a = abs(CGFloat(engine.straightenDeg) * .pi / 180)
-        return cos(a) + sin(a)
-    }
+    /// The crop canvas is a fixed multiple of the frame, matching
+    /// kCropCanvas in DevelopPipeline.cpp. Fixed rather than angle-dependent
+    /// so the picture rotates inside a stationary canvas instead of the whole
+    /// view rescaling as the angle changes.
+    private let growth: CGFloat = 1.42
 
     /// The original frame's rectangle inside the (possibly grown) preview.
     private var imageRect: CGRect {

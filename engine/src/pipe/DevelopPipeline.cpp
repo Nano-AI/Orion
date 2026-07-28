@@ -135,7 +135,6 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     // Orientation is last, and is the only node whose output dimensions differ
     // from its input — a quarter turn swaps them.
-    exifQuarters_ = quarterTurnsFor(image.flip);
     const bool swaps = (exifQuarters_ % 2) != 0;
 
     // Allocate for the worst case so a user rotation never needs a recompile.
@@ -150,7 +149,34 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     pipeline_.compile(width_, height_);
 
-    // ── Static parameters: everything that depends only on the file ────────
+    applyImageParams(image);
+
+    pipeline_.setSource(image.samples.data(), static_cast<std::size_t>(width_) * 2);
+}
+
+bool DevelopPipeline::canReload(const raw::BayerImage& image) const noexcept {
+    return image.width == width_ && image.height == height_ &&
+           image.filters == filters_;
+}
+
+void DevelopPipeline::reload(const raw::BayerImage& image) {
+    applyImageParams(image);
+
+    // Force every parameter block to be re-pushed: the new file has different
+    // black levels, white balance and colour matrix, and `primed_` would
+    // otherwise suppress writes whose values happen to match.
+    primed_ = false;
+    Adjustments initial;
+    initial.wb = asShot_;
+    apply(initial);
+
+    pipeline_.setSource(image.samples.data(), static_cast<std::size_t>(width_) * 2);
+}
+
+void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
+    exifQuarters_ = quarterTurnsFor(image.flip);
+    filters_      = image.filters;
+
     const std::uint32_t size[2] = {width_, height_};
 
     const float g = (image.camMul[1] != 0.0f) ? image.camMul[1] : 1.0f;
@@ -226,7 +252,6 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     initial.wb = asShot_;
     apply(initial);
 
-    pipeline_.setSource(image.samples.data(), static_cast<std::size_t>(width_) * 2);
 }
 
 void DevelopPipeline::apply(const Adjustments& adj) {
@@ -327,19 +352,23 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         g.straightenRad = adj.straightenDeg * 3.14159265358979f / 180.0f;
 
         if (adj.cropPreview) {
-            // Whole frame, expanded so a straightened picture is not clipped by
-            // its own bounding box. The corners outside the original are
-            // transparent, which is what lets the UI show them as empty.
-            const float a = std::abs(g.straightenRad);
-            const float grow = std::cos(a) + std::sin(a);
+            // A FIXED canvas, larger than the frame, with the picture rotating
+            // inside it — Photoshop's crop view. The expansion deliberately
+            // does not depend on the angle: if the canvas grew as you turned
+            // the dial, the whole image would rescale under the crop rectangle
+            // and appear to slide about. Constant canvas, moving picture.
+            //
+            // sqrt(2) covers a 45 degree turn, which is past anything a
+            // straighten control should offer.
+            constexpr float kCropCanvas = 1.42f;
 
-            g.cropSize[0] = grow;
-            g.cropSize[1] = grow;
-            g.cropOrigin[0] = -(grow - 1.0f) * 0.5f;
-            g.cropOrigin[1] = -(grow - 1.0f) * 0.5f;
+            g.cropSize[0] = kCropCanvas;
+            g.cropSize[1] = kCropCanvas;
+            g.cropOrigin[0] = -(kCropCanvas - 1.0f) * 0.5f;
+            g.cropOrigin[1] = -(kCropCanvas - 1.0f) * 0.5f;
 
-            g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * grow));
-            g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * grow));
+            g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * kCropCanvas));
+            g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * kCropCanvas));
         } else {
             const float cw = std::clamp(adj.cropW, 0.01f, 1.0f);
             const float ch = std::clamp(adj.cropH, 0.01f, 1.0f);
