@@ -10,6 +10,12 @@ struct CompareOverlay: View {
     /// The photo's rectangle inside the canvas, in view coordinates.
     let frame: CGRect
 
+    /// Where the split was when the drag started. Dragging works from a
+    /// translation rather than from an absolute location because the handle is
+    /// positioned, and a positioned view's own coordinate space is not the
+    /// canvas's.
+    @State private var startSplit: CGFloat?
+
     private let grabWidth: CGFloat = 28
 
     var body: some View {
@@ -69,19 +75,22 @@ struct CompareOverlay: View {
         return extent * share > 90
     }
 
+    /// The grab box: a band the width of the divider's reach, the length of
+    /// the frame.
+    private var grabSize: CGSize {
+        engine.compareVertical
+            ? CGSize(width: grabWidth, height: frame.height)
+            : CGSize(width: frame.width, height: grabWidth)
+    }
+
     private var handle: some View {
-        Group {
+        ZStack {
             if engine.compareVertical {
-                Rectangle()
-                    .fill(.white)
-                    .frame(width: 1.5, height: frame.height)
+                Rectangle().fill(.white).frame(width: 1.5)
             } else {
-                Rectangle()
-                    .fill(.white)
-                    .frame(width: frame.width, height: 1.5)
+                Rectangle().fill(.white).frame(height: 1.5)
             }
-        }
-        .overlay {
+
             // A grip at the midpoint, so the divider reads as draggable rather
             // than as a rule that happens to be there.
             Circle()
@@ -94,23 +103,32 @@ struct CompareOverlay: View {
                         .foregroundStyle(.black.opacity(0.7))
                 }
                 .shadow(color: .black.opacity(0.4), radius: 2)
+
+            // The whole band is the target. Sized here, before `.position`:
+            // a modifier after it applies to a view that fills the parent, so
+            // the old contentShape put the grab area in the canvas's corner
+            // rather than on the divider. Same defect the crop handles had.
+            Color.clear.contentShape(Rectangle())
         }
+        .frame(width: grabSize.width, height: grabSize.height)
         .position(dividerPosition)
-        .contentShape(
-            engine.compareVertical
-                ? Rectangle().path(in: CGRect(x: -grabWidth / 2, y: -frame.height / 2,
-                                              width: grabWidth, height: frame.height))
-                : Rectangle().path(in: CGRect(x: -frame.width / 2, y: -grabWidth / 2,
-                                              width: frame.width, height: grabWidth))
-        )
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
-                    let t = engine.compareVertical
-                        ? (value.location.x - frame.minX) / frame.width
-                        : (value.location.y - frame.minY) / frame.height
-                    engine.setCompare(split: Double(min(max(t, 0.02), 0.98)))
+                    // From a translation, not a location. A positioned view's
+                    // coordinate space is its own, so `value.location` is not
+                    // in canvas coordinates and reading it moved the divider to
+                    // wherever the grab box's origin happened to be.
+                    let from = startSplit ?? split
+                    if startSplit == nil { startSplit = from }
+
+                    let delta = engine.compareVertical
+                        ? value.translation.width / max(frame.width, 1)
+                        : value.translation.height / max(frame.height, 1)
+
+                    engine.setCompare(split: Double(min(max(from + delta, 0.02), 0.98)))
                 }
+                .onEnded { _ in startSplit = nil }
         )
     }
 }

@@ -252,6 +252,11 @@ final class Engine {
         imageHeight = h
         camera = String(cString: orion_engine_camera(handle))
 
+        // The held original is the *previous* photo's unedited render. Keeping
+        // it means compare shows one picture against another one entirely,
+        // which is worse than showing nothing.
+        originalTexture = nil
+
         // Reset to the camera's own settings before marking loaded, so the
         // didSet observers don't each trigger a render on a half-set model.
         suspended = true
@@ -261,6 +266,10 @@ final class Engine {
         isLoaded = true
         history.reset(to: state)
         pushAndRender()
+
+        // Compare stays on across a switch — that is the point of it while
+        // culling — so the new photo needs its own original captured now.
+        if comparing { captureOriginal() }
     }
 
     /// Rotates by a quarter turn, wrapping. Clockwise is positive.
