@@ -197,6 +197,13 @@ enum Screenshot {
             engine.highlights = -0.4
             engine.shadows = 0.45
             AdjustmentSlider.previewHover = (scene == "reset-hover")
+        case "grade":
+            engine.exposureEv = 2.6
+            // Cool shadows, warm highlights — the split-tone every grading
+            // panel gets used for first, so the screenshot shows the control
+            // doing the thing it exists for.
+            engine.gradeShadow = [-0.35, -0.55, -0.10]
+            engine.gradeHighlight = [0.55, 0.35, 0.08]
         case "recover":
             engine.highlightRecovery = 1.0
         case "c110": engine.contrast = 1.10

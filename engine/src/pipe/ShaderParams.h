@@ -125,6 +125,17 @@ struct Display {
 };
 static_assert(sizeof(Display) == 32);
 
+/// Three-way colour grading. Mirrors GradeParams in color_grade.slang.
+/// Each row is an already zero-sum RGB offset with that zone's slope in w.
+struct alignas(16) Grade {
+    std::uint32_t size[2];
+    float         _pad0, _pad1;
+    float         shadow[4];
+    float         midtone[4];
+    float         highlight[4];
+};
+static_assert(sizeof(Grade) == 64);
+
 /// Lens corrections. Mirrors LensParams in lens.slang.
 struct Lens {
     std::uint32_t size[2];

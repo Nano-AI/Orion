@@ -17,10 +17,10 @@ struct Filmstrip: View {
     let selected: URL?
     let onSelect: (URL) -> Void
 
-    private let cellHeight: CGFloat = 62
+    private let cellHeight: CGFloat = 58
 
     /// The perforated margin above and below the frames.
-    private let sprocketBand: CGFloat = 11
+    private let sprocketBand: CGFloat = 13
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,28 +42,42 @@ struct Filmstrip: View {
     /// projector, and the way they would not if they scrolled with the photos.
     private var film: some View {
         strip
-            .background(alignment: .top) { sprockets }
-            .background(alignment: .bottom) { sprockets }
+            .background(alignment: .top) { sprockets(top: true) }
+            .background(alignment: .bottom) { sprockets(top: false) }
             .background(Palette.filmBase)
     }
 
-    private var sprockets: some View {
+    private func sprockets(top: Bool) -> some View {
         Canvas { context, size in
-            // 4.5 mm pitch on 35 mm stock, scaled to the band. The regularity
+            // 4.75 mm pitch on 35 mm stock, scaled to the band. The regularity
             // is the whole effect: an irregular pitch reads as a texture, an
             // even one reads as film.
-            let pitch: CGFloat = 15
-            let holeW: CGFloat = 8
-            let holeH: CGFloat = 6
+            let pitch: CGFloat = 16
+            let holeW: CGFloat = 9
+            let holeH: CGFloat = 7
             let y = (size.height - holeH) / 2
 
-            var x: CGFloat = 6
-            while x < size.width {
-                let hole = Path(roundedRect: CGRect(x: x, y: y, width: holeW, height: holeH),
-                                cornerRadius: 1.5)
-                context.fill(hole, with: .color(Palette.panel))
+            var x: CGFloat = 7
+            while x < size.width - 2 {
+                let rect = CGRect(x: x, y: y, width: holeW, height: holeH)
+                let hole = Path(roundedRect: rect, cornerRadius: 1.5)
+                context.fill(hole, with: .color(Palette.filmHole))
+                // A hole has a thickness. The inner shadow on the leading edge
+                // is what stops it reading as a painted rectangle.
+                var lip = Path()
+                lip.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+                lip.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+                context.stroke(lip, with: .color(.black.opacity(0.55)), lineWidth: 1)
                 x += pitch
             }
+
+            // The rebate: the clear edge between the perforations and the
+            // frames, brighter than the base the way undeveloped stock is.
+            var edge = Path()
+            let edgeY = top ? size.height - 0.5 : 0.5
+            edge.move(to: CGPoint(x: 0, y: edgeY))
+            edge.addLine(to: CGPoint(x: size.width, y: edgeY))
+            context.stroke(edge, with: .color(.white.opacity(0.10)), lineWidth: 1)
         }
         .frame(height: sprocketBand)
         .allowsHitTesting(false)
@@ -167,15 +181,14 @@ struct Filmstrip: View {
                 .padding(.leading, 4)
                 .padding(.bottom, 3)
         }
-        // The gate: a dark border around each exposure, the way the frame line
-        // sits between negatives. Selection takes it over in the accent rather
-        // than adding a second ring on top of it.
-        .padding(2)
+        // The gate: the frame line between negatives. Selection takes it over
+        // in the accent rather than adding a second ring on top of it.
+        .padding(3)
         .background(Palette.filmBase)
         .overlay(
             Rectangle()
-                .strokeBorder(isSelected ? Palette.accent : .black.opacity(0.55),
-                              lineWidth: 2)
+                .strokeBorder(isSelected ? Palette.accent : .white.opacity(0.09),
+                              lineWidth: isSelected ? 2 : 1)
         )
         .contentShape(Rectangle())
         .help(photo.name)

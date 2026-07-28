@@ -193,6 +193,14 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  {nMatrix_, nGuideV2_, nGuidePrep_},
                                  PixelFormat::RGBA16Float, {}});
 
+    // Grading sits after the tone controls and before the display transform,
+    // in scene-linear light. After the transform — where a colour balance
+    // control usually lives in a display-referred editor — the same offset
+    // would do something different to a highlight than to a midtone for
+    // reasons unrelated to the zone the user picked.
+    nGrade_     = pipeline_.add({"color grade", "colorGrade", {nLinear_},
+                                 PixelFormat::RGBA16Float, {}});
+
     auxCurveLut_ = pipeline_.addAuxTexture(kCurveResolution, kCurveRows,
                                            PixelFormat::R32Float);
     // Sixteen bits per channel, not eight. The display transform's output is
@@ -201,7 +209,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // that survived the whole pipeline in float gets quantised on the way out.
     // Half float rather than 16-bit integer because it is guaranteed
     // read-write on Metal, and because it holds the shadows better.
-    nDisplay_   = pipeline_.add({"develop:display", "developDisplay", {nLinear_},
+    nDisplay_   = pipeline_.add({"develop:display", "developDisplay", {nGrade_},
                                  PixelFormat::RGBA16Float, {}, {auxCurveLut_}});
 
     // Orientation is last, and is the only node whose output dimensions differ
@@ -242,6 +250,42 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
     apply(initial);
 
     pipeline_.setSource(image.samples.data(), static_cast<std::size_t>(width_) * 2);
+}
+
+void DevelopPipeline::gradeOffsets(float x, float y, float out[3]) noexcept {
+    // The puck's angle picks a hue; its distance from the centre picks how far.
+    // Each primary contributes by the cosine of its angular distance, which is
+    // the standard three-phase decomposition a colour wheel implies.
+    const float radius = std::min(std::sqrt(x * x + y * y), 1.0f);
+    if (radius < 1e-6f) {
+        out[0] = out[1] = out[2] = 0.0f;
+        return;
+    }
+
+    const float theta = std::atan2(y, x);
+    constexpr float kTwoPiOverThree = 2.0943951023931953f;   // 120 degrees
+    constexpr float kStrength = 0.03f;
+
+    float v[3];
+    for (int c = 0; c < 3; ++c) {
+        v[c] = std::cos(theta - float(c) * kTwoPiOverThree);
+    }
+
+    // Subtracting the mean is what makes this a colour control. Without it,
+    // pushing toward yellow also lifts the zone, so every wheel fights the
+    // exposure slider and a neutral grey no longer keeps its luminance.
+    //
+    // It also means some component of every offset is negative, which is why
+    // kStrength is 0.03 and not the 0.15 it started at. This is scene-linear
+    // light: a dark patch sits around 0.005, so a 0.15 offset drove two of its
+    // channels straight through zero and the shader's clamp held them there.
+    // Measured on a night frame, the shadow patch came back at luma 0.12 with
+    // 0.15 and 0.22 with 0.03 — the larger number was *darker*, because it was
+    // crushing channels to black rather than tinting them.
+    const float mean = (v[0] + v[1] + v[2]) / 3.0f;
+    for (int c = 0; c < 3; ++c) {
+        out[c] = kStrength * radius * (v[c] - mean);
+    }
 }
 
 float DevelopPipeline::whiteClipFor(const float multipliers[3]) const noexcept {
@@ -450,6 +494,42 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             hl.gamma = 0.97f;
             hl.strength = adj.highlightRecovery;
             pipeline_.setParams(nHighlights_, &hl, sizeof hl);
+        }
+    }
+
+    // ── Colour grading ───────────────────────────────────────────────────
+    const auto zoneMoved = [](const float a[3], const float b[3]) {
+        return a[0] != b[0] || a[1] != b[1] || a[2] != b[2];
+    };
+    if (first || zoneMoved(adj.gradeShadow, lastAdj_.gradeShadow)
+              || zoneMoved(adj.gradeMidtone, lastAdj_.gradeMidtone)
+              || zoneMoved(adj.gradeHighlight, lastAdj_.gradeHighlight)) {
+
+        const auto zoneIsFlat = [](const float z[3]) {
+            return z[0] == 0.0f && z[1] == 0.0f && z[2] == 0.0f;
+        };
+        const bool grading = !zoneIsFlat(adj.gradeShadow)
+                          || !zoneIsFlat(adj.gradeMidtone)
+                          || !zoneIsFlat(adj.gradeHighlight);
+
+        // A whole pass over the frame, so it is switched off rather than run
+        // as an identity. A disabled node passes its first input through.
+        pipeline_.setEnabled(nGrade_, grading);
+
+        if (grading) {
+            params::Grade g{};
+            g.size[0] = width_;
+            g.size[1] = height_;
+
+            const auto fill = [](const float in[3], float out[4]) {
+                gradeOffsets(in[0], in[1], out);
+                out[3] = in[2];
+            };
+            fill(adj.gradeShadow,    g.shadow);
+            fill(adj.gradeMidtone,   g.midtone);
+            fill(adj.gradeHighlight, g.highlight);
+
+            pipeline_.setParams(nGrade_, &g, sizeof g);
         }
     }
 

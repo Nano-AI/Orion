@@ -82,6 +82,13 @@ struct Adjustments {
     /// Engine.highlightRecovery in the app.
     float highlightRecovery = 0.0f;
 
+    /// Three-way colour grading, as ASC CDL per tonal zone. Each entry is a
+    /// wheel's puck position (x, y) in the unit disc plus that zone's slope.
+    /// research/color-grading.md.
+    float gradeShadow[3]{};      // x, y, luminance
+    float gradeMidtone[3]{};
+    float gradeHighlight[3]{};
+
     /// Profiled wavelet denoise. Strengths are multiples of the measured
     /// noise level, so 1.0 means "shrink coefficients smaller than one sigma"
     /// rather than an arbitrary amount — which is what makes the same setting
@@ -158,6 +165,7 @@ private:
     int nGeometry_ = -1;
     int nHighlights_ = -1;
     int nLens_ = -1;
+    int nGrade_ = -1;
     float whiteLevel_ = 0.0f;
     float blackLevel_[3]{};
     static constexpr int kDenoiseScales = 4;
@@ -192,6 +200,17 @@ private:
     /// Linearize clips to it so a blown highlight comes out white instead of
     /// carrying the white-balance gains as a color cast.
     [[nodiscard]] float whiteClipFor(const float multipliers[3]) const noexcept;
+
+public:
+    /// A grading wheel's puck position, as a zero-sum RGB offset.
+    ///
+    /// Public and static because it is pure arithmetic with one property that
+    /// has to hold — the three components sum to zero — and that property is
+    /// the whole reason the wheel is a colour control rather than a brightness
+    /// one. Testable without a device.
+    static void gradeOffsets(float x, float y, float out[3]) noexcept;
+
+private:
 };
 
 }  // namespace orion::pipe

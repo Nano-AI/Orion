@@ -100,6 +100,13 @@ typedef struct OrionAdjustments {
      * linear extrapolation, and one asked to reach past its data invents. */
     float highlight_recovery;
 
+    /* Three-way colour grading, ASC CDL per tonal zone. Each triple is a
+     * wheel's puck position (x, y) in the unit disc, then that zone's
+     * luminance slope. research/color-grading.md. */
+    float grade_shadow[3];
+    float grade_midtone[3];
+    float grade_highlight[3];
+
     /* Profiled wavelet denoise. Strengths are multiples of the measured noise
      * level, not arbitrary amounts, so one setting behaves the same way on a
      * clean frame and a very noisy one. Zero switches the chain off entirely. */

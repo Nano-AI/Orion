@@ -144,6 +144,11 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.lensCaRed      = adj->lens_ca_red;
         a.lensCaBlue     = adj->lens_ca_blue;
         a.highlightRecovery = adj->highlight_recovery;
+        for (int i = 0; i < 3; ++i) {
+            a.gradeShadow[i]    = adj->grade_shadow[i];
+            a.gradeMidtone[i]   = adj->grade_midtone[i];
+            a.gradeHighlight[i] = adj->grade_highlight[i];
+        }
         a.denoiseLuma   = adj->denoise_luma;
         a.denoiseColor = adj->denoise_color;
 

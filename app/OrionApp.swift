@@ -144,10 +144,13 @@ enum Palette {
     static let accent   = Color(red: 0.302, green: 0.714, blue: 0.769)
     static let rejected = Color(red: 0.769, green: 0.341, blue: 0.302)
     static let rated    = Color(red: 0.941, green: 0.776, blue: 0.455)
-    /// Film base. Warmer and darker than the panel, the way a developed strip
-    /// is against the light table it lies on — the only tinted value in the
-    /// interface, and it is nowhere near the photo.
-    static let filmBase = Color(red: 0.086, green: 0.078, blue: 0.075)
+    /// Film base — near-black, and the darkest value in the interface. It was
+    /// two percent off the panel behind it, which is to say invisible; a strip
+    /// only reads as film if its base is clearly darker than what it lies on.
+    static let filmBase = Color(red: 0.035, green: 0.031, blue: 0.029)
+    /// The perforations, and the rebate edge. Bright, because a sprocket hole
+    /// is a hole — it shows the light table through it.
+    static let filmHole = Color(red: 0.300, green: 0.290, blue: 0.278)
 }
 
 enum ToolTab: String, CaseIterable, Identifiable {
@@ -746,8 +749,42 @@ struct Editor: View {
 
     /// File-folder tabs: the selected one is filled with the panel's own color
     /// and covers the strip's rule, so tab and panel read as one surface.
+    /// Tabs, and they stay tabs.
+    ///
+    /// A camera-style mode dial was built here and thrown away: the knurled rim
+    /// and the 3D turn looked like a costume on a control that has one job, and
+    /// the perspective could not be checked by the screenshot suite at all
+    /// (`cacheDisplay` drops 3D transforms). A tab that reads instantly beats a
+    /// tab with a story.
     private var tabBar: some View {
-        ModeDial(tab: $tab)
+        HStack(alignment: .bottom, spacing: 2) {
+            ForEach(ToolTab.allCases) { t in
+                let selected = t == tab
+                Button { withAnimation(.easeOut(duration: 0.16)) { tab = t } } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: t.symbol).font(.system(size: 12))
+                        if selected {
+                            Text(t.title).font(.system(size: 11)).tracking(0.6)
+                        }
+                    }
+                    .frame(maxWidth: selected ? .infinity : 40)
+                    .frame(height: selected ? 32 : 27)
+                    .background(selected ? Palette.panel : Palette.raised)
+                    .foregroundStyle(selected ? Palette.accent : Palette.faint)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 5,
+                                                      topTrailingRadius: 5))
+                    .overlay(
+                        UnevenRoundedRectangle(topLeadingRadius: 5, topTrailingRadius: 5)
+                            .stroke(Palette.line, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .help(t.title)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .background(Palette.ground)
     }
 
     private var lightPanel: some View {
@@ -792,6 +829,29 @@ struct Editor: View {
                 slider("Vibrance", $engine.vibrance, -1...1, "", 2, resetsTo: engine.defaults.vibrance)
                 slider("Saturation", $engine.saturation, -1...1, "", 2, resetsTo: engine.defaults.saturation)
             }
+            section("Color Grading") {
+                // Three wheels across the panel. Side by side rather than
+                // stacked, because grading is a comparison — you push the
+                // shadows cool by looking at what it does against the
+                // highlights, and a stacked layout puts them a scroll apart.
+                HStack(alignment: .top, spacing: 8) {
+                    ColorWheel(title: "Shadows", value: $engine.gradeShadow,
+                               engine: engine)
+                    ColorWheel(title: "Midtones", value: $engine.gradeMidtone,
+                               engine: engine)
+                    ColorWheel(title: "Highlights", value: $engine.gradeHighlight,
+                               engine: engine)
+                }
+                .frame(maxWidth: .infinity)
+
+                Text("Angle picks the hue, distance picks how far. The wheels "
+                     + "only change color — the slider under each one is what "
+                     + "changes that zone's brightness.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.faint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             section("Color Mixer") {
                 // Targeted adjustment: click a color in the photo and drag.
                 // Beats guessing which of eight swatches the sky falls into.

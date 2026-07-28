@@ -192,6 +192,14 @@ final class Engine {
     /// that is still true.
     var highlightRecovery: Float = 0 { didSet { pushAndRender() } }
 
+    /// Three-way colour grading. Each is [x, y, luminance] — the wheel's puck
+    /// in the unit disc, then that zone's slope. The engine turns (x, y) into a
+    /// zero-sum RGB offset, which is what keeps a wheel a colour control rather
+    /// than a second brightness one. research/color-grading.md.
+    var gradeShadow: [Float] = [0, 0, 0] { didSet { pushAndRender() } }
+    var gradeMidtone: [Float] = [0, 0, 0] { didSet { pushAndRender() } }
+    var gradeHighlight: [Float] = [0, 0, 0] { didSet { pushAndRender() } }
+
     /// Profiled wavelet denoise, in multiples of the frame's own measured
     /// noise level. Zero switches eight nodes off rather than running them at
     /// no strength.
@@ -400,6 +408,8 @@ final class Engine {
             lensDistortion: lensDistortion, lensVignette: lensVignette,
             lensCaRed: lensCaRed, lensCaBlue: lensCaBlue,
             highlightRecovery: highlightRecovery,
+            gradeShadow: gradeShadow, gradeMidtone: gradeMidtone,
+            gradeHighlight: gradeHighlight,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
@@ -422,6 +432,9 @@ final class Engine {
         lensDistortion = s.lensDistortion; lensVignette = s.lensVignette
         lensCaRed = s.lensCaRed; lensCaBlue = s.lensCaBlue
         highlightRecovery = s.highlightRecovery
+        gradeShadow = s.gradeShadow
+        gradeMidtone = s.gradeMidtone
+        gradeHighlight = s.gradeHighlight
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
         sharpenMasking = s.sharpenMasking; curve = s.curve
@@ -558,6 +571,9 @@ final class Engine {
             lens_distortion: lensDistortion, lens_vignette: lensVignette,
             lens_ca_red: lensCaRed, lens_ca_blue: lensCaBlue,
             highlight_recovery: highlightRecovery,
+            grade_shadow: (gradeShadow[0], gradeShadow[1], gradeShadow[2]),
+            grade_midtone: (gradeMidtone[0], gradeMidtone[1], gradeMidtone[2]),
+            grade_highlight: (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2]),
             denoise_luma: denoiseLuma, denoise_color: denoiseColor,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,

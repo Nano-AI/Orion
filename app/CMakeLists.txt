@@ -35,7 +35,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/AnalogTrack.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/RatingBar.swift
-    ${CMAKE_CURRENT_SOURCE_DIR}/ModeDial.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/ColorWheel.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in

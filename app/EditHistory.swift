@@ -116,6 +116,10 @@ struct DevelopState: Equatable, Codable {
     var lensCaBlue: Float = 0
     /// Off by default. See Engine.highlightRecovery.
     var highlightRecovery: Float = 0
+    /// Three-way colour grading, each [x, y, luminance].
+    var gradeShadow: [Float] = [0, 0, 0]
+    var gradeMidtone: [Float] = [0, 0, 0]
+    var gradeHighlight: [Float] = [0, 0, 0]
     var denoiseLuma: Float = 0
     var denoiseColor: Float = 0
     var sharpenAmount: Float = 0
@@ -150,6 +154,7 @@ extension DevelopState {
         case cropX, cropY, cropW, cropH
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue
         case highlightRecovery, denoiseLuma, denoiseColor
+        case gradeShadow, gradeMidtone, gradeHighlight
         case sharpenAmount, sharpenRadius, sharpenMasking
         case curve, hueShift, satShift, lumShift
 
@@ -209,6 +214,16 @@ extension DevelopState {
                   v.count == 8 else { return nil }
             return v
         }
+        // Three, not eight — the grading wheels store x, y and luminance.
+        func triple(_ key: Key) -> [Float]? {
+            guard let v = (try? c.decodeIfPresent([Float].self, forKey: key)).flatMap({ $0 }),
+                  v.count == 3 else { return nil }
+            return v
+        }
+        gradeShadow = triple(.gradeShadow) ?? gradeShadow
+        gradeMidtone = triple(.gradeMidtone) ?? gradeMidtone
+        gradeHighlight = triple(.gradeHighlight) ?? gradeHighlight
+
         hueShift = band(.hueShift) ?? hueShift
         satShift = band(.satShift) ?? satShift
         lumShift = band(.lumShift) ?? lumShift
