@@ -1,5 +1,31 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
+
+/// Colour mixer bands, in the order the engine expects.
+enum HueBand: Int, CaseIterable, Identifiable {
+    case red, orange, yellow, green, aqua, blue, purple, magenta
+    var id: Int { rawValue }
+
+    var name: String {
+        switch self {
+        case .red:     "Red"
+        case .orange:  "Orange"
+        case .yellow:  "Yellow"
+        case .green:   "Green"
+        case .aqua:    "Aqua"
+        case .blue:    "Blue"
+        case .purple:  "Purple"
+        case .magenta: "Magenta"
+        }
+    }
+
+    /// Swatch hue, matching the band centres in hsl_ops.slang.
+    var swatch: Color {
+        Color(hue: Double([0, 30, 60, 120, 180, 240, 285, 320][rawValue]) / 360.0,
+              saturation: 0.75, brightness: 0.85)
+    }
+}
 
 /// The targeted adjustment tool.
 ///
@@ -38,6 +64,23 @@ final class TargetedAdjust {
     private(set) var activeBand: HueBand?
     private(set) var sampledHue: Double = 0
 
+    /// Live readout under the cursor, so you can see what you are about to
+    /// pick instead of clicking blind.
+    var hoverPoint: CGPoint?
+    var hoverColor: CGColor?
+    var hoverBand: HueBand?
+    var hoverIsNeutral = false
+
+    /// Set when a pick lands, so the panel can follow the selection.
+    var lastPicked: HueBand?
+
+    func clearHover() {
+        hoverPoint = nil
+        hoverColor = nil
+        hoverBand = nil
+        hoverIsNeutral = false
+    }
+
     /// Which band a hue in degrees belongs to. Mirrors the band centres in
     /// hsl_ops.slang — if these drift apart, the tool adjusts the wrong band.
     static let centres: [Double] = [0, 30, 60, 120, 180, 240, 285, 320]
@@ -74,6 +117,7 @@ final class TargetedAdjust {
     func begin(band: HueBand, hue: Double) {
         activeBand = band
         sampledHue = hue
+        lastPicked = band
     }
 
     func end() { activeBand = nil }

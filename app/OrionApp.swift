@@ -27,31 +27,6 @@ enum Palette {
     static let accent   = Color(red: 0.302, green: 0.714, blue: 0.769)
 }
 
-/// Colour mixer bands, in the order the engine expects.
-enum HueBand: Int, CaseIterable, Identifiable {
-    case red, orange, yellow, green, aqua, blue, purple, magenta
-    var id: Int { rawValue }
-
-    var name: String {
-        switch self {
-        case .red:     "Red"
-        case .orange:  "Orange"
-        case .yellow:  "Yellow"
-        case .green:   "Green"
-        case .aqua:    "Aqua"
-        case .blue:    "Blue"
-        case .purple:  "Purple"
-        case .magenta: "Magenta"
-        }
-    }
-
-    /// Swatch hue, matching the band centres in hsl_ops.slang.
-    var swatch: Color {
-        Color(hue: Double([0, 30, 60, 120, 180, 240, 285, 320][rawValue]) / 360.0,
-              saturation: 0.75, brightness: 0.85)
-    }
-}
-
 enum ToolTab: String, CaseIterable, Identifiable {
     case light, colour, detail, crop
     var id: String { rawValue }
@@ -205,6 +180,12 @@ private struct Editor: View {
                     ImageCanvas(engine: engine, viewport: viewport,
                                 targeted: targeted, generation: engine.generation)
                         .padding(20)
+                        .overlay { ColorLoupe(targeted: targeted) }
+                        .onChange(of: targeted.lastPicked) { _, picked in
+                            // Follow the pick, so the sliders below act on the
+                            // band you just clicked rather than a stale one.
+                            if let picked { band = picked }
+                        }
 
                     HStack(alignment: .bottom, spacing: 10) {
                         if !viewport.isFit {
@@ -353,6 +334,7 @@ private struct Editor: View {
                 HStack(spacing: 6) {
                     Button {
                         targeted.isActive.toggle()
+                        if !targeted.isActive { targeted.clearHover() }
                     } label: {
                         Image(systemName: targeted.isActive
                               ? "scope" : "eyedropper")

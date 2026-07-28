@@ -79,6 +79,24 @@ struct ImageCanvas: NSViewRepresentable {
         override func rightMouseDown(with event: NSEvent) {
             coordinator?.resetView(in: self)
         }
+
+        override func mouseMoved(with event: NSEvent) {
+            coordinator?.hover(at: convert(event.locationInWindow, from: nil), in: self)
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            coordinator?.clearHover()
+        }
+
+        // A tracking area is what makes mouseMoved fire at all.
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach(removeTrackingArea)
+            addTrackingArea(NSTrackingArea(
+                rect: bounds,
+                options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                owner: self))
+        }
     }
 
     // MARK: - Renderer
@@ -270,6 +288,35 @@ struct ImageCanvas: NSViewRepresentable {
             viewport.clamp(to: visible)
             view.needsDisplay = true
         }
+
+        /// Publishes the colour under the cursor so the loupe can show it.
+        func hover(at point: CGPoint, in view: NSView) {
+            guard targeted.isActive else {
+                if targeted.hoverPoint != nil { targeted.clearHover() }
+                return
+            }
+            guard let uv = imageUV(point, in: view),
+                  let rgb = engine.sample(u: Float(uv.x), v: Float(uv.y)) else {
+                targeted.clearHover()
+                return
+            }
+
+            targeted.hoverPoint = point
+            // Approximate display encode, so the swatch reads like the photo
+            // rather than like scene-linear data.
+            let g = { (v: Double) in pow(max(v, 0), 1.0 / 2.2) }
+            targeted.hoverColor = CGColor(red: g(rgb.r), green: g(rgb.g), blue: g(rgb.b), alpha: 1)
+
+            if let hue = TargetedAdjust.hue(r: rgb.r, g: rgb.g, b: rgb.b) {
+                targeted.hoverBand = TargetedAdjust.band(forHue: hue)
+                targeted.hoverIsNeutral = false
+            } else {
+                targeted.hoverBand = nil
+                targeted.hoverIsNeutral = true
+            }
+        }
+
+        func clearHover() { targeted.clearHover() }
 
         func resetView(in view: NSView) {
             viewport.reset()

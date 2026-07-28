@@ -74,6 +74,14 @@ public:
     [[nodiscard]] WhiteBalance asShotWhiteBalance() const noexcept { return asShot_; }
 
     [[nodiscard]] const gpu::Texture& output() const { return pipeline_.output(); }
+
+    /// The image after white balance and the camera matrix, but before any user
+    /// adjustment. This is what the colour picker must sample: reading the
+    /// edited result would mean adjusting a band changes which band you would
+    /// pick next time, which is a feedback loop, not a tool.
+    [[nodiscard]] const gpu::Texture& referenceImage() const {
+        return pipeline_.nodeOutput(nMatrix_);
+    }
     [[nodiscard]] Pipeline&           graph()        { return pipeline_; }
     [[nodiscard]] const Pipeline&     graph() const  { return pipeline_; }
 

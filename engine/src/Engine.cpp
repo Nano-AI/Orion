@@ -1,6 +1,7 @@
 #include "Engine.h"
 
 #include <stdexcept>
+#include <algorithm>
 #include <vector>
 
 namespace orion {
@@ -40,9 +41,21 @@ void Engine::sampleAt(float u, float v, float outRgb[3]) const {
     const auto x = static_cast<std::uint32_t>(clamp01(u) * float(w - 1));
     const auto y = static_cast<std::uint32_t>(clamp01(v) * float(h - 1));
 
-    std::uint8_t px[4]{};
-    develop_->output().readPixel(x, y, px);
-    for (int i = 0; i < 3; ++i) outRgb[i] = float(px[i]) / 255.0f;
+    // Reference image is unoriented, so undo the rotation to find the pixel.
+    // The caller works in oriented coordinates because that is what it sees.
+    const std::uint32_t rw = develop_->width();
+    const std::uint32_t rh = develop_->height();
+    const std::uint32_t rx = (rw == w) ? x : std::min(y, rw - 1);
+    const std::uint32_t ry = (rw == w) ? y : std::min(x, rh - 1);
+
+    __fp16 px[4]{};
+    develop_->referenceImage().readPixel(std::min(rx, rw - 1),
+                                         std::min(ry, rh - 1), px);
+
+    // Scene-linear and unbounded. Normalise by the peak so hue survives; the
+    // caller only needs the ratio between channels.
+    const float peak = std::max({float(px[0]), float(px[1]), float(px[2]), 1e-6f});
+    for (int i = 0; i < 3; ++i) outRgb[i] = std::max(float(px[i]), 0.0f) / peak;
 }
 
 void Engine::exportImage(const std::string& path, const util::ExportOptions& options) {

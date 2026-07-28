@@ -36,6 +36,7 @@ enum ViewportTests {
         testClampKeepsFrameInView()
         testZoomAnchoring()
         testPercent()
+        testHueBands()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -156,6 +157,47 @@ enum ViewportTests {
             w.zoomBy(2.0, anchor: CGPoint(x: 0.5, y: 0.5), visible: visible)
         }
         report(w.zoom <= 64.0 + 1e-6, "zoom is capped")
+    }
+
+    /// Hue to band. If this drifts from the centres in hsl_ops.slang, the
+    /// targeted tool adjusts a band you did not click.
+    static func testHueBands() {
+        // Each band centre must map to its own band.
+        for (i, centre) in TargetedAdjust.centres.enumerated() {
+            let got = TargetedAdjust.band(forHue: centre)
+            report(got.rawValue == i,
+                   "hue \(Int(centre))deg maps to \(HueBand(rawValue: i)!.name)",
+                   got.rawValue == i ? "" : "got \(got.name)")
+        }
+
+        // Wrapping: 359 degrees is red, not magenta.
+        report(TargetedAdjust.band(forHue: 359) == .red, "hue wraps around zero")
+        report(TargetedAdjust.band(forHue: 1) == .red, "just past zero is red")
+
+        // Sky blue lands in blue, foliage in green.
+        report(TargetedAdjust.band(forHue: 225) == .blue, "sky blue is the blue band")
+        report(TargetedAdjust.band(forHue: 110) == .green, "foliage is the green band")
+
+        // Hue extraction from RGB.
+        near(TargetedAdjust.hue(r: 1, g: 0, b: 0) ?? -1, 0, 1e-6, "pure red is 0deg")
+        near(TargetedAdjust.hue(r: 0, g: 1, b: 0) ?? -1, 120, 1e-6, "pure green is 120deg")
+        near(TargetedAdjust.hue(r: 0, g: 0, b: 1) ?? -1, 240, 1e-6, "pure blue is 240deg")
+
+        // Grey has no hue, and must refuse rather than pick one at random —
+        // otherwise clicking a wall silently adjusts some band.
+        report(TargetedAdjust.hue(r: 0.5, g: 0.5, b: 0.5) == nil, "grey has no hue")
+        report(TargetedAdjust.hue(r: 0.5, g: 0.505, b: 0.5) == nil,
+               "near-grey has no hue")
+
+        // Scale invariance: the picker normalises by peak, so a dark and a
+        // bright version of the same colour must land in the same band.
+        let bright = TargetedAdjust.hue(r: 0.2, g: 0.4, b: 0.9)
+        let dark = TargetedAdjust.hue(r: 0.02, g: 0.04, b: 0.09)
+        if let b = bright, let d = dark {
+            near(b, d, 0.5, "hue is independent of brightness")
+        } else {
+            report(false, "hue is independent of brightness", "one sample returned nil")
+        }
     }
 
     /// The percentage in the toolbar is true magnification, not zoom.
