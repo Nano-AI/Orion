@@ -144,6 +144,10 @@ enum Palette {
     static let accent   = Color(red: 0.302, green: 0.714, blue: 0.769)
     static let rejected = Color(red: 0.769, green: 0.341, blue: 0.302)
     static let rated    = Color(red: 0.941, green: 0.776, blue: 0.455)
+    /// Film base. Warmer and darker than the panel, the way a developed strip
+    /// is against the light table it lies on — the only tinted value in the
+    /// interface, and it is nowhere near the photo.
+    static let filmBase = Color(red: 0.086, green: 0.078, blue: 0.075)
 }
 
 enum ToolTab: String, CaseIterable, Identifiable {
@@ -269,8 +273,20 @@ struct Editor: View {
 
     // MARK: Toolbar
 
+    /// One height for every control in the toolbar.
+    ///
+    /// They used to size themselves: the icon chips carried an explicit 22,
+    /// the text chips grew out of their padding, and the Open menu added
+    /// whatever `.borderlessButton` felt like on top of that. Three answers,
+    /// three heights, and Open visibly taller than the buttons beside it.
+    private static let chipHeight: CGFloat = 23
+
+    /// The toolbar reads left to right in the order the work happens: what you
+    /// open, what you are looking at, what you do to it, and what comes out.
+    /// Open used to sit between the rotate buttons and Reset, which put the
+    /// start of the workflow in the middle of the middle of it.
     private var toolbar: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 12) {
             // Serif wordmark against a sans interface. The instrument is
             // sans because it is read at a glance; the name is serif because
             // it is read once. Both faces ship with macOS.
@@ -279,17 +295,39 @@ struct Editor: View {
                 .tracking(0.5)
                 .foregroundStyle(Palette.text)
 
+            Menu {
+                Button("Open Photo…") { openFile() }
+                Button("Open Folder…") { openFolder() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "folder").font(.system(size: 11))
+                    Text("Open").font(.system(size: 11))
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+                }
+                .padding(.horizontal, 9)
+                .frame(height: Self.chipHeight)
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(Palette.text)
+            .background(Palette.raised, in: RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Palette.line, lineWidth: 1))
+            .help("Open a photo or a folder")
+
             Text(engine.isLoaded ? engine.camera : "")
                 .font(.system(size: 12))
                 .foregroundStyle(Palette.dim)
                 .frame(maxWidth: .infinity)
 
-            HStack(spacing: 10) {
+            // ── Looking ──────────────────────────────────────────────────
+            HStack(spacing: 7) {
                 if engine.isLoaded {
                     Text("\(viewport.percent)%")
                         .font(.system(size: 11)).monospacedDigit()
                         .foregroundStyle(Palette.faint)
-                        .frame(width: 46, alignment: .trailing)
+                        .frame(width: 42, alignment: .trailing)
                 }
                 Button {
                     engine.comparing ? engine.clearCompare()
@@ -297,7 +335,9 @@ struct Editor: View {
                 } label: {
                     Text("Compare")
                         .font(.system(size: 11))
-                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .padding(.horizontal, 9)
+                        .frame(height: Self.chipHeight)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(engine.comparing ? Palette.accent : Palette.dim)
@@ -315,7 +355,12 @@ struct Editor: View {
                     }
                     .help("Swap between a vertical and horizontal split")
                 }
+            }
 
+            divider
+
+            // ── Editing ──────────────────────────────────────────────────
+            HStack(spacing: 7) {
                 iconChip("arrow.uturn.backward", enabled: engine.history.canUndo) {
                     engine.undo()
                 }
@@ -329,31 +374,48 @@ struct Editor: View {
                 iconChip("rotate.left", enabled: engine.isLoaded) {
                     engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset()
                 }
+                .help("Rotate left")
                 iconChip("rotate.right", enabled: engine.isLoaded) {
                     engine.edit("Rotate") { engine.rotate(1) }; viewport.reset()
                 }
-                Menu {
-                    Button("Open Photo…") { openFile() }
-                    Button("Open Folder…") { openFolder() }
-                } label: {
-                    Text("Open")
-                        .font(.system(size: 11))
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .contentShape(Rectangle())
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .foregroundStyle(Palette.dim)
-                .overlay(RoundedRectangle(cornerRadius: 5)
-                    .stroke(Palette.line, lineWidth: 1))
+                .help("Rotate right")
+
                 chip("Reset", enabled: engine.isLoaded) { engine.resetEdits() }
-                chip("Export…", enabled: engine.isLoaded) { showingExport = true }
+                    .help("Put every adjustment back")
             }
+
+            divider
+
+            // ── Out ──────────────────────────────────────────────────────
+            Button {
+                showingExport = true
+            } label: {
+                Text("Export…")
+                    .font(.system(size: 11, weight: .medium))
+                    .padding(.horizontal, 11)
+                    .frame(height: Self.chipHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(engine.isLoaded ? Palette.text : Palette.faint)
+            .background(engine.isLoaded ? Palette.accent.opacity(0.18) : .clear,
+                        in: RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5)
+                .stroke(engine.isLoaded ? Palette.accent.opacity(0.55) : Palette.line,
+                        lineWidth: 1))
+            .disabled(!engine.isLoaded)
         }
         .padding(.horizontal, 14)
         .frame(height: 44)
         .background(Palette.panel)
+    }
+
+    /// Separates the toolbar's three groups. A hairline rather than a gap:
+    /// spacing alone reads as a rhythm, a rule reads as a boundary.
+    private var divider: some View {
+        Rectangle()
+            .fill(Palette.line)
+            .frame(width: 1, height: 18)
     }
 
     private func iconChip(_ symbol: String, enabled: Bool,
@@ -361,7 +423,8 @@ struct Editor: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 12))
-                .frame(width: 26, height: 22)
+                .frame(width: 26, height: Self.chipHeight)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(enabled ? Palette.dim : Palette.faint)
@@ -374,8 +437,9 @@ struct Editor: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, 9)
+                .frame(height: Self.chipHeight)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(enabled ? Palette.dim : Palette.faint)
@@ -476,6 +540,19 @@ struct Editor: View {
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(Color.black.opacity(0.45),
                                         in: RoundedRectangle(cornerRadius: 4))
+
+                        Spacer(minLength: 10)
+
+                        // Culling happens while looking at the picture, so the
+                        // mark you are setting belongs over it — not only as
+                        // four-pixel dots on a thumbnail you are not looking at.
+                        if let current,
+                           let photo = library.photos.first(where: { $0.url == current }) {
+                            RatingBar(rating: photo.rating,
+                                      rejected: photo.rejected,
+                                      rate: { library.setRating($0, for: current) },
+                                      toggleReject: { library.toggleRejected(current) })
+                        }
                     }
                     .padding(14)
                 } else {
@@ -670,34 +747,7 @@ struct Editor: View {
     /// File-folder tabs: the selected one is filled with the panel's own color
     /// and covers the strip's rule, so tab and panel read as one surface.
     private var tabBar: some View {
-        HStack(alignment: .bottom, spacing: 2) {
-            ForEach(ToolTab.allCases) { t in
-                let selected = t == tab
-                Button { withAnimation(.easeOut(duration: 0.16)) { tab = t } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: t.symbol).font(.system(size: 12))
-                        if selected {
-                            Text(t.title).font(.system(size: 11)).tracking(0.6)
-                        }
-                    }
-                    .frame(maxWidth: selected ? .infinity : 40)
-                    .frame(height: selected ? 32 : 27)
-                    .background(selected ? Palette.panel : Palette.raised)
-                    .foregroundStyle(selected ? Palette.accent : Palette.faint)
-                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 5,
-                                                      topTrailingRadius: 5))
-                    .overlay(
-                        UnevenRoundedRectangle(topLeadingRadius: 5, topTrailingRadius: 5)
-                            .stroke(Palette.line, lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .help(t.title)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .background(Palette.ground)
+        ModeDial(tab: $tab)
     }
 
     private var lightPanel: some View {
