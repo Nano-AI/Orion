@@ -4,9 +4,53 @@
 
 ---
 
-**Last updated:** 2026-07-27
-**Phase:** M0 done. M1 ~60%, M2 ~55%. See the status table in `ROADMAP.md`.
-**Next story:** crop/rotate and XMP sidecars (M1) · denoise and lens corrections (M2)
+**Last updated:** 2026-07-28 (overnight run, in progress)
+**Phase:** M0 done. M1 ~92%, M2 ~90%.
+**Next story:** highlight reconstruction, then lens corrections, then export parity
+
+## Overnight run — 2026-07-28
+
+Working agreement for this run: commit and push per feature, screenshot every
+major feature, measure the engine's output rather than eyeballing it, and only
+reach for Gemini if `research/` genuinely does not cover something. It has not
+been needed so far.
+
+**Done**
+
+| | Commit |
+|---|---|
+| Crop constrained to the turned frame; straighten opens to ±90; pivot is the frame centre; corner marks in a fixed box; culling moved to a Photo menu | `28ca074` |
+| Tone curve panel — the engine's spline had been unreachable through the facade since M2 | `829e565` |
+| Profiled wavelet denoise, with a per-frame Poisson–Gaussian fit | `bb06700` |
+
+**Still to do, in order**
+
+1. Highlight reconstruction — `deep-research-2026-07-27.md` §1, inpaint-opposed.
+   Needs the per-channel clip threshold derivation first (§1 ★).
+2. Lens corrections — §4 has the lensfun formulas in full.
+3. Export panel parity with Preview: typed dimensions, colour space, metadata,
+   and a real file-size target rather than an empirical estimate.
+4. Benchmark. Denoise adds eight full-resolution nodes; the M1 latency gate has
+   not been re-measured since.
+5. Right-hand panel has a lot of dead space below the controls on every tab.
+
+### The screenshot harness
+
+```
+./build/Orion.app/Contents/MacOS/Orion --screenshot out.png --photo x.ARW \
+    --scene crop-angle [--measure x,y,w,h] [--size 1680x1050]
+```
+
+Renders the real view hierarchy offscreen — no Screen Recording permission,
+which a terminal does not have. Scenes live in `app/Screenshot.swift`; add one
+there when you add a feature. `--measure` prints mean and standard deviation
+for a region of the engine's output, which is the only way to tell whether a
+filter did anything: noise that is obvious at 100% vanishes into a screenshot
+scaled to fit a review pane. It is what caught the denoiser doing nothing.
+
+**What it does not prove:** the canvas is drawn as a still read off the GPU, not
+through `MTKView` — AppKit cannot capture a Metal layer. Canvas geometry stays
+the viewport suite's job.
 
 ---
 
