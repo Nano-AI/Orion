@@ -64,9 +64,10 @@ struct CropOverlay: View {
             .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
             .allowsHitTesting(false)
 
-            if dragging != nil {
-                thirds
-            }
+            // Always on while the tool is open. Thirds are for judging where a
+            // horizon or subject sits, which is a decision made before the drag
+            // starts, not during it.
+            thirds
 
             Rectangle()
                 .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
@@ -99,7 +100,7 @@ struct CropOverlay: View {
                 p.addLine(to: CGPoint(x: rect.maxX, y: y))
             }
         }
-        .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
+        .stroke(Color.white.opacity(dragging != nil ? 0.5 : 0.3), lineWidth: 0.5)
         .allowsHitTesting(false)
     }
 

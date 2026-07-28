@@ -27,45 +27,68 @@ float3 applyExposure(float3 c, float ev)
 
 // ── Highlights / shadows / whites / blacks ─────────────────────────────────
 //
-// Highlights and shadows are *local*: their masks are built from a guided-filter
-// estimate of the neighbourhood's tone rather than from the pixel's own value.
-// This is what Lightroom and darktable do and a pointwise curve cannot: recovery
-// follows the structure of the scene, so a bright window against a dark wall is
-// pulled down as a region instead of every bright pixel everywhere being pulled
-// down individually.
+// Mask geometry and gain mapping follow research/deep-research-2026-07-27.md §3.
 //
-// Whites and blacks stay pointwise on purpose. They set the endpoints of the
-// range, and an endpoint that moved around with local content would be
-// unpredictable to use.
+// Four Gaussian masks centred on the exposure bands photographers reason in:
 //
-// `guideEv` is the filtered neighbourhood luminance in log2 exposure, already
-// scaled for the current exposure setting.
+//     Blacks     −5.5 EV      Shadows    −2.5 EV
+//     Highlights +2.5 EV      Whites     +5.5 EV
+//
+// ★ The masks are normalised to a **partition of unity** — they sum to 1 at
+// every exposure — and the four exposure offsets are summed into a *single*
+// exponent. Both matter. Multiplying independent masks, which is what this did
+// before, double-counts wherever two bands overlap and produces a brightness
+// spike there. Summing exponents under normalised weights cannot.
+//
+// Highlights and shadows read the guided-filter estimate of the neighbourhood;
+// whites and blacks read the pixel. That split is confirmed correct by the
+// research: the first pair adjusts the base layer so detail survives, the
+// second sets the display endpoints and must stay global, or extreme contrast
+// boundaries — a dark window frame against bright sky — grow halos.
+
+static const float kEvBlacks     = -5.5f;
+static const float kEvShadows    = -2.5f;
+static const float kEvHighlights =  2.5f;
+static const float kEvWhites     =  5.5f;
+
+// Wide enough that adjacent bands overlap smoothly rather than stepping.
+static const float kBandSigma = 1.6f;
+
+// A slider at full travel is worth two stops.
+static const float kEvPerUnit = 2.0f;
+
+float bandWeight(float ev, float centre)
+{
+    const float d = (ev - centre) / kBandSigma;
+    return exp(-0.5f * d * d);
+}
+
 float3 applyTone(float3 c, float guideEv,
                  float highlights, float shadows, float whites, float blacks)
 {
-    const float y  = max(luminance2020(c), 1e-6f);
-    const float ev = log2(y);
+    const float y = max(luminance2020(c), 1e-6f);
 
-    // Middle grey sits near -2.5 EV. Wide, overlapping knees keep transitions
-    // invisible. Highlights and shadows read the neighbourhood; whites and
-    // blacks read the pixel.
-    const float hiMask    = smoothstep(-4.0f,  1.0f, guideEv);
-    const float loMask    = 1.0f - smoothstep(-7.0f, -1.5f, guideEv);
-    const float whiteMask = smoothstep(-2.0f,  2.5f, ev);
-    const float blackMask = 1.0f - smoothstep(-9.0f, -3.5f, ev);
+    // EV relative to middle grey, which is where the band centres are defined.
+    const float ev      = log2(y / 0.18f);
+    const float evLocal = guideEv - log2(0.18f);
 
-    float gain = 1.0f;
-    gain *= exp2(highlights * hiMask    * 1.5f);
-    gain *= exp2(shadows    * loMask    * 1.5f);
-    gain *= exp2(whites     * whiteMask * 1.0f);
+    // Local bands read the neighbourhood; endpoint bands read the pixel.
+    const float wShadows    = bandWeight(evLocal, kEvShadows);
+    const float wHighlights = bandWeight(evLocal, kEvHighlights);
+    const float wBlacks     = bandWeight(ev, kEvBlacks);
+    const float wWhites     = bandWeight(ev, kEvWhites);
 
-    c *= gain;
+    // Partition of unity: normalise so the weights sum to 1.
+    const float total = wBlacks + wShadows + wHighlights + wWhites + 1e-6f;
 
-    // Blacks is an offset, not a gain: crushing the floor should move the black
-    // point rather than rescale everything beneath it.
-    c += blacks * blackMask * 0.05f;
+    const float deltaEv =
+          (wBlacks     / total) * blacks     * kEvPerUnit
+        + (wShadows    / total) * shadows    * kEvPerUnit
+        + (wHighlights / total) * highlights * kEvPerUnit
+        + (wWhites     / total) * whites     * kEvPerUnit;
 
-    return max(c, 0.0f);
+    // One exponent, not four multiplied gains.
+    return max(c * exp2(deltaEv), 0.0f);
 }
 
 // ── Vibrance / saturation ──────────────────────────────────────────────────

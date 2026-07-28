@@ -405,22 +405,27 @@ private struct Editor: View {
                                                      count: 3),
                                       spacing: 4) {
                                 ForEach(ratios, id: \.0) { name, ratio in
-                                    Button(name) {
+                                    Button {
                                         engine.edit("Aspect") {
                                             if ratio == nil { engine.resetCrop() }
                                             else { engine.setAspect(ratio) }
                                         }
+                                    } label: {
+                                        // Every modifier here is inside the
+                                        // label. A plain button's hit region is
+                                        // its label's shape, so padding applied
+                                        // outside the label stays inert — which
+                                        // is why only the text responded.
+                                        Text(name)
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(Palette.dim)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 7)
+                                            .background(Palette.raised,
+                                                        in: RoundedRectangle(cornerRadius: 4))
+                                            .contentShape(RoundedRectangle(cornerRadius: 4))
                                     }
                                     .buttonStyle(.plain)
-                                    .font(.system(size: 10))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 6)
-                                    .foregroundStyle(Palette.dim)
-                                    .background(Palette.raised,
-                                                in: RoundedRectangle(cornerRadius: 4))
-                                    // Without this the tile is decoration and
-                                    // only the glyphs are clickable.
-                                    .contentShape(RoundedRectangle(cornerRadius: 4))
                                 }
                             }
                         }
