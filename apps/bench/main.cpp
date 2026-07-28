@@ -273,7 +273,11 @@ int main(int argc, char** argv) {
             const Case cases[] = {
                 {"-full.jpg", {orion::util::ImageFormat::Jpeg, 0.92f, 0}},
                 {"-web.jpg",  {orion::util::ImageFormat::Jpeg, 0.85f, 2048}},
-                {"-16bit.tif",{orion::util::ImageFormat::Tiff, 1.0f,  0}},
+                // Named for the format, not the depth: the graph ends in
+                // RGBA8Unorm, so every export is eight bits per channel
+                // whatever the container. Calling this one "16bit" implied
+                // a capability that does not exist.
+                {"-full.tif",  {orion::util::ImageFormat::Tiff, 1.0f,  0}},
             };
 
             for (const auto& c : cases) {

@@ -5,8 +5,8 @@
 ---
 
 **Last updated:** 2026-07-28 (overnight run, in progress)
-**Phase:** M0 done. M1 ~92%, M2 ~90%.
-**Next story:** highlight reconstruction, then lens corrections, then export parity
+**Phase:** M0 done. M1 ~96%, M2 ~97%.
+**Next story:** 16-bit output, then the colour-space picker
 
 ## Overnight run — 2026-07-28
 
@@ -22,17 +22,36 @@ been needed so far.
 | Crop constrained to the turned frame; straighten opens to ±90; pivot is the frame centre; corner marks in a fixed box; culling moved to a Photo menu | `28ca074` |
 | Tone curve panel — the engine's spline had been unreachable through the facade since M2 | `829e565` |
 | Profiled wavelet denoise, with a per-frame Poisson–Gaussian fit | `bb06700` |
+| Highlight reconstruction; fast guided filter (90 ms → 19.6 ms); a bench that stops crying wolf | `a4ac2fa` |
+| Lens corrections — distortion, TCA, vignetting | `bd8c23c` |
+| Export panel: measured file size, typed dimensions | `06fff34` |
 
 **Still to do, in order**
 
-1. Highlight reconstruction — `deep-research-2026-07-27.md` §1, inpaint-opposed.
-   Needs the per-channel clip threshold derivation first (§1 ★).
-2. Lens corrections — §4 has the lensfun formulas in full.
-3. Export panel parity with Preview: typed dimensions, colour space, metadata,
-   and a real file-size target rather than an empirical estimate.
-4. Benchmark. Denoise adds eight full-resolution nodes; the M1 latency gate has
-   not been re-measured since.
-5. Right-hand panel has a lot of dead space below the controls on every tab.
+1. **16-bit output.** The graph ends in `RGBA8Unorm`, so every export is eight
+   bits per channel whatever the container. Needs `develop:display` and
+   `geometry` moved to a 16-bit format, `ImageWriter` taught to build a 16-bit
+   `CGImage`, and the canvas blit and screenshot readback checked — both assume
+   8-bit BGRA today.
+2. **Colour space on export.** sRGB only. The display transform hard-codes
+   Rec.2020 → Rec.709; P3 and Adobe RGB want that matrix as a parameter.
+3. **A lens database.** The corrections are built and manual. lensfun would set
+   the coefficients from what the EXIF names; the maths does not change.
+4. **Metadata on export** — EXIF and the XMP rating are not carried through.
+
+### Latency, re-measured 2026-07-28 (Sony ILCE-7M3, 6024×4024, M4)
+
+| Drag | Nodes | Time |
+|---|---|---|
+| Exposure | 3 | 9.0 ms |
+| Curve | 1 | 6.1 ms |
+| Highlights / shadows | 10 | **19.6 ms** (was 90.1) |
+| Colour mixer | 5 | 16.4 ms |
+| Temperature / tint / sharpen | 11 | 42.9 ms |
+
+M0 gate passes at 9.04 ms p95. Temperature is the one still over budget and
+always will be: it rewrites the head of the graph, so the demosaic reruns. The
+fix is degrade-then-refine or the preview-ROI path, neither of which is built.
 
 ### The screenshot harness
 
@@ -46,7 +65,8 @@ which a terminal does not have. Scenes live in `app/Screenshot.swift`; add one
 there when you add a feature. `--measure` prints mean and standard deviation
 for a region of the engine's output, which is the only way to tell whether a
 filter did anything: noise that is obvious at 100% vanishes into a screenshot
-scaled to fit a review pane. It is what caught the denoiser doing nothing.
+scaled to fit a review pane. It is what caught the denoiser doing nothing, and the export panel's size
+estimate reading twenty percent high.
 
 **What it does not prove:** the canvas is drawn as a still read off the GPU, not
 through `MTKView` — AppKit cannot capture a Metal layer. Canvas geometry stays
