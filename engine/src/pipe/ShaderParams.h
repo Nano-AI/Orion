@@ -51,6 +51,13 @@ struct Exposure {
 };
 static_assert(sizeof(Exposure) == 16);
 
+struct Curve {
+    std::uint32_t size[2];
+    std::uint32_t resolution;
+    std::uint32_t _pad;
+};
+static_assert(sizeof(Curve) == 16);
+
 struct Agx {
     float         contrast;
     float         pivot;

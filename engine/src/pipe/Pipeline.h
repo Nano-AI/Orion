@@ -30,6 +30,7 @@ struct Node {
     std::vector<int>        inputs;   // node ids, or kSource
     gpu::PixelFormat        format;   // this node's output format
     std::vector<std::byte>  params;   // opaque block bound at buffer(0)
+    std::vector<int>        aux;      // auxiliary texture ids, bound after inputs
 };
 
 struct NodeTiming {
@@ -60,6 +61,15 @@ public:
 
     /// Uploads the source mosaic. Marks the whole graph dirty.
     void setSource(const void* samples, std::size_t bytesPerRow);
+
+    /// Registers a texture that nodes can read but no node produces — curve
+    /// LUTs now, masks and lens-correction maps later. Must be called before
+    /// compile(). Returns its id, for Node::aux.
+    int addAuxTexture(std::uint32_t width, std::uint32_t height, gpu::PixelFormat);
+
+    /// Replaces an auxiliary texture's contents and dirties every node that
+    /// reads it.
+    void updateAux(int auxId, const void* data, std::size_t bytesPerRow);
 
     /// Executes every dirty node in one command buffer.
     /// Returns the GPU-side duration in milliseconds.
@@ -92,6 +102,10 @@ private:
     std::vector<std::unique_ptr<gpu::Texture>> outputs_;
     std::vector<bool>                          dirty_;
     std::vector<int>                           order_;
+
+    struct AuxSpec { std::uint32_t width, height; gpu::PixelFormat format; };
+    std::vector<AuxSpec>                       auxSpecs_;
+    std::vector<std::unique_ptr<gpu::Texture>> aux_;
 
     std::unique_ptr<gpu::Texture> source_;
     std::uint32_t width_ = 0, height_ = 0;

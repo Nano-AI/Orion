@@ -55,6 +55,20 @@ void normaliseRows(float m[9]) {
     }
 }
 
+bool sameChannel(const CurveChannel& a, const CurveChannel& b) {
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        if (std::abs(a[i].x - b[i].x) > 1e-6f) return false;
+        if (std::abs(a[i].y - b[i].y) > 1e-6f) return false;
+    }
+    return true;
+}
+
+bool sameCurve(const ToneCurveSpec& a, const ToneCurveSpec& b) {
+    return sameChannel(a.master, b.master) && sameChannel(a.red, b.red) &&
+           sameChannel(a.green, b.green) && sameChannel(a.blue, b.blue);
+}
+
 }  // namespace
 
 DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
@@ -75,8 +89,15 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::RGBA16Float, {}});
     nExposure_  = pipeline_.add({"exposure", "exposure", {nMatrix_},
                                  PixelFormat::RGBA16Float, {}});
+    // AgX now hands off in float rather than encoding to 8-bit, so the tone
+    // curve has full precision to work with before the final quantise.
     nAgx_       = pipeline_.add({"agx", "agx", {nExposure_},
-                                 PixelFormat::RGBA8Unorm, {}});
+                                 PixelFormat::RGBA16Float, {}});
+
+    auxCurveLut_ = pipeline_.addAuxTexture(kCurveResolution, kCurveRows,
+                                           PixelFormat::R32Float);
+    nCurve_     = pipeline_.add({"tone curve", "toneCurve", {nAgx_},
+                                 PixelFormat::RGBA8Unorm, {}, {auxCurveLut_}});
 
     pipeline_.compile(width_, height_);
 
@@ -127,11 +148,36 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 void DevelopPipeline::apply(const Adjustments& adj) {
     const std::uint32_t size[2] = {width_, height_};
 
-    params::Exposure expo{adj.exposureEv, adj.black, {size[0], size[1]}};
-    pipeline_.setParams(nExposure_, &expo, sizeof expo);
+    // Only push what actually moved. setParams dirties the whole downstream
+    // subgraph, so pushing all three blocks on every tick would make dragging
+    // the curve also recompute exposure and AgX — three nodes of work for a
+    // one-node change, and the difference between 4 ms and 12 ms.
+    const bool first = !primed_;
 
-    params::Agx agx{adj.contrast, -2.5f, adj.saturation, 0.0f, {size[0], size[1]}};
-    pipeline_.setParams(nAgx_, &agx, sizeof agx);
+    if (first || adj.exposureEv != lastAdj_.exposureEv || adj.black != lastAdj_.black) {
+        params::Exposure expo{adj.exposureEv, adj.black, {size[0], size[1]}};
+        pipeline_.setParams(nExposure_, &expo, sizeof expo);
+    }
+
+    if (first || adj.contrast != lastAdj_.contrast || adj.saturation != lastAdj_.saturation) {
+        params::Agx agx{adj.contrast, -2.5f, adj.saturation, 0.0f, {size[0], size[1]}};
+        pipeline_.setParams(nAgx_, &agx, sizeof agx);
+    }
+
+    if (first) {
+        params::Curve curve{{size[0], size[1]}, kCurveResolution, 0};
+        pipeline_.setParams(nCurve_, &curve, sizeof curve);
+    }
+
+    // Rebuilding the LUT walks four splines. Skip it when the curve has not
+    // moved, which is every frame of an exposure drag.
+    if (first || !sameCurve(adj.curve, lastAdj_.curve)) {
+        const auto lut = buildCurveLut(adj.curve);
+        pipeline_.updateAux(auxCurveLut_, lut.data(), kCurveResolution * sizeof(float));
+    }
+
+    lastAdj_ = adj;
+    primed_  = true;
 }
 
 double DevelopPipeline::render() { return pipeline_.render(); }

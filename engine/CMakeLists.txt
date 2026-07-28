@@ -9,6 +9,7 @@ add_library(orion_engine STATIC
     src/gpu/Resources.mm
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp
+    src/pipe/ToneCurve.cpp
     src/util/ImageWriter.mm
 )
 

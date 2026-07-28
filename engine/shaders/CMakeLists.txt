@@ -29,6 +29,7 @@ set(ORION_SHADERS
     color_matrix:cameraToWorking
     exposure:exposure
     agx:agx
+    tone_curve:toneCurve
 )
 
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR})

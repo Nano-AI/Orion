@@ -9,6 +9,7 @@
 
 #include "gpu/Resources.h"
 #include "pipe/Pipeline.h"
+#include "pipe/ToneCurve.h"
 #include "raw/RawImage.h"
 
 #include <memory>
@@ -21,6 +22,7 @@ struct Adjustments {
     float black      = 0.0f;
     float contrast   = 1.0f;
     float saturation = 1.0f;
+    ToneCurveSpec curve{};
 };
 
 class DevelopPipeline {
@@ -46,7 +48,10 @@ private:
     Pipeline      pipeline_;
     std::uint32_t width_ = 0, height_ = 0;
     int nLinearize_ = -1, nDirs_ = -1, nGreen_ = -1, nRgb_ = -1;
-    int nMatrix_ = -1, nExposure_ = -1, nAgx_ = -1;
+    int nMatrix_ = -1, nExposure_ = -1, nAgx_ = -1, nCurve_ = -1;
+    int auxCurveLut_ = -1;
+    Adjustments lastAdj_{};
+    bool primed_ = false;
 };
 
 }  // namespace orion::pipe

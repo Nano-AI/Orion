@@ -5,8 +5,8 @@
 ---
 
 **Last updated:** 2026-07-27
-**Phase:** **M0 COMPLETE — gate passed.** Next: M2.
-**Next story:** M2 — tone curve, HSL, sharpening, denoise, lens corrections
+**Phase:** M0 complete. **M2 in progress — tone curve done.**
+**Next story:** M2 — HSL / colour mixer, then sharpening
 
 ---
 
@@ -19,12 +19,22 @@ optimisation the architecture assumes we would need is not needed yet.
 
 ```
 Source          Sony ILCE-7M3, 6024 x 4024 (24.2 MP, RGGB)
-  decode        47 ms   (511 MP/s, LibRaw)
-Pipeline        7 nodes, 971 MiB of intermediates
-  full render   43.9 ms  (every node)
-  exposure drag  8.2 ms  (2 of 7 nodes recomputed)  <- the number that matters
+  decode        48 ms   (504 MP/s, LibRaw)
+Pipeline        8 nodes, 1156 MiB of intermediates
+  full render   40.1 ms  (every node)
+  exposure drag 11.7 ms median, 12.8 p95  (3 of 8 nodes)
+  curve drag     4.1 ms median,  5.0 p95  (1 of 8 nodes)
 M0 gate         PASS
 ```
+
+Exposure costs more than the curve because AgX and the curve both sit
+downstream of it. Adding the curve node raised exposure drag from 8.2 to
+11.7 ms: AgX now outputs `rgba16f` instead of `rgba8` so the curve has
+precision to work with, which doubles that write's bandwidth.
+
+**The pipeline is bandwidth-bound, not compute-bound.** If headroom is ever
+needed, fusing AgX and the curve into one node saves a 48 MiB write plus a
+48 MiB read — but it couples two concerns, so do the preview-ROI path first.
 
 Per-node caching works: moving exposure dirties only exposure + AgX, so
 linearize, all three RCD passes and the colour matrix are served from cache.
@@ -107,10 +117,12 @@ Every feature now has a milestone. Notable calls:
 ## Next actions — M2
 
 M0 stories S0.1–S0.8 are all complete. M1 (browse, cull, crop, export, sidecars)
-is deliberately skipped for now per the goal; M2 is next:
+is deliberately skipped for now per the goal.
 
-1. Tone curve node — the mockup's editor is the UX spec; monotone cubic Hermite
-   on the GPU, matching the JS in `design/mockup-darkroom.html`
+1. ✅ **Tone curve** — `pipe/ToneCurve.{h,cpp}` evaluates the same monotone cubic
+   Hermite spline as the mockup into a 256x4 LUT (master, R, G, B); the shader
+   just samples it. Runs after AgX in display space. Verified: mean luma
+   0.248 -> 0.154 with a film S-curve.
 2. HSL / colour mixer, 8 hue bands
 3. Sharpening (amount / radius / masking)
 4. Profiled wavelet denoise + a per-camera noise profile

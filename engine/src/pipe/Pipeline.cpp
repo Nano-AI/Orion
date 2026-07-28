@@ -64,6 +64,12 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
     // Source mosaic: one 16-bit sample per pixel.
     source_ = gpu::Texture::create(device_, width_, height_, gpu::PixelFormat::R16Uint);
 
+    aux_.clear();
+    aux_.reserve(auxSpecs_.size());
+    for (const auto& spec : auxSpecs_) {
+        aux_.push_back(gpu::Texture::create(device_, spec.width, spec.height, spec.format));
+    }
+
     libraries_.clear();
     kernels_.clear();
     outputs_.clear();
@@ -108,6 +114,25 @@ void Pipeline::markDownstreamDirty(int nodeId) {
     }
 }
 
+int Pipeline::addAuxTexture(std::uint32_t width, std::uint32_t height,
+                            gpu::PixelFormat format) {
+    if (compiled_) throw std::runtime_error("cannot add aux textures after compile()");
+    auxSpecs_.push_back({width, height, format});
+    return static_cast<int>(auxSpecs_.size()) - 1;
+}
+
+void Pipeline::updateAux(int auxId, const void* data, std::size_t bytesPerRow) {
+    if (auxId < 0 || auxId >= static_cast<int>(aux_.size())) {
+        throw std::runtime_error("updateAux: bad aux id");
+    }
+    aux_[auxId]->upload(data, bytesPerRow);
+
+    for (int id : order_) {
+        const auto& a = nodes_[id].aux;
+        if (std::find(a.begin(), a.end(), auxId) != a.end()) markDownstreamDirty(id);
+    }
+}
+
 void Pipeline::setSource(const void* samples, std::size_t bytesPerRow) {
     if (!compiled_) throw std::runtime_error("setSource before compile()");
     source_->upload(samples, bytesPerRow);
@@ -129,9 +154,12 @@ double Pipeline::render() {
         if (!run) continue;
 
         std::vector<const gpu::Texture*> textures;
-        textures.reserve(node.inputs.size() + 1);
+        textures.reserve(node.inputs.size() + node.aux.size() + 1);
         for (int in : node.inputs) {
             textures.push_back(in == kSource ? source_.get() : outputs_[in].get());
+        }
+        for (int a : node.aux) {
+            textures.push_back(aux_[a].get());
         }
         textures.push_back(outputs_[id].get());
 
