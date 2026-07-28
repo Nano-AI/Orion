@@ -197,6 +197,8 @@ enum Screenshot {
             engine.highlights = -0.4
             engine.shadows = 0.45
             AdjustmentSlider.previewHover = (scene == "reset-hover")
+        case "recover":
+            engine.highlightRecovery = 1.0
         case "c110": engine.contrast = 1.10
         case "c120": engine.contrast = 1.20
         case "c130": engine.contrast = 1.30

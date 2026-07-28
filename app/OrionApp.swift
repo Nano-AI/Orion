@@ -698,11 +698,13 @@ struct Editor: View {
             }
             section("Highlight Recovery") {
                 slider("Amount", $engine.highlightRecovery, 0...1, "", 2, resetsTo: engine.defaults.highlightRecovery)
-                Text("A sensor clips one channel before the others, which turns "
-                     + "a white cloud magenta. This rebuilds the clipped channel "
-                     + "from the ones still reading. Off by default: on a frame "
-                     + "with small bright lights it can tint the edge of a "
-                     + "highlight rather than repair it.")
+                Text("Where one channel clips before the others, it stops "
+                     + "carrying detail while the rest still do — a bright sky "
+                     + "goes flat where blue ran out. This rebuilds that "
+                     + "channel from the ones still reading. A fully blown "
+                     + "highlight is already rendered white, so this only "
+                     + "changes the places where a single channel ran out on "
+                     + "its own.")
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.faint)
                     .fixedSize(horizontal: false, vertical: true)

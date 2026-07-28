@@ -26,6 +26,36 @@ been needed so far.
 | Lens corrections — distortion, TCA, vignetting | `bd8c23c` |
 | Export panel: measured file size, typed dimensions | `06fff34` |
 | 16-bit output end to end; red/blue swap in the screenshot harness | `a50908c` |
+| Edits persist per photo; keys work; compare survives a rotation | `02ad412` |
+| **A blown highlight came out magenta** — linearize never clipped | see below |
+| Every adjustment resets from its own readout | see below |
+
+### The magenta highlights
+
+The one that mattered. `linearize` scaled each channel by its white-balance gain
+and clamped only at zero, so a blown pixel — which the sensor delivers as
+(S, S, S) — left the node as the gains themselves, about (2.2, 1.0, 1.6) on a
+warm frame. Everything downstream preserves ratios, so the tone curve, the
+colour matrix and AgX all carried it faithfully to the screen. Every clipped
+light in a night shot rendered magenta.
+
+Clipping all three to one ceiling is dcraw's default, and it belongs in the
+mosaic for dcraw's reason: RCD interpolates across an unclipped neighbour, so
+clipping afterwards leaves a fringe instead of a clean edge. Written up in
+`research/colour-pipeline.md`.
+
+Measured over the blown sign in `_PIC8220.ARW`: mean saturation **0.242 → 0.015**,
+R/G/B 0.878/0.677/0.896 → 0.800/0.809/0.811.
+
+A side effect worth knowing: highlight recovery is now a measured no-op on that
+frame (saturation 0.0146 → 0.0147 at full strength), because a fully blown pixel
+is already white and there is nothing to correlate. It still earns its place
+where one channel clipped alone. Left off by default, but the panel copy no
+longer promises to fix a magenta the pipeline no longer produces.
+
+⚠️ The clip moves with white balance, by design — the white point does. It also
+spends the headroom a reconstruction could have used. Both are the right trade
+against a cast that was on every frame.
 
 **Still to do, in order**
 
@@ -56,7 +86,9 @@ to watch on a lesser GPU.
 | Colour mixer | 5 | 19.2 ms |
 | Temperature / tint / sharpen | 11 | ~50 ms |
 
-**M0 gate passes at 11.67 ms p95**, against 16 ms.
+**M0 gate passes at 11.67 ms p95**, against 16 ms. Re-measured 2026-07-28 after
+the highlight clip: **12.70 ms p95** on `_PIC8220.ARW`. The clip is one
+instruction in `linearize`; the difference is the frame, not the change.
 
 ⚠️ It was 9.04 ms before 16-bit output. Writing `RGBA16Float` from the display
 and geometry nodes doubles the bytes those two move, and that is 2.6 ms of the
@@ -83,6 +115,14 @@ for a region of the engine's output, which is the only way to tell whether a
 filter did anything: noise that is obvious at 100% vanishes into a screenshot
 scaled to fit a review pane. It is what caught the denoiser doing nothing, and the export panel's size
 estimate reading twenty percent high.
+
+`--measure` also prints mean saturation, which is what turned "there is purple
+in my photo" into a number that could be watched going down.
+
+A hover cannot be staged in an offscreen render, so `AdjustmentSlider.previewHover`
+forces it for the `reset-hover` scene. Whether a control shifts sideways when its
+hover state appears is exactly the kind of question a screenshot answers and
+reading the code does not — this codebase has shipped that bug three times.
 
 **What it does not prove:** the canvas is drawn as a still read off the GPU, not
 through `MTKView` — AppKit cannot capture a Metal layer. Canvas geometry stays
