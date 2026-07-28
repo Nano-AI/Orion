@@ -166,10 +166,19 @@ final class Engine {
     private func render() {
         guard let handle else { return }
         var ms: Double = 0
-        if orion_engine_render(handle, &ms) == ORION_OK {
-            lastRenderMs = ms
-            generation &+= 1
+        guard orion_engine_render(handle, &ms) == ORION_OK else { return }
+
+        // Re-read the size every frame. A quarter turn swaps width and height,
+        // and the canvas uses these to work out which part of the (square)
+        // orientation texture is valid — stale values there tear the image.
+        var w: UInt32 = 0, h: UInt32 = 0
+        if orion_engine_image_size(handle, &w, &h) == ORION_OK {
+            imageWidth = w
+            imageHeight = h
         }
+
+        lastRenderMs = ms
+        generation &+= 1
     }
 
     /// Swift imports a C float[8] as a 8-tuple, and there is no nicer bridge.

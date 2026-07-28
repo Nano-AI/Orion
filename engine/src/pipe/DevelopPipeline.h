@@ -90,7 +90,9 @@ private:
     int auxCurveLut_ = -1;
     Adjustments  lastAdj_{};
     bool         primed_ = false;
-    WhiteBalance asShot_{};
+    WhiteBalance         asShot_{};
+    std::array<float, 3> asShotMul_{1.0f, 1.0f, 1.0f};
+    std::array<float, 3> asShotRef_{1.0f, 1.0f, 1.0f};
     float        xyzToCam_[9]{};
     params::Linearize linBase_{};
 };

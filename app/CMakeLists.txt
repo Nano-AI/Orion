@@ -53,3 +53,28 @@ add_custom_command(
 
 add_custom_target(orion_app ALL DEPENDS ${APP_BINARY})
 add_dependencies(orion_app orion_shaders)
+
+# Viewport geometry tests. A separate tiny executable rather than a test
+# framework — the point is that the maths gets checked at all.
+set(VIEWPORT_TESTS ${CMAKE_BINARY_DIR}/orion-viewport-tests)
+
+add_custom_command(
+    OUTPUT ${VIEWPORT_TESTS}
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
+            ${CMAKE_CURRENT_BINARY_DIR}/main.swift
+    COMMAND ${SWIFTC}
+            -swift-version 5
+            -target arm64-apple-macos14.0
+            ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
+            ${CMAKE_CURRENT_BINARY_DIR}/main.swift
+            -o ${VIEWPORT_TESTS}
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
+    COMMENT "swiftc    orion-viewport-tests"
+    VERBATIM
+)
+
+add_custom_target(orion_viewport_tests ALL DEPENDS ${VIEWPORT_TESTS})

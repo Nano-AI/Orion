@@ -62,20 +62,31 @@ final class Viewport {
         clampCentre()
     }
 
-    /// Visible fraction of the image on each axis, given the view's aspect.
-    func visibleFraction(imageAspect: CGFloat, viewAspect: CGFloat) -> CGSize {
-        // At fit, the constrained axis shows all of the image and the other
-        // shows all of it too — the leftover becomes letterbox, not extra image.
-        let baseU: CGFloat = imageAspect > viewAspect ? 1.0 : imageAspect / viewAspect
-        let baseV: CGFloat = imageAspect > viewAspect ? viewAspect / imageAspect : 1.0
-        return CGSize(width: min(1.0, baseU / zoom), height: min(1.0, baseV / zoom))
+    /// Fraction of the view each axis of the image covers at zoom 1. The
+    /// smaller one is 1 (that axis is what "fit" is constrained by) and the
+    /// other is less, which is the letterbox.
+    private func fitCoverage(imageAspect: CGFloat, viewAspect: CGFloat) -> CGSize {
+        imageAspect > viewAspect
+            ? CGSize(width: 1.0, height: viewAspect / imageAspect)
+            : CGSize(width: imageAspect / viewAspect, height: 1.0)
     }
 
     /// How much of the view the image covers, per axis. Below 1 means letterbox.
     func quadScale(imageAspect: CGFloat, viewAspect: CGFloat) -> CGSize {
-        let w = imageAspect > viewAspect ? 1.0 : imageAspect / viewAspect
-        let h = imageAspect > viewAspect ? viewAspect / imageAspect : 1.0
-        return CGSize(width: min(1.0, w * zoom), height: min(1.0, h * zoom))
+        let base = fitCoverage(imageAspect: imageAspect, viewAspect: viewAspect)
+        return CGSize(width: min(1.0, base.width * zoom),
+                      height: min(1.0, base.height * zoom))
+    }
+
+    /// Visible fraction of the *image* on each axis.
+    ///
+    /// This is the reciprocal of how far the image extends past the view, not
+    /// the coverage itself — getting that backwards silently crops the frame,
+    /// which is exactly what it did.
+    func visibleFraction(imageAspect: CGFloat, viewAspect: CGFloat) -> CGSize {
+        let base = fitCoverage(imageAspect: imageAspect, viewAspect: viewAspect)
+        return CGSize(width: min(1.0, 1.0 / (zoom * base.width)),
+                      height: min(1.0, 1.0 / (zoom * base.height)))
     }
 
     private func clampCentre() {

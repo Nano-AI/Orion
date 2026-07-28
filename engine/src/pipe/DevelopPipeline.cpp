@@ -167,7 +167,15 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     mat.size[0] = size[0]; mat.size[1] = size[1];
     pipeline_.setParams(nMatrix_, &mat, sizeof mat);
 
-    asShot_ = estimateFrom({image.camMul[0], image.camMul[1], image.camMul[2]}, xyzToCam_);
+    // Anchor on the camera's actual multipliers, not on a temperature we
+    // inferred from them. The temperature is only a handle for the user to
+    // turn; routing "as shot" through it would bake every estimation error
+    // into the image as a colour cast.
+    const float gRef = (image.camMul[1] != 0.0f) ? image.camMul[1] : 1.0f;
+    asShotMul_ = {image.camMul[0] / gRef, 1.0f, image.camMul[2] / gRef};
+
+    asShot_    = estimateFrom(asShotMul_, xyzToCam_);
+    asShotRef_ = multipliersFor(asShot_, xyzToCam_);
 
     Adjustments initial;
     initial.wb = asShot_;
@@ -191,11 +199,15 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     // white-balanced data.
     if (first || adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
         adj.wb.tint != lastAdj_.wb.tint) {
-        const auto mul = multipliersFor(adj.wb, xyzToCam_);
+        // Apply temperature as a *ratio* against the as-shot estimate, so
+        // leaving the slider alone reproduces the camera's own multipliers
+        // exactly, and moving it is a relative change from there.
+        const auto want = multipliersFor(adj.wb, xyzToCam_);
+
         params::Linearize lin = linBase_;
-        lin.whiteBalance[0] = mul[0];
+        lin.whiteBalance[0] = asShotMul_[0] * want[0] / std::max(asShotRef_[0], 1e-6f);
         lin.whiteBalance[1] = 1.0f;
-        lin.whiteBalance[2] = mul[2];
+        lin.whiteBalance[2] = asShotMul_[2] * want[2] / std::max(asShotRef_[2], 1e-6f);
         lin.whiteBalance[3] = 1.0f;   // second green
         pipeline_.setParams(nLinearize_, &lin, sizeof lin);
     }

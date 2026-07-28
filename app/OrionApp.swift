@@ -150,8 +150,12 @@ private struct Editor: View {
                         .foregroundStyle(Palette.faint)
                         .frame(width: 46, alignment: .trailing)
                 }
-                iconChip("rotate.left", enabled: engine.isLoaded) { engine.rotate(-1) }
-                iconChip("rotate.right", enabled: engine.isLoaded) { engine.rotate(1) }
+                iconChip("rotate.left", enabled: engine.isLoaded) {
+                    engine.rotate(-1); viewport.reset()
+                }
+                iconChip("rotate.right", enabled: engine.isLoaded) {
+                    engine.rotate(1); viewport.reset()
+                }
                 chip("Open…", enabled: true) { openFile() }
                 chip("Reset", enabled: engine.isLoaded) { engine.resetEdits() }
                 chip("Export…", enabled: engine.isLoaded) { exportFile() }
@@ -250,13 +254,13 @@ private struct Editor: View {
                         section("Rotate") {
                             HStack(spacing: 8) {
                                 Button {
-                                    engine.rotate(-1)
+                                    engine.rotate(-1); viewport.reset()
                                 } label: {
                                     Label("Left", systemImage: "rotate.left")
                                         .font(.system(size: 11))
                                 }
                                 Button {
-                                    engine.rotate(1)
+                                    engine.rotate(1); viewport.reset()
                                 } label: {
                                     Label("Right", systemImage: "rotate.right")
                                         .font(.system(size: 11))
@@ -292,7 +296,7 @@ private struct Editor: View {
         HStack(alignment: .bottom, spacing: 2) {
             ForEach(ToolTab.allCases) { t in
                 let selected = t == tab
-                Button { tab = t } label: {
+                Button { withAnimation(.easeOut(duration: 0.16)) { tab = t } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: t.symbol).font(.system(size: 12))
                         if selected {
