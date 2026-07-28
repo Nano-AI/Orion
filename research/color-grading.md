@@ -80,6 +80,45 @@ the *larger* setting was darker, because it was crushing channels to black
 instead of tinting them. At 0.03 the same push moves mean saturation from 0.46
 to 0.51 and leaves the tonality intact.
 
+## The control surface — why a wheel, and which way it winds
+
+**Where:** `app/ColorWheel.swift`.
+
+**Source:** Van Hurkman, *Color Correction Handbook*, 2nd ed. (Peachpit, 2014),
+ch. 4 — the three-way color balance control, its history in telecine, and why
+the hue/strength disc rather than three sliders. The hue-angle convention is
+HSV's: Alvy Ray Smith, *"Color Gamut Transform Pairs"*, SIGGRAPH '78,
+Computer Graphics 12(3), 12–19 — red at 0°, increasing counter-clockwise.
+
+**Why a disc.** Hue and strength are one gesture rather than two controls, and
+the direction you push is the direction the color goes. That second property is
+the whole value, and it is also the thing that is easy to get wrong.
+
+**Which way it winds — and the bug that came of it.** The engine's
+decomposition, `cos(θ − c·120°)`, is the mathematical convention: red at 0°,
+green at 120°, blue at 240°, measured **counter-clockwise with y upward**.
+SwiftUI's `AngularGradient` sweeps **clockwise from three o'clock in screen
+coordinates, where y runs downward**. Painting the familiar R-Y-G-C-B-M ring
+into it therefore put green exactly where the engine puts blue: dragging toward
+what looked like green made the picture blue, and the wheel was lying about what
+it did.
+
+The ring is wound in reverse to match. `testGradePrimaryAngles` pins the engine
+half — that each primary direction raises its own channel above the other two,
+and that 60° is yellow — which is what makes the panel's ordering checkable
+against something rather than against a reading of the code.
+
+**Deliberately not on the disc: brightness.** Because the offsets are zero-sum,
+a wheel changes hue and nothing else; the track beneath each one is the only
+thing that moves that zone's luminance. Two controls, two axes, no interaction —
+which is what makes a grade recoverable when you overshoot. Resolve's wheels put
+luminance on a separate slider for the same reason.
+
+**Gap:** the ring is a plain HSV hue sweep, not a vectorscope-aligned one. A
+colorist reading a vectorscope alongside these wheels would expect the targets
+at the SMPTE angles rather than at even 120° spacing. That is a real difference
+and it is not implemented; there is no vectorscope in Orion yet to disagree with.
+
 ## Position in the graph
 
 After the color matrix and the tone controls, before the guided filter and the
@@ -107,8 +146,14 @@ in a log or perceptual space instead.
 - `testGradeOffsets` — a wheel at any angle produces a zero-sum RGB offset, so a
   neutral keeps its luminance; radius scales it linearly; the center is exactly
   zero.
-- `testColorGradeGpu` — runs the real kernel. Asserts the identity (all controls
-  at zero returns the input unchanged), that a shadow-only push moves a dark
-  patch and leaves a bright one alone, that a highlight-only push does the
-  reverse, and that the three weights sum to one by checking a mid-gray ramp is
-  not dimmed anywhere.
+- `testGradePrimaryAngles` — each primary direction on the wheel raises its own
+  channel above the other two, and 60° is yellow. This is what the panel's
+  gradient ordering is checked against.
+
+**Not tested:** the shader itself has no GPU test yet. Its effect is verified by
+measurement instead — `--scene grade --measure` on a night frame, which is how
+`kStrength` was calibrated — but that is a check somebody ran once, not one that
+runs on every build. A `testColorGradeGpu` asserting the identity (all controls
+at zero returns the input unchanged) and the zone separation (a shadow push
+moves a dark patch and leaves a bright one alone) is the obvious next test, and
+its absence is the weakest point in this node.

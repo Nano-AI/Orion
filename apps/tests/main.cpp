@@ -1418,10 +1418,35 @@ void testGradeOffsets() {
     checkNear(double(beyond[0]), double(full[0]), 1e-5,
               "the offset is clamped at the rim");
 
-    // Pushing toward red raises red above the other two, which is the least
-    // that "the direction you push is the direction the colour goes" can mean.
-    report(full[0] > full[1] && full[0] > full[2],
-           "pushing toward red is redder than green or blue");
+    // Where each primary actually lives on the wheel.
+    //
+    // This is the half of the wheel that can be tested. The other half is the
+    // gradient the panel paints, and the two disagreed: the maths winds
+    // counter-clockwise with y upward, SwiftUI's AngularGradient winds
+    // clockwise with y downward, so the ordinary R-Y-G-C-B-M ring put green
+    // where the engine puts blue. Dragging toward visible green made the
+    // picture blue. Pinning the angles here is what makes the panel's ordering
+    // checkable against something.
+    struct Primary { float degrees; int channel; const char* name; };
+    const Primary primaries[] = {{0.0f, 0, "red"}, {120.0f, 1, "green"},
+                                 {240.0f, 2, "blue"}};
+    for (const auto& prim : primaries) {
+        const float t = prim.degrees * 3.14159265358979f / 180.0f;
+        float o[3];
+        DevelopPipeline::gradeOffsets(std::cos(t), std::sin(t), o);
+        const int c = prim.channel;
+        report(o[c] > o[(c + 1) % 3] && o[c] > o[(c + 2) % 3],
+               std::string("the wheel's ") + prim.name + " direction raises " +
+                   prim.name + " above the other two");
+    }
+
+    // And the complements land opposite their primaries, which is what makes
+    // the ring continuous rather than three spikes.
+    float yellow[3];
+    DevelopPipeline::gradeOffsets(std::cos(1.0471975512f), std::sin(1.0471975512f),
+                                  yellow);   // 60 degrees
+    report(yellow[0] > yellow[2] && yellow[1] > yellow[2],
+           "sixty degrees is yellow: red and green above blue");
 }
 
 void testLensGpu() {

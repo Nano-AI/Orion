@@ -207,9 +207,15 @@ struct Editor: View {
     @State private var viewport = Viewport()
     @State private var tab: ToolTab
 
-    init(engine: Engine, startTab: ToolTab = .light) {
+    /// `startLibrary` exists for the screenshot harness. The filmstrip has been
+    /// changed twice without any capture showing it, because the harness opens
+    /// one photo and never scans a folder — so the strip appeared in no
+    /// screenshot at all and was checked by reading the code. Handing in a
+    /// pre-scanned library is the smallest seam that fixes that.
+    init(engine: Engine, startTab: ToolTab = .light, startLibrary: Library? = nil) {
         self.engine = engine
         _tab = State(initialValue: startTab)
+        _library = State(initialValue: startLibrary ?? Library())
     }
 
     @State private var band: HueBand = .blue

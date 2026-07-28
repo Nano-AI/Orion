@@ -67,13 +67,24 @@ struct ColorWheel: View {
 
     private var disc: some View {
         ZStack {
-            // The hue ring. Red at 0°, matching the engine's decomposition —
-            // the primaries sit 120° apart from there, so what you see on the
-            // wheel is where the offset actually goes.
+            // The hue ring, wound to match the engine.
+            //
+            // `gradeOffsets` puts red at 0°, green at 120° and blue at 240°
+            // measured counter-clockwise with y upward — the usual mathematical
+            // convention. `AngularGradient` sweeps *clockwise* from three
+            // o'clock in screen coordinates, where y runs downward, so the
+            // familiar R-Y-G-C-B-M order paints green where the engine puts
+            // blue and vice versa. Dragging toward what looked like green made
+            // the picture blue.
+            //
+            // Reversing the order winds the ring the same way the maths does.
+            // `testGradePrimaryAngles` pins the engine half of that; this
+            // comment is the only thing holding the other half, so do not
+            // "tidy" this back into alphabetical rainbow order.
             Circle()
                 .fill(AngularGradient(
-                    colors: [.red, .yellow, .green, .cyan, .blue,
-                             Color(red: 1, green: 0, blue: 1), .red],
+                    colors: [.red, Color(red: 1, green: 0, blue: 1), .blue,
+                             .cyan, .green, .yellow, .red],
                     center: .center))
                 // Saturation falls to nothing at the middle, so the center
                 // reads as "no correction" rather than as a color you happen

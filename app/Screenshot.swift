@@ -118,7 +118,31 @@ enum Screenshot {
             exit(0)
         }
 
-        let view = Editor(engine: engine, startTab: tab(for: o.scene))
+        // Scan the photo's own folder so the filmstrip has frames in it.
+        // Thumbnails stream in on a background queue, so the run loop below
+        // has to turn enough times for them to arrive — an empty strip is a
+        // screenshot of nothing.
+        let library = MainActor.assumeIsolated { () -> Library in
+            let lib = Library()
+            if let photo = o.photo {
+                lib.open(folder: URL(fileURLWithPath: photo).deletingLastPathComponent())
+            }
+            return lib
+        }
+        // Thumbnails stream in on a background queue, so the run loop has to
+        // turn enough times for them to arrive. An empty strip is a screenshot
+        // of nothing, which is worse than no screenshot — it looks like a pass.
+        for _ in 0..<60 {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+            let ready = MainActor.assumeIsolated {
+                !library.loading && !library.photos.isEmpty
+                    && library.photos.allSatisfy { $0.thumbnail != nil }
+            }
+            if ready { break }
+        }
+
+        let view = Editor(engine: engine, startTab: tab(for: o.scene),
+                          startLibrary: library)
             .frame(width: o.size.width, height: o.size.height)
             .preferredColorScheme(.dark)
 
