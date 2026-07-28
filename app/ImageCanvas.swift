@@ -180,6 +180,12 @@ struct ImageCanvas: NSViewRepresentable {
             struct VOut {
                 float4 pos [[position]];
                 float2 uv;
+                // Position across the drawn quad, 0..1, y downward — the same
+                // sense the panel's own geometry uses. Carried rather than
+                // recovered from uv, because uv is flipped in y and scaled into
+                // a sub-rectangle of the texture, and unpicking that in the
+                // fragment shader is what put the top/bottom split upside down.
+                float2 quad;
             };
 
             // A quad as a triangle strip, NOT the usual oversized fullscreen
@@ -191,8 +197,9 @@ struct ImageCanvas: NSViewRepresentable {
                                         constant Transform& t [[buffer(0)]]) {
                 const float2 p = float2(float(vid & 1u), float(vid >> 1u));
                 VOut out;
-                out.pos = float4((p * 2.0 - 1.0) * t.quadScale, 0.0, 1.0);
-                out.uv  = t.uvMin + float2(p.x, 1.0 - p.y) * t.uvSize;
+                out.pos  = float4((p * 2.0 - 1.0) * t.quadScale, 0.0, 1.0);
+                out.uv   = t.uvMin + float2(p.x, 1.0 - p.y) * t.uvSize;
+                out.quad = float2(p.x, 1.0 - p.y);
                 return out;
             }
 
@@ -214,12 +221,11 @@ struct ImageCanvas: NSViewRepresentable {
                 if (t.split >= 0.999) return edited;
 
                 // Which side of the divider this pixel is on. The divider runs
-                // in view space, not image space, so it stays put while the
-                // image pans underneath.
-                const float pos = (t.vertical != 0u) ? in.uv.x : in.uv.y;
-                const float u = (pos - t.uvMin.x) / max(t.uvSize.x, 1e-6);
-                const float v = (pos - t.uvMin.y) / max(t.uvSize.y, 1e-6);
-                const float where_ = (t.vertical != 0u) ? u : v;
+                // across the drawn quad, not across the image, so it stays put
+                // while the image pans underneath — and it lands where the
+                // panel draws it, which at any zoom other than fit is not the
+                // same rectangle the image occupies when fitted.
+                const float where_ = (t.vertical != 0u) ? in.quad.x : in.quad.y;
 
                 if (where_ > t.split) return edited;
 

@@ -418,7 +418,7 @@ struct Editor: View {
                             if engine.comparing {
                                 GeometryReader { canvasGeo in
                                     CompareOverlay(engine: engine,
-                                                   frame: photoFrame(in: canvasGeo.size))
+                                                   frame: drawnFrame(in: canvasGeo.size))
                                 }
                             }
                         }
@@ -518,6 +518,23 @@ struct Editor: View {
         return CanvasLayout.frameRect(
             imageAspect: CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight),
             in: size)
+    }
+
+    /// Where the picture is on screen right now, zoom included.
+    ///
+    /// The compare divider lives in view space — it stays put while the image
+    /// pans under it — so it has to be placed against the rectangle the picture
+    /// actually covers, not the one it covers at fit. Zoomed in, those are not
+    /// the same rectangle, and the divider drawn on one while the split happens
+    /// on the other is the whole of the bug.
+    private func drawnFrame(in size: CGSize) -> CGRect {
+        guard engine.imageWidth > 0, engine.imageHeight > 0, size.height > 0 else {
+            return .zero
+        }
+        let quad = viewport.quadScale(
+            imageAspect: CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight),
+            viewAspect: size.width / size.height)
+        return CanvasLayout.drawnRect(quadScale: quad, in: size)
     }
 
     private var hint: String {

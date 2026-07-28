@@ -27,6 +27,25 @@ enum CanvasLayout {
                       width: w, height: h)
     }
 
+    /// Where the picture is actually drawn, once zoom has had its say.
+    ///
+    /// `frameRect` is where it sits at fit. Zoom in and the quad grows until it
+    /// covers the whole view, and anything positioned against the fit rectangle
+    /// is then pointing at pixels that are no longer there — which is what put
+    /// the compare divider, its labels and its grab band somewhere the split
+    /// was not.
+    ///
+    /// `quadScale` is the renderer's own, in NDC half-extents: the quad spans
+    /// −q…+q about the centre, so it covers `q` of the view on each axis.
+    static func drawnRect(quadScale q: CGSize, in size: CGSize) -> CGRect {
+        guard size.width > 0, size.height > 0 else { return .zero }
+
+        let w = size.width * max(min(q.width, 1), 0)
+        let h = size.height * max(min(q.height, 1), 0)
+        return CGRect(x: (size.width - w) / 2, y: (size.height - h) / 2,
+                      width: w, height: h)
+    }
+
     // MARK: The rotated frame
 
     /// How far a frame of aspect `a` reaches on each axis once turned by

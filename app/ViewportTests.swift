@@ -47,6 +47,7 @@ enum ViewportTests {
         testCurveMatchesTheEngine()
         testCurvePointsStayOrdered()
         testModifiedTracksTheReadout()
+        testDrawnRectFollowsTheZoom()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -544,6 +545,66 @@ enum ViewportTests {
             stillAscending = false
         }
         report(stillAscending, "a densely packed curve still ascends")
+    }
+
+    /// The compare divider has to be placed against the rectangle the picture
+    /// actually covers, which is not the one it covers at fit.
+    ///
+    /// The split happens across the drawn quad in the canvas shader. The panel
+    /// was drawing the divider, the labels and the grab band against the *fit*
+    /// rectangle, so the moment you zoomed in the line stopped marking the
+    /// boundary and the grab band stopped being over it.
+    static func testDrawnRectFollowsTheZoom() {
+        let view = CGSize(width: 1200, height: 800)
+
+        for image in [landscape, portrait, 1.0] as [CGFloat] {
+            let v = Viewport()
+            let viewAspect = view.width / view.height
+
+            // At fit the two derivations must agree exactly, or the crop tool
+            // and the compare divider would disagree about where the photo is.
+            let fitQuad = v.quadScale(imageAspect: image, viewAspect: viewAspect)
+            let drawn = CanvasLayout.drawnRect(quadScale: fitQuad, in: view)
+            let fitted = CanvasLayout.frameRect(imageAspect: image, in: view)
+            near(drawn.minX, fitted.minX, 1e-6, "at fit the drawn rect starts where the frame does (x, \(image))")
+            near(drawn.minY, fitted.minY, 1e-6, "at fit the drawn rect starts where the frame does (y, \(image))")
+            near(drawn.width, fitted.width, 1e-6, "at fit the drawn rect is the frame's width (\(image))")
+            near(drawn.height, fitted.height, 1e-6, "at fit the drawn rect is the frame's height (\(image))")
+
+            // Zoomed in far enough, the picture covers the whole view — so a
+            // divider at split 0.5 belongs at the middle of the *view*, not at
+            // the middle of the letterboxed rectangle.
+            v.zoomBy(8.0, anchor: CGPoint(x: 0.5, y: 0.5),
+                     visible: CGSize(width: 1, height: 1))
+            let zoomedQuad = v.quadScale(imageAspect: image, viewAspect: viewAspect)
+            let zoomed = CanvasLayout.drawnRect(quadScale: zoomedQuad, in: view)
+            near(zoomed.width, view.width, 1e-6, "zoomed in, the picture spans the view's width (\(image))")
+            near(zoomed.height, view.height, 1e-6, "zoomed in, the picture spans the view's height (\(image))")
+
+            // And the two must actually differ where the image is letterboxed,
+            // or the test would pass on the broken code it was written for.
+            if abs(image - viewAspect) > 0.01 {
+                report(zoomed.width > fitted.width + 1 || zoomed.height > fitted.height + 1,
+                       "zoom changes where the picture is (\(image))")
+            }
+
+            // Never past the view: a rectangle wider than the canvas would put
+            // the divider's grab band outside anything that can be clicked.
+            for z in [1.0, 1.5, 2.0, 4.0, 16.0] as [CGFloat] {
+                let w = Viewport()
+                w.zoomBy(z, anchor: CGPoint(x: 0.5, y: 0.5),
+                         visible: CGSize(width: 1, height: 1))
+                let r = CanvasLayout.drawnRect(
+                    quadScale: w.quadScale(imageAspect: image, viewAspect: viewAspect),
+                    in: view)
+                report(r.width <= view.width + 1e-6 && r.height <= view.height + 1e-6,
+                       "the drawn rect stays inside the view (image \(image), zoom \(z))")
+                report(r.width > 0 && r.height > 0,
+                       "the drawn rect is not empty (image \(image), zoom \(z))")
+                near(r.midX, view.width / 2, 1e-6, "the drawn rect stays centred (x, zoom \(z))")
+                near(r.midY, view.height / 2, 1e-6, "the drawn rect stays centred (y, zoom \(z))")
+            }
+        }
     }
 
     /// A control is marked modified when, and only when, its readout differs
