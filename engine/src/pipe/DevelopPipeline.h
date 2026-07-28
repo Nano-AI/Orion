@@ -44,6 +44,15 @@ struct Adjustments {
     /// Extra quarter turns clockwise on top of the camera's own orientation.
     int rotateQuarters = 0;
 
+    /// Fine rotation in degrees, applied after the quarter turns. Positive
+    /// rotates the image clockwise, which is what a "straighten" control means.
+    float straightenDeg = 0.0f;
+
+    /// Crop rectangle in normalised post-rotation coordinates. The full frame
+    /// is origin (0,0) size (1,1).
+    float cropX = 0.0f, cropY = 0.0f;
+    float cropW = 1.0f, cropH = 1.0f;
+
     // Capture sharpening. Sits just after the demosaic.
     float sharpenAmount  = 0.0f;   // 0..2
     float sharpenRadius  = 1.0f;   // pixels
@@ -96,10 +105,12 @@ private:
     std::uint32_t width_ = 0, height_ = 0;
     int nLinearize_ = -1, nDirs_ = -1, nLpf_ = -1, nGreen_ = -1, nRgb_ = -1;
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
+    int nGeometry_ = -1;
     int nGuidePrep_ = -1, nGuideH1_ = -1, nGuideV1_ = -1;
     int nGuideAb_ = -1, nGuideH2_ = -1, nGuideV2_ = -1;
     int exifQuarters_ = 0;
     int turns_ = 0;
+    std::uint32_t outW_ = 0, outH_ = 0;
     int auxCurveLut_ = -1;
     Adjustments  lastAdj_{};
     bool         primed_ = false;

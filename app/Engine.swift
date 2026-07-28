@@ -42,6 +42,37 @@ final class Engine {
 
     /// Extra quarter turns clockwise, on top of the camera's own orientation.
     var rotateQuarters: Int32 = 0  { didSet { pushAndRender() } }
+    var straightenDeg: Float = 0   { didSet { pushAndRender() } }
+    var cropX: Float = 0           { didSet { pushAndRender() } }
+    var cropY: Float = 0           { didSet { pushAndRender() } }
+    var cropW: Float = 1           { didSet { pushAndRender() } }
+    var cropH: Float = 1           { didSet { pushAndRender() } }
+
+    /// Common crop ratios. nil is freeform.
+    func setAspect(_ ratio: Float?) {
+        guard isLoaded else { return }
+        guard let ratio else { return }
+
+        // Fit the largest rectangle of this ratio inside the current frame,
+        // centred, so choosing a ratio never crops information the user has
+        // not asked to lose beyond what the ratio requires.
+        let frame = Float(imageWidth) / Float(max(imageHeight, 1))
+        var w: Float = 1, h: Float = 1
+        if ratio > frame { h = frame / ratio } else { w = ratio / frame }
+
+        suspended = true
+        cropW = w; cropH = h
+        cropX = (1 - w) / 2; cropY = (1 - h) / 2
+        suspended = false
+        pushAndRender()
+    }
+
+    func resetCrop() {
+        suspended = true
+        cropX = 0; cropY = 0; cropW = 1; cropH = 1; straightenDeg = 0
+        suspended = false
+        pushAndRender()
+    }
 
     var sharpenAmount: Float = 0   { didSet { pushAndRender() } }
     var sharpenRadius: Float = 1   { didSet { pushAndRender() } }
@@ -140,7 +171,8 @@ final class Engine {
         exposureEv = 0; highlights = 0; shadows = 0; whites = 0; blacks = 0
         vibrance = 0; saturation = 0; contrast = 1
         sharpenAmount = 0; sharpenRadius = 1; sharpenMasking = 0
-        rotateQuarters = 0
+        rotateQuarters = 0; straightenDeg = 0
+        cropX = 0; cropY = 0; cropW = 1; cropH = 1
         hueShift = [Float](repeating: 0, count: 8)
         satShift = [Float](repeating: 0, count: 8)
         lumShift = [Float](repeating: 0, count: 8)
@@ -192,7 +224,8 @@ final class Engine {
             temperatureK: temperatureK, tint: tint, exposureEv: exposureEv,
             highlights: highlights, shadows: shadows, whites: whites, blacks: blacks,
             vibrance: vibrance, saturation: saturation, contrast: contrast,
-            rotateQuarters: rotateQuarters,
+            rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
+            cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking,
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
@@ -205,7 +238,8 @@ final class Engine {
         highlights = s.highlights; shadows = s.shadows
         whites = s.whites; blacks = s.blacks
         vibrance = s.vibrance; saturation = s.saturation; contrast = s.contrast
-        rotateQuarters = s.rotateQuarters
+        rotateQuarters = s.rotateQuarters; straightenDeg = s.straightenDeg
+        cropX = s.cropX; cropY = s.cropY; cropW = s.cropW; cropH = s.cropH
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
         sharpenMasking = s.sharpenMasking
         hueShift = s.hueShift; satShift = s.satShift; lumShift = s.lumShift
@@ -233,7 +267,8 @@ final class Engine {
             exposure_ev: exposureEv, highlights: highlights, shadows: shadows,
             whites: whites, blacks: blacks,
             vibrance: vibrance, saturation: saturation, contrast: contrast,
-            rotate_quarters: rotateQuarters,
+            rotate_quarters: rotateQuarters, straighten_deg: straightenDeg,
+            crop_x: cropX, crop_y: cropY, crop_w: cropW, crop_h: cropH,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),

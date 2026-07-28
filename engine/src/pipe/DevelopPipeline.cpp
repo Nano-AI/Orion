@@ -140,9 +140,9 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     // Allocate for the worst case so a user rotation never needs a recompile.
     const std::uint32_t maxSide = std::max(width_, height_);
-    nOrient_ = pipeline_.add({"orient", "orient", {nDisplay_},
-                              PixelFormat::RGBA8Unorm, {}, {},
-                              maxSide, maxSide});
+    nGeometry_ = pipeline_.add({"geometry", "geometry", {nDisplay_},
+                                PixelFormat::RGBA8Unorm, {}, {},
+                                maxSide, maxSide});
     (void)swaps;
 
     pipeline_.compile(width_, height_);
@@ -302,30 +302,47 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         pipeline_.updateAux(auxCurveLut_, lut.data(), kCurveResolution * sizeof(float));
     }
 
-    if (first || adj.rotateQuarters != lastAdj_.rotateQuarters) {
+    const bool geometryMoved =
+        first ||
+        adj.rotateQuarters != lastAdj_.rotateQuarters ||
+        adj.straightenDeg  != lastAdj_.straightenDeg ||
+        adj.cropX != lastAdj_.cropX || adj.cropY != lastAdj_.cropY ||
+        adj.cropW != lastAdj_.cropW || adj.cropH != lastAdj_.cropH;
+
+    if (geometryMoved) {
         const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
         const bool swap = (turns % 2) != 0;
-        params::Orient o{};
-        o.outSize[0] = swap ? height_ : width_;
-        o.outSize[1] = swap ? width_  : height_;
-        o.inSize[0]  = width_;
-        o.inSize[1]  = height_;
-        o.quarterTurns = static_cast<std::uint32_t>(turns);
-        pipeline_.setParams(nOrient_, &o, sizeof o);
-        turns_ = turns;
+
+        const float rotW = static_cast<float>(swap ? height_ : width_);
+        const float rotH = static_cast<float>(swap ? width_  : height_);
+
+        const float cw = std::clamp(adj.cropW, 0.01f, 1.0f);
+        const float ch = std::clamp(adj.cropH, 0.01f, 1.0f);
+        const float cx = std::clamp(adj.cropX, 0.0f, 1.0f - cw);
+        const float cy = std::clamp(adj.cropY, 0.0f, 1.0f - ch);
+
+        params::Geometry g{};
+        g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * cw));
+        g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * ch));
+        g.inSize[0]  = width_;
+        g.inSize[1]  = height_;
+        g.quarterTurns = static_cast<std::uint32_t>(turns);
+        g.straightenRad = adj.straightenDeg * 3.14159265358979f / 180.0f;
+        g.cropOrigin[0] = cx; g.cropOrigin[1] = cy;
+        g.cropSize[0]   = cw; g.cropSize[1]   = ch;
+        pipeline_.setParams(nGeometry_, &g, sizeof g);
+
+        turns_   = turns;
+        outW_    = g.outSize[0];
+        outH_    = g.outSize[1];
     }
 
     lastAdj_ = adj;
     primed_  = true;
 }
 
-std::uint32_t DevelopPipeline::outputWidth() const noexcept {
-    return (turns_ % 2) ? height_ : width_;
-}
-
-std::uint32_t DevelopPipeline::outputHeight() const noexcept {
-    return (turns_ % 2) ? width_ : height_;
-}
+std::uint32_t DevelopPipeline::outputWidth() const noexcept  { return outW_; }
+std::uint32_t DevelopPipeline::outputHeight() const noexcept { return outH_; }
 
 double DevelopPipeline::render() { return pipeline_.render(); }
 

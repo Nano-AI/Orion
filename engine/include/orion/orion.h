@@ -57,7 +57,10 @@ typedef struct OrionAdjustments {
     float saturation;     /* -1..1, 0 is untouched        */
     float contrast;       /* display transform slope      */
 
-    int32_t rotate_quarters; /* extra quarter turns clockwise */
+    int32_t rotate_quarters; /* extra quarter turns clockwise    */
+    float   straighten_deg;  /* fine rotation after the turns    */
+    float   crop_x, crop_y;  /* normalised, post-rotation        */
+    float   crop_w, crop_h;
 
     float sharpen_amount;   /* 0..2                       */
     float sharpen_radius;   /* pixels                     */
@@ -94,7 +97,7 @@ void* orion_engine_output_texture(const OrionEngine* engine);
 void* orion_engine_metal_device(const OrionEngine* engine);
 
 /* Samples the image at normalised oriented coordinates.
-/* out_display is the rendered colour (what a swatch should show); out_scene is
+   out_display is the rendered colour (what a swatch should show); out_scene is
  * the colour before any user adjustment (what a hue band must be derived from).
  * Each takes 3 floats; either may be NULL. */
 OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,

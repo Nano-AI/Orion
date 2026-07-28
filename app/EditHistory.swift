@@ -104,6 +104,11 @@ struct DevelopState: Equatable {
     var saturation: Float = 0
     var contrast: Float = 1
     var rotateQuarters: Int32 = 0
+    var straightenDeg: Float = 0
+    var cropX: Float = 0
+    var cropY: Float = 0
+    var cropW: Float = 1
+    var cropH: Float = 1
     var sharpenAmount: Float = 0
     var sharpenRadius: Float = 1
     var sharpenMasking: Float = 0

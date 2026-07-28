@@ -106,6 +106,9 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.saturation      = adj->saturation;
         a.contrast        = adj->contrast;
         a.rotateQuarters  = adj->rotate_quarters;
+        a.straightenDeg   = adj->straighten_deg;
+        a.cropX = adj->crop_x; a.cropY = adj->crop_y;
+        a.cropW = adj->crop_w; a.cropH = adj->crop_h;
         a.sharpenAmount   = adj->sharpen_amount;
         a.sharpenRadius   = adj->sharpen_radius;
         a.sharpenMasking  = adj->sharpen_masking;
@@ -128,6 +131,8 @@ OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* ou
         out->tint          = wb.tint;
         out->contrast      = 1.0f;
         out->sharpen_radius = 1.0f;
+        out->crop_w = 1.0f;
+        out->crop_h = 1.0f;
         return ORION_OK;
     });
 }

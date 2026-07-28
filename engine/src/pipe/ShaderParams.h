@@ -103,12 +103,15 @@ struct Display {
 };
 static_assert(sizeof(Display) == 32);
 
-struct Orient {
+struct Geometry {
     std::uint32_t outSize[2];
     std::uint32_t inSize[2];
     std::uint32_t quarterTurns;
-    std::uint32_t _pad[3];
+    float         straightenRad;
+    float         cropOrigin[2];
+    float         cropSize[2];
+    float         _pad[2];
 };
-static_assert(sizeof(Orient) == 32);
+static_assert(sizeof(Geometry) == 48);
 
 }  // namespace orion::pipe::params

@@ -293,6 +293,43 @@ private struct Editor: View {
                     case .colour: colourPanel
                     case .detail: detailPanel
                     case .crop:
+                        section("Aspect") {
+                            // Ratios photographers actually shoot and print to.
+                            let ratios: [(String, Float?)] = [
+                                ("Original", nil), ("1:1", 1), ("4:5", 0.8),
+                                ("3:2", 1.5), ("16:9", 16.0 / 9.0),
+                            ]
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
+                                                                        spacing: 4),
+                                                     count: 3),
+                                      spacing: 4) {
+                                ForEach(ratios, id: \.0) { name, ratio in
+                                    Button(name) {
+                                        engine.edit("Aspect") {
+                                            if ratio == nil { engine.resetCrop() }
+                                            else { engine.setAspect(ratio) }
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 10))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 5)
+                                    .foregroundStyle(Palette.dim)
+                                    .background(Palette.raised,
+                                                in: RoundedRectangle(cornerRadius: 4))
+                                }
+                            }
+                        }
+
+                        section("Straighten") {
+                            slider("Angle", $engine.straightenDeg, -15...15, "°", 1)
+                            Text("Rotates about the centre of the crop, so the "
+                                 + "composition stays put.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Palette.faint)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
                         section("Rotate") {
                             HStack(spacing: 8) {
                                 Button {
@@ -317,9 +354,9 @@ private struct Editor: View {
                                 .foregroundStyle(Palette.faint)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        Text("Crop and straighten still to come — M1")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.faint)
+                        Button("Reset crop") { engine.edit("Crop") { engine.resetCrop() } }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                     }
                 }
                 .padding(14)

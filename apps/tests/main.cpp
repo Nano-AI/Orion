@@ -251,8 +251,8 @@ void testOrientGpu() {
     }
 
     auto library = orion::gpu::Library::createFromFile(
-        *device, std::string(ORION_SHADER_DIR) + "/orient.metallib");
-    auto kernel = orion::gpu::Kernel::create(*device, *library, "orient");
+        *device, std::string(ORION_SHADER_DIR) + "/geometry.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "geometry");
 
     auto src = orion::gpu::Texture::create(*device, kW, kH,
                                            orion::gpu::PixelFormat::RGBA16Float);
@@ -278,12 +278,15 @@ void testOrientGpu() {
         const std::uint32_t ow = swaps ? kH : kW;
         const std::uint32_t oh = swaps ? kW : kH;
 
-        orion::pipe::params::Orient p{};
+        orion::pipe::params::Geometry p{};
         p.outSize[0] = ow;
         p.outSize[1] = oh;
         p.inSize[0]  = kW;
         p.inSize[1]  = kH;
         p.quarterTurns = turns;
+        p.straightenRad = 0.0f;
+        p.cropOrigin[0] = 0.0f; p.cropOrigin[1] = 0.0f;
+        p.cropSize[0]   = 1.0f; p.cropSize[1]   = 1.0f;
 
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*kernel, {src.get(), dst.get()}, &p, sizeof p, ow, oh);
@@ -437,6 +440,97 @@ void testDisplayNeutrality() {
     report(mid > 95 && mid < 165, "middle grey lands mid-range", detail);
 }
 
+/// Crop selects the requested region, not merely a smaller one.
+///
+/// An off-by-one or a transposed origin here shows up as "the crop works but
+/// grabs the wrong part of the frame", which is easy to miss by eye on a
+/// uniform subject.
+void testCropGpu() {
+    section("Crop (GPU)");
+
+    constexpr std::uint32_t kW = 16, kH = 16;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/geometry.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "geometry");
+
+    auto src = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto dst = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+
+    std::vector<__fp16> input(std::size_t(kW) * kH * 4);
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = (std::size_t(y) * kW + x) * 4;
+            input[i + 0] = static_cast<__fp16>(x);
+            input[i + 1] = static_cast<__fp16>(y);
+            input[i + 2] = 0;
+            input[i + 3] = 1;
+        }
+    }
+    src->upload(input.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+    // Right half, bottom half: origin (0.5, 0.5), size (0.5, 0.5).
+    const std::uint32_t ow = kW / 2, oh = kH / 2;
+    orion::pipe::params::Geometry p{};
+    p.outSize[0] = ow; p.outSize[1] = oh;
+    p.inSize[0]  = kW; p.inSize[1]  = kH;
+    p.quarterTurns = 0;
+    p.straightenRad = 0.0f;
+    p.cropOrigin[0] = 0.5f; p.cropOrigin[1] = 0.5f;
+    p.cropSize[0]   = 0.5f; p.cropSize[1]   = 0.5f;
+
+    orion::gpu::CommandBuffer cb(*device);
+    cb.dispatch(*kernel, {src.get(), dst.get()}, &p, sizeof p, ow, oh);
+    cb.commitAndWait();
+
+    std::vector<__fp16> out(std::size_t(ow) * oh * 4);
+    dst->download(out.data(), std::size_t(ow) * 4 * sizeof(__fp16), ow, oh);
+
+    // The crop's top-left must be the source's centre, within half a pixel of
+    // bilinear positioning.
+    const double x0 = double(out[0]);
+    const double y0 = double(out[1]);
+    checkNear(x0, 8.0, 0.6, "crop origin lands at the requested column");
+    checkNear(y0, 8.0, 0.6, "crop origin lands at the requested row");
+
+    // And the far corner must reach the source's far corner.
+    const std::size_t last = (std::size_t(oh - 1) * ow + (ow - 1)) * 4;
+    checkNear(double(out[last + 0]), 15.0, 0.6, "crop reaches the right edge");
+    checkNear(double(out[last + 1]), 15.0, 0.6, "crop reaches the bottom edge");
+
+    // A full-frame crop must be an exact pass-through.
+    p.cropOrigin[0] = 0.0f; p.cropOrigin[1] = 0.0f;
+    p.cropSize[0]   = 1.0f; p.cropSize[1]   = 1.0f;
+    p.outSize[0] = kW; p.outSize[1] = kH;
+
+    orion::gpu::CommandBuffer cb2(*device);
+    cb2.dispatch(*kernel, {src.get(), dst.get()}, &p, sizeof p, kW, kH);
+    cb2.commitAndWait();
+
+    std::vector<__fp16> full(std::size_t(kW) * kH * 4);
+    dst->download(full.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+
+    bool identity = true;
+    for (std::uint32_t i = 0; i < kW * kH; ++i) {
+        if (std::abs(double(full[i * 4]) - double(input[i * 4])) > 0.51 ||
+            std::abs(double(full[i * 4 + 1]) - double(input[i * 4 + 1])) > 0.51) {
+            identity = false;
+            break;
+        }
+    }
+    report(identity, "a full-frame crop is a pass-through");
+}
+
 }  // namespace
 
 int main() {
@@ -448,6 +542,7 @@ int main() {
     testOrientation();
     testOrientGpu();
     testDisplayNeutrality();
+    testCropGpu();
     testExportFormats();
 
     std::printf("\n%d checks, %d failures\n", checks, failures);

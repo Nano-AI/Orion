@@ -34,7 +34,7 @@ set(ORION_SHADERS
     guide_ab:guideAb
     develop_linear:developLinear
     develop_display:developDisplay
-    orient:orient
+    geometry:geometry
 )
 
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR})
