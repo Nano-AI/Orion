@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
 #include "gpu/MetalDevice.h"
 #include "pipe/DevelopPipeline.h"
 #include "raw/RawImage.h"
@@ -46,6 +49,13 @@ public:
     /// The export panel shows a measured size rather than an estimate, which
     /// is the whole reason the number is worth showing.
     [[nodiscard]] std::size_t exportedSize(const util::ExportOptions&);
+
+private:
+    /// The developed output as 16-bit unsigned, which is what the image
+    /// formats want. The graph ends in half float.
+    [[nodiscard]] std::vector<std::uint16_t> readOutput16(std::uint32_t w,
+                                                          std::uint32_t h) const;
+public:
 
     [[nodiscard]] bool hasImage() const noexcept { return develop_ != nullptr; }
     [[nodiscard]] const pipe::DevelopPipeline& develop() const;

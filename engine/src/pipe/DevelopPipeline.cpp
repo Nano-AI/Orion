@@ -195,8 +195,14 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     auxCurveLut_ = pipeline_.addAuxTexture(kCurveResolution, kCurveRows,
                                            PixelFormat::R32Float);
+    // Sixteen bits per channel, not eight. The display transform's output is
+    // the last thing that happens to a pixel, so eight bits there caps every
+    // export at eight bits whatever container it goes into — and a gradient
+    // that survived the whole pipeline in float gets quantised on the way out.
+    // Half float rather than 16-bit integer because it is guaranteed
+    // read-write on Metal, and because it holds the shadows better.
     nDisplay_   = pipeline_.add({"develop:display", "developDisplay", {nLinear_},
-                                 PixelFormat::RGBA8Unorm, {}, {auxCurveLut_}});
+                                 PixelFormat::RGBA16Float, {}, {auxCurveLut_}});
 
     // Orientation is last, and is the only node whose output dimensions differ
     // from its input — a quarter turn swaps them.
@@ -208,7 +214,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     const std::uint32_t maxSide =
         static_cast<std::uint32_t>(std::max(width_, height_) * 1.45f);
     nGeometry_ = pipeline_.add({"geometry", "geometry", {nDisplay_},
-                                PixelFormat::RGBA8Unorm, {}, {},
+                                PixelFormat::RGBA16Float, {}, {},
                                 true, maxSide, maxSide});
     (void)swaps;
 

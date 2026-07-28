@@ -1222,6 +1222,97 @@ void testLensGpu() {
               "the red control leaves blue alone");
 }
 
+/// The graph's output must actually carry more than eight bits.
+///
+/// Changing a texture format is the kind of edit that looks done the moment it
+/// compiles. This renders a gradient fine enough that eight bits could not
+/// represent it and checks the steps survive — if the format quietly fell back,
+/// adjacent outputs would land on the same value.
+void testOutputDepth() {
+    section("Output depth");
+
+    constexpr std::uint32_t kN = 512;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/developDisplay.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "developDisplay");
+
+    auto src = orion::gpu::Texture::create(*device, kN, 1,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto dst = orion::gpu::Texture::create(*device, kN, 1,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto lut = orion::gpu::Texture::create(*device, orion::pipe::kCurveResolution,
+                                           orion::pipe::kCurveRows,
+                                           orion::gpu::PixelFormat::R32Float);
+    const auto identity = orion::pipe::buildCurveLut({});
+    lut->upload(identity.data(), orion::pipe::kCurveResolution * sizeof(float));
+
+    // A gradient across a narrow slice of scene-linear values, so the *output*
+    // steps are far finer than 1/255.
+    std::vector<__fp16> input(std::size_t(kN) * 4);
+    for (std::uint32_t i = 0; i < kN; ++i) {
+        const float v = 0.180f + 0.004f * (float(i) / float(kN - 1));
+        input[i * 4 + 0] = static_cast<__fp16>(v);
+        input[i * 4 + 1] = static_cast<__fp16>(v);
+        input[i * 4 + 2] = static_cast<__fp16>(v);
+        input[i * 4 + 3] = 1;
+    }
+    src->upload(input.data(), std::size_t(kN) * 4 * sizeof(__fp16));
+
+    orion::pipe::params::Display dp{};
+    dp.contrast = 1.0f;
+    dp.pivot = 0.18f;
+    dp.curveIdentity = 1;
+    dp.resolution = orion::pipe::kCurveResolution;
+    dp.size[0] = kN;
+    dp.size[1] = 1;
+
+    orion::gpu::CommandBuffer cb(*device);
+    cb.dispatch(*kernel, {src.get(), lut.get(), dst.get()}, &dp, sizeof dp, kN, 1);
+    cb.commitAndWait();
+
+    std::vector<__fp16> out(std::size_t(kN) * 4);
+    dst->download(out.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, 1);
+
+    // How many distinct green values came back. Eight bits across this range
+    // could give only a handful.
+    std::vector<float> values;
+    values.reserve(kN);
+    for (std::uint32_t i = 0; i < kN; ++i) values.push_back(float(out[i * 4 + 1]));
+
+    std::sort(values.begin(), values.end());
+    const auto last = std::unique(values.begin(), values.end());
+    const auto distinct = static_cast<std::size_t>(std::distance(values.begin(), last));
+
+    const double span = double(values.back() - values.front());
+    const double eightBitSteps = span * 255.0;
+
+    report(span > 0.0, "the gradient produced a range at all");
+    report(distinct > eightBitSteps * 4.0,
+           "the output resolves far finer than eight bits could",
+           std::to_string(distinct) + " distinct values across "
+               + std::to_string(eightBitSteps) + " eight-bit steps");
+
+    // And it must be monotone: a format mismatch shows up as noise, not as a
+    // smooth ramp.
+    bool monotone = true;
+    for (std::uint32_t i = 1; i < kN; ++i) {
+        if (float(out[i * 4 + 1]) < float(out[(i - 1) * 4 + 1]) - 1e-5f) {
+            monotone = false;
+            break;
+        }
+    }
+    report(monotone, "the output ramp is monotone");
+}
+
 }  // namespace
 
 int main() {
@@ -1239,6 +1330,7 @@ int main() {
     testDenoiseGpu();
     testHighlightRecoveryGpu();
     testLensGpu();
+    testOutputDepth();
     testExportFormats();
 
     std::printf("\n%d checks, %d failures\n", checks, failures);

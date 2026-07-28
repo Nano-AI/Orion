@@ -44,12 +44,27 @@ Stats summarise(std::vector<double> v) {
             std::accumulate(v.begin(), v.end(), 0.0) / static_cast<double>(v.size())};
 }
 
+/// The developed output as 16-bit unsigned. The graph ends in half float; the
+/// image formats want integers.
+std::vector<std::uint16_t> output16(const orion::pipe::DevelopPipeline& d,
+                                    std::uint32_t w, std::uint32_t h) {
+    const std::size_t count = std::size_t(w) * h * 4;
+    std::vector<__fp16> half(count);
+    d.output().download(half.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+
+    std::vector<std::uint16_t> out(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        const float v = std::clamp(float(half[i]), 0.0f, 1.0f);
+        out[i] = static_cast<std::uint16_t>(v * 65535.0f + 0.5f);
+    }
+    return out;
+}
+
 void writeOut(const orion::pipe::DevelopPipeline& d, const std::string& path) {
     const std::uint32_t w = d.outputWidth(), h = d.outputHeight();
-    const std::size_t rowBytes = static_cast<std::size_t>(w) * 4;
-    std::vector<std::uint8_t> pixels(rowBytes * h);
-    d.output().download(pixels.data(), rowBytes, w, h);
-    orion::util::writePng(path, pixels.data(), w, h, rowBytes);
+    const auto pixels = output16(d, w, h);
+    orion::util::writePng(path, pixels.data(), w, h,
+                          std::size_t(w) * 4 * sizeof(std::uint16_t));
     std::printf("  wrote %s  (%u x %u)\n", path.c_str(), w, h);
 }
 
@@ -65,16 +80,14 @@ enum class Metric { Luma, Chroma };
 /// actually did something rather than silently no-op'ing.
 double meanOf(const orion::pipe::DevelopPipeline& d, Metric metric) {
     const std::uint32_t tw = d.outputWidth(), th = d.outputHeight();
-    const std::size_t rowBytes = static_cast<std::size_t>(tw) * 4;
-    std::vector<std::uint8_t> pixels(rowBytes * th);
-    d.output().download(pixels.data(), rowBytes, tw, th);
+    const auto pixels = output16(d, tw, th);
 
     double sum = 0.0;
     std::size_t n = 0;
     for (std::size_t i = 0; i < static_cast<std::size_t>(tw) * th; i += 37) {
-        const double r = pixels[i * 4 + 0];
-        const double g = pixels[i * 4 + 1];
-        const double b = pixels[i * 4 + 2];
+        const double r = pixels[i * 4 + 0] / 257.0;   // 16-bit to the 0..255
+        const double g = pixels[i * 4 + 1] / 257.0;   // scale these numbers
+        const double b = pixels[i * 4 + 2] / 257.0;   // have always been on
         const double y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         sum += (metric == Metric::Luma)
              ? y
@@ -265,9 +278,9 @@ int main(int argc, char** argv) {
 
             const std::uint32_t ew = develop.outputWidth();
             const std::uint32_t eh = develop.outputHeight();
-            const std::size_t rowBytes = static_cast<std::size_t>(ew) * 4;
-            std::vector<std::uint8_t> pixels(rowBytes * eh);
-            develop.output().download(pixels.data(), rowBytes, ew, eh);
+            const std::size_t rowBytes =
+                static_cast<std::size_t>(ew) * 4 * sizeof(std::uint16_t);
+            const auto pixels = output16(develop, ew, eh);
 
             struct Case { const char* suffix; orion::util::ExportOptions opts; };
             const Case cases[] = {

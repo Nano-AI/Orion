@@ -20,7 +20,7 @@ struct ExportOptions {
 /// Resampling, when requested, happens in CoreGraphics rather than on the GPU:
 /// export is not on the interaction path, and a correct downscale with proper
 /// filtering matters more here than shaving milliseconds.
-void writeImage(const std::string& path, const std::uint8_t* rgba,
+void writeImage(const std::string& path, const std::uint16_t* rgba,
                 std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow,
                 const ExportOptions& options);
 
@@ -28,12 +28,12 @@ void writeImage(const std::string& path, const std::uint8_t* rgba,
 /// Encodes to memory and reports the byte count, without writing anything.
 /// The export panel needs a size it can trust before you commit to the write,
 /// and only a real encode gives one.
-[[nodiscard]] std::size_t encodedSize(const std::uint8_t* rgba,
+[[nodiscard]] std::size_t encodedSize(const std::uint16_t* rgba,
                                       std::uint32_t width, std::uint32_t height,
                                       std::size_t bytesPerRow,
                                       const ExportOptions& options);
 
-void writePng(const std::string& path, const std::uint8_t* rgba,
+void writePng(const std::string& path, const std::uint16_t* rgba,
               std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow);
 
 /// Picks a format from the path's extension, defaulting to JPEG.

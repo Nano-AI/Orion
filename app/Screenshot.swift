@@ -220,19 +220,26 @@ enum Screenshot {
         let w = Int(engine.imageWidth), h = Int(engine.imageHeight)
         guard w > 0, h > 0, w <= src.width, h <= src.height else { return nil }
 
-        let stride = w * 4
-        var pixels = [UInt8](repeating: 0, count: stride * h)
-        pixels.withUnsafeMutableBytes { raw in
-            src.getBytes(raw.baseAddress!, bytesPerRow: stride,
-                         from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
+        // The graph ends in half float now. CoreGraphics takes 16-bit
+        // unsigned, so the conversion happens here rather than the readback
+        // pretending the texture is still eight bit — which would have read
+        // two pixels of noise for every one that exists.
+        let halves = readHalf(src, width: w, height: h)
+        var pixels = [UInt16](repeating: 0, count: w * h * 4)
+        for i in 0..<(w * h) {
+            for c in 0..<3 {
+                let v = min(max(Float(halves[i * 4 + c]), 0), 1)
+                pixels[i * 4 + c] = UInt16(v * 65535)
+            }
+            pixels[i * 4 + 3] = UInt16(min(max(Float(halves[i * 4 + 3]), 0), 1) * 65535)
         }
 
-        // The pipeline writes BGRA; CoreGraphics is told so rather than the
-        // channels being swapped by hand.
-        let info: CGBitmapInfo = [.byteOrder32Little,
-                                  CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)]
-        guard let provider = CGDataProvider(data: Data(pixels) as CFData),
-              let cg = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32,
+        let stride = w * 4 * MemoryLayout<UInt16>.size
+        let info: CGBitmapInfo = [.byteOrder16Little,
+                                  CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)]
+        let data = pixels.withUnsafeBufferPointer { Data(buffer: $0) }
+        guard let provider = CGDataProvider(data: data as CFData),
+              let cg = CGImage(width: w, height: h, bitsPerComponent: 16, bitsPerPixel: 64,
                                bytesPerRow: stride,
                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info,
                                provider: provider, decode: nil, shouldInterpolate: true,
@@ -258,20 +265,14 @@ enum Screenshot {
         let rw = max(1, min(w - x0, Int(region.width * CGFloat(w))))
         let rh = max(1, min(h - y0, Int(region.height * CGFloat(h))))
 
-        let stride = rw * 4
-        var pixels = [UInt8](repeating: 0, count: stride * rh)
-        pixels.withUnsafeMutableBytes { raw in
-            src.getBytes(raw.baseAddress!, bytesPerRow: stride,
-                         from: MTLRegionMake2D(x0, y0, rw, rh), mipmapLevel: 0)
-        }
+        let pixels = readHalf(src, width: rw, height: rh, x: x0, y: y0)
 
-        // BGRA, and the alpha channel is not a measurement.
         var sums = [Double](repeating: 0, count: 3)
         var squares = [Double](repeating: 0, count: 3)
         let n = Double(rw * rh)
-        for i in stride_pixels(count: rw * rh) {
+        for i in 0..<(rw * rh) {
             for c in 0..<3 {
-                let v = Double(pixels[i * 4 + (2 - c)]) / 255
+                let v = Double(min(max(Float(pixels[i * 4 + c]), 0), 1))
                 sums[c] += v
                 squares[c] += v * v
             }
@@ -287,8 +288,16 @@ enum Screenshot {
         FileHandle.standardError.write(Data(report.utf8))
     }
 
-    private static func stride_pixels(count: Int) -> StrideTo<Int> {
-        stride(from: 0, to: count, by: 1)
+    /// A region of a half-float texture, as Float16.
+    private static func readHalf(_ texture: MTLTexture, width: Int, height: Int,
+                                 x: Int = 0, y: Int = 0) -> [Float16] {
+        let stride = width * 4 * MemoryLayout<Float16>.size
+        var out = [Float16](repeating: 0, count: width * height * 4)
+        out.withUnsafeMutableBytes { raw in
+            texture.getBytes(raw.baseAddress!, bytesPerRow: stride,
+                             from: MTLRegionMake2D(x, y, width, height), mipmapLevel: 0)
+        }
+        return out
     }
 
     // MARK: Rendering

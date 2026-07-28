@@ -55,9 +55,11 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
 
     // What is on screen.
     if (outDisplay) {
-        std::uint8_t px[4]{};
+        __fp16 px[4]{};
         develop_->output().readPixel(x, y, px);
-        for (int i = 0; i < 3; ++i) outDisplay[i] = float(px[i]) / 255.0f;
+        for (int i = 0; i < 3; ++i) {
+            outDisplay[i] = std::clamp(float(px[i]), 0.0f, 1.0f);
+        }
     }
 
     // The unedited scene colour. The reference image is unrotated, so invert
@@ -96,8 +98,8 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
     const std::uint32_t h = develop_->outputHeight();
     if (w == 0 || h == 0) return;
 
-    const std::size_t rowBytes = std::size_t(w) * 4;
-    std::vector<std::uint8_t> pixels(rowBytes * h);
+    const std::size_t rowBytes = std::size_t(w) * 4 * sizeof(__fp16);
+    std::vector<__fp16> pixels(std::size_t(w) * h * 4);
     develop_->output().download(pixels.data(), rowBytes, w, h);
 
     // A prime stride decorrelates from any repeating structure in the image,
@@ -107,8 +109,9 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
 
     for (std::size_t i = 0; i < count; i += kStride) {
         for (std::uint32_t c = 0; c < 3; ++c) {
-            const std::uint32_t bin =
-                std::min<std::uint32_t>(bins - 1, pixels[i * 4 + c] * bins / 256);
+            const float v = std::clamp(float(pixels[i * 4 + c]), 0.0f, 1.0f);
+            const std::uint32_t bin = std::min<std::uint32_t>(
+                bins - 1, static_cast<std::uint32_t>(v * float(bins)));
             ++out[c * bins + bin];
         }
     }
@@ -124,12 +127,10 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     // inside it holds pixels.
     const std::uint32_t w = develop_->outputWidth();
     const std::uint32_t h = develop_->outputHeight();
-    const std::size_t rowBytes = static_cast<std::size_t>(w) * 4;
 
-    std::vector<std::uint8_t> pixels(rowBytes * h);
-    develop_->output().download(pixels.data(), rowBytes, w, h);
-
-    util::writeImage(path, pixels.data(), w, h, rowBytes, options);
+    const auto pixels = readOutput16(w, h);
+    util::writeImage(path, pixels.data(), w, h,
+                     static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t), options);
 }
 
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {
@@ -139,12 +140,30 @@ std::size_t Engine::exportedSize(const util::ExportOptions& options) {
 
     const std::uint32_t w = develop_->outputWidth();
     const std::uint32_t h = develop_->outputHeight();
-    const std::size_t rowBytes = static_cast<std::size_t>(w) * 4;
 
-    std::vector<std::uint8_t> pixels(rowBytes * h);
-    develop_->output().download(pixels.data(), rowBytes, w, h);
+    const auto pixels = readOutput16(w, h);
+    return util::encodedSize(pixels.data(), w, h,
+                             static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t),
+                             options);
+}
 
-    return util::encodedSize(pixels.data(), w, h, rowBytes, options);
+/// The output as 16-bit unsigned, which is what the image formats want.
+///
+/// The graph ends in half float. Converting here rather than making the graph
+/// write integers keeps the pipeline in one numeric world, and half float is
+/// the format Metal guarantees is read-write.
+std::vector<std::uint16_t> Engine::readOutput16(std::uint32_t w, std::uint32_t h) const {
+    const std::size_t count = static_cast<std::size_t>(w) * h * 4;
+    std::vector<__fp16> half(count);
+    develop_->output().download(half.data(),
+                                static_cast<std::size_t>(w) * 4 * sizeof(__fp16), w, h);
+
+    std::vector<std::uint16_t> out(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        const float v = std::clamp(float(half[i]), 0.0f, 1.0f);
+        out[i] = static_cast<std::uint16_t>(v * 65535.0f + 0.5f);
+    }
+    return out;
 }
 
 const pipe::DevelopPipeline& Engine::develop() const {

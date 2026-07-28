@@ -35,14 +35,20 @@ struct CFHolder {
     explicit operator bool() const { return ref != nullptr; }
 };
 
-CGImageRef makeImage(const std::uint8_t* rgba, std::uint32_t width,
+/// Sixteen bits per component.
+///
+/// PNG and TIFF carry that through; JPEG does not and CoreGraphics quantises on
+/// the way out, which is correct — the point is that the depth survives as far
+/// as the container allows rather than being thrown away at the graph's edge.
+CGImageRef makeImage(const std::uint16_t* rgba, std::uint32_t width,
                      std::uint32_t height, std::size_t bytesPerRow) {
     CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
     if (space == nullptr) throw std::runtime_error("could not create colour space");
 
+    // Little-endian, because that is how the sixteen-bit samples were written.
     CGContextRef ctx = CGBitmapContextCreate(
-        const_cast<std::uint8_t*>(rgba), width, height, 8, bytesPerRow, space,
-        static_cast<CGBitmapInfo>(kCGImageAlphaNoneSkipLast) | kCGBitmapByteOrder32Big);
+        const_cast<std::uint16_t*>(rgba), width, height, 16, bytesPerRow, space,
+        static_cast<CGBitmapInfo>(kCGImageAlphaNoneSkipLast) | kCGBitmapByteOrder16Little);
     CGColorSpaceRelease(space);
     if (ctx == nullptr) throw std::runtime_error("could not create bitmap context");
 
@@ -101,7 +107,7 @@ ImageFormat formatForPath(const std::string& path) {
     return ImageFormat::Jpeg;
 }
 
-void writeImage(const std::string& path, const std::uint8_t* rgba,
+void writeImage(const std::string& path, const std::uint16_t* rgba,
                 std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow,
                 const ExportOptions& options) {
     @autoreleasepool {
@@ -126,7 +132,7 @@ void writeImage(const std::string& path, const std::uint8_t* rgba,
     }
 }
 
-std::size_t encodedSize(const std::uint8_t* rgba,
+std::size_t encodedSize(const std::uint16_t* rgba,
                         std::uint32_t width, std::uint32_t height,
                         std::size_t bytesPerRow, const ExportOptions& options) {
     @autoreleasepool {
@@ -153,7 +159,7 @@ std::size_t encodedSize(const std::uint8_t* rgba,
     }
 }
 
-void writePng(const std::string& path, const std::uint8_t* rgba,
+void writePng(const std::string& path, const std::uint16_t* rgba,
               std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow) {
     writeImage(path, rgba, width, height, bytesPerRow, {ImageFormat::Png, 1.0f, 0});
 }
