@@ -20,18 +20,30 @@ struct DisplayParams
 static const float kMinEv = -12.47393f;
 static const float kMaxEv =   4.026069f;
 
-// Rec.2020 -> AgX inset. Compressing the gamut inward before the sigmoid is the
-// whole trick: bright saturated colours then desaturate toward white as they
-// roll off, instead of skewing hue the way a naive per-channel curve does.
+// Working space is linear Rec.2020; AgX is defined against Rec.709 primaries,
+// so convert first. Skipping this step is not a subtle error — it silently
+// rotates every hue.
+static const float3x3 kRec2020ToRec709 = float3x3(
+     1.6605f, -0.5876f, -0.0728f,
+    -0.1246f,  1.1329f, -0.0083f,
+    -0.0182f, -0.1006f,  1.1187f);
+
+// AgX inset and outset, from Troy Sobotka's reference implementation.
+//
+// Every row sums to 1, which is the property that matters: it means neutral
+// grey stays neutral. An earlier pair of matrices here did not have it — the
+// outset mapped (1,1,1) to roughly (0.84, 0.94, 1.22), lifting blue well above
+// green and casting the whole image purple. The test in orion-tests asserts
+// neutrality now, so that cannot recur silently.
 static const float3x3 kInset = float3x3(
-    0.856627153315983f, 0.137318972929847f, 0.11189821299995f,
-    0.0951212405381588f, 0.761241990602591f, 0.0767994186031903f,
-    0.0482516061458583f, 0.101439036467562f, 0.811302368396859f);
+    0.84247906f, 0.07843360f, 0.07922375f,
+    0.04232824f, 0.87846864f, 0.07916613f,
+    0.04237565f, 0.07843360f, 0.87914297f);
 
 static const float3x3 kOutset = float3x3(
-    1.1271005818144368f, -0.1413297634984383f, -0.14132976349843826f,
-   -0.11060664309660323f, 1.157823702216272f, -0.11060664309660294f,
-   -0.016493938717834573f, -0.016493938717834257f, 1.2519364065950405f);
+     1.19687900512017f,   -0.0980208811401368f, -0.0990297440797205f,
+    -0.0528968517574562f,  1.15190312990417f,   -0.0989611768448433f,
+    -0.0529716355144438f, -0.0980434501171241f,  1.15107367264116f);
 
 // Six-term polynomial fit of the AgX sigmoid over the normalised range.
 float agxCurve(float x)
@@ -70,6 +82,7 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
     float3 c = max(src[tid.xy].rgb, 0.0f);
 
     // ── AgX ────────────────────────────────────────────────────────────────
+    c = max(mul(kRec2020ToRec709, c), 0.0f);
     c = mul(kInset, c);
 
     c = clamp(log2(max(c, 1e-10f)), kMinEv, kMaxEv);

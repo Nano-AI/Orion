@@ -335,6 +335,108 @@ void testOrientGpu() {
     }
 }
 
+// ── Neutrality of the display transform ────────────────────────────────────
+
+/// Grey in, grey out.
+///
+/// This is the single most valuable check in the file. A tone mapper's inset
+/// and outset matrices must each preserve the achromatic axis; if they do not,
+/// *every* pixel picks up a cast and the image looks subtly wrong in a way that
+/// is easy to mistake for a white balance problem. An earlier pair of matrices
+/// mapped neutral to roughly (0.84, 0.94, 1.22) and cast the whole image purple.
+void testDisplayNeutrality() {
+    section("Display transform neutrality");
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/developDisplay.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "developDisplay");
+
+    // A ramp of neutral greys spanning 12 stops, from deep shadow to well
+    // above diffuse white.
+    constexpr std::uint32_t kN = 24;
+    std::vector<__fp16> input(std::size_t(kN) * 4);
+    std::vector<float> levels(kN);
+    for (std::uint32_t i = 0; i < kN; ++i) {
+        const float ev = -10.0f + 12.0f * float(i) / float(kN - 1);
+        const float v = std::pow(2.0f, ev);
+        levels[i] = v;
+        input[i * 4 + 0] = static_cast<__fp16>(v);
+        input[i * 4 + 1] = static_cast<__fp16>(v);
+        input[i * 4 + 2] = static_cast<__fp16>(v);
+        input[i * 4 + 3] = 1;
+    }
+
+    auto src = orion::gpu::Texture::create(*device, kN, 1,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto dst = orion::gpu::Texture::create(*device, kN, 1,
+                                           orion::gpu::PixelFormat::RGBA8Unorm);
+    src->upload(input.data(), std::size_t(kN) * 4 * sizeof(__fp16));
+
+    // An identity LUT, so the curve stage is a pass-through.
+    auto lut = orion::gpu::Texture::create(*device, orion::pipe::kCurveResolution,
+                                           orion::pipe::kCurveRows,
+                                           orion::gpu::PixelFormat::R32Float);
+    const auto lutData = orion::pipe::buildCurveLut({});
+    lut->upload(lutData.data(), orion::pipe::kCurveResolution * sizeof(float));
+
+    orion::pipe::params::Display p{};
+    p.contrast = 1.0f;
+    p.pivot = -2.5f;
+    p.curveIdentity = 1u;
+    p.resolution = orion::pipe::kCurveResolution;
+    p.size[0] = kN;
+    p.size[1] = 1;
+
+    orion::gpu::CommandBuffer cb(*device);
+    cb.dispatch(*kernel, {src.get(), lut.get(), dst.get()}, &p, sizeof p, kN, 1);
+    cb.commitAndWait();
+
+    std::vector<std::uint8_t> out(std::size_t(kN) * 4);
+    dst->download(out.data(), std::size_t(kN) * 4, kN, 1);
+
+    int worst = 0;
+    float worstLevel = 0.0f;
+    bool monotone = true;
+    int previousGreen = -1;
+
+    for (std::uint32_t i = 0; i < kN; ++i) {
+        const int r = out[i * 4 + 0], g = out[i * 4 + 1], b = out[i * 4 + 2];
+        const int spread = std::max({r, g, b}) - std::min({r, g, b});
+        if (spread > worst) { worst = spread; worstLevel = levels[i]; }
+        if (g < previousGreen) monotone = false;
+        previousGreen = g;
+    }
+
+    char detail[160];
+    std::snprintf(detail, sizeof detail,
+                  "worst channel spread %d/255 at scene level %.4f", worst, worstLevel);
+    // 2/255 covers 8-bit rounding; anything beyond that is a genuine cast.
+    report(worst <= 2, "neutral grey stays neutral through the display transform",
+           worst <= 2 ? "" : detail);
+
+    report(monotone, "brighter input never produces a darker output");
+
+    // Middle grey must land near the middle of the display range. This is what
+    // catches a double encode: applying a transfer function on top of AgX put
+    // 0.18 at 189/255 instead of about 128.
+    const float target = 0.18f;
+    std::uint32_t nearest = 0;
+    for (std::uint32_t i = 1; i < kN; ++i) {
+        if (std::abs(levels[i] - target) < std::abs(levels[nearest] - target)) nearest = i;
+    }
+    const int mid = out[nearest * 4 + 1];
+    std::snprintf(detail, sizeof detail, "scene %.3f -> %d/255", levels[nearest], mid);
+    report(mid > 95 && mid < 165, "middle grey lands mid-range", detail);
+}
+
 }  // namespace
 
 int main() {
@@ -345,6 +447,7 @@ int main() {
     testCfa();
     testOrientation();
     testOrientGpu();
+    testDisplayNeutrality();
     testExportFormats();
 
     std::printf("\n%d checks, %d failures\n", checks, failures);
