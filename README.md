@@ -8,9 +8,15 @@ aims at the gap: a GPU pipeline quick enough that adjustments feel instant, a
 toolset capable of transforming an image rather than nudging it, and an
 interface that stays out of the way of the photograph.
 
-**Status: early.** It opens a raw file, develops it, and exports. There is no
-library, no crop, and no highlight recovery yet. See
-[`planning/ROADMAP.md`](planning/ROADMAP.md) for what is done and what is not.
+**Status: M0–M2 complete, M3 not started.** It browses a folder, culls, develops,
+crops, and exports with metadata and a color profile. The panel covers white
+balance, tone, a tone curve, an eight-band color mixer, profiled noise
+reduction, lens corrections, sharpening, highlight recovery, crop and
+straighten. Undo is unlimited and edits persist per photo in XMP sidecars.
+
+**Not there yet:** color grading wheels, masking, healing, a lens database,
+tethering. See [`planning/ROADMAP.md`](planning/ROADMAP.md) and
+[`planning/STATUS.md`](planning/STATUS.md), which is the honest list.
 
 ---
 
@@ -27,13 +33,24 @@ That is why zooming to 100% shows real pixels: the full-resolution result is
 already in a texture.
 
 ```
-decode → white balance → demosaic → camera matrix
+decode → linearize + white balance + white clip → RCD demosaic
+       → highlight reconstruction → wavelet denoise (4 scales)
+       → lens corrections → sharpen → camera matrix
        → guided filter → tone, color, curve
-       → AgX display transform → orientation
+       → AgX display transform → crop, straighten, orientation
 ```
+
+27 nodes, about 4 GiB of intermediates on a 24 MP frame.
 
 Everything between the camera matrix and the display transform is scene-linear
 and unbounded. There is exactly one display transform, and it is at the end.
+
+The **white clip** in the first node is small and load-bearing. A sensor
+saturates at one count for every channel, so a blown highlight arrives as
+(S, S, S); white balance then multiplies each channel by its own gain and what
+was a white light is, in ratio, the gains themselves. Nothing downstream can
+undo that, because every stage after it preserves ratios. Without the clip,
+every clipped light in a night frame renders magenta.
 
 ## Algorithms are cited, not invented
 
@@ -46,9 +63,15 @@ on every image — a class of bug that is invisible to inspection and obvious to
 arithmetic. Citing the source makes the numbers checkable; testing the invariant
 keeps them right.
 
-Notable ports: the guided filter (He, Sun & Tang, ECCV 2010) for local highlight
-and shadow recovery, AgX (Sobotka) as the display transform, monotone cubic
-Hermite (Fritsch & Carlson, 1980) for tone curves.
+Notable ports: RCD demosaic, the fast guided filter (He & Sun, arXiv:1505.00996)
+for local highlight and shadow recovery, AgX (Sobotka) as the display transform,
+monotone cubic Hermite (Fritsch & Carlson, 1980) for tone curves, à-trous
+wavelet denoising (Starck et al., 2007) with a per-frame Poisson–Gaussian noise
+fit (Foi et al., 2008), cross-channel highlight reconstruction (Masood, Zhu &
+Tang, CGF 2009), and lensfun's lens correction models.
+
+No GPL code is copied. Implementing a *published algorithm* from its description
+is fine — mathematics is not copyrightable — and each entry says which it is.
 
 ## Building
 
@@ -73,5 +96,23 @@ open build/Orion.app
 ./build/apps/bench/orion-bench file.ARW   # latency gate and per-control checks
 ```
 
+129 engine checks, 2067 viewport checks.
+
 The GPU tests matter most. Pure maths tests pass happily on code that renders
 garbage, because they never touch a texture — two shipped bugs proved it.
+
+### The screenshot harness
+
+```sh
+./build/Orion.app/Contents/MacOS/Orion --screenshot out.png --photo x.ARW \
+    --scene light [--measure x,y,w,h] [--size 1680x1050]
+```
+
+Renders the real view hierarchy offscreen, so no Screen Recording permission is
+needed. `--measure` prints per-channel mean, standard deviation, saturation and
+luma over a region of the engine's output — which is how "there is purple in my
+photo" became a number that could be watched going down.
+
+**What it cannot see:** the Metal canvas (AppKit cannot capture a Metal layer,
+so it draws a still), and any 3D transform (`cacheDisplay` skips them). Both
+limits are recorded in `planning/STATUS.md` rather than left to be rediscovered.

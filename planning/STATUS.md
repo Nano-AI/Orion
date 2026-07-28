@@ -187,6 +187,13 @@ reading the code does not — this codebase has shipped that bug three times.
 through `MTKView` — AppKit cannot capture a Metal layer. Canvas geometry stays
 the viewport suite's job.
 
+**Second blind spot, found 2026-07-28:** a `rotation3DEffect` does not survive
+`cacheDisplay` either. The mode dial renders every tab square-on in a
+screenshot, and looks correct, while the live app shows the turn. Anything
+relying on a 3D transform has to be checked by eye. The dial's horizontal scale
+is deliberately redundant with its rotation so the part a screenshot *can* see
+is still the right shape.
+
 ---
 
 ## Where we are
