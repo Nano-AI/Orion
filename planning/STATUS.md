@@ -108,6 +108,16 @@ against a cast that was on every frame.
 
 **Still to do, in order**
 
+0. **Masking** — the largest gap, and now the best-specified. `research/masking.md`
+   is a full plan of record from a deep-research run: mask primitive maths,
+   parametric-not-raster stroke storage, alpha applied to the *parameter* rather
+   than blended, mask-group algebra, and Apple Vision for subject. The finding
+   that matters most: **guided feathering is the guided filter's own named
+   application** (He/Sun/Tang §"Matting/Guided Feathering", r = 60, ε = 1e-6), so
+   auto-mask, feathering and AI-matte upsampling all come from the node already
+   in the graph with one extra input binding. Steps 1–3 of that plan need no new
+   dependency and no new licence position.
+
 1. **A lens database.** The corrections are built and manual. lensfun would set
    the coefficients from what the EXIF names; the maths does not change. This is
    the largest remaining item — a dependency plus an XML database, not an

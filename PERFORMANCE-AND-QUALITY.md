@@ -142,7 +142,7 @@ Not "not polished" — absent.
 
 | Missing | Notes |
 |---|---|
-| **Masking** | No linear, radial, brush or subject masks. Every adjustment is global. **This is now the largest gap against the reference product** |
+| **Masking** | No linear, radial, brush or subject masks. Every adjustment is global. **The largest gap against the reference product** — and now the best-specified one: `research/masking.md` is a complete plan of record, researched but not built |
 | **Healing / clone** | Nothing for dust spots |
 | **Lens database** | **Not built — see §8.** The corrections work; the coefficients are typed in by hand |
 | **Perspective / keystone** | Straighten only |
