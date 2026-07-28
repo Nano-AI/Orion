@@ -82,7 +82,7 @@ apps/probe, apps/bench              C-API smoke test, and the M0 gate
 design/                             tokens.json -> CSS + Swift; darkroom mockup
 ```
 
-### Two bugs worth remembering
+### Bugs worth remembering
 1. **Slang binding indices are cumulative across a module.** Compiling all
    kernels into one metallib gave kernel 2 textures at index 2/3 and kernel 3 at
    4/5, while the host binds from 0 every dispatch — so every kernel after the
@@ -92,6 +92,27 @@ design/                             tokens.json -> CSS + Swift; darkroom mockup
    the colour matrix fight: the data is already neutral after WB, and an
    unnormalised matrix re-tints it (we had a magenta cast). dcraw normalises
    rgb_cam for the same reason.
+3. **One geometry, one function.** The renderer, the crop overlay and hit
+   testing each computed the photo's on-screen rectangle for themselves, and
+   drifted apart — handles landed on a rectangle the pixels were not drawn in.
+   `app/CanvasLayout.swift` is now the only copy, and the *engine is given*
+   the preview canvas rather than deriving a second one. Same class of bug in
+   the shader: the straighten pivot was derived from cropOrigin/cropSize,
+   which describe the canvas rather than the user's rectangle, so the preview
+   turned about the frame centre and the committed render about the crop
+   centre. Pass the pivot, do not derive it.
+4. **The crop must stay inside the turned frame.** Nothing enforced it, so a
+   straightened export had transparent wedges in its corners — the crop is
+   what gets sampled, and it reached past the picture. `constrainedCrop`
+   shrinks and recentres it, which is what Lightroom does. A fixed preview
+   canvas could not hold a steep angle either: a 3:2 frame at 45 degrees
+   reaches 1.77x its short side, so the old constant 1.42 clipped corners past
+   about 17 degrees. The canvas is now computed per angle and aspect, and
+   sampled into a frame-sized texture so its cost stays flat.
+5. **A `Path` view takes the size it is offered.** An unsized one inside a
+   `.position()` grows to the whole overlay, and `.position` then centres
+   *that* — which threw the crop corner marks into the middle of the window.
+   Give hand-drawn marks a fixed `.frame`.
 
 ## Settled
 
@@ -158,6 +179,19 @@ filtering · the SQLite index.
   is designed but unbuilt. Not needed yet on an M4 — will be on lesser GPUs
 - Black level ignores LibRaw's 2D cblack pattern (averaged instead)
 - AgX output is sRGB-encoded; the EDR/P3 path is not wired up
+
+## Culling — where the controls are
+
+Rejection was reported broken three times and was never reproducible from the
+code, because the failure was focus, not logic: the `x` handler was an
+`onKeyPress` on the editor's root view, and the Metal canvas takes first
+responder on any click. Culling now lives in a **Photo menu** (`PhotoCommands`
+in `OrionApp.swift`), published through `@FocusedValue(\.cull)`. Menu shortcuts
+route through the responder chain, so they work wherever focus sits — and the
+shortcut is written next to its name instead of having to be known in advance.
+
+R rejects · 1–5 rate · ⌘0 clears · ← → browse · 0 fits · 9 is actual size ·
+⏎ applies a crop · ⎋ cancels one · ⌘R resets adjustments.
 
 ## Notes for whoever picks this up
 

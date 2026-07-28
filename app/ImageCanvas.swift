@@ -387,24 +387,16 @@ struct ImageCanvas: NSViewRepresentable {
             let validU = validW / CGFloat(texture.width)
             let validV = validH / CGFloat(texture.height)
 
-            // While cropping, the engine renders onto a canvas larger than the
-            // frame so a rotated picture has somewhere to go. Fit the *frame*
-            // to the view rather than that canvas — otherwise the padding eats
-            // roughly a third of the hero area and the photo looks shrunken.
-            // The overflow simply draws past the edges and clips, which is what
-            // Photoshop does.
-            let canvasGrowth: CGFloat = engine.cropPreview ? 1.42 : 1.0
-
-            // A little breathing room so crop handles at the frame edge stay
-            // grabbable rather than sitting hard against the panel.
-            let inset: CGFloat = engine.cropPreview ? 0.86 : 1.0
-
+            // The crop preview is rendered into a texture of the frame's own
+            // aspect — the extra context lives inside the picture rather than
+            // spilling past it — so there is nothing special to do here. The
+            // output is fitted to the view, cropping or not.
             let imageAspect = validW / validH
             let viewAspect = view.drawableSize.width / max(view.drawableSize.height, 1)
 
             // Report true magnification so the toolbar can show a real percent.
             viewport.fitScale = min(view.drawableSize.width / validW,
-                                    view.drawableSize.height / validH) * canvasGrowth
+                                    view.drawableSize.height / validH)
 
             let visible = viewport.visibleFraction(imageAspect: imageAspect, viewAspect: viewAspect)
             viewport.clamp(to: visible)
@@ -412,8 +404,7 @@ struct ImageCanvas: NSViewRepresentable {
             let quad = viewport.quadScale(imageAspect: imageAspect, viewAspect: viewAspect)
 
             var t = Transform()
-            t.quadScale = SIMD2<Float>(Float(quad.width * canvasGrowth * inset),
-                                       Float(quad.height * canvasGrowth * inset))
+            t.quadScale = SIMD2<Float>(Float(quad.width), Float(quad.height))
             // Scale image-space UVs into the valid sub-rectangle of the texture.
             t.uvSize = SIMD2<Float>(Float(visible.width * validU),
                                     Float(visible.height * validV))

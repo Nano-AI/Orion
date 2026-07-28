@@ -21,7 +21,7 @@ struct GeometryParams
     float straightenRad;  // fine rotation, applied after the quarter turns
     float2 cropOrigin;    // normalised, in post-rotation space
     float2 cropSize;      // normalised
-    float2 _pad;
+    float2 pivot;         // straighten centre, normalised in post-rotation space
 };
 
 /// Bilinear fetch. Outside the frame returns transparent black rather than
@@ -72,9 +72,15 @@ void geometry(uint3 tid : SV_DispatchThreadID,
 
     // Straighten about the centre of the crop, not the frame — rotating about
     // the frame centre would slide the composition out from under the crop.
+    //
+    // The pivot is passed in rather than derived from cropOrigin and cropSize,
+    // because those two describe the *canvas* while the crop tool is open, not
+    // the user's rectangle. Deriving it meant the preview turned about the
+    // frame centre and the committed render about the crop centre, so an
+    // off-centre crop delivered a different picture than the box had shown.
     if (abs(p.straightenRad) > 1e-6f)
     {
-        const float2 pivot = (p.cropOrigin + p.cropSize * 0.5f) * rotated;
+        const float2 pivot = p.pivot * rotated;
         const float s = sin(p.straightenRad);
         const float c = cos(p.straightenRad);
         const float2 d = r - pivot;

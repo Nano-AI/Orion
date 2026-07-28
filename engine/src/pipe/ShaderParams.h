@@ -128,7 +128,10 @@ struct Geometry {
     float         straightenRad;
     float         cropOrigin[2];
     float         cropSize[2];
-    float         _pad[2];
+    /// Straighten centre, normalised in post-rotation frame space. Always the
+    /// centre of the user's crop rectangle, whether or not the crop tool's
+    /// enlarged preview canvas is in play.
+    float         pivot[2];
 };
 static_assert(sizeof(Geometry) == 48);
 

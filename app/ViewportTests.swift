@@ -38,7 +38,12 @@ enum ViewportTests {
         testPercent()
         testHueBands()
         testCropLock()
-        testCropRectMapping()
+        testFrameRectMatchesRenderer()
+        testCropStaysInsideTurnedFrame()
+        testConstraintIsIdentityWhenStraight()
+        testPreviewCanvasCoversTheTurnedFrame()
+        testCanvasIgnoresTheCrop()
+        testCornerHandlePositions()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -228,42 +233,214 @@ enum ViewportTests {
         near(v.zoom, 2.0, 1e-6, "unlocking restores zoom")
     }
 
-    /// The crop rectangle's mapping from normalised coordinates to the view.
+    /// The overlay's rectangle must be the one the renderer draws on.
     ///
-    /// While cropping, the engine renders onto a canvas larger than the frame,
-    /// and the overlay must map into the frame's sub-rectangle rather than the
-    /// whole canvas — getting that wrong put the rectangle outside the picture.
-    static func testCropRectMapping() {
-        let canvas: CGFloat = 1.42
-        let frame = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+    /// Two copies of this arithmetic existed — the renderer's and the
+    /// overlay's — and they disagreed, which put the white rectangle and the
+    /// corner marks on a frame the pixels were not in.
+    static func testFrameRectMatchesRenderer() {
+        let views = [CGSize(width: 1400, height: 900), CGSize(width: 700, height: 1000),
+                     CGSize(width: 1000, height: 1000)]
 
-        // The frame sits centred inside the enlarged canvas.
-        let w = frame.width / canvas
-        let inner = CGRect(x: frame.midX - w / 2, y: frame.midY - w / 2,
-                           width: w, height: w)
+        for image in [landscape, portrait, 1.0] as [CGFloat] {
+            for view in views {
+                let frame = CanvasLayout.frameRect(imageAspect: image, in: view)
 
-        report(inner.width < frame.width, "the frame is smaller than the crop canvas")
-        near(inner.midX, frame.midX, 1e-6, "the frame is centred horizontally")
-        near(inner.midY, frame.midY, 1e-6, "the frame is centred vertically")
+                let v = Viewport()
+                let quad = v.quadScale(imageAspect: image,
+                                       viewAspect: view.width / view.height)
 
-        // A full crop covers exactly the frame, never the whole canvas.
-        let full = CGRect(x: inner.minX, y: inner.minY,
-                          width: inner.width, height: inner.height)
-        near(full.width, inner.width, 1e-6, "a full crop matches the frame width")
-        report(full.maxX <= frame.maxX + 1e-6, "a full crop stays inside the canvas")
+                near(frame.width, view.width * quad.width, 1e-6,
+                     "frame width matches the renderer (\(image), \(view))")
+                near(frame.height, view.height * quad.height, 1e-6,
+                     "frame height matches the renderer (\(image), \(view))")
+                near(frame.midX, view.width / 2, 1e-6, "frame is centred horizontally")
+                near(frame.midY, view.height / 2, 1e-6, "frame is centred vertically")
+                near(frame.width / frame.height, image, 1e-4,
+                     "frame keeps the image's aspect")
+            }
+        }
+    }
 
-        // A half-size crop at the origin lands in the frame's top-left quarter.
-        let half = CGRect(x: inner.minX, y: inner.minY,
-                          width: inner.width * 0.5, height: inner.height * 0.5)
-        report(half.maxX < inner.midX + 1e-6, "a half crop stops at the frame midpoint")
-        report(half.minX >= inner.minX - 1e-6, "a half crop starts at the frame edge")
+    /// The rule that stops a straightened export having transparent corners.
+    ///
+    /// The crop is what gets sampled, so anything it reaches past the turned
+    /// frame has nothing behind it. This checks the constraint directly: take
+    /// the crop's four corners, turn them about the crop's own centre by the
+    /// straighten angle, and require every one to land inside the frame.
+    static func testCropStaysInsideTurnedFrame() {
+        let aspects: [CGFloat] = [landscape, portrait, 1.0, 16.0 / 9.0]
+        let angles: [CGFloat] = [0, 1, 5, 15, 30, 45, 60, 90, -7, -45, -90]
+        let asked = [CGRect(x: 0, y: 0, width: 1, height: 1),
+                     CGRect(x: 0.05, y: 0.05, width: 0.9, height: 0.9),
+                     CGRect(x: 0, y: 0, width: 0.5, height: 0.5),
+                     CGRect(x: 0.6, y: 0.7, width: 0.4, height: 0.3),
+                     CGRect(x: -0.2, y: 0.8, width: 1.4, height: 0.6)]
 
-        // Centred crop of any size stays centred.
-        for size in [0.25, 0.5, 0.9] as [CGFloat] {
-            let c = CGRect(x: inner.minX + inner.width * (1 - size) / 2,
-                           y: inner.minY + inner.height * (1 - size) / 2,
-                           width: inner.width * size, height: inner.height * size)
-            near(c.midX, inner.midX, 1e-6, "centred crop stays centred at \(size)")
+        for a in aspects {
+            for angle in angles {
+                for want in asked {
+                    let r = CanvasLayout.constrainedCrop(want, frameAspect: a,
+                                                         angleDeg: angle)
+                    let what = "aspect \(a), \(angle)°, asked \(want)"
+
+                    report(r.width > 0 && r.height > 0, "crop is non-empty — \(what)")
+                    report(r.width <= want.width + 1e-6 && r.height <= want.height + 1e-6,
+                           "crop never grows beyond what was asked — \(what)")
+
+                    for c in turnedCorners(r, aspect: a, angleDeg: angle) {
+                        report(c.x >= -1e-4 && c.x <= 1 + 1e-4
+                               && c.y >= -1e-4 && c.y <= 1 + 1e-4,
+                               "turned corner \(c) is inside the frame — \(what)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// The crop's corners after the straighten, in frame coordinates. The
+    /// picture turns about the frame's centre, so that is what the rectangle
+    /// turns about too.
+    static func turnedCorners(_ r: CGRect, aspect a: CGFloat,
+                              angleDeg: CGFloat) -> [CGPoint] {
+        let t = angleDeg * .pi / 180
+        let c = cos(t), s = sin(t)
+        let mid = CanvasLayout.pivot
+
+        return [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
+                CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)].map { p in
+            // Into units where a rotation is a rotation: height 1, width `a`.
+            let dx = (p.x - mid.x) * a
+            let dy = (p.y - mid.y)
+            return CGPoint(x: mid.x + (dx * c - dy * s) / a,
+                           y: mid.y + (dx * s + dy * c))
+        }
+    }
+
+    /// An untouched crop at no angle must be left completely alone. The
+    /// constraint runs on every angle tick, so a rounding drift here would
+    /// quietly shrink the frame each time you touched the dial.
+    static func testConstraintIsIdentityWhenStraight() {
+        for a in [landscape, portrait, 1.0] as [CGFloat] {
+            let full = CGRect(x: 0, y: 0, width: 1, height: 1)
+            let r = CanvasLayout.constrainedCrop(full, frameAspect: a, angleDeg: 0)
+            near(r.width, 1, 1e-9, "a full crop is untouched at 0° (aspect \(a))")
+            near(r.height, 1, 1e-9, "a full crop keeps its height at 0° (aspect \(a))")
+            near(r.origin.x, 0, 1e-9, "a full crop keeps its origin at 0° (aspect \(a))")
+
+            // And repeated application must not creep.
+            var creep = CGRect(x: 0.1, y: 0.2, width: 0.6, height: 0.5)
+            for _ in 0..<50 {
+                creep = CanvasLayout.constrainedCrop(creep, frameAspect: a, angleDeg: 12)
+            }
+            let once = CanvasLayout.constrainedCrop(
+                CGRect(x: 0.1, y: 0.2, width: 0.6, height: 0.5),
+                frameAspect: a, angleDeg: 12)
+            near(creep.width, once.width, 1e-6,
+                 "the constraint is idempotent (aspect \(a))")
+        }
+    }
+
+    /// The preview canvas has to contain the whole turned frame, or the corners
+    /// of the picture are clipped away — which the old fixed 1.42 did past
+    /// about 17 degrees on a 3:2 frame.
+    static func testPreviewCanvasCoversTheTurnedFrame() {
+        for a in [landscape, portrait, 1.0, 16.0 / 9.0] as [CGFloat] {
+            for angle in [0, 5, 17, 30, 45, 60, 90, -45] as [CGFloat] {
+                let crop = CanvasLayout.constrainedCrop(
+                    CGRect(x: 0, y: 0, width: 1, height: 1),
+                    frameAspect: a, angleDeg: angle)
+                let canvas = CanvasLayout.previewCanvas(frameAspect: a, angleDeg: angle)
+                let what = "aspect \(a), \(angle)°"
+
+                report(canvas.size >= 1 - 1e-9, "the canvas is at least the frame — \(what)")
+
+                // Every corner of the frame, turned, must fall on the canvas.
+                let full = CGRect(x: 0, y: 0, width: 1, height: 1)
+                for c in turnedFrameCorners(full, about: CanvasLayout.pivot, aspect: a,
+                                            angleDeg: -angle) {
+                    let u = (c.x - canvas.origin.x) / canvas.size
+                    let v = (c.y - canvas.origin.y) / canvas.size
+                    report(u >= -1e-4 && u <= 1 + 1e-4 && v >= -1e-4 && v <= 1 + 1e-4,
+                           "frame corner \(c) is on the canvas at (\(u), \(v)) — \(what)")
+                }
+
+                // And the crop must sit on the canvas too, or the white
+                // rectangle is drawn somewhere the picture is not.
+                let onCanvas = CanvasLayout.onCanvas(crop, canvasOrigin: canvas.origin,
+                                                     canvasSize: canvas.size)
+                report(onCanvas.minX >= -1e-4 && onCanvas.maxX <= 1 + 1e-4,
+                       "the crop rectangle is on the canvas — \(what)")
+            }
+        }
+    }
+
+    /// The frame's corners after the picture turns about `pivot`.
+    static func turnedFrameCorners(_ r: CGRect, about pivot: CGPoint, aspect a: CGFloat,
+                                   angleDeg: CGFloat) -> [CGPoint] {
+        let t = angleDeg * .pi / 180
+        let c = cos(t), s = sin(t)
+        return [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
+                CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)].map { p in
+            let dx = (p.x - pivot.x) * a
+            let dy = (p.y - pivot.y)
+            return CGPoint(x: pivot.x + (dx * c - dy * s) / a,
+                           y: pivot.y + (dx * s + dy * c))
+        }
+    }
+
+    /// Moving or resizing the crop must not move the picture.
+    ///
+    /// The preview canvas once followed the crop's centre, so dragging the
+    /// rectangle re-rotated the frame underneath it and the image came unstuck
+    /// from the box. The canvas depends on the angle and the aspect, and on
+    /// nothing else.
+    static func testCanvasIgnoresTheCrop() {
+        for a in [landscape, portrait, 1.0] as [CGFloat] {
+            for angle in [0, 8, 30, 45, 90, -22] as [CGFloat] {
+                let reference = CanvasLayout.previewCanvas(frameAspect: a, angleDeg: angle)
+
+                for crop in [CGRect(x: 0, y: 0, width: 1, height: 1),
+                             CGRect(x: 0, y: 0, width: 0.3, height: 0.3),
+                             CGRect(x: 0.7, y: 0.6, width: 0.3, height: 0.4),
+                             CGRect(x: 0.4, y: 0.05, width: 0.2, height: 0.2)] {
+                    let constrained = CanvasLayout.constrainedCrop(
+                        crop, frameAspect: a, angleDeg: angle)
+                    let again = CanvasLayout.previewCanvas(frameAspect: a, angleDeg: angle)
+
+                    near(again.size, reference.size, 1e-12,
+                         "canvas size ignores crop \(constrained) — aspect \(a), \(angle)°")
+                    near(again.origin.x, reference.origin.x, 1e-12,
+                         "canvas origin ignores crop \(constrained) — aspect \(a), \(angle)°")
+                }
+
+                // And it is concentric with the frame, which is what the
+                // engine turns the picture about.
+                near(reference.origin.x + reference.size / 2, CanvasLayout.pivot.x, 1e-9,
+                     "canvas is centred on the pivot horizontally — aspect \(a), \(angle)°")
+                near(reference.origin.y + reference.size / 2, CanvasLayout.pivot.y, 1e-9,
+                     "canvas is centred on the pivot vertically — aspect \(a), \(angle)°")
+            }
+        }
+    }
+
+    /// Corner handles sit on the crop rectangle's corners. They were drawn in
+    /// an unsized path view that SwiftUI grew to the whole overlay, and landed
+    /// nowhere near.
+    static func testCornerHandlePositions() {
+        let frame = CGRect(x: 40, y: 30, width: 600, height: 400)
+        let unit = CGRect(x: 0.25, y: 0.5, width: 0.5, height: 0.5)
+        let r = CanvasLayout.inView(unit, in: frame)
+
+        near(r.minX, 40 + 150, 1e-6, "top-left handle x")
+        near(r.minY, 30 + 200, 1e-6, "top-left handle y")
+        near(r.maxX, 40 + 450, 1e-6, "bottom-right handle x")
+        near(r.maxY, 30 + 400, 1e-6, "bottom-right handle y")
+
+        for corner in [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
+                       CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)] {
+            report(frame.insetBy(dx: -1e-6, dy: -1e-6).contains(corner),
+                   "handle \(corner) is on the frame")
         }
     }
 

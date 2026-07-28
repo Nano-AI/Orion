@@ -63,6 +63,17 @@ typedef struct OrionAdjustments {
     float   crop_w, crop_h;
     int32_t crop_preview;    /* show the whole frame while cropping */
 
+    /* The crop tool's preview canvas, in the same normalised post-rotation
+     * coordinates as crop_x/crop_y. It has to cover the frame's rotated
+     * bounding box, which depends on the angle and the frame's aspect.
+     *
+     * The UI computes it because the overlay has to land on the same
+     * rectangle; a second derivation in the engine is how the handles and the
+     * pixels drifted apart before. Ignored unless crop_preview is set.
+     */
+    float   preview_x, preview_y;  /* canvas origin  */
+    float   preview_size;          /* canvas extent, both axes, >= 1 */
+
     float sharpen_amount;   /* 0..2                       */
     float sharpen_radius;   /* pixels                     */
     float sharpen_masking;  /* 0..1, protects flat areas  */
@@ -86,8 +97,15 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
 /* Renders dirty nodes. *out_ms receives GPU-side milliseconds (may be NULL). */
 OrionStatus orion_engine_render(OrionEngine* engine, double* out_ms);
 
-/* Dimensions of the open image. */
+/* Dimensions of the open image, as rendered — so the crop and the crop tool's
+ * preview canvas both change this. */
 OrionStatus orion_engine_image_size(const OrionEngine* engine,
+                                    uint32_t* out_width, uint32_t* out_height);
+
+/* Dimensions of the whole frame after rotation, before any crop. This is what
+ * the crop rectangle is normalised against, and what the UI needs to work out
+ * how far a straightened frame reaches. */
+OrionStatus orion_engine_frame_size(const OrionEngine* engine,
                                     uint32_t* out_width, uint32_t* out_height);
 
 /* The pipeline's output as an id<MTLTexture>, for zero-copy display.

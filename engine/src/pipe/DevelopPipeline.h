@@ -59,6 +59,17 @@ struct Adjustments {
     /// rotates the picture under a stationary rectangle rather than zooming in.
     bool cropPreview = false;
 
+    /// The preview canvas, in the same coordinates as the crop rectangle. It
+    /// has to cover the frame's rotated bounding box, which depends on both
+    /// the angle and the frame's aspect — a fixed factor could not, and at
+    /// anything past about 17 degrees on a 3:2 frame it clipped the corners.
+    ///
+    /// Supplied by the UI rather than derived here: the crop overlay has to
+    /// land on the same rectangle, and two derivations is exactly how the
+    /// handles and the pixels drifted apart before.
+    float previewX = 0.0f, previewY = 0.0f;
+    float previewSize = 1.0f;
+
     // Capture sharpening. Sits just after the demosaic.
     float sharpenAmount  = 0.0f;   // 0..2
     float sharpenRadius  = 1.0f;   // pixels
@@ -97,6 +108,11 @@ public:
     [[nodiscard]] std::uint32_t outputWidth()  const noexcept;
     [[nodiscard]] std::uint32_t outputHeight() const noexcept;
 
+    /// The whole frame after rotation, before any crop — what the crop
+    /// rectangle is normalised against.
+    [[nodiscard]] std::uint32_t frameWidth()  const noexcept;
+    [[nodiscard]] std::uint32_t frameHeight() const noexcept;
+
     /// The camera's own white balance, used as the starting point.
     [[nodiscard]] WhiteBalance asShotWhiteBalance() const noexcept { return asShot_; }
 
@@ -126,6 +142,7 @@ private:
     int exifQuarters_ = 0;
     int turns_ = 0;
     std::uint32_t outW_ = 0, outH_ = 0;
+    std::uint32_t frameW_ = 0, frameH_ = 0;
     int auxCurveLut_ = -1;
     Adjustments  lastAdj_{};
     bool         primed_ = false;

@@ -110,6 +110,9 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.cropX = adj->crop_x; a.cropY = adj->crop_y;
         a.cropW = adj->crop_w; a.cropH = adj->crop_h;
         a.cropPreview = adj->crop_preview != 0;
+        a.previewX = adj->preview_x;
+        a.previewY = adj->preview_y;
+        a.previewSize = adj->preview_size;
         a.sharpenAmount   = adj->sharpen_amount;
         a.sharpenRadius   = adj->sharpen_radius;
         a.sharpenMasking  = adj->sharpen_masking;
@@ -156,6 +159,19 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
         const auto& d = engine->impl.develop();
         *out_width  = d.outputWidth();
         *out_height = d.outputHeight();
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_frame_size(const OrionEngine* engine,
+                                    uint32_t* out_width, uint32_t* out_height) {
+    if (engine == nullptr || out_width == nullptr || out_height == nullptr) {
+        return ORION_ERR_BAD_ARG;
+    }
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        const auto& d = engine->impl.develop();
+        *out_width  = d.frameWidth();
+        *out_height = d.frameHeight();
         return ORION_OK;
     });
 }

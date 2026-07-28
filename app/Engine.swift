@@ -28,6 +28,19 @@ final class Engine {
     private(set) var camera = ""
     private(set) var imageWidth: UInt32 = 0
     private(set) var imageHeight: UInt32 = 0
+
+    /// The whole frame after rotation, before any crop. The crop rectangle is
+    /// normalised against this, and the crop tool's canvas is sized from it —
+    /// `imageWidth` cannot stand in, because it is the *cropped* result.
+    private(set) var frameWidth: UInt32 = 0
+    private(set) var frameHeight: UInt32 = 0
+
+    /// The frame's width over its height, which is what every rotated-bounds
+    /// calculation needs.
+    var frameAspect: CGFloat {
+        guard frameWidth > 0, frameHeight > 0 else { return 1 }
+        return CGFloat(frameWidth) / CGFloat(frameHeight)
+    }
     private(set) var lastRenderMs: Double = 0
     private(set) var isLoaded = false
 
@@ -43,20 +56,59 @@ final class Engine {
     var contrast: Float = 1        { didSet { pushAndRender() } }
 
     /// Extra quarter turns clockwise, on top of the camera's own orientation.
-    var rotateQuarters: Int32 = 0  { didSet { pushAndRender() } }
-    var straightenDeg: Float = 0   { didSet { pushAndRender() } }
+    var rotateQuarters: Int32 = 0  { didSet { constrainCrop(); pushAndRender() } }
+
+    /// Straighten angle. Turning the dial shrinks the crop rather than letting
+    /// it reach past the turned frame, which is what would leave transparent
+    /// wedges in the corners of the export.
+    var straightenDeg: Float = 0   { didSet { constrainCrop(); pushAndRender() } }
 
     /// True while the crop tool is open.
     var cropPreview = false        { didSet { pushAndRender() } }
 
+    /// The region the crop preview renders, in crop coordinates. The overlay
+    /// draws against the same numbers the engine renders from, which is the
+    /// only way the white rectangle can be trusted to sit on the pixels.
+    var previewCanvas: (origin: CGPoint, size: CGFloat) {
+        guard cropPreview else { return (.zero, 1) }
+        return CanvasLayout.previewCanvas(frameAspect: frameAspect,
+                                          angleDeg: CGFloat(straightenDeg))
+    }
+
     /// Sets the crop in one push, so a drag is a single render rather than four.
     func setCrop(x: Float, y: Float, w: Float, h: Float) {
         guard isLoaded else { return }
+        let r = CanvasLayout.constrainedCrop(
+            CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h)),
+            frameAspect: frameAspect, angleDeg: CGFloat(straightenDeg))
+
         suspended = true
-        cropW = w; cropH = h; cropX = x; cropY = y
+        cropW = Float(r.width); cropH = Float(r.height)
+        cropX = Float(r.origin.x); cropY = Float(r.origin.y)
         suspended = false
         pushAndRender()
     }
+
+    /// Pulls the crop back inside the frame after the angle or the rotation
+    /// changed under it. Silent — it runs on every angle tick.
+    private func constrainCrop() {
+        guard isLoaded, !constraining else { return }
+        constraining = true
+        defer { constraining = false }
+
+        let r = CanvasLayout.constrainedCrop(
+            CGRect(x: CGFloat(cropX), y: CGFloat(cropY),
+                   width: CGFloat(cropW), height: CGFloat(cropH)),
+            frameAspect: frameAspect, angleDeg: CGFloat(straightenDeg))
+
+        let was = suspended
+        suspended = true
+        cropW = Float(r.width); cropH = Float(r.height)
+        cropX = Float(r.origin.x); cropY = Float(r.origin.y)
+        suspended = was
+    }
+
+    private var constraining = false
 
     /// Records one history entry when a crop drag finishes, rather than one per
     /// frame of the drag.
@@ -84,7 +136,7 @@ final class Engine {
         // Fit the largest rectangle of this ratio inside the current frame,
         // centred, so choosing a ratio never crops information the user has
         // not asked to lose beyond what the ratio requires.
-        let frame = Float(imageWidth) / Float(max(imageHeight, 1))
+        let frame = Float(frameAspect)
         var w: Float = 1, h: Float = 1
         if ratio > frame { h = frame / ratio } else { w = ratio / frame }
 
@@ -184,7 +236,16 @@ final class Engine {
     }
 
     /// Rotates by a quarter turn, wrapping. Clockwise is positive.
+    /// A quarter turn swaps the frame's width and height, so a crop rectangle
+    /// expressed against the old one no longer means anything. Resetting it is
+    /// honest; carrying it over would silently reframe the picture.
     func rotate(_ turns: Int32) {
+        suspended = true
+        cropX = 0; cropY = 0; cropW = 1; cropH = 1
+        // Predict the swap rather than waiting for the render to report it,
+        // so the constraint that runs on the next edit has the right aspect.
+        if turns % 2 != 0 { swap(&frameWidth, &frameHeight) }
+        suspended = false
         rotateQuarters = ((rotateQuarters + turns) % 4 + 4) % 4
     }
 
@@ -369,6 +430,9 @@ final class Engine {
             rotate_quarters: rotateQuarters, straighten_deg: straightenDeg,
             crop_x: cropX, crop_y: cropY, crop_w: cropW, crop_h: cropH,
             crop_preview: cropPreview ? 1 : 0,
+            preview_x: Float(previewCanvas.origin.x),
+            preview_y: Float(previewCanvas.origin.y),
+            preview_size: Float(previewCanvas.size),
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),
@@ -390,6 +454,11 @@ final class Engine {
         if orion_engine_image_size(handle, &w, &h) == ORION_OK {
             imageWidth = w
             imageHeight = h
+        }
+        var fw: UInt32 = 0, fh: UInt32 = 0
+        if orion_engine_frame_size(handle, &fw, &fh) == ORION_OK {
+            frameWidth = fw
+            frameHeight = fh
         }
 
         lastRenderMs = ms

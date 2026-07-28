@@ -4,8 +4,7 @@ import SwiftUI
 ///
 /// The exterior is darkened rather than hidden, so you can see what you are
 /// giving up — that context is the whole reason a crop overlay beats numeric
-/// fields. Thirds guides appear only while dragging: they are for placing a
-/// subject, and once placed they are clutter.
+/// fields.
 ///
 /// The rectangle moves and resizes by drag. Corner handles resize freely;
 /// dragging the interior pans the crop across the frame, which is what you
@@ -13,78 +12,79 @@ import SwiftUI
 /// of the picture.
 struct CropOverlay: View {
     @Bindable var engine: Engine
-    /// The photo's rectangle inside the canvas view, in view coordinates.
+
+    /// The rendered canvas's rectangle inside the view.
+    ///
+    /// While the crop tool is open this is the preview canvas, which covers
+    /// more than the frame so a turned picture has somewhere to go. The crop
+    /// rectangle is placed on it through the same numbers the engine renders
+    /// from, so the white box lands on the pixels rather than near them.
     let frame: CGRect
+
+    /// The canvas view's own size, which is what the renderer fills.
+    ///
+    /// Everything that is not the crop is dimmed out to these edges. Dimming
+    /// only as far as `frame` left the rotation overhang bright, so a
+    /// straightened picture had corners poking out of the mask.
+    let bounds: CGSize
 
     @State private var dragging: Handle?
     @State private var startRect: CGRect?
 
-    private enum Handle: Equatable {
+    private enum Handle: Equatable, Hashable {
         case move
         case topLeft, topRight, bottomLeft, bottomRight
     }
 
-    /// The crop canvas is a fixed multiple of the frame, matching
-    /// kCropCanvas in DevelopPipeline.cpp. Fixed rather than angle-dependent
-    /// so the picture rotates inside a stationary canvas instead of the whole
-    /// view rescaling as the angle changes.
-    private let growth: CGFloat = 1.42
-
-    /// The original frame's rectangle inside the (possibly grown) preview.
-    private var imageRect: CGRect {
-        let g = growth
-        guard g > 1.0001 else { return frame }
-        let w = frame.width / g
-        let h = frame.height / g
-        return CGRect(x: frame.midX - w / 2, y: frame.midY - h / 2, width: w, height: h)
-    }
-
-    /// Crop rectangle in view coordinates.
+    /// Crop rectangle in view coordinates. The engine stores the crop
+    /// normalised to the frame, so this is the one conversion.
     private var rect: CGRect {
-        let base = imageRect
-        return CGRect(x: base.minX + CGFloat(engine.cropX) * base.width,
-                      y: base.minY + CGFloat(engine.cropY) * base.height,
-                      width: CGFloat(engine.cropW) * base.width,
-                      height: CGFloat(engine.cropH) * base.height)
+        let canvas = engine.previewCanvas
+        let crop = CGRect(x: CGFloat(engine.cropX), y: CGFloat(engine.cropY),
+                          width: CGFloat(engine.cropW), height: CGFloat(engine.cropH))
+        return CanvasLayout.inView(
+            CanvasLayout.onCanvas(crop, canvasOrigin: canvas.origin,
+                                  canvasSize: canvas.size),
+            in: frame)
     }
 
-    private let handleSize: CGFloat = 22
     private let armLength: CGFloat = 26
+    /// Fixed box each corner mark is drawn and hit-tested in.
+    private var handleBox: CGFloat { armLength + 18 }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Everything outside the crop, dimmed.
-            Path { p in
-                p.addRect(frame)
-                p.addRect(rect)
-            }
-            .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
-            .allowsHitTesting(false)
-
-            // Always on while the tool is open. Thirds are for judging where a
-            // horizon or subject sits, which is a decision made before the drag
-            // starts, not during it.
+            dim
             thirds
+            outline
 
-            Rectangle()
-                .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
-                .frame(width: rect.width, height: rect.height)
-                .offset(x: rect.minX, y: rect.minY)
-                .allowsHitTesting(false)
-
-            corners
-
-            // Interior drag target, below the corner handles in the stack so
-            // the corners win where they overlap.
+            // Interior drag target first, so the corner handles sit above it in
+            // the stack and win wherever the two overlap. A later child is
+            // drawn — and hit-tested — on top.
             Color.clear
                 .contentShape(Rectangle())
-                .frame(width: max(rect.width - handleSize, 1),
-                       height: max(rect.height - handleSize, 1))
-                .offset(x: rect.minX + handleSize / 2, y: rect.minY + handleSize / 2)
+                .frame(width: max(rect.width - handleBox, 1),
+                       height: max(rect.height - handleBox, 1))
+                .offset(x: rect.minX + handleBox / 2, y: rect.minY + handleBox / 2)
                 .gesture(drag(.move))
+
+            corners
         }
     }
 
+    // MARK: Pieces
+
+    private var dim: some View {
+        Path { p in
+            p.addRect(CGRect(origin: .zero, size: bounds))
+            p.addRect(rect)
+        }
+        .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
+        .allowsHitTesting(false)
+    }
+
+    /// Always on while the tool is open. Thirds are for judging where a horizon
+    /// or subject sits, which is a decision made before the drag starts.
     private var thirds: some View {
         Path { p in
             for i in 1..<3 {
@@ -101,29 +101,48 @@ struct CropOverlay: View {
         .allowsHitTesting(false)
     }
 
+    private var outline: some View {
+        Rectangle()
+            .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
+            .frame(width: rect.width, height: rect.height)
+            .offset(x: rect.minX, y: rect.minY)
+            .allowsHitTesting(false)
+    }
+
     private var corners: some View {
         ForEach([Handle.topLeft, .topRight, .bottomLeft, .bottomRight], id: \.self) { h in
-            let p = position(of: h)
             ZStack {
-                // An L of two arms, the way every crop tool draws a corner —
-                // it reads as a corner rather than a dot, and shows which two
-                // edges the handle moves.
-                Path { path in
-                    let hx: CGFloat = (h == .topLeft || h == .bottomLeft) ? 1 : -1
-                    let vy: CGFloat = (h == .topLeft || h == .topRight) ? 1 : -1
-                    path.move(to: CGPoint(x: armLength * hx, y: 0))
-                    path.addLine(to: .zero)
-                    path.addLine(to: CGPoint(x: 0, y: armLength * vy))
-                }
-                .stroke(Color.white, lineWidth: 3)
+                // Drawn inside a fixed box, never an unsized one. A Path view
+                // takes the size it is offered, so an unsized path here became
+                // as large as the whole overlay and `.position` then centred
+                // *that* — which threw the corner marks into the middle of the
+                // window while the crop rectangle stayed where it was.
+                cornerPath(h)
+                    .stroke(Color.white,
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .shadow(color: .black.opacity(0.5), radius: 1)
 
-                Color.clear
-                    .contentShape(Rectangle())
-                    .frame(width: handleSize + 12, height: handleSize + 12)
-                    .gesture(drag(h))
+                Color.clear.contentShape(Rectangle())
             }
-            .position(p)
+            .frame(width: handleBox, height: handleBox)
+            .position(position(of: h))
+            .gesture(drag(h))
         }
+    }
+
+    /// An L of two arms, the way every crop tool draws a corner: it reads as a
+    /// corner rather than a dot, and shows which two edges the handle moves.
+    /// Coordinates are local to the handle's box, with the corner at its centre.
+    private func cornerPath(_ h: Handle) -> Path {
+        let c = CGPoint(x: handleBox / 2, y: handleBox / 2)
+        let hx: CGFloat = (h == .topLeft || h == .bottomLeft) ? 1 : -1
+        let vy: CGFloat = (h == .topLeft || h == .topRight) ? 1 : -1
+
+        var p = Path()
+        p.move(to: CGPoint(x: c.x + armLength * hx, y: c.y))
+        p.addLine(to: c)
+        p.addLine(to: CGPoint(x: c.x, y: c.y + armLength * vy))
+        return p
     }
 
     private func position(of h: Handle) -> CGPoint {
@@ -136,6 +155,8 @@ struct CropOverlay: View {
         }
     }
 
+    // MARK: Dragging
+
     private func drag(_ handle: Handle) -> some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { value in
@@ -145,11 +166,13 @@ struct CropOverlay: View {
                                        width: CGFloat(engine.cropW),
                                        height: CGFloat(engine.cropH))
                 }
-                let base = imageRect
-                guard let start = startRect, base.width > 0, base.height > 0 else { return }
+                guard let start = startRect, frame.width > 0, frame.height > 0 else { return }
 
-                let dx = value.translation.width / base.width
-                let dy = value.translation.height / base.height
+                // View points to crop coordinates. The canvas is wider than the
+                // frame, so a point of drag is less than a point of crop.
+                let canvas = engine.previewCanvas
+                let dx = value.translation.width / frame.width * canvas.size
+                let dy = value.translation.height / frame.height * canvas.size
 
                 var r = start
                 switch handle {
@@ -170,12 +193,8 @@ struct CropOverlay: View {
                     r.size.height += dy
                 }
 
-                // A crop cannot invert or leave the frame.
-                r.size.width = min(max(r.size.width, 0.05), 1)
-                r.size.height = min(max(r.size.height, 0.05), 1)
-                r.origin.x = min(max(r.origin.x, 0), 1 - r.size.width)
-                r.origin.y = min(max(r.origin.y, 0), 1 - r.size.height)
-
+                // The engine constrains it to the turned frame; asking for
+                // more than fits simply gets less.
                 engine.setCrop(x: Float(r.origin.x), y: Float(r.origin.y),
                                w: Float(r.size.width), h: Float(r.size.height))
             }

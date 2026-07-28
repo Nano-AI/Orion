@@ -3,12 +3,129 @@ import UniformTypeIdentifiers
 
 @main
 struct OrionApp: App {
+    /// `--screenshot` renders the interface to a PNG and exits without ever
+    /// showing a window. Checked here because App.init runs before the scene.
+    init() {
+        if let options = Screenshot.options(CommandLine.arguments) {
+            Screenshot.run(options)
+        }
+    }
+
     var body: some Scene {
         WindowGroup("Orion") {
             RootView().frame(minWidth: 1100, minHeight: 700)
         }
         .windowStyle(.hiddenTitleBar)
-        .commands { CommandGroup(replacing: .newItem) {} }
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+            PhotoCommands()
+        }
+    }
+}
+
+/// Culling, as menu commands.
+///
+/// These were bare `onKeyPress` handlers on the editor's root view, which only
+/// fire while SwiftUI holds focus — and the Metal canvas takes first responder
+/// on any click, so rejecting stopped working the moment you touched the photo.
+/// A menu command routes through the responder chain regardless, and has the
+/// side benefit of being findable: the shortcut is written next to its name
+/// instead of having to be known in advance.
+private struct PhotoCommands: Commands {
+    @FocusedValue(\.cull) private var cull
+
+    /// Nothing open means nothing to cull.
+    private var idle: Bool { cull?.url == nil }
+
+    var body: some Commands {
+        CommandGroup(after: .sidebar) {
+            Button("Fit in Window") { cull?.fit() }
+                .keyboardShortcut("0", modifiers: [])
+                .disabled(idle)
+            Button("Actual Size") { cull?.actualSize() }
+                .keyboardShortcut("9", modifiers: [])
+                .disabled(idle)
+        }
+
+        CommandGroup(after: .undoRedo) {
+            Button("Reset Adjustments") { cull?.resetEdits() }
+                .keyboardShortcut("r", modifiers: [.command])
+                .disabled(idle)
+        }
+
+        CommandMenu("Photo") {
+            Button(cull?.isRejected == true ? "Keep" : "Reject") {
+                cull?.toggleReject()
+            }
+            .keyboardShortcut("r", modifiers: [])
+            .disabled(idle)
+
+            Divider()
+
+            ForEach(1...5, id: \.self) { n in
+                Button("\(n) Star\(n == 1 ? "" : "s")") { cull?.rate(n) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: [])
+                    .disabled(idle)
+            }
+            Button("No Rating") { cull?.rate(0) }
+                .keyboardShortcut("0", modifiers: [.command])
+                .disabled(idle)
+
+            Divider()
+
+            Button("Next Photo") { cull?.step(1) }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+                .disabled(idle)
+            Button("Previous Photo") { cull?.step(-1) }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+                .disabled(idle)
+
+            Divider()
+
+            Button("Apply Crop") { cull?.applyCrop() }
+                .keyboardShortcut(.return, modifiers: [])
+                .disabled(cull?.cropping != true)
+            Button("Cancel Crop") { cull?.cancelCrop() }
+                .keyboardShortcut(.escape, modifiers: [])
+                .disabled(cull?.cropping != true)
+        }
+    }
+}
+
+/// What the Photo menu acts on. Equatable by state rather than by closure, so
+/// SwiftUI can tell when the menu's titles need to change.
+struct CullActions: Equatable {
+    /// nil when nothing is open, which is what greys the menu out.
+    let url: URL?
+    let isRejected: Bool
+    let rating: Int
+    let toggleReject: () -> Void
+    let rate: (Int) -> Void
+    let step: (Int) -> Void
+    let fit: () -> Void
+    let actualSize: () -> Void
+    let resetEdits: () -> Void
+
+    /// True while the crop tool is open, which is when Apply and Cancel mean
+    /// anything.
+    let cropping: Bool
+    let applyCrop: () -> Void
+    let cancelCrop: () -> Void
+
+    static func == (a: CullActions, b: CullActions) -> Bool {
+        a.url == b.url && a.isRejected == b.isRejected && a.rating == b.rating
+            && a.cropping == b.cropping
+    }
+}
+
+private struct CullActionsKey: FocusedValueKey {
+    typealias Value = CullActions
+}
+
+extension FocusedValues {
+    var cull: CullActions? {
+        get { self[CullActionsKey.self] }
+        set { self[CullActionsKey.self] = newValue }
     }
 }
 
@@ -25,6 +142,8 @@ enum Palette {
     static let dim      = Color(red: 0.541, green: 0.541, blue: 0.565)
     static let faint    = Color(red: 0.353, green: 0.353, blue: 0.376)
     static let accent   = Color(red: 0.302, green: 0.714, blue: 0.769)
+    static let rejected = Color(red: 0.769, green: 0.341, blue: 0.302)
+    static let rated    = Color(red: 0.941, green: 0.776, blue: 0.455)
 }
 
 enum ToolTab: String, CaseIterable, Identifiable {
@@ -76,10 +195,16 @@ struct RootView: View {
     }
 }
 
-private struct Editor: View {
+struct Editor: View {
     @Bindable var engine: Engine
     @State private var viewport = Viewport()
-    @State private var tab: ToolTab = .light
+    @State private var tab: ToolTab
+
+    init(engine: Engine, startTab: ToolTab = .light) {
+        self.engine = engine
+        _tab = State(initialValue: startTab)
+    }
+
     @State private var band: HueBand = .blue
     @State private var targeted = TargetedAdjust()
     @State private var message: String?
@@ -115,26 +240,11 @@ private struct Editor: View {
             engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
             return .handled
         }
-        .onKeyPress(.leftArrow) { step(-1); return .handled }
-        .onKeyPress(.rightArrow) { step(1); return .handled }
-        .onKeyPress(.init("x")) {
-            guard let current else { return .ignored }
-            library.toggleRejected(current); return .handled
-        }
-        .onKeyPress(.init("0")) { viewport.reset(); return .handled }
-        .onKeyPress(.init("1")) {
-            if let current, !library.photos.isEmpty { library.setRating(1, for: current) }
-            else { viewport.toggleFitAndActual() }
-            return .handled
-        }
-        .onKeyPress(.init("2")) { rate(2); return .handled }
-        .onKeyPress(.init("3")) { rate(3); return .handled }
-        .onKeyPress(.init("4")) { rate(4); return .handled }
-        .onKeyPress(.init("5")) { rate(5); return .handled }
-        .onKeyPress(.init("r")) {
-            guard engine.isLoaded else { return .ignored }
-            engine.resetEdits(); return .handled
-        }
+        // Culling, rating, stepping and zoom live in the Photo and View menus.
+        // Their shortcuts go through the responder chain, so they keep working
+        // once the Metal canvas has taken first responder — which is what a
+        // bare onKeyPress here could not do.
+        .focusedSceneValue(\.cull, cullActions)
         .onKeyPress(.init("[")) {
             guard engine.isLoaded else { return .ignored }
             engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset(); return .handled
@@ -285,15 +395,35 @@ private struct Editor: View {
                 if engine.isLoaded {
                     ImageCanvas(engine: engine, viewport: viewport,
                                 targeted: targeted, generation: engine.generation)
-                        .padding(20)
+                        // Held while a new photo decodes, and what the
+                        // screenshot harness draws into — AppKit cannot capture
+                        // a Metal layer, so the canvas has to be a still there.
+                        // First in the chain, so every overlay below is drawn
+                        // over it rather than hidden by it.
+                        .overlay {
+                            if let still = engine.placeholder {
+                                Image(nsImage: still)
+                                    .resizable()
+                                    .interpolation(.high)
+                                    .aspectRatio(contentMode: .fit)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        // The crop overlay goes on before the padding, so its
+                        // coordinate space is the Metal view's exactly. Applied
+                        // after, it measured the padded box and every handle
+                        // sat a few points off the pixels.
                         .overlay {
                             if tab == .crop {
                                 GeometryReader { canvasGeo in
                                     CropOverlay(engine: engine,
-                                                frame: photoFrame(in: canvasGeo.size))
+                                                frame: photoFrame(in: canvasGeo.size),
+                                                bounds: canvasGeo.size)
                                 }
+                                .clipped()
                             }
                         }
+                        .padding(20)
                         .onChange(of: tab) { _, t in
                             engine.cropPreview = (t == .crop)
                             viewport.locked = (t == .crop)
@@ -358,33 +488,22 @@ private struct Editor: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// The photo's rectangle within the canvas, matching the renderer's
-    /// letterbox exactly so the overlay lands on the pixels rather than near
-    /// them. Measured inside the padded canvas, which is the same geometry the
-    /// Metal view is given.
+    /// The photo's rectangle within the canvas, from the same function the
+    /// renderer uses, so the overlay lands on the pixels rather than near them.
     private func photoFrame(in size: CGSize) -> CGRect {
-        guard engine.imageWidth > 0, engine.imageHeight > 0,
-              size.width > 0, size.height > 0 else { return .zero }
-
-        let imageAspect = CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight)
-        let viewAspect = size.width / size.height
-
-        var w = size.width, h = size.height
-        if imageAspect > viewAspect { h = w / imageAspect } else { w = h * imageAspect }
-
-        // Matches the renderer's crop inset, so the rectangle lands on the
-        // pixels rather than near them.
-        if engine.cropPreview {
-            w *= 0.86
-            h *= 0.86
-        }
-
-        return CGRect(x: (size.width - w) / 2, y: (size.height - h) / 2,
-                      width: w, height: h)
+        guard engine.imageWidth > 0, engine.imageHeight > 0 else { return .zero }
+        return CanvasLayout.frameRect(
+            imageAspect: CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight),
+            in: size)
     }
 
     private var hint: String {
         if tab == .crop { return "drag the rectangle or its corners" }
+        if !library.photos.isEmpty {
+            return viewport.isFit
+                ? "← → to browse · 1–5 rates · X rejects"
+                : "drag to pan · right-click to fit"
+        }
         return viewport.isFit
             ? "scroll or pinch to zoom · right-click to fit"
             : "drag to pan · right-click to fit"
@@ -459,9 +578,10 @@ private struct Editor: View {
                         }
 
                         section("Straighten") {
-                            slider("Angle", $engine.straightenDeg, -15...15, "°", 1)
-                            Text("Rotates about the centre of the crop, so the "
-                                 + "composition stays put.")
+                            slider("Angle", $engine.straightenDeg, -90...90, "°", 1)
+                            Text("Turns the picture about the frame's centre. "
+                                 + "The rectangle shrinks to stay inside the "
+                                 + "turned frame, so a corner is never empty.")
                                 .font(.system(size: 10))
                                 .foregroundStyle(Palette.faint)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -751,6 +871,27 @@ private struct Editor: View {
             }
             engine.clearPlaceholder()
         }
+    }
+
+    /// Published to the scene so the Photo and View menus can act on whatever
+    /// is open, from wherever focus happens to be.
+    private var cullActions: CullActions {
+        let photo = current.flatMap { url in library.photos.first { $0.url == url } }
+        return CullActions(
+            url: current,
+            isRejected: photo?.rejected ?? false,
+            rating: photo?.rating ?? 0,
+            toggleReject: { if let current { library.toggleRejected(current) } },
+            rate: { stars in if let current { library.setRating(stars, for: current) } },
+            step: { offset in step(offset) },
+            fit: { viewport.reset() },
+            actualSize: { viewport.toggleFitAndActual() },
+            resetEdits: { engine.resetEdits() },
+            cropping: tab == .crop,
+            // Applying is just leaving the tool: the preview canvas goes away
+            // and the engine renders the crop itself.
+            applyCrop: { tab = .light },
+            cancelCrop: { engine.edit("Crop") { engine.resetCrop() }; tab = .light })
     }
 
     private func rate(_ stars: Int) {

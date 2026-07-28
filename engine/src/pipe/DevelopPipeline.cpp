@@ -365,29 +365,43 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         g.quarterTurns  = static_cast<std::uint32_t>(turns);
         g.straightenRad = adj.straightenDeg * 3.14159265358979f / 180.0f;
 
+        const float cw = std::clamp(adj.cropW, 0.01f, 1.0f);
+        const float ch = std::clamp(adj.cropH, 0.01f, 1.0f);
+        const float cx = std::clamp(adj.cropX, 0.0f, 1.0f - cw);
+        const float cy = std::clamp(adj.cropY, 0.0f, 1.0f - ch);
+
+        // The picture turns about the frame's centre, and the pivot is passed
+        // rather than derived so the preview and the committed render cannot
+        // disagree. Pivoting on the crop instead — which this did briefly —
+        // re-rotates the picture every time the rectangle is dragged, and the
+        // image swims out from under the box.
+        g.pivot[0] = 0.5f;
+        g.pivot[1] = 0.5f;
+
         if (adj.cropPreview) {
-            // A FIXED canvas, larger than the frame, with the picture rotating
-            // inside it — Photoshop's crop view. The expansion deliberately
-            // does not depend on the angle: if the canvas grew as you turned
-            // the dial, the whole image would rescale under the crop rectangle
-            // and appear to slide about. Constant canvas, moving picture.
-            //
-            // sqrt(2) covers a 45 degree turn, which is past anything a
-            // straighten control should offer.
-            constexpr float kCropCanvas = 1.42f;
+            // The canvas the UI asked for. It has to cover the frame's rotated
+            // bounding box, which grows with both the angle and the frame's
+            // aspect — at 45 degrees on a 3:2 frame that is 1.77x the short
+            // side, so the old fixed 1.42 clipped the corners off anything past
+            // about 17 degrees.
+            const float m = std::max(adj.previewSize, 1.0f);
 
-            g.cropSize[0] = kCropCanvas;
-            g.cropSize[1] = kCropCanvas;
-            g.cropOrigin[0] = -(kCropCanvas - 1.0f) * 0.5f;
-            g.cropOrigin[1] = -(kCropCanvas - 1.0f) * 0.5f;
+            g.cropSize[0] = m;
+            g.cropSize[1] = m;
+            g.cropOrigin[0] = adj.previewX;
+            g.cropOrigin[1] = adj.previewY;
 
-            g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * kCropCanvas));
-            g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * kCropCanvas));
+            // The texture does *not* grow with the canvas. A larger area is
+            // sampled into a frame-sized target instead, so the preview costs
+            // the same memory at 90 degrees as at zero — it just resolves a
+            // little softer, which is what a crop preview can afford. Capped at
+            // the 1.45 the graph allocates for.
+            const float texScale = std::min(m, 1.45f);
+            g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * texScale));
+            g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * texScale));
         } else {
-            const float cw = std::clamp(adj.cropW, 0.01f, 1.0f);
-            const float ch = std::clamp(adj.cropH, 0.01f, 1.0f);
-            g.cropOrigin[0] = std::clamp(adj.cropX, 0.0f, 1.0f - cw);
-            g.cropOrigin[1] = std::clamp(adj.cropY, 0.0f, 1.0f - ch);
+            g.cropOrigin[0] = cx;
+            g.cropOrigin[1] = cy;
             g.cropSize[0]   = cw;
             g.cropSize[1]   = ch;
 
@@ -399,6 +413,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         turns_ = turns;
         outW_  = g.outSize[0];
         outH_  = g.outSize[1];
+        frameW_ = static_cast<std::uint32_t>(rotW);
+        frameH_ = static_cast<std::uint32_t>(rotH);
     }
 
     lastAdj_ = adj;
@@ -407,6 +423,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
 std::uint32_t DevelopPipeline::outputWidth() const noexcept  { return outW_; }
 std::uint32_t DevelopPipeline::outputHeight() const noexcept { return outH_; }
+std::uint32_t DevelopPipeline::frameWidth()  const noexcept { return frameW_; }
+std::uint32_t DevelopPipeline::frameHeight() const noexcept { return frameH_; }
 
 double DevelopPipeline::render() { return pipeline_.render(); }
 

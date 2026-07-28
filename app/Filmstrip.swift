@@ -35,16 +35,28 @@ struct Filmstrip: View {
             .labelsHidden()
             .frame(width: 96)
 
-            if let selected {
+            // Named rather than an anonymous ✕ glyph, and it says which way it
+            // is about to go. A bare icon left the whole idea of rejecting
+            // undiscoverable unless you already knew the keystroke.
+            if let selected, let photo = library.photos.first(where: { $0.url == selected }) {
                 Button {
                     library.toggleRejected(selected)
                 } label: {
-                    Image(systemName: "xmark.circle")
-                        .font(.system(size: 12))
-                        .frame(width: 24, height: 20)
+                    HStack(spacing: 4) {
+                        Image(systemName: photo.rejected
+                              ? "arrow.uturn.backward" : "xmark")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(photo.rejected ? "Keep" : "Reject")
+                            .font(.system(size: 10))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .foregroundStyle(photo.rejected ? Palette.text : Palette.dim)
+                    .background(photo.rejected ? Palette.rejected : Palette.raised,
+                                in: RoundedRectangle(cornerRadius: 4))
+                    .contentShape(RoundedRectangle(cornerRadius: 4))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Palette.dim)
                 .help("Reject or keep this photo (X)")
             }
 
@@ -124,11 +136,11 @@ struct Filmstrip: View {
             if photo.rejected {
                 Text("✕")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color(red: 0.769, green: 0.341, blue: 0.302))
+                    .foregroundStyle(Palette.rejected)
             } else {
                 ForEach(0..<photo.rating, id: \.self) { _ in
                     Circle()
-                        .fill(Color(red: 0.941, green: 0.776, blue: 0.455))
+                        .fill(Palette.rated)
                         .frame(width: 4, height: 4)
                 }
             }

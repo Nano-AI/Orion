@@ -531,6 +531,146 @@ void testCropGpu() {
     report(identity, "a full-frame crop is a pass-through");
 }
 
+/// The straighten preview must agree with what committing the crop produces.
+///
+/// While the crop tool is open the geometry node renders onto a canvas larger
+/// than the frame, so cropOrigin and cropSize describe the canvas rather than
+/// the user's rectangle. The pivot was derived from those two, which meant the
+/// preview turned the picture about the frame centre and the committed render
+/// turned it about the crop centre. With an off-centre crop the two disagree,
+/// and the picture you got was not the picture the white box had shown.
+void testStraightenPivot() {
+    section("Straighten pivot (GPU)");
+
+    constexpr std::uint32_t kW = 64, kH = 64;
+    constexpr float kCanvas = 1.42f;
+    constexpr float kAngle  = 8.0f * 3.14159265358979f / 180.0f;
+
+    // An off-centre crop — the case the two paths disagreed on.
+    constexpr float cx = 0.10f, cy = 0.15f, cw = 0.40f, ch = 0.35f;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/geometry.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "geometry");
+
+    auto src = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+
+    // Coordinates as colour, so every output pixel names the source pixel it
+    // came from and the two renders can be compared exactly.
+    std::vector<__fp16> input(std::size_t(kW) * kH * 4);
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = (std::size_t(y) * kW + x) * 4;
+            input[i + 0] = static_cast<__fp16>(x);
+            input[i + 1] = static_cast<__fp16>(y);
+            input[i + 2] = 0;
+            input[i + 3] = 1;
+        }
+    }
+    src->upload(input.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+    orion::pipe::params::Geometry base{};
+    base.inSize[0] = kW; base.inSize[1] = kH;
+    base.quarterTurns  = 0;
+    base.straightenRad = kAngle;
+    // The frame's centre, which is what the app sends. An off-centre crop is
+    // the case the two paths used to disagree on.
+    base.pivot[0] = 0.5f;
+    base.pivot[1] = 0.5f;
+
+    const auto render = [&](const orion::pipe::params::Geometry& p) {
+        auto dst = orion::gpu::Texture::create(*device, p.outSize[0], p.outSize[1],
+                                               orion::gpu::PixelFormat::RGBA16Float);
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), dst.get()}, &p, sizeof p,
+                    p.outSize[0], p.outSize[1]);
+        cb.commitAndWait();
+
+        std::vector<__fp16> out(std::size_t(p.outSize[0]) * p.outSize[1] * 4);
+        dst->download(out.data(), std::size_t(p.outSize[0]) * 4 * sizeof(__fp16),
+                      p.outSize[0], p.outSize[1]);
+        return out;
+    };
+
+    // The committed render: the crop rectangle alone.
+    orion::pipe::params::Geometry commit = base;
+    commit.cropOrigin[0] = cx; commit.cropOrigin[1] = cy;
+    commit.cropSize[0]   = cw; commit.cropSize[1]   = ch;
+    commit.outSize[0] = static_cast<std::uint32_t>(kW * cw);
+    commit.outSize[1] = static_cast<std::uint32_t>(kH * ch);
+    const auto committed = render(commit);
+
+    // The preview: the whole enlarged canvas.
+    orion::pipe::params::Geometry preview = base;
+    preview.cropOrigin[0] = 0.5f - kCanvas * 0.5f;
+    preview.cropOrigin[1] = 0.5f - kCanvas * 0.5f;
+    preview.cropSize[0]   = kCanvas;
+    preview.cropSize[1]   = kCanvas;
+    preview.outSize[0] = static_cast<std::uint32_t>(kW * kCanvas);
+    preview.outSize[1] = static_cast<std::uint32_t>(kH * kCanvas);
+    const auto previewed = render(preview);
+
+    // Where the crop rectangle lands inside the preview canvas.
+    const double pw = preview.outSize[0], ph = preview.outSize[1];
+    const double originU = (cx - preview.cropOrigin[0]) / kCanvas;
+    const double originV = (cy - preview.cropOrigin[1]) / kCanvas;
+
+    double worst = 0.0;
+    int sampled = 0;
+    for (std::uint32_t oy = 2; oy + 2 < commit.outSize[1]; oy += 4) {
+        for (std::uint32_t ox = 2; ox + 2 < commit.outSize[0]; ox += 4) {
+            // Same point of the crop, addressed in the preview's canvas.
+            const double u = originU + (double(ox) + 0.5) / commit.outSize[0]
+                                       * (cw / kCanvas);
+            const double v = originV + (double(oy) + 0.5) / commit.outSize[1]
+                                       * (ch / kCanvas);
+            const auto px = std::uint32_t(u * pw);
+            const auto py = std::uint32_t(v * ph);
+            if (px >= preview.outSize[0] || py >= preview.outSize[1]) continue;
+
+            const std::size_t a = (std::size_t(oy) * commit.outSize[0] + ox) * 4;
+            const std::size_t b = (std::size_t(py) * preview.outSize[0] + px) * 4;
+
+            worst = std::max(worst, std::abs(double(committed[a]) - double(previewed[b])));
+            worst = std::max(worst,
+                             std::abs(double(committed[a + 1]) - double(previewed[b + 1])));
+            ++sampled;
+        }
+    }
+
+    report(sampled > 20, "the comparison sampled the crop", "n = " + std::to_string(sampled));
+
+    // A pixel of slack for the two grids landing on different sample points.
+    report(worst <= 1.5,
+           "the straighten preview shows what committing produces",
+           "worst disagreement " + std::to_string(worst) + " px");
+
+    // And with no crop the pivot is the frame centre, which must leave the
+    // centre pixel exactly where it started.
+    orion::pipe::params::Geometry centred{};
+    centred.inSize[0] = kW; centred.inSize[1] = kH;
+    centred.outSize[0] = kW; centred.outSize[1] = kH;
+    centred.straightenRad = kAngle;
+    centred.cropSize[0] = 1.0f; centred.cropSize[1] = 1.0f;
+    centred.pivot[0] = 0.5f; centred.pivot[1] = 0.5f;
+    const auto whole = render(centred);
+
+    const std::size_t mid = (std::size_t(kH / 2) * kW + kW / 2) * 4;
+    checkNear(double(whole[mid + 0]), kW / 2.0, 0.6,
+              "rotating about the centre leaves the centre column put");
+    checkNear(double(whole[mid + 1]), kH / 2.0, 0.6,
+              "rotating about the centre leaves the centre row put");
+}
+
 }  // namespace
 
 int main() {
@@ -543,6 +683,7 @@ int main() {
     testOrientGpu();
     testDisplayNeutrality();
     testCropGpu();
+    testStraightenPivot();
     testExportFormats();
 
     std::printf("\n%d checks, %d failures\n", checks, failures);

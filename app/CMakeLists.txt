@@ -15,6 +15,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ImageCanvas.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Navigator.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorLoupe.swift
@@ -26,6 +27,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Library.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Filmstrip.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CompareOverlay.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
@@ -77,11 +79,13 @@ add_custom_command(
             -swift-version 5
             -target arm64-apple-macos14.0
             ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_BINARY_DIR}/main.swift
             -o ${VIEWPORT_TESTS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
