@@ -53,6 +53,69 @@ CGColorSpaceRef colorSpace(ColorSpace s) {
     return space;
 }
 
+/// The EXIF, TIFF and GPS blocks of `source`, ready to hand to a destination.
+///
+/// ImageIO reads them straight out of the RAW container, which is why this is
+/// three dozen lines rather than a dependency: exiv2 is GPL and would decide
+/// Orion's license for it (DECISIONS #10).
+///
+/// Orientation and the pixel dimensions are dropped deliberately. They describe
+/// the RAW, and the export has already been rotated, cropped and possibly
+/// resized — copying them over would tell every viewer to turn the picture
+/// again, which is the one metadata bug users notice immediately.
+NSMutableDictionary* metadata(const std::string& source, int rating) {
+    NSMutableDictionary* out = [NSMutableDictionary dictionary];
+
+    if (!source.empty()) {
+        NSURL* url = [NSURL fileURLWithPath:@(source.c_str())];
+        CFHolder<CGImageSourceRef> src(
+            CGImageSourceCreateWithURL((__bridge CFURLRef)url, nullptr));
+        if (src) {
+            CFHolder<CFDictionaryRef> all(
+                CGImageSourceCopyPropertiesAtIndex(src.ref, 0, nullptr));
+            if (all) {
+                NSDictionary* props = (__bridge NSDictionary*)all.ref;
+                for (NSString* key in @[(__bridge NSString*)kCGImagePropertyExifDictionary,
+                                        (__bridge NSString*)kCGImagePropertyTIFFDictionary,
+                                        (__bridge NSString*)kCGImagePropertyGPSDictionary,
+                                        (__bridge NSString*)kCGImagePropertyExifAuxDictionary,
+                                        (__bridge NSString*)kCGImagePropertyIPTCDictionary]) {
+                    if (NSDictionary* block = props[key]) {
+                        out[key] = [block mutableCopy];
+                    }
+                }
+            }
+        }
+
+        // The RAW's own orientation is already baked into the pixels by the
+        // geometry node, and its dimensions are not the export's.
+        NSMutableDictionary* tiff = out[(__bridge NSString*)kCGImagePropertyTIFFDictionary];
+        [tiff removeObjectForKey:(__bridge NSString*)kCGImagePropertyTIFFOrientation];
+        NSMutableDictionary* exif = out[(__bridge NSString*)kCGImagePropertyExifDictionary];
+        [exif removeObjectForKey:(__bridge NSString*)kCGImagePropertyExifPixelXDimension];
+        [exif removeObjectForKey:(__bridge NSString*)kCGImagePropertyExifPixelYDimension];
+
+        // Say who developed it. The camera stays in TIFF Make and Model, which
+        // is what a photographer is actually looking for.
+        if (tiff == nil) {
+            tiff = [NSMutableDictionary dictionary];
+            out[(__bridge NSString*)kCGImagePropertyTIFFDictionary] = tiff;
+        }
+        tiff[(__bridge NSString*)kCGImagePropertyTIFFSoftware] = @"Orion";
+    }
+
+    if (rating >= 0) {
+        NSMutableDictionary* iptc = out[(__bridge NSString*)kCGImagePropertyIPTCDictionary];
+        if (iptc == nil) {
+            iptc = [NSMutableDictionary dictionary];
+            out[(__bridge NSString*)kCGImagePropertyIPTCDictionary] = iptc;
+        }
+        iptc[(__bridge NSString*)kCGImagePropertyIPTCStarRating] = @(std::clamp(rating, 0, 5));
+    }
+
+    return out;
+}
+
 /// Sixteen bits per component.
 ///
 /// PNG and TIFF carry that through; JPEG does not and CoreGraphics quantises on
@@ -154,10 +217,9 @@ void writeImage(const std::string& path, const std::uint16_t* rgba,
             (__bridge CFURLRef)url, uti(options.format), 1, nullptr));
         if (!dest) throw std::runtime_error("could not create destination: " + path);
 
-        NSDictionary* props = @{
-            (__bridge NSString*)kCGImageDestinationLossyCompressionQuality :
-                @(std::clamp(options.quality, 0.0f, 1.0f))
-        };
+        NSMutableDictionary* props = metadata(options.metadataFrom, options.rating);
+        props[(__bridge NSString*)kCGImageDestinationLossyCompressionQuality] =
+            @(std::clamp(options.quality, 0.0f, 1.0f));
         CGImageDestinationAddImage(dest.ref, image, (__bridge CFDictionaryRef)props);
 
         if (!CGImageDestinationFinalize(dest.ref)) {

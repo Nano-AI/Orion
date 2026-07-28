@@ -24,6 +24,17 @@ struct ExportOptions {
     /// Longest edge in pixels; 0 keeps full resolution.
     std::uint32_t maxDimension = 0;
     ColorSpace space = ColorSpace::Srgb;
+
+    /// A file whose EXIF, TIFF and GPS blocks are copied onto the export.
+    /// Empty writes no metadata.
+    ///
+    /// Read with ImageIO rather than exiv2, which is GPL — DECISIONS #10. It
+    /// reads the RAW's own blocks straight out of the container, so the export
+    /// carries the exposure, lens and date the picture was actually taken with.
+    std::string metadataFrom;
+
+    /// XMP rating, 0-5, written as the EXIF user rating. Negative writes none.
+    int rating = -1;
 };
 
 /// Writes 8-bit RGBA pixels. Throws std::runtime_error on failure.

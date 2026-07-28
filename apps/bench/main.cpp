@@ -282,15 +282,21 @@ int main(int argc, char** argv) {
                 static_cast<std::size_t>(ew) * 4 * sizeof(std::uint16_t);
             const auto pixels = output16(develop, ew, eh);
 
+            // The same options the app builds, metadata and colour space
+            // included. The bench used to pass a bare struct, so it measured a
+            // write the product never performs — and it would have reported
+            // green on an export that carried no EXIF at all.
+            using orion::util::ColorSpace;
             struct Case { const char* suffix; orion::util::ExportOptions opts; };
             const Case cases[] = {
-                {"-full.jpg", {orion::util::ImageFormat::Jpeg, 0.92f, 0}},
-                {"-web.jpg",  {orion::util::ImageFormat::Jpeg, 0.85f, 2048}},
-                // Named for the format, not the depth: the graph ends in
-                // RGBA8Unorm, so every export is eight bits per channel
-                // whatever the container. Calling this one "16bit" implied
-                // a capability that does not exist.
-                {"-full.tif",  {orion::util::ImageFormat::Tiff, 1.0f,  0}},
+                {"-full.jpg", {orion::util::ImageFormat::Jpeg, 0.92f, 0,
+                               ColorSpace::Srgb, path, 4}},
+                {"-web.jpg",  {orion::util::ImageFormat::Jpeg, 0.85f, 2048,
+                               ColorSpace::DisplayP3, path, 4}},
+                // Named for the format, not the depth: the container decides
+                // how much of the sixteen bits survives, and JPEG keeps eight.
+                {"-full.tif", {orion::util::ImageFormat::Tiff, 1.0f, 0,
+                               ColorSpace::AdobeRgb, path, 4}},
             };
 
             for (const auto& c : cases) {

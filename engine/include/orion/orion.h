@@ -210,6 +210,7 @@ typedef struct OrionExportOptions {
     float    quality;        /* JPEG only, 0..1                               */
     uint32_t max_dimension;  /* longest edge; 0 keeps full resolution         */
     int32_t  space;          /* OrionColorSpace                               */
+    int32_t  rating;         /* 0-5 written as the star rating; -1 writes none */
 } OrionExportOptions;
 
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,

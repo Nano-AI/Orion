@@ -361,10 +361,12 @@ final class Engine {
     }
 
     func export(to path: String, quality: Float = 0.92,
-                maxDimension: UInt32 = 0, space: Int32 = 0) throws {
+                maxDimension: UInt32 = 0, space: Int32 = 0,
+                rating: Int32 = -1) throws {
         guard let handle else { return }
         var options = OrionExportOptions(format: -1, quality: quality,
-                                         max_dimension: maxDimension, space: space)
+                                         max_dimension: maxDimension, space: space,
+                                         rating: rating)
         let status = orion_engine_export(handle, path, &options)
         guard status == ORION_OK else { throw Failure.export(errorText(status)) }
     }
@@ -375,8 +377,11 @@ final class Engine {
     func exportedSize(format: Int32, quality: Float, maxDimension: UInt32,
                       space: Int32 = 0) -> Int? {
         guard let handle else { return nil }
+        // No rating and no metadata source: the estimate measures the pixels,
+        // and a few hundred bytes of EXIF is below its resolution anyway.
         var options = OrionExportOptions(format: format, quality: quality,
-                                         max_dimension: maxDimension, space: space)
+                                         max_dimension: maxDimension, space: space,
+                                         rating: -1)
         var bytes: UInt64 = 0
         guard orion_engine_export_size(handle, &options, &bytes) == ORION_OK else {
             return nil

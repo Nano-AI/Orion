@@ -12,6 +12,7 @@ Engine::~Engine() = default;
 
 void Engine::openRaw(const std::string& path) {
     const auto image = raw::decodeBayer(path);
+    sourcePath_ = path;
 
     // Reuse the compiled graph whenever the new frame has the same shape.
     // Rebuilding recompiles sixteen shaders and reallocates roughly 2.5 GiB of
@@ -128,9 +129,15 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     const std::uint32_t w = develop_->outputWidth();
     const std::uint32_t h = develop_->outputHeight();
 
+    util::ExportOptions o = options;
+    // Only the real write carries metadata. The size estimate does not, and
+    // the difference is a few hundred bytes against a file measured in
+    // megabytes — but it is a difference, so it is stated rather than hidden.
+    o.metadataFrom = sourcePath_;
+
     const auto pixels = readOutput16(w, h);
     util::writeImage(path, pixels.data(), w, h,
-                     static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t), options);
+                     static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t), o);
 }
 
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {

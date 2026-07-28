@@ -29,6 +29,55 @@ been needed so far.
 | Edits persist per photo; keys work; compare survives a rotation | `02ad412` |
 | **A blown highlight came out magenta** — linearize never clipped | see below |
 | Every adjustment resets from its own readout | see below |
+| Compare came apart on zoom; the top/bottom split was upside down | see below |
+| Analog track controls; American spelling; a sidecar that survives a rename | see below |
+| Export color space, EXIF and rating; a resize that keeps its depth | see below |
+
+### Export, finished
+
+sRGB, Display P3 and Adobe RGB, converted by ColorSync rather than by a matrix
+typed in here — CLAUDE.md's "prefer mature libraries", and a hand-rolled
+chromatic adaptation is a cast waiting to happen. The pixels are tagged sRGB
+where they are made, because that is what they are, and converted from there;
+tagging them as the destination would relabel without moving them, which is how
+a file comes to open oversaturated.
+
+EXIF, lens, date and the star rating are carried onto the file, read with
+ImageIO rather than exiv2 — DECISIONS #10, and it reads the RAW's own blocks
+straight out of the container. Orientation and the RAW's pixel dimensions are
+dropped deliberately: the geometry node has already applied the rotation, so
+copying the tag would tell every viewer to turn the picture again.
+
+Verified end to end on `_PIC8220.ARW`: Make SONY, Model ILCE-7M3, lens
+"24mm F1.4 DG DN | Art 022", ISO 3200, 1/80 at f/1.4, the capture date, Software
+Orion, rating 4, and the three profiles each landing on the right file.
+
+**A resize was dropping to eight bits.** The 16-bit output path shipped the
+night before survived exactly as far as the first resize, and only for exports
+with a size limit — the ones nobody re-checks. The test now reads the written
+file back, because a PNG of a smooth ramp compresses to almost nothing at either
+depth and byte counts cannot tell them apart.
+
+The bench was passing a bare options struct, so it measured a write the product
+never performs. It builds the same options the app does now.
+
+### Compare and zoom
+
+The split happens across the drawn quad in the canvas shader; the panel was
+drawing the divider, the labels and the grab band against the *fit* rectangle.
+Same rectangle only at fit. `CanvasLayout.drawnRect` is where the picture
+actually is. The top/bottom split was also upside down — the fragment shader
+recovered its position by unpicking `uv`, which is flipped in y and scaled into
+a sub-rectangle of the texture. The quad coordinate is a varying now.
+
+### The sidecar could not survive a rename
+
+Swift's synthesised decoder throws on a missing key rather than falling back to
+a property's default, and `Engine.restore` swallows it with a `try?`. Renaming
+`denoiseColour` would have silently discarded **every** adjustment in **every**
+sidecar on disk, and the photo would have opened unedited with nothing said —
+and that was already true of adding any field at all. Decoding is field-by-field
+and forgiving now, and still reads the old spelling.
 
 ### The magenta highlights
 
@@ -59,12 +108,22 @@ against a cast that was on every frame.
 
 **Still to do, in order**
 
-1. **Color space on export.** sRGB only. The display transform hard-codes
-   Rec.2020 → Rec.709; P3 and Adobe RGB want that matrix as a parameter, and
-   the encoder wants the matching `CGColorSpace`.
-2. **A lens database.** The corrections are built and manual. lensfun would set
-   the coefficients from what the EXIF names; the maths does not change.
-3. **Metadata on export** — EXIF and the XMP rating are not carried through.
+1. **A lens database.** The corrections are built and manual. lensfun would set
+   the coefficients from what the EXIF names; the maths does not change. This is
+   the largest remaining item — a dependency plus an XML database, not an
+   afternoon.
+2. **A real wide gamut.** The export picker offers sRGB, Display P3 and Adobe
+   RGB, and converts correctly — but the display transform ends in Rec.709
+   primaries and saturates there, so **nothing Orion renders yet falls outside
+   sRGB**. Choosing P3 today buys correct tagging for a managed workflow, not
+   more saturation. Widening it for real means giving `develop_display.slang`
+   its output primaries as a parameter and moving the sRGB encode with them.
+   The panel and the C header both say this plainly rather than implying
+   otherwise.
+3. **The EXIF read costs ~90 ms per export.** `writeImage` opens the RAW with
+   ImageIO on every write to lift its metadata. Caching the property dictionary
+   at open would give it straight back; export is off the interaction path, so
+   it has not been worth doing yet.
 4. **Temperature drag is 43 ms.** Structural: white balance rewrites the head of
    the graph, so the demosaic reruns. The fix is degrade-then-refine (a cheap
    demosaic mid-drag) or the preview-ROI path in `ARCHITECTURE.md`. Neither is

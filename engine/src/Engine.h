@@ -69,6 +69,9 @@ private:
     std::unique_ptr<gpu::Device>           device_;
     std::unique_ptr<pipe::DevelopPipeline> develop_;
     std::string                            camera_;
+    /// The RAW this was opened from. Export lifts its EXIF, so the file
+    /// written carries the exposure, lens and date the picture was taken with.
+    std::string                            sourcePath_;
     std::string                            lastError_;
 };
 

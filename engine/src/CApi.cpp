@@ -310,6 +310,7 @@ OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
             opts.quality      = options->quality;
             opts.maxDimension = options->max_dimension;
             opts.space        = toColorSpace(options->space);
+            opts.rating       = options->rating;
         }
 
         engine->impl.exportImage(path, opts);

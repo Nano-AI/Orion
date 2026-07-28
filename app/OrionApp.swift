@@ -1080,7 +1080,8 @@ struct Editor: View {
                               maxDimension: exportSettings.longestEdge(
                                   sourceWidth: engine.imageWidth,
                                   sourceHeight: engine.imageHeight),
-                              space: exportSettings.space.code)
+                              space: exportSettings.space.code,
+                              rating: Int32(library.photos.first { $0.url == current }?.rating ?? 0))
         } catch {
             message = error.localizedDescription
         }
