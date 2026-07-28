@@ -101,6 +101,15 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     nRgb_       = pipeline_.add({"rcd:red/blue", "rcdRedBlue",
                                  {nLinearize_, nGreen_, nDirs_},
                                  PixelFormat::RGBA16Float, {}});
+    // ── Highlight reconstruction (Masood, Zhu & Tang) ─────────────────────
+    //
+    // Straight after the demosaic, so it has all three channels per pixel, and
+    // before everything else, so no later stage ever sees the false colour that
+    // per-channel clipping produces. Still in linear camera RGB, which is where
+    // the clipping levels are known.
+    nHighlights_ = pipeline_.add({"highlights", "highlightRecover", {nRgb_},
+                                  PixelFormat::RGBA16Float, {}});
+
     // ── Profiled wavelet denoise (Starck et al., starlet) ─────────────────
     //
     // Before the colour matrix and before sharpening, because the noise model
@@ -114,13 +123,13 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     //
     //     I = c_J + Σ_j w_j,   w_j = c_j − c_{j+1}
     for (int j = 0; j < kDenoiseScales; ++j) {
-        const int input = (j == 0) ? nRgb_ : nAtrousBlur_[j - 1];
+        const int input = (j == 0) ? nHighlights_ : nAtrousBlur_[j - 1];
         nAtrousBlur_[j] = pipeline_.add({"denoise:blur " + std::to_string(j),
                                          "atrousBlur", {input},
                                          PixelFormat::RGBA16Float, {}});
     }
     for (int j = kDenoiseScales - 1; j >= 0; --j) {
-        const int fine   = (j == 0) ? nRgb_ : nAtrousBlur_[j - 1];
+        const int fine   = (j == 0) ? nHighlights_ : nAtrousBlur_[j - 1];
         const int coarse = nAtrousBlur_[j];
         // The coarsest scale accumulates onto the residual itself; every finer
         // one accumulates onto the scale below it.
@@ -134,8 +143,8 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // Capture sharpening belongs right after the denoise, and keeping it
     // upstream of the tone controls means an exposure drag never recomputes it.
     // Note the input: a disabled node passes its *first* input through, and
-    // shrink 0's first input is the demosaic — so switching the whole chain off
-    // hands sharpen exactly what it used to get.
+    // shrink 0's first input is the reconstruction — so switching the whole
+    // chain off hands sharpen exactly what it would otherwise have got.
     nSharpen_   = pipeline_.add({"sharpen", "sharpen", {nAtrousShrink_[0]},
                                  PixelFormat::RGBA16Float, {}});
     nMatrix_    = pipeline_.add({"camera->working", "cameraToWorking", {nSharpen_},
@@ -149,16 +158,29 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // chain cached while the exposure slider moves.
     nGuidePrep_ = pipeline_.add({"guide:prep", "guidePrep", {nMatrix_},
                                  PixelFormat::RG32Float, {}});
-    nGuideH1_   = pipeline_.add({"guide:blur h", "boxBlur", {nGuidePrep_},
-                                 PixelFormat::RG32Float, {}});
+    // Subsample before filtering (He & Sun, 2015). Everything from here to the
+    // coefficients runs on a grid sixteen times smaller.
+    guideW_ = std::max(1u, (width_ + kGuideScale - 1) / kGuideScale);
+    guideH_ = std::max(1u, (height_ + kGuideScale - 1) / kGuideScale);
+    nGuideDown_ = pipeline_.add({"guide:subsample", "guideDown", {nGuidePrep_},
+                                 PixelFormat::RG32Float, {}, {},
+                                 true, guideW_, guideH_});
+
+    nGuideH1_   = pipeline_.add({"guide:blur h", "boxBlur", {nGuideDown_},
+                                 PixelFormat::RG32Float, {}, {},
+                                 true, guideW_, guideH_});
     nGuideV1_   = pipeline_.add({"guide:blur v", "boxBlur", {nGuideH1_},
-                                 PixelFormat::RG32Float, {}});
+                                 PixelFormat::RG32Float, {}, {},
+                                 true, guideW_, guideH_});
     nGuideAb_   = pipeline_.add({"guide:coeffs", "guideAb", {nGuideV1_},
-                                 PixelFormat::RG32Float, {}});
+                                 PixelFormat::RG32Float, {}, {},
+                                 true, guideW_, guideH_});
     nGuideH2_   = pipeline_.add({"guide:blur h2", "boxBlur", {nGuideAb_},
-                                 PixelFormat::RG32Float, {}});
+                                 PixelFormat::RG32Float, {}, {},
+                                 true, guideW_, guideH_});
     nGuideV2_   = pipeline_.add({"guide:blur v2", "boxBlur", {nGuideH2_},
-                                 PixelFormat::RG32Float, {}});
+                                 PixelFormat::RG32Float, {}, {},
+                                 true, guideW_, guideH_});
 
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
                                  {nMatrix_, nGuideV2_, nGuidePrep_},
@@ -224,6 +246,8 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
         lin.whiteBalance[c] = mul / g;
     }
     lin.invRange = 1.0f / static_cast<float>(image.white - image.black[0]);
+    whiteLevel_ = static_cast<float>(image.white);
+    for (int c = 0; c < 3; ++c) blackLevel_[c] = static_cast<float>(image.black[c]);
     lin.filters  = image.filters;
     lin.size[0] = size[0]; lin.size[1] = size[1];
     linBase_ = lin;
@@ -258,20 +282,29 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     // covers the same fraction of the picture regardless of megapixels;
     // epsilon is in squared log2-exposure units, and 0.04 is about a fifth of
     // a stop — below that is texture and noise, above it is an edge.
-    const int guideRadius =
+    // The radius is subsampled along with the image, so the filter still covers
+    // the same fraction of the picture.
+    const int fullRadius =
         std::max(4, static_cast<int>(std::max(width_, height_) / 200));
+    const int guideRadius = std::max(2, fullRadius / kGuideScale);
 
     params::GuidePrep gp{{size[0], size[1]}, {0, 0}};
     pipeline_.setParams(nGuidePrep_, &gp, sizeof gp);
 
-    params::BoxBlur bh{{size[0], size[1]}, guideRadius, 1};
-    params::BoxBlur bv{{size[0], size[1]}, guideRadius, 0};
+    params::GuideDown gd{};
+    gd.outSize[0] = guideW_; gd.outSize[1] = guideH_;
+    gd.inSize[0] = size[0];  gd.inSize[1] = size[1];
+    gd.scale = kGuideScale;
+    pipeline_.setParams(nGuideDown_, &gd, sizeof gd);
+
+    params::BoxBlur bh{{guideW_, guideH_}, guideRadius, 1};
+    params::BoxBlur bv{{guideW_, guideH_}, guideRadius, 0};
     pipeline_.setParams(nGuideH1_, &bh, sizeof bh);
     pipeline_.setParams(nGuideV1_, &bv, sizeof bv);
     pipeline_.setParams(nGuideH2_, &bh, sizeof bh);
     pipeline_.setParams(nGuideV2_, &bv, sizeof bv);
 
-    params::GuideAb ga{{size[0], size[1]}, 0.04f, 0.0f};
+    params::GuideAb ga{{guideW_, guideH_}, 0.04f, 0.0f};
     pipeline_.setParams(nGuideAb_, &ga, sizeof ga);
 
     // Anchor on the camera's actual multipliers, not on a temperature we
@@ -324,6 +357,53 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         lin.whiteBalance[2] = asShotMul_[2] * want[2] / std::max(asShotRef_[2], 1e-6f);
         lin.whiteBalance[3] = 1.0f;   // second green
         pipeline_.setParams(nLinearize_, &lin, sizeof lin);
+    }
+
+    // ── Highlight reconstruction ─────────────────────────────────────────
+    //
+    // The clipping level has to be recomputed whenever white balance moves.
+    // Linearize scales each channel by its multiplier, so the level a channel
+    // saturates at is scaled with it — and because white balance raises red and
+    // blue relative to green, those levels routinely sit above 1.0. Testing
+    // against a single level after white balance is itself a source of the
+    // false colour this node exists to remove.
+    const bool highlightsMoved =
+        first ||
+        adj.highlightRecovery != lastAdj_.highlightRecovery ||
+        adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
+        adj.wb.tint != lastAdj_.wb.tint;
+
+    if (highlightsMoved) {
+        pipeline_.setEnabled(nHighlights_, adj.highlightRecovery > 0.0f);
+
+        if (adj.highlightRecovery > 0.0f) {
+            const auto wanted = multipliersFor(adj.wb, xyzToCam_);
+            const float m[3] = {
+                asShotMul_[0] * wanted[0] / std::max(asShotRef_[0], 1e-6f),
+                1.0f,
+                asShotMul_[2] * wanted[2] / std::max(asShotRef_[2], 1e-6f),
+            };
+
+            params::Highlights hl{};
+            hl.size[0] = width_;
+            hl.size[1] = height_;
+
+            // T_raw,k = (W − B_k) / (W − B_ref), then scaled by the channel's
+            // own multiplier. Research §1's per-channel threshold, exactly.
+            float level[3];
+            for (int c = 0; c < 3; ++c) {
+                level[c] = (whiteLevel_ - blackLevel_[c]) * linBase_.invRange * m[c];
+            }
+            hl.clipR = level[0];
+            hl.clipG = level[1];
+            hl.clipB = level[2];
+            // 0.97, in the middle of the 0.95-0.99 the research gives. Lower
+            // treats sound highlights as clipped; higher misses the shoulder
+            // where a channel is already non-linear before it reaches its stop.
+            hl.gamma = 0.97f;
+            hl.strength = adj.highlightRecovery;
+            pipeline_.setParams(nHighlights_, &hl, sizeof hl);
+        }
     }
 
     // ── Denoise ──────────────────────────────────────────────────────────
@@ -419,7 +499,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     const bool needsGuide = adj.highlights != 0.0f || adj.shadows != 0.0f;
     if (first || needsGuide != (lastAdj_.highlights != 0.0f ||
                                 lastAdj_.shadows != 0.0f)) {
-        for (int n : {nGuidePrep_, nGuideH1_, nGuideV1_,
+        for (int n : {nGuidePrep_, nGuideDown_, nGuideH1_, nGuideV1_,
                       nGuideAb_, nGuideH2_, nGuideV2_}) {
             pipeline_.setEnabled(n, needsGuide);
         }
@@ -428,7 +508,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     if (linearMoved) {
         params::LinearAdjust la{adj.exposureEv, adj.highlights, adj.shadows,
                                 adj.whites, adj.blacks, adj.vibrance,
-                                adj.saturation, 0.0f, {size[0], size[1]}, {0, 0},
+                                adj.saturation, 0.0f, {size[0], size[1]},
+                                {guideW_, guideH_},
                                 {}, {}, {}};
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
         std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);

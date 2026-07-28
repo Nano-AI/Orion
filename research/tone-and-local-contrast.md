@@ -120,3 +120,67 @@ the same curve.
   the guided filter, which was in fact developed to refine its transmission map.
 
 All three are M3.
+
+
+## Fast guided filter — 2026-07-28
+
+He & Sun (2015), *Fast Guided Filter*, arXiv:1505.00996. Same authors as the
+original; their own answer to its cost.
+
+`a` and `b` are averages over a window of radius r, so they vary slowly by
+construction and there is no point solving them at full resolution. Subsample
+the guide by s, divide the radius by s, solve there, and lift the coefficients
+back bilinearly. Cost falls by roughly s². They report s = 4 as visually
+indistinguishable.
+
+**Why it was needed.** The radius scales with the frame — 30 px at 24 MP — and
+`box_blur.slang` looped over every tap. Four passes of 61 taps over 24 million
+pixels took **90 ms**, five times the budget for a slider you drag. The comment
+in that file claimed the filter was O(1) in the radius; the loop in it was not.
+
+**Measured**, Sony ILCE-7M3 at 6024×4024, `highlights −1` against a +5.5 EV
+baseline:
+
+| | Time | Mean luma |
+|---|---|---|
+| Full resolution | 90.09 ms | 0.3917 |
+| Subsampled, s = 4 | 19.60 ms | 0.3917 |
+
+Identical to four decimal places, which is what He & Sun predict. Bilinear on
+the lift, not nearest — a nearest lift prints the subsampling grid into every
+gradient.
+
+## Highlight reconstruction — 2026-07-28
+
+Masood, Zhu & Tang (2009), *Automatic Correction of Saturated Regions in
+Photographs using Cross-Channel Correlation*, Computer Graphics Forum 28(7),
+1861–1869. Restated in `deep-research-2026-07-27.md` §1.
+
+A sensor clips per channel, not per pixel. For a neutral subject every channel
+stops at the same scene brightness and only brightness is lost; for a coloured
+one the strongest channel stops first, the ratio between channels changes, and a
+warm cloud comes out cyan. Within a small neighbourhood the channels are close
+to linearly related, so fitting `C_c = α·C_u + β` by ordinary least squares over
+the still-valid pixels says what the clipped channel would have read.
+
+**The per-channel threshold** — `deep-research-2026-07-27.md` §1 ★, marked there
+as the part Orion lacked entirely. White balance scales red and blue *upward*
+relative to green, so their clipping levels routinely exceed 1.0. Testing
+against a single level after white balance is itself a source of false colour.
+`T_k = (W − B_k)·invRange·m_k`, and γ = 0.97, mid-range of the 0.95–0.99 given.
+
+**Deliberate deviations.**
+
+- **A fixed window, not a traced boundary region.** Masood et al. fit over Ω, the
+  valid boundary of each saturated region, which needs segmentation and a
+  reduction per region. A fixed window round each clipped pixel is the same
+  model with a cruder Ω, and it is one shader of 150 lines rather than a
+  multi-pass region solver. The cost is reach: a highlight wider than the window
+  has no valid neighbours to fit against, and the shader declines rather than
+  inventing colour.
+- **All three channels clipped goes neutral.** There is nothing left to
+  correlate against. A blown sun is white; inventing a hue for it is worse than
+  declining to.
+- **The estimate can only raise a channel.** A clipped channel read *at least*
+  its clipping level, so `max(clipped, estimate)` is sound — and it makes a poor
+  fit harmless rather than actively wrong.

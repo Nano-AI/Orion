@@ -55,7 +55,9 @@ struct LinearAdjust {
     float         saturation;
     float         _pad;
     std::uint32_t size[2];
-    std::uint32_t _pad2[2];
+    /// Dimensions of the subsampled guide coefficients, which this kernel lifts
+    /// back to full resolution. See guide_down.slang.
+    std::uint32_t guideSize[2];
     float         hueShift[8];
     float         satShift[8];
     float         lumShift[8];
@@ -120,6 +122,25 @@ struct Display {
     std::uint32_t _pad[2];
 };
 static_assert(sizeof(Display) == 32);
+
+/// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
+struct GuideDown {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    std::int32_t  scale;
+    std::int32_t  _pad[3];
+};
+static_assert(sizeof(GuideDown) == 32);
+
+/// Highlight reconstruction. Mirrors HighlightParams in highlights.slang.
+struct Highlights {
+    std::uint32_t size[2];
+    float clipR, clipG;
+    float clipB, gamma;
+    float strength;
+    float _pad;
+};
+static_assert(sizeof(Highlights) == 32);
 
 /// À-trous blur, one scale. Mirrors AtrousParams in denoise_blur.slang.
 struct AtrousBlur {

@@ -89,6 +89,11 @@ typedef struct OrionAdjustments {
     float   preview_x, preview_y;  /* canvas origin  */
     float   preview_size;          /* canvas extent, both axes, >= 1 */
 
+    /* Highlight reconstruction, 0..1. A correction rather than a look, so the
+     * app opens it at 1: a clipped red channel under a white cloud is a defect
+     * of the sensor, not a choice. */
+    float highlight_recovery;
+
     /* Profiled wavelet denoise. Strengths are multiples of the measured noise
      * level, not arbitrary amounts, so one setting behaves the same way on a
      * clean frame and a very noisy one. Zero switches the chain off entirely. */

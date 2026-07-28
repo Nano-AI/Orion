@@ -159,6 +159,10 @@ final class Engine {
     /// spline and the LUT since M2; nothing reached them until now.
     var curve = ToneCurve()       { didSet { pushAndRender() } }
 
+    /// Highlight reconstruction. Defaults on, because per-channel clipping is
+    /// a defect rather than a look.
+    var highlightRecovery: Float = 1 { didSet { pushAndRender() } }
+
     /// Profiled wavelet denoise, in multiples of the frame's own measured
     /// noise level. Zero switches eight nodes off rather than running them at
     /// no strength.
@@ -327,6 +331,7 @@ final class Engine {
             vibrance: vibrance, saturation: saturation, contrast: contrast,
             rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
             cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
+            highlightRecovery: highlightRecovery,
             denoiseLuma: denoiseLuma, denoiseColour: denoiseColour,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
@@ -342,6 +347,7 @@ final class Engine {
         vibrance = s.vibrance; saturation = s.saturation; contrast = s.contrast
         rotateQuarters = s.rotateQuarters; straightenDeg = s.straightenDeg
         cropX = s.cropX; cropY = s.cropY; cropW = s.cropW; cropH = s.cropH
+        highlightRecovery = s.highlightRecovery
         denoiseLuma = s.denoiseLuma; denoiseColour = s.denoiseColour
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
         sharpenMasking = s.sharpenMasking; curve = s.curve
@@ -445,6 +451,7 @@ final class Engine {
             preview_x: Float(previewCanvas.origin.x),
             preview_y: Float(previewCanvas.origin.y),
             preview_size: Float(previewCanvas.size),
+            highlight_recovery: highlightRecovery,
             denoise_luma: denoiseLuma, denoise_colour: denoiseColour,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,

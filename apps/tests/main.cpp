@@ -940,6 +940,162 @@ void testDenoiseGpu() {
            "worst " + std::to_string(worst));
 }
 
+/// Highlight reconstruction, on a real GPU.
+///
+/// The defect: a sensor clips per channel. For a *neutral* subject that happens
+/// in every channel at once and costs only brightness — the interesting case is
+/// a coloured one. A warm cloud drives red hardest, so red reaches its stop
+/// while green and blue are still reading, the ratio between the channels
+/// changes, and the cloud turns cyan. This builds exactly that.
+void testHighlightRecoveryGpu() {
+    section("Highlight recovery (GPU)");
+
+    constexpr std::uint32_t kW = 192, kH = 64;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/highlightRecover.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "highlightRecover");
+
+    // Clipping levels after white balance, of the sort a daylight frame gives:
+    // red and blue scaled up relative to green, so they stop higher.
+    constexpr float kClipR = 2.0f, kClipG = 1.0f, kClipB = 1.5f;
+    constexpr float kGamma = 0.97f;
+
+    // A warm subject: post-white-balance the channels sit in the ratio
+    // 2.8 : 1.0 : 1.05, so red reaches its stop while green is barely past
+    // two-thirds of the way to its own.
+    constexpr float kRatioR = 2.8f, kRatioG = 1.0f, kRatioB = 1.05f;
+
+    // Left half a ramp that never clips anything, right half a highlight where
+    // red alone is blown. The ramp matters: a fit needs the reference to *vary*
+    // across the window, and a flat valid region would make the least squares
+    // singular — which the shader detects and declines, correctly but untestably.
+    constexpr float kHighlight = 0.85f;
+    const std::uint32_t split = kW / 2;
+
+    std::vector<__fp16> input(std::size_t(kW) * kH * 4);
+    std::vector<float> scene(std::size_t(kW) * kH);
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = std::size_t(y) * kW + x;
+            const float v = (x < split)
+                ? 0.25f + 0.44f * (float(x) / float(split - 1))
+                : kHighlight;
+            scene[i] = v;
+            input[i * 4 + 0] = static_cast<__fp16>(std::min(kRatioR * v, kClipR));
+            input[i * 4 + 1] = static_cast<__fp16>(std::min(kRatioG * v, kClipG));
+            input[i * 4 + 2] = static_cast<__fp16>(std::min(kRatioB * v, kClipB));
+            input[i * 4 + 3] = 1;
+        }
+    }
+
+    auto src = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto dst = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    src->upload(input.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+    orion::pipe::params::Highlights hl{};
+    hl.size[0] = kW; hl.size[1] = kH;
+    hl.clipR = kClipR; hl.clipG = kClipG; hl.clipB = kClipB;
+    hl.gamma = kGamma;
+    hl.strength = 1.0f;
+
+    const auto run = [&](std::vector<__fp16>& out) {
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), dst.get()}, &hl, sizeof hl, kW, kH);
+        cb.commitAndWait();
+        dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+    };
+
+    std::vector<__fp16> out(std::size_t(kW) * kH * 4);
+    run(out);
+
+    // Four pixels into the highlight, so the window still reaches the valid
+    // ramp behind it. Further in there is nothing to fit against and the shader
+    // declines — the window's reach is a real limit of the method, not a bug.
+    const std::uint32_t probe = split + 4;
+    report(probe < kW, "the probe column is inside the frame");
+    report(kRatioR * kHighlight > kClipR,
+           "the probe is genuinely clipped, not merely near the threshold");
+    report(kRatioG * kHighlight < kClipG * kGamma &&
+           kRatioB * kHighlight < kClipB * kGamma,
+           "green and blue are still reading at the probe");
+
+    const std::size_t i = (std::size_t(kH / 2) * kW + probe) * 4;
+    const double before = double(input[i]);
+    const double after = double(out[i]);
+    const double want = kRatioR * double(kHighlight);
+
+    report(after > before + 0.05, "a clipped red channel is raised",
+           "was " + std::to_string(before) + ", now " + std::to_string(after));
+    checkNear(after, want, 0.10, "the rebuilt red is close to what red would have read");
+
+    // Green and blue were never clipped there, and must come back untouched.
+    checkNear(double(out[i + 1]), double(input[i + 1]), 1e-3,
+              "an unclipped green is left alone");
+    checkNear(double(out[i + 2]), double(input[i + 2]), 1e-3,
+              "an unclipped blue is left alone");
+
+    // Nothing with all three channels below their own levels may move at all.
+    // A highlight tool that shifts the midtones is worse than one that does
+    // nothing.
+    double worstValid = 0.0;
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t k = std::size_t(y) * kW + x;
+            const float v = scene[k];
+            if (kRatioR * v >= kClipR * kGamma) continue;
+            if (kRatioG * v >= kClipG * kGamma) continue;
+            if (kRatioB * v >= kClipB * kGamma) continue;
+            for (int ch = 0; ch < 3; ++ch) {
+                worstValid = std::max(worstValid,
+                    std::abs(double(out[k * 4 + ch]) - double(input[k * 4 + ch])));
+            }
+        }
+    }
+    report(worstValid < 1e-3, "a wholly valid pixel is never touched",
+           "worst " + std::to_string(worstValid));
+
+    // Strength zero must be a pass-through, or the control does not turn off.
+    hl.strength = 0.0f;
+    run(out);
+    double worstOff = 0.0;
+    for (std::size_t k = 0; k < std::size_t(kW) * kH * 4; ++k) {
+        worstOff = std::max(worstOff, std::abs(double(out[k]) - double(input[k])));
+    }
+    report(worstOff < 1e-6, "strength zero is a pass-through",
+           "worst " + std::to_string(worstOff));
+
+    // All three clipped has nothing left to correlate against, and must go
+    // neutral rather than keep whatever hue three different stops implied.
+    std::vector<__fp16> blown(std::size_t(kW) * kH * 4);
+    for (std::uint32_t k = 0; k < kW * kH; ++k) {
+        blown[k * 4 + 0] = static_cast<__fp16>(kClipR);
+        blown[k * 4 + 1] = static_cast<__fp16>(kClipG);
+        blown[k * 4 + 2] = static_cast<__fp16>(kClipB);
+        blown[k * 4 + 3] = 1;
+    }
+    src->upload(blown.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+    hl.strength = 1.0f;
+    run(out);
+
+    const std::size_t mid = (std::size_t(kH / 2) * kW + kW / 2) * 4;
+    const double r = double(out[mid]), g = double(out[mid + 1]), b = double(out[mid + 2]);
+    report(std::abs(r - g) < 1e-3 && std::abs(g - b) < 1e-3,
+           "a wholly blown highlight comes back neutral",
+           "rgb " + std::to_string(r) + ", " + std::to_string(g) + ", "
+                  + std::to_string(b));
+}
+
 }  // namespace
 
 int main() {
@@ -955,6 +1111,7 @@ int main() {
     testStraightenPivot();
     testNoiseEstimator();
     testDenoiseGpu();
+    testHighlightRecoveryGpu();
     testExportFormats();
 
     std::printf("\n%d checks, %d failures\n", checks, failures);

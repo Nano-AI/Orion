@@ -71,6 +71,11 @@ struct Adjustments {
     float previewX = 0.0f, previewY = 0.0f;
     float previewSize = 1.0f;
 
+    /// Highlight reconstruction, 0..1. A correction rather than an effect, so
+    /// it defaults to on: a clipped red channel under a white cloud is a defect
+    /// of the sensor, not a look.
+    float highlightRecovery = 1.0f;
+
     /// Profiled wavelet denoise. Strengths are multiples of the measured
     /// noise level, so 1.0 means "shrink coefficients smaller than one sigma"
     /// rather than an arbitrary amount — which is what makes the same setting
@@ -145,11 +150,20 @@ private:
     int nLinearize_ = -1, nDirs_ = -1, nLpf_ = -1, nGreen_ = -1, nRgb_ = -1;
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
     int nGeometry_ = -1;
+    int nHighlights_ = -1;
+    float whiteLevel_ = 0.0f;
+    float blackLevel_[3]{};
     static constexpr int kDenoiseScales = 4;
     int nAtrousBlur_[kDenoiseScales]{-1, -1, -1, -1};
     int nAtrousShrink_[kDenoiseScales]{-1, -1, -1, -1};
     raw::NoiseProfile noise_{};
-    int nGuidePrep_ = -1, nGuideH1_ = -1, nGuideV1_ = -1;
+    int nGuidePrep_ = -1, nGuideDown_ = -1, nGuideH1_ = -1, nGuideV1_ = -1;
+
+    /// He & Sun's subsampling ratio for the guided filter. Four is what they
+    /// report as visually indistinguishable, and it takes the filter from
+    /// ninety milliseconds to something you can drag.
+    static constexpr int kGuideScale = 4;
+    std::uint32_t guideW_ = 0, guideH_ = 0;
     int nGuideAb_ = -1, nGuideH2_ = -1, nGuideV2_ = -1;
     int exifQuarters_ = 0;
     int turns_ = 0;

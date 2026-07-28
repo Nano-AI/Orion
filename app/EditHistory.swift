@@ -109,6 +109,7 @@ struct DevelopState: Equatable {
     var cropY: Float = 0
     var cropW: Float = 1
     var cropH: Float = 1
+    var highlightRecovery: Float = 1
     var denoiseLuma: Float = 0
     var denoiseColour: Float = 0
     var sharpenAmount: Float = 0

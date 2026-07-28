@@ -101,11 +101,14 @@ enum Screenshot {
 
     private static func tab(for scene: String) -> ToolTab {
         switch scene {
-        case "colour":                 .colour
-        case "curve":                  .light
-        case "detail", "noisy", "denoise-off", "denoise-luma", "denoise-both": .detail
-        case "crop", "crop-angle":     .crop
-        default:                       .light
+        case "colour":
+            return .colour
+        case "detail", "noisy", "denoise-off", "denoise-luma", "denoise-both":
+            return .detail
+        case "crop", "crop-angle":
+            return .crop
+        default:
+            return .light
         }
     }
 
@@ -117,6 +120,11 @@ enum Screenshot {
             engine.exposureEv = 2.6
             engine.highlights = -0.4
             engine.shadows = 0.45
+        case "tone":
+            engine.exposureEv = 4.2
+            engine.highlights = -1.0
+            engine.shadows = 0.8
+            engine.blacks = -0.3
         case "curve":
             engine.exposureEv = 2.6
             engine.curve.master = [CurvePoint(x: 0, y: 0.04), CurvePoint(x: 0.28, y: 0.19),

@@ -139,6 +139,7 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.previewY = adj->preview_y;
         a.previewSize = adj->preview_size;
 
+        a.highlightRecovery = adj->highlight_recovery;
         a.denoiseLuma   = adj->denoise_luma;
         a.denoiseColour = adj->denoise_colour;
 
@@ -168,6 +169,7 @@ OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* ou
         out->tint          = wb.tint;
         out->contrast      = 1.0f;
         out->sharpen_radius = 1.0f;
+        out->highlight_recovery = 1.0f;
         out->crop_w = 1.0f;
         out->crop_h = 1.0f;
         return ORION_OK;

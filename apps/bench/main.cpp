@@ -53,9 +53,17 @@ void writeOut(const orion::pipe::DevelopPipeline& d, const std::string& path) {
     std::printf("  wrote %s  (%u x %u)\n", path.c_str(), w, h);
 }
 
-/// Mean luma of the output, for asserting that an adjustment actually did
-/// something rather than silently no-op'ing.
-double meanLuma(const orion::pipe::DevelopPipeline& d) {
+/// What a control is expected to move.
+///
+/// Saturation and vibrance preserve luminance *by construction* — the mean of
+/// y + (c - y)*a weighted by the luminance weights is exactly y — so measuring
+/// mean luma reported them as doing nothing, every run. A benchmark that cries
+/// wolf trains you to ignore it, which is worse than not having one.
+enum class Metric { Luma, Chroma };
+
+/// Mean luma, or mean distance from grey, for asserting that an adjustment
+/// actually did something rather than silently no-op'ing.
+double meanOf(const orion::pipe::DevelopPipeline& d, Metric metric) {
     const std::uint32_t tw = d.outputWidth(), th = d.outputHeight();
     const std::size_t rowBytes = static_cast<std::size_t>(tw) * 4;
     std::vector<std::uint8_t> pixels(rowBytes * th);
@@ -64,9 +72,13 @@ double meanLuma(const orion::pipe::DevelopPipeline& d) {
     double sum = 0.0;
     std::size_t n = 0;
     for (std::size_t i = 0; i < static_cast<std::size_t>(tw) * th; i += 37) {
-        sum += 0.2126 * pixels[i * 4 + 0]
-             + 0.7152 * pixels[i * 4 + 1]
-             + 0.0722 * pixels[i * 4 + 2];
+        const double r = pixels[i * 4 + 0];
+        const double g = pixels[i * 4 + 1];
+        const double b = pixels[i * 4 + 2];
+        const double y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        sum += (metric == Metric::Luma)
+             ? y
+             : (std::abs(r - y) + std::abs(g - y) + std::abs(b - y)) / 3.0;
         ++n;
     }
     return n ? sum / static_cast<double>(n) / 255.0 : 0.0;
@@ -147,33 +159,38 @@ int main(int argc, char** argv) {
             base.wb = develop.asShotWhiteBalance();
             develop.apply(base);
             develop.render();
-            return meanLuma(develop);
+            return meanOf(develop, Metric::Luma);
         }());
 
         {
             orion::pipe::Adjustments base;
             base.wb = develop.asShotWhiteBalance();
 
-            struct Probe { const char* name; void (*set)(orion::pipe::Adjustments&); };
+            struct Probe {
+                const char* name;
+                void (*set)(orion::pipe::Adjustments&);
+                Metric metric = Metric::Luma;
+            };
             const Probe probes[] = {
                 {"exposure +1 EV", [](auto& a) { a.exposureEv = 1.0f; }},
                 {"highlights -1*", [](auto& a) { a.exposureEv = 5.5f; a.highlights = -1.0f; }},
                 {"shadows +1",     [](auto& a) { a.shadows = 1.0f; }},
                 {"whites +1*",     [](auto& a) { a.exposureEv = 5.5f; a.whites = 1.0f; }},
                 {"blacks -1",      [](auto& a) { a.blacks = -1.0f; }},
-                {"vibrance +1",    [](auto& a) { a.vibrance = 1.0f; }},
-                {"saturation -1",  [](auto& a) { a.saturation = -1.0f; }},
+                {"vibrance +1",    [](auto& a) { a.vibrance = 1.0f; }, Metric::Chroma},
+                {"saturation -1",  [](auto& a) { a.saturation = -1.0f; }, Metric::Chroma},
                 {"contrast 1.5",   [](auto& a) { a.contrast = 1.5f; }},
                 {"temp 3000K",     [](auto& a) { a.wb.temperatureK = 3000.0f; }},
                 {"tint +0.5",      [](auto& a) { a.wb.tint += 0.5f; }},
                 {"sharpen 1.0",    [](auto& a) { a.sharpenAmount = 1.0f; }},
                 {"mixer blue lum", [](auto& a) { a.lumShift[5] = -1.0f; }},
-                {"mixer blue sat", [](auto& a) { a.satShift[5] = 1.0f; }},
+                {"mixer blue sat", [](auto& a) { a.satShift[5] = 1.0f; }, Metric::Chroma},
             };
 
             develop.apply(base);
             develop.render();
-            const double ref = meanLuma(develop);
+            const double ref = meanOf(develop, Metric::Luma);
+            const double refChroma = meanOf(develop, Metric::Chroma);
 
             // Starred probes are measured against a +3 EV baseline: this frame
             // is a night sky, and highlight recovery correctly does nothing
@@ -182,21 +199,25 @@ int main(int argc, char** argv) {
             lifted.exposureEv = 5.5f;
             develop.apply(lifted);
             develop.render();
-            const double liftedRef = meanLuma(develop);
+            const double liftedRef = meanOf(develop, Metric::Luma);
 
             for (const auto& probe : probes) {
                 auto a = base;
                 probe.set(a);
                 develop.apply(a);
                 const double ms = develop.render();
-                const double luma = meanLuma(develop);
+                const double value = meanOf(develop, probe.metric);
                 const bool starred = std::string(probe.name).find('*') != std::string::npos;
-                const double against = starred ? liftedRef : ref;
+                const double against = (probe.metric == Metric::Chroma)
+                    ? refChroma
+                    : (starred ? liftedRef : ref);
                 int nodes = 0;
                 for (const auto& n : develop.graph().lastRun()) if (n.executed) ++nodes;
-                std::printf("  %-16s %7.4f  (%+.4f)  %6.2f ms  %d nodes  %s\n",
-                            probe.name, luma, luma - against, ms, nodes,
-                            std::abs(luma - against) > 2e-4 ? "ok" : "NO EFFECT");
+                std::printf("  %-16s %7.4f %-7s (%+.4f)  %6.2f ms  %2d nodes  %s\n",
+                            probe.name, value,
+                            probe.metric == Metric::Chroma ? "chroma" : "luma",
+                            value - against, ms, nodes,
+                            std::abs(value - against) > 2e-4 ? "ok" : "NO EFFECT");
             }
             develop.apply(base);
             develop.render();
@@ -209,7 +230,7 @@ int main(int argc, char** argv) {
         adj.wb = develop.asShotWhiteBalance();
         develop.apply(adj);
         develop.render();
-        const double flatLuma = meanLuma(develop);
+        const double flatLuma = meanOf(develop, Metric::Luma);
         writeOut(develop, prefix + "-flat.png");
 
         // A film-style S: lift the shoulder, drop the toe.
@@ -224,7 +245,7 @@ int main(int argc, char** argv) {
             curveTimes.push_back(develop.render());
         }
         const Stats cs = summarise(curveTimes);
-        const double curvedLuma = meanLuma(develop);
+        const double curvedLuma = meanOf(develop, Metric::Luma);
         writeOut(develop, prefix + "-curved.png");
 
         std::printf("  curve drag     %.2f ms median, %.2f ms p95  (1 of 8 nodes)\n",

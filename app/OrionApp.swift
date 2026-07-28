@@ -673,6 +673,15 @@ struct Editor: View {
                 slider("Whites", $engine.whites, -1...1, "", 2)
                 slider("Blacks", $engine.blacks, -1...1, "", 2)
             }
+            section("Highlight Recovery") {
+                slider("Amount", $engine.highlightRecovery, 0...1, "", 2)
+                Text("A sensor clips one channel before the others, which turns "
+                     + "a white cloud magenta. This rebuilds the clipped channel "
+                     + "from the ones still reading.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.faint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             // Below the sliders, because it is the control you reach for when
             // a slider was not specific enough. The engine has evaluated this
             // spline since M2; nothing reached it until now.
