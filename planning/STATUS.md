@@ -6,7 +6,7 @@
 
 **Last updated:** 2026-07-27
 **Phase:** M0 complete. **M1 in progress — develop controls done.**
-**Next story:** M1 — crop, then export, then XMP sidecars
+**Next story:** M1 — crop/rotate, then XMP sidecars, then browse/cull
 
 ---
 
@@ -122,6 +122,16 @@ Every feature now has a milestone. Notable calls:
 - **Local edits land in M4**, gradient + luminance/color-range masks + AI subject/sky. Spot removal kept.
 - **Bilateral grid + BGU pulled forward to M1** — built before needed, as the escape hatch for the latency budget.
 - No tethered shooting.
+
+## M1 progress
+
+Done: white balance (real Kelvin, as-shot on open), exposure, highlights,
+shadows, whites, blacks, vibrance, saturation, contrast, tone curve, and
+export (JPEG/PNG/TIFF with quality and resize). The app has all of them.
+
+Remaining in M1: crop/rotate/straighten · XMP sidecars and the non-destructive
+op stack · undo/redo and history · folder browse, filmstrip, ratings and
+filtering · the SQLite index.
 
 ## Next actions — M2
 

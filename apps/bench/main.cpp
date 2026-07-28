@@ -229,6 +229,35 @@ int main(int argc, char** argv) {
         const bool curveWorks = std::abs(curvedLuma - flatLuma) > 1e-4;
         std::printf("  curve changed the image: %s\n", curveWorks ? "yes" : "NO — BUG");
 
+        // ── Export ────────────────────────────────────────────────────────
+        std::printf("\nExport\n");
+        {
+            orion::pipe::Adjustments base;
+            base.wb = develop.asShotWhiteBalance();
+            develop.apply(base);
+            develop.render();
+
+            const auto& tex = develop.output();
+            const std::size_t rowBytes = static_cast<std::size_t>(tex.width()) * 4;
+            std::vector<std::uint8_t> pixels(rowBytes * tex.height());
+            tex.download(pixels.data(), rowBytes);
+
+            struct Case { const char* suffix; orion::util::ExportOptions opts; };
+            const Case cases[] = {
+                {"-full.jpg", {orion::util::ImageFormat::Jpeg, 0.92f, 0}},
+                {"-web.jpg",  {orion::util::ImageFormat::Jpeg, 0.85f, 2048}},
+                {"-16bit.tif",{orion::util::ImageFormat::Tiff, 1.0f,  0}},
+            };
+
+            for (const auto& c : cases) {
+                const std::string out = prefix + c.suffix;
+                const auto t = Clock::now();
+                orion::util::writeImage(out, pixels.data(), tex.width(), tex.height(),
+                                        rowBytes, c.opts);
+                std::printf("  %-14s %6.0f ms\n", c.suffix, msSince(t));
+            }
+        }
+
         return (pass && curveWorks) ? 0 : 1;
 
     } catch (const std::exception& e) {

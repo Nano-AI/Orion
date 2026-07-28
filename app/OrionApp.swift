@@ -103,17 +103,31 @@ private struct Editor: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    section("White Balance") {
+                        slider("Temperature", value: $engine.temperatureK,
+                               range: 2000...12000, unit: " K", decimals: 0)
+                        slider("Tint", value: $engine.tint,
+                               range: -1...1, unit: "", decimals: 2)
+                    }
                     section("Light") {
                         slider("Exposure", value: $engine.exposureEv,
                                range: -5...5, unit: " EV", decimals: 2)
-                        slider("Black", value: $engine.black,
-                               range: -0.1...0.1, unit: "", decimals: 3)
-                    }
-                    section("Tone") {
                         slider("Contrast", value: $engine.contrast,
                                range: 0.5...2, unit: "", decimals: 2)
+                        slider("Highlights", value: $engine.highlights,
+                               range: -1...1, unit: "", decimals: 2)
+                        slider("Shadows", value: $engine.shadows,
+                               range: -1...1, unit: "", decimals: 2)
+                        slider("Whites", value: $engine.whites,
+                               range: -1...1, unit: "", decimals: 2)
+                        slider("Blacks", value: $engine.blacks,
+                               range: -1...1, unit: "", decimals: 2)
+                    }
+                    section("Presence") {
+                        slider("Vibrance", value: $engine.vibrance,
+                               range: -1...1, unit: "", decimals: 2)
                         slider("Saturation", value: $engine.saturation,
-                               range: 0...2, unit: "", decimals: 2)
+                               range: -1...1, unit: "", decimals: 2)
                     }
                 }
                 .padding(14)
@@ -164,6 +178,10 @@ private struct Editor: View {
         ToolbarItem(placement: .primaryAction) {
             Button("Open…") { openFile() }
         }
+        ToolbarItem(placement: .primaryAction) {
+            Button("Export…") { exportFile() }
+                .disabled(!engine.isLoaded)
+        }
     }
 
     private func section<Content: View>(_ title: String,
@@ -210,6 +228,17 @@ private struct Editor: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do { try engine.open(path: url.path) }
+        catch { openError = error.localizedDescription }
+    }
+
+    private func exportFile() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "export.jpg"
+        panel.allowedContentTypes = [.jpeg, .png, .tiff]
+        panel.message = "Format follows the file extension."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do { try engine.export(to: url.path) }
         catch { openError = error.localizedDescription }
     }
 }

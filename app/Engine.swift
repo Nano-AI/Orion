@@ -12,13 +12,13 @@ final class Engine {
     enum Failure: LocalizedError {
         case create(String)
         case open(String)
-        case render(String)
+        case export(String)
 
         var errorDescription: String? {
             switch self {
             case .create(let m): return "Could not start the engine: \(m)"
             case .open(let m):   return "Could not open that photo: \(m)"
-            case .render(let m): return "Rendering failed: \(m)"
+            case .export(let m): return "Could not export: \(m)"
             }
         }
     }
@@ -29,10 +29,20 @@ final class Engine {
     private(set) var lastRenderMs: Double = 0
     private(set) var isLoaded = false
 
-    var exposureEv: Float = 0 { didSet { pushAndRender() } }
-    var black: Float = 0      { didSet { pushAndRender() } }
-    var contrast: Float = 1   { didSet { pushAndRender() } }
-    var saturation: Float = 1 { didSet { pushAndRender() } }
+    var temperatureK: Float = 5500 { didSet { pushAndRender() } }
+    var tint: Float = 0            { didSet { pushAndRender() } }
+    var exposureEv: Float = 0      { didSet { pushAndRender() } }
+    var highlights: Float = 0      { didSet { pushAndRender() } }
+    var shadows: Float = 0         { didSet { pushAndRender() } }
+    var whites: Float = 0          { didSet { pushAndRender() } }
+    var blacks: Float = 0          { didSet { pushAndRender() } }
+    var vibrance: Float = 0        { didSet { pushAndRender() } }
+    var saturation: Float = 0      { didSet { pushAndRender() } }
+    var contrast: Float = 1        { didSet { pushAndRender() } }
+
+    /// True while a slider is being dragged, so pushes are suppressed until
+    /// the value settles. Not used yet — hook for degrade-then-refine.
+    private var suspended = false
 
     /// Bumped after every successful render so the view knows to redraw.
     private(set) var generation: UInt64 = 0
@@ -75,16 +85,37 @@ final class Engine {
         imageWidth = w
         imageHeight = h
         camera = String(cString: orion_engine_camera(handle))
-        isLoaded = true
 
-        exposureEv = 0
-        render()
+        // Reset to the camera's own settings before marking loaded, so the
+        // didSet observers don't each trigger a render on a half-set model.
+        suspended = true
+        var asShot = OrionAdjustments()
+        orion_engine_as_shot(handle, &asShot)
+        temperatureK = asShot.temperature_k
+        tint = asShot.tint
+        exposureEv = 0; highlights = 0; shadows = 0; whites = 0; blacks = 0
+        vibrance = 0; saturation = 0; contrast = 1
+        suspended = false
+
+        isLoaded = true
+        pushAndRender()
+    }
+
+    func export(to path: String, quality: Float = 0.92, maxDimension: UInt32 = 0) throws {
+        guard let handle else { return }
+        var options = OrionExportOptions(format: -1, quality: quality,
+                                         max_dimension: maxDimension)
+        let status = orion_engine_export(handle, path, &options)
+        guard status == ORION_OK else { throw Failure.export(errorText(status)) }
     }
 
     private func pushAndRender() {
-        guard isLoaded, let handle else { return }
-        var adj = OrionAdjustments(exposure_ev: exposureEv, black: black,
-                                   contrast: contrast, saturation: saturation)
+        guard isLoaded, !suspended, let handle else { return }
+        var adj = OrionAdjustments(
+            temperature_k: temperatureK, tint: tint,
+            exposure_ev: exposureEv, highlights: highlights, shadows: shadows,
+            whites: whites, blacks: blacks,
+            vibrance: vibrance, saturation: saturation, contrast: contrast)
         orion_engine_set_adjustments(handle, &adj)
         render()
     }

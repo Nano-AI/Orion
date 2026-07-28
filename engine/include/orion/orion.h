@@ -46,14 +46,24 @@ void        orion_engine_destroy(OrionEngine* engine);
 
 /* Adjustments. Plain floats so the block is trivially bridgeable. */
 typedef struct OrionAdjustments {
+    float temperature_k;  /* white balance, Kelvin        */
+    float tint;           /* -1..1, green to magenta      */
     float exposure_ev;
-    float black;
-    float contrast;
-    float saturation;
+    float highlights;     /* -1..1, negative recovers     */
+    float shadows;
+    float whites;
+    float blacks;
+    float vibrance;
+    float saturation;     /* -1..1, 0 is untouched        */
+    float contrast;       /* display transform slope      */
 } OrionAdjustments;
 
 /* Opens a raw file and builds the develop pipeline for it. */
 OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path);
+
+/* The camera's own white balance, so the UI can open on "as shot". Only the
+ * temperature and tint fields are filled; the rest are zeroed. */
+OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* out);
 
 /* Pushes adjustments; cheap enough to call on every slider tick. */
 OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustments* adj);
@@ -71,6 +81,22 @@ void* orion_engine_output_texture(const OrionEngine* engine);
 
 /* The engine's id<MTLDevice>, so the view can share it. */
 void* orion_engine_metal_device(const OrionEngine* engine);
+
+/* Export. Renders at full resolution and writes the file. */
+typedef enum OrionImageFormat {
+    ORION_FORMAT_PNG  = 0,
+    ORION_FORMAT_JPEG = 1,
+    ORION_FORMAT_TIFF = 2
+} OrionImageFormat;
+
+typedef struct OrionExportOptions {
+    int32_t  format;         /* OrionImageFormat; -1 picks from the extension */
+    float    quality;        /* JPEG only, 0..1                               */
+    uint32_t max_dimension;  /* longest edge; 0 keeps full resolution         */
+} OrionExportOptions;
+
+OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
+                                const OrionExportOptions* options);
 
 /* Camera make and model of the open image, or "" when none. */
 const char* orion_engine_camera(const OrionEngine* engine);

@@ -94,8 +94,30 @@ OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path) {
 OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustments* adj) {
     if (engine == nullptr || adj == nullptr) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        engine->impl.setAdjustments(orion::pipe::Adjustments{
-            adj->exposure_ev, adj->black, adj->contrast, adj->saturation});
+        orion::pipe::Adjustments a;
+        a.wb.temperatureK = adj->temperature_k;
+        a.wb.tint         = adj->tint;
+        a.exposureEv      = adj->exposure_ev;
+        a.highlights      = adj->highlights;
+        a.shadows         = adj->shadows;
+        a.whites          = adj->whites;
+        a.blacks          = adj->blacks;
+        a.vibrance        = adj->vibrance;
+        a.saturation      = adj->saturation;
+        a.contrast        = adj->contrast;
+        engine->impl.setAdjustments(a);
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* out) {
+    if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        const auto wb = engine->impl.develop().asShotWhiteBalance();
+        *out = OrionAdjustments{};
+        out->temperature_k = wb.temperatureK;
+        out->tint          = wb.tint;
+        out->contrast      = 1.0f;
         return ORION_OK;
     });
 }
@@ -138,6 +160,27 @@ void* orion_engine_metal_device(const OrionEngine* engine) {
     } catch (...) {
         return nullptr;
     }
+}
+
+OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
+                                const OrionExportOptions* options) {
+    if (engine == nullptr || path == nullptr) return ORION_ERR_BAD_ARG;
+
+    return guard(engine, [&]() -> OrionStatus {
+        orion::util::ExportOptions opts;
+        opts.format = orion::util::formatForPath(path);
+
+        if (options != nullptr) {
+            if (options->format >= 0) {
+                opts.format = static_cast<orion::util::ImageFormat>(options->format);
+            }
+            opts.quality      = options->quality;
+            opts.maxDimension = options->max_dimension;
+        }
+
+        engine->impl.exportImage(path, opts);
+        return ORION_OK;
+    });
 }
 
 const char* orion_engine_camera(const OrionEngine* engine) {

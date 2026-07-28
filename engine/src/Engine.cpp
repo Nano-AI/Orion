@@ -1,6 +1,7 @@
 #include "Engine.h"
 
 #include <stdexcept>
+#include <vector>
 
 namespace orion {
 
@@ -25,6 +26,20 @@ void Engine::setAdjustments(const pipe::Adjustments& adj) {
 double Engine::render() {
     if (!develop_) throw std::runtime_error("no image open");
     return develop_->render();
+}
+
+void Engine::exportImage(const std::string& path, const util::ExportOptions& options) {
+    if (!develop_) throw std::runtime_error("no image open");
+
+    // Make sure what we write matches what is on screen.
+    develop_->render();
+
+    const auto& tex = develop_->output();
+    const std::size_t rowBytes = static_cast<std::size_t>(tex.width()) * 4;
+    std::vector<std::uint8_t> pixels(rowBytes * tex.height());
+    tex.download(pixels.data(), rowBytes);
+
+    util::writeImage(path, pixels.data(), tex.width(), tex.height(), rowBytes, options);
 }
 
 const pipe::DevelopPipeline& Engine::develop() const {

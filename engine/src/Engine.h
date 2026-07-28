@@ -3,6 +3,7 @@
 #include "gpu/MetalDevice.h"
 #include "pipe/DevelopPipeline.h"
 #include "raw/RawImage.h"
+#include "util/ImageWriter.h"
 
 #include <memory>
 #include <string>
@@ -23,6 +24,7 @@ public:
     void openRaw(const std::string& path);
     void setAdjustments(const pipe::Adjustments&);
     double render();
+    void exportImage(const std::string& path, const util::ExportOptions&);
 
     [[nodiscard]] bool hasImage() const noexcept { return develop_ != nullptr; }
     [[nodiscard]] const pipe::DevelopPipeline& develop() const;
