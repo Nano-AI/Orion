@@ -8,8 +8,10 @@
 #pragma once
 
 #include "gpu/Resources.h"
+#include "pipe/ShaderParams.h"
 #include "pipe/Pipeline.h"
 #include "pipe/ToneCurve.h"
+#include "pipe/WhiteBalance.h"
 #include "raw/RawImage.h"
 
 #include <memory>
@@ -18,10 +20,22 @@
 namespace orion::pipe {
 
 struct Adjustments {
+    // White balance. Defaults are replaced with the camera's own estimate when
+    // a file is opened, so "as shot" is where every image starts.
+    WhiteBalance wb{};
+
+    // Scene-linear tone, in order of the pipeline.
     float exposureEv = 0.0f;
-    float black      = 0.0f;
+    float highlights = 0.0f;   // -1..1, negative recovers
+    float shadows    = 0.0f;
+    float whites     = 0.0f;
+    float blacks     = 0.0f;
+
+    float vibrance   = 0.0f;   // -1..1
+    float saturation = 0.0f;   // -1..1, 0 is untouched
+
+    // Display transform and look.
     float contrast   = 1.0f;
-    float saturation = 1.0f;
     ToneCurveSpec curve{};
 };
 
@@ -37,6 +51,9 @@ public:
     /// Renders every dirty node. Returns GPU-side milliseconds.
     double render();
 
+    /// The camera's own white balance, used as the starting point.
+    [[nodiscard]] WhiteBalance asShotWhiteBalance() const noexcept { return asShot_; }
+
     [[nodiscard]] const gpu::Texture& output() const { return pipeline_.output(); }
     [[nodiscard]] Pipeline&           graph()        { return pipeline_; }
     [[nodiscard]] const Pipeline&     graph() const  { return pipeline_; }
@@ -48,10 +65,13 @@ private:
     Pipeline      pipeline_;
     std::uint32_t width_ = 0, height_ = 0;
     int nLinearize_ = -1, nDirs_ = -1, nGreen_ = -1, nRgb_ = -1;
-    int nMatrix_ = -1, nExposure_ = -1, nAgx_ = -1, nCurve_ = -1;
+    int nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1;
     int auxCurveLut_ = -1;
-    Adjustments lastAdj_{};
-    bool primed_ = false;
+    Adjustments  lastAdj_{};
+    bool         primed_ = false;
+    WhiteBalance asShot_{};
+    float        xyzToCam_[9]{};
+    params::Linearize linBase_{};
 };
 
 }  // namespace orion::pipe

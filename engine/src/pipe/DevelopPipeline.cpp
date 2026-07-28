@@ -87,16 +87,15 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::RGBA16Float, {}});
     nMatrix_    = pipeline_.add({"camera->working", "cameraToWorking", {nRgb_},
                                  PixelFormat::RGBA16Float, {}});
-    nExposure_  = pipeline_.add({"exposure", "exposure", {nMatrix_},
-                                 PixelFormat::RGBA16Float, {}});
-    // AgX now hands off in float rather than encoding to 8-bit, so the tone
-    // curve has full precision to work with before the final quantise.
-    nAgx_       = pipeline_.add({"agx", "agx", {nExposure_},
+    // Every scene-linear adjustment fuses into one dispatch, and the display
+    // transform plus curve into another. They are all pointwise; separate
+    // passes only bought a 194 MB round trip each at 24 MP.
+    nLinear_    = pipeline_.add({"develop:linear", "developLinear", {nMatrix_},
                                  PixelFormat::RGBA16Float, {}});
 
     auxCurveLut_ = pipeline_.addAuxTexture(kCurveResolution, kCurveRows,
                                            PixelFormat::R32Float);
-    nCurve_     = pipeline_.add({"tone curve", "toneCurve", {nAgx_},
+    nDisplay_   = pipeline_.add({"develop:display", "developDisplay", {nLinear_},
                                  PixelFormat::RGBA8Unorm, {}, {auxCurveLut_}});
 
     pipeline_.compile(width_, height_);
@@ -115,7 +114,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     lin.invRange = 1.0f / static_cast<float>(image.white - image.black[0]);
     lin.filters  = image.filters;
     lin.size[0] = size[0]; lin.size[1] = size[1];
-    pipeline_.setParams(nLinearize_, &lin, sizeof lin);
+    linBase_ = lin;
 
     params::Dirs dirs{{size[0], size[1]}};
     pipeline_.setParams(nDirs_, &dirs, sizeof dirs);
@@ -129,6 +128,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     if (!invert3x3(xyzToCam, camToXyz)) {
         throw std::runtime_error("camera colour matrix is singular");
     }
+    std::copy_n(xyzToCam, 9, xyzToCam_);
     multiply3x3(kXyzToRec2020, camToXyz, camToWorking);
     normaliseRows(camToWorking);
 
@@ -141,7 +141,12 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     mat.size[0] = size[0]; mat.size[1] = size[1];
     pipeline_.setParams(nMatrix_, &mat, sizeof mat);
 
-    apply({});
+    asShot_ = estimateFrom({image.camMul[0], image.camMul[1], image.camMul[2]}, xyzToCam_);
+
+    Adjustments initial;
+    initial.wb = asShot_;
+    apply(initial);
+
     pipeline_.setSource(image.samples.data(), static_cast<std::size_t>(width_) * 2);
 }
 
@@ -154,24 +159,50 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     // one-node change, and the difference between 4 ms and 12 ms.
     const bool first = !primed_;
 
-    if (first || adj.exposureEv != lastAdj_.exposureEv || adj.black != lastAdj_.black) {
-        params::Exposure expo{adj.exposureEv, adj.black, {size[0], size[1]}};
-        pipeline_.setParams(nExposure_, &expo, sizeof expo);
+    // White balance rewrites the linearize block, which sits at the head of the
+    // graph — so moving temperature legitimately recomputes everything,
+    // including the demosaic. That is inherent: the demosaic interpolates
+    // white-balanced data.
+    if (first || adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
+        adj.wb.tint != lastAdj_.wb.tint) {
+        const auto mul = multipliersFor(adj.wb, xyzToCam_);
+        params::Linearize lin = linBase_;
+        lin.whiteBalance[0] = mul[0];
+        lin.whiteBalance[1] = 1.0f;
+        lin.whiteBalance[2] = mul[2];
+        lin.whiteBalance[3] = 1.0f;   // second green
+        pipeline_.setParams(nLinearize_, &lin, sizeof lin);
     }
 
-    if (first || adj.contrast != lastAdj_.contrast || adj.saturation != lastAdj_.saturation) {
-        params::Agx agx{adj.contrast, -2.5f, adj.saturation, 0.0f, {size[0], size[1]}};
-        pipeline_.setParams(nAgx_, &agx, sizeof agx);
+    const bool linearMoved =
+        first ||
+        adj.exposureEv != lastAdj_.exposureEv ||
+        adj.highlights != lastAdj_.highlights ||
+        adj.shadows    != lastAdj_.shadows    ||
+        adj.whites     != lastAdj_.whites     ||
+        adj.blacks     != lastAdj_.blacks     ||
+        adj.vibrance   != lastAdj_.vibrance   ||
+        adj.saturation != lastAdj_.saturation;
+
+    if (linearMoved) {
+        params::LinearAdjust la{adj.exposureEv, adj.highlights, adj.shadows,
+                                adj.whites, adj.blacks, adj.vibrance,
+                                adj.saturation, 0.0f, {size[0], size[1]}, {0, 0}};
+        pipeline_.setParams(nLinear_, &la, sizeof la);
     }
 
-    if (first) {
-        params::Curve curve{{size[0], size[1]}, kCurveResolution, 0};
-        pipeline_.setParams(nCurve_, &curve, sizeof curve);
+    const bool curveMoved = first || !sameCurve(adj.curve, lastAdj_.curve);
+
+    if (first || adj.contrast != lastAdj_.contrast || curveMoved) {
+        params::Display d{adj.contrast, -2.5f,
+                          adj.curve.isIdentity() ? 1u : 0u,
+                          kCurveResolution, {size[0], size[1]}, {0, 0}};
+        pipeline_.setParams(nDisplay_, &d, sizeof d);
     }
 
     // Rebuilding the LUT walks four splines. Skip it when the curve has not
     // moved, which is every frame of an exposure drag.
-    if (first || !sameCurve(adj.curve, lastAdj_.curve)) {
+    if (curveMoved) {
         const auto lut = buildCurveLut(adj.curve);
         pipeline_.updateAux(auxCurveLut_, lut.data(), kCurveResolution * sizeof(float));
     }

@@ -44,27 +44,30 @@ struct alignas(16) ColorMatrix {
 };
 static_assert(sizeof(ColorMatrix) == 64);
 
-struct Exposure {
-    float         ev;
-    float         black;
-    std::uint32_t size[2];
-};
-static_assert(sizeof(Exposure) == 16);
-
-struct Curve {
-    std::uint32_t size[2];
-    std::uint32_t resolution;
-    std::uint32_t _pad;
-};
-static_assert(sizeof(Curve) == 16);
-
-struct Agx {
-    float         contrast;
-    float         pivot;
+/// Every scene-linear adjustment, fused into one dispatch.
+struct LinearAdjust {
+    float         exposureEv;
+    float         highlights;
+    float         shadows;
+    float         whites;
+    float         blacks;
+    float         vibrance;
     float         saturation;
     float         _pad;
     std::uint32_t size[2];
+    std::uint32_t _pad2[2];
 };
-static_assert(sizeof(Agx) == 24);
+static_assert(sizeof(LinearAdjust) == 48);
+
+/// AgX plus the tone curve plus the display encode.
+struct Display {
+    float         contrast;
+    float         pivot;
+    std::uint32_t curveIdentity;
+    std::uint32_t resolution;
+    std::uint32_t size[2];
+    std::uint32_t _pad[2];
+};
+static_assert(sizeof(Display) == 32);
 
 }  // namespace orion::pipe::params

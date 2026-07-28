@@ -10,6 +10,7 @@ add_library(orion_engine STATIC
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp
     src/pipe/ToneCurve.cpp
+    src/pipe/WhiteBalance.cpp
     src/util/ImageWriter.mm
 )
 

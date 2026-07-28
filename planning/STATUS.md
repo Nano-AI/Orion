@@ -5,8 +5,8 @@
 ---
 
 **Last updated:** 2026-07-27
-**Phase:** M0 complete. **M2 in progress — tone curve done.**
-**Next story:** M2 — HSL / colour mixer, then sharpening
+**Phase:** M0 complete. **M1 in progress — develop controls done.**
+**Next story:** M1 — crop, then export, then XMP sidecars
 
 ---
 
@@ -20,21 +20,30 @@ optimisation the architecture assumes we would need is not needed yet.
 ```
 Source          Sony ILCE-7M3, 6024 x 4024 (24.2 MP, RGGB)
   decode        48 ms   (504 MP/s, LibRaw)
-Pipeline        8 nodes, 1156 MiB of intermediates
-  full render   40.1 ms  (every node)
-  exposure drag 11.7 ms median, 12.8 p95  (3 of 8 nodes)
-  curve drag     4.1 ms median,  5.0 p95  (1 of 8 nodes)
+Pipeline        7 nodes, 971 MiB of intermediates
+  full render   45.8 ms  (every node)
+  exposure drag  6.7 ms median, 7.9 p95  (2 of 7 nodes)
+  curve drag     3.7 ms median, 4.6 p95  (1 of 7 nodes)
+  WB drag       26.5 ms                  (7 of 7 nodes)  <- over budget
 M0 gate         PASS
 ```
 
-Exposure costs more than the curve because AgX and the curve both sit
-downstream of it. Adding the curve node raised exposure drag from 8.2 to
-11.7 ms: AgX now outputs `rgba16f` instead of `rgba8` so the curve has
-precision to work with, which doubles that write's bandwidth.
+**The pipeline is bandwidth-bound, not compute-bound.** An `rgba16f` texture at
+24 MP is 194 MB. Adding tone and colour as separate pointwise nodes pushed
+exposure drag to 19 ms and *failed the gate*; fusing all the scene-linear
+pointwise work into one kernel, and AgX + curve into another, brought it back to
+6.7 ms. Each operation still lives in its own function in
+`shaders/ops/tone_ops.slang` — one file per adjustment, but one dispatch.
 
-**The pipeline is bandwidth-bound, not compute-bound.** If headroom is ever
-needed, fusing AgX and the curve into one node saves a 48 MiB write plus a
-48 MiB read — but it couples two concerns, so do the preview-ROI path first.
+**Do not split pointwise operations back into separate nodes.** The
+maintainability rule is about readable code, not one kernel per slider, and
+every extra pointwise pass costs a 194 MB round trip for nothing.
+
+⚠️ **White balance is over budget at 26.5 ms** and always will be: it rewrites
+the linearize block at the head of the graph, so the demosaic has to rerun —
+the demosaic interpolates white-balanced data. The fix is darktable's
+degrade-then-refine (cheap demosaic mid-drag, full quality on release), or the
+preview-ROI path. Neither is built yet.
 
 Per-node caching works: moving exposure dirties only exposure + AgX, so
 linearize, all three RCD passes and the colour matrix are served from cache.

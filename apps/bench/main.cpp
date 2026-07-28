@@ -137,11 +137,71 @@ int main(int argc, char** argv) {
         std::printf("\n  M0 gate (<16 ms at p95): %s  [%.2f ms]\n\n",
                     pass ? "PASS" : "FAIL", s.p95);
 
-        // ── Tone curve ────────────────────────────────────────────────────
-        std::printf("Tone curve\n");
+        // ── Every control does something ──────────────────────────────────
+        // A slider that silently no-ops is worse than one that is missing, so
+        // assert each moves the image before trusting any of it.
+        std::printf("Control check (mean luma, identity = %.4f)\n", [&] {
+            orion::pipe::Adjustments base;
+            base.wb = develop.asShotWhiteBalance();
+            develop.apply(base);
+            develop.render();
+            return meanLuma(develop.output());
+        }());
 
-        adj.exposureEv = 0.0f;
-        adj.curve = {};                       // identity
+        {
+            orion::pipe::Adjustments base;
+            base.wb = develop.asShotWhiteBalance();
+
+            struct Probe { const char* name; void (*set)(orion::pipe::Adjustments&); };
+            const Probe probes[] = {
+                {"exposure +1 EV", [](auto& a) { a.exposureEv = 1.0f; }},
+                {"highlights -1*", [](auto& a) { a.exposureEv = 5.5f; a.highlights = -1.0f; }},
+                {"shadows +1",     [](auto& a) { a.shadows = 1.0f; }},
+                {"whites +1*",     [](auto& a) { a.exposureEv = 5.5f; a.whites = 1.0f; }},
+                {"blacks -1",      [](auto& a) { a.blacks = -1.0f; }},
+                {"vibrance +1",    [](auto& a) { a.vibrance = 1.0f; }},
+                {"saturation -1",  [](auto& a) { a.saturation = -1.0f; }},
+                {"contrast 1.5",   [](auto& a) { a.contrast = 1.5f; }},
+                {"temp 3000K",     [](auto& a) { a.wb.temperatureK = 3000.0f; }},
+                {"tint +0.5",      [](auto& a) { a.wb.tint += 0.5f; }},
+            };
+
+            develop.apply(base);
+            develop.render();
+            const double ref = meanLuma(develop.output());
+
+            // Starred probes are measured against a +3 EV baseline: this frame
+            // is a night sky, and highlight recovery correctly does nothing
+            // when there are no highlights to recover.
+            auto lifted = base;
+            lifted.exposureEv = 5.5f;
+            develop.apply(lifted);
+            develop.render();
+            const double liftedRef = meanLuma(develop.output());
+
+            for (const auto& probe : probes) {
+                auto a = base;
+                probe.set(a);
+                develop.apply(a);
+                const double ms = develop.render();
+                const double luma = meanLuma(develop.output());
+                const bool starred = std::string(probe.name).find('*') != std::string::npos;
+                const double against = starred ? liftedRef : ref;
+                int nodes = 0;
+                for (const auto& n : develop.graph().lastRun()) if (n.executed) ++nodes;
+                std::printf("  %-16s %7.4f  (%+.4f)  %6.2f ms  %d nodes  %s\n",
+                            probe.name, luma, luma - against, ms, nodes,
+                            std::abs(luma - against) > 2e-4 ? "ok" : "NO EFFECT");
+            }
+            develop.apply(base);
+            develop.render();
+        }
+
+        // ── Tone curve ────────────────────────────────────────────────────
+        std::printf("\nTone curve\n");
+
+        adj = {};
+        adj.wb = develop.asShotWhiteBalance();
         develop.apply(adj);
         develop.render();
         const double flatLuma = meanLuma(develop.output());

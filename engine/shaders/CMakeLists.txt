@@ -27,9 +27,8 @@ set(ORION_SHADERS
     rcd_green:rcdGreen
     rcd_rb:rcdRedBlue
     color_matrix:cameraToWorking
-    exposure:exposure
-    agx:agx
-    tone_curve:toneCurve
+    develop_linear:developLinear
+    develop_display:developDisplay
 )
 
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -38,7 +37,7 @@ set(OUT_DIR    ${CMAKE_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${STAGE_DIR} ${OUT_DIR})
 
 # Every kernel includes cfa.slang, so a change there rebuilds all of them.
-file(GLOB SHADER_SOURCES ${SHADER_DIR}/*.slang)
+file(GLOB SHADER_SOURCES ${SHADER_DIR}/*.slang ${SHADER_DIR}/ops/*.slang)
 
 set(METALLIBS "")
 
