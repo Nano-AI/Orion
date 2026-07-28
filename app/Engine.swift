@@ -62,6 +62,12 @@ final class Engine {
     /// 128 bins per channel, packed R then G then B.
     private(set) var histogramBins: [UInt32] = []
 
+    let history = EditHistory()
+
+    /// Suppresses history recording while undo/redo is applying a snapshot —
+    /// otherwise stepping back would immediately record the step as a new edit.
+    private var restoring = false
+
     private var handle: OpaquePointer?
 
     init() throws {
@@ -113,6 +119,7 @@ final class Engine {
         suspended = false
 
         isLoaded = true
+        history.reset(to: state)
         pushAndRender()
     }
 
@@ -177,6 +184,46 @@ final class Engine {
                                          max_dimension: maxDimension)
         let status = orion_engine_export(handle, path, &options)
         guard status == ORION_OK else { throw Failure.export(errorText(status)) }
+    }
+
+    /// Captures every setting as a value, for undo.
+    var state: DevelopState {
+        DevelopState(
+            temperatureK: temperatureK, tint: tint, exposureEv: exposureEv,
+            highlights: highlights, shadows: shadows, whites: whites, blacks: blacks,
+            vibrance: vibrance, saturation: saturation, contrast: contrast,
+            rotateQuarters: rotateQuarters,
+            sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
+            sharpenMasking: sharpenMasking,
+            hueShift: hueShift, satShift: satShift, lumShift: lumShift)
+    }
+
+    private func apply(_ s: DevelopState) {
+        restoring = true
+        suspended = true
+        temperatureK = s.temperatureK; tint = s.tint; exposureEv = s.exposureEv
+        highlights = s.highlights; shadows = s.shadows
+        whites = s.whites; blacks = s.blacks
+        vibrance = s.vibrance; saturation = s.saturation; contrast = s.contrast
+        rotateQuarters = s.rotateQuarters
+        sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
+        sharpenMasking = s.sharpenMasking
+        hueShift = s.hueShift; satShift = s.satShift; lumShift = s.lumShift
+        suspended = false
+        restoring = false
+        pushAndRender()
+    }
+
+    func undo() { if let s = history.undo() { apply(s) } }
+    func redo() { if let s = history.redo() { apply(s) } }
+    func jumpHistory(to index: Int) { if let s = history.jump(to: index) { apply(s) } }
+
+    /// Names the control being changed, so history entries read like edits
+    /// rather than like state dumps, and consecutive drags of one slider
+    /// collapse into a single step.
+    func edit(_ label: String, _ change: () -> Void) {
+        change()
+        if !restoring { history.record(state, label: label) }
     }
 
     private func pushAndRender() {

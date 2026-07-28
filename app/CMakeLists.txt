@@ -19,6 +19,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorLoupe.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Histogram.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in

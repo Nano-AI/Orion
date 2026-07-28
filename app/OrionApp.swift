@@ -96,6 +96,12 @@ private struct Editor: View {
             }
         }
         .background(Palette.ground)
+        .focusable()
+        .onKeyPress(.init("z"), phases: .down) { press in
+            guard press.modifiers.contains(.command) else { return .ignored }
+            press.modifiers.contains(.shift) ? engine.redo() : engine.undo()
+            return .handled
+        }
         .alert("Something went wrong",
                isPresented: Binding(get: { message != nil },
                                     set: { if !$0 { message = nil } })) {
@@ -129,11 +135,21 @@ private struct Editor: View {
                         .foregroundStyle(Palette.faint)
                         .frame(width: 46, alignment: .trailing)
                 }
+                iconChip("arrow.uturn.backward", enabled: engine.history.canUndo) {
+                    engine.undo()
+                }
+                .help(engine.history.undoLabel.map { "Undo \($0)" } ?? "Undo")
+
+                iconChip("arrow.uturn.forward", enabled: engine.history.canRedo) {
+                    engine.redo()
+                }
+                .help(engine.history.redoLabel.map { "Redo \($0)" } ?? "Redo")
+
                 iconChip("rotate.left", enabled: engine.isLoaded) {
-                    engine.rotate(-1); viewport.reset()
+                    engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset()
                 }
                 iconChip("rotate.right", enabled: engine.isLoaded) {
-                    engine.rotate(1); viewport.reset()
+                    engine.edit("Rotate") { engine.rotate(1) }; viewport.reset()
                 }
                 chip("Open…", enabled: true) { openFile() }
                 chip("Reset", enabled: engine.isLoaded) { engine.resetEdits() }
@@ -492,7 +508,12 @@ private struct Editor: View {
                     .font(.system(size: 11)).monospacedDigit()
                     .foregroundStyle(Palette.text)
             }
-            Slider(value: value, in: range)
+            Slider(value: Binding(
+                get: { value.wrappedValue },
+                // Route through history so each control's drags coalesce into
+                // one undo step rather than a hundred.
+                set: { v in engine.edit(name) { value.wrappedValue = v } }
+            ), in: range)
                 .controlSize(.small)
                 .tint(Palette.accent)
         }
