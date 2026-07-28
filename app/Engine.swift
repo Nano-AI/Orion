@@ -159,6 +159,13 @@ final class Engine {
     /// spline and the LUT since M2; nothing reached them until now.
     var curve = ToneCurve()       { didSet { pushAndRender() } }
 
+    /// Lens corrections. Manual controls; a lens database would set them from
+    /// what the EXIF names, and the maths is the same either way.
+    var lensDistortion: Float = 0 { didSet { pushAndRender() } }
+    var lensVignette: Float = 0   { didSet { pushAndRender() } }
+    var lensCaRed: Float = 0      { didSet { pushAndRender() } }
+    var lensCaBlue: Float = 0     { didSet { pushAndRender() } }
+
     /// Highlight reconstruction. Defaults on, because per-channel clipping is
     /// a defect rather than a look.
     var highlightRecovery: Float = 1 { didSet { pushAndRender() } }
@@ -331,6 +338,8 @@ final class Engine {
             vibrance: vibrance, saturation: saturation, contrast: contrast,
             rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
             cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
+            lensDistortion: lensDistortion, lensVignette: lensVignette,
+            lensCaRed: lensCaRed, lensCaBlue: lensCaBlue,
             highlightRecovery: highlightRecovery,
             denoiseLuma: denoiseLuma, denoiseColour: denoiseColour,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
@@ -347,6 +356,8 @@ final class Engine {
         vibrance = s.vibrance; saturation = s.saturation; contrast = s.contrast
         rotateQuarters = s.rotateQuarters; straightenDeg = s.straightenDeg
         cropX = s.cropX; cropY = s.cropY; cropW = s.cropW; cropH = s.cropH
+        lensDistortion = s.lensDistortion; lensVignette = s.lensVignette
+        lensCaRed = s.lensCaRed; lensCaBlue = s.lensCaBlue
         highlightRecovery = s.highlightRecovery
         denoiseLuma = s.denoiseLuma; denoiseColour = s.denoiseColour
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
@@ -451,6 +462,8 @@ final class Engine {
             preview_x: Float(previewCanvas.origin.x),
             preview_y: Float(previewCanvas.origin.y),
             preview_size: Float(previewCanvas.size),
+            lens_distortion: lensDistortion, lens_vignette: lensVignette,
+            lens_ca_red: lensCaRed, lens_ca_blue: lensCaBlue,
             highlight_recovery: highlightRecovery,
             denoise_luma: denoiseLuma, denoise_colour: denoiseColour,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,

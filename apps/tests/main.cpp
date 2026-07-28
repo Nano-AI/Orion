@@ -1096,6 +1096,132 @@ void testHighlightRecoveryGpu() {
                   + std::to_string(b));
 }
 
+/// Lens corrections, on a real GPU.
+///
+/// Three properties that are easy to get wrong and invisible by eye: the frame
+/// corners must not move when distortion is applied, vignetting must divide
+/// rather than multiply, and the chromatic-aberration controls must move red
+/// and blue *relative to green* rather than all three together.
+void testLensGpu() {
+    section("Lens corrections (GPU)");
+
+    constexpr std::uint32_t kW = 256, kH = 256;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/lensCorrect.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "lensCorrect");
+
+    auto src = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto dst = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+
+    // Coordinates as colour again, so an output pixel names where it came from.
+    // Blue carries a constant, which is what the vignetting check reads.
+    std::vector<__fp16> input(std::size_t(kW) * kH * 4);
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = (std::size_t(y) * kW + x) * 4;
+            input[i + 0] = static_cast<__fp16>(x / double(kW));
+            input[i + 1] = static_cast<__fp16>(y / double(kH));
+            input[i + 2] = static_cast<__fp16>(0.5);
+            input[i + 3] = 1;
+        }
+    }
+    src->upload(input.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+    orion::pipe::params::Lens lens{};
+    lens.size[0] = kW; lens.size[1] = kH;
+    lens.centreX = 0.5f; lens.centreY = 0.5f;
+
+    const auto run = [&](std::vector<__fp16>& out) {
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), dst.get()}, &lens, sizeof lens, kW, kH);
+        cb.commitAndWait();
+        dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+    };
+    std::vector<__fp16> out(std::size_t(kW) * kH * 4);
+
+    // Nothing set must be an exact pass-through, or the node cannot be left on.
+    run(out);
+    double worstIdentity = 0.0;
+    for (std::uint32_t i = 0; i < kW * kH; ++i) {
+        for (int c = 0; c < 3; ++c) {
+            worstIdentity = std::max(worstIdentity,
+                std::abs(double(out[i * 4 + c]) - double(input[i * 4 + c])));
+        }
+    }
+    report(worstIdentity < 2e-3, "no correction is a pass-through",
+           "worst " + std::to_string(worstIdentity));
+
+    // Distortion. The (1 - k1) term pins r_d(1) = 1, so a pixel on the frame's
+    // diagonal at r = 1 must not move: without that term the whole picture
+    // scales and the control reads as a zoom.
+    lens.k1 = 0.3f;
+    run(out);
+
+    // The corner is at r = 1 by construction (R_norm is half the diagonal).
+    const std::size_t corner = ((std::size_t(kH) - 1) * kW + (kW - 1)) * 4;
+    checkNear(double(out[corner + 0]), double(input[corner + 0]), 0.01,
+              "the frame corner does not move under distortion");
+    checkNear(double(out[corner + 1]), double(input[corner + 1]), 0.01,
+              "the frame corner does not move vertically either");
+
+    // The centre never moves under a radial model, at any coefficient.
+    const std::size_t centre = (std::size_t(kH / 2) * kW + kW / 2) * 4;
+    checkNear(double(out[centre + 0]), double(input[centre + 0]), 0.01,
+              "the optical centre is fixed");
+
+    // Between them it must actually move something, or the control is inert.
+    const std::size_t mid = (std::size_t(kH / 2) * kW + (3 * kW / 4)) * 4;
+    report(std::abs(double(out[mid]) - double(input[mid])) > 0.005,
+           "distortion moves the interior",
+           "delta " + std::to_string(double(out[mid]) - double(input[mid])));
+    lens.k1 = 0.0f;
+
+    // Vignetting divides, so a negative coefficient must *brighten* the corner
+    // — that is the correction for a lens that darkens it. Getting the sign
+    // backwards doubles the vignette instead of removing it, which looks
+    // plausible enough to ship.
+    lens.vignetteA = -0.4f;
+    run(out);
+    const double cornerBlue = double(out[corner + 2]);
+    const double centreBlue = double(out[centre + 2]);
+    report(cornerBlue > 0.5 + 1e-3, "negative vignetting brightens the corner",
+           "corner " + std::to_string(cornerBlue));
+    checkNear(centreBlue, 0.5, 5e-3, "vignetting leaves the centre alone");
+
+    // 1 + p_a·r² at r = 1 is 0.6, and 0.5 / 0.6 = 0.8333.
+    checkNear(cornerBlue, 0.5 / 0.6, 0.02, "the vignette follows 1 + p_a·r²");
+    lens.vignetteA = 0.0f;
+
+    // Chromatic aberration moves red and blue against green. Green is the
+    // reference and must not move at all.
+    //
+    // A coefficient well past the production range on purpose: a real fringe
+    // correction is a sub-pixel shift, and fp16 cannot resolve one at these
+    // values. Exaggerating it is the only way to test the sign and the
+    // channel routing, which is what actually goes wrong.
+    lens.caRed = 0.2f;
+    run(out);
+    const std::size_t probe = (std::size_t(kH / 2) * kW + (7 * kW / 8)) * 4;
+    checkNear(double(out[probe + 1]), double(input[probe + 1]), 2e-3,
+              "green is the reference and does not move");
+    report(std::abs(double(out[probe + 0]) - double(input[probe + 0])) > 1e-3,
+           "the red fringe control moves red",
+           "delta " + std::to_string(double(out[probe]) - double(input[probe])));
+    checkNear(double(out[probe + 2]), double(input[probe + 2]), 2e-3,
+              "the red control leaves blue alone");
+}
+
 }  // namespace
 
 int main() {
@@ -1112,6 +1238,7 @@ int main() {
     testNoiseEstimator();
     testDenoiseGpu();
     testHighlightRecoveryGpu();
+    testLensGpu();
     testExportFormats();
 
     std::printf("\n%d checks, %d failures\n", checks, failures);

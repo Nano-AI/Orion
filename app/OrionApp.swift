@@ -771,6 +771,19 @@ struct Editor: View {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Lens") {
+            slider("Distortion", $engine.lensDistortion, -1...1, "", 2)
+            slider("Vignetting", $engine.lensVignette, -1...1, "", 2)
+            slider("Fringe R/C", $engine.lensCaRed, -1...1, "", 2)
+            slider("Fringe B/Y", $engine.lensCaBlue, -1...1, "", 2)
+            Text("Negative distortion pulls the barrel out of a wide lens; "
+                 + "negative vignetting lifts the corners. The fringe controls "
+                 + "rescale red and blue against green, which is what removes "
+                 + "the coloured edges at the frame's corners.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Sharpening") {
             slider("Amount", $engine.sharpenAmount, 0...2, "", 2)
             slider("Radius", $engine.sharpenRadius, 0.5...3, " px", 1)

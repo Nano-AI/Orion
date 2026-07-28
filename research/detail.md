@@ -117,3 +117,32 @@ ML denoising can therefore only ever be a background pass, never a live slider.
 **Planned source:** [lensfun](https://lensfun.github.io/) — the established
 open database of distortion, vignetting and TCA models, keyed by lens and
 focal length. LGPL-3; the database itself is CC-BY-SA.
+
+
+## Lens corrections — 2026-07-28
+
+lensfun's model definitions, as set out in `deep-research-2026-07-27.md` §4.
+Radii normalised against `R_norm = ½·sqrt(width² + height²)`, which is
+lensfun's convention and what every published coefficient assumes.
+
+| Correction | Model | Note |
+|---|---|---|
+| Distortion | `r_d = r_u·((1 − k₁) + k₁·r_u²)` (poly3) | The `(1 − k₁)` term pins `r_d(1) = 1` so the frame corners stay put; without it the whole picture scales and the control reads as a zoom |
+| Transverse CA | `r_R = r_G·(v_R + k_R·r_G²)` | Green is the reference; red and blue are rescaled radially about it |
+| Vignetting | `V(r) = 1 + p_a·r² + p_b·r⁴ + p_c·r⁶`, `I ÷ V(r)` | Evaluated at the *corrected* radius, because that is where the light fell |
+
+All three in one sampling pass: they are one coordinate transform per channel,
+and doing them separately would resample three times and soften three times.
+
+**Deliberate deviations.**
+
+- **Manual controls, not a database.** lensfun would fill these in from the lens
+  the EXIF names. The maths is identical either way, so the database is a data
+  problem to solve later rather than a reason to leave the correction unbuilt.
+- **poly3 only, and `p_b` and `p_c` held at zero.** A person driving a slider
+  has one degree of freedom to give; the extra terms exist to fit a measured
+  lens, which is the database's job.
+- **Two resamples.** The geometry node resamples again at the end for crop and
+  straighten. Composing them is not possible while one runs on linear light and
+  the other on display-encoded pixels, and moving either would cost more than
+  the softening does.

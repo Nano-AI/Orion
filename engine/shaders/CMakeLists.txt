@@ -30,6 +30,7 @@ set(ORION_SHADERS
     highlights:highlightRecover
     denoise_blur:atrousBlur
     denoise_accum:atrousShrink
+    lens:lensCorrect
     sharpen:sharpen
     color_matrix:cameraToWorking
     guide_prep:guidePrep

@@ -139,6 +139,10 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.previewY = adj->preview_y;
         a.previewSize = adj->preview_size;
 
+        a.lensDistortion = adj->lens_distortion;
+        a.lensVignette   = adj->lens_vignette;
+        a.lensCaRed      = adj->lens_ca_red;
+        a.lensCaBlue     = adj->lens_ca_blue;
         a.highlightRecovery = adj->highlight_recovery;
         a.denoiseLuma   = adj->denoise_luma;
         a.denoiseColour = adj->denoise_colour;

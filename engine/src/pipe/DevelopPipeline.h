@@ -71,6 +71,13 @@ struct Adjustments {
     float previewX = 0.0f, previewY = 0.0f;
     float previewSize = 1.0f;
 
+    /// Lens corrections. Manual for now: the lensfun database would fill these
+    /// in from the lens the EXIF names, and the maths is the same either way.
+    float lensDistortion = 0.0f;   // -1..1, poly3 k1
+    float lensVignette   = 0.0f;   // -1..1, p_a
+    float lensCaRed      = 0.0f;   // -1..1
+    float lensCaBlue     = 0.0f;   // -1..1
+
     /// Highlight reconstruction, 0..1. A correction rather than an effect, so
     /// it defaults to on: a clipped red channel under a white cloud is a defect
     /// of the sensor, not a look.
@@ -151,6 +158,7 @@ private:
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
     int nGeometry_ = -1;
     int nHighlights_ = -1;
+    int nLens_ = -1;
     float whiteLevel_ = 0.0f;
     float blackLevel_[3]{};
     static constexpr int kDenoiseScales = 4;

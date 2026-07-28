@@ -89,6 +89,13 @@ typedef struct OrionAdjustments {
     float   preview_x, preview_y;  /* canvas origin  */
     float   preview_size;          /* canvas extent, both axes, >= 1 */
 
+    /* Lens corrections, each -1..1. Manual for now; a lens database would fill
+     * them in from what the EXIF names, and the maths is the same either way. */
+    float lens_distortion;
+    float lens_vignette;
+    float lens_ca_red;
+    float lens_ca_blue;
+
     /* Highlight reconstruction, 0..1. A correction rather than a look, so the
      * app opens it at 1: a clipped red channel under a white cloud is a defect
      * of the sensor, not a choice. */

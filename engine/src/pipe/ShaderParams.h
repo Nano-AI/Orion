@@ -123,6 +123,17 @@ struct Display {
 };
 static_assert(sizeof(Display) == 32);
 
+/// Lens corrections. Mirrors LensParams in lens.slang.
+struct Lens {
+    std::uint32_t size[2];
+    float centreX, centreY;
+    float k1;
+    float caRed, caBlue;
+    float vignetteA;
+    float _pad[4];
+};
+static_assert(sizeof(Lens) == 48);
+
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {
     std::uint32_t outSize[2];

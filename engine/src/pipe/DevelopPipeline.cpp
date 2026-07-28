@@ -140,12 +140,19 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                            PixelFormat::RGBA16Float, {}});
     }
 
+    // ── Lens corrections ──────────────────────────────────────────────────
+    //
+    // After denoise so it is not resampling noise, before sharpening so the
+    // sharpening answers for the softening a resample costs.
+    nLens_ = pipeline_.add({"lens", "lensCorrect", {nAtrousShrink_[0]},
+                            PixelFormat::RGBA16Float, {}});
+
     // Capture sharpening belongs right after the denoise, and keeping it
     // upstream of the tone controls means an exposure drag never recomputes it.
     // Note the input: a disabled node passes its *first* input through, and
     // shrink 0's first input is the reconstruction — so switching the whole
     // chain off hands sharpen exactly what it would otherwise have got.
-    nSharpen_   = pipeline_.add({"sharpen", "sharpen", {nAtrousShrink_[0]},
+    nSharpen_   = pipeline_.add({"sharpen", "sharpen", {nLens_},
                                  PixelFormat::RGBA16Float, {}});
     nMatrix_    = pipeline_.add({"camera->working", "cameraToWorking", {nSharpen_},
                                  PixelFormat::RGBA16Float, {}});
@@ -404,6 +411,39 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             hl.strength = adj.highlightRecovery;
             pipeline_.setParams(nHighlights_, &hl, sizeof hl);
         }
+    }
+
+    // ── Lens corrections ─────────────────────────────────────────────────
+    //
+    // A whole resampling pass, so it is switched off rather than run as an
+    // identity when nothing is set.
+    const bool correctingLens =
+        adj.lensDistortion != 0.0f || adj.lensVignette != 0.0f ||
+        adj.lensCaRed != 0.0f || adj.lensCaBlue != 0.0f;
+
+    if (first || correctingLens ||
+        adj.lensDistortion != lastAdj_.lensDistortion ||
+        adj.lensVignette != lastAdj_.lensVignette ||
+        adj.lensCaRed != lastAdj_.lensCaRed ||
+        adj.lensCaBlue != lastAdj_.lensCaBlue) {
+        pipeline_.setEnabled(nLens_, correctingLens);
+
+        params::Lens lens{};
+        lens.size[0] = width_;
+        lens.size[1] = height_;
+        lens.centreX = 0.5f;
+        lens.centreY = 0.5f;
+        // The sliders run -1..1; the coefficients they drive are much smaller.
+        // These ranges cover what a real lens needs without letting the control
+        // fold the picture through itself at the extremes.
+        lens.k1       = adj.lensDistortion * 0.35f;
+        // At full slider this is about seven pixels of radial shift at the
+        // corner of a 24 MP frame, which is well past any real lateral
+        // aberration and still short of obviously wrong.
+        lens.caRed    = adj.lensCaRed * 0.003f;
+        lens.caBlue   = adj.lensCaBlue * 0.003f;
+        lens.vignetteA = adj.lensVignette * 0.6f;
+        pipeline_.setParams(nLens_, &lens, sizeof lens);
     }
 
     // ── Denoise ──────────────────────────────────────────────────────────
