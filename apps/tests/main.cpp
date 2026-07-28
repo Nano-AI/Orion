@@ -1102,6 +1102,125 @@ void testHighlightRecoveryGpu() {
 /// corners must not move when distortion is applied, vignetting must divide
 /// rather than multiply, and the chromatic-aberration controls must move red
 /// and blue *relative to green* rather than all three together.
+/// A blown highlight must come out neutral.
+///
+/// This is the bug that painted every light in a night frame magenta. A sensor
+/// saturates at one count for all three channels, so a blown pixel arrives as
+/// (S, S, S); white balance then multiplies each channel by its own gain and
+/// what was a white light is, in ratio, the gains themselves. Every stage after
+/// this one preserves ratios, so nothing downstream can undo it.
+///
+/// The test is worth its length because the failure is invisible to inspection:
+/// the shader was three correct lines and one missing clamp, and the output was
+/// a perfectly plausible image with coloured lights in it.
+void testLinearizeClipsToWhite() {
+    section("Linearize clips a blown highlight to white");
+
+    constexpr std::uint32_t kW = 64, kH = 64;
+    constexpr float kWhite = 16383.0f, kBlack = 512.0f;
+
+    // Gains of the shape a warm scene gives: red and blue lifted against green.
+    // These are what a blown pixel would wear as a colour if nothing clipped.
+    constexpr float kGainR = 2.2f, kGainG = 1.0f, kGainB = 1.6f;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/linearize.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "linearize");
+
+    // Top half blown, bottom half a neutral midtone. The midtone is the control:
+    // a clamp that fixed the highlight by flattening everything would pass a
+    // test that only looked at the highlight.
+    constexpr float kMidRaw = kBlack + 0.25f * (kWhite - kBlack);
+    std::vector<std::uint16_t> input(std::size_t(kW) * kH);
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            input[std::size_t(y) * kW + x] = static_cast<std::uint16_t>(
+                (y < kH / 2) ? kWhite : kMidRaw);
+        }
+    }
+
+    auto src = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::R16Uint);
+    auto dst = orion::gpu::Texture::create(*device, kW, kH,
+                                           orion::gpu::PixelFormat::R32Float);
+    src->upload(input.data(), std::size_t(kW) * sizeof(std::uint16_t));
+
+    orion::pipe::params::Linearize lin{};
+    for (int c = 0; c < 4; ++c) lin.black[c] = kBlack;
+    lin.whiteBalance[0] = kGainR;
+    lin.whiteBalance[1] = kGainG;
+    lin.whiteBalance[2] = kGainB;
+    lin.whiteBalance[3] = kGainG;   // second green
+    lin.invRange = 1.0f / (kWhite - kBlack);
+    lin.filters  = 0x94949494u;     // RGGB
+    lin.size[0] = kW; lin.size[1] = kH;
+    lin.whiteClip = std::min({kGainR, kGainG, kGainB});
+
+    std::vector<float> out(std::size_t(kW) * kH);
+    {
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), dst.get()}, &lin, sizeof lin, kW, kH);
+        cb.commitAndWait();
+        dst->download(out.data(), std::size_t(kW) * sizeof(float), kW, kH);
+    }
+
+    report(lin.whiteClip < kGainR,
+           "the test's gains would actually tint an unclipped highlight");
+
+    // Every channel of the blown half must land on one value. Reading the
+    // mosaic per CFA channel is the point: the cast is a *difference between*
+    // channels, and an average over all of them hides it completely.
+    double blown[3] = {0, 0, 0};
+    int blownCount[3] = {0, 0, 0};
+    for (std::uint32_t y = 0; y < kH / 2; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::uint32_t shift = (((y << 1) & 14u) | (x & 1u)) << 1;
+            int c = int((lin.filters >> shift) & 3u);
+            if (c == 3) c = 1;
+            blown[c] += double(out[std::size_t(y) * kW + x]);
+            blownCount[c] += 1;
+        }
+    }
+    for (int c = 0; c < 3; ++c) blown[c] /= std::max(blownCount[c], 1);
+
+    checkNear(blown[0], blown[1], 1e-4, "a blown red matches a blown green");
+    checkNear(blown[2], blown[1], 1e-4, "a blown blue matches a blown green");
+    checkNear(blown[1], double(lin.whiteClip), 1e-4,
+              "a blown pixel lands on the white level");
+
+    // The midtone keeps its gains. Below the clip, white balance is still white
+    // balance — clipping is a ceiling, not a desaturation.
+    double mid[3] = {0, 0, 0};
+    int midCount[3] = {0, 0, 0};
+    for (std::uint32_t y = kH / 2; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::uint32_t shift = (((y << 1) & 14u) | (x & 1u)) << 1;
+            int c = int((lin.filters >> shift) & 3u);
+            if (c == 3) c = 1;
+            mid[c] += double(out[std::size_t(y) * kW + x]);
+            midCount[c] += 1;
+        }
+    }
+    for (int c = 0; c < 3; ++c) mid[c] /= std::max(midCount[c], 1);
+
+    // Against the fraction the sensor counts actually carry, not the nominal
+    // quarter — kMidRaw truncates to an integer on the way into the texture.
+    const double midFraction =
+        (double(static_cast<std::uint16_t>(kMidRaw)) - kBlack) / (kWhite - kBlack);
+    checkNear(mid[0], midFraction * kGainR, 1e-4, "a midtone red keeps its gain");
+    checkNear(mid[1], midFraction * kGainG, 1e-4, "a midtone green keeps its gain");
+    checkNear(mid[2], midFraction * kGainB, 1e-4, "a midtone blue keeps its gain");
+    report(mid[0] > mid[1], "the midtone is still white-balanced, not flattened");
+}
+
 void testLensGpu() {
     section("Lens corrections (GPU)");
 
@@ -1430,6 +1549,7 @@ int main() {
     testCropGpu();
     testStraightenPivot();
     testNoiseEstimator();
+    testLinearizeClipsToWhite();
     testDenoiseGpu();
     testHighlightRecoveryGpu();
     testLensGpu();

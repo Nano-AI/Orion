@@ -76,3 +76,6 @@ third_party/*/
 # --- Render output --------------------------------------------------------
 orion-out.png
 *-out.png
+
+# Sample RAW files — large, and the developer's own photos
+Samples/

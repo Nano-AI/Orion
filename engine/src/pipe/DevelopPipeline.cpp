@@ -244,6 +244,28 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
     pipeline_.setSource(image.samples.data(), static_cast<std::size_t>(width_) * 2);
 }
 
+float DevelopPipeline::whiteClipFor(const float multipliers[3]) const noexcept {
+    // Each channel saturates where its own sensor reading runs out, scaled by
+    // the gain white balance gives it:
+    //
+    //     T_k = (W − B_k) / (W − B_ref) · m_k
+    //
+    // The lowest of the three is the brightest neutral the frame can still
+    // describe. Above it a channel is claiming more of one primary than a white
+    // at full brightness, which the white point does not admit — and that claim
+    // is exactly what a blown highlight makes, in the shape of the white
+    // balance gains, which is why an unclipped one comes out magenta.
+    float clip = 0.0f;
+    for (int c = 0; c < 3; ++c) {
+        const float level =
+            (whiteLevel_ - blackLevel_[c]) * linBase_.invRange * multipliers[c];
+        clip = (c == 0) ? level : std::min(clip, level);
+    }
+    // A frame whose black point sits at the white point is not a frame; clipping
+    // to zero would render it black rather than admit that.
+    return std::max(clip, 1e-3f);
+}
+
 void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     exifQuarters_ = quarterTurnsFor(image.flip);
     filters_      = image.filters;
@@ -264,6 +286,11 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     lin.filters  = image.filters;
     lin.size[0] = size[0]; lin.size[1] = size[1];
     linBase_ = lin;
+
+    // Needs invRange and the black points, so it comes after linBase_ is whole.
+    const float asShot[3] = {lin.whiteBalance[0], lin.whiteBalance[1],
+                             lin.whiteBalance[2]};
+    linBase_.whiteClip = whiteClipFor(asShot);
 
     params::Dirs dirs{{size[0], size[1]}};
     pipeline_.setParams(nDirs_, &dirs, sizeof dirs);
@@ -369,6 +396,13 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         lin.whiteBalance[1] = 1.0f;
         lin.whiteBalance[2] = asShotMul_[2] * want[2] / std::max(asShotRef_[2], 1e-6f);
         lin.whiteBalance[3] = 1.0f;   // second green
+
+        // The white point moves with the white balance, so the level a blown
+        // pixel clips to has to move with it too. Pinning it would tint the
+        // highlights the moment the temperature left as-shot.
+        const float gains[3] = {lin.whiteBalance[0], lin.whiteBalance[1],
+                                lin.whiteBalance[2]};
+        lin.whiteClip = whiteClipFor(gains);
         pipeline_.setParams(nLinearize_, &lin, sizeof lin);
     }
 
@@ -401,15 +435,15 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             hl.size[0] = width_;
             hl.size[1] = height_;
 
-            // T_raw,k = (W − B_k) / (W − B_ref), then scaled by the channel's
-            // own multiplier. Research §1's per-channel threshold, exactly.
-            float level[3];
-            for (int c = 0; c < 3; ++c) {
-                level[c] = (whiteLevel_ - blackLevel_[c]) * linBase_.invRange * m[c];
-            }
-            hl.clipR = level[0];
-            hl.clipG = level[1];
-            hl.clipB = level[2];
+            // One level for all three, because linearize now clips all three to
+            // the same ceiling. The per-channel thresholds this node was
+            // written against belonged to the unclipped mosaic it used to see;
+            // testing for them here would find nothing, since no channel can
+            // still be above the common clip when it reaches this node.
+            const float clip = whiteClipFor(m);
+            hl.clipR = clip;
+            hl.clipG = clip;
+            hl.clipB = clip;
             // 0.97, in the middle of the 0.95-0.99 the research gives. Lower
             // treats sound highlights as clipped; higher misses the shoulder
             // where a channel is already non-linear before it reaches its stop.

@@ -84,6 +84,59 @@ normalisation, and round-trip accuracy within 60 K.
 
 ---
 
+## Highlight clipping — the white level after white balance
+
+**Where:** `linearize.slang`, `DevelopPipeline::whiteClipFor`.
+
+**Source:** Dave Coffin, dcraw `scale_colors()`, highlight mode 0 — the default,
+and the convention LibRaw inherits along with the rest of dcraw's front end.
+- [dcraw source](https://www.dechifro.org/dcraw/dcraw.c) — `scale_colors()`,
+  the `pre_mul` / `scale_mul` block ending in `CLIP(val)`
+- [LibRaw docs: `imgdata.params.highlight`](https://www.libraw.org/docs/API-datastruct.html) — 0 clip, 1 unclip, 2 blend, 3+ rebuild
+
+**The problem.** A sensor saturates at one count for every channel, so a blown
+highlight arrives as (S, S, S). White balance then multiplies each channel by
+its own gain — for a warm scene something like (2.2, 1.0, 1.6) — and what was a
+white light now carries the gains themselves as a colour. Nothing downstream can
+undo it: the tone curve, the colour matrix and AgX all preserve ratios, so they
+preserve the cast, and it lands on every clipped light in the frame.
+
+**What we implement.** Clip all three channels to one ceiling, in the mosaic,
+inside `linearize`:
+
+```
+T_k  = (W − B_k) / (W − B_ref) · m_k        per-channel saturation level
+clip = min_k T_k
+```
+
+`min` and not `max`: the lowest of the three is the brightest neutral the frame
+can still describe. A channel above it is claiming more of one primary than a
+white at full brightness, which the white point does not admit — and that claim
+is precisely what an unclipped blown pixel makes.
+
+**Why before demosaic.** dcraw clips here, and for a reason that shows up in the
+output: RCD interpolates the mosaic, so an unclipped neighbour sitting at 2.2
+drags the estimate at every pixel around it. Clip afterwards and the cast does
+not stop at the highlight's edge, it spreads past it as a fringe.
+
+**The cost.** The clip moves with white balance, so dragging temperature moves
+the white point — correctly, but it does mean highlights shift under the slider.
+It also throws away the headroom that a reconstruction could have used; the
+highlight node now works from clipped data, predicting a clipped channel from
+whichever channels are still reading, which is the part of Masood et al. that
+does not need the headroom.
+
+**Confidence:** high. This is what every raw converter does by default.
+
+**Tests:** `orion-tests` → `testLinearizeClipsToWhite` renders a blown mosaic
+and a midtone through the real kernel, and reads the result *per CFA channel* —
+the cast is a difference between channels, and an average over all of them hides
+it entirely. It asserts the blown half is neutral and lands on the clip, and
+that the midtone still carries its gains, so a fix that desaturated everything
+would fail rather than pass.
+
+---
+
 ## AgX display transform
 
 **Where:** `develop_display.slang`.

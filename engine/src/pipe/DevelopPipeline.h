@@ -186,6 +186,12 @@ private:
     params::Linearize linBase_{};
     std::uint32_t filters_ = 0;
     void applyImageParams(const raw::BayerImage&);
+
+    /// The brightest neutral this frame can describe, once white balance has
+    /// been applied — the lowest of the three per-channel saturation levels.
+    /// Linearize clips to it so a blown highlight comes out white instead of
+    /// carrying the white-balance gains as a colour cast.
+    [[nodiscard]] float whiteClipFor(const float multipliers[3]) const noexcept;
 };
 
 }  // namespace orion::pipe

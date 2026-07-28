@@ -18,8 +18,10 @@ struct alignas(16) Linearize {
     float         invRange;        // 1 / (white - black)
     std::uint32_t filters;         // CFA bitmask
     std::uint32_t size[2];
+    float         whiteClip;       // common saturation level, post white balance
+    float         _pad[3];
 };
-static_assert(sizeof(Linearize) == 48);
+static_assert(sizeof(Linearize) == 64);
 
 struct Dirs {
     std::uint32_t size[2];
