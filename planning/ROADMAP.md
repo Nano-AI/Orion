@@ -39,20 +39,52 @@ Rule: every milestone ends with something you can actually shoot with. No milest
 - **Epic: Interaction** — per-node caching, degrade-then-refine during drags
 - **Epic: Look** — neutral-gray dark theme, panel layout
 
+### Export panel — modelled on macOS Preview's export sheet
+
+Basic export works (JPEG/PNG/TIFF, quality, longest-edge resize) but has no UI
+beyond a save dialog. Preview's sheet is the right reference because it is the
+one every Mac user already understands.
+
+| Control | Behaviour |
+|---|---|
+| **Format** | JPEG · PNG · TIFF · HEIF. Changing it swaps the options below and updates the extension in the filename. |
+| **Quality** | JPEG and HEIF only. Slider with a live **estimated file size** beside it — the number is why the slider is legible. |
+| **Resolution** | Preset menu (Full · 4096 · 2048 · 1024 px long edge · Custom) plus explicit width/height fields that respect the aspect ratio. Shows the resulting pixel dimensions. |
+| **Colour space** | sRGB · Display P3 · Adobe RGB. sRGB default, since it is what survives the web. |
+| **Bit depth** | 8-bit · 16-bit, TIFF and PNG only. ⚠️ Needs the pipeline to end in `rgba16f` rather than `rgba8`. |
+| **Metadata** | Keep all · Strip location · Strip everything. |
+| **Output sharpening** | None · Screen · Print. Resampling softens; this is the standard correction. |
+
+**Live estimate** matters more than it sounds: quality sliders are meaningless
+without one, which is exactly why Preview shows it.
+
+**Blocked on:** 16-bit export needs the final node's format changed and the
+orientation node widened to match. Not hard, but it touches the pipeline tail.
+
+### Extending format support
+
+| Format | Notes |
+|---|---|
+| HEIF | Free via ImageIO — smaller than JPEG at equal quality, and native on Apple platforms |
+| JPEG XL | Better still, but ImageIO support needs verifying before promising it |
+| AVIF | Same caveat |
+| DNG | *Export* as DNG is a different problem — writing a raw container, not an image. Later. |
+
 ---
 
 ## M2 — Depth
 
 **Definition of done:** Orion handles a difficult image (harsh light, high ISO, bad lens) as well as Lightroom would.
 
-- Tone curve (parametric + point, per-channel)
-- HSL / color mixer, 8 hue bands
-- Sharpening (amount / radius / masking)
-- Profiled wavelet denoise + per-camera noise profile
-- Lens corrections via lensfun
-- Broader camera support via LibRaw + DNG
-- Before/after and split view
-- Keyboard-first workflow
+- ✅ Tone curve (monotone cubic Hermite, per-channel LUT)
+- ✅ HSL / colour mixer, 8 hue bands, with targeted adjustment
+- ✅ Sharpening (amount / radius / masking)
+- ✅ Guided filter → local highlights and shadows *(He, Sun & Tang)*
+- ⬜ Profiled wavelet denoise + per-camera noise profile
+- ⬜ Lens corrections via lensfun
+- ⬜ Broader camera support via LibRaw + DNG
+- ⬜ Before/after split — the mockup's Compare interaction
+- ⬜ Keyboard-first workflow
 
 ---
 
@@ -97,6 +129,40 @@ Rule: every milestone ends with something you can actually shoot with. No milest
 - Windows port (engine already portable; UI is the work)
 
 ---
+
+## Where things actually stand — 2026-07-27
+
+Milestones stopped running in order once M0 proved the budget, so this is the
+honest picture rather than the plan.
+
+| | Status | What is left |
+|---|---|---|
+| **M0** Prove the budget | ✅ **Done** | — |
+| **M1** Usable editor | 🟡 ~60% | Crop and straighten · XMP sidecars · undo/redo · browse, filmstrip, ratings, filtering · the export panel above |
+| **M2** Depth | 🟡 ~55% | Denoise · lens corrections · before/after · keyboard workflow · **port real RCD** |
+| **M3** The 180° | ⬜ Not started | All of it |
+| **M4** Local edits | ⬜ Not started | All of it |
+| **M5** Advanced | ⬜ Not started | All of it |
+
+### What works today
+Open a raw file · white balance in Kelvin · exposure, contrast, and four tone
+controls with *local* highlights and shadows · vibrance and saturation · an
+eight-band colour mixer with a targeted picker · tone curve · sharpening ·
+rotation · pan, zoom and navigator · histogram · export to JPEG, PNG and TIFF.
+
+### The three biggest gaps, in order
+1. **No library.** One file at a time, no browsing, rating or filtering. This is
+   the largest remaining chunk of M1 and it is mostly UI.
+2. **No highlight reconstruction.** Clipped stays clipped, so blown skies do not
+   recover the way Lightroom's do. A missing feature, not a tuning difference.
+3. **Demosaic is RCD-family, not RCD.** Foundational, and everything downstream
+   inherits it. The reference is MIT-licensed — roughly a day.
+
+### Known limits worth remembering
+- Export is 8-bit, including TIFF
+- White balance costs ~26 ms because it rewrites the head of the graph
+- No preview-ROI path; everything renders at full resolution
+- No EDR or P3 output despite choosing a native shell partly for it
 
 ## Working agreement
 

@@ -5,7 +5,7 @@
 ---
 
 **Last updated:** 2026-07-27
-**Phase:** M0 complete. **M1 and M2 both in progress.**
+**Phase:** M0 done. M1 ~60%, M2 ~55%. See the status table in `ROADMAP.md`.
 **Next story:** crop/rotate and XMP sidecars (M1) · denoise and lens corrections (M2)
 
 ---
