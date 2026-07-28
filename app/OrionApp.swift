@@ -83,6 +83,8 @@ private struct Editor: View {
     @State private var band: HueBand = .blue
     @State private var targeted = TargetedAdjust()
     @State private var message: String?
+    @State private var exportSettings = ExportSettings()
+    @State private var showingExport = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -101,6 +103,32 @@ private struct Editor: View {
             guard press.modifiers.contains(.command) else { return .ignored }
             press.modifiers.contains(.shift) ? engine.redo() : engine.undo()
             return .handled
+        }
+        // Hold backslash for the original — Lightroom's muscle memory.
+        .onKeyPress(.init("\\"), phases: [.down, .up]) { press in
+            press.phase == .down ? engine.beginCompare() : engine.endCompare()
+            return .handled
+        }
+        .onKeyPress(.init("0")) { viewport.reset(); return .handled }
+        .onKeyPress(.init("1")) { viewport.toggleFitAndActual(); return .handled }
+        .onKeyPress(.init("r")) {
+            guard engine.isLoaded else { return .ignored }
+            engine.resetEdits(); return .handled
+        }
+        .onKeyPress(.init("[")) {
+            guard engine.isLoaded else { return .ignored }
+            engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset(); return .handled
+        }
+        .onKeyPress(.init("]")) {
+            guard engine.isLoaded else { return .ignored }
+            engine.edit("Rotate") { engine.rotate(1) }; viewport.reset(); return .handled
+        }
+        .sheet(isPresented: $showingExport) {
+            ExportPanel(settings: exportSettings,
+                        sourceWidth: engine.imageWidth,
+                        sourceHeight: engine.imageHeight,
+                        onExport: { showingExport = false; exportFile() },
+                        onCancel: { showingExport = false })
         }
         .alert("Something went wrong",
                isPresented: Binding(get: { message != nil },
@@ -135,6 +163,21 @@ private struct Editor: View {
                         .foregroundStyle(Palette.faint)
                         .frame(width: 46, alignment: .trailing)
                 }
+                Button {} label: {
+                    Text("Compare")
+                        .font(.system(size: 11))
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(engine.comparing ? Palette.accent : Palette.dim)
+                .overlay(RoundedRectangle(cornerRadius: 5)
+                    .stroke(engine.comparing ? Palette.accent : Palette.line, lineWidth: 1))
+                .disabled(!engine.isLoaded)
+                .help("Hold to see the original (\\)")
+                .onLongPressGesture(minimumDuration: 0, pressing: { down in
+                    down ? engine.beginCompare() : engine.endCompare()
+                }, perform: {})
+
                 iconChip("arrow.uturn.backward", enabled: engine.history.canUndo) {
                     engine.undo()
                 }
@@ -153,7 +196,7 @@ private struct Editor: View {
                 }
                 chip("Open…", enabled: true) { openFile() }
                 chip("Reset", enabled: engine.isLoaded) { engine.resetEdits() }
-                chip("Export…", enabled: engine.isLoaded) { exportFile() }
+                chip("Export…", enabled: engine.isLoaded) { showingExport = true }
             }
         }
         .padding(.horizontal, 14)
@@ -576,12 +619,17 @@ private struct Editor: View {
 
     private func exportFile() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "export.jpg"
-        panel.allowedContentTypes = [.jpeg, .png, .tiff]
-        panel.message = "Format follows the file extension."
+        panel.nameFieldStringValue = "export.\(exportSettings.format.ext)"
+        panel.allowedContentTypes = [UTType(filenameExtension: exportSettings.format.ext)
+                                     ?? .jpeg]
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        do { try engine.export(to: url.path) }
-        catch { message = error.localizedDescription }
+        do {
+            try engine.export(to: url.path,
+                              quality: Float(exportSettings.quality),
+                              maxDimension: exportSettings.size.longestEdge)
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }

@@ -20,6 +20,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorLoupe.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Histogram.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in

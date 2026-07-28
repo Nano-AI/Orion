@@ -210,7 +210,8 @@ final class Engine {
         return out
     }
 
-    func export(to path: String, quality: Float = 0.92, maxDimension: UInt32 = 0) throws {
+    func export(to path: String, quality: Float = 0.92,
+                maxDimension: UInt32 = 0) throws {
         guard let handle else { return }
         var options = OrionExportOptions(format: -1, quality: quality,
                                          max_dimension: maxDimension)
@@ -246,6 +247,36 @@ final class Engine {
         suspended = false
         restoring = false
         pushAndRender()
+    }
+
+    /// True while the original is being shown.
+    private(set) var comparing = false
+    private var beforeCompare: DevelopState?
+
+    /// Momentarily shows the image as shot — white balance kept, every user
+    /// adjustment neutral. Deliberately momentary rather than a mode: you want
+    /// a glance at the original, not somewhere to get stuck.
+    ///
+    /// Nothing is recorded in history; this is a view, not an edit. And it is
+    /// cheap because the demosaic and colour matrix stay cached — only the
+    /// tone, display and geometry nodes recompute.
+    func beginCompare() {
+        guard isLoaded, !comparing else { return }
+        comparing = true
+        beforeCompare = state
+
+        var neutral = DevelopState()
+        neutral.temperatureK = temperatureK   // as shot is not an edit
+        neutral.tint = tint
+        neutral.rotateQuarters = rotateQuarters
+        apply(neutral)
+    }
+
+    func endCompare() {
+        guard comparing, let restore = beforeCompare else { return }
+        comparing = false
+        beforeCompare = nil
+        apply(restore)
     }
 
     func undo() { if let s = history.undo() { apply(s) } }
