@@ -270,7 +270,8 @@ final class Engine {
         // Reset to the camera's own settings before marking loaded, so the
         // didSet observers don't each trigger a render on a half-set model.
         suspended = true
-        assign(asShotState())
+        defaults = asShotState()
+        assign(defaults)
         suspended = false
 
         isLoaded = true
@@ -323,7 +324,7 @@ final class Engine {
     func resetEdits() {
         guard isLoaded else { return }
         suspended = true
-        assign(asShotState())
+        assign(defaults)
         suspended = false
         pushAndRender()
         history.record(state, label: "Reset")
@@ -432,6 +433,14 @@ final class Engine {
 
     /// A fresh state carrying the camera's own white balance, which is the
     /// starting point rather than an edit.
+    /// What every control returns to, and what the panel compares against to
+    /// decide whether a control has been touched.
+    ///
+    /// A fresh `DevelopState` in all but white balance, which is the camera's
+    /// own reading and so belongs to the photo rather than to the app —
+    /// "reset temperature" has to mean the camera's number, not 5500 K.
+    private(set) var defaults = DevelopState()
+
     private func asShotState() -> DevelopState {
         var fresh = DevelopState()
         guard let handle else { return fresh }

@@ -190,6 +190,13 @@ enum Screenshot {
             engine.exposureEv = 2.6
         case "asshot":
             break
+        case "reset", "reset-hover":
+            // A mix of touched and untouched controls, so the accent readout
+            // can be read against the plain one in the same frame.
+            engine.exposureEv = 2.6
+            engine.highlights = -0.4
+            engine.shadows = 0.45
+            AdjustmentSlider.previewHover = (scene == "reset-hover")
         case "c110": engine.contrast = 1.10
         case "c120": engine.contrast = 1.20
         case "c130": engine.contrast = 1.30

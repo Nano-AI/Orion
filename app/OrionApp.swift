@@ -601,7 +601,7 @@ struct Editor: View {
                         }
 
                         section("Straighten") {
-                            slider("Angle", $engine.straightenDeg, -90...90, "°", 1)
+                            slider("Angle", $engine.straightenDeg, -90...90, "°", 1, resetsTo: engine.defaults.straightenDeg)
                             Text("Turns the picture about the frame's centre. "
                                  + "The rectangle shrinks to stay inside the "
                                  + "turned frame, so a corner is never empty.")
@@ -685,19 +685,19 @@ struct Editor: View {
     private var lightPanel: some View {
         Group {
             section("White Balance") {
-                slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0)
-                slider("Tint", $engine.tint, -1...1, "", 2)
+                slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0, resetsTo: engine.defaults.temperatureK)
+                slider("Tint", $engine.tint, -1...1, "", 2, resetsTo: engine.defaults.tint)
             }
             section("Light") {
-                slider("Exposure", $engine.exposureEv, -5...5, " EV", 2)
-                slider("Contrast", $engine.contrast, 0.5...2, "", 2)
-                slider("Highlights", $engine.highlights, -1...1, "", 2)
-                slider("Shadows", $engine.shadows, -1...1, "", 2)
-                slider("Whites", $engine.whites, -1...1, "", 2)
-                slider("Blacks", $engine.blacks, -1...1, "", 2)
+                slider("Exposure", $engine.exposureEv, -5...5, " EV", 2, resetsTo: engine.defaults.exposureEv)
+                slider("Contrast", $engine.contrast, 0.5...2, "", 2, resetsTo: engine.defaults.contrast)
+                slider("Highlights", $engine.highlights, -1...1, "", 2, resetsTo: engine.defaults.highlights)
+                slider("Shadows", $engine.shadows, -1...1, "", 2, resetsTo: engine.defaults.shadows)
+                slider("Whites", $engine.whites, -1...1, "", 2, resetsTo: engine.defaults.whites)
+                slider("Blacks", $engine.blacks, -1...1, "", 2, resetsTo: engine.defaults.blacks)
             }
             section("Highlight Recovery") {
-                slider("Amount", $engine.highlightRecovery, 0...1, "", 2)
+                slider("Amount", $engine.highlightRecovery, 0...1, "", 2, resetsTo: engine.defaults.highlightRecovery)
                 Text("A sensor clips one channel before the others, which turns "
                      + "a white cloud magenta. This rebuilds the clipped channel "
                      + "from the ones still reading. Off by default: on a frame "
@@ -719,8 +719,8 @@ struct Editor: View {
     private var colourPanel: some View {
         Group {
             section("Presence") {
-                slider("Vibrance", $engine.vibrance, -1...1, "", 2)
-                slider("Saturation", $engine.saturation, -1...1, "", 2)
+                slider("Vibrance", $engine.vibrance, -1...1, "", 2, resetsTo: engine.defaults.vibrance)
+                slider("Saturation", $engine.saturation, -1...1, "", 2, resetsTo: engine.defaults.saturation)
             }
             section("Colour Mixer") {
                 // Targeted adjustment: click a colour in the photo and drag.
@@ -777,9 +777,9 @@ struct Editor: View {
                             .foregroundStyle(Palette.accent)
                     }
                 }
-                slider("Hue", bandBinding(\.hueShift), -1...1, "", 2)
-                slider("Saturation", bandBinding(\.satShift), -1...1, "", 2)
-                slider("Luminance", bandBinding(\.lumShift), -1...1, "", 2)
+                slider("Hue", bandBinding(\.hueShift), -1...1, "", 2, resetsTo: 0)
+                slider("Saturation", bandBinding(\.satShift), -1...1, "", 2, resetsTo: 0)
+                slider("Luminance", bandBinding(\.lumShift), -1...1, "", 2, resetsTo: 0)
             }
         }
     }
@@ -787,8 +787,8 @@ struct Editor: View {
     private var detailPanel: some View {
         Group {
         section("Noise Reduction") {
-            slider("Luminance", $engine.denoiseLuma, 0...4, "", 2)
-            slider("Colour", $engine.denoiseColour, 0...4, "", 2)
+            slider("Luminance", $engine.denoiseLuma, 0...4, "", 2, resetsTo: engine.defaults.denoiseLuma)
+            slider("Colour", $engine.denoiseColour, 0...4, "", 2, resetsTo: engine.defaults.denoiseColour)
             Text("Measured from this frame, so 1.00 means \"remove what is "
                  + "smaller than one standard deviation of its own noise\" "
                  + "rather than a fixed amount.")
@@ -797,10 +797,10 @@ struct Editor: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         section("Lens") {
-            slider("Distortion", $engine.lensDistortion, -1...1, "", 2)
-            slider("Vignetting", $engine.lensVignette, -1...1, "", 2)
-            slider("Fringe R/C", $engine.lensCaRed, -1...1, "", 2)
-            slider("Fringe B/Y", $engine.lensCaBlue, -1...1, "", 2)
+            slider("Distortion", $engine.lensDistortion, -1...1, "", 2, resetsTo: engine.defaults.lensDistortion)
+            slider("Vignetting", $engine.lensVignette, -1...1, "", 2, resetsTo: engine.defaults.lensVignette)
+            slider("Fringe R/C", $engine.lensCaRed, -1...1, "", 2, resetsTo: engine.defaults.lensCaRed)
+            slider("Fringe B/Y", $engine.lensCaBlue, -1...1, "", 2, resetsTo: engine.defaults.lensCaBlue)
             Text("Negative distortion pulls the barrel out of a wide lens; "
                  + "negative vignetting lifts the corners. The fringe controls "
                  + "rescale red and blue against green, which is what removes "
@@ -810,9 +810,9 @@ struct Editor: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         section("Sharpening") {
-            slider("Amount", $engine.sharpenAmount, 0...2, "", 2)
-            slider("Radius", $engine.sharpenRadius, 0.5...3, " px", 1)
-            slider("Masking", $engine.sharpenMasking, 0...1, "", 2)
+            slider("Amount", $engine.sharpenAmount, 0...2, "", 2, resetsTo: engine.defaults.sharpenAmount)
+            slider("Radius", $engine.sharpenRadius, 0.5...3, " px", 1, resetsTo: engine.defaults.sharpenRadius)
+            slider("Masking", $engine.sharpenMasking, 0...1, "", 2, resetsTo: engine.defaults.sharpenMasking)
             Text("Masking protects flat areas, where noise lives and detail does not.")
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.faint)
@@ -856,26 +856,16 @@ struct Editor: View {
         }
     }
 
+    /// `resetsTo` is the value the control returns to for *this* photo, which
+    /// for white balance is the camera's own reading rather than a constant.
+    /// It is spelled out at every call site on purpose: a control whose reset
+    /// silently disagreed with its binding would put the wrong number back, and
+    /// nothing else in the app would notice.
     private func slider(_ name: String, _ value: Binding<Float>,
                         _ range: ClosedRange<Float>, _ unit: String,
-                        _ decimals: Int) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(name).font(.system(size: 12)).foregroundStyle(Palette.dim)
-                Spacer()
-                Text(String(format: "%.\(decimals)f%@", value.wrappedValue, unit))
-                    .font(.system(size: 11)).monospacedDigit()
-                    .foregroundStyle(Palette.text)
-            }
-            Slider(value: Binding(
-                get: { value.wrappedValue },
-                // Route through history so each control's drags coalesce into
-                // one undo step rather than a hundred.
-                set: { v in engine.edit(name) { value.wrappedValue = v } }
-            ), in: range)
-                .controlSize(.small)
-                .tint(Palette.accent)
-        }
+                        _ decimals: Int, resetsTo base: Float) -> some View {
+        AdjustmentSlider(name: name, value: value, range: range, unit: unit,
+                         decimals: decimals, base: base, engine: engine)
     }
 
     // MARK: Actions

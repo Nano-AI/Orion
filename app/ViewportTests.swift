@@ -46,6 +46,7 @@ enum ViewportTests {
         testCornerHandlePositions()
         testCurveMatchesTheEngine()
         testCurvePointsStayOrdered()
+        testModifiedTracksTheReadout()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -543,6 +544,70 @@ enum ViewportTests {
             stillAscending = false
         }
         report(stillAscending, "a densely packed curve still ascends")
+    }
+
+    /// A control is marked modified when, and only when, its readout differs
+    /// from the one it would show at its base.
+    ///
+    /// The accent colour is the only thing telling you which controls you have
+    /// touched, and the only thing telling you the number is clickable. Get the
+    /// comparison wrong in one direction and half the panel glows for edits
+    /// nobody made; get it wrong in the other and a moved slider offers no way
+    /// back.
+    static func testModifiedTracksTheReadout() {
+        // Dragged back to where it started, but landing on float noise rather
+        // than exactly on the base — the case a plain != would get wrong.
+        report(!AdjustmentMath.isModified(1e-8, from: 0, decimals: 2),
+               "float noise is not an edit")
+        report(!AdjustmentMath.isModified(0.15 + 0.15 + 0.15, from: 0.45, decimals: 2),
+               "an accumulated drag back to the base is not an edit")
+
+        // Anything the readout would print differently is an edit, including
+        // the smallest step it can show.
+        report(AdjustmentMath.isModified(0.01, from: 0, decimals: 2),
+               "one step at two decimals is an edit")
+        report(AdjustmentMath.isModified(-0.01, from: 0, decimals: 2),
+               "one step down is an edit")
+        report(!AdjustmentMath.isModified(0.0005, from: 0, decimals: 2),
+               "half a printed step is not an edit")
+
+        // Temperature reads whole kelvin, so its tolerance has to scale with
+        // the readout rather than being a fixed epsilon.
+        report(AdjustmentMath.isModified(3426, from: 3425, decimals: 0),
+               "one kelvin is an edit")
+        report(!AdjustmentMath.isModified(3425.02, from: 3425, decimals: 0),
+               "a fiftieth of a kelvin is not an edit")
+
+        // The bases that are not zero. Contrast opens at 1.15 and sharpen
+        // radius at 1, and a control that called its own default an edit would
+        // light up the panel on every photo before it was touched.
+        report(!AdjustmentMath.isModified(1.15, from: 1.15, decimals: 2),
+               "contrast at its base is not an edit")
+        report(AdjustmentMath.isModified(1.16, from: 1.15, decimals: 2),
+               "contrast one step off its base is an edit")
+
+        // Every default in DevelopState against itself: nothing may read as
+        // modified on a photo nobody has touched.
+        let fresh = DevelopState()
+        let bases: [(String, Float, Int)] = [
+            ("exposure", fresh.exposureEv, 2), ("contrast", fresh.contrast, 2),
+            ("highlights", fresh.highlights, 2), ("shadows", fresh.shadows, 2),
+            ("whites", fresh.whites, 2), ("blacks", fresh.blacks, 2),
+            ("vibrance", fresh.vibrance, 2), ("saturation", fresh.saturation, 2),
+            ("recovery", fresh.highlightRecovery, 2),
+            ("denoise luma", fresh.denoiseLuma, 2),
+            ("denoise colour", fresh.denoiseColour, 2),
+            ("distortion", fresh.lensDistortion, 2),
+            ("vignetting", fresh.lensVignette, 2),
+            ("sharpen amount", fresh.sharpenAmount, 2),
+            ("sharpen radius", fresh.sharpenRadius, 1),
+            ("sharpen masking", fresh.sharpenMasking, 2),
+            ("straighten", fresh.straightenDeg, 1),
+        ]
+        for (name, base, decimals) in bases {
+            report(!AdjustmentMath.isModified(base, from: base, decimals: decimals),
+                   "\(name) is unmarked at its own default")
+        }
     }
 
     /// The percentage in the toolbar is true magnification, not zoom.

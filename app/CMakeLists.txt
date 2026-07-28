@@ -31,6 +31,8 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveEditor.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentSlider.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
@@ -86,6 +88,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_BINARY_DIR}/main.swift
             -o ${VIEWPORT_TESTS}
@@ -94,6 +98,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
     COMMENT "swiftc    orion-viewport-tests"
