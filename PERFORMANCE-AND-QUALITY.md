@@ -34,7 +34,8 @@ Sony ILCE-7M3, 6024 × 4024 (24.2 MP, RGGB), Apple M4.
 | Curve drag | 1 of 8 | 8.2 ms median, 9.4 p95 |
 | Temperature / tint / sharpen | 11 | **~43–50 ms** |
 
-**M0 gate: 12.70 ms p95 against a 16 ms budget.** Full resolution, no preview
+**M0 gate: 13.90 ms p95 against a 16 ms budget**, with the grading node in
+the graph (12.70 without it). Full resolution, no preview
 proxy — which is why zooming to 100% shows real pixels rather than an upscale.
 
 Two honest caveats:
@@ -137,17 +138,72 @@ Not "not polished" — absent.
 
 | Missing | Notes |
 |---|---|
-| **Color grading wheels** | Lightroom's shadow/midtone/highlight wheels. Orion has an eight-band HSL mixer and per-channel RGB curves, which can reach most of the same results but not in the same gesture. This is the largest gap against the reference product |
-| **Masking** | No linear, radial, brush or subject masks. Every adjustment is global. This is the other large gap |
+| **Masking** | No linear, radial, brush or subject masks. Every adjustment is global. **This is now the largest gap against the reference product** |
 | **Healing / clone** | Nothing for dust spots |
-| **Lens database** | lensfun's database is **CC-BY-SA**, usable with attribution; darktable's *code* is **GPL** and must not be copied. The right move is lensfun's data, not darktable's source — and it is a license decision the project has not made yet (`DECISIONS.md` #10 leaves the model open) |
+| **Lens database** | **Not built — see §8.** The corrections work; the coefficients are typed in by hand |
 | **Perspective / keystone** | Straighten only |
 | **Panorama / HDR merge** | Out of scope for M3 |
 | **Print** | No print pipeline |
 
 ---
 
-## 7. Working agreements a reviewer should know
+## 7. Color grading — built this session
+
+Three-way wheels, in `Color`. Worth a reviewer's attention because it is the
+newest engine node and the one whose constant was hardest to get right.
+
+- **Algorithm**: ASC CDL v1.2 slope/offset per tonal zone, blended by a
+  smoothstep partition of Rec.2020 luma. `research/color-grading.md`.
+- **Position**: after the tone controls, before the display transform, in
+  scene-linear light. Grading after a filmic shoulder makes the same offset
+  behave differently in the highlights for reasons unrelated to the zone.
+- **The invariant**: each wheel's RGB offset is **zero-sum**, so a wheel changes
+  hue and not brightness, and the slider beneath it is the only thing that
+  moves luminance. 40 checks in `testGradeOffsets` cover every angle and radius.
+  Nothing in the picture would announce this being wrong; the image would just
+  drift brighter as you graded.
+- **The constant was measured.** `kStrength` started at 0.15, which is sensible
+  in a display-referred space and wrong in linear light where a dark patch sits
+  around 0.005. Because the offset is zero-sum it always has a negative
+  component, so 0.15 pushed two channels of every shadow through zero and the
+  clamp held them there. The shadow patch measured luma **0.12 at k = 0.15 and
+  0.22 at k = 0.03** — the larger setting was *darker*. It ships at 0.03.
+
+A reviewer could reasonably challenge the zone boundaries (0.0/0.5 and 0.5/1.0
+in linear luma). They are a plain reading of "shadows, midtones, highlights"
+rather than a measured perceptual partition, and the research file says so.
+
+---
+
+## 8. What I was asked for and did not deliver
+
+**The lens database.** Asked for in the same session as the grading and not
+built. The correction shaders are finished and correct — distortion, TCA and
+vignetting, against lensfun's published models — but the coefficients are still
+entered by hand rather than looked up from what the EXIF names.
+
+What it needs, so the next session does not have to rediscover it:
+
+1. `lensfun` as a dependency. **LGPL-3** for the library, so dynamic linking
+   keeps the application's own license free — which matters for the
+   source-open / binaries-paid model this project is considering. Its database
+   is **CC-BY-SA 3.0**: shippable with attribution, and share-alike applies to
+   the data, not to the application.
+2. darktable is **not** a source for this. Its database *is* lensfun's; its own
+   code is GPL and copying it would force the whole application GPL.
+3. The lookup: `TIFF Make`/`Model` and `Exif LensModel` are already read on
+   export, so the strings are in hand. lensfun matches on those, then gives
+   poly3 `k1`, TCA and vignetting terms for the focal length and aperture.
+4. The maths does not change. `lens.slang` already takes exactly these
+   parameters, normalized against lensfun's own `R_norm = ½√(w²+h²)`.
+
+I ran out of session before starting it rather than half-building it. The honest
+state is: the hard part (the corrections, correctly sourced) is done; the
+plumbing (a dependency, a string match, a parameter fill) is not.
+
+---
+
+## 9. Working agreements a reviewer should know
 
 - **No Rust, no Vulkan.** Both are hard constraints in `CLAUDE.md`, for
   maintainability by a solo developer. Suggestions that route through either are

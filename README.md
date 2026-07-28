@@ -10,12 +10,11 @@ interface that stays out of the way of the photograph.
 
 **Status: M0–M2 complete, M3 not started.** It browses a folder, culls, develops,
 crops, and exports with metadata and a color profile. The panel covers white
-balance, tone, a tone curve, an eight-band color mixer, profiled noise
-reduction, lens corrections, sharpening, highlight recovery, crop and
-straighten. Undo is unlimited and edits persist per photo in XMP sidecars.
+balance, tone, a tone curve, three-way color grading, an eight-band color
+mixer, profiled noise reduction, lens corrections, sharpening, highlight
+recovery, crop and straighten. Undo is unlimited and edits persist per photo in XMP sidecars.
 
-**Not there yet:** color grading wheels, masking, healing, a lens database,
-tethering. See [`planning/ROADMAP.md`](planning/ROADMAP.md) and
+**Not there yet:** masking, healing, a lens database, tethering. See [`planning/ROADMAP.md`](planning/ROADMAP.md) and
 [`planning/STATUS.md`](planning/STATUS.md), which is the honest list.
 
 ---
@@ -36,8 +35,8 @@ already in a texture.
 decode → linearize + white balance + white clip → RCD demosaic
        → highlight reconstruction → wavelet denoise (4 scales)
        → lens corrections → sharpen → camera matrix
-       → guided filter → tone, color, curve
-       → AgX display transform → crop, straighten, orientation
+       → guided filter → tone, color → three-way grade
+       → AgX display transform + curve → crop, straighten, orientation
 ```
 
 27 nodes, about 4 GiB of intermediates on a 24 MP frame.
@@ -68,7 +67,8 @@ for local highlight and shadow recovery, AgX (Sobotka) as the display transform,
 monotone cubic Hermite (Fritsch & Carlson, 1980) for tone curves, à-trous
 wavelet denoising (Starck et al., 2007) with a per-frame Poisson–Gaussian noise
 fit (Foi et al., 2008), cross-channel highlight reconstruction (Masood, Zhu &
-Tang, CGF 2009), and lensfun's lens correction models.
+Tang, CGF 2009), ASC CDL v1.2 for the grading wheels, and lensfun's lens
+correction models.
 
 No GPL code is copied. Implementing a *published algorithm* from its description
 is fine — mathematics is not copyrightable — and each entry says which it is.
@@ -96,7 +96,7 @@ open build/Orion.app
 ./build/apps/bench/orion-bench file.ARW   # latency gate and per-control checks
 ```
 
-129 engine checks, 2067 viewport checks.
+208 engine checks, 2067 viewport checks.
 
 The GPU tests matter most. Pure maths tests pass happily on code that renders
 garbage, because they never touch a texture — two shipped bugs proved it.
