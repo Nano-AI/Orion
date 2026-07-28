@@ -17,6 +17,17 @@ final class Viewport {
     /// drawable and image sizes.
     var fitScale: CGFloat = 1.0
 
+    /// Held at fit while the crop tool is open.
+    ///
+    /// The crop overlay is drawn in view coordinates from the *fit* rectangle;
+    /// zooming moves the pixels without moving the rectangle, so the two
+    /// disagree and the handles end up somewhere the image is not. Lightroom
+    /// locks the view during crop for the same reason. Rejecting the input is
+    /// better than letting it desynchronise.
+    var locked = false {
+        didSet { if locked { reset() } }
+    }
+
     var isFit: Bool { abs(zoom - 1.0) < 0.001 }
 
     /// Actual on-screen magnification, which is what a photographer means by
@@ -30,6 +41,7 @@ final class Viewport {
 
     /// Toggles between fitting the frame and 1:1 pixels.
     func toggleFitAndActual() {
+        guard !locked else { return }
         if isFit {
             zoom = max(1.0, 1.0 / max(fitScale, 0.0001))
         } else {
@@ -41,6 +53,7 @@ final class Viewport {
     /// Zooms about a point given in normalised *view* coordinates (0..1), so
     /// the pixel under the cursor stays under the cursor.
     func zoomBy(_ factor: CGFloat, anchor: CGPoint, visible: CGSize) {
+        guard !locked else { return }
         let old = zoom
         zoom = min(max(zoom * factor, 1.0), 64.0)
         guard zoom != old else { return }
@@ -57,6 +70,7 @@ final class Viewport {
 
     /// Pans by a delta in normalised view coordinates.
     func pan(by delta: CGSize, visible: CGSize) {
+        guard !locked else { return }
         center.x -= delta.width * visible.width
         center.y -= delta.height * visible.height
         clampCentre()

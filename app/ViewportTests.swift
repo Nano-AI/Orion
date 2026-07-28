@@ -37,6 +37,8 @@ enum ViewportTests {
         testZoomAnchoring()
         testPercent()
         testHueBands()
+        testCropLock()
+        testCropRectMapping()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -197,6 +199,71 @@ enum ViewportTests {
             near(b, d, 0.5, "hue is independent of brightness")
         } else {
             report(false, "hue is independent of brightness", "one sample returned nil")
+        }
+    }
+
+    /// A locked viewport rejects zoom and pan.
+    ///
+    /// The crop overlay draws from the fit rectangle, so any zoom desynchronises
+    /// the handles from the pixels — a bug that shipped twice.
+    static func testCropLock() {
+        let v = Viewport()
+        v.zoomBy(4.0, anchor: CGPoint(x: 0.5, y: 0.5), visible: CGSize(width: 1, height: 1))
+        report(v.zoom > 1, "zoom works when unlocked")
+
+        v.locked = true
+        near(v.zoom, 1.0, 1e-6, "locking returns to fit")
+
+        v.zoomBy(4.0, anchor: CGPoint(x: 0.5, y: 0.5), visible: CGSize(width: 1, height: 1))
+        near(v.zoom, 1.0, 1e-6, "locked viewport rejects zoom")
+
+        v.pan(by: CGSize(width: 0.3, height: 0.3), visible: CGSize(width: 0.5, height: 0.5))
+        near(v.center.x, 0.5, 1e-6, "locked viewport rejects pan")
+
+        v.toggleFitAndActual()
+        near(v.zoom, 1.0, 1e-6, "locked viewport rejects the fit toggle")
+
+        v.locked = false
+        v.zoomBy(2.0, anchor: CGPoint(x: 0.5, y: 0.5), visible: CGSize(width: 1, height: 1))
+        near(v.zoom, 2.0, 1e-6, "unlocking restores zoom")
+    }
+
+    /// The crop rectangle's mapping from normalised coordinates to the view.
+    ///
+    /// While cropping, the engine renders onto a canvas larger than the frame,
+    /// and the overlay must map into the frame's sub-rectangle rather than the
+    /// whole canvas — getting that wrong put the rectangle outside the picture.
+    static func testCropRectMapping() {
+        let canvas: CGFloat = 1.42
+        let frame = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+
+        // The frame sits centred inside the enlarged canvas.
+        let w = frame.width / canvas
+        let inner = CGRect(x: frame.midX - w / 2, y: frame.midY - w / 2,
+                           width: w, height: w)
+
+        report(inner.width < frame.width, "the frame is smaller than the crop canvas")
+        near(inner.midX, frame.midX, 1e-6, "the frame is centred horizontally")
+        near(inner.midY, frame.midY, 1e-6, "the frame is centred vertically")
+
+        // A full crop covers exactly the frame, never the whole canvas.
+        let full = CGRect(x: inner.minX, y: inner.minY,
+                          width: inner.width, height: inner.height)
+        near(full.width, inner.width, 1e-6, "a full crop matches the frame width")
+        report(full.maxX <= frame.maxX + 1e-6, "a full crop stays inside the canvas")
+
+        // A half-size crop at the origin lands in the frame's top-left quarter.
+        let half = CGRect(x: inner.minX, y: inner.minY,
+                          width: inner.width * 0.5, height: inner.height * 0.5)
+        report(half.maxX < inner.midX + 1e-6, "a half crop stops at the frame midpoint")
+        report(half.minX >= inner.minX - 1e-6, "a half crop starts at the frame edge")
+
+        // Centred crop of any size stays centred.
+        for size in [0.25, 0.5, 0.9] as [CGFloat] {
+            let c = CGRect(x: inner.minX + inner.width * (1 - size) / 2,
+                           y: inner.minY + inner.height * (1 - size) / 2,
+                           width: inner.width * size, height: inner.height * size)
+            near(c.midX, inner.midX, 1e-6, "centred crop stays centred at \(size)")
         }
     }
 

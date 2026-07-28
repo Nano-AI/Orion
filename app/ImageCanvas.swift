@@ -116,7 +116,8 @@ struct ImageCanvas: NSViewRepresentable {
             var uvSize = SIMD2<Float>(1, 1)
             var split: Float = 1
             var vertical: UInt32 = 1
-            var pad = SIMD2<Float>(0, 0)
+            var surround = SIMD3<Float>(0.165, 0.165, 0.173)   // --surround
+            var pad: Float = 0
         }
 
         init(engine: Engine, viewport: Viewport, targeted: TargetedAdjust) {
@@ -169,7 +170,8 @@ struct ImageCanvas: NSViewRepresentable {
                 float2 uvSize;
                 float  split;      // 0..1 along the axis; 1 = no split
                 uint   vertical;   // 1 splits left/right, 0 splits top/bottom
-                float2 _pad;
+                float3 surround;   // what empty space blends to
+                float  _pad;
             };
 
             struct VOut {
@@ -196,7 +198,16 @@ struct ImageCanvas: NSViewRepresentable {
                                               texture2d<float> original [[texture(1)]],
                                               sampler samp [[sampler(0)]],
                                               constant Transform& t [[buffer(0)]]) {
-                const float4 edited = image.sample(samp, in.uv);
+                float4 edited = image.sample(samp, in.uv);
+
+                // Alpha is zero wherever the geometry pass found nothing —
+                // outside a rotated frame, for instance. Blending to the
+                // surround rather than showing black is what removes the
+                // apparent edge of a viewport: the picture just sits on the
+                // background like a print on a table.
+                edited.rgb = mix(t.surround, edited.rgb, edited.a);
+                edited.a = 1.0;
+
                 if (t.split >= 0.999) return edited;
 
                 // Which side of the divider this pixel is on. The divider runs
@@ -213,7 +224,9 @@ struct ImageCanvas: NSViewRepresentable {
                 if (abs(where_ - t.split) < 0.0015) {
                     return float4(1.0, 1.0, 1.0, 1.0);
                 }
-                return original.sample(samp, in.uv);
+                float4 before = original.sample(samp, in.uv);
+                before.rgb = mix(t.surround, before.rgb, before.a);
+                return float4(before.rgb, 1.0);
             }
             """
 
@@ -374,12 +387,24 @@ struct ImageCanvas: NSViewRepresentable {
             let validU = validW / CGFloat(texture.width)
             let validV = validH / CGFloat(texture.height)
 
+            // While cropping, the engine renders onto a canvas larger than the
+            // frame so a rotated picture has somewhere to go. Fit the *frame*
+            // to the view rather than that canvas — otherwise the padding eats
+            // roughly a third of the hero area and the photo looks shrunken.
+            // The overflow simply draws past the edges and clips, which is what
+            // Photoshop does.
+            let canvasGrowth: CGFloat = engine.cropPreview ? 1.42 : 1.0
+
+            // A little breathing room so crop handles at the frame edge stay
+            // grabbable rather than sitting hard against the panel.
+            let inset: CGFloat = engine.cropPreview ? 0.86 : 1.0
+
             let imageAspect = validW / validH
             let viewAspect = view.drawableSize.width / max(view.drawableSize.height, 1)
 
             // Report true magnification so the toolbar can show a real percent.
             viewport.fitScale = min(view.drawableSize.width / validW,
-                                    view.drawableSize.height / validH)
+                                    view.drawableSize.height / validH) * canvasGrowth
 
             let visible = viewport.visibleFraction(imageAspect: imageAspect, viewAspect: viewAspect)
             viewport.clamp(to: visible)
@@ -387,7 +412,8 @@ struct ImageCanvas: NSViewRepresentable {
             let quad = viewport.quadScale(imageAspect: imageAspect, viewAspect: viewAspect)
 
             var t = Transform()
-            t.quadScale = SIMD2<Float>(Float(quad.width), Float(quad.height))
+            t.quadScale = SIMD2<Float>(Float(quad.width * canvasGrowth * inset),
+                                       Float(quad.height * canvasGrowth * inset))
             // Scale image-space UVs into the valid sub-rectangle of the texture.
             t.uvSize = SIMD2<Float>(Float(visible.width * validU),
                                     Float(visible.height * validV))

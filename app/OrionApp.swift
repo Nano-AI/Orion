@@ -224,7 +224,21 @@ private struct Editor: View {
                 iconChip("rotate.right", enabled: engine.isLoaded) {
                     engine.edit("Rotate") { engine.rotate(1) }; viewport.reset()
                 }
-                chip("Open…", enabled: true) { openFile() }
+                Menu {
+                    Button("Open Photo…") { openFile() }
+                    Button("Open Folder…") { openFolder() }
+                } label: {
+                    Text("Open")
+                        .font(.system(size: 11))
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .foregroundStyle(Palette.dim)
+                .overlay(RoundedRectangle(cornerRadius: 5)
+                    .stroke(Palette.line, lineWidth: 1))
                 chip("Reset", enabled: engine.isLoaded) { engine.resetEdits() }
                 chip("Export…", enabled: engine.isLoaded) { showingExport = true }
             }
@@ -280,8 +294,14 @@ private struct Editor: View {
                                 }
                             }
                         }
-                        .onChange(of: tab) { _, t in engine.cropPreview = (t == .crop) }
-                        .onAppear { engine.cropPreview = (tab == .crop) }
+                        .onChange(of: tab) { _, t in
+                            engine.cropPreview = (t == .crop)
+                            viewport.locked = (t == .crop)
+                        }
+                        .onAppear {
+                            engine.cropPreview = (tab == .crop)
+                            viewport.locked = (tab == .crop)
+                        }
                         .overlay { ColorLoupe(targeted: targeted) }
                         .onChange(of: targeted.lastPicked) { _, picked in
                             // Follow the pick, so the sliders below act on the
@@ -352,12 +372,20 @@ private struct Editor: View {
         var w = size.width, h = size.height
         if imageAspect > viewAspect { h = w / imageAspect } else { w = h * imageAspect }
 
+        // Matches the renderer's crop inset, so the rectangle lands on the
+        // pixels rather than near them.
+        if engine.cropPreview {
+            w *= 0.86
+            h *= 0.86
+        }
+
         return CGRect(x: (size.width - w) / 2, y: (size.height - h) / 2,
                       width: w, height: h)
     }
 
     private var hint: String {
-        viewport.isFit
+        if tab == .crop { return "drag the rectangle or its corners" }
+        return viewport.isFit
             ? "scroll or pinch to zoom · right-click to fit"
             : "drag to pan · right-click to fit"
     }
@@ -667,40 +695,56 @@ private struct Editor: View {
 
     // MARK: Actions
 
-    /// Opening a photo opens its folder too, so the filmstrip is populated
-    /// without a separate import step. Folder-first, as intended.
+    /// Opening one photo still scans its folder, so the filmstrip is populated
+    /// without a separate import step.
     private func openFile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = true
-        panel.message = "Choose a raw file, or a folder of them."
+        panel.canChooseDirectories = false
+        panel.prompt = "Open Photo"
         panel.allowedContentTypes = ["arw", "dng", "nef", "cr2", "cr3", "raf", "orf", "rw2"]
             .compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        var isDirectory: ObjCBool = false
-        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        library.open(folder: url.deletingLastPathComponent())
+        load(url)
+    }
 
-        if isDirectory.boolValue {
-            library.open(folder: url)
-            // Wait for the scan, then open the first frame.
-            Task {
-                while library.loading { try? await Task.sleep(for: .milliseconds(40)) }
-                if let first = library.visible.first?.url { load(first) }
-            }
-        } else {
-            library.open(folder: url.deletingLastPathComponent())
-            load(url)
+    private func openFolder() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = "Open Folder"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        library.open(folder: url)
+        Task {
+            while library.loading { try? await Task.sleep(for: .milliseconds(30)) }
+            if let first = library.visible.first?.url { load(first) }
         }
     }
 
     private func load(_ url: URL) {
-        do {
-            try engine.open(path: url.path)
-            current = url
-            viewport.reset()
-        } catch {
-            message = error.localizedDescription
+        current = url
+
+        // Show the camera's embedded preview straight away, then decode. The
+        // decode is ~50ms plus a full-resolution render; without this the view
+        // holds the previous photo for the whole of it, which reads as lag even
+        // though the work is unavoidable.
+        engine.showPlaceholder(library.photos.first { $0.url == url }?.thumbnail)
+
+        Task { @MainActor in
+            // One runloop turn, so the placeholder actually paints before the
+            // synchronous decode begins.
+            await Task.yield()
+            do {
+                try engine.open(path: url.path)
+                viewport.reset()
+            } catch {
+                message = error.localizedDescription
+            }
+            engine.clearPlaceholder()
         }
     }
 

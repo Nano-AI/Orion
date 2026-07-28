@@ -1,6 +1,7 @@
 import Foundation
 import Metal
 import MetalKit
+import AppKit
 
 /// Swift-side owner of the C engine handle.
 ///
@@ -392,8 +393,37 @@ final class Engine {
 
         lastRenderMs = ms
         invalidateOriginal()
-        histogramBins = histogram() ?? histogramBins
         generation &+= 1
+        scheduleHistogram()
+    }
+
+    /// A stand-in shown while the next photo decodes.
+    private(set) var placeholder: NSImage?
+
+    func showPlaceholder(_ image: NSImage?) {
+        placeholder = image
+        generation &+= 1
+    }
+
+    func clearPlaceholder() {
+        guard placeholder != nil else { return }
+        placeholder = nil
+        generation &+= 1
+    }
+
+    private var histogramTask: Task<Void, Never>?
+
+    /// The histogram reads back the whole output texture — ~96 MB at 24 MP —
+    /// so recomputing it per render added tens of milliseconds to every slider
+    /// tick. It is a readout nobody watches mid-drag, so it updates once the
+    /// values settle instead.
+    private func scheduleHistogram() {
+        histogramTask?.cancel()
+        histogramTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(160))
+            guard !Task.isCancelled, let self else { return }
+            if let bins = self.histogram() { self.histogramBins = bins }
+        }
     }
 
     /// Swift imports a C float[8] as a 8-tuple, and there is no nicer bridge.
