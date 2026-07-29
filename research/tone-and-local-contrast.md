@@ -110,7 +110,9 @@ the same curve.
 
 ## Planned, not yet implemented
 
-- **Local Laplacian filters** for clarity and texture — Paris, Hasinoff & Kautz,
+- ✅ **Local Laplacian filters** — built for clarity; see
+  [`local-laplacian.md`](local-laplacian.md). Texture, the fine-level variant,
+  is not built. Paris, Hasinoff & Kautz,
   [SIGGRAPH 2011](https://people.csail.mit.edu/sparis/publi/2011/siggraph/Paris_11_Local_Laplacian_Filters.pdf) (MIT CSAIL / Adobe / NVIDIA), with the
   [fast approximation](https://imagine.enpc.fr/~aubrym/projects/llf/texts/2014-fast-laplacian-filter.pdf) by Aubry, Paris, Hasinoff, Kautz & Durand. ~50× faster and halo-free.
 - **Single-image exposure fusion** for shadow lift with preserved local contrast
@@ -118,6 +120,8 @@ the same curve.
 - **Dehaze** — He, Sun & Tang, *Single Image Haze Removal Using Dark Channel
   Prior*, [CVPR 2009](https://doi.org/10.1109/CVPR.2009.5206515). Same authors as
   the guided filter, which was in fact developed to refine its transmission map.
+  Written up in full, with every constant read out of the papers, in
+  [`dehaze.md`](dehaze.md).
 
 All three are M3.
 
