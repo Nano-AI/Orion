@@ -236,6 +236,29 @@ enum Screenshot {
             // exposure with no mask, so the difference measured against
             // `mask-linear` is the mask's doing and not the scene's.
             engine.exposureEv = 2.6
+        case "brush":
+            // A stroke laid down the same way the canvas lays one: dabs at a
+            // fixed spacing along a path, through CanvasLayout, so what the
+            // screenshot shows is the real gesture rather than a hand-placed
+            // list of points.
+            engine.exposureEv = 2.6
+            engine.maskKind = 3
+            engine.localExposureEv = 2.2
+            engine.brushRadius = 0.07
+            engine.brushFlow = 0.55
+            engine.brushHardness = 0.45
+            var stroke: [CGPoint] = []
+            var carry: CGFloat = 0
+            let path = [CGPoint(x: 0.20, y: 0.66), CGPoint(x: 0.34, y: 0.60),
+                        CGPoint(x: 0.48, y: 0.62), CGPoint(x: 0.62, y: 0.58),
+                        CGPoint(x: 0.74, y: 0.55)]
+            stroke.append(path[0])
+            for i in 1..<path.count {
+                stroke += CanvasLayout.brushDabs(from: path[i - 1], to: path[i],
+                                                 radius: CGFloat(engine.brushRadius),
+                                                 carry: &carry)
+            }
+            engine.setBrushStroke(stroke)
         case "mask-linear":
             // Placed and angled, because a gradient drawn square to the frame
             // proves nothing: the whole question is whether the three lines

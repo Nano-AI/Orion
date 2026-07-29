@@ -4,17 +4,132 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M4 — gradient masks are draggable)
+**Last updated:** 2026-07-29 (M4 — brush masks reachable; landing site live)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** — step 1
 of `research/masking.md` is built and now reachable by hand: linear and radial
 gradient primitives, the parameter-space application they feed, and the canvas
 overlay that places them.
 **Next story:** M4 step 2 — mask groups and compositing (`research/masking.md`
-§6), then step 3's guided-filter refinement. The brush-dab rasteriser is the
-remaining third of step 1 and has no overlay work in front of it now.
+§6): the structural one, because it turns a single mask into a *list* and that
+reaches the POD facade, the sidecar format and undo history. Then step 3's
+guided-filter refinement, which is a second input binding on a filter that is
+already built and tested.
 
-**Suites:** `orion-tests` **397 checks** · `orion-viewport-tests` **3214
+**Suites:** `orion-tests` **397 checks** · `orion-viewport-tests` **3230
 checks** · both 0 failures.
+
+## Session 2026-07-29n — the brush is reachable, and there is a website
+
+### Brush masks, end to end
+
+`maskKind == 3`. Kernel → pipeline node → C facade → Swift → panel → painting on
+the canvas. **Verified on a photograph, not by eye:**
+
+| region | no mask | brush |
+|---|---|---|
+| under the stroke | 0.3892 | **0.5643** |
+| far from the stroke | 0.0859 | **0.0859** — bit-identical |
+
+The second row is the one that matters. A mask leaking a faint edit across the
+whole frame still looks right.
+
+**One node serves all four mask kinds**, which falls out of a property the suite
+already pins — a pass with no dabs is the identity:
+
+| kind | gradient node | brush node | result |
+|---|---|---|---|
+| 0 none | writes 1.0 | passes through | full coverage |
+| 1 / 2 | the gradient | passes through | the gradient |
+| 3 brush | ignored | starts empty | the stroke |
+
+The alternative was swapping a node's kernel per render, which the graph cannot
+express, or writing into a node's output from outside it.
+
+⚠️ **The real risk was never the brush** — it is that every existing gradient
+mask now reaches `develop:linear` through a new node. Measured against the
+numbers taken before it existed: 0.4703 / 0.1981 / 0.4110, all three exact.
+
+**Dab centres are deliberately not in `Adjustments`.** That struct is compared
+field by field on every slider tick; carrying a stroke through it would make
+every tick walk the stroke. It holds `brushRevision`, a single int.
+
+**Spacing is walked, not stamped per event.** A pointer reports a handful of
+positions a second, so per-event stamping draws a dotted line at speed and a
+solid one when slow — the same gesture laying different paint depending on how
+fast it was made. `carry` continues the spacing across event boundaries;
+restarting clusters dabs wherever the hand slowed, which is at the corners of a
+gesture. The test walks one line through a 3-event stream and a 60-event stream
+and demands the same dabs in the same places.
+
+⚠️ **A stroke over 256 dabs is truncated and says so on stderr.** The kernel
+chains; the graph holds one brush node. Fixing it is more nodes, not a bigger
+buffer.
+
+### Three dead controls found, all the same class
+
+- **Feather did nothing to a linear mask.** The shader reads it only in the
+  radial branch — a linear ramp runs zero-line to full-line, so Length *is* the
+  feather. Measured 0.50 against 0.02: bit-identical. Hidden.
+- **The radial branch was a bare `else`,** so it also caught the brush: four
+  dead sliders under a stroke that reads none of them. Now `else if kind == 2`.
+- **The brush had no picker entry at all.** Kernel, node, facade and gesture all
+  built, and `maskKind` could never be 3. An engine feature nobody can select is
+  not finished.
+
+### Mutation testing, twice, and what it caught
+
+Fifteen mutations across the canvas geometry and the brush kernel. Thirteen
+died. Two did not, and only one was a real gap:
+
+- **Pinning the canvas map's origin — ignoring panning entirely — passed all
+  3100 checks**, because `point(unit(p)) == p` holds for *any* invertible map.
+  The round trip proved invertibility, not correctness. Now pinned against
+  `ImageCanvas.transform`'s own `uvMin`.
+- Deleting the brush's radius cutoff correctly changed nothing: `brushFalloff`
+  saturates, so it is a performance early-out, not a correctness guard. Said so
+  in the shader.
+
+⚠️ **Four sessions running, the first version of a test measured something other
+than its claim.** This time: an empty-pass check that never uploaded its input,
+and an R16F banding claim asserted at flow 0.03 where banding cannot occur —
+one dab moves alpha ~0.02, five to seven whole 8-bit codes. Banding needs flow
+below 1/255. Re-asserted at 0.002 against `1 − 0.998⁴⁰` in closed form.
+
+### ⚠️ Brush masks were cut from v1, and that was reversed
+
+ROADMAP and FEATURES both said **"No brush masking in v1 — deliberately cut."**
+The developer reversed it. `DECISIONS.md` #54 records why the original estimate
+was wrong: of the three costs it named, storage is a list of centres rather than
+a raster, and edge-aware snapping is the guided filter already built for dehaze.
+Only stroke capture was ever real work.
+
+### The landing site
+
+`web/`, deployed to **https://nano-ai.github.io/Orion/** by
+`.github/workflows/pages.yml`. Dependency-free static files; Pages is enabled
+with `build_type: workflow`.
+
+Dark only, no theme toggle, nothing interactive, American spelling. The chrome
+is near-black plus the app's teal, teal reserved for numeric values; **all color
+comes from six full-bleed photographs**, which is how "more color" and "match
+the app" reconcile.
+
+⚠️ **Every photograph was screened at native resolution for people, and twelve
+frames were rejected** — including `_PIC8095`. **That frame is a repo sample and
+has people in the plaza at its base; it must not be used for any published
+render.** `_PIC8220` and `_PIC8148` are clear.
+
+Three deploy traps hit and recorded:
+
+- **`.gitignore`'s `orion-*.jpg` silently swallowed `web/img/*.jpg`.** The push
+  succeeded, the deploy went green, every image 404'd. Negated for `web/img/`.
+- **Vite's `base` must be `/Orion/`** if a build step is ever added — the
+  default emits absolute paths that 404 on a project page while the deploy still
+  reports success. React + Framer Motion was scaffolded and reverted: with
+  interactivity banned there is no state for React and no gestures for Framer
+  Motion, so it reduces to one `IntersectionObserver`.
+- **A green deploy is not proof the page is right.** Verify the page *and every
+  asset* returns 200, and that the content actually changed.
 
 ## Session 2026-07-29m — brush dabs, the last third of step 1
 
