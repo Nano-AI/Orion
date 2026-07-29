@@ -46,6 +46,13 @@ set(ORION_SHADERS
     llf_collapse:llfCollapse
     llf_collapse0:llfCollapse0
     llf_apply:llfApply
+    dehaze_chan:dehazeChannelMin
+    dehaze_rank:dehazeRank
+    dehaze_peak:dehazePeak
+    dehaze_prep:dehazePrep
+    box_blur4:boxBlur4
+    dehaze_ab:dehazeAb
+    dehaze_recover:dehazeRecover
     develop_linear:developLinear
     develop_display:developDisplay
     geometry:geometry

@@ -230,6 +230,66 @@ struct LlfApply {
 };
 static_assert(sizeof(LlfApply) == 16);
 
+/// Dehaze — He, Sun & Tang's dark channel prior. research/dehaze.md.
+struct alignas(16) DehazeChan {
+    std::uint32_t size[2];
+    float         _pad[2];
+    float         airlight[4];   // A_c, w unused
+};
+static_assert(sizeof(DehazeChan) == 32);
+
+struct DehazeRank {
+    std::uint32_t size[2];
+    std::int32_t  radius;
+    std::int32_t  horizontal;
+    std::int32_t  maximum;
+    std::int32_t  _pad[3];
+};
+static_assert(sizeof(DehazeRank) == 32);
+
+struct DehazePeak {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    std::int32_t  scale;
+    std::int32_t  _pad[3];
+};
+static_assert(sizeof(DehazePeak) == 32);
+
+struct DehazePrep {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    std::int32_t  scale;
+    float         omega;
+    float         lo;
+    float         invRange;
+};
+static_assert(sizeof(DehazePrep) == 32);
+
+struct BoxBlur4 {
+    std::uint32_t size[2];
+    std::int32_t  radius;
+    std::int32_t  horizontal;
+};
+static_assert(sizeof(BoxBlur4) == 16);
+
+struct DehazeAb {
+    std::uint32_t size[2];
+    float         epsilon;
+    float         _pad;
+};
+static_assert(sizeof(DehazeAb) == 16);
+
+struct alignas(16) DehazeRecover {
+    std::uint32_t size[2];
+    std::uint32_t coeffSize[2];
+    float         t0;
+    float         lo;
+    float         invRange;
+    float         _pad;
+    float         airlight[4];
+};
+static_assert(sizeof(DehazeRecover) == 48);
+
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {
     std::uint32_t outSize[2];

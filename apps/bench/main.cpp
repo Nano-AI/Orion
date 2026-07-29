@@ -399,6 +399,19 @@ int main(int argc, char** argv) {
                 // Floors are half the smallest ratio measured over all three
                 // sample frames: +1 moved 0.125 / 0.185 / 0.125 of the
                 // reference, -1 moved 0.120 / 0.158 / 0.115.
+                // Floor is half the smaller ratio over the two frames that
+                // have any haze in them: 0.123 and 0.057 of the reference.
+                //
+                // Waived rather than floored across all three, because dehaze
+                // is the one control whose correct output on some frames is no
+                // change at all. On the night frame the dark channel is near
+                // zero everywhere, the atmospheric light lands on a light
+                // source, and Eq. (12) gives t = 1 — the method reporting,
+                // correctly, that there is no veil to remove. A floor that
+                // failed there would be a floor demanding a filter invent haze.
+                // What pins this control is testDehazeGpu, not this line.
+                {"dehaze 1.0",     flat, [](auto& a) { a.dehaze = 1.0f; }, Metric::Luma, 0.028,
+                 "a haze-free frame has nothing to remove; t = 1 is the right answer"},
                 {"clarity +1",     flat, [](auto& a) { a.clarity = 1.0f; }, Metric::Detail, 0.062},
                 {"clarity -1",     flat, [](auto& a) { a.clarity = -1.0f; }, Metric::Detail, 0.055},
                 {"denoise 2.0",    flat, [](auto& a) { a.denoiseLuma = 2.0f; }, Metric::Detail, 0.018},

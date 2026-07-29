@@ -165,6 +165,7 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.curve.red    = toChannel(adj->curve_red);
         a.curve.green  = toChannel(adj->curve_green);
         a.curve.blue   = toChannel(adj->curve_blue);
+        a.dehaze          = adj->dehaze;
         a.clarity         = adj->clarity;
         a.sharpenAmount   = adj->sharpen_amount;
         a.sharpenRadius   = adj->sharpen_radius;

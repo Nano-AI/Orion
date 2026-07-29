@@ -17,6 +17,7 @@
 #include "pipe/HueSatMap.h"
 #include "pipe/LensDatabase.h"
 #include "pipe/LensGeometry.h"
+#include "pipe/Dehaze.h"
 #include "pipe/LocalLaplacian.h"
 #include "util/ImageWriter.h"
 
@@ -3132,6 +3133,211 @@ void testLocalLaplacianGpu() {
            "worst " + std::to_string(worstRemap));
 }
 
+/// Dehaze — the three claims that are not obvious by reading.
+void testDehazeGpu() {
+    section("Dehaze, dark channel prior");
+
+    namespace dh = orion::pipe::dehaze;
+    using orion::gpu::PixelFormat;
+
+    // ── The atmospheric light picks haze, not a specular ──────────────────
+    //
+    // CVPR section 4.4 is two stages: the most haze-opaque pixels by dark
+    // channel *first*, then the brightest among those. The paper is explicit
+    // that the answer "may not be brightest ones in the whole input image", and
+    // this is the case that separates a correct implementation from the obvious
+    // wrong one — a specular highlight is the brightest pixel in most frames,
+    // and picking it hands the whole recovery a wrong constant.
+    {
+        std::vector<dh::Candidate> c;
+        for (int i = 0; i < 1000; ++i) {
+            c.push_back({0.02f, 0.2f, 0.2f, 0.2f});          // ordinary scene
+        }
+        c.push_back({0.60f, 0.75f, 0.74f, 0.72f});           // haze-opaque sky
+        c.push_back({0.61f, 0.70f, 0.69f, 0.68f});           // slightly dimmer haze
+        c.push_back({0.01f, 3.00f, 3.00f, 3.00f});           // a specular
+
+        const auto a = dh::airlightFrom(c);
+        report(a[0] > 0.6f && a[0] < 0.8f,
+               "the atmospheric light is the haze, not the brightest pixel",
+               "A.r " + std::to_string(a[0]));
+        report(a[0] < 1.0f, "a specular four times brighter is rejected",
+               "A.r " + std::to_string(a[0]));
+    }
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    const auto load = [&](const char* entry) {
+        auto lib = orion::gpu::Library::createFromFile(
+            *device, std::string(ORION_SHADER_DIR) + "/" + entry + ".metallib");
+        auto k = orion::gpu::Kernel::create(*device, *lib, entry);
+        return std::pair{std::move(lib), std::move(k)};
+    };
+
+    // ── A separable rank filter really is the square patch ────────────────
+    //
+    // The claim in dehaze_rank.slang is that a 15-tap minimum along each axis
+    // *is* the 15 x 15 minimum, not an approximation of it — that is what buys
+    // 30 taps instead of 225. Checked against the square patch computed
+    // directly, which is the only way to know.
+    {
+        constexpr int kW = 61, kH = 41;
+        auto kRank = load("dehazeRank");
+
+        std::vector<float> src(std::size_t(kW) * kH);
+        std::mt19937 rng(20260728);
+        std::uniform_real_distribution<float> uni(0.0f, 1.0f);
+        for (auto& v : src) v = uni(rng);
+        // A few hard zeros and ones, so the extremes are exercised and not just
+        // the interior of the distribution.
+        src[std::size_t(7) * kW + 9] = 0.0f;
+        src[std::size_t(30) * kW + 40] = 1.0f;
+
+        auto a = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+        auto b = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+        auto c = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+
+        std::vector<__fp16> up(src.size());
+        for (std::size_t i = 0; i < src.size(); ++i) up[i] = __fp16(src[i]);
+        a->upload(up.data(), std::size_t(kW) * sizeof(__fp16));
+
+        const auto runRank = [&](bool maximum) {
+            orion::gpu::CommandBuffer cb(*device);
+            orion::pipe::params::DehazeRank h{};
+            h.size[0] = kW; h.size[1] = kH;
+            h.radius = dh::kPatchRadius; h.horizontal = 1; h.maximum = maximum ? 1 : 0;
+            cb.dispatch(*kRank.second, {a.get(), b.get()}, &h, sizeof h, kW, kH);
+            orion::pipe::params::DehazeRank v = h;
+            v.horizontal = 0;
+            cb.dispatch(*kRank.second, {b.get(), c.get()}, &v, sizeof v, kW, kH);
+            cb.commitAndWait();
+            std::vector<__fp16> got(src.size());
+            c->download(got.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+            return got;
+        };
+
+        for (const bool maximum : {false, true}) {
+            const auto got = runRank(maximum);
+            double worst = 0.0;
+            for (int y = 0; y < kH; ++y) {
+                for (int x = 0; x < kW; ++x) {
+                    float want = src[std::size_t(y) * kW + x];
+                    for (int dy = -dh::kPatchRadius; dy <= dh::kPatchRadius; ++dy) {
+                        for (int dx = -dh::kPatchRadius; dx <= dh::kPatchRadius; ++dx) {
+                            const int sx = std::clamp(x + dx, 0, kW - 1);
+                            const int sy = std::clamp(y + dy, 0, kH - 1);
+                            const float v = src[std::size_t(sy) * kW + sx];
+                            want = maximum ? std::max(want, v) : std::min(want, v);
+                        }
+                    }
+                    worst = std::max(worst,
+                        std::abs(double(got[std::size_t(y) * kW + x]) - double(want)));
+                }
+            }
+            report(worst < 1e-3,
+                   maximum ? "separable 15-tap max is the 15x15 maximum"
+                           : "separable 15-tap min is the 15x15 minimum",
+                   "worst " + std::to_string(worst));
+        }
+    }
+
+    // ── Eq. (16), and the identity at omega = 0 ───────────────────────────
+    {
+        constexpr int kW = 32, kH = 16;
+        auto kRec = load("dehazeRecover");
+
+        auto src    = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+        auto coeffs = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RG32Float);
+        auto dst    = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+
+        std::vector<__fp16> in(std::size_t(kW) * kH * 4);
+        for (int y = 0; y < kH; ++y) {
+            for (int x = 0; x < kW; ++x) {
+                const std::size_t i = (std::size_t(y) * kW + x) * 4;
+                in[i + 0] = __fp16(0.05 + 0.9 * x / double(kW - 1));
+                in[i + 1] = __fp16(0.04 + 0.7 * x / double(kW - 1));
+                in[i + 2] = __fp16(0.06 + 0.5 * x / double(kW - 1));
+                in[i + 3] = __fp16(1.0f);
+            }
+        }
+        src->upload(in.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+        const float airlight[3] = {0.80f, 0.78f, 0.75f};
+
+        // a = 0 and b = t makes the transmission a constant, which is what lets
+        // Eq. (16) be checked as arithmetic rather than against another
+        // implementation of the guided filter.
+        const auto runWithT = [&](float t) {
+            std::vector<float> ab(std::size_t(kW) * kH * 2);
+            for (std::size_t i = 0; i < std::size_t(kW) * kH; ++i) {
+                ab[i * 2 + 0] = 0.0f;
+                ab[i * 2 + 1] = t;
+            }
+            coeffs->upload(ab.data(), std::size_t(kW) * 2 * sizeof(float));
+
+            orion::pipe::params::DehazeRecover p{};
+            p.size[0] = kW; p.size[1] = kH;
+            p.coeffSize[0] = kW; p.coeffSize[1] = kH;
+            p.t0 = dh::kT0;
+            p.lo = orion::pipe::llf::kWindowLoEv;
+            p.invRange = 1.0f / orion::pipe::llf::kWindowEv;
+            for (int c = 0; c < 3; ++c) p.airlight[c] = airlight[c];
+
+            orion::gpu::CommandBuffer cb(*device);
+            cb.dispatch(*kRec.second, {src.get(), coeffs.get(), dst.get()},
+                        &p, sizeof p, kW, kH);
+            cb.commitAndWait();
+            std::vector<__fp16> got(in.size());
+            dst->download(got.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+            return got;
+        };
+
+        // t = 1 is what omega = 0 produces, and Eq. (16) collapses to J = I.
+        // The slider's zero is exact because of this, not because the result is
+        // blended back afterwards.
+        const auto identity = runWithT(1.0f);
+        double worstId = 0.0;
+        for (std::size_t i = 0; i < in.size(); ++i) {
+            if ((i & 3) == 3) continue;
+            worstId = std::max(worstId, std::abs(double(identity[i]) - double(in[i])));
+        }
+        report(worstId < 2e-3, "transmission of one is exactly the identity",
+               "worst " + std::to_string(worstId));
+
+        const float t = 0.55f;
+        const auto got = runWithT(t);
+        double worstEq = 0.0;
+        for (int x = 0; x < kW; ++x) {
+            const std::size_t i = (std::size_t(kH / 2) * kW + x) * 4;
+            for (int c = 0; c < 3; ++c) {
+                const double want =
+                    (double(in[i + c]) - airlight[c]) / t + airlight[c];
+                worstEq = std::max(worstEq,
+                                   std::abs(double(got[i + c]) - std::max(want, 0.0)));
+            }
+        }
+        report(worstEq < 3e-3, "Eq. (16) recovers the radiance it was given",
+               "worst " + std::to_string(worstEq));
+
+        // The floor on t. Below it the division would run away, and the paper
+        // puts t0 at 0.1 for exactly that reason.
+        const auto floored = runWithT(0.001f);
+        const auto atFloor = runWithT(dh::kT0);
+        double worstFloor = 0.0;
+        for (std::size_t i = 0; i < in.size(); ++i) {
+            worstFloor = std::max(worstFloor,
+                                  std::abs(double(floored[i]) - double(atFloor[i])));
+        }
+        report(worstFloor < 2e-3, "transmission is floored at t0, not divided by",
+               "worst " + std::to_string(worstFloor));
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -3156,6 +3362,7 @@ int main() {
     testHueSatMapGpu();
     testColorGradeGpu();
     testLocalLaplacianGpu();
+    testDehazeGpu();
     testHighlightHaloGpu();
     testOutputDepth();
     testLensDatabase();

@@ -9,6 +9,7 @@
 
 #include "gpu/Resources.h"
 #include "pipe/HueSatMap.h"
+#include "pipe/Dehaze.h"
 #include "pipe/LocalLaplacian.h"
 #include "pipe/ShaderParams.h"
 #include "pipe/Pipeline.h"
@@ -105,6 +106,11 @@ struct Adjustments {
     /// behave the same way on a clean frame and a very noisy one.
     float denoiseLuma   = 0.0f;   // 0..4, 0 disables the whole chain
     float denoiseColor = 0.0f;   // 0..4, applied on top of luma
+
+    /// Dehaze, 0..1. Maps onto the paper's own omega, so zero is exactly the
+    /// identity and one is the value He, Sun & Tang fixed for every result in
+    /// their paper. research/dehaze.md.
+    float dehaze = 0.0f;
 
     /// Local Laplacian clarity, -1..1. Negative smooths detail, positive
     /// increases its contrast; the slider is the published alpha exponent, and
@@ -213,6 +219,24 @@ private:
     static_assert(kLlfStacks == 4,
                   "llf_collapse.slang binds four packed stacks by name; "
                   "changing kGammaLevels needs that kernel widened to match.");
+
+    // ── Dehaze (dark channel prior) ───────────────────────────────────────
+    int nDehazeChan_ = -1, nDarkH_ = -1, nDarkV_ = -1, nPeak_ = -1;
+    int nDehazeChanA_ = -1, nMinH_ = -1, nMinV_ = -1, nMaxH_ = -1, nMaxV_ = -1;
+    int nHazePrep_ = -1, nHazeBlurH_ = -1, nHazeBlurV_ = -1, nHazeAb_ = -1;
+    int nHazeBlurH2_ = -1, nHazeBlurV2_ = -1, nDehaze_ = -1;
+    std::uint32_t peakW_ = 0, peakH_ = 0, hazeW_ = 0, hazeH_ = 0;
+
+    /// A from Eq. (11). A reduction over the whole frame, so it is not a node;
+    /// it depends only on what is upstream of dehaze, so it is cached and
+    /// recomputed when white balance or the profile moves — never per tick.
+    std::array<float, 3> airlight_{1.0f, 1.0f, 1.0f};
+    bool airlightValid_ = false;
+    bool dehazing_ = false;
+
+    /// Reads the pooled candidates back and picks A. Costs one small download.
+    void estimateAirlight();
+    void pushAirlight();
 
     int nLlfLuma_ = -1;
     int nLlfGauss_[kLlfLevels]{};                 // [0] aliases nLlfLuma_

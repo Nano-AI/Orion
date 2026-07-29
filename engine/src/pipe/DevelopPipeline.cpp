@@ -200,6 +200,72 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                          PixelFormat::RGBA32Float);
     nHueSat_   = pipeline_.add({"profile:hue/sat", "hueSatMap", {nMatrix_},
                                 PixelFormat::RGBA16Float, {}, {auxHueSat_}});
+    // ── Dehaze, the dark channel prior (He, Sun & Tang) ───────────────────
+    //
+    // Before clarity, because the two claim different things: dehaze says it is
+    // recovering the scene's true radiance and clarity is a look applied on
+    // top. Physically the restoration comes first.
+    //
+    // In scene-linear light rather than on display-encoded pixels, which is a
+    // departure from how the paper's own results were produced and a closer
+    // reading of its Eq. (1): J*t + A(1-t) is a physical mixture, and a mixture
+    // is only linear in linear light. research/dehaze.md.
+    peakW_ = std::max(1u, (width_  + dehaze::kPeakScale - 1) / dehaze::kPeakScale);
+    peakH_ = std::max(1u, (height_ + dehaze::kPeakScale - 1) / dehaze::kPeakScale);
+    hazeW_ = std::max(1u, (width_  + dehaze::kGuideScale - 1) / dehaze::kGuideScale);
+    hazeH_ = std::max(1u, (height_ + dehaze::kGuideScale - 1) / dehaze::kGuideScale);
+
+    // The dark channel of the image itself — A = (1,1,1) — which is what the
+    // candidates for the atmospheric light are ranked by.
+    nDehazeChan_ = pipeline_.add({"dehaze:channel min", "dehazeChannelMin", {nHueSat_},
+                                  PixelFormat::R16Float, {}});
+    nDarkH_ = pipeline_.add({"dehaze:dark h", "dehazeRank", {nDehazeChan_},
+                             PixelFormat::R16Float, {}});
+    nDarkV_ = pipeline_.add({"dehaze:dark v", "dehazeRank", {nDarkH_},
+                             PixelFormat::R16Float, {}});
+    nPeak_  = pipeline_.add({"dehaze:candidates", "dehazePeak", {nDarkV_, nHueSat_},
+                             PixelFormat::RGBA16Float, {}, {},
+                             true, peakW_, peakH_});
+
+    // The same minimum again, now normalized by A — Eq. (11)'s inner term.
+    nDehazeChanA_ = pipeline_.add({"dehaze:channel min/A", "dehazeChannelMin", {nHueSat_},
+                                   PixelFormat::R16Float, {}});
+    nMinH_ = pipeline_.add({"dehaze:min h", "dehazeRank", {nDehazeChanA_},
+                            PixelFormat::R16Float, {}});
+    nMinV_ = pipeline_.add({"dehaze:min v", "dehazeRank", {nMinH_},
+                            PixelFormat::R16Float, {}});
+    // TPAMI 35 (2013) section 5: "we first apply a max filter to counteract the
+    // morphological effects of the min filter". A minimum over a patch dilates
+    // every dark object by its radius, so without this the transmission map is
+    // systematically wide around each one.
+    nMaxH_ = pipeline_.add({"dehaze:max h", "dehazeRank", {nMinV_},
+                            PixelFormat::R16Float, {}});
+    nMaxV_ = pipeline_.add({"dehaze:max v", "dehazeRank", {nMaxH_},
+                            PixelFormat::R16Float, {}});
+
+    // Guided-filter refinement, cross-guided: the guide is the hazy image and
+    // the input is the transmission. The authors' own replacement for the
+    // matting Laplacian they used in 2009 — "visually similar", and about 40 ms
+    // against 10 seconds.
+    nHazePrep_ = pipeline_.add({"dehaze:moments", "dehazePrep", {nHueSat_, nMaxV_},
+                                PixelFormat::RGBA32Float, {}, {},
+                                true, hazeW_, hazeH_});
+    nHazeBlurH_ = pipeline_.add({"dehaze:blur h", "boxBlur4", {nHazePrep_},
+                                 PixelFormat::RGBA32Float, {}, {}, true, hazeW_, hazeH_});
+    nHazeBlurV_ = pipeline_.add({"dehaze:blur v", "boxBlur4", {nHazeBlurH_},
+                                 PixelFormat::RGBA32Float, {}, {}, true, hazeW_, hazeH_});
+    nHazeAb_    = pipeline_.add({"dehaze:coeffs", "dehazeAb", {nHazeBlurV_},
+                                 PixelFormat::RG32Float, {}, {}, true, hazeW_, hazeH_});
+    nHazeBlurH2_ = pipeline_.add({"dehaze:blur h2", "boxBlur", {nHazeAb_},
+                                  PixelFormat::RG32Float, {}, {}, true, hazeW_, hazeH_});
+    nHazeBlurV2_ = pipeline_.add({"dehaze:blur v2", "boxBlur", {nHazeBlurH2_},
+                                  PixelFormat::RG32Float, {}, {}, true, hazeW_, hazeH_});
+
+    // First input is the profile output, so a disabled chain resolves straight
+    // through and dehaze at zero costs nothing.
+    nDehaze_ = pipeline_.add({"dehaze", "dehazeRecover", {nHueSat_, nHazeBlurV2_},
+                              PixelFormat::RGBA16Float, {}});
+
     // ── Local Laplacian clarity (Paris et al. 2011 / Aubry et al. 2014) ───
     //
     // Placed here, before the tone controls, for the same reason the guided
@@ -219,7 +285,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     // The channel the filter runs on: normalized log2 luminance. Reads the
     // profile output, not the tone output, so it describes the scene.
-    nLlfLuma_ = pipeline_.add({"clarity:luma", "llfLuma", {nHueSat_},
+    nLlfLuma_ = pipeline_.add({"clarity:luma", "llfLuma", {nDehaze_},
                                PixelFormat::R16Float, {}});
     nLlfGauss_[0] = nLlfLuma_;
 
@@ -282,7 +348,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // First input is the profile output on purpose: a disabled node resolves
     // to its first input, so clarity at zero costs exactly nothing.
     nClarity_ = pipeline_.add({"clarity", "llfApply",
-                               {nHueSat_, nLlfOut_[0], nLlfLuma_},
+                               {nDehaze_, nLlfOut_[0], nLlfLuma_},
                                PixelFormat::RGBA16Float, {}});
 
     // Every scene-linear adjustment fuses into one dispatch, and the display
@@ -823,6 +889,87 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         }
     }
 
+    // ── Dehaze ───────────────────────────────────────────────────────────
+    //
+    // Sixteen nodes, so the same rule as the guided filter, the denoiser and
+    // clarity: switched off entirely at zero rather than run at no strength.
+    dehazing_ = adj.dehaze > 1e-4f;
+    const bool hazeMoved = first || adj.dehaze != lastAdj_.dehaze;
+
+    // A is estimated from everything upstream of this chain, so white balance
+    // invalidates it and nothing downstream does.
+    if (first || adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
+        adj.wb.tint != lastAdj_.wb.tint) {
+        airlightValid_ = false;
+    }
+
+    if (hazeMoved) {
+        for (int n : {nDehazeChan_, nDarkH_, nDarkV_, nPeak_, nDehazeChanA_,
+                      nMinH_, nMinV_, nMaxH_, nMaxV_, nHazePrep_, nHazeBlurH_,
+                      nHazeBlurV_, nHazeAb_, nHazeBlurH2_, nHazeBlurV2_, nDehaze_}) {
+            pipeline_.setEnabled(n, dehazing_);
+        }
+    }
+
+    if (dehazing_ && (hazeMoved || !airlightValid_)) {
+        // The dark channel of the image itself: A = (1,1,1).
+        params::DehazeChan plain{};
+        plain.size[0] = width_; plain.size[1] = height_;
+        plain.airlight[0] = plain.airlight[1] = plain.airlight[2] = 1.0f;
+        pipeline_.setParams(nDehazeChan_, &plain, sizeof plain);
+
+        const auto rank = [&](int node, bool horizontal, bool maximum) {
+            params::DehazeRank r{};
+            r.size[0] = width_; r.size[1] = height_;
+            r.radius = dehaze::kPatchRadius;
+            r.horizontal = horizontal ? 1 : 0;
+            r.maximum = maximum ? 1 : 0;
+            pipeline_.setParams(node, &r, sizeof r);
+        };
+        rank(nDarkH_, true,  false);
+        rank(nDarkV_, false, false);
+        rank(nMinH_,  true,  false);
+        rank(nMinV_,  false, false);
+        rank(nMaxH_,  true,  true);
+        rank(nMaxV_,  false, true);
+
+        params::DehazePeak peak{};
+        peak.outSize[0] = peakW_; peak.outSize[1] = peakH_;
+        peak.inSize[0]  = width_; peak.inSize[1]  = height_;
+        peak.scale = dehaze::kPeakScale;
+        pipeline_.setParams(nPeak_, &peak, sizeof peak);
+
+        params::DehazePrep prep{};
+        prep.outSize[0] = hazeW_; prep.outSize[1] = hazeH_;
+        prep.inSize[0]  = width_; prep.inSize[1]  = height_;
+        prep.scale = dehaze::kGuideScale;
+        // The slider *is* omega. Zero gives t = 1 and Eq. (16) is the identity.
+        prep.omega = dehaze::kOmega * std::clamp(adj.dehaze, 0.0f, 1.0f);
+        prep.lo = llf::kWindowLoEv;
+        prep.invRange = 1.0f / llf::kWindowEv;
+        pipeline_.setParams(nHazePrep_, &prep, sizeof prep);
+
+        // The paper's radius is a fraction of the frame, not a pixel count.
+        const int fullRadius =
+            std::max(1, int(std::max(width_, height_)) / dehaze::kGuideRadiusDivisor);
+        const int radius = std::max(1, fullRadius / dehaze::kGuideScale);
+
+        params::BoxBlur4 b4h{{hazeW_, hazeH_}, radius, 1};
+        params::BoxBlur4 b4v{{hazeW_, hazeH_}, radius, 0};
+        pipeline_.setParams(nHazeBlurH_, &b4h, sizeof b4h);
+        pipeline_.setParams(nHazeBlurV_, &b4v, sizeof b4v);
+
+        params::DehazeAb ab{{hazeW_, hazeH_}, dehaze::kEpsilon, 0.0f};
+        pipeline_.setParams(nHazeAb_, &ab, sizeof ab);
+
+        params::BoxBlur b2h{{hazeW_, hazeH_}, radius, 1};
+        params::BoxBlur b2v{{hazeW_, hazeH_}, radius, 0};
+        pipeline_.setParams(nHazeBlurH2_, &b2h, sizeof b2h);
+        pipeline_.setParams(nHazeBlurV2_, &b2v, sizeof b2v);
+
+        pushAirlight();
+    }
+
     // ── Local Laplacian clarity ──────────────────────────────────────────
     //
     // Thirty-two nodes, so it follows the guided filter's and the denoiser's
@@ -1074,6 +1221,55 @@ void DevelopPipeline::setWideOutput(bool wide) {
     pushDisplayParams(lastAdj_);
 }
 
-double DevelopPipeline::render() { return pipeline_.render(); }
+void DevelopPipeline::pushAirlight() {
+    params::DehazeChan chan{};
+    chan.size[0] = width_; chan.size[1] = height_;
+    for (int c = 0; c < 3; ++c) chan.airlight[c] = airlight_[c];
+    pipeline_.setParams(nDehazeChanA_, &chan, sizeof chan);
+
+    params::DehazeRecover rec{};
+    rec.size[0] = width_; rec.size[1] = height_;
+    rec.coeffSize[0] = hazeW_; rec.coeffSize[1] = hazeH_;
+    rec.t0 = dehaze::kT0;
+    rec.lo = llf::kWindowLoEv;
+    rec.invRange = 1.0f / llf::kWindowEv;
+    for (int c = 0; c < 3; ++c) rec.airlight[c] = airlight_[c];
+    pipeline_.setParams(nDehaze_, &rec, sizeof rec);
+}
+
+void DevelopPipeline::estimateAirlight() {
+    const gpu::Texture& tex = pipeline_.nodeOutput(nPeak_);
+
+    std::vector<__fp16> buf(static_cast<std::size_t>(peakW_) * peakH_ * 4);
+    tex.download(buf.data(), static_cast<std::size_t>(peakW_) * 4 * sizeof(__fp16),
+                 peakW_, peakH_);
+
+    std::vector<dehaze::Candidate> cand(static_cast<std::size_t>(peakW_) * peakH_);
+    for (std::size_t i = 0; i < cand.size(); ++i) {
+        cand[i] = {float(buf[i * 4 + 0]), float(buf[i * 4 + 1]),
+                   float(buf[i * 4 + 2]), float(buf[i * 4 + 3])};
+    }
+
+    airlight_ = dehaze::airlightFrom(std::move(cand));
+    airlightValid_ = true;
+    pushAirlight();
+}
+
+double DevelopPipeline::render() {
+    // A is a reduction over the whole frame, so it cannot be a node, and every
+    // node downstream of it needs it before it runs. When it is stale the graph
+    // is rendered once to produce the pooled candidates, A is read back, and
+    // the parameters that depend on it are pushed — the per-node cache then
+    // makes the second pass redo only what those parameters touched.
+    //
+    // Stale means the image changed or white balance moved. It is never stale
+    // because a slider moved, so this does not run on the interaction path.
+    if (dehazing_ && !airlightValid_) {
+        const double first = pipeline_.render();
+        estimateAirlight();
+        return first + pipeline_.render();
+    }
+    return pipeline_.render();
+}
 
 }  // namespace orion::pipe

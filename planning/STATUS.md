@@ -4,15 +4,82 @@
 
 ---
 
-**Last updated:** 2026-07-28 (M3 opened — local Laplacian clarity)
-**Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity built and
-measured; dehaze, LUTs, exposure fusion and auto-enhance still to come.
-**Next story:** dehaze (dark channel prior), which reuses the guided filter
-already in the graph as its transmission refinement.
+**Last updated:** 2026-07-28 (M3 — clarity and dehaze)
+**Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity and
+dehaze built and measured; creative LUTs, exposure fusion and auto-enhance
+still to come.
+**Next story:** creative LUTs (.cube, tetrahedral interpolation) — the smallest
+remaining M3 item and the only one with no new maths to source.
 
-**Suites:** `orion-tests` **297 checks** · `orion-viewport-tests` **2088
+**Suites:** `orion-tests` **304 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
-the M0 gate passes on all three at 10.61 / 10.18 / 9.79 ms p95.
+the M0 gate passes on all three at 8.97 / 9.21 / 9.73 ms p95.
+
+## Session 2026-07-28e — M3 story 2, dehaze
+
+He, Sun & Tang's dark channel prior (CVPR 2009 / TPAMI 33(12), 2011), refined
+with their own guided filter rather than the matting Laplacian they published
+it with. `research/dehaze.md` carries every constant with the quotation it came
+out of — the patch is 15 × 15, ω is 0.95, t₀ is 0.1, and the atmospheric light
+is the brightest *of the top 0.1% of the dark channel*, which is not the same
+thing as the brightest pixel.
+
+**Sixteen nodes, seven kernels.** The graph is now
+`profile → dehaze → clarity → tone`, both restorations upstream of the tone
+controls so an exposure drag recomputes neither. 77 nodes, 5238 MiB.
+
+### What is pinned
+
+- **The atmospheric light is the haze, not the brightest pixel.** A specular
+  four times brighter than the sky is offered to `airlightFrom` and rejected,
+  because the paper's first stage ranks by dark channel and only then by
+  brightness. Getting that order wrong hands a wrong constant to the whole
+  frame, and the paper says so explicitly.
+- **A separable rank filter really is the square patch.** The 15-tap minimum
+  along each axis is checked against the 15 × 15 minimum computed directly, on
+  random data with hard zeros and ones. Same for the maximum, which TPAMI 2013
+  §5 calls for to undo the min filter's morphological dilation. That claim is
+  what buys 30 taps instead of 225, so it is worth a test rather than a comment.
+- **Eq. (16) as arithmetic**, with the transmission pinned to a constant so the
+  recovery is checked against the equation and not against another
+  implementation of the guided filter. Also: `t = 1` is exactly the identity —
+  which is *why* the slider is ω rather than a blend, so zero is exact by
+  construction — and `t` is floored at t₀ rather than divided by.
+
+### The night frame legitimately does nothing, and the bench says so
+
+`_PIC8148` measures 0.0000 movement at full strength. That is the method
+working: the dark channel is near zero across a night shot, the atmospheric
+light lands on a light source, and Eq. (12) returns `t = 1` everywhere — no
+veil to remove. The probe is **waived with that reason printed on the line**
+rather than floored, because a floor that failed there would be a floor
+demanding the filter invent haze. The other two frames move 0.123 and 0.057 of
+the reference and are floored at half the smaller.
+
+### Deliberate departures, both stated
+
+- **Scene-linear, not display-encoded.** Eq. (1) is a physical mixture and only
+  holds in linear light, so applying it here is a closer reading of the model
+  than the paper's own gamma-encoded inputs. The prior survives the change; the
+  *statistics* quoted in the paper were measured on encoded images and are not
+  re-quoted as if they held here. Consequence handled: scene-linear is unbounded
+  above, so `I_c/A_c` is clamped or a specular drives the transmission negative
+  and Eq. (16) inverts the pixel.
+- **The percentile is over pooled 4 × 4 block maxima, not over pixels.** Max
+  pooling is right for a step hunting extremes, but it is not literally the
+  paper's top 0.1% of pixels. `UNSOURCED.md`.
+
+### ⚠️ Cost
+
+A dehaze drag is **108 ms over 15 nodes** — six full-resolution 15-tap rank
+passes are most of it. Same shape of problem as clarity's 70 ms, and the
+per-node profiler added last session applies directly. The M0 gate is unmoved
+because dehaze at zero disables the chain.
+
+`A` is a reduction over the whole frame, so it is not a node: `render()` renders
+once when it is stale, reads back a sixteenth-resolution candidate texture,
+picks `A`, and renders again. Stale means the image or white balance changed —
+never a slider, so it is off the interaction path.
 
 ## Session 2026-07-28d — M3 story 1, local Laplacian clarity
 

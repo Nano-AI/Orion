@@ -203,6 +203,17 @@ extension Editor {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Dehaze") {
+            slider("Dehaze", $engine.dehaze, 0...1, "", 2,
+                   resetsTo: engine.defaults.dehaze)
+            Text("Estimates how much of each part of the picture is haze rather "
+               + "than subject, and subtracts it. It has a known blind spot: a "
+               + "large pale surface with no shadow on it \u{2014} white stone, a "
+               + "white car \u{2014} reads as haze, and will darken.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Clarity") {
             slider("Clarity", $engine.clarity, -1...1, "", 2,
                    resetsTo: engine.defaults.clarity)

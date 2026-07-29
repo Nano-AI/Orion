@@ -117,6 +117,11 @@ typedef struct OrionAdjustments {
     float denoise_luma;     /* 0..4                       */
     float denoise_color;   /* 0..4                       */
 
+    /* Dehaze, 0..1 — He, Sun & Tang's dark channel prior. The value is the
+     * paper's own omega, so zero is exactly the identity and one is the 0.95
+     * they fixed for every result they published. research/dehaze.md. */
+    float dehaze;
+
     /* Local Laplacian clarity, -1..1. Negative smooths detail, positive
      * increases its contrast. Zero switches thirty-two nodes off entirely, so
      * it costs nothing when unused. research/local-laplacian.md. */

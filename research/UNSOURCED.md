@@ -227,3 +227,25 @@ finding, and nothing has been measured against a reference for the midpoints.
 over, and `kMaxCorrectionEv`. The window sets what `sigmaR` and the noise
 thresholds mean in stops, so it is not cosmetic — a different window is a
 different filter.
+
+## 11. Dehaze — the atmospheric light's percentile is over blocks, not pixels
+
+**Where:** `pipe/Dehaze.h`, `airlightFrom`, with `dehaze_peak.slang`.
+
+**Published:** the whole method, and this step's intent — "We first pick the top
+0.1 percent brightest pixels in the dark channel... Among these pixels, the
+pixels with highest intensity in the input image I are selected as the
+atmospheric light" (He, Sun & Tang, CVPR 2009 §4.4). See `research/dehaze.md`.
+
+**Ours:** the pooling. A percentile over the whole frame is a reduction the DAG
+has no node type for, so `dehaze_peak.slang` max-pools 4 × 4 blocks first and
+the percentile is taken over block maxima. Max pooling is the right choice —
+the step is looking for the most haze-opaque extremes, and an average of a block
+is not in the block — but the selected set is not literally the paper's top 0.1%
+of pixels, and nothing has measured how far apart the two answers are on a real
+frame.
+
+**Also ours:** applying the method in scene-linear rather than on display-encoded
+pixels. That one is argued in `research/dehaze.md` as a closer reading of Eq. (1)
+than the paper's own inputs, but it is still a departure and the clamp it makes
+necessary is a piece of behaviour the paper does not specify.
