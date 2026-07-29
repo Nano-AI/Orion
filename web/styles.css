@@ -828,6 +828,26 @@ html:not(.scrub) .fr { display: none; }
 /* ---------- Narrow ---------- */
 
 @media (max-width: 900px) {
+  /* Pinned scenes run shorter on a phone — the same scrub over less thumb
+     travel. Progress is computed from the element's own height, so the
+     scenes adapt without script changes. */
+  html.scrub .dev { height: 250svh; }
+  html.scrub .sayscene { height: 150svh; }
+  html.scrub .wipe { height: 185svh; }
+  html.scrub .maskscene { height: 175svh; }
+
+  /* The wordmark keeps air on both sides of a narrow screen. */
+  .vf__name {
+    font-size: clamp(2.5rem, 12.5vw, 4rem);
+    letter-spacing: .2em; margin-right: -.2em;
+  }
+
+  /* The numbers hold one row of three: smaller figures, no separators. */
+  .stats { width: 100%; justify-content: space-between; gap: 1rem; }
+  .stat + .stat { border-left: 0; padding-left: 0; }
+  .stat b { font-size: clamp(1.55rem, 7vw, 2.3rem); }
+  .stat__l { font-size: .56rem; letter-spacing: .18em; }
+
   .cites li { flex-direction: column; gap: .2rem; }
   .v { text-align: left; }
   /* Words up top, the photograph across the foot, dissolving upward. */
