@@ -1,236 +1,198 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Orion — the RAW editor you own</title>
-<meta name="description" content="A fast, subscription-free RAW editor for macOS. Full-resolution editing that keeps up with your hands, and colour you can check.">
-<meta name="color-scheme" content="dark light">
-<script>/* set stored theme before first paint */
-try{var t=localStorage.getItem('orion-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
-<link rel="preload" as="image" href="img/orion-hero-canvas.jpg">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orion — a RAW editor you own</title>
+<meta name="description" content="A fast, subscription-free RAW photo editor for macOS. Full-resolution edits that keep up with your hands, corrections for 1,558 real lenses, and every filter traced to a published paper.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0c0d">
+<link rel="preload" as="image" href="img/photo-aston-trio.jpg" fetchpriority="high">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b0c0d'/><circle cx='16' cy='16' r='6.5' fill='none' stroke='%234DB6C4' stroke-width='2.5'/></svg>">
 <link rel="stylesheet" href="styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231a1a1d'/><circle cx='16' cy='16' r='6' fill='none' stroke='%234db6c4' stroke-width='2'/></svg>">
 </head>
 <body>
 
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="nav">
-  <div class="nav__in">
-    <a class="wordmark" href="#main">Orion</a>
-    <nav class="nav__links" aria-label="Sections">
-      <a href="#masks">Masks</a>
-      <a href="#colour">Colour</a>
-      <a href="#today">Today</a>
-    </nav>
-    <button type="button" class="themebtn" id="themebtn"><span class="themebtn__dot" aria-hidden="true"></span><span id="themelabel">Theme</span></button>
+<!-- ============================ HERO ============================ -->
+<header class="hero">
+  <div class="hero__media">
+    <img src="img/photo-aston-trio.jpg"
+         srcset="img/photo-aston-trio-1200.jpg 1200w, img/photo-aston-trio.jpg 2400w"
+         sizes="100vw" fetchpriority="high" decoding="async"
+         alt="Three Aston Martins parked at night outside a lit dealership: one yellow, one silver, one white.">
   </div>
+  <div class="hero__grade"></div>
+
+  <div class="hero__body">
+    <p class="eyebrow rv">RAW photo editor · macOS</p>
+    <h1 class="rv d1">Every slider,<br><span class="glow">full resolution,</span><br>right now.</h1>
+    <p class="lede rv d2">
+      No subscription. No cloud. No catalog holding your work hostage.
+      Orion develops a 24-megapixel raw file at its native size and keeps up
+      with your hand while you drag.
+    </p>
+    <p class="chips rv d3">
+      <span class="chip"><b>$0</b> per month</span>
+      <span class="chip"><b>1,558</b> lenses profiled</span>
+      <span class="chip"><b>100%</b> your files</span>
+    </p>
+  </div>
+
+  <div class="cue rv d4" aria-hidden="true"><span></span></div>
 </header>
 
 <main id="main">
 
-<!-- ─── Hero ─────────────────────────────────────────────────────────── -->
-<section class="hero">
-  <p class="eyebrow hero-in">Raw editor for macOS</p>
-  <h1 class="h1 hero-in">The RAW editor<br>you own.</h1>
-  <p class="lede hero-in">Fast, honest RAW development. One&#8209;time purchase or free — never a subscription.</p>
-  <p class="status hero-in">In development · not yet released · everything below is built and measured</p>
+<!-- ============================ STATEMENT ============================ -->
+<section class="say">
+  <p class="rv">Photo editors got rented out. <em>Orion is software you keep.</em></p>
 </section>
 
-<!-- ─── The recreation ───────────────────────────────────────────────── -->
-<section class="stage" aria-label="A recreation of the Orion editor">
-  <div class="mock" id="mock">
-    <div class="mock__bar">
-      <span class="mock__lights" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="mock__name">Orion</span>
-      <span class="mock__file">Sony ILCE-7M3</span>
-      <span class="mock__tools" aria-hidden="true"><span class="mock__pct">43%</span><span class="mock__chip">Compare</span><span class="mock__chip mock__chip--go">Export…</span></span>
-    </div>
-    <div class="mock__body">
-      <div class="mock__canvas">
-        <img id="mockimg" src="img/orion-hero-canvas.jpg" width="1235" height="820"
-             alt="Night photograph of three Aston Martins on a forecourt, open in Orion with a linear gradient mask drawn across the frame as three dashed guide lines with endpoint handles.">
-      </div>
-      <aside class="mock__panel">
-        <div class="mock__histo" aria-hidden="true">
-          <svg viewBox="0 0 260 56" preserveAspectRatio="none">
-            <g id="histog">
-              <path d="M0,56 L0,20 C14,4 26,8 40,26 C58,50 86,52 122,50 C160,48 196,50 226,40 C240,35 250,44 260,48 L260,56 Z" class="histo__fill"/>
-              <path d="M0,20 C14,4 26,8 40,26 C58,50 86,52 122,50 C160,48 196,50 226,40 C240,35 250,44 260,48" class="histo__line"/>
-            </g>
-            <line x1="87" y1="0" x2="87" y2="56" class="histo__third"/>
-            <line x1="173" y1="0" x2="173" y2="56" class="histo__third"/>
-          </svg>
-          <div class="mock__histolbl"><span>shadows</span><span>midtones</span><span>highlights</span></div>
-        </div>
-
-        <div class="mock__tabs" aria-hidden="true">
-          <span class="mock__tab mock__tab--on"><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="2.6" fill="none" stroke="currentColor"/><path d="M6 0v2M6 10v2M0 6h2M10 6h2" stroke="currentColor"/></svg>Light</span>
-          <span class="mock__tab"><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor"/><path d="M6 1.5v9A4.5 4.5 0 006 1.5z" fill="currentColor"/></svg></span>
-          <span class="mock__tab"><svg viewBox="0 0 12 12"><circle cx="5" cy="5" r="3.5" fill="none" stroke="currentColor"/><path d="M8 8l3 3" stroke="currentColor"/></svg></span>
-          <span class="mock__tab"><svg viewBox="0 0 12 12"><path d="M3 1v8h8M1 3h8v8" fill="none" stroke="currentColor"/></svg></span>
-        </div>
-
-        <div class="m-desk">
-          <p class="mock__sec">White balance</p>
-          <div class="sl"><span class="sl__k">Temperature</span><span class="sl__v">3635 K</span>
-            <div class="sl__track"><span class="sl__thumb" style="left:25%"></span></div></div>
-          <div class="sl"><span class="sl__k">Tint</span><span class="sl__v">0.14</span>
-            <div class="sl__track"><span class="sl__thumb" style="left:52%"></span></div></div>
-        </div>
-
-        <p class="mock__sec">Light</p>
-        <p class="mock__auto" aria-hidden="true"><span class="mock__chip">Auto</span><span class="mock__autohint">sets Exposure, Whites, Blacks, Lift</span></p>
-
-        <div class="sl sl--live">
-          <span class="sl__k" id="explabel">Exposure</span><span class="sl__v sl__v--hot" id="expval">2.60 EV</span>
-          <div class="sl__track" id="exptrack" role="slider" tabindex="0"
-               aria-label="Exposure — try it, this editor is a demo"
-               aria-valuemin="-5" aria-valuemax="5" aria-valuenow="2.6" aria-valuetext="2.60 EV"
-               aria-describedby="mocknote">
-            <span class="sl__fill" id="expfill" style="left:50%;width:26%"></span>
-            <span class="sl__thumb sl__thumb--big" id="expthumb" style="left:76%"></span>
-          </div>
-        </div>
-
-        <div class="m-desk">
-          <div class="sl"><span class="sl__k">Contrast</span><span class="sl__v">1.45</span>
-            <div class="sl__track"><span class="sl__thumb" style="left:46%"></span></div></div>
-          <div class="sl"><span class="sl__k">Highlights</span><span class="sl__v sl__v--dim">0.00</span>
-            <div class="sl__track"><span class="sl__thumb" style="left:50%"></span></div></div>
-          <div class="sl"><span class="sl__k">Shadows</span><span class="sl__v sl__v--dim">0.00</span>
-            <div class="sl__track"><span class="sl__thumb" style="left:50%"></span></div></div>
-        </div>
-
-        <p class="mock__sec">Local</p>
-        <div class="mock__seg" aria-hidden="true"><span>No mask</span><span class="mock__seg--on">Linear</span><span>Radial</span></div>
-        <div class="sl"><span class="sl__k">Exposure</span><span class="sl__v sl__v--hot">−1.60 EV</span>
-          <div class="sl__track"><span class="sl__fill" style="left:34%;width:16%"></span><span class="sl__thumb" style="left:34%"></span></div></div>
-        <div class="sl"><span class="sl__k">Centre X</span><span class="sl__v sl__v--hot">0.46</span>
-          <div class="sl__track"><span class="sl__thumb" style="left:46%"></span></div></div>
-
-        <div class="mock__foot"><span>6,024 × 4,024</span><span class="mock__ms" id="mockms">9.3 ms</span></div>
-      </aside>
-    </div>
-    <div class="mock__strip" aria-hidden="true">
-      <span class="mock__count">All · 3 photos</span>
-      <span class="mock__thumb mock__thumb--on"><img src="img/orion-hero-canvas.jpg" alt=""></span>
-      <span class="mock__thumb"><img src="img/orion-hero-canvas.jpg" alt="" style="object-position:20% 40%"></span>
-      <span class="mock__thumb"><img src="img/orion-hero-canvas.jpg" alt="" style="object-position:80% 60%"></span>
-    </div>
+<!-- ============================ SPEED ============================ -->
+<section class="bleed bleed--tall">
+  <img class="bleed__img" src="img/photo-revuelto.jpg"
+       srcset="img/photo-revuelto-1200.jpg 1200w, img/photo-revuelto.jpg 2400w"
+       sizes="100vw" loading="lazy" decoding="async"
+       alt="A blue Lamborghini Revuelto photographed head-on in a dark showroom.">
+  <div class="bleed__wash"></div>
+  <div class="bleed__copy">
+    <h2 class="rv">It does not<br>make you wait.</h2>
+    <p class="rv d1">
+      Most editors show you a shrunken proxy while you work, then make you wait
+      for the real thing. Orion renders the whole frame, every time, on the
+      graphics card.
+    </p>
+    <p class="mnote rv d2">Exposure drag · 24 MP Sony raw · full resolution — <b>9.29 ms</b></p>
   </div>
-  <p class="stage__note" id="mocknote">A recreation in HTML — drag the Exposure slider. The photographs further down are real renders.</p>
 </section>
 
-<!-- ─── Speed ────────────────────────────────────────────────────────── -->
-<section class="sect" id="speed" data-rev>
-  <p class="eyebrow rev">Speed</p>
-  <h2 class="h2 rev">Full resolution,<br>while you drag.</h2>
-  <p class="body rev">Orion develops a 24-megapixel RAW at its full size as the slider moves — not a rough preview that sharpens after you let go. Your edit keeps up with your hand.</p>
-  <p class="fn rev">9.29 ms per frame, 95th percentile, on a 6,024 × 4,024 Sony ARW — measured, not quoted.</p>
-</section>
-
-<!-- ─── Masks ────────────────────────────────────────────────────────── -->
-<section class="sect" id="masks" data-rev>
-  <p class="eyebrow rev">Local edits</p>
-  <h2 class="h2 rev">Light, exactly<br>where you point.</h2>
-  <p class="body rev">Drag linear and radial gradients on the photograph itself. A mask stays on its subject through crop, rotation and straightening — and the export matches the preview.</p>
-
-  <figure class="shot rev">
+<!-- ============================ MASKS ============================ -->
+<section class="split" id="masks">
+  <div class="split__text">
+    <p class="eyebrow rv">Local adjustments</p>
+    <h2 class="rv d1">Put the light<br>exactly where<br>you want it.</h2>
+    <p class="rv d2">
+      Drag a gradient straight onto the photograph. Darken a sky, lift a
+      subject out of shadow, warm one corner — and the mask stays where you put
+      it when you crop, straighten or turn the frame.
+    </p>
+  </div>
+  <figure class="shot rv d1">
     <img src="img/orion-mask-linear.jpg"
          srcset="img/orion-mask-linear-900.jpg 900w, img/orion-mask-linear.jpg 1600w"
-         sizes="(max-width: 720px) 94vw, min(94vw, 1120px)"
-         width="1600" height="1000" loading="lazy" decoding="async"
-         alt="Orion editing a night photograph of three Aston Martins on a forecourt. A linear gradient mask is drawn across the frame with three dashed guide lines and draggable endpoint handles; the Local panel reads Exposure −1.60 EV.">
-    <figcaption>Linear gradient, −1.60 EV. The side you didn’t touch stays untouched — measured to the bit.</figcaption>
+         sizes="(max-width: 860px) 100vw, 58vw" loading="lazy" decoding="async"
+         alt="Orion's interface with a linear gradient mask drawn across a night photograph as three dashed guide lines with endpoint handles. The Local panel reads Exposure minus 1.60 EV.">
   </figure>
-
-  <figure class="shot rev">
-    <img src="img/orion-mask-radial.jpg"
-         srcset="img/orion-mask-radial-900.jpg 900w, img/orion-mask-radial.jpg 1600w"
-         sizes="(max-width: 720px) 94vw, min(94vw, 1120px)"
-         width="1600" height="1000" loading="lazy" decoding="async"
-         alt="The same photograph with a radial gradient mask drawn over the silver car with axis and rotate handles; the Local panel reads Exposure 1.60 EV.">
-    <figcaption>Radial gradient over the silver car, +1.60 EV — a real render from the running app.</figcaption>
-  </figure>
-
-  <p class="fn rev">Not built yet: brush, luminance-range and subject masks. Nothing on this page pretends otherwise.</p>
 </section>
 
-<!-- ─── Colour ───────────────────────────────────────────────────────── -->
-<section class="sect" id="colour" data-rev>
-  <p class="eyebrow rev">Colour</p>
-  <h2 class="h2 rev">Colour you<br>can check.</h2>
-  <p class="body rev">Every non-trivial filter names the published paper it came from, so when a photograph looks right you can see why. What isn’t sourced yet sits on a public list — twelve entries, kept on purpose.</p>
-  <ul class="cites rev">
-    <li><span>Dehaze</span><span>He, Sun &amp; Tang · CVPR 2009</span></li>
-    <li><span>Clarity</span><span>Paris, Hasinoff &amp; Kautz · SIGGRAPH 2011</span></li>
-    <li><span>Shadow lift</span><span>Hessel &amp; Morel · IPOL 2019</span></li>
-    <li><span>Tone</span><span>AgX — Blender’s default view transform</span></li>
-    <li><span>Tone curve</span><span>Fritsch &amp; Carlson · SIAM 1980</span></li>
+<!-- ============================ COLOR ============================ -->
+<section class="bleed" id="color">
+  <img class="bleed__img" src="img/photo-glasshouse.jpg"
+       srcset="img/photo-glasshouse-1200.jpg 1200w, img/photo-glasshouse.jpg 2400w"
+       sizes="100vw" loading="lazy" decoding="async"
+       alt="A glass-fronted building at golden hour with saturated yellow machinery visible inside.">
+  <div class="bleed__wash bleed__wash--right"></div>
+  <div class="bleed__copy bleed__copy--right">
+    <h2 class="rv">Color that is<br>right, and<br>checkable.</h2>
+    <p class="rv d1">
+      Orion used to render blue skies violet. The fix was not a nicer-looking
+      number — it was building the color stage the DNG specification actually
+      describes, then testing it against the camera's own rendering of the same
+      frame.
+    </p>
+  </div>
+</section>
+
+<!-- ============================ LEDGER ============================ -->
+<section class="ledger">
+  <p class="eyebrow rv">Why you can trust the picture</p>
+  <h2 class="rv d1">Every filter cites<br>a published paper.</h2>
+  <p class="ledger__lede rv d2">
+    Not a slogan — a rule the code is held to. Each non-trivial filter names the
+    research it implements, with the venue and the year. Where something is
+    <em>not</em> yet sourced, that is written down too, in public.
+  </p>
+  <ul class="cites">
+    <li class="rv"><span class="k">Haze removal</span><span class="v">He, Sun &amp; Tang · CVPR 2009</span></li>
+    <li class="rv"><span class="k">Local contrast</span><span class="v">Paris, Hasinoff &amp; Kautz · SIGGRAPH 2011</span></li>
+    <li class="rv"><span class="k">Shadow recovery</span><span class="v">Hessel &amp; Morel · WACV 2020</span></li>
+    <li class="rv"><span class="k">Film looks</span><span class="v">Adobe Cube LUT spec · 2013</span></li>
+    <li class="rv"><span class="k">Mask falloff</span><span class="v">Perlin · ACM TOG 2002</span></li>
   </ul>
 </section>
 
-<!-- ─── Own ──────────────────────────────────────────────────────────── -->
-<section class="sect" id="own" data-rev>
-  <h2 class="h2 h2--big rev">No subscription.<br>Ever.</h2>
-  <p class="body rev">Lightroom is rented. Orion is owned — built by one developer for their own camera, and for the students and hobbyists a monthly bill prices out.</p>
-  <dl class="facts rev">
-    <div class="fact"><dt>1,558</dt><dd>lenses with measured corrections for distortion, vignetting and fringing</dd></div>
-    <div class="fact"><dt>XMP</dt><dd>edits live beside your files in open sidecars — no catalogue, no import, no lock-in</dd></div>
-    <div class="fact"><dt>0 / month</dt><dd>one-time purchase or free; the price isn’t set yet, the model is</dd></div>
-  </dl>
+<!-- ============================ OWNERSHIP ============================ -->
+<section class="bleed bleed--tall">
+  <img class="bleed__img" src="img/photo-m5-bluehour.jpg"
+       srcset="img/photo-m5-bluehour-1200.jpg 1200w, img/photo-m5-bluehour.jpg 2400w"
+       sizes="100vw" loading="lazy" decoding="async"
+       alt="A gray BMW M5 photographed at blue hour outside a lit building.">
+  <div class="bleed__wash"></div>
+  <div class="bleed__copy">
+    <h2 class="rv">Your edits are<br>yours to take.</h2>
+    <p class="rv d1">
+      Settings are written beside the photograph in plain XMP — the same format
+      every other editor reads. Nothing is locked in a database only Orion can
+      open. Delete the app tomorrow and your raw files are untouched.
+    </p>
+  </div>
 </section>
 
-<!-- ─── Today ────────────────────────────────────────────────────────── -->
-<section class="sect" id="today" data-rev>
-  <p class="eyebrow rev">Where it stands</p>
-  <h2 class="h2 rev">Built. Not yet.<br>Never.</h2>
-  <div class="cols rev">
-    <div class="col">
-      <p class="col__h">In the app today</p>
-      <ul>
-        <li>Sony ARW, Bayer RAW and DNG</li>
-        <li>Exposure to curves, colour mixer, grading wheels</li>
-        <li>Clarity, dehaze, shadow lift, .cube looks</li>
-        <li>Auto-enhance that moves real sliders you can argue with</li>
-        <li>Sharpening and profiled denoise</li>
-        <li>Crop, straighten, measured lens corrections</li>
-        <li>Gradient masks, dragged on the photo</li>
-        <li>Export with your location stripped by default</li>
-      </ul>
-    </div>
-    <div class="col">
-      <p class="col__h">Not yet</p>
-      <ul class="mut">
-        <li>Brush masks — painting isn’t wired up yet</li>
-        <li>Luminance, colour-range, subject and sky masks</li>
-        <li>Spot removal, perspective correction</li>
-        <li>Presets, copy-paste settings, batch export</li>
-        <li>Fujifilm X-Trans — refused by name, not scrambled</li>
-      </ul>
-      <p class="col__h col__h--gap">Never in v1</p>
-      <ul class="mut">
-        <li>Cloud sync and a mobile app</li>
-        <li>A full asset manager</li>
-        <li>Layers and Photoshop-grade retouching</li>
-      </ul>
-    </div>
+<!-- ============================ REGISTER ============================ -->
+<section class="reg" id="today">
+  <div class="reg__col rv">
+    <p class="reg__h"><span class="dot dot--on"></span>Working today</p>
+    <ul>
+      <li>Exposure, contrast, highlights, shadows, whites, blacks</li>
+      <li>White balance, color grading, tone curves</li>
+      <li>Crop, straighten, rotate</li>
+      <li>Distortion and vignetting for 1,558 lenses</li>
+      <li>Haze removal, clarity, shadow recovery</li>
+      <li>Film looks from any <code>.cube</code> file</li>
+      <li>Gradient masks you drag onto the photo</li>
+      <li>Export with your location stripped by default</li>
+    </ul>
+  </div>
+  <div class="reg__col rv d1">
+    <p class="reg__h"><span class="dot"></span>Not yet</p>
+    <ul class="dim">
+      <li>Brush masks — the engine is built, the brush is not reachable</li>
+      <li>Combining masks: add, subtract, intersect</li>
+      <li>Selecting a subject or a sky</li>
+      <li>Spot and blemish removal</li>
+      <li>Presets, and copying settings between photos</li>
+    </ul>
+    <p class="reg__note">Listed because it is true. Nothing on this page pretends to exist.</p>
+  </div>
+</section>
+
+<!-- ============================ CLOSE ============================ -->
+<section class="close">
+  <img class="close__img" src="img/photo-nightsky.jpg"
+       srcset="img/photo-nightsky-1200.jpg 1200w, img/photo-nightsky.jpg 2400w"
+       sizes="100vw" loading="lazy" decoding="async"
+       alt="A deep blue night sky above a dark treeline.">
+  <div class="close__wash"></div>
+  <div class="close__body">
+    <h2 class="rv">Built by one person,<br>in the open.</h2>
+    <p class="rv d1">
+      Orion is open source. Every decision, every measurement and every mistake
+      is written down in the repository — including the ones that shipped.
+    </p>
+    <p class="rv d2"><a class="cta" href="https://github.com/Nano-AI/Orion">View the source on GitHub</a></p>
+    <p class="status rv d3">In development · not yet released</p>
   </div>
 </section>
 
 </main>
 
-<footer class="foot">
-  <div class="foot__in">
-    <p>Orion is built in the open, by one developer. Screenshots are real renders from the running app; the editor at the top of this page is an HTML recreation.</p>
-    <p>Lens data: lensfun, CC&nbsp;BY-SA&nbsp;3.0, vendored unmodified. Demosaic: RCD, MIT, by Luis Sanz Rodríguez. No Adobe data ships.</p>
-    <p class="foot__mono">For the curious — C++ engine · Metal GPU · colour-managed end to end · macOS 14+</p>
-  </div>
+<footer class="bar">
+  <span>Orion · a RAW editor for macOS</span>
+  <span class="mono">macOS 14+ · Apple silicon</span>
 </footer>
 
-<script src="vendor/motion.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
