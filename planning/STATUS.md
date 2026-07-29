@@ -4,16 +4,68 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M3 — exposure fusion shipped)
+**Last updated:** 2026-07-29 (M3 — auto-enhance, policy in, wiring left)
 **Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity, dehaze,
-creative LUTs and exposure fusion all built and measured. **Auto-enhance is the
-last M3 item**, and it is the one that combines the others.
-**Next story:** auto-enhance — percentile auto-levels driving the four
-operators M3 has just built. Needs a source for the percentile choice before
-any code; `planning/RESEARCH.md` §84 sketches the stack.
+creative LUTs and exposure fusion shipped. Auto-enhance is **researched and its
+policy is built and tested; it is not yet wired to anything.**
+**Next story:** wire auto-enhance up — `Engine::autoEnhance` running the
+measure/correct loop, `orion_engine_auto_enhance` on the facade, an Auto button
+in the develop panel, and a bench probe that checks the *outcome* (do the
+percentiles land where they were aimed) on the three real frames. The policy
+and its tests are done; this is plumbing plus one real-image verification.
 
-**Suites:** `orion-tests` **342 checks** · `orion-viewport-tests` **2088
+**Suites:** `orion-tests` **356 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames.
+
+## Session 2026-07-29c — auto-enhance: researched, policy built, not yet wired
+
+`research/auto-enhance.md`. **The research turned up two negative findings that
+would otherwise have become confident wrong constants**, which is the whole
+argument for chasing sources before writing numbers down.
+
+### What has no source, and now says so
+
+- **Simplest Color Balance recommends no clipping percentage.** Not in the text,
+  and its reference implementation takes the levels as mandatory arguments with
+  no fallback. The widely repeated "0.5% per side" is a reading of figure
+  captions calling 1% total *"optimal"* and *"moderate"*. Orion uses it and
+  records it as inference in `UNSOURCED.md` §14.
+- **There is no published value for the mean or median luminance of a
+  well-exposed photograph.** It was looked for. What exists is CIPA
+  DC-004:2004's `MAX × 0.461`, which is a target for a uniform grey card under
+  controlled lighting — and the standard itself calls the choice conventional:
+  *"there is no single and absolute point of definition as long as the tone is
+  in the middle range."* Aiming a photograph's median at it is a judgement.
+
+### What is sourced
+
+The quantile definition and — usefully — the reason to work on luminance rather
+than per channel, which is the paper's own sentence: per-channel stretching
+*"provides both a white balance and a contrast enhancement"*, and it is blunt
+that this *"is not a real physical white balance"*. Orion already has one the
+photographer set. Also sourced: a published ceiling on how hard an automatic
+stretch may push (Lisani, Petro & Sbert, IPOL 2012, `smax = 2`).
+
+**A trap avoided:** Mertens' well-exposedness Gaussian at 0.5 is a per-pixel
+blending kernel for a bracketed stack, *not* evidence about the mean of a
+photograph. It is used correctly inside exposure fusion; citing it here would
+have been exactly the wrong-but-cited constant this repository exists to stop.
+
+### The damping was backwards, and the comment says why
+
+The solver's step is `log2(target / median)` — the correction that would be
+right if the rendered median moved in proportion to exposure. The display
+transform is compressive, so the true response is *smaller* than that estimate
+and every step already undershoots. Damping below 1 only slows it: measured
+0.064 from the anchor after five passes at 0.7, and inside 0.02 at 1.0.
+
+### What is left
+
+The policy is a pure function of a histogram and is fully tested. Not built:
+`Engine::autoEnhance`, the C facade entry point, the Auto button, and the bench
+probe that verifies the outcome on real frames. That last one matters most —
+everything so far is checked against a stand-in for the pipeline, not the
+pipeline.
 
 ## Session 2026-07-29b — exposure fusion, finished
 
