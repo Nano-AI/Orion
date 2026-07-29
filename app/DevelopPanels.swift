@@ -43,6 +43,26 @@ private struct PanelButton: View {
 
 extension Editor {
 
+    /// Row labels for the mask group. Named here rather than in the state struct
+    /// because they are interface words: the shader's `kind` is a number and
+    /// `MaskComponentState` has no business knowing what a photographer calls it.
+    static func maskKindName(_ kind: Int32) -> String {
+        switch kind {
+        case 1:  return "Linear"
+        case 2:  return "Radial"
+        case 3:  return "Brush"
+        default: return "Off"
+        }
+    }
+
+    static func composeName(_ compose: Int32) -> String {
+        switch compose {
+        case 1:  return "subtract"
+        case 2:  return "intersect"
+        default: return "add"
+        }
+    }
+
     var lightPanel: some View {
         Group {
             section("White Balance") {
@@ -71,6 +91,66 @@ extension Editor {
                 slider("Blacks", $engine.blacks, -1...1, "", 2, resetsTo: engine.defaults.blacks)
             }
             section("Local") {
+                let maskDefaults = MaskComponentState()
+
+                // The group's rows. A mask is a list folded left in listed
+                // order, so the list has to be visible — the order is part of
+                // the edit, not an implementation detail.
+                if !engine.maskComponents.isEmpty {
+                    VStack(spacing: 2) {
+                        ForEach(Array(engine.maskComponents.enumerated()), id: \.offset) { i, m in
+                            Button {
+                                engine.selectedMask = i
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("\(i + 1)")
+                                        .foregroundStyle(Palette.faint)
+                                        .frame(width: 12, alignment: .trailing)
+                                    Text(Self.maskKindName(m.kind))
+                                    // The first row's op is not shown because it
+                                    // cannot mean anything: the fold starts from
+                                    // zero, so add is the identity there and the
+                                    // other two give an empty group.
+                                    if i > 0 {
+                                        Text(Self.composeName(m.compose))
+                                            .foregroundStyle(Palette.faint)
+                                    }
+                                    Spacer(minLength: 0)
+                                    if m.kind == 3 && !m.brushStroke.isEmpty {
+                                        Text("\(m.brushStroke.count / 2) dabs")
+                                            .foregroundStyle(Palette.faint)
+                                    }
+                                }
+                                .font(.system(size: 11))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .frame(maxWidth: .infinity)
+                                .background(i == engine.selectedMask
+                                            ? Palette.faint.opacity(0.18)
+                                            : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        Button("Add") {
+                            if engine.addMaskComponent() {
+                                engine.commitMaskGroupEdit("Add mask")
+                            }
+                        }
+                        .disabled(engine.maskComponents.count >= Engine.maxMaskComponents)
+                        Button("Remove") {
+                            engine.removeMaskComponent(at: engine.selectedMask)
+                            engine.commitMaskGroupEdit("Remove mask")
+                        }
+                        .disabled(engine.maskComponents.isEmpty)
+                        Spacer(minLength: 0)
+                    }
+                    .font(.system(size: 11))
+                }
+
                 Picker("", selection: $engine.maskKind) {
                     Text("No mask").tag(Int32(0))
                     Text("Linear").tag(Int32(1))
@@ -81,6 +161,22 @@ extension Editor {
                 .labelsHidden()
 
                 if engine.maskKind != 0 {
+                    // The op applies to the *selected* row, and only rows after
+                    // the first have one.
+                    if engine.selectedMask > 0 {
+                        Picker("", selection: $engine.maskCompose) {
+                            Text("Add").tag(Int32(0))
+                            Text("Subtract").tag(Int32(1))
+                            Text("Intersect").tag(Int32(2))
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
+
+                    // One exposure for the whole group, not one per component:
+                    // research/masking.md §6 is explicit that the adjustment is
+                    // applied once through the combined coverage, or two
+                    // overlapping components would apply it twice.
                     slider("Exposure", $engine.localExposureEv, -3...3, " EV", 2,
                            resetsTo: engine.defaults.localExposureEv)
 
@@ -89,11 +185,11 @@ extension Editor {
                         // whole point is that it is drawn. What is left is the
                         // nib, and those are the three the shader reads.
                         slider("Size", $engine.brushRadius, 0.01...0.4, "", 3,
-                               resetsTo: engine.defaults.brushRadius)
+                               resetsTo: maskDefaults.brushRadius)
                         slider("Flow", $engine.brushFlow, 0.01...1, "", 2,
-                               resetsTo: engine.defaults.brushFlow)
+                               resetsTo: maskDefaults.brushFlow)
                         slider("Hardness", $engine.brushHardness, 0...1, "", 2,
-                               resetsTo: engine.defaults.brushHardness)
+                               resetsTo: maskDefaults.brushHardness)
 
                         HStack(spacing: 8) {
                             Button("Clear stroke") { engine.clearBrushStroke() }
@@ -109,11 +205,11 @@ extension Editor {
 
                     if engine.maskKind == 1 || engine.maskKind == 2 {
                         slider("Centre X", $engine.maskCentreX, 0...1, "", 2,
-                               resetsTo: engine.defaults.maskCentreX)
+                               resetsTo: maskDefaults.centreX)
                         slider("Centre Y", $engine.maskCentreY, 0...1, "", 2,
-                               resetsTo: engine.defaults.maskCentreY)
+                               resetsTo: maskDefaults.centreY)
                         slider("Angle", $engine.maskAngle, -3.15...3.15, " rad", 2,
-                               resetsTo: engine.defaults.maskAngle)
+                               resetsTo: maskDefaults.angle)
                     }
 
                     if engine.maskKind == 1 {
@@ -126,7 +222,7 @@ extension Editor {
                         // slider a photographer can move and watch do nothing
                         // is worse than no slider.
                         slider("Length", $engine.maskLength, 0.05...1.5, "", 2,
-                               resetsTo: engine.defaults.maskLength)
+                               resetsTo: maskDefaults.length)
                     } else if engine.maskKind == 2 {
                         // Explicitly kind 2, not `else`. An `else` here also
                         // catches the brush, which reads none of these — the
@@ -136,13 +232,13 @@ extension Editor {
                         // defect as the Feather slider that did nothing to a
                         // linear gradient.
                         slider("Feather", $engine.maskFeather, 0...1, "", 2,
-                               resetsTo: engine.defaults.maskFeather)
+                               resetsTo: maskDefaults.feather)
                         slider("Width", $engine.maskRadiusX, 0.02...1, "", 2,
-                               resetsTo: engine.defaults.maskRadiusX)
+                               resetsTo: maskDefaults.radiusX)
                         slider("Height", $engine.maskRadiusY, 0.02...1, "", 2,
-                               resetsTo: engine.defaults.maskRadiusY)
+                               resetsTo: maskDefaults.radiusY)
                         slider("Roundness", $engine.maskRoundness, 2...8, "", 1,
-                               resetsTo: engine.defaults.maskRoundness)
+                               resetsTo: maskDefaults.roundness)
                     }
 
                     HStack(spacing: 14) {

@@ -222,59 +222,232 @@ final class Engine {
     /// loaded through `loadLut`, not an adjustment.
     var lutStrength: Float = 1     { didSet { pushAndRender() } }
 
-    // ── Local adjustment (M4) ─────────────────────────────────────────────
-    /// 0 none, 1 linear, 2 radial.
-    var maskKind: Int32 = 0        { didSet { pushAndRender() } }
-    var maskInvert = false         { didSet { pushAndRender() } }
-    var maskCentreX: Float = 0.5   { didSet { pushAndRender() } }
-    var maskCentreY: Float = 0.5   { didSet { pushAndRender() } }
-    var maskAngle: Float = 0       { didSet { pushAndRender() } }
-    var maskLength: Float = 0.5    { didSet { pushAndRender() } }
-    var maskRadiusX: Float = 0.3   { didSet { pushAndRender() } }
-    var maskRadiusY: Float = 0.3   { didSet { pushAndRender() } }
-    var maskFeather: Float = 0.5   { didSet { pushAndRender() } }
-    var maskRoundness: Float = 2   { didSet { pushAndRender() } }
+    // ── Local adjustments: the mask group (M4) ────────────────────────────
+    //
+    // A mask is a *list* of components folded left in listed order
+    // (research/masking.md §6), and one local adjustment is applied through the
+    // combined coverage. The list is the storage; the `mask…` properties below
+    // are views onto whichever row is selected, which is what the sliders, the
+    // canvas overlay and the screenshot harness all bind to.
+
+    /// How many components one group holds. Matches the engine's own cap; the
+    /// facade rejects an index past it.
+    static let maxMaskComponents = 4
+
+    private(set) var maskComponents: [MaskComponentState] = []
+
+    /// Which row the panel and the canvas are editing. Clamped on every read,
+    /// because removing a row can leave it past the end and a stale index would
+    /// silently edit the wrong component.
+    var selectedMask: Int = 0 {
+        didSet {
+            let clamped = maskComponents.isEmpty
+                ? 0 : min(max(0, selectedMask), maskComponents.count - 1)
+            if clamped != selectedMask { selectedMask = clamped }
+        }
+    }
+
     var localExposureEv: Float = 0 { didSet { pushAndRender() } }
 
-    // ── The brush (mask kind 3) ───────────────────────────────────────────
-    var brushRadius: Float = 0.08   { didSet { pushAndRender() } }
-    var brushFlow: Float = 0.5      { didSet { pushAndRender() } }
-    var brushHardness: Float = 0.5  { didSet { pushAndRender() } }
+    /// The selected component, or nil when the group is empty.
+    private var selected: MaskComponentState? {
+        guard selectedMask >= 0 && selectedMask < maskComponents.count else { return nil }
+        return maskComponents[selectedMask]
+    }
 
-    /// The stroke, as normalized points on the displayed picture.
+    /// Edits the selected component in place and pushes once.
     ///
-    /// Setting this pushes the points across the facade and bumps the revision,
-    /// which is the only thing the engine compares — it never walks the stroke
-    /// to find out whether it moved. Change the points without the revision and
-    /// the picture does not follow the hand, which is why the two are set
-    /// together here rather than being left to callers.
-    private(set) var brushRevision: UInt32 = 0
-    private(set) var brushStroke: [CGPoint] = []
+    /// Every `mask…` setter routes through here rather than mutating the array
+    /// directly, so there is one place that knows what "selected" means and one
+    /// place that renders.
+    private func editSelected(_ change: (inout MaskComponentState) -> Void) {
+        guard selectedMask >= 0 && selectedMask < maskComponents.count else { return }
+        change(&maskComponents[selectedMask])
+        pushAndRender()
+    }
+
+    /// The selected component's primitive. Zero means the group is empty.
+    ///
+    /// Setting it off zero on an empty group *adds* a component, and setting it
+    /// to zero removes the selected one — so the existing segmented picker keeps
+    /// meaning what it did before there were rows, and "No mask" on the only row
+    /// still clears the mask rather than leaving a live component covering
+    /// nothing.
+    var maskKind: Int32 {
+        get { selected?.kind ?? 0 }
+        set {
+            if newValue == 0 {
+                if !maskComponents.isEmpty { removeMaskComponent(at: selectedMask) }
+                return
+            }
+            if maskComponents.isEmpty {
+                addMaskComponent(kind: newValue)
+            } else {
+                editSelected { $0.kind = newValue }
+            }
+        }
+    }
+
+    var maskInvert: Bool {
+        get { selected?.invert ?? false }
+        set { editSelected { $0.invert = newValue } }
+    }
+    /// 0 add, 1 subtract, 2 intersect. Meaningless on the first row — the fold
+    /// starts from zero, so subtract or intersect there gives an empty group.
+    var maskCompose: Int32 {
+        get { selected?.compose ?? 0 }
+        set { editSelected { $0.compose = newValue } }
+    }
+    var maskCentreX: Float {
+        get { selected?.centreX ?? 0.5 }
+        set { editSelected { $0.centreX = newValue } }
+    }
+    var maskCentreY: Float {
+        get { selected?.centreY ?? 0.5 }
+        set { editSelected { $0.centreY = newValue } }
+    }
+    var maskAngle: Float {
+        get { selected?.angle ?? 0 }
+        set { editSelected { $0.angle = newValue } }
+    }
+    var maskLength: Float {
+        get { selected?.length ?? 0.5 }
+        set { editSelected { $0.length = newValue } }
+    }
+    var maskRadiusX: Float {
+        get { selected?.radiusX ?? 0.3 }
+        set { editSelected { $0.radiusX = newValue } }
+    }
+    var maskRadiusY: Float {
+        get { selected?.radiusY ?? 0.3 }
+        set { editSelected { $0.radiusY = newValue } }
+    }
+    var maskFeather: Float {
+        get { selected?.feather ?? 0.5 }
+        set { editSelected { $0.feather = newValue } }
+    }
+    var maskRoundness: Float {
+        get { selected?.roundness ?? 2 }
+        set { editSelected { $0.roundness = newValue } }
+    }
+
+    // ── The brush (mask kind 3) ───────────────────────────────────────────
+    var brushRadius: Float {
+        get { selected?.brushRadius ?? 0.08 }
+        set { editSelected { $0.brushRadius = newValue } }
+    }
+    var brushFlow: Float {
+        get { selected?.brushFlow ?? 0.5 }
+        set { editSelected { $0.brushFlow = newValue } }
+    }
+    var brushHardness: Float {
+        get { selected?.brushHardness ?? 0.5 }
+        set { editSelected { $0.brushHardness = newValue } }
+    }
+
+    /// Appends a component and selects it. Returns false when the group is full.
+    ///
+    /// A new row composes with `add` — the only op that does anything on a first
+    /// row, and the one a photographer means by "and also this".
+    @discardableResult
+    func addMaskComponent(kind: Int32 = 1) -> Bool {
+        guard maskComponents.count < Self.maxMaskComponents else { return false }
+        var m = MaskComponentState()
+        m.kind = kind
+        m.compose = 0
+        maskComponents.append(m)
+        selectedMask = maskComponents.count - 1
+        pushAndRender()
+        return true
+    }
+
+    /// Removes a component, keeping the strokes of the ones after it with them.
+    ///
+    /// The engine indexes strokes by component, so removing row 1 of three has
+    /// to shift row 2's paint down with it — otherwise the surviving component
+    /// renders the removed one's stroke. `pushStrokes` re-sends every one.
+    func removeMaskComponent(at index: Int) {
+        guard index >= 0 && index < maskComponents.count else { return }
+        maskComponents.remove(at: index)
+        selectedMask = maskComponents.isEmpty ? 0 : min(index, maskComponents.count - 1)
+        pushStrokes()
+        pushAndRender()
+    }
+
+    /// The selected component's stroke, as normalized points on the displayed
+    /// picture.
+    var brushStroke: [CGPoint] {
+        guard let m = selected else { return [] }
+        return Self.points(m.brushStroke)
+    }
+
+    /// Pairs a flattened stroke back into points. An odd count is a truncated
+    /// sidecar; drop the stray rather than reading past the end.
+    private static func points(_ xy: [Float]) -> [CGPoint] {
+        var pts: [CGPoint] = []
+        pts.reserveCapacity(xy.count / 2)
+        for i in stride(from: 0, to: xy.count - 1, by: 2) {
+            pts.append(CGPoint(x: CGFloat(xy[i]), y: CGFloat(xy[i + 1])))
+        }
+        return pts
+    }
+
+    /// Bumped per component whenever that component's stroke changes.
+    ///
+    /// The revision is the only thing the engine compares — it never walks a
+    /// stroke to find out whether it moved. Change the points without the
+    /// revision and the picture does not follow the hand, which is why the two
+    /// are set together here rather than being left to callers.
+    ///
+    /// Not in `DevelopState`: it is a staleness token, not an edit, so it must
+    /// not reach the sidecar or undo.
+    private var brushRevisions = [UInt32](repeating: 0, count: Engine.maxMaskComponents)
 
     func setBrushStroke(_ points: [CGPoint]) {
-        brushStroke = points
-        guard isLoaded, let handle else { return }
+        guard selectedMask >= 0 && selectedMask < maskComponents.count else { return }
+        maskComponents[selectedMask].brushStroke =
+            points.flatMap { [Float($0.x), Float($0.y)] }
+        guard pushStroke(selectedMask) else { return }
+        pushAndRender()
+    }
 
-        var xy = [Float]()
-        xy.reserveCapacity(points.count * 2)
-        for p in points {
-            xy.append(Float(p.x))
-            xy.append(Float(p.y))
-        }
+    /// Sends one component's stroke across the facade and bumps its revision.
+    @discardableResult
+    private func pushStroke(_ index: Int) -> Bool {
+        guard isLoaded, let handle,
+              index >= 0 && index < maskComponents.count else { return false }
+        let xy = maskComponents[index].brushStroke
 
         // An empty stroke is a real state — it is what clearing the brush
         // means — so pass the null the facade documents rather than a dangling
-        // pointer into an empty array. Component 0, because the interface edits
-        // one component until the panel grows rows.
+        // pointer into an empty array.
         let status: OrionStatus = xy.isEmpty
-            ? orion_engine_set_brush_stroke(handle, 0, nil, 0)
+            ? orion_engine_set_brush_stroke(handle, Int32(index), nil, 0)
             : xy.withUnsafeBufferPointer {
-                  orion_engine_set_brush_stroke(handle, 0, $0.baseAddress, Int32(points.count))
+                  orion_engine_set_brush_stroke(handle, Int32(index),
+                                                $0.baseAddress, Int32(xy.count / 2))
               }
-        guard status == ORION_OK else { return }
+        guard status == ORION_OK else { return false }
+        brushRevisions[index] &+= 1
+        return true
+    }
 
-        brushRevision &+= 1
-        pushAndRender()
+    /// Re-sends every component's stroke. Needed whenever the *indexing*
+    /// changes rather than the paint — a restore, or a removal that shifts the
+    /// rows after it down.
+    private func pushStrokes() {
+        for i in 0..<Self.maxMaskComponents {
+            if i < maskComponents.count {
+                pushStroke(i)
+            } else if isLoaded, let handle {
+                // Clear the tail, or a component removed from a group of three
+                // leaves its paint in the engine for the next one added to
+                // inherit.
+                if orion_engine_set_brush_stroke(handle, Int32(i), nil, 0) == ORION_OK {
+                    brushRevisions[i] &+= 1
+                }
+            }
+        }
     }
 
     /// One history entry when a brush stroke finishes, rather than one per dab.
@@ -288,13 +461,17 @@ final class Engine {
     /// machine. `export` forces it off around the write for the same reason.
     var maskOverlay = false { didSet { pushAndRender() } }
 
-    /// Wipes the stroke. Undoable, because painting for a minute and losing it
-    /// to a misclick is not a thing a photographer should have to fear.
+    /// Wipes the selected component's stroke. Undoable, because painting for a
+    /// minute and losing it to a misclick is not a thing a photographer should
+    /// have to fear.
     func clearBrushStroke() {
         guard !brushStroke.isEmpty else { return }
         setBrushStroke([])
         history.record(state, label: "Clear brush")
     }
+
+    /// One history entry when a component is added or removed.
+    func commitMaskGroupEdit(_ label: String) { history.record(state, label: label) }
 
     /// The mask as the canvas overlay handles it.
     ///
@@ -623,15 +800,8 @@ final class Engine {
             gradeHighlight: gradeHighlight,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             lutStrength: lutStrength,
-            maskKind: maskKind, maskInvert: maskInvert,
-            maskCentreX: maskCentreX, maskCentreY: maskCentreY,
-            maskAngle: maskAngle, maskLength: maskLength,
-            maskRadiusX: maskRadiusX, maskRadiusY: maskRadiusY,
-            maskFeather: maskFeather, maskRoundness: maskRoundness,
+            maskComponents: maskComponents,
             localExposureEv: localExposureEv,
-            brushRadius: brushRadius, brushFlow: brushFlow,
-            brushHardness: brushHardness,
-            brushStroke: brushStroke.flatMap { [Float($0.x), Float($0.y)] },
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
@@ -659,24 +829,14 @@ final class Engine {
         gradeHighlight = s.gradeHighlight
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         lutStrength = s.lutStrength
-        maskKind = s.maskKind; maskInvert = s.maskInvert
-        maskCentreX = s.maskCentreX; maskCentreY = s.maskCentreY
-        maskAngle = s.maskAngle; maskLength = s.maskLength
-        maskRadiusX = s.maskRadiusX; maskRadiusY = s.maskRadiusY
-        maskFeather = s.maskFeather; maskRoundness = s.maskRoundness
+        // The whole group at once, then every stroke re-sent — the engine keeps
+        // strokes outside the adjustment block, so assigning the list alone
+        // would restore the geometry and leave the previous photo's paint in the
+        // engine under the same indices.
+        maskComponents = Array(s.maskComponents.prefix(Self.maxMaskComponents))
+        selectedMask = maskComponents.isEmpty ? 0 : 0
+        pushStrokes()
         localExposureEv = s.localExposureEv
-        brushRadius   = s.brushRadius
-        brushFlow     = s.brushFlow
-        brushHardness = s.brushHardness
-        // Pairs back into points. An odd count is a truncated sidecar; drop the
-        // stray rather than reading past the end.
-        var pts: [CGPoint] = []
-        pts.reserveCapacity(s.brushStroke.count / 2)
-        for i in stride(from: 0, to: s.brushStroke.count - 1, by: 2) {
-            pts.append(CGPoint(x: CGFloat(s.brushStroke[i]),
-                               y: CGFloat(s.brushStroke[i + 1])))
-        }
-        setBrushStroke(pts)
         fusion = s.fusion
         dehaze = s.dehaze
         clarity = s.clarity
@@ -846,22 +1006,32 @@ final class Engine {
         a.denoise_luma = denoiseLuma; a.denoise_color = denoiseColor
         a.lut_strength = lutStrength
 
-        // The mask group. The interface still edits one component; the engine
-        // takes a list, and this is where the two meet until the panel grows
-        // rows. Kind 0 is "no mask", which is a count of zero — not a live
+        // The mask group. An empty list is a count of zero — not one live
         // component that happens to cover nothing.
-        var c0 = OrionMaskComponent()
-        c0.kind = maskKind
-        c0.compose = 0                     // the fold's first entry: add
-        c0.invert = maskInvert ? 1 : 0
-        c0.centre_x = maskCentreX; c0.centre_y = maskCentreY
-        c0.angle = maskAngle; c0.length = maskLength
-        c0.radius_x = maskRadiusX; c0.radius_y = maskRadiusY
-        c0.feather = maskFeather; c0.roundness = maskRoundness
-        c0.brush_radius = brushRadius; c0.brush_flow = brushFlow
-        c0.brush_hardness = brushHardness; c0.brush_revision = brushRevision
-        a.mask_components.0 = c0
-        a.mask_count = maskKind != 0 ? 1 : 0
+        //
+        // Swift imports the C array as a tuple, so there is no subscript to loop
+        // over; the four are written by name. `withUnsafeMutablePointer` over the
+        // tuple would compile and is how this gets written by accident, but the
+        // tuple's layout is not a guaranteed C array and a stride mismatch would
+        // scatter components into each other's fields.
+        let cs = (0..<Self.maxMaskComponents).map { i -> OrionMaskComponent in
+            guard i < maskComponents.count else { return OrionMaskComponent() }
+            let m = maskComponents[i]
+            var c = OrionMaskComponent()
+            c.kind = m.kind
+            c.compose = m.compose
+            c.invert = m.invert ? 1 : 0
+            c.centre_x = m.centreX; c.centre_y = m.centreY
+            c.angle = m.angle; c.length = m.length
+            c.radius_x = m.radiusX; c.radius_y = m.radiusY
+            c.feather = m.feather; c.roundness = m.roundness
+            c.brush_radius = m.brushRadius; c.brush_flow = m.brushFlow
+            c.brush_hardness = m.brushHardness
+            c.brush_revision = brushRevisions[i]
+            return c
+        }
+        a.mask_components = (cs[0], cs[1], cs[2], cs[3])
+        a.mask_count = Int32(maskComponents.count)
         a.local_exposure_ev = localExposureEv
         a.mask_overlay = maskOverlay ? 1 : 0
 

@@ -49,6 +49,7 @@ enum ViewportTests {
         testModifiedTracksTheReadout()
         testDrawnRectFollowsTheZoom()
         testSidecarSurvivesAMissingField()
+        testMaskGroupSidecar()
         testSidecarEscapingDoesNotCompound()
         testEditsSurviveAQuit()
 
@@ -635,6 +636,138 @@ enum ViewportTests {
             report(back == full, "a full state round-trips unchanged")
         } else {
             report(false, "a full state round-trips at all")
+        }
+    }
+
+    /// The mask group in the sidecar, and the single mask that came before it.
+    ///
+    /// The migration is the load-bearing half. Every photo finished between the
+    /// gradient masks landing and mask groups landing has the flat `maskKind`
+    /// keys and no `maskComponents` — and `localExposureEv` kept its own name
+    /// through the change, so dropping the mask would not open those photos
+    /// unedited. It would open them with the local exposure applied to the
+    /// *whole frame*, which looks like a working editor and is worse than a
+    /// crash.
+    static func testMaskGroupSidecar() {
+        func decode(_ json: String) -> DevelopState? {
+            guard let data = json.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode(DevelopState.self, from: data)
+        }
+
+        // ── A pre-group sidecar: one linear mask, lifted into one component ──
+        let legacy = #"""
+        {"exposureEv":2.6,"localExposureEv":-1.6,"maskKind":1,"maskCentreX":0.46,
+         "maskCentreY":0.44,"maskAngle":1.05,"maskLength":0.55,"maskInvert":true}
+        """#
+        if let s = decode(legacy) {
+            report(s.maskComponents.count == 1,
+                   "a pre-group sidecar's single mask becomes one component",
+                   "\(s.maskComponents.count) components")
+            if let m = s.maskComponents.first {
+                report(m.kind == 1, "and keeps its kind")
+                near(CGFloat(m.centreX), 0.46, 1e-6, "and its centre x")
+                near(CGFloat(m.centreY), 0.44, 1e-6, "and its centre y")
+                near(CGFloat(m.angle), 1.05, 1e-6, "and its angle")
+                near(CGFloat(m.length), 0.55, 1e-6, "and its length")
+                report(m.invert, "and its invert")
+                report(m.compose == 0,
+                       "and folds with add, the only op a single mask can have meant")
+            }
+            near(CGFloat(s.localExposureEv), -1.6, 1e-6,
+                 "and the local exposure it was applying through that mask")
+        } else {
+            report(false, "a pre-group sidecar decodes at all")
+        }
+
+        // A pre-group brush, whose stroke lived beside the mask rather than in it.
+        let legacyBrush = #"""
+        {"maskKind":3,"brushRadius":0.07,"brushFlow":0.55,"brushHardness":0.45,
+         "brushStroke":[0.2,0.66,0.34,0.6]}
+        """#
+        if let s = decode(legacyBrush), let m = s.maskComponents.first {
+            report(m.kind == 3 && m.brushStroke.count == 4,
+                   "a pre-group brush's stroke moves inside its component",
+                   "\(m.brushStroke.count) values")
+            near(CGFloat(m.brushRadius), 0.07, 1e-6, "and the nib comes with it")
+        } else {
+            report(false, "a pre-group brush sidecar decodes")
+        }
+
+        // ── maskKind 0 was "no mask", which is an empty group, not an off row ──
+        //
+        // A live component that happens to cover nothing is not the same thing:
+        // the engine would run a pass for it and `mask_count` would be one.
+        if let s = decode(#"{"maskKind":0,"maskCentreX":0.3}"#) {
+            report(s.maskComponents.isEmpty,
+                   "a pre-group sidecar with no mask decodes to an empty group",
+                   "\(s.maskComponents.count) components")
+        } else {
+            report(false, "a pre-group sidecar with no mask decodes")
+        }
+
+        // ── A component list present wins over legacy keys ──────────────────
+        //
+        // A file holding both was written by a newer build, and its legacy keys
+        // are whatever that build's first row happened to be. Preferring them
+        // would silently discard rows two and up.
+        let both = #"""
+        {"maskKind":1,"maskCentreX":0.9,
+         "maskComponents":[{"kind":2,"centreX":0.25},{"kind":3,"compose":1}]}
+        """#
+        if let s = decode(both) {
+            report(s.maskComponents.count == 2,
+                   "a list plus legacy keys keeps the list, both rows",
+                   "\(s.maskComponents.count) components")
+            if s.maskComponents.count == 2 {
+                report(s.maskComponents[0].kind == 2 && s.maskComponents[1].kind == 3,
+                       "in the order it was written")
+                report(s.maskComponents[1].compose == 1,
+                       "with the second row's subtract intact")
+                near(CGFloat(s.maskComponents[0].centreX), 0.25, 1e-6,
+                     "and the list's geometry, not the legacy key's")
+            }
+        } else {
+            report(false, "a sidecar with both forms decodes")
+        }
+
+        // ── A component missing fields falls back per field ─────────────────
+        if let s = decode(#"{"maskComponents":[{"kind":2}]}"#),
+           let m = s.maskComponents.first {
+            near(CGFloat(m.roundness), 2.0, 1e-6,
+                 "a component's absent field is its default, not zero")
+            near(CGFloat(m.brushFlow), 0.5, 1e-6, "for the nib too")
+        } else {
+            report(false, "a sparse component decodes")
+        }
+
+        // An off row is dropped on the way in. It cannot render anything, and
+        // keeping it would put a row in the panel that does nothing.
+        if let s = decode(#"{"maskComponents":[{"kind":1},{"kind":0},{"kind":3}]}"#) {
+            report(s.maskComponents.count == 2,
+                   "an off component is dropped rather than listed",
+                   "\(s.maskComponents.count) components")
+            report(s.maskComponents.last?.kind == 3, "and the rows after it survive")
+        } else {
+            report(false, "a list with an off component decodes")
+        }
+
+        // ── Round trip, with a full group ───────────────────────────────────
+        var full = DevelopState()
+        var a = MaskComponentState()
+        a.kind = 1; a.centreX = 0.3; a.angle = 0.8; a.length = 0.7
+        var b = MaskComponentState()
+        b.kind = 3; b.compose = 1; b.brushStroke = [0.1, 0.2, 0.3, 0.4]
+        var c = MaskComponentState()
+        c.kind = 2; c.compose = 2; c.invert = true; c.roundness = 4
+        full.maskComponents = [a, b, c]
+        full.localExposureEv = 1.75
+        if let data = try? JSONEncoder().encode(full),
+           let back = try? JSONDecoder().decode(DevelopState.self, from: data) {
+            report(back == full, "a three-component group round-trips unchanged")
+            report(back.maskComponents.map(\.compose) == [0, 1, 2],
+                   "with every op in place — the fold order is the edit")
+        } else {
+            report(false, "a group round-trips at all")
         }
     }
 

@@ -92,6 +92,72 @@ final class EditHistory {
 }
 
 /// Every develop setting, as a value. Snapshotting this is what makes undo work.
+/// One component of the mask group. research/masking.md §6.
+///
+/// The stroke lives *inside* the component rather than beside it, because a
+/// group can hold several brushes and a stroke belongs to the one it was painted
+/// into — keeping them in parallel arrays is how a reorder puts someone's paint
+/// on the wrong component.
+struct MaskComponentState: Equatable, Codable {
+    var kind: Int32 = 0            // 1 linear, 2 radial, 3 brush
+    /// 0 add, 1 subtract, 2 intersect. The group folds from zero, so the first
+    /// component's op has no effect when it is add and zeroes the group when it
+    /// is not — the panel does not offer one on the first row.
+    var compose: Int32 = 0
+    var invert = false
+    var centreX: Float = 0.5
+    var centreY: Float = 0.5
+    var angle: Float = 0
+    var length: Float = 0.5
+    var radiusX: Float = 0.3
+    var radiusY: Float = 0.3
+    var feather: Float = 0.5
+    var roundness: Float = 2
+
+    var brushRadius: Float = 0.08
+    var brushFlow: Float = 0.5
+    var brushHardness: Float = 0.5
+    /// Interleaved x, y so the sidecar stays a plain JSON array of numbers
+    /// rather than a list of objects — a stroke is thousands of points and the
+    /// object form doubles the file for nothing.
+    var brushStroke: [Float] = []
+
+    /// Decoding takes what the sidecar has and leaves the rest at its default,
+    /// for the same reason `DevelopState` does: the synthesized decoder throws
+    /// on a missing key, so adding one field would discard every component in
+    /// every sidecar written before it.
+    private enum Key: String, CodingKey {
+        case kind, compose, invert, centreX, centreY, angle, length
+        case radiusX, radiusY, feather, roundness
+        case brushRadius, brushFlow, brushHardness, brushStroke
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        self.init()
+        guard let c = try? decoder.container(keyedBy: Key.self) else { return }
+        func float(_ key: Key) -> Float? {
+            (try? c.decodeIfPresent(Float.self, forKey: key)).flatMap { $0 }
+        }
+        kind = (try? c.decodeIfPresent(Int32.self, forKey: .kind)).flatMap { $0 } ?? kind
+        compose = (try? c.decodeIfPresent(Int32.self, forKey: .compose)).flatMap { $0 } ?? compose
+        invert = (try? c.decodeIfPresent(Bool.self, forKey: .invert)).flatMap { $0 } ?? invert
+        centreX = float(.centreX) ?? centreX
+        centreY = float(.centreY) ?? centreY
+        angle = float(.angle) ?? angle
+        length = float(.length) ?? length
+        radiusX = float(.radiusX) ?? radiusX
+        radiusY = float(.radiusY) ?? radiusY
+        feather = float(.feather) ?? feather
+        roundness = float(.roundness) ?? roundness
+        brushRadius = float(.brushRadius) ?? brushRadius
+        brushFlow = float(.brushFlow) ?? brushFlow
+        brushHardness = float(.brushHardness) ?? brushHardness
+        brushStroke = (try? c.decode([Float].self, forKey: .brushStroke)) ?? brushStroke
+    }
+}
+
 struct DevelopState: Equatable, Codable {
     var temperatureK: Float = 5500
     var tint: Float = 0
@@ -123,26 +189,10 @@ struct DevelopState: Equatable, Codable {
     var denoiseLuma: Float = 0
     var denoiseColor: Float = 0
     var lutStrength: Float = 1
-    var maskKind: Int32 = 0
-    var maskInvert = false
-    var maskCentreX: Float = 0.5
-    var maskCentreY: Float = 0.5
-    var maskAngle: Float = 0
-    var maskLength: Float = 0.5
-    var maskRadiusX: Float = 0.3
-    var maskRadiusY: Float = 0.3
-    var maskFeather: Float = 0.5
-    var maskRoundness: Float = 2
+    /// The mask group, folded left in listed order. Empty means no mask.
+    /// research/masking.md §6.
+    var maskComponents: [MaskComponentState] = []
     var localExposureEv: Float = 0
-
-    /// The brush. `brushStroke` is flattened to interleaved x, y so the sidecar
-    /// stays a plain JSON array of numbers rather than a list of objects — a
-    /// stroke is thousands of points and the object form doubles the file for
-    /// nothing.
-    var brushRadius: Float = 0.08
-    var brushFlow: Float = 0.5
-    var brushHardness: Float = 0.5
-    var brushStroke: [Float] = []
 
     var fusion: Float = 0
     var dehaze: Float = 0
@@ -180,10 +230,7 @@ extension DevelopState {
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue
         case highlightRecovery, denoiseLuma, denoiseColor
         case gradeShadow, gradeMidtone, gradeHighlight
-        case maskKind, maskInvert, maskCentreX, maskCentreY, maskAngle
-        case maskLength, maskRadiusX, maskRadiusY, maskFeather, maskRoundness
-        case localExposureEv
-        case brushRadius, brushFlow, brushHardness, brushStroke
+        case maskComponents, localExposureEv
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case curve, hueShift, satShift, lumShift
 
@@ -195,6 +242,27 @@ extension DevelopState {
         /// The raw value carries the old spelling; the case is named apart from
         /// it so a future rename sweep cannot collide the two into one key.
         case legacyDenoiseColour = "denoiseColour"
+
+        /// The single mask a sidecar carried before mask groups (M4 step 2).
+        /// Read, never written. Every photo finished between the gradient masks
+        /// landing and groups landing has these keys and no `maskComponents`, so
+        /// dropping them would open those photos with the local edit silently
+        /// gone — and the exposure still applied, over the whole frame, because
+        /// `localExposureEv` survived under its own name.
+        case legacyMaskKind = "maskKind"
+        case legacyMaskInvert = "maskInvert"
+        case legacyMaskCentreX = "maskCentreX"
+        case legacyMaskCentreY = "maskCentreY"
+        case legacyMaskAngle = "maskAngle"
+        case legacyMaskLength = "maskLength"
+        case legacyMaskRadiusX = "maskRadiusX"
+        case legacyMaskRadiusY = "maskRadiusY"
+        case legacyMaskFeather = "maskFeather"
+        case legacyMaskRoundness = "maskRoundness"
+        case legacyBrushRadius = "brushRadius"
+        case legacyBrushFlow = "brushFlow"
+        case legacyBrushHardness = "brushHardness"
+        case legacyBrushStroke = "brushStroke"
     }
 
     init(from decoder: Decoder) throws {
@@ -231,23 +299,37 @@ extension DevelopState {
         denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
         denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
         lutStrength = float(.lutStrength) ?? lutStrength
-        maskKind = (try? c.decodeIfPresent(Int32.self, forKey: .maskKind))
-            .flatMap { $0 } ?? maskKind
-        maskInvert = (try? c.decodeIfPresent(Bool.self, forKey: .maskInvert))
-            .flatMap { $0 } ?? maskInvert
-        maskCentreX = float(.maskCentreX) ?? maskCentreX
-        maskCentreY = float(.maskCentreY) ?? maskCentreY
-        maskAngle = float(.maskAngle) ?? maskAngle
-        maskLength = float(.maskLength) ?? maskLength
-        maskRadiusX = float(.maskRadiusX) ?? maskRadiusX
-        maskRadiusY = float(.maskRadiusY) ?? maskRadiusY
-        maskFeather = float(.maskFeather) ?? maskFeather
-        maskRoundness = float(.maskRoundness) ?? maskRoundness
         localExposureEv = float(.localExposureEv) ?? localExposureEv
-        brushRadius   = float(.brushRadius) ?? brushRadius
-        brushFlow     = float(.brushFlow) ?? brushFlow
-        brushHardness = float(.brushHardness) ?? brushHardness
-        brushStroke   = (try? c.decode([Float].self, forKey: .brushStroke)) ?? brushStroke
+
+        // The group, or the single mask a pre-group sidecar carried lifted into
+        // one. A component list that is present wins outright: a file holding
+        // both was written by a newer build, and its legacy keys are whatever
+        // that build's first row happened to be.
+        if let list = (try? c.decodeIfPresent([MaskComponentState].self,
+                                              forKey: .maskComponents)).flatMap({ $0 }) {
+            maskComponents = list.filter { $0.kind != 0 }
+        } else if let kind = (try? c.decodeIfPresent(Int32.self, forKey: .legacyMaskKind))
+                    .flatMap({ $0 }), kind != 0 {
+            var m = MaskComponentState()
+            m.kind = kind
+            m.compose = 0          // the only op a single mask can have meant
+            m.invert = (try? c.decodeIfPresent(Bool.self, forKey: .legacyMaskInvert))
+                .flatMap { $0 } ?? m.invert
+            m.centreX = float(.legacyMaskCentreX) ?? m.centreX
+            m.centreY = float(.legacyMaskCentreY) ?? m.centreY
+            m.angle = float(.legacyMaskAngle) ?? m.angle
+            m.length = float(.legacyMaskLength) ?? m.length
+            m.radiusX = float(.legacyMaskRadiusX) ?? m.radiusX
+            m.radiusY = float(.legacyMaskRadiusY) ?? m.radiusY
+            m.feather = float(.legacyMaskFeather) ?? m.feather
+            m.roundness = float(.legacyMaskRoundness) ?? m.roundness
+            m.brushRadius = float(.legacyBrushRadius) ?? m.brushRadius
+            m.brushFlow = float(.legacyBrushFlow) ?? m.brushFlow
+            m.brushHardness = float(.legacyBrushHardness) ?? m.brushHardness
+            m.brushStroke = (try? c.decode([Float].self, forKey: .legacyBrushStroke)) ?? []
+            maskComponents = [m]
+        }
+
         fusion = float(.fusion) ?? fusion
         dehaze = float(.dehaze) ?? dehaze
         clarity = float(.clarity) ?? clarity
