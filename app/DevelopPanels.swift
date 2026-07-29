@@ -20,6 +20,20 @@ extension Editor {
                 slider("Tint", $engine.tint, -1...1, "", 2, resetsTo: engine.defaults.tint)
             }
             section("Light") {
+                // Auto-enhance writes Exposure, Whites and Blacks — three of
+                // the sliders directly below it — plus Lift and Clarity. It
+                // belongs with the controls it moves, not in a section of its
+                // own eleven rows further down.
+                HStack {
+                    Button("Auto") { engine.autoEnhance() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                    Text("sets Exposure, Whites, Blacks, Lift and Clarity")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                    Spacer()
+                }
+
                 slider("Exposure", $engine.exposureEv, -5...5, " EV", 2, resetsTo: engine.defaults.exposureEv)
                 slider("Contrast", $engine.contrast, 0.5...2, "", 2, resetsTo: engine.defaults.contrast)
                 slider("Highlights", $engine.highlights, -1...1, "", 2, resetsTo: engine.defaults.highlights)
@@ -244,17 +258,6 @@ extension Editor {
             Text("A .cube look, applied last — after the tone curve, to a "
                + "finished picture. Tetrahedral interpolation, so a LUT with a "
                + "hard edge in it keeps the edge.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        section("Auto") {
-            Button("Auto enhance") { engine.autoEnhance() }
-                .buttonStyle(.plain)
-                .font(.system(size: 11))
-            Text("Measures the picture and sets Exposure, Blacks, Whites, Lift "
-               + "and Clarity. They are ordinary edits afterwards — move any of "
-               + "them, or undo the lot.")
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
