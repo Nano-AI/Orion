@@ -79,3 +79,10 @@ orion-out.png
 
 # Sample RAW files — large, and the developer's own photos
 Samples/
+
+# --- The landing site's screenshots -----------------------------------------
+# The orion-*.jpg rule above exists for full-resolution bench renders at the
+# repo root. It also matched web/img/orion-mask-*.jpg, so `git add web` skipped
+# them without a word and the site deployed with every image 404ing — a push
+# that reported success and a page that was visibly broken.
+!web/img/orion-*.jpg
