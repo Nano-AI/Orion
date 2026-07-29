@@ -463,8 +463,14 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     nMask_ = pipeline_.add({"mask", "maskGradient", {},
                             PixelFormat::R16Float, {}});
 
+    // The brush stamps onto whatever the gradient produced. See nBrush_'s
+    // comment for why one node covers all four mask kinds; the short version is
+    // that a pass with no dabs is the identity, which the suite pins.
+    nBrush_ = pipeline_.add({"mask:brush", "maskBrush", {nMask_},
+                             PixelFormat::R16Float, {}});
+
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
-                                 {nFusion_, nGuideV2_, nGuidePrep_, nMask_},
+                                 {nFusion_, nGuideV2_, nGuidePrep_, nBrush_},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
@@ -586,6 +592,12 @@ float DevelopPipeline::whiteClipFor(const float multipliers[3]) const noexcept {
     // A frame whose black point sits at the white point is not a frame; clipping
     // to zero would render it black rather than admit that.
     return std::max(clip, 1e-3f);
+}
+
+void DevelopPipeline::setBrushStroke(const float* xy, int count) {
+    brushDabs_.clear();
+    if (xy == nullptr || count <= 0) return;
+    brushDabs_.assign(xy, xy + std::size_t(count) * 2);
 }
 
 void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
@@ -1241,6 +1253,56 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         m.feather   = adj.maskFeather;
         m.roundness = adj.maskRoundness;
         pipeline_.setParams(nMask_, &m, sizeof m);
+    }
+
+    // The brush. Its own staleness, because a stroke changes while nothing else
+    // does — and the reverse: a gradient slider must not re-stamp the stroke.
+    const bool brushMoved =
+        first ||
+        adj.maskKind != lastAdj_.maskKind ||
+        adj.brushRevision != lastAdj_.brushRevision ||
+        adj.brushRadius != lastAdj_.brushRadius ||
+        adj.brushFlow != lastAdj_.brushFlow ||
+        adj.brushHardness != lastAdj_.brushHardness ||
+        maskMoved;
+
+    if (brushMoved) {
+        params::MaskBrush b{};
+        b.size[0] = width_; b.size[1] = height_;
+        b.radius   = adj.brushRadius;
+        b.flow     = adj.brushFlow;
+        b.hardness = adj.brushHardness;
+
+        if (adj.maskKind == 3) {
+            // Start from empty and lay the stroke down. The gradient node's
+            // output is ignored, which is what makes this a brush rather than a
+            // brush over a gradient — mask groups (research/masking.md §6) are
+            // where combining the two belongs, not here.
+            b.accumulate = 0;
+            const int have = brushDabCount();
+            b.count = std::min(have, params::kMaskDabsPerPass);
+            for (int i = 0; i < b.count; ++i) {
+                b.dabs[i][0] = brushDabs_[std::size_t(i) * 2 + 0];
+                b.dabs[i][1] = brushDabs_[std::size_t(i) * 2 + 1];
+            }
+            // ⚠️ A stroke longer than one pass is silently truncated here. The
+            // kernel is built to chain — it accumulates into the alpha it is
+            // handed — but the graph holds one brush node, so the extra passes
+            // have nowhere to run. Fixing it is more nodes, not a bigger
+            // buffer. Said out loud rather than left to be discovered as "the
+            // end of my stroke did nothing".
+            if (have > b.count) {
+                std::fprintf(stderr,
+                             "orion: brush stroke truncated, %d of %d dabs "
+                             "(one pass holds %d)\n",
+                             b.count, have, params::kMaskDabsPerPass);
+            }
+        } else {
+            // Every other kind: pass the gradient through untouched.
+            b.accumulate = 1;
+            b.count = 0;
+        }
+        pipeline_.setParams(nBrush_, &b, sizeof b);
     }
 
     const bool linearMoved =

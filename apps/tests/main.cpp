@@ -4663,10 +4663,25 @@ void testMaskBrushGpu() {
         src->upload(second.data(), std::size_t(kW) * sizeof(__fp16));
         b.count = 0;
         const auto empty = run(b);
-        report(std::abs(at(empty, 64, 64) - at(second, 64, 64)) < 1e-4,
-               "an empty pass leaves the stroke exactly as it was",
-               std::to_string(at(empty, 64, 64)) + " vs "
-                   + std::to_string(at(second, 64, 64)));
+
+        // Every pixel, not one. `DevelopPipeline` chains this node after the
+        // gradient on *every* render and relies on a dabless pass being the
+        // identity — so a gradient mask now reaches develop:linear through a
+        // brush. If that is not bit-exact, every existing mask is quietly
+        // wrong, and checking the centre pixel alone would not notice: the
+        // centre is where a brush writes most confidently and an edge is where
+        // an off-by-one shows up.
+        std::size_t differing = 0;
+        double worst = 0;
+        for (std::size_t i = 0; i < empty.size(); ++i) {
+            const double d = std::abs(double(empty[i]) - double(second[i]));
+            if (d != 0.0) ++differing;
+            worst = std::max(worst, d);
+        }
+        report(differing == 0,
+               "an empty pass leaves the stroke bit-identical, every pixel",
+               std::to_string(differing) + " of " + std::to_string(empty.size())
+                   + " differ, worst " + std::to_string(worst));
     }
 
     // ── Flow zero is exactly nothing ──────────────────────────────────────

@@ -123,7 +123,7 @@ struct Adjustments {
     /// manipulates — a linear gradient's two endpoints are derived from them
     /// and its length. The shader still takes the two points, because that is
     /// the form the maths wants; this is the form the interface wants.
-    int   maskKind = 0;            // 0 none, 1 linear, 2 radial
+    int   maskKind = 0;            // 0 none, 1 linear, 2 radial, 3 brush
     bool  maskInvert = false;
     float maskCentre[2]{0.5f, 0.5f};
     float maskAngle = 0.0f;             // radians, both kinds
@@ -131,6 +131,20 @@ struct Adjustments {
     float maskRadius[2]{0.3f, 0.3f};    // radial semi-axes
     float maskFeather = 0.5f;
     float maskRoundness = 2.0f;
+
+    /// The brush, when `maskKind` is 3. One radius for the whole stroke, which
+    /// is the shape research/masking.md §1 settles on — a stroke is then a list
+    /// of centres and nothing else.
+    ///
+    /// The centres themselves are *not* here. They are a variable-length list
+    /// and `Adjustments` is copied whole on every slider tick to decide what
+    /// changed; carrying a thousand points through that comparison would make
+    /// every tick walk the stroke. `setBrushStroke` owns them instead, and this
+    /// struct carries only the revision, so the comparison stays a single int.
+    float brushRadius = 0.08f;     // normalized
+    float brushFlow = 0.5f;        // 0..1 per dab
+    float brushHardness = 0.5f;    // 0 soft, 1 hard-edged
+    unsigned brushRevision = 0;    // bumped whenever the stroke changes
 
     /// What the mask does. Scales the *parameter*, so alpha 0.5 with +1 EV is
     /// exactly 2^0.5 — not a blend between two rendered frames.
@@ -180,6 +194,21 @@ public:
     /// Pushes the current adjustments into the graph, dirtying only what they
     /// affect. Cheap — call it freely on every slider tick.
     void apply(const Adjustments&);
+
+    /// Replaces the brush stroke: dab centres in normalized coordinates of the
+    /// displayed picture, the same space the gradient masks are placed in.
+    ///
+    /// Kept out of `Adjustments` because it is variable-length and that struct
+    /// is compared field by field on every tick. Bump `brushRadius` or a
+    /// centre and `Adjustments::brushRevision` is what tells `apply` the mask
+    /// is stale — so a caller that changes the stroke must change the revision
+    /// too, or the picture will not follow the hand.
+    void setBrushStroke(const float* xy, int count);
+
+    /// How many dabs the current stroke holds.
+    [[nodiscard]] int brushDabCount() const noexcept {
+        return int(brushDabs_.size() / 2);
+    }
 
     /// Renders every dirty node. Returns GPU-side milliseconds.
     double render();
@@ -301,6 +330,21 @@ private:
     int nFuseOut_[kFuseLevels]{};
     int nFusion_ = -1;
     int nMask_ = -1;
+
+    /// The brush, chained after the gradient rather than replacing it.
+    ///
+    /// One node serves all four mask kinds, which falls out of a property the
+    /// suite already pins — an empty pass leaves the alpha it was given exactly
+    /// as it was:
+    ///
+    ///   kind 0  gradient writes 1.0   · brush passes it through  -> 1.0
+    ///   kind 1/2 gradient is the mask · brush passes it through  -> gradient
+    ///   kind 3  gradient ignored      · brush starts from empty  -> the stroke
+    ///
+    /// The alternative was swapping the mask node's kernel per render, which
+    /// the graph has no way to express, or writing into a node's output from
+    /// outside the graph, which is worse than an extra pass.
+    int nBrush_ = -1;
     std::uint32_t fuseW_[kFuseLevels]{}, fuseH_[kFuseLevels]{};
 
     /// The simulated-image plan. Derived from the frame's median, so it is a
@@ -345,6 +389,10 @@ private:
     std::uint32_t frameW_ = 0, frameH_ = 0;
     int auxCurveLut_ = -1;
     Adjustments  lastAdj_{};
+
+    /// The brush stroke, interleaved x, y. Lives here rather than in
+    /// `Adjustments` because it is variable-length; see `setBrushStroke`.
+    std::vector<float> brushDabs_;
     bool         primed_ = false;
     WhiteBalance         asShot_{};
     std::array<float, 3> asShotMul_{1.0f, 1.0f, 1.0f};
