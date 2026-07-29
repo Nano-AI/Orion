@@ -47,6 +47,33 @@ frames — an automatic control handing the user a setting with nowhere left to
 go. At 1.0 the median still lands on the anchor and the endpoints stay
 somewhere a person can argue with.
 
+### M3's features, composed — the check that was missing
+
+Every M3 feature was verified alone; nothing verified them **together**, and
+they are exactly the kind that interact. Dehaze divides by a transmission,
+exposure fusion divides one proxy luminance by another, clarity raises a
+normalised amplitude to a fractional power, and the creative LUT indexes a grid
+with whatever comes out of all that. A NaN from any one of them is invisible on
+screen — it renders as one black or white pixel — and propagates downstream.
+
+The bench now renders all four at full strength over a tone move, and counts
+pixels pinned hard at either end, against the same frame with the four off. A
+photograph legitimately contains black and white pixels; the question is whether
+these features *added* them.
+
+| Frame | four on | four off | nodes / time |
+|---|---|---|---|
+| daylight | 1.01% | 0.00% | 83 / 141 ms |
+| forecourt | 2.59% | 0.13% | 83 / 140 ms |
+| night | **0.57%** | 0.63% | 83 / 142 ms |
+
+All three compose cleanly. The night frame is the pleasing one: it ends with
+*fewer* pinned pixels with the features on than off, which is exposure fusion
+lifting shadows back out of pure black — the thing it exists to do, showing up
+in a number rather than in an opinion.
+
+140 ms is the worst case in the product and it is a single render, not a drag.
+
 ## M3 — what it cost, in one table
 
 | Feature | Nodes | Drag | Resolution |

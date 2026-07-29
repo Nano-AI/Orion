@@ -696,6 +696,81 @@ int main(int argc, char** argv) {
         const bool curveWorks = std::abs(curvedLuma - flatLuma) > 1e-4;
         std::printf("  curve changed the image: %s\n", curveWorks ? "yes" : "NO — BUG");
 
+        // ── Everything at once ────────────────────────────────────────────
+        //
+        // Each M3 feature is verified alone. Nothing verified them *composed*,
+        // and they are exactly the kind that interact: dehaze divides by a
+        // transmission, exposure fusion divides one proxy luminance by another,
+        // clarity raises a normalised amplitude to a fractional power, and the
+        // creative LUT indexes a grid with whatever comes out. A NaN from any
+        // one of them is invisible on screen — it renders as a black or white
+        // pixel — and propagates through everything downstream of it.
+        {
+            std::printf("\nAll M3 features together\n");
+
+            orion::pipe::Adjustments all;
+            all.wb = develop.asShotWhiteBalance();
+            all.dehaze  = 1.0f;
+            all.clarity = 1.0f;
+            all.fusion  = 1.0f;
+            all.lutStrength = 1.0f;      // the look loaded for the probes above
+            all.exposureEv = 0.75f;      // and a tone move underneath them
+            all.blacks = -0.3f;
+            all.whites = 0.4f;
+
+            develop.apply(all);
+            const double ms = develop.render();
+
+            int nodes = 0;
+            for (const auto& n : develop.graph().lastRun()) if (n.executed) ++nodes;
+
+            const std::uint32_t w = develop.outputWidth();
+            const std::uint32_t h = develop.outputHeight();
+            const auto pixels = output16(develop, w, h);
+
+            // The output is 16-bit unsigned, so a NaN cannot survive as a NaN —
+            // it has already been converted, and what it leaves behind is a
+            // pixel pinned hard at one end. Count those instead, and compare
+            // against the same count with the four features off: a photograph
+            // legitimately contains black and white pixels, and the question is
+            // whether these features *added* them.
+            const auto extremes = [&](const std::vector<std::uint16_t>& p) {
+                std::size_t n = 0;
+                for (std::size_t i = 0; i < std::size_t(w) * h; ++i) {
+                    const bool low  = p[i * 4] == 0 && p[i * 4 + 1] == 0 && p[i * 4 + 2] == 0;
+                    const bool high = p[i * 4] == 65535 && p[i * 4 + 1] == 65535 &&
+                                      p[i * 4 + 2] == 65535;
+                    if (low || high) ++n;
+                }
+                return double(n) / double(std::size_t(w) * h);
+            };
+            const double withAll = extremes(pixels);
+
+            orion::pipe::Adjustments toneOnly = all;
+            toneOnly.dehaze = toneOnly.clarity = toneOnly.fusion = 0.0f;
+            toneOnly.lutStrength = 0.0f;
+            develop.apply(toneOnly);
+            develop.render();
+            const double withoutAll = extremes(output16(develop, w, h));
+
+            std::printf("  %d nodes, %.2f ms\n", nodes, ms);
+            std::printf("  pinned pixels: %.4f%% with the four on, %.4f%% with them off\n",
+                        withAll * 100.0, withoutAll * 100.0);
+
+            // Composed, they may legitimately clip more than the tone controls
+            // alone — dehaze darkens and fusion lifts. What they may not do is
+            // produce a frame that is largely pinned, which is what arithmetic
+            // gone wrong looks like once it has been converted to integers.
+            const bool sane = withAll < 0.05;
+            std::printf("  composes cleanly: %s\n", sane ? "yes" : "NO");
+            if (!sane) controlsPass = false;
+
+            orion::pipe::Adjustments restore;
+            restore.wb = develop.asShotWhiteBalance();
+            develop.apply(restore);
+            develop.render();
+        }
+
         // ── Auto-enhance, checked by outcome ──────────────────────────────
         //
         // Everything else about auto-enhance is tested against a stand-in for
