@@ -215,6 +215,26 @@ guide lines and a handle, ticking to −1.60 EV.
   the others — it gets a CSS lift, stated in a comment) and the hero's
   teal text-glow read as a rendering artifact at full strength (halved).
 
+**Round two, same day — show, don't tell.** The developer's review: too much
+text, not enough motion. Body copy cut again (most sections are a headline
+and one line now), and the page gained four things, all in the same
+finished-page-rewound contract:
+
+- **The proxy wipe.** The speed section no longer *says* other editors show
+  you a proxy — the frame *is* a blurred proxy until a sweep line drags full
+  resolution across it, labeled FULL RESOLUTION / PROXY at the line.
+- **The statement lights up word by word** as you scroll through it. The
+  words are wrapped in spans by the script, so without it the line is
+  simply lit.
+- **Every scrub is smoothed** — outputs chase their scroll-derived targets
+  at 0.16/frame, so a stepping mouse wheel reads as one continuous motion;
+  the rAF loop runs only while something is settling.
+- **A live frame counter** in film-rebate amber sits fixed bottom-right
+  (01 · Speed … End of roll), replacing the static per-section eyebrows.
+  Plus: parallax inside the two flowing photo sections, the app screenshot
+  lands like a print settling flat, the lens count ticks up on arrival,
+  static grain over the two darkest scenes.
+
 ## Session 2026-07-29m — brush dabs, the last third of step 1
 
 One kernel, `mask_brush.slang`. Normalized coordinates in, R16F alpha out, no

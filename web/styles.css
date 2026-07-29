@@ -4,17 +4,18 @@
  *  is used in a dark room and the page is the same room. The chrome is
  *  near-black plus one teal, exactly as the editor's interface is, and teal is
  *  reserved for live numbers — never a button, never a wash. One more ink is
- *  allowed: the amber of film-rebate edge markings, for the tiny frame
- *  counters that number the sections, and nothing else. Every other color on
- *  this page comes out of the photographs, which is the whole point: it is a
- *  photo editor, so the photographs do the talking.
+ *  allowed: the amber of film-rebate edge markings, for the frame counter in
+ *  the corner, and nothing else. Every other color on this page comes out of
+ *  the photographs, which is the whole point: it is a photo editor, so the
+ *  photographs do the talking.
  *
- *  Motion is scroll-driven and the visitor operates nothing. Two scenes are
- *  pinned and scrubbed — the hero develops the raw as you scroll, and a
- *  gradient mask sweeps a sky — via html.scrub, which JavaScript adds only
- *  when motion is allowed. Without it (no JS, reduced motion), both scenes
- *  are ordinary full-height sections showing their finished state: the CSS
- *  default is the developed photograph, and the script is what rewinds it.
+ *  Motion is scroll-driven and the visitor operates nothing. Four scenes are
+ *  scrubbed — the hero develops the raw, a statement lights up word by word,
+ *  a proxy wipes to full resolution, a gradient mask sweeps a sky — via
+ *  html.scrub, which JavaScript adds only when motion is allowed. Without it
+ *  (no JS, reduced motion) every scene is an ordinary section showing its
+ *  finished state: the CSS default is the developed photograph, and the
+ *  script is what rewinds it.
  *
  *  The display face is Bricolage Grotesque, self-hosted in this repository —
  *  no font service, no third-party request. Same reason the app has no
@@ -36,7 +37,7 @@
   --body:   #c9d2d5;   /* running text, a step down from headings */
   --slate:  #8b969b;   /* muted, cool, biased toward the accent */
   --teal:   #4DB6C4;   /* live numbers only */
-  --rebate: #F0C674;   /* film-edge amber — frame counters only */
+  --rebate: #F0C674;   /* film-edge amber — the frame counter only */
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
   --disp: "Bricolage Grotesque", var(--sans);
@@ -93,17 +94,6 @@ h2.disp { font-size: clamp(2.3rem, 6.4vw, 5.4rem); }
   color: var(--slate);
 }
 
-/* Frame counters — the amber edge-markings on a strip of negatives. The
- * numbers are real: the sections run in the order of the roll. */
-.mark {
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--rebate);
-  opacity: 0.9;
-}
-
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* The only hue other than teal in the chrome, and it is light rather than
@@ -114,12 +104,19 @@ h2.disp { font-size: clamp(2.3rem, 6.4vw, 5.4rem); }
   text-shadow: 0 0 34px rgba(77,182,196,0.38), 0 0 110px rgba(77,182,196,0.14);
 }
 
-/* ---------- Reveals ----------
- * Two kinds. Blocks rise and fade (.rv). Headlines reveal line by line
- * through a clipped mask (.lines .l) — motion the section is announced by,
- * so it gets the sharper curve. */
+/* Film grain over the two darkest scenes — a print, not a screenshot.
+ * Static and very quiet; it exists to be felt, not seen. */
+.grain {
+  position: absolute; inset: 0; z-index: 0;
+  pointer-events: none;
+  opacity: .05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 240px 240px;
+}
 
-/* Hiding is gated on html.js — the class the script adds as its first act —
+/* ---------- Reveals ----------
+ * Hiding is gated on html.js — the class the script adds as its first act —
  * so a browser with JavaScript off never hides anything. The failure mode of
  * a reveal must be "no animation", never "no page". */
 html.js .rv {
@@ -163,10 +160,15 @@ html.scrub .dev { height: 260svh; }
   position: absolute; inset: 0; z-index: -2;
   width: 100%; height: 100%;
   object-fit: cover; object-position: 58% 50%;
+  animation: drift 44s ease-in-out infinite alternate;
+}
+@keyframes drift {
+  from { transform: scale(1.05) translate3d(-0.8%, 0, 0); }
+  to   { transform: scale(1.12) translate3d(0.8%, -1%, 0); }
 }
 /* The script owns the filter while scrubbing; will-change only then, so the
  * static page never pays for a compositing layer it isn't using. */
-html.scrub .dev__img { will-change: filter; }
+html.scrub .dev__img { will-change: filter, transform; }
 
 /* Grade the photograph into the page rather than dropping a flat scrim over
    it: opaque where the type sits, clear where the cars are. */
@@ -177,7 +179,7 @@ html.scrub .dev__img { will-change: filter; }
     radial-gradient(130% 85% at 15% 100%, rgba(77,182,196,.13), transparent 62%);
 }
 
-.dev__body { max-width: 68rem; margin-bottom: auto; margin-top: auto; }
+.dev__body { max-width: 68rem; margin-bottom: auto; margin-top: auto; position: relative; z-index: 1; }
 .dev__body h1 { margin-top: .5em; }
 
 .lede {
@@ -205,6 +207,7 @@ html.scrub .dev__img { will-change: filter; }
   transform: translateY(-50%);
   background: rgba(240,243,244,.16);
   border-radius: 1px;
+  z-index: 1;
 }
 .dev__fill {
   position: absolute; left: 0; top: 0; width: 100%; height: 0%;
@@ -228,6 +231,7 @@ html:not(.scrub) .dev__rail { display: none; }
   border-top: 1px solid rgba(36,40,43,.8);
   font-size: .74rem; letter-spacing: .08em;
   color: var(--slate);
+  position: relative; z-index: 1;
 }
 .dev__hud b { color: var(--teal); font-weight: 600; }
 .hud__cue { margin-left: auto; margin-right: auto; letter-spacing: .3em; text-transform: uppercase; font-size: .66rem; transition: opacity .5s ease; }
@@ -236,50 +240,78 @@ html:not(.scrub) .dev__rail { display: none; }
 .hud__ms { margin-left: auto; }
 html:not(.scrub) .hud__cue { display: none; }
 
-/* ---------- Statement ---------- */
+/* ---------- Statement — lit word by word ----------
+ * The script wraps the words; until each is reached it sits in the dark.
+ * Without the script there are no .w spans and the line is simply lit. */
 
-.say { padding: clamp(6rem, 18vh, 13rem) var(--gut); }
-.say p {
-  max-width: 52rem;
-  font-size: clamp(1.7rem, 4.6vw, 3.6rem);
-  font-weight: 600; line-height: 1.06; letter-spacing: -.02em;
-  color: var(--slate);
+.sayscene { position: relative; }
+html.scrub .sayscene { height: 180svh; }
+.say__pin {
+  display: flex; align-items: center;
+  min-height: 60svh;
+  padding: clamp(4rem, 10vh, 8rem) var(--gut);
 }
-.say em { color: var(--ivory); font-style: normal; }
+html.scrub .say__pin { position: sticky; top: 0; height: 100svh; min-height: 0; }
+.say {
+  max-width: 56rem;
+  font-size: clamp(1.9rem, 5vw, 4.2rem);
+  font-weight: 700; letter-spacing: -0.02em; line-height: 1.04;
+  color: var(--ivory);
+}
+.say em { font-style: normal; color: #fff; }
+html.scrub .say .w { color: #23282b; transition: color .35s ease; }
+html.scrub .say .w.on { color: var(--ivory); }
+html.scrub .say em .w.on { color: #fff; }
 
-/* ---------- Full-bleed scenes ---------- */
+/* ---------- Speed — the proxy wipe ---------- */
 
-.bleed {
-  position: relative; min-height: 80svh;
+.wipe { position: relative; height: 100svh; }
+html.scrub .wipe { height: 230svh; }
+.wipe__pin {
+  position: sticky; top: 0;
+  height: 100svh;
   display: flex; align-items: flex-end;
   padding: var(--gut);
   overflow: hidden; isolation: isolate;
 }
-.bleed--tall { min-height: 96svh; }
-.bleed__img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
-/* The showroom frame is a stop darker than everything around it, and under
-   the text wash it disappeared entirely. Lift it — the page's job here is
-   the car, not the photographer's exposure. */
-.bleed__img--lift { filter: brightness(1.45) saturate(1.08); }
-.bleed__wash {
-  position: absolute; inset: 0; z-index: -1;
-  background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.9) 26%, rgba(8,9,11,.2) 70%);
+/* The showroom frame is a stop darker than everything around it; lift it —
+   the page's job here is the car, not the photographer's exposure. */
+.wipe__img, .wipe__proxy img {
+  position: absolute; inset: 0; z-index: -3;
+  width: 100%; height: 100%; object-fit: cover;
+  filter: brightness(1.45) saturate(1.08);
 }
-/* Right-aligned copy needs the dark side on the right, or the text sits on the
-   bright part of the picture and stops being readable. */
-.bleed__wash--right {
-  background:
-    linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.85) 22%, rgba(8,9,11,.16) 72%),
-    linear-gradient(to left, rgba(8,9,11,.92) 8%, transparent 62%);
-}
-.bleed__copy { max-width: 44rem; }
-.bleed__copy h2 { margin-top: .55em; }
-.bleed__copy p:not(.mark) { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
-.bleed__copy--right { margin-left: auto; text-align: right; }
-.bleed__copy--right p { margin-left: auto; }
+/* What everyone else shows you while you drag. Clipped away as the sweep
+   passes; clipped away entirely when there is no script. */
+.wipe__proxy { position: absolute; inset: 0; z-index: -2; clip-path: inset(0 0 0 100%); }
+.wipe__proxy img { position: absolute; inset: 0; z-index: auto; filter: brightness(1.1) saturate(.75) blur(14px); transform: scale(1.04); }
+html.scrub .wipe__proxy { will-change: clip-path; clip-path: inset(0 0 0 0); }
 
-.mnote { font-family: var(--mono); font-size: .76rem; color: var(--slate); letter-spacing: .06em; }
-.mnote b { color: var(--teal); font-weight: 600; font-variant-numeric: tabular-nums; }
+.wipe__edge {
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none; opacity: 0;
+}
+html.scrub .wipe__edge { will-change: transform, opacity; opacity: 1; }
+.wipe__edge::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 1px;
+  background: rgba(240,243,244,.85);
+  box-shadow: 0 0 22px rgba(240,243,244,.5);
+}
+.wipe__lab {
+  position: absolute; top: 16%;
+  font-size: .66rem; letter-spacing: .28em; color: var(--ivory);
+  text-shadow: 0 1px 8px rgba(8,9,11,.9);
+  white-space: nowrap;
+}
+.wipe__lab--l { left: 0; transform: translateX(calc(-100% - 14px)); }
+.wipe__lab--r { left: 14px; opacity: .7; }
+
+.wipe__wash {
+  position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.88) 22%, rgba(8,9,11,.12) 62%);
+}
+.wipe__copy { position: relative; z-index: 1; max-width: 44rem; }
+.wipe__copy .mnote { margin-top: 1.2rem; }
 
 /* ---------- The mask sweep ---------- */
 
@@ -328,7 +360,7 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   width: 12px; height: 12px; border-radius: 50%;
   background: var(--ivory);
   transform: translate(-50%, -50%);
-  box-shadow: 0 0 0 3px rgba(4,6,9,.45);
+  box-shadow: 0 0 0 3px rgba(4,6,9,.45), 0 0 14px rgba(240,243,244,.35);
 }
 
 .mask__wash {
@@ -336,18 +368,25 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.86) 20%, transparent 58%);
 }
 .mask__copy { max-width: 44rem; }
-.mask__copy h2 { margin-top: .55em; }
-.mask__copy p:not(.mark) { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
+.mask__copy .mnote { margin-top: 1.2rem; }
 
-/* ---------- Proof ---------- */
+/* ---------- Proof ----------
+ * The screenshot lands like a print laid on a table: tilted away, settling
+ * flat as it arrives. The script drives it; at rest it simply lies flat. */
 
-.proof { padding: clamp(4rem, 11vh, 8rem) var(--gut); display: flex; justify-content: center; }
+.proof {
+  padding: clamp(4rem, 11vh, 8rem) var(--gut);
+  display: flex; justify-content: center;
+  perspective: 1400px;
+}
 .shot {
   margin: 0; max-width: 74rem;
   border-radius: 14px; overflow: hidden;
   border: 1px solid var(--rail);
   box-shadow: 0 40px 120px rgba(0,0,0,.65), 0 0 90px rgba(77,182,196,.08);
+  transform-origin: 50% 100%;
 }
+html.scrub .shot { will-change: transform; }
 .shot img { width: 100%; }
 .shot figcaption {
   padding: .85rem 1.1rem;
@@ -356,10 +395,40 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   font-size: .74rem; letter-spacing: .06em; color: var(--slate);
 }
 
+/* ---------- Full-bleed scenes ---------- */
+
+.bleed {
+  position: relative; min-height: 84svh;
+  display: flex; align-items: flex-end;
+  padding: var(--gut);
+  overflow: hidden; isolation: isolate;
+}
+.bleed__img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
+/* Parallax images get headroom to move inside their section. */
+.plx { top: -8%; height: 116%; }
+html.scrub .plx { will-change: transform; }
+.bleed__wash {
+  position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.9) 26%, rgba(8,9,11,.2) 70%);
+}
+/* Right-aligned copy needs the dark side on the right, or the text sits on the
+   bright part of the picture and stops being readable. */
+.bleed__wash--right {
+  background:
+    linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.85) 22%, rgba(8,9,11,.16) 72%),
+    linear-gradient(to left, rgba(8,9,11,.92) 8%, transparent 62%);
+}
+.bleed__copy { max-width: 44rem; }
+.bleed__copy p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
+.bleed__copy--right { margin-left: auto; text-align: right; }
+.bleed__copy--right p { margin-left: auto; }
+
+.mnote { font-family: var(--mono); font-size: .76rem; color: var(--slate); letter-spacing: .06em; }
+.mnote b { color: var(--teal); font-weight: 600; font-variant-numeric: tabular-nums; }
+
 /* ---------- Ledger ---------- */
 
 .ledger { padding: clamp(4.5rem, 13vh, 10rem) var(--gut); }
-.ledger h2 { margin-top: .55em; }
 .ledger__lede { margin-top: 1.3rem; max-width: var(--measure); color: var(--body); }
 .ledger em { color: var(--ivory); font-style: italic; }
 
@@ -386,8 +455,7 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   padding: clamp(4.5rem, 13vh, 10rem) var(--gut);
   border-top: 1px solid var(--rail);
 }
-.own__text h2 { margin-top: .55em; }
-.own__text p:not(.mark) { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
+.own__text p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
 
 .sidecar {
   border: 1px solid var(--rail); border-radius: 12px;
@@ -416,7 +484,6 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
   gap: clamp(2rem, 5vw, 5rem);
-  margin-top: 2.2rem;
 }
 .reg__h {
   font-size: .74rem; letter-spacing: .18em;
@@ -438,16 +505,17 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
 /* ---------- Close ---------- */
 
 .close {
-  position: relative; min-height: 86svh;
+  position: relative; min-height: 88svh;
   display: flex; align-items: center;
   padding: var(--gut); overflow: hidden; isolation: isolate;
 }
 .close__img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
+.close__img.plx { top: -8%; height: 116%; }
 .close__wash {
   position: absolute; inset: 0; z-index: -1;
   background: linear-gradient(to right, rgba(8,9,11,.95) 18%, rgba(8,9,11,.5) 78%);
 }
-.close__body { max-width: 44rem; }
+.close__body { position: relative; z-index: 1; max-width: 44rem; }
 .close__body p:not(.status) { margin-top: 1.2rem; color: var(--body); max-width: var(--measure); }
 .status { margin-top: 1.4rem; font-size: .78rem; color: var(--slate); }
 
@@ -470,6 +538,24 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   font-size: .8rem; color: var(--slate);
 }
 
+/* ---------- The frame counter ----------
+ * Film-rebate edge markings for wherever you are on the roll. Fed by the
+ * script; does not exist without it. */
+.fr {
+  position: fixed; right: clamp(1rem, 2.5vw, 2.2rem); bottom: 1.4rem;
+  z-index: 50;
+  font-size: .66rem; letter-spacing: .3em; text-transform: uppercase;
+  color: var(--rebate);
+  opacity: 0; pointer-events: none;
+  transition: opacity .45s ease;
+  overflow: hidden;
+}
+.fr.fr--on { opacity: .92; }
+.fr span { display: inline-block; }
+.fr.tick span { animation: frtick .4s cubic-bezier(.16,1,.3,1); }
+@keyframes frtick { from { transform: translateY(120%); } to { transform: none; } }
+html:not(.scrub) .fr { display: none; }
+
 /* ---------- Narrow ---------- */
 
 @media (max-width: 900px) {
@@ -486,14 +572,17 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   .dev__rail { display: none; }
   .hud--wide { display: none; }
   .hud__cue { display: none; }
+  .fr { display: none; }
+  .wipe__lab { top: 12%; }
 }
 
 /* ---------- Reduced motion ----------
  * The scrub never engages (the script checks the same query before adding
- * html.scrub), reveals are instant, and the two ambient loops stop. */
+ * html.scrub), reveals are instant, and the ambient loops stop. */
 @media (prefers-reduced-motion: reduce) {
-  .rv, .lines .l > span { opacity: 1 !important; transform: none !important; transition: none !important; }
+  html.js .rv, html.js .lines .l > span { opacity: 1 !important; transform: none !important; transition: none !important; }
   .cue__tick { animation: none; }
+  .dev__img { animation: none; }
   *, *::before, *::after {
     animation-duration: .001ms !important;
     animation-iteration-count: 1 !important;
