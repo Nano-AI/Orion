@@ -206,6 +206,19 @@ struct LlfRemap {
 };
 static_assert(sizeof(LlfRemap) == 48);
 
+struct LlfRemapH {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    float         gamma0;
+    float         gammaStep;
+    float         sigmaR;
+    float         alpha;
+    float         noiseLo;
+    float         noiseHi;
+    float         _pad[2];
+};
+static_assert(sizeof(LlfRemapH) == 48);
+
 struct LlfCollapse {
     std::uint32_t size[2];
     std::uint32_t coarseSize[2];

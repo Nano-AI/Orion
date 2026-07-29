@@ -306,13 +306,21 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         for (int s = 0; s < kLlfStacks; ++s) {
             const std::string tag = "clarity:remap " + std::to_string(l) +
                                     "." + std::to_string(s);
-            nLlfPack_[l][s] = (l == 1)
-                ? pipeline_.add({tag, "llfRemapDown", {nLlfLuma_},
-                                 PixelFormat::RGBA16Float, {}, {},
-                                 true, llfW_[1], llfH_[1]})
-                : pipeline_.add({tag, "llfDownPacked", {nLlfPack_[l - 1][s]},
-                                 PixelFormat::RGBA16Float, {}, {},
-                                 true, llfW_[l], llfH_[l]});
+            if (l == 1) {
+                // Separable: remap and halve horizontally, then halve
+                // vertically. The remapping is evaluated at five taps rather
+                // than twenty-five, which is what the profile said to fix.
+                nLlfRemapH_[s] = pipeline_.add({tag + " h", "llfRemapH", {nLlfLuma_},
+                                                PixelFormat::RGBA16Float, {}, {},
+                                                true, llfW_[1], height_});
+                nLlfPack_[l][s] = pipeline_.add({tag + " v", "llfDownV", {nLlfRemapH_[s]},
+                                                 PixelFormat::RGBA16Float, {}, {},
+                                                 true, llfW_[1], llfH_[1]});
+            } else {
+                nLlfPack_[l][s] = pipeline_.add({tag, "llfDownPacked", {nLlfPack_[l - 1][s]},
+                                                 PixelFormat::RGBA16Float, {}, {},
+                                                 true, llfW_[l], llfH_[l]});
+            }
         }
     }
 
@@ -1106,6 +1114,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             pipeline_.setEnabled(nLlfGauss_[l], clarifying);
             for (int st = 0; st < kLlfStacks; ++st) {
                 pipeline_.setEnabled(nLlfPack_[l][st], clarifying);
+                if (l == 1) pipeline_.setEnabled(nLlfRemapH_[st], clarifying);
             }
         }
         for (int l = 0; l <= kLlfLevels - 2; ++l) {
@@ -1126,8 +1135,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
             for (int st = 0; st < kLlfStacks; ++st) {
                 if (l == 1) {
-                    params::LlfRemap r{};
-                    r.outSize[0] = llfW_[1]; r.outSize[1] = llfH_[1];
+                    params::LlfRemapH r{};
+                    r.outSize[0] = llfW_[1]; r.outSize[1] = height_;
                     r.inSize[0]  = width_;   r.inSize[1]  = height_;
                     // Each texture carries four consecutive gammas, so the
                     // stack index is where its first one sits on the range.
@@ -1137,7 +1146,10 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                     r.alpha     = alpha;
                     r.noiseLo   = llf::kNoiseLo;
                     r.noiseHi   = llf::kNoiseHi;
-                    pipeline_.setParams(nLlfPack_[l][st], &r, sizeof r);
+                    pipeline_.setParams(nLlfRemapH_[st], &r, sizeof r);
+
+                    params::LlfDown v{{llfW_[1], llfH_[1]}, {llfW_[1], height_}};
+                    pipeline_.setParams(nLlfPack_[l][st], &v, sizeof v);
                 } else {
                     pipeline_.setParams(nLlfPack_[l][st], &d, sizeof d);
                 }

@@ -289,6 +289,8 @@ private:
     void pushFusionPlan();
 
     int nLlfLuma_ = -1;
+    /// The separable halving's intermediate: half width, full height.
+    int nLlfRemapH_[kLlfStacks]{};
     int nLlfGauss_[kLlfLevels]{};                 // [0] aliases nLlfLuma_
     int nLlfPack_[kLlfLevels][kLlfStacks]{};      // levels 1..kLlfLevels-1
     int nLlfOut_[kLlfLevels]{};                   // [kLlfLevels-1] is the residual

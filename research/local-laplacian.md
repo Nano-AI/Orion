@@ -241,19 +241,38 @@ only the stacks a pixel needs. Output was bit-identical and it ran **slower** �
 were worth. Reverted. `Pipeline::setProfiling` was written instead, and it
 pointed at a different kernel entirely.
 
-**Candidates, in the order worth trying:**
+### Done: the separable split, measured
 
-1. **Separable halving in threadgroup memory.** The Burt kernel is separable, so
-   a tile loaded once and blurred in two passes turns 25 taps into 10. It cuts
-   the remapping count by the same factor, which is the dominant term. One
-   kernel, no new textures, and it applies to all three downsampling nodes.
-2. **Remap at full resolution into its own texture**, then halve it. Takes the
-   remapping count from 25 per full-resolution pixel to 1, at the cost of
-   776 MB of intermediates and the traffic to write and read them. Estimated a
-   wash on this machine and worth measuring rather than assuming.
+Candidate 1, without the threadgroup-memory refinement — an intermediate texture
+at half width and full height instead. `llf_remap_h.slang` remaps and halves
+horizontally; `llf_down_v.slang` halves vertically and does no remapping at all,
+because it has already happened.
 
-Neither is a change to the filter, only to how it is evaluated, so both are
-covered by the existing reference tests.
+| | Clarity drag | Remap nodes | Intermediates |
+|---|---|---|---|
+| Fused 5×5 | 70 ms | 12.07 / 8.47 / 7.47 / 7.46 ms | 5491 MiB |
+| **Separable** | **58 ms** | **~2.8 ms each** | 5861 MiB |
+
+The serialized profile fell from 76.1 ms to 60.8. **The filter is unchanged**,
+and the bench proves it rather than assuming it: `clarity +1` measures 0.0163
+moved and +0.0095 detail both before and after, to four decimals. That is what
+the reference tests are for — a change to how something is evaluated should be
+invisible in what it produces.
+
+The trade is **370 MB for 12 ms**, which is worth taking on this machine and is
+the kind of thing to look at first on a smaller one.
+
+**Still open, and now the largest single node:** `clarity:collapse 0` at
+11.96 ms, 20% of the drag. It reads four packed stacks at nine expansion taps
+each, at full resolution. The obvious fix — fetch only the two gammas a pixel
+needs — was tried and made things *slower*, because the branch diverges more
+than the saved fetches are worth. Anything attempted here should start from the
+profile, not from that intuition.
+
+**Not tried:** remapping at full resolution into its own texture, then halving.
+Takes the remapping count to one per pixel at the cost of 776 MB. With the
+separable split already landed, the remaining remap cost is ~11 ms total, so the
+ceiling on this is low.
 
 ## What is checked, and where
 

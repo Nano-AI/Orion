@@ -42,6 +42,8 @@ set(ORION_SHADERS
     llf_luma:llfLuma
     llf_down:llfDown
     llf_remap:llfRemapDown
+    llf_remap_h:llfRemapH
+    llf_down_v:llfDownV
     llf_down4:llfDownPacked
     llf_collapse:llfCollapse
     llf_collapse0:llfCollapse0

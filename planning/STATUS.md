@@ -9,9 +9,33 @@
 clarity, dehaze, creative LUTs, single-image exposure fusion and auto-enhance
 all built, measured and verified on real frames.
 **Next story:** the developer's quality pass on M3, then M4 (local edits —
-`research/masking.md` is the plan of record). Before new features, two things
-are worth doing: **clarity at 70 ms and dehaze at 108 ms are not yet
-interactive**, and the per-node profiler says where both go.
+`research/masking.md` is the plan of record). **Dehaze at 108 ms is the
+remaining slow control**; clarity is down to 58 ms.
+
+## Session 2026-07-29e — clarity, 70 ms to 58
+
+The Burt kernel is separable and the fused 5×5 remap node was not using that.
+Split into a horizontal pass that remaps and halves, and a vertical pass that
+only halves, the remapping is evaluated at five taps per output instead of
+twenty-five.
+
+| | Clarity drag | The four remap nodes | Intermediates |
+|---|---|---|---|
+| Before | 70 ms | 12.07 / 8.47 / 7.47 / 7.46 ms | 5491 MiB |
+| **After** | **58 ms** | **~2.8 ms each** | 5861 MiB |
+
+**The filter is unchanged, and the bench proves it rather than asserting it:**
+`clarity +1` measures 0.0163 moved and +0.0095 detail both before and after, to
+four decimals. A change to how something is evaluated should be invisible in
+what it produces, and that is exactly what the reference tests exist to check.
+
+The trade is **370 MB for 12 ms**. Worth taking here; the first thing to look at
+on a smaller GPU.
+
+`clarity:collapse 0` is now the largest single node at 11.96 ms — 20% of the
+drag, reading four packed stacks at nine taps each at full resolution. Recorded
+in `research/local-laplacian.md` along with the warning that the obvious fix for
+it was already tried and made things slower.
 
 **Suites:** `orion-tests` **356 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames.
