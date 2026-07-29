@@ -104,7 +104,7 @@
 
     var devWrap = q('dev'), devImg = q('devImg'), devZoom = q('devZoom'),
         devFill = q('devFill'), devThumb = q('devThumb'), devCue = q('devCue'),
-        vf = q('vf'),
+        vf = q('vf'), devEye = q('devEye'), vfCenter = q('vfCenter'),
         hExp = q('hExp'), hCon = q('hCon'), hTmp = q('hTmp');
     var sayWrap = q('say'), sayText = q('sayText');
     var wipeWrap = q('speed'), wipeProxy = q('wipeProxy'), wipeEdge = q('wipeEdge');
@@ -175,19 +175,41 @@
     }
 
     function drawDev(p) {
-      // Three beats: the raw develops, the AF point locks, then the visitor
-      // pushes through the finder — the overlay scales past the eye and
-      // fades while the photograph stays.
-      var e = easeOut(clamp01(p / 0.62));
+      // Four beats: the eye approaches the ocular and it opens to the full
+      // frame; the finder wakes; the raw develops and the AF point locks;
+      // then the visitor pushes through — the overlay scales past the eye
+      // and fades while the photograph stays.
+      var a = easeOut(clamp01(p / 0.22));
+      if (devEye) {
+        if (a >= 0.999) {
+          devEye.style.clipPath = '';
+        } else {
+          // The closed ocular is a 3:2 eyepiece whatever the screen is —
+          // sized from the viewport, not fixed percentages, so a phone
+          // gets a window and not a slit.
+          var vw = window.innerWidth, vh = window.innerHeight;
+          var hi = vw < 700 ? 27 : 36;
+          var wpx = vw * (1 - 2 * hi / 100);
+          var hpx = Math.min(vh * 0.36, wpx * 0.66);
+          var vi = (1 - hpx / vh) / 2 * 100;
+          devEye.style.clipPath =
+            'inset(' + (vi * (1 - a)).toFixed(3) + '% ' + (hi * (1 - a)).toFixed(3) +
+            '% round ' + (28 * (1 - a)).toFixed(2) + 'px)';
+        }
+      }
+
+      var e = easeOut(clamp01((p - 0.20) / 0.42));
       devImg.style.filter = e >= 0.999 ? '' :
         'contrast(' + (0.72 + 0.28 * e).toFixed(4) +
         ') saturate(' + (0.28 + 0.72 * e).toFixed(4) +
         ') brightness(' + (1.16 - 0.16 * e).toFixed(4) + ')';
 
-      // The frame settles home as the grade lands.
+      // A slight dolly on the approach, then the frame settles home as the
+      // grade lands.
       if (devZoom) {
-        devZoom.style.transform = e >= 0.999 ? '' :
-          'scale(' + (1.09 - 0.09 * e).toFixed(4) + ')';
+        var zs = 1.09 - 0.09 * e + 0.10 * (1 - a);
+        devZoom.style.transform = (a >= 0.999 && e >= 0.999) ? '' :
+          'scale(' + zs.toFixed(4) + ')';
       }
 
       // The real values from the real edit of this photograph — the same
@@ -198,14 +220,21 @@
 
       if (devFill) devFill.style.height = (e * 100).toFixed(2) + '%';
       if (devThumb) devThumb.style.top = (e * 100).toFixed(2) + '%';
-      if (devCue) devCue.style.opacity = String(1 - clamp01(p * 5));
+      if (devCue) devCue.style.opacity = String(1 - clamp01((p - 0.02) * 4));
 
+      var push = clamp01((p - 0.76) / 0.24);
+      push = push * push;
+      var exitT = push <= 0 ? '' : 'scale(' + (1 + 0.85 * push).toFixed(4) + ')';
       if (vf) {
-        var push = clamp01((p - 0.74) / 0.26);
-        push = push * push;
-        vf.style.transform = push <= 0 ? '' : 'scale(' + (1 + 0.85 * push).toFixed(4) + ')';
-        vf.style.opacity = push <= 0 ? '' : (1 - push).toFixed(4);
+        // Wakes as the ocular reaches the frame, leaves on the push.
+        var fo = Math.min(clamp01((p - 0.15) / 0.09), 1 - push);
+        vf.style.opacity = fo.toFixed(4);
+        vf.style.transform = exitT;
         vf.classList.toggle('lock', e >= 0.999);
+      }
+      if (vfCenter) {
+        vfCenter.style.transform = exitT;
+        vfCenter.style.opacity = push <= 0 ? '' : (1 - push).toFixed(4);
       }
     }
 
@@ -328,7 +357,12 @@
 
     window.addEventListener('scroll', wake, { passive: true });
     window.addEventListener('resize', wake);
-    wake();
+
+    // The first frame runs synchronously so the ocular is closed before
+    // the page ever paints — no flash of the full photograph.
+    lastScroll = performance.now();
+    running = true;
+    frame(lastScroll);
   } catch (e) {
     /* finished state already on screen */
   }
