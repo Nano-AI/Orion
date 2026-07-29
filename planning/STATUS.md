@@ -8,13 +8,42 @@
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** — step 1
 of `research/masking.md` is built: linear and radial gradient primitives, and
 the parameter-space application they feed.
-**Next story:** M4 step 2 — mask groups and compositing (add / subtract /
-intersect), then the guided-filter refinement in step 3, which needs no new
-dependency because the filter is already a node.
+**Next story:** dragging the gradient on the canvas — the geometry is currently
+driven by sliders, which is usable but is not how anyone places a mask. Then M4
+step 2, mask groups and compositing (add / subtract / intersect), and step 3's
+guided-filter refinement, which needs no new dependency because the filter is
+already a node.
 
 **Suites:** `orion-tests` **374 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
 the M0 gate passes at 9.29 ms p95. 114 nodes, 5907 MiB.
+
+## Session 2026-07-29i — masks made reachable
+
+An engine feature nobody can touch is not finished, so step 1 was wired all the
+way out — facade, sidecar, history and panel — before starting step 2.
+
+Both mask kinds now share a **centre and an angle**, which is what a person
+manipulates; a linear gradient's endpoints are derived from those plus a length.
+The shader still takes the two points, because that is the form the maths wants.
+
+**Measured end to end:** a local +2 EV through a linear gradient recomputes
+**4 nodes in about 12 ms** and moves mean luma 0.073–0.108 across the three
+frames. Four, because the mask is a pure function of position and nothing
+upstream of a slider ever redirties it.
+
+⚠️ **Not built: dragging the gradient on the canvas.** Geometry is on sliders —
+usable and testable, but not how anyone wants to place a mask.
+
+### Two mistakes, both about verification rather than code
+
+- The panel section was inserted against an anchor that no longer existed. The
+  replace had **no assertion**, so it silently did nothing, compiled, and passed
+  every test — the feature simply was not in the interface. Anchored edits
+  without a check are the same failure mode as a test that measures the wrong
+  thing.
+- Having been caught by exactly this on the Auto button, the section was
+  **screenshotted rather than trusted**. It renders where intended.
 
 ## Session 2026-07-29h — M4 step 1, gradient masks
 
