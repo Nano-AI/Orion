@@ -95,7 +95,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 
 - ✅ Local Laplacian clarity *(Paris/Hasinoff/Kautz; Aubry et al.)* — Texture, the fine-level variant, is not built
 - Single-image exposure fusion (shadow lift with local contrast preserved)
-- Dehaze (dark channel prior)
+- ✅ Dehaze (dark channel prior) *(He, Sun & Tang; guided-filter refinement)*
 - **Auto-enhance** combining the above with percentile auto-levels
 - Color grading wheels (ASC CDL), split toning, vignette
 - Creative LUTs (.cube, tetrahedral)
