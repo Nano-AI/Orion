@@ -41,6 +41,92 @@ Small, named, and none of them blocking the next story:
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
 
+## Session 2026-07-29p — the landing page, redesigned around one idea
+
+`web/` only; no engine or app code touched. The idea: **scrolling is the
+slider drag.** The hero opens on the flat, undeveloped raw and the visitor's
+scroll develops it — filter scrubbed from washed-out to the graded frame, a
+readout ticking to the *real* values from the real edit (Exposure +2.60 EV,
+Contrast 1.45, 3635 K — the same numbers the Local panel shows in the
+interface screenshot further down, of the same photograph), and a literal
+slider rail filling on the right. A second pinned scene sweeps a linear
+gradient mask down over a sky, drawn as the editor draws it: three dashed
+guide lines and a handle, ticking to −1.60 EV.
+
+- **Display type is Bricolage Grotesque**, variable, self-hosted at 77 KB
+  (decision #60). Headlines reveal line-by-line through clipped masks. Copy
+  cut hard everywhere — headlines carry the page; body text is one or two
+  lines per section. The working-today / not-yet register stays, verbatim
+  claim discipline included.
+- **The static page is the finished page** (decision #59). The script's
+  first act is adding `html.js`; every hidden-until-revealed rule is gated
+  on it. No JavaScript or reduced motion = the developed photo, the placed
+  mask, the final numbers. The old page hid `.rv` blocks unconditionally
+  and only JavaScript could show them — a no-JS visitor got a blank page.
+  Verified with a screenshots pass at `javaScriptEnabled: false`.
+- Frame counters number the sections in film-rebate amber (the app's `star`
+  token) — the one new ink; teal remains live-numbers-only.
+- Screenshotted at 14 desktop scroll positions, 4 mobile, plus no-JS and
+  reduced-motion. Two fixes came out of looking rather than trusting: the
+  Revuelto scene was mud under its wash (the photo is a stop darker than
+  the others — it gets a CSS lift, stated in a comment) and the hero's
+  teal text-glow read as a rendering artifact at full strength (halved).
+
+**Round two, same day — show, don't tell.** The developer's review: too much
+text, not enough motion. Body copy cut again (most sections are a headline
+and one line now), and the page gained four things, all in the same
+finished-page-rewound contract:
+
+- **The proxy wipe.** The speed section no longer *says* other editors show
+  you a proxy — the frame *is* a blurred proxy until a sweep line drags full
+  resolution across it, labeled FULL RESOLUTION / PROXY at the line.
+- **The statement lights up word by word** as you scroll through it. The
+  words are wrapped in spans by the script, so without it the line is
+  simply lit.
+- **Every scrub is smoothed** — outputs chase their scroll-derived targets
+  at 0.16/frame, so a stepping mouse wheel reads as one continuous motion;
+  the rAF loop runs only while something is settling.
+- **A live frame counter** in film-rebate amber sits fixed bottom-right
+  (01 · Speed … End of roll), replacing the static per-section eyebrows.
+  Plus: parallax inside the two flowing photo sections, the app screenshot
+  lands like a print settling flat, the lens count ticks up on arrival,
+  static grain over the two darkest scenes.
+
+**Round four, same day — the hero is a viewfinder** (decision #61). The
+sentence headline read as a generic hero, so it is gone. The page opens
+inside a camera: frame brackets, a thirds grid, a mode line up top, an AF
+point at the upper thirds intersection that turns teal the moment the
+develop lands, and ORION set in Michroma — the wide engraved-on-the-body
+lettering cameras use — where the eyepiece display sits. Scrolling develops
+the raw as before; keep going and you push through the finder, the whole
+overlay scaling past the eye while the photograph stays. The lede and the
+instrument cluster moved to a strip below the hero so the finder stays
+clean. Screenshotted at load, at lock, mid-push, and on mobile; the AF
+point and the mode line were both repositioned because the first
+screenshots showed them lost behind the wordmark.
+
+**Round three, same day — subjects in frame, nothing generic.** Three notes
+from the developer, all acted on:
+
+- **Headers cut to two or three words** ("Instant updates." "Local light."
+  "No lock-in." "Color you can check.") and every line of copy passed
+  through a de-slop edit: no em dashes, no capsule phrasing, nothing that
+  reads machine-made.
+- **The pill chips and stock favicon are gone.** The hero numbers are now
+  an instrument cluster (value over label, hairlines between), the GitHub
+  button wears focus-peaking viewfinder corners that reach further on
+  hover, and the favicon is Orion's Belt — three stars, the app's own
+  namesake. Space Mono (self-hosted, 9 KB a weight) replaces the system
+  mono so the readouts have a face of their own.
+- **Every subject now fits its frame.** Measured the images instead of
+  eyeballing: the M5 is 0.92:1 and the glasshouse 0.67:1, and both were
+  being butchered by wide full-bleed crops. The mask demo moved to the
+  night sky (a graduated sky darken, nothing to cut), the glasshouse hangs
+  whole as a print beside the color copy, and the close anchors the M5 to
+  its foot so the whole car reads on any screen. The hero also gained a
+  scroll-driven settle: the frame eases from 1.09 to 1.0 as the grade
+  lands.
+
 ## Session 2026-07-29o — see the mask you are painting
 
 `Show mask` paints the coverage over the picture in red. Drawn in
@@ -184,92 +270,6 @@ Three deploy traps hit and recorded:
   Motion, so it reduces to one `IntersectionObserver`.
 - **A green deploy is not proof the page is right.** Verify the page *and every
   asset* returns 200, and that the content actually changed.
-## Session 2026-07-29n — the landing page, redesigned around one idea
-
-`web/` only; no engine or app code touched. The idea: **scrolling is the
-slider drag.** The hero opens on the flat, undeveloped raw and the visitor's
-scroll develops it — filter scrubbed from washed-out to the graded frame, a
-readout ticking to the *real* values from the real edit (Exposure +2.60 EV,
-Contrast 1.45, 3635 K — the same numbers the Local panel shows in the
-interface screenshot further down, of the same photograph), and a literal
-slider rail filling on the right. A second pinned scene sweeps a linear
-gradient mask down over a sky, drawn as the editor draws it: three dashed
-guide lines and a handle, ticking to −1.60 EV.
-
-- **Display type is Bricolage Grotesque**, variable, self-hosted at 77 KB
-  (decision #56). Headlines reveal line-by-line through clipped masks. Copy
-  cut hard everywhere — headlines carry the page; body text is one or two
-  lines per section. The working-today / not-yet register stays, verbatim
-  claim discipline included.
-- **The static page is the finished page** (decision #55). The script's
-  first act is adding `html.js`; every hidden-until-revealed rule is gated
-  on it. No JavaScript or reduced motion = the developed photo, the placed
-  mask, the final numbers. The old page hid `.rv` blocks unconditionally
-  and only JavaScript could show them — a no-JS visitor got a blank page.
-  Verified with a screenshots pass at `javaScriptEnabled: false`.
-- Frame counters number the sections in film-rebate amber (the app's `star`
-  token) — the one new ink; teal remains live-numbers-only.
-- Screenshotted at 14 desktop scroll positions, 4 mobile, plus no-JS and
-  reduced-motion. Two fixes came out of looking rather than trusting: the
-  Revuelto scene was mud under its wash (the photo is a stop darker than
-  the others — it gets a CSS lift, stated in a comment) and the hero's
-  teal text-glow read as a rendering artifact at full strength (halved).
-
-**Round two, same day — show, don't tell.** The developer's review: too much
-text, not enough motion. Body copy cut again (most sections are a headline
-and one line now), and the page gained four things, all in the same
-finished-page-rewound contract:
-
-- **The proxy wipe.** The speed section no longer *says* other editors show
-  you a proxy — the frame *is* a blurred proxy until a sweep line drags full
-  resolution across it, labeled FULL RESOLUTION / PROXY at the line.
-- **The statement lights up word by word** as you scroll through it. The
-  words are wrapped in spans by the script, so without it the line is
-  simply lit.
-- **Every scrub is smoothed** — outputs chase their scroll-derived targets
-  at 0.16/frame, so a stepping mouse wheel reads as one continuous motion;
-  the rAF loop runs only while something is settling.
-- **A live frame counter** in film-rebate amber sits fixed bottom-right
-  (01 · Speed … End of roll), replacing the static per-section eyebrows.
-  Plus: parallax inside the two flowing photo sections, the app screenshot
-  lands like a print settling flat, the lens count ticks up on arrival,
-  static grain over the two darkest scenes.
-
-**Round four, same day — the hero is a viewfinder** (decision #57). The
-sentence headline read as a generic hero, so it is gone. The page opens
-inside a camera: frame brackets, a thirds grid, a mode line up top, an AF
-point at the upper thirds intersection that turns teal the moment the
-develop lands, and ORION set in Michroma — the wide engraved-on-the-body
-lettering cameras use — where the eyepiece display sits. Scrolling develops
-the raw as before; keep going and you push through the finder, the whole
-overlay scaling past the eye while the photograph stays. The lede and the
-instrument cluster moved to a strip below the hero so the finder stays
-clean. Screenshotted at load, at lock, mid-push, and on mobile; the AF
-point and the mode line were both repositioned because the first
-screenshots showed them lost behind the wordmark.
-
-**Round three, same day — subjects in frame, nothing generic.** Three notes
-from the developer, all acted on:
-
-- **Headers cut to two or three words** ("Instant updates." "Local light."
-  "No lock-in." "Color you can check.") and every line of copy passed
-  through a de-slop edit: no em dashes, no capsule phrasing, nothing that
-  reads machine-made.
-- **The pill chips and stock favicon are gone.** The hero numbers are now
-  an instrument cluster (value over label, hairlines between), the GitHub
-  button wears focus-peaking viewfinder corners that reach further on
-  hover, and the favicon is Orion's Belt — three stars, the app's own
-  namesake. Space Mono (self-hosted, 9 KB a weight) replaces the system
-  mono so the readouts have a face of their own.
-- **Every subject now fits its frame.** Measured the images instead of
-  eyeballing: the M5 is 0.92:1 and the glasshouse 0.67:1, and both were
-  being butchered by wide full-bleed crops. The mask demo moved to the
-  night sky (a graduated sky darken, nothing to cut), the glasshouse hangs
-  whole as a print beside the color copy, and the close anchors the M5 to
-  its foot so the whole car reads on any screen. The hero also gained a
-  scroll-driven settle: the frame eases from 1.09 to 1.0 as the grade
-  lands.
-
 ## Session 2026-07-29m — brush dabs, the last third of step 1
 
 One kernel, `mask_brush.slang`. Normalized coordinates in, R16F alpha out, no
