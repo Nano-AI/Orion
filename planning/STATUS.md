@@ -13,8 +13,67 @@ overlay that places them.
 §6), then step 3's guided-filter refinement. The brush-dab rasteriser is the
 remaining third of step 1 and has no overlay work in front of it now.
 
-**Suites:** `orion-tests` **388 checks** · `orion-viewport-tests` **3214
-checks** (was 2088) · both 0 failures.
+**Suites:** `orion-tests` **397 checks** · `orion-viewport-tests` **3214
+checks** · both 0 failures.
+
+## Session 2026-07-29m — brush dabs, the last third of step 1
+
+One kernel, `mask_brush.slang`. Normalized coordinates in, R16F alpha out, no
+new dependency. **The maths and the GPU kernel are in and tested; nothing is
+wired to the interface yet** — no node in `DevelopPipeline`, no facade field, no
+painting on the canvas. That is the next story.
+
+A stroke is a **list of dab centres**, stored parametrically and rasterized on
+demand — a few kilobytes instead of the 24–120 MB a raster mask costs at
+24–60 MP, and exact under a crop or a rotation because each centre goes through
+the same transform the image does rather than being resampled. Re-interpolating
+an already-feathered raster mask compounds blur; this cannot.
+
+**One radius for the whole mask, not one per dab**, per the research's own shape.
+
+**A long stroke is not capped at 256 dabs.** The kernel accumulates into the
+alpha it is handed, so a stroke is several dispatches chained nose to tail.
+Capping would either leave gaps or silently resample the photographer's stroke
+into something they did not draw.
+
+### What is pinned
+
+- **Dabs compose source-over, not additively.** Two at full flow are full
+  coverage, not two — adding lets a slow hand over one spot drive alpha past 1
+  and clip, which reads as the brush getting stronger the longer you hover. The
+  check uses *partial* flow, where the two rules differ measurably: over gives
+  0.75, addition gives 1.0.
+- **A dab is smootherstep in the radius**, checked against the function computed
+  independently — not "the centre is bright and the outside is dark", which
+  passes on any blob. The falloff is *shared* with the gradient masks rather
+  than reimplemented.
+- **Chaining works**: a second pass builds on the first rather than replacing
+  it, and an empty pass leaves the stroke exactly as it was.
+
+### Seven mutations, six dead — and the one that correctly survived
+
+Deleting the radius cutoff changes no output, because `brushFalloff` saturates
+and a pixel past the rim already contributes nothing. It is a **performance
+early-out, not a correctness guard**, and the shader now says so — otherwise the
+next reader assumes it load-bearing. Real defects (radius doubled, flow ignored,
+addition instead of over, accumulate ignored, hardness ignored, smoothstep for
+smootherstep) all die.
+
+### ⚠️ Both first-run failures were the tests, not the shader
+
+Fourth session running. The pattern does not change: the check asserted
+something weaker than, or different from, its claim.
+
+- The empty-pass check **never uploaded the second result into the source**, so
+  it compared a pass-through of the first against the second — reporting a
+  shader bug that was a missing line in the test.
+- **The R16F claim was asserted at a flow where it is false.** At flow 0.03,
+  source-over moves alpha about 0.02 per dab — five to seven whole 8-bit codes —
+  so all forty steps resolve at eight bits and the check demonstrated nothing
+  while reading like proof. Banding needs one dab to move alpha *less than one
+  code*: **flow below about 1/255**. Asserted at 0.002 now, an ordinary airbrush
+  flow, with the buildup checked against the source-over series `1 − 0.998⁴⁰` in
+  closed form rather than against a range.
 
 ## Session 2026-07-29l — a gradient you place with your hands
 
