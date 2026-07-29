@@ -600,12 +600,10 @@ html.scrub .shot { will-change: transform; }
   font-size: .74rem; letter-spacing: .06em; color: var(--body);
 }
 
-/* ---------- Color — the cut ----------
+/* ---------- Color ----------
  * The glasshouse photograph is a vertical, so it stands at full section
- * height on the right, nearly uncropped, and the slash CUTS it: a diagonal
- * clip on the image, a frosted-glass band riding the cut, the words in the
- * dark it leaves behind. The diagonal is tan(14°) of the height, and the
- * band is centered on it, so the two are one geometry. */
+ * height on the right, nearly uncropped, dissolving into the dark on its
+ * leading edge — no cut, no frame, the words in the black beside it. */
 
 .duo {
   position: relative;
@@ -613,8 +611,7 @@ html.scrub .shot { will-change: transform; }
   display: flex; align-items: center;
   padding: clamp(4rem, 10vh, 7rem) var(--gut);
   overflow: hidden;
-  --imgw: min(70svh, 54vw);          /* the photo panel's width */
-  --cut: 24.9svh;                    /* tan(14deg) x section height */
+  --imgw: min(72svh, 55vw);          /* the photo panel's width */
 }
 .duo h2 { font-size: clamp(2.6rem, 6.2vw, 5.6rem); }
 .duo__text { position: relative; z-index: 2; max-width: 42rem; }
@@ -624,22 +621,9 @@ html.scrub .shot { will-change: transform; }
   position: absolute; top: 0; bottom: 0; right: 0;
   width: var(--imgw); height: 100%;
   object-fit: cover;
-  clip-path: polygon(var(--cut) 0, 100% 0, 100% 100%, 0 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 22%);
+  mask-image: linear-gradient(to right, transparent, #000 22%);
   z-index: 0;
-}
-
-.duo__slash {
-  position: absolute; top: -10%; bottom: -10%;
-  right: calc(var(--imgw) - var(--cut) / 2);
-  width: clamp(4rem, 9vw, 9rem);
-  transform: translateX(50%) rotate(14deg);
-  background: linear-gradient(105deg, rgba(240,243,244,.09), rgba(240,243,244,.015) 65%);
-  -webkit-backdrop-filter: blur(14px) saturate(1.25);
-  backdrop-filter: blur(14px) saturate(1.25);
-  border-left: 1px solid rgba(240,243,244,.3);
-  border-right: 1px solid rgba(240,243,244,.06);
-  pointer-events: none;
-  z-index: 1;
 }
 
 /* Parallax images get headroom to move inside their section. */
@@ -823,15 +807,14 @@ html:not(.scrub) .fr { display: none; }
 @media (max-width: 900px) {
   .cites li { flex-direction: column; gap: .2rem; }
   .v { text-align: left; }
-  /* The cut turns horizontal on a phone: words up top, the photograph
-     across the foot of the section, the diagonal between them. */
+  /* Words up top, the photograph across the foot, dissolving upward. */
   .duo { min-height: 96svh; align-items: flex-start; padding-top: 5rem; }
   .duo__img {
     top: auto; left: 0; right: 0; bottom: 0;
-    width: 100%; height: 52%;
-    clip-path: polygon(0 16vw, 100% 0, 100% 100%, 0 100%);
+    width: 100%; height: 54%;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%);
+    mask-image: linear-gradient(to bottom, transparent, #000 24%);
   }
-  .duo__slash { display: none; }
   .own { grid-template-columns: 1fr; }
   .sidecar__row { grid-template-columns: minmax(0, 1fr) auto; }
   .sidecar__what { display: none; }
