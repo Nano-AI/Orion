@@ -161,3 +161,49 @@ drag recomputes neither.
 horizontal minimum followed by a 15-tap vertical one is exactly the 15 × 15
 minimum, at 30 taps instead of 225. Same for the max filter the TPAMI guided
 filter paper calls for.
+
+---
+
+## The node plan
+
+Sixteen nodes, seven new kernels (`boxBlur` is reused). Written down before
+building so that a session that loses its context can pick it up here.
+
+| # | Node | Kernel | Out |
+|---|---|---|---|
+| 1 | `dehaze:chan` | `dehazeChannelMin` | R16F, `min_c(I_c/A_c)` — with `A = (1,1,1)` this is the plain per-pixel channel minimum |
+| 2–3 | `dehaze:dark h/v` | `dehazeRank` | R16F, separable 15-tap **min** → the dark channel |
+| 4 | `dehaze:peak` | `dehazePeak` | RGBA16F at ¼, `(maxDark, R, G, B)` of the block's argmax — read back to find `A` |
+| 5 | `dehaze:chan/A` | `dehazeChannelMin` | R16F, now with the real `A` |
+| 6–7 | `dehaze:min h/v` | `dehazeRank` | R16F, separable 15-tap min |
+| 8–9 | `dehaze:max h/v` | `dehazeRank` | R16F, separable 15-tap **max** — TPAMI 2013 §5's counteraction of the min filter's morphological shift, applied to the same quantity the min was |
+| 10 | `dehaze:prep` | `dehazePrep` | RGBA32F at ¼: `(g, g², t̃, g·t̃)`, where `t̃ = 1 − ω·(node 9)` |
+| 11–12 | `dehaze:blur h/v` | `boxBlur4` | RGBA32F, the four moments together |
+| 13 | `dehaze:coeffs` | `dehazeAb` | RG32F, the guided filter's `a` and `b` |
+| 14–15 | `dehaze:blur2 h/v` | `boxBlur` | RG32F — the existing kernel, unchanged |
+| 16 | `dehaze` | `dehazeRecover` | RGBA16F: lift `(a, b)` bilinearly, `t = a·g + b`, then Eq. (16) |
+
+**One kernel does both rank passes.** A 15 × 15 minimum is a 15-tap minimum
+along each axis, and the same kernel with a mode flag is the maximum, so six
+nodes share one shader.
+
+**The strength slider is ω, not a blend.** Eq. (12) already has a parameter for
+"how much haze to remove", the paper fixes it at 0.95, and `ω = 0` gives
+`t̃ = 1` and `J = I` exactly — so zero is the identity by construction rather
+than by a lerp bolted on the end. The slider maps `0…1 → ω = 0…0.95`, and its
+top is the paper's own value rather than a number chosen here.
+
+**`A` is the one part that is not a per-pixel node.** It is a reduction over the
+whole frame, and it depends only on what is upstream of dehaze — not on the
+slider — so it is computed once and cached, and recomputed when white balance
+or the profile moves. `render()` does a readback of node 4 when it is stale,
+picks `A`, pushes it, and renders again; the per-node cache means the second
+pass only redoes what changed.
+
+⚠️ **A deviation to state plainly when it ships.** The paper's percentile is
+over *pixels* — the top 0.1% of the dark channel. Node 4 max-pools 4 × 4 blocks
+first and the percentile is taken over block maxima, so the set selected is the
+most haze-opaque part of the frame but is not literally the paper's top 0.1% of
+pixels. Max-pooling is the right pooling here — it preserves exactly the
+haze-opaque extremes the step is looking for — but it is an approximation and
+belongs in `UNSOURCED.md` until measured against the exact percentile.
