@@ -179,21 +179,31 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.curve.red    = toChannel(adj->curve_red);
     a.curve.green  = toChannel(adj->curve_green);
     a.curve.blue   = toChannel(adj->curve_blue);
-    a.maskKind        = adj->mask_kind;
-    a.maskInvert      = adj->mask_invert != 0;
-    a.maskCentre[0]   = adj->mask_centre_x;
-    a.maskCentre[1]   = adj->mask_centre_y;
-    a.maskAngle       = adj->mask_angle;
-    a.maskLength      = adj->mask_length;
-    a.maskRadius[0]   = adj->mask_radius_x;
-    a.maskRadius[1]   = adj->mask_radius_y;
-    a.maskFeather     = adj->mask_feather;
-    a.maskRoundness   = adj->mask_roundness;
+    static_assert(ORION_MAX_MASK_COMPONENTS == orion::pipe::kMaxMaskComponents,
+                  "the facade and the engine disagree about the group's size");
+    // Out-of-range counts are clamped rather than rejected: a caller one field
+    // behind on the format should lose the excess components, not the frame.
+    a.maskCount = std::clamp(adj->mask_count, 0, ORION_MAX_MASK_COMPONENTS);
+    for (int i = 0; i < a.maskCount; ++i) {
+        const OrionMaskComponent& s = adj->mask_components[i];
+        orion::pipe::MaskComponentEdit& d = a.maskComponents[std::size_t(i)];
+        d.kind          = s.kind;
+        d.compose       = s.compose;
+        d.invert        = s.invert != 0;
+        d.centre[0]     = s.centre_x;
+        d.centre[1]     = s.centre_y;
+        d.angle         = s.angle;
+        d.length        = s.length;
+        d.radius[0]     = s.radius_x;
+        d.radius[1]     = s.radius_y;
+        d.feather       = s.feather;
+        d.roundness     = s.roundness;
+        d.brushRadius   = s.brush_radius;
+        d.brushFlow     = s.brush_flow;
+        d.brushHardness = s.brush_hardness;
+        d.brushRevision = s.brush_revision;
+    }
     a.localExposureEv = adj->local_exposure_ev;
-    a.brushRadius     = adj->brush_radius;
-    a.brushFlow       = adj->brush_flow;
-    a.brushHardness   = adj->brush_hardness;
-    a.brushRevision   = adj->brush_revision;
     a.maskOverlay     = adj->mask_overlay != 0;
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;
@@ -220,13 +230,17 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
     });
 }
 
-OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine,
+OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
                                           const float* xy, int count) {
     if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    // Rejected rather than clamped: paint landing in the wrong component is
+    // worse than nothing happening.
+    if (component < 0 || component >= ORION_MAX_MASK_COMPONENTS)
+        return ORION_ERR_BAD_ARG;
     // A null buffer with a positive count is a caller bug, not an empty stroke.
     if (xy == nullptr && count > 0) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        engine->impl.developMutable().setBrushStroke(xy, count);
+        engine->impl.developMutable().setBrushStroke(component, xy, count);
         return ORION_OK;
     });
 }

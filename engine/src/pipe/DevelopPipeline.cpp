@@ -455,22 +455,31 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::RG32Float, {}, {},
                                  true, guideW_, guideH_});
 
-    // The mask has no image input — it is a pure function of position — so it
-    // sits outside the chain and is bound as a fourth input below. Left enabled
-    // even with no mask set: it is a single full-resolution R16F write, and the
-    // per-node cache means it runs once and then never again while any slider
-    // moves.
-    nMask_ = pipeline_.add({"mask", "maskGradient", {},
-                            PixelFormat::R16Float, {}});
+    // The mask group. Components are a pure function of position, so the chain
+    // has no image input and hangs off the side of the graph, bound as
+    // develop:linear's fourth input.
+    //
+    // The base writes the fold's identity and stays enabled — a disabled node
+    // copies its first input through, and this one has no input to copy. It is a
+    // single full-resolution R16F write whose params never change, so the
+    // per-node cache serves it for the life of the image.
+    nMaskBase_ = pipeline_.add({"mask:base", "maskBase", {},
+                                PixelFormat::R16Float, {}});
 
-    // The brush stamps onto whatever the gradient produced. See nBrush_'s
-    // comment for why one node covers all four mask kinds; the short version is
-    // that a pass with no dabs is the identity, which the suite pins.
-    nBrush_ = pipeline_.add({"mask:brush", "maskBrush", {nMask_},
-                             PixelFormat::R16Float, {}});
+    // One node per component, each folding its own coverage into the one before
+    // it. All the same shape, so a group of one runs the same code as a group of
+    // four; unused components are disabled in `apply`, which costs their texture
+    // and none of their time. research/masking.md §6.
+    int prevMask = nMaskBase_;
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        nMaskComponent_[i] =
+            pipeline_.add({"mask:" + std::to_string(i), "maskComponent",
+                           {prevMask}, PixelFormat::R16Float, {}});
+        prevMask = nMaskComponent_[i];
+    }
 
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
-                                 {nFusion_, nGuideV2_, nGuidePrep_, nBrush_},
+                                 {nFusion_, nGuideV2_, nGuidePrep_, prevMask},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
@@ -594,10 +603,14 @@ float DevelopPipeline::whiteClipFor(const float multipliers[3]) const noexcept {
     return std::max(clip, 1e-3f);
 }
 
-void DevelopPipeline::setBrushStroke(const float* xy, int count) {
-    brushDabs_.clear();
+void DevelopPipeline::setBrushStroke(int component, const float* xy, int count) {
+    // Ignored rather than clamped: a stroke written into the wrong component
+    // would put paint somewhere the photographer did not.
+    if (component < 0 || component >= kMaxMaskComponents) return;
+    auto& dabs = brushDabs_[std::size_t(component)];
+    dabs.clear();
     if (xy == nullptr || count <= 0) return;
-    brushDabs_.assign(xy, xy + std::size_t(count) * 2);
+    dabs.assign(xy, xy + std::size_t(count) * 2);
 }
 
 void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
@@ -685,6 +698,12 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
 
     params::GuidePrep gp{{size[0], size[1]}, {0, 0}};
     pipeline_.setParams(nGuidePrep_, &gp, sizeof gp);
+
+    // The mask group's fold starts from zero, the additive identity — see
+    // mask_base.slang for why it is a node at all. Set once per image; the
+    // per-node cache serves it thereafter.
+    params::MaskBase mb{{size[0], size[1]}, 0.0f, 0.0f};
+    pipeline_.setParams(nMaskBase_, &mb, sizeof mb);
 
     params::GuideDown gd{};
     gd.outSize[0] = guideW_; gd.outSize[1] = guideH_;
@@ -1201,115 +1220,106 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         pipeline_.setParams(nClarity_, &ap, sizeof ap);
     }
 
-    const bool maskMoved =
+    // The mask group. Each component gets its own staleness, so painting on one
+    // does not re-stamp the others and a gradient slider does not re-walk a
+    // stroke. The geometry that every component shares — the crop, the turns and
+    // the straighten — is computed once out here rather than four times.
+    const bool frameMoved =
         first ||
-        adj.maskKind != lastAdj_.maskKind ||
-        adj.maskInvert != lastAdj_.maskInvert ||
-        adj.maskLength != lastAdj_.maskLength ||
-        adj.maskCentre[0] != lastAdj_.maskCentre[0] ||
-        adj.maskCentre[1] != lastAdj_.maskCentre[1] ||
-        adj.maskRadius[0] != lastAdj_.maskRadius[0] ||
-        adj.maskRadius[1] != lastAdj_.maskRadius[1] ||
-        adj.maskAngle != lastAdj_.maskAngle ||
-        adj.maskFeather != lastAdj_.maskFeather ||
-        adj.maskRoundness != lastAdj_.maskRoundness;
+        adj.cropX != lastAdj_.cropX || adj.cropY != lastAdj_.cropY ||
+        adj.cropW != lastAdj_.cropW || adj.cropH != lastAdj_.cropH ||
+        adj.rotateQuarters != lastAdj_.rotateQuarters ||
+        adj.straightenDeg != lastAdj_.straightenDeg;
 
-    if (maskMoved) {
-        params::MaskGradient m{};
+    // The mask is placed on the picture the photographer is looking at, which is
+    // cropped and rotated; it is applied before the geometry node, which sees
+    // neither. Without this a mask slides off its subject the moment the frame is
+    // turned. pipe/MaskGeometry.h.
+    const mask::Crop crop{adj.cropX, adj.cropY, adj.cropW, adj.cropH};
+    const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
+    // The straighten pivot and the rotated frame's shape, both as the geometry
+    // shader sees them — the rotation happens in that frame's pixels, so its
+    // aspect is part of the transform.
+    const bool swaps = (turns % 2) != 0;
+    const float rotW = float(swaps ? height_ : width_);
+    const float rotH = float(swaps ? width_  : height_);
+
+    if (first || adj.maskCount != lastAdj_.maskCount) {
+        for (int i = 0; i < kMaxMaskComponents; ++i) {
+            pipeline_.setEnabled(nMaskComponent_[i], i < adj.maskCount);
+        }
+    }
+
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        const MaskComponentEdit& c = adj.maskComponents[std::size_t(i)];
+        // A component past the count is disabled; its params cannot reach the
+        // picture, so uploading them would only dirty a node that will not run.
+        if (i >= adj.maskCount) continue;
+        if (!first && frameMoved == false && c == lastAdj_.maskComponents[std::size_t(i)] &&
+            i < lastAdj_.maskCount) {
+            continue;
+        }
+
+        params::MaskComponent m{};
         m.size[0] = width_; m.size[1] = height_;
-        m.kind   = adj.maskKind;
-        m.invert = adj.maskInvert ? 1 : 0;
-        // The mask is placed on the picture the photographer is looking at,
-        // which is cropped and rotated; it is applied before the geometry node,
-        // which sees neither. Without this a mask slides off its subject the
-        // moment the frame is turned. pipe/MaskGeometry.h.
-        const mask::Crop crop{adj.cropX, adj.cropY, adj.cropW, adj.cropH};
-        const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
-        // The straighten pivot and the rotated frame's shape, both as the
-        // geometry shader sees them — the rotation happens in that frame's
-        // pixels, so its aspect is part of the transform.
-        const bool swaps = (turns % 2) != 0;
-        const float rotW = float(swaps ? height_ : width_);
-        const float rotH = float(swaps ? width_  : height_);
+        m.kind    = c.kind;
+        m.invert  = c.invert ? 1 : 0;
+        m.compose = c.compose;
+
         const auto placed = mask::toFrame(
-            {adj.maskCentre[0], adj.maskCentre[1], adj.maskAngle}, crop, turns,
+            {c.centre[0], c.centre[1], c.angle}, crop, turns,
             adj.straightenDeg * 3.14159265358979324f / 180.0f,
             adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
             rotW, rotH);
 
         m.centre[0] = placed.centreX; m.centre[1] = placed.centreY;
-        mask::radiusToFrame(adj.maskRadius[0], adj.maskRadius[1], crop, turns,
-                            m.radius[0], m.radius[1]);
+        mask::radiusToFrame(c.radius[0], c.radius[1], crop, turns,
+                            m.semi[0], m.semi[1]);
         m.angle     = placed.angle;
 
         // A linear gradient's endpoints, from the *placed* centre and angle.
         // Half the length either side, so rotating about the centre does not
         // also move the ramp.
-        const float len = mask::lengthToFrame(adj.maskLength, crop);
+        const float len = mask::lengthToFrame(c.length, crop);
         const float dx = std::cos(m.angle) * len * 0.5f;
         const float dy = std::sin(m.angle) * len * 0.5f;
         m.zero[0] = m.centre[0] - dx; m.zero[1] = m.centre[1] - dy;
         m.full[0] = m.centre[0] + dx; m.full[1] = m.centre[1] + dy;
-        m.feather   = adj.maskFeather;
-        m.roundness = adj.maskRoundness;
-        pipeline_.setParams(nMask_, &m, sizeof m);
-    }
+        m.feather   = c.feather;
+        m.roundness = c.roundness;
 
-    // The brush. Its own staleness, because a stroke changes while nothing else
-    // does — and the reverse: a gradient slider must not re-stamp the stroke.
-    const bool brushMoved =
-        first ||
-        adj.maskKind != lastAdj_.maskKind ||
-        adj.brushRevision != lastAdj_.brushRevision ||
-        adj.brushRadius != lastAdj_.brushRadius ||
-        adj.brushFlow != lastAdj_.brushFlow ||
-        adj.brushHardness != lastAdj_.brushHardness ||
-        maskMoved;
+        m.radius   = c.brushRadius;
+        m.flow     = c.brushFlow;
+        m.hardness = c.brushHardness;
 
-    if (brushMoved) {
-        params::MaskBrush b{};
-        b.size[0] = width_; b.size[1] = height_;
-        b.radius   = adj.brushRadius;
-        b.flow     = adj.brushFlow;
-        b.hardness = adj.brushHardness;
-
-        if (adj.maskKind == 3) {
-            // Start from empty and lay the stroke down. The gradient node's
-            // output is ignored, which is what makes this a brush rather than a
-            // brush over a gradient — mask groups (research/masking.md §6) are
-            // where combining the two belongs, not here.
-            b.accumulate = 0;
-            const int have = brushDabCount();
-            b.count = std::min(have, params::kMaskDabsPerPass);
-            for (int i = 0; i < b.count; ++i) {
-                b.dabs[i][0] = brushDabs_[std::size_t(i) * 2 + 0];
-                b.dabs[i][1] = brushDabs_[std::size_t(i) * 2 + 1];
+        if (c.kind == 3) {
+            const int have = brushDabCount(i);
+            m.count = std::min(have, params::kMaskDabsPerPass);
+            const auto& dabs = brushDabs_[std::size_t(i)];
+            for (int d = 0; d < m.count; ++d) {
+                m.dabs[d][0] = dabs[std::size_t(d) * 2 + 0];
+                m.dabs[d][1] = dabs[std::size_t(d) * 2 + 1];
             }
             // ⚠️ A stroke longer than one pass is silently truncated here. The
-            // kernel is built to chain — it accumulates into the alpha it is
-            // handed — but the graph holds one brush node, so the extra passes
-            // have nowhere to run. Fixing it is more nodes, not a bigger
-            // buffer. Said out loud rather than left to be discovered as "the
-            // end of my stroke did nothing".
-            if (have > b.count) {
+            // kernel can continue a stroke — that is what its `accumulate` flag
+            // is for — but nothing yet spends a second component on the
+            // continuation. Said out loud rather than left to be discovered as
+            // "the end of my stroke did nothing".
+            if (have > m.count) {
                 std::fprintf(stderr,
                              "orion: brush stroke truncated, %d of %d dabs "
-                             "(one pass holds %d)\n",
-                             b.count, have, params::kMaskDabsPerPass);
+                             "(one component holds %d)\n",
+                             m.count, have, params::kMaskDabsPerPass);
             }
-        } else {
-            // Every other kind: pass the gradient through untouched.
-            b.accumulate = 1;
-            b.count = 0;
         }
-        pipeline_.setParams(nBrush_, &b, sizeof b);
+        pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
     }
 
     const bool linearMoved =
         first ||
         adj.localExposureEv != lastAdj_.localExposureEv ||
         adj.maskOverlay != lastAdj_.maskOverlay ||
-        adj.maskKind != lastAdj_.maskKind ||
+        adj.maskCount != lastAdj_.maskCount ||
         adj.hueShift != lastAdj_.hueShift ||
         adj.satShift != lastAdj_.satShift ||
         adj.lumShift != lastAdj_.lumShift ||
@@ -1350,7 +1360,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                                 {guideW_, guideH_},
                                 {}, {}, {}};
         la.localExposureEv = adj.localExposureEv;
-        la.maskActive  = (adj.maskKind != 0) ? 1.0f : 0.0f;
+        la.maskActive  = (adj.maskCount > 0) ? 1.0f : 0.0f;
         la.maskOverlay = adj.maskOverlay ? 1.0f : 0.0f;
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
         std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);

@@ -60,6 +60,43 @@ typedef struct OrionCurveChannel {
     float   y[ORION_CURVE_MAX_POINTS];   /* output, 0..1 */
 } OrionCurveChannel;
 
+/* How many components one mask group holds. Each live component is one GPU
+ * pass and one full-resolution alpha — a memory number, not a concept. Must
+ * match kMaxMaskComponents in the engine. */
+#define ORION_MAX_MASK_COMPONENTS 4
+
+/* One component of the mask group: a primitive plus how it folds into the
+ * components listed before it. research/masking.md §6.
+ *
+ * Geometry is in normalized coordinates of the *displayed* picture — the crop
+ * and rotation the photographer is looking at. The engine moves it to the
+ * frame the shader sees; the caller never does that transform. */
+typedef struct OrionMaskComponent {
+    int   kind;             /* 0 off, 1 linear, 2 radial, 3 brush */
+    int   compose;          /* 0 add, 1 subtract, 2 intersect — the fold starts
+                             * from zero, so the first component should be 0 */
+    int   invert;           /* inverts this component, before the fold */
+
+    float centre_x, centre_y;
+    float angle;            /* radians */
+    float length;           /* linear: zero-to-full distance */
+    float radius_x, radius_y; /* radial semi-axes */
+    float feather;          /* radial, 0..1 */
+    float roundness;        /* 2 is an ellipse */
+
+    /* The brush, when kind is 3. One radius for the whole stroke. The dab
+     * centres are not here — they are variable-length, and this struct is
+     * compared field by field on every slider tick. Set them with
+     * orion_engine_set_brush_stroke for this component's index and bump
+     * brush_revision, which is what tells the engine the stroke is stale.
+     * Change the points without changing the revision and the picture will
+     * not follow the hand. */
+    float brush_radius;     /* normalized */
+    float brush_flow;       /* 0..1 per dab */
+    float brush_hardness;   /* 0 soft, 1 hard-edged */
+    unsigned brush_revision;
+} OrionMaskComponent;
+
 typedef struct OrionAdjustments {
     float temperature_k;  /* white balance, Kelvin        */
     float tint;           /* -1..1, green to magenta      */
@@ -122,33 +159,17 @@ typedef struct OrionAdjustments {
      * having none loaded. */
     float lut_strength;
 
-    /* A local adjustment, masked by a gradient. research/masking.md.
+    /* The mask group: components folded left in listed order into one coverage,
+     * and the local adjustment applied once through it — never twice because two
+     * components overlap. research/masking.md §6.
      *
-     * Both mask kinds share a centre and an angle. The alpha scales the
-     * *parameter*, so coverage 0.5 with a one-stop local exposure is 2^0.5 —
-     * not a blend of two rendered frames. */
-    int   mask_kind;        /* 0 none, 1 linear, 2 radial, 3 brush */
-    int   mask_invert;
-    float mask_centre_x, mask_centre_y;
-    float mask_angle;       /* radians */
-    float mask_length;      /* linear: zero-to-full distance */
-    float mask_radius_x, mask_radius_y;
-    float mask_feather;     /* 0..1 */
-    float mask_roundness;   /* 2 is an ellipse */
+     * mask_count says how many entries of mask_components are live; the rest
+     * are ignored. Zero means no mask. The alpha scales the *parameter*, so
+     * coverage 0.5 with a one-stop local exposure is 2^0.5 — not a blend of two
+     * rendered frames. */
+    OrionMaskComponent mask_components[ORION_MAX_MASK_COMPONENTS];
+    int   mask_count;
     float local_exposure_ev;
-
-    /* The brush, when mask_kind is 3. One radius for the whole stroke, which is
-     * what makes a stroke a list of centres and nothing else.
-     *
-     * The centres are not here — they are variable-length, and this struct is
-     * compared field by field on every slider tick. Set them with
-     * orion_engine_set_brush_stroke and bump brush_revision, which is what
-     * tells the engine the stroke is stale. Change the points without changing
-     * the revision and the picture will not follow the hand. */
-    float brush_radius;     /* normalized */
-    float brush_flow;       /* 0..1 per dab */
-    float brush_hardness;   /* 0 soft, 1 hard-edged */
-    unsigned brush_revision;
 
     /* Paint the mask's coverage over the picture so it can be placed by eye.
      * A viewing aid only — an export must never set it. */
@@ -189,20 +210,22 @@ typedef struct OrionAdjustments {
 /* Opens a raw file and builds the develop pipeline for it. */
 OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path);
 
-/* Replaces the brush stroke. `xy` is `count` interleaved x, y pairs in
- * normalized coordinates of the displayed picture — the same space the gradient
- * masks are placed in, so the engine puts them where develop:linear can use
- * them and the caller never sees that transform.
+/* Replaces one component's brush stroke. `xy` is `count` interleaved x, y
+ * pairs in normalized coordinates of the displayed picture — the same space the
+ * gradient masks are placed in, so the engine puts them where develop:linear
+ * can use them and the caller never sees that transform.
  *
- * The points are copied, so the caller's buffer need not outlive the call.
- * Passing NULL or count <= 0 clears the stroke.
+ * `component` indexes mask_components; out of range is ORION_ERR_BAD_ARG rather
+ * than a clamp, because paint landing in the wrong component is worse than
+ * nothing happening. The points are copied, so the caller's buffer need not
+ * outlive the call. Passing NULL or count <= 0 clears the stroke.
  *
- * This does not itself dirty anything: bump OrionAdjustments.brush_revision and
+ * This does not itself dirty anything: bump that component's brush_revision and
  * push the adjustments, which is what makes the change visible. Two calls are
  * deliberate — a drag sets the stroke once per frame and the revision is what
  * the engine compares, so the stroke never has to be walked to decide whether
  * it moved. */
-OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine,
+OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
                                           const float* xy, int count);
 
 /* The camera's own white balance, so the UI can open on "as shot". Only the

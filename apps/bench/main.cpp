@@ -453,12 +453,41 @@ int main(int argc, char** argv) {
                 // global exposure of the same size — which is the point, and
                 // what the floor is calibrated against.
                 {"local +2 EV",    flat, [](auto& a) {
-                     a.maskKind = 1;
-                     a.maskCentre[0] = 0.5f; a.maskCentre[1] = 0.5f;
-                     a.maskAngle = 0.0f;
-                     a.maskLength = 0.8f;
+                     auto& c = a.maskComponents[0];
+                     c.kind = 1;
+                     c.centre[0] = 0.5f; c.centre[1] = 0.5f;
+                     c.angle = 0.0f;
+                     c.length = 0.8f;
+                     a.maskCount = 1;
                      a.localExposureEv = 2.0f;
                  }, Metric::Luma, 0.36},
+                // The same edit with a radial subtracted from the ramp's full
+                // side — the only thing in the product that drives a mask group
+                // of more than one component through the real pipeline, so this
+                // is what catches the chain being miswired: a second component
+                // whose params never arrive, an enable that follows the wrong
+                // count, a fold against the wrong input. The compose *algebra*
+                // is pinned exactly in orion-tests; what this pins is that the
+                // graph delivers it. Moves noticeably less than the probe above
+                // by construction, since the hole covers most of where that
+                // edit lands.
+                {"local +2 EV, hole", flat, [](auto& a) {
+                     auto& c = a.maskComponents[0];
+                     c.kind = 1;
+                     c.centre[0] = 0.5f; c.centre[1] = 0.5f;
+                     c.angle = 0.0f;
+                     c.length = 0.8f;
+                     auto& s = a.maskComponents[1];
+                     s.kind = 2;
+                     s.compose = 1;      // subtract
+                     s.centre[0] = 0.75f; s.centre[1] = 0.5f;
+                     s.radius[0] = 0.3f; s.radius[1] = 0.55f;
+                     s.feather = 0.5f;
+                     a.maskCount = 2;
+                     a.localExposureEv = 2.0f;
+                 // Half the smallest ratio over the three frames: 0.47, 0.44,
+                 // 0.60 of the reference.
+                 }, Metric::Luma, 0.22},
                 {"fusion 1.0",     flat, [](auto& a) { a.fusion = 1.0f; }, Metric::Luma, 0.57},
                 {"dehaze 1.0",     flat, [](auto& a) { a.dehaze = 1.0f; }, Metric::Luma, 0.028,
                  "a haze-free frame has nothing to remove; t = 1 is the right answer"},

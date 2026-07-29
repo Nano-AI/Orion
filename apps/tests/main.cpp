@@ -4375,12 +4375,20 @@ void testMaskGpu() {
         return std::pair{std::move(lib), std::move(k)};
     };
 
-    auto kMask = load("maskGradient");
+    auto kMask = load("maskComponent");
+    auto src = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
     auto dst = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
 
-    const auto run = [&](const orion::pipe::params::MaskGradient& m) {
+    // The fold's identity, which mask:base writes in the product. Every check
+    // here runs a single component over it, where add-from-zero is the
+    // component's own coverage — so all of the numbers pinned before the merge
+    // must reproduce exactly.
+    const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
+
+    const auto run = [&](const orion::pipe::params::MaskComponent& m) {
+        src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kMask.second, {dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kMask.second, {src.get(), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -4392,7 +4400,7 @@ void testMaskGpu() {
 
     // ── Linear ────────────────────────────────────────────────────────────
     {
-        orion::pipe::params::MaskGradient m{};
+        orion::pipe::params::MaskComponent m{};
         m.size[0] = kW; m.size[1] = kH;
         m.kind = 1;
         m.zero[0] = 0.0f; m.zero[1] = 0.0f;   // left edge
@@ -4438,7 +4446,7 @@ void testMaskGpu() {
 
     // ── Radial ────────────────────────────────────────────────────────────
     {
-        orion::pipe::params::MaskGradient m{};
+        orion::pipe::params::MaskComponent m{};
         m.size[0] = kW; m.size[1] = kH;
         m.kind = 2;
         // On a pixel centre, not on 0.5. With 64 pixels, 0.5 falls *between*
@@ -4446,7 +4454,7 @@ void testMaskGpu() {
         // the steepest part of the feather that half-pixel is worth a quarter
         // of the alpha range. The asymmetry was in the test, not the shader.
         m.centre[0] = 32.5f / 64.0f; m.centre[1] = 32.5f / 64.0f;
-        m.radius[0] = 0.25f; m.radius[1] = 0.25f;
+        m.semi[0] = 0.25f; m.semi[1] = 0.25f;
         m.feather = 0.4f;
         m.roundness = 2.0f;
         const auto a = run(m);
@@ -4550,13 +4558,18 @@ void testMaskBrushGpu() {
         return;
     }
     auto lib = orion::gpu::Library::createFromFile(
-        *device, std::string(ORION_SHADER_DIR) + "/maskBrush.metallib");
-    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskBrush");
+        *device, std::string(ORION_SHADER_DIR) + "/maskComponent.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
 
     auto src = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
     auto dst = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
 
-    const auto run = [&](const orion::pipe::params::MaskBrush& b) {
+    // A fresh stroke folds over the group's identity, so `src` is zeroed before
+    // each run unless a check is deliberately chaining passes.
+    const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
+    src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
+
+    const auto run = [&](const orion::pipe::params::MaskComponent& b) {
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*kernel, {src.get(), dst.get()}, &b, sizeof b, kW, kH);
         cb.commitAndWait();
@@ -4568,8 +4581,9 @@ void testMaskBrushGpu() {
         return double(a[std::size_t(y) * kW + x]);
     };
 
-    orion::pipe::params::MaskBrush base{};
+    orion::pipe::params::MaskComponent base{};
     base.size[0] = kW; base.size[1] = kH;
+    base.kind = 3;
     base.radius = 0.2f;
     base.flow = 1.0f;
     base.hardness = 0.5f;
@@ -4664,13 +4678,12 @@ void testMaskBrushGpu() {
         b.count = 0;
         const auto empty = run(b);
 
-        // Every pixel, not one. `DevelopPipeline` chains this node after the
-        // gradient on *every* render and relies on a dabless pass being the
-        // identity — so a gradient mask now reaches develop:linear through a
-        // brush. If that is not bit-exact, every existing mask is quietly
-        // wrong, and checking the centre pixel alone would not notice: the
-        // centre is where a brush writes most confidently and an edge is where
-        // an off-by-one shows up.
+        // Every pixel, not one. A long stroke is several components chained
+        // nose to tail, each continuing the alpha it is handed — so a
+        // continuation pass that lays nothing must be exactly the identity, or
+        // every chained dispatch would erode the stroke before it. Checking the
+        // centre pixel alone would not notice: the centre is where a brush
+        // writes most confidently and an edge is where an off-by-one shows up.
         std::size_t differing = 0;
         double worst = 0;
         for (std::size_t i = 0; i < empty.size(); ++i) {
@@ -4686,6 +4699,9 @@ void testMaskBrushGpu() {
 
     // ── Flow zero is exactly nothing ──────────────────────────────────────
     {
+        // The chaining check above left its stroke in `src`; this one starts a
+        // fresh component over the group's identity.
+        src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         auto b = base;
         b.flow = 0.0f;
         b.count = 8;
@@ -4742,6 +4758,187 @@ void testMaskBrushGpu() {
         report(std::abs(alpha - (1.0 - std::pow(0.998, 40.0))) < 2e-3,
                "and the buildup is the source-over series, not something near it",
                std::to_string(alpha));
+    }
+}
+
+/// Mask groups — components folding into one coverage. research/masking.md §6.
+void testMaskCompositeGpu() {
+    section("Mask groups (GPU)");
+
+    using orion::gpu::PixelFormat;
+    constexpr std::uint32_t kW = 64, kH = 64;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto lib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/maskComponent.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
+
+    auto src = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto dst = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+
+    // Chains a list of components exactly as DevelopPipeline does: the fold
+    // starts from zero and each pass reads the one before it.
+    const auto fold = [&](const std::vector<orion::pipe::params::MaskComponent>& parts) {
+        std::vector<__fp16> alpha(std::size_t(kW) * kH, __fp16(0.0f));
+        for (const auto& p : parts) {
+            src->upload(alpha.data(), std::size_t(kW) * sizeof(__fp16));
+            orion::gpu::CommandBuffer cb(*device);
+            cb.dispatch(*kernel, {src.get(), dst.get()}, &p, sizeof p, kW, kH);
+            cb.commitAndWait();
+            dst->download(alpha.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+        }
+        return alpha;
+    };
+    const auto at = [&](const std::vector<__fp16>& a, int x, int y) {
+        return double(a[std::size_t(y) * kW + x]);
+    };
+
+    // Two radials, deliberately overlapping and deliberately *partial* in the
+    // overlap — the ops differ measurably only at fractional coverage, so full
+    // coverage would pass on the wrong algebra. Wide feather keeps the region
+    // between the centres in both falloffs.
+    orion::pipe::params::MaskComponent A{};
+    A.size[0] = kW; A.size[1] = kH;
+    A.kind = 2;
+    A.centre[0] = 0.375f; A.centre[1] = 0.5f;
+    A.semi[0] = 0.35f; A.semi[1] = 0.35f;
+    A.feather = 0.9f; A.roundness = 2.0f;
+
+    auto B = A;
+    B.centre[0] = 0.625f;
+
+    // Each alone, for reference — the algebra below is checked against what the
+    // kernel actually produces for the parts, not against a reimplementation of
+    // the falloff.
+    const auto a = fold({A});
+    const auto b = fold({B});
+
+    // A probe row through both centres, all in partial coverage.
+    const int y = 32;
+
+    {
+        auto B2 = B; B2.compose = 0;    // add
+        const auto got = fold({A, B2});
+        double worstMax = 0.0, vsScreen = 0.0;
+        for (int x = 8; x < 56; ++x) {
+            const double va = at(a, x, y), vb = at(b, x, y);
+            worstMax = std::max(worstMax,
+                                std::abs(at(got, x, y) - std::max(va, vb)));
+            // Screen is the research's own listed alternative, so it is the
+            // failure shape to rule out by name: smoother accumulation, but a
+            // visible strengthening where two components overlap.
+            vsScreen = std::max(vsScreen,
+                                std::abs(at(got, x, y) - (va + vb - va * vb)));
+        }
+        report(worstMax < 2e-3, "add is max: no buildup where components overlap",
+               "worst " + std::to_string(worstMax));
+        report(vsScreen > 0.05, "and is measurably not screen",
+               "differs by " + std::to_string(vsScreen));
+    }
+
+    {
+        auto B2 = B; B2.compose = 1;    // subtract
+        const auto got = fold({A, B2});
+        double worst = 0.0;
+        for (int x = 8; x < 56; ++x) {
+            const double want = at(a, x, y) * (1.0 - at(b, x, y));
+            worst = std::max(worst, std::abs(at(got, x, y) - want));
+        }
+        report(worst < 2e-3, "subtract is alpha1 * (1 - alpha2)",
+               "worst " + std::to_string(worst));
+    }
+
+    {
+        auto B2 = B; B2.compose = 2;    // intersect
+        const auto got = fold({A, B2});
+        double worst = 0.0;
+        for (int x = 8; x < 56; ++x) {
+            const double want = at(a, x, y) * at(b, x, y);
+            worst = std::max(worst, std::abs(at(got, x, y) - want));
+        }
+        report(worst < 2e-3, "intersect is alpha1 * alpha2",
+               "worst " + std::to_string(worst));
+    }
+
+    // ── Order sensitivity, which the research states rather than implies ────
+    //
+    // Components fold left in listed order: A then subtract-B masks A's region
+    // away from B; B-subtract then add-A is A alone, because subtracting from
+    // the fold's zero start is zero. If a reorder ever stops changing the
+    // answer, the fold has quietly become a merge.
+    {
+        auto Bsub = B; Bsub.compose = 1;
+        const auto ab = fold({A, Bsub});
+        const auto ba = fold({Bsub, A});
+        double biggest = 0.0;
+        for (int x = 8; x < 56; ++x) {
+            biggest = std::max(biggest,
+                               std::abs(at(ab, x, y) - at(ba, x, y)));
+        }
+        report(biggest > 0.05, "add then subtract is order-sensitive, as stated",
+               "differs by " + std::to_string(biggest));
+    }
+
+    // ── Invert reaches the brush now ─────────────────────────────────────────
+    //
+    // It never did before: the gradient node held the invert, the brush node
+    // discarded that node's output, so inverting a brush mask did nothing —
+    // the fourth dead control of the class found in session 2026-07-29n. Pin
+    // the fix: an inverted dab is full coverage far away and dips at the dab.
+    {
+        orion::pipe::params::MaskComponent s{};
+        s.size[0] = kW; s.size[1] = kH;
+        s.kind = 3;
+        s.invert = 1;
+        s.radius = 0.2f; s.flow = 1.0f; s.hardness = 0.5f;
+        s.count = 1;
+        s.dabs[0][0] = 0.5f; s.dabs[0][1] = 0.5f;
+        const auto got = fold({s});
+        report(std::abs(at(got, 4, 4) - 1.0) < 1e-3 &&
+               at(got, 32, 32) < 1e-3,
+               "inverting a brush component inverts the stroke",
+               std::to_string(at(got, 4, 4)) + " far, "
+                   + std::to_string(at(got, 32, 32)) + " under the dab");
+    }
+
+    // ── A subtracted brush erases from a gradient ───────────────────────────
+    //
+    // The shape §6 exists for: a sky gradient with the treeline painted back
+    // out. Under the dab the gradient must fall by exactly its own coverage
+    // times the dab's; away from the dab it must not move at all.
+    {
+        orion::pipe::params::MaskComponent g{};
+        g.size[0] = kW; g.size[1] = kH;
+        g.kind = 1;
+        g.zero[0] = 0.0f; g.zero[1] = 0.0f;
+        g.full[0] = 1.0f; g.full[1] = 0.0f;
+
+        orion::pipe::params::MaskComponent s{};
+        s.size[0] = kW; s.size[1] = kH;
+        s.kind = 3;
+        s.compose = 1;   // subtract
+        s.radius = 0.15f; s.flow = 1.0f; s.hardness = 0.5f;
+        s.count = 1;
+        s.dabs[0][0] = 0.75f; s.dabs[0][1] = 0.5f;
+
+        const auto grad = fold({g});
+        const auto stroke = fold({[&]{ auto t = s; t.compose = 0; return t; }()});
+        const auto got = fold({g, s});
+
+        const int dabX = 48;
+        const double want = at(grad, dabX, y) * (1.0 - at(stroke, dabX, y));
+        report(std::abs(at(got, dabX, y) - want) < 2e-3,
+               "a subtracted stroke erases the gradient under it",
+               std::to_string(at(got, dabX, y)) + " vs " + std::to_string(want));
+        report(std::abs(at(got, 8, y) - at(grad, 8, y)) < 1e-3,
+               "and leaves it exactly alone elsewhere",
+               std::to_string(std::abs(at(got, 8, y) - at(grad, 8, y))));
     }
 }
 
@@ -4925,6 +5122,7 @@ int main() {
     testAutoEnhanceStats();
     testMaskGpu();
     testMaskBrushGpu();
+    testMaskCompositeGpu();
     testMaskGeometry();
     testHighlightHaloGpu();
     testOutputDepth();

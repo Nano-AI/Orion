@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace orion::pipe::params {
@@ -368,48 +369,66 @@ struct FuseApply {
 };
 static_assert(sizeof(FuseApply) == 32);
 
-/// A gradient mask. Mirrors MaskParams in mask_gradient.slang.
-/// research/masking.md.
-struct alignas(8) MaskGradient {
+/// The value a mask group's fold starts from. Mirrors MaskBaseParams in
+/// mask_base.slang.
+struct MaskBase {
     std::uint32_t size[2];
-    std::int32_t  kind;        // 0 none, 1 linear, 2 radial
-    std::int32_t  invert;
-    float         zero[2];
-    float         full[2];
-    float         centre[2];
-    float         radius[2];
-    float         angle;
-    float         feather;
-    float         roundness;
+    float         value;
     float         _pad;
 };
-static_assert(sizeof(MaskGradient) == 64);
+static_assert(sizeof(MaskBase) == 16);
 
 /// How many dabs one dispatch lays down.
 ///
-/// A stroke is not capped at this — the kernel accumulates into the alpha it is
-/// given, so a long stroke is several dispatches of the same kernel chained
-/// nose to tail. Capping instead would either leave gaps in a long stroke or
-/// silently resample the photographer's stroke into something they did not
-/// draw. research/masking.md §1.
+/// A stroke is not capped at this by the *method* — a component with
+/// `accumulate` set continues the coverage it is handed, so a long stroke is
+/// several components chained nose to tail. Capping instead would either leave
+/// gaps in a long stroke or silently resample the photographer's stroke into
+/// something they did not draw. research/masking.md §1.
 inline constexpr int kMaskDabsPerPass = 256;
 
-/// A brush mask. Mirrors BrushParams in mask_brush.slang.
+/// How a component folds into the coverage before it. research/masking.md §6,
+/// and the same values `ops/mask_ops.slang` names.
+enum class MaskCompose : std::int32_t { Add = 0, Subtract = 1, Intersect = 2 };
+
+/// One mask component — a primitive plus how it combines with the ones listed
+/// before it. Mirrors MaskComponentParams in mask_component.slang, field for
+/// field and offset for offset; the asserts below are what keep the two honest,
+/// because a silently mismatched offset reads every later field from the wrong
+/// place and renders as a plausible-looking mask rather than as anything
+/// obviously broken.
 ///
-/// **One radius for the whole mask, not one per dab** — that is the research's
+/// **One radius for the whole brush, not one per dab** — that is the research's
 /// own shape, and it is what makes a stroke a few kilobytes of centres rather
 /// than a raster. research/masking.md §1 and §3.
-struct alignas(8) MaskBrush {
+struct alignas(8) MaskComponent {
     std::uint32_t size[2];
-    std::int32_t  count;       // dabs actually used this pass, <= kMaskDabsPerPass
-    std::int32_t  accumulate;  // 0 starts from empty, 1 builds on `src`
-    float         radius;      // normalized, one per mask
-    float         flow;        // 0..1, how much one dab lays down
+    std::int32_t  kind;        // 0 off, 1 linear, 2 radial, 3 brush
+    std::int32_t  invert;      // inverts this component, before the fold
+    std::int32_t  compose;     // MaskCompose
+    std::int32_t  count;       // dabs this pass, <= kMaskDabsPerPass
+    std::int32_t  accumulate;  // 1 continues the stroke in `src` and skips the fold
+    float         radius;      // brush nib, normalized
+    float         flow;        // 0..1 per dab
     float         hardness;    // 0 soft, 1 hard-edged
+    float         feather;     // radial, 0..1
+    float         roundness;   // radial superellipse exponent
+    float         angle;       // radial rotation, radians
     float         _pad;
-    float         dabs[kMaskDabsPerPass][2];   // centres, normalized
+    float         zero[2];     // linear
+    float         full[2];     // linear
+    float         centre[2];   // radial
+    float         semi[2];     // radial semi-axes, normalized
+    float         dabs[kMaskDabsPerPass][2];   // brush centres, normalized
 };
-static_assert(sizeof(MaskBrush) == 32 + kMaskDabsPerPass * 8);
+static_assert(sizeof(MaskComponent) == 88 + kMaskDabsPerPass * 8);
+// Every float2 in the shader's struct must land on an eight-byte boundary, or
+// Metal pads and every field after the first pair shifts.
+static_assert(offsetof(MaskComponent, zero)   == 56);
+static_assert(offsetof(MaskComponent, full)   == 64);
+static_assert(offsetof(MaskComponent, centre) == 72);
+static_assert(offsetof(MaskComponent, semi)   == 80);
+static_assert(offsetof(MaskComponent, dabs)   == 88);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {

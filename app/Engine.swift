@@ -264,11 +264,12 @@ final class Engine {
 
         // An empty stroke is a real state — it is what clearing the brush
         // means — so pass the null the facade documents rather than a dangling
-        // pointer into an empty array.
+        // pointer into an empty array. Component 0, because the interface edits
+        // one component until the panel grows rows.
         let status: OrionStatus = xy.isEmpty
-            ? orion_engine_set_brush_stroke(handle, nil, 0)
+            ? orion_engine_set_brush_stroke(handle, 0, nil, 0)
             : xy.withUnsafeBufferPointer {
-                  orion_engine_set_brush_stroke(handle, $0.baseAddress, Int32(points.count))
+                  orion_engine_set_brush_stroke(handle, 0, $0.baseAddress, Int32(points.count))
               }
         guard status == ORION_OK else { return }
 
@@ -819,45 +820,62 @@ final class Engine {
     /// Factored out because auto-enhance has to send the engine the *whole*
     /// state to measure against, not just the fields it is going to change.
     private func cAdjustments() -> OrionAdjustments {
-        OrionAdjustments(
-            temperature_k: temperatureK, tint: tint,
-            exposure_ev: exposureEv, highlights: highlights, shadows: shadows,
-            whites: whites, blacks: blacks,
-            vibrance: vibrance, saturation: saturation, contrast: contrast,
-            rotate_quarters: rotateQuarters, straighten_deg: straightenDeg,
-            crop_x: cropX, crop_y: cropY, crop_w: cropW, crop_h: cropH,
-            crop_preview: cropPreview ? 1 : 0,
-            preview_x: Float(previewCanvas.origin.x),
-            preview_y: Float(previewCanvas.origin.y),
-            preview_size: Float(previewCanvas.size),
-            lens_distortion: lensDistortion, lens_vignette: lensVignette,
-            lens_ca_red: lensCaRed, lens_ca_blue: lensCaBlue,
-            lens_profile: (lensProfileEnabled && hasLensProfile) ? 1 : 0,
-            highlight_recovery: highlightRecovery,
-            grade_shadow: (gradeShadow[0], gradeShadow[1], gradeShadow[2]),
-            grade_midtone: (gradeMidtone[0], gradeMidtone[1], gradeMidtone[2]),
-            grade_highlight: (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2]),
-            denoise_luma: denoiseLuma, denoise_color: denoiseColor,
-            lut_strength: lutStrength,
-            mask_kind: maskKind, mask_invert: maskInvert ? 1 : 0,
-            mask_centre_x: maskCentreX, mask_centre_y: maskCentreY,
-            mask_angle: maskAngle, mask_length: maskLength,
-            mask_radius_x: maskRadiusX, mask_radius_y: maskRadiusY,
-            mask_feather: maskFeather, mask_roundness: maskRoundness,
-            local_exposure_ev: localExposureEv,
-            brush_radius: brushRadius, brush_flow: brushFlow,
-            brush_hardness: brushHardness, brush_revision: brushRevision,
-            mask_overlay: maskOverlay ? 1 : 0,
-            fusion: fusion, dehaze: dehaze, clarity: clarity,
-            sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
-            sharpen_masking: sharpenMasking,
-            hue_shift: toTuple8(hueShift),
-            sat_shift: toTuple8(satShift),
-            lum_shift: toTuple8(lumShift),
-            curve_master: curveChannel(curve.master),
-            curve_red: curveChannel(curve.red),
-            curve_green: curveChannel(curve.green),
-            curve_blue: curveChannel(curve.blue))
+        // Field assignment rather than the memberwise initializer, deliberately:
+        // the memberwise form is positional over eighty arguments, so any change
+        // to the C struct's shape breaks it wholesale — and a transposed pair of
+        // same-typed floats would compile and ship. Assignment names every
+        // field, and a field this file forgets stays zeroed rather than shifted.
+        var a = OrionAdjustments()
+        a.temperature_k = temperatureK; a.tint = tint
+        a.exposure_ev = exposureEv; a.highlights = highlights; a.shadows = shadows
+        a.whites = whites; a.blacks = blacks
+        a.vibrance = vibrance; a.saturation = saturation; a.contrast = contrast
+        a.rotate_quarters = rotateQuarters; a.straighten_deg = straightenDeg
+        a.crop_x = cropX; a.crop_y = cropY; a.crop_w = cropW; a.crop_h = cropH
+        a.crop_preview = cropPreview ? 1 : 0
+        a.preview_x = Float(previewCanvas.origin.x)
+        a.preview_y = Float(previewCanvas.origin.y)
+        a.preview_size = Float(previewCanvas.size)
+        a.lens_distortion = lensDistortion; a.lens_vignette = lensVignette
+        a.lens_ca_red = lensCaRed; a.lens_ca_blue = lensCaBlue
+        a.lens_profile = (lensProfileEnabled && hasLensProfile) ? 1 : 0
+        a.highlight_recovery = highlightRecovery
+        a.grade_shadow = (gradeShadow[0], gradeShadow[1], gradeShadow[2])
+        a.grade_midtone = (gradeMidtone[0], gradeMidtone[1], gradeMidtone[2])
+        a.grade_highlight = (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2])
+        a.denoise_luma = denoiseLuma; a.denoise_color = denoiseColor
+        a.lut_strength = lutStrength
+
+        // The mask group. The interface still edits one component; the engine
+        // takes a list, and this is where the two meet until the panel grows
+        // rows. Kind 0 is "no mask", which is a count of zero — not a live
+        // component that happens to cover nothing.
+        var c0 = OrionMaskComponent()
+        c0.kind = maskKind
+        c0.compose = 0                     // the fold's first entry: add
+        c0.invert = maskInvert ? 1 : 0
+        c0.centre_x = maskCentreX; c0.centre_y = maskCentreY
+        c0.angle = maskAngle; c0.length = maskLength
+        c0.radius_x = maskRadiusX; c0.radius_y = maskRadiusY
+        c0.feather = maskFeather; c0.roundness = maskRoundness
+        c0.brush_radius = brushRadius; c0.brush_flow = brushFlow
+        c0.brush_hardness = brushHardness; c0.brush_revision = brushRevision
+        a.mask_components.0 = c0
+        a.mask_count = maskKind != 0 ? 1 : 0
+        a.local_exposure_ev = localExposureEv
+        a.mask_overlay = maskOverlay ? 1 : 0
+
+        a.fusion = fusion; a.dehaze = dehaze; a.clarity = clarity
+        a.sharpen_amount = sharpenAmount; a.sharpen_radius = sharpenRadius
+        a.sharpen_masking = sharpenMasking
+        a.hue_shift = toTuple8(hueShift)
+        a.sat_shift = toTuple8(satShift)
+        a.lum_shift = toTuple8(lumShift)
+        a.curve_master = curveChannel(curve.master)
+        a.curve_red = curveChannel(curve.red)
+        a.curve_green = curveChannel(curve.green)
+        a.curve_blue = curveChannel(curve.blue)
+        return a
     }
 
     /// Measures the picture and sets the sliders auto-enhance is allowed to

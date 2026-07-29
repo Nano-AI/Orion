@@ -256,12 +256,19 @@ The plan above is the plan of record; this is the state of it.
 
 | Step | Status |
 |---|---|
-| 1. Primitives — linear, radial | ✅ `mask_gradient.slang`, draggable on the canvas |
-| 1. Primitives — brush dabs | ✅ `mask_brush.slang`, paintable on the canvas |
-| 2. Groups and compositing (§6) | ❌ not started — **the next story** |
-| 3. Guided refinement (§4) | ❌ not started |
+| 1. Primitives — linear, radial | ✅ draggable on the canvas |
+| 1. Primitives — brush dabs | ✅ paintable on the canvas |
+| 2. Groups and compositing (§6) | ✅ **engine-side** — `mask_component.slang` folds per §6 (add = max, subtract, intersect), one node per component, `kMaxMaskComponents = 4`. The facade takes the list; the panel still drives one component. Group rows in the interface are the remaining half |
+| 3. Guided refinement (§4) | ❌ not started — **the next story** |
 | 4. Vision subject and person (§5) | ❌ not started |
 | 5. Sky | ❌ not started |
+
+The two primitive kernels are gone as separate files: one `mask_component.slang`
+serves all three primitives plus the fold, and the shared falloff moved to
+`ops/mask_ops.slang` with the compose ops (decision #62). The merge fixed a
+fourth dead control of session 2026-07-29n's class — invert never reached a
+brush, because the gradient node held it and the brush node discarded that
+node's output. Pinned by a GPU test now.
 
 **Departures from §1 and §3, both deliberate:**
 
@@ -275,9 +282,10 @@ The plan above is the plan of record; this is the state of it.
   photographers use.
 
 ⚠ **A stroke longer than 256 dabs is truncated**, with a warning on stderr. The
-kernel accumulates into the alpha it is handed and is built to chain, so this is
-a graph limitation and not a limit of the method: the fix is more nodes, not a
-bigger buffer.
+component kernel already carries the fix's shape — an `accumulate` flag that
+continues the stroke in its input and skips the fold — but nothing yet spends a
+second component node on the continuation. The fix is more nodes, not a bigger
+buffer.
 
 ⚠ **The nib's constants are not sourced.** Dab spacing, the hardness clamp and
 the overlay tint are all Orion's own, recorded in `UNSOURCED.md` §17 and §18.

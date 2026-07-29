@@ -59,8 +59,8 @@ set(ORION_SHADERS
     fuse_split:fuseSplit
     fuse_blend:fuseBlend
     fuse_apply:fuseApply
-    mask_gradient:maskGradient
-    mask_brush:maskBrush
+    mask_base:maskBase
+    mask_component:maskComponent
     develop_linear:developLinear
     develop_display:developDisplay
     geometry:geometry

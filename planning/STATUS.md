@@ -4,25 +4,26 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M4 — brush masks reachable; landing site live and redesigned)
+**Last updated:** 2026-07-29 (M4 — mask groups composited engine-side)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** —
-**step 1 of `research/masking.md` is finished and all of it is reachable by
-hand**: linear and radial gradients dragged on the canvas, brush strokes
-painted on it, the parameter-space application they feed, and a red overlay so
-the coverage can be seen while it is placed.
+step 1 of `research/masking.md` is finished and reachable by hand; **step 2's
+engine half is done**: a mask is now a *list* of components folded per §6
+(add/subtract/intersect), through the graph, the POD facade and the bench. The
+panel still drives one component — group rows in the interface are the
+remaining half of step 2.
 
 ⚠️ **M3 is done — do not rebuild it.** Dehaze, creative LUTs, exposure fusion
 and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has arrived four times; the answer each
 time is that they exist.
-**Next story:** M4 step 2 — mask groups and compositing (`research/masking.md`
-§6): the structural one, because it turns a single mask into a *list* and that
-reaches the POD facade, the sidecar format and undo history. Then step 3's
-guided-filter refinement, which is a second input binding on a filter that is
-already built and tested.
+**Next story:** M4 step 2's interface half — component rows in the panel
+(add/subtract/intersect per row, no op on the first row: the fold starts at
+zero, so subtract or intersect there is always zero), multi-component sidecar
+and undo. Then step 3's guided-filter refinement, a second input binding on a
+filter that is already built and tested.
 
-**Suites:** `orion-tests` **397 checks** · `orion-viewport-tests` **3230
+**Suites:** `orion-tests` **405 checks** · `orion-viewport-tests` **3230
 checks** · both 0 failures.
 
 ### Known gaps, carried forward
@@ -31,7 +32,8 @@ Small, named, and none of them blocking the next story:
 
 | Gap | Where |
 |---|---|
-| A brush stroke over **256 dabs is truncated** (warns on stderr). Needs more nodes, not a bigger buffer | `DevelopPipeline::apply` |
+| A brush stroke over **256 dabs is truncated** (warns on stderr). The kernel now carries the fix's shape — `accumulate` continues a stroke and skips the fold — but nothing spends a spare component node on the continuation | `DevelopPipeline::apply` |
+| **The panel drives one mask component.** The engine takes four; rows, per-row compose pickers and multi-component sidecar/undo are the interface half of step 2 | `DevelopPanels`, `Sidecar` |
 | **No bench probe for the brush** — probes take `Adjustments&`, a stroke needs `setBrushStroke` | `apps/bench` |
 | The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph | `Engine.export` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
@@ -40,6 +42,68 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-29q — mask groups, the engine half
+
+`research/masking.md` §6, decision #62. A mask is now a **list of components**
+folded left in listed order — add is `max` (no buildup where two overlap, which
+is the section's first sentence), subtract is `α₁(1−α₂)`, intersect `α₁·α₂` —
+and the adjustment is applied once through the combined coverage.
+
+**The two mask kernels became one, and the merge found a fourth dead control.**
+Decision #55's shape — a gradient node with a brush node chained after it, one
+always passing through — existed only because the graph cannot swap a kernel per
+render. `mask_component.slang` branches on `kind` instead, one node per
+component, and the pass-through contortion is gone. What it had been hiding:
+**invert never reached a brush** — the gradient node held the invert and the
+brush node discarded that node's output. Same class as session `2026-07-29n`'s
+three. Pinned by a GPU test now, and the mutation restoring the old behaviour
+dies.
+
+**The fold starts from a node that writes zero** — the additive identity — so
+the first component needs no special case and a group of one runs the same code
+as a group of four. Consequence stated in the header docs: subtract or
+intersect on the *first* row is always zero, so the interface should not offer
+an op there.
+
+**`kMaxMaskComponents` is 4, and it is a memory number, not a concept.** Each
+live component is a full-resolution R16F pass; unused ones are disabled — their
+texture is the cost, none of their time. 118 nodes, 6092 MiB (was 5907);
+the M0 gate is unmoved at **9.13–9.39 ms p95**.
+
+**Found on the way: mask placement went stale under a crop.** The old
+`maskMoved` staleness had no geometry fields, and the geometry block never
+re-pushed the mask params — so after a crop or straighten the coverage kept its
+old placement until a mask slider happened to move. The rewrite computes the
+shared frame geometry once and re-places every live component when it moves.
+
+**Verified, in three registers:**
+
+- **The pre-merge numbers reproduce exactly.** The two GPU mask test suites now
+  run against `maskComponent` with every pinned number unchanged — smootherstep
+  against the closed form, source-over at partial flow (0.75 not 1.0), the
+  airbrush series `1 − 0.998⁴⁰`, R16F resolving all forty steps.
+- **The compose algebra is checked against the kernel's own parts**, not a
+  reimplementation: each op on two overlapping radials, add measurably *not*
+  screen (differs 0.095 where max matches to 2e-3), subtract-then-add order
+  sensitivity, and a subtracted stroke erasing a gradient under the dab while
+  leaving it exactly alone elsewhere.
+- **On photographs:** zero-coverage bit-identity through the whole new chain on
+  `_PIC8220` (`--measure`, luma 0.3856 → 0.3856 to four decimals beyond the
+  ramp; 0.3767 → 0.1716 past the full line). A new bench probe drives a
+  **group of two** through the real pipeline — linear +2 EV with a radial
+  subtracted — the only thing that would catch the chain miswired; floors
+  0.47/0.44/0.60 of reference across the three frames, floored at 0.22.
+
+**Facade:** `OrionMaskComponent[4]` plus `mask_count` in the adjustments block;
+`orion_engine_set_brush_stroke` takes a component index (out of range is
+`BAD_ARG`, not a clamp — paint in the wrong component is worse than nothing).
+Swift's `cAdjustments()` became named field assignment rather than the
+80-argument positional init, which a transposed pair of same-typed floats would
+have survived silently.
+
+Also: the falloff was **two identical copies each commented "shared"** —
+`ops/mask_ops.slang` now actually holds the one copy, next to the compose ops.
 
 ## Session 2026-07-29p — the landing page, redesigned around one idea
 
