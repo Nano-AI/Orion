@@ -258,7 +258,7 @@ The plan above is the plan of record; this is the state of it.
 |---|---|
 | 1. Primitives — linear, radial | ✅ draggable on the canvas |
 | 1. Primitives — brush dabs | ✅ paintable on the canvas |
-| 2. Groups and compositing (§6) | ✅ **engine-side** — `mask_component.slang` folds per §6 (add = max, subtract, intersect), one node per component, `kMaxMaskComponents = 4`. The facade takes the list; the panel still drives one component. Group rows in the interface are the remaining half |
+| 2. Groups and compositing (§6) | ✅ **done** — `mask_component.slang` folds per §6 (add = max, subtract, intersect), one node per component, `kMaxMaskComponents = 4`. Panel rows with a per-row op, sidecar and undo all carry the list; pre-group sidecars migrate to one component |
 | 3. Guided refinement (§4) | ❌ not started — **the next story** |
 | 4. Vision subject and person (§5) | ❌ not started |
 | 5. Sky | ❌ not started |

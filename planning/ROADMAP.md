@@ -109,7 +109,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 
 - ✅ Gradient masks (linear + radial) — parametric, applied to the parameter
 - Luminance and color range masks — cheap given M1's bilateral grid
-- Mask combine operators (add/subtract/intersect) — ✅ engine-side 2026-07-29 (decision #62); panel rows pending
+- ✅ Mask combine operators (add/subtract/intersect) — 2026-07-29, decision #62
 - AI subject/sky selection (Core ML) — needs the mask system first
 - Spot removal (sensor dust and blemishes, not Photoshop-grade healing)
 - Brush masks — **reinstated 2026-07-29**, see DECISIONS #54 (was cut from v1)

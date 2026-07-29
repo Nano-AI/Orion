@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M4 — mask groups composited engine-side)
+**Last updated:** 2026-07-29 (M4 — **step 2 complete**, mask groups end to end)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** —
 step 1 of `research/masking.md` is finished and reachable by hand; **step 2's
 engine half is done**: a mask is now a *list* of components folded per §6
@@ -17,13 +17,11 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has arrived four times; the answer each
 time is that they exist.
-**Next story:** M4 step 2's interface half — component rows in the panel
-(add/subtract/intersect per row, no op on the first row: the fold starts at
-zero, so subtract or intersect there is always zero), multi-component sidecar
-and undo. Then step 3's guided-filter refinement, a second input binding on a
-filter that is already built and tested.
+**Next story:** M4 **step 3** — guided-filter refinement (`research/masking.md`
+§4), a second input binding on a filter that is already built and tested for
+dehaze. Step 2 is finished: engine, facade, panel rows, sidecar and undo.
 
-**Suites:** `orion-tests` **405 checks** · `orion-viewport-tests` **3230
+**Suites:** `orion-tests` **405 checks** · `orion-viewport-tests` **3252
 checks** · both 0 failures.
 
 ### Known gaps, carried forward
@@ -42,6 +40,43 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-29r — mask groups reach the interface
+
+The other half of step 2. A mask was a list in the engine; now it is one in the
+app, so **an engine feature nobody can select is finished at last**.
+
+`DevelopState` carries `maskComponents`, and **each component holds its own
+stroke** rather than strokes living in a parallel array — that arrangement is
+how a reorder puts someone's paint on the wrong component. The panel gains a
+row list (number, kind, op, dab count), Add and Remove, and a compose picker
+that appears **only on rows after the first**, because the fold starts from
+zero: add is the identity there and subtract or intersect gives an empty group.
+
+**The `mask…` properties on `Engine` became views onto the selected row**, so
+the sliders, the canvas overlay and the screenshot harness bind exactly as
+before — the churn stayed in one file. The kind picker keeps its old meaning at
+both ends: a kind on an empty group adds a component, `No mask` on a row
+removes it.
+
+⚠️ **Removal has to re-send every stroke.** The engine indexes strokes by
+component, so removing row 1 of three shifts row 2's paint down with it and the
+vacated tail must be cleared — otherwise the surviving component renders the
+removed one's stroke, and the next component added inherits paint nobody drew.
+
+### The migration is the load-bearing part
+
+Every photo finished between gradient masks and groups has flat `maskKind` keys
+and no `maskComponents` — and **`localExposureEv` kept its own name through the
+change**. So dropping the mask would not open those photos unedited. It would
+open them with the local exposure applied to the **whole frame**, which reads as
+a working editor and is worse than a crash. Legacy keys are read and never
+written, alongside `denoiseColour`.
+
+**A component list that is present wins over legacy keys.** A file holding both
+came from a newer build, and preferring the flat keys would silently discard
+rows two and up. Pinned, with the off-row drop and a three-component round trip
+including every op: 22 new checks in `orion-viewport-tests`.
 
 ## Session 2026-07-29q — mask groups, the engine half
 
