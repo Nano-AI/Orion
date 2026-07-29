@@ -11,9 +11,9 @@ which requires this notice and the license text to travel with them.
     Copyright 2016 The Space Mono Project Authors
     https://github.com/googlefonts/spacemono
 
-  Michroma             (Michroma-400.woff2)
-    Copyright 2011 The Michroma Project Authors
-    https://github.com/googlefonts/Michroma-font
+  Space Grotesk        (SpaceGrotesk-var.woff2)
+    Copyright 2020 The Space Grotesk Project Authors
+    https://github.com/floriankarsten/space-grotesk
 
 Copyright lines taken from each family's own OFL.txt upstream, not
 transcribed from memory. The license text below is the standard OFL 1.1.
