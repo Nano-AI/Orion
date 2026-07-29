@@ -29,10 +29,21 @@ support what it is attached to.
 | File | Covers |
 |---|---|
 | [`color-pipeline.md`](color-pipeline.md) | Scene-referred design, camera matrices, white balance, AgX display transform |
+| [`camera-profiles.md`](camera-profiles.md) | The rest of a DNG profile — BaselineExposure and HueSatMap |
 | [`demosaic.md`](demosaic.md) | CFA interpolation, and the gap between what we ship and RCD proper |
 | [`tone-and-local-contrast.md`](tone-and-local-contrast.md) | Guided filter, local shadows/highlights, curves |
+| [`local-laplacian.md`](local-laplacian.md) | Clarity — Paris et al. 2011, and Aubry et al.'s fast approximation |
+| [`dehaze.md`](dehaze.md) | The dark channel prior, and the guided filter as its refinement |
+| [`luts.md`](luts.md) | `.cube` files and tetrahedral interpolation |
+| [`color-grading.md`](color-grading.md) | Three-way grading wheels, as ASC CDL per tonal zone |
 | [`detail.md`](detail.md) | Sharpening and denoising |
+| [`lens-corrections.md`](lens-corrections.md) | Distortion, TCA and vignetting; the vendored lensfun database |
+| [`masking.md`](masking.md) | Plan of record for M4's local edits — not built |
+| [`deep-research-2026-07-27.md`](deep-research-2026-07-27.md) | A research run's raw findings, referenced by several entries above |
 | [`UNSOURCED.md`](UNSOURCED.md) | **Honest register of what is still invention** |
+
+Keep this table complete. It went eight files stale once, which is how a
+codebase ends up with research nobody reads because nobody knows it is there.
 
 ## How to challenge an entry
 
