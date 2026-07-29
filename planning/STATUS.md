@@ -8,15 +8,51 @@
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** — step 1
 of `research/masking.md` is built: linear and radial gradient primitives, and
 the parameter-space application they feed.
-**Next story:** dragging the gradient on the canvas — the geometry is currently
-driven by sliders, which is usable but is not how anyone places a mask. Then M4
-step 2, mask groups and compositing (add / subtract / intersect), and step 3's
-guided-filter refinement, which needs no new dependency because the filter is
-already a node.
+**Next story:** dragging the gradient on the canvas. The coordinate transform it
+needs is now built and tested (`pipe/MaskGeometry.h`), so what remains is the
+overlay and the hit testing — and both must go through `CanvasLayout`, which is
+the one copy of where the picture actually is. Then M4 step 2, mask groups and
+compositing, and step 3's guided-filter refinement.
+
+**Suites:** `orion-tests` **384 checks** · `orion-viewport-tests` **2088
+checks** · both 0 failures.
 
 **Suites:** `orion-tests` **374 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
 the M0 gate passes at 9.29 ms p95. 114 nodes, 5907 MiB.
+
+## Session 2026-07-29j — a mask has to stay on its subject
+
+Found while thinking about canvas dragging, which turned out to be the smaller
+half of the problem. **Masks are placed on the picture the user sees — cropped
+and rotated — but applied in `develop:linear`, which runs before the geometry
+node and sees neither.** Handing displayed coordinates straight to the shader
+means a mask slides off its subject the moment the frame is turned, and shrinks
+away from it under a crop.
+
+`pipe/MaskGeometry.h` is the transform, and it is the payoff for masks being
+parametric rather than raster: nothing to resample, only a centre, an angle and
+two radii to move.
+
+Three things that are individually easy to get wrong, each with its own test:
+
+- **The crop applies before the turns.** The displayed picture *is* the crop, so
+  a point halfway across the visible image is halfway across the crop rectangle,
+  not across the frame.
+- **The angle turns with the picture**, or a gradient placed across the frame
+  runs down it after a rotation.
+- **Radial semi-axes swap on an odd quarter turn, a gradient's length does
+  not** — a length is measured along its own direction, semi-axes have an axis
+  each.
+
+The invariant the suite leans on: place a mask where the subject appears, turn
+that placement forward through the same rotation, and it must land back where it
+was put. Holds for all four turns across three points.
+
+⚠️ **Straighten is not handled** — only quarter turns and crop. A straightened
+frame drifts its masks by the straighten angle. Recorded rather than implied,
+and it is the first thing to fix when the canvas overlay lands, because that is
+where it will become visible.
 
 ## Session 2026-07-29i — masks made reachable
 
