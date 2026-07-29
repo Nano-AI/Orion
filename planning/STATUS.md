@@ -4,16 +4,73 @@
 
 ---
 
-**Last updated:** 2026-07-28 (M3 — clarity and dehaze)
-**Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity and
-dehaze built and measured; creative LUTs, exposure fusion and auto-enhance
-still to come.
-**Next story:** creative LUTs (.cube, tetrahedral interpolation) — the smallest
-remaining M3 item and the only one with no new maths to source.
+**Last updated:** 2026-07-28 (M3 — clarity, dehaze, creative LUTs)
+**Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity, dehaze
+and creative LUTs built and measured; single-image exposure fusion and
+auto-enhance still to come.
+**Next story:** single-image exposure fusion (Hasinoff et al. HDR+, extended to
+one image by Hessel & Morel, WACV 2020 — both already cited in
+`tone-and-local-contrast.md`).
 
-**Suites:** `orion-tests` **304 checks** · `orion-viewport-tests` **2088
-checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
-the M0 gate passes on all three at 8.97 / 9.21 / 9.73 ms p95.
+**Suites:** `orion-tests` **319 checks** · `orion-viewport-tests` **2088
+checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames.
+
+## Session 2026-07-28f — M3 story 3, creative LUTs
+
+`.cube` files, applied last in the display kernel with tetrahedral
+interpolation. `research/luts.md`.
+
+**Cheap, because it is fused.** The lookup lives inside
+`develop_display.slang` rather than in a node of its own, following the rule
+this pipeline already had about pointwise passes. Measured: changing the look
+recomputes **2 nodes and 7 ms**.
+
+### Tetrahedral, and why the test is built the way it is
+
+Trilinear and tetrahedral **agree exactly on anything linear across a cell**, so
+a gentle LUT cannot distinguish them and "it looks right" proves nothing. They
+diverge only where a LUT has a hard boundary — a key, a hue restriction, most
+film emulations — because trilinear reads four corners from the far side of it.
+
+So the test builds a table that is zero at every corner except (1,1,1), where
+the two must disagree: tetrahedral returns the smallest fractional coordinate,
+trilinear their product. 0.4 against 0.12.
+
+### Two bugs written and caught, both by tests that exist for the purpose
+
+- **The grid's row stride used the texture's width where the shader used the
+  LUT's own edge.** The texture is allocated at 65 to hold any grid; the packing
+  must be `b·size + g` in both places. Getting it wrong puts every blue slice in
+  the wrong row, which renders as a plausible colour cast rather than as
+  anything obviously broken. The identity-LUT check is the only thing here that
+  would have found it.
+- **`lutStrength` was missing from the display node's change detection**, so the
+  slider did nothing at all. Not visible by inspection; the bench reported the
+  control as dead with 0 nodes recomputed.
+
+### The reader reads the format, not the feature
+
+Comments anywhere, CRLF, quoted titles, mixed-case keywords, `DOMAIN_MIN`/`MAX`,
+and a 1D LUT **lifted onto the 3D grid** — a 1D LUT is a separable 3D one, so
+the lift is exact at the grid nodes and downstream there is one code path
+instead of a branch only some files exercise. Errors name the line: a LUT that
+will not load is the user's file being wrong, and they need to know which line.
+
+Sizes above 65 are refused by name rather than truncated.
+
+### ⚠️ Both references are unverified
+
+The session's web-search budget was exhausted (200/200) and direct fetches for
+Adobe's *Cube LUT Specification* and Kasson et al. (1995) did not land. So two
+things are believed rather than sourced, and are in `UNSOURCED.md` §12: that
+**red varies fastest** in a `.cube` data block, and that tetrahedral is the
+right choice among trilinear/prism/pyramid/tetrahedral.
+
+The ordering is asserted by test, but the assertion encodes the belief — it does
+not independently confirm it. If it is wrong, every LUT Orion loads has red and
+blue swapped. **Closing this is the first thing the next session with a search
+budget should do.** The interpolation's *correctness* is checked directly and
+does not depend on the citation; the *choice* does.
 
 ## Session 2026-07-28e — M3 story 2, dehaze
 

@@ -98,7 +98,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 - ✅ Dehaze (dark channel prior) *(He, Sun & Tang; guided-filter refinement)*
 - **Auto-enhance** combining the above with percentile auto-levels
 - Color grading wheels (ASC CDL), split toning, vignette
-- Creative LUTs (.cube, tetrahedral)
+- ✅ Creative LUTs (.cube, tetrahedral) — ⚠️ references unverified, see `research/UNSOURCED.md` §12
 - Segmentation-based highlight reconstruction
 
 ---
