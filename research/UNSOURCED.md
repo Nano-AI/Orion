@@ -83,7 +83,16 @@ does. See [detail.md](detail.md).
 
 ---
 
-## 6. Tint as a y-offset
+## 6. ~~Tint as a y-offset~~ — RESOLVED 2026-07-29
+
+Replaced with Robertson's isotemperature lines as Adobe's DNG SDK implements
+them: the offset now runs along the interpolated isotherm in CIE 1960 UCS, with
+Adobe's `kTintScale = −3000`. Thirteen of Adobe's own `(temperature, tint) → xy`
+vectors are asserted to 2 × 10⁻⁵. See `research/color-pipeline.md`.
+
+### The original entry
+
+
 
 **Where:** `WhiteBalance.cpp`, `multipliersFor`.
 

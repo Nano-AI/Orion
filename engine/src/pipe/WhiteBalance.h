@@ -21,6 +21,13 @@ struct WhiteBalance {
 /// Per-channel multipliers (R, G, B) that neutralize the given illuminant for
 /// a camera whose XYZ->camera matrix is `xyzToCam`, row-major 3x3.
 /// Normalized so green is 1.
+/// The white point this temperature and tint describe, in CIE 1931 xy.
+///
+/// Exposed because it is the part worth checking against Adobe directly: the
+/// multipliers that follow depend on the camera matrix, so a disagreement there
+/// could be either the locus or the profile, and the test would not say which.
+void whitePointXy(const WhiteBalance&, float& x, float& y);
+
 std::array<float, 3> multipliersFor(const WhiteBalance&, const float xyzToCam[9]);
 
 /// Best-fitting temperature and tint for a set of as-shot multipliers, so the

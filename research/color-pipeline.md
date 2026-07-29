@@ -198,3 +198,60 @@ easy to miss because the result still looks like a photograph.
   Rec.709 conversion added; sRGB double-encode removed. Neutrality test added.
 - **2026-07-27** — White balance re-anchored on the camera's own multipliers
   rather than an inferred temperature.
+
+
+## White balance: temperature and tint, done Adobe's way — 2026-07-29
+
+**This replaces a real defect.** Tint used to shift CIE 1931 *y* by
+`tint × 0.05`. That is wrong three ways at once: wrong **space** (the offset
+belongs in CIE 1960 UCS, not in the non-uniform 1931 xy plane), wrong
+**direction** (it runs along the isotemperature line, whose slope changes with
+temperature, not along a fixed axis), and wrong **scale**.
+
+**Method:** Robertson, A. R., *Computation of Correlated Color Temperature and
+Distribution Temperature*, JOSA **58**(11), 1968, 1528–1535
+([DOI](https://doi.org/10.1364/JOSA.58.001528)).
+
+**The numbers are not Robertson's.** Adobe's own comment in
+`dng_sdk/source/dng_temperature.cpp` attributes the 31-row isotemperature table
+to Wyszecki & Stiles, *Color Science: Concepts and Methods, Quantitative Data
+and Formulae*, 2nd ed., Table 1(3.11), p. 228. Cite both: Robertson for the
+method, W&S for the table.
+
+Orion implements `dng_temperature::Get_xy_coord`: bracket on reciprocal
+temperature, interpolate the locus point, blend and **renormalise** the two
+bracketing isotherm unit vectors — not the slopes, which is a different thing
+once they steepen past −100 — and displace along the result by
+`tint / −3000`, Adobe's `kTintScale`. Orion's −1…1 tint maps onto Adobe's
+±150, which is also Lightroom's range.
+
+### ⚠️ A typo is kept on purpose
+
+Row `r = 325` carries `u = 0.24702` in the DNG SDK, versions 1.1 through 1.7.1.
+Bruce Lindbloom's transcription — and every implementation descended from it,
+including RawTherapee and colour-science — uses **0.24792**, with an explicit
+correction note. Recomputing the locus from Planck's law against the CIE 1931 2°
+observer gives **0.247924**: the error at that row is roughly *two hundred times*
+any other row's, so 0.24702 is a genuine mistake in the source book, copied
+verbatim by Adobe and still shipping.
+
+**Orion keeps 0.24702**, because the goal is to agree with Adobe rather than
+with physics. A photographer cross-checking a tungsten frame against Lightroom
+should see the same numbers. Correcting it would move the white point by up to
+**0.0011 in xy around 3080 K** — about 23 K and 1.1 tint units, squarely in
+tungsten territory. Bug-compatibility is the deliberate choice, recorded here so
+it is not "fixed" by someone who spots it.
+
+### What the tests pin
+
+Thirteen `(temperature, tint) → xy` vectors from a line-by-line port of Adobe's
+routine, matched to better than 2 × 10⁻⁵. And separately, that the tint
+displacement's **direction turns with temperature** — which is exactly what the
+old fixed-axis version could not do.
+
+⚠️ **D65 does not sit at tint 0.** It lands near **+9.77**, because D65 is on
+the *daylight* locus, which is above the Planckian locus in uv; every D-series
+illuminant reads about +9.5 to +10. Illuminant A, which *is* defined as a
+Planckian radiator at 2856 K, reads tint 0.008 — that is the sanity check that
+the locus is right. Anyone writing a test that asserts `tint(D65) ≈ 0` will find
+it fails against real Adobe behaviour, and the test would be wrong, not the code.

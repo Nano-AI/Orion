@@ -6,26 +6,119 @@
 namespace orion::pipe {
 namespace {
 
-/// Kim et al.'s cubic approximation of the Planckian locus in CIE 1931 xy,
-/// accurate from 1667 K to 25000 K — comfortably wider than any photographic
-/// white balance a user will reach for.
-void locusXy(float cct, float& x, float& y) {
-    const float t = std::clamp(cct, 1667.0f, 25000.0f);
-    const float t2 = t * t, t3 = t2 * t;
+/// Robertson's isotemperature lines, as Adobe's DNG SDK ships them.
+///
+/// `r` is reciprocal megakelvin (T = 1e6/r), `u` and `v` are the Planckian
+/// radiator's CIE 1960 UCS coordinates there, and `t` is the slope dv/du of the
+/// isotemperature line through it.
+///
+/// Method: Robertson, A. R., "Computation of Correlated Color Temperature and
+/// Distribution Temperature", JOSA 58(11), 1968, 1528–1535. The numbers are not
+/// his — Adobe's own comment attributes them to Wyszecki & Stiles, *Color
+/// Science*, 2nd ed., Table 1(3.11), p. 228.
+///
+/// ⚠️ **Row r = 325 carries a typo, and it is kept deliberately.** Adobe ships
+/// u = 0.24702 there; Bruce Lindbloom's transcription and every implementation
+/// descended from it use 0.24792, and recomputing the locus from Planck's law
+/// against the CIE 1931 2° observer puts the correct value at 0.247924 — the
+/// error at that row is two hundred times any other row's. So 0.24702 is a
+/// genuine mistake in the source book, copied verbatim into the DNG SDK and
+/// still shipping.
+///
+/// Orion keeps it, because the goal here is to agree with Adobe rather than
+/// with physics: a photographer cross-checking a tungsten frame against
+/// Lightroom should see the same numbers. Correcting it would move the white
+/// point by up to 0.0011 in xy around 3080 K — about 23 K and 1.1 tint units.
+/// Recorded in research/color-pipeline.md.
+struct Isotherm { double r, u, v, t; };
 
-    if (t <= 4000.0f) {
-        x = -0.2661239e9f / t3 - 0.2343589e6f / t2 + 0.8776956e3f / t + 0.179910f;
-    } else {
-        x = -3.0258469e9f / t3 + 2.1070379e6f / t2 + 0.2226347e3f / t + 0.240390f;
-    }
+static const Isotherm kTempTable[] = {
+    {   0, 0.18006, 0.26352,   -0.24341 },
+    {  10, 0.18066, 0.26589,   -0.25479 },
+    {  20, 0.18133, 0.26846,   -0.26876 },
+    {  30, 0.18208, 0.27119,   -0.28539 },
+    {  40, 0.18293, 0.27407,   -0.30470 },
+    {  50, 0.18388, 0.27709,   -0.32675 },
+    {  60, 0.18494, 0.28021,   -0.35156 },
+    {  70, 0.18611, 0.28342,   -0.37915 },
+    {  80, 0.18740, 0.28668,   -0.40955 },
+    {  90, 0.18880, 0.28997,   -0.44278 },
+    { 100, 0.19032, 0.29326,   -0.47888 },
+    { 125, 0.19462, 0.30141,   -0.58204 },
+    { 150, 0.19962, 0.30921,   -0.70471 },
+    { 175, 0.20525, 0.31647,   -0.84901 },
+    { 200, 0.21142, 0.32312,   -1.0182  },
+    { 225, 0.21807, 0.32909,   -1.2168  },
+    { 250, 0.22511, 0.33439,   -1.4512  },
+    { 275, 0.23247, 0.33904,   -1.7298  },
+    { 300, 0.24010, 0.34308,   -2.0637  },
+    { 325, 0.24702, 0.34655,   -2.4681  },
+    { 350, 0.25591, 0.34951,   -2.9641  },
+    { 375, 0.26400, 0.35200,   -3.5814  },
+    { 400, 0.27218, 0.35407,   -4.3633  },
+    { 425, 0.28039, 0.35577,   -5.3762  },
+    { 450, 0.28863, 0.35714,   -6.7262  },
+    { 475, 0.29685, 0.35823,   -8.5955  },
+    { 500, 0.30505, 0.35907,  -11.324   },
+    { 525, 0.31320, 0.35968,  -15.628   },
+    { 550, 0.32129, 0.36011,  -23.325   },
+    { 575, 0.32931, 0.36038,  -40.770   },
+    { 600, 0.33724, 0.36051, -116.45    },
+};
+static constexpr int kTempRows = int(sizeof(kTempTable) / sizeof(kTempTable[0]));
 
-    const float x2 = x * x, x3 = x2 * x;
-    if (t <= 2222.0f) {
-        y = -1.1063814f * x3 - 1.34811020f * x2 + 2.18555832f * x - 0.20219683f;
-    } else if (t <= 4000.0f) {
-        y = -0.9549476f * x3 - 1.37418593f * x2 + 2.09137015f * x - 0.16748867f;
-    } else {
-        y =  3.0817580f * x3 - 5.87338670f * x2 + 3.75112997f * x - 0.37001483f;
+/// Adobe's `kTintScale`. Purely a unit conversion: the displacement along the
+/// isotemperature line is `tint / -3000`. The sign is what makes positive tint
+/// read as magenta in the picture, matching the slider everyone already knows.
+inline constexpr double kTintScale = -3000.0;
+
+/// Orion's tint is -1…1; Adobe's is ±150, which is also Lightroom's range.
+inline constexpr double kTintPerUnit = 150.0;
+
+/// `dng_temperature::Get_xy_coord` — temperature and tint to a white point.
+///
+/// The tint offset moves **along the interpolated isotemperature line**, in
+/// CIE 1960 UCS. That is the correction this replaces: shifting CIE 1931 y by a
+/// constant was wrong in the space, wrong in the direction (which is
+/// temperature-dependent), and wrong in the scale.
+void locusXy(float cct, float tintUnits, float& outX, float& outY) {
+    const double r = 1.0e6 / std::clamp(double(cct), 1000.0, 1.0e6);
+    const double offset = double(tintUnits) * kTintPerUnit / kTintScale;
+
+    for (int i = 0; i <= kTempRows - 2; ++i) {
+        if (r < kTempTable[i + 1].r || i == kTempRows - 2) {
+            // Weight of the first line. Note this brackets on reciprocal
+            // temperature, not on temperature — the table is uniform in r.
+            const double f = (kTempTable[i + 1].r - r) /
+                             (kTempTable[i + 1].r - kTempTable[i].r);
+
+            double u = kTempTable[i].u * f + kTempTable[i + 1].u * (1.0 - f);
+            double v = kTempTable[i].v * f + kTempTable[i + 1].v * (1.0 - f);
+
+            // Unit vectors along each bracketing isotherm, blended and
+            // renormalized — not the blend of the slopes, which is not the same
+            // thing once they are steep.
+            const double len1 = std::sqrt(1.0 + kTempTable[i].t * kTempTable[i].t);
+            const double len2 = std::sqrt(1.0 + kTempTable[i + 1].t * kTempTable[i + 1].t);
+
+            const double uu1 = 1.0 / len1, vv1 = kTempTable[i].t / len1;
+            const double uu2 = 1.0 / len2, vv2 = kTempTable[i + 1].t / len2;
+
+            double uu3 = uu1 * f + uu2 * (1.0 - f);
+            double vv3 = vv1 * f + vv2 * (1.0 - f);
+            const double len3 = std::sqrt(uu3 * uu3 + vv3 * vv3);
+            uu3 /= len3;
+            vv3 /= len3;
+
+            u += uu3 * offset;
+            v += vv3 * offset;
+
+            // CIE 1960 uv back to CIE 1931 xy.
+            const double denom = u - 4.0 * v + 2.0;
+            outX = float(1.5 * u / denom);
+            outY = float(v / denom);
+            return;
+        }
     }
 }
 
@@ -37,14 +130,13 @@ std::array<float, 3> applyMatrix(const float m[9], const std::array<float, 3>& v
 
 }  // namespace
 
+void whitePointXy(const WhiteBalance& wb, float& x, float& y) {
+    locusXy(wb.temperatureK, wb.tint, x, y);
+}
+
 std::array<float, 3> multipliersFor(const WhiteBalance& wb, const float xyzToCam[9]) {
     float x = 0.0f, y = 0.0f;
-    locusXy(wb.temperatureK, x, y);
-
-    // Tint moves perpendicular to the locus — the green/magenta axis. A small
-    // offset in y is close enough to perpendicular over the range that matters,
-    // and it is what users actually feel as "more green" or "more magenta".
-    y += wb.tint * 0.05f;
+    locusXy(wb.temperatureK, wb.tint, x, y);
     y = std::max(y, 1e-4f);
 
     // xy at unit luminance -> XYZ.

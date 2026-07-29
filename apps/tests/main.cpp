@@ -70,6 +70,70 @@ constexpr float kSonyXyzToCam[9] = {
     -0.1006f,  0.1795f,  0.6552f,
 };
 
+/// The Planckian locus and the tint axis, against Adobe's own numbers.
+///
+/// Orion used to shift CIE 1931 y by `tint * 0.05`, which was wrong three ways:
+/// wrong space (the offset belongs in CIE 1960 UCS), wrong direction (it runs
+/// along the isotemperature line, whose slope depends on temperature), and
+/// wrong scale. These vectors come from a line-by-line port of
+/// `dng_temperature::Get_xy_coord`, so passing them means agreeing with
+/// Lightroom rather than merely being self-consistent.
+void testPlanckianLocus() {
+    section("Planckian locus and tint");
+
+    // (temperature, Adobe tint) -> xy. Orion's tint is -1..1 against Adobe's
+    // +/-150, so the third column is divided by 150 on the way in.
+    struct Vector { float kelvin; float adobeTint; double x, y; };
+    static const Vector kVectors[] = {
+        { 2000.0f,    0.0f, 0.52669291, 0.41330847 },
+        { 2856.0f,    0.0f, 0.44754761, 0.40743728 },
+        { 3000.0f,    0.0f, 0.43610027, 0.40418917 },
+        { 4000.0f,    0.0f, 0.38044617, 0.37675624 },
+        { 5000.0f,    0.0f, 0.34510414, 0.35162252 },
+        { 6500.0f,    0.0f, 0.31352792, 0.32353408 },
+        { 7500.0f,    0.0f, 0.30036317, 0.31013622 },
+        {10000.0f,    0.0f, 0.28063070, 0.28827855 },
+        {25000.0f,    0.0f, 0.25251461, 0.25221552 },
+        { 5000.0f,  100.0f, 0.35241776, 0.43338023 },
+        { 5000.0f, -100.0f, 0.33946110, 0.28853988 },
+        { 6500.0f,   50.0f, 0.30941427, 0.35311940 },
+        { 6500.0f,  -50.0f, 0.31721352, 0.29702728 },
+    };
+
+    double worst = 0.0;
+    for (const auto& v : kVectors) {
+        orion::pipe::WhiteBalance wb{};
+        wb.temperatureK = v.kelvin;
+        wb.tint = v.adobeTint / 150.0f;
+
+        float x = 0.0f, y = 0.0f;
+        orion::pipe::whitePointXy(wb, x, y);
+        worst = std::max(worst, std::max(std::abs(double(x) - v.x),
+                                         std::abs(double(y) - v.y)));
+    }
+    report(worst < 2e-5, "the white point matches Adobe's Get_xy_coord",
+           "worst " + std::to_string(worst));
+
+    // Tint runs along the isotemperature line, so its direction turns with
+    // temperature. If it were a fixed axis — which the old code assumed — the
+    // displacement would point the same way at every Kelvin.
+    const auto displacement = [](float kelvin) {
+        orion::pipe::WhiteBalance a{}, b{};
+        a.temperatureK = b.temperatureK = kelvin;
+        a.tint = 0.0f;
+        b.tint = 100.0f / 150.0f;
+        float ax = 0, ay = 0, bx = 0, by = 0;
+        orion::pipe::whitePointXy(a, ax, ay);
+        orion::pipe::whitePointXy(b, bx, by);
+        return std::atan2(double(by - ay), double(bx - ax));
+    };
+    const double warm = displacement(2800.0f);
+    const double cool = displacement(9000.0f);
+    report(std::abs(warm - cool) > 0.15,
+           "and its direction turns with temperature, as an isotherm does",
+           "2800 K " + std::to_string(warm) + " rad, 9000 K " + std::to_string(cool));
+}
+
 void testWhiteBalance() {
     section("White balance");
 
@@ -4208,6 +4272,7 @@ int main() {
     std::printf("orion-tests\n\n");
 
     testWhiteBalance();
+    testPlanckianLocus();
     testToneCurve();
     testCfa();
     testOrientation();
