@@ -113,10 +113,10 @@
     </div>
     <div class="wipe__wash"></div>
     <div class="wipe__copy">
-      <h2 class="disp lines rv-lines" data-rv>
-        <span class="l"><span>Instant updates.</span></span>
+      <h2 class="disp disp--num lines rv-lines" data-rv>
+        <span class="l"><span>9.29 <small>MS</small></span></span>
       </h2>
-      <p class="mnote rv d2">EXPOSURE DRAG · 24 MP RAW · FULL RESOLUTION · <b>9.29 ms</b></p>
+      <p class="kicker rv d2">Instant updates · an exposure drag · 24 MP · full resolution</p>
     </div>
   </div>
 </section>
@@ -139,11 +139,10 @@
     <div class="mask__wash"></div>
 
     <div class="mask__copy">
-      <h2 class="disp lines rv-lines" data-rv>
-        <span class="l"><span>Local light.</span></span>
+      <h2 class="disp disp--num lines rv-lines" data-rv>
+        <span class="l"><span><span id="hMask">−1.60</span> <small>EV</small></span></span>
       </h2>
-      <p class="rv d2">Drag a gradient onto the photograph. It stays where you put it.</p>
-      <p class="mnote rv d3">LOCAL · LINEAR · EXPOSURE <b id="hMask">−1.60</b> EV</p>
+      <p class="kicker rv d2">Local light · a gradient dragged onto the photograph</p>
     </div>
   </div>
 </section>
@@ -151,7 +150,7 @@
 <!-- ============ PROOF ============ -->
 <section class="proof">
   <figure class="shot" id="proofShot">
-    <img src="img/orion-mask-linear.jpg"
+    <img class="fadei" data-rv src="img/orion-mask-linear.jpg"
          srcset="img/orion-mask-linear-900.jpg 900w, img/orion-mask-linear.jpg 1600w"
          sizes="(max-width: 900px) 100vw, 74vw" loading="lazy" decoding="async"
          alt="Orion's interface with a linear gradient mask drawn across a night photograph as three dashed guide lines with endpoint handles. The Local panel reads Exposure minus 1.60 EV.">
@@ -164,12 +163,12 @@
   <div class="duo__text">
     <h2 class="disp lines rv-lines" data-rv>
       <span class="l"><span>Color you</span></span>
-      <span class="l"><span>can check.</span></span>
+      <span class="l"><span>can check</span></span>
     </h2>
     <p class="rv d2">Built to the DNG spec, checked against the camera's own rendering.</p>
   </div>
   <figure class="print rv d1" data-plx>
-    <img src="img/photo-glasshouse.jpg"
+    <img class="fadei" data-rv src="img/photo-glasshouse.jpg"
          srcset="img/photo-glasshouse-1200.jpg 1200w, img/photo-glasshouse.jpg 2400w"
          sizes="(max-width: 900px) 100vw, 42vw" loading="lazy" decoding="async"
          alt="A glass-fronted building at golden hour with saturated yellow machinery visible inside.">
@@ -180,7 +179,7 @@
 <section class="ledger" data-frame="04 · Sources">
   <h2 class="disp lines rv-lines" data-rv>
     <span class="l"><span>Every filter</span></span>
-    <span class="l"><span>cites its paper.</span></span>
+    <span class="l"><span>cites its paper</span></span>
   </h2>
   <p class="ledger__lede rv d2">What isn't sourced yet is written down too, in public.</p>
   <ul class="cites">
@@ -196,7 +195,7 @@
 <section class="own" data-frame="05 · Yours">
   <div class="own__text">
     <h2 class="disp lines rv-lines" data-rv>
-      <span class="l"><span>No lock-in.</span></span>
+      <span class="l"><span>No lock-in</span></span>
     </h2>
     <p class="rv d2">Plain XMP beside the file. Delete the app and nothing follows.</p>
   </div>
@@ -238,7 +237,7 @@
 
 <!-- ============ CLOSE ============ -->
 <section class="close" data-frame="End of roll">
-  <img class="close__img plx" data-plx src="img/photo-m5-bluehour.jpg"
+  <img class="close__img plx fadei" data-plx data-rv src="img/photo-m5-bluehour.jpg"
        srcset="img/photo-m5-bluehour-1200.jpg 1200w, img/photo-m5-bluehour.jpg 2400w"
        sizes="100vw" loading="lazy" decoding="async"
        alt="A gray BMW M5 photographed at blue hour outside a lit building.">
@@ -247,7 +246,7 @@
   <div class="close__body">
     <h2 class="disp lines rv-lines" data-rv>
       <span class="l"><span>Built by one person,</span></span>
-      <span class="l"><span>in the open.</span></span>
+      <span class="l"><span>in the open</span></span>
     </h2>
     <p class="rv d2">Every decision, measurement and mistake is in the repository.</p>
     <p class="rv d3"><a class="cta" href="https://github.com/Nano-AI/Orion">Read the source on GitHub</a></p>

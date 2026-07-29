@@ -96,8 +96,39 @@ p { margin: 0; }
   line-height: 0.94;
   text-wrap: balance;
 }
-h1.disp { font-size: clamp(3.2rem, 11.5vw, 10.5rem); }
-h2.disp { font-size: clamp(2.3rem, 6.4vw, 5.4rem); }
+/* Section headers: caps, tracked, medium — the engraved-plate register.
+ * The drama belongs to the photographs and the figures, not the words. */
+h2.disp {
+  font-size: clamp(1.8rem, 4.4vw, 3.8rem);
+  font-weight: 640;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 1.04;
+}
+/* The figure moments — a measurement as the headline, set thin and
+ * enormous, with its unit small beside it. */
+.disp--num {
+  font-size: clamp(4rem, 11.5vw, 10.5rem);
+  font-weight: 260;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  line-height: .95;
+  font-variant-numeric: tabular-nums;
+}
+.disp--num small {
+  font-size: .32em;
+  font-weight: 480;
+  letter-spacing: .08em;
+}
+
+/* The tracked line under a figure — what the number means. */
+.kicker {
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .26em;
+  text-transform: uppercase;
+  color: var(--slate);
+}
 
 .skip {
   position: absolute; left: -9999px;
@@ -116,6 +147,18 @@ h2.disp { font-size: clamp(2.3rem, 6.4vw, 5.4rem); }
 }
 
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* Photographs surface like prints in the tray: from black, up to full
+ * density. Images that also carry the parallax transform skip the scale so
+ * the two never fight over one property. */
+html.js .fadei {
+  opacity: 0;
+  filter: brightness(.3) saturate(.7);
+  transition: opacity 1.3s ease, filter 1.4s ease, transform 1.8s cubic-bezier(.16,1,.3,1);
+}
+html.js .fadei:not(.plx) { transform: scale(1.045); }
+html.js .fadei.in { opacity: 1; filter: none; }
+html.js .fadei.in:not(.plx) { transform: none; }
 
 /* Film grain over the two darkest scenes — a print, not a screenshot.
  * Static and very quiet; it exists to be felt, not seen. */
@@ -313,15 +356,18 @@ html.scrub .vf { will-change: transform, opacity; }
   text-wrap: balance;
 }
 
-/* The numbers, set like an instrument cluster: value over label, hairlines
- * between. No capsules — this is a readout, not a row of buttons. */
-.stats { display: flex; flex-wrap: wrap; gap: clamp(1.3rem, 3vw, 2.6rem); }
-.stat { display: flex; flex-direction: column; gap: .3rem; }
-.stat + .stat { border-left: 1px solid rgba(240,243,244,.14); padding-left: clamp(1.3rem, 3vw, 2.6rem); }
+/* The numbers, set thin and enormous over small tracked labels, hairlines
+ * between. No capsules — a specification, not a row of buttons. */
+.stats { display: flex; flex-wrap: wrap; gap: clamp(1.6rem, 4vw, 3.4rem); }
+.stat { display: flex; flex-direction: column; gap: .5rem; }
+.stat + .stat { border-left: 1px solid rgba(240,243,244,.14); padding-left: clamp(1.6rem, 4vw, 3.4rem); }
 .stat b {
-  font-family: var(--mono); font-weight: 700;
-  font-size: clamp(1.15rem, 1rem + .7vw, 1.6rem);
-  color: var(--teal);
+  font-family: var(--disp); font-weight: 270;
+  font-size: clamp(2.3rem, 1.6rem + 3vw, 4.2rem);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ivory);
+  font-variant-numeric: tabular-nums;
 }
 .stat__l {
   font-family: var(--mono); font-size: .62rem;
@@ -506,7 +552,7 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
  * flat as it arrives. The script drives it; at rest it simply lies flat. */
 
 .proof {
-  padding: clamp(4rem, 11vh, 8rem) var(--gut);
+  padding: clamp(5rem, 13vh, 10rem) var(--gut);
   display: flex; justify-content: center;
   perspective: 1400px;
 }
@@ -535,7 +581,7 @@ html.scrub .shot { will-change: transform; }
   grid-template-columns: minmax(0, 1fr) minmax(0, .85fr);
   gap: clamp(2rem, 6vw, 6rem);
   align-items: center;
-  padding: clamp(4.5rem, 13vh, 10rem) var(--gut);
+  padding: clamp(6rem, 16vh, 13rem) var(--gut);
 }
 .duo__text p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
 .print {
@@ -556,7 +602,7 @@ html.scrub .plx { will-change: transform; }
 
 /* ---------- Ledger ---------- */
 
-.ledger { padding: clamp(4.5rem, 13vh, 10rem) var(--gut); }
+.ledger { padding: clamp(6rem, 16vh, 13rem) var(--gut); }
 .ledger__lede { margin-top: 1.3rem; max-width: var(--measure); color: var(--body); }
 .ledger em { color: var(--ivory); font-style: italic; }
 
@@ -586,7 +632,7 @@ html.scrub .plx { will-change: transform; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: clamp(2rem, 6vw, 6rem);
   align-items: center;
-  padding: clamp(4.5rem, 13vh, 10rem) var(--gut);
+  padding: clamp(6rem, 16vh, 13rem) var(--gut);
   border-top: 1px solid var(--rail);
 }
 .own__text p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
