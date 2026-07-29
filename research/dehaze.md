@@ -207,3 +207,56 @@ most haze-opaque part of the frame but is not literally the paper's top 0.1% of
 pixels. Max-pooling is the right pooling here — it preserves exactly the
 haze-opaque extremes the step is looking for — but it is an approximation and
 belongs in `UNSOURCED.md` until measured against the exact percentile.
+
+
+---
+
+## Where a dehaze drag goes — profiled 2026-07-29
+
+`orion-bench` prints this per node on every run. Unlike clarity, **there is no
+hotspot**: the cost is spread almost evenly.
+
+| Node | ms | share |
+|---|---|---|
+| `dehaze:min h` | 4.51 | 7.2% |
+| `dehaze:dark h` | 4.50 | 7.2% |
+| `dehaze:max h` | 4.48 | 7.1% |
+| `dehaze:dark v` | 4.40 | 7.0% |
+| `dehaze:max v` | 4.40 | 7.0% |
+| `dehaze:min v` | 4.40 | 7.0% |
+| `dehaze:moments` | 4.19 | 6.7% |
+
+Six rank passes, **26.7 ms between them, 43% of the drag**, and each is within
+2% of the others. That flatness is the finding: there is nothing here to fix
+one of. The separability trick that took clarity from 70 ms to 58 does not
+apply, because these passes are *already* separable — a 15 × 15 minimum is a
+15-tap minimum along each axis, and that is how they were built.
+
+At ~48 MB written and a cached read per pass, 4.4 ms is roughly 22 GB/s against
+a 120 GB/s machine, so these are **tap-count bound rather than bandwidth
+bound**: fifteen comparisons per pixel, per pass, six times.
+
+### The published way to make that O(1)
+
+A running minimum over a window of size k can be computed in a constant number
+of comparisons per pixel, independent of k:
+
+- **van Herk** — *A fast algorithm for local minimum and maximum filters on
+  rectangular and octagonal kernels*, Pattern Recognition Letters 13(7), 1992.
+- **Gil & Werman** — *Computing 2-D min, median, and max filters*, IEEE TPAMI
+  15(5), 1993.
+
+Both are standard and would take fifteen comparisons to about three.
+
+⚠️ **But it is a sequential scan**, which is the opposite of what a GPU wants:
+the algorithm builds running prefix and suffix minima along a line, and each
+element depends on the one before it. Adapting it means one thread per line
+segment with the segment length tuned to the window, and correctness at the
+segment joins is the whole difficulty. That is a session's work with a real
+chance of ending slower, which is exactly the shape of the change that already
+backfired once on clarity's collapse kernel.
+
+**Not attempted, and the reason recorded rather than the intention.** If it is
+tried, the existing GPU test is the safety net: `testDehazeGpu` checks the
+separable rank filter against a 15 × 15 patch computed directly, so any
+replacement has to produce the same answer or say so.

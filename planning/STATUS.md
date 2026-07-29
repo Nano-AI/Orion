@@ -9,8 +9,43 @@
 clarity, dehaze, creative LUTs, single-image exposure fusion and auto-enhance
 all built, measured and verified on real frames.
 **Next story:** the developer's quality pass on M3, then M4 (local edits —
-`research/masking.md` is the plan of record). **Dehaze at 108 ms is the
-remaining slow control**; clarity is down to 58 ms.
+`research/masking.md` is the plan of record). Clarity is down to 58 ms. **Dehaze
+is still 108 ms and has been profiled: there is no hotspot in it**, so the fix
+is a different algorithm rather than a better arrangement of this one — written
+up in `research/dehaze.md`, not attempted.
+
+## Session 2026-07-29f — dehaze profiled, and deliberately not optimised
+
+The bench's per-node profiler now points at any control, not just clarity. What
+it says about dehaze is the opposite of what it said about clarity, and it
+changes what the fix would have to be.
+
+| Node | ms | share |
+|---|---|---|
+| `dehaze:min h` | 4.51 | 7.2% |
+| `dehaze:dark h` | 4.50 | 7.2% |
+| `dehaze:max h` | 4.48 | 7.1% |
+| `dehaze:dark v` | 4.40 | 7.0% |
+| `dehaze:max v` | 4.40 | 7.0% |
+| `dehaze:min v` | 4.40 | 7.0% |
+
+**Six rank passes, 26.7 ms between them, every one within 2% of the others.**
+There is nothing to fix *one* of. And the trick that took clarity from 70 ms to
+58 does not apply: these passes are already separable — that is how they were
+built, and `testDehazeGpu` checks the claim against a 15 × 15 patch computed
+directly.
+
+At ~48 MB written per pass they run at roughly 22 GB/s on a 120 GB/s machine,
+so they are **tap-count bound, not bandwidth bound**: fifteen comparisons per
+pixel, six times over.
+
+The published fix is a running min/max — van Herk (1992), Gil & Werman (1993) —
+which is O(1) in the window size and would take fifteen comparisons to about
+three. **Not attempted**, and the reason is recorded rather than the intention:
+it is a sequential scan, which is what a GPU is worst at, and adapting it means
+one thread per line segment with correctness at the joins being the whole
+problem. That is a session's work with a real chance of ending slower — the
+same shape as the change that already backfired once on clarity.
 
 ## Session 2026-07-29e — clarity, 70 ms to 58
 

@@ -858,35 +858,41 @@ int main(int argc, char** argv) {
         // One command buffer per node, so these do not sum to the batched
         // figure above — they rank, they do not total.
         {
-            std::printf("\nClarity, node by node\n");
-            orion::pipe::Adjustments base;
-            base.wb = develop.asShotWhiteBalance();
-            develop.apply(base);
-            develop.render();
+            const auto profileDrag = [&](const char* label,
+                                         void (*set)(orion::pipe::Adjustments&)) {
+                std::printf("\n%s, node by node\n", label);
+                orion::pipe::Adjustments base;
+                base.wb = develop.asShotWhiteBalance();
+                develop.apply(base);
+                develop.render();
 
-            orion::pipe::Adjustments clar = base;
-            clar.clarity = 1.0f;
-            develop.apply(clar);
+                orion::pipe::Adjustments moved = base;
+                set(moved);
+                develop.apply(moved);
 
-            develop.graph().setProfiling(true);
-            develop.render();
-            develop.graph().setProfiling(false);
+                develop.graph().setProfiling(true);
+                develop.render();
+                develop.graph().setProfiling(false);
 
-            std::vector<std::pair<double, std::string>> ran;
-            double sum = 0.0;
-            for (const auto& t : develop.graph().lastRun()) {
-                if (!t.executed) continue;
-                ran.emplace_back(t.ms, t.name);
-                sum += t.ms;
-            }
-            std::sort(ran.begin(), ran.end(),
-                      [](const auto& a, const auto& b) { return a.first > b.first; });
+                std::vector<std::pair<double, std::string>> ran;
+                double sum = 0.0;
+                for (const auto& t : develop.graph().lastRun()) {
+                    if (!t.executed) continue;
+                    ran.emplace_back(t.ms, t.name);
+                    sum += t.ms;
+                }
+                std::sort(ran.begin(), ran.end(),
+                          [](const auto& a, const auto& b) { return a.first > b.first; });
 
-            std::printf("  %zu nodes ran, %.2f ms serialized\n", ran.size(), sum);
-            for (std::size_t i = 0; i < ran.size() && i < 8; ++i) {
-                std::printf("    %-22s %6.2f ms  %4.1f%%\n", ran[i].second.c_str(),
-                            ran[i].first, 100.0 * ran[i].first / std::max(sum, 1e-9));
-            }
+                std::printf("  %zu nodes ran, %.2f ms serialized\n", ran.size(), sum);
+                for (std::size_t i = 0; i < ran.size() && i < 8; ++i) {
+                    std::printf("    %-22s %6.2f ms  %4.1f%%\n", ran[i].second.c_str(),
+                                ran[i].first, 100.0 * ran[i].first / std::max(sum, 1e-9));
+                }
+            };
+
+            profileDrag("Clarity", [](orion::pipe::Adjustments& a) { a.clarity = 1.0f; });
+            profileDrag("Dehaze",  [](orion::pipe::Adjustments& a) { a.dehaze  = 1.0f; });
         }
 
         // ── Export ────────────────────────────────────────────────────────
