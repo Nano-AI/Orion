@@ -4027,6 +4027,101 @@ void testAutoEnhanceStats() {
                std::to_string(out[10]));
     }
 
+    // ── The solver ────────────────────────────────────────────────────────
+    //
+    // Driven against a stand-in for the pipeline rather than the real one, so
+    // the controller's behaviour is testable without a GPU or a photograph.
+    // The stand-in compresses like a display transform does, which is the
+    // property that makes a full correction overshoot and the damping
+    // necessary.
+    {
+        const auto renderStub = [](float sceneMedian, float ev) {
+            const float lifted = sceneMedian * std::exp2(ev);
+            // A soft shoulder — not AgX, but non-linear in the same direction.
+            return lifted / (1.0f + lifted);
+        };
+
+        bool allConverged = true;
+        double worst = 0.0;
+        for (const float scene : {0.05f, 0.08f, 0.35f, 1.2f, 4.0f}) {
+            ae::Controls c{};
+            for (int pass = 0; pass < ae::kPasses; ++pass) {
+                ae::Stats st{};
+                st.median = renderStub(scene, c.exposureEv);
+                st.shadow = st.median * 0.4f;
+                st.high   = std::min(1.0f, st.median * 1.8f);
+                c = ae::refine(c, st);
+            }
+            const float finalMedian = renderStub(scene, c.exposureEv);
+            const double err = std::abs(double(finalMedian) - double(ae::kMidGrey));
+            worst = std::max(worst, err);
+            if (err > 0.05) allConverged = false;
+        }
+        report(allConverged,
+               "the exposure solver converges on the mid-grey anchor across four stops of scene",
+               "worst " + std::to_string(worst));
+
+        // Past its clamp it must saturate, not oscillate. A frame this dark
+        // wanted a different photograph, and an automatic control that will
+        // move ten stops turns a mistake into a bigger one.
+        ae::Controls c{};
+        float previous = 0.0f;
+        bool settled = true;
+        for (int pass = 0; pass < 8; ++pass) {
+            ae::Stats st{};
+            st.median = renderStub(0.001f, c.exposureEv);
+            st.shadow = st.median * 0.4f;
+            st.high   = std::min(1.0f, st.median * 1.8f);
+            c = ae::refine(c, st);
+            if (pass > 0 && c.exposureEv < previous - 1e-6f) settled = false;
+            previous = c.exposureEv;
+        }
+        report(settled && std::abs(c.exposureEv - ae::kMaxExposureEv) < 1e-4f,
+               "a frame darker than the clamp saturates at it rather than oscillating",
+               std::to_string(c.exposureEv));
+    }
+
+    // A picture already against the stops must not be pushed further out —
+    // Simplest Color Balance section 1 warns that saturation "can create flat
+    // white regions or flat black regions that may look unnatural".
+    {
+        ae::Controls c{};
+        ae::Stats st{};
+        st.median = ae::kMidGrey;
+        st.shadow = 0.1f; st.high = 0.9f;
+        st.atFloor = 0.10f; st.atCeiling = 0.10f;    // already clipping hard
+        const auto next = ae::refine(c, st);
+        report(next.blacks == 0.0f && next.whites == 0.0f,
+               "an already-clipping picture has its endpoints left alone",
+               std::to_string(next.blacks) + " / " + std::to_string(next.whites));
+    }
+
+    // And the published slope cap has to actually bind: a picture that already
+    // uses a narrow range would be stretched past smax = 2 without it.
+    {
+        ae::Controls c{};
+        ae::Stats st{};
+        st.median = ae::kMidGrey;
+        st.shadow = 0.45f; st.high = 0.55f;          // span 0.1 -> slope 10
+        const auto next = ae::refine(c, st);
+        report(next.blacks == 0.0f && next.whites == 0.0f,
+               "the slope cap stops a low-contrast frame being stretched tenfold",
+               std::to_string(next.blacks) + " / " + std::to_string(next.whites));
+    }
+
+    // The look controls respond to the picture, and stay inside their range.
+    {
+        const auto darkLook   = ae::look({0.05f, 0.4f, 0.08f, 0.0f, 0.0f});
+        const auto brightLook = ae::look({0.3f, 0.98f, 0.75f, 0.0f, 0.0f});
+        report(darkLook.fusion > brightLook.fusion,
+               "a dark frame is given more shadow lift than a bright one",
+               std::to_string(darkLook.fusion) + " vs " + std::to_string(brightLook.fusion));
+        report(brightLook.fusion == 0.0f,
+               "and a frame already above mid grey is given none", "");
+        report(darkLook.fusion <= 1.0f && darkLook.clarity <= 1.0f,
+               "the look controls stay inside the range the sliders have", "");
+    }
+
     // Clipping is reported, because a picture already against the stops does
     // not want its endpoints pushed further out.
     {

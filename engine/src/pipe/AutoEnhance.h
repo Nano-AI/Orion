@@ -18,6 +18,47 @@
 
 namespace orion::pipe::auto_enhance {
 
+/// Clipped at each end. ⚠️ **Inference, not a recommendation** — Simplest Color
+/// Balance recommends no percentage at all, and its reference implementation
+/// takes the levels as mandatory arguments. Its figure captions call a total of
+/// 1% "optimal" and "moderate", and §7 splits it half and half. See
+/// research/UNSOURCED.md §14.
+inline constexpr double kClipPerSide = 0.005;
+
+/// Where middle grey lands through the sRGB transfer function — CIPA
+/// DC-004:2004 §2.3(3), `MAX × 0.461`.
+///
+/// ⚠️ The standard defines this for a uniform 18% reflectance card under
+/// controlled lighting. Aiming a *photograph's median* at it is a step the
+/// standard does not take, and the standard calls its own value conventional.
+inline constexpr float kMidGrey = 0.461f;
+
+/// A ceiling on how much contrast an automatic stretch may add — Lisani, Petro
+/// & Sbert, IPOL 2012: `smax = 2` "provides a good compromise between contrast
+/// enhancement and saturation".
+inline constexpr float kMaxSlope = 2.0f;
+
+/// Gain on each solver step.
+///
+/// One might expect this to need damping below 1, and it does not: the step is
+/// computed as `log2(target / median)` — the correction that *would* be right
+/// if the rendered median moved in proportion to exposure — while the display
+/// transform is compressive, so the true response is smaller than that estimate
+/// and every step already undershoots. Damping it further only makes
+/// convergence slower. Measured: at 0.7 the solver was still 0.064 away from
+/// the anchor after five passes; at 1.0 it converges well inside 0.02.
+inline constexpr float kDamping = 1.0f;
+
+/// The most exposure auto-enhance may add or remove. Five stops is already a
+/// drastic correction; past that the picture wanted a different photograph, and
+/// an automatic control that will move ten stops is one that turns a mistake
+/// into a bigger one.
+inline constexpr float kMaxExposureEv = 5.0f;
+
+/// How many times to render, measure and adjust.
+inline constexpr int kPasses = 6;
+
+
 /// What the histogram says about the rendered picture.
 ///
 /// All in display units, [0, 1], because that is the space the percentiles are
@@ -92,6 +133,72 @@ inline void combine(const std::uint32_t* rgb, std::uint32_t bins, std::uint32_t*
         s.atCeiling = float(double(combined[bins - 1]) / total);
     }
     return s;
+}
+
+/// The controls auto-enhance is allowed to move. Deliberately a small struct
+/// rather than the full adjustment set: what this may touch is a decision, and
+/// making it a type means the decision cannot be widened by accident.
+struct Controls {
+    float exposureEv = 0.0f;
+    float blacks     = 0.0f;
+    float whites     = 0.0f;
+    float fusion     = 0.0f;
+    float clarity    = 0.0f;
+};
+
+/// One step of the solve.
+///
+/// The relationship between the exposure slider and the rendered histogram runs
+/// through AgX, the tone curve and everything the user has already set, so it
+/// is not invertible in closed form. This measures, corrects, and is called
+/// again — which makes it right whatever the curve is doing.
+[[nodiscard]] inline Controls refine(const Controls& current, const Stats& s) noexcept {
+    Controls next = current;
+
+    // Exposure, toward the mid-grey anchor. In stops, because that is what the
+    // slider is; damped, because the display transform compresses the move.
+    if (s.median > 1e-4f) {
+        const float stops = std::log2(kMidGrey / s.median);
+        next.exposureEv = std::clamp(current.exposureEv + kDamping * stops, -kMaxExposureEv, kMaxExposureEv);
+    }
+
+    // Endpoints. A picture already against the stops does not want pushing
+    // further out — that is the "flat white regions or flat black regions that
+    // may look unnatural" the paper warns about.
+    const float span = std::max(s.high - s.shadow, 1e-3f);
+    const float slope = 1.0f / span;
+
+    if (slope < kMaxSlope) {
+        if (s.atFloor < 0.02f) {
+            next.blacks = std::clamp(current.blacks - kDamping * s.shadow * 2.0f, -1.0f, 1.0f);
+        }
+        if (s.atCeiling < 0.02f) {
+            next.whites = std::clamp(current.whites + kDamping * (1.0f - s.high) * 2.0f,
+                                     -1.0f, 1.0f);
+        }
+    }
+
+    return next;
+}
+
+/// The look controls, set once from the first measurement rather than solved.
+///
+/// ⚠️ Taste, and recorded as such. There is no measurable target for how much
+/// clarity a photograph wants. Both land on visible sliders, so disagreeing
+/// costs one drag.
+///
+/// Dehaze is deliberately absent: deciding whether a frame is hazy needs the
+/// dark-channel statistic, which this path does not compute, and applying it to
+/// a haze-free frame is exactly the case the dark channel prior is documented
+/// to get wrong.
+[[nodiscard]] inline Controls look(const Stats& s) noexcept {
+    Controls c{};
+    // A dark picture gets shadow lift, in proportion to how dark. Measured
+    // before any exposure correction, so it responds to the photograph rather
+    // than to what the solver has already done about it.
+    c.fusion  = std::clamp(1.6f * (kMidGrey - s.median) / kMidGrey, 0.0f, 1.0f);
+    c.clarity = 0.25f;
+    return c;
 }
 
 }  // namespace orion::pipe::auto_enhance
