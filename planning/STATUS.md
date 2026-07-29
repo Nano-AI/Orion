@@ -57,20 +57,29 @@ each**, so Shadows +1 moves middle grey +0.99 EV. Not changed, because sidecars
 store slider values and moving the centres would silently re-render every edit
 already made — a migration decision, not a tuning one.
 
-### ⚠️ And one defect found, improved, not solved
+### And one defect found and fixed on the way
 
-**As-shot white balance does not round-trip.** Written as a test while changing
+**As-shot white balance did not round-trip.** Written as a test while changing
 the locus, because changing it alters what every file opens at and nothing was
-checking that. Feeding `multipliersFor` a temperature and tint and handing the
-result to `estimateFrom` recovers the multipliers to **0.026 — about 2.6%**,
-which is a visible colour shift and not float noise.
+checking that. It is now **exact** — 0 K, 0.000 tint, 0.000 in the multipliers
+across fifteen pairs — but it took three wrong answers to get there, and two of
+them were plausible:
 
-The original search was **845 K** out: it solved temperature with tint pinned at
-zero and then solved tint, which cannot work. Alternating the axes does not fix
-it either — the error surface is a curved valley and coordinate descent zigzags.
-A joint two-dimensional search reaches 120 K. **That is where it stands, and it
-is recorded as an open defect in `UNSOURCED.md` §16 rather than smoothed over.**
-The test asserts the current figure so a regression trips it.
+- **845 K out**, originally: it solved temperature with tint pinned at zero and
+  then solved tint, which cannot work — tint moves the red/blue ratio the
+  temperature stage matches on.
+- **Alternating the two axes does not fix it.** The error surface is a curved
+  valley and coordinate descent zigzags along it. Worth recording, because it is
+  the obvious next thing to try.
+- **120 K out** with a joint two-dimensional search, and this is where it was
+  nearly left as a documented gap. The cause was the *refinement window*: one
+  coarse cell either way, which assumes the coarse stage lands in the cell
+  containing the minimum. Where the valley runs obliquely it does not.
+
+**The diagnostic that settled it was printing which pair failed rather than the
+worst error.** "0.026 worst" reads like a systematic accuracy limit and invites
+loosening a threshold. "Fourteen exact, one 120 K out" reads like a bug and
+points at the search. Same data, opposite conclusion.
 
 ## Session 2026-07-29f — dehaze profiled, and deliberately not optimised
 

@@ -195,9 +195,15 @@ WhiteBalance estimateFrom(const std::array<float, 3>& camMul, const float xyzToC
         }
     }
 
+    // Two coarse cells either way, not one. With a single cell the refinement
+    // assumes the coarse stage landed in the right cell, and on a valley that
+    // runs obliquely across the grid it does not always — measured, one pair in
+    // fifteen came back 120 K and 0.05 out because the true minimum sat just
+    // outside the window. Widening costs a few thousand more evaluations of a
+    // table walk, once per file.
     const float coarseCct = best, coarseTint = tint;
-    for (float cct = coarseCct - 250.0f; cct <= coarseCct + 250.0f; cct += 5.0f) {
-        for (float t = coarseTint - 0.05f; t <= coarseTint + 0.05f; t += 0.002f) {
+    for (float cct = coarseCct - 500.0f; cct <= coarseCct + 500.0f; cct += 5.0f) {
+        for (float t = coarseTint - 0.10f; t <= coarseTint + 0.10f; t += 0.002f) {
             const float e = errorAt(cct, std::clamp(t, -1.0f, 1.0f));
             if (e < bestErr) { bestErr = e; best = cct; tint = std::clamp(t, -1.0f, 1.0f); }
         }

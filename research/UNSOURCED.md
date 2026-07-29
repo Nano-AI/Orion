@@ -381,10 +381,13 @@ dehaze to a haze-free frame is precisely the case He, Sun & Tang document the
 prior getting wrong.
 
 
-## 16. As-shot white balance does not round-trip — an open defect
+## 16. ~~As-shot white balance does not round-trip~~ — RESOLVED 2026-07-29
 
-**Where:** `pipe/WhiteBalance.cpp`, `estimateFrom`. Found 2026-07-29 by a test
-written while replacing the tint axis, and **not** fixed.
+**Where:** `pipe/WhiteBalance.cpp`, `estimateFrom`. Found by a test written
+while replacing the tint axis, and **fixed the same day**. The round trip is now
+exact — 0 K, 0.000 tint, 0.000 in the multipliers across fifteen pairs. What
+follows is the record of how it was wrong, because two of the three wrong
+answers were plausible.
 
 Feed `multipliersFor` a temperature and tint, hand the resulting multipliers
 back to `estimateFrom`, and it does not recover them. Measured against a
@@ -411,7 +414,21 @@ slightly. In practice the as-shot estimate runs once at open and the user's own
 temperature and tint are stored in the sidecar, so nothing drifts on repeated
 saves — but the number Orion shows for "as shot" is not exactly the camera's.
 
-**What has not been ruled out:** that the forward map has genuine multimodality
-over the search range, in which case no search recovers the parameters and the
-right fix is to store the multipliers rather than re-derive them. The test
-asserts the current figure so a regression trips it, and prints it every run.
+**It was none of the things it looked like.** Not the camera matrix — an
+XYZ-to-sRGB matrix drives a "camera" response negative for a tinted white point,
+where the log-error clamps and the surface flattens, but switching to the
+identity kept the defect. Not multimodality either: the error at the true point
+is exactly zero, so nothing can beat it, and only **one pair in fifteen** ever
+failed.
+
+**The cause was the refinement window.** It searched one coarse cell either way
+around the coarse winner, which assumes the coarse stage lands in the cell
+containing the minimum. Where the valley runs obliquely across the grid it does
+not — at 2800 K with tint +0.30 the true minimum sat just outside, and the
+search returned 2920 K and +0.350 having never evaluated it. Two cells either
+way fixes it, for a few thousand more evaluations of a table walk, once per file.
+
+**The lesson worth keeping:** the diagnostic that settled it was printing *which*
+pair failed rather than the worst error. "0.026 worst" reads like a systematic
+accuracy limit and invites loosening a threshold; "fourteen exact, one 120 K
+out" reads like a bug and points straight at the search.

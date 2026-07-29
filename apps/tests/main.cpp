@@ -144,6 +144,25 @@ void testPlanckianLocus() {
                 }
             }
         }
+        // Which pair is actually failing, and is it the search or the map?
+        for (const float kelvin : {2800.0f, 4000.0f, 5500.0f, 6500.0f, 9000.0f}) {
+            for (const float tint : {-0.4f, 0.0f, 0.3f}) {
+                const auto mul  = orion::pipe::multipliersFor({kelvin, tint}, xyzToCam);
+                const auto back = orion::pipe::estimateFrom(mul, xyzToCam);
+                const auto again = orion::pipe::multipliersFor(back, xyzToCam);
+                double e = 0.0;
+                for (int c = 0; c < 3; ++c) {
+                    const double d = double(again[c]) - double(mul[c]);
+                    e += d * d;
+                }
+                // Prints only what fails, so a regression names the pair.
+                if (e > 1e-8) {
+                    std::printf("    %5.0f K tint %+.2f -> %7.1f K tint %+.3f   err %.2e\n",
+                                kelvin, tint, back.temperatureK, back.tint, e);
+                }
+            }
+        }
+
         std::printf("  as-shot round trip: %.3f in the multipliers, "
                     "%.0f K / %.3f tint in the parameters\n",
                     worstMul, worstK, worstTint);
@@ -161,22 +180,16 @@ void testPlanckianLocus() {
         // What has to hold is that the estimate *renders the same* — that
         // opening a file and re-deriving its white balance does not change a
         // pixel. That is what a photographer would notice, and it is tight.
-        // ⚠️ **This threshold documents a known gap, it does not endorse it.**
-        // 0.026 on a multiplier is about 2.6%, which is not float noise and not
-        // good enough — a file should reopen at the white balance it was saved
-        // with. Replacing the old temperature-then-tint search with a joint
-        // two-dimensional one took the parameter error from 845 K to 120 K, so
-        // this is a real improvement over what shipped, but the search is still
-        // landing off the true minimum and the reason is not yet understood.
-        //
-        // The threshold is set at what is currently achieved so that any
-        // regression trips it, and the number prints on every run. See
-        // research/UNSOURCED.md.
-        report(worstMul < 0.03,
-               "the as-shot estimate reproduces its multipliers (KNOWN GAP: 0.026)",
+        // Exact, and the tightness is the point: this started at 845 K out,
+        // and every loosening along the way would have been a threshold chosen
+        // to make a broken search look acceptable. The estimate recovers
+        // exactly what produced it, so a file reopens at the white balance it
+        // was saved with.
+        report(worstMul < 1e-4,
+               "the as-shot estimate reproduces the multipliers it came from",
                "worst " + std::to_string(worstMul));
-        report(worstK < 200.0 && worstTint < 0.06,
-               "and lands in the right neighbourhood of the parameters",
+        report(worstK < 10.0 && worstTint < 0.005,
+               "and recovers the temperature and tint themselves",
                std::to_string(worstK) + " K, " + std::to_string(worstTint) + " tint");
     }
 
