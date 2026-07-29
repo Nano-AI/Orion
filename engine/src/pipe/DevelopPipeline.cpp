@@ -1207,16 +1207,28 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         m.size[0] = width_; m.size[1] = height_;
         m.kind   = adj.maskKind;
         m.invert = adj.maskInvert ? 1 : 0;
-        // A linear gradient's endpoints, from the centre, angle and length the
-        // interface carries. Half the length either side, so rotating about the
-        // centre does not also move the ramp.
-        const float dx = std::cos(adj.maskAngle) * adj.maskLength * 0.5f;
-        const float dy = std::sin(adj.maskAngle) * adj.maskLength * 0.5f;
-        m.zero[0] = adj.maskCentre[0] - dx; m.zero[1] = adj.maskCentre[1] - dy;
-        m.full[0] = adj.maskCentre[0] + dx; m.full[1] = adj.maskCentre[1] + dy;
-        m.centre[0] = adj.maskCentre[0]; m.centre[1] = adj.maskCentre[1];
-        m.radius[0] = adj.maskRadius[0]; m.radius[1] = adj.maskRadius[1];
-        m.angle     = adj.maskAngle;
+        // The mask is placed on the picture the photographer is looking at,
+        // which is cropped and rotated; it is applied before the geometry node,
+        // which sees neither. Without this a mask slides off its subject the
+        // moment the frame is turned. pipe/MaskGeometry.h.
+        const mask::Crop crop{adj.cropX, adj.cropY, adj.cropW, adj.cropH};
+        const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
+        const auto placed = mask::toFrame({adj.maskCentre[0], adj.maskCentre[1],
+                                           adj.maskAngle}, crop, turns);
+
+        m.centre[0] = placed.centreX; m.centre[1] = placed.centreY;
+        mask::radiusToFrame(adj.maskRadius[0], adj.maskRadius[1], crop, turns,
+                            m.radius[0], m.radius[1]);
+        m.angle     = placed.angle;
+
+        // A linear gradient's endpoints, from the *placed* centre and angle.
+        // Half the length either side, so rotating about the centre does not
+        // also move the ramp.
+        const float len = mask::lengthToFrame(adj.maskLength, crop);
+        const float dx = std::cos(m.angle) * len * 0.5f;
+        const float dy = std::sin(m.angle) * len * 0.5f;
+        m.zero[0] = m.centre[0] - dx; m.zero[1] = m.centre[1] - dy;
+        m.full[0] = m.centre[0] + dx; m.full[1] = m.centre[1] + dy;
         m.feather   = adj.maskFeather;
         m.roundness = adj.maskRoundness;
         pipeline_.setParams(nMask_, &m, sizeof m);

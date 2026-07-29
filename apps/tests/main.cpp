@@ -22,6 +22,7 @@
 #include "pipe/ExposureFusion.h"
 #include "pipe/Dehaze.h"
 #include "pipe/LocalLaplacian.h"
+#include "pipe/MaskGeometry.h"
 #include "util/ImageWriter.h"
 
 #include <CoreGraphics/CoreGraphics.h>
@@ -4532,6 +4533,104 @@ void testMaskGpu() {
     }
 }
 
+/// A mask has to stay on its subject when the picture is turned or cropped.
+void testMaskGeometry() {
+    section("Mask geometry");
+
+    namespace mg = orion::pipe::mask;
+    const mg::Crop none{};
+
+    // Nothing applied is nothing changed.
+    {
+        const auto p = mg::toFrame({0.3f, 0.7f, 0.5f}, none, 0);
+        report(std::abs(p.centreX - 0.3f) < 1e-6f && std::abs(p.centreY - 0.7f) < 1e-6f &&
+               std::abs(p.angle - 0.5f) < 1e-6f,
+               "an unturned, uncropped frame leaves the placement alone", "");
+    }
+
+    // **The invariant that matters.** A quarter turn clockwise sends a frame
+    // point (x, y) to (1 - y, x) on screen. So placing a mask where the subject
+    // appears, then turning that placement forward again, must land back where
+    // it was put — otherwise the mask slides off the subject the moment the
+    // photograph is rotated, which is the whole reason this file exists.
+    {
+        const auto forward = [](float& x, float& y) {
+            const float nx = 1.0f - y, ny = x;
+            x = nx; y = ny;
+        };
+
+        double worst = 0.0;
+        for (int turns = 0; turns < 4; ++turns) {
+            for (const auto& pt : {std::pair{0.25f, 0.50f}, std::pair{0.10f, 0.90f},
+                                   std::pair{0.75f, 0.30f}}) {
+                const auto placed = mg::toFrame({pt.first, pt.second, 0.0f}, none, turns);
+                float x = placed.centreX, y = placed.centreY;
+                for (int i = 0; i < turns; ++i) forward(x, y);
+                worst = std::max(worst, std::max(std::abs(double(x) - pt.first),
+                                                 std::abs(double(y) - pt.second)));
+            }
+        }
+        report(worst < 1e-6, "a placement survives being turned back through the rotation",
+               "worst " + std::to_string(worst));
+    }
+
+    // Four turns is no turn.
+    {
+        const auto p = mg::toFrame({0.2f, 0.8f, 0.0f}, none, 4);
+        report(std::abs(p.centreX - 0.2f) < 1e-6f && std::abs(p.centreY - 0.8f) < 1e-6f,
+               "four quarter turns is the identity", "");
+    }
+
+    // The angle turns with the picture, or a linear gradient placed across the
+    // frame would run down it after a rotation.
+    {
+        const auto p = mg::toFrame({0.5f, 0.5f, 0.0f}, none, 1);
+        constexpr float kHalfPi = 1.57079632679489662f;
+        report(std::abs(p.angle + kHalfPi) < 1e-6f,
+               "one quarter turn takes ninety degrees off the angle",
+               std::to_string(p.angle));
+    }
+
+    // A crop magnifies. The centre of a centred crop is the centre of the
+    // frame, and its corner is the crop's corner — not the frame's.
+    {
+        const mg::Crop c{0.25f, 0.25f, 0.5f, 0.5f};
+        const auto mid = mg::toFrame({0.5f, 0.5f, 0.0f}, c, 0);
+        const auto corner = mg::toFrame({0.0f, 0.0f, 0.0f}, c, 0);
+        report(std::abs(mid.centreX - 0.5f) < 1e-6f && std::abs(mid.centreY - 0.5f) < 1e-6f,
+               "the middle of a centred crop is the middle of the frame", "");
+        report(std::abs(corner.centreX - 0.25f) < 1e-6f &&
+               std::abs(corner.centreY - 0.25f) < 1e-6f,
+               "and its corner is the crop's corner, not the frame's", "");
+    }
+
+    // A gradient spanning half the visible width spans half the *crop*, which
+    // is a smaller slice of the whole frame. Without this the feather widens
+    // every time the picture is cropped tighter.
+    {
+        const mg::Crop c{0.25f, 0.25f, 0.5f, 0.5f};
+        report(std::abs(mg::lengthToFrame(0.5f, c) - 0.25f) < 1e-6f,
+               "a length shrinks with the crop it was measured against",
+               std::to_string(mg::lengthToFrame(0.5f, c)));
+        report(std::abs(mg::lengthToFrame(0.5f, none) - 0.5f) < 1e-6f,
+               "and is untouched without one", "");
+    }
+
+    // Semi-axes have an axis each, so they swap when the picture goes on its
+    // side — a wide ellipse over a landscape stays wide over the subject.
+    {
+        float x = 0.0f, y = 0.0f;
+        mg::radiusToFrame(0.4f, 0.1f, none, 1, x, y);
+        report(std::abs(x - 0.1f) < 1e-6f && std::abs(y - 0.4f) < 1e-6f,
+               "radial semi-axes swap on an odd quarter turn",
+               std::to_string(x) + ", " + std::to_string(y));
+
+        mg::radiusToFrame(0.4f, 0.1f, none, 2, x, y);
+        report(std::abs(x - 0.4f) < 1e-6f && std::abs(y - 0.1f) < 1e-6f,
+               "and stay put on an even one", "");
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -4563,6 +4662,7 @@ int main() {
     testExposureFusionGpu();
     testAutoEnhanceStats();
     testMaskGpu();
+    testMaskGeometry();
     testHighlightHaloGpu();
     testOutputDepth();
     testLensDatabase();

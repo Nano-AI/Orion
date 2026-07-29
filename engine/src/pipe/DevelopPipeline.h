@@ -13,6 +13,7 @@
 #include "pipe/Dehaze.h"
 #include "pipe/ExposureFusion.h"
 #include "pipe/LocalLaplacian.h"
+#include "pipe/MaskGeometry.h"
 #include "pipe/ShaderParams.h"
 #include "pipe/Pipeline.h"
 #include "pipe/ToneCurve.h"
