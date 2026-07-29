@@ -5,10 +5,17 @@
 ---
 
 **Last updated:** 2026-07-29 (M4 — brush masks reachable; landing site live)
-**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** — step 1
-of `research/masking.md` is built and now reachable by hand: linear and radial
-gradient primitives, the parameter-space application they feed, and the canvas
-overlay that places them.
+**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** —
+**step 1 of `research/masking.md` is finished and all of it is reachable by
+hand**: linear and radial gradients dragged on the canvas, brush strokes
+painted on it, the parameter-space application they feed, and a red overlay so
+the coverage can be seen while it is placed.
+
+⚠️ **M3 is done — do not rebuild it.** Dehaze, creative LUTs, exposure fusion
+and auto-enhance all shipped with research files, GPU tests and bench probes
+(sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
+stale kickoff prompt naming those four has arrived four times; the answer each
+time is that they exist.
 **Next story:** M4 step 2 — mask groups and compositing (`research/masking.md`
 §6): the structural one, because it turns a single mask into a *list* and that
 reaches the POD facade, the sidecar format and undo history. Then step 3's
@@ -17,6 +24,22 @@ already built and tested.
 
 **Suites:** `orion-tests` **397 checks** · `orion-viewport-tests` **3230
 checks** · both 0 failures.
+
+### Known gaps, carried forward
+
+Small, named, and none of them blocking the next story:
+
+| Gap | Where |
+|---|---|
+| A brush stroke over **256 dabs is truncated** (warns on stderr). Needs more nodes, not a bigger buffer | `DevelopPipeline::apply` |
+| **No bench probe for the brush** — probes take `Adjustments&`, a stroke needs `setBrushStroke` | `apps/bench` |
+| The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph | `Engine.export` |
+| The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
+| **98 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo | whole history |
+
+⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
+frame, but it must not be used for any published render — the landing site's
+imagery was screened for this and twelve frames were rejected.
 
 ## Session 2026-07-29o — see the mask you are painting
 
