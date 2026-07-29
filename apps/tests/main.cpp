@@ -2554,6 +2554,8 @@ void testToneBandsWithoutGuide() {
     // the test exercises the binding production actually makes.
     auto guideAb = orion::gpu::Texture::create(*device, kW, kH,
                                                orion::gpu::PixelFormat::RG32Float);
+    auto maskStub = orion::gpu::Texture::create(*device, kW, kH,
+                                                orion::gpu::PixelFormat::R16Float);
     auto guideRaw = orion::gpu::Texture::create(*device, kW, kH,
                                                 orion::gpu::PixelFormat::RG32Float);
 
@@ -2607,10 +2609,14 @@ void testToneBandsWithoutGuide() {
     // chain is disabled.
     const auto run = [&](bool live, std::vector<__fp16>& o) {
         orion::gpu::CommandBuffer cb(*device);
+        // The kernel gained a mask input. It is never sampled here — maskActive
+        // stays zero — but the binding has to exist or every texture after it
+        // shifts by one, which is silent and total.
         cb.dispatch(*kernel,
                     {src.get(),
                      live ? guideAb.get() : src.get(),
                      live ? guideRaw.get() : src.get(),
+                     maskStub.get(),
                      dst.get()},
                     &la, sizeof la, kW, kH);
         cb.commitAndWait();
@@ -4345,6 +4351,187 @@ void testAutoEnhanceStats() {
     }
 }
 
+/// Mask primitives, and the thing about them most likely to be got wrong.
+void testMaskGpu() {
+    section("Masks (GPU)");
+
+    using orion::gpu::PixelFormat;
+    constexpr std::uint32_t kW = 64, kH = 64;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    const auto load = [&](const char* entry) {
+        auto lib = orion::gpu::Library::createFromFile(
+            *device, std::string(ORION_SHADER_DIR) + "/" + entry + ".metallib");
+        auto k = orion::gpu::Kernel::create(*device, *lib, entry);
+        return std::pair{std::move(lib), std::move(k)};
+    };
+
+    auto kMask = load("maskGradient");
+    auto dst = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+
+    const auto run = [&](const orion::pipe::params::MaskGradient& m) {
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kMask.second, {dst.get()}, &m, sizeof m, kW, kH);
+        cb.commitAndWait();
+        std::vector<__fp16> out(std::size_t(kW) * kH);
+        dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+        return out;
+    };
+    const auto at = [&](const std::vector<__fp16>& a, int x, int y) {
+        return float(a[std::size_t(y) * kW + x]);
+    };
+
+    // ── Linear ────────────────────────────────────────────────────────────
+    {
+        orion::pipe::params::MaskGradient m{};
+        m.size[0] = kW; m.size[1] = kH;
+        m.kind = 1;
+        m.zero[0] = 0.0f; m.zero[1] = 0.0f;   // left edge
+        m.full[0] = 1.0f; m.full[1] = 0.0f;   // right edge
+        const auto a = run(m);
+
+        report(at(a, 0, 32) < 0.01f && at(a, kW - 1, 32) > 0.99f,
+               "a linear gradient is zero at Zero and full at Full",
+               std::to_string(at(a, 0, 32)) + " … " + std::to_string(at(a, kW - 1, 32)));
+
+        bool monotone = true;
+        for (std::uint32_t x = 1; x < kW; ++x) {
+            if (at(a, int(x), 32) < at(a, int(x) - 1, 32) - 1e-3f) monotone = false;
+        }
+        report(monotone, "and rises monotonically between them", "");
+
+        // Perpendicular to the gradient direction nothing may change — that is
+        // what makes it a *linear* gradient rather than a smear.
+        double worstRow = 0.0;
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            worstRow = std::max(worstRow,
+                                std::abs(double(at(a, int(x), 4)) - double(at(a, int(x), 60))));
+        }
+        report(worstRow < 2e-3, "and is constant along its own perpendicular",
+               "worst " + std::to_string(worstRow));
+
+        // The midpoint of a smootherstep is a half, exactly. Cheap check that
+        // the falloff is the one that was intended.
+        report(std::abs(at(a, kW / 2, 32) - 0.5f) < 0.02f,
+               "the falloff is symmetric about its midpoint",
+               std::to_string(at(a, kW / 2, 32)));
+
+        m.invert = 1;
+        const auto inv = run(m);
+        double worstInv = 0.0;
+        for (std::uint32_t i = 0; i < kW * kH; ++i) {
+            worstInv = std::max(worstInv,
+                                std::abs(1.0 - double(a[i]) - double(inv[i])));
+        }
+        report(worstInv < 2e-3, "and inverting is exactly one minus it",
+               "worst " + std::to_string(worstInv));
+    }
+
+    // ── Radial ────────────────────────────────────────────────────────────
+    {
+        orion::pipe::params::MaskGradient m{};
+        m.size[0] = kW; m.size[1] = kH;
+        m.kind = 2;
+        // On a pixel centre, not on 0.5. With 64 pixels, 0.5 falls *between*
+        // 31 and 32, so "twelve pixels either side" is not equidistant — and on
+        // the steepest part of the feather that half-pixel is worth a quarter
+        // of the alpha range. The asymmetry was in the test, not the shader.
+        m.centre[0] = 32.5f / 64.0f; m.centre[1] = 32.5f / 64.0f;
+        m.radius[0] = 0.25f; m.radius[1] = 0.25f;
+        m.feather = 0.4f;
+        m.roundness = 2.0f;
+        const auto a = run(m);
+
+        report(at(a, 32, 32) > 0.99f, "a radial gradient is full at its centre",
+               std::to_string(at(a, 32, 32)));
+        report(at(a, 0, 0) < 0.01f, "and zero well outside its boundary",
+               std::to_string(at(a, 0, 0)));
+
+        // Circular: equal radii means the alpha depends only on distance, so
+        // the four cardinal points at one radius must agree.
+        const float right = at(a, 32 + 12, 32), left = at(a, 32 - 12, 32);
+        const float down  = at(a, 32, 32 + 12), up   = at(a, 32, 32 - 12);
+        const double spread = std::max({std::abs(right - left), std::abs(right - down),
+                                        std::abs(right - up)});
+        report(spread < 2e-3, "and with equal radii depends only on distance",
+               "spread " + std::to_string(spread));
+    }
+
+    // ── The alpha scales the parameter, not the result ────────────────────
+    //
+    // research/masking.md section 2 calls this the part most likely to be got
+    // wrong, and the two candidates differ measurably: at alpha 0.5 with a
+    // one-stop local exposure, scaling the parameter gives 2^0.5 = 1.414, while
+    // blending two rendered results gives (1 + 2)/2 = 1.5. Six per cent apart,
+    // and only one of them is a smooth multiplicative ramp in linear light.
+    {
+        auto kLinear = load("developLinear");
+
+        auto src   = orion::gpu::Texture::create(*device, kW, 1, PixelFormat::RGBA16Float);
+        auto guide = orion::gpu::Texture::create(*device, kW, 1, PixelFormat::RG32Float);
+        auto mask  = orion::gpu::Texture::create(*device, kW, 1, PixelFormat::R16Float);
+        auto out   = orion::gpu::Texture::create(*device, kW, 1, PixelFormat::RGBA16Float);
+
+        std::vector<__fp16> in(std::size_t(kW) * 4);
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            for (int c = 0; c < 3; ++c) in[x * 4 + c] = __fp16(0.25f);
+            in[x * 4 + 3] = __fp16(1.0f);
+        }
+        src->upload(in.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+        // A ramp of coverage across the row.
+        std::vector<__fp16> alpha(kW);
+        for (std::uint32_t x = 0; x < kW; ++x) alpha[x] = __fp16(float(x) / float(kW - 1));
+        mask->upload(alpha.data(), std::size_t(kW) * sizeof(__fp16));
+
+        std::vector<float> guideData(std::size_t(kW) * 2, 0.0f);
+        guide->upload(guideData.data(), std::size_t(kW) * 2 * sizeof(float));
+
+        orion::pipe::params::LinearAdjust la{};
+        la.size[0] = kW; la.size[1] = 1;
+        la.guideEnabled = 0.0f;
+        la.localExposureEv = 1.0f;
+        la.maskActive = 1.0f;
+
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kLinear.second,
+                    {src.get(), guide.get(), guide.get(), mask.get(), out.get()},
+                    &la, sizeof la, kW, 1);
+        cb.commitAndWait();
+
+        std::vector<__fp16> got(in.size());
+        out->download(got.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, 1);
+
+        double worstParam = 0.0, worstAgainstBlend = 0.0;
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const double a = double(x) / double(kW - 1);
+            const double parameter = 0.25 * std::exp2(a * 1.0);   // what it should be
+            const double blended   = 0.25 * (1.0 - a) + 0.5 * a;  // what it must not be
+            const double v = double(got[x * 4]);
+            worstParam = std::max(worstParam, std::abs(v - parameter));
+            worstAgainstBlend = std::max(worstAgainstBlend, std::abs(v - blended));
+        }
+        report(worstParam < 2e-3,
+               "a masked exposure scales the parameter: alpha 0.5 gives 2^0.5",
+               "worst " + std::to_string(worstParam));
+        report(worstAgainstBlend > 0.005,
+               "and is measurably not a blend of two rendered results",
+               "differs by " + std::to_string(worstAgainstBlend));
+
+        // Coverage zero has to be the untouched pixel, or every mask would put
+        // a faint edit over the whole frame.
+        report(std::abs(double(got[0]) - 0.25) < 1e-3,
+               "and zero coverage leaves the pixel exactly alone",
+               std::to_string(double(got[0])));
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -4375,6 +4562,7 @@ int main() {
     testExposureFusionMath();
     testExposureFusionGpu();
     testAutoEnhanceStats();
+    testMaskGpu();
     testHighlightHaloGpu();
     testOutputDepth();
     testLensDatabase();

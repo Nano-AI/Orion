@@ -455,8 +455,16 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::RG32Float, {}, {},
                                  true, guideW_, guideH_});
 
+    // The mask has no image input — it is a pure function of position — so it
+    // sits outside the chain and is bound as a fourth input below. Left enabled
+    // even with no mask set: it is a single full-resolution R16F write, and the
+    // per-node cache means it runs once and then never again while any slider
+    // moves.
+    nMask_ = pipeline_.add({"mask", "maskGradient", {},
+                            PixelFormat::R16Float, {}});
+
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
-                                 {nFusion_, nGuideV2_, nGuidePrep_},
+                                 {nFusion_, nGuideV2_, nGuidePrep_, nMask_},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
@@ -1181,8 +1189,41 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         pipeline_.setParams(nClarity_, &ap, sizeof ap);
     }
 
+    const bool maskMoved =
+        first ||
+        adj.maskKind != lastAdj_.maskKind ||
+        adj.maskInvert != lastAdj_.maskInvert ||
+        adj.maskZero[0] != lastAdj_.maskZero[0] ||
+        adj.maskZero[1] != lastAdj_.maskZero[1] ||
+        adj.maskFull[0] != lastAdj_.maskFull[0] ||
+        adj.maskFull[1] != lastAdj_.maskFull[1] ||
+        adj.maskCentre[0] != lastAdj_.maskCentre[0] ||
+        adj.maskCentre[1] != lastAdj_.maskCentre[1] ||
+        adj.maskRadius[0] != lastAdj_.maskRadius[0] ||
+        adj.maskRadius[1] != lastAdj_.maskRadius[1] ||
+        adj.maskAngle != lastAdj_.maskAngle ||
+        adj.maskFeather != lastAdj_.maskFeather ||
+        adj.maskRoundness != lastAdj_.maskRoundness;
+
+    if (maskMoved) {
+        params::MaskGradient m{};
+        m.size[0] = width_; m.size[1] = height_;
+        m.kind   = adj.maskKind;
+        m.invert = adj.maskInvert ? 1 : 0;
+        m.zero[0] = adj.maskZero[0];   m.zero[1] = adj.maskZero[1];
+        m.full[0] = adj.maskFull[0];   m.full[1] = adj.maskFull[1];
+        m.centre[0] = adj.maskCentre[0]; m.centre[1] = adj.maskCentre[1];
+        m.radius[0] = adj.maskRadius[0]; m.radius[1] = adj.maskRadius[1];
+        m.angle     = adj.maskAngle;
+        m.feather   = adj.maskFeather;
+        m.roundness = adj.maskRoundness;
+        pipeline_.setParams(nMask_, &m, sizeof m);
+    }
+
     const bool linearMoved =
         first ||
+        adj.localExposureEv != lastAdj_.localExposureEv ||
+        adj.maskKind != lastAdj_.maskKind ||
         adj.hueShift != lastAdj_.hueShift ||
         adj.satShift != lastAdj_.satShift ||
         adj.lumShift != lastAdj_.lumShift ||
@@ -1222,6 +1263,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                                 {size[0], size[1]},
                                 {guideW_, guideH_},
                                 {}, {}, {}};
+        la.localExposureEv = adj.localExposureEv;
+        la.maskActive = (adj.maskKind != 0) ? 1.0f : 0.0f;
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
         std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);
         std::copy(adj.lumShift.begin(), adj.lumShift.end(), la.lumShift);

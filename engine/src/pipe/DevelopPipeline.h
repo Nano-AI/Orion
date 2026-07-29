@@ -113,6 +113,25 @@ struct Adjustments {
     /// adjustment — it is a file, set through `setCreativeLut`.
     float lutStrength = 1.0f;
 
+    // ── Local adjustments (M4) ────────────────────────────────────────────
+    //
+    // A mask is its parameters, not an image: normalized coordinates in, alpha
+    // out, so it survives a resize and an export matches the preview it was
+    // made on. research/masking.md.
+    int   maskKind = 0;            // 0 none, 1 linear, 2 radial
+    bool  maskInvert = false;
+    float maskZero[2]{0.0f, 0.0f};      // linear: where the effect is zero
+    float maskFull[2]{0.0f, 1.0f};      // linear: where it is full
+    float maskCentre[2]{0.5f, 0.5f};    // radial
+    float maskRadius[2]{0.3f, 0.3f};
+    float maskAngle = 0.0f;
+    float maskFeather = 0.5f;
+    float maskRoundness = 2.0f;
+
+    /// What the mask does. Scales the *parameter*, so alpha 0.5 with +1 EV is
+    /// exactly 2^0.5 — not a blend between two rendered frames.
+    float localExposureEv = 0.0f;
+
     /// Single-image exposure fusion, 0..1 — shadow lift that keeps local
     /// contrast. The value is a power applied to the emitted gain, so zero is
     /// bit-exactly the identity. research/exposure-fusion.md.
@@ -277,6 +296,7 @@ private:
     int nFuseWeight_[kFuseLevels][kFuseStacks]{};
     int nFuseOut_[kFuseLevels]{};
     int nFusion_ = -1;
+    int nMask_ = -1;
     std::uint32_t fuseW_[kFuseLevels]{}, fuseH_[kFuseLevels]{};
 
     /// The simulated-image plan. Derived from the frame's median, so it is a

@@ -67,8 +67,12 @@ struct LinearAdjust {
     float         hueShift[8];
     float         satShift[8];
     float         lumShift[8];
+    /// A local adjustment and its coverage. See mask_gradient.slang and
+    /// research/masking.md — the alpha scales the parameter, not the result.
+    float         localExposureEv;
+    float         maskActive;
 };
-static_assert(sizeof(LinearAdjust) == 144);
+static_assert(sizeof(LinearAdjust) == 152);
 
 struct GuidePrep {
     std::uint32_t size[2];
@@ -361,6 +365,23 @@ struct FuseApply {
     float         _pad;
 };
 static_assert(sizeof(FuseApply) == 32);
+
+/// A gradient mask. Mirrors MaskParams in mask_gradient.slang.
+/// research/masking.md.
+struct alignas(8) MaskGradient {
+    std::uint32_t size[2];
+    std::int32_t  kind;        // 0 none, 1 linear, 2 radial
+    std::int32_t  invert;
+    float         zero[2];
+    float         full[2];
+    float         centre[2];
+    float         radius[2];
+    float         angle;
+    float         feather;
+    float         roundness;
+    float         _pad;
+};
+static_assert(sizeof(MaskGradient) == 64);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {

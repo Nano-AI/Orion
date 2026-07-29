@@ -30,6 +30,16 @@ struct LinearAdjustParams
     float hueShift[8];
     float satShift[8];
     float lumShift[8];
+
+    /// A local adjustment, and whether there is a mask to scale it by.
+    ///
+    /// research/masking.md section 2: the alpha multiplies the **parameter**,
+    /// not two rendered results. For exposure that is literally
+    /// `x * 2^(alpha * stops)` — a smooth multiplicative ramp in linear light,
+    /// artifact-free by construction. Blending two renders instead would mix
+    /// two tone-mapped states and shift hue across the transition band.
+    float localExposureEv;
+    float maskActive;
 };
 
 /// Bilinear lift of the guide coefficients from their subsampled grid.
@@ -60,6 +70,7 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float4>   src,
                    uniform Texture2D<float2>   guideAb,   // a, b from the guided filter
                    uniform Texture2D<float2>   guideRaw,  // log2 luminance
+                   uniform Texture2D<float>    mask,      // local alpha, 0..1
                    uniform RWTexture2D<float4> dst,
                    uniform ConstantBuffer<LinearAdjustParams> p)
 {
@@ -113,6 +124,12 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     c = applyTone(c, guideEv, p.highlights, p.shadows, p.whites, p.blacks);
     c = applyColor(c, p.vibrance, p.saturation);
     c = applyColorMixer(c, p.hueShift, p.satShift, p.lumShift);
+
+    // The local exposure, scaled by coverage. One multiply, no blend.
+    if (p.maskActive != 0.0f && p.localExposureEv != 0.0f)
+    {
+        c *= exp2(saturate(mask[tid.xy]) * p.localExposureEv);
+    }
 
     dst[tid.xy] = float4(c, 1.0f);
 }
