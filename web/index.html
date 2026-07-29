@@ -50,7 +50,7 @@ try{var t=localStorage.getItem('orion-theme');if(t==='dark'||t==='light')documen
     <div class="mock__body">
       <div class="mock__canvas">
         <img id="mockimg" src="img/orion-hero-canvas.jpg" width="1235" height="820"
-             alt="Night photograph of three Aston Martins on a forecourt, open in Orion with a radial mask outlined over the silver car.">
+             alt="Night photograph of three Aston Martins on a forecourt, open in Orion with a linear gradient mask drawn across the frame as three dashed guide lines with endpoint handles.">
       </div>
       <aside class="mock__panel">
         <div class="mock__histo" aria-hidden="true">
@@ -104,11 +104,11 @@ try{var t=localStorage.getItem('orion-theme');if(t==='dark'||t==='light')documen
         </div>
 
         <p class="mock__sec">Local</p>
-        <div class="mock__seg" aria-hidden="true"><span>No mask</span><span>Linear</span><span class="mock__seg--on">Radial</span></div>
-        <div class="sl"><span class="sl__k">Exposure</span><span class="sl__v sl__v--hot">1.60 EV</span>
-          <div class="sl__track"><span class="sl__fill" style="left:50%;width:16%"></span><span class="sl__thumb" style="left:66%"></span></div></div>
-        <div class="sl"><span class="sl__k">Feather</span><span class="sl__v">0.30</span>
-          <div class="sl__track"><span class="sl__fill" style="left:0;width:30%"></span><span class="sl__thumb" style="left:30%"></span></div></div>
+        <div class="mock__seg" aria-hidden="true"><span>No mask</span><span class="mock__seg--on">Linear</span><span>Radial</span></div>
+        <div class="sl"><span class="sl__k">Exposure</span><span class="sl__v sl__v--hot">−1.60 EV</span>
+          <div class="sl__track"><span class="sl__fill" style="left:34%;width:16%"></span><span class="sl__thumb" style="left:34%"></span></div></div>
+        <div class="sl"><span class="sl__k">Centre X</span><span class="sl__v sl__v--hot">0.46</span>
+          <div class="sl__track"><span class="sl__thumb" style="left:46%"></span></div></div>
 
         <div class="mock__foot"><span>6,024 × 4,024</span><span class="mock__ms" id="mockms">9.3 ms</span></div>
       </aside>
@@ -138,21 +138,21 @@ try{var t=localStorage.getItem('orion-theme');if(t==='dark'||t==='light')documen
   <p class="body rev">Drag linear and radial gradients on the photograph itself. A mask stays on its subject through crop, rotation and straightening — and the export matches the preview.</p>
 
   <figure class="shot rev">
-    <img src="img/orion-mask-radial.jpg"
-         srcset="img/orion-mask-radial-900.jpg 900w, img/orion-mask-radial.jpg 1600w"
-         sizes="(max-width: 720px) 94vw, min(94vw, 1120px)"
-         width="1600" height="1000" loading="lazy" decoding="async"
-         alt="Orion editing a night photograph of three Aston Martins. A radial gradient mask is drawn over the silver car with axis and rotate handles; the Local panel reads Exposure 1.60 EV.">
-    <figcaption>Radial gradient over the silver car, +1.60 EV — a real render from the running app.</figcaption>
-  </figure>
-
-  <figure class="shot rev">
     <img src="img/orion-mask-linear.jpg"
          srcset="img/orion-mask-linear-900.jpg 900w, img/orion-mask-linear.jpg 1600w"
          sizes="(max-width: 720px) 94vw, min(94vw, 1120px)"
          width="1600" height="1000" loading="lazy" decoding="async"
-         alt="The same photograph with a linear gradient mask drawn across the frame as three guide lines with draggable endpoints; the Local panel reads Exposure −1.60 EV.">
+         alt="Orion editing a night photograph of three Aston Martins on a forecourt. A linear gradient mask is drawn across the frame with three dashed guide lines and draggable endpoint handles; the Local panel reads Exposure −1.60 EV.">
     <figcaption>Linear gradient, −1.60 EV. The side you didn’t touch stays untouched — measured to the bit.</figcaption>
+  </figure>
+
+  <figure class="shot rev">
+    <img src="img/orion-mask-radial.jpg"
+         srcset="img/orion-mask-radial-900.jpg 900w, img/orion-mask-radial.jpg 1600w"
+         sizes="(max-width: 720px) 94vw, min(94vw, 1120px)"
+         width="1600" height="1000" loading="lazy" decoding="async"
+         alt="The same photograph with a radial gradient mask drawn over the silver car with axis and rotate handles; the Local panel reads Exposure 1.60 EV.">
+    <figcaption>Radial gradient over the silver car, +1.60 EV — a real render from the running app.</figcaption>
   </figure>
 
   <p class="fn rev">Not built yet: brush, luminance-range and subject masks. Nothing on this page pretends otherwise.</p>
