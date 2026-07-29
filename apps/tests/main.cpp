@@ -18,6 +18,7 @@
 #include "pipe/LensDatabase.h"
 #include "pipe/LensGeometry.h"
 #include "pipe/CubeLut.h"
+#include "pipe/ExposureFusion.h"
 #include "pipe/Dehaze.h"
 #include "pipe/LocalLaplacian.h"
 #include "util/ImageWriter.h"
@@ -3579,6 +3580,217 @@ void testCreativeLut() {
            "worst " + std::to_string(worstId) + "/255");
 }
 
+/// Simulated exposure fusion — the maths, before any of it reaches a shader.
+void testExposureFusionMath() {
+    section("Exposure fusion (maths)");
+
+    namespace sef = orion::pipe::sef;
+
+    const float alpha = sef::kAlphaDefault, beta = sef::kBeta;
+    sef::Plan p{};
+    p.images = 5; p.dark = 0; p.bright = 4;
+
+    // ── The smooth clip ───────────────────────────────────────────────────
+    //
+    // g is the identity inside the restrained range and decays outside it. The
+    // join is where a hand-rolled version goes wrong: a discontinuity there is
+    // a visible edge in the simulated image, and a slope discontinuity is a
+    // visible edge in the *weight*, which is worse because it moves.
+    {
+        double worstJoin = 0.0, worstSlope = 0.0;
+        bool monotone = true, bounded = true;
+        for (int k = 0; k <= p.bright; ++k) {
+            const float c = sef::rho(k, p, beta);
+            const float half = beta * 0.5f;
+
+            // Continuity of value at both ends of the range.
+            worstJoin = std::max(worstJoin,
+                std::abs(double(sef::clip(c + half, c, beta, sef::kLambda)) - double(c + half)));
+            worstJoin = std::max(worstJoin,
+                std::abs(double(sef::clip(c - half, c, beta, sef::kLambda)) - double(c - half)));
+
+            // Continuity of slope: one inside, and the tail's own expression
+            // evaluated at the join must also be one.
+            worstSlope = std::max(worstSlope,
+                std::abs(double(sef::clipSlope(c + half + 1e-6f, c, beta, sef::kLambda)) - 1.0));
+
+            float previous = -1e9f;
+            for (int i = -200; i <= 400; ++i) {
+                const float t = float(i) / 200.0f;      // deliberately outside [0,1]
+                const float g = sef::clip(t, c, beta, sef::kLambda);
+                if (g < previous - 1e-6f) monotone = false;
+                previous = g;
+                // The tail asymptote: |g - centre| < beta/2 + lambda.
+                if (std::abs(g - c) > half + sef::kLambda + 1e-5f) bounded = false;
+            }
+        }
+        report(worstJoin < 1e-6, "the clip is continuous where its branches meet",
+               "worst " + std::to_string(worstJoin));
+        report(worstSlope < 1e-3, "and its slope is one on both sides of the join",
+               "worst " + std::to_string(worstSlope));
+        report(monotone, "the clip is monotone, so it cannot invert tones", "");
+        report(bounded, "and is bounded by beta/2 + lambda however far the input goes", "");
+    }
+
+    // beta = 1 degenerates to plain exposure fusion — the paper says so, and it
+    // is the cheapest check that rho and the clip agree with each other.
+    {
+        sef::Plan q{}; q.images = 5; q.dark = 0; q.bright = 4;
+        double worst = 0.0;
+        for (int k = 0; k <= q.bright; ++k) {
+            for (int i = 0; i <= 100; ++i) {
+                const float t = float(i) / 100.0f;
+                worst = std::max(worst, std::abs(double(sef::clip(t, sef::rho(k, q, 1.0f),
+                                                                 1.0f, sef::kLambda)) - double(t)));
+            }
+        }
+        report(worst < 1e-6, "beta = 1 makes the clip the identity, as the paper states",
+               "worst " + std::to_string(worst));
+    }
+
+    // ── The contrast weight is the clip's own derivative ──────────────────
+    //
+    // Hessel & Morel replace Mertens' Laplacian filter with it, so if this is
+    // not actually the derivative there is no contrast measure at all. Checked
+    // against a finite difference rather than against itself.
+    {
+        double worst = 0.0;
+        for (int k = 0; k <= p.bright; ++k) {
+            const float c = sef::rho(k, p, beta);
+            for (int i = 1; i < 200; ++i) {
+                const float t = -0.2f + 1.4f * float(i) / 200.0f;
+                const float h = 1e-4f;
+                if (std::abs(std::abs(t - c) - beta * 0.5f) < 2e-3f) continue;  // skip the join
+                const float numeric = (sef::clip(t + h, c, beta, sef::kLambda) -
+                                       sef::clip(t - h, c, beta, sef::kLambda)) / (2.0f * h);
+                worst = std::max(worst,
+                    std::abs(double(numeric) - double(sef::clipSlope(t, c, beta, sef::kLambda))));
+            }
+        }
+        report(worst < 2e-3, "the contrast weight is the clip's actual derivative",
+               "worst " + std::to_string(worst));
+    }
+
+    // ── The simulated set is solved, not chosen ───────────────────────────
+    {
+        const auto dark  = sef::planFor(0.05f, alpha, beta);
+        const auto light = sef::planFor(0.95f, alpha, beta);
+        report(dark.valid() && light.valid(), "a plan is found at both ends of the histogram",
+               std::to_string(dark.images) + " and " + std::to_string(light.images));
+        // "contrast enhancement is generally needed in the dark parts only" —
+        // so a dark frame gets brightened images and a bright one gets darkened.
+        report(dark.bright > dark.dark,
+               "a dark frame simulates more brightened images than darkened",
+               std::to_string(dark.bright) + " vs " + std::to_string(dark.dark));
+        report(light.dark >= light.bright,
+               "and a bright frame the other way round",
+               std::to_string(light.dark) + " vs " + std::to_string(light.bright));
+        report(sef::overlaps(dark, alpha, beta) && sef::overlaps(light, alpha, beta),
+               "the chosen sets overlap, so the fused range has no gap in it", "");
+    }
+
+    // ── The blend, exactly ────────────────────────────────────────────────
+    //
+    // On a constant image every Laplacian coefficient is zero and only the
+    // residual survives, so the fused value must be the weighted average of the
+    // remapped constants — computable here in closed form. If the pyramid,
+    // the expand, the weighting or the collapse is wrong in any way that does
+    // not cancel, this is where it shows.
+    {
+        constexpr int kW = 24, kH = 16, kLevels = 4;
+        const float t = 0.3f;
+        const auto plan = sef::planFor(t, alpha, beta);
+
+        orion::pipe::pyr::Plane flat{kW, kH, std::vector<float>(std::size_t(kW) * kH, t)};
+        auto fused = sef::fuseReference(flat, plan, alpha, beta, sef::kSigma, kLevels);
+
+        double sumW = 0.0, sumWV = 0.0;
+        for (int k = -plan.dark; k <= plan.bright; ++k) {
+            const double w = double(sef::wellExposed(sef::remap(t, k, plan, alpha, beta),
+                                                     sef::kSigma)) *
+                             double(sef::contrastWeight(t, k, plan, alpha, beta));
+            sumW  += w;
+            sumWV += w * double(sef::remap(t, k, plan, alpha, beta));
+        }
+        const double want = sumWV / sumW;
+
+        double worst = 0.0, spread = 0.0;
+        for (std::size_t i = 0; i < fused.v.size(); ++i) {
+            worst  = std::max(worst,  std::abs(double(fused.v[i]) - want));
+            spread = std::max(spread, std::abs(double(fused.v[i]) - double(fused.v[0])));
+        }
+        report(worst < 2e-4, "a flat field fuses to the weighted average of its remaps",
+               "want " + std::to_string(want) + ", worst error " + std::to_string(worst));
+        report(spread < 1e-5, "and stays flat — no seam from the pyramid or the borders",
+               "spread " + std::to_string(spread));
+    }
+
+    // A ramp must not gain a reversal: the whole point is more local contrast,
+    // not different tonal ordering.
+    {
+        constexpr int kW = 64, kH = 8, kLevels = 4;
+        orion::pipe::pyr::Plane ramp{kW, kH, std::vector<float>(std::size_t(kW) * kH)};
+        for (int y = 0; y < kH; ++y)
+            for (int x = 0; x < kW; ++x)
+                ramp.v[std::size_t(y) * kW + x] = float(x) / float(kW - 1);
+
+        const auto plan = sef::planFor(0.5f, alpha, beta);
+        auto fused = sef::fuseReference(ramp, plan, alpha, beta, sef::kSigma, kLevels);
+
+        // Exposure fusion does not *guarantee* monotonicity — it blends
+        // Laplacian coefficients with spatially varying weights, and Mertens
+        // et al. section 4.1 names a "spurious low frequency brightness change"
+        // as a known artefact of exactly this. So the question is not whether
+        // reversals exist but how large they are, and whether they grow with
+        // the amplification — which is what says they come from the method
+        // rather than from a mistake in the blend.
+        const std::size_t row = std::size_t(kH / 2) * kW;
+        const auto worstDropAt = [&](float a) {
+            const auto q = sef::planFor(0.5f, a, beta);
+            auto f = sef::fuseReference(ramp, q, a, beta, sef::kSigma, kLevels);
+            double worst = 0.0;
+            for (int x = 1; x < kW; ++x) {
+                worst = std::max(worst, double(f.v[row + x - 1]) - double(f.v[row + x]));
+            }
+            return worst;
+        };
+        const double mild = worstDropAt(2.0f);
+        const double mid  = worstDropAt(4.0f);
+        const double full = worstDropAt(8.0f);
+        std::printf("  ramp reversal by alpha: 2 -> %.2e, 4 -> %.2e, 8 -> %.2e\n",
+                    mild, mid, full);
+
+        report(mild < full && mid <= full,
+               "reversals scale with the amplification, as the method implies",
+               std::to_string(mild) + " < " + std::to_string(full));
+        // A regression guard on the worst case, not an aspiration. If a change
+        // to the blend pushes this up, that is the signal.
+        report(full < 0.02, "and stay under two percent at full amplification",
+               "worst " + std::to_string(full));
+    }
+
+    // ── Robust normalisation ──────────────────────────────────────────────
+    {
+        orion::pipe::pyr::Plane v{101, 1, std::vector<float>(101)};
+        for (int i = 0; i <= 100; ++i) v.v[std::size_t(i)] = 0.2f + 0.006f * float(i);
+        sef::robustNormalise(v, sef::kRobustClip);
+
+        const auto mm = std::minmax_element(v.v.begin(), v.v.end());
+        report(*mm.first <= 1e-5f && *mm.second >= 1.0f - 1e-5f,
+               "robust normalisation stretches to the full range",
+               std::to_string(*mm.first) + " … " + std::to_string(*mm.second));
+
+        // The clip is what makes it robust: an outlier must not set the scale.
+        orion::pipe::pyr::Plane spike = v;
+        for (float& t : spike.v) t = 0.5f;
+        spike.v[0] = 100.0f;
+        sef::robustNormalise(spike, sef::kRobustClip);
+        report(spike.v[1] > 0.0f && spike.v[1] <= 1.0f,
+               "and a single wild outlier does not flatten everything else",
+               std::to_string(spike.v[1]));
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -3605,6 +3817,7 @@ int main() {
     testLocalLaplacianGpu();
     testDehazeGpu();
     testCreativeLut();
+    testExposureFusionMath();
     testHighlightHaloGpu();
     testOutputDepth();
     testLensDatabase();

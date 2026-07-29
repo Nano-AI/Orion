@@ -280,3 +280,37 @@ So `research/luts.md` does not assert the accuracy ordering. The reason Orion
 interpolates tetrahedrally is that the file format's own specification says to,
 which is a better reason for this decision in any case. To close: read the paper,
 or drop the reference entirely.
+
+## 13. Exposure fusion — four departures from the published method
+
+**Where:** `pipe/ExposureFusion.h`. Argued in full in `research/exposure-fusion.md`.
+
+The algorithm itself is sourced — Mertens et al. (2007) and Hessel & Morel
+(WACV 2020 / IPOL 9, 2019), with every constant quoted. These four are Orion's.
+
+**The number of simulated images.** [H279] Eq. (7) solves for the smallest set
+whose ranges still overlap. That constraint could not be transcribed from the
+available text with enough confidence to implement as the sole authority, so the
+search starts at 5 — the count [HM20] Fig. 10 reports for the recommended α = 8,
+β = 0.5 — rather than at 2. Starting at 2 is independently wrong: with a single
+image to allocate, the median-derived split cannot give a bright frame a darkened
+image at all, and the asymmetry the method depends on never appears.
+
+**The proxy transfer function.** The method requires `t ∈ [0,1]`,
+display-referred. Orion is scene-linear, so the chain maps luminance through a
+sigmoid over log2 before running SEF. The reasoning — that a raw log domain
+depresses the median, over-allocates brightened images and amplifies the sensor
+noise floor — is argued but not published, and the specific sigmoid is a choice.
+
+**The robust normalisation is dropped.** [HM20] §4 stretches the result to [0,1]
+allowing 1% clipping. In an editor that fights the user's own exposure controls,
+makes a pixel depend on the current crop, and destroys identity-at-zero. Replaced
+by a fixed clamp on the emitted gain. The reference implementation keeps the
+paper's version so comparisons remain possible.
+
+**The strength control.** No published parameter degenerates to the identity, so
+the slider raises the emitted gain to its own power — a lerp in log-gain, exact
+at zero. Reasoned, not sourced.
+
+**Also unspecified by any paper:** the epsilon guarding the weight
+normalisation, whose denominator can reach zero.

@@ -222,8 +222,89 @@ pipeline.
 
 ---
 
+## How this lands in Orion
+
+**The method needs a bounded, display-referred `t ∈ [0,1]`.** Orion's pipeline
+carries unbounded scene-linear light, so the placement question is real. Three
+options were weighed:
+
+**A — split `develop:display`** so fusion sees exactly the AgX-mapped image the
+user sees. Faithful, and rejected. The split is structural, so it costs a
+full-resolution round trip (~4 ms) on *every* render including when fusion is
+off, against an architecture whose rule is that a disabled feature costs
+nothing. And the faithfulness it buys is illusory: a full-resolution RGB fusion
+of six simulated exposures, each with its own Laplacian pyramid and Gaussian
+weight pyramid, is multiple gigabytes of traffic — 30–60 ms on its own, at *any*
+placement. Once the method has to be approximated regardless, paying a permanent
+tax for exactness that is not achievable is the worst of both.
+
+**B — its own chain before the display transform, emitting a scene-linear
+gain.** Chosen. The chain maps luminance into a bounded proxy internally, runs
+SEF there, and outputs a per-pixel gain multiplied onto RGB — the same shape as
+the clarity node, which filters normalised log2 luminance and re-applies a
+ratio. Zero cost when off, because a disabled node resolves to its first input.
+
+**The proxy is a sigmoid over log2 luminance, not raw normalised log.** This
+matters, and the failure it avoids is specific:
+
+> In a raw log domain the shadow axis is stretched, so `median{u}` falls. The
+> split `N* = ⌊(M−1)·median⌋` then allocates almost every simulated image to the
+> *brightened* side, the weights read the sensor's noise floor as
+> "underexposed content that needs lifting", and the fusion amplifies noise in
+> the near-black. A sigmoid compresses the shadows back, which puts the median
+> where the paper's constants were validated.
+
+Two further reasons the same choice is forced: `f*(t,k) = α^{|k|/N}(t−1)+1` is
+anchored at `t = 1`, which is meaningless in an unbounded domain; and
+well-exposedness at 0.5 with σ = 0.2 means "within about ±0.4 of mid" — over a
+raw 12-stop log window that is ±2.4 stops, a different preference shape from the
+one the paper tested. AgX is itself a sigmoid in log2, so matching one at middle
+grey and slope is a cheap, faithful proxy rather than an invention.
+
+**The robust normalisation is dropped, not implemented.** [HM20]'s final 1%
+stretch is a global histogram operation, and in an editor it is wrong three
+times over: it fights the user's own exposure, whites and blacks sliders; it
+makes a pixel's value depend on the current crop, since the crop changes the
+histogram; and it destroys identity-at-zero, because stretching an unmodified
+image is not the identity. AgX and the user's controls already own global
+tonality. A fixed clamp on the gain replaces it. The reference implementation
+in `pipe/ExposureFusion.h` keeps it, because comparing against the paper needs
+it — it just is not in the pipeline.
+
+**The slider is `gain^s`, which is exactly the identity at zero.** No published
+parameter degenerates cleanly: α → 1 collapses the exposure factors to the
+identity, but `ρ(k)` contains no α, so the simulated images remain differently
+clipped copies and their blend is not the input. Raising the emitted gain to the
+slider's power is a lerp in log-gain: `s = 0` gives `gain⁰ = 1`, bit-exact, and
+the node is disabled there anyway, so the architectural guarantee and the
+arithmetic one agree. α stays fixed at the paper's 8 internally.
+
+⚠️ **Monotonicity is not guaranteed, and this is measured.** Fusion blends
+Laplacian coefficients with spatially varying weights; [M07] §4.1 names a
+"spurious low frequency brightness change" as a known artefact. On a synthetic
+full-range ramp the worst tonal reversal scales cleanly with the amplification:
+
+| α | worst reversal |
+|---|---|
+| 2 | 2.1 × 10⁻⁴ |
+| 4 | 2.3 × 10⁻³ |
+| 8 | **1.1 × 10⁻²** |
+
+That scaling is what says the reversals come from the method rather than from a
+mistake in the blend — and 1% at the recommended α = 8 is large enough to band a
+smooth gradient. `testExposureFusionMath` guards it as a regression and prints
+all three numbers on every run.
+
 ## Open, and to be recorded in UNSOURCED
 
 - **The epsilon guarding the weight normalisation.** No paper specifies one, and
   the denominator can reach zero.
+- **`M` is searched from 5 upward, not from 2.** [H279] Eq. (7) solves for the
+  smallest overlapping set; the exact form of that constraint could not be
+  transcribed with enough confidence to be the sole authority, so the search
+  starts at the count [HM20] Fig. 10 reports for the recommended α = 8, β = 0.5.
+  Starting at 2 is also actively wrong here: with one image to allocate, the
+  median-derived split cannot give a bright frame a darkened image at all.
+- **The proxy transfer function**, the dropped robust normalisation, and the
+  `gain^s` strength control are all Orion's, argued above but not published.
 - **CGF 2009** unread; nothing may be attributed to it.
