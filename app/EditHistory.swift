@@ -134,6 +134,16 @@ struct DevelopState: Equatable, Codable {
     var maskFeather: Float = 0.5
     var maskRoundness: Float = 2
     var localExposureEv: Float = 0
+
+    /// The brush. `brushStroke` is flattened to interleaved x, y so the sidecar
+    /// stays a plain JSON array of numbers rather than a list of objects — a
+    /// stroke is thousands of points and the object form doubles the file for
+    /// nothing.
+    var brushRadius: Float = 0.08
+    var brushFlow: Float = 0.5
+    var brushHardness: Float = 0.5
+    var brushStroke: [Float] = []
+
     var fusion: Float = 0
     var dehaze: Float = 0
     var clarity: Float = 0
@@ -173,6 +183,7 @@ extension DevelopState {
         case maskKind, maskInvert, maskCentreX, maskCentreY, maskAngle
         case maskLength, maskRadiusX, maskRadiusY, maskFeather, maskRoundness
         case localExposureEv
+        case brushRadius, brushFlow, brushHardness, brushStroke
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case curve, hueShift, satShift, lumShift
 
@@ -233,6 +244,10 @@ extension DevelopState {
         maskFeather = float(.maskFeather) ?? maskFeather
         maskRoundness = float(.maskRoundness) ?? maskRoundness
         localExposureEv = float(.localExposureEv) ?? localExposureEv
+        brushRadius   = float(.brushRadius) ?? brushRadius
+        brushFlow     = float(.brushFlow) ?? brushFlow
+        brushHardness = float(.brushHardness) ?? brushHardness
+        brushStroke   = (try? c.decode([Float].self, forKey: .brushStroke)) ?? brushStroke
         fusion = float(.fusion) ?? fusion
         dehaze = float(.dehaze) ?? dehaze
         clarity = float(.clarity) ?? clarity

@@ -279,6 +279,14 @@ final class Engine {
     /// One history entry when a brush stroke finishes, rather than one per dab.
     func commitBrushEdit() { history.record(state, label: "Brush") }
 
+    /// Wipes the stroke. Undoable, because painting for a minute and losing it
+    /// to a misclick is not a thing a photographer should have to fear.
+    func clearBrushStroke() {
+        guard !brushStroke.isEmpty else { return }
+        setBrushStroke([])
+        history.record(state, label: "Clear brush")
+    }
+
     /// The mask as the canvas overlay handles it.
     ///
     /// The overlay works in one struct because a drag moves several of these at
@@ -603,6 +611,9 @@ final class Engine {
             maskRadiusX: maskRadiusX, maskRadiusY: maskRadiusY,
             maskFeather: maskFeather, maskRoundness: maskRoundness,
             localExposureEv: localExposureEv,
+            brushRadius: brushRadius, brushFlow: brushFlow,
+            brushHardness: brushHardness,
+            brushStroke: brushStroke.flatMap { [Float($0.x), Float($0.y)] },
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
@@ -636,6 +647,18 @@ final class Engine {
         maskRadiusX = s.maskRadiusX; maskRadiusY = s.maskRadiusY
         maskFeather = s.maskFeather; maskRoundness = s.maskRoundness
         localExposureEv = s.localExposureEv
+        brushRadius   = s.brushRadius
+        brushFlow     = s.brushFlow
+        brushHardness = s.brushHardness
+        // Pairs back into points. An odd count is a truncated sidecar; drop the
+        // stray rather than reading past the end.
+        var pts: [CGPoint] = []
+        pts.reserveCapacity(s.brushStroke.count / 2)
+        for i in stride(from: 0, to: s.brushStroke.count - 1, by: 2) {
+            pts.append(CGPoint(x: CGFloat(s.brushStroke[i]),
+                               y: CGFloat(s.brushStroke[i + 1])))
+        }
+        setBrushStroke(pts)
         fusion = s.fusion
         dehaze = s.dehaze
         clarity = s.clarity

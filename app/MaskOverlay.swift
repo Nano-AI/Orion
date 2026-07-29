@@ -22,7 +22,17 @@ struct MaskOverlay: View {
     @State private var grab: CGPoint = .zero
     @State private var start: CanvasLayout.MaskPlacement?
 
+    // Painting. `carry` is the distance left over from the previous pointer
+    // event, which is what keeps dab spacing continuous across events instead
+    // of restarting at each one.
+    @State private var painting = false
+    @State private var carry: CGFloat = 0
+    @State private var stroke: [CGPoint] = []
+    @State private var last: CGPoint = .zero
+    @State private var cursor: CGPoint?
+
     private var mask: CanvasLayout.MaskPlacement { engine.maskPlacement }
+    private var isBrush: Bool { engine.maskKind == 3 }
 
     // The mask reads as an instruction to the picture rather than as furniture:
     // a thin white line with a dark halo under it, which stays legible on both
@@ -32,7 +42,9 @@ struct MaskOverlay: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            if mask.kind != 0 {
+            if isBrush {
+                brushCursor
+            } else if mask.kind != 0 {
                 // Clipped to the picture, not to the canvas. A mask exists on
                 // the photograph; drawing its lines across the letterbox says
                 // the gradient continues into the black bars, and at fit on a
@@ -45,7 +57,17 @@ struct MaskOverlay: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .contentShape(Rectangle())
-        .gesture(drag)
+        .gesture(isBrush ? AnyGesture(paint.map { _ in () })
+                         : AnyGesture(drag.map { _ in () }))
+        // Where the brush is, without waiting for a press — a brush whose size
+        // you can only discover by painting is a brush you undo a lot.
+        .onContinuousHover { phase in
+            guard isBrush else { cursor = nil; return }
+            switch phase {
+            case .active(let p): cursor = p
+            case .ended:         cursor = nil
+            }
+        }
         // The picture underneath still pans and zooms; only the mask's own
         // handles and body take a press, and `maskHit` returning nil is what
         // lets everything else through.
@@ -160,6 +182,76 @@ struct MaskOverlay: View {
                 Circle().fill(line).frame(width: 8, height: 8)
             }
         }
+    }
+
+    // MARK: The brush
+
+    /// The nib, drawn where the pointer is.
+    ///
+    /// An ellipse on any frame that is not square, because that is the shape
+    /// the kernel stamps — `mask_brush.slang` measures distance in normalized
+    /// coordinates exactly as the gradients do. A screen-round cursor would
+    /// promise a shape the paint does not have.
+    /// Built in a plain function, not in the `ViewBuilder` — a `for` loop
+    /// cannot live inside one.
+    private func cursorPath(_ at: CGPoint) -> Path {
+        let pts = CanvasLayout.brushCursor(at: map.unit(at),
+                                           radius: CGFloat(engine.brushRadius),
+                                           map)
+        var p = Path()
+        guard let first = pts.first else { return p }
+        p.move(to: first)
+        for q in pts.dropFirst() { p.addLine(to: q) }
+        p.closeSubpath()
+        return p
+    }
+
+    @ViewBuilder private var brushCursor: some View {
+        if let c = cursor {
+            let p = cursorPath(c)
+            ZStack {
+                p.stroke(halo, lineWidth: 3)
+                p.stroke(line, lineWidth: 1.25)
+            }
+            .clipShape(Rectangle().path(in: map.rect))
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Painting. Dabs are laid along the drag at a fixed spacing rather than
+    /// once per pointer event, so a fast stroke and a slow one over the same
+    /// path lay the same paint. `CanvasLayout.brushDabs` owns that walk.
+    private var paint: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let here = map.unit(value.location)
+                if !painting {
+                    painting = true
+                    carry = 0
+                    // Start from the stroke already on the picture, so a second
+                    // pass adds to it rather than replacing it. The engine
+                    // accumulates source-over, which is what makes overlapping
+                    // passes build rather than double.
+                    stroke = engine.brushStroke
+                    stroke.append(here)
+                    last = here
+                    engine.setBrushStroke(stroke)
+                    return
+                }
+                let added = CanvasLayout.brushDabs(from: last, to: here,
+                                                   radius: CGFloat(engine.brushRadius),
+                                                   carry: &carry)
+                guard !added.isEmpty else { return }
+                stroke += added
+                last = here
+                engine.setBrushStroke(stroke)
+            }
+            .onEnded { _ in
+                painting = false
+                carry = 0
+                // One history entry for the whole stroke, not one per dab.
+                if !stroke.isEmpty { engine.commitBrushEdit() }
+            }
     }
 
     // MARK: Dragging

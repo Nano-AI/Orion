@@ -75,6 +75,7 @@ extension Editor {
                     Text("No mask").tag(Int32(0))
                     Text("Linear").tag(Int32(1))
                     Text("Radial").tag(Int32(2))
+                    Text("Brush").tag(Int32(3))
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -82,12 +83,38 @@ extension Editor {
                 if engine.maskKind != 0 {
                     slider("Exposure", $engine.localExposureEv, -3...3, " EV", 2,
                            resetsTo: engine.defaults.localExposureEv)
-                    slider("Centre X", $engine.maskCentreX, 0...1, "", 2,
-                           resetsTo: engine.defaults.maskCentreX)
-                    slider("Centre Y", $engine.maskCentreY, 0...1, "", 2,
-                           resetsTo: engine.defaults.maskCentreY)
-                    slider("Angle", $engine.maskAngle, -3.15...3.15, " rad", 2,
-                           resetsTo: engine.defaults.maskAngle)
+
+                    if engine.maskKind == 3 {
+                        // A stroke has no centre or angle to type in — the
+                        // whole point is that it is drawn. What is left is the
+                        // nib, and those are the three the shader reads.
+                        slider("Size", $engine.brushRadius, 0.01...0.4, "", 3,
+                               resetsTo: engine.defaults.brushRadius)
+                        slider("Flow", $engine.brushFlow, 0.01...1, "", 2,
+                               resetsTo: engine.defaults.brushFlow)
+                        slider("Hardness", $engine.brushHardness, 0...1, "", 2,
+                               resetsTo: engine.defaults.brushHardness)
+
+                        HStack(spacing: 8) {
+                            Button("Clear stroke") { engine.clearBrushStroke() }
+                                .disabled(engine.brushStroke.isEmpty)
+                            Text(engine.brushStroke.isEmpty
+                                 ? "drag on the photo to paint"
+                                 : "\(engine.brushStroke.count) dabs")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Palette.faint)
+                        }
+                        .font(.system(size: 11))
+                    }
+
+                    if engine.maskKind == 1 || engine.maskKind == 2 {
+                        slider("Centre X", $engine.maskCentreX, 0...1, "", 2,
+                               resetsTo: engine.defaults.maskCentreX)
+                        slider("Centre Y", $engine.maskCentreY, 0...1, "", 2,
+                               resetsTo: engine.defaults.maskCentreY)
+                        slider("Angle", $engine.maskAngle, -3.15...3.15, " rad", 2,
+                               resetsTo: engine.defaults.maskAngle)
+                    }
 
                     if engine.maskKind == 1 {
                         // No Feather here, and it is not an omission.
@@ -100,7 +127,14 @@ extension Editor {
                         // is worse than no slider.
                         slider("Length", $engine.maskLength, 0.05...1.5, "", 2,
                                resetsTo: engine.defaults.maskLength)
-                    } else {
+                    } else if engine.maskKind == 2 {
+                        // Explicitly kind 2, not `else`. An `else` here also
+                        // catches the brush, which reads none of these — the
+                        // stroke carries its own radius and the shader's
+                        // feather and roundness fields are radial-only. Four
+                        // dead sliders under a brush, and the same class of
+                        // defect as the Feather slider that did nothing to a
+                        // linear gradient.
                         slider("Feather", $engine.maskFeather, 0...1, "", 2,
                                resetsTo: engine.defaults.maskFeather)
                         slider("Width", $engine.maskRadiusX, 0.02...1, "", 2,
