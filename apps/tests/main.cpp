@@ -22,6 +22,8 @@
 #include "pipe/ExposureFusion.h"
 #include "pipe/Dehaze.h"
 #include "pipe/LocalLaplacian.h"
+#include <set>
+
 #include "pipe/MaskGeometry.h"
 #include "util/ImageWriter.h"
 
@@ -4533,6 +4535,201 @@ void testMaskGpu() {
     }
 }
 
+/// Brush dabs — a stroke as a list of centres. research/masking.md §1.
+void testMaskBrushGpu() {
+    section("Brush masks (GPU)");
+
+    using orion::gpu::PixelFormat;
+    constexpr std::uint32_t kW = 128, kH = 128;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto lib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/maskBrush.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskBrush");
+
+    auto src = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto dst = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+
+    const auto run = [&](const orion::pipe::params::MaskBrush& b) {
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), dst.get()}, &b, sizeof b, kW, kH);
+        cb.commitAndWait();
+        std::vector<__fp16> out(std::size_t(kW) * kH);
+        dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+        return out;
+    };
+    const auto at = [&](const std::vector<__fp16>& a, int x, int y) {
+        return double(a[std::size_t(y) * kW + x]);
+    };
+
+    orion::pipe::params::MaskBrush base{};
+    base.size[0] = kW; base.size[1] = kH;
+    base.radius = 0.2f;
+    base.flow = 1.0f;
+    base.hardness = 0.5f;
+
+    // ── One dab, against the falloff computed here ────────────────────────
+    //
+    // Not "the centre is bright and the outside is dark" — that passes on any
+    // blob. The dab has to be the *stated* function, so it is checked against
+    // smootherstep evaluated independently, at radii either side of where the
+    // ramp starts.
+    {
+        auto b = base;
+        b.count = 1;
+        b.dabs[0][0] = 0.5f; b.dabs[0][1] = 0.5f;
+        const auto a = run(b);
+
+        const auto falloff = [](double t) {
+            const double x = std::clamp(t, 0.0, 1.0);
+            return x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
+        };
+        const auto want = [&](double d) {
+            const double h = 0.5;
+            return 1.0 - falloff((d - h) / (1.0 - h));
+        };
+
+        double worst = 0;
+        for (int px = 64; px < 64 + 25; ++px) {
+            // Distance from the centre in units of the radius.
+            const double d = ((px + 0.5) / double(kW) - 0.5) / 0.2;
+            if (d >= 1.0) break;
+            worst = std::max(worst, std::abs(at(a, px, 64) - want(d)));
+        }
+        report(worst < 2e-3, "a dab is smootherstep in the radius, not merely round",
+               "worst " + std::to_string(worst));
+
+        report(std::abs(at(a, 64, 64) - 1.0) < 1e-3,
+               "full flow reaches full coverage at the centre");
+        report(at(a, 4, 4) == 0.0,
+               "and lays down exactly nothing outside its radius",
+               std::to_string(at(a, 4, 4)));
+    }
+
+    // ── The one most likely to be got wrong ───────────────────────────────
+    //
+    // Dabs compose source-over, not additively. Two dabs at full flow on the
+    // same spot must still be full coverage; adding would drive alpha past 1
+    // and clip, which reads as the brush getting stronger the longer a hand
+    // hovers. The check that catches it is a *partial* flow, where the two
+    // rules give measurably different answers: over gives 0.5 + 0.5·0.5 =
+    // 0.75, addition gives 1.0.
+    {
+        auto b = base;
+        b.flow = 0.5f;
+        b.count = 2;
+        b.dabs[0][0] = 0.5f; b.dabs[0][1] = 0.5f;
+        b.dabs[1][0] = 0.5f; b.dabs[1][1] = 0.5f;
+        const auto a = run(b);
+        report(std::abs(at(a, 64, 64) - 0.75) < 2e-3,
+               "two half-flow dabs compose source-over, not by addition",
+               std::to_string(at(a, 64, 64)));
+    }
+
+    // ── Chaining, which is what makes a long stroke possible ──────────────
+    //
+    // A stroke longer than one pass accumulates into the alpha it is handed.
+    // If `accumulate` were ignored, a long stroke would silently keep only its
+    // last 256 dabs — and would still look like a stroke.
+    {
+        auto b = base;
+        b.flow = 0.5f;
+        b.count = 1;
+        b.dabs[0][0] = 0.5f; b.dabs[0][1] = 0.5f;
+        const auto first = run(b);
+
+        // Feed the result back in and lay the same dab again.
+        src->upload(first.data(), std::size_t(kW) * sizeof(__fp16));
+        b.accumulate = 1;
+        const auto second = run(b);
+
+        report(std::abs(at(second, 64, 64) - 0.75) < 2e-3,
+               "a second pass builds on the first rather than replacing it",
+               std::to_string(at(second, 64, 64)));
+
+        // And a pass that lays nothing must leave the stroke untouched, or
+        // every chained dispatch would erode what came before.
+        //
+        // ⚠️ `src` has to be fed the *second* result first. The first version
+        // of this check forgot to, so it compared the pass-through of `first`
+        // against `second` and failed — reporting a shader bug that was a
+        // missing upload in the test.
+        src->upload(second.data(), std::size_t(kW) * sizeof(__fp16));
+        b.count = 0;
+        const auto empty = run(b);
+        report(std::abs(at(empty, 64, 64) - at(second, 64, 64)) < 1e-4,
+               "an empty pass leaves the stroke exactly as it was",
+               std::to_string(at(empty, 64, 64)) + " vs "
+                   + std::to_string(at(second, 64, 64)));
+    }
+
+    // ── Flow zero is exactly nothing ──────────────────────────────────────
+    {
+        auto b = base;
+        b.flow = 0.0f;
+        b.count = 8;
+        for (int i = 0; i < 8; ++i) {
+            b.dabs[i][0] = 0.3f + 0.05f * float(i);
+            b.dabs[i][1] = 0.5f;
+        }
+        const auto a = run(b);
+        double worst = 0;
+        for (std::size_t i = 0; i < a.size(); ++i) worst = std::max(worst, double(a[i]));
+        report(worst == 0.0, "flow zero lays down exactly nothing",
+               std::to_string(worst));
+    }
+
+    // ── Why R16F and not R8, with the flow it actually starts to matter at ─
+    //
+    // The format claim is load-bearing, so it gets a number rather than an
+    // assertion of principle.
+    //
+    // ⚠️ The first version of this check used flow 0.03 and claimed banding.
+    // It does not band there and cannot: source-over moves alpha by about
+    // 0.02 per dab, which is five to seven whole 8-bit codes, so all forty
+    // steps resolve at eight bits and the test was demonstrating nothing while
+    // reading like proof. The threshold is where one dab moves alpha less than
+    // one code — flow · (1 − alpha) < 1/255, so flow below about 0.0039.
+    //
+    // 0.002 is below it and is an ordinary airbrush flow. There, consecutive
+    // dabs land on the same 8-bit code and the buildup quantises; R16F still
+    // resolves every one.
+    {
+        auto b = base;
+        b.flow = 0.002f;
+        b.count = 1;
+        b.dabs[0][0] = 0.5f; b.dabs[0][1] = 0.5f;
+
+        std::vector<__fp16> zero(std::size_t(kW) * kH, __fp16(0.0f));
+        src->upload(zero.data(), std::size_t(kW) * sizeof(__fp16));
+        b.accumulate = 1;
+
+        std::set<int> levels8, levels16;
+        double alpha = 0;
+        for (int pass = 0; pass < 40; ++pass) {
+            const auto a = run(b);
+            src->upload(a.data(), std::size_t(kW) * sizeof(__fp16));
+            alpha = at(a, 64, 64);
+            levels16.insert(int(std::lround(alpha * 65535.0)));
+            levels8.insert(int(std::lround(alpha * 255.0)));
+        }
+        report(levels16.size() == 40 && levels8.size() * 4 < levels16.size() * 3,
+               "40 airbrush dabs resolve in R16F and quantise at 8 bits",
+               std::to_string(levels16.size()) + " distinct in 16-bit, "
+                   + std::to_string(levels8.size()) + " at 8-bit");
+        // 1 - 0.998^40, computed independently of the shader.
+        report(std::abs(alpha - (1.0 - std::pow(0.998, 40.0))) < 2e-3,
+               "and the buildup is the source-over series, not something near it",
+               std::to_string(alpha));
+    }
+}
+
 /// A mask has to stay on its subject when the picture is turned or cropped.
 void testMaskGeometry() {
     section("Mask geometry");
@@ -4712,6 +4909,7 @@ int main() {
     testExposureFusionGpu();
     testAutoEnhanceStats();
     testMaskGpu();
+    testMaskBrushGpu();
     testMaskGeometry();
     testHighlightHaloGpu();
     testOutputDepth();

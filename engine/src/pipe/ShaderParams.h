@@ -383,6 +383,32 @@ struct alignas(8) MaskGradient {
 };
 static_assert(sizeof(MaskGradient) == 64);
 
+/// How many dabs one dispatch lays down.
+///
+/// A stroke is not capped at this — the kernel accumulates into the alpha it is
+/// given, so a long stroke is several dispatches of the same kernel chained
+/// nose to tail. Capping instead would either leave gaps in a long stroke or
+/// silently resample the photographer's stroke into something they did not
+/// draw. research/masking.md §1.
+inline constexpr int kMaskDabsPerPass = 256;
+
+/// A brush mask. Mirrors BrushParams in mask_brush.slang.
+///
+/// **One radius for the whole mask, not one per dab** — that is the research's
+/// own shape, and it is what makes a stroke a few kilobytes of centres rather
+/// than a raster. research/masking.md §1 and §3.
+struct alignas(8) MaskBrush {
+    std::uint32_t size[2];
+    std::int32_t  count;       // dabs actually used this pass, <= kMaskDabsPerPass
+    std::int32_t  accumulate;  // 0 starts from empty, 1 builds on `src`
+    float         radius;      // normalized, one per mask
+    float         flow;        // 0..1, how much one dab lays down
+    float         hardness;    // 0 soft, 1 hard-edged
+    float         _pad;
+    float         dabs[kMaskDabsPerPass][2];   // centres, normalized
+};
+static_assert(sizeof(MaskBrush) == 32 + kMaskDabsPerPass * 8);
+
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {
     std::uint32_t outSize[2];

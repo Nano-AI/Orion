@@ -60,6 +60,7 @@ set(ORION_SHADERS
     fuse_blend:fuseBlend
     fuse_apply:fuseApply
     mask_gradient:maskGradient
+    mask_brush:maskBrush
     develop_linear:developLinear
     develop_display:developDisplay
     geometry:geometry
