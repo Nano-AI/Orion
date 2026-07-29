@@ -661,9 +661,12 @@ final class Engine {
         if !restoring { history.record(state, label: label) }
     }
 
-    private func pushAndRender() {
-        guard isLoaded, !suspended, let handle else { return }
-        var adj = OrionAdjustments(
+    /// The current controls as the C block.
+    ///
+    /// Factored out because auto-enhance has to send the engine the *whole*
+    /// state to measure against, not just the fields it is going to change.
+    private func cAdjustments() -> OrionAdjustments {
+        OrionAdjustments(
             temperature_k: temperatureK, tint: tint,
             exposure_ev: exposureEv, highlights: highlights, shadows: shadows,
             whites: whites, blacks: blacks,
@@ -693,6 +696,30 @@ final class Engine {
             curve_red: curveChannel(curve.red),
             curve_green: curveChannel(curve.green),
             curve_blue: curveChannel(curve.blue))
+    }
+
+    /// Measures the picture and sets the sliders auto-enhance is allowed to
+    /// move. They land as ordinary edits — visible, adjustable and undoable —
+    /// which is the whole point of it writing sliders rather than applying
+    /// something of its own.
+    func autoEnhance() {
+        guard isLoaded, let handle else { return }
+        var adj = cAdjustments()
+        guard orion_engine_auto_enhance(handle, &adj) == ORION_OK else { return }
+
+        // Each assignment re-renders, which for a one-click action is fine and
+        // is what keeps every value going through the same path an ordinary
+        // edit does.
+        exposureEv = adj.exposure_ev
+        blacks     = adj.blacks
+        whites     = adj.whites
+        fusion     = adj.fusion
+        clarity    = adj.clarity
+    }
+
+    private func pushAndRender() {
+        guard isLoaded, !suspended, let handle else { return }
+        var adj = cAdjustments()
         orion_engine_set_adjustments(handle, &adj)
         render()
         onEdit?(state)

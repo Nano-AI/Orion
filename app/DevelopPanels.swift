@@ -248,6 +248,17 @@ extension Editor {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Auto") {
+            Button("Auto enhance") { engine.autoEnhance() }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+            Text("Measures the picture and sets Exposure, Blacks, Whites, Lift "
+               + "and Clarity. They are ordinary edits afterwards — move any of "
+               + "them, or undo the lot.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Shadow lift") {
             slider("Lift", $engine.fusion, 0...1, "", 2,
                    resetsTo: engine.defaults.fusion)

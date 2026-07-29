@@ -4,18 +4,68 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M3 — auto-enhance, policy in, wiring left)
-**Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity, dehaze,
-creative LUTs and exposure fusion shipped. Auto-enhance is **researched and its
-policy is built and tested; it is not yet wired to anything.**
-**Next story:** wire auto-enhance up — `Engine::autoEnhance` running the
-measure/correct loop, `orion_engine_auto_enhance` on the facade, an Auto button
-in the develop panel, and a bench probe that checks the *outcome* (do the
-percentiles land where they were aimed) on the three real frames. The policy
-and its tests are done; this is plumbing plus one real-image verification.
+**Last updated:** 2026-07-29 (M3 — auto-enhance shipped; **M3 complete**)
+**Phase:** M0 done. M1 ~98%. M2 complete. **M3 complete** — local Laplacian
+clarity, dehaze, creative LUTs, single-image exposure fusion and auto-enhance
+all built, measured and verified on real frames.
+**Next story:** the developer's quality pass on M3, then M4 (local edits —
+`research/masking.md` is the plan of record). Before new features, two things
+are worth doing: **clarity at 70 ms and dehaze at 108 ms are not yet
+interactive**, and the per-node profiler says where both go.
 
 **Suites:** `orion-tests` **356 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames.
+
+## Session 2026-07-29d — auto-enhance wired, and M3 closes
+
+`Engine::autoEnhance` runs the measure/correct loop; the facade writes back only
+the five controls auto-enhance may move and leaves the rest of the caller's
+block alone. The Auto button sets ordinary sliders, so what it decides is
+visible, adjustable and undoable.
+
+### The check that matters, on real photographs
+
+Everything else about auto-enhance is tested against a stand-in for the
+pipeline. The bench probe runs the real one, and asks the only question worth
+asking — did the median land where it was aimed. Not a magnitude probe with a
+floor, because "it moved" is not the claim.
+
+| Frame | median | exposure | lift |
+|---|---|---|---|
+| daylight | 0.617 → **0.473** | −1.16 EV | 0.00 |
+| forecourt | 0.148 → **0.461** | +0.03 EV | 1.00 |
+| night | 0.129 → **0.461** | +0.26 EV | 1.00 |
+
+The two dark frames barely move exposure, because the shadow lift is derived
+from the photograph *before* the solver starts — by the time it runs there is
+little left to correct. That division of labour was the intent, and it is
+satisfying to watch it happen rather than have to argue for it.
+
+**One constant changed because the measurement said so.** The endpoint gain
+started at 2.0 and railed the whites slider at its maximum on two of three
+frames — an automatic control handing the user a setting with nowhere left to
+go. At 1.0 the median still lands on the anchor and the endpoints stay
+somewhere a person can argue with.
+
+## M3 — what it cost, in one table
+
+| Feature | Nodes | Drag | Resolution |
+|---|---|---|---|
+| Clarity (local Laplacian) | 32 | 70 ms | full |
+| Dehaze (dark channel prior) | 16 | 108 ms | full |
+| Exposure fusion | 32 | 37–48 ms | quarter |
+| Creative LUT | — | 7 ms | fused into the display node |
+| Auto-enhance | — | ~6 renders, one click | — |
+
+**The M0 gate never moved**: 8.8–9.9 ms p95 throughout, exposure drag still
+three nodes, because every one of these disables to nothing when it is off.
+109 nodes, 5491 MiB of intermediates — the number to watch on a lesser GPU.
+
+**The two slow ones are slow for the same reason and it is written down.**
+Clarity and dehaze run at full resolution; fusion does not, and costs half as
+much with the same node count. `Pipeline::setProfiling` prints a per-node
+ranking on every bench run, and `research/local-laplacian.md` names the two
+candidate fixes in order.
 
 ## Session 2026-07-29c — auto-enhance: researched, policy built, not yet wired
 
