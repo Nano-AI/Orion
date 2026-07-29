@@ -124,10 +124,11 @@ h2.disp {
 /* The tracked line under a figure — what the number means. */
 .kicker {
   font-family: var(--mono);
-  font-size: .68rem;
+  font-size: .72rem;
   letter-spacing: .26em;
   text-transform: uppercase;
-  color: var(--slate);
+  color: var(--body);
+  text-shadow: 0 1px 10px rgba(8,9,11,.85);
 }
 
 .skip {
@@ -139,11 +140,11 @@ h2.disp {
 
 .eyebrow {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--slate);
-  text-shadow: 0 1px 12px rgba(8,9,11,.85);
+  color: var(--body);
+  text-shadow: 0 1px 12px rgba(8,9,11,.9);
 }
 
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -417,9 +418,10 @@ html:not(.scrub) .dev__rail { display: none; }
   display: flex; align-items: baseline; flex-wrap: wrap;
   gap: .4rem 1.6rem;
   margin-top: 1.6rem; padding-top: 1rem;
-  border-top: 1px solid rgba(36,40,43,.8);
-  font-size: .72rem; letter-spacing: .06em;
-  color: var(--slate);
+  border-top: 1px solid rgba(240,243,244,.14);
+  font-size: .76rem; letter-spacing: .06em;
+  color: var(--body);
+  text-shadow: 0 1px 10px rgba(8,9,11,.85);
   position: relative; z-index: 1;
 }
 .dev__hud b { color: var(--teal); font-weight: 700; }
@@ -431,8 +433,8 @@ html:not(.scrub) .dev__rail { display: none; }
   bottom: clamp(1.4rem, 4vh, 2.8rem);
   z-index: 2;
   text-align: center;
-  letter-spacing: .3em; text-transform: uppercase; font-size: .64rem;
-  color: var(--slate);
+  letter-spacing: .3em; text-transform: uppercase; font-size: .72rem;
+  color: var(--ivory);
 }
 .cue__tick { display: inline-block; animation: tick 2.2s ease-in-out infinite; }
 @keyframes tick { 0%,100% { transform: translateY(0); opacity: .4; } 50% { transform: translateY(4px); opacity: 1; } }
@@ -598,46 +600,50 @@ html.scrub .shot { will-change: transform; }
   padding: .85rem 1.1rem;
   background: var(--panel);
   border-top: 1px solid var(--rail);
-  font-size: .72rem; letter-spacing: .06em; color: var(--slate);
+  font-size: .74rem; letter-spacing: .06em; color: var(--body);
 }
 
-/* ---------- Color — the print, shown whole ----------
- * The glasshouse photograph is a vertical; cropping it to a wide band cost
- * it its subject. So it hangs at its own aspect, like a print. */
+/* ---------- Color — the cut ----------
+ * The glasshouse photograph is a vertical, so it stands at full section
+ * height on the right, nearly uncropped, and the slash CUTS it: a diagonal
+ * clip on the image, a frosted-glass band riding the cut, the words in the
+ * dark it leaves behind. The diagonal is tan(14°) of the height, and the
+ * band is centered on it, so the two are one geometry. */
 
 .duo {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, .85fr);
-  gap: clamp(2rem, 6vw, 6rem);
-  align-items: center;
-  padding: clamp(6rem, 16vh, 13rem) var(--gut);
+  min-height: 100svh;
+  display: flex; align-items: center;
+  padding: clamp(4rem, 10vh, 7rem) var(--gut);
   overflow: hidden;
+  --imgw: min(70svh, 54vw);          /* the photo panel's width */
+  --cut: 24.9svh;                    /* tan(14deg) x section height */
 }
 .duo h2 { font-size: clamp(2.6rem, 6.2vw, 5.6rem); }
-/* The cut. A glass slash between the words and the print — frosted where it
- * crosses the photograph, a bright edge on its leading side. */
+.duo__text { position: relative; z-index: 2; max-width: 42rem; }
+.duo__text p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
+
+.duo__img {
+  position: absolute; top: 0; bottom: 0; right: 0;
+  width: var(--imgw); height: 100%;
+  object-fit: cover;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% 100%, 0 100%);
+  z-index: 0;
+}
+
 .duo__slash {
-  position: absolute; top: -8%; bottom: -8%;
-  left: 56%; width: clamp(4rem, 9vw, 9rem);
-  transform: rotate(14deg);
+  position: absolute; top: -10%; bottom: -10%;
+  right: calc(var(--imgw) - var(--cut) / 2);
+  width: clamp(4rem, 9vw, 9rem);
+  transform: translateX(50%) rotate(14deg);
   background: linear-gradient(105deg, rgba(240,243,244,.09), rgba(240,243,244,.015) 65%);
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
   backdrop-filter: blur(14px) saturate(1.25);
-  border-left: 1px solid rgba(240,243,244,.28);
+  border-left: 1px solid rgba(240,243,244,.3);
   border-right: 1px solid rgba(240,243,244,.06);
   pointer-events: none;
   z-index: 1;
 }
-.duo__text p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
-.print {
-  margin: 0; justify-self: center;
-  border: 1px solid var(--rail); border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 34px 90px rgba(0,0,0,.6);
-}
-.print img { max-height: 82svh; width: auto; }
-html.scrub .print { will-change: transform; }
 
 /* Parallax images get headroom to move inside their section. */
 .plx { top: -8%; height: 116%; }
@@ -822,9 +828,15 @@ html:not(.scrub) .fr { display: none; }
 @media (max-width: 900px) {
   .cites li { flex-direction: column; gap: .2rem; }
   .v { text-align: left; }
-  .duo { grid-template-columns: 1fr; }
-  .print { justify-self: start; }
-  .print img { max-height: 70svh; }
+  /* The cut turns horizontal on a phone: words up top, the photograph
+     across the foot of the section, the diagonal between them. */
+  .duo { min-height: 96svh; align-items: flex-start; padding-top: 5rem; }
+  .duo__img {
+    top: auto; left: 0; right: 0; bottom: 0;
+    width: 100%; height: 52%;
+    clip-path: polygon(0 16vw, 100% 0, 100% 100%, 0 100%);
+  }
+  .duo__slash { display: none; }
   .own { grid-template-columns: 1fr; }
   .sidecar__row { grid-template-columns: minmax(0, 1fr) auto; }
   .sidecar__what { display: none; }
