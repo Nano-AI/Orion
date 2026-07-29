@@ -130,3 +130,42 @@ next to a comment saying so.
   the r⁴ and r⁶ vignetting terms each reach the corner. `b` and p_a were the
   only ones a manual control could ever set, so the rest would otherwise ship
   untested and arrive with the first real profile.
+
+
+## Vignetting interpolates across aperture — corrected 2026-07-29
+
+Orion used to take the **nearest calibrated aperture** and interpolate only in
+focal length within it, on the reasoning that falloff changes fast between wide
+open and a stop down, so a value between two stops is not a value at either.
+
+**lensfun disagrees, and it is the authority.**
+`lfLens::InterpolateVignetting` interpolates aperture rather than selecting it,
+and does so against **1/aperture** — inverse-distance weighted over three axes
+(focal linear, 1/aperture, 1/distance). The reciprocal is the right variable:
+the f-number is a ratio, vignetting tracks the entrance pupil, and equal steps
+in 1/N are equal steps in what the lens is doing.
+
+The old behaviour is invisible by inspection and obvious once measured: a lens
+calibrated at f/2 and f/2.8 rendered **every aperture between them
+identically**, then jumped. Measured on the smc Pentax-FA 50mm f/1.4, which is
+calibrated at eight stops:
+
+| Aperture | p_a |
+|---|---|
+| f/2 (calibrated) | −0.0668 |
+| **f/2.4 (interpolated)** | **−0.0904** |
+| f/2.8 (calibrated) | −0.1072 |
+
+Orion interpolates linearly between the two bracketing stops in the reciprocal,
+which is the one-dimensional case of lensfun's inverse-distance weighting.
+
+⚠️ **Focus distance is still fixed at infinity.** lensfun interpolates it too,
+also reciprocally, and Orion does not — EXIF focus distance is frequently absent
+and the database's distance coverage is thin. Recorded rather than implied.
+
+⚠️ **A test that assumed the database is uniformly populated measured
+nothing.** The first version of this check used the Sony FE 24-70mm F2.8 GM,
+which has distortion coefficients but **no vignetting data at all** — every
+aperture returned zero and the test passed its own comparison trivially. The
+database is not uniformly populated, and a lens being present is not the same as
+a lens being calibrated for what you are about to ask it.

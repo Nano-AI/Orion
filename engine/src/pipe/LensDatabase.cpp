@@ -238,22 +238,61 @@ LensProfile LensDatabase::lookup(const std::string& lensName,
 
     interpolate(best->distortion, focalLength, profile.poly);
 
-    // Vignetting: the nearest calibrated aperture, then interpolated in focal
-    // length within it. Nearest rather than interpolated because the falloff
-    // changes fast between wide open and one stop down, and a value between two
-    // stops is not a value at either.
+    // Vignetting: interpolated in focal length within each calibrated aperture,
+    // then between apertures **in the reciprocal**.
+    //
+    // This used to take the nearest calibrated aperture, on the reasoning that
+    // falloff changes fast between wide open and a stop down so a value between
+    // two stops is not a value at either. lensfun disagrees, and it is the
+    // authority here: `lfLens::InterpolateVignetting` interpolates aperture
+    // rather than selecting, and does it against **1/aperture** — which is the
+    // right variable, because vignetting tracks the entrance pupil and the
+    // f-number is a ratio, so equal steps in 1/N are equal steps in what the
+    // lens is actually doing. Nearest-stop also means a lens calibrated at f/2.8
+    // and f/5.6 renders f/4 and f/5.5 identically and then jumps.
+    //
+    // lensfun weights by inverse distance over three axes; this interpolates
+    // linearly between the two bracketing apertures, which is the same thing in
+    // one dimension. Focus distance stays at infinity — see the note above.
     if (!best->vignetting.empty()) {
-        float nearest = best->vignetting.front().aperture;
+        std::vector<float> stops;
         for (const auto& c : best->vignetting) {
-            if (std::abs(c.aperture - aperture) < std::abs(nearest - aperture)) {
-                nearest = c.aperture;
+            if (std::find(stops.begin(), stops.end(), c.aperture) == stops.end()) {
+                stops.push_back(c.aperture);
             }
         }
-        std::vector<Calibration> atAperture;
-        for (const auto& c : best->vignetting) {
-            if (c.aperture == nearest) atAperture.push_back(c);
+        std::sort(stops.begin(), stops.end());
+
+        const auto atStop = [&](float stop, float out[3]) {
+            std::vector<Calibration> points;
+            for (const auto& c : best->vignetting) {
+                if (c.aperture == stop) points.push_back(c);
+            }
+            interpolate(points, focalLength, out);
+        };
+
+        if (stops.size() == 1 || aperture <= stops.front()) {
+            atStop(stops.front(), profile.vignette);
+        } else if (aperture >= stops.back()) {
+            atStop(stops.back(), profile.vignette);
+        } else {
+            std::size_t hi = 1;
+            while (hi < stops.size() && stops[hi] < aperture) ++hi;
+
+            float below[3]{}, above[3]{};
+            atStop(stops[hi - 1], below);
+            atStop(stops[hi],     above);
+
+            // Linear in 1/N, not in N.
+            const float ra = 1.0f / std::max(aperture, 1e-3f);
+            const float r0 = 1.0f / std::max(stops[hi - 1], 1e-3f);
+            const float r1 = 1.0f / std::max(stops[hi],     1e-3f);
+            const float t  = (std::abs(r1 - r0) < 1e-9f) ? 0.0f : (ra - r0) / (r1 - r0);
+
+            for (int i = 0; i < 3; ++i) {
+                profile.vignette[i] = below[i] + (above[i] - below[i]) * t;
+            }
         }
-        interpolate(atAperture, focalLength, profile.vignette);
     }
 
     return profile;

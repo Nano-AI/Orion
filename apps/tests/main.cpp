@@ -407,6 +407,45 @@ void testLensDatabase() {
         }
     }
 
+    // Vignetting interpolates across aperture rather than snapping to the
+    // nearest calibrated stop, and does it in the reciprocal — which is what
+    // lensfun does, because the f-number is a ratio and vignetting tracks the
+    // entrance pupil.
+    //
+    // Nearest-stop is invisible by inspection and obvious here: a lens
+    // calibrated at two stops renders every aperture between them identically,
+    // then jumps. This asks whether an intermediate aperture lands strictly
+    // between its neighbours.
+    {
+        // A prime with vignetting calibrated at many stops. The Sony zoom
+        // above has distortion data but no vignetting, which is common — the
+        // database is not uniformly populated, and a test that assumed it was
+        // measured nothing.
+        const char* lens = "smc Pentax-FA 50mm f/1.4";
+        const float focal = 50.0f;
+        const auto wide  = db.lookup(lens, focal, 2.0f);
+        const auto mid   = db.lookup(lens, focal, 2.4f);   // between 2 and 2.8
+        const auto tight = db.lookup(lens, focal, 2.8f);
+
+        if (wide.found && mid.found && tight.found) {
+            const float a = wide.vignette[0], b = mid.vignette[0], c = tight.vignette[0];
+            std::printf("  vignette p_a: f/2 %.4f, f/2.4 %.4f (uncalibrated), f/2.8 %.4f\n", a, b, c);
+
+            // Vignetting weakens as the lens stops down, so the coefficients
+            // should be ordered and the middle one should be neither endpoint.
+            const bool between = (b != a) && (b != c);
+            report(between, "an uncalibrated aperture is interpolated, not snapped",
+                   std::to_string(a) + " / " + std::to_string(b) + " / " + std::to_string(c));
+
+            const bool ordered = (a < b && b < c) || (a > b && b > c);
+            report(ordered, "and lands between its neighbours rather than outside them",
+                   std::to_string(a) + " / " + std::to_string(b) + " / " + std::to_string(c));
+        } else {
+            report(false, "the calibrated prime is found at three apertures",
+                   "lookup failed");
+        }
+    }
+
     // Interpolation across the zoom range: a 24-70 does not distort the same
     // way at both ends, so two focal lengths must not return one answer.
     {
