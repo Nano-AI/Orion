@@ -4,15 +4,60 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M3 — exposure fusion, maths and decision)
-**Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity, dehaze
-and creative LUTs shipped. Exposure fusion is **half built**: the maths, its
-reference and its tests are in, the GPU chain is not.
-**Next story:** finish exposure fusion — build the GPU chain per the plan in
-`research/exposure-fusion.md`, then auto-enhance.
+**Last updated:** 2026-07-29 (M3 — exposure fusion shipped)
+**Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity, dehaze,
+creative LUTs and exposure fusion all built and measured. **Auto-enhance is the
+last M3 item**, and it is the one that combines the others.
+**Next story:** auto-enhance — percentile auto-levels driving the four
+operators M3 has just built. Needs a source for the percentile choice before
+any code; `planning/RESEARCH.md` §84 sketches the stack.
 
-**Suites:** `orion-tests` **336 checks** · `orion-viewport-tests` **2088
+**Suites:** `orion-tests` **342 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames.
+
+## Session 2026-07-29b — exposure fusion, finished
+
+The GPU chain, built to the plan the previous session recorded. Thirty-two
+nodes, **all at quarter resolution**.
+
+| | Nodes | Drag | Resolution |
+|---|---|---|---|
+| Clarity | 32 | 70 ms | full |
+| Dehaze | 16 | 108 ms | full |
+| **Fusion** | **32** | **37–48 ms** | **quarter** |
+
+Fusion is the cheapest of the three despite having as many nodes as clarity,
+because only a *gain* reaches the full-resolution picture — the pyramid never
+does. That is worth remembering when the other two get optimised.
+
+Measured lift at full strength: mean luma **+0.105 / +0.245 / +0.257** on the
+three sample frames. **M0 gate unmoved at 8.84–9.93 ms p95.** 109 nodes,
+5491 MiB.
+
+### The test that stops two implementations drifting
+
+`ops/fuse_ops.slang` and `pipe/ExposureFusion.h` are the same equations written
+twice, and every other exposure-fusion test measures against the C++ side — so
+if the two ever disagree, all of those tests are pinning something the product
+does not run. The GPU test compares them per pixel on both the simulated
+exposures and the weights, and separately checks that **the weights sum to one
+at every pixel**, because if they do not the blend is quietly a gain as well.
+
+**Strength zero is checked bit-identical** against a deliberately violent proxy
+gain. That is load-bearing, not decoration: no published parameter of this
+method degenerates to the identity — α → 1 collapses the exposure factors, but
+`ρ(k)` contains no α, so the simulated images remain differently-clipped copies
+and their blend is not the input. It is why the slider is a power on the gain.
+
+### Where the whole-frame reductions now live
+
+Two features need a statistic over the entire frame, which is the one thing a
+per-pixel DAG cannot express: dehaze's atmospheric light, and fusion's median.
+Both are handled the same way — `render()` renders once when the value is
+stale, reads back a small texture, and renders again; the per-node cache means
+the second pass only redoes what the new parameter touched. Stale means the
+image or white balance changed. **Neither is ever recomputed on a slider tick**,
+so neither is on the interaction path.
 
 ## Session 2026-07-29a — M3 story 4, exposure fusion (part one)
 
