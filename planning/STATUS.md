@@ -4,16 +4,87 @@
 
 ---
 
-**Last updated:** 2026-07-28 (M3 — clarity, dehaze, creative LUTs)
+**Last updated:** 2026-07-29 (M3 — exposure fusion, maths and decision)
 **Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity, dehaze
-and creative LUTs built and measured; single-image exposure fusion and
-auto-enhance still to come.
-**Next story:** single-image exposure fusion (Hasinoff et al. HDR+, extended to
-one image by Hessel & Morel, WACV 2020 — both already cited in
-`tone-and-local-contrast.md`).
+and creative LUTs shipped. Exposure fusion is **half built**: the maths, its
+reference and its tests are in, the GPU chain is not.
+**Next story:** finish exposure fusion — build the GPU chain per the plan in
+`research/exposure-fusion.md`, then auto-enhance.
 
-**Suites:** `orion-tests` **320 checks** · `orion-viewport-tests` **2088
+**Suites:** `orion-tests` **336 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames.
+
+## Session 2026-07-29a — M3 story 4, exposure fusion (part one)
+
+Simulated Exposure Fusion — Hessel & Morel (WACV 2020 / IPOL 9, 2019) on top of
+Mertens et al. (2007). `research/exposure-fusion.md` has every constant with the
+quotation it came from. **The CPU maths, its reference implementation and its
+tests are in. The GPU chain is not built yet.**
+
+### The placement decision, and why it went the way it did
+
+The method needs a bounded, display-referred `t ∈ [0,1]`; this pipeline carries
+unbounded scene-linear light. The faithful option is to split `develop:display`
+so fusion sees the AgX-mapped image the user sees — and it was rejected for a
+reason worth recording: **a faithful full-resolution RGB fusion is 30–60 ms at
+any placement**, six simulated exposures each with two pyramids, on a
+bandwidth-bound GPU. Once the method must be approximated regardless, paying a
+permanent ~4 ms structural tax on every render — including when the feature is
+off — buys an exactness that was never reachable.
+
+So fusion gets its own chain emitting a scene-linear gain, the same shape as the
+clarity node, disabled to zero cost when off.
+
+**The proxy must be a sigmoid over log2, not raw normalised log**, and the
+failure it avoids is specific: in raw log the shadow axis is stretched, so the
+median falls, so `N* = ⌊(M−1)·median⌋` allocates nearly every simulated image to
+the brightened side, and the weights then read the sensor's own noise floor as
+underexposed content that needs lifting. AgX is itself a sigmoid in log2, so
+matching one is a cheap faithful proxy rather than an invention.
+
+**The paper's final 1% global stretch is dropped.** In an editor it fights the
+user's exposure, whites and blacks; it makes a pixel's value depend on the
+current crop; and it destroys identity-at-zero. The reference implementation
+keeps it so comparisons against the paper stay possible.
+
+**The slider raises the emitted gain to its own power.** No published parameter
+degenerates to the identity — α → 1 collapses the exposure factors but `ρ(k)`
+contains no α, so the simulated images stay differently-clipped copies. `gain^s`
+is a lerp in log-gain, exact at `s = 0`.
+
+### Three defects found by writing the tests
+
+- **The simulated-image search started at M = 2**, where the median-derived split
+  has a single image to allocate — so a bright frame could never be given a
+  darkened one and the asymmetry the whole method rests on silently never
+  appeared. It starts at 5 now, the count the paper reports for its own
+  recommended α and β.
+- **Robust normalisation divided by an epsilon** when its two clipped percentiles
+  coincided, mapping a flat field plus one outlier to solid black.
+- **A monotone ramp gains tonal reversals.** Measured 2.1e-4 / 2.3e-3 / 1.1e-2
+  at α = 2 / 4 / 8. That it scales cleanly with amplification is what says it is
+  the method — [M07] §4.1 names the artefact — and not a mistake in the blend.
+  But 1% at the recommended α is enough to band a smooth gradient, so it is
+  guarded as a regression and all three numbers print on every run.
+
+### What the tests actually pin
+
+The clip is continuous *and* has slope one on both sides of its join — a value
+discontinuity is an edge in the simulated image, a slope discontinuity is an
+edge in the *weight*, which is worse because it moves. The contrast weight is
+checked against a finite difference, because Hessel & Morel replace Mertens'
+Laplacian filter with that derivative, so if it is not the derivative there is no
+contrast measure at all. And a flat field must fuse to the weighted average of
+its own remaps — computable in closed form, and the one check that catches the
+pyramid, the expand, the weighting or the collapse being wrong in a way that
+does not cancel.
+
+### Also this session
+
+- `pipe/Pyramid.h` — the Burt & Adelson helpers lifted out of
+  `LocalLaplacian.h`, since fusion analyses over the same construction. They
+  exist to be the reference the GPU is measured against, so one copy matters.
+- The `research/` index had gone **eight files stale**. Fixed.
 
 ## Session 2026-07-28f — M3 story 3, creative LUTs
 
