@@ -55,7 +55,11 @@ struct LinearAdjust {
     float         blacks;
     float         vibrance;
     float         saturation;
-    float         _pad;
+    /// Nonzero when the guided-filter chain is live. When it is not, the two
+    /// guide textures resolve back to the color matrix output — real pixels,
+    /// but not the log2 luminance and coefficients this kernel would be
+    /// reading them as. The shader falls back to the pixel's own EV instead.
+    float         guideEnabled;
     std::uint32_t size[2];
     /// Dimensions of the subsampled guide coefficients, which this kernel lifts
     /// back to full resolution. See guide_down.slang.
@@ -121,7 +125,9 @@ struct Display {
     std::uint32_t curveIdentity;
     std::uint32_t resolution;
     std::uint32_t size[2];
-    std::uint32_t _pad[2];
+    /// Nonzero when this node writes eight bits. See develop_display.slang.
+    std::uint32_t dither;
+    std::uint32_t _pad;
 };
 static_assert(sizeof(Display) == 32);
 
@@ -136,16 +142,32 @@ struct alignas(16) Grade {
 };
 static_assert(sizeof(Grade) == 64);
 
+/// The camera profile's hue/saturation table. Mirrors HueSatParams in
+/// huesat.slang. The two matrices carry the working space in and out of linear
+/// ProPhoto, which is the space the DNG spec's table is defined in.
+struct alignas(16) HueSat {
+    float         toProPhoto[3][4];     // rows, w unused
+    float         fromProPhoto[3][4];
+    std::uint32_t size[2];
+    std::uint32_t hueDivisions;
+    std::uint32_t satDivisions;
+};
+static_assert(sizeof(HueSat) == 112);
+
 /// Lens corrections. Mirrors LensParams in lens.slang.
 struct Lens {
     std::uint32_t size[2];
     float centerX, centerY;
-    float k1;
+    /// ptlens a, b, c. A manual distortion slider sets b alone, which is poly3.
+    float distA, distB, distC;
     float caRed, caBlue;
-    float vignetteA;
-    float _pad[4];
+    float vignetteA, vignetteB, vignetteC;
+    /// Autoscale — the zoom that keeps every fetch inside the frame.
+    /// Computed in LensGeometry.h; 0 is read by the shader as 1.
+    float scale;
+    float _pad[3];
 };
-static_assert(sizeof(Lens) == 48);
+static_assert(sizeof(Lens) == 64);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {

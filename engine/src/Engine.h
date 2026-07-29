@@ -5,6 +5,7 @@
 
 #include "gpu/MetalDevice.h"
 #include "pipe/DevelopPipeline.h"
+#include "pipe/LensDatabase.h"
 #include "raw/RawImage.h"
 #include "util/ImageWriter.h"
 
@@ -53,13 +54,29 @@ public:
 private:
     /// The developed output as 16-bit unsigned, which is what the image
     /// formats want. The graph ends in half float.
+    /// The output as normalized float, whichever format the tail is in.
+    /// Screen readers use this; only export widens the graph and reads 16.
+    [[nodiscard]] std::vector<float> readOutputFloat(std::uint32_t w,
+                                                     std::uint32_t h) const;
+
     [[nodiscard]] std::vector<std::uint16_t> readOutput16(std::uint32_t w,
                                                           std::uint32_t h) const;
 public:
 
     [[nodiscard]] bool hasImage() const noexcept { return develop_ != nullptr; }
     [[nodiscard]] const pipe::DevelopPipeline& develop() const;
+
+    /// Mutable access, for the few C-API entry points that change graph state
+    /// rather than adjustments — the output width being one of them.
+    [[nodiscard]] pipe::DevelopPipeline& developMutable();
     [[nodiscard]] const std::string& camera() const noexcept { return camera_; }
+
+    /// The lens profile for the open photo, looked up when it was opened.
+    /// `found` is false when the lens is unknown, which includes every manual
+    /// lens — those report no name in EXIF at all.
+    [[nodiscard]] const pipe::LensProfile& lensProfile() const noexcept {
+        return lensProfile_;
+    }
     [[nodiscard]] gpu::Device& device() noexcept { return *device_; }
 
     void setError(std::string message) { lastError_ = std::move(message); }
@@ -73,6 +90,11 @@ private:
     /// written carries the exposure, lens and date the picture was taken with.
     std::string                            sourcePath_;
     std::string                            lastError_;
+
+    /// One copy for the process. Five megabytes of XML, parsed once — a
+    /// per-photo parse would put a tenth of a second in front of every open.
+    static const pipe::LensDatabase& lensDatabase();
+    pipe::LensProfile                      lensProfile_;
 };
 
 }  // namespace orion

@@ -108,10 +108,40 @@ final class ExportSettings {
         }
     }
 
+    /// What the file carries from the RAW.
+    ///
+    /// The default strips location. A photo taken at home carries the home
+    /// coordinates in its GPS block, and a file put on the web hands them to
+    /// everyone who downloads it — silently, because nothing in an image viewer
+    /// says so. Keeping them is a choice, and this is where it is made.
+    enum Metadata: Int32, CaseIterable, Identifiable {
+        case all = 0, noLocation = 1, none = 2
+        var id: Int32 { rawValue }
+
+        var title: String {
+            switch self {
+            case .all:        "Keep all"
+            case .noLocation: "Strip location"
+            case .none:       "Strip everything"
+            }
+        }
+
+        var note: String {
+            switch self {
+            case .all:        "Camera, lens, exposure, date — and where the photo "
+                            + "was taken. Anyone who downloads the file can read it."
+            case .noLocation: "Camera, lens, exposure and date. GPS coordinates are "
+                            + "removed."
+            case .none:       "Nothing but the star rating and that Orion developed it."
+            }
+        }
+    }
+
     var format: Format = .jpeg
     var quality: Double = 0.9
     var size: Size = .full
     var space: Space = .srgb
+    var metadata: Metadata = .noLocation
 
     /// Typed dimensions, used when `size` is `.custom`. The aspect is held, so
     /// entering either one sets the other — a free pair would let you squash
@@ -190,6 +220,10 @@ struct ExportPanel: View {
     let onExport: () -> Void
     let onCancel: () -> Void
 
+    /// Which dimension field holds focus, so leaving one commits it.
+    enum Field { case width, height }
+    @FocusState private var focusedField: Field?
+
     @State private var widthText = ""
     @State private var heightText = ""
     @State private var measuring = false
@@ -248,6 +282,21 @@ struct ExportPanel: View {
                 }
             }
 
+            row("Metadata") {
+                VStack(alignment: .leading, spacing: 5) {
+                    Picker("", selection: $settings.metadata) {
+                        ForEach(ExportSettings.Metadata.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+
+                    Text(settings.metadata.note)
+                        .font(.system(size: 9))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             row("Size") {
                 VStack(alignment: .leading, spacing: 8) {
                     Picker("", selection: $settings.size) {
@@ -258,13 +307,13 @@ struct ExportPanel: View {
 
                     if settings.size == .custom {
                         HStack(spacing: 6) {
-                            dimensionField("Width", text: $widthText) { v in
+                            dimensionField("Width", field: .width, text: $widthText) { v in
                                 settings.setCustom(width: v, sourceWidth: sourceWidth,
                                                    sourceHeight: sourceHeight)
                                 syncFields()
                             }
                             Text("×").foregroundStyle(Palette.faint)
-                            dimensionField("Height", text: $heightText) { v in
+                            dimensionField("Height", field: .height, text: $heightText) { v in
                                 settings.setCustom(height: v, sourceWidth: sourceWidth,
                                                    sourceHeight: sourceHeight)
                                 syncFields()
@@ -298,7 +347,7 @@ struct ExportPanel: View {
 
             Text(settings.measuredBytes == nil
                  ? "Measuring the encoded size…"
-                 : "Encoded size, measured. Color space is sRGB.")
+                 : "Encoded size, measured. Color space is \(settings.space.title).")
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
@@ -356,14 +405,22 @@ struct ExportPanel: View {
     /// A numeric field that commits on Return or on losing focus, not on every
     /// keystroke — re-encoding while you are halfway through typing "2048" is
     /// three wasted encodes and a jumping number.
-    private func dimensionField(_ label: String, text: Binding<String>,
+    private func dimensionField(_ label: String, field: Field, text: Binding<String>,
                                 commit: @escaping (UInt32) -> Void) -> some View {
         TextField(label, text: text)
             .textFieldStyle(.roundedBorder)
             .controlSize(.small)
             .frame(width: 74)
             .monospacedDigit()
+            // On Return *and* on losing focus. Typing a width and clicking
+            // Export used to export the previous dimensions, because the field
+            // had never been submitted.
             .onSubmit { if let v = UInt32(text.wrappedValue), v > 0 { commit(v) } }
+            .focused($focusedField, equals: field)
+            .onChange(of: focusedField) { was, _ in
+                guard was == field else { return }
+                if let v = UInt32(text.wrappedValue), v > 0 { commit(v) }
+            }
     }
 
     private func row<Content: View>(_ label: String,

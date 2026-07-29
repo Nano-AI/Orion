@@ -158,6 +158,22 @@ struct Filmstrip: View {
                         cell(photo)
                             .id(photo.url)
                             .onTapGesture { onSelect(photo.url) }
+                            // Tap-only cells were unreachable without a mouse
+                            // and invisible to VoiceOver beyond a tooltip. A
+                            // button is the right shape: it is one thing, it
+                            // has one action, and the platform already knows
+                            // how to focus and announce it.
+                            .accessibilityElement(children: .combine)
+                            .accessibilityAddTraits(
+                                photo.url == selected ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityLabel(Text(spoken(photo)))
+                            .accessibilityAction { onSelect(photo.url) }
+                            .accessibilityAction(named: Text(photo.rejected ? "Keep" : "Reject")) {
+                                library.toggleRejected(photo.url)
+                            }
+                            .focusable()
+                            .onKeyPress(.return) { onSelect(photo.url); return .handled }
+                            .onKeyPress(.space)  { onSelect(photo.url); return .handled }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -169,6 +185,17 @@ struct Filmstrip: View {
                 }
             }
         }
+    }
+
+    /// What VoiceOver says for one frame. The name first, because that is what
+    /// the photographer is looking for, then the marks that decide whether it
+    /// stays — a rating nobody can hear is a rating nobody can check.
+    private func spoken(_ photo: Library.Photo) -> String {
+        var parts = [photo.name]
+        if photo.rejected { parts.append("rejected") }
+        if photo.rating > 0 { parts.append("\(photo.rating) star\(photo.rating == 1 ? "" : "s")") }
+        if let label = photo.colorLabel, !label.isEmpty { parts.append("label \(label)") }
+        return parts.joined(separator: ", ")
     }
 
     private func cell(_ photo: Library.Photo) -> some View {
@@ -198,12 +225,25 @@ struct Filmstrip: View {
             }
             // The gate: the frame line between negatives. Selection takes it
             // over in the accent rather than adding a second ring on top of it.
-            .padding(3)
+            //
+            // Order matters and it was wrong. Padding *before* the overlay drew
+            // the line on the padded bounds, so 3 pt of film base sat between
+            // the frame line and the picture on every side and the photo read
+            // as floating inside its own gate. On film the frame line is the
+            // image's edge; the base is what separates one frame from the next.
+            // So: line on the picture, base outside the line.
             .overlay(
                 Rectangle()
                     .strokeBorder(isSelected ? Palette.accent : .white.opacity(0.09),
                                   lineWidth: isSelected ? 2 : 1)
             )
+            // Horizontal only. Vertical padding put a strip of base between the
+            // perforated margin and the top of the picture, so the frame read
+            // as sitting in a hole rather than as part of the film. On real
+            // stock the rebate *is* the frame's edge — there is nothing between
+            // them. Sideways it stays, because that gap is what separates one
+            // negative from the next.
+            .padding(.horizontal, 3)
 
             sprockets(width: frameWidth, top: false)
         }

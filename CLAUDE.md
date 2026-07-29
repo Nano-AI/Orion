@@ -14,6 +14,9 @@ Everything lives in `planning/`. On a fresh session, read in this order:
 7. `planning/RESEARCH.md` — algorithm and library findings with sources
 8. `planning/UI-DECISION.md` — UI shell evaluation (settled)
 9. `research/` — **algorithm sources.** Read before touching any filter.
+10. `feedback/` — **outside review and self-assessment.** Every critique of this
+    repository, and the investigations that came out of them, kept together so
+    the criticism is as findable as the plan. Read `feedback/README.md` first.
 
 ## Algorithm sourcing — non-negotiable
 

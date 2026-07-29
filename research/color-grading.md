@@ -25,19 +25,35 @@ market reads and writes. Nothing here is invented.
 Three ASC CDL corrections — one per tonal zone — blended by a smooth partition
 of luminance.
 
-### The tonal partition
+### The tonal partition — rewritten 2026-07-28
 
 ```
 Y   = 0.2627·R + 0.6780·G + 0.0593·B        Rec.2020 luma, the working space
-w_s = 1 − smoothstep(0.0, 0.5, Y)
-w_h =     smoothstep(0.5, 1.0, Y)
-w_m = 1 − w_s − w_h
+EV  = log2(Y / 0.18)                        stops relative to middle gray
+
+w_z = exp( −½ · ((EV − c_z) / σ)² )         c = −2.5 / 0 / +2.5,  σ = 1.6
+      normalized so the three sum to 1
 ```
 
-`smoothstep` rather than a linear ramp because its derivative is zero at both
-ends, so a correction fades in without a visible edge where the zones meet. The
-three weights sum to 1 everywhere by construction, which is the property that
-makes an untouched image come back bit-identical.
+Gaussian bands on a **log** axis, normalized to a partition of unity. This is
+the same construction the tone controls use, for the same reason and from the
+same source — `ops/tone_ops.slang` and `deep-research-2026-07-27.md` §3. Summed
+weights of one everywhere are what make an untouched image come back unchanged;
+a Gaussian has no corner where two zones meet. The centres sit one stop inside
+the tone controls' own inner pair, and share their σ, so the two sets of bands
+describe the same picture.
+
+**What this replaced, and why.** The first version partitioned on *linear*
+luminance with `smoothstep` at 0.0/0.5 and 0.5/1.0. That sounds like "shadows,
+midtones, highlights" and is not: middle gray is Y = 0.18, so it weighed
+**0.70 shadows / 0.30 midtones / 0.00 highlights**. The shadow wheel graded most
+of a normal photograph, the midtone weight peaked a stop and a half above middle
+gray, and the highlight wheel only switched on past Y = 0.5 linear. Measured on
+`_PIC8148.ARW` and `_PIC8220.ARW` lifted 5.5 EV, the highlight wheel moved mean
+chroma by **−0.0000 and +0.0001**. Inert. The midtone wheel managed −0.0007.
+
+Middle gray now sits at EV = 0, which is the midtone band's centre — where the
+word says it should be.
 
 ### The correction
 
@@ -47,8 +63,30 @@ brightness), weighted by that zone's share of the pixel:
 ```
 offset = Σ_z  w_z · O_z
 slope  = 1 + Σ_z  w_z · s_z
-out    = max(in × slope + offset, 0)
+out    = max( in × slope + offset · Y , 0 )
 ```
+
+### Why the offset is multiplied by Y
+
+ASC CDL defines its offset on **code values** — a bounded, display-referred
+signal. Orion applies the correction in unbounded scene-linear light, which is
+the right place for the *zones* to mean what they say, but it means a constant
+offset is not scale-invariant: what it is worth relative to the pixel — and
+relative is what survives a log-shaped display transform — falls as 1/Y.
+
+So a wheel had all its authority in the deep shadows and none in the highlights,
+which is precisely where the highlight wheel lives. Multiplying by the pixel's
+own luminance makes it a constant **chromaticity** shift at every exposure, and
+`testColorGradeGpu` pins it: the same wheel measures **0.1077** relative chroma
+at −3 EV and **0.1079** at +3 EV, six stops apart.
+
+It also removes the clamp failure. A zero-sum offset always has a negative
+component, and as a constant it was larger than a deep shadow — so two channels
+stuck at the shader's zero clamp, the sum stopped cancelling, and the wheel
+*brightened* what it was meant to tint. Measured: a 0.0096-linear patch came
+back at 0.0124, **+29%**. Scaled by Y the offset cannot exceed the pixel, and
+the test now checks luminance drift across the whole wedge rather than at one
+convenient level.
 
 Power is left at 1. A per-zone gamma on top of a per-zone slope is two controls
 for one perceptual axis, and the tone curve upstream already owns contrast.
@@ -70,15 +108,26 @@ adjustment fights the exposure slider. With it, a neutral gray keeps its
 luminance and only changes hue — so the luminance slider beside each wheel is
 the only thing that moves brightness, which is what the control surface promises.
 
-`k = 0.03`, and the number was measured rather than guessed. It started at 0.15,
-which is a reasonable figure in a display-referred space and badly wrong here:
-this is scene-linear light, where a dark patch sits around 0.005. A zero-sum
-offset always has a negative component, so 0.15 drove two channels of every
-shadow straight through zero and the shader's clamp held them there. On a night
-frame the shadow patch measured luma 0.12 at k = 0.15 and 0.22 at k = 0.03 —
-the *larger* setting was darker, because it was crushing channels to black
-instead of tinting them. At 0.03 the same push moves mean saturation from 0.46
-to 0.51 and leaves the tonality intact.
+**`k = 0.25`** — and the constant changed meaning when the offset started
+scaling with Y, so the old value and its story are both obsolete.
+
+It used to be an absolute quantity in scene-linear light, where a dark patch
+sits around 0.005; `k = 0.15` drove two channels of every shadow through zero,
+`k = 0.03` did it less often, and neither was really a strength — both were
+"how far can this go before it clips". Now `k` is a fraction of the pixel, and
+it can be derived instead of tuned. A full-radius push toward a primary gives
+the zero-sum offset `k·(1, −½, −½)`, so a neutral pixel comes out as
+
+```
+Y · (1 + k, 1 − k/2, 1 − k/2)      saturation = (max − min) / max = 1.5k / (1 + k)
+```
+
+`k = 0.25` is therefore **30% saturation from neutral at full travel** — a
+strong grade, and the number is checkable rather than felt. Measured on both
+sample frames, a full push moves the picture by 17–23% of what a one-stop
+exposure change moves it: more than vibrance at full travel, less than
+saturation. Predicted relative chroma for the test's wheel is 0.100 against
+0.1077 measured, the difference being the mean shifting slightly off zero.
 
 ## The control surface — why a wheel, and which way it winds
 
@@ -133,11 +182,18 @@ zones the user selected. In linear light the weights mean what they say.
 
 ## Confidence
 
-High for the SOP arithmetic, which is a published transfer function. Medium for
-the partition thresholds (0.0/0.5 and 0.5/1.0): they are a reasonable reading of
-"shadows, midtones, highlights" in linear light rather than a measured
-psychophysical boundary, and a reviewer could reasonably argue for placing them
-in a log or perceptual space instead.
+High for the SOP arithmetic, which is a published transfer function. High for
+the partition now: the previous version of this section said the linear
+thresholds were "a reasonable reading ... and a reviewer could reasonably argue
+for placing them in a log or perceptual space instead." A reviewer did, the
+measurement agreed with them, and the log axis is what shipped.
+
+What remains chosen rather than derived: the band centres at ±2.5 EV and
+σ = 1.6. They inherit the tone controls' geometry, which is sourced, but
+"shadows are two and a half stops down" is a convention rather than a
+psychophysical boundary. Consistency with the tone bands is the argument for
+them, and it is a real one — a photograph should not have two different ideas of
+where its shadows are.
 
 ## Tests
 
@@ -150,10 +206,25 @@ in a log or perceptual space instead.
   channel above the other two, and 60° is yellow. This is what the panel's
   gradient ordering is checked against.
 
-**Not tested:** the shader itself has no GPU test yet. Its effect is verified by
-measurement instead — `--scene grade --measure` on a night frame, which is how
-`kStrength` was calibrated — but that is a check somebody ran once, not one that
-runs on every build. A `testColorGradeGpu` asserting the identity (all controls
-at zero returns the input unchanged) and the zone separation (a shadow push
-moves a dark patch and leaves a bright one alone) is the obvious next test, and
-its absence is the weakest point in this node.
+`testColorGradeGpu` — **added 2026-07-28**, over a neutral wedge spanning
+−7…+4.5 EV:
+
+- every wheel centred is the identity
+- the shadow wheel tints its own zone and leaves the highlight zone alone
+- **a wheel is worth the same at every level** — 0.1077 relative chroma at
+  −3 EV against 0.1079 at +3 EV. This is the scale-invariance the Y-scaled
+  offset exists for, and the one assertion that would have caught the original
+  bug on its own
+- zero-sum holds across the *whole* wedge, not at one level — the deep-shadow
+  clamp is what broke it before
+- the luminance slider lifts its own zone and leaves the far one alone
+
+`orion-bench` — one probe per wheel, on a frame lifted 3 EV so all three zones
+are populated, gated on how far the pixels actually moved.
+
+**The instrument mattered more than the code here.** Three separate summary
+metrics — mean luma, mean chroma, mean saturation — each reported a working
+grading wheel as doing nothing, because a wheel rotates hue at roughly constant
+saturation and a frame mean cancels it. The bench gates on mean absolute
+per-pixel difference now. Measuring a hue rotation with a saturation average is
+the same mistake as measuring an edge filter by mean brightness.

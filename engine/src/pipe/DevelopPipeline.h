@@ -8,6 +8,7 @@
 #pragma once
 
 #include "gpu/Resources.h"
+#include "pipe/HueSatMap.h"
 #include "pipe/ShaderParams.h"
 #include "pipe/Pipeline.h"
 #include "pipe/ToneCurve.h"
@@ -78,6 +79,14 @@ struct Adjustments {
     float lensCaRed      = 0.0f;   // -1..1
     float lensCaBlue     = 0.0f;   // -1..1
 
+    /// A measured profile from the lens database, in place of the sliders.
+    /// `lensPoly` is ptlens a, b, c; `lensVignettePa` is p_a, p_b, p_c. Both
+    /// are physical coefficients at this frame's focal length and aperture,
+    /// not normalized control positions. See pipe/LensDatabase.h.
+    bool  lensProfile = false;
+    float lensPoly[3]{};
+    float lensVignettePa[3]{};
+
     /// Highlight reconstruction, 0..1. Off by default — see the note on
     /// Engine.highlightRecovery in the app.
     float highlightRecovery = 0.0f;
@@ -144,12 +153,22 @@ public:
 
     [[nodiscard]] const gpu::Texture& output() const { return pipeline_.output(); }
 
+    /// Sixteen bits out of the display and geometry nodes, or eight.
+    ///
+    /// The screen's drawable is `bgra8Unorm`, so the wide path moves twice the
+    /// bytes through the two largest nodes in the graph for precision the
+    /// display cannot show. Export is the only consumer that can use it.
+    /// Switching reallocates two textures and re-renders them, so it belongs
+    /// around an export and nowhere near a slider.
+    void setWideOutput(bool wide);
+    [[nodiscard]] bool wideOutput() const noexcept { return wideOutput_; }
+
     /// The image after white balance and the camera matrix, but before any user
     /// adjustment. This is what the color picker must sample: reading the
     /// edited result would mean adjusting a band changes which band you would
     /// pick next time, which is a feedback loop, not a tool.
     [[nodiscard]] const gpu::Texture& referenceImage() const {
-        return pipeline_.nodeOutput(nMatrix_);
+        return pipeline_.nodeOutput(nHueSat_);
     }
     [[nodiscard]] Pipeline&           graph()        { return pipeline_; }
     [[nodiscard]] const Pipeline&     graph() const  { return pipeline_; }
@@ -166,6 +185,7 @@ private:
     int nHighlights_ = -1;
     int nLens_ = -1;
     int nGrade_ = -1;
+    int nHueSat_ = -1, auxHueSat_ = -1;
     float whiteLevel_ = 0.0f;
     float blackLevel_[3]{};
     static constexpr int kDenoiseScales = 4;
@@ -182,6 +202,13 @@ private:
     int nGuideAb_ = -1, nGuideH2_ = -1, nGuideV2_ = -1;
     int exifQuarters_ = 0;
     int turns_ = 0;
+
+    /// Sixteen-bit tail. Matches the node declarations at construction.
+    /// Narrow by default: the screen is the common case, and anything that
+    /// wants sixteen bits has to ask.
+    bool wideOutput_ = false;
+
+    void pushDisplayParams(const Adjustments&);
     std::uint32_t outW_ = 0, outH_ = 0;
     std::uint32_t frameW_ = 0, frameH_ = 0;
     int auxCurveLut_ = -1;

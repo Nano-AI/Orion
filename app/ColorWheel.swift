@@ -141,7 +141,75 @@ struct ColorWheel: View {
                 }
                 .onEnded { _ in dragging = false }
         )
+        // Keyboard and VoiceOver reach the same two numbers the drag does.
+        // A wheel that only answers to a mouse is a control a VoiceOver user
+        // cannot grade with at all, and the arrow keys are also the only way to
+        // place a puck exactly — a drag cannot hit 0.25 on purpose.
+        .focusable()
+        .focusEffectDisabled(false)
+        .onKeyPress(.leftArrow)  { nudge(dx: -kStep, dy: 0); return .handled }
+        .onKeyPress(.rightArrow) { nudge(dx:  kStep, dy: 0); return .handled }
+        .onKeyPress(.upArrow)    { nudge(dx: 0, dy:  kStep); return .handled }
+        .onKeyPress(.downArrow)  { nudge(dx: 0, dy: -kStep); return .handled }
         .accessibilityElement()
         .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(spoken))
+        .accessibilityHint(Text("Arrow keys move the puck. Adjust changes strength."))
+        // Adjust is one axis, so it is the one that matters: how far from
+        // neutral. Hue gets its own two actions rather than being folded into
+        // the same gesture, because rotating and strengthening are different
+        // decisions.
+        .accessibilityAdjustableAction { direction in
+            let d = strength
+            let scale = d > 0.001 ? (d + (direction == .increment ? kStep : -kStep)) / d : 0
+            if d <= 0.001 {
+                // From neutral there is no angle to keep, so increment starts
+                // at the top of the disc rather than doing nothing.
+                if direction == .increment { setPuck(x: 0, y: kStep) }
+                return
+            }
+            setPuck(x: point.x * scale, y: point.y * scale)
+        }
+        .accessibilityAction(named: Text("Rotate hue clockwise")) { rotate(by: -.pi / 12) }
+        .accessibilityAction(named: Text("Rotate hue anticlockwise")) { rotate(by: .pi / 12) }
+    }
+
+    /// One arrow press. A twentieth of the radius: fine enough to place a puck,
+    /// coarse enough that crossing the disc is not a hundred presses.
+    private let kStep: CGFloat = 0.05
+
+    private var strength: CGFloat { sqrt(point.x * point.x + point.y * point.y) }
+
+    /// What VoiceOver reads. Hue as a compass angle in degrees and strength as
+    /// a percentage, because those are the two things the puck means — reading
+    /// out x and y would describe the widget instead of the grade.
+    private var spoken: String {
+        guard strength > 0.001 else { return "neutral" }
+        var degrees = atan2(point.y, point.x) * 180 / .pi
+        if degrees < 0 { degrees += 360 }
+        return String(format: "hue %.0f degrees, strength %.0f percent",
+                      degrees, min(strength, 1) * 100)
+    }
+
+    private func nudge(dx: CGFloat, dy: CGFloat) {
+        setPuck(x: point.x + dx, y: point.y + dy)
+    }
+
+    private func rotate(by radians: CGFloat) {
+        guard strength > 0.001 else { return }
+        let angle = atan2(point.y, point.x) + radians
+        setPuck(x: cos(angle) * strength, y: sin(angle) * strength)
+    }
+
+    /// Clamped to the disc, exactly as the drag is — past the rim the angle is
+    /// still meaningful and the radius is not.
+    private func setPuck(x: CGFloat, y: CGFloat) {
+        var nx = x, ny = y
+        let d = sqrt(nx * nx + ny * ny)
+        if d > 1 { nx /= d; ny /= d }
+        engine.edit(title) {
+            value[0] = Float(nx)
+            value[1] = Float(ny)
+        }
     }
 }

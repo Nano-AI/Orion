@@ -108,6 +108,30 @@ void Pipeline::setEnabled(int nodeId, bool enabled) {
     markDownstreamDirty(nodeId);
 }
 
+void Pipeline::setNodeFormat(int nodeId, gpu::PixelFormat format) {
+    if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return;
+    if (nodes_[nodeId].format == format) return;
+
+    nodes_[nodeId].format = format;
+    if (!compiled_) return;   // compile() will honour it
+
+    const auto& node = nodes_[nodeId];
+    const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;
+    const std::uint32_t h = node.outHeight ? node.outHeight : height_;
+    outputs_[nodeId] = gpu::Texture::create(device_, w, h, format);
+
+    // The old texture is gone, so whatever was cached in it is gone with it.
+    dirty_[nodeId] = true;
+    markDownstreamDirty(nodeId);
+}
+
+gpu::PixelFormat Pipeline::nodeFormat(int nodeId) const {
+    if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) {
+        throw std::runtime_error("nodeFormat: bad node id");
+    }
+    return nodes_[nodeId].format;
+}
+
 int Pipeline::resolve(int nodeId) const {
     // Walk back past disabled nodes to whoever last produced real pixels.
     int id = nodeId;

@@ -80,11 +80,12 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 - ✅ HSL / color mixer, 8 hue bands, with targeted adjustment
 - ✅ Sharpening (amount / radius / masking)
 - ✅ Guided filter → local highlights and shadows *(He, Sun & Tang)*
-- ⬜ Profiled wavelet denoise + per-camera noise profile
-- ⬜ Lens corrections via lensfun
-- ⬜ Broader camera support via LibRaw + DNG
-- ⬜ Before/after split — the mockup's Compare interaction
-- ⬜ Keyboard-first workflow
+- ✅ Profiled wavelet denoise + per-camera noise profile *(Starck et al.)*
+- ✅ Lens corrections, with lensfun's database vendored and read directly
+- ✅ Broader camera support via LibRaw — and unsupported sensors refused by name
+- ✅ Before/after split — the mockup's Compare interaction
+- ✅ Keyboard-first workflow and control accessibility
+- ✅ Camera profile beyond the 3×3: BaselineExposure and HueSatMap *(DNG spec)*
 
 ---
 
@@ -130,39 +131,14 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 
 ---
 
-## Where things actually stand — 2026-07-27
+## Where things actually stand
 
-Milestones stopped running in order once M0 proved the budget, so this is the
-honest picture rather than the plan.
+**`planning/STATUS.md`.** There is no second copy here on purpose: this file
+had one, it disagreed with STATUS on the milestone percentages, on whether
+16-bit export existed and on which story was next, and two copies of "where we
+are" guarantee that outcome.
 
-| | Status | What is left |
-|---|---|---|
-| **M0** Prove the budget | ✅ **Done** | — |
-| **M1** Usable editor | 🟡 ~60% | Crop and straighten · XMP sidecars · undo/redo · browse, filmstrip, ratings, filtering · the export panel above |
-| **M2** Depth | 🟡 ~55% | Denoise · lens corrections · before/after · keyboard workflow · **port real RCD** |
-| **M3** The 180° | ⬜ Not started | All of it |
-| **M4** Local edits | ⬜ Not started | All of it |
-| **M5** Advanced | ⬜ Not started | All of it |
-
-### What works today
-Open a raw file · white balance in Kelvin · exposure, contrast, and four tone
-controls with *local* highlights and shadows · vibrance and saturation · an
-eight-band color mixer with a targeted picker · tone curve · sharpening ·
-rotation · pan, zoom and navigator · histogram · export to JPEG, PNG and TIFF.
-
-### The three biggest gaps, in order
-1. **No library.** One file at a time, no browsing, rating or filtering. This is
-   the largest remaining chunk of M1 and it is mostly UI.
-2. **No highlight reconstruction.** Clipped stays clipped, so blown skies do not
-   recover the way Lightroom's do. A missing feature, not a tuning difference.
-3. **Demosaic is RCD-family, not RCD.** Foundational, and everything downstream
-   inherits it. The reference is MIT-licensed — roughly a day.
-
-### Known limits worth remembering
-- Export is 8-bit, including TIFF
-- White balance costs ~26 ms because it rewrites the head of the graph
-- No preview-ROI path; everything renders at full resolution
-- No EDR or P3 output despite choosing a native shell partly for it
+This file says what the milestones *are*. STATUS says where they stand.
 
 ## Working agreement
 

@@ -1,5 +1,6 @@
 #include "pipe/DevelopPipeline.h"
 
+#include "pipe/LensGeometry.h"
 #include "pipe/ShaderParams.h"
 
 #include <algorithm>
@@ -82,6 +83,37 @@ int quarterTurnsFor(int flip) {
     }
 }
 
+/// How far Orion's zero point sits below every other converter's.
+///
+/// **Measured, not chosen.** Orion opened a daylight frame about 1.3x darker in
+/// the midtones than the camera's own JPEG, which read as flat and washed. A
+/// two-dimensional fit of exposure against base contrast, scored as mean
+/// absolute luma error over six patches spanning each frame's tonal range,
+/// against two independent references (the camera's JPEG and Apple's RAW
+/// rendering):
+///
+///     _PIC8095 daylight   best +1.20 EV, contrast 1.45, error 0.0171
+///     _PIC8220 forecourt  best +1.20 EV, contrast 1.45, error 0.0103
+///     _PIC8148 night sky  best +1.60 EV, contrast 2.05, error 0.0068
+///
+/// Two of three agree exactly. The night frame's error surface is nearly flat —
+/// 0.0083 at the old defaults against 0.0068 at its own minimum — because a
+/// near-black frame barely moves a mean luma, so its preference is noise. At
+/// (+1.2, 1.45) its error is 0.0150. Consistent wherever there is signal.
+///
+/// The mechanism is the DNG specification's `BaselineExposure` (tag 50730),
+/// "by how much (in EV units) to move the zero point", which Adobe applies
+/// silently on open — which is why the user's Exposure slider still reads 0.00
+/// here rather than +1.20. See research/camera-profiles.md.
+///
+/// ⚠️ **What this value is not yet known to be.** It fits one camera body. A
+/// per-camera `BaselineExposure` and a property of Orion's own AgX zero point
+/// are indistinguishable from a single body's data, and LibRaw does not carry
+/// the tag for native ARW. The moment a second body is supported, measure it
+/// again: if the number moves, it is per-camera and belongs in a table; if it
+/// does not, it belongs in the display transform.
+constexpr float kBaselineExposureEv = 1.2f;
+
 }  // namespace
 
 DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
@@ -156,6 +188,18 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::RGBA16Float, {}});
     nMatrix_    = pipeline_.add({"camera->working", "cameraToWorking", {nSharpen_},
                                  PixelFormat::RGBA16Float, {}});
+
+    // ── The rest of the camera profile ────────────────────────────────────
+    //
+    // The matrix is one of five parts of a DNG profile, and it is the only one
+    // that cannot be right for a saturated narrow-band stimulus. HueSatMap is
+    // the spec's correction stage and belongs immediately after it, still in
+    // scene-linear light and before any user adjustment — a profile is what the
+    // camera saw, not what the photographer asked for.
+    auxHueSat_ = pipeline_.addAuxTexture(huesat::kSatDivisions, huesat::kHueDivisions,
+                                         PixelFormat::RGBA32Float);
+    nHueSat_   = pipeline_.add({"profile:hue/sat", "hueSatMap", {nMatrix_},
+                                PixelFormat::RGBA16Float, {}, {auxHueSat_}});
     // Every scene-linear adjustment fuses into one dispatch, and the display
     // transform plus curve into another. They are all pointwise; separate
     // passes only bought a 194 MB round trip each at 24 MP.
@@ -163,7 +207,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // Sits before exposure on purpose: exposure is a multiply, so in log2 it is
     // an add the tone node applies for free — which keeps this whole six-pass
     // chain cached while the exposure slider moves.
-    nGuidePrep_ = pipeline_.add({"guide:prep", "guidePrep", {nMatrix_},
+    nGuidePrep_ = pipeline_.add({"guide:prep", "guidePrep", {nHueSat_},
                                  PixelFormat::RG32Float, {}});
     // Subsample before filtering (He & Sun, 2015). Everything from here to the
     // coefficients runs on a grid sixteen times smaller.
@@ -190,7 +234,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  true, guideW_, guideH_});
 
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
-                                 {nMatrix_, nGuideV2_, nGuidePrep_},
+                                 {nHueSat_, nGuideV2_, nGuidePrep_},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
@@ -210,21 +254,19 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // Half float rather than 16-bit integer because it is guaranteed
     // read-write on Metal, and because it holds the shadows better.
     nDisplay_   = pipeline_.add({"develop:display", "developDisplay", {nGrade_},
-                                 PixelFormat::RGBA16Float, {}, {auxCurveLut_}});
+                                 PixelFormat::RGBA8Unorm, {}, {auxCurveLut_}});
 
     // Orientation is last, and is the only node whose output dimensions differ
     // from its input — a quarter turn swaps them.
-    const bool swaps = (exifQuarters_ % 2) != 0;
-
+    //
     // Allocate for the worst case so a user rotation never needs a recompile.
     // 1.5x covers the worst-case straighten bounding box (45 degrees
     // grows the frame by sqrt(2)).
     const std::uint32_t maxSide =
         static_cast<std::uint32_t>(std::max(width_, height_) * 1.45f);
     nGeometry_ = pipeline_.add({"geometry", "geometry", {nDisplay_},
-                                PixelFormat::RGBA16Float, {}, {},
+                                PixelFormat::RGBA8Unorm, {}, {},
                                 true, maxSide, maxSide});
-    (void)swaps;
 
     pipeline_.compile(width_, height_);
 
@@ -264,7 +306,7 @@ void DevelopPipeline::gradeOffsets(float x, float y, float out[3]) noexcept {
 
     const float theta = std::atan2(y, x);
     constexpr float kTwoPiOverThree = 2.0943951023931953f;   // 120 degrees
-    constexpr float kStrength = 0.03f;
+    constexpr float kStrength = 0.25f;
 
     float v[3];
     for (int c = 0; c < 3; ++c) {
@@ -361,6 +403,27 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     }
     mat.size[0] = size[0]; mat.size[1] = size[1];
     pipeline_.setParams(nMatrix_, &mat, sizeof mat);
+
+    // The profile's hue/saturation table and the two matrices that put the
+    // working space into the space the spec defines the table in.
+    {
+        const auto toPro   = huesat::rec2020ToProPhoto();
+        const auto fromPro = huesat::proPhotoToRec2020();
+        params::HueSat hs{};
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c) {
+                hs.toProPhoto[r][c]   = toPro[r * 3 + c];
+                hs.fromProPhoto[r][c] = fromPro[r * 3 + c];
+            }
+        hs.size[0] = size[0]; hs.size[1] = size[1];
+        hs.hueDivisions = huesat::kHueDivisions;
+        hs.satDivisions = huesat::kSatDivisions;
+        pipeline_.setParams(nHueSat_, &hs, sizeof hs);
+
+        const auto table = huesat::buildTable(huesat::blueSky());
+        pipeline_.updateAux(auxHueSat_, table.data(),
+                            huesat::kSatDivisions * 4 * sizeof(float));
+    }
 
     // Guided filter parameters. Radius scales with the frame so the effect
     // covers the same fraction of the picture regardless of megapixels;
@@ -538,10 +601,27 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     // A whole resampling pass, so it is switched off rather than run as an
     // identity when nothing is set.
     const bool correctingLens =
+        adj.lensProfile ||
         adj.lensDistortion != 0.0f || adj.lensVignette != 0.0f ||
         adj.lensCaRed != 0.0f || adj.lensCaBlue != 0.0f;
 
-    if (first || correctingLens ||
+    // `correctingLens` is deliberately NOT a condition for re-pushing. It is
+    // true whenever a slider is nonzero, not when one changed, and setParams
+    // dirties everything downstream unconditionally — so a vignette left on
+    // made every exposure tick recompute lens, sharpen, matrix, develop:linear,
+    // display and geometry. Seven full-resolution passes where three were
+    // needed, on a state the bench never measured because every latency number
+    // was taken with the lens sliders at zero. Once the lens database lands,
+    // corrections-on is the normal state. The changed-comparisons below already
+    // cover the enable and disable transitions.
+    if (first ||
+        adj.lensProfile != lastAdj_.lensProfile ||
+        adj.lensPoly[0] != lastAdj_.lensPoly[0] ||
+        adj.lensPoly[1] != lastAdj_.lensPoly[1] ||
+        adj.lensPoly[2] != lastAdj_.lensPoly[2] ||
+        adj.lensVignettePa[0] != lastAdj_.lensVignettePa[0] ||
+        adj.lensVignettePa[1] != lastAdj_.lensVignettePa[1] ||
+        adj.lensVignettePa[2] != lastAdj_.lensVignettePa[2] ||
         adj.lensDistortion != lastAdj_.lensDistortion ||
         adj.lensVignette != lastAdj_.lensVignette ||
         adj.lensCaRed != lastAdj_.lensCaRed ||
@@ -556,13 +636,33 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         // The sliders run -1..1; the coefficients they drive are much smaller.
         // These ranges cover what a real lens needs without letting the control
         // fold the picture through itself at the extremes.
-        lens.k1       = adj.lensDistortion * 0.35f;
+        // A measured profile replaces the sliders rather than adding to them.
+        // Two sources for one coefficient is a control that fights the data:
+        // the profile knows what this lens does at this focal length, and a
+        // slider on top of it would be undoing a correction by feel.
+        if (adj.lensProfile) {
+            lens.distA     = adj.lensPoly[0];
+            lens.distB     = adj.lensPoly[1];
+            lens.distC     = adj.lensPoly[2];
+            lens.vignetteA = adj.lensVignettePa[0];
+            lens.vignetteB = adj.lensVignettePa[1];
+            lens.vignetteC = adj.lensVignettePa[2];
+        } else {
+            lens.distB     = adj.lensDistortion * 0.35f;
+            lens.vignetteA = adj.lensVignette * 0.6f;
+        }
         // At full slider this is about seven pixels of radial shift at the
         // corner of a 24 MP frame, which is well past any real lateral
         // aberration and still short of obviously wrong.
         lens.caRed    = adj.lensCaRed * 0.003f;
         lens.caBlue   = adj.lensCaBlue * 0.003f;
-        lens.vignetteA = adj.lensVignette * 0.6f;
+
+        // Keep the picture in the frame. Without this a barrel correction
+        // reaches past the border and the clamp smears the edge column.
+        lens.scale = lens::autoScale(width_, height_,
+                                     lens.centerX, lens.centerY,
+                                     lens.distA, lens.distB, lens.distC,
+                                     lens.caRed, lens.caBlue);
         pipeline_.setParams(nLens_, &lens, sizeof lens);
     }
 
@@ -666,9 +766,17 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     }
 
     if (linearMoved) {
-        params::LinearAdjust la{adj.exposureEv, adj.highlights, adj.shadows,
+        params::LinearAdjust la{adj.exposureEv + kBaselineExposureEv,
+                                adj.highlights, adj.shadows,
                                 adj.whites, adj.blacks, adj.vibrance,
-                                adj.saturation, 0.0f, {size[0], size[1]},
+                                adj.saturation,
+                                // Tell the shader whether the guide textures
+                                // hold what it thinks they hold. `linearMoved`
+                                // already covers every way this can flip:
+                                // `needsGuide` turns on exactly when highlights
+                                // or shadows crosses zero, and both are in it.
+                                needsGuide ? 1.0f : 0.0f,
+                                {size[0], size[1]},
                                 {guideW_, guideH_},
                                 {}, {}, {}};
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
@@ -688,10 +796,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     const bool curveMoved = first || !sameCurve(adj.curve, lastAdj_.curve);
 
     if (first || adj.contrast != lastAdj_.contrast || curveMoved) {
-        params::Display d{adj.contrast, -2.5f,
-                          adj.curve.isIdentity() ? 1u : 0u,
-                          kCurveResolution, {size[0], size[1]}, {0, 0}};
-        pipeline_.setParams(nDisplay_, &d, sizeof d);
+        pushDisplayParams(adj);
     }
 
     // Rebuilding the LUT walks four splines. Skip it when the curve has not
@@ -782,6 +887,30 @@ std::uint32_t DevelopPipeline::outputWidth() const noexcept  { return outW_; }
 std::uint32_t DevelopPipeline::outputHeight() const noexcept { return outH_; }
 std::uint32_t DevelopPipeline::frameWidth()  const noexcept { return frameW_; }
 std::uint32_t DevelopPipeline::frameHeight() const noexcept { return frameH_; }
+
+void DevelopPipeline::pushDisplayParams(const Adjustments& adj) {
+    params::Display d{adj.contrast, -2.5f,
+                      adj.curve.isIdentity() ? 1u : 0u,
+                      kCurveResolution, {width_, height_},
+                      // Dither only when this node is the one quantising. At
+                      // sixteen bits there is nothing to hide.
+                      wideOutput_ ? 0u : 1u, 0u};
+    pipeline_.setParams(nDisplay_, &d, sizeof d);
+}
+
+void DevelopPipeline::setWideOutput(bool wide) {
+    if (wide == wideOutput_) return;
+    wideOutput_ = wide;
+
+    const auto format = wide ? gpu::PixelFormat::RGBA16Float
+                             : gpu::PixelFormat::RGBA8Unorm;
+    pipeline_.setNodeFormat(nDisplay_, format);
+    pipeline_.setNodeFormat(nGeometry_, format);
+
+    // The dither flag moved with the format, and the normal push is guarded on
+    // contrast and the curve — neither of which changed.
+    pushDisplayParams(lastAdj_);
+}
 
 double DevelopPipeline::render() { return pipeline_.render(); }
 

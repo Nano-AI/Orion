@@ -45,18 +45,14 @@ bool ToneCurveSpec::isIdentity() const noexcept {
            isIdentityChannel(green) && isIdentityChannel(blue);
 }
 
-float evaluateCurve(const CurveChannel& channel, float x) {
-    if (channel.size() < 2) return x;
+namespace {
 
-    // Callers may hand us points in any order; the spline needs them sorted.
-    std::vector<CurvePoint> p(channel);
-    std::sort(p.begin(), p.end(),
-              [](const CurvePoint& a, const CurvePoint& b) { return a.x < b.x; });
-
+/// The spline itself, on points that are already sorted and tangents that are
+/// already fitted. Split out so the LUT builder can hoist both.
+float evaluateSorted(const std::vector<CurvePoint>& p,
+                     const std::vector<float>& t, float x) {
     if (x <= p.front().x) return p.front().y;
     if (x >= p.back().x)  return p.back().y;
-
-    const auto t = tangentsFor(p);
 
     std::size_t i = 0;
     while (i + 2 < p.size() && x > p[i + 1].x) ++i;
@@ -74,6 +70,19 @@ float evaluateCurve(const CurveChannel& channel, float x) {
          + (s3 - s2) * h * t[i + 1];
 }
 
+}  // namespace
+
+float evaluateCurve(const CurveChannel& channel, float x) {
+    if (channel.size() < 2) return x;
+
+    // Callers may hand us points in any order; the spline needs them sorted.
+    std::vector<CurvePoint> p(channel);
+    std::sort(p.begin(), p.end(),
+              [](const CurvePoint& a, const CurvePoint& b) { return a.x < b.x; });
+
+    return evaluateSorted(p, tangentsFor(p), x);
+}
+
 std::vector<float> buildCurveLut(const ToneCurveSpec& spec) {
     std::vector<float> lut(static_cast<std::size_t>(kCurveResolution) * kCurveRows);
 
@@ -82,11 +91,30 @@ std::vector<float> buildCurveLut(const ToneCurveSpec& spec) {
     };
 
     for (std::uint32_t row = 0; row < kCurveRows; ++row) {
+        const CurveChannel& channel = *rows[row];
+
+        // Sort and fit the tangents once per channel rather than once per
+        // sample. `evaluateCurve` does both on every call — correct, and fine
+        // for the handful of calls the UI makes, but this loop makes 1024 of
+        // them per rebuild and the curve does not change between them.
+        if (channel.size() < 2) {
+            for (std::uint32_t i = 0; i < kCurveResolution; ++i) {
+                const float x = static_cast<float>(i) / static_cast<float>(kCurveResolution - 1);
+                lut[static_cast<std::size_t>(row) * kCurveResolution + i] =
+                    std::clamp(x, 0.0f, 1.0f);
+            }
+            continue;
+        }
+
+        std::vector<CurvePoint> p(channel);
+        std::sort(p.begin(), p.end(),
+                  [](const CurvePoint& a, const CurvePoint& b) { return a.x < b.x; });
+        const auto t = tangentsFor(p);
+
         for (std::uint32_t i = 0; i < kCurveResolution; ++i) {
             const float x = static_cast<float>(i) / static_cast<float>(kCurveResolution - 1);
-            const float y = evaluateCurve(*rows[row], x);
             lut[static_cast<std::size_t>(row) * kCurveResolution + i] =
-                std::clamp(y, 0.0f, 1.0f);
+                std::clamp(evaluateSorted(p, t, x), 0.0f, 1.0f);
         }
     }
     return lut;

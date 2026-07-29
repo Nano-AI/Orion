@@ -34,6 +34,7 @@ set(ORION_SHADERS
     color_grade:colorGrade
     sharpen:sharpen
     color_matrix:cameraToWorking
+    huesat:hueSatMap
     guide_prep:guidePrep
     guide_down:guideDown
     box_blur:boxBlur

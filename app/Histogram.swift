@@ -48,9 +48,9 @@ struct Histogram: View {
 
     private func color(_ channel: Int) -> Color {
         switch channel {
-        case 0:  Color(red: 0.769, green: 0.263, blue: 0.227)
-        case 1:  Color(red: 0.227, green: 0.659, blue: 0.310)
-        default: Color(red: 0.227, green: 0.435, blue: 0.769)
+        case 0:  Orion.Palette.chanR
+        case 1:  Orion.Palette.chanG
+        default: Orion.Palette.chanB
         }
     }
 

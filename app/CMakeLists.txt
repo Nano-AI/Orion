@@ -11,7 +11,9 @@ set(APP_CONTENTS ${APP_BUNDLE}/Contents)
 set(APP_BINARY   ${APP_CONTENTS}/MacOS/Orion)
 
 set(SWIFT_SOURCES
+    ${CMAKE_SOURCE_DIR}/Sources/OrionUI/DesignTokens.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ImageCanvas.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
@@ -24,6 +26,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CropOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Library.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Filmstrip.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CompareOverlay.swift
@@ -93,6 +96,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_BINARY_DIR}/main.swift
             -o ${VIEWPORT_TESTS}
@@ -103,6 +108,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
     COMMENT "swiftc    orion-viewport-tests"

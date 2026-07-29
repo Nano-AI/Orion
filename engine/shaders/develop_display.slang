@@ -14,7 +14,23 @@ struct DisplayParams
     uint  curveIdentity;// skip the LUT entirely when the curve is untouched
     uint  resolution;   // LUT entries per row
     uint2 size;
-    uint2 _pad;
+    uint  dither;       // nonzero when this node writes eight bits
+    uint  _pad;
+};
+
+/// Ordered dithering (Bayer, 1973), 4x4.
+///
+/// Eight bits is all the drawable holds, so quantising here costs nothing on
+/// its own — but the geometry node then *resamples* these values and quantises
+/// again, and two roundings of a smooth gradient is exactly where contouring
+/// comes from. A night sky at 200% is the case that shows it. A sub-LSB offset
+/// that varies with position turns the contour into noise the eye integrates
+/// away; it is what every eight-bit display pipeline does, and it is free.
+static const float kBayer4x4[16] = {
+     0.0f,  8.0f,  2.0f, 10.0f,
+    12.0f,  4.0f, 14.0f,  6.0f,
+     3.0f, 11.0f,  1.0f,  9.0f,
+    15.0f,  7.0f, 13.0f,  5.0f,
 };
 
 static const float kMinEv = -12.47393f;
@@ -115,5 +131,11 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
     // applying a transfer function on top encodes the signal twice. That is
     // what washed the image out: middle gray landed at 0.74 instead of 0.50,
     // lifting everything and flattening color along with it.
+    if (p.dither != 0u)
+    {
+        const uint i = (tid.y & 3u) * 4u + (tid.x & 3u);
+        c += (kBayer4x4[i] / 16.0f - 0.5f) / 255.0f;
+    }
+
     dst[tid.xy] = float4(saturate(c), 1.0f);
 }

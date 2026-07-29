@@ -48,20 +48,40 @@ struct Sidecar: Sendable {
     /// Reads an attribute or an element with the same name. Editors write
     /// these interchangeably, so accepting both is what makes the sidecar
     /// actually interoperable rather than nominally so.
+    ///
+    /// ⚠️ This is string matching, not an XML parser. It is deliberate — the
+    /// interop bar today is "read what Lightroom and darktable write for these
+    /// six fields", and a parser is a dependency and a schema. It will not
+    /// survive a namespace prefix it has not seen or an attribute split across
+    /// lines. If the bar rises to "read arbitrary XMP", replace it rather than
+    /// patching it.
     private static func value(of key: String, in text: String) -> String? {
         if let r = text.range(of: "\(key)=\"") {
             let rest = text[r.upperBound...]
             if let end = rest.firstIndex(of: "\"") {
-                return String(rest[..<end])
+                return unescape(String(rest[..<end]))
             }
         }
         if let open = text.range(of: "<\(key)>"),
            let close = text.range(of: "</\(key)>"),
            open.upperBound <= close.lowerBound {
-            return String(text[open.upperBound..<close.lowerBound])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return unescape(String(text[open.upperBound..<close.lowerBound])
+                .trimmingCharacters(in: .whitespacesAndNewlines))
         }
         return nil
+    }
+
+    /// The inverse of `escape`, and it has to exist: `Library.persist` reads,
+    /// modifies and rewrites the whole sidecar on every rating change, so a
+    /// value that is escaped on write and not unescaped on read gains a layer
+    /// per save. A label of `R&D` becomes `R&amp;D`, then `R&amp;amp;D`.
+    /// Ampersand last, or `&lt;` written as `&amp;lt;` would come back as `<`.
+    static func unescape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&lt;", with: "<")
+         .replacingOccurrences(of: "&gt;", with: ">")
+         .replacingOccurrences(of: "&quot;", with: "\"")
+         .replacingOccurrences(of: "&apos;", with: "'")
+         .replacingOccurrences(of: "&amp;", with: "&")
     }
 
     // MARK: Writing
@@ -112,7 +132,13 @@ struct Sidecar: Sendable {
         }
     }
 
-    private func escape(_ s: String) -> String {
+    /// The escape half, reachable from the tests. `escape` is an instance
+    /// method on the writer and the round trip is what needs proving.
+    static func escapeForTests(_ s: String) -> String { escapeXml(s) }
+
+    private func escape(_ s: String) -> String { Sidecar.escapeXml(s) }
+
+    private static func escapeXml(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;")
          .replacingOccurrences(of: "<", with: "&lt;")
          .replacingOccurrences(of: ">", with: "&gt;")

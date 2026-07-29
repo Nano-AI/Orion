@@ -10,6 +10,7 @@ add_library(orion_engine STATIC
     src/gpu/Resources.mm
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp
+    src/pipe/LensDatabase.cpp
     src/pipe/ToneCurve.cpp
     src/pipe/WhiteBalance.cpp
     src/util/ImageWriter.mm
@@ -25,6 +26,7 @@ target_include_directories(orion_engine
 target_compile_definitions(orion_engine
     PRIVATE ORION_VERSION_STRING="${PROJECT_VERSION}"
             ORION_SHADER_DIR="${ORION_SHADER_DIR}"
+            ORION_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
 )
 
 add_dependencies(orion_engine orion_shaders)

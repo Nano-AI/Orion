@@ -14,6 +14,7 @@ MTLPixelFormat toMetal(PixelFormat f) {
         case PixelFormat::R32Float:    return MTLPixelFormatR32Float;
         case PixelFormat::RG32Float:   return MTLPixelFormatRG32Float;
         case PixelFormat::RGBA16Float: return MTLPixelFormatRGBA16Float;
+        case PixelFormat::RGBA32Float: return MTLPixelFormatRGBA32Float;
         case PixelFormat::RGBA8Unorm:  return MTLPixelFormatRGBA8Unorm;
     }
     throw std::runtime_error("unknown pixel format");
@@ -29,6 +30,7 @@ std::size_t bytesPerPixel(PixelFormat f) noexcept {
         case PixelFormat::R32Float:    return 4;
         case PixelFormat::RG32Float:   return 8;
         case PixelFormat::RGBA16Float: return 8;
+        case PixelFormat::RGBA32Float: return 16;
         case PixelFormat::RGBA8Unorm:  return 4;
     }
     return 0;
@@ -40,6 +42,7 @@ const char* formatName(PixelFormat f) noexcept {
         case PixelFormat::R32Float:    return "r32f";
         case PixelFormat::RG32Float:   return "rg32f";
         case PixelFormat::RGBA16Float: return "rgba16f";
+        case PixelFormat::RGBA32Float: return "rgba32f";
         case PixelFormat::RGBA8Unorm:  return "rgba8";
     }
     return "?";

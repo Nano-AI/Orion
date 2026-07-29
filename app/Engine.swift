@@ -65,7 +65,7 @@ final class Engine {
     /// test frame it puts mean luma at 0.051 against the camera's 0.052, and
     /// mean saturation at 0.81 against 0.85. Drag the slider to 1.00 for the
     /// neutral transform.
-    var contrast: Float = 1.15     { didSet { pushAndRender() } }
+    var contrast: Float = 1.45     { didSet { pushAndRender() } }
 
     /// Extra quarter turns clockwise, on top of the camera's own orientation.
     var rotateQuarters: Int32 = 0  { didSet { constrainCrop(); pushAndRender() } }
@@ -171,10 +171,22 @@ final class Engine {
     /// spline and the LUT since M2; nothing reached them until now.
     var curve = ToneCurve()       { didSet { pushAndRender() } }
 
-    /// Lens corrections. Manual controls; a lens database would set them from
-    /// what the EXIF names, and the maths is the same either way.
+    /// Lens corrections. Manual, unless `lensProfileEnabled` is on and this
+    /// photo's lens is in the database — then the measured coefficients replace
+    /// both of these and the sliders are disabled rather than fighting the data.
     var lensDistortion: Float = 0 { didSet { pushAndRender() } }
     var lensVignette: Float = 0   { didSet { pushAndRender() } }
+
+    /// Whether to apply the measured profile. On by default when one is found:
+    /// a correction the lens is known to need is not a creative decision, and
+    /// every other converter applies it without being asked.
+    var lensProfileEnabled = true { didSet { pushAndRender() } }
+
+    /// What the database knows about this photo's lens. Empty name means no
+    /// match — which includes every manual lens, since those record no name.
+    private(set) var lensProfileName = ""
+    private(set) var lensProfileApproximate = false
+    var hasLensProfile: Bool { !lensProfileName.isEmpty }
     var lensCaRed: Float = 0      { didSet { pushAndRender() } }
     var lensCaBlue: Float = 0     { didSet { pushAndRender() } }
 
@@ -217,6 +229,16 @@ final class Engine {
 
     /// True while a slider is being dragged, so pushes are suppressed until
     /// the value settles. Not used yet — hook for degrade-then-refine.
+    /// Called with the new state after every adjustment lands, so the shell can
+    /// persist it. The engine deliberately knows nothing about files, URLs or
+    /// sidecars — it reports *that* something changed and hands over the value;
+    /// what that is worth is the shell's call.
+    ///
+    /// The state is passed rather than read back, so the callback need not
+    /// capture the engine — which would be a retain cycle — and so a deferred
+    /// write cannot pick up a *later* state than the one it was queued for.
+    @ObservationIgnored var onEdit: ((DevelopState) -> Void)?
+
     private var suspended = false
 
     /// Bumped after every successful render so the view knows to redraw.
@@ -270,6 +292,22 @@ final class Engine {
         imageHeight = h
         camera = String(cString: orion_engine_camera(handle))
 
+        var profile = OrionLensProfile()
+        if orion_engine_lens_profile(handle, &profile) == ORION_OK, profile.found != 0 {
+            let name = withUnsafeBytes(of: profile.lens) { raw in
+                String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
+            }
+            let maker = withUnsafeBytes(of: profile.maker) { raw in
+                String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
+            }
+            lensProfileName = name.hasPrefix(maker) || maker.isEmpty
+                ? name : "\(maker) \(name)"
+            lensProfileApproximate = profile.approximate != 0
+        } else {
+            lensProfileName = ""
+            lensProfileApproximate = false
+        }
+
         // The held original is the *previous* photo's unedited render. Keeping
         // it means compare shows one picture against another one entirely,
         // which is worse than showing nothing.
@@ -290,9 +328,6 @@ final class Engine {
         // culling — so the new photo needs its own original captured now.
         if comparing { captureOriginal() }
     }
-
-    /// Every adjustment as JSON, for the sidecar.
-    var encodedState: Data? { try? JSONEncoder().encode(state) }
 
     /// Restores a state saved to a sidecar. Silent on malformed data: a
     /// sidecar written by a newer build should leave the photo openable.
@@ -370,11 +405,11 @@ final class Engine {
 
     func export(to path: String, quality: Float = 0.92,
                 maxDimension: UInt32 = 0, space: Int32 = 0,
-                rating: Int32 = -1) throws {
+                rating: Int32 = -1, metadata: Int32 = 1) throws {
         guard let handle else { return }
         var options = OrionExportOptions(format: -1, quality: quality,
                                          max_dimension: maxDimension, space: space,
-                                         rating: rating)
+                                         rating: rating, metadata: metadata)
         let status = orion_engine_export(handle, path, &options)
         guard status == ORION_OK else { throw Failure.export(errorText(status)) }
     }
@@ -389,7 +424,7 @@ final class Engine {
         // and a few hundred bytes of EXIF is below its resolution anyway.
         var options = OrionExportOptions(format: format, quality: quality,
                                          max_dimension: maxDimension, space: space,
-                                         rating: -1)
+                                         rating: -1, metadata: 1)
         var bytes: UInt64 = 0
         guard orion_engine_export_size(handle, &options, &bytes) == ORION_OK else {
             return nil
@@ -532,6 +567,22 @@ final class Engine {
 
     func generationBump() { generation &+= 1 }
 
+    /// Sixteen bits out of the tail of the graph instead of eight.
+    ///
+    /// The screen path is eight bits: the drawable is `bgra8Unorm`, so wider is
+    /// bytes moved for precision nothing can show, and it costs about 3.5 ms of
+    /// a 16 ms budget. Export widens the tail itself. This is here for the
+    /// screenshot harness, which reads the output texture directly and measures
+    /// to four decimal places — quantised to 8 bits, the differences this
+    /// codebase hunts (0.0001 chroma) round to nothing.
+    ///
+    /// Reallocates two full-resolution textures. Not for a slider.
+    func setWideOutput(_ wide: Bool) {
+        guard let handle, isLoaded else { return }
+        _ = orion_engine_set_wide_output(handle, wide ? 1 : 0)
+        pushAndRender()
+    }
+
     func clearCompare() {
         compareSplit = 1.0
         originalTexture = nil
@@ -570,6 +621,7 @@ final class Engine {
             preview_size: Float(previewCanvas.size),
             lens_distortion: lensDistortion, lens_vignette: lensVignette,
             lens_ca_red: lensCaRed, lens_ca_blue: lensCaBlue,
+            lens_profile: (lensProfileEnabled && hasLensProfile) ? 1 : 0,
             highlight_recovery: highlightRecovery,
             grade_shadow: (gradeShadow[0], gradeShadow[1], gradeShadow[2]),
             grade_midtone: (gradeMidtone[0], gradeMidtone[1], gradeMidtone[2]),
@@ -586,6 +638,7 @@ final class Engine {
             curve_blue: curveChannel(curve.blue))
         orion_engine_set_adjustments(handle, &adj)
         render()
+        onEdit?(state)
     }
 
     private func render() {

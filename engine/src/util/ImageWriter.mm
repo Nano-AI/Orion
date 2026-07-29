@@ -63,10 +63,10 @@ CGColorSpaceRef colorSpace(ColorSpace s) {
 /// the RAW, and the export has already been rotated, cropped and possibly
 /// resized — copying them over would tell every viewer to turn the picture
 /// again, which is the one metadata bug users notice immediately.
-NSMutableDictionary* metadata(const std::string& source, int rating) {
+NSMutableDictionary* metadata(const std::string& source, int rating, Metadata policy) {
     NSMutableDictionary* out = [NSMutableDictionary dictionary];
 
-    if (!source.empty()) {
+    if (!source.empty() && policy != Metadata::None) {
         NSURL* url = [NSURL fileURLWithPath:@(source.c_str())];
         CFHolder<CGImageSourceRef> src(
             CGImageSourceCreateWithURL((__bridge CFURLRef)url, nullptr));
@@ -80,6 +80,9 @@ NSMutableDictionary* metadata(const std::string& source, int rating) {
                                         (__bridge NSString*)kCGImagePropertyGPSDictionary,
                                         (__bridge NSString*)kCGImagePropertyExifAuxDictionary,
                                         (__bridge NSString*)kCGImagePropertyIPTCDictionary]) {
+                    const bool isGps =
+                        [key isEqualToString:(__bridge NSString*)kCGImagePropertyGPSDictionary];
+                    if (isGps && policy != Metadata::All) continue;
                     if (NSDictionary* block = props[key]) {
                         out[key] = [block mutableCopy];
                     }
@@ -102,6 +105,15 @@ NSMutableDictionary* metadata(const std::string& source, int rating) {
             out[(__bridge NSString*)kCGImagePropertyTIFFDictionary] = tiff;
         }
         tiff[(__bridge NSString*)kCGImagePropertyTIFFSoftware] = @"Orion";
+    }
+
+    // Even a stripped file says what developed it. That is not identifying —
+    // and a file with no software tag at all reads as something to be
+    // suspicious of.
+    if (policy == Metadata::None) {
+        NSMutableDictionary* tiff = [NSMutableDictionary dictionary];
+        tiff[(__bridge NSString*)kCGImagePropertyTIFFSoftware] = @"Orion";
+        out[(__bridge NSString*)kCGImagePropertyTIFFDictionary] = tiff;
     }
 
     if (rating >= 0) {
@@ -217,7 +229,7 @@ void writeImage(const std::string& path, const std::uint16_t* rgba,
             (__bridge CFURLRef)url, uti(options.format), 1, nullptr));
         if (!dest) throw std::runtime_error("could not create destination: " + path);
 
-        NSMutableDictionary* props = metadata(options.metadataFrom, options.rating);
+        NSMutableDictionary* props = metadata(options.metadataFrom, options.rating, options.metadata);
         props[(__bridge NSString*)kCGImageDestinationLossyCompressionQuality] =
             @(std::clamp(options.quality, 0.0f, 1.0f));
         CGImageDestinationAddImage(dest.ref, image, (__bridge CFDictionaryRef)props);

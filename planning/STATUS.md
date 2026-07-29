@@ -4,9 +4,436 @@
 
 ---
 
-**Last updated:** 2026-07-28 (overnight run, in progress)
-**Phase:** M0 done. M1 ~98%, M2 ~97%.
-**Next story:** the color-space picker, then a lens database
+**Last updated:** 2026-07-28 (M2 close-out session)
+**Phase:** M0 done. M1 ~98%. **M2 complete** — every roadmap item built and
+measured. Awaiting the developer's quality pass before M3 starts.
+**Next story:** M3 — local Laplacian clarity, then dehaze.
+
+**Suites:** `orion-tests` **285 checks** · `orion-viewport-tests` **2088
+checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
+the M0 gate passes on all three at 9.23 / 9.95 / 9.57 ms p95.
+
+## Session 2026-07-28c — closing M2
+
+Everything M2 listed is now built, and the outside review's P2/P3 findings are
+closed with it. In the order the work landed.
+
+### The purple sky, closed — the camera profile grew its second stage
+
+`research/camera-profiles.md` diagnosed it last session: Orion had one of the
+five parts of a DNG profile, and a 3×3 matrix cannot be right for a saturated
+narrow-band stimulus. The fix is the specification's own **HueSatMap** stage,
+built as a real 90 × 25 table with `ValueDivisions = 1` in the spec's entry and
+loop order — not a blue-only special case, so a `.dcp` reader later is a reader
+and nothing else.
+
+**The trap the plan nearly walked into:** `ProfileHueSatMapEncoding = 0`
+requires the table to apply in **linear ProPhoto HSV**. Orion works in linear
+Rec.2020. Indexing HSV built from Rec.2020 components would have looked right
+against a hand-fitted table and been silently wrong the day a real profile
+loaded — which is the entire reason for wearing the spec's shape. The node
+converts in and out, from Lindbloom's three published matrices kept as separate
+factors so each is checkable.
+
+| | R/B | G/B |
+|---|---|---|
+| Orion, before | 0.622 | 0.678 |
+| **Orion, after** | **0.451** | **0.689** |
+| target (Sony/Apple mean) | 0.450 | 0.692 |
+
+Fitted at −8°, saturation ×1.05, centred on 250° over a 60° half-width, swept
+against two independent renderings of the same frame with a foliage patch and a
+white sign watched for spread. The hazier sky near the horizon lands at 0.636
+against 0.647 from the *same* numbers, because the correction is weighted by
+saturation rather than applied flat across the hue.
+
+Costs one full-resolution pass, upstream of exposure, so the gate did not move.
+
+### What is pinned, and where
+
+The process finding that built the `feedback/` folder was *the code was fine
+wherever it was measured*. So:
+
+- `orion-tests` holds everything checkable without the sample frame: the matrix
+  round trip is the identity to 1e-5, every zero-saturation table entry is
+  exactly (0, 1, 1), no entry scales value, an identity table leaves every pixel
+  where it was, a grey ramp stays grey at every level, and blue moves while
+  foliage and skin do not.
+- `tools/huefit.py --check` holds the part that needs a photograph — it renders
+  `_PIC8095.ARW` and fails if the sky drifts past 0.02 from the target. Outside
+  the suite because `samples/` is local-only, and it measures the whole
+  pipeline, so it also catches an upstream change that moves the sky without
+  touching the node.
+
+### Lens database — the data, not the library
+
+The maths was never the missing part. lensfun's models were already implemented,
+tested and running on the GPU; the measured coefficients were sitting in XML.
+Linking the library would have added an LGPL-3 dependency, a build step and a
+second implementation of the same polynomials to obtain a number that can be
+read directly.
+
+`data/lensfun/` is the database vendored unmodified with its CC BY-SA 3.0
+licence — **1,558 lenses**. `pipe/LensDatabase.cpp` parses it once per process.
+The shader now evaluates ptlens, of which poly3 is the a = c = 0 case, so both
+of the database's distortion models land in one kernel; `autoScale` evaluates
+the same polynomial, with a comment saying why it must.
+
+**Matching is deliberately conservative, because a confident wrong profile is
+worse than none** — it distorts the frame and reports that it measured it.
+Names below eight characters never match; a differently-spelled match is
+flagged and the panel says so. The developer's own Sigma 24mm F1.4 DG DN is not
+in the database and correctly reports nothing rather than borrowing the DSLR
+DG HSM entry, which is a different optical design. That case is asserted.
+
+`a`, `c`, p_b and p_c would all have shipped untested — a manual slider can
+only ever set `b` and p_a — so each has its own GPU assertion that it pins the
+corner and moves the interior.
+
+### Broader camera support
+
+- **Unsupported sensors are refused by name.** X-Trans (6 × 6 mosaic), Foveon
+  and linear DNG, and four-colour CFAs each produce their own message instead of
+  a scrambled picture that reads as a bug in the pipeline.
+- **The 2 × 2 black-level pattern is exact rather than averaged.** LibRaw's
+  pattern lines up with the CFA cell for cell; averaging it left the spread in
+  the shadows as a colour cast on every frame, with no control that could remove
+  it. Asserted on RGGB and BGGR.
+- One extension list. The Open panel took eight and the folder scan ten, so a
+  folder could show a file the dialog refused.
+
+### The review's P2 and P3 findings
+
+| # | Was | Now |
+|---|---|---|
+| 6 | Sidecar escaping compounded one layer per save (`R&D` → `R&amp;D` → …) | unescape on read, asserted over three round trips |
+| 7 | **Every export published the photographer's GPS**, silently | three-way control, default strips location, and the default itself is asserted |
+| 8 | Generated design tokens existed and nothing imported them | the mirror is deleted; the generator emits sRGB (it emitted P3 while the app built sRGB) and a numeric `Components` enum for Metal |
+| 9 | Serial folder load; a 30 ms busy-poll | bounded six-wide task group; `open` is async and the poll is gone |
+| 10 | Five copy/behaviour mismatches | all five, including the export dialog now defaulting to the photo's own name |
+| 11 | Dead state, per-call curve re-sorting | `minimumRating` deleted, curve sort and tangents hoisted per channel |
+| 12 | Grading wheels, curve and filmstrip were mouse-only | all three have keyboard and VoiceOver paths; wheels speak hue and strength, the curve walks its points, filmstrip cells are buttons |
+| 13 | `OrionApp.swift` 1,321 lines against a hard 1,000 | 1,120, with the three tool panels lifted into `DevelopPanels.swift`. **`apps/tests/main.cpp` is 2,828 and still over — stated, not softened** |
+| 14 | Two copies of "where we are", four wrong entries | ROADMAP's status section is a pointer to this file; UNSOURCED rewritten |
+
+**Not done, on purpose:** finding 9's suggestion to detach `Engine.exportedSize`
+from the main actor. It renders a full-resolution frame through the same
+pipeline the canvas is using, so detaching it races the render rather than
+moving it — the fix is a serialized engine queue, which is a change to the
+facade's threading contract and not a one-line detach. The hitch stays until
+then.
+
+### Adobe, and what Orion actually depends on
+
+`/NOTICE` now carries the string the DNG patent grant requires — implementing
+the specification triggered it, and the HueSatMap node is that implementation.
+**No Adobe data is shipped.** Both profile values are fitted from the camera's
+own JPEG and a second independent rendering, which is why they are also in
+`research/UNSOURCED.md` §9: the *stages* are published, the *numbers* are
+Orion's own measurement of one camera body.
+
+## Session 2026-07-28b — answering the outside review
+
+`feedback/2026-07-28-senior-review.md` is a senior review with 17 findings. This session took the three
+P1s, one P2, and the process finding underneath them.
+
+**Suites:** `orion-tests` **237 checks** (was 211) · `orion-viewport-tests`
+**2081 checks** (was 2067) · both 0 failures. `orion-bench` now exits nonzero
+when a control is dead or weak; verified by forcing one.
+
+| # | Finding | What it was | Now |
+|---|---|---|---|
+| 1 | Edits lost on quit | `saveDevelop` ran only on a photo switch | `app/Autosave.swift`, coalesced writes + `willTerminate` |
+| 2 | Disabled guide fed garbage to whites/blacks | `whites +1` moved mean luma **+0.1105**; correct is **+0.0064** | flag + pixel-EV fallback |
+| 3 | Lens killed incremental invalidation | 7 nodes per exposure tick with a vignette on | 3, asserted by the bench |
+| 5 | Newest node untested, bench could not fail | no grading GPU test, no probe, exit code ignored the probes | all three |
+| — | **Lens distortion smeared the frame edges** | found by the developer mid-session | autoscale, `pipe/LensGeometry.h` |
+
+### The correction the git history needs
+
+The commit `02ad412` **"Edits persist per photo" claimed more than it built.**
+It wired the sidecar and called it on a photo switch, and nothing else — so
+editing one photo and quitting lost the work, which is the ordinary case. The
+gap was noticed in that session, not built, and then shipped under a title that
+reads as solved. This paragraph is the correction; the code landed today.
+
+The same overstatement is in `feedback/2026-07-28-performance-and-quality.md` §2's "exposure drag,
+3 nodes, 11.5 ms", which held only with every lens slider at zero — the one
+state the bench measured. Both are fixed in the doc as well as in the code.
+
+### What each fix cost, measured
+
+- **Guide chain.** `develop_linear` sampled `guideAb`/`guideRaw` unconditionally.
+  With highlights and shadows at zero the seven guide nodes are disabled, and
+  `Pipeline::resolve` walks a disabled node back to the last live producer — the
+  colour matrix. So linear RGB was read as log2 luminance and as filter
+  coefficients. The *offsets* were zero, but the four band weights normalize to
+  a partition of unity and two of them came from that garbage, so they sat in
+  the denominator and diluted the other two per pixel.
+  GPU-measured: blacks −1 at its strongest was worth **0.758 EV instead of
+  1.948 EV**. On a real frame `whites +1` moved mean luma **+0.1105** where it
+  should move **+0.0064** — an endpoint control acting as a second exposure
+  slider on every photo. Fixed by telling the shader (`guideEnabled`) and
+  falling back to the pixel's own EV, which is the correct semantics anyway.
+- **Lens invalidation.** `correctingLens ||` tested nonzero, not changed. One
+  clause deleted. The bench now drags exposure with a vignette and distortion
+  applied and asserts the node count matches the clean drag: **3 of 28, 11.7 ms.**
+- **Lens autoscale.** poly3's `(1 − k₁)` pins `r_d(1) = 1`, so the corners stay
+  put — but `r = 1` is the corner and the frame is a rectangle. The edge
+  midpoints sit at r ≈ 0.83, where a negative k₁ multiplies by 1 + 0.31·|k₁|.
+  At the slider maximum that fetches **325 px past a 6024 px frame**, and
+  `sampleClamped` returned the border pixel for all of it. Measured before the
+  fix on `_PIC8148.ARW`: three columns 18 px apart returned identical means to
+  four decimals. After: they differ, as real content does. Written up in
+  `research/deep-research-2026-07-27.md` §4.
+- **A half-texel shift in the same shader**, found while fixing the above. `d`
+  is measured from pixel centers and `sampleClamped` indexes texels, so every
+  fetch landed exactly between two texels — a half-pixel shift and a bilinear
+  blur over the whole frame the moment any lens slider left zero. It survived
+  the identity test because that test reads a linear ramp, where the average of
+  two neighbours is the value between them, and the tolerance was 2e-3 — which
+  is exactly one half of the ramp's texel step. The tolerance is 1e-4 now.
+
+### The class of bug underneath findings 2, 3 and 5
+
+All three lived in the gap between *something happened* and *the right thing
+happened*. Three changes, in order of how much they are worth:
+
+1. **Every bench probe is judged against its own baseline.** A probe that lifts
+   exposure 5.5 EV was being compared against an unlifted frame, so the lift
+   was counted as the control's own effect — it flattered the highlight grading
+   wheel by more than tenfold. Fixed by giving each probe a `context` and
+   measuring context-versus-context+control.
+2. **Every probe asserts a magnitude**, as a fraction of what a reference
+   control moves on the same frame, and **the exit code honours it.** Floors are
+   printed on every line, passing or not. Verified on both sample frames.
+3. **Invariant probes, not just magnitude probes.** Two exact questions that the
+   loose version passed while the code was wrong: blacks and whites must land
+   identically with the guide chain on and off, and an exposure drag with lens
+   corrections applied must recompute the same node count as a clean one.
+
+Also: `sharpen` was measured by mean luma, which an edge filter barely moves by
+construction — it read −0.0005 on `_PIC8220`, under every other probe's noise.
+There is a `Metric::Detail` now (neighbour-to-neighbour luma), and denoise has a
+probe for the first time.
+
+### Found while doing the above — not fixed, filed
+
+**Feedback #4 is worse than it reads, and now has numbers.** The grading zones
+partition on *linear* luma at 0.0/0.5/1.0, and separately the offset is an
+additive constant in unbounded scene-linear — so what a wheel is worth relative
+to the pixel falls as 1/level, while `wh` only switches on past linear 0.5. The
+highlight wheel is therefore enabled exactly where its authority has gone. On
+both sample frames lifted 5.5 EV it measures **−0.0000 and +0.0001** mean
+chroma: inert. Midtones manage −0.0007. The shadow wheel works (+0.0396).
+
+Third effect, same root: the shader clamps at zero and `kStrength = 0.03` at
+full radius is ±0.038 — larger than a deep shadow — so the negative channels
+stick at zero, the offsets stop cancelling, and the wheel *brightens* what it
+should tint. A 0.0096-linear patch comes back at 0.0124, **+29%**.
+
+Written up as `research/UNSOURCED.md` §8 with the fix (perceptual zone weights,
+level-scaled offsets). The two dead probes are `WAIVED` in the bench with that
+number, so they are stated on every run rather than quietly absent. **This is
+the next story.**
+
+### The M0 gate: 12.98 → 9.61 ms p95
+
+Asked whether locality or caching had anything left to give. The answer is a
+number: the pipeline runs at **96 GB/s against the M4's 120 GB/s peak** — 81%.
+Spatial locality inside a kernel is already maxed, temporal locality across
+frames *is* the per-node dirty cache, and the only lever left is moving fewer
+bytes. Full working in `feedback/2026-07-28-performance-and-quality.md` §2.
+
+So: the tail of the graph is eight bits for the screen now. The drawable is
+`bgra8Unorm`, so `rgba16f` through `develop:display` and `geometry` was buying
+precision nothing could show. Export widens the tail around its own read and
+narrows it again, so 16-bit output is untouched.
+
+| Tail | median | p95 | intermediates |
+|---|---|---|---|
+| RGBA8 (screen) | 9.09 ms | **9.61 ms** | 3828 MiB |
+| RGBA16F (export) | 12.07 ms | 12.64 ms | 4211 MiB |
+
+That is the 2.6 ms `feedback/2026-07-28-performance-and-quality.md` said 16-bit export had cost,
+handed back, with the capability kept.
+
+**Two process notes, because both nearly cost more than the change was worth:**
+
+- **The first measurement was wrong and said "no gain at p95".** It compared a
+  build from ten minutes earlier against one taken now, and this machine
+  throttles hard across a long bench session — the same wide configuration read
+  12.58 ms cool and 22.68 ms warm. The bench measures both tails **in one
+  process, interleaved, and repeats the first configuration as a drift check.**
+  If the two matching runs disagree, the comparison is noise and the numbers
+  say so.
+- **The bench's own readback was still asking for half float.** Downloading an
+  `RGBA8Unorm` texture with a stride computed for `__fp16` does not fail, it
+  returns nonsense — mean luma read 0.0023 instead of 0.0714 and every probe
+  went with it. Four readers had the same assumption baked in (`Engine`'s
+  histogram, `Engine::readOutput16`, the bench, the screenshot harness). All
+  four ask the texture what it is now.
+
+The display node dithers on the way down (ordered, Bayer 4×4). Not decoration:
+geometry *resamples* those values and quantises a second time, and two roundings
+of a smooth gradient is where contouring comes from — a night sky is the case.
+The bench asserts the screen and export paths agree to better than one 8-bit
+step; measured **0.00004 luma, 0.00005 chroma** with exposure, blacks and a 3°
+straighten applied.
+
+**Not done, and why.** Fusing `geometry` into `develop:display` would save
+another ~2 ms, but `geometry.slang` resamples display-encoded pixels on purpose
+— averaging unbounded scene-linear blooms a specular edge, which is why film
+and VFX resample in log rather than linear. Fusion forces scene-linear
+resampling and merges two small shaders into one large one. With 6.4 ms of
+headroom that trade is not worth taking. Decision #40.
+
+Also worth knowing: **the 4.2 GiB of intermediates is not waste, it is the
+cache.** Resource aliasing would cut it to ~600 MB, but a cached node's output
+has to stay resident, so aliasing and per-node caching are mutually exclusive.
+Decision #39, written down because somebody will try.
+
+### The flat, dark opening render — closed, and it took the shadow complaint with it
+
+Two complaints from the developer, one root. *"Looks disgusting when loaded in"*
+and *"shadows literally colours EVERYTHING"* were both the same defect: Orion
+opened a daylight frame **1.3× darker** than the camera's own JPEG, which reads
+as flat, **and** put the whole picture half a stop below middle gray — where the
+grading shadow band legitimately catches it.
+
+The mechanism has a name: the DNG specification's **`BaselineExposure`**
+(tag 50730), *"by how much (in EV units) to move the zero point"*, which Adobe
+applies silently on open. Orion had none.
+
+LibRaw does not carry the tag for native ARW and no DNG Converter is installed,
+so it was **fitted, not read**: mean absolute luma error over six patches per
+frame, swept over a 2-D grid of exposure against base contrast, against two
+independent references — the camera's JPEG and Apple's RAW rendering.
+
+| Frame | best EV | best contrast | error |
+|---|---|---|---|
+| `_PIC8095` daylight | **+1.20** | **1.45** | 0.0171 |
+| `_PIC8220` forecourt | **+1.20** | **1.45** | 0.0103 |
+| `_PIC8148` night sky | +1.60 | 2.05 | 0.0068 |
+
+Two of three agree exactly. The night frame's surface is nearly flat (0.0083 at
+the old defaults against 0.0068 at its own minimum) because a near-black frame
+barely moves a mean luma — its preference is noise, and at (+1.2, 1.45) its error
+is still 0.0150.
+
+Applied as `kBaselineExposureEv`, added inside `apply()` so **the Exposure slider
+still reads 0.00** and Reset returns to the baseline rather than to darkness.
+Base contrast 1.15 → 1.45. Daylight mean error **0.1543 → 0.0194**, and Orion now
+lands *between* Sony and Apple on five of six patches — the right place to be
+when two references disagree.
+
+⚠️ It fits **one body**. A per-camera `BaselineExposure` and a property of
+Orion's own AgX zero point cannot be told apart from one camera's data. The
+caveat is written at the constant so whoever adds the second body re-measures.
+
+**Bench floors recalibrated across three frames.** Adding the daylight frame
+tripped six probes — a bright picture genuinely has no deep blacks, little noise
+and few shadows, so those controls move less in it. Not regressions. One frame
+had tripped four probes on the second; two frames tripped six on the third.
+Floors are half the minimum ratio over all three now, and the reason is written
+where the numbers are. All three frames exit 0; the gate passes on all three
+(9.70 / 9.76 / 10.89 ms p95).
+
+`apps/pixstat/` is in the repository rather than a scratchpad, with its
+orientation handling rewritten as a pixel remap — the CGContext version was
+vertically flipped, which is why the first "sky" measurement sampled foliage.
+
+**Still open: the sky is still violet.** After the exposure fix its G/B is on
+target (0.678 against Apple's 0.671) and the remaining error is almost purely
+excess red (R/B 0.622 against a target of ≈0.45). One axis instead of two, which
+is exactly why the exposure had to land first. `research/camera-profiles.md` has
+the HueSatMap specification, the ProPhoto-HSV requirement, and the target.
+
+### Grading regraded — feedback #4 closed
+
+The developer reported it independently while this was being fixed: *"the color
+grading for the shadows feels like it takes over the entire photo... it might
+actually be pulling from the raw image instead of what's currently being
+viewed."* Right in spirit. It reads the current scene-linear state, not the raw
+— but it decided which zone a pixel was in using **linear** luminance, which
+does not correspond to anything you can see on screen. Middle gray is Y = 0.18,
+so it weighed 0.70 shadows.
+
+Shadow-zone weight, before → after:
+
+| Pixel | Linear Y | Old ws | New ws |
+|---|---|---|---|
+| Middle gray | 0.18 | **0.70** | 0.19 |
+| A daylight sky | 0.30 | **0.35** | 0.08 |
+| Two stops down | 0.045 | 0.87 | 0.77 |
+
+Zones are Gaussian bands on `log2(Y/0.18)` at −2.5 / 0 / +2.5 EV, σ = 1.6 —
+the same partition-of-unity construction the tone bands use, so a photograph has
+one idea of where its shadows are. And the offset now scales with the pixel's
+luminance, so a wheel is a constant chromaticity shift at every exposure instead
+of an additive constant whose authority fell as 1/level. `k = 0.25` is derived
+rather than tuned: `saturation = 1.5k/(1+k)`, so full travel is 30% from neutral.
+
+`testColorGradeGpu` pins the property that matters: the same wheel measures
+**0.1077 relative chroma at −3 EV and 0.1079 at +3 EV**, six stops apart. All
+three bench probes pass on both frames; both waivers are gone.
+
+### The instrument was wrong three times over
+
+Worth recording, because it cost more than the fix did. A grading wheel rotates
+hue at roughly constant saturation. **Mean luma, mean chroma and mean saturation
+each reported a working wheel as doing nothing** — three different instruments,
+same blind spot, because a frame mean cancels a rotation.
+
+The bench gates on **mean absolute per-pixel movement** now. The summary metric
+is still printed, for insight into *what* changed; movement decides *whether* it
+did. It immediately paid for itself elsewhere: `tint +0.5` moves 0.0090 while
+its mean-luma delta is −0.0014, so the old gate was reading a sixth of what that
+control actually does.
+
+Floors are half the *smaller* ratio measured across both sample frames.
+Calibrating on one was not enough — four probes tuned on the night sky tripped
+on the lit forecourt, because how far saturation, temperature, sharpening and
+denoise move depends on how saturated, warm, detailed and noisy the picture
+already is.
+
+### Filmstrip: the frame line was 3 pt away from its own picture
+
+Reported by eye, and a screenshot answered it. `.padding(3)` was applied
+*before* the border overlay, so the line was drawn on the padded bounds and a
+strip of film base sat between the frame line and the photo on every side — the
+picture read as floating in a hole rather than as part of the film. The overlay
+goes on the picture now, and the padding is horizontal only: on real stock the
+rebate *is* the frame's top edge, while sideways the base is what separates one
+negative from the next. New scenes `lens-barrel` and `lens-pincushion` in the
+harness.
+
+### Why the pipeline still runs at full resolution — asked, and worth recording
+
+Not a stance, a deferral. The preview-ROI path in `ARCHITECTURE.md` is designed
+and unbuilt because the budget passes without it: exposure drag is 11.9 ms p95
+against 16 on this machine. Three separate things get conflated under "preview":
+
+- **Tiling / chunk-by-chunk** does not reduce the work, it spreads it. It helps
+  a first paint and does nothing for a slider drag, where a half-updated frame
+  is worse than a whole one 12 ms later.
+- **A downscaled proxy** is the real saving and the real risk. Every
+  scale-dependent filter needs a scale-aware parameterization — the noise
+  profile is per-pixel, the sharpen radius is in pixels, the guided filter's
+  radius is `max(4, longest/200)` — and any mismatch means the preview lies
+  about the export. That is the worst bug class in an editor: you find out after
+  you have finished editing.
+- **ROI — render only the visible region at the zoom you are at** — is the one
+  that pays and the one that is designed. At fit the screen is ~2 MP against
+  24 MP, roughly a tenfold saving, and it does not need a second parameterization
+  because the pixels are the same pixels.
+
+So the trade being taken is: one render path, no possible preview/export
+disagreement, and 100% zoom shows real pixels with no re-render — against
+carrying 4.2 GiB of intermediates and no headroom on a lesser GPU. The trigger
+to build ROI is already named and already measured: temperature and tint at
+43–53 ms, which no amount of caching fixes because white balance rewrites the
+head of the graph.
 
 ## Overnight run — 2026-07-28
 

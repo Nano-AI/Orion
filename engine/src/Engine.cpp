@@ -10,9 +10,22 @@ Engine::Engine() : device_(gpu::Device::create()) {}
 
 Engine::~Engine() = default;
 
+const pipe::LensDatabase& Engine::lensDatabase() {
+    // Function-local static: parsed on the first open, never on a path where
+    // nothing asks for it, and thread-safe initialization is the language's
+    // problem rather than ours.
+    static const pipe::LensDatabase db(std::string(ORION_DATA_DIR) + "/lensfun");
+    return db;
+}
+
 void Engine::openRaw(const std::string& path) {
     const auto image = raw::decodeBayer(path);
     sourcePath_ = path;
+
+    // The lens name lives in the metadata rather than the mosaic, so it takes a
+    // second read of the file — cheap next to the decode that just happened.
+    const auto info = raw::readInfo(path);
+    lensProfile_ = lensDatabase().lookup(info.lens, info.focalLength, info.aperture);
 
     // Reuse the compiled graph whenever the new frame has the same shape.
     // Rebuilding recompiles sixteen shaders and reallocates roughly 2.5 GiB of
@@ -99,9 +112,9 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
     const std::uint32_t h = develop_->outputHeight();
     if (w == 0 || h == 0) return;
 
-    const std::size_t rowBytes = std::size_t(w) * 4 * sizeof(__fp16);
-    std::vector<__fp16> pixels(std::size_t(w) * h * 4);
-    develop_->output().download(pixels.data(), rowBytes, w, h);
+    // Format-aware: the tail is eight bits for the screen and sixteen only
+    // around an export, and the histogram is a screen reader.
+    const std::vector<float> pixels = readOutputFloat(w, h);
 
     // A prime stride decorrelates from any repeating structure in the image,
     // so a picket fence cannot alias into a false peak.
@@ -110,7 +123,7 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
 
     for (std::size_t i = 0; i < count; i += kStride) {
         for (std::uint32_t c = 0; c < 3; ++c) {
-            const float v = std::clamp(float(pixels[i * 4 + c]), 0.0f, 1.0f);
+            const float v = std::clamp(pixels[i * 4 + c], 0.0f, 1.0f);
             const std::uint32_t bin = std::min<std::uint32_t>(
                 bins - 1, static_cast<std::uint32_t>(v * float(bins)));
             ++out[c * bins + bin];
@@ -118,8 +131,40 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
     }
 }
 
+/// Widens the graph's tail for the duration of a read, and puts it back.
+///
+/// The display and geometry nodes write eight bits for the screen, because the
+/// drawable is `bgra8Unorm` and anything wider is bytes moved for precision
+/// nothing can show — worth 3.4 ms of a 16 ms budget. Export is the one
+/// consumer that can use sixteen, so it asks, and pays the reallocation.
+namespace {
+struct WideOutputFor {
+    pipe::DevelopPipeline& pipeline;
+    const bool was;
+
+    explicit WideOutputFor(pipe::DevelopPipeline& p)
+        : pipeline(p), was(p.wideOutput()) {
+        pipeline.setWideOutput(true);
+    }
+    ~WideOutputFor() {
+        // Reallocates, so it can throw, and a throwing destructor during
+        // unwinding terminates the process. Failing to narrow again costs
+        // latency; terminating costs the user's work.
+        try {
+            pipeline.setWideOutput(was);
+        } catch (...) {
+        }
+    }
+    WideOutputFor(const WideOutputFor&) = delete;
+    WideOutputFor& operator=(const WideOutputFor&) = delete;
+};
+}  // namespace
+
 void Engine::exportImage(const std::string& path, const util::ExportOptions& options) {
     if (!develop_) throw std::runtime_error("no image open");
+
+    // Sixteen bits end to end, and back to eight when this returns.
+    WideOutputFor wide(*develop_);
 
     // Make sure what we write matches what is on screen.
     develop_->render();
@@ -143,6 +188,8 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {
     if (!develop_) throw std::runtime_error("no image open");
 
+    // The estimate has to encode the same pixels the real write will.
+    WideOutputFor wide(*develop_);
     develop_->render();
 
     const std::uint32_t w = develop_->outputWidth();
@@ -159,6 +206,23 @@ std::size_t Engine::exportedSize(const util::ExportOptions& options) {
 /// The graph ends in half float. Converting here rather than making the graph
 /// write integers keeps the pipeline in one numeric world, and half float is
 /// the format Metal guarantees is read-write.
+std::vector<float> Engine::readOutputFloat(std::uint32_t w, std::uint32_t h) const {
+    const std::size_t count = static_cast<std::size_t>(w) * h * 4;
+    std::vector<float> out(count);
+
+    if (develop_->output().format() == gpu::PixelFormat::RGBA16Float) {
+        std::vector<__fp16> half(count);
+        develop_->output().download(half.data(),
+                                    static_cast<std::size_t>(w) * 4 * sizeof(__fp16), w, h);
+        for (std::size_t i = 0; i < count; ++i) out[i] = static_cast<float>(half[i]);
+    } else {
+        std::vector<std::uint8_t> bytes(count);
+        develop_->output().download(bytes.data(), static_cast<std::size_t>(w) * 4, w, h);
+        for (std::size_t i = 0; i < count; ++i) out[i] = bytes[i] / 255.0f;
+    }
+    return out;
+}
+
 std::vector<std::uint16_t> Engine::readOutput16(std::uint32_t w, std::uint32_t h) const {
     const std::size_t count = static_cast<std::size_t>(w) * h * 4;
     std::vector<__fp16> half(count);
@@ -174,6 +238,11 @@ std::vector<std::uint16_t> Engine::readOutput16(std::uint32_t w, std::uint32_t h
 }
 
 const pipe::DevelopPipeline& Engine::develop() const {
+    if (!develop_) throw std::runtime_error("no image open");
+    return *develop_;
+}
+
+pipe::DevelopPipeline& Engine::developMutable() {
     if (!develop_) throw std::runtime_error("no image open");
     return *develop_;
 }

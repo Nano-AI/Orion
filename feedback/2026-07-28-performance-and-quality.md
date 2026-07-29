@@ -12,13 +12,17 @@ file, or a file and line you can read.
 ```sh
 cmake -S . -B build -G Ninja && cmake --build build
 
-./build/apps/tests/orion-tests            # 208 checks — engine maths + real GPU renders
-./build/orion-viewport-tests              # 2067 checks — canvas geometry, curve, sidecar
+./build/apps/tests/orion-tests            # 237 checks — engine maths + real GPU renders
+./build/orion-viewport-tests              # 2081 checks — canvas geometry, curve, sidecar, autosave
 ./build/apps/bench/orion-bench file.ARW   # latency gate + per-control effect checks
 ```
 
-Both suites are green as of the last commit. The bench writes its outputs to the
-working directory and `.gitignore` covers them.
+Both suites are green as of the last commit, and the bench exits nonzero when a
+control is dead or weak — which it did not until 2026-07-28. Counts here are
+pasted from the runs, not recalled; the previous "208" was neither.
+
+The bench writes its outputs to the working directory and `.gitignore` covers
+them.
 
 ---
 
@@ -26,17 +30,80 @@ working directory and `.gitignore` covers them.
 
 Sony ILCE-7M3, 6024 × 4024 (24.2 MP, RGGB), Apple M4.
 
+Re-measured 2026-07-28 on `_PIC8148.ARW`. **28 nodes in the graph.**
+
 | Interaction | Nodes recomputed | Time |
 |---|---|---|
-| Exposure drag | 3 | 11.5 ms |
-| Highlights / shadows | 10 | 23.6 ms |
-| Color mixer | 5 | 19.2 ms |
-| Curve drag | 1 of 8 | 8.2 ms median, 9.4 p95 |
-| Temperature / tint / sharpen | 11 | **~43–50 ms** |
+| Exposure drag | 3 of 28 | 9.1 ms |
+| Exposure drag, vignette and distortion applied | 3 of 28 | 9.1 ms |
+| Curve drag | 2 of 28 | 8.2 ms median, 8.8 p95 |
+| Color mixer | 3 of 28 | 9.1 ms |
+| Highlights / shadows | 10 of 28 | 19.9 ms |
+| Lens vignette | 6 of 28 | 21.5 ms |
+| Denoise 2.0 | 13 of 28 | 77.4 ms |
+| Temperature / tint | 10 of 28 | **~40–43 ms** |
 
-**M0 gate: 13.90 ms p95 against a 16 ms budget**, with the grading node in
-the graph (12.70 without it). Full resolution, no preview
+**M0 gate: 9.61 ms p95 against a 16 ms budget.** Full resolution, no preview
 proxy — which is why zooming to 100% shows real pixels rather than an upscale.
+
+### The pipeline runs at 81% of the machine's memory bandwidth
+
+Which is the only number that matters when deciding what to optimize next.
+Exposure drag is `develop:linear` + `develop:display` + `geometry`, and at
+24.24 Mpx an `rgba16f` texture is 194 MB:
+
+```
+develop:linear   read 194 + write 194   = 388 MB
+develop:display  read 194 + write  97   = 291 MB   (writes 8-bit)
+geometry         read  97 + write  97   = 194 MB
+                                   total  873 MB in 9.1 ms = 96 GB/s
+M4 base peak                                                 120 GB/s
+```
+
+So: spatial locality inside a kernel is already maxed — the pointwise reads are
+coalesced and Metal's texture layout is swizzled. Temporal locality across
+frames is the per-node dirty cache, and it is why 3 of 28 nodes run. The only
+lever left is **moving fewer bytes**, which means fusion.
+
+**The 4.2 GiB of intermediates is not waste — it is the cache.** Standard
+render-graph resource aliasing would cut it to roughly 600 MB, but a cached
+node's output has to stay resident, so aliasing and per-node caching are
+mutually exclusive. Do not "optimize" it without accepting a 3-node drag
+becoming a 28-node one.
+
+### Eight bits for the screen, sixteen for export
+
+The drawable is `bgra8Unorm`. Carrying `rgba16f` through the two largest nodes
+in the graph was buying precision nothing could display. Measured in one
+process, interleaved, with a repeat of the first configuration as a drift check
+— this machine throttles enough across a bench session that two runs minutes
+apart differ by more than the effect:
+
+| Tail | median | p95 | intermediates |
+|---|---|---|---|
+| RGBA8 (screen) | 9.09 ms | **9.61 ms** | 3828 MiB |
+| RGBA16F (export) | 12.07 ms | 12.64 ms | 4211 MiB |
+
+**−3.0 ms at p95, −383 MiB.** Export widens the tail around its own read and
+narrows it again, so 16-bit output is unchanged — the depth test still reads
+`bitsPerSample: 16` back off the file.
+
+The display node dithers on the way down to eight bits (ordered, Bayer 4×4).
+Not decoration: the geometry node then *resamples* those values and quantises
+again, and two roundings of a smooth gradient is where contouring comes from.
+The bench asserts the two paths agree to better than one 8-bit step — measured
+0.00004 luma, 0.00005 chroma on a frame with exposure, blacks and a 3° straighten
+applied.
+
+**Correction to the previous version of this table.** It said "Exposure drag,
+3 nodes, 11.5 ms" without qualification. That was only true with every lens
+slider at zero, which was the only state the bench ever measured. With a
+vignette applied it was **7 nodes**, because `DevelopPipeline` re-pushed the
+lens parameters whenever a slider was *nonzero* rather than when one had
+*changed*, and `setParams` dirties everything downstream unconditionally. The
+row above is now measured in both states, and the bench asserts the node count
+in the corrected-lens state on every run. The old "Curve drag, 1 of 8" was a
+string literal in the bench that had never been updated; it is counted now.
 
 Two honest caveats:
 
@@ -44,9 +111,10 @@ Two honest caveats:
   head of the graph, so the demosaic reruns. The fix is degrade-then-refine or
   the preview-ROI path in `ARCHITECTURE.md`. Neither is built and neither is
   small.
-- **16-bit output costs 2.6 ms** of the budget (9.04 → 11.67 ms when it landed).
-  It is a capability nobody sees on screen. If the budget ever gets tight, the
-  fix is a second display path used only for export.
+- ~~**16-bit output costs 2.6 ms** of the budget.~~ **Fixed 2026-07-28** — the
+  second display path this line proposed is built. The screen renders eight
+  bits and export widens the tail around its own read, so the gate is back to
+  9.61 ms with 16-bit export intact.
 
 Export is off the interaction path: 140–350 ms depending on format, color
 conversion and metadata. The EXIF read alone is ~90 ms because ImageIO opens the

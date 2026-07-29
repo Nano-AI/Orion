@@ -17,6 +17,18 @@ enum class ImageFormat { Png, Jpeg, Tiff };
 /// its output primaries as a parameter; see research/color-pipeline.md.
 enum class ColorSpace { Srgb, DisplayP3, AdobeRgb };
 
+/// How much of the RAW's own metadata the export carries.
+///
+/// The default is **not** `All`. A photograph taken at home carries the home
+/// coordinates, and a file put on the web publishes them to everyone who
+/// downloads it — silently, with nothing in the interface to say so. Keeping
+/// location is a choice the photographer has to make on purpose.
+enum class Metadata {
+    All,          ///< everything the container held, GPS included
+    NoLocation,   ///< everything except GPS — the default
+    None,         ///< nothing but "developed in Orion" and the star rating
+};
+
 struct ExportOptions {
     ImageFormat format = ImageFormat::Jpeg;
     /// JPEG only, 0..1. Ignored by PNG and TIFF, which are lossless.
@@ -32,6 +44,8 @@ struct ExportOptions {
     /// reads the RAW's own blocks straight out of the container, so the export
     /// carries the exposure, lens and date the picture was actually taken with.
     std::string metadataFrom;
+
+    Metadata metadata = Metadata::NoLocation;
 
     /// XMP rating, 0-5, written as the EXIF user rating. Negative writes none.
     int rating = -1;

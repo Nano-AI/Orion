@@ -20,7 +20,8 @@ struct LinearAdjustParams
     float blacks;
     float vibrance;
     float saturation;
-    float guideEpsilonUnused;
+    /// Nonzero when the guided-filter chain is live. See below.
+    float guideEnabled;
     uint2 size;
     /// Subsampled dimensions of the guide coefficients, and the ratio to this
     /// kernel's own grid. See guide_down.slang.
@@ -66,19 +67,49 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
 
     float3 c = src[tid.xy].rgb;
 
-    // Reconstruct the guided-filter output: q = a*I + b, where I is the
-    // unexposed log2 luminance. Exposure is a multiply, so in log2 it is an
-    // add — which is why the whole guide chain stays cached while exposure
-    // moves, and only this one line accounts for it.
-    //
-    // a and b are solved on a subsampled grid and lifted back here (He & Sun,
-    // 2015). Bilinear rather than nearest: they vary smoothly by construction,
-    // and a nearest lift would print the subsampling grid into every gradient.
-    const float2 ab = sampleAbBilinear(guideAb, tid.xy, p.size, p.guideSize);
-    const float rawEv = guideRaw[tid.xy].x;
-    const float guideEv = ab.x * rawEv + ab.y + p.exposureEv;
-
     c = applyExposure(c, p.exposureEv);
+
+    // The neighbourhood's EV, which is what the highlight and shadow bands are
+    // weighted by.
+    //
+    // The guide chain is seven nodes and only these two bands use it, so it is
+    // switched off when both sliders are zero. A disabled node resolves to the
+    // last live producer upstream — the color matrix — so these two bindings
+    // then carry ordinary linear RGB. Sampling them regardless read that RGB as
+    // log2 luminance and as filter coefficients: `rawEv` became a linear value
+    // and `ab` became the pixel's own red and green.
+    //
+    // The offsets were zero, so nothing moved directly. But the weights are
+    // normalized into a partition of unity, and two of the four came from that
+    // garbage — so they sat in the denominator and diluted whites and blacks by
+    // an amount that varied per pixel with the pixel's own color. A blacks-only
+    // edit was quietly weaker than it asked to be, everywhere, and the bench
+    // printed ok because it only ever asserted that *something* changed.
+    //
+    // With no neighbourhood estimate the honest answer is the pixel itself,
+    // which is also what makes the fallback exact: the bands then read the same
+    // EV whites and blacks do.
+    float guideEv;
+    if (p.guideEnabled != 0.0f)
+    {
+        // Reconstruct the guided-filter output: q = a*I + b, where I is the
+        // unexposed log2 luminance. Exposure is a multiply, so in log2 it is an
+        // add — which is why the whole guide chain stays cached while exposure
+        // moves, and only this one line accounts for it.
+        //
+        // a and b are solved on a subsampled grid and lifted back here (He &
+        // Sun, 2015). Bilinear rather than nearest: they vary smoothly by
+        // construction, and a nearest lift would print the subsampling grid
+        // into every gradient.
+        const float2 ab = sampleAbBilinear(guideAb, tid.xy, p.size, p.guideSize);
+        const float rawEv = guideRaw[tid.xy].x;
+        guideEv = ab.x * rawEv + ab.y + p.exposureEv;
+    }
+    else
+    {
+        guideEv = log2(max(luminance2020(c), 1e-6f));
+    }
+
     c = applyTone(c, guideEv, p.highlights, p.shadows, p.whites, p.blacks);
     c = applyColor(c, p.vibrance, p.saturation);
     c = applyColorMixer(c, p.hueShift, p.satShift, p.lumShift);

@@ -34,7 +34,8 @@ struct ImageCanvas: NSViewRepresentable {
         // an adjustment or the viewport changed.
         view.isPaused = true
         view.enableSetNeedsDisplay = true
-        view.clearColor = MTLClearColorMake(0.165, 0.165, 0.173, 1.0)  // --surround
+        let s = Orion.Components.surround
+        view.clearColor = MTLClearColorMake(Double(s.x), Double(s.y), Double(s.z), 1.0)
         view.coordinator = context.coordinator
         context.coordinator.attach(to: view)
         return view
@@ -119,7 +120,7 @@ struct ImageCanvas: NSViewRepresentable {
             var uvSize = SIMD2<Float>(1, 1)
             var split: Float = 1
             var vertical: UInt32 = 1
-            var surround = SIMD3<Float>(0.165, 0.165, 0.173)   // --surround
+            var surround = Orion.Components.surround
             var pad: Float = 0
         }
 

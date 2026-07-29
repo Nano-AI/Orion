@@ -39,11 +39,33 @@ private struct PhotoCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .sidebar) {
+            ForEach(Array(ToolTab.allCases.enumerated()), id: \.element) { index, t in
+                Button(t.title) { cull?.selectTab(t) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")),
+                                      modifiers: [.command])
+                    .disabled(idle)
+            }
+
+            Divider()
+
+            Button(cull?.comparing == true ? "Hide Original  (\\)" : "Compare Original  (\\)") {
+                cull?.toggleCompare()
+            }
+            .disabled(idle)
+
+            Divider()
+
             Button("Fit in Window  (0)") { cull?.fit() }
                 .keyboardShortcut("0", modifiers: [.command])
                 .disabled(idle)
             Button("Actual Size  (9)") { cull?.actualSize() }
                 .keyboardShortcut("9", modifiers: [.command])
+                .disabled(idle)
+        }
+
+        CommandGroup(after: .importExport) {
+            Button("Export…") { cull?.export() }
+                .keyboardShortcut("e", modifiers: [.command])
                 .disabled(idle)
         }
 
@@ -112,9 +134,19 @@ struct CullActions: Equatable {
     let applyCrop: () -> Void
     let cancelCrop: () -> Void
 
+    /// Which tool panel is showing, and how to change it. On the menu so the
+    /// four panels have shortcuts, and so a keyboard user can reach the tools
+    /// without knowing that the tab strip exists.
+    let tab: ToolTab
+    let selectTab: (ToolTab) -> Void
+
+    let comparing: Bool
+    let toggleCompare: () -> Void
+    let export: () -> Void
+
     static func == (a: CullActions, b: CullActions) -> Bool {
         a.url == b.url && a.isRejected == b.isRejected && a.rating == b.rating
-            && a.cropping == b.cropping
+            && a.cropping == b.cropping && a.tab == b.tab && a.comparing == b.comparing
     }
 }
 
@@ -129,28 +161,20 @@ extension FocusedValues {
     }
 }
 
-// Mirrors design/tokens.json. Neutrals are deliberately near-neutral: a tinted
-// interface reads as a color cast and corrupts the judgment the app exists
-// to support.
-enum Palette {
-    static let ground   = Color(red: 0.078, green: 0.078, blue: 0.086)
-    static let panel    = Color(red: 0.106, green: 0.106, blue: 0.114)
-    static let raised   = Color(red: 0.137, green: 0.137, blue: 0.149)
-    static let surround = Color(red: 0.165, green: 0.165, blue: 0.173)
-    static let line     = Color(red: 0.192, green: 0.192, blue: 0.208)
-    static let text     = Color(red: 0.910, green: 0.910, blue: 0.918)
-    static let dim      = Color(red: 0.541, green: 0.541, blue: 0.565)
-    static let faint    = Color(red: 0.353, green: 0.353, blue: 0.376)
-    static let accent   = Color(red: 0.302, green: 0.714, blue: 0.769)
-    static let rejected = Color(red: 0.769, green: 0.341, blue: 0.302)
-    static let rated    = Color(red: 0.941, green: 0.776, blue: 0.455)
-    /// Film base — near-black, and the darkest value in the interface. It was
-    /// two percent off the panel behind it, which is to say invisible; a strip
-    /// only reads as film if its base is clearly darker than what it lies on.
-    static let filmBase = Color(red: 0.035, green: 0.031, blue: 0.029)
-    /// The perforations, and the rebate edge. Bright, because a sprocket hole
-    /// is a hole — it shows the light table through it.
-    static let filmHole = Color(red: 0.300, green: 0.290, blue: 0.278)
+// The palette is `design/tokens.json`, generated into
+// `Sources/OrionUI/DesignTokens.swift`. This is an alias, not a copy: the file
+// that used to sit here was a hand-kept mirror, and it had already drifted —
+// different names, a token dropped, two colours invented, and every value built
+// in sRGB against a generator that emitted Display P3.
+//
+// Two names differ from the token file and are mapped rather than renamed in
+// either direction: the tokens describe what the colour *is* (`reject`,
+// `star`), the app reads better saying what the thing *does*.
+typealias Palette = Orion.Palette
+
+extension Orion.Palette {
+    static let rejected = reject
+    static let rated    = star
 }
 
 enum ToolTab: String, CaseIterable, Identifiable {
@@ -218,14 +242,19 @@ struct Editor: View {
         _library = State(initialValue: startLibrary ?? Library())
     }
 
-    @State private var band: HueBand = .blue
-    @State private var targeted = TargetedAdjust()
+    @State var band: HueBand = .blue
+    @State var targeted = TargetedAdjust()
     @State private var message: String?
     @State private var exportSettings = ExportSettings()
     @State private var showingExport = false
     @State private var library = Library()
     @State private var current: URL?
     @State private var keyMonitor: Any?
+
+    /// Edits reach the sidecar on their own — see `Autosave`. Held here rather
+    /// than in `Engine` because it is the shell that knows which file is open.
+    @State private var autosave = Autosave()
+    @State private var lifecycleObservers: [NSObjectProtocol] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -254,7 +283,8 @@ struct Editor: View {
         // once the Metal canvas has taken first responder — which is what a
         // bare onKeyPress here could not do.
         .focusedSceneValue(\.cull, cullActions)
-        .onAppear { installKeyMonitor() }
+        .onAppear { installKeyMonitor(); installAutosave() }
+        .onDisappear { teardown() }
         .sheet(isPresented: $showingExport) {
             ExportPanel(settings: exportSettings,
                         sourceWidth: engine.imageWidth,
@@ -586,7 +616,7 @@ struct Editor: View {
                                 .stroke(Palette.accent.opacity(0.5), lineWidth: 1))
                             .padding(.top, 28)
 
-                        Text("Sony ARW today. More cameras as they are tested.")
+                        Text("ARW, DNG, NEF, CR2, CR3, RAF, ORF, RW2 — Sony is the tested one.")
                             .font(.system(size: 10))
                             .foregroundStyle(Palette.faint)
                             .padding(.top, 14)
@@ -628,7 +658,7 @@ struct Editor: View {
         if tab == .crop { return "drag the rectangle or its corners" }
         if !library.photos.isEmpty {
             return viewport.isFit
-                ? "← → to browse · 1–5 rates · X rejects"
+                ? "← → to browse · 1–5 rates · R rejects"
                 : "drag to pan · right-click to fit"
         }
         return viewport.isFit
@@ -793,169 +823,6 @@ struct Editor: View {
         .background(Palette.ground)
     }
 
-    private var lightPanel: some View {
-        Group {
-            section("White Balance") {
-                slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0, resetsTo: engine.defaults.temperatureK)
-                slider("Tint", $engine.tint, -1...1, "", 2, resetsTo: engine.defaults.tint)
-            }
-            section("Light") {
-                slider("Exposure", $engine.exposureEv, -5...5, " EV", 2, resetsTo: engine.defaults.exposureEv)
-                slider("Contrast", $engine.contrast, 0.5...2, "", 2, resetsTo: engine.defaults.contrast)
-                slider("Highlights", $engine.highlights, -1...1, "", 2, resetsTo: engine.defaults.highlights)
-                slider("Shadows", $engine.shadows, -1...1, "", 2, resetsTo: engine.defaults.shadows)
-                slider("Whites", $engine.whites, -1...1, "", 2, resetsTo: engine.defaults.whites)
-                slider("Blacks", $engine.blacks, -1...1, "", 2, resetsTo: engine.defaults.blacks)
-            }
-            section("Highlight Recovery") {
-                slider("Amount", $engine.highlightRecovery, 0...1, "", 2, resetsTo: engine.defaults.highlightRecovery)
-                Text("Where one channel clips before the others, it stops "
-                     + "carrying detail while the rest still do — a bright sky "
-                     + "goes flat where blue ran out. This rebuilds that "
-                     + "channel from the ones still reading. A fully blown "
-                     + "highlight is already rendered white, so this only "
-                     + "changes the places where a single channel ran out on "
-                     + "its own.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Palette.faint)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            // Below the sliders, because it is the control you reach for when
-            // a slider was not specific enough. The engine has evaluated this
-            // spline since M2; nothing reached it until now.
-            section("Curve") {
-                CurveEditor(engine: engine, histogram: engine.histogramBins)
-            }
-        }
-    }
-
-    private var colorPanel: some View {
-        Group {
-            section("Presence") {
-                slider("Vibrance", $engine.vibrance, -1...1, "", 2, resetsTo: engine.defaults.vibrance)
-                slider("Saturation", $engine.saturation, -1...1, "", 2, resetsTo: engine.defaults.saturation)
-            }
-            section("Color Grading") {
-                // Three wheels across the panel. Side by side rather than
-                // stacked, because grading is a comparison — you push the
-                // shadows cool by looking at what it does against the
-                // highlights, and a stacked layout puts them a scroll apart.
-                HStack(alignment: .top, spacing: 8) {
-                    ColorWheel(title: "Shadows", value: $engine.gradeShadow,
-                               engine: engine)
-                    ColorWheel(title: "Midtones", value: $engine.gradeMidtone,
-                               engine: engine)
-                    ColorWheel(title: "Highlights", value: $engine.gradeHighlight,
-                               engine: engine)
-                }
-                .frame(maxWidth: .infinity)
-
-                Text("Angle picks the hue, distance picks how far. The wheels "
-                     + "only change color — the slider under each one is what "
-                     + "changes that zone's brightness.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Palette.faint)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            section("Color Mixer") {
-                // Targeted adjustment: click a color in the photo and drag.
-                // Beats guessing which of eight swatches the sky falls into.
-                HStack(spacing: 6) {
-                    Button {
-                        targeted.isActive.toggle()
-                        if !targeted.isActive { targeted.clearHover() }
-                    } label: {
-                        Image(systemName: targeted.isActive
-                              ? "scope" : "eyedropper")
-                            .font(.system(size: 12))
-                            .frame(width: 26, height: 22)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(targeted.isActive ? Palette.accent : Palette.dim)
-                    .overlay(RoundedRectangle(cornerRadius: 5)
-                        .stroke(targeted.isActive ? Palette.accent : Palette.line, lineWidth: 1))
-                    .help("Targeted adjustment — drag on the photo")
-
-                    if targeted.isActive {
-                        Picker("", selection: $targeted.mode) {
-                            ForEach(TargetedAdjust.Mode.allCases) { m in
-                                Text(m.title).tag(m)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .controlSize(.small)
-                        .labelsHidden()
-                    } else {
-                        Text("Drag on the photo to adjust its color")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.faint)
-                    }
-                }
-
-                HStack(spacing: 4) {
-                    ForEach(HueBand.allCases) { b in
-                        Circle()
-                            .fill(b.swatch)
-                            .frame(width: 19, height: 19)
-                            .overlay(Circle().strokeBorder(
-                                band == b ? Palette.text : .clear, lineWidth: 1.5))
-                            .onTapGesture { band = b }
-                            .help(b.name)
-                    }
-                }
-                HStack {
-                    Text(band.name).font(.system(size: 11)).foregroundStyle(Palette.dim)
-                    if let active = targeted.activeBand {
-                        Spacer()
-                        Text("adjusting \(active.name)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.accent)
-                    }
-                }
-                slider("Hue", bandBinding(\.hueShift), -1...1, "", 2, resetsTo: 0)
-                slider("Saturation", bandBinding(\.satShift), -1...1, "", 2, resetsTo: 0)
-                slider("Luminance", bandBinding(\.lumShift), -1...1, "", 2, resetsTo: 0)
-            }
-        }
-    }
-
-    private var detailPanel: some View {
-        Group {
-        section("Noise Reduction") {
-            slider("Luminance", $engine.denoiseLuma, 0...4, "", 2, resetsTo: engine.defaults.denoiseLuma)
-            slider("Color", $engine.denoiseColor, 0...4, "", 2, resetsTo: engine.defaults.denoiseColor)
-            Text("Measured from this frame, so 1.00 means \"remove what is "
-                 + "smaller than one standard deviation of its own noise\" "
-                 + "rather than a fixed amount.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        section("Lens") {
-            slider("Distortion", $engine.lensDistortion, -1...1, "", 2, resetsTo: engine.defaults.lensDistortion)
-            slider("Vignetting", $engine.lensVignette, -1...1, "", 2, resetsTo: engine.defaults.lensVignette)
-            slider("Fringe R/C", $engine.lensCaRed, -1...1, "", 2, resetsTo: engine.defaults.lensCaRed)
-            slider("Fringe B/Y", $engine.lensCaBlue, -1...1, "", 2, resetsTo: engine.defaults.lensCaBlue)
-            Text("Negative distortion pulls the barrel out of a wide lens; "
-                 + "negative vignetting lifts the corners. The fringe controls "
-                 + "rescale red and blue against green, which is what removes "
-                 + "the colored edges at the frame's corners.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        section("Sharpening") {
-            slider("Amount", $engine.sharpenAmount, 0...2, "", 2, resetsTo: engine.defaults.sharpenAmount)
-            slider("Radius", $engine.sharpenRadius, 0.5...3, " px", 1, resetsTo: engine.defaults.sharpenRadius)
-            slider("Masking", $engine.sharpenMasking, 0...1, "", 2, resetsTo: engine.defaults.sharpenMasking)
-            Text("Masking protects flat areas, where noise lives and detail does not.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        }
-    }
 
     private var footer: some View {
         HStack {
@@ -975,13 +842,13 @@ struct Editor: View {
 
     // MARK: Pieces
 
-    private func bandBinding(_ key: ReferenceWritableKeyPath<Engine, [Float]>)
+    func bandBinding(_ key: ReferenceWritableKeyPath<Engine, [Float]>)
         -> Binding<Float> {
         Binding(get: { engine[keyPath: key][band.rawValue] },
                 set: { engine[keyPath: key][band.rawValue] = $0 })
     }
 
-    private func section<Content: View>(_ title: String,
+    func section<Content: View>(_ title: String,
                                         @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 11) {
             Text(title.uppercased())
@@ -997,7 +864,7 @@ struct Editor: View {
     /// It is spelled out at every call site on purpose: a control whose reset
     /// silently disagreed with its binding would put the wrong number back, and
     /// nothing else in the app would notice.
-    private func slider(_ name: String, _ value: Binding<Float>,
+    func slider(_ name: String, _ value: Binding<Float>,
                         _ range: ClosedRange<Float>, _ unit: String,
                         _ decimals: Int, resetsTo base: Float) -> some View {
         AdjustmentSlider(name: name, value: value, range: range, unit: unit,
@@ -1013,11 +880,11 @@ struct Editor: View {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.prompt = "Open Photo"
-        panel.allowedContentTypes = ["arw", "dng", "nef", "cr2", "cr3", "raf", "orf", "rw2"]
+        panel.allowedContentTypes = Library.rawExtensions
             .compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        library.open(folder: url.deletingLastPathComponent())
+        Task { await library.open(folder: url.deletingLastPathComponent()) }
         load(url)
     }
 
@@ -1029,9 +896,8 @@ struct Editor: View {
         panel.prompt = "Open Folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        library.open(folder: url)
         Task {
-            while library.loading { try? await Task.sleep(for: .milliseconds(30)) }
+            await library.open(folder: url)
             if let first = library.visible.first?.url { load(first) }
         }
     }
@@ -1040,7 +906,11 @@ struct Editor: View {
         // The photo being left keeps its edits. Without this, going to the next
         // frame and back threw the work away — which is the whole difference
         // between an editor and a viewer.
-        saveDevelop()
+        //
+        // `stop` writes what is owed *and* disarms: the engine renders several
+        // times while a file opens, and until the sidecar has been restored
+        // those renders still describe the photo being left.
+        autosave.stop()
 
         current = url
 
@@ -1059,6 +929,10 @@ struct Editor: View {
                 if let saved = Sidecar.read(for: url)?.develop {
                     engine.restore(encoded: saved)
                 }
+                // Arm only once the photo is settled, with what its sidecar
+                // already holds — so opening a file does not write straight
+                // back what it just read.
+                autosave.begin(url: url, saved: engine.state)
             } catch {
                 message = error.localizedDescription
             }
@@ -1083,7 +957,14 @@ struct Editor: View {
             // Applying is just leaving the tool: the preview canvas goes away
             // and the engine renders the crop itself.
             applyCrop: { tab = .light },
-            cancelCrop: { engine.edit("Crop") { engine.resetCrop() }; tab = .light })
+            cancelCrop: { engine.edit("Crop") { engine.resetCrop() }; tab = .light },
+            tab: tab,
+            selectTab: { tab = $0 },
+            comparing: engine.comparing,
+            toggleCompare: {
+                engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
+            },
+            export: { showingExport = true })
     }
 
     /// Single keys, seen before AppKit dispatches them.
@@ -1162,13 +1043,43 @@ struct Editor: View {
         }
     }
 
-    /// Writes the open photo's adjustments into its sidecar, alongside the
-    /// rating and the flag that already live there.
-    private func saveDevelop() {
-        guard let current, engine.isLoaded, let encoded = engine.encodedState else {
-            return
+    /// Edits reach disk on their own from here on.
+    ///
+    /// Three triggers, because they fail differently. Coalesced writes cover
+    /// the crash and the logout; `willTerminate` covers the ⌘Q that arrives
+    /// inside the coalescing window; resigning active shortens the window
+    /// before a force-quit. Only the first is a policy — the other two are just
+    /// "write now", which is why `Autosave` owns no AppKit.
+    private func installAutosave() {
+        guard lifecycleObservers.isEmpty else { return }
+
+        engine.onEdit = { [autosave] state in autosave.note(state) }
+
+        let center = NotificationCenter.default
+        lifecycleObservers = [
+            NSApplication.willTerminateNotification,
+            NSApplication.willResignActiveNotification,
+        ].map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [autosave] _ in
+                autosave.flush()
+            }
         }
-        Sidecar.merge(into: current) { $0.develop = encoded }
+    }
+
+    /// The key monitor and the lifecycle observers both outlive the view unless
+    /// they are taken back. Flushing here as well covers the window being
+    /// closed without the app quitting.
+    private func teardown() {
+        autosave.flush()
+        engine.onEdit = nil
+
+        lifecycleObservers.forEach(NotificationCenter.default.removeObserver)
+        lifecycleObservers = []
+
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
     }
 
     private func rate(_ stars: Int) {
@@ -1185,7 +1096,10 @@ struct Editor: View {
 
     private func exportFile() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "export.\(exportSettings.format.ext)"
+        // The photo's own name, not "export": a folder of files called
+        // export-1.jpg is what happens when the dialog does not offer one.
+        let base = current?.deletingPathExtension().lastPathComponent ?? "export"
+        panel.nameFieldStringValue = "\(base).\(exportSettings.format.ext)"
         panel.allowedContentTypes = [UTType(filenameExtension: exportSettings.format.ext)
                                      ?? .jpeg]
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -1197,7 +1111,8 @@ struct Editor: View {
                                   sourceWidth: engine.imageWidth,
                                   sourceHeight: engine.imageHeight),
                               space: exportSettings.space.code,
-                              rating: Int32(library.photos.first { $0.url == current }?.rating ?? 0))
+                              rating: Int32(library.photos.first { $0.url == current }?.rating ?? 0),
+                              metadata: exportSettings.metadata.rawValue)
         } catch {
             message = error.localizedDescription
         }

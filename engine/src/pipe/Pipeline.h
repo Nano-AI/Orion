@@ -70,6 +70,17 @@ public:
     /// Enables or disables a node. Disabled nodes are skipped entirely.
     void setEnabled(int nodeId, bool enabled);
 
+    /// Changes a node's output format, reallocating its texture.
+    ///
+    /// Exists so the tail of the graph can be narrow for the screen — whose
+    /// drawable is `bgra8Unorm`, so anything wider is bytes moved for
+    /// precision the display cannot show — and wide for an export, which is
+    /// the only consumer that can use sixteen bits. Reallocation is not free,
+    /// so this belongs on a mode switch and never on a slider.
+    void setNodeFormat(int nodeId, gpu::PixelFormat format);
+
+    [[nodiscard]] gpu::PixelFormat nodeFormat(int nodeId) const;
+
     /// Which node's texture a consumer should read, following any
     /// disabled nodes back to a live producer.
     [[nodiscard]] int resolve(int nodeId) const;

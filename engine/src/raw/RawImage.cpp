@@ -86,6 +86,47 @@ std::vector<std::uint8_t> extractThumbnail(const std::string& path) {
     return out;
 }
 
+std::array<std::uint16_t, 4> BayerImage::blackLevels(unsigned black,
+                                                     const unsigned* cblack,
+                                                     std::uint32_t filters) noexcept {
+    std::array<std::uint16_t, 4> out{};
+
+    const unsigned rows = cblack[4], cols = cblack[5];
+    const unsigned cells = rows * cols;
+
+    if (rows == 2 && cols == 2) {
+        // Each pattern cell belongs to whichever CFA channel sits at that
+        // position, which is what makes this exact rather than an average.
+        BayerImage probe;
+        probe.filters = filters;
+        unsigned value[4] = {0, 0, 0, 0};
+        bool seen[4] = {false, false, false, false};
+        for (unsigned y = 0; y < 2; ++y) {
+            for (unsigned x = 0; x < 2; ++x) {
+                const int c = static_cast<int>(probe.channelAt(x, y));
+                // Two greens share channel 1 in LibRaw's mask unless the file
+                // distinguishes them; taking the first is what FC would give.
+                if (!seen[c]) { value[c] = cblack[6 + y * 2 + x]; seen[c] = true; }
+            }
+        }
+        for (int c = 0; c < 4; ++c) {
+            const unsigned offset = seen[c] ? value[c] : (seen[1] ? value[1] : 0u);
+            out[c] = static_cast<std::uint16_t>(black + cblack[c] + offset);
+        }
+        return out;
+    }
+
+    unsigned mean = 0;
+    if (cells > 0) {
+        for (unsigned i = 0; i < cells; ++i) mean += cblack[6 + i];
+        mean /= cells;
+    }
+    for (int c = 0; c < 4; ++c) {
+        out[c] = static_cast<std::uint16_t>(black + cblack[c] + mean);
+    }
+    return out;
+}
+
 BayerImage decodeBayer(const std::string& path) {
     auto owned = std::make_unique<LibRaw>();
     LibRaw& proc = *owned;
@@ -101,10 +142,47 @@ BayerImage decodeBayer(const std::string& path) {
     const auto& idata = proc.imgdata.idata;
     const auto& color = proc.imgdata.color;
 
+    // ── What this decoder can and cannot take ──────────────────────────────
+    //
+    // Each of these produces a *specific* message rather than a wrong picture.
+    // The demosaic assumes a 2x2 mosaic of three colours; every case below
+    // breaks that assumption in a different way, and two of them would render
+    // silently — a scrambled X-Trans frame and a four-colour sensor's cast both
+    // look like a bug in the pipeline rather than an unsupported file.
     if (proc.imgdata.rawdata.raw_image == nullptr) {
+        const bool threeColour = proc.imgdata.rawdata.color3_image != nullptr;
+        const bool fourColour  = proc.imgdata.rawdata.color4_image != nullptr;
+        proc.recycle();
+        if (threeColour || fourColour) {
+            throw std::runtime_error(
+                "this file is already demosaiced (a linear DNG or a Foveon "
+                "frame). Orion develops mosaic data — open the camera's "
+                "original raw file instead");
+        }
+        throw std::runtime_error("no mosaic data in this file");
+    }
+
+    if (idata.filters == 9) {
+        proc.recycle();
         throw std::runtime_error(
-            "no Bayer mosaic in this file — Foveon or already-demosaiced sources "
-            "are not supported");
+            "X-Trans sensors use a 6x6 mosaic, and Orion's demosaic is Bayer "
+            "only. Fujifilm X-Trans support needs the Markesteijn algorithm — "
+            "it is on the roadmap, not in this build");
+    }
+    if (idata.filters == 0) {
+        proc.recycle();
+        throw std::runtime_error("this file has no colour filter array");
+    }
+    // cdesc names the four mosaic positions. Anything but RGB-with-two-greens
+    // (RGBE on some early bodies, CMYG on older camcorder sensors) needs a
+    // different matrix path as well as a different demosaic.
+    if (const std::string desc(idata.cdesc);
+        desc.find('E') != std::string::npos || desc.find('C') != std::string::npos ||
+        desc.find('M') != std::string::npos || desc.find('Y') != std::string::npos) {
+        proc.recycle();
+        throw std::runtime_error(
+            "this sensor's filter array is " + desc +
+            ", not RGB. Orion supports three-colour Bayer sensors");
     }
 
     BayerImage out;
@@ -131,17 +209,7 @@ BayerImage decodeBayer(const std::string& path) {
     if (sizes.left_margin & 1) out.filters = (out.filters >> 2) | (out.filters << 30);
     if (sizes.top_margin & 1)  out.filters = (out.filters >> 8) | (out.filters << 24);
 
-    // Black level: a global offset plus a per-channel trim. LibRaw can also
-    // carry a 2D pattern in cblack[4]x cblack[5]; averaging it is close enough
-    // for M0 and avoids a per-pixel table. Revisit if banding shows up.
-    unsigned patternMean = 0;
-    if (const unsigned cells = color.cblack[4] * color.cblack[5]; cells > 0) {
-        for (unsigned i = 0; i < cells; ++i) patternMean += color.cblack[6 + i];
-        patternMean /= cells;
-    }
-    for (int c = 0; c < 4; ++c) {
-        out.black[c] = static_cast<std::uint16_t>(color.black + color.cblack[c] + patternMean);
-    }
+    out.black = BayerImage::blackLevels(color.black, color.cblack, out.filters);
     out.white = static_cast<std::uint16_t>(color.maximum);
 
     for (int c = 0; c < 4; ++c) out.camMul[c] = color.cam_mul[c];

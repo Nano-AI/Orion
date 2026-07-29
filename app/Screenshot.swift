@@ -24,8 +24,17 @@ enum Screenshot {
         var photo: String?
         var scene = "light"
         var size = CGSize(width: 1680, height: 1050)
-        /// Region to report statistics for, normalized. Empty means no report.
-        var measure: CGRect?
+        /// Regions to report statistics for, normalized. Repeat the flag for
+        /// several. Repeating beats one-region-per-run because each run pays a
+        /// RAW decode and a full render, and a calibration sweep is dozens of
+        /// runs.
+        var measure: [CGRect] = []
+        /// Exposure offset in EV, applied on top of whatever the scene sets.
+        /// Exists so a calibration sweep is a loop over one flag rather than a
+        /// scene per value.
+        var exposure: Float?
+        /// Base contrast override, for the same reason.
+        var contrast: Float?
     }
 
     /// Parses the command line. Returns nil when this is an ordinary launch.
@@ -45,10 +54,15 @@ enum Screenshot {
                 if let next {
                     let n = next.split(separator: ",").compactMap { Double($0) }
                     if n.count == 4 {
-                        o.measure = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
+                        o.measure.append(CGRect(x: n[0], y: n[1],
+                                                width: n[2], height: n[3]))
                     }
                     i += 1
                 }
+            case "--exposure":
+                if let next, let ev = Float(next) { o.exposure = ev; i += 1 }
+            case "--contrast":
+                if let next, let c = Float(next) { o.contrast = c; i += 1 }
             case "--size":
                 if let next {
                     let parts = next.split(separator: "x").compactMap { Double($0) }
@@ -75,8 +89,21 @@ enum Screenshot {
             do { try engine.open(path: photo) }
             catch { fail("could not open \(photo) — \(error.localizedDescription)") }
             apply(scene: o.scene, to: engine)
+            if let ev = o.exposure { engine.exposureEv = ev }
+            if let c = o.contrast { engine.contrast = c }
+
+            // `--measure` needs the wide tail: it resolves differences that
+            // eight-bit quantisation would erase, and the changes hunted in
+            // this codebase are four decimal places wide. A plain screenshot
+            // does not, and must not — the canvas should show what the screen
+            // path produces, not a second rendering nobody sees.
+            if !o.measure.isEmpty {
+                engine.setWideOutput(true)
+                for region in o.measure { measure(engine, region: region) }
+                engine.setWideOutput(false)
+            }
+
             let image = developed(engine)
-            if let region = o.measure { measure(engine, region: region) }
             engine.showPlaceholder(image)
         }
 
@@ -125,7 +152,10 @@ enum Screenshot {
         let library = MainActor.assumeIsolated { () -> Library in
             let lib = Library()
             if let photo = o.photo {
-                lib.open(folder: URL(fileURLWithPath: photo).deletingLastPathComponent())
+                let folder = URL(fileURLWithPath: photo).deletingLastPathComponent()
+                // Fire and forget: the run loop below already waits for the
+                // strip to fill, which is the same wait this would be.
+                Task { await lib.open(folder: folder) }
             }
             return lib
         }
@@ -246,6 +276,19 @@ enum Screenshot {
         case "compare":
             engine.exposureEv = 2.6
             engine.setCompare(split: 0.5)
+        // Distortion at each end of its travel. Negative k₁ is the case that
+        // pushes the sample point past the frame edge, so it is the one that
+        // says whether the picture still fills the frame.
+        // Shadow wheel alone, hard over, so "does this colour the whole
+        // picture" can be answered with a number instead of an impression.
+        case "grade-shadow-only":
+            engine.gradeShadow = [-0.9, -0.9, 0.0]
+        case "lens-barrel":
+            engine.exposureEv = 2.6
+            engine.lensDistortion = -1.0
+        case "lens-pincushion":
+            engine.exposureEv = 2.6
+            engine.lensDistortion = 1.0
         default:
             break
         }
@@ -266,11 +309,12 @@ enum Screenshot {
         let w = Int(engine.imageWidth), h = Int(engine.imageHeight)
         guard w > 0, h > 0, w <= src.width, h <= src.height else { return nil }
 
-        // The graph ends in half float now. CoreGraphics takes 16-bit
-        // unsigned, so the conversion happens here rather than the readback
-        // pretending the texture is still eight bit — which would have read
-        // two pixels of noise for every one that exists.
-        let halves = readHalf(src, width: w, height: h)
+        // CoreGraphics takes 16-bit unsigned, so the conversion happens here
+        // rather than the readback pretending the texture is a format it is
+        // not — which would read two pixels of noise for every one that
+        // exists. The tail is eight bits on the screen path and sixteen around
+        // an export, so `readNormalized` asks the texture which it is.
+        let halves = readNormalized(src, width: w, height: h)
         var pixels = [UInt16](repeating: 0, count: w * h * 4)
         for i in 0..<(w * h) {
             for c in 0..<3 {
@@ -311,7 +355,7 @@ enum Screenshot {
         let rw = max(1, min(w - x0, Int(region.width * CGFloat(w))))
         let rh = max(1, min(h - y0, Int(region.height * CGFloat(h))))
 
-        let pixels = readHalf(src, width: rw, height: rh, x: x0, y: y0)
+        let pixels = readNormalized(src, width: rw, height: rh, x: x0, y: y0)
 
         var sums = [Double](repeating: 0, count: 3)
         var squares = [Double](repeating: 0, count: 3)
@@ -350,9 +394,25 @@ enum Screenshot {
         FileHandle.standardError.write(Data(report.utf8))
     }
 
-    /// A region of a half-float texture, as Float16.
-    private static func readHalf(_ texture: MTLTexture, width: Int, height: Int,
-                                 x: Int = 0, y: Int = 0) -> [Float16] {
+    /// A region of the output texture, normalized, whichever format it is in.
+    ///
+    /// The tail of the graph writes eight bits for the screen — the drawable is
+    /// `bgra8Unorm`, so wider is bytes moved for precision nothing can show —
+    /// and sixteen only around an export. Downloading an `RGBA8Unorm` texture
+    /// with a stride computed for half float does not fail; it returns
+    /// nonsense, which is a worse outcome than an error.
+    private static func readNormalized(_ texture: MTLTexture, width: Int, height: Int,
+                                       x: Int = 0, y: Int = 0) -> [Float16] {
+        guard texture.pixelFormat == .rgba16Float else {
+            var bytes = [UInt8](repeating: 0, count: width * height * 4)
+            bytes.withUnsafeMutableBytes { raw in
+                texture.getBytes(raw.baseAddress!, bytesPerRow: width * 4,
+                                 from: MTLRegionMake2D(x, y, width, height),
+                                 mipmapLevel: 0)
+            }
+            return bytes.map { Float16(Float($0) / 255.0) }
+        }
+
         let stride = width * 4 * MemoryLayout<Float16>.size
         var out = [Float16](repeating: 0, count: width * height * 4)
         out.withUnsafeMutableBytes { raw in

@@ -51,6 +51,23 @@ struct BayerImage {
         return static_cast<Channel>((filters >> shift) & 3);
     }
 
+    /// Per-channel black points from LibRaw's global black, its four-channel
+    /// trim and its 2D pattern.
+    ///
+    /// **The 2x2 case is exact, the rest is an average.** A camera that carries
+    /// a per-pixel black pattern usually carries a 2x2 one, which lines up with
+    /// the CFA cell by cell — so each channel gets its own value rather than the
+    /// mean of four. Larger patterns (X-Trans is 6x6) are averaged, and X-Trans
+    /// is rejected at decode anyway. Averaging a 2x2 pattern with real spread
+    /// leaves a colour cast in the deep shadows that no control can remove.
+    ///
+    /// `cblack` is LibRaw's `imgdata.color.cblack`: [0..3] per channel,
+    /// [4] pattern rows, [5] pattern columns, [6...] the pattern itself in
+    /// row-major order.
+    static std::array<std::uint16_t, 4> blackLevels(unsigned black,
+                                                    const unsigned* cblack,
+                                                    std::uint32_t filters) noexcept;
+
     /// Human-readable pattern of the top-left 2x2, e.g. "RGGB".
     [[nodiscard]] std::string patternString() const;
 

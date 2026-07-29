@@ -49,6 +49,8 @@ enum ViewportTests {
         testModifiedTracksTheReadout()
         testDrawnRectFollowsTheZoom()
         testSidecarSurvivesAMissingField()
+        testSidecarEscapingDoesNotCompound()
+        testEditsSurviveAQuit()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -618,6 +620,127 @@ enum ViewportTests {
             report(back == full, "a full state round-trips unchanged")
         } else {
             report(false, "a full state round-trips at all")
+        }
+    }
+
+    /// Edit, quit, reopen — the adjustments have to still be there.
+    ///
+    /// They were not. `saveDevelop` ran only when *switching* photos, so the
+    /// common case — open one file, work on it, ⌘Q — lost everything. The
+    /// sidecar round-trip above was passing the whole time, which is the point:
+    /// a correct mechanism nobody triggers reads exactly like a working feature.
+    ///
+    /// The deferral is handed in, so the coalescing is checked by firing it
+    /// rather than by sleeping.
+    static func testEditsSurviveAQuit() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orion-autosave-\(ProcessInfo.processInfo.processIdentifier)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let a = dir.appendingPathComponent("a.ARW")
+        let b = dir.appendingPathComponent("b.ARW")
+
+        /// What is on disk for a photo, decoded back the way `Editor.load` does.
+        func onDisk(_ photo: URL) -> DevelopState? {
+            guard let data = Sidecar.read(for: photo)?.develop else { return nil }
+            return try? JSONDecoder().decode(DevelopState.self, from: data)
+        }
+
+        func edited(_ ev: Float) -> DevelopState {
+            var s = DevelopState()
+            s.exposureEv = ev
+            return s
+        }
+
+        // --- The invariant, through the real sidecar on a real file. ---
+        var fire: (() -> Void)?
+        let save = Autosave(deferral: { fire = $0 })
+
+        save.begin(url: a, saved: DevelopState())
+        save.note(edited(1.5))
+        report(onDisk(a) == nil, "nothing is written before the writes coalesce")
+        report(save.isDirty, "the write is owed, not forgotten")
+
+        fire?()
+        near(CGFloat(onDisk(a)?.exposureEv ?? 0), 1.5, 1e-6,
+             "the edit reaches the sidecar without anybody asking")
+        report(!save.isDirty, "and is not owed twice")
+
+        // The ⌘Q that lands inside the window. This is the case that was losing
+        // an entire session's work.
+        save.note(edited(-2.25))
+        report(onDisk(a)?.exposureEv == 1.5, "a later edit has not landed yet")
+        save.flush()
+        near(CGFloat(onDisk(a)?.exposureEv ?? 0), -2.25, 1e-6,
+             "quitting inside the coalescing window still writes")
+
+        // Ratings live in the same file and must survive an edit write.
+        Sidecar.merge(into: a) { $0.rating = 4 }
+        save.note(edited(0.75))
+        save.flush()
+        report(Sidecar.read(for: a)?.rating == 4, "an autosave keeps the rating")
+        near(CGFloat(onDisk(a)?.exposureEv ?? 0), 0.75, 1e-6, "and carries the edit")
+
+        // --- Nothing may be misfiled. ---
+        // A write queued for a and not yet fired, then the photo switches: it
+        // belongs to a. Reading the engine at fire time instead would put a's
+        // work in b's sidecar, because `current` moves ~50 ms before the decode
+        // finishes.
+        save.begin(url: a, saved: edited(0.75))
+        save.note(edited(3.0))
+        save.begin(url: b, saved: DevelopState())
+        near(CGFloat(onDisk(a)?.exposureEv ?? 0), 3.0, 1e-6,
+             "a pending write follows the photo it was queued for")
+        report(onDisk(b) == nil, "and does not land on the photo that arrived")
+
+        fire?()   // the stale timer from a's note must not write b's sidecar
+        report(onDisk(b) == nil, "a timer left over from the previous photo writes nothing")
+
+        // --- Restoring is not an edit. ---
+        // Every open pushes renders; if those counted, opening a photo would
+        // rewrite its sidecar, and opening a folder would rewrite all of them.
+        let opened = edited(-1.0)
+        save.begin(url: b, saved: opened)
+        save.note(opened)
+        save.flush()
+        report(onDisk(b) == nil, "opening a photo does not write back what it just read")
+
+        // --- Notes while nothing is open are dropped, not queued. ---
+        save.stop()
+        save.note(edited(9.0))
+        save.flush()
+        report(onDisk(b) == nil, "an edit with no photo in hand goes nowhere")
+
+        // --- Last note wins. ---
+        // `Engine.captureOriginal` applies a neutral state and then the real
+        // one, back to back. A queue that appended would persist the neutral.
+        save.begin(url: b, saved: opened)
+        save.note(DevelopState())        // the neutral compare render
+        save.note(edited(2.0))           // the edit, restored immediately after
+        save.flush()
+        near(CGFloat(onDisk(b)?.exposureEv ?? 0), 2.0, 1e-6,
+             "the last state noted is the one written")
+    }
+
+    /// Escaping compounds unless reading undoes it.
+    ///
+    /// `Library.persist` reads, modifies and rewrites the whole sidecar on
+    /// every rating change, so a label written as `R&amp;D` and read back as
+    /// `R&amp;D` is escaped again on the next save. One save per gained layer,
+    /// and the field is read from foreign sidecars — Lightroom writes labels.
+    static func testSidecarEscapingDoesNotCompound() {
+        let cases = ["R&D", "a < b", "a > b", "say \"hi\"", "&amp;", "plain",
+                     "&lt;not a tag&gt;"]
+        for original in cases {
+            var text = original
+            // Three round trips: one save is not enough to show compounding.
+            for _ in 0..<3 {
+                text = Sidecar.unescape(Sidecar.escapeForTests(text))
+            }
+            report(text == original,
+                   "\(original) survives three save/load cycles unchanged",
+                   text == original ? "" : "became \(text)")
         }
     }
 

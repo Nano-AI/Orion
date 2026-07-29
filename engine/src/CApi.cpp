@@ -11,6 +11,7 @@
 
 #include "Engine.h"
 
+#include <algorithm>
 #include <cstring>
 #include <exception>
 #include <new>
@@ -141,6 +142,14 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
 
         a.lensDistortion = adj->lens_distortion;
         a.lensVignette   = adj->lens_vignette;
+        a.lensProfile    = adj->lens_profile != 0;
+        if (a.lensProfile) {
+            const auto& p = engine->impl.lensProfile();
+            for (int i = 0; i < 3; ++i) {
+                a.lensPoly[i]       = p.poly[i];
+                a.lensVignettePa[i] = p.vignette[i];
+            }
+        }
         a.lensCaRed      = adj->lens_ca_red;
         a.lensCaBlue     = adj->lens_ca_blue;
         a.highlightRecovery = adj->highlight_recovery;
@@ -202,6 +211,14 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
         const auto& d = engine->impl.develop();
         *out_width  = d.outputWidth();
         *out_height = d.outputHeight();
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_set_wide_output(OrionEngine* engine, int wide) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        engine->impl.developMutable().setWideOutput(wide != 0);
         return ORION_OK;
     });
 }
@@ -316,6 +333,11 @@ OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
             opts.maxDimension = options->max_dimension;
             opts.space        = toColorSpace(options->space);
             opts.rating       = options->rating;
+            switch (options->metadata) {
+                case ORION_METADATA_ALL:  opts.metadata = orion::util::Metadata::All;  break;
+                case ORION_METADATA_NONE: opts.metadata = orion::util::Metadata::None; break;
+                default: opts.metadata = orion::util::Metadata::NoLocation; break;
+            }
         }
 
         engine->impl.exportImage(path, opts);
@@ -340,6 +362,19 @@ OrionStatus orion_engine_export_size(OrionEngine* engine,
         *out_bytes = static_cast<uint64_t>(engine->impl.exportedSize(o));
         return ORION_OK;
     });
+}
+
+OrionStatus orion_engine_lens_profile(const OrionEngine* engine,
+                                      OrionLensProfile* out) {
+    if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+
+    *out = OrionLensProfile{};
+    const auto& p = engine->impl.lensProfile();
+    out->found = p.found ? 1 : 0;
+    out->approximate = p.approximate ? 1 : 0;
+    std::strncpy(out->lens, p.lens.c_str(), sizeof out->lens - 1);
+    std::strncpy(out->maker, p.maker.c_str(), sizeof out->maker - 1);
+    return ORION_OK;
 }
 
 const char* orion_engine_camera(const OrionEngine* engine) {

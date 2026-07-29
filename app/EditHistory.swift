@@ -103,7 +103,7 @@ struct DevelopState: Equatable, Codable {
     var vibrance: Float = 0
     var saturation: Float = 0
     /// Orion's base rendering, not neutral. See Engine.contrast.
-    var contrast: Float = 1.15
+    var contrast: Float = 1.45
     var rotateQuarters: Int32 = 0
     var straightenDeg: Float = 0
     var cropX: Float = 0

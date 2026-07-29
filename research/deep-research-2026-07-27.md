@@ -240,7 +240,7 @@ This confirms Orion's existing split as correct.
 
 ---
 
-## 4. Lens corrections — ⬜ not yet implemented
+## 4. Lens corrections — ✅ implemented (distortion, TCA, vignetting, autoscale)
 
 Lensfun conventions. `R_norm = ½·sqrt(width² + height²)`, `r_u` normalized
 radius from the optical center.
@@ -258,6 +258,37 @@ ptlens:  r_d = a·r_u⁴ + b·r_u³ + c·r_u² + (1 − a − b − c)·r_u
 ```
 x_d = x₀ + (x_u − x₀)·(r_d / r_u)
 ```
+
+### Autoscale — keeping the corrected picture in the frame
+
+`d = 1 − a − b − c` pins `r_d(1) = 1`, so the frame **corners** stay put. That
+is not the same as the frame staying full: `r = 1` is the corner, and a frame is
+a rectangle. The edge midpoints sit at `r = W / sqrt(W² + H²)` — 0.83 on 3:2 —
+where poly3 with a negative `k₁` gives a multiplier of `1 + 0.31·|k₁|`. Those
+pixels are fetched from outside the image, and an edge-clamped sampler returns
+the border pixel for every one of them: a band of one column smeared sideways.
+At Orion's slider maximum (`k₁ = −0.35`) that band is 325 px on a 6024 px frame.
+
+lensfun answers this with `lf_modifier_get_auto_scale`, which searches the
+destination frame for the largest overreach and returns the zoom that brings it
+back to the edge; darktable exposes it as "auto scale" and Lightroom as the
+constrained crop. Orion computes the same quantity in `pipe/LensGeometry.h`:
+
+```
+find the largest s ≤ 1 such that, for every pixel on the destination perimeter,
+    | (d·s) · m(|d·s| / R_norm) |  ≤  half the frame, on both axes
+```
+
+where `m` is the radial multiplier including the widest of the three channel
+scales. Bisection on `s` is valid because the fetch distance along a ray is
+`t·m(t)`, whose derivative `(1 − k₁) + 3·k₁·t²/R²` is positive throughout for
+|k₁| < ½ — so the distance grows monotonically outward and the perimeter bounds
+the interior. Pincushion (`k₁ > 0`) pulls samples inward and returns exactly 1.
+
+**Sources:** lensfun `lf_modifier_get_auto_scale` (LGPL — the *behavior* is
+described here and reimplemented from the geometry above; no code was read or
+copied). Same correction in darktable's lens module and Adobe's lens profile
+model. The monotonicity argument and the perimeter bound are derived here.
 
 ### Transverse chromatic aberration
 

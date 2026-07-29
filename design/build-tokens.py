@@ -88,10 +88,25 @@ def swift_file(t):
         "    // reads as a color cast and corrupts the judgment the app exists to support.",
         "    public enum Palette {",
     ]
+    components: list[str] = []
     for name, spec in strip_comments(t["color"]).items():
         hexv = spec["hex"].lstrip("#")
         out.append(f"        /// {spec['use']}")
         out.append(f"        public static let {camel(name)} = Color(hex: 0x{hexv.upper()})")
+        components.append(
+            f"        public static let {camel(name)} = SIMD3<Float>("
+            f"{int(hexv[0:2],16)/255:.4f}, {int(hexv[2:4],16)/255:.4f}, "
+            f"{int(hexv[4:6],16)/255:.4f})")
+    out.append("    }")
+
+    # The same colours as plain numbers, for the consumers that are not SwiftUI:
+    # the canvas clear colour and the shader's surround. They were literals with
+    # a `// --surround` comment, which is a copy with a note attached.
+    out += ["",
+            "    /// The palette as components, for Metal and anything else that",
+            "    /// cannot take a SwiftUI Color. Same source, same numbers.",
+            "    public enum Components {"]
+    out += components
     out.append("    }")
 
     out += ["", "    // MARK: Space", "    public enum Space {"]
@@ -120,9 +135,13 @@ def swift_file(t):
         "",
         "extension Color {",
         "    /// 0xRRGGBB literal, in the display-P3 space the app renders in.",
+        "    /// Tokens are authored as sRGB hex — the same numbers the HTML",
+        "    /// mockup renders in a browser, which is where the palette was",
+        "    /// judged. Building them as Display P3 would move every colour in",
+        "    /// the interface off the design it came from.",
         "    init(hex: UInt32) {",
         "        self.init(",
-        "            .displayP3,",
+        "            .sRGB,",
         "            red:   Double((hex >> 16) & 0xFF) / 255,",
         "            green: Double((hex >>  8) & 0xFF) / 255,",
         "            blue:  Double( hex        & 0xFF) / 255",

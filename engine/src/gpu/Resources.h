@@ -22,6 +22,7 @@ enum class PixelFormat {
     R32Float,     // linearised mosaic, green plane
     RG32Float,    // guided-filter moments and coefficients
     RGBA16Float,  // the working format — scene-linear Rec.2020
+    RGBA32Float,  // profile tables, where the entries are spec'd as 32-bit float
     RGBA8Unorm,   // display output
 };
 

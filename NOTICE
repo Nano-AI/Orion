@@ -1,0 +1,37 @@
+# Third-party notices
+
+## DNG technology
+
+This product includes DNG technology under license by Adobe.
+
+Orion implements parts of Adobe's *Digital Negative (DNG) Specification*
+(version 1.6.0.0, December 2021) from its published description — the
+BaselineExposure zero point (tag 50730) and the HueSatMap profile stage
+(tags 50938/50939, ProfileHueSatMapDims/Data/Encoding). The specification
+carries a royalty-free patent grant, and that grant requires this notice to
+appear prominently in source and documentation.
+
+**No Adobe data is included.** Orion ships no `.dcp` profile from Adobe or from
+any project that derives from one. Both values Orion uses are *fitted*, from
+the camera's own JPEG and a second independent rendering of the same frame —
+the method and the numbers are in `research/camera-profiles.md`. See
+`planning/DECISIONS.md` #44 for why redistributing Adobe's profiles is out, and
+#45 for an open question about the provenance of LibRaw's built-in matrices.
+
+## LibRaw
+
+Raw decoding uses LibRaw, dual-licensed LGPL-2.1 and CDDL-1.0. Orion links it
+dynamically. See `planning/DECISIONS.md` #43.
+
+## Algorithms implemented from published descriptions
+
+Mathematics is not copyrightable, and none of these is a port of anyone's
+source. Each entry in `research/` names its paper.
+
+- RCD-family demosaic — Luis Sanz Rodríguez
+- Guided image filtering — He, Sun & Tang
+- Starlet (à trous) wavelet denoise — Starck, Fadili & Murtagh
+- AgX display transform
+- ASC CDL colour grading
+- poly3 lens distortion and its autoscale, as lensfun documents the model
+- Highlight reconstruction — Masood, Zhu & Tang

@@ -89,12 +89,16 @@ typedef struct OrionAdjustments {
     float   preview_x, preview_y;  /* canvas origin  */
     float   preview_size;          /* canvas extent, both axes, >= 1 */
 
-    /* Lens corrections, each -1..1. Manual for now; a lens database would fill
-     * them in from what the EXIF names, and the maths is the same either way. */
+    /* Lens corrections, each -1..1. */
     float lens_distortion;
     float lens_vignette;
     float lens_ca_red;
     float lens_ca_blue;
+
+    /* Nonzero applies the measured profile for this photo's lens in place of
+     * lens_distortion and lens_vignette, which the interface then disables.
+     * Has no effect when orion_engine_lens_profile reports nothing found. */
+    int32_t lens_profile;
 
     /* Highlight reconstruction, 0..1. Zero by default: the reconstruction is a
      * linear extrapolation, and one asked to reach past its data invents. */
@@ -151,6 +155,17 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
 /* Dimensions of the whole frame after rotation, before any crop. This is what
  * the crop rectangle is normalized against, and what the UI needs to work out
  * how far a straightened frame reaches. */
+/// Sixteen bits out of the tail of the graph instead of eight.
+///
+/// The screen path is eight bits because the drawable is `bgra8Unorm` — wider
+/// is bytes moved for precision nothing can show, and it costs about 3.5 ms of
+/// a 16 ms budget. Export widens the tail on its own. This entry point exists
+/// for the measurement harness, which reads the output texture directly and
+/// needs the precision to see a change worth four decimal places.
+///
+/// Reallocates two full-resolution textures. Not for a slider.
+OrionStatus orion_engine_set_wide_output(OrionEngine* engine, int wide);
+
 OrionStatus orion_engine_frame_size(const OrionEngine* engine,
                                     uint32_t* out_width, uint32_t* out_height);
 
@@ -212,12 +227,25 @@ typedef enum OrionColorSpace {
     ORION_SPACE_ADOBE_RGB  = 2
 } OrionColorSpace;
 
+/* How much of the RAW's own metadata the export carries.
+ *
+ * The default is NO_LOCATION, not ALL: a photo taken at home carries the home
+ * coordinates, and putting it on the web publishes them. Keeping location is a
+ * choice the photographer makes on purpose. */
+typedef enum OrionMetadata {
+    ORION_METADATA_ALL         = 0,
+    ORION_METADATA_NO_LOCATION = 1,
+    ORION_METADATA_NONE        = 2
+} OrionMetadata;
+
 typedef struct OrionExportOptions {
     int32_t  format;         /* OrionImageFormat; -1 picks from the extension */
     float    quality;        /* JPEG only, 0..1                               */
     uint32_t max_dimension;  /* longest edge; 0 keeps full resolution         */
     int32_t  space;          /* OrionColorSpace                               */
     int32_t  rating;         /* 0-5 written as the star rating; -1 writes none */
+    int32_t  metadata;       /* OrionMetadata; 0 keeps GPS, and 0 is not the
+                              * caller's default — see OrionMetadata          */
 } OrionExportOptions;
 
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
@@ -229,6 +257,22 @@ OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
 OrionStatus orion_engine_export_size(OrionEngine* engine,
                                      const OrionExportOptions* options,
                                      uint64_t* out_bytes);
+
+/* The lens profile for the open photo, from the vendored lensfun database.
+ *
+ * `found` is zero when the lens is unknown — which includes every manual lens,
+ * since those write no lens name at all. `approximate` is nonzero when the
+ * match came from a name the database spells differently, so the interface can
+ * say so rather than implying a measurement of this exact copy. */
+typedef struct OrionLensProfile {
+    int32_t found;
+    int32_t approximate;
+    char    lens[128];
+    char    maker[64];
+} OrionLensProfile;
+
+OrionStatus orion_engine_lens_profile(const OrionEngine* engine,
+                                      OrionLensProfile* out);
 
 /* Camera make and model of the open image, or "" when none. */
 const char* orion_engine_camera(const OrionEngine* engine);

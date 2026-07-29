@@ -18,6 +18,9 @@ struct CurveEditor: View {
 
     @State private var channel: CurveChannel = .master
     @State private var dragging: Int?
+    /// Which point the keyboard is on. Independent of `dragging`, which is
+    /// only live during a mouse gesture.
+    @State private var selected = 0
 
     /// Measured rather than fixed: the graph is square and fills the panel, so
     /// it stays legible if the panel width is ever changed.
@@ -87,6 +90,71 @@ struct CurveEditor: View {
         .contentShape(Rectangle())
         .gesture(drag)
         .onTapGesture(count: 2) { engine.edit("Curve") { engine.curve[channel] = ToneCurve.identity } }
+        // The curve was mouse-only. Tab reaches it now, left and right walk
+        // the points, up and down move the selected one — which is also the
+        // only way to place a point on an exact value.
+        .focusable()
+        .onKeyPress(.leftArrow)  { select(-1); return .handled }
+        .onKeyPress(.rightArrow) { select(1);  return .handled }
+        .onKeyPress(.upArrow)    { move(by:  kNudge); return .handled }
+        .onKeyPress(.downArrow)  { move(by: -kNudge); return .handled }
+        .onKeyPress(.delete)     { removeSelected(); return .handled }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(channel.title) tone curve"))
+        .accessibilityValue(Text(spoken))
+        .accessibilityHint(Text("Left and right select a point, up and down move it, "
+                                + "delete removes it."))
+        .accessibilityAdjustableAction { direction in
+            move(by: direction == .increment ? kNudge : -kNudge)
+        }
+        .accessibilityAction(named: Text("Reset this channel")) {
+            engine.edit("Curve") { engine.curve[channel] = ToneCurve.identity }
+        }
+    }
+
+    /// One arrow press, in curve units. A hundredth is the resolution the
+    /// readouts elsewhere print to.
+    private let kNudge: Float = 0.01
+
+    /// The point the keyboard is on. Starts at the black end rather than
+    /// nowhere, so the first arrow press does something visible.
+    private var selectedIndex: Int { min(selected, max(0, engine.curve[channel].count - 1)) }
+
+    private var spoken: String {
+        let points = engine.curve[channel]
+        guard points.indices.contains(selectedIndex) else { return "identity" }
+        let p = points[selectedIndex]
+        return String(format: "point %d of %d, input %.0f percent, output %.0f percent",
+                      selectedIndex + 1, points.count, p.x * 100, p.y * 100)
+    }
+
+    private func select(_ delta: Int) {
+        let count = engine.curve[channel].count
+        guard count > 0 else { return }
+        selected = min(max(0, selectedIndex + delta), count - 1)
+    }
+
+    private func move(by delta: Float) {
+        var points = engine.curve[channel]
+        let i = selectedIndex
+        guard points.indices.contains(i) else { return }
+        engine.edit("Curve") {
+            points[i] = CurvePoint(x: points[i].x, y: min(max(points[i].y + delta, 0), 1))
+            engine.curve[channel] = points
+        }
+    }
+
+    /// The endpoints stay: they are the black and white points, and a curve
+    /// without them has nothing to interpolate between.
+    private func removeSelected() {
+        var points = engine.curve[channel]
+        let i = selectedIndex
+        guard points.count > 2, i > 0, i < points.count - 1 else { return }
+        engine.edit("Curve") {
+            points.remove(at: i)
+            engine.curve[channel] = points
+        }
+        selected = min(i, points.count - 1)
     }
 
     /// Faint, and behind everything. It is orientation, not data you read off.

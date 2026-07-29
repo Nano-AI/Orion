@@ -27,7 +27,7 @@ struct Navigator: View {
                 .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
 
             Rectangle()
-                .strokeBorder(Color(red: 0.302, green: 0.714, blue: 0.769), lineWidth: 1.5)
+                .strokeBorder(Palette.accent, lineWidth: 1.5)
                 .frame(width: boxWidth * min(visible.width, 1),
                        height: boxHeight * min(visible.height, 1))
                 .offset(x: boxWidth * max(0, viewport.center.x - visible.width / 2),
