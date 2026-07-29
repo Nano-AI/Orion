@@ -14,12 +14,36 @@ overlay and the hit testing — and both must go through `CanvasLayout`, which i
 the one copy of where the picture actually is. Then M4 step 2, mask groups and
 compositing, and step 3's guided-filter refinement.
 
-**Suites:** `orion-tests` **384 checks** · `orion-viewport-tests` **2088
+**Suites:** `orion-tests` **388 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures.
 
 **Suites:** `orion-tests` **374 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
 the M0 gate passes at 9.29 ms p95. 114 nodes, 5907 MiB.
+
+## Session 2026-07-29k — straighten, read off the shader rather than guessed
+
+The gap left open last session. The temptation was to write a plausible rotation
+and move on; the risk with that is the same one this codebase has been bitten by
+before — two implementations of one transform that agree today and drift later.
+
+So `geometry.slang` was read first, and it settled the question:
+
+- **It rotates in pixel coordinates of the rotated frame, not normalized ones.**
+  The frame's aspect is therefore *part of the transform* — a rotation applied
+  to normalized coordinates of a 3:2 frame is a different rotation. A test
+  asserts the square and 3:2 cases differ, which is what would catch someone
+  "simplifying" the aspect away.
+- **It rotates after the crop and before the turns are undone**, so the mask
+  transform does the same, in the same place.
+- **The pivot is passed, not derived** — deriving it from the crop origin and
+  size is what once made the preview turn about the frame centre and the
+  committed render about the crop centre.
+
+Also pinned: the pivot is a fixed point at any angle and aspect; rotating by an
+angle and then its negative is the identity, which says the transform is a
+rotation and not a shear; and the straighten enters the mask's own angle
+directly.
 
 ## Session 2026-07-29j — a mask has to stay on its subject
 
@@ -49,10 +73,7 @@ The invariant the suite leans on: place a mask where the subject appears, turn
 that placement forward through the same rotation, and it must land back where it
 was put. Holds for all four turns across three points.
 
-⚠️ **Straighten is not handled** — only quarter turns and crop. A straightened
-frame drifts its masks by the straighten angle. Recorded rather than implied,
-and it is the first thing to fix when the canvas overlay lands, because that is
-where it will become visible.
+✅ **Straighten is handled now** (session 2026-07-29k, below).
 
 ## Session 2026-07-29i — masks made reachable
 

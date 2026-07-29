@@ -32,6 +32,39 @@ struct Crop {
     float x = 0.0f, y = 0.0f, w = 1.0f, h = 1.0f;
 };
 
+/// The straighten, exactly as `geometry.slang` applies it.
+///
+/// ⚠️ **The shader rotates in pixel coordinates of the rotated frame**, not in
+/// normalized ones, so the frame's aspect is part of the transform: a rotation
+/// applied to normalized coordinates of a 3:2 frame is a different rotation.
+/// `frameW` and `frameH` are that frame's dimensions after any quarter turns —
+/// only their ratio matters.
+///
+/// The pivot is the crop's centre, in the same normalized rotated space, and it
+/// is *passed* rather than derived. Deriving it from the crop origin and size is
+/// what once made the preview turn about the frame centre and the committed
+/// render about the crop centre, so an off-centre crop delivered a different
+/// picture than the box had shown.
+inline void unstraighten(float& x, float& y, float radians,
+                         float pivotX, float pivotY,
+                         float frameW, float frameH) noexcept {
+    if (std::fabs(radians) <= 1e-6f) return;
+
+    const float w = std::max(frameW, 1e-6f);
+    const float h = std::max(frameH, 1e-6f);
+
+    // Into the shader's units, rotate the same way it does, and back out.
+    const float dx = (x - pivotX) * w;
+    const float dy = (y - pivotY) * h;
+
+    const float c = std::cos(radians), s = std::sin(radians);
+    const float rx = dx * c - dy * s;
+    const float ry = dx * s + dy * c;
+
+    x = pivotX + rx / w;
+    y = pivotY + ry / h;
+}
+
 /// Displayed coordinates to the frame the develop stage sees.
 ///
 /// Two steps, in this order. The crop first, because the displayed picture *is*
@@ -40,10 +73,17 @@ struct Crop {
 /// the crop is expressed against the rotated frame.
 ///
 /// `turns` is clockwise quarter turns, matching `DevelopPipeline::quarterTurns`.
-[[nodiscard]] inline Placement toFrame(Placement p, const Crop& c, int turns) noexcept {
+[[nodiscard]] inline Placement toFrame(Placement p, const Crop& c, int turns,
+                                       float straightenRad = 0.0f,
+                                       float pivotX = 0.5f, float pivotY = 0.5f,
+                                       float frameW = 1.0f, float frameH = 1.0f) noexcept {
     // Into the rotated frame.
     float x = c.x + p.centreX * c.w;
     float y = c.y + p.centreY * c.h;
+
+    // Then the straighten, in the same place the shader applies it: after the
+    // crop has put the point in the rotated frame, before the turns are undone.
+    unstraighten(x, y, straightenRad, pivotX, pivotY, frameW, frameH);
 
     // Out of the rotation. A quarter turn clockwise sends a frame point (x, y)
     // to (1 - y, x) on screen, so coming back is the inverse of that, applied
@@ -61,9 +101,10 @@ struct Crop {
     out.centreY = y;
 
     // The angle turns with it. Anticlockwise here, because this undoes the
-    // rotation the viewer sees.
+    // rotation the viewer sees — and the straighten is a rotation too, so it
+    // enters the angle directly whatever the aspect does to the position.
     constexpr float kHalfPi = 1.57079632679489662f;
-    out.angle = p.angle - float(k) * kHalfPi;
+    out.angle = p.angle + straightenRad - float(k) * kHalfPi;
     return out;
 }
 

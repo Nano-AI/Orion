@@ -1213,8 +1213,17 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         // moment the frame is turned. pipe/MaskGeometry.h.
         const mask::Crop crop{adj.cropX, adj.cropY, adj.cropW, adj.cropH};
         const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
-        const auto placed = mask::toFrame({adj.maskCentre[0], adj.maskCentre[1],
-                                           adj.maskAngle}, crop, turns);
+        // The straighten pivot and the rotated frame's shape, both as the
+        // geometry shader sees them — the rotation happens in that frame's
+        // pixels, so its aspect is part of the transform.
+        const bool swaps = (turns % 2) != 0;
+        const float rotW = float(swaps ? height_ : width_);
+        const float rotH = float(swaps ? width_  : height_);
+        const auto placed = mask::toFrame(
+            {adj.maskCentre[0], adj.maskCentre[1], adj.maskAngle}, crop, turns,
+            adj.straightenDeg * 3.14159265358979324f / 180.0f,
+            adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
+            rotW, rotH);
 
         m.centre[0] = placed.centreX; m.centre[1] = placed.centreY;
         mask::radiusToFrame(adj.maskRadius[0], adj.maskRadius[1], crop, turns,

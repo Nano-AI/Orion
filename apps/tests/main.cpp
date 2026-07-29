@@ -4616,6 +4616,56 @@ void testMaskGeometry() {
                "and is untouched without one", "");
     }
 
+    // ── Straighten ────────────────────────────────────────────────────────
+    {
+        constexpr float kDeg = 0.10471975512f;   // six degrees
+
+        // The pivot itself cannot move, whatever the angle or the aspect.
+        {
+            float x = 0.4f, y = 0.6f;
+            mg::unstraighten(x, y, kDeg, 0.4f, 0.6f, 6024.0f, 4024.0f);
+            report(std::abs(x - 0.4f) < 1e-6f && std::abs(y - 0.6f) < 1e-6f,
+                   "the straighten pivot is a fixed point", "");
+        }
+
+        // Rotating by an angle and then by its negative is the identity, which
+        // is what says the transform is a rotation and not a shear.
+        {
+            double worst = 0.0;
+            for (const auto& pt : {std::pair{0.2f, 0.3f}, std::pair{0.9f, 0.1f}}) {
+                float x = pt.first, y = pt.second;
+                mg::unstraighten(x, y,  kDeg, 0.5f, 0.5f, 6024.0f, 4024.0f);
+                mg::unstraighten(x, y, -kDeg, 0.5f, 0.5f, 6024.0f, 4024.0f);
+                worst = std::max(worst, std::max(std::abs(double(x) - pt.first),
+                                                 std::abs(double(y) - pt.second)));
+            }
+            report(worst < 1e-6, "and undoing it returns the point exactly",
+                   "worst " + std::to_string(worst));
+        }
+
+        // ⚠️ The shader rotates in the rotated frame's *pixels*, so the aspect
+        // is part of the transform. If this were done in normalized space the
+        // two would agree, and a mask on a 3:2 frame would drift.
+        {
+            float sq = 0.2f, sqy = 0.3f;
+            mg::unstraighten(sq, sqy, kDeg, 0.5f, 0.5f, 1.0f, 1.0f);
+            float wide = 0.2f, widey = 0.3f;
+            mg::unstraighten(wide, widey, kDeg, 0.5f, 0.5f, 6024.0f, 4024.0f);
+            report(std::abs(sq - wide) > 1e-4f || std::abs(sqy - widey) > 1e-4f,
+                   "and a non-square frame rotates differently, as the shader does",
+                   std::to_string(sq - wide) + ", " + std::to_string(sqy - widey));
+        }
+
+        // A straighten is a rotation, so it enters the mask's angle directly.
+        {
+            const auto p = mg::toFrame({0.5f, 0.5f, 0.0f}, none, 0,
+                                       kDeg, 0.5f, 0.5f, 6024.0f, 4024.0f);
+            report(std::abs(p.angle - kDeg) < 1e-6f,
+                   "and it turns the mask's own angle with it",
+                   std::to_string(p.angle));
+        }
+    }
+
     // Semi-axes have an axis each, so they swap when the picture goes on its
     // side — a wide ellipse over a landscape stays wide over the subject.
     {
