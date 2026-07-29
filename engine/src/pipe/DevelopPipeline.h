@@ -146,6 +146,10 @@ struct Adjustments {
     float brushHardness = 0.5f;    // 0 soft, 1 hard-edged
     unsigned brushRevision = 0;    // bumped whenever the stroke changes
 
+    /// Paint the mask's coverage over the picture, so it can be placed by eye.
+    /// A viewing aid — `Engine` forces it off around an export.
+    bool  maskOverlay = false;
+
     /// What the mask does. Scales the *parameter*, so alpha 0.5 with +1 EV is
     /// exactly 2^0.5 — not a blend between two rendered frames.
     float localExposureEv = 0.0f;

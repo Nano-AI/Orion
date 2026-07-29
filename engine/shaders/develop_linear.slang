@@ -40,6 +40,13 @@ struct LinearAdjustParams
     /// two tone-mapped states and shift hue across the transition band.
     float localExposureEv;
     float maskActive;
+
+    /// Paint the coverage on screen instead of only acting through it.
+    ///
+    /// A mask you cannot see is a mask you cannot place, and it is the only way
+    /// to tell "the brush did nothing" from "the brush painted somewhere else".
+    /// Never set while exporting — this is a viewing aid, not an edit.
+    float maskOverlay;
 };
 
 /// Bilinear lift of the guide coefficients from their subsampled grid.
@@ -129,6 +136,22 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     if (p.maskActive != 0.0f && p.localExposureEv != 0.0f)
     {
         c *= exp2(saturate(mask[tid.xy]) * p.localExposureEv);
+    }
+
+    // The coverage, drawn over the picture. Last, so it sits on top of every
+    // adjustment, and in scene-linear so it goes through the same tone
+    // transform the photograph does rather than being pasted on afterwards.
+    //
+    // Some of the image is kept underneath rather than flooding flat red: you
+    // are placing the mask *against* the subject, so the subject has to stay
+    // legible through it. The constant floor is what keeps the overlay visible
+    // in deep shadow, where a purely proportional tint would vanish exactly
+    // where a photographer most wants to check coverage.
+    if (p.maskOverlay != 0.0f && p.maskActive != 0.0f)
+    {
+        const float a = saturate(mask[tid.xy]);
+        const float3 red = float3(0.35f, 0.012f, 0.02f);
+        c = lerp(c, red + c * 0.25f, a * 0.6f);
     }
 
     dst[tid.xy] = float4(c, 1.0f);

@@ -145,9 +145,15 @@ extension Editor {
                                resetsTo: engine.defaults.maskRoundness)
                     }
 
-                    Toggle("Invert", isOn: $engine.maskInvert)
-                        .font(.system(size: 11))
-                        .toggleStyle(.checkbox)
+                    HStack(spacing: 14) {
+                        Toggle("Invert", isOn: $engine.maskInvert)
+                            .toggleStyle(.checkbox)
+                        // Not in the sidecar and not undoable: this is how you
+                        // are looking at the photo, not an edit to it.
+                        Toggle("Show mask", isOn: $engine.maskOverlay)
+                            .toggleStyle(.checkbox)
+                    }
+                    .font(.system(size: 11))
                 }
 
                 Text("A masked exposure scales the parameter, so half coverage "

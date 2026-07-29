@@ -279,6 +279,14 @@ final class Engine {
     /// One history entry when a brush stroke finishes, rather than one per dab.
     func commitBrushEdit() { history.record(state, label: "Brush") }
 
+    /// Paint the mask's coverage over the picture, so it can be placed by eye.
+    ///
+    /// Not part of `DevelopState` on purpose: it is how you are *looking* at
+    /// the photo, not an edit to it, so it must not land in the sidecar, must
+    /// not enter undo history, and must not follow the photo to another
+    /// machine. `export` forces it off around the write for the same reason.
+    var maskOverlay = false { didSet { pushAndRender() } }
+
     /// Wipes the stroke. Undoable, because painting for a minute and losing it
     /// to a misclick is not a thing a photographer should have to fear.
     func clearBrushStroke() {
@@ -565,6 +573,15 @@ final class Engine {
                 maxDimension: UInt32 = 0, space: Int32 = 0,
                 rating: Int32 = -1, metadata: Int32 = 1) throws {
         guard let handle else { return }
+
+        // The coverage overlay is a viewing aid. Exporting with it on would
+        // write a red-tinted photograph and nothing in the file would say why,
+        // so it is forced off around the write and restored after — including
+        // when the export throws.
+        let wasOverlay = maskOverlay
+        if wasOverlay { maskOverlay = false }
+        defer { if wasOverlay { maskOverlay = true } }
+
         var options = OrionExportOptions(format: -1, quality: quality,
                                          max_dimension: maxDimension, space: space,
                                          rating: rating, metadata: metadata)
@@ -830,6 +847,7 @@ final class Engine {
             local_exposure_ev: localExposureEv,
             brush_radius: brushRadius, brush_flow: brushFlow,
             brush_hardness: brushHardness, brush_revision: brushRevision,
+            mask_overlay: maskOverlay ? 1 : 0,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,

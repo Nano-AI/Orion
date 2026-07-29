@@ -150,6 +150,10 @@ typedef struct OrionAdjustments {
     float brush_hardness;   /* 0 soft, 1 hard-edged */
     unsigned brush_revision;
 
+    /* Paint the mask's coverage over the picture so it can be placed by eye.
+     * A viewing aid only — an export must never set it. */
+    int   mask_overlay;
+
     /* Single-image exposure fusion, 0..1 — shadow lift that keeps local
      * contrast. The value is a power applied to the emitted gain, so zero is
      * bit-exactly the identity. research/exposure-fusion.md. */

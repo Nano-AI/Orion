@@ -259,6 +259,18 @@ enum Screenshot {
                                                  carry: &carry)
             }
             engine.setBrushStroke(stroke)
+        case "mask-overlay":
+            // The same linear mask as `mask-linear`, with the coverage painted
+            // on. Measured against that scene, so the difference is the overlay
+            // and nothing else.
+            engine.exposureEv = 2.6
+            engine.maskKind = 1
+            engine.localExposureEv = -1.6
+            engine.maskCentreX = 0.46
+            engine.maskCentreY = 0.44
+            engine.maskAngle = 1.05
+            engine.maskLength = 0.55
+            engine.maskOverlay = true
         case "mask-linear":
             // Placed and angled, because a gradient drawn square to the frame
             // proves nothing: the whole question is whether the three lines

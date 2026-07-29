@@ -1308,6 +1308,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     const bool linearMoved =
         first ||
         adj.localExposureEv != lastAdj_.localExposureEv ||
+        adj.maskOverlay != lastAdj_.maskOverlay ||
         adj.maskKind != lastAdj_.maskKind ||
         adj.hueShift != lastAdj_.hueShift ||
         adj.satShift != lastAdj_.satShift ||
@@ -1349,7 +1350,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                                 {guideW_, guideH_},
                                 {}, {}, {}};
         la.localExposureEv = adj.localExposureEv;
-        la.maskActive = (adj.maskKind != 0) ? 1.0f : 0.0f;
+        la.maskActive  = (adj.maskKind != 0) ? 1.0f : 0.0f;
+        la.maskOverlay = adj.maskOverlay ? 1.0f : 0.0f;
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
         std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);
         std::copy(adj.lumShift.begin(), adj.lumShift.end(), la.lumShift);

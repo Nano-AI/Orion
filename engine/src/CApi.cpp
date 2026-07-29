@@ -194,6 +194,7 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.brushFlow       = adj->brush_flow;
     a.brushHardness   = adj->brush_hardness;
     a.brushRevision   = adj->brush_revision;
+    a.maskOverlay     = adj->mask_overlay != 0;
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;
     a.lutStrength     = adj->lut_strength;

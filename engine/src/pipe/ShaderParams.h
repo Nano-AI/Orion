@@ -71,8 +71,10 @@ struct LinearAdjust {
     /// research/masking.md — the alpha scales the parameter, not the result.
     float         localExposureEv;
     float         maskActive;
+    /// Draw the coverage on screen. A viewing aid; never set for an export.
+    float         maskOverlay;
 };
-static_assert(sizeof(LinearAdjust) == 152);
+static_assert(sizeof(LinearAdjust) == 156);
 
 struct GuidePrep {
     std::uint32_t size[2];
