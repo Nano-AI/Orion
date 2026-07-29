@@ -11,6 +11,36 @@ import SwiftUI
 ///
 /// The crop panel stays with the editor: it is the only one that reads the
 /// canvas geometry.
+/// A panel button that looks like one.
+///
+/// `.buttonStyle(.plain)` in this palette renders as ordinary text: no border,
+/// no fill, nothing that says it can be pressed. Both panel buttons shipped
+/// that way, and the screenshot harness is what caught it — the code compiled,
+/// the control worked, and it read as a label sitting next to its own caption.
+private struct PanelButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Palette.text)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Palette.raised)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(Palette.line, lineWidth: 1)))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 extension Editor {
 
     var lightPanel: some View {
@@ -24,14 +54,13 @@ extension Editor {
                 // the sliders directly below it — plus Lift and Clarity. It
                 // belongs with the controls it moves, not in a section of its
                 // own eleven rows further down.
-                HStack {
-                    Button("Auto") { engine.autoEnhance() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .medium))
-                    Text("sets Exposure, Whites, Blacks, Lift and Clarity")
+                HStack(spacing: 8) {
+                    PanelButton(title: "Auto") { engine.autoEnhance() }
+                    Text("sets Exposure, Whites, Blacks, Lift, Clarity")
                         .font(.system(size: 10))
                         .foregroundStyle(Palette.faint)
-                    Spacer()
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
                 }
 
                 slider("Exposure", $engine.exposureEv, -5...5, " EV", 2, resetsTo: engine.defaults.exposureEv)
@@ -219,7 +248,7 @@ extension Editor {
         }
         section("Look") {
             HStack(spacing: 6) {
-                Button(engine.lutName.isEmpty ? "Load LUT…" : engine.lutName) {
+                PanelButton(title: engine.lutName.isEmpty ? "Load LUT…" : engine.lutName) {
                     let panel = NSOpenPanel()
                     panel.allowedContentTypes = [.init(filenameExtension: "cube")].compactMap { $0 }
                     panel.allowsMultipleSelection = false
@@ -228,10 +257,6 @@ extension Editor {
                                        displayName: url.deletingPathExtension().lastPathComponent)
                     }
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 11))
-                .lineLimit(1)
-                .truncationMode(.middle)
 
                 Spacer()
 

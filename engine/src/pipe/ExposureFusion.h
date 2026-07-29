@@ -59,17 +59,6 @@ inline constexpr float kMaxGain = 8.0f;
 /// what fixes how many textures a pyramid level costs. Eight is two of them.
 inline constexpr int kMaxImages = 8;
 
-/// ⚠️ **The search starts at the paper's own worked-example count rather than
-/// at two.** [H279] Eq. (7) solves for the smallest M whose simulated images
-/// still overlap, and the exact form of that constraint could not be
-/// transcribed with enough confidence to implement it as the sole authority —
-/// see research/UNSOURCED.md. Five is what [HM20] Fig. 10 reports for the
-/// recommended alpha = 8, beta = 0.5, and starting there also fixes a real
-/// defect: at M = 2 the median-derived split has only one image to allocate,
-/// so a bright frame cannot get a darkened one at all and the asymmetry the
-/// method depends on never appears.
-inline constexpr int kMinImages = 5;
-
 /// How many simulated images, and how they split between darker and brighter.
 struct Plan {
     int images = 0;   // M
@@ -151,41 +140,59 @@ struct Plan {
     return std::exp(-(d * d) / (2.0f * sigma * sigma));
 }
 
-/// Whether every neighbouring pair of simulated images still overlaps in range
-/// — [H279] Eq. (7). Without the overlap the fused result has a gap in it.
-[[nodiscard]] inline bool overlaps(const Plan& p, float alpha, float beta) noexcept {
-    const auto edge = [&](int k, float side) {
-        return simulate(rho(k, p, beta) + side * beta * 0.5f, k, p, alpha);
-    };
-    // The paper notes only k = -1, 0, +1 can bind in practice; checking every
-    // pair costs nothing here and does not rely on that holding.
-    for (int k = -p.dark + 1; k <= p.bright; ++k) {
-        if (!(edge(k, +1.0f) > edge(k - 1, -1.0f))) return false;
-    }
-    for (int k = -p.dark; k <= p.bright - 1; ++k) {
-        if (!(edge(k, -1.0f) < edge(k + 1, +1.0f))) return false;
-    }
-    return true;
-}
-
-/// [H279] Eq. (6) and Alg. 1. The count is solved, not chosen: the smallest set
-/// whose ranges still overlap. The split between darker and brighter comes from
-/// the image's median, because "contrast enhancement is generally needed in the
-/// dark parts only".
+/// [H279] Eq. (7) and Algorithm 1 — the smallest set whose simulated images
+/// still overlap in range.
+///
+/// **This replaces a hardcoded floor of five.** That floor was right for the
+/// recommended alpha = 8, beta = 0.5, where the paper reports N = 4 and N* = 0,
+/// and wrong for every other pair — the failure mode of hardcoding a worked
+/// example instead of the condition that produced it.
+///
+/// The edges below are in the **input** domain: they are the intensities that
+/// map onto each simulated image's valid range, so the exposure factor is
+/// *inverted* rather than applied. Inverting Eq. (3) gives
+///
+///     k >= 0 :  t = v / lambda^k
+///     k <  0 :  t = (v - 1) / lambda^|k| + 1
+///
+/// and Eq. (4) gives the range edges as `rho(k) +/- beta/2`, which reduce to
+/// `1 + slope*(k + N*)` and `1 - beta + slope*(k + N*)`.
+///
+/// Only k = -1, 0 and +1 are checked: they bracket the smallest overlap, as the
+/// paper notes.
+///
+/// **Verified against the paper's own table**, which is what settles that this
+/// is the right reading rather than a plausible one: at alpha = 8 it reports
+/// N = 6, 4 and 3 for beta = 0.4, 0.5 and 0.6, and this reproduces all three.
 [[nodiscard]] inline Plan planFor(float median, float alpha, float beta) noexcept {
-    Plan best{};
-    for (int m = kMinImages; m <= kMaxImages; ++m) {
-        Plan p{};
-        p.images = m;
-        p.dark   = std::clamp(int(std::floor(float(m - 1) * std::clamp(median, 0.0f, 1.0f))),
-                              0, m - 1);
-        p.bright = m - p.dark - 1;
-        best = p;
-        if (overlaps(p, alpha, beta)) return p;
+    const float m = std::clamp(median, 0.0f, 1.0f);
+
+    Plan p{};
+    int images = 1;
+    for (int guard = 0; guard < kMaxImages; ++guard) {
+        ++images;
+
+        const int dark   = int(std::floor(m * float(images - 1)));
+        const int bright = (images - 1) - dark;
+        const int span   = std::max(std::max(dark, bright), 1);
+
+        p.images = images;
+        p.dark   = dark;
+        p.bright = bright;
+
+        const float lambda = std::pow(alpha, 1.0f / float(span));
+        const float slope  = (beta - 1.0f) / float(images - 1);
+
+        const float upperOfBrighter = (1.0f + slope * float(dark + 1)) / lambda;
+        const float upperOfCentre   =  1.0f + slope * float(dark);
+        const float lowerOfCentre   =  1.0f - beta + slope * float(dark);
+        const float lowerOfDarker   = (-beta + slope * float(dark - 1)) / lambda + 1.0f;
+
+        if (upperOfBrighter > lowerOfCentre && upperOfCentre > lowerOfDarker) return p;
     }
-    // Ran out of room. The largest set is the closest to satisfying it, and a
-    // slightly gapped fusion beats refusing to render.
-    return best;
+    // Every simulated image is a pyramid, so the search is bounded; the largest
+    // set is the closest to satisfying the condition.
+    return p;
 }
 
 // ── The reference ─────────────────────────────────────────────────────────

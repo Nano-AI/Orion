@@ -206,7 +206,7 @@ not questionable implementations:
 reduction, lens corrections, 16-bit export. **Struck 2026-07-28b:** the lens
 database, and the camera profile beyond the 3×3.
 
-## 10. Clarity's slider-to-alpha mapping
+## 11. Clarity's slider-to-alpha mapping
 
 **Where:** `pipe/LocalLaplacian.h`, `alphaForClarity`.
 
@@ -228,7 +228,7 @@ over, and `kMaxCorrectionEv`. The window sets what `sigmaR` and the noise
 thresholds mean in stops, so it is not cosmetic — a different window is a
 different filter.
 
-## 11. Dehaze — the atmospheric light's percentile is over blocks, not pixels
+## 12. Dehaze — the atmospheric light's percentile is over blocks, not pixels
 
 **Where:** `pipe/Dehaze.h`, `airlightFrom`, with `dehaze_peak.slang`.
 
@@ -250,7 +250,7 @@ pixels. That one is argued in `research/dehaze.md` as a closer reading of Eq. (1
 than the paper's own inputs, but it is still a departure and the clamp it makes
 necessary is a piece of behaviour the paper does not specify.
 
-## 12. Creative LUTs — one claim left open
+## 13. Creative LUTs — one claim left open
 
 **Where:** `pipe/CubeLut.cpp`, and `sampleCube` in `shaders/develop_display.slang`.
 Full write-up in `research/luts.md`.
@@ -281,20 +281,20 @@ interpolates tetrahedrally is that the file format's own specification says to,
 which is a better reason for this decision in any case. To close: read the paper,
 or drop the reference entirely.
 
-## 13. Exposure fusion — four departures from the published method
+## 14. Exposure fusion — four departures from the published method
 
 **Where:** `pipe/ExposureFusion.h`. Argued in full in `research/exposure-fusion.md`.
 
 The algorithm itself is sourced — Mertens et al. (2007) and Hessel & Morel
 (WACV 2020 / IPOL 9, 2019), with every constant quoted. These four are Orion's.
 
-**The number of simulated images.** [H279] Eq. (7) solves for the smallest set
-whose ranges still overlap. That constraint could not be transcribed from the
-available text with enough confidence to implement as the sole authority, so the
-search starts at 5 — the count [HM20] Fig. 10 reports for the recommended α = 8,
-β = 0.5 — rather than at 2. Starting at 2 is independently wrong: with a single
-image to allocate, the median-derived split cannot give a bright frame a darkened
-image at all, and the asymmetry the method depends on never appears.
+~~**The number of simulated images.**~~ **CLOSED 2026-07-29.** [H279] Eq. (7) and
+Algorithm 1 are now implemented, replacing a hardcoded floor of five. The edges
+are in the *input* domain, so the exposure factor is inverted rather than
+applied — inverting Eq. (3) gives `t = v/λ^k` for `k ≥ 0` and
+`t = (v−1)/λ^|k| + 1` for `k < 0`. Verified against the paper's own table: at
+α = 8 it reports N = 6, 4 and 3 for β = 0.4, 0.5 and 0.6, and the implementation
+reproduces all three. `testExposureFusionMath` prints the counts every run.
 
 **The proxy transfer function.** The method requires `t ∈ [0,1]`,
 display-referred. Orion is scene-linear, so the chain maps luminance through a
@@ -315,7 +315,7 @@ at zero. Reasoned, not sourced.
 **Also unspecified by any paper:** the epsilon guarding the weight
 normalisation, whose denominator can reach zero.
 
-## 14. Auto-enhance — the percentage, the target, and the taste
+## 15. Auto-enhance — the percentage, the target, and the taste
 
 **Where:** `pipe/AutoEnhance.h`. Argued in `research/auto-enhance.md`.
 

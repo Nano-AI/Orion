@@ -299,12 +299,14 @@ all three numbers on every run.
 
 - **The epsilon guarding the weight normalisation.** No paper specifies one, and
   the denominator can reach zero.
-- **`M` is searched from 5 upward, not from 2.** [H279] Eq. (7) solves for the
-  smallest overlapping set; the exact form of that constraint could not be
-  transcribed with enough confidence to be the sole authority, so the search
-  starts at the count [HM20] Fig. 10 reports for the recommended α = 8, β = 0.5.
-  Starting at 2 is also actively wrong here: with one image to allocate, the
-  median-derived split cannot give a bright frame a darkened image at all.
+- ✅ **`M` is solved, not hardcoded** — closed 2026-07-29. Eq. (7) and Algorithm 1
+  are implemented. The subtlety worth recording: the edges are **input**
+  intensities, so the exposure factor is *inverted*. Inverting Eq. (3),
+  `t = v/λ^k` for `k ≥ 0` and `t = (v−1)/λ^|k| + 1` for `k < 0`; Eq. (4)'s edges
+  reduce to `1 + slope·(k+N*)` and `1 − β + slope·(k+N*)`. Applying λ instead of
+  dividing by it terminates the search at M = 2 for every input. **The paper's
+  own table is what settles the reading**: at α = 8 it reports N = 6, 4 and 3
+  for β = 0.4, 0.5 and 0.6, and this reproduces all three exactly.
 - **The proxy transfer function**, the dropped robust normalisation, and the
   `gain^s` strength control are all Orion's, argued above but not published.
 - **CGF 2009** unread; nothing may be attributed to it.

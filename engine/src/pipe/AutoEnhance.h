@@ -22,7 +22,7 @@ namespace orion::pipe::auto_enhance {
 /// Balance recommends no percentage at all, and its reference implementation
 /// takes the levels as mandatory arguments. Its figure captions call a total of
 /// 1% "optimal" and "moderate", and §7 splits it half and half. See
-/// research/UNSOURCED.md §14.
+/// research/UNSOURCED.md §15.
 inline constexpr double kClipPerSide = 0.005;
 
 /// Where middle grey lands through the sRGB transfer function — CIPA

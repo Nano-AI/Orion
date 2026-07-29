@@ -165,7 +165,7 @@ argument for chasing sources before writing numbers down.
   and its reference implementation takes the levels as mandatory arguments with
   no fallback. The widely repeated "0.5% per side" is a reading of figure
   captions calling 1% total *"optimal"* and *"moderate"*. Orion uses it and
-  records it as inference in `UNSOURCED.md` §14.
+  records it as inference in `UNSOURCED.md` §15.
 - **There is no published value for the mean or median luminance of a
   well-exposed photograph.** It was looked for. What exists is CIPA
   DC-004:2004's `MAX × 0.461`, which is a target for a uniform grey card under
