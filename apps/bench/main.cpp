@@ -7,6 +7,7 @@
 
 #include "gpu/MetalDevice.h"
 #include "gpu/Resources.h"
+#include "pipe/CubeLut.h"
 #include "pipe/DevelopPipeline.h"
 #include "raw/RawImage.h"
 #include "util/ImageWriter.h"
@@ -375,6 +376,36 @@ int main(int argc, char** argv) {
             // anything to act on.
             const auto mid  = [](orion::pipe::Adjustments& a) { a.exposureEv = 1.8f; };
 
+            // A creative LUT is a file, not an adjustment, so the probe
+            // measures the strength control against a LUT loaded here. Mildly
+            // warm and not separable — the cross term is there so the probe
+            // exercises the 3D path rather than something a per-channel curve
+            // could have done.
+            {
+                orion::pipe::CubeLut look;
+                look.size = 17;
+                look.data.resize(std::size_t(17) * 17 * 17 * 3);
+                std::size_t w = 0;
+                for (int b = 0; b < 17; ++b) {
+                    for (int g = 0; g < 17; ++g) {
+                        for (int r = 0; r < 17; ++r) {
+                            const float fr = float(r) / 16.0f;
+                            const float fg = float(g) / 16.0f;
+                            const float fb = float(b) / 16.0f;
+                            look.data[w++] = std::clamp(std::pow(fr, 0.85f) + 0.05f * (fg - fb),
+                                                        0.0f, 1.0f);
+                            look.data[w++] = fg;
+                            look.data[w++] = std::clamp(std::pow(fb, 1.15f), 0.0f, 1.0f);
+                        }
+                    }
+                }
+                develop.setCreativeLut(look);
+            }
+
+            // The look is loaded, so "no look" is the context and the control
+            // being measured is the strength slider moving off zero.
+            const auto noLook = [](orion::pipe::Adjustments& a) { a.lutStrength = 0.0f; };
+
             const Probe probes[] = {
                 {"exposure +1 EV", flat, [](auto& a) { a.exposureEv = 1.0f; }, Metric::Luma, 0.5},
                 {"highlights -1",  lift, [](auto& a) { a.highlights = -1.0f; }, Metric::Luma, 0.237},
@@ -410,6 +441,9 @@ int main(int argc, char** argv) {
                 // correctly, that there is no veil to remove. A floor that
                 // failed there would be a floor demanding a filter invent haze.
                 // What pins this control is testDehazeGpu, not this line.
+                // Half the smallest ratio over the three frames: 0.26, 0.25,
+                // 0.22 of the reference.
+                {"look 1.0",       noLook, [](auto& a) { a.lutStrength = 1.0f; }, Metric::Chroma, 0.11},
                 {"dehaze 1.0",     flat, [](auto& a) { a.dehaze = 1.0f; }, Metric::Luma, 0.028,
                  "a haze-free frame has nothing to remove; t = 1 is the right answer"},
                 {"clarity +1",     flat, [](auto& a) { a.clarity = 1.0f; }, Metric::Detail, 0.062},

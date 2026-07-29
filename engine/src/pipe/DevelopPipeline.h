@@ -9,6 +9,7 @@
 
 #include "gpu/Resources.h"
 #include "pipe/HueSatMap.h"
+#include "pipe/CubeLut.h"
 #include "pipe/Dehaze.h"
 #include "pipe/LocalLaplacian.h"
 #include "pipe/ShaderParams.h"
@@ -107,6 +108,10 @@ struct Adjustments {
     float denoiseLuma   = 0.0f;   // 0..4, 0 disables the whole chain
     float denoiseColor = 0.0f;   // 0..4, applied on top of luma
 
+    /// How much of the creative LUT to apply, 0..1. The LUT itself is not an
+    /// adjustment — it is a file, set through `setCreativeLut`.
+    float lutStrength = 1.0f;
+
     /// Dehaze, 0..1. Maps onto the paper's own omega, so zero is exactly the
     /// identity and one is the value He, Sun & Tang fixed for every result in
     /// their paper. research/dehaze.md.
@@ -166,6 +171,18 @@ public:
     [[nodiscard]] WhiteBalance asShotWhiteBalance() const noexcept { return asShot_; }
 
     [[nodiscard]] const gpu::Texture& output() const { return pipeline_.output(); }
+
+    /// Loads a creative LUT, uploading its grid into the display node's second
+    /// auxiliary texture. Replaces whatever was there.
+    ///
+    /// Not an adjustment: adjustments are plain data that a sidecar round-trips
+    /// and the bench sweeps, and a lookup table is neither. What *is* an
+    /// adjustment is how much of it to apply.
+    void setCreativeLut(const CubeLut&);
+    void clearCreativeLut();
+
+    [[nodiscard]] bool hasCreativeLut() const noexcept { return lutSize_ >= 2; }
+    [[nodiscard]] const std::string& creativeLutTitle() const noexcept { return lutTitle_; }
 
     /// Sixteen bits out of the display and geometry nodes, or eight.
     ///
@@ -260,6 +277,11 @@ private:
     bool wideOutput_ = false;
 
     void pushDisplayParams(const Adjustments&);
+    int  auxCube_ = -1;
+    int  lutSize_ = 0;                       // 0 when none is loaded
+    std::array<float, 3> lutMin_{0.0f, 0.0f, 0.0f};
+    std::array<float, 3> lutMax_{1.0f, 1.0f, 1.0f};
+    std::string lutTitle_;
     std::uint32_t outW_ = 0, outH_ = 0;
     std::uint32_t frameW_ = 0, frameH_ = 0;
     int auxCurveLut_ = -1;

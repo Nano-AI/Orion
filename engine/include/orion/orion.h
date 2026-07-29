@@ -117,6 +117,11 @@ typedef struct OrionAdjustments {
     float denoise_luma;     /* 0..4                       */
     float denoise_color;   /* 0..4                       */
 
+    /* How much of the loaded creative LUT to apply, 0..1. The LUT itself is
+     * not an adjustment — see orion_engine_load_lut. Zero is byte-identical to
+     * having none loaded. */
+    float lut_strength;
+
     /* Dehaze, 0..1 — He, Sun & Tang's dark channel prior. The value is the
      * paper's own omega, so zero is exactly the identity and one is the 0.95
      * they fixed for every result they published. research/dehaze.md. */
@@ -174,6 +179,20 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
 /// needs the precision to see a change worth four decimal places.
 ///
 /// Reallocates two full-resolution textures. Not for a slider.
+/* Loads a creative LUT from a .cube file.
+ *
+ * Returns ORION_ERR_BAD_ARG when the file cannot be read or is not
+ * a .cube Orion understands; the reason is available from
+ * orion_last_error. A failed load leaves any previously loaded LUT in
+ * place, so a mistyped path does not silently drop the look. */
+OrionStatus orion_engine_load_lut(OrionEngine* engine, const char* path);
+
+/* Unloads it. Safe when none is loaded. */
+OrionStatus orion_engine_clear_lut(OrionEngine* engine);
+
+/* The loaded LUT's TITLE, or an empty string. */
+OrionStatus orion_engine_lut_title(const OrionEngine* engine, char* out, int capacity);
+
 OrionStatus orion_engine_set_wide_output(OrionEngine* engine, int wide);
 
 OrionStatus orion_engine_frame_size(const OrionEngine* engine,

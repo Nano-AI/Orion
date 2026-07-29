@@ -15,8 +15,88 @@ struct DisplayParams
     uint  resolution;   // LUT entries per row
     uint2 size;
     uint  dither;       // nonzero when this node writes eight bits
-    uint  _pad;
+    uint  lutSize;      // creative LUT grid edge; 0 when none is loaded
+    float lutStrength;
+    float _pad[3];
+    float4 lutMin;      // the file's DOMAIN_MIN
+    float4 lutMax;
 };
+
+/// A creative 3D LUT, with tetrahedral interpolation.
+///
+/// Kasson, Nin, Plouffe & Hafner compared the ways a cube can be subdivided for
+/// three-dimensional interpolation; tetrahedral is the one that wins, and it is
+/// what colour management has used since. research/luts.md.
+///
+/// Why not the hardware's trilinear filtering, which is free: trilinear is a
+/// different function, not a cheaper implementation of the same one. It reads
+/// all eight corners of the cell, and on a LUT with a hard boundary in it — a
+/// key, a hue restriction, most film emulations — the four corners on the far
+/// side of that boundary bleed across it. Tetrahedral reads four corners that
+/// all lie in the same simplex as the sample, so it cannot.
+///
+/// The grid is stored in a 2D texture because a 3D one would be the only 3D
+/// texture in the engine: x is red, and y packs blue and green as b*size + g.
+/// One corner of the cell, clamped to the grid.
+float3 cubeCorner(Texture2D<float4> cube, int3 base, int3 d, uint size)
+{
+    const int w = int(size);
+    const int3 q = min(base + d, int3(w - 1, w - 1, w - 1));
+    return cube[int2(q.x, q.z * w + q.y)].rgb;
+}
+
+float3 sampleCube(Texture2D<float4> cube, float3 c, uint size,
+                  float3 domainMin, float3 domainMax)
+{
+    const float n = float(size - 1u);
+    const float3 t = saturate((c - domainMin) / max(domainMax - domainMin,
+                                                    float3(1e-6f, 1e-6f, 1e-6f)));
+    const float3 x = t * n;
+
+    const int3 i0 = int3(min(floor(x), float3(n - 1.0f, n - 1.0f, n - 1.0f)));
+    const float3 f = x - float3(i0);
+
+    const float3 c000 = cubeCorner(cube, i0, int3(0, 0, 0), size);
+    const float3 c111 = cubeCorner(cube, i0, int3(1, 1, 1), size);
+
+    // The six tetrahedra, selected by the ordering of the fractional
+    // coordinates. Each case walks c000 to c111 along the three unit steps in
+    // descending order of their fractions, which is exactly the simplex the
+    // sample falls in.
+    if (f.r > f.g)
+    {
+        if (f.g > f.b)
+        {
+            const float3 a = cubeCorner(cube, i0, int3(1, 0, 0), size);
+            const float3 b = cubeCorner(cube, i0, int3(1, 1, 0), size);
+            return c000 + f.r * (a - c000) + f.g * (b - a) + f.b * (c111 - b);
+        }
+        if (f.r > f.b)
+        {
+            const float3 a = cubeCorner(cube, i0, int3(1, 0, 0), size);
+            const float3 b = cubeCorner(cube, i0, int3(1, 0, 1), size);
+            return c000 + f.r * (a - c000) + f.b * (b - a) + f.g * (c111 - b);
+        }
+        const float3 a = cubeCorner(cube, i0, int3(0, 0, 1), size);
+        const float3 b = cubeCorner(cube, i0, int3(1, 0, 1), size);
+        return c000 + f.b * (a - c000) + f.r * (b - a) + f.g * (c111 - b);
+    }
+    if (f.b > f.g)
+    {
+        const float3 a = cubeCorner(cube, i0, int3(0, 0, 1), size);
+        const float3 b = cubeCorner(cube, i0, int3(0, 1, 1), size);
+        return c000 + f.b * (a - c000) + f.g * (b - a) + f.r * (c111 - b);
+    }
+    if (f.b > f.r)
+    {
+        const float3 a = cubeCorner(cube, i0, int3(0, 1, 0), size);
+        const float3 b = cubeCorner(cube, i0, int3(0, 1, 1), size);
+        return c000 + f.g * (a - c000) + f.b * (b - a) + f.r * (c111 - b);
+    }
+    const float3 a = cubeCorner(cube, i0, int3(0, 1, 0), size);
+    const float3 b = cubeCorner(cube, i0, int3(1, 1, 0), size);
+    return c000 + f.g * (a - c000) + f.r * (b - a) + f.b * (c111 - b);
+}
 
 /// Ordered dithering (Bayer, 1973), 4x4.
 ///
@@ -90,6 +170,7 @@ float sampleLut(Texture2D<float> lut, float v, uint row, uint resolution)
 void developDisplay(uint3 tid : SV_DispatchThreadID,
                     uniform Texture2D<float4>   src,
                     uniform Texture2D<float>    lut,
+                    uniform Texture2D<float4>   cube,
                     uniform RWTexture2D<float4> dst,
                     uniform ConstantBuffer<DisplayParams> p)
 {
@@ -124,6 +205,22 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
         c.r = sampleLut(lut, c.r, 1u, p.resolution);
         c.g = sampleLut(lut, c.g, 2u, p.resolution);
         c.b = sampleLut(lut, c.b, 3u, p.resolution);
+    }
+
+    // ── Creative LUT ───────────────────────────────────────────────────────
+    // Last, and deliberately: a look is applied to a finished picture. Running
+    // it before the tone curve would mean the curve reshapes whatever the look
+    // did, and a .cube authored against a display-referred image expects to see
+    // one.
+    //
+    // Inside this kernel rather than as its own node, because it is pointwise
+    // and every extra pointwise pass is a 194 MB round trip at 24 MP. Same rule
+    // that fused AgX and the curve.
+    if (p.lutSize >= 2u)
+    {
+        const float3 looked = sampleCube(cube, c, p.lutSize,
+                                         p.lutMin.rgb, p.lutMax.rgb);
+        c = lerp(c, looked, saturate(p.lutStrength));
     }
 
     // No sRGB encode here. The AgX polynomial is a fit of the *display*

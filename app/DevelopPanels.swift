@@ -203,6 +203,51 @@ extension Editor {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Look") {
+            HStack(spacing: 6) {
+                Button(engine.lutName.isEmpty ? "Load LUT…" : engine.lutName) {
+                    let panel = NSOpenPanel()
+                    panel.allowedContentTypes = [.init(filenameExtension: "cube")].compactMap { $0 }
+                    panel.allowsMultipleSelection = false
+                    if panel.runModal() == .OK, let url = panel.url {
+                        engine.loadLut(path: url.path,
+                                       displayName: url.deletingPathExtension().lastPathComponent)
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+                Spacer()
+
+                if !engine.lutName.isEmpty {
+                    Button("Remove") { engine.clearLut() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                }
+            }
+
+            if let error = engine.lutError {
+                Text(error)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !engine.lutName.isEmpty {
+                slider("Strength", $engine.lutStrength, 0...1, "", 2,
+                       resetsTo: engine.defaults.lutStrength)
+            }
+
+            Text("A .cube look, applied last — after the tone curve, to a "
+               + "finished picture. Tetrahedral interpolation, so a LUT with a "
+               + "hard edge in it keeps the edge.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Dehaze") {
             slider("Dehaze", $engine.dehaze, 0...1, "", 2,
                    resetsTo: engine.defaults.dehaze)

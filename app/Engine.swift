@@ -218,6 +218,10 @@ final class Engine {
     var denoiseLuma: Float = 0     { didSet { pushAndRender() } }
     var denoiseColor: Float = 0   { didSet { pushAndRender() } }
 
+    /// How much of the loaded creative LUT to apply. The LUT itself is a file,
+    /// loaded through `loadLut`, not an adjustment.
+    var lutStrength: Float = 1     { didSet { pushAndRender() } }
+
     /// Dehaze. The dark channel prior's own omega, so zero is the identity.
     var dehaze: Float = 0          { didSet { pushAndRender() } }
 
@@ -283,6 +287,41 @@ final class Engine {
     var outputTexture: MTLTexture? {
         guard let handle, let raw = orion_engine_output_texture(handle) else { return nil }
         return Unmanaged<AnyObject>.fromOpaque(raw).takeUnretainedValue() as? MTLTexture
+    }
+
+    /// The loaded creative LUT's title, or "" when none is loaded.
+    private(set) var lutName: String = ""
+
+    /// Why the last load failed, for the panel to show. A LUT that will not
+    /// load is the user's file being wrong, not the app misbehaving, so the
+    /// reason has to reach them — the parser names the line.
+    private(set) var lutError: String?
+
+    func loadLut(path: String, displayName: String) {
+        guard let handle else { return }
+
+        let status = orion_engine_load_lut(handle, path)
+        guard status == ORION_OK else {
+            lutError = errorText(status)
+            return
+        }
+
+        lutError = nil
+        var buffer = [CChar](repeating: 0, count: 256)
+        orion_engine_lut_title(handle, &buffer, Int32(buffer.count))
+        let title = String(cString: buffer)
+        // A .cube is not obliged to carry a TITLE, and most do not. The file's
+        // own name is what the user picked and what they will look for.
+        lutName = title.isEmpty ? displayName : title
+        pushAndRender()
+    }
+
+    func clearLut() {
+        guard let handle else { return }
+        orion_engine_clear_lut(handle)
+        lutName = ""
+        lutError = nil
+        pushAndRender()
     }
 
     func open(path: String) throws {
@@ -453,6 +492,7 @@ final class Engine {
             gradeShadow: gradeShadow, gradeMidtone: gradeMidtone,
             gradeHighlight: gradeHighlight,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
+            lutStrength: lutStrength,
             dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
@@ -479,6 +519,7 @@ final class Engine {
         gradeMidtone = s.gradeMidtone
         gradeHighlight = s.gradeHighlight
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
+        lutStrength = s.lutStrength
         dehaze = s.dehaze
         clarity = s.clarity
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
@@ -637,6 +678,7 @@ final class Engine {
             grade_midtone: (gradeMidtone[0], gradeMidtone[1], gradeMidtone[2]),
             grade_highlight: (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2]),
             denoise_luma: denoiseLuma, denoise_color: denoiseColor,
+            lut_strength: lutStrength,
             dehaze: dehaze, clarity: clarity,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,

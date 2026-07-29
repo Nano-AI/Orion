@@ -249,3 +249,34 @@ frame.
 pixels. That one is argued in `research/dehaze.md` as a closer reading of Eq. (1)
 than the paper's own inputs, but it is still a departure and the clamp it makes
 necessary is a piece of behaviour the paper does not specify.
+
+## 12. Creative LUTs — the format and the interpolation, both unverified
+
+**Where:** `pipe/CubeLut.cpp`, and `sampleCube` in `shaders/develop_display.slang`.
+Full write-up in `research/luts.md`.
+
+Two distinct gaps, and neither is about whether the code works — both are about
+whether the belief the code encodes has been checked against a document.
+
+**The `.cube` format.** Adobe's *Cube LUT Specification* is the reference. The
+keywords, their defaults, the size limits and — most importantly — the fact that
+**red varies fastest** in the data block are all implemented from how the format
+is universally documented and written, not from the specification text, which
+was not retrieved. The ordering is asserted by `testCreativeLut`, but that
+assertion encodes the belief; it does not independently confirm it. If it is
+wrong, every LUT Orion loads has red and blue swapped and the result looks like
+a deliberate cross-process look.
+
+**Tetrahedral interpolation.** The six-case decomposition implemented is
+standard in colour management, and its correctness properties are checked
+directly: it reproduces the grid points exactly, and it demonstrably differs
+from trilinear where the two must differ. What is *not* sourced is the claim
+that tetrahedral is the right choice among trilinear, prism, pyramid and
+tetrahedral subdivision. The canonical comparison is believed to be Kasson, Nin,
+Plouffe & Hafner, *Performing Color Space Conversions with Three-Dimensional
+Linear Interpolation*, Journal of Electronic Imaging 4(3), 1995 — cited here
+from memory, not retrieved.
+
+**To close both:** fetch the two documents and either confirm the values or fix
+them. The session that wrote this had exhausted its web-search budget and the
+direct fetches it tried did not land.

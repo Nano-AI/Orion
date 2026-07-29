@@ -118,8 +118,8 @@ struct Sharpen {
 };
 static_assert(sizeof(Sharpen) == 32);
 
-/// AgX plus the tone curve plus the display encode.
-struct Display {
+/// AgX plus the tone curve plus the creative LUT plus the display encode.
+struct alignas(16) Display {
     float         contrast;
     float         pivot;
     std::uint32_t curveIdentity;
@@ -127,9 +127,16 @@ struct Display {
     std::uint32_t size[2];
     /// Nonzero when this node writes eight bits. See develop_display.slang.
     std::uint32_t dither;
-    std::uint32_t _pad;
+    /// Edge length of the creative LUT's grid; zero when none is loaded, which
+    /// is what makes the lookup free rather than an identity table's worth of
+    /// fetches on every pixel of every frame.
+    std::uint32_t lutSize;
+    float         lutStrength;
+    float         _pad[3];
+    float         lutMin[4];    // the .cube file's DOMAIN_MIN, w unused
+    float         lutMax[4];
 };
-static_assert(sizeof(Display) == 32);
+static_assert(sizeof(Display) == 80);
 
 /// Three-way colour grading. Mirrors GradeParams in color_grade.slang.
 /// Each row is an already zero-sum RGB offset with that zone's slope in w.

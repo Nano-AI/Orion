@@ -404,8 +404,14 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // that survived the whole pipeline in float gets quantised on the way out.
     // Half float rather than 16-bit integer because it is guaranteed
     // read-write on Metal, and because it holds the shadows better.
+    // The creative LUT's grid, allocated for the largest edge Orion accepts so
+    // that loading a different LUT is an upload rather than a recompile. A 65
+    // grid is 4.4 MB, which is nothing beside the frame buffers.
+    auxCube_ = pipeline_.addAuxTexture(kMaxCubeSize, kMaxCubeSize * kMaxCubeSize,
+                                       PixelFormat::RGBA32Float);
     nDisplay_   = pipeline_.add({"develop:display", "developDisplay", {nGrade_},
-                                 PixelFormat::RGBA8Unorm, {}, {auxCurveLut_}});
+                                 PixelFormat::RGBA8Unorm, {},
+                                 {auxCurveLut_, auxCube_}});
 
     // Orientation is last, and is the only node whose output dimensions differ
     // from its input — a quarter turn swaps them.
@@ -1104,7 +1110,12 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
     const bool curveMoved = first || !sameCurve(adj.curve, lastAdj_.curve);
 
-    if (first || adj.contrast != lastAdj_.contrast || curveMoved) {
+    // The creative LUT's strength lives in this node's parameters too, so it
+    // has to be in the condition that re-pushes them. Leaving it out is not a
+    // visible bug — the slider simply does nothing, and the bench reports the
+    // control as dead, which is how this one was found.
+    if (first || adj.contrast != lastAdj_.contrast || curveMoved ||
+        adj.lutStrength != lastAdj_.lutStrength) {
         pushDisplayParams(adj);
     }
 
@@ -1198,13 +1209,80 @@ std::uint32_t DevelopPipeline::frameWidth()  const noexcept { return frameW_; }
 std::uint32_t DevelopPipeline::frameHeight() const noexcept { return frameH_; }
 
 void DevelopPipeline::pushDisplayParams(const Adjustments& adj) {
-    params::Display d{adj.contrast, -2.5f,
-                      adj.curve.isIdentity() ? 1u : 0u,
-                      kCurveResolution, {width_, height_},
-                      // Dither only when this node is the one quantising. At
-                      // sixteen bits there is nothing to hide.
-                      wideOutput_ ? 0u : 1u, 0u};
+    params::Display d{};
+    d.contrast      = adj.contrast;
+    d.pivot         = -2.5f;
+    d.curveIdentity = adj.curve.isIdentity() ? 1u : 0u;
+    d.resolution    = kCurveResolution;
+    d.size[0] = width_; d.size[1] = height_;
+    // Dither only when this node is the one quantising. At sixteen bits there
+    // is nothing to hide.
+    d.dither = wideOutput_ ? 0u : 1u;
+
+    // A strength of zero is the same as no LUT at all, and saying so here means
+    // the shader skips the lookup entirely rather than interpolating a table it
+    // is about to discard.
+    const bool applying = lutSize_ >= 2 && adj.lutStrength > 1e-4f;
+    d.lutSize     = applying ? static_cast<std::uint32_t>(lutSize_) : 0u;
+    d.lutStrength = std::clamp(adj.lutStrength, 0.0f, 1.0f);
+    for (int c = 0; c < 3; ++c) {
+        d.lutMin[c] = lutMin_[static_cast<std::size_t>(c)];
+        d.lutMax[c] = lutMax_[static_cast<std::size_t>(c)];
+    }
+
     pipeline_.setParams(nDisplay_, &d, sizeof d);
+}
+
+void DevelopPipeline::setCreativeLut(const CubeLut& lut) {
+    if (!lut.valid()) { clearCreativeLut(); return; }
+
+    // The texture is allocated at the largest accepted edge, so the upload has
+    // to be a full-size buffer whatever the file's grid is: rows are
+    // kMaxCubeSize entries wide and the shader only ever indexes the first
+    // `lutSize_` of them.
+    std::vector<float> grid(static_cast<std::size_t>(kMaxCubeSize) *
+                            kMaxCubeSize * kMaxCubeSize * 4, 0.0f);
+
+    const int n = lut.size;
+    for (int b = 0; b < n; ++b) {
+        for (int g = 0; g < n; ++g) {
+            for (int r = 0; r < n; ++r) {
+                // Red varies fastest in the file; y packs blue and green.
+                //
+                // The row index uses the LUT's own edge, not the texture's
+                // width — `b * n + g` is what the shader recomputes, and the
+                // texture is merely wide enough to hold the largest one. Using
+                // the width here instead puts every blue slice in the wrong
+                // place, which reads as a plausible colour cast rather than as
+                // an obvious break.
+                const std::size_t src =
+                    ((static_cast<std::size_t>(b) * n + g) * n + r) * 3;
+                const std::size_t row = static_cast<std::size_t>(b) * n + g;
+                const std::size_t dst = (row * kMaxCubeSize + r) * 4;
+                grid[dst + 0] = lut.data[src + 0];
+                grid[dst + 1] = lut.data[src + 1];
+                grid[dst + 2] = lut.data[src + 2];
+                grid[dst + 3] = 1.0f;
+            }
+        }
+    }
+
+    pipeline_.updateAux(auxCube_, grid.data(),
+                        static_cast<std::size_t>(kMaxCubeSize) * 4 * sizeof(float));
+
+    lutSize_  = lut.size;
+    lutMin_   = lut.domainMin;
+    lutMax_   = lut.domainMax;
+    lutTitle_ = lut.title;
+    pushDisplayParams(lastAdj_);
+}
+
+void DevelopPipeline::clearCreativeLut() {
+    lutSize_ = 0;
+    lutTitle_.clear();
+    lutMin_ = {0.0f, 0.0f, 0.0f};
+    lutMax_ = {1.0f, 1.0f, 1.0f};
+    pushDisplayParams(lastAdj_);
 }
 
 void DevelopPipeline::setWideOutput(bool wide) {

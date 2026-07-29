@@ -9,6 +9,12 @@
 
 #include "orion/orion.h"
 
+#include "pipe/CubeLut.h"
+
+#include <fstream>
+#include <iterator>
+#include <cstring>
+
 #include "Engine.h"
 
 #include <algorithm>
@@ -166,6 +172,7 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.curve.green  = toChannel(adj->curve_green);
         a.curve.blue   = toChannel(adj->curve_blue);
         a.dehaze          = adj->dehaze;
+        a.lutStrength     = adj->lut_strength;
         a.clarity         = adj->clarity;
         a.sharpenAmount   = adj->sharpen_amount;
         a.sharpenRadius   = adj->sharpen_radius;
@@ -213,6 +220,45 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
         const auto& d = engine->impl.develop();
         *out_width  = d.outputWidth();
         *out_height = d.outputHeight();
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_load_lut(OrionEngine* engine, const char* path) {
+    if (engine == nullptr || path == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        std::ifstream in(path, std::ios::binary);
+        if (!in) throw std::runtime_error(std::string("cannot open ") + path);
+
+        std::string text((std::istreambuf_iterator<char>(in)),
+                          std::istreambuf_iterator<char>());
+
+        const auto parsed = orion::pipe::parseCube(text);
+        // Thrown, not returned, so the reason reaches orion_last_error — a
+        // status code alone would tell the user their LUT failed and nothing
+        // about which line of it did.
+        if (!parsed.ok) throw std::runtime_error(parsed.error);
+
+        engine->impl.developMutable().setCreativeLut(parsed.lut);
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_clear_lut(OrionEngine* engine) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        engine->impl.developMutable().clearCreativeLut();
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_lut_title(const OrionEngine* engine, char* out, int capacity) {
+    if (engine == nullptr || out == nullptr || capacity <= 0) return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        const std::string& title = engine->impl.develop().creativeLutTitle();
+        const int n = std::min<int>(capacity - 1, static_cast<int>(title.size()));
+        std::memcpy(out, title.data(), static_cast<std::size_t>(n));
+        out[n] = '\0';
         return ORION_OK;
     });
 }

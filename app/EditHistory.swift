@@ -122,6 +122,7 @@ struct DevelopState: Equatable, Codable {
     var gradeHighlight: [Float] = [0, 0, 0]
     var denoiseLuma: Float = 0
     var denoiseColor: Float = 0
+    var lutStrength: Float = 1
     var dehaze: Float = 0
     var clarity: Float = 0
     var sharpenAmount: Float = 0
@@ -157,7 +158,7 @@ extension DevelopState {
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue
         case highlightRecovery, denoiseLuma, denoiseColor
         case gradeShadow, gradeMidtone, gradeHighlight
-        case dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
+        case lutStrength, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case curve, hueShift, satShift, lumShift
 
         /// What `denoiseColor` was called before the interface moved to
@@ -203,6 +204,7 @@ extension DevelopState {
         highlightRecovery = float(.highlightRecovery) ?? highlightRecovery
         denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
         denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
+        lutStrength = float(.lutStrength) ?? lutStrength
         dehaze = float(.dehaze) ?? dehaze
         clarity = float(.clarity) ?? clarity
         sharpenAmount = float(.sharpenAmount) ?? sharpenAmount

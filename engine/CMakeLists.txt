@@ -10,6 +10,7 @@ add_library(orion_engine STATIC
     src/gpu/Resources.mm
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp
+    src/pipe/CubeLut.cpp
     src/pipe/LensDatabase.cpp
     src/pipe/ToneCurve.cpp
     src/pipe/WhiteBalance.cpp
