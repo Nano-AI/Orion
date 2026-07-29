@@ -112,7 +112,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 - Mask combine operators (add/subtract/intersect)
 - AI subject/sky selection (Core ML) — needs the mask system first
 - Spot removal (sensor dust and blemishes, not Photoshop-grade healing)
-- **No brush masking in v1** — deliberately cut
+- Brush masks — **reinstated 2026-07-29**, see DECISIONS #54 (was cut from v1)
 - Presets (user + built-in looks)
 - Copy/paste/sync settings across a selection
 - Batch export
@@ -123,7 +123,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 ## M5 — Advanced
 
 - ML denoise (NAFNet-class via Core ML) as a **background pass**, not a live slider
-- Brush masking (deferred from M4)
+- Edge-aware brush refinement beyond M4's guided-filter pass
 - User-loadable DCP profiles
 - X-Trans support (Markesteijn)
 - Customizable tool panels / saved workspaces

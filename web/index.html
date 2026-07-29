@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orion — a raw editor that shows its working</title>
+<meta name="description" content="A fast, subscription-free raw photo editor for macOS. 9.29 ms at full resolution. Every non-trivial filter cites a published paper, and the ones that don't are on a list you can read.">
+<meta name="color-scheme" content="dark light">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231b1b1d'/><circle cx='16' cy='16' r='6' fill='none' stroke='%234db6c4' stroke-width='2'/></svg>">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="chrome">
+  <div class="chrome__in">
+    <a class="wordmark" href="#main">Orion</a>
+    <nav class="chrome__nav" aria-label="Sections">
+      <a href="#ledger">Ledger</a>
+      <a href="#speed">Speed</a>
+      <a href="#masks">Masks</a>
+      <a href="#built">Built</a>
+    </nav>
+    <button type="button" class="themebtn" id="themebtn" aria-live="polite">
+      <span class="themebtn__dot" aria-hidden="true"></span><span id="themelabel">Dark</span>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ─────────────────────────── HERO ─────────────────────────── -->
+  <section class="band band--hero">
+    <div class="wrap hero">
+      <div class="hero__say">
+        <p class="eyebrow">Raw development · macOS 14 and later</p>
+        <h1 class="h1">A raw editor that<br>shows its working.</h1>
+        <p class="lede">
+          Orion develops a 24-megapixel Sony raw file at <em>full resolution</em> while you drag the
+          slider — not a downsampled proxy that sharpens up after you let go. Every non-trivial
+          filter in it names the published paper it came from, and the ones that don't yet are on a
+          list you are welcome to read.
+        </p>
+        <div class="cta">
+          <a class="btn btn--go" href="#ledger">Read the ledger</a>
+          <a class="btn" href="#speed">See what's measured</a>
+        </div>
+        <p class="cta__note">
+          Not released yet. Four milestones of five are done or in flight; this page tracks
+          what is actually built, and says where it stops.
+        </p>
+      </div>
+
+      <aside class="panel" aria-label="Orion by the numbers">
+        <div class="panel__head">
+          <span class="mono-label">Measured</span>
+          <span class="panel__src">planning/STATUS.md</span>
+        </div>
+
+        <div class="row">
+          <div class="row__line"><span class="row__k">Subscription</span><span class="row__v row__v--word">none</span></div>
+          <p class="row__hint">One-time purchase or free. No price is set yet.</p>
+          <div class="tick" aria-hidden="true"></div>
+        </div>
+
+        <div class="row">
+          <div class="row__line"><span class="row__k">Slider feedback</span><span class="row__v"><span class="num" data-to="9.29" data-dp="2">9.29</span> ms</span></div>
+          <p class="row__hint">95th percentile, 24 MP Sony ARW, full resolution</p>
+          <div class="tick" aria-hidden="true"></div>
+        </div>
+
+        <div class="row">
+          <div class="row__line"><span class="row__k">Nodes recomputed</span><span class="row__v"><span class="num" data-to="3" data-dp="0">3</span></span></div>
+          <p class="row__hint">Of a 114-node graph. An exposure drag dirties nothing above itself.</p>
+          <div class="tick" aria-hidden="true"></div>
+        </div>
+
+        <div class="row">
+          <div class="row__line"><span class="row__k">Automated checks</span><span class="row__v"><span class="num" data-to="3611" data-dp="0" data-sep="1">3,611</span></span></div>
+          <p class="row__hint">397 engine · 3,214 canvas geometry · 0 failures</p>
+          <div class="tick" aria-hidden="true"></div>
+        </div>
+
+        <div class="row">
+          <div class="row__line"><span class="row__k">Lens profiles</span><span class="row__v"><span class="num" data-to="1558" data-dp="0" data-sep="1">1,558</span></span></div>
+          <p class="row__hint">lensfun's measured database, vendored with its licence</p>
+          <div class="tick" aria-hidden="true"></div>
+        </div>
+
+        <div class="row row--last">
+          <div class="row__line"><span class="row__k">Open in the register</span><span class="row__v"><span class="num" data-to="12" data-dp="0">12</span></span></div>
+          <p class="row__hint">Things Orion has <em>not</em> sourced, written down on purpose</p>
+        </div>
+
+        <div class="panel__foot"><span>6,024 × 4,024</span><span class="panel__ms">9.29 ms</span></div>
+      </aside>
+    </div>
+  </section>
+
+  <div class="rule" role="presentation"><span class="rule__ticks"></span></div>
+
+  <!-- ─────────────────────────── LEDGER ─────────────────────────── -->
+  <section class="band" id="ledger">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow">The register</p>
+        <h2 class="h2">Every filter names its paper.<br>The ones that don't are listed too.</h2>
+        <p class="body body--wide">
+          Most editors ask you to trust the numbers inside them. Orion's rule is that a
+          technically non-trivial filter cites a published, dated reference, kept in the repository
+          beside the code. The rule exists because it failed once: a set of plausible-looking
+          constants put a purple cast on every photograph, and nothing in the code looked wrong.
+          What could not be checked was where the numbers had come from.
+        </p>
+      </div>
+
+      <div class="ledger">
+        <table class="tbl tbl--ledger">
+          <caption class="vh">Filters, their published sources, and their sourcing status</caption>
+          <thead>
+            <tr><th scope="col">What you touch</th><th scope="col">Where the maths comes from</th><th scope="col">Status</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row" data-l="Control">Clarity</th>
+              <td data-l="Source">Paris, Hasinoff &amp; Kautz, SIGGRAPH 2011 · Aubry et al., ACM TOG 33(5), 2014</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Dehaze</th>
+              <td data-l="Source">He, Sun &amp; Tang, CVPR 2009 · IEEE TPAMI 33(12), 2011</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Shadow lift</th>
+              <td data-l="Source">Hessel &amp; Morel, IPOL 9, 2019 / WACV 2020 · Mertens et al., 2007</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Highlights &amp; shadows</th>
+              <td data-l="Source">He, Sun &amp; Tang, <em>Guided Image Filtering</em>, ECCV 2010 · TPAMI 35(6), 2013</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Demosaic</th>
+              <td data-l="Source">Luis Sanz Rodríguez, RCD — MIT-licensed, and darktable's chosen default</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">White balance</th>
+              <td data-l="Source">Adobe's DNG SDK <code>dng_temperature</code>, over Robertson's 31-row table</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Tone mapping</th>
+              <td data-l="Source">Troy Sobotka's AgX, the default view transform in Blender 4.0</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Creative LUTs</th>
+              <td data-l="Source">Adobe, <em>Cube LUT Specification 1.0</em>, 2013 · Sakamoto &amp; Itooka, US 4,275,413, 1981</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Tone curve</th>
+              <td data-l="Source">Fritsch &amp; Carlson, <em>SIAM J. Numer. Anal.</em> 17(2), 1980</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Colour grading wheels</th>
+              <td data-l="Source">Van Hurkman, <em>Color Correction Handbook</em>, 2nd ed., 2014</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Gradient mask falloff</th>
+              <td data-l="Source">Perlin, <em>Improving Noise</em>, ACM TOG 21(3), 2002 — smootherstep, not smoothstep</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+            <tr>
+              <th scope="row" data-l="Control">Lens corrections</th>
+              <td data-l="Source">lensfun's measured database, vendored unmodified under CC BY-SA 3.0</td>
+              <td data-l="Status"><span class="chip chip--ok">Sourced</span></td>
+            </tr>
+
+            <tr class="tr--open">
+              <th scope="row" data-l="Control">Highlights &amp; shadows</th>
+              <td data-l="Gap">Where the four tonal bands sit — −5.5, −2.5, +2.5, +5.5 EV from middle grey. The shape is published; the centres are Orion's own.</td>
+              <td data-l="Status"><span class="chip chip--open">In register</span></td>
+            </tr>
+            <tr class="tr--open">
+              <th scope="row" data-l="Control">Vibrance</th>
+              <td data-l="Gap">Backs off in proportion to how saturated a colour already is. The idea is universal; this exact curve is nobody's published one.</td>
+              <td data-l="Status"><span class="chip chip--open">In register</span></td>
+            </tr>
+            <tr class="tr--open">
+              <th scope="row" data-l="Control">Colour mixer</th>
+              <td data-l="Gap">Eight hue bands and their falloff. Reasoned — overlapping so a gradient across two of them cannot band — but not cited.</td>
+              <td data-l="Status"><span class="chip chip--open">In register</span></td>
+            </tr>
+            <tr class="tr--open">
+              <th scope="row" data-l="Control">Camera profile</th>
+              <td data-l="Gap">The stages are Adobe's published ones. The hue-twist numbers are fitted from one camera body, not read from a maker's profile.</td>
+              <td data-l="Status"><span class="chip chip--open">In register</span></td>
+            </tr>
+            <tr class="tr--open">
+              <th scope="row" data-l="Control">Auto levels</th>
+              <td data-l="Gap">The paper recommends no clipping percentage at all. The widely repeated "0.5% per side" is a reading of a figure caption, and it is used as inference.</td>
+              <td data-l="Status"><span class="chip chip--open">In register</span></td>
+            </tr>
+            <tr class="tr--open">
+              <th scope="row" data-l="Control">Dehaze</th>
+              <td data-l="Gap">The atmospheric light's percentile is taken over pooled 4×4 block maxima, not over pixels as published.</td>
+              <td data-l="Status"><span class="chip chip--open">In register</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="foot-note">
+        Twelve entries are open, ordered by how much the gap actually costs the photograph.
+        They live in <code>research/UNSOURCED.md</code>, and the list is meant to shrink.
+      </p>
+    </div>
+  </section>
+
+  <div class="rule" role="presentation"><span class="rule__ticks"></span></div>
+
+  <!-- ─────────────────────────── SPEED ─────────────────────────── -->
+  <section class="band" id="speed">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow">The number</p>
+        <h2 class="h2">9.29 ms — and exactly<br>what that is a measurement of.</h2>
+      </div>
+
+      <div class="split">
+        <div class="split__a">
+          <p class="body">
+            It is the 95th-percentile time to redraw after the exposure slider moves, on a
+            24-megapixel Sony ARW, at the file's full 6,024 × 4,024 — not at a preview size that
+            gets refined once your hand comes off the mouse. Three of the pipeline's 114 nodes
+            recompute, because an exposure change dirties nothing above itself in the graph.
+          </p>
+          <p class="body">
+            That figure has not moved while clarity, dehaze, shadow lift, creative LUTs and masks
+            were added on top of it. Each of them collapses to nothing when its slider sits at zero,
+            so the photographer who never touches dehaze never pays for it.
+          </p>
+        </div>
+        <div class="split__b">
+          <figure class="stat">
+            <div class="stat__n">9.29<span class="stat__u">ms</span></div>
+            <figcaption class="stat__c">p95 · exposure drag · 6,024 × 4,024 · Sony ILCE-7M3</figcaption>
+            <div class="tick tick--wide" aria-hidden="true"></div>
+          </figure>
+        </div>
+      </div>
+
+      <div class="tablewrap">
+        <table class="tbl tbl--cost">
+          <caption class="vh">Cost of each control while it is being dragged</caption>
+          <thead>
+            <tr><th scope="col">What you're dragging</th><th scope="col">Nodes</th><th scope="col">Per frame</th><th scope="col">Runs at</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row" data-l="Control">Exposure, contrast, tone</th><td data-l="Nodes" class="n">3</td><td data-l="Per frame" class="n hot">9.29 ms</td><td data-l="Runs at">full</td></tr>
+            <tr><th scope="row" data-l="Control">A gradient mask</th><td data-l="Nodes" class="n">4</td><td data-l="Per frame" class="n hot">~12 ms</td><td data-l="Runs at">full</td></tr>
+            <tr><th scope="row" data-l="Control">Creative LUT</th><td data-l="Nodes" class="n">—</td><td data-l="Per frame" class="n hot">7 ms</td><td data-l="Runs at">fused into display</td></tr>
+            <tr><th scope="row" data-l="Control">Shadow lift</th><td data-l="Nodes" class="n">32</td><td data-l="Per frame" class="n hot">37–48 ms</td><td data-l="Runs at">quarter</td></tr>
+            <tr><th scope="row" data-l="Control">Clarity</th><td data-l="Nodes" class="n">32</td><td data-l="Per frame" class="n hot">58 ms</td><td data-l="Runs at">full</td></tr>
+            <tr><th scope="row" data-l="Control">Dehaze</th><td data-l="Nodes" class="n">16</td><td data-l="Per frame" class="n hot">108 ms</td><td data-l="Runs at">full</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <p class="note__k">The two slow ones are slow, and it says so</p>
+          <p class="note__b">
+            Clarity and dehaze are correct, not yet interactive. Dehaze is 108 ms and the profiler
+            names the reason: six full-resolution 15-tap rank passes, each within 2% of the others.
+            There is nothing to fix <em>one</em> of. The published faster algorithm is a sequential
+            scan, which is what a GPU is worst at — so it is written down as a candidate rather
+            than attempted and quietly abandoned.
+          </p>
+        </div>
+        <div class="note">
+          <p class="note__k">A green test suite is not evidence</p>
+          <p class="note__b">
+            The mask code was checked by breaking it on purpose, eight ways. Seven died at once.
+            The eighth — pinning the canvas map's origin so the overlay ignores panning entirely —
+            passed all 3,100 checks, because the test had proved the map was invertible rather than
+            that it was the right map. The check was rewritten until all eight die.
+          </p>
+        </div>
+        <div class="note">
+          <p class="note__k">Measured on photographs, not on gradients</p>
+          <p class="note__b">
+            Synthetic test images hide the failures that matter. Auto-enhance is judged by whether
+            a real frame's median luminance lands where it was aimed: 0.617 → 0.473 on a daylight
+            frame, 0.129 → 0.461 on a night one. Not by whether the picture "moved".
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule" role="presentation"><span class="rule__ticks"></span></div>
+
+  <!-- ─────────────────────────── MASKS ─────────────────────────── -->
+  <section class="band" id="masks">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow">Local edits · in progress</p>
+        <h2 class="h2">Put the gradient where<br>you want it, with your hands.</h2>
+        <p class="body body--wide">
+          Linear and radial gradients, dragged on the picture rather than dialled in on a slider.
+          A mask is stored as its parameters — a centre, an angle, two radii — so it survives a
+          window resize, and an export matches the preview it was made on. It also stays on its
+          subject when you crop, turn or straighten the frame, because the placement is carried
+          through the same transform the geometry shader uses rather than a second guess at it.
+        </p>
+      </div>
+
+      <figure class="shot">
+        <img src="img/orion-mask-linear.jpg" width="1600" height="1000" alt="Orion editing a night photograph of three Aston Martins on a forecourt. A linear gradient mask is drawn across the frame with three dashed guide lines and draggable endpoint handles; the Local panel on the right reads Exposure −1.60 EV." loading="lazy" decoding="async">
+        <figcaption>
+          <span class="shotk">Linear gradient, −1.60 EV local.</span>
+          The three lines are the zero edge, the centre and the full edge. For a linear mask,
+          length <em>is</em> the feather — so the Feather slider is hidden rather than left there
+          doing nothing, which is what it was doing until somebody measured it.
+        </figcaption>
+      </figure>
+
+      <figure class="shot">
+        <img src="img/orion-mask-radial.jpg" width="1600" height="1000" alt="The same photograph with a radial gradient mask over the silver car. The mask boundary is a visibly non-elliptical closed curve with four axis handles and a rotate handle; the Local panel reads Exposure 1.60 EV, Feather 0.30." loading="lazy" decoding="async">
+        <figcaption>
+          <span class="shotk">Radial gradient, +1.60 EV local.</span>
+          Look at the boundary: it is <em>not</em> a screen ellipse. The mask is isotropic in
+          normalised coordinates and a photograph is not square, so the outline is sampled in the
+          mask's own space and mapped out point by point. Take the angle on screen instead and the
+          handle slides out from under your cursor by an amount that grows the further the frame
+          is from square.
+        </figcaption>
+      </figure>
+
+      <div class="proof">
+        <p class="proof__k">The check that matters, on a real frame</p>
+        <p class="proof__b">
+          A linear mask at −1.6 EV, measured either side of the gradient. Where coverage is zero
+          the pixel has to be left <em>exactly</em> alone — otherwise a mask lays a faint edit
+          across the whole photograph and still looks right.
+        </p>
+        <table class="tbl tbl--proof">
+          <caption class="vh">Mean luminance either side of a linear mask, before and after</caption>
+          <thead><tr><th scope="col">Region</th><th scope="col">Mask off</th><th scope="col">Mask on</th></tr></thead>
+          <tbody>
+            <tr><th scope="row" data-l="Region">Zero side</th><td data-l="Mask off" class="n">0.4703</td><td data-l="Mask on" class="n hot">0.4703</td></tr>
+            <tr><th scope="row" data-l="Region">Full side</th><td data-l="Mask off" class="n">0.4110</td><td data-l="Mask on" class="n hot">0.1981</td></tr>
+          </tbody>
+        </table>
+        <p class="proof__f">Bit-identical on the zero side. That is the invariant; the visible change is the easy half.</p>
+      </div>
+
+      <p class="warn">
+        <span class="warn__k">Not built yet:</span> mask groups and compositing, guided-filter edge
+        refinement, luminance and colour range masks, and subject or sky selection. Brush masks have
+        their kernel and its tests, and nothing you can yet reach. None of that is on this page
+        pretending to exist.
+      </p>
+    </div>
+  </section>
+
+  <div class="rule" role="presentation"><span class="rule__ticks"></span></div>
+
+  <!-- ─────────────────────────── BUILT ─────────────────────────── -->
+  <section class="band" id="built">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow">Where it actually is</p>
+        <h2 class="h2">What works today,<br>and what doesn't.</h2>
+      </div>
+
+      <div class="cols">
+        <div class="col">
+          <p class="col__h"><span class="chip chip--ok">Built</span></p>
+          <ul class="list">
+            <li>Folder browsing — no catalogue to import into</li>
+            <li>Ratings, reject flags and colour labels, written to XMP sidecars</li>
+            <li>Sony ARW, plus Bayer cameras and DNG through LibRaw</li>
+            <li>Exposure, contrast, highlights, shadows, whites, blacks — all in scene-linear light</li>
+            <li>White balance, temperature and tint</li>
+            <li>Tone curve, per channel</li>
+            <li>Colour mixer across eight hue bands</li>
+            <li>Colour grading wheels and split toning</li>
+            <li>Clarity, dehaze, shadow lift, creative <code>.cube</code> LUTs</li>
+            <li>One-click auto-enhance that moves ordinary sliders you can then argue with</li>
+            <li>Sharpening and profiled denoise</li>
+            <li>Crop, rotate, straighten</li>
+            <li>Lens distortion, vignetting and chromatic aberration from measured profiles</li>
+            <li>Linear and radial gradient masks, dragged on the canvas</li>
+            <li>Export to JPEG, TIFF and PNG, with location data stripped by default</li>
+            <li>Undo, redo and a history panel</li>
+          </ul>
+        </div>
+        <div class="col">
+          <p class="col__h"><span class="chip chip--open">Not yet</span></p>
+          <ul class="list list--muted">
+            <li>Brush masks — the kernel is in; painting on the canvas is not</li>
+            <li>Mask groups — add, subtract, intersect</li>
+            <li>Luminance and colour range masks</li>
+            <li>Subject and sky selection</li>
+            <li>Spot and blemish removal</li>
+            <li>Perspective and keystone correction</li>
+            <li>Presets, copy-paste settings, batch export</li>
+            <li>Film grain, snapshots, output sharpening</li>
+            <li>Fujifilm X-Trans files — refused by name today rather than rendered as a scramble</li>
+          </ul>
+          <p class="col__h col__h--gap"><span class="chip chip--cut">Cut from v1</span></p>
+          <ul class="list list--muted">
+            <li>Cloud sync and a mobile app</li>
+            <li>A full asset manager</li>
+            <li>Layers and Photoshop-grade retouching</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule" role="presentation"><span class="rule__ticks"></span></div>
+
+  <!-- ─────────────────────────── CLOSE ─────────────────────────── -->
+  <section class="band band--close">
+    <div class="wrap close">
+      <p class="eyebrow">The other thing</p>
+      <h2 class="h2 h2--close">No subscription.</h2>
+      <p class="lede lede--close">
+        Lightroom is rented. Orion is meant to be a one-time purchase or free — that decision is
+        written down, the price is not, and nothing on this page will pretend otherwise until it is.
+        It is built by one developer, for their own camera and for the students and hobbyists
+        Adobe's monthly bill has priced out.
+      </p>
+      <div class="tick tick--wide" aria-hidden="true"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <div class="foot__col">
+      <p class="mono-label">Under the hood</p>
+      <p class="foot__b">C++20 engine · Metal compute · shaders in Slang · SwiftUI and AppKit ·
+      LibRaw decode · OpenColorIO and lcms2 · scene-linear Rec.2020 in half float · XMP sidecars
+      as the source of truth.</p>
+    </div>
+    <div class="foot__col">
+      <p class="mono-label">Credits</p>
+      <p class="foot__b">Lens profiles from the lensfun database, vendored unmodified under
+      CC BY-SA 3.0. Demosaic ported from Luis Sanz Rodríguez's MIT-licensed RCD. No Adobe data
+      is shipped.</p>
+    </div>
+    <div class="foot__col">
+      <p class="mono-label">Status</p>
+      <p class="foot__b">macOS 14 and later. Milestone 4 of five in progress. Screenshots on this
+      page are real renders from the running application, not mockups.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="main.js"></script>
+</body>
+</html>

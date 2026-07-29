@@ -79,7 +79,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Luminance / color range masks | M4 | Cheap given the bilateral grid already exists from M1 |
 | Mask combine (add/subtract/intersect) | M4 | Needed to make the above compose |
 | AI subject / sky selection (Core ML) | M4 | Requires the mask system first |
-| Brush mask | **cut (v1)** | Not wanted — stroke capture + edge-aware snapping + mask storage is the expensive one. Revisit post-v1 |
+| Brush mask | M4 | **Reinstated 2026-07-29** (DECISIONS #54). The cost estimate was wrong: storage is a list of centres, not a raster, and edge-aware snapping is the guided filter already built. Kernel and tests landed; not yet reachable |
 
 ## 9. Repair
 | Feature | Status | Notes |
