@@ -256,3 +256,29 @@ estimates a body's SSFs with no hardware access, code public.
 With measured or estimated SSFs a matrix can be optimised against *chosen
 spectra* — including real daylight sky — instead of being limited to what a
 reflective chart can show.
+
+
+## Correction — the blue-sky twist is a look, not a measurement (2026-07-29)
+
+This file presents Orion's HueSatMap twist (−8°, saturation ×1.05, centred on
+250°) as a per-camera colour correction. **That framing is wrong and is
+corrected here.**
+
+Outside research: Adobe's own Standard profiles apply a blue-sky HueSatMap twist
+deliberately, as an *aesthetic* — pulling blues away from purple — and both
+dcamprof's documentation and independent write-ups describe HueSatMap
+"pre-compression" as a look choice rather than a colorimetric fix. The twist is
+primarily a property of the ProPhoto→display path plus a rendering intent, not
+of the sensor.
+
+What that means for the numbers here: they were fitted against the camera's own
+JPEG and Apple's rendering, **both of which contain their makers' looks**. So
+the fit reproduces a look, and calling the result a camera correction claims
+more than the method supports. Whether a specific body needs a specific twist is
+a calibration question only a measured DCP answers.
+
+The stage is still the DNG specification's, and implementing it was still right
+— a 3×3 matrix genuinely cannot be correct for a saturated narrow-band stimulus.
+What is overstated is the attribution of these particular numbers. Recorded in
+`UNSOURCED.md` alongside the fitted BaselineExposure, which has the same defect
+and a larger one besides.

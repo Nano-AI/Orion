@@ -146,6 +146,27 @@ shadows are.
 
 ## 9. The camera profile's numbers are fitted, not read
 
+⚠️ **Worse than this entry originally said — updated 2026-07-29.** Outside
+research puts measured `BaselineExposure` for real bodies in roughly
+**−1.0 … +0.4 EV** (Sony A7R V: −0.65 at ISO 50–80, +0.35 at ISO 100+; Nikon Z8:
++0.2; Fujifilm GFX100S: ≈0.0 at ISO 100). **Orion's fitted +1.20 EV sits well
+outside that range**, which says the fit absorbed something that is not
+BaselineExposure — almost certainly Apple's rendering intent, since the fit was
+made against Apple's output and the camera JPEG, and both carry their makers'
+looks on top of any baseline.
+
+The same defect applies to the HueSatMap twist in the same file: fitted against
+two rendered images, so it reproduces a *look*, and presenting it as a camera
+correction claims more than the method supports. `research/camera-profiles.md`
+now says so.
+
+**To close:** read the real value from a DCP (via the DNG SDK or RawTherapee's
+`rtengine/dcp.cc`), or measure per model and per ISO band. Do not ship Adobe's
+DCPs — they are licensed for use with Adobe products; dcamprof-generated
+profiles are redistributable.
+
+
+
 **Where:** `pipe/DevelopPipeline.cpp` (`kBaselineExposureEv`),
 `pipe/HueSatMap.h` (`blueSky`).
 

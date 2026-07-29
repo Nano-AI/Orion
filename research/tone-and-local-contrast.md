@@ -188,3 +188,46 @@ against a single level after white balance is itself a source of false color.
 - **The estimate can only raise a channel.** A clipped channel read *at least*
   its clipping level, so `max(clipped, estimate)` is sound — and it makes a poor
   fit harmless rather than actively wrong.
+
+
+## The four tone bands, measured — 2026-07-29
+
+Outside research prompted a check on the band placement (±5.5 / ±2.5 EV,
+σ = 1.6). Two findings, one of which corrects the concern that prompted it.
+
+**There is no partition-of-unity dip.** The worry was that σ = 1.6 leaves a gap
+between the ±2.5 and ±5.5 centres where the Gaussians sum to less than one.
+They do — but `applyTone` **normalises by their sum**, so the partition holds by
+construction at every exposure. The concern applies to unnormalised bands and
+this implementation is not that.
+
+**What the normalisation does surface is how broad these controls are.**
+Normalised authority per band:
+
+| EV | Blacks | Shadows | Highlights | Whites |
+|---|---|---|---|---|
+| −8 | 0.991 | 0.009 | — | — |
+| −4 | 0.500 | 0.500 | — | — |
+| −2 | 0.086 | 0.896 | 0.018 | — |
+| **0** | 0.005 | **0.495** | **0.495** | 0.005 |
+| +2 | — | 0.018 | 0.896 | 0.086 |
+| +4 | — | — | 0.500 | 0.500 |
+| +8 | — | — | 0.009 | 0.991 |
+
+At middle grey the Shadows and Highlights bands hold **half the authority
+each**, so with a slider worth two stops at full travel, **Shadows +1 moves
+middle grey by +0.99 EV** — nearly a full stop. Blacks and Whites are properly
+confined to the ends (0.005 at middle grey), which is what those controls should
+do.
+
+So Shadows and Highlights here behave as broad tonal controls rather than
+targeted ones. darktable's tone equalizer, the closest published analogue,
+places **nine** bands at 1 EV spacing from −8 to 0 with σ around 1.0–1.4, which
+is far more selective.
+
+⚠️ **Not changed, and the reason is not inertia.** Sidecars store *slider
+values*, not results. Moving the centres or σ silently re-renders every edit
+already made — a photograph finished last week would open looking different,
+with nothing in the interface to explain it. That is a migration decision, not a
+tuning one, and it belongs to whoever is willing to accept it. The numbers above
+are recorded so the choice is made with them in hand.
