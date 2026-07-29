@@ -1,19 +1,15 @@
 Fonts vendored in this directory, and their licenses.
 
-All three are licensed under the SIL Open Font License, Version 1.1,
+All are licensed under the SIL Open Font License, Version 1.1,
 which requires this notice and the license text to travel with them.
-
-  Bricolage Grotesque  (BricolageGrotesque-var.woff2)
-    Copyright 2022 The Bricolage Grotesque Project Authors
-    https://github.com/ateliertriay/bricolage
 
   Space Mono           (SpaceMono-400.woff2, SpaceMono-700.woff2)
     Copyright 2016 The Space Mono Project Authors
     https://github.com/googlefonts/spacemono
 
-  Michroma             (Michroma-400.woff2)
-    Copyright 2011 The Michroma Project Authors
-    https://github.com/googlefonts/Michroma-font
+  Space Grotesk        (SpaceGrotesk-var.woff2)
+    Copyright 2020 The Space Grotesk Project Authors
+    https://github.com/floriankarsten/space-grotesk
 
 Copyright lines taken from each family's own OFL.txt upstream, not
 transcribed from memory. The license text below is the standard OFL 1.1.

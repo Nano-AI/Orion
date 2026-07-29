@@ -42,9 +42,8 @@ source. Each entry in `research/` names its paper.
 The license and the per-family copyright notices are in `web/fonts/OFL.txt`,
 which the OFL requires to travel with the files.
 
-  Bricolage Grotesque — Copyright 2022 The Bricolage Grotesque Project Authors
   Space Mono          — Copyright 2016 The Space Mono Project Authors
-  Michroma            — Copyright 2011 The Michroma Project Authors
+  Space Grotesk       — Copyright 2020 The Space Grotesk Project Authors
 
 Self-hosted rather than loaded from a font service, so the page makes no
 third-party request.

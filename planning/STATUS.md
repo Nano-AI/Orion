@@ -156,6 +156,20 @@ finished-page-rewound contract:
   lands like a print settling flat, the lens count ticks up on arrival,
   static grain over the two darkest scenes.
 
+**Round five, same day — through the eyepiece, and the developer's notes.**
+The hero now opens OUTSIDE the camera: black screen, the wordmark over a
+small glowing 3:2 ocular, and the scroll opens the eyepiece to the full
+frame before the finder wakes and the develop begins — the entry the
+Hasselblad X2D page earns before its EVF view (their site refuses this
+sandbox's browser; the gesture is rebuilt from its structure, not copied).
+Four notes from the developer, all in: the wordmark drops Michroma for
+Space Grotesk, tracked caps — modern, minimal, kin to the readout mono;
+text contrast stepped up across the page; the statement's second sentence
+is run over by a film-rebate amber highlighter word by word as the scroll
+reaches it; and the color section is cut by a frosted-glass slash between
+the words and the print, with the header a size up. The ocular clip
+computes from the viewport so a phone gets an eyepiece, not a slit.
+
 **Round four, same day — the hero is a viewfinder** (decision #61). The
 sentence headline read as a generic hero, so it is gone. The page opens
 inside a camera: frame brackets, a thirds grid, a mode line up top, an AF

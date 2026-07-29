@@ -6,11 +6,16 @@
 <title>Orion — a RAW editor you own</title>
 <meta name="description" content="A fast, subscription-free RAW photo editor for macOS. Full-resolution edits that keep up with your hands, corrections for 1,558 lenses, and every filter traced to a published paper.">
 <meta name="color-scheme" content="dark">
+<meta property="og:title" content="Orion — a RAW editor you own">
+<meta property="og:description" content="A fast, subscription-free RAW photo editor for macOS. Full resolution, right now.">
+<meta property="og:image" content="https://nano-ai.github.io/Orion/img/photo-aston-trio-1200.jpg">
+<meta property="og:url" content="https://nano-ai.github.io/Orion/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#08090b">
 <link rel="preload" as="image" href="img/photo-aston-trio.jpg" fetchpriority="high">
-<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/BricolageGrotesque-var.woff2">
 <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceMono-400.woff2">
-<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/Michroma-400.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceGrotesk-var.woff2">
 <!-- The mark is Orion's Belt: Alnitak, Alnilam, Mintaka. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0c0d'/%3E%3Ccircle cx='9.5' cy='22' r='2.2' fill='%234DB6C4'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%234DB6C4'/%3E%3Ccircle cx='22.5' cy='10' r='2.5' fill='%234DB6C4'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
@@ -33,41 +38,48 @@
      ================================================================ -->
 <header class="dev" id="dev">
   <div class="dev__pin">
-    <div class="dev__zoom" id="devZoom">
-      <img class="dev__img" id="devImg" src="img/photo-aston-trio.jpg"
-           srcset="img/photo-aston-trio-1200.jpg 1200w, img/photo-aston-trio.jpg 2400w"
-           sizes="100vw" fetchpriority="high" decoding="async"
-           alt="Three Aston Martins parked at night outside a lit dealership: one yellow, one silver, one white.">
-    </div>
-    <div class="dev__grade"></div>
-    <div class="grain" aria-hidden="true"></div>
-
-    <div class="vf" id="vf">
-      <div class="vf__frame" aria-hidden="true"></div>
-      <div class="vf__grid" aria-hidden="true"></div>
-      <div class="vf__af" aria-hidden="true"></div>
-
-      <p class="eyebrow vf__eyebrow rv">RAW photo editor · macOS</p>
-
-      <div class="vf__center">
-        <h1 class="vf__name lines rv-lines" data-rv><span class="l"><span>Orion</span></span></h1>
-        <p class="vf__sub rv d2">Full resolution, right now.</p>
+    <!-- Everything seen THROUGH the eyepiece is clipped by this wrapper.
+         The scroll opens the ocular from a small rounded window to the
+         full frame; the wordmark and the cue live outside it, over the
+         black, so the name is there before the eye is. -->
+    <div class="dev__eye" id="devEye">
+      <div class="dev__zoom" id="devZoom">
+        <img class="dev__img" id="devImg" src="img/photo-aston-trio.jpg"
+             srcset="img/photo-aston-trio-1200.jpg 1200w, img/photo-aston-trio.jpg 2400w"
+             sizes="100vw" fetchpriority="high" decoding="async"
+             alt="Three Aston Martins parked at night outside a lit dealership: one yellow, one silver, one white.">
       </div>
+      <div class="dev__grade"></div>
+      <div class="grain" aria-hidden="true"></div>
 
-      <!-- The slider being dragged, literally. -->
-      <div class="dev__rail rv d3" aria-hidden="true">
-        <span class="dev__fill" id="devFill"></span>
-        <span class="dev__thumb" id="devThumb"></span>
+      <div class="vf" id="vf">
+        <div class="vf__frame" aria-hidden="true"></div>
+        <div class="vf__grid" aria-hidden="true"></div>
+        <div class="vf__af" aria-hidden="true"></div>
+
+        <!-- The slider being dragged, literally. -->
+        <div class="dev__rail rv d3" aria-hidden="true">
+          <span class="dev__fill" id="devFill"></span>
+          <span class="dev__thumb" id="devThumb"></span>
+        </div>
+
+        <p class="dev__hud mono rv d4">
+          <span class="hud__cell">EXPOSURE <b id="hExp">+2.60</b> EV</span>
+          <span class="hud__cell hud__sep">CONTRAST <b id="hCon">1.45</b></span>
+          <span class="hud__cell hud__sep hud--wide">TEMP <b id="hTmp">3635</b> K</span>
+          <span class="hud__cell hud__ms">RENDER <b>9.3</b> MS</span>
+        </p>
       </div>
-
-      <p class="dev__hud mono rv d4">
-        <span class="hud__cell">EXPOSURE <b id="hExp">+2.60</b> EV</span>
-        <span class="hud__cell hud__sep">CONTRAST <b id="hCon">1.45</b></span>
-        <span class="hud__cell hud__sep hud--wide">TEMP <b id="hTmp">3635</b> K</span>
-        <span class="hud__cue" id="devCue">scroll to develop <span class="cue__tick" aria-hidden="true">▾</span></span>
-        <span class="hud__cell hud__ms">RENDER <b>9.3</b> MS</span>
-      </p>
     </div>
+
+    <p class="vf__eyebrow rv"><span class="badge"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282"/></svg>Built for macOS</span></p>
+
+    <div class="vf__center" id="vfCenter">
+      <h1 class="vf__name lines rv-lines" data-rv><span class="l"><span>Orion</span></span></h1>
+      <p class="vf__sub rv d2">Full resolution, right now.</p>
+    </div>
+
+    <p class="dev__cue mono rv d3" id="devCue">scroll to look through <span class="cue__tick" aria-hidden="true">▾</span></p>
   </div>
 </header>
 
@@ -98,13 +110,13 @@
      ================================================================ -->
 <section class="wipe" id="speed" data-frame="01 · Speed">
   <div class="wipe__pin">
-    <img class="wipe__img" src="img/photo-revuelto.jpg"
-         srcset="img/photo-revuelto-1200.jpg 1200w, img/photo-revuelto.jpg 2400w"
+    <img class="wipe__img" src="img/photo-mclaren.jpg"
+         srcset="img/photo-mclaren-1200.jpg 1200w, img/photo-mclaren.jpg 2400w"
          sizes="100vw" loading="lazy" decoding="async"
-         alt="A blue Lamborghini Revuelto photographed head-on in a dark showroom.">
+         alt="A satin yellow McLaren Artura parked on dark asphalt among trees.">
     <div class="wipe__proxy" id="wipeProxy" aria-hidden="true">
-      <img src="img/photo-revuelto.jpg"
-           srcset="img/photo-revuelto-1200.jpg 1200w, img/photo-revuelto.jpg 2400w"
+      <img src="img/photo-mclaren.jpg"
+           srcset="img/photo-mclaren-1200.jpg 1200w, img/photo-mclaren.jpg 2400w"
            sizes="100vw" loading="lazy" decoding="async" alt="">
     </div>
     <div class="wipe__edge" id="wipeEdge" aria-hidden="true">
@@ -167,12 +179,10 @@
     </h2>
     <p class="rv d2">Built to the DNG spec, checked against the camera's own rendering.</p>
   </div>
-  <figure class="print rv d1" data-plx>
-    <img class="fadei" data-rv src="img/photo-glasshouse.jpg"
-         srcset="img/photo-glasshouse-1200.jpg 1200w, img/photo-glasshouse.jpg 2400w"
-         sizes="(max-width: 900px) 100vw, 42vw" loading="lazy" decoding="async"
-         alt="A glass-fronted building at golden hour with saturated yellow machinery visible inside.">
-  </figure>
+  <img class="duo__img fadei" data-rv src="img/photo-glasshouse.jpg"
+       srcset="img/photo-glasshouse-1200.jpg 1200w, img/photo-glasshouse.jpg 2400w"
+       sizes="(max-width: 900px) 100vw, 54vw" loading="lazy" decoding="async"
+       alt="A glass-fronted building at golden hour with saturated yellow machinery visible inside.">
 </section>
 
 <!-- ============ LEDGER ============ -->
@@ -200,8 +210,8 @@
     <p class="rv d2">Plain XMP beside the file. Delete the app and nothing follows.</p>
   </div>
   <div class="sidecar mono rv d1" aria-label="A raw file and its sidecar, side by side">
-    <p class="sidecar__row"><span class="sidecar__name">_PIC8220.ARW</span><span class="sidecar__what">the photograph</span><span class="sidecar__meta">24 MP · untouched</span></p>
-    <p class="sidecar__row"><span class="sidecar__name">_PIC8220.xmp</span><span class="sidecar__what">your edits</span><span class="sidecar__meta">plain text · 4 KB</span></p>
+    <p class="sidecar__row"><span class="sidecar__name"><svg class="fico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10.2" r="1.5"/><path d="M6 16.5l3.6-4 2.8 2.8 2.3-2.6 3.3 3.8"/></svg>_PIC8220.ARW</span><span class="sidecar__what">the photograph</span><span class="sidecar__meta">24 MP · untouched</span></p>
+    <p class="sidecar__row"><span class="sidecar__name"><svg class="fico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h6.5L18 8v12.5H7z"/><path d="M13.5 3.5V8H18"/><path d="M10 13h5M10 16.2h5"/></svg>_PIC8220.xmp</span><span class="sidecar__what">your edits</span><span class="sidecar__meta">plain text · 4 KB</span></p>
   </div>
 </section>
 
@@ -237,10 +247,10 @@
 
 <!-- ============ CLOSE ============ -->
 <section class="close" data-frame="End of roll">
-  <img class="close__img plx fadei" data-plx data-rv src="img/photo-m5-bluehour.jpg"
-       srcset="img/photo-m5-bluehour-1200.jpg 1200w, img/photo-m5-bluehour.jpg 2400w"
+  <img class="close__img plx fadei" data-plx data-rv src="img/photo-monoplane.jpg"
+       srcset="img/photo-monoplane-1200.jpg 1200w, img/photo-monoplane.jpg 2400w"
        sizes="100vw" loading="lazy" decoding="async"
-       alt="A gray BMW M5 photographed at blue hour outside a lit building.">
+       alt="A hand-built early monoplane with exposed rigging, hanging under a glass museum roof.">
   <div class="close__wash"></div>
   <div class="grain" aria-hidden="true"></div>
   <div class="close__body">

@@ -17,18 +17,13 @@
  *  finished state: the CSS default is the developed photograph, and the
  *  script is what rewinds it.
  *
- *  Both faces are self-hosted in this repository — Bricolage Grotesque for
- *  display, Space Mono for every readout — no font service, no third-party
- *  request. Same reason the app has no accounts: the page should work when
- *  its owner is the only server left.
+ *  Display type is the system face — SF Pro on every Mac, which is who this
+ *  page is for; an Apple app should read like one. The wordmark is Space
+ *  Grotesk and the readouts Space Mono, both self-hosted — no font service,
+ *  no third-party request. Same reason the app has no accounts: the page
+ *  should work when its owner is the only server left.
  */
 
-@font-face {
-  font-family: "Bricolage Grotesque";
-  src: url("fonts/BricolageGrotesque-var.woff2") format("woff2");
-  font-weight: 200 800;
-  font-display: swap;
-}
 @font-face {
   font-family: "Space Mono";
   src: url("fonts/SpaceMono-400.woff2") format("woff2");
@@ -41,11 +36,11 @@
   font-weight: 700;
   font-display: swap;
 }
-/* The wordmark face — the wide, engraved-on-the-body lettering cameras use. */
+/* The wordmark face — a plain modern grotesk, kin to the readout mono. */
 @font-face {
-  font-family: "Michroma";
-  src: url("fonts/Michroma-400.woff2") format("woff2");
-  font-weight: 400;
+  font-family: "Space Grotesk";
+  src: url("fonts/SpaceGrotesk-var.woff2") format("woff2");
+  font-weight: 300 700;
   font-display: swap;
 }
 
@@ -55,12 +50,12 @@
   --rail:   #24282b;   /* hairlines */
   --ivory:  #f0f3f4;   /* headings */
   --body:   #c9d2d5;   /* running text, a step down from headings */
-  --slate:  #8b969b;   /* muted, cool, biased toward the accent */
+  --slate:  #9aa6ab;   /* muted, cool, biased toward the accent */
   --teal:   #4DB6C4;   /* live numbers only */
   --rebate: #F0C674;   /* film-edge amber — the frame counter only */
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
-  --disp: "Bricolage Grotesque", var(--sans);
+  --disp: var(--sans);
   --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --gut: clamp(1.25rem, 5vw, 6rem);
@@ -91,16 +86,16 @@ p { margin: 0; }
   margin: 0;
   font-family: var(--disp);
   font-optical-sizing: auto;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  line-height: 0.94;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 0.96;
   text-wrap: balance;
 }
 /* Section headers: caps, tracked, medium — the engraved-plate register.
  * The drama belongs to the photographs and the figures, not the words. */
 h2.disp {
   font-size: clamp(1.8rem, 4.4vw, 3.8rem);
-  font-weight: 640;
+  font-weight: 600;
   letter-spacing: .05em;
   text-transform: uppercase;
   line-height: 1.04;
@@ -108,8 +103,8 @@ h2.disp {
 /* The figure moments — a measurement as the headline, set thin and
  * enormous, with its unit small beside it. */
 .disp--num {
-  font-size: clamp(4rem, 11.5vw, 10.5rem);
-  font-weight: 260;
+  font-size: clamp(2.9rem, 11vw, 10.5rem);
+  font-weight: 200;
   letter-spacing: -0.01em;
   text-transform: none;
   line-height: .95;
@@ -117,17 +112,18 @@ h2.disp {
 }
 .disp--num small {
   font-size: .32em;
-  font-weight: 480;
+  font-weight: 500;
   letter-spacing: .08em;
 }
 
 /* The tracked line under a figure — what the number means. */
 .kicker {
   font-family: var(--mono);
-  font-size: .68rem;
+  font-size: .72rem;
   letter-spacing: .26em;
   text-transform: uppercase;
-  color: var(--slate);
+  color: var(--body);
+  text-shadow: 0 1px 10px rgba(8,9,11,.85);
 }
 
 .skip {
@@ -139,11 +135,11 @@ h2.disp {
 
 .eyebrow {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--slate);
-  text-shadow: 0 1px 12px rgba(8,9,11,.85);
+  color: var(--body);
+  text-shadow: 0 1px 12px rgba(8,9,11,.9);
 }
 
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -201,7 +197,7 @@ html.js .lines.in .l > span { transform: none; }
 /* ---------- Hero — scroll to develop ---------- */
 
 .dev { position: relative; height: 100svh; }
-html.scrub .dev { height: 280svh; }
+html.scrub .dev { height: 330svh; }
 
 .dev__pin {
   position: sticky; top: 0;
@@ -241,11 +237,18 @@ html.scrub .dev__img { will-change: filter, transform; }
  * it at the end of the hero scales and fades everything at once. All the
  * furniture draws in currentColor, so state changes are one property. */
 
+/* The ocular. Everything seen through the eyepiece is inside; the script
+ * opens the clip from a small rounded window to the full frame. No script,
+ * no clip — the finder simply rests over the developed photograph. */
+.dev__eye { position: absolute; inset: 0; }
+html.scrub .dev__eye { will-change: clip-path; }
+
 .vf {
   position: absolute; inset: 0; z-index: 1;
   transform-origin: 50% 50%;
 }
-html.scrub .vf { will-change: transform, opacity; }
+/* Hidden until the eye reaches the finder; the script fades it up. */
+html.scrub .vf { will-change: transform, opacity; opacity: 0; }
 
 .vf__frame {
   position: absolute; inset: clamp(14px, 3.5vw, 44px);
@@ -303,16 +306,34 @@ html.scrub .vf { will-change: transform, opacity; }
   filter: drop-shadow(0 0 7px rgba(77,182,196,.7));
 }
 
-/* The mode line, top of the finder, where a camera names itself. */
+/* The platform badge, top of the finder, where a camera names itself.
+ * Outside the ocular clip, so it is on screen before the eye is. */
 .vf__eyebrow {
   position: absolute;
-  top: calc(clamp(14px, 3.5vw, 44px) + 16px);
+  top: calc(clamp(14px, 3.5vw, 44px) + 14px);
   left: 0; right: 0;
   text-align: center;
+  z-index: 2;
 }
+.badge {
+  display: inline-flex; align-items: center; gap: .5em;
+  padding: .5em 1.05em;
+  border: 1px solid rgba(240,243,244,.22);
+  border-radius: 999px;
+  background: rgba(20,22,24,.55);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  font-family: var(--sans);
+  font-size: .82rem; letter-spacing: .02em;
+  color: var(--ivory);
+}
+.badge svg { width: .95em; height: .95em; margin-top: -.12em; }
 
+/* The wordmark block sits outside the clip too, and takes the same exit
+ * transform as the finder on the push through. */
 .vf__center {
   position: absolute; inset: 0;
+  z-index: 2;
+  transform-origin: 50% 50%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: clamp(.9rem, 2vh, 1.4rem);
   text-align: center;
@@ -321,17 +342,17 @@ html.scrub .vf { will-change: transform, opacity; }
 }
 .vf__name {
   margin: 0;
-  font-family: "Michroma", var(--sans);
-  font-weight: 400;
-  font-size: clamp(3rem, 14vw, 12.5rem);
-  letter-spacing: .2em; margin-right: -.2em;   /* recenter the tracked text */
+  font-family: "Space Grotesk", var(--sans);
+  font-weight: 340;
+  font-size: clamp(3.4rem, 15vw, 13.5rem);
+  letter-spacing: .26em; margin-right: -.26em;   /* recenter the tracked text */
   text-transform: uppercase;
   line-height: 1;
   color: #fff;
-  text-shadow: 0 0 70px rgba(77,182,196,.28), 0 2px 34px rgba(8,9,11,.75);
+  text-shadow: 0 0 70px rgba(77,182,196,.25), 0 2px 34px rgba(8,9,11,.85);
 }
 .vf__sub {
-  color: var(--body);
+  color: var(--ivory);
   font-size: clamp(1rem, .95rem + .4vw, 1.25rem);
   text-shadow: 0 1px 14px rgba(8,9,11,.8);
 }
@@ -362,7 +383,7 @@ html.scrub .vf { will-change: transform, opacity; }
 .stat { display: flex; flex-direction: column; gap: .5rem; }
 .stat + .stat { border-left: 1px solid rgba(240,243,244,.14); padding-left: clamp(1.6rem, 4vw, 3.4rem); }
 .stat b {
-  font-family: var(--disp); font-weight: 270;
+  font-family: var(--disp); font-weight: 200;
   font-size: clamp(2.3rem, 1.6rem + 3vw, 4.2rem);
   line-height: 1;
   letter-spacing: -0.01em;
@@ -404,17 +425,27 @@ html:not(.scrub) .dev__rail { display: none; }
   display: flex; align-items: baseline; flex-wrap: wrap;
   gap: .4rem 1.6rem;
   margin-top: 1.6rem; padding-top: 1rem;
-  border-top: 1px solid rgba(36,40,43,.8);
-  font-size: .72rem; letter-spacing: .06em;
-  color: var(--slate);
+  border-top: 1px solid rgba(240,243,244,.14);
+  font-size: .76rem; letter-spacing: .06em;
+  color: var(--body);
+  text-shadow: 0 1px 10px rgba(8,9,11,.85);
   position: relative; z-index: 1;
 }
 .dev__hud b { color: var(--teal); font-weight: 700; }
-.hud__cue { margin-left: auto; margin-right: auto; letter-spacing: .3em; text-transform: uppercase; font-size: .64rem; transition: opacity .5s ease; }
+.hud__ms { margin-left: auto; }
+
+/* The invitation, over the black, under the window. */
+.dev__cue {
+  position: absolute; left: 0; right: 0;
+  bottom: clamp(1.4rem, 4vh, 2.8rem);
+  z-index: 2;
+  text-align: center;
+  letter-spacing: .3em; text-transform: uppercase; font-size: .72rem;
+  color: var(--ivory);
+}
 .cue__tick { display: inline-block; animation: tick 2.2s ease-in-out infinite; }
 @keyframes tick { 0%,100% { transform: translateY(0); opacity: .4; } 50% { transform: translateY(4px); opacity: 1; } }
-.hud__ms { margin-left: auto; }
-html:not(.scrub) .hud__cue { display: none; }
+html:not(.scrub) .dev__cue { display: none; }
 
 /* ---------- Statement — lit word by word ----------
  * The script wraps the words; until each is reached it sits in the dark.
@@ -431,13 +462,19 @@ html.scrub .say__pin { position: sticky; top: 0; height: 100svh; min-height: 0; 
 .say {
   max-width: 56rem;
   font-size: clamp(1.9rem, 5vw, 4.2rem);
-  font-weight: 700; letter-spacing: -0.02em; line-height: 1.04;
+  font-weight: 600; letter-spacing: -0.015em; line-height: 1.04;
   color: var(--ivory);
 }
 .say em { font-style: normal; color: #fff; }
-html.scrub .say .w { color: #23282b; transition: color .35s ease; }
+html.scrub .say .w { color: #262c30; transition: color .35s ease, background-color .35s ease, box-shadow .35s ease; }
 html.scrub .say .w.on { color: var(--ivory); }
-html.scrub .say em .w.on { color: #fff; }
+/* The second sentence is run over with a highlighter as the scroll reaches
+ * each word: rebate amber, ink-dark text, the marker's slight overshoot. */
+html.scrub .say em .w.on {
+  color: var(--ink);
+  background-color: var(--rebate);
+  box-shadow: -0.06em 0 0 var(--rebate), 0.06em 0 0 var(--rebate);
+}
 
 /* ---------- Speed — the proxy wipe ---------- */
 
@@ -450,17 +487,14 @@ html.scrub .wipe { height: 230svh; }
   padding: var(--gut);
   overflow: hidden; isolation: isolate;
 }
-/* The showroom frame is a stop darker than everything around it; lift it —
-   the page's job here is the car, not the photographer's exposure. */
 .wipe__img, .wipe__proxy img {
   position: absolute; inset: 0; z-index: -3;
   width: 100%; height: 100%; object-fit: cover;
-  filter: brightness(1.45) saturate(1.08);
 }
 /* What everyone else shows you while you drag. Clipped away as the sweep
    passes; clipped away entirely when there is no script. */
 .wipe__proxy { position: absolute; inset: 0; z-index: -2; clip-path: inset(0 0 0 100%); }
-.wipe__proxy img { position: absolute; inset: 0; z-index: auto; filter: brightness(1.1) saturate(.75) blur(14px); transform: scale(1.04); }
+.wipe__proxy img { position: absolute; inset: 0; z-index: auto; filter: saturate(.7) blur(16px); transform: scale(1.04); }
 html.scrub .wipe__proxy { will-change: clip-path; clip-path: inset(0 0 0 0); }
 
 .wipe__edge {
@@ -569,29 +603,34 @@ html.scrub .shot { will-change: transform; }
   padding: .85rem 1.1rem;
   background: var(--panel);
   border-top: 1px solid var(--rail);
-  font-size: .72rem; letter-spacing: .06em; color: var(--slate);
+  font-size: .74rem; letter-spacing: .06em; color: var(--body);
 }
 
-/* ---------- Color — the print, shown whole ----------
- * The glasshouse photograph is a vertical; cropping it to a wide band cost
- * it its subject. So it hangs at its own aspect, like a print. */
+/* ---------- Color ----------
+ * The glasshouse photograph is a vertical, so it stands at full section
+ * height on the right, nearly uncropped, dissolving into the dark on its
+ * leading edge — no cut, no frame, the words in the black beside it. */
 
 .duo {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, .85fr);
-  gap: clamp(2rem, 6vw, 6rem);
-  align-items: center;
-  padding: clamp(6rem, 16vh, 13rem) var(--gut);
-}
-.duo__text p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
-.print {
-  margin: 0; justify-self: center;
-  border: 1px solid var(--rail); border-radius: 10px;
+  position: relative;
+  min-height: 100svh;
+  display: flex; align-items: center;
+  padding: clamp(4rem, 10vh, 7rem) var(--gut);
   overflow: hidden;
-  box-shadow: 0 34px 90px rgba(0,0,0,.6);
+  --imgw: min(72svh, 55vw);          /* the photo panel's width */
 }
-.print img { max-height: 82svh; width: auto; }
-html.scrub .print { will-change: transform; }
+.duo h2 { font-size: clamp(2.6rem, 6.2vw, 5.6rem); }
+.duo__text { position: relative; z-index: 2; max-width: 42rem; }
+.duo__text p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
+
+.duo__img {
+  position: absolute; top: 0; bottom: 0; right: 0;
+  width: var(--imgw); height: 100%;
+  object-fit: cover;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 22%);
+  mask-image: linear-gradient(to right, transparent, #000 22%);
+  z-index: 0;
+}
 
 /* Parallax images get headroom to move inside their section. */
 .plx { top: -8%; height: 116%; }
@@ -650,7 +689,8 @@ html.scrub .plx { will-change: transform; }
   padding: 1rem 1.2rem;
 }
 .sidecar__row + .sidecar__row { border-top: 1px dashed var(--rail); }
-.sidecar__name { color: var(--ivory); }
+.sidecar__name { color: var(--ivory); display: flex; align-items: center; gap: .55em; }
+.fico { width: 1.15em; height: 1.15em; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
 .sidecar__what { color: var(--slate); }
 .sidecar__meta { color: var(--teal); font-size: .7rem; white-space: nowrap; }
 
@@ -674,8 +714,24 @@ html.scrub .plx { will-change: transform; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rail); }
 .dot--on { background: var(--teal); box-shadow: 0 0 12px rgba(77,182,196,.8); }
 .reg ul { margin: 1.3rem 0 0; padding: 0; list-style: none; }
-.reg li { padding: .5rem 0; border-bottom: 1px solid rgba(36,40,43,.6); font-size: .95rem; }
+.reg li {
+  position: relative;
+  padding: .5rem 0 .5rem 1.7em;
+  border-bottom: 1px solid rgba(36,40,43,.6); font-size: .95rem;
+}
+.reg li::before {
+  content: ""; position: absolute; left: 0; top: .82em;
+  width: 1.05em; height: 1.05em;
+  background-color: var(--teal);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.3'/%3E%3Cpath d='M5.3 8.3l1.9 1.9 3.5-4.2' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.3'/%3E%3Cpath d='M5.3 8.3l1.9 1.9 3.5-4.2' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
 .reg .dim li { color: var(--slate); }
+.reg .dim li::before {
+  background-color: var(--slate); opacity: .75;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.3' stroke-dasharray='2.7 2.5'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.3' stroke-dasharray='2.7 2.5'/%3E%3C/svg%3E") center/contain no-repeat;
+}
 .reg code {
   font-family: var(--mono); font-size: .85em;
   background: var(--panel); padding: .1em .4em; border-radius: 4px;
@@ -693,9 +749,7 @@ html.scrub .plx { will-change: transform; }
   position: absolute; inset: 0; z-index: -2;
   width: 100%; height: 100%;
   object-fit: cover;
-  /* The photograph is nearly square; anchored to its foot so the whole car
-     stays in frame on a wide screen. */
-  object-position: 50% 100%;
+  object-position: 50% 42%;
 }
 .close__img.plx { top: -8%; height: 116%; }
 .close__wash {
@@ -774,11 +828,36 @@ html:not(.scrub) .fr { display: none; }
 /* ---------- Narrow ---------- */
 
 @media (max-width: 900px) {
+  /* Pinned scenes run shorter on a phone — the same scrub over less thumb
+     travel. Progress is computed from the element's own height, so the
+     scenes adapt without script changes. */
+  html.scrub .dev { height: 250svh; }
+  html.scrub .sayscene { height: 150svh; }
+  html.scrub .wipe { height: 185svh; }
+  html.scrub .maskscene { height: 175svh; }
+
+  /* The wordmark keeps air on both sides of a narrow screen. */
+  .vf__name {
+    font-size: clamp(2.5rem, 12.5vw, 4rem);
+    letter-spacing: .2em; margin-right: -.2em;
+  }
+
+  /* The numbers hold one row of three: smaller figures, no separators. */
+  .stats { width: 100%; justify-content: space-between; gap: 1rem; }
+  .stat + .stat { border-left: 0; padding-left: 0; }
+  .stat b { font-size: clamp(1.55rem, 7vw, 2.3rem); }
+  .stat__l { font-size: .56rem; letter-spacing: .18em; }
+
   .cites li { flex-direction: column; gap: .2rem; }
   .v { text-align: left; }
-  .duo { grid-template-columns: 1fr; }
-  .print { justify-self: start; }
-  .print img { max-height: 70svh; }
+  /* Words up top, the photograph across the foot, dissolving upward. */
+  .duo { min-height: 96svh; align-items: flex-start; padding-top: 5rem; }
+  .duo__img {
+    top: auto; left: 0; right: 0; bottom: 0;
+    width: 100%; height: 54%;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%);
+    mask-image: linear-gradient(to bottom, transparent, #000 24%);
+  }
   .own { grid-template-columns: 1fr; }
   .sidecar__row { grid-template-columns: minmax(0, 1fr) auto; }
   .sidecar__what { display: none; }
