@@ -134,7 +134,7 @@
 
     // The statement's words, wrapped so they can be lit one at a time.
     // Wrapping happens only here — no script, no spans, fully lit line.
-    function wrapWords(node) {
+    function wrapWords(node, inEm) {
       var kids = Array.prototype.slice.call(node.childNodes);
       for (var i = 0; i < kids.length; i++) {
         var n = kids[i];
@@ -143,9 +143,12 @@
           var parts = n.textContent.split(/(\s+)/);
           for (var p = 0; p < parts.length; p++) {
             if (!parts[p]) continue;
-            if (/^\s+$/.test(parts[p])) {
+            if (/^\s+$/.test(parts[p]) && !inEm) {
+              // Outside the highlighted sentence, spaces stay plain text.
               frag.appendChild(document.createTextNode(parts[p]));
             } else {
+              // Inside it, spaces become spans too, so the marker paints
+              // straight through the gaps between words.
               var s = document.createElement('span');
               s.className = 'w';
               s.textContent = parts[p];
@@ -154,13 +157,13 @@
           }
           node.replaceChild(frag, n);
         } else if (n.nodeType === 1) {
-          wrapWords(n);
+          wrapWords(n, inEm || n.nodeName === 'EM');
         }
       }
     }
 
     var words = [];
-    if (sayText) { wrapWords(sayText); words = sayText.querySelectorAll('.w'); }
+    if (sayText) { wrapWords(sayText, false); words = sayText.querySelectorAll('.w'); }
     var lit = 0;
 
     // One smoothed value per scene: current chases target, so a stepping

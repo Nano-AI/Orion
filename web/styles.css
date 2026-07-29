@@ -103,7 +103,7 @@ h2.disp {
 /* The figure moments — a measurement as the headline, set thin and
  * enormous, with its unit small beside it. */
 .disp--num {
-  font-size: clamp(4rem, 11.5vw, 10.5rem);
+  font-size: clamp(2.9rem, 11vw, 10.5rem);
   font-weight: 200;
   letter-spacing: -0.01em;
   text-transform: none;
@@ -470,11 +470,10 @@ html.scrub .say .w { color: #262c30; transition: color .35s ease, background-col
 html.scrub .say .w.on { color: var(--ivory); }
 /* The second sentence is run over with a highlighter as the scroll reaches
  * each word: rebate amber, ink-dark text, the marker's slight overshoot. */
-html.scrub .say em .w { border-radius: 3px; }
 html.scrub .say em .w.on {
   color: var(--ink);
   background-color: var(--rebate);
-  box-shadow: -0.12em 0 0 var(--rebate), 0.12em 0 0 var(--rebate);
+  box-shadow: -0.06em 0 0 var(--rebate), 0.06em 0 0 var(--rebate);
 }
 
 /* ---------- Speed — the proxy wipe ---------- */
