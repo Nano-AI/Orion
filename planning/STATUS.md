@@ -18,6 +18,37 @@ already built and tested.
 **Suites:** `orion-tests` **397 checks** · `orion-viewport-tests` **3230
 checks** · both 0 failures.
 
+## Session 2026-07-29o — see the mask you are painting
+
+`Show mask` paints the coverage over the picture in red. Drawn in
+`develop:linear`, last, so it sits above every adjustment and goes through the
+same tone transform the photograph does. Some image is kept underneath rather
+than flooding flat red — the mask is placed *against* the subject, so the
+subject has to stay legible through it — and a constant floor keeps it visible
+in deep shadow, where a purely proportional tint vanishes exactly where coverage
+most needs checking.
+
+| region | mask only | with overlay |
+|---|---|---|
+| zero coverage | sat 0.3908 · luma 0.4703 | **identical** |
+| full coverage | sat 0.5262 · luma 0.1981 | **sat 0.8828** · luma 0.2388 |
+
+Zero coverage bit-identical is the invariant: the overlay is strictly
+proportional to alpha, so it cannot imply coverage that is not there.
+
+**Deliberately not in `DevelopState`.** It is how you are *looking* at the
+photograph, not an edit — so it never reaches the sidecar, never enters undo,
+and never follows the photo to another machine. `export()` forces it off around
+the write and restores it after, including when the export throws.
+
+⚠️ **That export guard is untested.** It is correct by construction — set
+synchronously and pushed before `orion_engine_export` — but nothing asserts it.
+An export with the overlay on would write a red-tinted photograph with nothing
+in the file to say why. Worth a test when the export path is next touched.
+
+**This had to come before mask groups**, which is the next story: nobody can
+debug add, subtract and intersect against an invisible alpha.
+
 ## Session 2026-07-29n — the brush is reachable, and there is a website
 
 ### Brush masks, end to end
