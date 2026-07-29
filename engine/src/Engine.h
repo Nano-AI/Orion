@@ -44,6 +44,11 @@ public:
     /// packed R then G then B. Sampled on a stride: this drives a 90-pixel-tall
     /// readout, not a measurement, and 24 million samples would be waste.
     void histogram(std::uint32_t* out, std::uint32_t bins) const;
+
+    /// Measures the picture and writes the sliders auto-enhance is allowed to
+    /// move, in place. Renders several times — it is a one-click action, not
+    /// something on the interaction path. research/auto-enhance.md.
+    void autoEnhance(pipe::Adjustments& adj);
     void exportImage(const std::string& path, const util::ExportOptions&);
 
     /// Encodes with these options and reports the byte count without writing.

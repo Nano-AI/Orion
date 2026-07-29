@@ -123,66 +123,82 @@ OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path) {
     });
 }
 
+namespace {
+/// The C adjustment block, as the engine's own type.
+///
+/// Factored out because auto-enhance needs the caller's *whole* state to
+/// measure against, not just the handful of fields it is going to write:
+/// solving exposure against a frame rendered with everything else at its
+/// default would be solving for a different photograph.
+///
+/// Takes the engine because the lens profile is not in the C block — it comes
+/// from the database, keyed by what the EXIF named.
+orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustments* adj) {
+    orion::pipe::Adjustments a;
+    a.wb.temperatureK = adj->temperature_k;
+    a.wb.tint         = adj->tint;
+    a.exposureEv      = adj->exposure_ev;
+    a.highlights      = adj->highlights;
+    a.shadows         = adj->shadows;
+    a.whites          = adj->whites;
+    a.blacks          = adj->blacks;
+    a.vibrance        = adj->vibrance;
+    a.saturation      = adj->saturation;
+    a.contrast        = adj->contrast;
+    a.rotateQuarters  = adj->rotate_quarters;
+    a.straightenDeg   = adj->straighten_deg;
+    a.cropX = adj->crop_x; a.cropY = adj->crop_y;
+    a.cropW = adj->crop_w; a.cropH = adj->crop_h;
+    a.cropPreview = adj->crop_preview != 0;
+    a.previewX = adj->preview_x;
+    a.previewY = adj->preview_y;
+    a.previewSize = adj->preview_size;
+
+    a.lensDistortion = adj->lens_distortion;
+    a.lensVignette   = adj->lens_vignette;
+    a.lensProfile    = adj->lens_profile != 0;
+    if (a.lensProfile) {
+        const auto& p = engine->impl.lensProfile();
+        for (int i = 0; i < 3; ++i) {
+            a.lensPoly[i]       = p.poly[i];
+            a.lensVignettePa[i] = p.vignette[i];
+        }
+    }
+    a.lensCaRed      = adj->lens_ca_red;
+    a.lensCaBlue     = adj->lens_ca_blue;
+    a.highlightRecovery = adj->highlight_recovery;
+    for (int i = 0; i < 3; ++i) {
+        a.gradeShadow[i]    = adj->grade_shadow[i];
+        a.gradeMidtone[i]   = adj->grade_midtone[i];
+        a.gradeHighlight[i] = adj->grade_highlight[i];
+    }
+    a.denoiseLuma   = adj->denoise_luma;
+    a.denoiseColor = adj->denoise_color;
+
+    a.curve.master = toChannel(adj->curve_master);
+    a.curve.red    = toChannel(adj->curve_red);
+    a.curve.green  = toChannel(adj->curve_green);
+    a.curve.blue   = toChannel(adj->curve_blue);
+    a.fusion          = adj->fusion;
+    a.dehaze          = adj->dehaze;
+    a.lutStrength     = adj->lut_strength;
+    a.clarity         = adj->clarity;
+    a.sharpenAmount   = adj->sharpen_amount;
+    a.sharpenRadius   = adj->sharpen_radius;
+    a.sharpenMasking  = adj->sharpen_masking;
+    for (int i = 0; i < 8; ++i) {
+        a.hueShift[i] = adj->hue_shift[i];
+        a.satShift[i] = adj->sat_shift[i];
+        a.lumShift[i] = adj->lum_shift[i];
+    }
+    return a;
+}
+}  // namespace
+
 OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustments* adj) {
     if (engine == nullptr || adj == nullptr) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        orion::pipe::Adjustments a;
-        a.wb.temperatureK = adj->temperature_k;
-        a.wb.tint         = adj->tint;
-        a.exposureEv      = adj->exposure_ev;
-        a.highlights      = adj->highlights;
-        a.shadows         = adj->shadows;
-        a.whites          = adj->whites;
-        a.blacks          = adj->blacks;
-        a.vibrance        = adj->vibrance;
-        a.saturation      = adj->saturation;
-        a.contrast        = adj->contrast;
-        a.rotateQuarters  = adj->rotate_quarters;
-        a.straightenDeg   = adj->straighten_deg;
-        a.cropX = adj->crop_x; a.cropY = adj->crop_y;
-        a.cropW = adj->crop_w; a.cropH = adj->crop_h;
-        a.cropPreview = adj->crop_preview != 0;
-        a.previewX = adj->preview_x;
-        a.previewY = adj->preview_y;
-        a.previewSize = adj->preview_size;
-
-        a.lensDistortion = adj->lens_distortion;
-        a.lensVignette   = adj->lens_vignette;
-        a.lensProfile    = adj->lens_profile != 0;
-        if (a.lensProfile) {
-            const auto& p = engine->impl.lensProfile();
-            for (int i = 0; i < 3; ++i) {
-                a.lensPoly[i]       = p.poly[i];
-                a.lensVignettePa[i] = p.vignette[i];
-            }
-        }
-        a.lensCaRed      = adj->lens_ca_red;
-        a.lensCaBlue     = adj->lens_ca_blue;
-        a.highlightRecovery = adj->highlight_recovery;
-        for (int i = 0; i < 3; ++i) {
-            a.gradeShadow[i]    = adj->grade_shadow[i];
-            a.gradeMidtone[i]   = adj->grade_midtone[i];
-            a.gradeHighlight[i] = adj->grade_highlight[i];
-        }
-        a.denoiseLuma   = adj->denoise_luma;
-        a.denoiseColor = adj->denoise_color;
-
-        a.curve.master = toChannel(adj->curve_master);
-        a.curve.red    = toChannel(adj->curve_red);
-        a.curve.green  = toChannel(adj->curve_green);
-        a.curve.blue   = toChannel(adj->curve_blue);
-        a.fusion          = adj->fusion;
-        a.dehaze          = adj->dehaze;
-        a.lutStrength     = adj->lut_strength;
-        a.clarity         = adj->clarity;
-        a.sharpenAmount   = adj->sharpen_amount;
-        a.sharpenRadius   = adj->sharpen_radius;
-        a.sharpenMasking  = adj->sharpen_masking;
-        for (int i = 0; i < 8; ++i) {
-            a.hueShift[i] = adj->hue_shift[i];
-            a.satShift[i] = adj->sat_shift[i];
-            a.lumShift[i] = adj->lum_shift[i];
-        }
+        orion::pipe::Adjustments a = toAdjustments(engine, adj);
         engine->impl.setAdjustments(a);
         return ORION_OK;
     });
@@ -221,6 +237,23 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
         const auto& d = engine->impl.develop();
         *out_width  = d.outputWidth();
         *out_height = d.outputHeight();
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_auto_enhance(OrionEngine* engine, OrionAdjustments* adj) {
+    if (engine == nullptr || adj == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        orion::pipe::Adjustments a = toAdjustments(engine, adj);
+        engine->impl.autoEnhance(a);
+
+        // Only the controls auto-enhance is allowed to move are written back.
+        // Everything else the caller sent is theirs and stays theirs.
+        adj->exposure_ev = a.exposureEv;
+        adj->blacks      = a.blacks;
+        adj->whites      = a.whites;
+        adj->fusion      = a.fusion;
+        adj->clarity     = a.clarity;
         return ORION_OK;
     });
 }

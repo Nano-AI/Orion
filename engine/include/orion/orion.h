@@ -190,6 +190,13 @@ OrionStatus orion_engine_image_size(const OrionEngine* engine,
  * a .cube Orion understands; the reason is available from
  * orion_last_error. A failed load leaves any previously loaded LUT in
  * place, so a mistyped path does not silently drop the look. */
+/* Measures the picture and writes back the sliders auto-enhance may move —
+ * exposure, blacks, whites, shadow lift and clarity. Everything else in the
+ * block is left as the caller sent it.
+ *
+ * Renders several times: this is a one-click action, not a slider. */
+OrionStatus orion_engine_auto_enhance(OrionEngine* engine, OrionAdjustments* adj);
+
 OrionStatus orion_engine_load_lut(OrionEngine* engine, const char* path);
 
 /* Unloads it. Safe when none is loaded. */

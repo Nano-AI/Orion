@@ -7,6 +7,7 @@
 
 #include "gpu/MetalDevice.h"
 #include "gpu/Resources.h"
+#include "pipe/AutoEnhance.h"
 #include "pipe/CubeLut.h"
 #include "pipe/DevelopPipeline.h"
 #include "raw/RawImage.h"
@@ -694,6 +695,83 @@ int main(int argc, char** argv) {
 
         const bool curveWorks = std::abs(curvedLuma - flatLuma) > 1e-4;
         std::printf("  curve changed the image: %s\n", curveWorks ? "yes" : "NO — BUG");
+
+        // ── Auto-enhance, checked by outcome ──────────────────────────────
+        //
+        // Everything else about auto-enhance is tested against a stand-in for
+        // the pipeline. This is the only check that runs the real one, on a
+        // real photograph, and it asks the only question that matters: did the
+        // median land where it was aimed?
+        //
+        // Not a magnitude probe with a floor, because "it moved" is not the
+        // claim. The claim is that it converged.
+        {
+            std::printf("\nAuto-enhance\n");
+            namespace ae = orion::pipe::auto_enhance;
+            constexpr std::uint32_t kBins = 256;
+
+            const auto measure = [&](const orion::pipe::Adjustments& a) {
+                develop.apply(a);
+                develop.render();
+                const std::uint32_t w = develop.outputWidth();
+                const std::uint32_t h = develop.outputHeight();
+                const auto pixels = output16(develop, w, h);
+
+                std::vector<std::uint32_t> bins(kBins, 0u);
+                // The same prime stride the engine's histogram uses, for the
+                // same reason: a picket fence must not alias into a peak.
+                constexpr std::size_t kStride = 31;
+                for (std::size_t i = 0; i < std::size_t(w) * h; i += kStride) {
+                    for (int c = 0; c < 3; ++c) {
+                        const float v = float(pixels[i * 4 + c]) / 65535.0f;
+                        ++bins[std::min<std::uint32_t>(kBins - 1,
+                              std::uint32_t(std::clamp(v, 0.0f, 1.0f) * float(kBins)))];
+                    }
+                }
+                return ae::measure(bins.data(), kBins, ae::kClipPerSide);
+            };
+
+            orion::pipe::Adjustments a;
+            a.wb = develop.asShotWhiteBalance();
+
+            const ae::Stats before = measure(a);
+            const ae::Controls look = ae::look(before);
+            a.fusion = look.fusion;
+            a.clarity = look.clarity;
+
+            ae::Controls c{};
+            for (int pass = 0; pass < ae::kPasses; ++pass) {
+                a.exposureEv = c.exposureEv;
+                a.blacks     = c.blacks;
+                a.whites     = c.whites;
+                c = ae::refine(c, measure(a));
+            }
+            a.exposureEv = c.exposureEv;
+            a.blacks = c.blacks; a.whites = c.whites;
+            const ae::Stats after = measure(a);
+
+            const double err = std::abs(double(after.median) - double(ae::kMidGrey));
+            std::printf("  median %.4f -> %.4f  (anchor %.4f, off by %.4f)\n",
+                        before.median, after.median, ae::kMidGrey, err);
+            std::printf("  set: exposure %+.2f EV, blacks %+.2f, whites %+.2f, "
+                        "lift %.2f, clarity %.2f\n",
+                        a.exposureEv, a.blacks, a.whites, a.fusion, a.clarity);
+
+            // A frame needing more than the clamp allows cannot reach the
+            // anchor, and should not be failed for it — but it must have gone
+            // as far as it is permitted to.
+            const bool clamped = std::abs(std::abs(a.exposureEv) - ae::kMaxExposureEv) < 1e-3f;
+            const bool landed = err < 0.05 || clamped;
+            std::printf("  converged: %s%s\n", landed ? "yes" : "NO",
+                        clamped ? " (at the exposure clamp)" : "");
+            if (!landed) controlsPass = false;
+
+            // Put the graph back where the sections after this expect it.
+            orion::pipe::Adjustments restore;
+            restore.wb = develop.asShotWhiteBalance();
+            develop.apply(restore);
+            develop.render();
+        }
 
         // ── Where a clarity drag actually goes ────────────────────────────
         //

@@ -1,5 +1,7 @@
 #include "Engine.h"
 
+#include "pipe/AutoEnhance.h"
+
 #include <stdexcept>
 #include <algorithm>
 #include <vector>
@@ -101,6 +103,52 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
         const float peak = std::max({float(px[0]), float(px[1]), float(px[2]), 1e-6f});
         for (int i = 0; i < 3; ++i) outScene[i] = std::max(float(px[i]), 0.0f) / peak;
     }
+}
+
+void Engine::autoEnhance(pipe::Adjustments& adj) {
+    if (!develop_) return;
+
+    namespace ae = pipe::auto_enhance;
+    constexpr std::uint32_t kBins = 256;
+
+    std::vector<std::uint32_t> rgb(std::size_t(kBins) * 3);
+    std::vector<std::uint32_t> combined(kBins);
+
+    const auto measureNow = [&]() {
+        develop_->apply(adj);
+        develop_->render();
+        histogram(rgb.data(), kBins);
+        ae::combine(rgb.data(), kBins, combined.data());
+        return ae::measure(combined.data(), kBins, ae::kClipPerSide);
+    };
+
+    // Measure the photograph as it stands first. The look controls respond to
+    // the picture the photographer took, not to the correction about to be
+    // applied to it — deriving them afterwards would let the solver's own work
+    // decide how much shadow lift the frame "needs".
+    const ae::Controls look = ae::look(measureNow());
+    adj.fusion  = look.fusion;
+    adj.clarity = look.clarity;
+
+    // Then solve, with the look already in place, because it moves the
+    // histogram the solver is reading.
+    ae::Controls c{};
+    c.exposureEv = adj.exposureEv;
+    c.blacks     = adj.blacks;
+    c.whites     = adj.whites;
+
+    for (int pass = 0; pass < ae::kPasses; ++pass) {
+        adj.exposureEv = c.exposureEv;
+        adj.blacks     = c.blacks;
+        adj.whites     = c.whites;
+        c = ae::refine(c, measureNow());
+    }
+
+    adj.exposureEv = c.exposureEv;
+    adj.blacks     = c.blacks;
+    adj.whites     = c.whites;
+    develop_->apply(adj);
+    develop_->render();
 }
 
 void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {

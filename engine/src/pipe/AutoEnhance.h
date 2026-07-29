@@ -169,11 +169,16 @@ struct Controls {
     const float slope = 1.0f / span;
 
     if (slope < kMaxSlope) {
+        // Unit gain, not the doubled one this started with. Measured: at 2.0
+        // the whites slider railed at its maximum on two of the three sample
+        // frames, which is an automatic control handing the user a setting with
+        // nowhere left to go. At 1.0 the median still lands on the anchor and
+        // the endpoints stay somewhere a person can argue with.
         if (s.atFloor < 0.02f) {
-            next.blacks = std::clamp(current.blacks - kDamping * s.shadow * 2.0f, -1.0f, 1.0f);
+            next.blacks = std::clamp(current.blacks - kDamping * s.shadow, -1.0f, 1.0f);
         }
         if (s.atCeiling < 0.02f) {
-            next.whites = std::clamp(current.whites + kDamping * (1.0f - s.high) * 2.0f,
+            next.whites = std::clamp(current.whites + kDamping * (1.0f - s.high),
                                      -1.0f, 1.0f);
         }
     }
