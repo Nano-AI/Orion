@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M4 — brush masks reachable; landing site live)
+**Last updated:** 2026-07-29 (M4 — brush masks reachable; landing site live and redesigned)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** —
 **step 1 of `research/masking.md` is finished and all of it is reachable by
 hand**: linear and radial gradients dragged on the canvas, brush strokes
@@ -184,6 +184,36 @@ Three deploy traps hit and recorded:
   Motion, so it reduces to one `IntersectionObserver`.
 - **A green deploy is not proof the page is right.** Verify the page *and every
   asset* returns 200, and that the content actually changed.
+## Session 2026-07-29n — the landing page, redesigned around one idea
+
+`web/` only; no engine or app code touched. The idea: **scrolling is the
+slider drag.** The hero opens on the flat, undeveloped raw and the visitor's
+scroll develops it — filter scrubbed from washed-out to the graded frame, a
+readout ticking to the *real* values from the real edit (Exposure +2.60 EV,
+Contrast 1.45, 3635 K — the same numbers the Local panel shows in the
+interface screenshot further down, of the same photograph), and a literal
+slider rail filling on the right. A second pinned scene sweeps a linear
+gradient mask down over a sky, drawn as the editor draws it: three dashed
+guide lines and a handle, ticking to −1.60 EV.
+
+- **Display type is Bricolage Grotesque**, variable, self-hosted at 77 KB
+  (decision #56). Headlines reveal line-by-line through clipped masks. Copy
+  cut hard everywhere — headlines carry the page; body text is one or two
+  lines per section. The working-today / not-yet register stays, verbatim
+  claim discipline included.
+- **The static page is the finished page** (decision #55). The script's
+  first act is adding `html.js`; every hidden-until-revealed rule is gated
+  on it. No JavaScript or reduced motion = the developed photo, the placed
+  mask, the final numbers. The old page hid `.rv` blocks unconditionally
+  and only JavaScript could show them — a no-JS visitor got a blank page.
+  Verified with a screenshots pass at `javaScriptEnabled: false`.
+- Frame counters number the sections in film-rebate amber (the app's `star`
+  token) — the one new ink; teal remains live-numbers-only.
+- Screenshotted at 14 desktop scroll positions, 4 mobile, plus no-JS and
+  reduced-motion. Two fixes came out of looking rather than trusting: the
+  Revuelto scene was mud under its wash (the photo is a stop darker than
+  the others — it gets a CSS lift, stated in a comment) and the hero's
+  teal text-glow read as a rendering artifact at full strength (halved).
 
 ## Session 2026-07-29m — brush dabs, the last third of step 1
 

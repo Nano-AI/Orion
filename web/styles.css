@@ -3,28 +3,47 @@
  *  Dark only, deliberately. No theme toggle, no prefers-color-scheme: the app
  *  is used in a dark room and the page is the same room. The chrome is
  *  near-black plus one teal, exactly as the editor's interface is, and teal is
- *  reserved for numeric values — never a button, never a wash. Every other
- *  color on this page comes out of the photographs, which is the whole point:
- *  it is a photo editor, so the photographs do the talking.
+ *  reserved for live numbers — never a button, never a wash. One more ink is
+ *  allowed: the amber of film-rebate edge markings, for the tiny frame
+ *  counters that number the sections, and nothing else. Every other color on
+ *  this page comes out of the photographs, which is the whole point: it is a
+ *  photo editor, so the photographs do the talking.
  *
- *  Nothing is interactive. Motion is scroll-driven and autoplaying; the visitor
- *  operates nothing.
+ *  Motion is scroll-driven and the visitor operates nothing. Two scenes are
+ *  pinned and scrubbed — the hero develops the raw as you scroll, and a
+ *  gradient mask sweeps a sky — via html.scrub, which JavaScript adds only
+ *  when motion is allowed. Without it (no JS, reduced motion), both scenes
+ *  are ordinary full-height sections showing their finished state: the CSS
+ *  default is the developed photograph, and the script is what rewinds it.
+ *
+ *  The display face is Bricolage Grotesque, self-hosted in this repository —
+ *  no font service, no third-party request. Same reason the app has no
+ *  accounts: the page should work when its owner is the only server left.
  */
 
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("fonts/BricolageGrotesque-var.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
 :root {
-  --ink:   #0b0c0d;   /* ground */
-  --panel: #141618;   /* raised */
-  --rail:  #24282b;   /* hairlines */
-  --ivory: #eef1f2;   /* headings */
-  --body:  #cdd5d8;   /* running text, a step down from headings */
-  --slate: #8b969b;   /* muted, cool, biased toward the accent */
-  --teal:  #4DB6C4;   /* numeric values only */
+  --ink:    #08090b;   /* ground — a stop deeper than the app, this is a cinema */
+  --panel:  #141618;   /* raised */
+  --rail:   #24282b;   /* hairlines */
+  --ivory:  #f0f3f4;   /* headings */
+  --body:   #c9d2d5;   /* running text, a step down from headings */
+  --slate:  #8b969b;   /* muted, cool, biased toward the accent */
+  --teal:   #4DB6C4;   /* live numbers only */
+  --rebate: #F0C674;   /* film-edge amber — frame counters only */
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  --disp: "Bricolage Grotesque", var(--sans);
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --gut: clamp(1.25rem, 5vw, 6rem);
-  --measure: 34rem;
+  --measure: 32rem;
 }
 
 * { box-sizing: border-box; }
@@ -36,23 +55,28 @@ body {
   color: var(--ivory);
   font-family: var(--sans);
   font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
-  line-height: 1.6;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;          /* the body never scrolls sideways */
 }
 
 img { display: block; max-width: 100%; height: auto; }
+p { margin: 0; }
 
-h1, h2 {
+/* ---------- Display type ----------
+ * Heavy, tight and optically sized — the headlines are the loud thing on
+ * this page, so everything else stays quiet. */
+.disp {
   margin: 0;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 0.95;
+  font-family: var(--disp);
+  font-optical-sizing: auto;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 0.94;
   text-wrap: balance;
 }
-h1 { font-size: clamp(2.6rem, 9vw, 8rem); }
-h2 { font-size: clamp(1.95rem, 5.6vw, 4.6rem); }
-p { margin: 0; }
+h1.disp { font-size: clamp(3rem, 10.5vw, 9.5rem); }
+h2.disp { font-size: clamp(2.3rem, 6.4vw, 5.4rem); }
 
 .skip {
   position: absolute; left: -9999px;
@@ -68,174 +92,337 @@ p { margin: 0; }
   text-transform: uppercase;
   color: var(--slate);
 }
+
+/* Frame counters — the amber edge-markings on a strip of negatives. The
+ * numbers are real: the sections run in the order of the roll. */
+.mark {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--rebate);
+  opacity: 0.9;
+}
+
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* The only hue other than teal in the chrome, and it is light rather than
-   paint: the display type carries a teal bloom so the accent reads as glow. */
+   paint: the closing display word carries a teal bloom so the accent reads
+   as glow. */
 .glow {
   color: #fff;
-  text-shadow: 0 0 60px rgba(77,182,196,0.55), 0 0 150px rgba(77,182,196,0.22);
+  text-shadow: 0 0 34px rgba(77,182,196,0.38), 0 0 110px rgba(77,182,196,0.14);
 }
 
-/* ---------- Scroll reveal ---------- */
+/* ---------- Reveals ----------
+ * Two kinds. Blocks rise and fade (.rv). Headlines reveal line by line
+ * through a clipped mask (.lines .l) — motion the section is announced by,
+ * so it gets the sharper curve. */
 
-.rv {
+/* Hiding is gated on html.js — the class the script adds as its first act —
+ * so a browser with JavaScript off never hides anything. The failure mode of
+ * a reveal must be "no animation", never "no page". */
+html.js .rv {
   opacity: 0;
-  transform: translate3d(0, 26px, 0);
-  transition: opacity .9s cubic-bezier(.16,1,.3,1), transform .9s cubic-bezier(.16,1,.3,1);
+  transform: translate3d(0, 22px, 0);
+  transition: opacity .8s cubic-bezier(.16,1,.3,1), transform .8s cubic-bezier(.16,1,.3,1);
 }
-.rv.in { opacity: 1; transform: none; }
+html.js .rv.in { opacity: 1; transform: none; }
 .d1 { transition-delay: .10s; }
 .d2 { transition-delay: .20s; }
 .d3 { transition-delay: .30s; }
 .d4 { transition-delay: .45s; }
 
-/* No JavaScript at all: show everything rather than a blank page. */
-.no-js .rv { opacity: 1; transform: none; transition: none; }
+.lines .l { display: block; overflow: hidden; }
+.lines .l > span { display: block; }
+html.js .lines .l > span {
+  transform: translate3d(0, 118%, 0);
+  transition: transform .95s cubic-bezier(.19,1,.22,1);
+}
+html.js .lines.in .l > span { transform: none; }
+.lines .l:nth-child(2) > span { transition-delay: .09s; }
+.lines .l:nth-child(3) > span { transition-delay: .18s; }
+/* Clipping sits tight on the glyphs, so give descenders room to land. */
+.lines .l { padding-bottom: 0.06em; margin-bottom: -0.06em; }
 
-/* ---------- Hero ---------- */
+/* ---------- Hero — scroll to develop ---------- */
 
-.hero {
-  position: relative;
-  min-height: 100svh;
+.dev { position: relative; height: 100svh; }
+html.scrub .dev { height: 260svh; }
+
+.dev__pin {
+  position: sticky; top: 0;
+  height: 100svh;
   display: flex; flex-direction: column; justify-content: flex-end;
   padding: var(--gut);
-  padding-bottom: clamp(2.5rem, 8vh, 6rem);
+  padding-bottom: clamp(1.2rem, 3.5vh, 2.5rem);
   overflow: hidden; isolation: isolate;
 }
-.hero__media { position: absolute; inset: 0; z-index: -2; }
-.hero__media img {
+
+.dev__img {
+  position: absolute; inset: 0; z-index: -2;
   width: 100%; height: 100%;
   object-fit: cover; object-position: 58% 50%;
-  animation: drift 36s ease-in-out infinite alternate;
 }
-@keyframes drift {
-  from { transform: scale(1.06) translate3d(-1.2%, 0, 0); }
-  to   { transform: scale(1.15) translate3d(1.2%, -1.5%, 0); }
-}
+/* The script owns the filter while scrubbing; will-change only then, so the
+ * static page never pays for a compositing layer it isn't using. */
+html.scrub .dev__img { will-change: filter; }
 
 /* Grade the photograph into the page rather than dropping a flat scrim over
    it: opaque where the type sits, clear where the cars are. */
-.hero__grade {
+.dev__grade {
   position: absolute; inset: 0; z-index: -1;
   background:
-    linear-gradient(to top, var(--ink) 2%, rgba(11,12,13,.88) 24%, rgba(11,12,13,.30) 55%, rgba(11,12,13,.55) 100%),
-    radial-gradient(130% 85% at 15% 100%, rgba(77,182,196,.14), transparent 62%);
+    linear-gradient(to top, var(--ink) 2%, rgba(8,9,11,.88) 22%, rgba(8,9,11,.24) 55%, rgba(8,9,11,.55) 100%),
+    radial-gradient(130% 85% at 15% 100%, rgba(77,182,196,.13), transparent 62%);
 }
-.hero__body { max-width: 62rem; }
-.hero h1 { margin-top: .5em; }
+
+.dev__body { max-width: 68rem; margin-bottom: auto; margin-top: auto; }
+.dev__body h1 { margin-top: .5em; }
 
 .lede {
-  margin-top: 1.5rem; max-width: var(--measure); color: var(--body);
+  margin-top: 1.4rem; max-width: var(--measure); color: var(--body);
   font-size: clamp(1rem, .95rem + .45vw, 1.28rem);
+  text-wrap: balance;
 }
 
-.chips { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 2rem; }
+.chips { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.8rem; }
 .chip {
   font-family: var(--mono); font-size: .78rem; letter-spacing: .03em;
   color: var(--slate);
   border: 1px solid var(--rail); border-radius: 999px;
   padding: .42rem .9rem;
-  background: rgba(11,12,13,.55);
+  background: rgba(8,9,11,.55);
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
 .chip b { color: var(--teal); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.cue { margin-top: 2.5rem; }
-.cue span {
-  display: block; width: 1px; height: 54px;
-  background: linear-gradient(to bottom, var(--teal), transparent);
-  animation: cue 2.4s ease-in-out infinite;
+/* The slider. A real rail with a real thumb, dragged by the scroll — the
+ * page's one moving control, and the visitor is the one moving it. */
+.dev__rail {
+  position: absolute; right: clamp(1.1rem, 3vw, 3.2rem); top: 50%;
+  height: 34svh; width: 2px;
+  transform: translateY(-50%);
+  background: rgba(240,243,244,.16);
+  border-radius: 1px;
 }
-@keyframes cue { 0%,100% { opacity:.25; transform: scaleY(.6); } 50% { opacity:1; transform: scaleY(1); } }
+.dev__fill {
+  position: absolute; left: 0; top: 0; width: 100%; height: 0%;
+  background: var(--teal); border-radius: 1px;
+}
+.dev__thumb {
+  position: absolute; left: 50%; top: 0;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--ivory);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 3px rgba(8,9,11,.5), 0 0 18px rgba(77,182,196,.55);
+}
+html:not(.scrub) .dev__rail { display: none; }
+
+/* The readout. Final values in the HTML — the page is honest without the
+ * script — and the script rewinds them to zero before the scrub begins. */
+.dev__hud {
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: .4rem 1.6rem;
+  margin-top: 1.6rem; padding-top: 1rem;
+  border-top: 1px solid rgba(36,40,43,.8);
+  font-size: .74rem; letter-spacing: .08em;
+  color: var(--slate);
+}
+.dev__hud b { color: var(--teal); font-weight: 600; }
+.hud__cue { margin-left: auto; margin-right: auto; letter-spacing: .3em; text-transform: uppercase; font-size: .66rem; transition: opacity .5s ease; }
+.cue__tick { display: inline-block; animation: tick 2.2s ease-in-out infinite; }
+@keyframes tick { 0%,100% { transform: translateY(0); opacity: .4; } 50% { transform: translateY(4px); opacity: 1; } }
+.hud__ms { margin-left: auto; }
+html:not(.scrub) .hud__cue { display: none; }
 
 /* ---------- Statement ---------- */
 
-.say { padding: clamp(5rem, 16vh, 12rem) var(--gut); }
+.say { padding: clamp(6rem, 18vh, 13rem) var(--gut); }
 .say p {
-  max-width: 46rem;
-  font-size: clamp(1.55rem, 4.2vw, 3.2rem);
-  font-weight: 600; line-height: 1.12; letter-spacing: -.03em;
-  color: var(--slate); text-wrap: balance;
+  max-width: 52rem;
+  font-size: clamp(1.7rem, 4.6vw, 3.6rem);
+  font-weight: 600; line-height: 1.06; letter-spacing: -.02em;
+  color: var(--slate);
 }
 .say em { color: var(--ivory); font-style: normal; }
 
-/* ---------- Full-bleed ---------- */
+/* ---------- Full-bleed scenes ---------- */
 
 .bleed {
-  position: relative; min-height: 78svh;
+  position: relative; min-height: 80svh;
   display: flex; align-items: flex-end;
   padding: var(--gut);
   overflow: hidden; isolation: isolate;
 }
-.bleed--tall { min-height: 94svh; }
+.bleed--tall { min-height: 96svh; }
 .bleed__img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
+/* The showroom frame is a stop darker than everything around it, and under
+   the text wash it disappeared entirely. Lift it — the page's job here is
+   the car, not the photographer's exposure. */
+.bleed__img--lift { filter: brightness(1.45) saturate(1.08); }
 .bleed__wash {
   position: absolute; inset: 0; z-index: -1;
-  background: linear-gradient(to top, var(--ink) 1%, rgba(11,12,13,.9) 26%, rgba(11,12,13,.22) 70%);
+  background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.9) 26%, rgba(8,9,11,.2) 70%);
 }
 /* Right-aligned copy needs the dark side on the right, or the text sits on the
    bright part of the picture and stops being readable. */
 .bleed__wash--right {
   background:
-    linear-gradient(to top, var(--ink) 1%, rgba(11,12,13,.85) 22%, rgba(11,12,13,.18) 72%),
-    linear-gradient(to left, rgba(11,12,13,.92) 8%, transparent 62%);
+    linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.85) 22%, rgba(8,9,11,.16) 72%),
+    linear-gradient(to left, rgba(8,9,11,.92) 8%, transparent 62%);
 }
-.bleed__copy { max-width: 40rem; }
-.bleed__copy p { margin-top: 1.25rem; max-width: var(--measure); color: var(--body); }
+.bleed__copy { max-width: 44rem; }
+.bleed__copy h2 { margin-top: .55em; }
+.bleed__copy p:not(.mark) { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
 .bleed__copy--right { margin-left: auto; text-align: right; }
 .bleed__copy--right p { margin-left: auto; }
 
-.mnote { font-family: var(--mono); font-size: .8rem; color: var(--slate); letter-spacing: .02em; }
+.mnote { font-family: var(--mono); font-size: .76rem; color: var(--slate); letter-spacing: .06em; }
 .mnote b { color: var(--teal); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* ---------- Split ---------- */
+/* ---------- The mask sweep ---------- */
 
-.split {
-  display: grid;
-  grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr);
-  gap: clamp(2rem, 5vw, 5rem);
-  align-items: center;
-  padding: clamp(4.5rem, 13vh, 10rem) var(--gut);
+.maskscene { position: relative; height: 100svh; }
+html.scrub .maskscene { height: 220svh; }
+
+.mask__pin {
+  position: sticky; top: 0;
+  height: 100svh;
+  display: flex; align-items: flex-end;
+  padding: var(--gut);
+  overflow: hidden; isolation: isolate;
 }
-.split__text h2 { margin-top: .45em; }
-.split__text p { margin-top: 1.25rem; color: var(--body); max-width: var(--measure); }
+.mask__img {
+  position: absolute; inset: 0; z-index: -3;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: 50% 30%;
+}
+
+/* The mask itself: a shade that ends in a feathered ramp, with the editor's
+ * own three guide lines riding the ramp — full, centre, zero — and a handle
+ * on the centre line. Tilted a few degrees, as a hand would place it. The
+ * script slides the whole assembly down; at rest (no script) it sits where
+ * the scrub would finish. */
+.mask__sweep {
+  position: absolute; left: -12%; right: -12%;
+  top: -200%; height: 200%;
+  z-index: -2;
+  transform: translate3d(0, 55%, 0) rotate(-4deg);
+  pointer-events: none;
+}
+html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-change: transform; }
+.mask__shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(4,6,9,.82) 0%, rgba(4,6,9,.82) 64%, rgba(4,6,9,0) 96%);
+}
+.mask__line {
+  position: absolute; left: 0; right: 0; height: 0;
+  border-top: 1px dashed rgba(240,243,244,.75);
+}
+.mask__line--full   { top: 64%; }
+.mask__line--centre { top: 80%; }
+.mask__line--zero   { top: 96%; }
+.mask__handle {
+  position: absolute; left: 50%; top: 0;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--ivory);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 3px rgba(4,6,9,.45);
+}
+
+.mask__wash {
+  position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.86) 20%, transparent 58%);
+}
+.mask__copy { max-width: 44rem; }
+.mask__copy h2 { margin-top: .55em; }
+.mask__copy p:not(.mark) { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
+
+/* ---------- Proof ---------- */
+
+.proof { padding: clamp(4rem, 11vh, 8rem) var(--gut); display: flex; justify-content: center; }
 .shot {
-  margin: 0; border-radius: 14px; overflow: hidden;
+  margin: 0; max-width: 74rem;
+  border-radius: 14px; overflow: hidden;
   border: 1px solid var(--rail);
-  box-shadow: 0 40px 120px rgba(0,0,0,.65), 0 0 90px rgba(77,182,196,.10);
+  box-shadow: 0 40px 120px rgba(0,0,0,.65), 0 0 90px rgba(77,182,196,.08);
+}
+.shot img { width: 100%; }
+.shot figcaption {
+  padding: .85rem 1.1rem;
+  background: var(--panel);
+  border-top: 1px solid var(--rail);
+  font-size: .74rem; letter-spacing: .06em; color: var(--slate);
 }
 
 /* ---------- Ledger ---------- */
 
 .ledger { padding: clamp(4.5rem, 13vh, 10rem) var(--gut); }
-.ledger h2 { margin-top: .5em; }
-.ledger__lede { margin-top: 1.35rem; max-width: var(--measure); color: var(--body); }
+.ledger h2 { margin-top: .55em; }
+.ledger__lede { margin-top: 1.3rem; max-width: var(--measure); color: var(--body); }
 .ledger em { color: var(--ivory); font-style: italic; }
 
-.cites { list-style: none; margin: 2.8rem 0 0; padding: 0; max-width: 52rem; }
+.cites { list-style: none; margin: 2.6rem 0 0; padding: 0; max-width: 56rem; }
 .cites li {
   display: flex; justify-content: space-between; gap: 1.5rem;
-  padding: .9rem 0; border-top: 1px solid var(--rail);
+  padding: 1rem 0; border-top: 1px solid var(--rail);
   font-family: var(--mono); font-size: .82rem;
+  transition: background .25s ease, padding-left .25s ease;
 }
+.cites li:hover { background: rgba(20,22,24,.65); padding-left: .6rem; }
 .cites li:last-child { border-bottom: 1px solid var(--rail); }
 .k { color: var(--ivory); }
 .v { color: var(--slate); text-align: right; font-variant-numeric: tabular-nums; }
+.v b { color: var(--teal); font-weight: 600; }
+
+/* ---------- Ownership ---------- */
+
+.own {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(2rem, 6vw, 6rem);
+  align-items: center;
+  padding: clamp(4.5rem, 13vh, 10rem) var(--gut);
+  border-top: 1px solid var(--rail);
+}
+.own__text h2 { margin-top: .55em; }
+.own__text p:not(.mark) { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
+
+.sidecar {
+  border: 1px solid var(--rail); border-radius: 12px;
+  background: var(--panel);
+  padding: .4rem 0;
+  font-size: .8rem;
+}
+.sidecar__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  gap: 1rem; align-items: baseline;
+  padding: 1rem 1.2rem;
+}
+.sidecar__row + .sidecar__row { border-top: 1px dashed var(--rail); }
+.sidecar__name { color: var(--ivory); }
+.sidecar__what { color: var(--slate); }
+.sidecar__meta { color: var(--teal); font-size: .72rem; white-space: nowrap; }
 
 /* ---------- Register ---------- */
 
 .reg {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-  gap: clamp(2rem, 5vw, 5rem);
   padding: clamp(3.5rem, 11vh, 8rem) var(--gut);
   border-top: 1px solid var(--rail);
 }
+.reg__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: clamp(2rem, 5vw, 5rem);
+  margin-top: 2.2rem;
+}
 .reg__h {
-  font-family: var(--mono); font-size: .74rem; letter-spacing: .18em;
+  font-size: .74rem; letter-spacing: .18em;
   text-transform: uppercase; color: var(--slate);
   display: flex; align-items: center; gap: .6rem;
+  margin: 0;
 }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rail); }
 .dot--on { background: var(--teal); box-shadow: 0 0 12px rgba(77,182,196,.8); }
@@ -251,27 +438,27 @@ p { margin: 0; }
 /* ---------- Close ---------- */
 
 .close {
-  position: relative; min-height: 82svh;
+  position: relative; min-height: 86svh;
   display: flex; align-items: center;
   padding: var(--gut); overflow: hidden; isolation: isolate;
 }
 .close__img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
 .close__wash {
   position: absolute; inset: 0; z-index: -1;
-  background: linear-gradient(to right, rgba(11,12,13,.95) 18%, rgba(11,12,13,.5) 78%);
+  background: linear-gradient(to right, rgba(8,9,11,.95) 18%, rgba(8,9,11,.5) 78%);
 }
-.close__body { max-width: 40rem; }
-.close__body p { margin-top: 1.25rem; color: var(--body); }
-.status { font-family: var(--mono); font-size: .78rem; color: var(--slate); }
+.close__body { max-width: 44rem; }
+.close__body p:not(.status) { margin-top: 1.2rem; color: var(--body); max-width: var(--measure); }
+.status { margin-top: 1.4rem; font-size: .78rem; color: var(--slate); }
 
 .cta {
-  display: inline-block; margin-top: .5rem;
+  display: inline-block; margin-top: .6rem;
   font-family: var(--mono); font-size: .85rem; letter-spacing: .03em;
   color: var(--ink); background: var(--ivory); text-decoration: none;
-  padding: .85rem 1.5rem; border-radius: 999px;
-  transition: background .2s ease;
+  padding: .9rem 1.6rem; border-radius: 999px;
+  transition: background .2s ease, box-shadow .3s ease, transform .3s cubic-bezier(.16,1,.3,1);
 }
-.cta:hover { background: #fff; }
+.cta:hover { background: #fff; box-shadow: 0 0 40px rgba(77,182,196,.25); transform: translateY(-2px); }
 .cta:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
 
 /* ---------- Footer ---------- */
@@ -285,23 +472,28 @@ p { margin: 0; }
 
 /* ---------- Narrow ---------- */
 
-@media (max-width: 860px) {
-  .split { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
   .bleed__copy--right { text-align: left; margin-left: 0; }
   .bleed__copy--right p { margin-left: 0; }
   .bleed__wash--right {
-    background: linear-gradient(to top, var(--ink) 1%, rgba(11,12,13,.9) 26%, rgba(11,12,13,.22) 70%);
+    background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.9) 26%, rgba(8,9,11,.22) 70%);
   }
   .cites li { flex-direction: column; gap: .2rem; }
   .v { text-align: left; }
+  .own { grid-template-columns: 1fr; }
+  .sidecar__row { grid-template-columns: minmax(0, 1fr) auto; }
+  .sidecar__what { display: none; }
+  .dev__rail { display: none; }
+  .hud--wide { display: none; }
+  .hud__cue { display: none; }
 }
 
-/* ---------- Reduced motion ---------- */
-
+/* ---------- Reduced motion ----------
+ * The scrub never engages (the script checks the same query before adding
+ * html.scrub), reveals are instant, and the two ambient loops stop. */
 @media (prefers-reduced-motion: reduce) {
-  .rv { opacity: 1 !important; transform: none !important; transition: none !important; }
-  .hero__media img { animation: none; transform: scale(1.06); }
-  .cue span { animation: none; opacity: .6; }
+  .rv, .lines .l > span { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .cue__tick { animation: none; }
   *, *::before, *::after {
     animation-duration: .001ms !important;
     animation-iteration-count: 1 !important;
