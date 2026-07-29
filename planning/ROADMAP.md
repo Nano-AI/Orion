@@ -107,7 +107,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 
 **Definition of done:** you can dodge, burn, and fix a specific area — then apply it across a shoot.
 
-- Gradient masks (linear + radial) — cheapest, pure math
+- ✅ Gradient masks (linear + radial) — parametric, applied to the parameter
 - Luminance and color range masks — cheap given M1's bilateral grid
 - Mask combine operators (add/subtract/intersect)
 - AI subject/sky selection (Core ML) — needs the mask system first

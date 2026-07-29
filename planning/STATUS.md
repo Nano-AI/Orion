@@ -4,15 +4,50 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M3 — auto-enhance shipped; **M3 complete**)
-**Phase:** M0 done. M1 ~98%. M2 complete. **M3 complete** — local Laplacian
-clarity, dehaze, creative LUTs, single-image exposure fusion and auto-enhance
-all built, measured and verified on real frames.
-**Next story:** the developer's quality pass on M3, then M4 (local edits —
-`research/masking.md` is the plan of record). Clarity is down to 58 ms. **Dehaze
-is still 108 ms and has been profiled: there is no hotspot in it**, so the fix
-is a different algorithm rather than a better arrangement of this one — written
-up in `research/dehaze.md`, not attempted.
+**Last updated:** 2026-07-29 (M4 opened — gradient masks)
+**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** — step 1
+of `research/masking.md` is built: linear and radial gradient primitives, and
+the parameter-space application they feed.
+**Next story:** M4 step 2 — mask groups and compositing (add / subtract /
+intersect), then the guided-filter refinement in step 3, which needs no new
+dependency because the filter is already a node.
+
+**Suites:** `orion-tests` **374 checks** · `orion-viewport-tests` **2088
+checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
+the M0 gate passes at 9.29 ms p95. 114 nodes, 5907 MiB.
+
+## Session 2026-07-29h — M4 step 1, gradient masks
+
+`research/masking.md` §1 and §2. **A mask is its parameters, not an image** —
+normalized coordinates in, R16Float alpha out, so it survives a resize and an
+export matches the preview it was made on.
+
+One kernel serves both gradients: they differ only in how a position becomes a
+distance, and two shaders would be two places to fix a feather. R16 rather than
+R8 deliberately — alpha is multiplied into parameters and, once brushes exist,
+accumulated across many low-flow dabs, and eight bits bands under accumulation.
+Same class of error as the resize that quietly cost the export its bit depth.
+
+**The falloff is Perlin's smootherstep**, not smoothstep: C² against C¹, and the
+difference is visible as a faint Mach band at the feather boundary on a clear
+sky, because the eye finds discontinuities in the second derivative.
+
+### The decision the research flags as most likely to be got wrong
+
+The alpha scales the **parameter**, not two rendered results. The test pins it
+because the two are measurably different: at coverage 0.5 with a one-stop local
+exposure, scaling the parameter gives **2^0.5 = 1.414** and blending renders
+gives **1.5**. Six per cent apart, and only one is a smooth multiplicative ramp
+in linear light. Also asserted: zero coverage leaves the pixel *exactly* alone,
+or every mask would lay a faint edit across the whole frame.
+
+### A test that was wrong before the code was
+
+It checked radial symmetry twelve pixels either side of centre 0.5 — which on a
+64-pixel axis falls *between* pixels, so the two sides were not equidistant, and
+on the steepest part of the feather that half-pixel is worth a quarter of the
+alpha range. The shader was right; the sampling was not. Third time this session
+that the first version of a check measured something other than what it claimed.
 
 ## Session 2026-07-29g — outside research, acted on
 
