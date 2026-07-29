@@ -235,6 +235,28 @@ finished-page-rewound contract:
   lands like a print settling flat, the lens count ticks up on arrival,
   static grain over the two darkest scenes.
 
+**Round three, same day — subjects in frame, nothing generic.** Three notes
+from the developer, all acted on:
+
+- **Headers cut to two or three words** ("Instant updates." "Local light."
+  "No lock-in." "Color you can check.") and every line of copy passed
+  through a de-slop edit: no em dashes, no capsule phrasing, nothing that
+  reads machine-made.
+- **The pill chips and stock favicon are gone.** The hero numbers are now
+  an instrument cluster (value over label, hairlines between), the GitHub
+  button wears focus-peaking viewfinder corners that reach further on
+  hover, and the favicon is Orion's Belt — three stars, the app's own
+  namesake. Space Mono (self-hosted, 9 KB a weight) replaces the system
+  mono so the readouts have a face of their own.
+- **Every subject now fits its frame.** Measured the images instead of
+  eyeballing: the M5 is 0.92:1 and the glasshouse 0.67:1, and both were
+  being butchered by wide full-bleed crops. The mask demo moved to the
+  night sky (a graduated sky darken, nothing to cut), the glasshouse hangs
+  whole as a print beside the color copy, and the close anchors the M5 to
+  its foot so the whole car reads on any screen. The hero also gained a
+  scroll-driven settle: the frame eases from 1.09 to 1.0 as the grade
+  lands.
+
 ## Session 2026-07-29m — brush dabs, the last third of step 1
 
 One kernel, `mask_brush.slang`. Normalized coordinates in, R16F alpha out, no

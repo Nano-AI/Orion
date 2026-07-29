@@ -4,12 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Orion — a RAW editor you own</title>
-<meta name="description" content="A fast, subscription-free RAW photo editor for macOS. Full-resolution edits that keep up with your hands, corrections for 1,558 real lenses, and every filter traced to a published paper.">
+<meta name="description" content="A fast, subscription-free RAW photo editor for macOS. Full-resolution edits that keep up with your hands, corrections for 1,558 lenses, and every filter traced to a published paper.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#08090b">
 <link rel="preload" as="image" href="img/photo-aston-trio.jpg" fetchpriority="high">
 <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/BricolageGrotesque-var.woff2">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b0c0d'/><circle cx='16' cy='16' r='6.5' fill='none' stroke='%234DB6C4' stroke-width='2.5'/></svg>">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceMono-400.woff2">
+<!-- The mark is Orion's Belt: Alnitak, Alnilam, Mintaka. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0c0d'/%3E%3Ccircle cx='9.5' cy='22' r='2.2' fill='%234DB6C4'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%234DB6C4'/%3E%3Ccircle cx='22.5' cy='10' r='2.5' fill='%234DB6C4'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -26,25 +28,26 @@
      ================================================================ -->
 <header class="dev" id="dev">
   <div class="dev__pin">
-    <img class="dev__img" id="devImg" src="img/photo-aston-trio.jpg"
-         srcset="img/photo-aston-trio-1200.jpg 1200w, img/photo-aston-trio.jpg 2400w"
-         sizes="100vw" fetchpriority="high" decoding="async"
-         alt="Three Aston Martins parked at night outside a lit dealership: one yellow, one silver, one white.">
+    <div class="dev__zoom" id="devZoom">
+      <img class="dev__img" id="devImg" src="img/photo-aston-trio.jpg"
+           srcset="img/photo-aston-trio-1200.jpg 1200w, img/photo-aston-trio.jpg 2400w"
+           sizes="100vw" fetchpriority="high" decoding="async"
+           alt="Three Aston Martins parked at night outside a lit dealership: one yellow, one silver, one white.">
+    </div>
     <div class="dev__grade"></div>
     <div class="grain" aria-hidden="true"></div>
 
     <div class="dev__body">
       <p class="eyebrow rv">RAW photo editor · macOS</p>
       <h1 class="disp lines rv-lines" data-rv>
-        <span class="l"><span>Every slider.</span></span>
-        <span class="l"><span>Full resolution.</span></span>
-        <span class="l"><span class="glow">Right now.</span></span>
+        <span class="l"><span>Full resolution,</span></span>
+        <span class="l"><span class="glow">right now.</span></span>
       </h1>
-      <p class="lede rv d2">No subscription. No cloud. 24 megapixels, live under your hand.</p>
-      <p class="chips rv d3">
-        <span class="chip"><b>$0</b> forever</span>
-        <span class="chip"><b data-count="1558" data-comma>1,558</b> lenses profiled</span>
-        <span class="chip"><b><span data-count="100">100</span>%</b> your files</span>
+      <p class="lede rv d2">No subscription, no cloud. 24 megapixels live under your hand.</p>
+      <p class="stats rv d3">
+        <span class="stat"><b>$0</b><span class="stat__l">forever</span></span>
+        <span class="stat"><b data-count="1558" data-comma>1,558</b><span class="stat__l">lenses profiled</span></span>
+        <span class="stat"><b><span data-count="100">100</span>%</b><span class="stat__l">your files</span></span>
       </p>
     </div>
 
@@ -97,10 +100,9 @@
     <div class="wipe__wash"></div>
     <div class="wipe__copy">
       <h2 class="disp lines rv-lines" data-rv>
-        <span class="l"><span>It does not</span></span>
-        <span class="l"><span>make you wait.</span></span>
+        <span class="l"><span>Instant updates.</span></span>
       </h2>
-      <p class="mnote rv d2">EXPOSURE DRAG · 24 MP RAW · FULL RESOLUTION — <b>9.29 ms</b></p>
+      <p class="mnote rv d2">EXPOSURE DRAG · 24 MP RAW · FULL RESOLUTION · <b>9.29 ms</b></p>
     </div>
   </div>
 </section>
@@ -108,10 +110,10 @@
 <!-- ============ LOCAL LIGHT — the mask sweep ============ -->
 <section class="maskscene" id="masks" data-frame="02 · Local light">
   <div class="mask__pin">
-    <img class="mask__img" src="img/photo-m5-bluehour.jpg"
-         srcset="img/photo-m5-bluehour-1200.jpg 1200w, img/photo-m5-bluehour.jpg 2400w"
+    <img class="mask__img" src="img/photo-nightsky.jpg"
+         srcset="img/photo-nightsky-1200.jpg 1200w, img/photo-nightsky.jpg 2400w"
          sizes="100vw" loading="lazy" decoding="async"
-         alt="A gray BMW M5 photographed at blue hour outside a lit building.">
+         alt="A deep blue night sky full of faint stars above a dark treeline.">
 
     <div class="mask__sweep" id="maskSweep" aria-hidden="true">
       <div class="mask__shade"></div>
@@ -124,10 +126,10 @@
 
     <div class="mask__copy">
       <h2 class="disp lines rv-lines" data-rv>
-        <span class="l"><span>Put the light exactly</span></span>
-        <span class="l"><span>where you want it.</span></span>
+        <span class="l"><span>Local light.</span></span>
       </h2>
-      <p class="mnote rv d2">LOCAL · LINEAR — EXPOSURE <b id="hMask">−1.60</b> EV</p>
+      <p class="rv d2">Drag a gradient onto the photograph. It stays where you put it.</p>
+      <p class="mnote rv d3">LOCAL · LINEAR · EXPOSURE <b id="hMask">−1.60</b> EV</p>
     </div>
   </div>
 </section>
@@ -139,24 +141,25 @@
          srcset="img/orion-mask-linear-900.jpg 900w, img/orion-mask-linear.jpg 1600w"
          sizes="(max-width: 900px) 100vw, 74vw" loading="lazy" decoding="async"
          alt="Orion's interface with a linear gradient mask drawn across a night photograph as three dashed guide lines with endpoint handles. The Local panel reads Exposure minus 1.60 EV.">
-    <figcaption class="mono rv">The interface as it runs today. Nothing on this page is a mockup.</figcaption>
+    <figcaption class="mono rv">The interface as it runs today, not a mockup.</figcaption>
   </figure>
 </section>
 
-<!-- ============ COLOR ============ -->
-<section class="bleed" id="color" data-frame="03 · Color">
-  <img class="bleed__img plx" data-plx src="img/photo-glasshouse.jpg"
-       srcset="img/photo-glasshouse-1200.jpg 1200w, img/photo-glasshouse.jpg 2400w"
-       sizes="100vw" loading="lazy" decoding="async"
-       alt="A glass-fronted building at golden hour with saturated yellow machinery visible inside.">
-  <div class="bleed__wash bleed__wash--right"></div>
-  <div class="bleed__copy bleed__copy--right">
+<!-- ============ COLOR — a print, shown whole ============ -->
+<section class="duo" id="color" data-frame="03 · Color">
+  <div class="duo__text">
     <h2 class="disp lines rv-lines" data-rv>
-      <span class="l"><span>Right — and</span></span>
-      <span class="l"><span>checkable.</span></span>
+      <span class="l"><span>Color you</span></span>
+      <span class="l"><span>can check.</span></span>
     </h2>
-    <p class="rv d2">Color built to the DNG spec, tested against the camera's own rendering.</p>
+    <p class="rv d2">Built to the DNG spec, checked against the camera's own rendering.</p>
   </div>
+  <figure class="print rv d1" data-plx>
+    <img src="img/photo-glasshouse.jpg"
+         srcset="img/photo-glasshouse-1200.jpg 1200w, img/photo-glasshouse.jpg 2400w"
+         sizes="(max-width: 900px) 100vw, 42vw" loading="lazy" decoding="async"
+         alt="A glass-fronted building at golden hour with saturated yellow machinery visible inside.">
+  </figure>
 </section>
 
 <!-- ============ LEDGER ============ -->
@@ -165,7 +168,7 @@
     <span class="l"><span>Every filter</span></span>
     <span class="l"><span>cites its paper.</span></span>
   </h2>
-  <p class="ledger__lede rv d2">What is <em>not</em> yet sourced is written down too — in public.</p>
+  <p class="ledger__lede rv d2">What isn't sourced yet is written down too, in public.</p>
   <ul class="cites">
     <li class="rv"><span class="k">Haze removal</span><span class="v">He, Sun &amp; Tang · CVPR <b>2009</b></span></li>
     <li class="rv"><span class="k">Local contrast</span><span class="v">Paris, Hasinoff &amp; Kautz · SIGGRAPH <b>2011</b></span></li>
@@ -179,10 +182,9 @@
 <section class="own" data-frame="05 · Yours">
   <div class="own__text">
     <h2 class="disp lines rv-lines" data-rv>
-      <span class="l"><span>Your edits are</span></span>
-      <span class="l"><span>yours to take.</span></span>
+      <span class="l"><span>No lock-in.</span></span>
     </h2>
-    <p class="rv d2">Plain XMP beside the file. Delete the app — nothing follows.</p>
+    <p class="rv d2">Plain XMP beside the file. Delete the app and nothing follows.</p>
   </div>
   <div class="sidecar mono rv d1" aria-label="A raw file and its sidecar, side by side">
     <p class="sidecar__row"><span class="sidecar__name">_PIC8220.ARW</span><span class="sidecar__what">the photograph</span><span class="sidecar__meta">24 MP · untouched</span></p>
@@ -209,7 +211,7 @@
     <div class="reg__col rv d1">
       <p class="reg__h mono"><span class="dot"></span>Not yet</p>
       <ul class="dim">
-        <li>Brush masks — the engine is built, the brush is not wired</li>
+        <li>Brush masks: engine built, brush not yet wired</li>
         <li>Combining masks: add, subtract, intersect</li>
         <li>Selecting a subject or a sky</li>
         <li>Spot and blemish removal</li>
@@ -222,10 +224,10 @@
 
 <!-- ============ CLOSE ============ -->
 <section class="close" data-frame="End of roll">
-  <img class="close__img plx" data-plx src="img/photo-nightsky.jpg"
-       srcset="img/photo-nightsky-1200.jpg 1200w, img/photo-nightsky.jpg 2400w"
+  <img class="close__img plx" data-plx src="img/photo-m5-bluehour.jpg"
+       srcset="img/photo-m5-bluehour-1200.jpg 1200w, img/photo-m5-bluehour.jpg 2400w"
        sizes="100vw" loading="lazy" decoding="async"
-       alt="A deep blue night sky above a dark treeline.">
+       alt="A gray BMW M5 photographed at blue hour outside a lit building.">
   <div class="close__wash"></div>
   <div class="grain" aria-hidden="true"></div>
   <div class="close__body">

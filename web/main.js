@@ -102,8 +102,8 @@
   try {
     var q = function (id) { return document.getElementById(id); };
 
-    var devWrap = q('dev'), devImg = q('devImg'), devFill = q('devFill'),
-        devThumb = q('devThumb'), devCue = q('devCue'),
+    var devWrap = q('dev'), devImg = q('devImg'), devZoom = q('devZoom'),
+        devFill = q('devFill'), devThumb = q('devThumb'), devCue = q('devCue'),
         hExp = q('hExp'), hCon = q('hCon'), hTmp = q('hTmp');
     var sayWrap = q('say'), sayText = q('sayText');
     var wipeWrap = q('speed'), wipeProxy = q('wipeProxy'), wipeEdge = q('wipeEdge');
@@ -181,6 +181,12 @@
         'contrast(' + (0.72 + 0.28 * e).toFixed(4) +
         ') saturate(' + (0.28 + 0.72 * e).toFixed(4) +
         ') brightness(' + (1.16 - 0.16 * e).toFixed(4) + ')';
+
+      // The frame settles home as the grade lands.
+      if (devZoom) {
+        devZoom.style.transform = e >= 0.999 ? '' :
+          'scale(' + (1.09 - 0.09 * e).toFixed(4) + ')';
+      }
 
       // The real values from the real edit of this photograph — the same
       // numbers the Local panel shows in the interface screenshot below.
