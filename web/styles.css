@@ -41,6 +41,13 @@
   font-weight: 700;
   font-display: swap;
 }
+/* The wordmark face — the wide, engraved-on-the-body lettering cameras use. */
+@font-face {
+  font-family: "Michroma";
+  src: url("fonts/Michroma-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
 
 :root {
   --ink:    #08090b;   /* ground — a stop deeper than the app, this is a cinema */
@@ -110,14 +117,6 @@ h2.disp { font-size: clamp(2.3rem, 6.4vw, 5.4rem); }
 
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
-/* The only hue other than teal in the chrome, and it is light rather than
-   paint: the closing display words carry a teal bloom so the accent reads
-   as glow. */
-.glow {
-  color: #fff;
-  text-shadow: 0 0 34px rgba(77,182,196,0.38), 0 0 110px rgba(77,182,196,0.14);
-}
-
 /* Film grain over the two darkest scenes — a print, not a screenshot.
  * Static and very quiet; it exists to be felt, not seen. */
 .grain {
@@ -159,14 +158,11 @@ html.js .lines.in .l > span { transform: none; }
 /* ---------- Hero — scroll to develop ---------- */
 
 .dev { position: relative; height: 100svh; }
-html.scrub .dev { height: 260svh; }
+html.scrub .dev { height: 280svh; }
 
 .dev__pin {
   position: sticky; top: 0;
   height: 100svh;
-  display: flex; flex-direction: column; justify-content: flex-end;
-  padding: var(--gut);
-  padding-bottom: clamp(1.2rem, 3.5vh, 2.5rem);
   overflow: hidden; isolation: isolate;
 }
 
@@ -186,27 +182,140 @@ html.scrub .dev__zoom { will-change: transform; }
 }
 html.scrub .dev__img { will-change: filter, transform; }
 
-/* Grade the photograph into the page rather than dropping a flat scrim over
-   it: opaque where the type sits, clear where the cars are. */
+/* An eyepiece, not a scrim: vignetted at the edges, a band of dark at the
+   foot for the readout, and otherwise out of the photograph's way. */
 .dev__grade {
   position: absolute; inset: 0; z-index: -1;
   background:
-    linear-gradient(to top, var(--ink) 2%, rgba(8,9,11,.88) 22%, rgba(8,9,11,.24) 55%, rgba(8,9,11,.55) 100%),
-    radial-gradient(130% 85% at 15% 100%, rgba(77,182,196,.13), transparent 62%);
+    radial-gradient(115% 115% at 50% 48%, transparent 52%, rgba(8,9,11,.55) 100%),
+    linear-gradient(to top, rgba(8,9,11,.8) 0%, rgba(8,9,11,.3) 14%, transparent 34%),
+    linear-gradient(to bottom, rgba(8,9,11,.45) 0%, transparent 16%);
 }
 
-.dev__body { max-width: 68rem; margin-bottom: auto; margin-top: auto; position: relative; z-index: 1; }
-.dev__body h1 { margin-top: .5em; }
+/* ---------- The viewfinder ----------
+ * Frame brackets, a thirds grid, an AF point, the wordmark where the
+ * eyepiece display sits. The whole assembly is one layer: pushing through
+ * it at the end of the hero scales and fades everything at once. All the
+ * furniture draws in currentColor, so state changes are one property. */
 
-.lede {
-  margin-top: 1.4rem; max-width: var(--measure); color: var(--body);
-  font-size: clamp(1rem, .95rem + .45vw, 1.28rem);
+.vf {
+  position: absolute; inset: 0; z-index: 1;
+  transform-origin: 50% 50%;
+}
+html.scrub .vf { will-change: transform, opacity; }
+
+.vf__frame {
+  position: absolute; inset: clamp(14px, 3.5vw, 44px);
+  color: rgba(240,243,244,.85);
+  background-image:
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
+  background-position:
+    left top, left top, right top, right top,
+    left bottom, left bottom, right bottom, right bottom;
+  background-size:
+    34px 2px, 2px 34px, 34px 2px, 2px 34px,
+    34px 2px, 2px 34px, 34px 2px, 2px 34px;
+  background-repeat: no-repeat;
+}
+
+.vf__grid {
+  position: absolute; inset: clamp(14px, 3.5vw, 44px);
+  background-image:
+    linear-gradient(rgba(240,243,244,.08), rgba(240,243,244,.08)),
+    linear-gradient(rgba(240,243,244,.08), rgba(240,243,244,.08)),
+    linear-gradient(rgba(240,243,244,.08), rgba(240,243,244,.08)),
+    linear-gradient(rgba(240,243,244,.08), rgba(240,243,244,.08));
+  background-size: 1px 100%, 1px 100%, 100% 1px, 100% 1px;
+  background-position: 33.33% 0, 66.66% 0, 0 33.33%, 0 66.66%;
+  background-repeat: no-repeat;
+}
+
+/* The AF point sits at the upper thirds intersection, on the silver car —
+ * where a hand would put it. It confirms, turning teal, the live-state
+ * color, the moment the develop lands. */
+.vf__af {
+  position: absolute; left: 63%; top: 34%;
+  width: 58px; height: 40px;
+  transform: translate(-50%, -50%);
+  color: rgba(240,243,244,.5);
+  transition: color .3s ease, filter .3s ease;
+  background-image:
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
+  background-position:
+    left top, left top, right top, right top,
+    left bottom, left bottom, right bottom, right bottom;
+  background-size:
+    9px 1.5px, 1.5px 9px, 9px 1.5px, 1.5px 9px,
+    9px 1.5px, 1.5px 9px, 9px 1.5px, 1.5px 9px;
+  background-repeat: no-repeat;
+}
+.vf.lock .vf__af {
+  color: var(--teal);
+  filter: drop-shadow(0 0 7px rgba(77,182,196,.7));
+}
+
+/* The mode line, top of the finder, where a camera names itself. */
+.vf__eyebrow {
+  position: absolute;
+  top: calc(clamp(14px, 3.5vw, 44px) + 16px);
+  left: 0; right: 0;
+  text-align: center;
+}
+
+.vf__center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(.9rem, 2vh, 1.4rem);
+  text-align: center;
+  padding: 0 1.2rem;
+  pointer-events: none;
+}
+.vf__name {
+  margin: 0;
+  font-family: "Michroma", var(--sans);
+  font-weight: 400;
+  font-size: clamp(3rem, 14vw, 12.5rem);
+  letter-spacing: .2em; margin-right: -.2em;   /* recentre the tracked text */
+  text-transform: uppercase;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 70px rgba(77,182,196,.28), 0 2px 34px rgba(8,9,11,.75);
+}
+.vf__sub {
+  color: var(--body);
+  font-size: clamp(1rem, .95rem + .4vw, 1.25rem);
+  text-shadow: 0 1px 14px rgba(8,9,11,.8);
+}
+
+.vf .dev__hud {
+  position: absolute;
+  left: var(--gut); right: var(--gut);
+  bottom: clamp(1.2rem, 3.5vh, 2.5rem);
+}
+
+/* ---------- The numbers strip ---------- */
+
+.strip {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 1.6rem 3rem;
+  padding: clamp(2.5rem, 7vh, 4.5rem) var(--gut);
+  border-bottom: 1px solid var(--rail);
+}
+.strip__lede {
+  max-width: 34rem; color: var(--body);
+  font-size: clamp(1rem, .95rem + .4vw, 1.25rem);
   text-wrap: balance;
 }
 
 /* The numbers, set like an instrument cluster: value over label, hairlines
  * between. No capsules — this is a readout, not a row of buttons. */
-.stats { display: flex; flex-wrap: wrap; gap: clamp(1.3rem, 3vw, 2.6rem); margin-top: 2.1rem; }
+.stats { display: flex; flex-wrap: wrap; gap: clamp(1.3rem, 3vw, 2.6rem); }
 .stat { display: flex; flex-direction: column; gap: .3rem; }
 .stat + .stat { border-left: 1px solid rgba(240,243,244,.14); padding-left: clamp(1.3rem, 3vw, 2.6rem); }
 .stat b {

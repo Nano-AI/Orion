@@ -235,6 +235,19 @@ finished-page-rewound contract:
   lands like a print settling flat, the lens count ticks up on arrival,
   static grain over the two darkest scenes.
 
+**Round four, same day — the hero is a viewfinder** (decision #57). The
+sentence headline read as a generic hero, so it is gone. The page opens
+inside a camera: frame brackets, a thirds grid, a mode line up top, an AF
+point at the upper thirds intersection that turns teal the moment the
+develop lands, and ORION set in Michroma — the wide engraved-on-the-body
+lettering cameras use — where the eyepiece display sits. Scrolling develops
+the raw as before; keep going and you push through the finder, the whole
+overlay scaling past the eye while the photograph stays. The lede and the
+instrument cluster moved to a strip below the hero so the finder stays
+clean. Screenshotted at load, at lock, mid-push, and on mobile; the AF
+point and the mode line were both repositioned because the first
+screenshots showed them lost behind the wordmark.
+
 **Round three, same day — subjects in frame, nothing generic.** Three notes
 from the developer, all acted on:
 

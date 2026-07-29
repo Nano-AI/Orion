@@ -10,6 +10,7 @@
 <link rel="preload" as="image" href="img/photo-aston-trio.jpg" fetchpriority="high">
 <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/BricolageGrotesque-var.woff2">
 <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceMono-400.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/Michroma-400.woff2">
 <!-- The mark is Orion's Belt: Alnitak, Alnilam, Mintaka. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0c0d'/%3E%3Ccircle cx='9.5' cy='22' r='2.2' fill='%234DB6C4'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%234DB6C4'/%3E%3Ccircle cx='22.5' cy='10' r='2.5' fill='%234DB6C4'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
@@ -19,12 +20,16 @@
 <a class="skip" href="#main">Skip to content</a>
 
 <!-- ================================================================
-     HERO — scroll to develop.
-     The photograph starts as the flat, undeveloped raw. Scrolling IS
-     the slider drag: the frame grades in while the readout ticks to
-     the real values from the real edit (see img/orion-mask-linear.jpg
-     — same photo, same panel). Without JavaScript, or with reduced
-     motion, the developed image and final numbers are simply there.
+     HERO — through the viewfinder.
+     The page opens inside a camera: frame brackets, a thirds grid, an
+     AF point, the wordmark where the eyepiece display sits. Scrolling
+     is the slider drag — the raw grades in while the readout ticks to
+     the real values from the real edit (see img/orion-mask-linear.jpg,
+     same photo, same panel) and the AF point locks when it lands. Keep
+     scrolling and you push through the finder: the whole overlay
+     scales past the eye and the photograph fills the frame. Without
+     JavaScript, or with reduced motion, the finder simply rests over
+     the developed frame.
      ================================================================ -->
 <header class="dev" id="dev">
   <div class="dev__pin">
@@ -37,37 +42,46 @@
     <div class="dev__grade"></div>
     <div class="grain" aria-hidden="true"></div>
 
-    <div class="dev__body">
-      <p class="eyebrow rv">RAW photo editor · macOS</p>
-      <h1 class="disp lines rv-lines" data-rv>
-        <span class="l"><span>Full resolution,</span></span>
-        <span class="l"><span class="glow">right now.</span></span>
-      </h1>
-      <p class="lede rv d2">No subscription, no cloud. 24 megapixels live under your hand.</p>
-      <p class="stats rv d3">
-        <span class="stat"><b>$0</b><span class="stat__l">forever</span></span>
-        <span class="stat"><b data-count="1558" data-comma>1,558</b><span class="stat__l">lenses profiled</span></span>
-        <span class="stat"><b><span data-count="100">100</span>%</b><span class="stat__l">your files</span></span>
+    <div class="vf" id="vf">
+      <div class="vf__frame" aria-hidden="true"></div>
+      <div class="vf__grid" aria-hidden="true"></div>
+      <div class="vf__af" aria-hidden="true"></div>
+
+      <p class="eyebrow vf__eyebrow rv">RAW photo editor · macOS</p>
+
+      <div class="vf__center">
+        <h1 class="vf__name lines rv-lines" data-rv><span class="l"><span>Orion</span></span></h1>
+        <p class="vf__sub rv d2">Full resolution, right now.</p>
+      </div>
+
+      <!-- The slider being dragged, literally. -->
+      <div class="dev__rail rv d3" aria-hidden="true">
+        <span class="dev__fill" id="devFill"></span>
+        <span class="dev__thumb" id="devThumb"></span>
+      </div>
+
+      <p class="dev__hud mono rv d4">
+        <span class="hud__cell">EXPOSURE <b id="hExp">+2.60</b> EV</span>
+        <span class="hud__cell hud__sep">CONTRAST <b id="hCon">1.45</b></span>
+        <span class="hud__cell hud__sep hud--wide">TEMP <b id="hTmp">3635</b> K</span>
+        <span class="hud__cue" id="devCue">scroll to develop <span class="cue__tick" aria-hidden="true">▾</span></span>
+        <span class="hud__cell hud__ms">RENDER <b>9.3</b> MS</span>
       </p>
     </div>
-
-    <!-- The slider being dragged, literally. -->
-    <div class="dev__rail rv d3" aria-hidden="true">
-      <span class="dev__fill" id="devFill"></span>
-      <span class="dev__thumb" id="devThumb"></span>
-    </div>
-
-    <p class="dev__hud mono rv d4">
-      <span class="hud__cell">EXPOSURE <b id="hExp">+2.60</b> EV</span>
-      <span class="hud__cell hud__sep">CONTRAST <b id="hCon">1.45</b></span>
-      <span class="hud__cell hud__sep hud--wide">TEMP <b id="hTmp">3635</b> K</span>
-      <span class="hud__cue" id="devCue">scroll to develop <span class="cue__tick" aria-hidden="true">▾</span></span>
-      <span class="hud__cell hud__ms">RENDER <b>9.3</b> MS</span>
-    </p>
   </div>
 </header>
 
 <main id="main">
+
+<!-- ============ THE NUMBERS ============ -->
+<section class="strip">
+  <p class="strip__lede rv">No subscription, no cloud. 24 megapixels live under your hand.</p>
+  <p class="stats rv d1">
+    <span class="stat"><b>$0</b><span class="stat__l">forever</span></span>
+    <span class="stat"><b data-count="1558" data-comma>1,558</b><span class="stat__l">lenses profiled</span></span>
+    <span class="stat"><b><span data-count="100">100</span>%</b><span class="stat__l">your files</span></span>
+  </p>
+</section>
 
 <!-- ============ STATEMENT — lights up word by word ============ -->
 <section class="sayscene" id="say">

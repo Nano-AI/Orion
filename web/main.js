@@ -104,6 +104,7 @@
 
     var devWrap = q('dev'), devImg = q('devImg'), devZoom = q('devZoom'),
         devFill = q('devFill'), devThumb = q('devThumb'), devCue = q('devCue'),
+        vf = q('vf'),
         hExp = q('hExp'), hCon = q('hCon'), hTmp = q('hTmp');
     var sayWrap = q('say'), sayText = q('sayText');
     var wipeWrap = q('speed'), wipeProxy = q('wipeProxy'), wipeEdge = q('wipeEdge');
@@ -174,9 +175,10 @@
     }
 
     function drawDev(p) {
-      // The grade lands a little before the pin releases, so the finished
-      // frame gets a beat on screen before the page moves on.
-      var e = easeOut(clamp01(p / 0.85));
+      // Three beats: the raw develops, the AF point locks, then the visitor
+      // pushes through the finder — the overlay scales past the eye and
+      // fades while the photograph stays.
+      var e = easeOut(clamp01(p / 0.62));
       devImg.style.filter = e >= 0.999 ? '' :
         'contrast(' + (0.72 + 0.28 * e).toFixed(4) +
         ') saturate(' + (0.28 + 0.72 * e).toFixed(4) +
@@ -197,6 +199,14 @@
       if (devFill) devFill.style.height = (e * 100).toFixed(2) + '%';
       if (devThumb) devThumb.style.top = (e * 100).toFixed(2) + '%';
       if (devCue) devCue.style.opacity = String(1 - clamp01(p * 5));
+
+      if (vf) {
+        var push = clamp01((p - 0.74) / 0.26);
+        push = push * push;
+        vf.style.transform = push <= 0 ? '' : 'scale(' + (1 + 0.85 * push).toFixed(4) + ')';
+        vf.style.opacity = push <= 0 ? '' : (1 - push).toFixed(4);
+        vf.classList.toggle('lock', e >= 0.999);
+      }
     }
 
     function drawSay(p) {
