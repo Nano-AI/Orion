@@ -35,3 +35,16 @@ source. Each entry in `research/` names its paper.
 - ASC CDL colour grading
 - poly3 lens distortion and its autoscale, as lensfun documents the model
 - Highlight reconstruction — Masood, Zhu & Tang
+
+## Fonts on the landing site
+
+`web/fonts/` vendors three typefaces, all under the SIL Open Font License 1.1.
+The license and the per-family copyright notices are in `web/fonts/OFL.txt`,
+which the OFL requires to travel with the files.
+
+  Bricolage Grotesque — Copyright 2022 The Bricolage Grotesque Project Authors
+  Space Mono          — Copyright 2016 The Space Mono Project Authors
+  Michroma            — Copyright 2011 The Michroma Project Authors
+
+Self-hosted rather than loaded from a font service, so the page makes no
+third-party request.

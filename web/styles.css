@@ -324,7 +324,7 @@ html.scrub .vf { will-change: transform, opacity; }
   font-family: "Michroma", var(--sans);
   font-weight: 400;
   font-size: clamp(3rem, 14vw, 12.5rem);
-  letter-spacing: .2em; margin-right: -.2em;   /* recentre the tracked text */
+  letter-spacing: .2em; margin-right: -.2em;   /* recenter the tracked text */
   text-transform: uppercase;
   line-height: 1;
   color: #fff;
@@ -508,8 +508,8 @@ html.scrub .maskscene { height: 220svh; }
 }
 
 /* The mask itself: a shade that ends in a feathered ramp, with the editor's
- * own three guide lines riding the ramp — full, centre, zero — and a handle
- * on the centre line. Tilted a few degrees, as a hand would place it. The
+ * own three guide lines riding the ramp — full, center, zero — and a handle
+ * on the center line. Tilted a few degrees, as a hand would place it. The
  * script slides the whole assembly down; at rest (no script) it sits where
  * the scrub would finish. */
 .mask__sweep {
@@ -529,7 +529,7 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   border-top: 1px dashed rgba(240,243,244,.75);
 }
 .mask__line--full   { top: 64%; }
-.mask__line--centre { top: 80%; }
+.mask__line--center { top: 80%; }
 .mask__line--zero   { top: 96%; }
 .mask__handle {
   position: absolute; left: 50%; top: 0;
