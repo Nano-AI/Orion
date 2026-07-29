@@ -200,6 +200,91 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                          PixelFormat::RGBA32Float);
     nHueSat_   = pipeline_.add({"profile:hue/sat", "hueSatMap", {nMatrix_},
                                 PixelFormat::RGBA16Float, {}, {auxHueSat_}});
+    // ── Local Laplacian clarity (Paris et al. 2011 / Aubry et al. 2014) ───
+    //
+    // Placed here, before the tone controls, for the same reason the guided
+    // filter is: exposure is a multiply, so in log2 it is an additive constant,
+    // and the Laplacian of a constant offset is zero. Computing clarity before
+    // exposure therefore gives bit for bit what computing it after would, while
+    // leaving all twenty-two of these nodes cached for the slider people
+    // actually drag. research/local-laplacian.md.
+    //
+    // Twenty-two nodes and seven kernels, none over a hundred lines. The count
+    // is the pyramid's, not the code's: six levels, and eight remapped copies
+    // of the image packed two textures wide.
+    for (int l = 0; l < kLlfLevels; ++l) {
+        llfW_[l] = (l == 0) ? width_  : std::max(1u, (llfW_[l - 1] + 1) / 2);
+        llfH_[l] = (l == 0) ? height_ : std::max(1u, (llfH_[l - 1] + 1) / 2);
+    }
+
+    // The channel the filter runs on: normalized log2 luminance. Reads the
+    // profile output, not the tone output, so it describes the scene.
+    nLlfLuma_ = pipeline_.add({"clarity:luma", "llfLuma", {nHueSat_},
+                               PixelFormat::R16Float, {}});
+    nLlfGauss_[0] = nLlfLuma_;
+
+    // The input's own Gaussian pyramid. This is where g comes from — the value
+    // that picks which two remappings get interpolated at each coefficient.
+    for (int l = 1; l < kLlfLevels; ++l) {
+        nLlfGauss_[l] = pipeline_.add({"clarity:gauss " + std::to_string(l),
+                                       "llfDown", {nLlfGauss_[l - 1]},
+                                       PixelFormat::R16Float, {}, {},
+                                       true, llfW_[l], llfH_[l]});
+    }
+
+    // The eight remapped pyramids, four gammas to a texture. Level one fuses
+    // the remapping into the first halving, so the full-resolution remapped
+    // images are never stored — they are recomputed point-wise in
+    // llf_collapse0, which is cheaper than a 194 MB round trip each.
+    for (int l = 1; l < kLlfLevels; ++l) {
+        for (int s = 0; s < kLlfStacks; ++s) {
+            const std::string tag = "clarity:remap " + std::to_string(l) +
+                                    "." + std::to_string(s);
+            nLlfPack_[l][s] = (l == 1)
+                ? pipeline_.add({tag, "llfRemapDown", {nLlfLuma_},
+                                 PixelFormat::RGBA16Float, {}, {},
+                                 true, llfW_[1], llfH_[1]})
+                : pipeline_.add({tag, "llfDownPacked", {nLlfPack_[l - 1][s]},
+                                 PixelFormat::RGBA16Float, {}, {},
+                                 true, llfW_[l], llfH_[l]});
+        }
+    }
+
+    // Interpolate, difference and collapse in one pass per level, coarse to
+    // fine. The output Laplacian pyramid is never written out: each level adds
+    // its coefficient to the expanded level below it and is done.
+    //
+    // The coarsest level is the residual, taken from the input's own pyramid
+    // unchanged — that is what makes this a detail filter and not a tone one.
+    nLlfOut_[kLlfLevels - 1] = nLlfGauss_[kLlfLevels - 1];
+    for (int l = kLlfLevels - 2; l >= 1; --l) {
+        nLlfOut_[l] = pipeline_.add({"clarity:collapse " + std::to_string(l),
+                                     "llfCollapse",
+                                     {nLlfGauss_[l],
+                                      nLlfPack_[l][0], nLlfPack_[l][1],
+                                      nLlfPack_[l][2], nLlfPack_[l][3],
+                                      nLlfPack_[l + 1][0], nLlfPack_[l + 1][1],
+                                      nLlfPack_[l + 1][2], nLlfPack_[l + 1][3],
+                                      nLlfOut_[l + 1]},
+                                     PixelFormat::R16Float, {}, {},
+                                     true, llfW_[l], llfH_[l]});
+    }
+    nLlfOut_[0] = pipeline_.add({"clarity:collapse 0", "llfCollapse0",
+                                 {nLlfLuma_,
+                                  nLlfPack_[1][0], nLlfPack_[1][1],
+                                  nLlfPack_[1][2], nLlfPack_[1][3],
+                                  nLlfOut_[1]},
+                                 PixelFormat::R16Float, {}});
+
+    // Back onto the picture as one scale factor per pixel, which is Paris et
+    // al.'s colour ratios and is what keeps hue and saturation still.
+    //
+    // First input is the profile output on purpose: a disabled node resolves
+    // to its first input, so clarity at zero costs exactly nothing.
+    nClarity_ = pipeline_.add({"clarity", "llfApply",
+                               {nHueSat_, nLlfOut_[0], nLlfLuma_},
+                               PixelFormat::RGBA16Float, {}});
+
     // Every scene-linear adjustment fuses into one dispatch, and the display
     // transform plus curve into another. They are all pointwise; separate
     // passes only bought a 194 MB round trip each at 24 MP.
@@ -234,7 +319,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  true, guideW_, guideH_});
 
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
-                                 {nHueSat_, nGuideV2_, nGuidePrep_},
+                                 {nClarity_, nGuideV2_, nGuidePrep_},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
@@ -736,6 +821,83 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             }
             pipeline_.setParams(nAtrousShrink_[j], &shrink, sizeof shrink);
         }
+    }
+
+    // ── Local Laplacian clarity ──────────────────────────────────────────
+    //
+    // Twenty-two nodes, so it follows the guided filter's and the denoiser's
+    // rule: switched off entirely at zero rather than run at no strength.
+    const bool clarifying   = std::fabs(adj.clarity) > 1e-4f;
+    const bool clarityMoved = first || adj.clarity != lastAdj_.clarity;
+
+    if (clarityMoved) {
+        pipeline_.setEnabled(nLlfLuma_, clarifying);
+        pipeline_.setEnabled(nClarity_, clarifying);
+        for (int l = 1; l < kLlfLevels; ++l) {
+            pipeline_.setEnabled(nLlfGauss_[l], clarifying);
+            for (int st = 0; st < kLlfStacks; ++st) {
+                pipeline_.setEnabled(nLlfPack_[l][st], clarifying);
+            }
+        }
+        for (int l = 0; l <= kLlfLevels - 2; ++l) {
+            pipeline_.setEnabled(nLlfOut_[l], clarifying);
+        }
+    }
+
+    if (clarifying && clarityMoved) {
+        const float alpha = llf::alphaForClarity(adj.clarity);
+
+        params::LlfLuma lum{{width_, height_}, llf::kWindowLoEv,
+                            1.0f / llf::kWindowEv};
+        pipeline_.setParams(nLlfLuma_, &lum, sizeof lum);
+
+        for (int l = 1; l < kLlfLevels; ++l) {
+            params::LlfDown d{{llfW_[l], llfH_[l]}, {llfW_[l - 1], llfH_[l - 1]}};
+            pipeline_.setParams(nLlfGauss_[l], &d, sizeof d);
+
+            for (int st = 0; st < kLlfStacks; ++st) {
+                if (l == 1) {
+                    params::LlfRemap r{};
+                    r.outSize[0] = llfW_[1]; r.outSize[1] = llfH_[1];
+                    r.inSize[0]  = width_;   r.inSize[1]  = height_;
+                    // Each texture carries four consecutive gammas, so the
+                    // stack index is where its first one sits on the range.
+                    r.gamma0    = float(st * 4) * llf::kGammaStep;
+                    r.gammaStep = llf::kGammaStep;
+                    r.sigmaR    = llf::kSigmaR;
+                    r.alpha     = alpha;
+                    r.noiseLo   = llf::kNoiseLo;
+                    r.noiseHi   = llf::kNoiseHi;
+                    pipeline_.setParams(nLlfPack_[l][st], &r, sizeof r);
+                } else {
+                    pipeline_.setParams(nLlfPack_[l][st], &d, sizeof d);
+                }
+            }
+        }
+
+        for (int l = kLlfLevels - 2; l >= 1; --l) {
+            params::LlfCollapse c{};
+            c.size[0] = llfW_[l];           c.size[1] = llfH_[l];
+            c.coarseSize[0] = llfW_[l + 1]; c.coarseSize[1] = llfH_[l + 1];
+            c.gammaStep  = llf::kGammaStep;
+            c.gammaCount = llf::kGammaLevels;
+            pipeline_.setParams(nLlfOut_[l], &c, sizeof c);
+        }
+
+        params::LlfCollapse0 c0{};
+        c0.size[0] = width_;         c0.size[1] = height_;
+        c0.coarseSize[0] = llfW_[1]; c0.coarseSize[1] = llfH_[1];
+        c0.gammaStep  = llf::kGammaStep;
+        c0.gammaCount = llf::kGammaLevels;
+        c0.sigmaR     = llf::kSigmaR;
+        c0.alpha      = alpha;
+        c0.noiseLo    = llf::kNoiseLo;
+        c0.noiseHi    = llf::kNoiseHi;
+        pipeline_.setParams(nLlfOut_[0], &c0, sizeof c0);
+
+        params::LlfApply ap{{width_, height_}, llf::kWindowEv,
+                            llf::kMaxCorrectionEv};
+        pipeline_.setParams(nClarity_, &ap, sizeof ap);
     }
 
     const bool linearMoved =

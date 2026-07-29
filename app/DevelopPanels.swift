@@ -203,6 +203,16 @@ extension Editor {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Clarity") {
+            slider("Clarity", $engine.clarity, -1...1, "", 2,
+                   resetsTo: engine.defaults.clarity)
+            Text("Local contrast, edge by edge rather than everywhere at once — "
+               + "a large edge keeps its shape while the texture inside it "
+               + "gains or loses contrast. Negative smooths.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Sharpening") {
             slider("Amount", $engine.sharpenAmount, 0...2, "", 2, resetsTo: engine.defaults.sharpenAmount)
             slider("Radius", $engine.sharpenRadius, 0.5...3, " px", 1, resetsTo: engine.defaults.sharpenRadius)

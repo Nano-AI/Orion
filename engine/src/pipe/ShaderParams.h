@@ -169,6 +169,67 @@ struct Lens {
 };
 static_assert(sizeof(Lens) == 64);
 
+/// Local Laplacian filters — Paris et al. 2011, Aubry et al. 2014.
+/// research/local-laplacian.md. Six kernels share these; every one of them
+/// mirrors a struct in the matching shaders/llf_*.slang.
+struct LlfLuma {
+    std::uint32_t size[2];
+    float         lo;         // window floor, log2 units
+    float         invRange;   // 1 / (hi - lo)
+};
+static_assert(sizeof(LlfLuma) == 16);
+
+/// Shared by llfDown and llfDownPacked — the same halving, one channel or four.
+struct LlfDown {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+};
+static_assert(sizeof(LlfDown) == 16);
+
+struct LlfRemap {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    float         gamma0;      // first of this texture's four
+    float         gammaStep;
+    float         sigmaR;
+    float         alpha;
+    float         noiseLo;     // Paris et al. section 5.2, tau's bounds
+    float         noiseHi;
+    float         _pad[2];
+};
+static_assert(sizeof(LlfRemap) == 48);
+
+struct LlfCollapse {
+    std::uint32_t size[2];
+    std::uint32_t coarseSize[2];
+    float         gammaStep;
+    std::int32_t  gammaCount;
+    float         _pad[2];
+};
+static_assert(sizeof(LlfCollapse) == 32);
+
+/// The finest level recomputes the remapping instead of reading it, so it
+/// carries the remapping's own parameters as well.
+struct LlfCollapse0 {
+    std::uint32_t size[2];
+    std::uint32_t coarseSize[2];
+    float         gammaStep;
+    std::int32_t  gammaCount;
+    float         sigmaR;
+    float         alpha;
+    float         noiseLo;
+    float         noiseHi;
+    float         _pad[2];
+};
+static_assert(sizeof(LlfCollapse0) == 48);
+
+struct LlfApply {
+    std::uint32_t size[2];
+    float         evPerUnit;
+    float         maxEv;
+};
+static_assert(sizeof(LlfApply) == 16);
+
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {
     std::uint32_t outSize[2];

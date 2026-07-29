@@ -9,6 +9,7 @@
 
 #include "gpu/Resources.h"
 #include "pipe/HueSatMap.h"
+#include "pipe/LocalLaplacian.h"
 #include "pipe/ShaderParams.h"
 #include "pipe/Pipeline.h"
 #include "pipe/ToneCurve.h"
@@ -105,6 +106,13 @@ struct Adjustments {
     float denoiseLuma   = 0.0f;   // 0..4, 0 disables the whole chain
     float denoiseColor = 0.0f;   // 0..4, applied on top of luma
 
+    /// Local Laplacian clarity, -1..1. Negative smooths detail, positive
+    /// increases its contrast; the slider is the published alpha exponent, and
+    /// its endpoints land on the paper's own illustrated values. Twenty-two
+    /// nodes hang off this one float, so zero switches the whole chain off
+    /// rather than running it at no strength. research/local-laplacian.md.
+    float clarity = 0.0f;
+
     // Capture sharpening. Sits just after the demosaic.
     float sharpenAmount  = 0.0f;   // 0..2
     float sharpenRadius  = 1.0f;   // pixels
@@ -193,6 +201,25 @@ private:
     int nAtrousShrink_[kDenoiseScales]{-1, -1, -1, -1};
     raw::NoiseProfile noise_{};
     int nGuidePrep_ = -1, nGuideDown_ = -1, nGuideH1_ = -1, nGuideV1_ = -1;
+
+    // ── Local Laplacian clarity ───────────────────────────────────────────
+    //
+    // The gamma stacks are packed four to an RGBA texture, so the number of
+    // textures follows from the number of gamma levels. The collapse kernels
+    // take exactly two of them by name, which is the one place that packing
+    // is not generic — hence the assert rather than a silent miscompile.
+    static constexpr int kLlfLevels = llf::kPyramidLevels;
+    static constexpr int kLlfStacks = (llf::kGammaLevels + 3) / 4;
+    static_assert(kLlfStacks == 4,
+                  "llf_collapse.slang binds four packed stacks by name; "
+                  "changing kGammaLevels needs that kernel widened to match.");
+
+    int nLlfLuma_ = -1;
+    int nLlfGauss_[kLlfLevels]{};                 // [0] aliases nLlfLuma_
+    int nLlfPack_[kLlfLevels][kLlfStacks]{};      // levels 1..kLlfLevels-1
+    int nLlfOut_[kLlfLevels]{};                   // [kLlfLevels-1] is the residual
+    int nClarity_ = -1;
+    std::uint32_t llfW_[kLlfLevels]{}, llfH_[kLlfLevels]{};
 
     /// He & Sun's subsampling ratio for the guided filter. Four is what they
     /// report as visually indistinguishable, and it takes the filter from

@@ -11,6 +11,7 @@ namespace {
 MTLPixelFormat toMetal(PixelFormat f) {
     switch (f) {
         case PixelFormat::R16Uint:     return MTLPixelFormatR16Uint;
+        case PixelFormat::R16Float:    return MTLPixelFormatR16Float;
         case PixelFormat::R32Float:    return MTLPixelFormatR32Float;
         case PixelFormat::RG32Float:   return MTLPixelFormatRG32Float;
         case PixelFormat::RGBA16Float: return MTLPixelFormatRGBA16Float;
@@ -27,6 +28,7 @@ id<MTLDevice> dev(Device& d) { return (__bridge id<MTLDevice>)d.rawDevice(); }
 std::size_t bytesPerPixel(PixelFormat f) noexcept {
     switch (f) {
         case PixelFormat::R16Uint:     return 2;
+        case PixelFormat::R16Float:    return 2;
         case PixelFormat::R32Float:    return 4;
         case PixelFormat::RG32Float:   return 8;
         case PixelFormat::RGBA16Float: return 8;
@@ -39,6 +41,7 @@ std::size_t bytesPerPixel(PixelFormat f) noexcept {
 const char* formatName(PixelFormat f) noexcept {
     switch (f) {
         case PixelFormat::R16Uint:     return "r16u";
+        case PixelFormat::R16Float:    return "r16f";
         case PixelFormat::R32Float:    return "r32f";
         case PixelFormat::RG32Float:   return "rg32f";
         case PixelFormat::RGBA16Float: return "rgba16f";

@@ -392,6 +392,15 @@ int main(int argc, char** argv) {
                 {"tint +0.5",      flat, [](auto& a) { a.wb.tint += 0.5f; }, Metric::Luma, 0.097},
                 // Measured as detail, not as brightness — see Metric::Detail.
                 {"sharpen 1.0",    flat, [](auto& a) { a.sharpenAmount = 1.0f; }, Metric::Detail, 0.023},
+                // Clarity is a local-contrast filter, so like sharpening it is
+                // measured as detail. Mean luma is the wrong instrument twice
+                // over here: the filter is built to leave the frame's overall
+                // brightness alone.
+                // Floors are half the smallest ratio measured over all three
+                // sample frames: +1 moved 0.125 / 0.185 / 0.125 of the
+                // reference, -1 moved 0.120 / 0.158 / 0.115.
+                {"clarity +1",     flat, [](auto& a) { a.clarity = 1.0f; }, Metric::Detail, 0.062},
+                {"clarity -1",     flat, [](auto& a) { a.clarity = -1.0f; }, Metric::Detail, 0.055},
                 {"denoise 2.0",    flat, [](auto& a) { a.denoiseLuma = 2.0f; }, Metric::Detail, 0.018},
                 {"mixer blue lum", flat, [](auto& a) { a.lumShift[5] = -1.0f; }, Metric::Luma, 0.068},
                 {"mixer blue sat", flat, [](auto& a) { a.satShift[5] = 1.0f; }, Metric::Chroma, 0.03},

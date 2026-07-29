@@ -117,6 +117,11 @@ typedef struct OrionAdjustments {
     float denoise_luma;     /* 0..4                       */
     float denoise_color;   /* 0..4                       */
 
+    /* Local Laplacian clarity, -1..1. Negative smooths detail, positive
+     * increases its contrast. Zero switches twenty-two nodes off entirely, so
+     * it costs nothing when unused. research/local-laplacian.md. */
+    float clarity;
+
     float sharpen_amount;   /* 0..2                       */
     float sharpen_radius;   /* pixels                     */
     float sharpen_masking;  /* 0..1, protects flat areas  */

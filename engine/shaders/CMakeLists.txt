@@ -39,6 +39,13 @@ set(ORION_SHADERS
     guide_down:guideDown
     box_blur:boxBlur
     guide_ab:guideAb
+    llf_luma:llfLuma
+    llf_down:llfDown
+    llf_remap:llfRemapDown
+    llf_down4:llfDownPacked
+    llf_collapse:llfCollapse
+    llf_collapse0:llfCollapse0
+    llf_apply:llfApply
     develop_linear:developLinear
     develop_display:developDisplay
     geometry:geometry

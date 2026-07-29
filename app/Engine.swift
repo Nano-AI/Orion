@@ -218,6 +218,10 @@ final class Engine {
     var denoiseLuma: Float = 0     { didSet { pushAndRender() } }
     var denoiseColor: Float = 0   { didSet { pushAndRender() } }
 
+    /// Local Laplacian clarity. Negative smooths detail, positive increases
+    /// its contrast; the endpoints are the exponents Paris et al. illustrate.
+    var clarity: Float = 0         { didSet { pushAndRender() } }
+
     var sharpenAmount: Float = 0   { didSet { pushAndRender() } }
     var sharpenRadius: Float = 1   { didSet { pushAndRender() } }
     var sharpenMasking: Float = 0  { didSet { pushAndRender() } }
@@ -446,6 +450,7 @@ final class Engine {
             gradeShadow: gradeShadow, gradeMidtone: gradeMidtone,
             gradeHighlight: gradeHighlight,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
+            clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
@@ -471,6 +476,7 @@ final class Engine {
         gradeMidtone = s.gradeMidtone
         gradeHighlight = s.gradeHighlight
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
+        clarity = s.clarity
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
         sharpenMasking = s.sharpenMasking; curve = s.curve
         hueShift = s.hueShift; satShift = s.satShift; lumShift = s.lumShift
@@ -627,6 +633,7 @@ final class Engine {
             grade_midtone: (gradeMidtone[0], gradeMidtone[1], gradeMidtone[2]),
             grade_highlight: (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2]),
             denoise_luma: denoiseLuma, denoise_color: denoiseColor,
+            clarity: clarity,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),
