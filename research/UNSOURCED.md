@@ -250,33 +250,33 @@ pixels. That one is argued in `research/dehaze.md` as a closer reading of Eq. (1
 than the paper's own inputs, but it is still a departure and the clamp it makes
 necessary is a piece of behaviour the paper does not specify.
 
-## 12. Creative LUTs — the format and the interpolation, both unverified
+## 12. Creative LUTs — one claim left open
 
 **Where:** `pipe/CubeLut.cpp`, and `sampleCube` in `shaders/develop_display.slang`.
 Full write-up in `research/luts.md`.
 
-Two distinct gaps, and neither is about whether the code works — both are about
-whether the belief the code encodes has been checked against a document.
+**Closed since this entry was first written.** The format and the interpolation
+are both sourced now: Adobe, *Cube LUT Specification, Version 1.0* (September
+2013) gives the grammar, the defaults, the size ranges, the byte ordering — with
+the C index expression written out — and §8 *requires* tetrahedral interpolation
+for three-dimensional tables. The six-tetrahedra construction is Sakamoto &
+Itooka, U.S. Patent 4,275,413 (1981), col. 10 and Table 2, checked term by term
+against what Orion implements.
 
-**The `.cube` format.** Adobe's *Cube LUT Specification* is the reference. The
-keywords, their defaults, the size limits and — most importantly — the fact that
-**red varies fastest** in the data block are all implemented from how the format
-is universally documented and written, not from the specification text, which
-was not retrieved. The ordering is asserted by `testCreativeLut`, but that
-assertion encodes the belief; it does not independently confirm it. If it is
-wrong, every LUT Orion loads has red and blue swapped and the result looks like
-a deliberate cross-process look.
+Reading the specification also corrected a real defect: comments in `.cube` are
+whole *lines*, not trailing text, so the parser had been truncating a title like
+`Look #3` to `Look`. Fixed, with a test.
 
-**Tetrahedral interpolation.** The six-case decomposition implemented is
-standard in colour management, and its correctness properties are checked
-directly: it reproduces the grid points exactly, and it demonstrably differs
-from trilinear where the two must differ. What is *not* sourced is the claim
-that tetrahedral is the right choice among trilinear, prism, pyramid and
-tetrahedral subdivision. The canonical comparison is believed to be Kasson, Nin,
-Plouffe & Hafner, *Performing Color Space Conversions with Three-Dimensional
-Linear Interpolation*, Journal of Electronic Imaging 4(3), 1995 — cited here
-from memory, not retrieved.
+**What remains open** is one claim, and Orion no longer depends on it: that
+tetrahedral is *more accurate* than trilinear, prism or pyramid subdivision.
+That is usually credited to Kasson, Nin, Plouffe & Hafner, *Journal of Electronic
+Imaging* 4(3), 226–250, 1995 (DOI 10.1117/12.208656). The citation is confirmed
+against DBLP, Crossref and Semantic Scholar; **the paper has not been read** —
+it is not open access and no copy could be retrieved. A secondary source
+confirms only that it analyses trilinear, prism and tetrahedral, not pyramid,
+and not the conclusion.
 
-**To close both:** fetch the two documents and either confirm the values or fix
-them. The session that wrote this had exhausted its web-search budget and the
-direct fetches it tried did not land.
+So `research/luts.md` does not assert the accuracy ordering. The reason Orion
+interpolates tetrahedrally is that the file format's own specification says to,
+which is a better reason for this decision in any case. To close: read the paper,
+or drop the reference entirely.

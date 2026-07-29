@@ -12,7 +12,7 @@ auto-enhance still to come.
 one image by Hessel & Morel, WACV 2020 — both already cited in
 `tone-and-local-contrast.md`).
 
-**Suites:** `orion-tests` **319 checks** · `orion-viewport-tests` **2088
+**Suites:** `orion-tests` **320 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames.
 
 ## Session 2026-07-28f — M3 story 3, creative LUTs
@@ -58,19 +58,38 @@ will not load is the user's file being wrong, and they need to know which line.
 
 Sizes above 65 are refused by name rather than truncated.
 
-### ⚠️ Both references are unverified
+### The references, chased down — and one of them found a bug
 
-The session's web-search budget was exhausted (200/200) and direct fetches for
-Adobe's *Cube LUT Specification* and Kasson et al. (1995) did not land. So two
-things are believed rather than sourced, and are in `UNSOURCED.md` §12: that
-**red varies fastest** in a `.cube` data block, and that tetrahedral is the
-right choice among trilinear/prism/pyramid/tetrahedral.
+Both were unverified when the code landed; both are sourced now.
 
-The ordering is asserted by test, but the assertion encodes the belief — it does
-not independently confirm it. If it is wrong, every LUT Orion loads has red and
-blue swapped. **Closing this is the first thing the next session with a search
-budget should do.** The interpolation's *correctness* is checked directly and
-does not depend on the citation; the *choice* does.
+**Adobe, *Cube LUT Specification, Version 1.0*, September 2013.** The Adobe URL
+is dead; the Internet Archive has it. It settles the byte ordering outright —
+§7.2 states red changes most rapidly and then writes out the C index,
+`r + N*g + N*N*b` — and, usefully, **§8 requires tetrahedral interpolation for
+three-dimensional tables**. So the choice of tetrahedral is sourced by the file
+format itself, which is a better reason than an accuracy argument.
+
+**The six-tetrahedra construction is Sakamoto & Itooka, U.S. Patent 4,275,413
+(1981)**, col. 10 and Table 2 — the origin of tetrahedral colour interpolation.
+All six of Orion's cases were checked term by term against it. ⚠️ That table has
+a **printing error** in rows 3–6 of its first half (two column headers
+transposed, producing geometrically impossible non-adjacent vertex pairs); the
+second half is correct and disambiguates it. Recorded in `research/luts.md` so
+the next person to check the source does not conclude the code is wrong.
+
+**Reading the specification found a real defect.** Comments in `.cube` are whole
+*lines*, not trailing text (§5.8) — so the parser had been truncating a look
+called `Look #3` to `Look`. Fixed, with a test. This is the argument for
+chasing references down rather than implementing from recollection: the code
+passed nineteen checks and was still wrong about the format.
+
+**Still open, and no longer load-bearing:** whether tetrahedral is *more
+accurate* than trilinear, prism or pyramid. Usually credited to Kasson et al.,
+*J. Electronic Imaging* 4(3), 1995 — citation confirmed against DBLP and
+Crossref, but the paper is paywalled and was not read, so `luts.md` does not
+assert the ordering. `UNSOURCED.md` §12. Two dead ends recorded there too: the
+ICC specifications contain zero occurrences of "tetrahedr", and neither does
+*GPU Gems 2* ch. 24, which is the Cube spec's only bibliography entry.
 
 ## Session 2026-07-28e — M3 story 2, dehaze
 

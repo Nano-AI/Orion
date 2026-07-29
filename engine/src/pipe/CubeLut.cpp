@@ -9,16 +9,23 @@
 namespace orion::pipe {
 namespace {
 
-/// A line, with its comment removed and both ends trimmed.
-[[nodiscard]] std::string_view clean(std::string_view line) {
-    // A '#' begins a comment and runs to the end of the line.
-    if (const auto hash = line.find('#'); hash != std::string_view::npos) {
-        line = line.substr(0, hash);
-    }
-    // Trailing \r matters: a LUT authored on Windows and read on a Mac
-    // otherwise ends every numeric field with a character strtod stops at,
-    // which parses fine and hides the fact that the file has CRLF endings
-    // until some other reader is less forgiving.
+/// A line, trimmed. Comments are handled by the caller, because in this format
+/// they are whole *lines* and not trailing text.
+///
+/// The specification, section 5.8: "The file may, at any location, include any
+/// number of comment lines. Each comment line shall be formatted as follows:
+/// `# <text>`". A '#' part-way through a line is therefore *not* a comment —
+/// and a look really can be called `TITLE "Look #3"`, which a mid-line rule
+/// would silently truncate to `Look`.
+///
+/// Leading whitespace before the '#' is tolerated on read even though the spec
+/// says a comment line has none: a data line cannot begin with '#', so nothing
+/// is ambiguous, and refusing a file over indentation helps nobody.
+[[nodiscard]] std::string_view trim(std::string_view line) {
+    // Trailing \r matters: the spec is explicit that the separator is \n and
+    // that files using \r as the separator "are not valid cube files", but a
+    // stray \r from CRLF is another matter and every field would otherwise end
+    // in a character the number parser stops at.
     const auto isSpace = [](char c) {
         return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
     };
@@ -130,8 +137,12 @@ CubeLutResult parseCube(std::string_view text) {
         pos = (nl == std::string_view::npos) ? text.size() + 1 : nl + 1;
         ++lineNumber;
 
-        const std::string_view line = clean(raw);
+        const std::string_view line = trim(raw);
+        // Blank lines are not in the spec's list of what a line may be
+        // (section 5.3), but its own reference reader in Annex B skips them,
+        // and files in circulation contain them. Tolerated on read.
         if (line.empty()) continue;
+        if (line.front() == '#') continue;
 
         const auto tok = split(line);
         if (tok.empty()) continue;
@@ -139,7 +150,7 @@ CubeLutResult parseCube(std::string_view text) {
         if (equalsIgnoringCase(tok[0], "TITLE")) {
             // The rest of the line, with surrounding quotes removed.
             const auto start = line.find(tok[0]) + tok[0].size();
-            std::string_view rest = clean(line.substr(start));
+            std::string_view rest = trim(line.substr(start));
             if (rest.size() >= 2 && rest.front() == '"' && rest.back() == '"') {
                 rest = rest.substr(1, rest.size() - 2);
             }

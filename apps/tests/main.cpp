@@ -3376,7 +3376,8 @@ void testCreativeLut() {
             "0 0 1\r\n"
             "1 0 1\r\n"
             "0 1 1\r\n"
-            "1 1 1   # trailing comment\r\n";
+            "1 1 1\r\n"
+            "# and a trailing comment line\r\n";
 
         const auto r = parseCube(text);
         report(r.ok, "a well-formed 3D cube parses", r.error);
@@ -3393,6 +3394,18 @@ void testCreativeLut() {
                r.ok ? std::to_string(r.lut.data[3]) + "," +
                       std::to_string(r.lut.data[4]) + "," +
                       std::to_string(r.lut.data[5]) : r.error);
+    }
+    {
+        // Comments in this format are whole lines, not trailing text
+        // (specification section 5.8) — and a look really can be called
+        // "Look #3". A mid-line rule truncates that to "Look" and never says
+        // so. This is the case that was written wrong first.
+        std::string text = "TITLE \"Look #3\"\nLUT_3D_SIZE 2\n";
+        for (int i = 0; i < 8; ++i) text += "0 0 0\n";
+        const auto r = parseCube(text);
+        report(r.ok && r.lut.title == "Look #3",
+               "a hash inside a title is part of the title",
+               r.ok ? r.lut.title : r.error);
     }
     {
         const auto r = parseCube("LUT_3D_SIZE 2\n0 0 0\n1 1 1\n");
