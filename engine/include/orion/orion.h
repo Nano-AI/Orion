@@ -122,6 +122,21 @@ typedef struct OrionAdjustments {
      * having none loaded. */
     float lut_strength;
 
+    /* A local adjustment, masked by a gradient. research/masking.md.
+     *
+     * Both mask kinds share a centre and an angle. The alpha scales the
+     * *parameter*, so coverage 0.5 with a one-stop local exposure is 2^0.5 —
+     * not a blend of two rendered frames. */
+    int   mask_kind;        /* 0 none, 1 linear, 2 radial */
+    int   mask_invert;
+    float mask_centre_x, mask_centre_y;
+    float mask_angle;       /* radians */
+    float mask_length;      /* linear: zero-to-full distance */
+    float mask_radius_x, mask_radius_y;
+    float mask_feather;     /* 0..1 */
+    float mask_roundness;   /* 2 is an ellipse */
+    float local_exposure_ev;
+
     /* Single-image exposure fusion, 0..1 — shadow lift that keeps local
      * contrast. The value is a power applied to the emitted gain, so zero is
      * bit-exactly the identity. research/exposure-fusion.md. */

@@ -1193,10 +1193,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         first ||
         adj.maskKind != lastAdj_.maskKind ||
         adj.maskInvert != lastAdj_.maskInvert ||
-        adj.maskZero[0] != lastAdj_.maskZero[0] ||
-        adj.maskZero[1] != lastAdj_.maskZero[1] ||
-        adj.maskFull[0] != lastAdj_.maskFull[0] ||
-        adj.maskFull[1] != lastAdj_.maskFull[1] ||
+        adj.maskLength != lastAdj_.maskLength ||
         adj.maskCentre[0] != lastAdj_.maskCentre[0] ||
         adj.maskCentre[1] != lastAdj_.maskCentre[1] ||
         adj.maskRadius[0] != lastAdj_.maskRadius[0] ||
@@ -1210,8 +1207,13 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         m.size[0] = width_; m.size[1] = height_;
         m.kind   = adj.maskKind;
         m.invert = adj.maskInvert ? 1 : 0;
-        m.zero[0] = adj.maskZero[0];   m.zero[1] = adj.maskZero[1];
-        m.full[0] = adj.maskFull[0];   m.full[1] = adj.maskFull[1];
+        // A linear gradient's endpoints, from the centre, angle and length the
+        // interface carries. Half the length either side, so rotating about the
+        // centre does not also move the ramp.
+        const float dx = std::cos(adj.maskAngle) * adj.maskLength * 0.5f;
+        const float dy = std::sin(adj.maskAngle) * adj.maskLength * 0.5f;
+        m.zero[0] = adj.maskCentre[0] - dx; m.zero[1] = adj.maskCentre[1] - dy;
+        m.full[0] = adj.maskCentre[0] + dx; m.full[1] = adj.maskCentre[1] + dy;
         m.centre[0] = adj.maskCentre[0]; m.centre[1] = adj.maskCentre[1];
         m.radius[0] = adj.maskRadius[0]; m.radius[1] = adj.maskRadius[1];
         m.angle     = adj.maskAngle;

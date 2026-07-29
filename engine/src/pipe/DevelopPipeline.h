@@ -118,13 +118,16 @@ struct Adjustments {
     // A mask is its parameters, not an image: normalized coordinates in, alpha
     // out, so it survives a resize and an export matches the preview it was
     // made on. research/masking.md.
+    /// Both kinds share a centre and an angle, which is what a person
+    /// manipulates — a linear gradient's two endpoints are derived from them
+    /// and its length. The shader still takes the two points, because that is
+    /// the form the maths wants; this is the form the interface wants.
     int   maskKind = 0;            // 0 none, 1 linear, 2 radial
     bool  maskInvert = false;
-    float maskZero[2]{0.0f, 0.0f};      // linear: where the effect is zero
-    float maskFull[2]{0.0f, 1.0f};      // linear: where it is full
-    float maskCentre[2]{0.5f, 0.5f};    // radial
-    float maskRadius[2]{0.3f, 0.3f};
-    float maskAngle = 0.0f;
+    float maskCentre[2]{0.5f, 0.5f};
+    float maskAngle = 0.0f;             // radians, both kinds
+    float maskLength = 0.5f;            // linear: zero-to-full distance
+    float maskRadius[2]{0.3f, 0.3f};    // radial semi-axes
     float maskFeather = 0.5f;
     float maskRoundness = 2.0f;
 

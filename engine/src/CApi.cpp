@@ -179,6 +179,17 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.curve.red    = toChannel(adj->curve_red);
     a.curve.green  = toChannel(adj->curve_green);
     a.curve.blue   = toChannel(adj->curve_blue);
+    a.maskKind        = adj->mask_kind;
+    a.maskInvert      = adj->mask_invert != 0;
+    a.maskCentre[0]   = adj->mask_centre_x;
+    a.maskCentre[1]   = adj->mask_centre_y;
+    a.maskAngle       = adj->mask_angle;
+    a.maskLength      = adj->mask_length;
+    a.maskRadius[0]   = adj->mask_radius_x;
+    a.maskRadius[1]   = adj->mask_radius_y;
+    a.maskFeather     = adj->mask_feather;
+    a.maskRoundness   = adj->mask_roundness;
+    a.localExposureEv = adj->local_exposure_ev;
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;
     a.lutStrength     = adj->lut_strength;

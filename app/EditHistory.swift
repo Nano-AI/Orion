@@ -123,6 +123,17 @@ struct DevelopState: Equatable, Codable {
     var denoiseLuma: Float = 0
     var denoiseColor: Float = 0
     var lutStrength: Float = 1
+    var maskKind: Int32 = 0
+    var maskInvert = false
+    var maskCentreX: Float = 0.5
+    var maskCentreY: Float = 0.5
+    var maskAngle: Float = 0
+    var maskLength: Float = 0.5
+    var maskRadiusX: Float = 0.3
+    var maskRadiusY: Float = 0.3
+    var maskFeather: Float = 0.5
+    var maskRoundness: Float = 2
+    var localExposureEv: Float = 0
     var fusion: Float = 0
     var dehaze: Float = 0
     var clarity: Float = 0
@@ -159,6 +170,9 @@ extension DevelopState {
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue
         case highlightRecovery, denoiseLuma, denoiseColor
         case gradeShadow, gradeMidtone, gradeHighlight
+        case maskKind, maskInvert, maskCentreX, maskCentreY, maskAngle
+        case maskLength, maskRadiusX, maskRadiusY, maskFeather, maskRoundness
+        case localExposureEv
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case curve, hueShift, satShift, lumShift
 
@@ -206,6 +220,19 @@ extension DevelopState {
         denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
         denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
         lutStrength = float(.lutStrength) ?? lutStrength
+        maskKind = (try? c.decodeIfPresent(Int32.self, forKey: .maskKind))
+            .flatMap { $0 } ?? maskKind
+        maskInvert = (try? c.decodeIfPresent(Bool.self, forKey: .maskInvert))
+            .flatMap { $0 } ?? maskInvert
+        maskCentreX = float(.maskCentreX) ?? maskCentreX
+        maskCentreY = float(.maskCentreY) ?? maskCentreY
+        maskAngle = float(.maskAngle) ?? maskAngle
+        maskLength = float(.maskLength) ?? maskLength
+        maskRadiusX = float(.maskRadiusX) ?? maskRadiusX
+        maskRadiusY = float(.maskRadiusY) ?? maskRadiusY
+        maskFeather = float(.maskFeather) ?? maskFeather
+        maskRoundness = float(.maskRoundness) ?? maskRoundness
+        localExposureEv = float(.localExposureEv) ?? localExposureEv
         fusion = float(.fusion) ?? fusion
         dehaze = float(.dehaze) ?? dehaze
         clarity = float(.clarity) ?? clarity

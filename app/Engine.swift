@@ -222,6 +222,20 @@ final class Engine {
     /// loaded through `loadLut`, not an adjustment.
     var lutStrength: Float = 1     { didSet { pushAndRender() } }
 
+    // ── Local adjustment (M4) ─────────────────────────────────────────────
+    /// 0 none, 1 linear, 2 radial.
+    var maskKind: Int32 = 0        { didSet { pushAndRender() } }
+    var maskInvert = false         { didSet { pushAndRender() } }
+    var maskCentreX: Float = 0.5   { didSet { pushAndRender() } }
+    var maskCentreY: Float = 0.5   { didSet { pushAndRender() } }
+    var maskAngle: Float = 0       { didSet { pushAndRender() } }
+    var maskLength: Float = 0.5    { didSet { pushAndRender() } }
+    var maskRadiusX: Float = 0.3   { didSet { pushAndRender() } }
+    var maskRadiusY: Float = 0.3   { didSet { pushAndRender() } }
+    var maskFeather: Float = 0.5   { didSet { pushAndRender() } }
+    var maskRoundness: Float = 2   { didSet { pushAndRender() } }
+    var localExposureEv: Float = 0 { didSet { pushAndRender() } }
+
     /// Exposure fusion. A power on the emitted gain, so zero is exact.
     var fusion: Float = 0          { didSet { pushAndRender() } }
 
@@ -496,6 +510,12 @@ final class Engine {
             gradeHighlight: gradeHighlight,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             lutStrength: lutStrength,
+            maskKind: maskKind, maskInvert: maskInvert,
+            maskCentreX: maskCentreX, maskCentreY: maskCentreY,
+            maskAngle: maskAngle, maskLength: maskLength,
+            maskRadiusX: maskRadiusX, maskRadiusY: maskRadiusY,
+            maskFeather: maskFeather, maskRoundness: maskRoundness,
+            localExposureEv: localExposureEv,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
@@ -523,6 +543,12 @@ final class Engine {
         gradeHighlight = s.gradeHighlight
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         lutStrength = s.lutStrength
+        maskKind = s.maskKind; maskInvert = s.maskInvert
+        maskCentreX = s.maskCentreX; maskCentreY = s.maskCentreY
+        maskAngle = s.maskAngle; maskLength = s.maskLength
+        maskRadiusX = s.maskRadiusX; maskRadiusY = s.maskRadiusY
+        maskFeather = s.maskFeather; maskRoundness = s.maskRoundness
+        localExposureEv = s.localExposureEv
         fusion = s.fusion
         dehaze = s.dehaze
         clarity = s.clarity
@@ -686,6 +712,12 @@ final class Engine {
             grade_highlight: (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2]),
             denoise_luma: denoiseLuma, denoise_color: denoiseColor,
             lut_strength: lutStrength,
+            mask_kind: maskKind, mask_invert: maskInvert ? 1 : 0,
+            mask_centre_x: maskCentreX, mask_centre_y: maskCentreY,
+            mask_angle: maskAngle, mask_length: maskLength,
+            mask_radius_x: maskRadiusX, mask_radius_y: maskRadiusY,
+            mask_feather: maskFeather, mask_roundness: maskRoundness,
+            local_exposure_ev: localExposureEv,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,

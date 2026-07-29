@@ -448,6 +448,17 @@ int main(int argc, char** argv) {
                 // Half the smallest ratio over the three frames: 1.15, 2.43,
                 // 2.62 of the reference. It moves more than an exposure stop
                 // does, which is what a shadow lift at full strength should do.
+                // A local exposure through a linear gradient. Half the frame
+                // is untouched by construction, so this moves less than a
+                // global exposure of the same size — which is the point, and
+                // what the floor is calibrated against.
+                {"local +2 EV",    flat, [](auto& a) {
+                     a.maskKind = 1;
+                     a.maskCentre[0] = 0.5f; a.maskCentre[1] = 0.5f;
+                     a.maskAngle = 0.0f;
+                     a.maskLength = 0.8f;
+                     a.localExposureEv = 2.0f;
+                 }, Metric::Luma, 0.36},
                 {"fusion 1.0",     flat, [](auto& a) { a.fusion = 1.0f; }, Metric::Luma, 0.57},
                 {"dehaze 1.0",     flat, [](auto& a) { a.dehaze = 1.0f; }, Metric::Luma, 0.028,
                  "a haze-free frame has nothing to remove; t = 1 is the right answer"},

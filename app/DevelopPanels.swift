@@ -70,6 +70,51 @@ extension Editor {
                 slider("Whites", $engine.whites, -1...1, "", 2, resetsTo: engine.defaults.whites)
                 slider("Blacks", $engine.blacks, -1...1, "", 2, resetsTo: engine.defaults.blacks)
             }
+            section("Local") {
+                Picker("", selection: $engine.maskKind) {
+                    Text("No mask").tag(Int32(0))
+                    Text("Linear").tag(Int32(1))
+                    Text("Radial").tag(Int32(2))
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                if engine.maskKind != 0 {
+                    slider("Exposure", $engine.localExposureEv, -3...3, " EV", 2,
+                           resetsTo: engine.defaults.localExposureEv)
+                    slider("Feather", $engine.maskFeather, 0...1, "", 2,
+                           resetsTo: engine.defaults.maskFeather)
+                    slider("Centre X", $engine.maskCentreX, 0...1, "", 2,
+                           resetsTo: engine.defaults.maskCentreX)
+                    slider("Centre Y", $engine.maskCentreY, 0...1, "", 2,
+                           resetsTo: engine.defaults.maskCentreY)
+                    slider("Angle", $engine.maskAngle, -3.15...3.15, " rad", 2,
+                           resetsTo: engine.defaults.maskAngle)
+
+                    if engine.maskKind == 1 {
+                        slider("Length", $engine.maskLength, 0.05...1.5, "", 2,
+                               resetsTo: engine.defaults.maskLength)
+                    } else {
+                        slider("Width", $engine.maskRadiusX, 0.02...1, "", 2,
+                               resetsTo: engine.defaults.maskRadiusX)
+                        slider("Height", $engine.maskRadiusY, 0.02...1, "", 2,
+                               resetsTo: engine.defaults.maskRadiusY)
+                        slider("Roundness", $engine.maskRoundness, 2...8, "", 1,
+                               resetsTo: engine.defaults.maskRoundness)
+                    }
+
+                    Toggle("Invert", isOn: $engine.maskInvert)
+                        .font(.system(size: 11))
+                        .toggleStyle(.checkbox)
+                }
+
+                Text("A masked exposure scales the parameter, so half coverage "
+                   + "at one stop is 2^0.5 \u{2014} a smooth multiplicative ramp "
+                   + "in linear light, not a blend of two rendered frames.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.faint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             section("Highlight Recovery") {
                 slider("Amount", $engine.highlightRecovery, 0...1, "", 2, resetsTo: engine.defaults.highlightRecovery)
                 Text("Where one channel clips before the others, it stops "
