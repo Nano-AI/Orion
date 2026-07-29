@@ -4,18 +4,110 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M4 opened — gradient masks)
+**Last updated:** 2026-07-29 (M4 — gradient masks are draggable)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** — step 1
-of `research/masking.md` is built: linear and radial gradient primitives, and
-the parameter-space application they feed.
-**Next story:** dragging the gradient on the canvas. The coordinate transform it
-needs is now built and tested (`pipe/MaskGeometry.h`), so what remains is the
-overlay and the hit testing — and both must go through `CanvasLayout`, which is
-the one copy of where the picture actually is. Then M4 step 2, mask groups and
-compositing, and step 3's guided-filter refinement.
+of `research/masking.md` is built and now reachable by hand: linear and radial
+gradient primitives, the parameter-space application they feed, and the canvas
+overlay that places them.
+**Next story:** M4 step 2 — mask groups and compositing (`research/masking.md`
+§6), then step 3's guided-filter refinement. The brush-dab rasteriser is the
+remaining third of step 1 and has no overlay work in front of it now.
 
-**Suites:** `orion-tests` **388 checks** · `orion-viewport-tests` **2088
-checks** · both 0 failures.
+**Suites:** `orion-tests` **388 checks** · `orion-viewport-tests` **3214
+checks** (was 2088) · both 0 failures.
+
+## Session 2026-07-29l — a gradient you place with your hands
+
+The overlay and the dragging. Nothing about the mask maths changed; what changed
+is that the geometry is reachable without reading a number off a slider.
+
+**No geometry went into the view.** Handle positions, hit testing and what a
+drag means are all `CanvasLayout` — the one copy of where the picture is —
+so they are tested without a window. `MaskOverlay.swift` draws what it is told.
+
+### The fact the whole design turns on
+
+`mask_gradient.slang` is isotropic in **normalized** coordinates, and a
+photograph is not square. So:
+
+- a radial mask's boundary **is not a screen ellipse**;
+- a linear gradient's iso-alpha lines **are not perpendicular on screen**;
+- a stored 45° angle **is not 45° to the eye**.
+
+Outlines are therefore sampled in the mask's own space and mapped out point by
+point, and every angle a drag takes is measured in normalized space. That second
+choice is also what keeps a dragged handle exactly under the cursor: the handle
+is redrawn through the same map, so the round trip is an identity. Taking
+`atan2` on screen instead and converting back makes the handle slide out from
+under the finger by an amount that grows with how far the frame is from square.
+
+The screenshot shows it: the linear gradient's endpoints are visibly *not*
+square to its three lines.
+
+### Handles
+
+| Kind | Handles | Notes |
+|---|---|---|
+| Linear | centre, two endpoints | an endpoint sets angle *and* length, so no rotate handle and no mode |
+| Radial | centre, four axis, rotate lollipop | axis handles resize **only** — one that also rotated would drift the angle on every size tweak with nothing on screen explaining it |
+
+One gesture for the whole overlay, not one per handle. A small radial mask
+stacks its centre, both axis handles and the lollipop within a few points of
+each other, and stacked SwiftUI gestures resolve by **draw order, not
+distance** — `CanvasLayout.maskHit` decides on distance instead.
+
+### A drag cannot leave a state the panel cannot show
+
+The sliders and the canvas write the same variables, so every drag clamps to the
+slider's own range. Otherwise the two disagree about the state and the next
+touch of a slider snaps the mask somewhere nobody put it.
+
+### Verified on a photograph, not by eye
+
+`--measure` on `_PIC8220`, a linear mask at −1.6 EV local:
+
+| region | mask off | mask on |
+|---|---|---|
+| zero side | 0.4703 | **0.4703** — bit-identical |
+| full side | 0.4110 | **0.1981** |
+
+Identity where coverage is zero is the invariant that matters; a mask that laid
+a faint edit across the whole frame would still look right.
+
+### Eight mutations, and the one that got through
+
+The suite was checked by breaking the code on purpose. Seven died immediately.
+The eighth — **pinning the map's origin to a constant, so the overlay ignores
+panning entirely** — passed all 3100 checks, because `point(unit(p)) == p` holds
+for *any* invertible map. The round trip proved the map was invertible, not that
+it was the right map. `testPictureMapFollowsThePan` now pins the origin against
+`ImageCanvas.transform`'s own `uvMin`, and all eight die.
+
+⚠️ **This is the third session running where a green suite was not evidence.**
+The pattern is the same each time: the test asserted a property weaker than the
+claim. Mutating the code is what exposed it, and it cost about ten minutes.
+
+### Three things only the screenshot could catch
+
+- **`arrow.trianglehead.clockwise` is SF Symbols 6**; the app's floor is macOS
+  14. It draws on this Mac (26.4) and blank on a user's. Now `arrow.clockwise`.
+  A screenshot on one machine cannot catch this either — only knowing the floor
+  can.
+- **The overlay was clipped to the canvas, not the picture**, so a mask's lines
+  ran out across the letterbox as though the gradient continued into the black
+  bars. Handles stay unclipped: a handle at the edge must remain grabbable.
+- **The Feather slider does nothing to a linear mask.** The shader reads that
+  field only in its radial branch — a linear gradient's ramp runs from the zero
+  line to the full line, so Length already *is* the feather. Measured before
+  removing it: 0.50 against 0.02 gave **bit-identical** luma. Hidden for linear.
+
+### And a measurement that was wrong before the code was
+
+The first `--measure` run passed **pixel** coordinates where the flag takes
+**normalized** ones. It clamped to a single corner pixel and reported
+`sd 0.00000` for what was supposed to be a 700 × 700 patch of a photograph —
+which is the tell, and the only reason it was caught. The flag prints the region
+it actually measured; read that line.
 
 **Suites:** `orion-tests` **374 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
