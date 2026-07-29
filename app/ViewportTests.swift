@@ -52,6 +52,19 @@ enum ViewportTests {
         testSidecarEscapingDoesNotCompound()
         testEditsSurviveAQuit()
 
+        testPictureMapMatchesTheFitRectangle()
+        testPictureMapRoundTrips()
+        testPictureMapFollowsThePan()
+        testMaskOutlineLandsOnTheFalloff()
+        testMaskIsoLinesAreIsoAlpha()
+        testMaskEndpointLandsUnderTheCursor()
+        testMaskRotateStaysOnTheCursorRay()
+        testMaskBodyDragMovesByTheDrag()
+        testMaskAxisDragDoesNotRotate()
+        testMaskDragStaysInSliderRange()
+        testMaskHitPrefersHandlesOverBody()
+        testMaskAnglesAreNormalizedNotScreen()
+
         print("\n\(checks) checks, \(failures) failures")
         return failures
     }
@@ -881,6 +894,599 @@ enum ViewportTests {
         v.toggleFitAndActual()
         report(v.isFit, "toggling again returns to fit")
         near(v.center.x, 0.5, 1e-6, "returning to fit recenters")
+    }
+
+    // MARK: The picture on screen
+
+    /// The map an overlay is placed with, and the rectangle the renderer
+    /// letterboxes into, have to be the same rectangle at fit. They are derived
+    /// two different ways — one from the quad the vertex shader gets, one from
+    /// the aspect — and the whole reason `CanvasLayout` exists is that those two
+    /// derivations once disagreed and the crop handles landed off the pixels.
+    static func testPictureMapMatchesTheFitRectangle() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+
+        for image in [landscape, portrait, 1.0] as [CGFloat] {
+            let v = Viewport()
+            let map = CanvasLayout.pictureMap(
+                quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                visible: v.visibleFraction(imageAspect: image, viewAspect: viewAspect),
+                center: v.center, in: view)
+            let fit = CanvasLayout.frameRect(imageAspect: image, in: view)
+
+            near(map.rect.minX, fit.minX, 1e-6, "map x matches frameRect (\(image))")
+            near(map.rect.minY, fit.minY, 1e-6, "map y matches frameRect (\(image))")
+            near(map.rect.width, fit.width, 1e-6, "map w matches frameRect (\(image))")
+            near(map.rect.height, fit.height, 1e-6, "map h matches frameRect (\(image))")
+
+            // The picture's centre is the rectangle's centre.
+            let c = map.point(CGPoint(x: 0.5, y: 0.5))
+            near(c.x, fit.midX, 1e-6, "picture centre is the rect centre x (\(image))")
+            near(c.y, fit.midY, 1e-6, "picture centre is the rect centre y (\(image))")
+
+            // And the corners are the corners.
+            let tl = map.point(.zero)
+            near(tl.x, fit.minX, 1e-6, "picture origin is the rect origin x (\(image))")
+            near(tl.y, fit.minY, 1e-6, "picture origin is the rect origin y (\(image))")
+        }
+    }
+
+    /// View to normalized and back, at zoom and off centre. An overlay that
+    /// only round-trips at fit is an overlay that comes off the picture the
+    /// moment anybody zooms in, which is when a mask is placed carefully.
+    static func testPictureMapRoundTrips() {
+        let view = CGSize(width: 1400, height: 900)
+        let viewAspect = view.width / view.height
+
+        for image in [landscape, portrait, 1.0] as [CGFloat] {
+            for zoom in [1.0, 2.0, 6.0] as [CGFloat] {
+                let v = Viewport()
+                v.zoomBy(zoom, anchor: CGPoint(x: 0.3, y: 0.7),
+                         visible: CGSize(width: 1, height: 1))
+                let vis = v.visibleFraction(imageAspect: image, viewAspect: viewAspect)
+                v.clamp(to: vis)
+                let map = CanvasLayout.pictureMap(
+                    quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                    visible: vis, center: v.center, in: view)
+
+                for p in [CGPoint(x: 310, y: 220), CGPoint(x: 900, y: 640),
+                          CGPoint(x: 700, y: 450)] {
+                    let back = map.point(map.unit(p))
+                    near(back.x, p.x, 1e-6, "view→unit→view x (\(image), \(zoom)x)")
+                    near(back.y, p.y, 1e-6, "view→unit→view y (\(image), \(zoom)x)")
+                }
+
+                // A displacement must not pick up the origin on the way through.
+                let d = CGSize(width: 60, height: -25)
+                let u = map.unitVector(d)
+                let a = map.point(CGPoint(x: 0.4, y: 0.4))
+                let b = map.point(CGPoint(x: 0.4 + u.width, y: 0.4 + u.height))
+                near(b.x - a.x, d.width, 1e-6, "unitVector is a pure delta x")
+                near(b.y - a.y, d.height, 1e-6, "unitVector is a pure delta y")
+            }
+        }
+    }
+
+    /// The map is pinned to the renderer's own uv arithmetic, edge for edge.
+    ///
+    /// ⚠️ **This test exists because the round trip above does not imply it.**
+    /// `point(unit(p)) == p` holds for *any* invertible map, so replacing the
+    /// pan with a constant origin passed all 3100 checks — the overlay would
+    /// have sat still while the picture panned under it, which is the compare
+    /// divider's old bug wearing a different hat. What follows measures the
+    /// origin against `ImageCanvas.transform`: `uvMin = centre − visible/2` at
+    /// the quad's leading edge and `uvMin + uvSize` at its trailing one.
+    static func testPictureMapFollowsThePan() {
+        let view = CGSize(width: 1400, height: 900)
+        let viewAspect = view.width / view.height
+
+        for image in [landscape, portrait, 1.0] as [CGFloat] {
+            for zoom in [1.0, 2.5, 8.0] as [CGFloat] {
+                for anchor in [CGPoint(x: 0.2, y: 0.8), CGPoint(x: 0.9, y: 0.1)] {
+                    let v = Viewport()
+                    v.zoomBy(zoom, anchor: anchor, visible: CGSize(width: 1, height: 1))
+                    let vis = v.visibleFraction(imageAspect: image, viewAspect: viewAspect)
+                    v.clamp(to: vis)
+                    let map = CanvasLayout.pictureMap(
+                        quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                        visible: vis, center: v.center, in: view)
+
+                    let tag = "\(image), \(zoom)x, anchor \(anchor.x)"
+
+                    // The renderer's uvMin and uvMin + uvSize, in normalized
+                    // image coordinates.
+                    let lead = map.unit(CGPoint(x: map.rect.minX, y: map.rect.minY))
+                    near(lead.x, v.center.x - vis.width / 2, 1e-9,
+                         "leading edge is the renderer's uvMin x (\(tag))")
+                    near(lead.y, v.center.y - vis.height / 2, 1e-9,
+                         "leading edge is the renderer's uvMin y (\(tag))")
+
+                    let trail = map.unit(CGPoint(x: map.rect.maxX, y: map.rect.maxY))
+                    near(trail.x, v.center.x + vis.width / 2, 1e-9,
+                         "trailing edge is uvMin + uvSize x (\(tag))")
+                    near(trail.y, v.center.y + vis.height / 2, 1e-9,
+                         "trailing edge is uvMin + uvSize y (\(tag))")
+
+                    // Whatever the zoom, the viewport's centre is drawn at the
+                    // centre of the rectangle the picture covers.
+                    let mid = map.point(v.center)
+                    near(mid.x, map.rect.midX, 1e-6, "viewport centre is drawn centred x (\(tag))")
+                    near(mid.y, map.rect.midY, 1e-6, "viewport centre is drawn centred y (\(tag))")
+                }
+            }
+        }
+
+        // Pan, and the picture must move under a fixed point of the view — by
+        // exactly the distance panned. A map that ignored the pan would leave
+        // this unchanged, and an overlay built on it would slide off the photo.
+        for image in [landscape, portrait] as [CGFloat] {
+            let v = Viewport()
+            v.zoomBy(4, anchor: CGPoint(x: 0.5, y: 0.5), visible: CGSize(width: 1, height: 1))
+            let vis = v.visibleFraction(imageAspect: image, viewAspect: viewAspect)
+            v.clamp(to: vis)
+
+            func mapNow() -> CanvasLayout.PictureMap {
+                CanvasLayout.pictureMap(
+                    quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                    visible: vis, center: v.center, in: view)
+            }
+
+            let probe = CGPoint(x: 700, y: 450)
+            let before = mapNow().unit(probe)
+            let was = v.center
+
+            v.pan(by: CGSize(width: 0.05, height: -0.03), visible: vis)
+            v.clamp(to: vis)
+            let after = mapNow().unit(probe)
+
+            let moved = hypot(after.x - before.x, after.y - before.y)
+            report(moved > 1e-6, "panning moves the picture under a fixed point (\(image))",
+                   String(format: "moved %.9f", moved))
+
+            // And by the centre's own displacement, not some other amount.
+            near(after.x - before.x, v.center.x - was.x, 1e-9,
+                 "the picture moves by the pan x (\(image))")
+            near(after.y - before.y, v.center.y - was.y, 1e-9,
+                 "the picture moves by the pan y (\(image))")
+        }
+    }
+
+    // MARK: Gradient masks
+
+    /// The one that matters: the outline is drawn where the falloff actually
+    /// is.
+    ///
+    /// `maskAlpha` is a transcription of `mask_gradient.slang`, so this asks
+    /// the shader's own question rather than "did we draw an ellipse" — every
+    /// point of the boundary curve must be exactly the end of the ramp, and
+    /// every point of the inner curve exactly the start of it. A test that only
+    /// checked the outline was closed and centred would pass on a plain screen
+    /// circle, which is the wrong curve on every frame that is not square.
+    static func testMaskOutlineLandsOnTheFalloff() {
+        for roundness in [2.0, 4.0, 8.0] as [CGFloat] {
+            for feather in [0.2, 0.5, 0.8] as [CGFloat] {
+                for angle in [0.0, 0.4, 1.1, -0.9] as [CGFloat] {
+                    var m = CanvasLayout.MaskPlacement()
+                    m.kind = 2
+                    m.centre = CGPoint(x: 0.42, y: 0.55)
+                    m.radius = CGSize(width: 0.3, height: 0.18)
+                    m.angle = angle
+                    m.feather = feather
+                    m.roundness = roundness
+
+                    let tag = "r\(roundness) f\(feather) a\(angle)"
+
+                    var worstEdge: CGFloat = 0
+                    var worstInner: CGFloat = 0
+                    for p in CanvasLayout.maskOutline(m, at: 1, samples: 64) {
+                        worstEdge = max(worstEdge, abs(CanvasLayout.maskAlpha(p, m) - 0))
+                    }
+                    for p in CanvasLayout.maskOutline(m, at: 1 - feather, samples: 64) {
+                        worstInner = max(worstInner, abs(CanvasLayout.maskAlpha(p, m) - 1))
+                    }
+                    near(worstEdge, 0, 1e-5, "outline is the end of the ramp (\(tag))")
+                    near(worstInner, 0, 1e-5, "inner outline starts the ramp (\(tag))")
+
+                    // And the boundary really is a boundary: a hair inside is
+                    // covered, a hair outside is not.
+                    let e = CanvasLayout.maskOutline(m, at: 0.98, samples: 16)
+                    let o = CanvasLayout.maskOutline(m, at: 1.02, samples: 16)
+                    report(e.allSatisfy { CanvasLayout.maskAlpha($0, m) > 0 },
+                           "inside the outline is covered (\(tag))")
+                    report(o.allSatisfy { CanvasLayout.maskAlpha($0, m) <= 1e-9 },
+                           "outside the outline is not (\(tag))")
+                }
+            }
+        }
+
+        // A hard-edged mask has nothing to draw between the two curves, and the
+        // overlay must not imply a feather it does not have.
+        var hard = CanvasLayout.MaskPlacement()
+        hard.kind = 2
+        hard.feather = 0
+        let outer = CanvasLayout.maskOutline(hard, at: 1, samples: 32)
+        let inner = CanvasLayout.maskOutline(hard, at: 1, samples: 32)
+        var gap: CGFloat = 0
+        for (a, b) in zip(outer, inner) { gap = max(gap, hypot(a.x - b.x, a.y - b.y)) }
+        near(gap, 0, 1e-9, "at feather 0 the two curves coincide")
+    }
+
+    /// A linear gradient's three lines are lines of constant coverage.
+    ///
+    /// Perpendicularity is measured in normalized coordinates, not on screen —
+    /// so the check is that every point along the drawn line has the *same*
+    /// ramp parameter, which is the property the shader defines and the one a
+    /// screen-space right angle would break on any non-square frame.
+    static func testMaskIsoLinesAreIsoAlpha() {
+        for angle in [0.0, 0.3, 1.2, -0.7, 2.9] as [CGFloat] {
+            for length in [0.2, 0.6, 1.4] as [CGFloat] {
+                var m = CanvasLayout.MaskPlacement()
+                m.kind = 1
+                m.centre = CGPoint(x: 0.45, y: 0.52)
+                m.angle = angle
+                m.length = length
+
+                for (t, want) in [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)] as [(CGFloat, CGFloat)] {
+                    let (a, b) = CanvasLayout.maskIsoLine(m, at: t)
+                    let tag = "t\(t) a\(angle) l\(length)"
+
+                    // Both ends, and points along the way.
+                    for s in [0.0, 0.25, 0.5, 0.75, 1.0] as [CGFloat] {
+                        let q = CGPoint(x: a.x + (b.x - a.x) * s,
+                                        y: a.y + (b.y - a.y) * s)
+                        near(CanvasLayout.maskLinearT(q, m), want, 1e-6,
+                             "iso line holds its parameter (\(tag), s\(s))")
+                    }
+                }
+
+                // The zero and full lines pass through the two endpoints the
+                // engine hands the shader.
+                let (z0, z1) = CanvasLayout.maskIsoLine(m, at: 0)
+                let d = hypot(z1.x - z0.x, z1.y - z0.y)
+                report(d > 1, "the iso line is long enough to cross the frame")
+                near(CanvasLayout.maskLinearT(m.zeroEnd, m), 0, 1e-6,
+                     "zero endpoint is t = 0 (a\(angle))")
+                near(CanvasLayout.maskLinearT(m.fullEnd, m), 1, 1e-6,
+                     "full endpoint is t = 1 (a\(angle))")
+            }
+        }
+    }
+
+    /// Drag an endpoint and it lands under the cursor — exactly, not nearly.
+    ///
+    /// This is the property that says the angle is being taken in the space the
+    /// handle is drawn from. Take `atan2` on screen instead and the handle
+    /// redraws off the cursor by an amount that grows with how far the frame is
+    /// from square, which reads as the control "slipping".
+    static func testMaskEndpointLandsUnderTheCursor() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+
+        for image in [landscape, portrait, 1.0] as [CGFloat] {
+            let v = Viewport()
+            let map = CanvasLayout.pictureMap(
+                quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                visible: v.visibleFraction(imageAspect: image, viewAspect: viewAspect),
+                center: v.center, in: view)
+
+            var m = CanvasLayout.MaskPlacement()
+            m.kind = 1
+            m.centre = CGPoint(x: 0.5, y: 0.5)
+
+            let grab = CanvasLayout.maskHandlePoint(.fullEnd, m, map)
+            for target in [CGPoint(x: 700, y: 430), CGPoint(x: 540, y: 330),
+                           CGPoint(x: 660, y: 500)] {
+                for handle in [CanvasLayout.MaskHandle.fullEnd, .zeroEnd] {
+                    let moved = CanvasLayout.maskDrag(handle, from: grab, to: target,
+                                                      start: m, map)
+                    let where_ = CanvasLayout.maskHandlePoint(handle, moved, map)
+                    near(where_.x, target.x, 1e-6,
+                         "\(handle) lands on the cursor x (\(image))")
+                    near(where_.y, target.y, 1e-6,
+                         "\(handle) lands on the cursor y (\(image))")
+
+                    // The centre does not move when an end is pulled.
+                    near(moved.centre.x, m.centre.x, 1e-9, "endpoint drag keeps the centre x")
+                    near(moved.centre.y, m.centre.y, 1e-9, "endpoint drag keeps the centre y")
+                }
+            }
+        }
+    }
+
+    /// The rotate handle keeps a fixed screen distance and stays on the ray
+    /// from the centre through the cursor. It cannot sit *on* the cursor —
+    /// it is a lollipop at a fixed stem length — so the property to check is
+    /// the direction, and on screen, which is where the hand is.
+    static func testMaskRotateStaysOnTheCursorRay() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+
+        for image in [landscape, portrait] as [CGFloat] {
+            let v = Viewport()
+            let map = CanvasLayout.pictureMap(
+                quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                visible: v.visibleFraction(imageAspect: image, viewAspect: viewAspect),
+                center: v.center, in: view)
+
+            var m = CanvasLayout.MaskPlacement()
+            m.kind = 2
+            m.centre = CGPoint(x: 0.5, y: 0.5)
+            let origin = map.point(m.centre)
+            let grab = CanvasLayout.maskHandlePoint(.rotate, m, map)
+
+            for target in [CGPoint(x: 800, y: 300), CGPoint(x: 400, y: 620),
+                           CGPoint(x: 620, y: 200), CGPoint(x: 300, y: 400)] {
+                let moved = CanvasLayout.maskDrag(.rotate, from: grab, to: target,
+                                                  start: m, map)
+                let h = CanvasLayout.maskHandlePoint(.rotate, moved, map)
+
+                let a = CGPoint(x: target.x - origin.x, y: target.y - origin.y)
+                let b = CGPoint(x: h.x - origin.x, y: h.y - origin.y)
+                let cross = a.x * b.y - a.y * b.x
+                let dot = a.x * b.x + a.y * b.y
+                let scale = max(hypot(a.x, a.y) * hypot(b.x, b.y), 1e-9)
+
+                near(cross / scale, 0, 1e-6, "rotate handle is on the cursor ray (\(image))")
+                report(dot > 0, "rotate handle is on the cursor's side (\(image))")
+
+                // Fixed stem: the handle sits a constant distance beyond the
+                // +X handle however the picture is shaped or turned.
+                let edge = CanvasLayout.maskHandlePoint(.plusX, moved, map)
+                near(hypot(h.x - edge.x, h.y - edge.y),
+                     CanvasLayout.maskRotateStem, 1e-6,
+                     "the stem keeps its length (\(image))")
+
+                // Rotating changes nothing but the angle.
+                near(moved.radius.width, m.radius.width, 1e-9, "rotate keeps radius x")
+                near(moved.radius.height, m.radius.height, 1e-9, "rotate keeps radius y")
+                near(moved.centre.x, m.centre.x, 1e-9, "rotate keeps the centre")
+            }
+        }
+    }
+
+    /// Dragging the body moves the mask by the distance the hand moved — on
+    /// screen, which is the only place the photographer can judge it.
+    static func testMaskBodyDragMovesByTheDrag() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+
+        for image in [landscape, portrait] as [CGFloat] {
+            for zoom in [1.0, 3.0] as [CGFloat] {
+                let v = Viewport()
+                v.zoomBy(zoom, anchor: CGPoint(x: 0.5, y: 0.5),
+                         visible: CGSize(width: 1, height: 1))
+                let vis = v.visibleFraction(imageAspect: image, viewAspect: viewAspect)
+                v.clamp(to: vis)
+                let map = CanvasLayout.pictureMap(
+                    quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                    visible: vis, center: v.center, in: view)
+
+                var m = CanvasLayout.MaskPlacement()
+                m.kind = 2
+                m.centre = CGPoint(x: 0.5, y: 0.5)
+
+                let grab = map.point(m.centre)
+                let delta = CGSize(width: 37, height: -21)
+                let to = CGPoint(x: grab.x + delta.width, y: grab.y + delta.height)
+
+                for handle in [CanvasLayout.MaskHandle.body, .centre] {
+                    let moved = CanvasLayout.maskDrag(handle, from: grab, to: to,
+                                                      start: m, map)
+                    let now = map.point(moved.centre)
+                    near(now.x - grab.x, delta.width, 1e-6,
+                         "\(handle) drag moves by the drag x (\(image), \(zoom)x)")
+                    near(now.y - grab.y, delta.height, 1e-6,
+                         "\(handle) drag moves by the drag y (\(image), \(zoom)x)")
+
+                    near(moved.angle, m.angle, 1e-9, "moving does not rotate")
+                    near(moved.radius.width, m.radius.width, 1e-9, "moving does not resize")
+                }
+            }
+        }
+    }
+
+    /// Pulling a side changes that side and nothing else.
+    ///
+    /// The temptation is to let an axis handle set the angle too, the way a
+    /// linear endpoint does. It must not: a photographer nudging a mask wider
+    /// would find it had quietly turned, and the angle would drift a little on
+    /// every size adjustment with nothing on screen explaining it.
+    static func testMaskAxisDragDoesNotRotate() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+        let v = Viewport()
+        let map = CanvasLayout.pictureMap(
+            quadScale: v.quadScale(imageAspect: landscape, viewAspect: viewAspect),
+            visible: v.visibleFraction(imageAspect: landscape, viewAspect: viewAspect),
+            center: v.center, in: view)
+
+        for angle in [0.0, 0.6, -1.3] as [CGFloat] {
+            var m = CanvasLayout.MaskPlacement()
+            m.kind = 2
+            m.centre = CGPoint(x: 0.5, y: 0.5)
+            m.angle = angle
+
+            for handle in [CanvasLayout.MaskHandle.plusX, .minusX, .plusY, .minusY] {
+                let grab = CanvasLayout.maskHandlePoint(handle, m, map)
+                // Deliberately off the axis, which is what a real hand does.
+                let to = CGPoint(x: grab.x + 44, y: grab.y + 61)
+                let moved = CanvasLayout.maskDrag(handle, from: grab, to: to,
+                                                  start: m, map)
+
+                near(moved.angle, angle, 1e-12, "\(handle) does not rotate (a\(angle))")
+                near(moved.centre.x, m.centre.x, 1e-12, "\(handle) does not move x")
+                near(moved.centre.y, m.centre.y, 1e-12, "\(handle) does not move y")
+
+                let onX = (handle == .plusX || handle == .minusX)
+                near(onX ? moved.radius.height : moved.radius.width,
+                     onX ? m.radius.height : m.radius.width, 1e-12,
+                     "\(handle) leaves the other axis alone")
+
+                // Pulling outward from the edge grows the mask on that axis.
+                let out = map.unit(to)
+                let axis = onX ? m.axisX : m.axisY
+                let reach = abs((out.x - m.centre.x) * axis.width
+                              + (out.y - m.centre.y) * axis.height)
+                near(onX ? moved.radius.width : moved.radius.height,
+                     min(max(reach, 0.02), 1), 1e-9,
+                     "\(handle) takes the drag's reach along its own axis")
+            }
+        }
+    }
+
+    /// A drag can never produce a mask the panel cannot show.
+    ///
+    /// The sliders and the canvas write the same variables. If a drag can leave
+    /// a value outside a slider's range, the two disagree about the state and
+    /// the next touch of that slider snaps the mask somewhere nobody put it.
+    static func testMaskDragStaysInSliderRange() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+        let v = Viewport()
+        let map = CanvasLayout.pictureMap(
+            quadScale: v.quadScale(imageAspect: landscape, viewAspect: viewAspect),
+            visible: v.visibleFraction(imageAspect: landscape, viewAspect: viewAspect),
+            center: v.center, in: view)
+
+        // Far outside the view on every side, which is where a determined drag
+        // ends up.
+        let wild = [CGPoint(x: -4000, y: -3000), CGPoint(x: 9000, y: -2000),
+                    CGPoint(x: 9000, y: 7000), CGPoint(x: -5000, y: 6000),
+                    CGPoint(x: 600, y: 400)]
+
+        for kind in [1, 2] {
+            var m = CanvasLayout.MaskPlacement()
+            m.kind = kind
+            m.centre = CGPoint(x: 0.5, y: 0.5)
+
+            for handle in CanvasLayout.maskHandles(m) {
+                let grab = CanvasLayout.maskHandlePoint(handle, m, map)
+                for to in wild {
+                    let r = CanvasLayout.maskDrag(handle, from: grab, to: to,
+                                                  start: m, map)
+                    let tag = "\(handle) kind \(kind)"
+                    report(CanvasLayout.maskCentreRange.contains(r.centre.x),
+                           "centre x stays in range (\(tag))", "\(r.centre.x)")
+                    report(CanvasLayout.maskCentreRange.contains(r.centre.y),
+                           "centre y stays in range (\(tag))", "\(r.centre.y)")
+                    report(CanvasLayout.maskLengthRange.contains(r.length),
+                           "length stays in range (\(tag))", "\(r.length)")
+                    report(CanvasLayout.maskRadiusRange.contains(r.radius.width),
+                           "radius x stays in range (\(tag))", "\(r.radius.width)")
+                    report(CanvasLayout.maskRadiusRange.contains(r.radius.height),
+                           "radius y stays in range (\(tag))", "\(r.radius.height)")
+                    report(abs(r.angle) <= 3.15,
+                           "angle stays in the slider's range (\(tag))", "\(r.angle)")
+                }
+            }
+        }
+    }
+
+    /// A handle standing inside the mask still gets the press.
+    ///
+    /// The body is the biggest target on screen and every handle sits on it, so
+    /// testing the body first makes all of them unreachable. Among handles the
+    /// nearest wins rather than a fixed order, because on a small mask their
+    /// boxes overlap and a fixed order strands one of them.
+    static func testMaskHitPrefersHandlesOverBody() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+        let v = Viewport()
+        let map = CanvasLayout.pictureMap(
+            quadScale: v.quadScale(imageAspect: landscape, viewAspect: viewAspect),
+            visible: v.visibleFraction(imageAspect: landscape, viewAspect: viewAspect),
+            center: v.center, in: view)
+
+        for kind in [1, 2] {
+            var m = CanvasLayout.MaskPlacement()
+            m.kind = kind
+            m.centre = CGPoint(x: 0.5, y: 0.5)
+
+            for handle in CanvasLayout.maskHandles(m) {
+                let at = CanvasLayout.maskHandlePoint(handle, m, map)
+                report(CanvasLayout.maskHit(at, m, map) == handle,
+                       "pressing a handle grabs it (\(handle), kind \(kind))",
+                       "got \(String(describing: CanvasLayout.maskHit(at, m, map)))")
+            }
+
+            // Inside the mask but clear of every handle: the body.
+            let inside = kind == 2
+                ? map.point(CGPoint(x: 0.5 + 0.12, y: 0.5 + 0.06))
+                : map.point(CGPoint(x: 0.5, y: 0.5 + 0.12))
+            if CanvasLayout.maskHandles(m).allSatisfy({
+                hypot(CanvasLayout.maskHandlePoint($0, m, map).x - inside.x,
+                      CanvasLayout.maskHandlePoint($0, m, map).y - inside.y)
+                    > CanvasLayout.maskHandleBox / 2
+            }) {
+                report(CanvasLayout.maskHit(inside, m, map) == .body,
+                       "pressing the mask body grabs the body (kind \(kind))")
+            }
+
+            // Well outside it: nothing, so the press falls through to panning.
+            let outside = CGPoint(x: 40, y: 40)
+            report(CanvasLayout.maskHit(outside, m, map) == nil,
+                   "pressing away from the mask grabs nothing (kind \(kind))")
+        }
+
+        // With no mask there is nothing to grab anywhere.
+        let none = CanvasLayout.MaskPlacement()
+        report(CanvasLayout.maskHit(CGPoint(x: 600, y: 400), none, map) == nil,
+               "no mask, no handles")
+    }
+
+    /// The stored angle is measured in normalized coordinates, and on a frame
+    /// that is not square that is *not* the angle it subtends on screen.
+    ///
+    /// This is the check that catches someone deciding the map is "really" a
+    /// rotation and dropping the aspect out of it — the same simplification
+    /// `pipe/MaskGeometry.h` guards against on the straighten. It has to differ
+    /// on 3:2 and it has to agree on a square, or the difference is a bug
+    /// rather than the geometry.
+    static func testMaskAnglesAreNormalizedNotScreen() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+
+        func screenAngle(_ image: CGFloat, _ angle: CGFloat) -> CGFloat {
+            let v = Viewport()
+            let map = CanvasLayout.pictureMap(
+                quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                visible: v.visibleFraction(imageAspect: image, viewAspect: viewAspect),
+                center: v.center, in: view)
+            var m = CanvasLayout.MaskPlacement()
+            m.kind = 1
+            m.centre = CGPoint(x: 0.5, y: 0.5)
+            m.angle = angle
+            let a = map.point(m.centre)
+            let b = map.point(m.fullEnd)
+            return atan2(b.y - a.y, b.x - a.x)
+        }
+
+        // A square *picture*: normalized coordinates are a unit square, so the
+        // map is a uniform scale only when the rectangle drawn is square too,
+        // and the two angles then coincide.
+        //
+        // ⚠️ Not when the picture merely fills the view. The first version of
+        // this check passed the view's own aspect here, which is a 3:2 picture
+        // drawn edge to edge — a perfectly anisotropic map — and it read
+        // 0.5117 rad against the 0.7 it asserted. The claim was "square" and
+        // the measurement was "fills the view"; they are different questions.
+        near(screenAngle(1.0, 0.7), 0.7, 1e-6,
+             "a square picture makes the two angles agree")
+
+        // 3:2 does not. The gap is the aspect, and it must be a real one — a
+        // tolerance-sized difference would mean this test could not tell the
+        // two implementations apart.
+        let got = screenAngle(landscape, 0.7)
+        report(abs(got - 0.7) > 0.05,
+               "a 3:2 picture separates the stored angle from the screen angle",
+               String(format: "screen %.4f rad vs stored 0.7000", got))
+
+        // On axis, though, they must agree whatever the aspect — a scale along
+        // the axes cannot turn a horizontal line.
+        for image in [landscape, portrait, 1.0] as [CGFloat] {
+            near(screenAngle(image, 0), 0, 1e-9, "0 is 0 at any aspect (\(image))")
+        }
     }
 }
 

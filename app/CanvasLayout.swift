@@ -184,4 +184,389 @@ enum CanvasLayout {
         r.origin.y = min(max(r.origin.y, 0), 1 - r.size.height)
         return r
     }
+
+    // MARK: The picture on screen
+
+    /// The map between normalized picture coordinates and view points.
+    ///
+    /// The renderer draws the picture across `rect` and shows `visible` of it
+    /// about the viewport's centre; this is the inverse of exactly that, built
+    /// from the same two numbers that go into the vertex shader. An overlay
+    /// made from anything else is a second opinion about where the pixels are,
+    /// and this repository has already shipped the bug where the second opinion
+    /// was wrong.
+    ///
+    /// ⚠️ **The map is anisotropic.** A normalized picture is a unit square; the
+    /// rectangle it is drawn in is not. So a normalized circle is a screen
+    /// ellipse, and two normalized vectors at right angles are not at right
+    /// angles on screen. Anything that wants an angle has to say which space it
+    /// means — see `maskDrag`.
+    struct PictureMap {
+        /// Where the picture covers the view.
+        var rect: CGRect = .zero
+        /// Fraction of the picture on screen, per axis. 1 means all of it.
+        var visible = CGSize(width: 1, height: 1)
+        /// The normalized coordinate sitting at `rect`'s top-left corner.
+        var origin: CGPoint = .zero
+
+        /// View points per unit of normalized coordinate.
+        var scale: CGSize {
+            CGSize(width: rect.width / max(visible.width, 1e-9),
+                   height: rect.height / max(visible.height, 1e-9))
+        }
+
+        /// A normalized picture point, in the view.
+        func point(_ u: CGPoint) -> CGPoint {
+            let s = scale
+            return CGPoint(x: rect.minX + (u.x - origin.x) * s.width,
+                           y: rect.minY + (u.y - origin.y) * s.height)
+        }
+
+        /// A view point, back in normalized picture coordinates.
+        func unit(_ p: CGPoint) -> CGPoint {
+            let s = scale
+            guard s.width > 1e-12, s.height > 1e-12 else { return origin }
+            return CGPoint(x: origin.x + (p.x - rect.minX) / s.width,
+                           y: origin.y + (p.y - rect.minY) / s.height)
+        }
+
+        /// A displacement, which has no origin. A drag translation is one of
+        /// these, and passing it through `unit` instead would add the origin in
+        /// twice.
+        func unitVector(_ d: CGSize) -> CGSize {
+            let s = scale
+            guard s.width > 1e-12, s.height > 1e-12 else { return .zero }
+            return CGSize(width: d.width / s.width, height: d.height / s.height)
+        }
+    }
+
+    /// The map the renderer is using right now.
+    ///
+    /// `quadScale` and `visible` come from `Viewport`, unmodified — they are
+    /// the values the shader is handed, so an overlay built on them cannot
+    /// drift from the picture. At fit this reduces to `frameRect`, which is
+    /// asserted rather than assumed.
+    static func pictureMap(quadScale q: CGSize, visible: CGSize,
+                           center: CGPoint, in size: CGSize) -> PictureMap {
+        var m = PictureMap()
+        m.rect = drawnRect(quadScale: q, in: size)
+        m.visible = CGSize(width: max(visible.width, 1e-9),
+                           height: max(visible.height, 1e-9))
+        m.origin = CGPoint(x: center.x - m.visible.width / 2,
+                           y: center.y - m.visible.height / 2)
+        return m
+    }
+
+    // MARK: Gradient masks
+
+    /// A gradient mask in the coordinates it is *stored* in: normalized against
+    /// the displayed picture — cropped, turned and straightened.
+    ///
+    /// Nothing here repeats `pipe/MaskGeometry.h`. The engine owns the step from
+    /// these coordinates to the frame `develop:linear` sees, and it is the only
+    /// thing that should: two implementations of that transform agreeing today
+    /// is how they drift apart tomorrow.
+    struct MaskPlacement: Equatable {
+        var kind: Int = 0                    // 0 none, 1 linear, 2 radial
+        var centre = CGPoint(x: 0.5, y: 0.5)
+        var angle: CGFloat = 0               // radians
+        var length: CGFloat = 0.5            // linear: zero-to-full distance
+        var radius = CGSize(width: 0.3, height: 0.3)   // radial semi-axes
+        var feather: CGFloat = 0.5
+        var roundness: CGFloat = 2
+        var invert = false
+
+        /// The mask's own axes, read off `mask_gradient.slang` rather than
+        /// guessed: it forms `u = ( c·e.x + s·e.y)/rx` and
+        /// `v = (−s·e.x + c·e.y)/ry`, so +X is (cos, sin) and +Y is (−sin, cos).
+        var axisX: CGSize { CGSize(width: cos(angle), height: sin(angle)) }
+        var axisY: CGSize { CGSize(width: -sin(angle), height: cos(angle)) }
+
+        /// Where the effect is zero and where it is full. The engine derives
+        /// the shader's two endpoints from centre and angle the same way, so a
+        /// linear gradient needs no separate angle once these exist.
+        var zeroEnd: CGPoint { along(axisX, -length / 2) }
+        var fullEnd: CGPoint { along(axisX, length / 2) }
+
+        func along(_ a: CGSize, _ d: CGFloat) -> CGPoint {
+            CGPoint(x: centre.x + a.width * d, y: centre.y + a.height * d)
+        }
+
+        /// A handle's spot in normalized picture coordinates.
+        ///
+        /// `rotate` is absent on purpose: it sits a fixed number of *view*
+        /// points beyond the +X handle so it stays a constant size on screen at
+        /// any zoom, which no normalized position can express.
+        func handleUnit(_ h: MaskHandle) -> CGPoint? {
+            switch h {
+            case .centre:  return centre
+            case .zeroEnd: return zeroEnd
+            case .fullEnd: return fullEnd
+            case .plusX:   return along(axisX, radius.width)
+            case .minusX:  return along(axisX, -radius.width)
+            case .plusY:   return along(axisY, radius.height)
+            case .minusY:  return along(axisY, -radius.height)
+            case .rotate, .body: return nil
+            }
+        }
+    }
+
+    /// What a press can grab.
+    enum MaskHandle: Hashable {
+        case centre, zeroEnd, fullEnd
+        case plusX, minusX, plusY, minusY
+        case rotate
+        case body
+    }
+
+    /// Matches the crop overlay's 44pt box, so the two tools feel the same
+    /// under the hand.
+    static let maskHandleBox: CGFloat = 44
+
+    /// How far past the +X handle the rotate lollipop sits, in view points.
+    static let maskRotateStem: CGFloat = 34
+
+    /// The ranges the panel's sliders offer.
+    ///
+    /// A drag must not produce a mask the sliders cannot show, or the canvas
+    /// and the panel disagree about the state and the next touch of a slider
+    /// silently snaps the mask somewhere the photographer did not put it.
+    static let maskCentreRange: ClosedRange<CGFloat> = 0...1
+    static let maskLengthRange: ClosedRange<CGFloat> = 0.05...1.5
+    static let maskRadiusRange: ClosedRange<CGFloat> = 0.02...1
+
+    /// Which handles a mask of this kind shows.
+    static func maskHandles(_ m: MaskPlacement) -> [MaskHandle] {
+        switch m.kind {
+        case 1: return [.zeroEnd, .fullEnd, .centre]
+        case 2: return [.plusX, .minusX, .plusY, .minusY, .rotate, .centre]
+        default: return []
+        }
+    }
+
+    /// A handle's position in the view.
+    static func maskHandlePoint(_ h: MaskHandle, _ m: MaskPlacement,
+                                _ map: PictureMap) -> CGPoint {
+        if h == .rotate {
+            // The stem's direction is the mask's +X axis *as drawn*, which is
+            // not the same screen direction as (cos, sin) unless the picture is
+            // square. Taking it through the map rather than reusing the angle
+            // is what keeps the lollipop on the end of the axis it belongs to.
+            let s = map.scale
+            var dx = m.axisX.width * s.width
+            var dy = m.axisX.height * s.height
+            let n = max(hypot(dx, dy), 1e-9)
+            dx /= n; dy /= n
+            let base = map.point(m.along(m.axisX, m.radius.width))
+            return CGPoint(x: base.x + dx * maskRotateStem,
+                           y: base.y + dy * maskRotateStem)
+        }
+        guard let u = m.handleUnit(h) else { return map.point(m.centre) }
+        return map.point(u)
+    }
+
+    /// Which handle a press at `p` takes.
+    ///
+    /// Nearest wins among the handles rather than a fixed order, because on a
+    /// small mask their boxes overlap and a fixed order leaves one of them
+    /// permanently unreachable. The body is tested last: it is the largest
+    /// target and would otherwise swallow every handle standing on it.
+    static func maskHit(_ p: CGPoint, _ m: MaskPlacement,
+                        _ map: PictureMap) -> MaskHandle? {
+        guard m.kind != 0 else { return nil }
+
+        let reach = maskHandleBox / 2
+        var best: (handle: MaskHandle, distance: CGFloat)?
+        for h in maskHandles(m) {
+            let q = maskHandlePoint(h, m, map)
+            let d = hypot(p.x - q.x, p.y - q.y)
+            guard d <= reach else { continue }
+            if best == nil || d < best!.distance { best = (h, d) }
+        }
+        if let b = best { return b.handle }
+
+        return maskBodyContains(map.unit(p), m) ? .body : nil
+    }
+
+    /// Inside the part of the picture the mask is acting on.
+    static func maskBodyContains(_ q: CGPoint, _ m: MaskPlacement) -> Bool {
+        switch m.kind {
+        case 1:
+            // The band between the zero and full lines — the ramp itself.
+            let t = maskLinearT(q, m)
+            return t >= 0 && t <= 1
+        case 2:
+            return maskRadialR(q, m) <= 1
+        default:
+            return false
+        }
+    }
+
+    // MARK: What the shader says, in Swift
+
+    /// Perlin's smootherstep, as `mask_gradient.slang` uses it.
+    static func maskSmootherstep(_ t: CGFloat) -> CGFloat {
+        let x = min(max(t, 0), 1)
+        return x * x * x * (x * (x * 6 - 15) + 10)
+    }
+
+    /// The linear gradient's ramp parameter, transcribed from the shader.
+    static func maskLinearT(_ q: CGPoint, _ m: MaskPlacement) -> CGFloat {
+        let z = m.zeroEnd, f = m.fullEnd
+        let dx = f.x - z.x, dy = f.y - z.y
+        let denom = dx * dx + dy * dy
+        guard denom > 1e-9 else { return 1 }
+        return ((q.x - z.x) * dx + (q.y - z.y) * dy) / denom
+    }
+
+    /// The radial gradient's superellipse radius, transcribed from the shader.
+    /// 1 is the boundary.
+    static func maskRadialR(_ q: CGPoint, _ m: MaskPlacement) -> CGFloat {
+        let c = cos(m.angle), s = sin(m.angle)
+        let ex = q.x - m.centre.x, ey = q.y - m.centre.y
+        let u = ( c * ex + s * ey) / max(m.radius.width, 1e-6)
+        let v = (-s * ex + c * ey) / max(m.radius.height, 1e-6)
+        let n = max(m.roundness, 0.1)
+        return pow(pow(abs(u), n) + pow(abs(v), n), 1 / n)
+    }
+
+    /// The coverage the mask kernel would write at `q`.
+    ///
+    /// A second implementation of `mask_gradient.slang`, and deliberately so:
+    /// it exists to be the oracle the *overlay* is checked against, so a test
+    /// can ask whether the outline is drawn where the falloff actually is
+    /// rather than merely whether an outline was drawn. Transcribed from the
+    /// shader, which is the only place the maths is allowed to change.
+    static func maskAlpha(_ q: CGPoint, _ m: MaskPlacement) -> CGFloat {
+        var alpha: CGFloat = 1
+        switch m.kind {
+        case 1:
+            alpha = maskSmootherstep(maskLinearT(q, m))
+        case 2:
+            let r = maskRadialR(q, m)
+            let f = min(max(m.feather, 0), 0.999)
+            alpha = 1 - maskSmootherstep((r - (1 - f)) / max(f, 1e-3))
+        default:
+            alpha = 1
+        }
+        return m.invert ? 1 - alpha : alpha
+    }
+
+    // MARK: What the overlay draws
+
+    /// A radial mask's boundary at a given level in its own metric — 1 is the
+    /// edge of the effect, `1 − feather` is where the falloff begins.
+    ///
+    /// Sampled in the mask's space and mapped out point by point, never drawn
+    /// as a screen-space ellipse. The shader is isotropic in *normalized*
+    /// coordinates and the picture is not square, so a screen circle is not the
+    /// mask's boundary — it is a curve near it that parts company as the frame
+    /// gets further from square.
+    static func maskOutline(_ m: MaskPlacement, at level: CGFloat,
+                            samples: Int = 128) -> [CGPoint] {
+        guard m.kind == 2, samples >= 3, level > 0 else { return [] }
+
+        let n = max(m.roundness, 0.1)
+        let c = cos(m.angle), s = sin(m.angle)
+        var out: [CGPoint] = []
+        out.reserveCapacity(samples)
+
+        for i in 0..<samples {
+            let t = CGFloat(i) / CGFloat(samples) * 2 * .pi
+            // The superellipse |u|^n + |v|^n = level^n, parametrized so that
+            // n = 2 gives the circle back.
+            let ct = cos(t), st = sin(t)
+            let u = copysign(pow(abs(ct), 2 / n), ct) * level
+            let v = copysign(pow(abs(st), 2 / n), st) * level
+            let ex = u * m.radius.width, ey = v * m.radius.height
+            out.append(CGPoint(x: m.centre.x + c * ex - s * ey,
+                               y: m.centre.y + s * ex + c * ey))
+        }
+        return out
+    }
+
+    /// One of a linear gradient's iso-alpha lines: `t = 0` is where the effect
+    /// is zero, `0.5` the centre, `1` where it is full.
+    ///
+    /// Perpendicular to the ramp *in normalized coordinates*, which is not
+    /// perpendicular on screen. Drawing these square to the ramp as it appears
+    /// would put the three lines at an angle to the bands the shader is
+    /// actually laying down — visible on any frame that is not square, which is
+    /// every frame.
+    static func maskIsoLine(_ m: MaskPlacement, at t: CGFloat,
+                            halfLength: CGFloat = 4) -> (CGPoint, CGPoint) {
+        let mid = m.along(m.axisX, (t - 0.5) * m.length)
+        let a = m.axisY
+        return (CGPoint(x: mid.x - a.width * halfLength,
+                        y: mid.y - a.height * halfLength),
+                CGPoint(x: mid.x + a.width * halfLength,
+                        y: mid.y + a.height * halfLength))
+    }
+
+    // MARK: Dragging
+
+    /// What a drag does to the mask.
+    ///
+    /// The whole gesture lives here rather than in the view, so it can be
+    /// checked without a window — and the check that matters is a round trip:
+    /// drag a handle to a point and the handle must redraw *at* that point.
+    ///
+    /// `grab` is where the press landed and `p` is where the cursor is now.
+    /// Both in view coordinates.
+    ///
+    /// ⚠️ **Every angle here is taken in normalized space**, because that is the
+    /// space the shader measures in and therefore the only one the stored angle
+    /// can mean. Taking `atan2` on screen instead and converting afterwards
+    /// makes the handle slide out from under the cursor as it is dragged, since
+    /// the handle is redrawn from the stored angle through the anisotropic map.
+    static func maskDrag(_ h: MaskHandle, from grab: CGPoint, to p: CGPoint,
+                         start: MaskPlacement, _ map: PictureMap) -> MaskPlacement {
+        var m = start
+
+        switch h {
+        case .centre, .body:
+            let d = map.unitVector(CGSize(width: p.x - grab.x, height: p.y - grab.y))
+            m.centre = CGPoint(
+                x: clamp(start.centre.x + d.width, maskCentreRange),
+                y: clamp(start.centre.y + d.height, maskCentreRange))
+
+        case .zeroEnd, .fullEnd:
+            // An endpoint carries angle and length at once, which is why a
+            // linear gradient needs no rotate handle: the point goes exactly
+            // where the cursor is and the angle is whatever that implies.
+            let q = map.unit(p)
+            let dx = q.x - start.centre.x, dy = q.y - start.centre.y
+            let r = hypot(dx, dy)
+            guard r > 1e-9 else { break }
+            m.length = clamp(2 * r, maskLengthRange)
+            m.angle = (h == .fullEnd) ? atan2(dy, dx) : atan2(-dy, -dx)
+
+        case .plusX, .minusX, .plusY, .minusY:
+            // Size only, and the drag is projected onto the axis it belongs to
+            // — pulling a side sideways must not quietly rotate the mask. The
+            // rotate handle is the one thing that changes the angle.
+            let q = map.unit(p)
+            let dx = q.x - start.centre.x, dy = q.y - start.centre.y
+            let onX = (h == .plusX || h == .minusX)
+            let axis = onX ? start.axisX : start.axisY
+            let along = abs(dx * axis.width + dy * axis.height)
+            if onX {
+                m.radius.width = clamp(along, maskRadiusRange)
+            } else {
+                m.radius.height = clamp(along, maskRadiusRange)
+            }
+
+        case .rotate:
+            let q = map.unit(p)
+            let dx = q.x - start.centre.x, dy = q.y - start.centre.y
+            guard hypot(dx, dy) > 1e-9 else { break }
+            m.angle = atan2(dy, dx)
+        }
+
+        return m
+    }
+
+    private static func clamp(_ v: CGFloat, _ r: ClosedRange<CGFloat>) -> CGFloat {
+        min(max(v, r.lowerBound), r.upperBound)
+    }
 }
