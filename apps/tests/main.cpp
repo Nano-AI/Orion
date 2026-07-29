@@ -17,6 +17,7 @@
 #include "pipe/HueSatMap.h"
 #include "pipe/LensDatabase.h"
 #include "pipe/LensGeometry.h"
+#include "pipe/AutoEnhance.h"
 #include "pipe/CubeLut.h"
 #include "pipe/ExposureFusion.h"
 #include "pipe/Dehaze.h"
@@ -3967,6 +3968,82 @@ void testExposureFusionGpu() {
     }
 }
 
+/// Auto-enhance reads a histogram. This is that reading, without a GPU.
+void testAutoEnhanceStats() {
+    section("Auto-enhance (statistics)");
+
+    namespace ae = orion::pipe::auto_enhance;
+    constexpr std::uint32_t kBins = 256;
+
+    // A flat histogram: the p-th percentile is p, to within a bin.
+    {
+        std::vector<std::uint32_t> h(kBins, 100u);
+        double worst = 0.0;
+        for (double f = 0.05; f <= 0.95; f += 0.05) {
+            worst = std::max(worst, std::abs(double(ae::percentileOf(h.data(), kBins, f)) - f));
+        }
+        report(worst < 1.0 / double(kBins) + 1e-6,
+               "percentiles of a flat histogram are the fraction itself",
+               "worst " + std::to_string(worst));
+    }
+
+    // Everything in one bin: every percentile is that bin, whatever is asked.
+    {
+        std::vector<std::uint32_t> h(kBins, 0u);
+        h[64] = 5000u;
+        report(std::abs(ae::percentileOf(h.data(), kBins, 0.01f) - 64.0f / 256.0f) < 1e-6 &&
+               std::abs(ae::percentileOf(h.data(), kBins, 0.99f) - 64.0f / 256.0f) < 1e-6,
+               "a single-valued image reports that value at every percentile", "");
+    }
+
+    // The bin's lower edge, not its centre. With a coarse histogram the centre
+    // reports a black point above zero on an image that genuinely contains
+    // black, and the correction then lifts a picture that needed nothing.
+    {
+        std::vector<std::uint32_t> h(kBins, 0u);
+        h[0] = 1000u;
+        report(ae::percentileOf(h.data(), kBins, 0.5) == 0.0f,
+               "an image sitting in bin zero reports exactly zero, not half a bin",
+               std::to_string(ae::percentileOf(h.data(), kBins, 0.5)));
+    }
+
+    // An empty histogram must not divide by its own total.
+    {
+        std::vector<std::uint32_t> h(kBins, 0u);
+        report(ae::percentileOf(h.data(), kBins, 0.5) == 0.0f,
+               "an empty histogram is answered, not divided by", "");
+    }
+
+    // Combining is a sum over channels: the bin index is a value, and a value's
+    // frequency is how often any channel took it.
+    {
+        std::vector<std::uint32_t> rgb(std::size_t(kBins) * 3, 0u);
+        rgb[10] = 3u;                    // red
+        rgb[kBins + 10] = 4u;            // green
+        rgb[2 * kBins + 10] = 5u;        // blue
+        std::vector<std::uint32_t> out(kBins, 0u);
+        ae::combine(rgb.data(), kBins, out.data());
+        report(out[10] == 12u, "the three channel histograms combine by summing",
+               std::to_string(out[10]));
+    }
+
+    // Clipping is reported, because a picture already against the stops does
+    // not want its endpoints pushed further out.
+    {
+        std::vector<std::uint32_t> h(kBins, 10u);
+        h[0] = 500u;
+        h[kBins - 1] = 250u;
+        const auto s = ae::measure(h.data(), kBins, 0.005);
+        const double total = 500.0 + 250.0 + 254.0 * 10.0;
+        report(std::abs(double(s.atFloor) - 500.0 / total) < 1e-4 &&
+               std::abs(double(s.atCeiling) - 250.0 / total) < 1e-4,
+               "measure reports how much is already clipped at each end",
+               std::to_string(s.atFloor) + " / " + std::to_string(s.atCeiling));
+        report(s.shadow < s.median && s.median < s.high,
+               "and the three percentiles come back in order", "");
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -3995,6 +4072,7 @@ int main() {
     testCreativeLut();
     testExposureFusionMath();
     testExposureFusionGpu();
+    testAutoEnhanceStats();
     testHighlightHaloGpu();
     testOutputDepth();
     testLensDatabase();
