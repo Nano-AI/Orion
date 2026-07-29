@@ -432,3 +432,76 @@ way fixes it, for a few thousand more evaluations of a table walk, once per file
 pair failed rather than the worst error. "0.026 worst" reads like a systematic
 accuracy limit and invites loosening a threshold; "fourteen exact, one 120 K
 out" reads like a bug and points straight at the search.
+
+---
+
+## 17. Brush masks — the nib is entirely Orion's own
+
+**Where:** `shaders/mask_brush.slang`, `app/CanvasLayout.swift`.
+
+`research/masking.md` §1 sources the *shape* of a brush mask — a stroke is a
+list of dab centres with one radius for the whole mask, accumulated in R16F —
+and that part is followed. **What the research does not give is any of the
+numbers below, and none of them are cited.**
+
+### Dab spacing: a quarter of the radius
+
+`CanvasLayout.brushSpacing = 0.25`. Justified in the code as "the usual figure
+in paint engines", which is **not a citation** — it is recollection. It is the
+right order of magnitude (scalloping on a stroke's edge becomes visible
+somewhere above roughly half a radius, and below about an eighth the extra dabs
+are wasted work), but the specific value is a judgement.
+
+What *is* pinned is the property that matters more than the constant: spacing is
+continuous across pointer events, so a fast stroke and a slow one over the same
+path lay identical paint. Tested against a 3-event and a 60-event stream.
+
+⚠ **A published source for dab spacing was not looked for.** The obvious places
+are libmypaint's dynamics (ISC, so readable) and the GIMP/Krita brush engines
+(GPL — readable as *description* only, never as code). Worth an hour before
+anyone tunes this by feel.
+
+### Hardness
+
+`dabCoverage` clamps hardness to 0.98 and ramps smootherstep from `h` to the
+rim. The clamp exists because a truly hard circle aliases into a visible
+staircase, and the mask is multiplied into a *parameter*, so that staircase
+becomes a banded edit rather than a jagged edge. The reasoning is sound; the
+0.98 is chosen, not derived.
+
+The falloff itself *is* sourced — Perlin's smootherstep, shared with the
+gradient masks rather than reimplemented, so a feather behaves the same under a
+brush as under a gradient.
+
+### The 256-dab pass, and the truncation
+
+`kMaskDabsPerPass = 256` is a buffer size, not a claim about anything. The
+kernel accumulates into the alpha it is handed and is built to chain, so this is
+not a cap in principle — but **the graph holds one brush node, so a longer
+stroke is truncated** and says so on stderr. Fixing it is more nodes, not a
+bigger buffer.
+
+---
+
+## 18. The mask overlay's tint is invented, and does not need not to be
+
+**Where:** `shaders/develop_linear.slang`, the `maskOverlay` branch.
+
+Scene-linear red `(0.35, 0.012, 0.02)`, mixed at `alpha * 0.6`, keeping
+`c * 0.25` of the image underneath. Every one of those four numbers was picked
+by looking at the result.
+
+Recorded here for completeness rather than as a debt. **This is a viewing aid,
+not a filter** — it never reaches an export, never enters the sidecar, and
+changes no stored value, so there is no photograph whose rendering depends on
+getting it "right". The bar it has to clear is legibility, and the two
+properties that matter are asserted by measurement rather than by taste:
+
+- zero coverage is **bit-identical** to the mask being off, so the overlay
+  cannot imply coverage that is not there;
+- the tint keeps a constant floor, so it stays visible in deep shadow — where a
+  purely proportional tint vanishes exactly where coverage most needs checking.
+
+The convention it follows — red for a coverage overlay — is Photoshop's quick
+mask and Lightroom's mask overlay, i.e. what photographers already expect. That
+is a UI convention, not a published result, and is not claimed as one.

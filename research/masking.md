@@ -250,6 +250,42 @@ Interesting if XMP round-trip fidelity ever matters; irrelevant otherwise, since
 
 ---
 
+## 6b. What is actually built, as of 2026-07-29
+
+The plan above is the plan of record; this is the state of it.
+
+| Step | Status |
+|---|---|
+| 1. Primitives — linear, radial | ✅ `mask_gradient.slang`, draggable on the canvas |
+| 1. Primitives — brush dabs | ✅ `mask_brush.slang`, paintable on the canvas |
+| 2. Groups and compositing (§6) | ❌ not started — **the next story** |
+| 3. Guided refinement (§4) | ❌ not started |
+| 4. Vision subject and person (§5) | ❌ not started |
+| 5. Sky | ❌ not started |
+
+**Departures from §1 and §3, both deliberate:**
+
+- §3 says store strokes in the *uncropped* image's normalized space. Orion
+  stores them in the **displayed** picture's space instead, and `MaskGeometry.h`
+  transforms them at render. Same result — a stroke stays on its subject through
+  crop, straighten and quarter turns — but it keeps one copy of that transform,
+  shared with the gradients, rather than two conventions to reconcile.
+- §1's "one radius per mask, plus mask-level Flow and CenterWeight" is followed.
+  **CenterWeight is called Hardness** in the interface, because that is the word
+  photographers use.
+
+⚠ **A stroke longer than 256 dabs is truncated**, with a warning on stderr. The
+kernel accumulates into the alpha it is handed and is built to chain, so this is
+a graph limitation and not a limit of the method: the fix is more nodes, not a
+bigger buffer.
+
+⚠ **The nib's constants are not sourced.** Dab spacing, the hardness clamp and
+the overlay tint are all Orion's own, recorded in `UNSOURCED.md` §17 and §18.
+The falloff is not among them — that is Perlin's smootherstep, shared with the
+gradient masks.
+
+---
+
 ## 7. Build order
 
 1. **Primitives.** Linear and radial gradient shaders, brush-dab rasteriser.
