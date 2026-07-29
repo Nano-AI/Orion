@@ -231,6 +231,59 @@ enum Screenshot {
             engine.denoiseColor = 2.4
             engine.sharpenAmount = 0.8
             engine.sharpenMasking = 0.4
+        case "mask-off":
+            // The control for `--measure`: the same frame and the same global
+            // exposure with no mask, so the difference measured against
+            // `mask-linear` is the mask's doing and not the scene's.
+            engine.exposureEv = 2.6
+        case "mask-linear":
+            // Placed and angled, because a gradient drawn square to the frame
+            // proves nothing: the whole question is whether the three lines
+            // stay perpendicular to the ramp in the space the shader measures,
+            // and at zero degrees every wrong answer looks like the right one.
+            engine.exposureEv = 2.6
+            engine.maskKind = 1
+            engine.localExposureEv = -1.6
+            engine.maskCentreX = 0.46
+            engine.maskCentreY = 0.44
+            engine.maskAngle = 1.05
+            engine.maskLength = 0.55
+        case "mask-linear-feathered":
+            // Identical to `mask-linear` but for the feather. The shader's
+            // linear branch never reads that field, so the two must measure
+            // the same — which is the evidence for hiding the control.
+            engine.exposureEv = 2.6
+            engine.maskKind = 1
+            engine.localExposureEv = -1.6
+            engine.maskCentreX = 0.46
+            engine.maskCentreY = 0.44
+            engine.maskAngle = 1.05
+            engine.maskLength = 0.55
+            engine.maskFeather = 0.02
+        case "mask-radial":
+            engine.exposureEv = 2.6
+            engine.maskKind = 2
+            engine.localExposureEv = 1.4
+            engine.maskCentreX = 0.44
+            engine.maskCentreY = 0.52
+            engine.maskAngle = 0.6
+            engine.maskRadiusX = 0.3
+            engine.maskRadiusY = 0.17
+            engine.maskFeather = 0.55
+        case "mask-square":
+            // A rounded-rectangle mask, which is the case that separates an
+            // outline sampled from the shader's superellipse from one drawn as
+            // an ellipse — at roundness 2 the two agree exactly.
+            engine.exposureEv = 2.6
+            engine.maskKind = 2
+            engine.localExposureEv = 1.6
+            engine.maskCentreX = 0.45
+            engine.maskCentreY = 0.5
+            engine.maskAngle = 0.35
+            engine.maskRadiusX = 0.3
+            engine.maskRadiusY = 0.22
+            engine.maskRoundness = 6
+            engine.maskFeather = 0.3
         case "crop":
             engine.exposureEv = 2.6
             engine.cropPreview = true

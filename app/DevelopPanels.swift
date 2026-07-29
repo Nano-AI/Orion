@@ -82,8 +82,6 @@ extension Editor {
                 if engine.maskKind != 0 {
                     slider("Exposure", $engine.localExposureEv, -3...3, " EV", 2,
                            resetsTo: engine.defaults.localExposureEv)
-                    slider("Feather", $engine.maskFeather, 0...1, "", 2,
-                           resetsTo: engine.defaults.maskFeather)
                     slider("Centre X", $engine.maskCentreX, 0...1, "", 2,
                            resetsTo: engine.defaults.maskCentreX)
                     slider("Centre Y", $engine.maskCentreY, 0...1, "", 2,
@@ -92,9 +90,19 @@ extension Editor {
                            resetsTo: engine.defaults.maskAngle)
 
                     if engine.maskKind == 1 {
+                        // No Feather here, and it is not an omission.
+                        // `mask_gradient.slang` reads that field only in its
+                        // radial branch — a linear gradient's ramp runs from
+                        // the zero line to the full line, so Length *is* the
+                        // feather. Measured before removing it: 0.50 against
+                        // 0.02 gave bit-identical luma on a real frame. A
+                        // slider a photographer can move and watch do nothing
+                        // is worse than no slider.
                         slider("Length", $engine.maskLength, 0.05...1.5, "", 2,
                                resetsTo: engine.defaults.maskLength)
                     } else {
+                        slider("Feather", $engine.maskFeather, 0...1, "", 2,
+                               resetsTo: engine.defaults.maskFeather)
                         slider("Width", $engine.maskRadiusX, 0.02...1, "", 2,
                                resetsTo: engine.defaults.maskRadiusX)
                         slider("Height", $engine.maskRadiusY, 0.02...1, "", 2,

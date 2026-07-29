@@ -536,6 +536,22 @@ struct Editor: View {
                                 .clipped()
                             }
                         }
+                        // The mask belongs to the panel that arms it, the same
+                        // rule the color picker follows: leaving Light with a
+                        // gradient still grabbing presses would mean a click on
+                        // the photo did something the visible controls no
+                        // longer explain. It goes on before the padding, so its
+                        // coordinates are the Metal view's exactly — applied
+                        // after, every handle sits twenty points off the pixels.
+                        .overlay {
+                            if tab == .light && engine.maskKind != 0 {
+                                GeometryReader { canvasGeo in
+                                    MaskOverlay(engine: engine,
+                                                map: pictureMap(in: canvasGeo.size))
+                                }
+                                .clipped()
+                            }
+                        }
                         .padding(20)
                         .onChange(of: tab) { _, t in
                             engine.cropPreview = (t == .crop)
@@ -652,6 +668,25 @@ struct Editor: View {
             imageAspect: CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight),
             viewAspect: size.width / size.height)
         return CanvasLayout.drawnRect(quadScale: quad, in: size)
+    }
+
+    /// The map an overlay places itself with: normalized picture coordinates to
+    /// view points, zoom and pan included.
+    ///
+    /// Built from the viewport's own `quadScale` and `visibleFraction` — the
+    /// two numbers the vertex shader is handed — so an overlay cannot disagree
+    /// with the picture about where the picture is.
+    private func pictureMap(in size: CGSize) -> CanvasLayout.PictureMap {
+        guard engine.imageWidth > 0, engine.imageHeight > 0, size.height > 0 else {
+            return CanvasLayout.PictureMap()
+        }
+        let imageAspect = CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight)
+        let viewAspect = size.width / size.height
+        return CanvasLayout.pictureMap(
+            quadScale: viewport.quadScale(imageAspect: imageAspect, viewAspect: viewAspect),
+            visible: viewport.visibleFraction(imageAspect: imageAspect, viewAspect: viewAspect),
+            center: viewport.center,
+            in: size)
     }
 
     private var hint: String {

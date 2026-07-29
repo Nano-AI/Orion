@@ -236,6 +236,50 @@ final class Engine {
     var maskRoundness: Float = 2   { didSet { pushAndRender() } }
     var localExposureEv: Float = 0 { didSet { pushAndRender() } }
 
+    /// The mask as the canvas overlay handles it.
+    ///
+    /// The overlay works in one struct because a drag moves several of these at
+    /// once — an endpoint sets the angle and the length together — and writing
+    /// them one at a time would push a render per field and, worse, leave the
+    /// mask briefly in a state that is neither where it was nor where it is
+    /// going. Setting it is one suspended batch and one render, the same shape
+    /// as `setCrop`.
+    ///
+    /// These are *displayed* coordinates. The engine puts them where
+    /// `develop:linear` can use them; the overlay never sees that transform.
+    var maskPlacement: CanvasLayout.MaskPlacement {
+        get {
+            CanvasLayout.MaskPlacement(
+                kind: Int(maskKind),
+                centre: CGPoint(x: CGFloat(maskCentreX), y: CGFloat(maskCentreY)),
+                angle: CGFloat(maskAngle),
+                length: CGFloat(maskLength),
+                radius: CGSize(width: CGFloat(maskRadiusX), height: CGFloat(maskRadiusY)),
+                feather: CGFloat(maskFeather),
+                roundness: CGFloat(maskRoundness),
+                invert: maskInvert)
+        }
+        set { setMask(newValue) }
+    }
+
+    /// Sets the mask's geometry in one push, so a drag is a single render
+    /// rather than five.
+    func setMask(_ m: CanvasLayout.MaskPlacement) {
+        guard isLoaded else { return }
+        suspended = true
+        maskCentreX  = Float(m.centre.x)
+        maskCentreY  = Float(m.centre.y)
+        maskAngle    = Float(m.angle)
+        maskLength   = Float(m.length)
+        maskRadiusX  = Float(m.radius.width)
+        maskRadiusY  = Float(m.radius.height)
+        suspended = false
+        pushAndRender()
+    }
+
+    /// One history entry when a mask drag finishes, rather than one per frame.
+    func commitMaskEdit() { history.record(state, label: "Mask") }
+
     /// Exposure fusion. A power on the emitted gain, so zero is exact.
     var fusion: Float = 0          { didSet { pushAndRender() } }
 
