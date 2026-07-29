@@ -236,6 +236,49 @@ final class Engine {
     var maskRoundness: Float = 2   { didSet { pushAndRender() } }
     var localExposureEv: Float = 0 { didSet { pushAndRender() } }
 
+    // ── The brush (mask kind 3) ───────────────────────────────────────────
+    var brushRadius: Float = 0.08   { didSet { pushAndRender() } }
+    var brushFlow: Float = 0.5      { didSet { pushAndRender() } }
+    var brushHardness: Float = 0.5  { didSet { pushAndRender() } }
+
+    /// The stroke, as normalized points on the displayed picture.
+    ///
+    /// Setting this pushes the points across the facade and bumps the revision,
+    /// which is the only thing the engine compares — it never walks the stroke
+    /// to find out whether it moved. Change the points without the revision and
+    /// the picture does not follow the hand, which is why the two are set
+    /// together here rather than being left to callers.
+    private(set) var brushRevision: UInt32 = 0
+    private(set) var brushStroke: [CGPoint] = []
+
+    func setBrushStroke(_ points: [CGPoint]) {
+        brushStroke = points
+        guard isLoaded, let handle else { return }
+
+        var xy = [Float]()
+        xy.reserveCapacity(points.count * 2)
+        for p in points {
+            xy.append(Float(p.x))
+            xy.append(Float(p.y))
+        }
+
+        // An empty stroke is a real state — it is what clearing the brush
+        // means — so pass the null the facade documents rather than a dangling
+        // pointer into an empty array.
+        let status: OrionStatus = xy.isEmpty
+            ? orion_engine_set_brush_stroke(handle, nil, 0)
+            : xy.withUnsafeBufferPointer {
+                  orion_engine_set_brush_stroke(handle, $0.baseAddress, Int32(points.count))
+              }
+        guard status == ORION_OK else { return }
+
+        brushRevision &+= 1
+        pushAndRender()
+    }
+
+    /// One history entry when a brush stroke finishes, rather than one per dab.
+    func commitBrushEdit() { history.record(state, label: "Brush") }
+
     /// The mask as the canvas overlay handles it.
     ///
     /// The overlay works in one struct because a drag moves several of these at
@@ -762,6 +805,8 @@ final class Engine {
             mask_radius_x: maskRadiusX, mask_radius_y: maskRadiusY,
             mask_feather: maskFeather, mask_roundness: maskRoundness,
             local_exposure_ev: localExposureEv,
+            brush_radius: brushRadius, brush_flow: brushFlow,
+            brush_hardness: brushHardness, brush_revision: brushRevision,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,

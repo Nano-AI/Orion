@@ -64,6 +64,8 @@ enum ViewportTests {
         testMaskDragStaysInSliderRange()
         testMaskHitPrefersHandlesOverBody()
         testMaskAnglesAreNormalizedNotScreen()
+        testBrushDabsAreEvenlySpaced()
+        testBrushSpacingSurvivesTheEventRate()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures
@@ -1487,6 +1489,117 @@ enum ViewportTests {
         for image in [landscape, portrait, 1.0] as [CGFloat] {
             near(screenAngle(image, 0), 0, 1e-9, "0 is 0 at any aspect (\(image))")
         }
+    }
+
+    // MARK: Brush strokes
+
+    /// Dabs land a fixed distance apart along the stroke.
+    ///
+    /// The spacing is what decides whether a stroke reads as a line or as a
+    /// string of beads, so it is checked as an actual distance between
+    /// consecutive dabs rather than as a count — a count is satisfied by dabs
+    /// bunched at one end.
+    static func testBrushDabsAreEvenlySpaced() {
+        for radius in [0.02, 0.08, 0.3] as [CGFloat] {
+            var carry: CGFloat = 0
+            let a = CGPoint(x: 0.1, y: 0.2), b = CGPoint(x: 0.9, y: 0.75)
+            let dabs = CanvasLayout.brushDabs(from: a, to: b, radius: radius,
+                                              carry: &carry)
+            let step = radius * CanvasLayout.brushSpacing
+            report(!dabs.isEmpty, "a long drag lays dabs (radius \(radius))")
+
+            // Consecutive gaps, including from the segment's start.
+            var prev = a
+            var worst: CGFloat = 0
+            for (i, d) in dabs.enumerated() {
+                let gap = hypot(d.x - prev.x, d.y - prev.y)
+                // The first gap is a full step because carry started at zero.
+                worst = max(worst, abs(gap - step))
+                prev = d
+                _ = i
+            }
+            near(worst, 0, 1e-9, "dabs are one step apart (radius \(radius))")
+
+            // Every dab is on the segment, not near it.
+            var offLine: CGFloat = 0
+            let dx = b.x - a.x, dy = b.y - a.y
+            let len = hypot(dx, dy)
+            for d in dabs {
+                let cross = abs((d.x - a.x) * dy - (d.y - a.y) * dx) / len
+                offLine = max(offLine, cross)
+            }
+            near(offLine, 0, 1e-9, "dabs lie on the drag (radius \(radius))")
+
+            // A tighter brush must lay more paint over the same distance.
+            report(dabs.count == Int(len / step),
+                   "the dab count is the distance over the step (radius \(radius))",
+                   "\(dabs.count) vs \(Int(len / step))")
+        }
+
+        // A drag that does not move lays nothing, or resting the pointer would
+        // pile dabs on one spot and burn a hole through the flow ramp.
+        var carry: CGFloat = 0
+        let still = CanvasLayout.brushDabs(from: CGPoint(x: 0.5, y: 0.5),
+                                           to: CGPoint(x: 0.5, y: 0.5),
+                                           radius: 0.1, carry: &carry)
+        report(still.isEmpty, "a stationary pointer lays no paint")
+    }
+
+    /// The same stroke drawn with different event rates must lay the same dabs.
+    ///
+    /// This is the one that matters and the one a naive implementation fails: a
+    /// pointer reports a handful of positions a second, so a fast hand jumps a
+    /// long way between two events. Stamping once per event draws a dotted
+    /// line, and restarting the spacing at every event clusters dabs wherever
+    /// the hand slowed down — which is exactly at the corners of a gesture,
+    /// where the extra paint is most visible.
+    ///
+    /// `carry` is what makes the two agree, so the test feeds one straight line
+    /// through a coarse event stream and a fine one and demands the same dabs.
+    static func testBrushSpacingSurvivesTheEventRate() {
+        let a = CGPoint(x: 0.05, y: 0.5), b = CGPoint(x: 0.95, y: 0.5)
+        let radius: CGFloat = 0.05
+
+        func walk(steps: Int) -> [CGPoint] {
+            var carry: CGFloat = 0
+            var out: [CGPoint] = []
+            var prev = a
+            for i in 1...steps {
+                let f = CGFloat(i) / CGFloat(steps)
+                let p = CGPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f)
+                out += CanvasLayout.brushDabs(from: prev, to: p, radius: radius,
+                                              carry: &carry)
+                prev = p
+            }
+            return out
+        }
+
+        let coarse = walk(steps: 3)     // a fast hand
+        let fine   = walk(steps: 60)    // a slow one over the same path
+
+        report(coarse.count == fine.count,
+               "event rate does not change how much paint a stroke lays",
+               "\(coarse.count) dabs vs \(fine.count)")
+
+        if coarse.count == fine.count {
+            var worst: CGFloat = 0
+            for (p, q) in zip(coarse, fine) {
+                worst = max(worst, hypot(p.x - q.x, p.y - q.y))
+            }
+            near(worst, 0, 1e-9, "and the dabs land in the same places")
+        }
+
+        // And the spacing holds across the event boundaries, which is the
+        // property `carry` exists for. Measured over the coarse stream, where
+        // the boundaries are furthest apart.
+        var prev = a
+        var worstGap: CGFloat = 0
+        for d in coarse {
+            worstGap = max(worstGap, abs(hypot(d.x - prev.x, d.y - prev.y)
+                                         - radius * CanvasLayout.brushSpacing))
+            prev = d
+        }
+        near(worstGap, 0, 1e-9, "spacing is continuous across events")
     }
 }
 

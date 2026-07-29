@@ -127,7 +127,7 @@ typedef struct OrionAdjustments {
      * Both mask kinds share a centre and an angle. The alpha scales the
      * *parameter*, so coverage 0.5 with a one-stop local exposure is 2^0.5 —
      * not a blend of two rendered frames. */
-    int   mask_kind;        /* 0 none, 1 linear, 2 radial */
+    int   mask_kind;        /* 0 none, 1 linear, 2 radial, 3 brush */
     int   mask_invert;
     float mask_centre_x, mask_centre_y;
     float mask_angle;       /* radians */
@@ -136,6 +136,19 @@ typedef struct OrionAdjustments {
     float mask_feather;     /* 0..1 */
     float mask_roundness;   /* 2 is an ellipse */
     float local_exposure_ev;
+
+    /* The brush, when mask_kind is 3. One radius for the whole stroke, which is
+     * what makes a stroke a list of centres and nothing else.
+     *
+     * The centres are not here — they are variable-length, and this struct is
+     * compared field by field on every slider tick. Set them with
+     * orion_engine_set_brush_stroke and bump brush_revision, which is what
+     * tells the engine the stroke is stale. Change the points without changing
+     * the revision and the picture will not follow the hand. */
+    float brush_radius;     /* normalized */
+    float brush_flow;       /* 0..1 per dab */
+    float brush_hardness;   /* 0 soft, 1 hard-edged */
+    unsigned brush_revision;
 
     /* Single-image exposure fusion, 0..1 — shadow lift that keeps local
      * contrast. The value is a power applied to the emitted gain, so zero is
@@ -171,6 +184,22 @@ typedef struct OrionAdjustments {
 
 /* Opens a raw file and builds the develop pipeline for it. */
 OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path);
+
+/* Replaces the brush stroke. `xy` is `count` interleaved x, y pairs in
+ * normalized coordinates of the displayed picture — the same space the gradient
+ * masks are placed in, so the engine puts them where develop:linear can use
+ * them and the caller never sees that transform.
+ *
+ * The points are copied, so the caller's buffer need not outlive the call.
+ * Passing NULL or count <= 0 clears the stroke.
+ *
+ * This does not itself dirty anything: bump OrionAdjustments.brush_revision and
+ * push the adjustments, which is what makes the change visible. Two calls are
+ * deliberate — a drag sets the stroke once per frame and the revision is what
+ * the engine compares, so the stroke never has to be walked to decide whether
+ * it moved. */
+OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine,
+                                          const float* xy, int count);
 
 /* The camera's own white balance, so the UI can open on "as shot". Only the
  * temperature and tint fields are filled; the rest are zeroed. */

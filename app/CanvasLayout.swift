@@ -569,4 +569,62 @@ enum CanvasLayout {
     private static func clamp(_ v: CGFloat, _ r: ClosedRange<CGFloat>) -> CGFloat {
         min(max(v, r.lowerBound), r.upperBound)
     }
+
+    // MARK: Brush strokes
+
+    /// How far apart dabs are laid, as a fraction of the brush radius.
+    ///
+    /// A stroke is a row of stamps, so the spacing is what decides whether it
+    /// reads as a line or as a string of beads. A quarter of the radius is the
+    /// usual figure in paint engines and it is comfortably inside the point
+    /// where the scalloping on the edge of a stroke becomes visible.
+    static let brushSpacing: CGFloat = 0.25
+
+    /// The dab centres a drag from `a` to `b` should add, given what the stroke
+    /// already ends with.
+    ///
+    /// A pointer delivers a handful of positions a second and a fast hand moves
+    /// a long way between two of them, so stamping once per event draws a
+    /// dotted line. This walks the segment at a fixed spacing instead, which is
+    /// what makes a quick stroke and a slow one lay down the same paint.
+    ///
+    /// `carry` is the distance left over from the previous segment, so spacing
+    /// is continuous across the whole stroke rather than restarting at every
+    /// event — restarting is what clusters dabs at the corners of a gesture.
+    static func brushDabs(from a: CGPoint, to b: CGPoint, radius: CGFloat,
+                          carry: inout CGFloat) -> [CGPoint] {
+        let step = max(radius * brushSpacing, 1e-4)
+        let dx = b.x - a.x, dy = b.y - a.y
+        let length = hypot(dx, dy)
+
+        guard length > 1e-9 else { return [] }
+
+        var out: [CGPoint] = []
+        // Distance along this segment at which the next dab falls.
+        var t = step - carry
+        while t <= length {
+            let f = t / length
+            out.append(CGPoint(x: a.x + dx * f, y: a.y + dy * f))
+            t += step
+        }
+        carry = length - (t - step)
+        return out
+    }
+
+    /// The brush's outline on screen: a circle in *normalized* coordinates, so
+    /// on a picture that is not square it is drawn as an ellipse — because that
+    /// is the shape the kernel actually stamps. `mask_brush.slang` measures its
+    /// distance in normalized space, exactly as the gradients do.
+    static func brushCursor(at unit: CGPoint, radius: CGFloat,
+                            _ map: PictureMap, samples: Int = 64) -> [CGPoint] {
+        guard samples >= 3, radius > 0 else { return [] }
+        var out: [CGPoint] = []
+        out.reserveCapacity(samples)
+        for i in 0..<samples {
+            let t = CGFloat(i) / CGFloat(samples) * 2 * .pi
+            out.append(map.point(CGPoint(x: unit.x + cos(t) * radius,
+                                         y: unit.y + sin(t) * radius)))
+        }
+        return out
+    }
 }

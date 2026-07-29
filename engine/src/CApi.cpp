@@ -190,6 +190,10 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.maskFeather     = adj->mask_feather;
     a.maskRoundness   = adj->mask_roundness;
     a.localExposureEv = adj->local_exposure_ev;
+    a.brushRadius     = adj->brush_radius;
+    a.brushFlow       = adj->brush_flow;
+    a.brushHardness   = adj->brush_hardness;
+    a.brushRevision   = adj->brush_revision;
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;
     a.lutStrength     = adj->lut_strength;
@@ -211,6 +215,17 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
     return guard(engine, [&]() -> OrionStatus {
         orion::pipe::Adjustments a = toAdjustments(engine, adj);
         engine->impl.setAdjustments(a);
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine,
+                                          const float* xy, int count) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    // A null buffer with a positive count is a caller bug, not an empty stroke.
+    if (xy == nullptr && count > 0) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        engine->impl.developMutable().setBrushStroke(xy, count);
         return ORION_OK;
     });
 }
