@@ -35,6 +35,8 @@ support what it is attached to.
 | [`local-laplacian.md`](local-laplacian.md) | Clarity — Paris et al. 2011, and Aubry et al.'s fast approximation |
 | [`dehaze.md`](dehaze.md) | The dark channel prior, and the guided filter as its refinement |
 | [`luts.md`](luts.md) | `.cube` files and tetrahedral interpolation |
+| [`exposure-fusion.md`](exposure-fusion.md) | Shadow lift that keeps local contrast — Mertens; Hessel & Morel |
+| [`auto-enhance.md`](auto-enhance.md) | Percentile auto-levels, and what has no published target |
 | [`color-grading.md`](color-grading.md) | Three-way grading wheels, as ASC CDL per tonal zone |
 | [`detail.md`](detail.md) | Sharpening and denoising |
 | [`lens-corrections.md`](lens-corrections.md) | Distortion, TCA and vignetting; the vendored lensfun database |

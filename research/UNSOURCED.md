@@ -314,3 +314,38 @@ at zero. Reasoned, not sourced.
 
 **Also unspecified by any paper:** the epsilon guarding the weight
 normalisation, whose denominator can reach zero.
+
+## 14. Auto-enhance — the percentage, the target, and the taste
+
+**Where:** `pipe/AutoEnhance.h`. Argued in `research/auto-enhance.md`.
+
+The statistic is sourced (Simplest Color Balance, IPOL 2011, §3.1), as is
+working on luminance rather than per channel (§4.1), the cap on how hard to
+push (Lisani, Petro & Sbert, IPOL 2012, `smax = 2`), and the mid-grey anchor
+(CIPA DC-004:2004 §2.3(3), `MAX × 0.461`). These four are not.
+
+**The clipped percentage — 0.5% per side — is an inference.** Simplest Color
+Balance recommends no value: §7 says only that "some saturation is almost always
+necessary, but that the needed percentage is variable", and its reference
+implementation takes the levels as mandatory arguments with no default. What
+supports 0.5% is that its figure captions call s = 1% total "optimal" and
+"moderate", and §7 fixes the split half and half. That is a reading of examples,
+not a recommendation, and it is recorded as one.
+
+**That a photograph's median should sit at mid grey is an extrapolation.**
+CIPA DC-004 defines `MAX × 0.461` for a uniform 18% reflectance card under
+controlled lighting. Applying it to the median of a pictorial image is a step
+the standard does not take — and the standard explicitly calls its own value
+conventional: "there is no single and absolute point of definition as long as
+the tone is in the middle range; therefore, it becomes necessary to select some
+value." **No published value for the mean or median luminance of a well-exposed
+photograph was found**, and one was looked for.
+
+**How much clarity to apply is taste.** There is no measurable target for it. It
+is a fixed modest default, visible as a slider the moment auto-enhance runs, so
+disagreeing with it costs one drag.
+
+**Dehaze is deliberately not set.** Deciding whether a frame is hazy needs the
+dark-channel statistic, which the auto path does not compute, and applying
+dehaze to a haze-free frame is precisely the case He, Sun & Tang document the
+prior getting wrong.
