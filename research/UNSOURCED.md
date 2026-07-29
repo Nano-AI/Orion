@@ -379,3 +379,39 @@ disagreeing with it costs one drag.
 dark-channel statistic, which the auto path does not compute, and applying
 dehaze to a haze-free frame is precisely the case He, Sun & Tang document the
 prior getting wrong.
+
+
+## 16. As-shot white balance does not round-trip — an open defect
+
+**Where:** `pipe/WhiteBalance.cpp`, `estimateFrom`. Found 2026-07-29 by a test
+written while replacing the tint axis, and **not** fixed.
+
+Feed `multipliersFor` a temperature and tint, hand the resulting multipliers
+back to `estimateFrom`, and it does not recover them. Measured against a
+hypothetical camera whose responses are XYZ, over 2800–9000 K and tint −0.4…0.3:
+
+| | error |
+|---|---|
+| multipliers | **0.026**, about 2.6% |
+| temperature | 120 K |
+| tint | 0.050 |
+
+**Improved, not solved.** The original searched temperature with tint pinned at
+zero and *then* searched tint, which cannot work — tint displaces the white
+point along the isotemperature line, moving the very red/blue ratio the
+temperature stage matches on. That version was **845 K** out. Alternating the
+two axes does not fix it either, and that is worth recording: the error surface
+is a curved valley and coordinate descent zigzags along it. A joint
+two-dimensional search brought it to 120 K, which is where it stands.
+
+**Why it is not float noise and does matter.** 2.6% on a multiplier is a visible
+colour shift. The consequence is that a file's white balance is not perfectly
+idempotent: what the camera reported and what Orion re-derives from it differ
+slightly. In practice the as-shot estimate runs once at open and the user's own
+temperature and tint are stored in the sidecar, so nothing drifts on repeated
+saves — but the number Orion shows for "as shot" is not exactly the camera's.
+
+**What has not been ruled out:** that the forward map has genuine multimodality
+over the search range, in which case no search recovers the parameters and the
+right fix is to store the multipliers rather than re-derive them. The test
+asserts the current figure so a regression trips it, and prints it every run.

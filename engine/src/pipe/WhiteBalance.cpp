@@ -164,33 +164,44 @@ WhiteBalance estimateFrom(const std::array<float, 3>& camMul, const float xyzToC
     const float g = (camMul[1] != 0.0f) ? camMul[1] : 1.0f;
     const std::array<float, 3> target{camMul[0] / g, 1.0f, camMul[2] / g};
 
-    auto errorAt = [&](float cct) {
-        const auto m = multipliersFor({cct, 0.0f}, xyzToCam);
+    // A two-dimensional search, coarse then fine.
+    //
+    // ⚠️ This used to solve temperature with tint pinned at zero and *then*
+    // solve tint. That cannot work: tint displaces the white point along the
+    // isotemperature line, which moves the red/blue ratio the temperature stage
+    // matches on — so a frame shot under a green-ish light came back with a
+    // temperature wrong by up to a thousand Kelvin and a tint that could not
+    // make up the difference.
+    //
+    // Alternating between the two axes does not fix it either, and that is
+    // worth recording: the error surface is a curved valley, so coordinate
+    // descent zigzags along it and stalls. Searching both axes together is the
+    // only thing that actually works. It runs once per file — a few thousand
+    // evaluations of a table walk and a 3×3 multiply is nothing.
+    const auto errorAt = [&](float cct, float tint) {
+        const auto m = multipliersFor({cct, tint}, xyzToCam);
         const float dr = std::log(std::max(m[0], 1e-6f)) - std::log(std::max(target[0], 1e-6f));
         const float db = std::log(std::max(m[2], 1e-6f)) - std::log(std::max(target[2], 1e-6f));
         return dr * dr + db * db;
     };
 
-    float best = 5500.0f, bestErr = errorAt(best);
-    for (float cct = 2000.0f; cct <= 15000.0f; cct += 100.0f) {
-        const float e = errorAt(cct);
-        if (e < bestErr) { bestErr = e; best = cct; }
-    }
-    for (float cct = best - 100.0f; cct <= best + 100.0f; cct += 5.0f) {
-        const float e = errorAt(cct);
-        if (e < bestErr) { bestErr = e; best = cct; }
+    float best = 5500.0f, tint = 0.0f;
+    float bestErr = errorAt(best, tint);
+
+    for (float cct = 2000.0f; cct <= 15000.0f; cct += 250.0f) {
+        for (float t = -1.0f; t <= 1.0f; t += 0.05f) {
+            const float e = errorAt(cct, t);
+            if (e < bestErr) { bestErr = e; best = cct; tint = t; }
+        }
     }
 
-    // Tint is whatever green offset is still needed once temperature is fixed.
-    const auto atBest = multipliersFor({best, 0.0f}, xyzToCam);
-    float tint = 0.0f, tintErr = 1e30f;
-    for (float t = -1.0f; t <= 1.0f; t += 0.01f) {
-        const auto m = multipliersFor({best, t}, xyzToCam);
-        const float dr = m[0] - target[0], db = m[2] - target[2];
-        const float e = dr * dr + db * db;
-        if (e < tintErr) { tintErr = e; tint = t; }
+    const float coarseCct = best, coarseTint = tint;
+    for (float cct = coarseCct - 250.0f; cct <= coarseCct + 250.0f; cct += 5.0f) {
+        for (float t = coarseTint - 0.05f; t <= coarseTint + 0.05f; t += 0.002f) {
+            const float e = errorAt(cct, std::clamp(t, -1.0f, 1.0f));
+            if (e < bestErr) { bestErr = e; best = cct; tint = std::clamp(t, -1.0f, 1.0f); }
+        }
     }
-    (void)atBest;
 
     return {best, tint};
 }

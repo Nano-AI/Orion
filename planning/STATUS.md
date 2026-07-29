@@ -14,6 +14,64 @@ is still 108 ms and has been profiled: there is no hotspot in it**, so the fix
 is a different algorithm rather than a better arrangement of this one — written
 up in `research/dehaze.md`, not attempted.
 
+## Session 2026-07-29g — outside research, acted on
+
+The developer had a second session research the unsourced register. Four
+correctness fixes came out of it, and one new defect was found on the way.
+
+**White balance tint was wrong three ways** — wrong space (the offset belongs in
+CIE 1960 UCS, not the non-uniform 1931 plane), wrong direction (it runs along
+the isotemperature line, whose slope turns with temperature), wrong scale. Now
+implements Adobe's `dng_temperature::Get_xy_coord` with Robertson's 31-row
+table. **Thirteen of Adobe's own (temperature, tint) → xy vectors assert to
+2 × 10⁻⁵.** `research/color-pipeline.md`.
+
+⚠️ **A typo is kept deliberately.** Row r = 325 ships u = 0.24702 in the DNG
+SDK; recomputing the locus from Planck's law gives 0.247924, and the error there
+is two hundred times any other row's — a genuine mistake in Wyszecki & Stiles,
+copied verbatim by Adobe. Orion keeps it, because the point is agreeing with
+Lightroom rather than with physics. Correcting it moves the white point 0.0011
+in xy around 3080 K: about 23 K and 1.1 tint units, below visibility on its own
+and squarely in tungsten territory when compared.
+
+⚠️ **D65 does not sit at tint 0** — it lands near +9.77, being on the daylight
+locus rather than the Planckian one. Illuminant A, which *is* a Planckian
+radiator at 2856 K, reads 0.008. A test asserting `tint(D65) = 0` would be the
+wrong test.
+
+**Exposure fusion solves for its image count** rather than using a hardcoded
+five. The subtlety: the edges are *input* intensities, so the exposure factor is
+inverted, not applied. The paper's own table settles the reading — at α = 8 it
+reports N = 6, 4, 3 for β = 0.4, 0.5, 0.6, and this reproduces all three.
+
+**Vignetting interpolates across aperture, in the reciprocal**, as lensfun does.
+The old nearest-stop behaviour rendered every aperture between two calibrated
+stops identically and then jumped.
+
+**Two claims of Orion's own were corrected rather than defended.** The HueSatMap
+blue twist is a *look*, not a per-camera correction — it was fitted against two
+already-rendered images, both carrying their makers' looks. And the tone bands
+were measured: there is no partition-of-unity dip, because `applyTone`
+normalises, but at middle grey Shadows and Highlights hold **half the authority
+each**, so Shadows +1 moves middle grey +0.99 EV. Not changed, because sidecars
+store slider values and moving the centres would silently re-render every edit
+already made — a migration decision, not a tuning one.
+
+### ⚠️ And one defect found, improved, not solved
+
+**As-shot white balance does not round-trip.** Written as a test while changing
+the locus, because changing it alters what every file opens at and nothing was
+checking that. Feeding `multipliersFor` a temperature and tint and handing the
+result to `estimateFrom` recovers the multipliers to **0.026 — about 2.6%**,
+which is a visible colour shift and not float noise.
+
+The original search was **845 K** out: it solved temperature with tint pinned at
+zero and then solved tint, which cannot work. Alternating the axes does not fix
+it either — the error surface is a curved valley and coordinate descent zigzags.
+A joint two-dimensional search reaches 120 K. **That is where it stands, and it
+is recorded as an open defect in `UNSOURCED.md` §16 rather than smoothed over.**
+The test asserts the current figure so a regression trips it.
+
 ## Session 2026-07-29f — dehaze profiled, and deliberately not optimised
 
 The bench's per-node profiler now points at any control, not just clarity. What

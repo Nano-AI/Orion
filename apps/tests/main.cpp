@@ -114,6 +114,72 @@ void testPlanckianLocus() {
     report(worst < 2e-5, "the white point matches Adobe's Get_xy_coord",
            "worst " + std::to_string(worst));
 
+    // The as-shot estimate sweeps this same locus backwards — it searches for
+    // the temperature whose multipliers match what the camera reported. Changing
+    // the locus therefore changes what every file opens at, and nothing was
+    // checking that the two directions still agree.
+    {
+        // The identity: a hypothetical camera whose responses are XYZ. Chosen
+        // deliberately over a real matrix — XYZ-to-sRGB carries large negative
+        // entries, so a tinted white point drives a "camera" response negative,
+        // the log-error clamps it, and the error surface goes flat. That
+        // measures the matrix's conditioning, not the estimator's search, which
+        // is what this test is about.
+        const float xyzToCam[9] = {1.0f, 0.0f, 0.0f,
+                                   0.0f, 1.0f, 0.0f,
+                                   0.0f, 0.0f, 1.0f};
+
+        double worstK = 0.0, worstTint = 0.0, worstMul = 0.0;
+        for (const float kelvin : {2800.0f, 4000.0f, 5500.0f, 6500.0f, 9000.0f}) {
+            for (const float tint : {-0.4f, 0.0f, 0.3f}) {
+                const auto mul = orion::pipe::multipliersFor({kelvin, tint}, xyzToCam);
+                const auto back = orion::pipe::estimateFrom(mul, xyzToCam);
+                const auto again = orion::pipe::multipliersFor(back, xyzToCam);
+
+                worstK = std::max(worstK,
+                                  std::abs(double(back.temperatureK) - double(kelvin)));
+                worstTint = std::max(worstTint, std::abs(double(back.tint) - double(tint)));
+                for (int c = 0; c < 3; ++c) {
+                    worstMul = std::max(worstMul, std::abs(double(again[c]) - double(mul[c])));
+                }
+            }
+        }
+        std::printf("  as-shot round trip: %.3f in the multipliers, "
+                    "%.0f K / %.3f tint in the parameters\n",
+                    worstMul, worstK, worstTint);
+
+        // **The multipliers are what the assertion is on, not the parameters.**
+        //
+        // The error surface along the locus is a shallow valley: a white point
+        // reached at 6500 K with one tint is very nearly the white point
+        // reached a hundred Kelvin away with a slightly different tint, and
+        // which one a search lands on is decided by float noise. The parameters
+        // are therefore not recoverable to better than about a hundred Kelvin,
+        // and demanding that they are would be demanding something untrue of
+        // the problem rather than of the code.
+        //
+        // What has to hold is that the estimate *renders the same* — that
+        // opening a file and re-deriving its white balance does not change a
+        // pixel. That is what a photographer would notice, and it is tight.
+        // ⚠️ **This threshold documents a known gap, it does not endorse it.**
+        // 0.026 on a multiplier is about 2.6%, which is not float noise and not
+        // good enough — a file should reopen at the white balance it was saved
+        // with. Replacing the old temperature-then-tint search with a joint
+        // two-dimensional one took the parameter error from 845 K to 120 K, so
+        // this is a real improvement over what shipped, but the search is still
+        // landing off the true minimum and the reason is not yet understood.
+        //
+        // The threshold is set at what is currently achieved so that any
+        // regression trips it, and the number prints on every run. See
+        // research/UNSOURCED.md.
+        report(worstMul < 0.03,
+               "the as-shot estimate reproduces its multipliers (KNOWN GAP: 0.026)",
+               "worst " + std::to_string(worstMul));
+        report(worstK < 200.0 && worstTint < 0.06,
+               "and lands in the right neighbourhood of the parameters",
+               std::to_string(worstK) + " K, " + std::to_string(worstTint) + " tint");
+    }
+
     // Tint runs along the isotemperature line, so its direction turns with
     // temperature. If it were a fixed axis — which the old code assumed — the
     // displacement would point the same way at every Kelvin.
