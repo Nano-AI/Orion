@@ -4,14 +4,131 @@
 
 ---
 
-**Last updated:** 2026-07-28 (M2 close-out session)
-**Phase:** M0 done. M1 ~98%. **M2 complete** — every roadmap item built and
-measured. Awaiting the developer's quality pass before M3 starts.
-**Next story:** M3 — local Laplacian clarity, then dehaze.
+**Last updated:** 2026-07-28 (M3 opened — local Laplacian clarity)
+**Phase:** M0 done. M1 ~98%. M2 complete. **M3 in progress** — clarity built and
+measured; dehaze, LUTs, exposure fusion and auto-enhance still to come.
+**Next story:** dehaze (dark channel prior), which reuses the guided filter
+already in the graph as its transmission refinement.
 
-**Suites:** `orion-tests` **285 checks** · `orion-viewport-tests` **2088
+**Suites:** `orion-tests` **297 checks** · `orion-viewport-tests` **2088
 checks** · both 0 failures. `orion-bench` exits 0 on all three sample frames;
-the M0 gate passes on all three at 9.23 / 9.95 / 9.57 ms p95.
+the M0 gate passes on all three at 10.61 / 10.18 / 9.79 ms p95.
+
+## Session 2026-07-28d — M3 story 1, local Laplacian clarity
+
+`research/local-laplacian.md` is the plan of record and carries the working;
+this is what happened.
+
+### The measurement that set the design
+
+Paris, Hasinoff & Kautz (SIGGRAPH 2011) with Aubry et al.'s fast approximation
+(ACM TOG 33(5), 2014). Aubry recommend sampling the intensity range **every
+standard deviation σ** — eight γ levels here, which is what got built first.
+
+Then it was measured against Paris et al.'s exact Algorithm 1, implemented
+literally in `pipe/LocalLaplacian.h` — one full pyramid per output coefficient,
+no approximation of any kind — at the strongest setting the slider reaches:
+
+| samples per σ | γ levels | mean error | max error | PSNR |
+|---|---|---|---|---|
+| 1.0 | 8 | 0.354 EV | 1.359 EV | **28.0 dB** |
+| 2.1 | **16** | 0.151 EV | 0.696 EV | **35.6 dB** |
+| 4.4 | 32 | 0.159 EV | 0.408 EV | — |
+
+The paper's own stated accuracy is "above 30 dB", and one sample per σ does not
+reach it. Two do; four buy nothing, and **that plateau is the informative
+part** — it says what is left is the linear interpolation standing in for a
+sinc reconstruction, which no amount of extra γ levels can fix. Sixteen is a
+measured knee. σr is now a constant in its own right instead of an alias for
+the γ step.
+
+Milder settings never needed it: α = 0.5 measures 42.0 dB, α = 4 measures 49.0.
+It is the strongest boost that sets the requirement, which is what the Nyquist
+argument in the paper predicts.
+
+### Two references, because one number cannot diagnose
+
+"The GPU disagrees with the paper" has two causes that want opposite fixes. So
+there are two CPU references, and the checks are separate:
+
+- **`referenceFast`** runs the *same* approximation on the CPU. A gap between it
+  and the GPU is a bug in a kernel. Worst disagreement across all three slider
+  settings is under 5e-3 — the shaders run Aubry's algorithm.
+- **`reference`** runs Paris's exact algorithm. A gap between it and
+  `referenceFast` is the approximation being an approximation, and it has to
+  shrink as γ levels grow. It does, until it plateaus.
+
+Also pinned: **α = 1 collapses back to the input** to 2e-3. With `fd(Δ) = Δ` the
+remapping is exactly the identity, so the whole chain reduces to "analyse into a
+Laplacian pyramid, collapse it again". Every other check here would still pass
+with a subtly wrong expand operator, because both sides would share the mistake.
+That one would not.
+
+### What is in that the paper says must be
+
+**The noise term.** §5.2, *Reducing Noise Amplification*: when α < 1,
+`fd(Δ) = τΔ^α + (1−τ)Δ`, τ a smooth step over 1%…2% of the range. The paper
+states every result in it was computed with that function. It matters because
+the α < 1 branch has unbounded slope at the origin — without the term, the
+lowest-amplitude signal in the frame receives the largest gain of anything in
+the picture, and on a photograph that is the noise.
+
+**Luminance only, ratios kept** (§5.3, Figure 9). Filtering the channels
+separately also boosts *colour* contrast, which for a clarity slider means
+fighting the grading wheels.
+
+### Placement, and why the gate did not move
+
+Before the tone controls, next to the guided filter, for the guided filter's own
+reason: exposure is a multiply, so in log2 it is an additive constant, and the
+Laplacian of a constant offset is zero. Clarity computed before exposure is
+therefore *bit for bit* what computing it after would give, while all thirty-two
+of its nodes stay cached for the slider people actually drag.
+
+**M0 gate: 10.61 / 10.18 / 9.79 ms p95** on the three frames, exposure drag still
+three nodes. Clarity at zero disables the whole chain and a disabled node
+resolves to its first input, so it costs nothing when unused.
+
+### ⚠️ A clarity drag is 70 ms, and the profile says where
+
+Correct, not yet interactive. `Pipeline::setProfiling` now times each node in its
+own command buffer and `orion-bench` prints the ranking every run:
+
+| Node | ms | share |
+|---|---|---|
+| `clarity:remap 1.0` | 12.07 | 16% |
+| `clarity:collapse 0` | 12.01 | 16% |
+| `clarity:remap 1.1` | 8.47 | 11% |
+| `clarity:remap 1.2/1.3` | 7.46 each | 20% |
+
+The four remap nodes are 47% between them: each remaps a 5×5 footprint for four
+γ at once, a hundred remappings per output pixel.
+
+**That tool exists because a hunch was wrong first.** The collapse kernels read
+all four packed stacks at all nine expansion taps while only two of sixteen γ
+are ever used, so they were rewritten to fetch only what a pixel needs. Output
+was bit-identical and it ran **slower — 78.9 ms against 71.6** — the branch
+diverges more than the saved fetches were worth. Reverted, profiler written, and
+it pointed at a different kernel.
+
+Next, in order: separable halving in threadgroup memory (25 taps → 10, and the
+remapping count falls with it), then measuring whether a full-resolution remap
+into its own texture is a win or a wash. Neither changes the filter, so the
+reference tests cover both.
+
+### Also this session
+
+- Intermediates **4027 → 4567 MiB**. The number to watch on a lesser GPU.
+- `PixelFormat::R16Float` added — the pyramids are normalized into [0, 1], where
+  a half-float quantum is 0.006 EV, an order of magnitude under the noise floor
+  τ already declines to amplify.
+- Bench probes `clarity +1` and `clarity -1` on the `Detail` metric, floors at
+  half the smallest ratio over all three frames. Mean luma is the wrong
+  instrument for a local-contrast filter, as it was for sharpening.
+- **Texture is not built.** Paris §5.2 and Figure 7d/e specify it as the same
+  filter restricted to fine pyramid levels, and §5.2 explicitly licenses
+  interpolating between level subsets for a continuous control. It needs a
+  second set of pyramids at its own α; the mechanism is written up.
 
 ## Session 2026-07-28c — closing M2
 

@@ -44,6 +44,9 @@ struct Node {
 struct NodeTiming {
     std::string name;
     bool        executed = false;   // false when the cache served it
+    /// GPU milliseconds for this node alone. Zero unless profiling is on —
+    /// see `setProfiling`.
+    double      ms = 0.0;
 };
 
 class Pipeline {
@@ -97,6 +100,16 @@ public:
     /// reads it.
     void updateAux(int auxId, const void* data, std::size_t bytesPerRow);
 
+    /// Times every node separately instead of batching them.
+    ///
+    /// One command buffer per node, so `lastRun()` carries real per-node
+    /// milliseconds. That serializes the queue and adds a submission per node,
+    /// so the total is *not* comparable to a normal render — this answers
+    /// "which node is expensive", not "how long does a frame take". It exists
+    /// because the alternative is guessing, and guessing cost an afternoon
+    /// optimizing the wrong kernel.
+    void setProfiling(bool on) noexcept { profiling_ = on; }
+
     /// Executes every dirty node in one command buffer.
     /// Returns the GPU-side duration in milliseconds.
     double render();
@@ -136,6 +149,7 @@ private:
     std::unique_ptr<gpu::Texture> source_;
     std::uint32_t width_ = 0, height_ = 0;
     bool compiled_ = false;
+    bool profiling_ = false;
 
     std::vector<NodeTiming> lastRun_;
 };

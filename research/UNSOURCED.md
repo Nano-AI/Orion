@@ -205,3 +205,25 @@ not questionable implementations:
 **Struck 2026-07-28, all four now built:** highlight reconstruction, noise
 reduction, lens corrections, 16-bit export. **Struck 2026-07-28b:** the lens
 database, and the camera profile beyond the 3×3.
+
+## 10. Clarity's slider-to-alpha mapping
+
+**Where:** `pipe/LocalLaplacian.h`, `alphaForClarity`.
+
+`alpha = 2^(-2 * clarity)`, so the slider's endpoints land on 0.25 and 4.
+
+**Published:** the exponent itself, and both endpoint values. Paris, Hasinoff &
+Kautz (SIGGRAPH 2011) section 5.2 defines `fd(D) = D^alpha` with alpha < 1
+increasing detail contrast and alpha > 1 smoothing it; Figure 7b illustrates
+alpha = 4 and Figure 7c alpha = 0.25. See `research/local-laplacian.md`.
+
+**Ours:** that the curve *between* the endpoints is exponential in the slider
+rather than some other monotone interpolation. Exponential means equal slider
+travel is equal ratio in alpha, which is the same reasoning every other control
+in the pipeline uses for a multiplicative parameter — but it is a choice, not a
+finding, and nothing has been measured against a reference for the midpoints.
+
+**Also ours:** the twelve-stop window (-10 to +2 EV) the luminance is normalized
+over, and `kMaxCorrectionEv`. The window sets what `sigmaR` and the noise
+thresholds mean in stops, so it is not cosmetic — a different window is a
+different filter.

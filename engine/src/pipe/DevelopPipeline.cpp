@@ -206,12 +206,12 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // filter is: exposure is a multiply, so in log2 it is an additive constant,
     // and the Laplacian of a constant offset is zero. Computing clarity before
     // exposure therefore gives bit for bit what computing it after would, while
-    // leaving all twenty-two of these nodes cached for the slider people
+    // leaving all thirty-two of these nodes cached for the slider people
     // actually drag. research/local-laplacian.md.
     //
-    // Twenty-two nodes and seven kernels, none over a hundred lines. The count
-    // is the pyramid's, not the code's: six levels, and eight remapped copies
-    // of the image packed two textures wide.
+    // Thirty-two nodes and seven kernels, none over a hundred lines. The count
+    // is the pyramid's, not the code's: six levels, and sixteen remapped copies
+    // of the image packed four textures wide.
     for (int l = 0; l < kLlfLevels; ++l) {
         llfW_[l] = (l == 0) ? width_  : std::max(1u, (llfW_[l - 1] + 1) / 2);
         llfH_[l] = (l == 0) ? height_ : std::max(1u, (llfH_[l - 1] + 1) / 2);
@@ -825,7 +825,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
     // ── Local Laplacian clarity ──────────────────────────────────────────
     //
-    // Twenty-two nodes, so it follows the guided filter's and the denoiser's
+    // Thirty-two nodes, so it follows the guided filter's and the denoiser's
     // rule: switched off entirely at zero rather than run at no strength.
     const bool clarifying   = std::fabs(adj.clarity) > 1e-4f;
     const bool clarityMoved = first || adj.clarity != lastAdj_.clarity;

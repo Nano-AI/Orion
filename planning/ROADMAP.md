@@ -93,7 +93,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 
 **Definition of done:** one click makes a flat RAW look striking.
 
-- Local Laplacian clarity/texture
+- ✅ Local Laplacian clarity *(Paris/Hasinoff/Kautz; Aubry et al.)* — Texture, the fine-level variant, is not built
 - Single-image exposure fusion (shadow lift with local contrast preserved)
 - Dehaze (dark channel prior)
 - **Auto-enhance** combining the above with percentile auto-levels

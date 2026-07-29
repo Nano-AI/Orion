@@ -108,7 +108,7 @@ struct Adjustments {
 
     /// Local Laplacian clarity, -1..1. Negative smooths detail, positive
     /// increases its contrast; the slider is the published alpha exponent, and
-    /// its endpoints land on the paper's own illustrated values. Twenty-two
+    /// its endpoints land on the paper's own illustrated values. Thirty-two
     /// nodes hang off this one float, so zero switches the whole chain off
     /// rather than running it at no strength. research/local-laplacian.md.
     float clarity = 0.0f;

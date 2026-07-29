@@ -1,5 +1,7 @@
 #include "pipe/Pipeline.h"
 
+#include <memory>
+
 #include <algorithm>
 #include <cstring>
 #include <queue>
@@ -191,12 +193,14 @@ double Pipeline::render() {
     lastRun_.clear();
     lastRun_.reserve(nodes_.size());
 
-    gpu::CommandBuffer cb(device_);
+    double total = 0.0;
+    std::unique_ptr<gpu::CommandBuffer> batch;
+    if (!profiling_) batch = std::make_unique<gpu::CommandBuffer>(device_);
 
     for (int id : order_) {
         const Node& node = nodes_[id];
         const bool run = dirty_[id] && node.enabled;
-        lastRun_.push_back({node.name, run});
+        lastRun_.push_back({node.name, run, 0.0});
         if (!run) continue;
 
         std::vector<const gpu::Texture*> textures;
@@ -212,16 +216,30 @@ double Pipeline::render() {
 
         // Dispatch over the node's own output, which may differ from the
         // graph's working size once rotation or crop is in play.
-        cb.dispatch(*kernels_[id], textures,
-                    node.params.empty() ? nullptr : node.params.data(),
-                    node.params.size(),
-                    node.outWidth  ? node.outWidth  : width_,
-                    node.outHeight ? node.outHeight : height_);
+        const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;
+        const std::uint32_t h = node.outHeight ? node.outHeight : height_;
+
+        if (profiling_) {
+            gpu::CommandBuffer one(device_);
+            one.dispatch(*kernels_[id], textures,
+                         node.params.empty() ? nullptr : node.params.data(),
+                         node.params.size(), w, h);
+            one.commitAndWait();
+            lastRun_.back().ms = one.gpuMilliseconds();
+            total += lastRun_.back().ms;
+        } else {
+            batch->dispatch(*kernels_[id], textures,
+                            node.params.empty() ? nullptr : node.params.data(),
+                            node.params.size(), w, h);
+        }
     }
 
-    cb.commitAndWait();
+    if (batch) {
+        batch->commitAndWait();
+        total = batch->gpuMilliseconds();
+    }
     std::fill(dirty_.begin(), dirty_.end(), false);
-    return cb.gpuMilliseconds();
+    return total;
 }
 
 const gpu::Texture& Pipeline::output() const {
