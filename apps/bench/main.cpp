@@ -444,6 +444,10 @@ int main(int argc, char** argv) {
                 // Half the smallest ratio over the three frames: 0.26, 0.25,
                 // 0.22 of the reference.
                 {"look 1.0",       noLook, [](auto& a) { a.lutStrength = 1.0f; }, Metric::Chroma, 0.11},
+                // Half the smallest ratio over the three frames: 1.15, 2.43,
+                // 2.62 of the reference. It moves more than an exposure stop
+                // does, which is what a shadow lift at full strength should do.
+                {"fusion 1.0",     flat, [](auto& a) { a.fusion = 1.0f; }, Metric::Luma, 0.57},
                 {"dehaze 1.0",     flat, [](auto& a) { a.dehaze = 1.0f; }, Metric::Luma, 0.028,
                  "a haze-free frame has nothing to remove; t = 1 is the right answer"},
                 {"clarity +1",     flat, [](auto& a) { a.clarity = 1.0f; }, Metric::Detail, 0.062},

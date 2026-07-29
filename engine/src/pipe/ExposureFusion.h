@@ -41,9 +41,23 @@ inline constexpr float kSigma = 0.2f;
 /// The final stretch allows this much clipping at each end ([HM20] section 4).
 inline constexpr float kRobustClip = 0.01f;
 
+/// The proxy curve's half-width, in stops. `t = 0.5 + 0.5·tanh(log2(Y/0.18)/s)`
+/// puts middle grey at 0.5 and reaches 0.88 at four stops over, 0.98 at eight —
+/// so a photographic range lands inside the interval the method was validated
+/// on, without the shoulder being so hard that highlight detail collapses into
+/// one value. ⚠️ Ours; see research/UNSOURCED.md.
+inline constexpr float kProxySlopeEv = 4.0f;
+
+/// A clamp on the emitted gain, standing in for the paper's global
+/// renormalisation — which this pipeline drops because in an editor it fights
+/// the user's own exposure controls and makes a pixel depend on the crop.
+inline constexpr float kMaxGain = 8.0f;
+
 /// A bound on the simulated set. Every simulated image is a pyramid, so a
-/// derivation that fails to converge must not run away.
-inline constexpr int kMaxImages = 9;
+/// derivation that fails to converge must not run away — and on the GPU the
+/// simulated images are packed four to an RGBA texture, so the bound is also
+/// what fixes how many textures a pyramid level costs. Eight is two of them.
+inline constexpr int kMaxImages = 8;
 
 /// ⚠️ **The search starts at the paper's own worked-example count rather than
 /// at two.** [H279] Eq. (7) solves for the smallest M whose simulated images

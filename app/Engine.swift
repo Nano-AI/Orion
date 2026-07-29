@@ -222,6 +222,9 @@ final class Engine {
     /// loaded through `loadLut`, not an adjustment.
     var lutStrength: Float = 1     { didSet { pushAndRender() } }
 
+    /// Exposure fusion. A power on the emitted gain, so zero is exact.
+    var fusion: Float = 0          { didSet { pushAndRender() } }
+
     /// Dehaze. The dark channel prior's own omega, so zero is the identity.
     var dehaze: Float = 0          { didSet { pushAndRender() } }
 
@@ -493,7 +496,7 @@ final class Engine {
             gradeHighlight: gradeHighlight,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             lutStrength: lutStrength,
-            dehaze: dehaze, clarity: clarity,
+            fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
@@ -520,6 +523,7 @@ final class Engine {
         gradeHighlight = s.gradeHighlight
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         lutStrength = s.lutStrength
+        fusion = s.fusion
         dehaze = s.dehaze
         clarity = s.clarity
         sharpenAmount = s.sharpenAmount; sharpenRadius = s.sharpenRadius
@@ -679,7 +683,7 @@ final class Engine {
             grade_highlight: (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2]),
             denoise_luma: denoiseLuma, denoise_color: denoiseColor,
             lut_strength: lutStrength,
-            dehaze: dehaze, clarity: clarity,
+            fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpen_amount: sharpenAmount, sharpen_radius: sharpenRadius,
             sharpen_masking: sharpenMasking,
             hue_shift: toTuple8(hueShift),

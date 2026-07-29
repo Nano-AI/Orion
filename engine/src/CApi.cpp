@@ -171,6 +171,7 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
         a.curve.red    = toChannel(adj->curve_red);
         a.curve.green  = toChannel(adj->curve_green);
         a.curve.blue   = toChannel(adj->curve_blue);
+        a.fusion          = adj->fusion;
         a.dehaze          = adj->dehaze;
         a.lutStrength     = adj->lut_strength;
         a.clarity         = adj->clarity;

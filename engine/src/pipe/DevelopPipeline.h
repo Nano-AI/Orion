@@ -11,6 +11,7 @@
 #include "pipe/HueSatMap.h"
 #include "pipe/CubeLut.h"
 #include "pipe/Dehaze.h"
+#include "pipe/ExposureFusion.h"
 #include "pipe/LocalLaplacian.h"
 #include "pipe/ShaderParams.h"
 #include "pipe/Pipeline.h"
@@ -111,6 +112,11 @@ struct Adjustments {
     /// How much of the creative LUT to apply, 0..1. The LUT itself is not an
     /// adjustment — it is a file, set through `setCreativeLut`.
     float lutStrength = 1.0f;
+
+    /// Single-image exposure fusion, 0..1 — shadow lift that keeps local
+    /// contrast. The value is a power applied to the emitted gain, so zero is
+    /// bit-exactly the identity. research/exposure-fusion.md.
+    float fusion = 0.0f;
 
     /// Dehaze, 0..1. Maps onto the paper's own omega, so zero is exactly the
     /// identity and one is the value He, Sun & Tang fixed for every result in
@@ -254,6 +260,33 @@ private:
     /// Reads the pooled candidates back and picks A. Costs one small download.
     void estimateAirlight();
     void pushAirlight();
+
+    // ── Exposure fusion ───────────────────────────────────────────────────
+    //
+    // Runs on a quarter-resolution proxy: the method is a large-scale tonal
+    // move and only a gain reaches the full-resolution picture, so nothing this
+    // filter could have affected is lost to the subsampling.
+    static constexpr int kFuseLevels = 6;
+    static constexpr int kFuseScale  = 4;
+    static constexpr int kFuseStacks = (sef::kMaxImages + 3) / 4;
+    static_assert(kFuseStacks == 2,
+                  "fuse_blend.slang binds two packed stacks by name.");
+
+    int nFuseProxy_ = -1;
+    int nFuseImage_[kFuseLevels][kFuseStacks]{};
+    int nFuseWeight_[kFuseLevels][kFuseStacks]{};
+    int nFuseOut_[kFuseLevels]{};
+    int nFusion_ = -1;
+    std::uint32_t fuseW_[kFuseLevels]{}, fuseH_[kFuseLevels]{};
+
+    /// The simulated-image plan. Derived from the frame's median, so it is a
+    /// whole-frame reduction and not a node — same treatment as dehaze's
+    /// atmospheric light: computed when stale, never on a slider tick.
+    sef::Plan fusePlan_{};
+    bool fusePlanValid_ = false;
+    bool fusing_ = false;
+    void estimateFusionPlan();
+    void pushFusionPlan();
 
     int nLlfLuma_ = -1;
     int nLlfGauss_[kLlfLevels]{};                 // [0] aliases nLlfLuma_

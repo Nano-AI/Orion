@@ -297,6 +297,58 @@ struct alignas(16) DehazeRecover {
 };
 static_assert(sizeof(DehazeRecover) == 48);
 
+/// Simulated exposure fusion — Hessel & Morel. research/exposure-fusion.md.
+/// Mirrors FusePlan in shaders/ops/fuse_ops.slang.
+struct FusePlanBlock {
+    std::int32_t images;
+    std::int32_t bright;
+    std::int32_t dark;
+    std::int32_t span;
+    float        alpha;
+    float        beta;
+    float        lambda;
+    float        sigma;
+};
+static_assert(sizeof(FusePlanBlock) == 32);
+
+struct FuseProxy {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    std::int32_t  scale;
+    float         slope;
+    float         _pad[2];
+};
+static_assert(sizeof(FuseProxy) == 32);
+
+struct FuseSplit {
+    std::uint32_t size[2];
+    std::int32_t  base;
+    std::int32_t  weights;
+    FusePlanBlock plan;
+    float         epsilon;
+    float         _pad[3];
+};
+static_assert(sizeof(FuseSplit) == 64);
+
+struct FuseBlend {
+    std::uint32_t size[2];
+    std::uint32_t coarseSize[2];
+    std::int32_t  images;
+    std::int32_t  residual;
+    float         _pad[2];
+};
+static_assert(sizeof(FuseBlend) == 32);
+
+struct FuseApply {
+    std::uint32_t size[2];
+    std::uint32_t proxySize[2];
+    float         slope;
+    float         strength;
+    float         maxGain;
+    float         _pad;
+};
+static_assert(sizeof(FuseApply) == 32);
+
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {
     std::uint32_t outSize[2];

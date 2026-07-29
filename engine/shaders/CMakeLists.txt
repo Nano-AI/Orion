@@ -53,6 +53,10 @@ set(ORION_SHADERS
     box_blur4:boxBlur4
     dehaze_ab:dehazeAb
     dehaze_recover:dehazeRecover
+    fuse_proxy:fuseProxy
+    fuse_split:fuseSplit
+    fuse_blend:fuseBlend
+    fuse_apply:fuseApply
     develop_linear:developLinear
     develop_display:developDisplay
     geometry:geometry

@@ -122,6 +122,11 @@ typedef struct OrionAdjustments {
      * having none loaded. */
     float lut_strength;
 
+    /* Single-image exposure fusion, 0..1 — shadow lift that keeps local
+     * contrast. The value is a power applied to the emitted gain, so zero is
+     * bit-exactly the identity. research/exposure-fusion.md. */
+    float fusion;
+
     /* Dehaze, 0..1 — He, Sun & Tang's dark channel prior. The value is the
      * paper's own omega, so zero is exactly the identity and one is the 0.95
      * they fixed for every result they published. research/dehaze.md. */

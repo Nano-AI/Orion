@@ -351,6 +351,69 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                {nDehaze_, nLlfOut_[0], nLlfLuma_},
                                PixelFormat::RGBA16Float, {}});
 
+    // ── Simulated exposure fusion (Hessel & Morel) ────────────────────────
+    //
+    // After clarity and before the tone controls, for the reason every local
+    // operator in this pipeline sits there: exposure is a multiply, so the
+    // whole chain stays cached while the slider people drag actually moves.
+    // research/exposure-fusion.md carries the placement argument in full.
+    for (int l = 0; l < kFuseLevels; ++l) {
+        fuseW_[l] = (l == 0) ? std::max(1u, (width_  + kFuseScale - 1) / kFuseScale)
+                             : std::max(1u, (fuseW_[l - 1] + 1) / 2);
+        fuseH_[l] = (l == 0) ? std::max(1u, (height_ + kFuseScale - 1) / kFuseScale)
+                             : std::max(1u, (fuseH_[l - 1] + 1) / 2);
+    }
+
+    nFuseProxy_ = pipeline_.add({"fusion:proxy", "fuseProxy", {nClarity_},
+                                 PixelFormat::R16Float, {}, {},
+                                 true, fuseW_[0], fuseH_[0]});
+
+    // Level zero of both stacks is point-wise in the proxy; every coarser level
+    // is the same halving the local Laplacian filter already uses.
+    for (int l = 0; l < kFuseLevels; ++l) {
+        for (int st = 0; st < kFuseStacks; ++st) {
+            const std::string tag = "." + std::to_string(l) + "." + std::to_string(st);
+            nFuseImage_[l][st] = (l == 0)
+                ? pipeline_.add({"fusion:images" + tag, "fuseSplit", {nFuseProxy_},
+                                 PixelFormat::RGBA16Float, {}, {},
+                                 true, fuseW_[0], fuseH_[0]})
+                : pipeline_.add({"fusion:images" + tag, "llfDownPacked",
+                                 {nFuseImage_[l - 1][st]},
+                                 PixelFormat::RGBA16Float, {}, {},
+                                 true, fuseW_[l], fuseH_[l]});
+
+            nFuseWeight_[l][st] = (l == 0)
+                ? pipeline_.add({"fusion:weights" + tag, "fuseSplit", {nFuseProxy_},
+                                 PixelFormat::RGBA16Float, {}, {},
+                                 true, fuseW_[0], fuseH_[0]})
+                : pipeline_.add({"fusion:weights" + tag, "llfDownPacked",
+                                 {nFuseWeight_[l - 1][st]},
+                                 PixelFormat::RGBA16Float, {}, {},
+                                 true, fuseW_[l], fuseH_[l]});
+        }
+    }
+
+    // Blend and collapse in one pass per level, coarse to fine. The coarsest is
+    // the residual — carried whole, which is what makes this a reconstruction
+    // rather than a sum of high-pass bands.
+    for (int l = kFuseLevels - 1; l >= 0; --l) {
+        const bool residual = (l == kFuseLevels - 1);
+        const int  coarse   = residual ? l : l + 1;
+        nFuseOut_[l] = pipeline_.add({"fusion:blend " + std::to_string(l), "fuseBlend",
+                                      {nFuseImage_[l][0], nFuseImage_[l][1],
+                                       nFuseWeight_[l][0], nFuseWeight_[l][1],
+                                       nFuseImage_[coarse][0], nFuseImage_[coarse][1],
+                                       residual ? nFuseWeight_[l][0] : nFuseOut_[l + 1]},
+                                      PixelFormat::R16Float, {}, {},
+                                      true, fuseW_[l], fuseH_[l]});
+    }
+
+    // First input is the clarity output, so a disabled chain resolves straight
+    // through and fusion at zero costs nothing.
+    nFusion_ = pipeline_.add({"fusion", "fuseApply",
+                              {nClarity_, nFuseOut_[0], nFuseProxy_},
+                              PixelFormat::RGBA16Float, {}});
+
     // Every scene-linear adjustment fuses into one dispatch, and the display
     // transform plus curve into another. They are all pointwise; separate
     // passes only bought a 194 MB round trip each at 24 MP.
@@ -385,7 +448,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  true, guideW_, guideH_});
 
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
-                                 {nClarity_, nGuideV2_, nGuidePrep_},
+                                 {nFusion_, nGuideV2_, nGuidePrep_},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
@@ -976,6 +1039,59 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         pushAirlight();
     }
 
+    // ── Exposure fusion ──────────────────────────────────────────────────
+    //
+    // Thirty-two nodes, all at quarter resolution. Same rule as every other
+    // multi-node feature here: switched off entirely at zero.
+    fusing_ = adj.fusion > 1e-4f;
+    const bool fusionMoved = first || adj.fusion != lastAdj_.fusion;
+
+    // The plan comes from the frame's median, which everything upstream of this
+    // chain can move and no slider below it can.
+    if (first || adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
+        adj.wb.tint != lastAdj_.wb.tint) {
+        fusePlanValid_ = false;
+    }
+
+    if (fusionMoved) {
+        pipeline_.setEnabled(nFuseProxy_, fusing_);
+        pipeline_.setEnabled(nFusion_, fusing_);
+        for (int l = 0; l < kFuseLevels; ++l) {
+            pipeline_.setEnabled(nFuseOut_[l], fusing_);
+            for (int st = 0; st < kFuseStacks; ++st) {
+                pipeline_.setEnabled(nFuseImage_[l][st], fusing_);
+                pipeline_.setEnabled(nFuseWeight_[l][st], fusing_);
+            }
+        }
+    }
+
+    if (fusing_ && (fusionMoved || !fusePlanValid_)) {
+        params::FuseProxy proxy{};
+        proxy.outSize[0] = fuseW_[0]; proxy.outSize[1] = fuseH_[0];
+        proxy.inSize[0]  = width_;    proxy.inSize[1]  = height_;
+        proxy.scale = kFuseScale;
+        proxy.slope = sef::kProxySlopeEv;
+        pipeline_.setParams(nFuseProxy_, &proxy, sizeof proxy);
+
+        for (int l = 1; l < kFuseLevels; ++l) {
+            params::LlfDown d{{fuseW_[l], fuseH_[l]}, {fuseW_[l - 1], fuseH_[l - 1]}};
+            for (int st = 0; st < kFuseStacks; ++st) {
+                pipeline_.setParams(nFuseImage_[l][st], &d, sizeof d);
+                pipeline_.setParams(nFuseWeight_[l][st], &d, sizeof d);
+            }
+        }
+
+        params::FuseApply ap{};
+        ap.size[0] = width_;       ap.size[1] = height_;
+        ap.proxySize[0] = fuseW_[0]; ap.proxySize[1] = fuseH_[0];
+        ap.slope    = sef::kProxySlopeEv;
+        ap.strength = std::clamp(adj.fusion, 0.0f, 1.0f);
+        ap.maxGain  = sef::kMaxGain;
+        pipeline_.setParams(nFusion_, &ap, sizeof ap);
+
+        pushFusionPlan();
+    }
+
     // ── Local Laplacian clarity ──────────────────────────────────────────
     //
     // Thirty-two nodes, so it follows the guided filter's and the denoiser's
@@ -1299,6 +1415,64 @@ void DevelopPipeline::setWideOutput(bool wide) {
     pushDisplayParams(lastAdj_);
 }
 
+void DevelopPipeline::pushFusionPlan() {
+    params::FusePlanBlock plan{};
+    plan.images = fusePlan_.images;
+    plan.bright = fusePlan_.bright;
+    plan.dark   = fusePlan_.dark;
+    plan.span   = fusePlan_.span();
+    plan.alpha  = sef::kAlphaDefault;
+    plan.beta   = sef::kBeta;
+    plan.lambda = sef::kLambda;
+    plan.sigma  = sef::kSigma;
+
+    for (int st = 0; st < kFuseStacks; ++st) {
+        params::FuseSplit sp{};
+        sp.size[0] = fuseW_[0]; sp.size[1] = fuseH_[0];
+        sp.base    = st * 4;
+        sp.plan    = plan;
+        sp.epsilon = sef::kWeightEpsilon;
+
+        sp.weights = 0;
+        pipeline_.setParams(nFuseImage_[0][st], &sp, sizeof sp);
+        sp.weights = 1;
+        pipeline_.setParams(nFuseWeight_[0][st], &sp, sizeof sp);
+    }
+
+    for (int l = kFuseLevels - 1; l >= 0; --l) {
+        const bool residual = (l == kFuseLevels - 1);
+        params::FuseBlend b{};
+        b.size[0] = fuseW_[l]; b.size[1] = fuseH_[l];
+        const int coarse = residual ? l : l + 1;
+        b.coarseSize[0] = fuseW_[coarse]; b.coarseSize[1] = fuseH_[coarse];
+        b.images   = fusePlan_.images;
+        b.residual = residual ? 1 : 0;
+        pipeline_.setParams(nFuseOut_[l], &b, sizeof b);
+    }
+}
+
+void DevelopPipeline::estimateFusionPlan() {
+    const gpu::Texture& tex = pipeline_.nodeOutput(nFuseProxy_);
+
+    std::vector<__fp16> buf(static_cast<std::size_t>(fuseW_[0]) * fuseH_[0]);
+    tex.download(buf.data(), static_cast<std::size_t>(fuseW_[0]) * sizeof(__fp16),
+                 fuseW_[0], fuseH_[0]);
+
+    std::vector<float> values(buf.size());
+    for (std::size_t i = 0; i < buf.size(); ++i) values[i] = float(buf[i]);
+
+    float median = 0.5f;
+    if (!values.empty()) {
+        const auto mid = values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2);
+        std::nth_element(values.begin(), mid, values.end());
+        median = *mid;
+    }
+
+    fusePlan_ = sef::planFor(median, sef::kAlphaDefault, sef::kBeta);
+    fusePlanValid_ = true;
+    pushFusionPlan();
+}
+
 void DevelopPipeline::pushAirlight() {
     params::DehazeChan chan{};
     chan.size[0] = width_; chan.size[1] = height_;
@@ -1342,9 +1516,13 @@ double DevelopPipeline::render() {
     //
     // Stale means the image changed or white balance moved. It is never stale
     // because a slider moved, so this does not run on the interaction path.
-    if (dehazing_ && !airlightValid_) {
+    const bool needsAirlight = dehazing_ && !airlightValid_;
+    const bool needsPlan     = fusing_ && !fusePlanValid_;
+
+    if (needsAirlight || needsPlan) {
         const double first = pipeline_.render();
-        estimateAirlight();
+        if (needsAirlight) estimateAirlight();
+        if (needsPlan)     estimateFusionPlan();
         return first + pipeline_.render();
     }
     return pipeline_.render();

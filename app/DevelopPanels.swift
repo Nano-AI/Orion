@@ -248,6 +248,16 @@ extension Editor {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Shadow lift") {
+            slider("Lift", $engine.fusion, 0...1, "", 2,
+                   resetsTo: engine.defaults.fusion)
+            Text("Opens the shadows without flattening them: the picture is "
+               + "blended with brighter versions of itself, feature by feature "
+               + "rather than tone by tone, so local contrast survives.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Dehaze") {
             slider("Dehaze", $engine.dehaze, 0...1, "", 2,
                    resetsTo: engine.defaults.dehaze)

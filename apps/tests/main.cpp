@@ -3791,6 +3791,182 @@ void testExposureFusionMath() {
     }
 }
 
+/// Exposure fusion on the GPU — does the shader run the maths the tests pinned?
+void testExposureFusionGpu() {
+    section("Exposure fusion (GPU)");
+
+    namespace sef = orion::pipe::sef;
+    using orion::gpu::PixelFormat;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    const auto load = [&](const char* entry) {
+        auto lib = orion::gpu::Library::createFromFile(
+            *device, std::string(ORION_SHADER_DIR) + "/" + entry + ".metallib");
+        auto k = orion::gpu::Kernel::create(*device, *lib, entry);
+        return std::pair{std::move(lib), std::move(k)};
+    };
+
+    constexpr std::uint32_t kW = 64, kH = 4;
+    const auto plan = sef::planFor(0.4f, sef::kAlphaDefault, sef::kBeta);
+
+    // ── The simulated images and weights, against the C++ mirror ──────────
+    //
+    // ops/fuse_ops.slang and pipe/ExposureFusion.h are two implementations of
+    // the same equations, and the CPU one is what every other test in this file
+    // measures against. If they disagree, those tests are pinning something the
+    // product does not run.
+    {
+        auto kSplit = load("fuseSplit");
+        auto proxy = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+        auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+
+        std::vector<__fp16> in(std::size_t(kW) * kH);
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            for (std::uint32_t y = 0; y < kH; ++y) {
+                in[std::size_t(y) * kW + x] = __fp16(float(x) / float(kW - 1));
+            }
+        }
+        proxy->upload(in.data(), std::size_t(kW) * sizeof(__fp16));
+
+        const auto run = [&](int base, bool weights) {
+            orion::pipe::params::FuseSplit sp{};
+            sp.size[0] = kW; sp.size[1] = kH;
+            sp.base = base;
+            sp.weights = weights ? 1 : 0;
+            sp.plan.images = plan.images; sp.plan.bright = plan.bright;
+            sp.plan.dark = plan.dark;     sp.plan.span = plan.span();
+            sp.plan.alpha = sef::kAlphaDefault; sp.plan.beta = sef::kBeta;
+            sp.plan.lambda = sef::kLambda;      sp.plan.sigma = sef::kSigma;
+            sp.epsilon = sef::kWeightEpsilon;
+
+            orion::gpu::CommandBuffer cb(*device);
+            cb.dispatch(*kSplit.second, {proxy.get(), dst.get()}, &sp, sizeof sp, kW, kH);
+            cb.commitAndWait();
+            std::vector<__fp16> out(std::size_t(kW) * kH * 4);
+            dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+            return out;
+        };
+
+        double worstImage = 0.0, worstWeight = 0.0, worstSum = 0.0;
+        std::vector<std::vector<__fp16>> images, weights;
+        for (int st = 0; st * 4 < plan.images; ++st) {
+            images.push_back(run(st * 4, false));
+            weights.push_back(run(st * 4, true));
+        }
+
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const float t = float(x) / float(kW - 1);
+
+            double total = 0.0;
+            for (int k = -plan.dark; k <= plan.bright; ++k) {
+                total += double(sef::wellExposed(sef::remap(t, k, plan, sef::kAlphaDefault,
+                                                            sef::kBeta), sef::kSigma)) *
+                         double(sef::contrastWeight(t, k, plan, sef::kAlphaDefault, sef::kBeta));
+            }
+
+            double sum = 0.0;
+            for (int index = 0; index < plan.images; ++index) {
+                const int k = index - plan.dark;
+                const std::size_t st = std::size_t(index / 4);
+                const std::size_t at = (std::size_t(1) * kW + x) * 4 + std::size_t(index % 4);
+
+                const double wantImage = sef::remap(t, k, plan, sef::kAlphaDefault, sef::kBeta);
+                const double wantWeight =
+                    double(sef::wellExposed(sef::remap(t, k, plan, sef::kAlphaDefault,
+                                                       sef::kBeta), sef::kSigma)) *
+                    double(sef::contrastWeight(t, k, plan, sef::kAlphaDefault, sef::kBeta)) /
+                    std::max(total, double(sef::kWeightEpsilon));
+
+                worstImage  = std::max(worstImage,  std::abs(double(images[st][at]) - wantImage));
+                worstWeight = std::max(worstWeight, std::abs(double(weights[st][at]) - wantWeight));
+                sum += double(weights[st][at]);
+            }
+            worstSum = std::max(worstSum, std::abs(sum - 1.0));
+        }
+
+        report(worstImage < 3e-3, "the shader simulates the same exposures as the reference",
+               "worst " + std::to_string(worstImage));
+        report(worstWeight < 3e-3, "and computes the same weights",
+               "worst " + std::to_string(worstWeight));
+        // Mertens et al. section 3.2 normalises so the weights sum to one at
+        // every pixel. If they do not, the blend is a gain as well as a blend.
+        report(worstSum < 5e-3, "the weights sum to one at every pixel",
+               "worst " + std::to_string(worstSum));
+    }
+
+    // ── Strength zero is the identity, bit for bit ────────────────────────
+    //
+    // No published parameter of this method degenerates to the identity, which
+    // is why the slider is a power on the emitted gain instead. gain^0 = 1, and
+    // this is the check that says so rather than assuming it.
+    {
+        auto kApply = load("fuseApply");
+        auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+        auto fused = orion::gpu::Texture::create(*device, 8, 2, PixelFormat::R16Float);
+        auto proxy = orion::gpu::Texture::create(*device, 8, 2, PixelFormat::R16Float);
+        auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+
+        std::vector<__fp16> in(std::size_t(kW) * kH * 4);
+        for (std::size_t i = 0; i < std::size_t(kW) * kH; ++i) {
+            in[i * 4 + 0] = __fp16(0.02 + 0.9 * double(i % kW) / double(kW - 1));
+            in[i * 4 + 1] = __fp16(0.30);
+            in[i * 4 + 2] = __fp16(0.11);
+            in[i * 4 + 3] = __fp16(1.0f);
+        }
+        src->upload(in.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+        // A deliberately violent gain: the fused proxy says every pixel should
+        // move a long way, so a strength that is not exactly zero will show.
+        std::vector<__fp16> a(16, __fp16(0.9f)), b(16, __fp16(0.1f));
+        fused->upload(a.data(), 8 * sizeof(__fp16));
+        proxy->upload(b.data(), 8 * sizeof(__fp16));
+
+        const auto run = [&](float strength) {
+            orion::pipe::params::FuseApply ap{};
+            ap.size[0] = kW; ap.size[1] = kH;
+            ap.proxySize[0] = 8; ap.proxySize[1] = 2;
+            ap.slope = sef::kProxySlopeEv;
+            ap.strength = strength;
+            ap.maxGain = sef::kMaxGain;
+
+            orion::gpu::CommandBuffer cb(*device);
+            cb.dispatch(*kApply.second, {src.get(), fused.get(), proxy.get(), dst.get()},
+                        &ap, sizeof ap, kW, kH);
+            cb.commitAndWait();
+            std::vector<__fp16> out(in.size());
+            dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+            return out;
+        };
+
+        const auto off = run(0.0f);
+        int differing = 0;
+        for (std::size_t i = 0; i < in.size(); ++i) {
+            if (float(off[i]) != float(in[i])) ++differing;
+        }
+        report(differing == 0, "strength zero leaves every pixel bit-identical",
+               std::to_string(differing) + " of " + std::to_string(in.size()) + " differ");
+
+        const auto on = run(1.0f);
+        double lift = 0.0;
+        for (std::size_t i = 0; i < std::size_t(kW) * kH; ++i) {
+            lift = std::max(lift, double(on[i * 4]) / std::max(double(in[i * 4]), 1e-6));
+        }
+        report(lift > 1.5, "and full strength actually lifts", "max gain " + std::to_string(lift));
+
+        // The clamp replaces the paper's global renormalisation, so it has to
+        // hold even when the proxy asks for something absurd.
+        report(lift <= double(sef::kMaxGain) + 1e-3,
+               "the gain is clamped where the paper would have renormalised",
+               "max gain " + std::to_string(lift));
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -3818,6 +3994,7 @@ int main() {
     testDehazeGpu();
     testCreativeLut();
     testExposureFusionMath();
+    testExposureFusionGpu();
     testHighlightHaloGpu();
     testOutputDepth();
     testLensDatabase();
