@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -76,6 +77,17 @@ private struct PhotoCommands: Commands {
             Button("Export…") { cull?.export() }
                 .keyboardShortcut("e", modifiers: [.command])
                 .disabled(idle)
+
+            Divider()
+
+            // The session log, which is a runnable scenario. Findable from a
+            // menu rather than documented in a file nobody opens: the whole
+            // point of it is that a person reporting a bug can hand it over,
+            // and a path they have to be told is a path they have to be told
+            // every time.
+            Button("Reveal Session Log in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([InteractionLog.url])
+            }
         }
 
         CommandGroup(after: .undoRedo) {
@@ -704,14 +716,6 @@ struct Editor: View {
                         // handle to drag and nothing naming the two sides — the
                         // split itself was happening in the shader all along.
                         .overlay {
-                            if engine.comparing {
-                                GeometryReader { canvasGeo in
-                                    CompareOverlay(engine: engine,
-                                                   frame: drawnFrame(in: canvasGeo.size))
-                                }
-                            }
-                        }
-                        .overlay {
                             if tab == .crop {
                                 GeometryReader { canvasGeo in
                                     CropOverlay(engine: engine,
@@ -751,8 +755,30 @@ struct Editor: View {
                                 .clipped()
                             }
                         }
+                        // ⚠ **Compare goes on top of the editing overlays, and
+                        // the order is the bug it fixes.** `MaskOverlay` takes
+                        // `contentShape(Rectangle())` — the whole canvas, which
+                        // it needs, since dragging a radial's body or painting a
+                        // stroke can start anywhere on the picture. It sat above
+                        // this, so with any mask active the divider could not be
+                        // grabbed at all: reported as "I was messing around with
+                        // masking and now I can't drag the compare".
+                        //
+                        // Reordering rather than disabling the mask overlay,
+                        // because editing through a split is a thing people do.
+                        // The divider only claims a 28-point strip, so every
+                        // press outside it still falls through to the mask.
+                        .overlay {
+                            if engine.comparing {
+                                GeometryReader { canvasGeo in
+                                    CompareOverlay(engine: engine,
+                                                   frame: drawnFrame(in: canvasGeo.size))
+                                }
+                            }
+                        }
                         .padding(20)
                         .onChange(of: tab) { _, t in
+                            engine.log.tab(t.rawValue)
                             engine.cropPreview = (t == .crop)
                             viewport.locked = (t == .crop)
 

@@ -31,6 +31,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Engraved.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Histogram.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CropOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MaskOverlay.swift
@@ -120,6 +121,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
@@ -137,6 +139,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift

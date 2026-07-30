@@ -124,7 +124,10 @@ final class Engine {
 
     /// Records one history entry when a crop drag finishes, rather than one per
     /// frame of the drag.
-    func commitCropEdit() { history.record(state, label: "Crop") }
+    func commitCropEdit() {
+        history.record(state, label: "Crop")
+        log.committed(state, label: "Crop")
+    }
 
     /// Moves the crop without changing its size, clamped to the frame.
     func moveCrop(dx: Float, dy: Float) {
@@ -317,7 +320,7 @@ final class Engine {
         spots.append(s)
         selectedSpot = spots.count - 1
         pushAndRender()
-        history.record(state, label: "Spot")
+        history.record(state, label: "Spot"); log.committed(state, label: "Spot")
         return true
     }
 
@@ -385,7 +388,7 @@ final class Engine {
     /// The place-and-drag gesture is deliberately *not* two entries: `addSpot`
     /// has already recorded, and the overlay skips this call while the spot it
     /// is dragging the source of is the one it just created.
-    func commitSpotEdit() { history.record(state, label: "Move spot") }
+    func commitSpotEdit() { history.record(state, label: "Move spot"); log.committed(state, label: "Move spot") }
 
     /// Removes one spot by index, which is what a selected spot and a Delete
     /// key mean. `removeLastSpot` stays for the panel's Undo spot button.
@@ -394,14 +397,14 @@ final class Engine {
         spots.remove(at: index)
         selectedSpot = -1
         pushAndRender()
-        history.record(state, label: "Spot")
+        history.record(state, label: "Spot"); log.committed(state, label: "Spot")
     }
 
     func removeLastSpot() {
         guard !spots.isEmpty else { return }
         spots.removeLast()
         pushAndRender()
-        history.record(state, label: "Spot")
+        history.record(state, label: "Spot"); log.committed(state, label: "Spot")
     }
 
     func clearSpots() {
@@ -782,7 +785,7 @@ final class Engine {
     }
 
     /// One history entry when a brush stroke finishes, rather than one per dab.
-    func commitBrushEdit() { history.record(state, label: "Brush") }
+    func commitBrushEdit() { history.record(state, label: "Brush"); log.committed(state, label: "Brush") }
 
     /// Paint the mask's coverage over the picture, so it can be placed by eye.
     ///
@@ -790,7 +793,7 @@ final class Engine {
     /// the photo, not an edit to it, so it must not land in the sidecar, must
     /// not enter undo history, and must not follow the photo to another
     /// machine. `export` forces it off around the write for the same reason.
-    var maskOverlay = false { didSet { pushAndRender() } }
+    var maskOverlay = false { didSet { log.overlay(maskOverlay); pushAndRender() } }
 
     /// Wipes the selected component's stroke. Undoable, because painting for a
     /// minute and losing it to a misclick is not a thing a photographer should
@@ -798,11 +801,14 @@ final class Engine {
     func clearBrushStroke() {
         guard !brushStroke.isEmpty else { return }
         setBrushStroke([])
-        history.record(state, label: "Clear brush")
+        history.record(state, label: "Clear brush"); log.committed(state, label: "Clear brush")
     }
 
     /// One history entry when a component is added or removed.
-    func commitMaskGroupEdit(_ label: String) { history.record(state, label: label) }
+    func commitMaskGroupEdit(_ label: String) {
+        history.record(state, label: label)
+        log.committed(state, label: label)
+    }
 
     /// The mask as the canvas overlay handles it.
     ///
@@ -964,12 +970,14 @@ final class Engine {
     /// A drag started. Renders go to the preview graph until `endInteraction`.
     func beginInteraction() {
         guard isLoaded, previewTexture != nil, !interacting else { return }
+        log.interacting(true)
         interacting = true
     }
 
     /// The hand stopped. Renders the full graph once and goes back to it.
     func endInteraction() {
         guard interacting else { return }
+        log.interacting(false)
         interacting = false
         // ⚠ The full graph is *stale* at this point — every tick of the drag
         // went to the preview. This render is not a refinement of what is on
@@ -1062,6 +1070,7 @@ final class Engine {
 
         isLoaded = true
         history.reset(to: state)
+        log.opened(path, state: state)
         pushAndRender()
     }
 
@@ -1108,6 +1117,8 @@ final class Engine {
         suspended = false
         pushAndRender()
         history.record(state, label: preset.name)
+        log.record("preset \(preset.name)")
+        log.committed(state, label: preset.name)
     }
 
     /// Returns every adjustment to its default, with white balance back to
@@ -1118,7 +1129,7 @@ final class Engine {
         assign(defaults)
         suspended = false
         pushAndRender()
-        history.record(state, label: "Reset")
+        history.record(state, label: "Reset"); log.committed(state, label: "Reset")
     }
 
     struct Sample {
@@ -1384,6 +1395,7 @@ final class Engine {
         // captured and thrown away in the same call, and compare showed the
         // edit on both sides.
         compareSplit = min(max(split, 0), 1)
+        log.compare(compareSplit)
         refreshOriginal()
         generation &+= 1
     }
@@ -1407,6 +1419,7 @@ final class Engine {
     }
 
     func clearCompare() {
+        log.compare(1.0)
         compareSplit = 1.0
         originalTexture = nil
         originalGeometry = nil
@@ -1437,16 +1450,24 @@ final class Engine {
         captureOriginal()
     }
 
-    func undo() { if let s = history.undo() { apply(s) } }
-    func redo() { if let s = history.redo() { apply(s) } }
+    func undo() { log.undo(); if let s = history.undo() { apply(s) } }
+    func redo() { log.redo(); if let s = history.redo() { apply(s) } }
     func jumpHistory(to index: Int) { if let s = history.jump(to: index) { apply(s) } }
 
     /// Names the control being changed, so history entries read like edits
     /// rather than like state dumps, and consecutive drags of one slider
     /// collapse into a single step.
+    /// What the photographer did, as a runnable scenario. See
+    /// `InteractionLog` — a report that names a *sequence* is the only kind
+    /// this project has struggled to reproduce.
+    let log = InteractionLog()
+
     func edit(_ label: String, _ change: () -> Void) {
         change()
-        if !restoring { history.record(state, label: label) }
+        if !restoring {
+            history.record(state, label: label)
+            log.committed(state, label: label)
+        }
     }
 
     /// The current controls as the C block.
