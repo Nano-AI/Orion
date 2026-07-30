@@ -105,7 +105,8 @@
     var devWrap = q('dev'), devImg = q('devImg'), devZoom = q('devZoom'),
         devFill = q('devFill'), devThumb = q('devThumb'), devCue = q('devCue'),
         vf = q('vf'), devEye = q('devEye'), vfCenter = q('vfCenter'),
-        hExp = q('hExp'), hCon = q('hCon'), hTmp = q('hTmp');
+        hExp = q('hExp'), hCon = q('hCon'), hTmp = q('hTmp'),
+        evNeedle = q('evNeedle');
     var sayWrap = q('say'), sayText = q('sayText');
     var wipeWrap = q('speed'), wipeProxy = q('wipeProxy'), wipeEdge = q('wipeEdge');
     var maskWrap = q('masks'), maskSweep = q('maskSweep'), hMask = q('hMask');
@@ -217,9 +218,13 @@
 
       // The real values from the real edit of this photograph — the same
       // numbers the Local panel shows in the interface screenshot below.
-      setText(hExp, '+' + (2.60 * e).toFixed(2));
+      var ev = 2.60 * e;
+      setText(hExp, '+' + ev.toFixed(2));
       setText(hCon, (1 + 0.45 * e).toFixed(2));
       setText(hTmp, String(Math.round(5500 - 1865 * e)));
+
+      // The needle on the ±3 EV scale is the same number, pointed at.
+      if (evNeedle) evNeedle.style.left = (50 + ev / 3 * 50).toFixed(3) + '%';
 
       if (devFill) devFill.style.height = (e * 100).toFixed(2) + '%';
       if (devThumb) devThumb.style.top = (e * 100).toFixed(2) + '%';

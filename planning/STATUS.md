@@ -582,6 +582,47 @@ finished-page-rewound contract:
   lands like a print settling flat, the lens count ticks up on arrival,
   static grain over the two darkest scenes.
 
+**Round six, same day — the finder gets a readout, and the highlighter stops
+eating the line above.** The developer sent a Nikon Z5 product shot of an EVF
+and asked whether it could be used. The image itself cannot — it is Nikon's
+marketing photography, and a Nikon body in Orion's hero also implies an
+endorsement — but a finder's *readout layout* is functional convention, so it
+was rebuilt, same rule as the Hasselblad gesture. The hero now stacks two
+lines at the foot of the frame the way a finder does: the shot above
+(`24mm · f/1.4 · 1/80 · ISO 3200`, read out of this photograph's own EXIF —
+a Sony A7 III at 24 mm — so nothing on the line is invented), then a ±3 EV
+scale with a centre post and a teal needle the develop drives to +2.60, then
+CONTRAST / TEMP / RENDER underneath as before. A status line pins `A7 III`
+and `ARW · 24.2 MP` to the top corners, and EXPOSURE left the lower row
+because the scale now says it. Two looking-not-trusting fixes, both from
+screenshots: the scale first sat marooned mid-line while its number was
+flush right, so the pair now travels right together; and on a phone the unit
+lost its space to a negative-margin hack tuned for the desktop gap, now a
+wrapped span instead.
+
+The statement's highlighter was cutting the letters, and the cause was not
+the highlighter. `line-height: 1.04` is tighter than SF Pro's content box
+(~1.17em), and an inline background fills the content box — so the amber
+band on line two reached up and sliced the descender of "got" on line one.
+Line height is 1.22, with the reason in a comment so it does not get tuned
+back down.
+
+The band also faded from transparent to amber, which spends its whole
+transition as half-opaque amber over near-black — a murky olive block — so
+it became a stroke: a gradient grown 0 → 100% width, always fully inked and
+simply not arrived yet. That traded one bug for a subtler one the developer
+caught in a zoomed screenshot: the *text* colour was still flipping per
+word, and a per-word colour flip cannot stay in step with a band sweeping
+across that same word, so mid-stroke a letter was half ink-on-amber and
+half ink-on-black. Fixed by removing the colour change entirely rather than
+timing around it. A marker passes over writing that is already dark; the
+unlit words are already dark, so they now hold #262c30 throughout — 8.9:1
+on the amber — and only the band moves. Verified by freezing the stroke at
+52% across "software" and looking at it. The overshoot moved into the
+band's own geometry too (`background-position: -0.06em`, width `100% +
+0.12em`), because a box-shadow is the shape of the whole border box and so
+could only snap in at full width, which it did.
+
 **Round five, same day — through the eyepiece, and the developer's notes.**
 The hero now opens OUTSIDE the camera: black screen, the wordmark over a
 small glowing 3:2 ocular, and the scroll opens the eyepiece to the full

@@ -57,18 +57,43 @@
         <div class="vf__grid" aria-hidden="true"></div>
         <div class="vf__af" aria-hidden="true"></div>
 
+        <!-- Top status line, the corners a finder keeps for the body and the
+             file. Ends only, so the platform badge sits between them. -->
+        <p class="vf__status mono rv d4">
+          <span>A7 III</span>
+          <span>ARW · 24.2 MP</span>
+        </p>
+
         <!-- The slider being dragged, literally. -->
         <div class="dev__rail rv d3" aria-hidden="true">
           <span class="dev__fill" id="devFill"></span>
           <span class="dev__thumb" id="devThumb"></span>
         </div>
 
-        <p class="dev__hud mono rv d4">
-          <span class="hud__cell">EXPOSURE <b id="hExp">+2.60</b> EV</span>
-          <span class="hud__cell hud__sep">CONTRAST <b id="hCon">1.45</b></span>
-          <span class="hud__cell hud__sep hud--wide">TEMP <b id="hTmp">3635</b> K</span>
-          <span class="hud__cell hud__ms">RENDER <b>9.3</b> MS</span>
-        </p>
+        <!-- The readout, stacked the way a finder stacks it: what the camera
+             recorded on top, what Orion is doing to it underneath, one
+             hairline between. The shot line is this file's own EXIF — a
+             24 mm at f/1.4, 1/80, ISO 3200 — so the numbers are the
+             photograph's, not decoration. The scale is ±3 EV and the needle
+             is the develop: it walks right to +2.60 as the raw comes up. -->
+        <div class="vf__readout">
+          <p class="vf__shot mono rv d4">
+            <span class="shot__c">24<i>mm</i></span>
+            <span class="shot__c">f/1.4</span>
+            <span class="shot__c">1/80</span>
+            <span class="shot__c">ISO 3200</span>
+            <span class="evb" aria-hidden="true">
+              <span class="evb__n" id="evNeedle"></span>
+            </span>
+            <span class="shot__c"><b class="shot__ev" id="hExp">+2.60</b> <span class="shot__u">EV</span></span>
+          </p>
+
+          <p class="dev__hud mono rv d4">
+            <span class="hud__cell">CONTRAST <b id="hCon">1.45</b></span>
+            <span class="hud__cell hud__sep hud--wide">TEMP <b id="hTmp">3635</b> K</span>
+            <span class="hud__cell hud__ms">RENDER <b>9.3</b> MS</span>
+          </p>
+        </div>
       </div>
     </div>
 

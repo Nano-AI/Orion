@@ -357,10 +357,70 @@ html.scrub .vf { will-change: transform, opacity; opacity: 0; }
   text-shadow: 0 1px 14px rgba(8,9,11,.8);
 }
 
-.vf .dev__hud {
+/* Top status line. Tiny, tracked, pushed to the corners of the frame the
+ * brackets draw, so it reads as engraving on the display and not as text. */
+.vf__status {
+  position: absolute;
+  left: calc(clamp(14px, 3.5vw, 44px) + 12px);
+  right: calc(clamp(14px, 3.5vw, 44px) + 12px);
+  top: calc(clamp(14px, 3.5vw, 44px) + 12px);
+  display: flex; justify-content: space-between;
+  font-size: .58rem; letter-spacing: .22em; text-transform: uppercase;
+  color: rgba(240,243,244,.52);
+  text-shadow: 0 1px 10px rgba(8,9,11,.9);
+}
+
+/* ---------- The readout ----------
+ * Two lines at the foot of the finder: the shot, then the develop. */
+.vf__readout {
   position: absolute;
   left: var(--gut); right: var(--gut);
   bottom: clamp(1.2rem, 3.5vh, 2.5rem);
+  z-index: 1;
+}
+.vf .dev__hud { margin-top: .85rem; }
+
+.vf__shot {
+  display: flex; align-items: center;
+  gap: .4rem 1.15rem;
+  font-size: .74rem; letter-spacing: .04em;
+  color: var(--ivory);
+  text-shadow: 0 1px 10px rgba(8,9,11,.9);
+}
+.shot__c { white-space: nowrap; }
+.shot__c i { font-style: normal; color: var(--slate); }
+/* The live one, and the only teal on the line. */
+.shot__ev { color: var(--teal); font-weight: 700; }
+.shot__u { color: var(--slate); font-size: .62rem; letter-spacing: .18em; }
+
+/* The exposure scale. A ±3 EV rule with a taller centre post and a needle
+ * the develop drives — the one instrument on the page with a pointer. */
+/* The scale travels with the number it points at, hard right, so the pair
+ * reads as one instrument instead of a rule adrift in the middle. */
+.evb {
+  position: relative;
+  flex: 0 1 clamp(88px, 22vw, 210px);
+  height: 13px;
+  margin: 0 .25rem 0 auto;
+}
+.evb::before {          /* the ticks, one per third of a stop */
+  content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 4px;
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(240,243,244,.55) 0 1px, transparent 1px 5.5556%);
+}
+.evb::after {           /* the centre post — nought */
+  content: ""; position: absolute; left: 50%; top: 2px;
+  width: 1px; height: 9px; margin-left: -.5px;
+  background: rgba(240,243,244,.75);
+}
+.evb__n {
+  position: absolute; top: 0; left: 50%;
+  width: 5px; height: 5px;
+  margin-left: -2.5px;
+  background: var(--teal);
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  filter: drop-shadow(0 0 5px rgba(77,182,196,.75));
 }
 
 /* ---------- The numbers strip ---------- */
@@ -462,19 +522,44 @@ html.scrub .say__pin { position: sticky; top: 0; height: 100svh; min-height: 0; 
 .say {
   max-width: 56rem;
   font-size: clamp(1.9rem, 5vw, 4.2rem);
-  font-weight: 600; letter-spacing: -0.015em; line-height: 1.04;
+  font-weight: 600; letter-spacing: -0.015em;
+  /* 1.22, not tighter: an inline background fills the font's content box,
+   * about 1.17em here, so anything under that and the highlighter band on
+   * one line eats the descenders of the line above. The marker needs the
+   * air it would need on paper. */
+  line-height: 1.22;
   color: var(--ivory);
 }
 .say em { font-style: normal; color: #fff; }
-html.scrub .say .w { color: #262c30; transition: color .35s ease, background-color .35s ease, box-shadow .35s ease; }
+html.scrub .say .w { color: #262c30; transition: color .35s ease; }
 html.scrub .say .w.on { color: var(--ivory); }
 /* The second sentence is run over with a highlighter as the scroll reaches
- * each word: rebate amber, ink-dark text, the marker's slight overshoot. */
+ * each word: rebate amber, ink-dark text, the marker's slight overshoot.
+ * The band is drawn as a gradient grown from 0 to full width rather than a
+ * background faded up, because a fade spends its whole transition as a
+ * half-transparent amber over near-black — a murky olive block. A stroke
+ * is always fully inked; it just is not there yet. */
+html.scrub .say em .w,
 html.scrub .say em .w.on {
-  color: var(--ink);
-  background-color: var(--rebate);
-  box-shadow: -0.06em 0 0 var(--rebate), 0.06em 0 0 var(--rebate);
+  /* The ink never changes. A marker passes over writing that is already
+   * dark; it does not recolour it. Any per-word colour flip cannot stay in
+   * step with a band sweeping across that same word, so mid-stroke a letter
+   * ends up half ink-on-amber and half ink-on-black. Holding the dark still
+   * removes the problem instead of timing around it — and 8.9:1 on the
+   * rebate amber is a comfortable read. */
+  color: #262c30;
 }
+html.scrub .say em .w {
+  background-image: linear-gradient(var(--rebate), var(--rebate));
+  background-repeat: no-repeat;
+  /* The overshoot is in the band's own geometry, not a box-shadow: a shadow
+   * is the shape of the whole border box, so it can only snap in at full
+   * width, and it snapped. This grows with the stroke. */
+  background-position: -0.06em 0;
+  background-size: 0% 100%;
+  transition: background-size .3s cubic-bezier(.4,0,.3,1);
+}
+html.scrub .say em .w.on { background-size: calc(100% + 0.12em) 100%; }
 
 /* ---------- Speed — the proxy wipe ---------- */
 
@@ -876,6 +961,11 @@ html:not(.scrub) .fr { display: none; }
   .dev__rail { display: none; }
   .hud--wide { display: none; }
   .hud__cue { display: none; }
+  /* The finder keeps the scale and the live stop on a phone; the focal
+     length and the film speed are the ones a narrow line can spare. */
+  .vf__shot { font-size: .66rem; gap: .3rem .7rem; }
+  .vf__shot .shot__c:first-child, .vf__shot .shot__c:nth-child(4) { display: none; }
+  .vf__status { font-size: .52rem; letter-spacing: .14em; }
   .fr { display: none; }
   .wipe__lab { top: 12%; }
 }
