@@ -235,6 +235,28 @@ OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path);
 OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
                                           const float* xy, int count);
 
+/* Uploads a raster matte for one component — kind 4, research/masking.md §5.
+ *
+ * `alpha` is row-major, top-left origin, `width * height` floats in 0..1.
+ *
+ * ⚠ It must be in FRAME coordinates: the whole uncropped, unturned sensor
+ * frame, which is the space masks are applied in. A producer working from the
+ * displayed picture has to undo the crop, the straighten and the quarter turns
+ * itself. The kernel does no correction, deliberately — that is what lets a
+ * matte survive a crop and a rotation the way a gradient does.
+ *
+ * Larger than orion_engine_max_matte_size on either axis is ORION_ERR_BAD_ARG
+ * rather than a silent downscale. Pass NULL to clear.
+ *
+ * Like the brush stroke, this does not itself dirty anything: set the
+ * component's kind to 4 and push the adjustments. */
+OrionStatus orion_engine_set_mask_matte(OrionEngine* engine, int component,
+                                        const float* alpha, int width, int height);
+
+/* The largest matte this image will accept, in pixels. */
+OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
+                                        unsigned* out_w, unsigned* out_h);
+
 /* The camera's own white balance, so the UI can open on "as shot". Only the
  * temperature and tint fields are filled; the rest are zeroed. */
 OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* out);

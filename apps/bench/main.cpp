@@ -361,6 +361,17 @@ int main(int argc, char** argv) {
                 /// never silently skipped, and it does not gate the build.
                 /// Nothing else may use this without a reason string.
                 const char* waived = nullptr;
+                /// Out-of-band state, set on the pipeline before either render.
+                ///
+                /// Not everything a mask can be is expressible in `Adjustments`.
+                /// A brush stroke is a variable-length list of centres and a
+                /// matte is a raster, so both are uploaded through their own
+                /// calls — which is precisely why neither had a probe: the two
+                /// hooks above take an `Adjustments&` and cannot reach them.
+                /// Runs for the context render as well as the measured one, so
+                /// a probe can put a mask in place and then measure a control
+                /// *through* it. research/masking.md §5.
+                void (*prepare)(orion::pipe::DevelopPipeline&) = nullptr;
             };
 
             const auto flat = [](orion::pipe::Adjustments&) {};
@@ -488,6 +499,43 @@ int main(int argc, char** argv) {
                  // Half the smallest ratio over the three frames: 0.47, 0.44,
                  // 0.60 of the reference.
                  }, Metric::Luma, 0.22},
+                // A raster mask component — research/masking.md §5, the
+                // shape a segmentation matte arrives in.
+                //
+                // ⚠ This probe exists because of the `prepare` hook above. A
+                // matte is uploaded out of band, like a brush stroke, so
+                // neither of the two `Adjustments&` hooks could reach it —
+                // which is exactly why the brush has gone unprobed since it was
+                // built. Both are reachable now.
+                //
+                // A centred disc of radius 0.25 covers about a fifth of the
+                // frame, so a two-stop local exposure through it moves roughly a
+                // fifth of what an unmasked one would. That ratio is the point:
+                // a matte that silently covered everything, or nothing, would
+                // not land near it.
+                {"matte +2 EV", flat, [](auto& a) {
+                     auto& c = a.maskComponents[0];
+                     c.kind = 4;
+                     a.maskCount = 1;
+                     a.localExposureEv = 2.0f;
+                 // Half the smallest ratio over the three frames: 0.43, 0.48,
+                 // 0.35 of the reference.
+                 }, Metric::Luma, 0.17, nullptr,
+                 [](orion::pipe::DevelopPipeline& d) {
+                     const std::uint32_t mw = d.maxMatteWidth();
+                     const std::uint32_t mh = d.maxMatteHeight();
+                     std::vector<float> a(std::size_t(mw) * mh, 0.0f);
+                     for (std::uint32_t y = 0; y < mh; ++y) {
+                         for (std::uint32_t x = 0; x < mw; ++x) {
+                             const double u = (x + 0.5) / mw - 0.5;
+                             const double v = (y + 0.5) / mh - 0.5;
+                             if (u * u + v * v < 0.25 * 0.25) {
+                                 a[std::size_t(y) * mw + x] = 1.0f;
+                             }
+                         }
+                     }
+                     d.setMaskMatte(0, a.data(), int(mw), int(mh));
+                 }},
                 // Guided feathering, research/masking.md §4.
                 //
                 // ⚠ The context is the *same mask, unrefined*, so what is
@@ -550,6 +598,7 @@ int main(int argc, char** argv) {
             results.reserve(std::size(probes));
 
             for (const auto& probe : probes) {
+                if (probe.prepare) probe.prepare(develop);
                 auto ctx = base;
                 probe.context(ctx);
                 develop.apply(ctx);

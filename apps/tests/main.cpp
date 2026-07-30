@@ -4378,6 +4378,9 @@ void testMaskGpu() {
     auto kMask = load("maskComponent");
     auto src = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
     auto dst = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    // Bound but unread by kinds 1-3. The kernel takes a matte for kind 4
+    // (research/masking.md §5) and the binding has to be present either way.
+    auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
 
     // The fold's identity, which mask:base writes in the product. Every check
     // here runs a single component over it, where add-from-zero is the
@@ -4388,7 +4391,7 @@ void testMaskGpu() {
     const auto run = [&](const orion::pipe::params::MaskComponent& m) {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kMask.second, {src.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kMask.second, {src.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -4563,6 +4566,9 @@ void testMaskBrushGpu() {
 
     auto src = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
     auto dst = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    // Bound but unread by kinds 1-3. The kernel takes a matte for kind 4
+    // (research/masking.md §5) and the binding has to be present either way.
+    auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
 
     // A fresh stroke folds over the group's identity, so `src` is zeroed before
     // each run unless a check is deliberately chaining passes.
@@ -4571,7 +4577,7 @@ void testMaskBrushGpu() {
 
     const auto run = [&](const orion::pipe::params::MaskComponent& b) {
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), dst.get()}, &b, sizeof b, kW, kH);
+        cb.dispatch(*kernel, {src.get(), matte.get(), dst.get()}, &b, sizeof b, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -4784,6 +4790,9 @@ void testMaskCompositeGpu() {
 
     auto src = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
     auto dst = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    // Bound but unread by kinds 1-3. The kernel takes a matte for kind 4
+    // (research/masking.md §5) and the binding has to be present either way.
+    auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
 
     // Chains a list of components exactly as DevelopPipeline does: the fold
     // starts from zero and each pass reads the one before it.
@@ -4792,7 +4801,7 @@ void testMaskCompositeGpu() {
         for (const auto& p : parts) {
             src->upload(alpha.data(), std::size_t(kW) * sizeof(__fp16));
             orion::gpu::CommandBuffer cb(*device);
-            cb.dispatch(*kernel, {src.get(), dst.get()}, &p, sizeof p, kW, kH);
+            cb.dispatch(*kernel, {src.get(), matte.get(), dst.get()}, &p, sizeof p, kW, kH);
             cb.commitAndWait();
             dst->download(alpha.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
         }
@@ -5191,6 +5200,217 @@ void testMaskGeometry() {
     }
 }
 
+// A raster mask component — research/masking.md §5, the shape a segmentation
+// matte arrives in.
+//
+// Vision's own output cannot be unit-tested: it is a model whose result moves
+// between OS releases, and "did it find the subject" is not a property this
+// suite can assert. What *can* be pinned is everything between the matte and
+// the picture, which is where the silent failures live — a half-texel offset in
+// the lift, a live rectangle ignored, invert or compose skipping the new kind
+// the way they once skipped the brush.
+void testMaskMatteGpu() {
+    section("Matte masks (GPU)");
+
+    using orion::gpu::PixelFormat;
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 64, kH = 64;
+    constexpr std::uint32_t kM = 8;          // the matte texture's allocation
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto lib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/maskComponent.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
+
+    auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto matte = orion::gpu::Texture::create(*device, kM, kM, PixelFormat::R16Float);
+
+    const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
+
+    // The matte texture is allocated for the largest matte a producer might
+    // hand over, and a smaller one lands in its top-left corner — exactly as
+    // DevelopPipeline::setMaskMatte does it. `fill` writes junk outside the live
+    // rectangle on purpose: if the kernel ever reads past `matteSize`, that junk
+    // is what tells us.
+    const auto upload = [&](int lw, int lh, const std::vector<float>& live,
+                            float outside) {
+        std::vector<__fp16> tex(std::size_t(kM) * kM, __fp16(outside));
+        for (int y = 0; y < lh; ++y) {
+            for (int x = 0; x < lw; ++x) {
+                tex[std::size_t(y) * kM + std::size_t(x)] =
+                    __fp16(live[std::size_t(y) * std::size_t(lw) + std::size_t(x)]);
+            }
+        }
+        matte->upload(tex.data(), std::size_t(kM) * sizeof(__fp16));
+    };
+
+    const auto run = [&](const params::MaskComponent& m) {
+        src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.commitAndWait();
+        std::vector<__fp16> out(std::size_t(kW) * kH);
+        dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+        return out;
+    };
+    const auto at = [&](const std::vector<__fp16>& a, int x, int y) {
+        return double(a[std::size_t(y) * kW + std::size_t(x)]);
+    };
+
+    params::MaskComponent base{};
+    base.size[0] = kW; base.size[1] = kH;
+    base.kind = 4;
+    base.matteSize[0] = 2; base.matteSize[1] = 1;
+
+    // ── The half-texel convention, which is the whole risk ────────────────
+    //
+    // A 2 x 1 matte of [0, 1] is a ramp whose answer is analytic under the
+    // stated convention — samples at pixel *centres*, clamped at the edge
+    // texels. The texel centres sit at normalized x = 0.25 and 0.75, so the
+    // output is flat 0 left of 0.25, flat 1 right of 0.75, and linear between,
+    // passing through exactly 0.5 at the middle.
+    //
+    // Every plausible off-by-half convention breaks one of those three: drop
+    // the -0.5 and the ramp shifts a quarter of the frame; sample at texel
+    // corners and the midpoint stops being 0.5; forget the clamp and the ends
+    // wrap or extrapolate.
+    {
+        upload(2, 1, {0.0f, 1.0f}, 0.75f);
+        const auto got = run(base);
+
+        // Mid-frame, by symmetry, exactly half.
+        const double mid = 0.5 * (at(got, 31, 32) + at(got, 32, 32));
+        report(std::abs(mid - 0.5) < 2e-3,
+               "a matte is lifted about its texel centres, so a two-texel ramp "
+               "is exactly half way across",
+               std::to_string(mid));
+
+        // Flat outside the texel centres, at both ends.
+        report(at(got, 0, 32) < 2e-3 && at(got, 15, 32) < 2e-3,
+               "flat at the value of the first texel left of its centre",
+               std::to_string(at(got, 0, 32)) + ", " + std::to_string(at(got, 15, 32)));
+        report(at(got, 48, 32) > 1.0 - 2e-3 && at(got, 63, 32) > 1.0 - 2e-3,
+               "and flat at the last texel's value right of its centre",
+               std::to_string(at(got, 48, 32)) + ", " + std::to_string(at(got, 63, 32)));
+
+        // A quarter of the way from one centre to the other is a quarter up.
+        const double q = at(got, 24, 32);
+        report(std::abs(q - 0.25) < 0.02, "and linear between them",
+               std::to_string(q));
+
+        // ⚠ Nothing outside the live rectangle leaks in. The texture is 8 x 8
+        // and holds 0.75 everywhere the 2 x 1 matte does not; if any of that
+        // were read, the ramp's ends could not be 0 and 1.
+        report(at(got, 0, 0) < 2e-3 && at(got, 63, 63) > 1.0 - 2e-3,
+               "and the rows past the live rectangle are never sampled",
+               std::to_string(at(got, 0, 0)) + ", " + std::to_string(at(got, 63, 63)));
+    }
+
+    // ── The edge clamp, with a first texel that is not zero ───────────────
+    //
+    // ⚠ Added because a mutation survived. The ramp above starts at 0, and an
+    // out-of-bounds texture read on Metal also returns 0 — so deleting the
+    // clamp on the sample coordinate changed nothing anywhere the test looked,
+    // and the suite reported a clean run on a kernel that reads outside its
+    // matte. A first texel of 0.25 makes the two answers differ: clamped gives
+    // 0.25 at the left edge, unclamped blends it toward the out-of-bounds zero
+    // and gives about 0.13.
+    {
+        upload(2, 1, {0.25f, 1.0f}, 0.0f);
+        const auto got = run(base);
+        report(std::abs(at(got, 0, 32) - 0.25) < 3e-3,
+               "the sample coordinate is clamped to the edge texel, so the "
+               "border is the matte's own value and not the void past it",
+               std::to_string(at(got, 0, 32)));
+    }
+
+    // ── A matte with no live rectangle contributes nothing ────────────────
+    //
+    // Zero means "no matte uploaded", and a component in that state has to
+    // behave like a component switched off — not sample an empty texture and
+    // not cover the frame.
+    {
+        upload(2, 1, {0.0f, 1.0f}, 1.0f);
+        auto m = base;
+        m.matteSize[0] = 0; m.matteSize[1] = 0;
+        const auto got = run(m);
+        double worst = 0.0;
+        for (std::uint32_t y = 0; y < kH; ++y) {
+            for (std::uint32_t x = 0; x < kW; ++x) {
+                worst = std::max(worst, at(got, int(x), int(y)));
+            }
+        }
+        report(worst < 1e-4, "an empty matte covers nothing at all",
+               std::to_string(worst));
+    }
+
+    // ── Invert and compose reach the new kind ─────────────────────────────
+    //
+    // ⚠ This is the check that exists because of history. When the brush was
+    // added, invert was held by the gradient node and the brush node discarded
+    // its output, so invert silently did nothing to a stroke — a dead control
+    // nobody noticed for a session. A fourth kind is exactly the shape of that
+    // mistake repeating.
+    {
+        upload(2, 1, {0.0f, 1.0f}, 0.0f);
+        const auto plain = run(base);
+        auto inv = base;
+        inv.invert = 1;
+        const auto inverted = run(inv);
+
+        double worst = 0.0;
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            worst = std::max(worst, std::abs((1.0 - at(plain, int(x), 32))
+                                             - at(inverted, int(x), 32)));
+        }
+        report(worst < 2e-3, "invert reaches a matte component",
+               "worst " + std::to_string(worst));
+    }
+    {
+        // Subtract a matte from full coverage: the fold's input is 1 here
+        // rather than the usual 0, so what is measured is the op and not the
+        // component alone.
+        upload(2, 1, {0.0f, 1.0f}, 0.0f);
+        const std::vector<__fp16> ones(std::size_t(kW) * kH, __fp16(1.0f));
+        auto m = base;
+        m.compose = 1;   // subtract
+
+        src->upload(ones.data(), std::size_t(kW) * sizeof(__fp16));
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.commitAndWait();
+        std::vector<__fp16> got(std::size_t(kW) * kH);
+        dst->download(got.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+
+        // alpha1 * (1 - alpha2), with alpha1 = 1: the matte's complement.
+        report(at(got, 0, 32) > 1.0 - 2e-3 && at(got, 63, 32) < 2e-3,
+               "and subtract composes it like any other kind",
+               std::to_string(at(got, 0, 32)) + ", " + std::to_string(at(got, 63, 32)));
+    }
+
+    // ── A two-dimensional matte, to catch a transposed lift ───────────────
+    //
+    // Everything above runs along x, so a kernel that swapped the two axes
+    // would pass all of it. This one cannot: the matte varies only in y.
+    {
+        upload(1, 2, {0.0f, 1.0f}, 0.0f);
+        auto m = base;
+        m.matteSize[0] = 1; m.matteSize[1] = 2;
+        const auto got = run(m);
+        report(at(got, 32, 0) < 2e-3 && at(got, 32, 63) > 1.0 - 2e-3 &&
+               std::abs(0.5 * (at(got, 32, 31) + at(got, 32, 32)) - 0.5) < 2e-3,
+               "a matte that varies in y is lifted in y, not in x",
+               std::to_string(at(got, 32, 0)) + " -> " + std::to_string(at(got, 32, 63)));
+    }
+}
+
 // Guided feathering of the mask group — research/masking.md §4.
 //
 // He, Sun & Tang's guided filter with the mask as input and the photograph as
@@ -5569,6 +5789,7 @@ int main() {
     testMaskCompositeGpu();
     testMaskGeometry();
     testMaskRefineGpu();
+    testMaskMatteGpu();
     testBrushDabsFollowTheFrame();
     testHighlightHaloGpu();
     testOutputDepth();

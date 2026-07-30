@@ -260,6 +260,25 @@ public:
     /// not, which is worse than nothing happening.
     void setBrushStroke(int component, const float* xy, int count);
 
+    /// Uploads a raster matte for one component — a segmentation result, or
+    /// anything else that is an image rather than a formula.
+    ///
+    /// ⚠ **`alpha` is in frame coordinates**: row-major, top-left origin, the
+    /// whole uncropped and unturned frame, values 0..1. A producer working from
+    /// the displayed picture has to undo the geometry before calling this. The
+    /// kernel does no correction, deliberately — see `auxMatte_`.
+    ///
+    /// Larger than `kMaxMatteEdge` on either side is rejected rather than
+    /// scaled: silently resampling someone's matte is how a boundary loses the
+    /// precision they went to the trouble of producing.
+    ///
+    /// Passing `nullptr` clears the matte, which is what "no longer a matte
+    /// component" means.
+    bool setMaskMatte(int component, const float* alpha, int width, int height);
+
+    [[nodiscard]] std::uint32_t maxMatteWidth()  const noexcept { return matteW_; }
+    [[nodiscard]] std::uint32_t maxMatteHeight() const noexcept { return matteH_; }
+
     /// How many dabs one component's stroke holds.
     [[nodiscard]] int brushDabCount(int component) const noexcept {
         if (component < 0 || component >= kMaxMaskComponents) return 0;
@@ -395,6 +414,19 @@ private:
     /// exercises the same code path as a group of three. Unused components are
     /// disabled, which costs their texture and none of their time.
     int nMaskComponent_[kMaxMaskComponents]{};
+
+    /// A raster component's matte, one per slot — research/masking.md §5.
+    ///
+    /// ⚠ In **frame** coordinates: the whole uncropped, unturned sensor frame,
+    /// which is the space `develop:linear` works in. That is a contract on the
+    /// producer rather than something the kernel corrects for, and it is what
+    /// lets a matte survive a crop and a quarter turn the same way a parametric
+    /// component does.
+    static constexpr std::uint32_t kMaxMatteEdge = 1024;
+    int auxMatte_[kMaxMaskComponents]{-1, -1, -1, -1};
+    std::uint32_t matteW_ = 0, matteH_ = 0;
+    /// The live rectangle of each matte, or zero where none has been uploaded.
+    std::uint32_t matteLive_[kMaxMaskComponents][2]{};
 
     /// Guided feathering of the folded group — research/masking.md §4.
     /// One chain for the whole group, not one per component: what gets snapped

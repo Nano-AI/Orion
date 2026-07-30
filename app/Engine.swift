@@ -457,6 +457,40 @@ final class Engine {
         }
     }
 
+    /// Uploads a raster matte for the selected component — kind 4,
+    /// research/masking.md §5.
+    ///
+    /// ⚠ `alpha` is in **frame** coordinates: the whole uncropped, unturned
+    /// frame, row-major from the top left. Not the displayed picture. A
+    /// producer that worked from what is on screen has to undo the geometry
+    /// first — the engine does no correction, which is exactly what lets a
+    /// matte stay on its subject through a crop and a quarter turn.
+    ///
+    /// Returns false if the matte is larger than the engine will take, which is
+    /// reported rather than silently downscaled.
+    @discardableResult
+    func setMaskMatte(_ alpha: [Float], width: Int, height: Int) -> Bool {
+        guard let handle, isLoaded,
+              selectedMask >= 0, selectedMask < maskComponents.count else { return false }
+        let status = alpha.withUnsafeBufferPointer {
+            orion_engine_set_mask_matte(handle, Int32(selectedMask),
+                                        $0.baseAddress, Int32(width), Int32(height))
+        }
+        guard status == ORION_OK else { return false }
+        // The matte lives outside `Adjustments`, like a brush stroke, so
+        // nothing above has been dirtied yet.
+        pushAndRender()
+        return true
+    }
+
+    /// The largest matte this image will accept.
+    var maxMatteSize: (width: Int, height: Int) {
+        guard let handle, isLoaded else { return (0, 0) }
+        var w: UInt32 = 0, h: UInt32 = 0
+        guard orion_engine_max_matte_size(handle, &w, &h) == ORION_OK else { return (0, 0) }
+        return (Int(w), Int(h))
+    }
+
     /// One history entry when a brush stroke finishes, rather than one per dab.
     func commitBrushEdit() { history.record(state, label: "Brush") }
 

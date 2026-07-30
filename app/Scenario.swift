@@ -35,6 +35,8 @@ import SwiftUI
 ///     preview on | off                  the crop tool's context render
 ///     set <control> <value>             any slider by name
 ///     mask <kind>                       none | linear | radial | brush
+///     matte disc | left                 a synthetic raster matte in frame
+///                                       coordinates, for the kind-4 component
 ///     overlay on | off                  paint the coverage, as `Show mask` does
 ///     maskcheck <cells> <ev>            does the mask the *interface draws*
 ///                                       sit on the coverage the engine
@@ -218,6 +220,38 @@ enum Scenario {
                 throw Bad(what: "maskcheck needs a grid size and a local exposure")
             }
             try maskCheck(engine: engine, cells: cells, ev: Float(try number(1)))
+
+        case "matte":
+            // A synthetic matte, in frame coordinates, so the raster component
+            // can be driven without a segmentation model. `disc` is a centred
+            // circle, `left` a half-plane — both have an answer you can predict
+            // and neither depends on a model whose output moves between OS
+            // releases. research/masking.md §5.
+            let shape = args.first ?? ""
+            guard shape == "disc" || shape == "left" else {
+                throw Bad(what: "matte takes disc or left")
+            }
+            let (mw, mh) = engine.maxMatteSize
+            guard mw > 0, mh > 0 else { throw Bad(what: "no photo open") }
+            if engine.maskComponents.isEmpty { engine.maskKind = 1 }
+            var a = [Float](repeating: 0, count: mw * mh)
+            for y in 0..<mh {
+                for x in 0..<mw {
+                    let u = (Double(x) + 0.5) / Double(mw)
+                    let v = (Double(y) + 0.5) / Double(mh)
+                    let on: Bool
+                    if shape == "left" { on = u < 0.5 }
+                    else {
+                        let dx = u - 0.5, dy = v - 0.5
+                        on = (dx * dx + dy * dy) < (0.25 * 0.25)
+                    }
+                    a[y * mw + x] = on ? 1 : 0
+                }
+            }
+            guard engine.setMaskMatte(a, width: mw, height: mh) else {
+                throw Bad(what: "the engine refused the matte")
+            }
+            engine.maskKind = 4
 
         case "overlay":
             // Paint the coverage over the picture, as `Show mask` does. With

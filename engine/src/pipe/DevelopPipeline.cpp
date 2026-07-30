@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace orion::pipe {
 namespace {
@@ -470,11 +471,28 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // it. All the same shape, so a group of one runs the same code as a group of
     // four; unused components are disabled in `apply`, which costs their texture
     // and none of their time. research/masking.md §6.
+    // One matte per component slot, so a group can hold a subject on one row
+    // and a person on another. Allocated at `kMaxMatteEdge` on the long side
+    // rather than at the frame's: a segmentation network runs at a fixed
+    // internal resolution far below 24 MP, and the guided refinement is what
+    // recovers the boundary afterwards. Four of these cost about 4 MB together,
+    // against 48 MB for one at full resolution.
+    const bool tall = height_ > width_;
+    matteW_ = tall ? std::max(1u, kMaxMatteEdge * width_ / std::max(height_, 1u))
+                   : kMaxMatteEdge;
+    matteH_ = tall ? kMaxMatteEdge
+                   : std::max(1u, kMaxMatteEdge * height_ / std::max(width_, 1u));
+
     int prevMask = nMaskBase_;
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        auxMatte_[i] = pipeline_.addAuxTexture(matteW_, matteH_,
+                                               PixelFormat::R16Float);
+    }
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         nMaskComponent_[i] =
             pipeline_.add({"mask:" + std::to_string(i), "maskComponent",
-                           {prevMask}, PixelFormat::R16Float, {}});
+                           {prevMask}, PixelFormat::R16Float, {},
+                           {auxMatte_[i]}});
         prevMask = nMaskComponent_[i];
     }
 
@@ -654,6 +672,48 @@ void DevelopPipeline::setBrushStroke(int component, const float* xy, int count) 
     dabs.clear();
     if (xy == nullptr || count <= 0) return;
     dabs.assign(xy, xy + std::size_t(count) * 2);
+}
+
+bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
+                                   int width, int height) {
+    // Ignored rather than clamped, for the same reason a brush stroke is: a
+    // matte written into the wrong component covers something nobody selected.
+    if (component < 0 || component >= kMaxMaskComponents) return false;
+    const auto slot = std::size_t(component);
+
+    if (alpha == nullptr || width <= 0 || height <= 0) {
+        matteLive_[slot][0] = 0;
+        matteLive_[slot][1] = 0;
+        return true;
+    }
+
+    // ⚠ Rejected, not resampled. A producer that hands over more detail than
+    // the aux texture holds has gone to some trouble for that boundary, and
+    // quietly throwing half of it away — then refining the result and calling
+    // it edge-aware — is worse than refusing.
+    if (std::uint32_t(width) > matteW_ || std::uint32_t(height) > matteH_) {
+        return false;
+    }
+
+    // The aux texture is allocated for the largest matte; a smaller one lands
+    // in its top-left corner and `matteSize` tells the kernel how much is real.
+    // Uploading only the live rows would leave whatever the last matte wrote
+    // outside them, and the bilinear tap at the right and bottom edges reaches
+    // one texel past — so the whole texture is written every time.
+    std::vector<__fp16> full(std::size_t(matteW_) * matteH_, __fp16(0.0f));
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const float v = alpha[std::size_t(y) * std::size_t(width) + std::size_t(x)];
+            full[std::size_t(y) * matteW_ + std::size_t(x)] =
+                __fp16(std::clamp(v, 0.0f, 1.0f));
+        }
+    }
+    pipeline_.updateAux(auxMatte_[slot], full.data(),
+                        std::size_t(matteW_) * sizeof(__fp16));
+
+    matteLive_[slot][0] = std::uint32_t(width);
+    matteLive_[slot][1] = std::uint32_t(height);
+    return true;
 }
 
 void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
@@ -1376,6 +1436,9 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             adj.straightenDeg * 3.14159265358979324f / 180.0f,
             adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
             rotW, rotH);
+
+        m.matteSize[0] = matteLive_[std::size_t(i)][0];
+        m.matteSize[1] = matteLive_[std::size_t(i)][1];
 
         m.centre[0] = placed.centreX; m.centre[1] = placed.centreY;
         mask::radiusToFrame(c.radius[0], c.radius[1], crop, m.semi[0], m.semi[1]);

@@ -428,7 +428,7 @@ enum class MaskCompose : std::int32_t { Add = 0, Subtract = 1, Intersect = 2 };
 /// than a raster. research/masking.md §1 and §3.
 struct alignas(8) MaskComponent {
     std::uint32_t size[2];
-    std::int32_t  kind;        // 0 off, 1 linear, 2 radial, 3 brush
+    std::int32_t  kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte
     std::int32_t  invert;      // inverts this component, before the fold
     std::int32_t  compose;     // MaskCompose
     std::int32_t  count;       // dabs this pass, <= kMaskDabsPerPass
@@ -444,16 +444,21 @@ struct alignas(8) MaskComponent {
     float         full[2];     // linear
     float         centre[2];   // radial
     float         semi[2];     // radial semi-axes, normalized
+    /// Matte (kind 4): the live rectangle of the aux texture, which is
+    /// allocated for the largest matte a producer might hand over. Zero
+    /// disables the branch. research/masking.md §5.
+    std::uint32_t matteSize[2];
     float         dabs[kMaskDabsPerPass][2];   // brush centres, normalized
 };
-static_assert(sizeof(MaskComponent) == 88 + kMaskDabsPerPass * 8);
+static_assert(sizeof(MaskComponent) == 96 + kMaskDabsPerPass * 8);
 // Every float2 in the shader's struct must land on an eight-byte boundary, or
 // Metal pads and every field after the first pair shifts.
 static_assert(offsetof(MaskComponent, zero)   == 56);
 static_assert(offsetof(MaskComponent, full)   == 64);
 static_assert(offsetof(MaskComponent, centre) == 72);
-static_assert(offsetof(MaskComponent, semi)   == 80);
-static_assert(offsetof(MaskComponent, dabs)   == 88);
+static_assert(offsetof(MaskComponent, semi)      == 80);
+static_assert(offsetof(MaskComponent, matteSize) == 88);
+static_assert(offsetof(MaskComponent, dabs)      == 96);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {

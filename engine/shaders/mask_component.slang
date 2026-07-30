@@ -25,7 +25,7 @@
 struct MaskComponentParams
 {
     uint2  size;
-    int    kind;        // 0 off, 1 linear, 2 radial, 3 brush
+    int    kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte
     int    invert;      // inverts *this component's* coverage, before the fold
 
     int    compose;     // kMaskAdd | kMaskSubtract | kMaskIntersect
@@ -51,6 +51,12 @@ struct MaskComponentParams
     float2 centre;      // radial
     float2 semi;        // radial semi-axes, normalized
 
+    /// Matte (kind 4): the live rectangle of the aux texture. A matte is
+    /// uploaded at whatever size its producer had, into a texture allocated for
+    /// the largest one, so the kernel has to be told how much of it is real.
+    /// Zero disables the branch rather than sampling an empty texture.
+    uint2  matteSize;
+
     float2 dabs[256];   // brush centres, normalized
 };
 
@@ -68,10 +74,42 @@ float dabCoverage(float d, float hardness)
     return 1.0f - maskFalloff((d - h) / max(1.0f - h, 1e-3f));
 }
 
+/// A matte sampled bilinearly at a normalized frame position.
+///
+/// ⚠ **The matte is in frame coordinates**, the same space this kernel works
+/// in — uncropped, unturned, the whole sensor frame. That is a contract on
+/// whoever *produces* it, not something this kernel corrects for, and it is
+/// deliberate: a raster in displayed coordinates would need the crop, the
+/// straighten and the quarter turns undone per pixel here, and it would carry
+/// no data at all outside the crop rectangle. Keeping the kernel ignorant of
+/// geometry means a matte survives a crop and a rotation for the same reason
+/// the parametric components do.
+///
+/// Bilinear by hand because the mattes worth having are coarse — a segmentation
+/// network runs at a fixed internal resolution well below the frame's — and a
+/// nearest fetch would staircase the boundary before the guided refinement ever
+/// saw it.
+float sampleMatte(Texture2D<float> matte, float2 q, uint2 msize)
+{
+    if (msize.x == 0u || msize.y == 0u) return 0.0f;
+
+    const float2 maxCoord = float2(msize) - 1.0f;
+    const float2 c = clamp(q * float2(msize) - 0.5f, float2(0.0f, 0.0f), maxCoord);
+
+    const int2 i0 = int2(floor(c));
+    const int2 i1 = min(i0 + int2(1, 1), int2(maxCoord));
+    const float2 f = c - float2(i0);
+
+    const float top = lerp(matte[int2(i0.x, i0.y)], matte[int2(i1.x, i0.y)], f.x);
+    const float bot = lerp(matte[int2(i0.x, i1.y)], matte[int2(i1.x, i1.y)], f.x);
+    return saturate(lerp(top, bot, f.y));
+}
+
 [shader("compute")]
 [numthreads(16, 16, 1)]
 void maskComponent(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float>   src,   // coverage so far, 0..1
+                   uniform Texture2D<float>   matte, // kind 4, frame coordinates
                    uniform RWTexture2D<float> dst,
                    uniform ConstantBuffer<MaskComponentParams> p)
 {
@@ -152,6 +190,16 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         }
 
         own = saturate(own);
+    }
+    else if (p.kind == 4)
+    {
+        // A raster component: a segmentation matte, or anything else that is an
+        // image rather than a formula. The boundary it arrives with is as coarse
+        // as its producer's resolution; the guided refinement (research/
+        // masking.md §4) is what snaps it back onto the photograph's own edges,
+        // and it is a separate control precisely so a matte can be used raw when
+        // the refinement would hurt.
+        own = sampleMatte(matte, q, p.matteSize);
     }
 
     // Invert applies to every kind, which it did not before: the old pair of

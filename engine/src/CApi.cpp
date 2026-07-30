@@ -246,6 +246,35 @@ OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
     });
 }
 
+OrionStatus orion_engine_set_mask_matte(OrionEngine* engine, int component,
+                                        const float* alpha, int width, int height) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    // Rejected rather than clamped, like a brush stroke: a matte in the wrong
+    // component covers something nobody selected.
+    if (component < 0 || component >= ORION_MAX_MASK_COMPONENTS)
+        return ORION_ERR_BAD_ARG;
+    if (alpha == nullptr && (width > 0 || height > 0)) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        const bool ok = engine->impl.developMutable()
+                            .setMaskMatte(component, alpha, width, height);
+        // Too large for the aux texture. Reported rather than resampled — see
+        // the header. A caller that gets this back should downscale on its own
+        // terms, where it can choose the filter.
+        return ok ? ORION_OK : ORION_ERR_BAD_ARG;
+    });
+}
+
+OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
+                                        unsigned* out_w, unsigned* out_h) {
+    if (engine == nullptr || out_w == nullptr || out_h == nullptr)
+        return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        *out_w = engine->impl.develop().maxMatteWidth();
+        *out_h = engine->impl.develop().maxMatteHeight();
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* out) {
     if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
     return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {

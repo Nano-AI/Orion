@@ -1,0 +1,51 @@
+# A raster mask component — research/masking.md §5, the shape a segmentation
+# matte arrives in.
+#
+# ⚠ The contract this file exists to pin: **a matte is in frame coordinates**,
+# the whole uncropped and unturned sensor frame, and the kernel does no geometry
+# correction. That is what lets a matte stay on its subject through a crop and a
+# quarter turn, exactly as a gradient does — and it is a promise the *producer*
+# has to keep, so it needs checking from outside the engine.
+#
+# The disc is centred and so survives a rotation whatever the convention is; it
+# proves only that the matte reaches the picture. The half-plane is the
+# discriminating case, and it is the one that would catch a matte quietly being
+# treated as displayed-space.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+print a centred disc reaches the picture, and stops at its edge
+measure 0.45,0.45,0.10,0.10 centreBefore
+measure 0.05,0.05,0.08,0.08 cornerBefore
+matte disc
+set localExposure 2.5
+measure 0.45,0.45,0.10,0.10 centreAfter
+measure 0.05,0.05,0.08,0.08 cornerAfter
+expect centreAfter != centreBefore
+expect cornerAfter == cornerBefore
+
+# A half-plane over the frame's left half. Unrotated, that is the displayed
+# left half too.
+open samples/_PIC8220.ARW
+set exposure 2.6
+matte left
+set localExposure 2.5
+measure 0.12,0.45,0.10,0.10 leftLit
+measure 0.78,0.45,0.10,0.10 rightDark
+expect leftLit != rightDark
+
+# ⚠ One quarter turn clockwise sends a frame point (x, y) to (1 - y, x) on
+# screen, so the frame's LEFT half is displayed across the TOP. A matte that had
+# been stored in displayed coordinates would stay on the left and this would
+# fail. Measured on the two halves the turn moves it between.
+rotate 1
+measure 0.45,0.12,0.10,0.10 topAfterTurn
+measure 0.45,0.78,0.10,0.10 bottomAfterTurn
+expect topAfterTurn != bottomAfterTurn
+
+# And the sides it used to occupy are now uniform, because the coverage left
+# them: both halves of a horizontal cut sit inside the covered band.
+measure 0.12,0.20,0.08,0.08 leftAfterTurn
+measure 0.78,0.20,0.08,0.08 rightAfterTurn
+expect leftAfterTurn != rightAfterTurn
