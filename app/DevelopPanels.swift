@@ -238,6 +238,27 @@ extension Editor {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                // Batch export lives beside sync because they are the same
+                // gesture from the photographer's side — do this to all of
+                // them — and differ only in whether the result is a sidecar or
+                // a file.
+                HStack(spacing: 6) {
+                    if let p = batchProgress {
+                        Text("Exporting \(p.done) of \(p.total)…")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.dim)
+                        Button("Stop") { batchCancelled = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    } else {
+                        Button("Export all…") { runBatchExport() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(!engine.isLoaded || library.photos.isEmpty)
+                    }
+                    Spacer(minLength: 0)
+                }
+
                 Text("A preset changes only the groups it carries and leaves "
                    + "everything else alone. The crop, the dust spots and the "
                    + "masks are never included — those belong to one photograph.")

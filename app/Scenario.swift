@@ -73,6 +73,7 @@ import SwiftUI
 ///                                       one tick. Distinct values, because a
 ///                                       repeated *same* value dirties nothing
 ///                                       and would time an empty render
+///     save <path>                       write the state to that photo's sidecar
 ///     shot <path>                       write a PNG
 ///     print <text>
 ///
@@ -312,6 +313,17 @@ enum Scenario {
             }
             engine.apply(preset: p)
             say("  applied preset \(p.name) (\(p.groups.count) groups)\n")
+
+        case "save":
+            // Writes the current state to the photo's sidecar, which is what
+            // autosave does when the edits settle. Here so a scenario can set a
+            // photograph up for something that reads sidecars rather than the
+            // engine — batch export, and sync.
+            guard let p = args.first else { throw Bad(what: "save needs a path") }
+            guard let encoded = try? JSONEncoder().encode(engine.state) else {
+                throw Bad(what: "could not encode the state")
+            }
+            Sidecar.merge(into: URL(fileURLWithPath: p)) { $0.develop = encoded }
 
         case "overlay":
             // Paint the coverage over the picture, as `Show mask` does. With

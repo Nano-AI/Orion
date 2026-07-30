@@ -14,6 +14,10 @@ struct OrionApp: App {
         if let options = Screenshot.options(CommandLine.arguments) {
             Screenshot.run(options)
         }
+        // A real batch, so the feature is run rather than only unit-tested.
+        if CommandLine.arguments.contains("--batch-export") {
+            BatchExport.runCommandLine(CommandLine.arguments)
+        }
     }
 
     var body: some Scene {
@@ -272,6 +276,11 @@ struct Editor: View {
     /// How many sidecars the last sync wrote, for the footer message.
     @State var syncedCount = 0
 
+    /// Batch export progress: how many done of how many, and a cancel flag the
+    /// running loop polls. Nil when nothing is running.
+    @State var batchProgress: (done: Int, total: Int)?
+    @State var batchCancelled = false
+
     /// Set while a segmentation model is running, so the two buttons can say so
     /// and cannot be pressed twice. research/masking.md §5.
     @State var matteRunning = false
@@ -289,7 +298,7 @@ struct Editor: View {
 
     /// Edits reach the sidecar on their own — see `Autosave`. Held here rather
     /// than in `Engine` because it is the shell that knows which file is open.
-    @State private var autosave = Autosave()
+    @State var autosave = Autosave()
     @State private var lifecycleObservers: [NSObjectProtocol] = []
 
     var body: some View {
@@ -355,6 +364,51 @@ struct Editor: View {
             Button("Sync", role: .destructive) { runSync() }
         } message: {
             Text(syncWarning)
+        }
+    }
+
+    /// Exports every photo in view to a folder the photographer chooses.
+    ///
+    /// ⚠ Runs on the main actor because the engine does, so the interface would
+    /// freeze for the duration — a folder of three hundred is two and a half
+    /// minutes. It yields between photographs instead, which lets the progress
+    /// readout paint and the Stop button respond. Not the same as running it
+    /// off the main thread, and honest about it: the panel says "working" and
+    /// the rest of the interface is disabled while it does.
+    func runBatchExport() {
+        guard engine.isLoaded, !library.photos.isEmpty else { return }
+
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Export Here"
+        panel.message = "Choose a folder for \(library.photos.count) exported photos."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+
+        // Anything owed to the open photo is written first: batch reads
+        // sidecars, and the one on screen may have edits that have not settled.
+        autosave.flush()
+
+        let ext = exportSettings.format == .jpeg ? "jpg"
+                                                 : exportSettings.format.rawValue
+        let jobs = BatchExport.plan(sources: library.photos.map(\.url),
+                                    into: folder, extension: ext)
+        batchCancelled = false
+        batchProgress = (0, jobs.count)
+
+        Task { @MainActor in
+            let outcome = BatchExport.run(
+                jobs: jobs, engine: engine, settings: exportSettings,
+                progress: { done, total in batchProgress = (done, total) },
+                isCancelled: { batchCancelled })
+
+            batchProgress = nil
+            message = outcome.summary
+            // The engine is now sitting on the last photo of the batch. Put the
+            // one the photographer was looking at back, or they return to a
+            // different picture than they left.
+            if let current { load(current) }
         }
     }
 
@@ -1036,7 +1090,7 @@ struct Editor: View {
         }
     }
 
-    private func load(_ url: URL) {
+    func load(_ url: URL) {
         // The photo being left keeps its edits. Without this, going to the next
         // frame and back threw the work away — which is the whole difference
         // between an editor and a viewer.

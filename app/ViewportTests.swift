@@ -56,6 +56,8 @@ enum ViewportTests {
         testPictureMapMatchesTheFitRectangle()
         testPictureMapRoundTrips()
         testPictureMapFollowsThePan()
+        testBatchNeverOverwrites()
+        testBatchKeepsGoingAfterAFailure()
         testEveryFieldSurvivesTheSidecar()
         testPresetIsAPatch()
         testSyncKeysMatchTheStructPatch()
@@ -2214,5 +2216,114 @@ enum ViewportTests {
         report(back.maskComponents == original.maskComponents,
                "the mask group survives",
                "\(back.maskComponents.count) of \(original.maskComponents.count)")
+    }
+
+    // MARK: Batch export
+
+    /// ⚠ Nothing is overwritten, and two sources never collide.
+    ///
+    /// Export is the one operation here that writes files a photographer may
+    /// already have, and a batch is where both ways of losing one live: a
+    /// target already on disk, and two sources from different folders sharing a
+    /// basename.
+    static func testBatchNeverOverwrites() {
+        let out = URL(fileURLWithPath: "/out")
+
+        // Two different folders, same basename. Nothing on disk yet.
+        let sources = [URL(fileURLWithPath: "/a/IMG_0001.ARW"),
+                       URL(fileURLWithPath: "/b/IMG_0001.ARW"),
+                       URL(fileURLWithPath: "/c/IMG_0002.ARW")]
+        let jobs = BatchExport.plan(sources: sources, into: out, extension: "jpg",
+                                    exists: { _ in false })
+
+        report(jobs.count == 3, "every source gets a job", "\(jobs.count)")
+        report(jobs[0].destination.lastPathComponent == "IMG_0001.jpg",
+               "the first keeps its name", jobs[0].destination.lastPathComponent)
+        report(jobs[1].destination.lastPathComponent == "IMG_0001-2.jpg",
+               "the second is numbered rather than overwriting the first",
+               jobs[1].destination.lastPathComponent)
+        report(jobs[2].destination.lastPathComponent == "IMG_0002.jpg",
+               "and an unrelated name is untouched",
+               jobs[2].destination.lastPathComponent)
+
+        // Every destination distinct — the property the numbering exists for,
+        // checked directly rather than inferred from the three names above.
+        report(Set(jobs.map(\.destination)).count == jobs.count,
+               "no two jobs share a destination")
+
+        // Now with something already on disk.
+        let onDisk: Set<String> = ["/out/IMG_0001.jpg", "/out/IMG_0001-2.jpg"]
+        let jobs2 = BatchExport.plan(sources: [sources[0]], into: out,
+                                     extension: "jpg",
+                                     exists: { onDisk.contains($0.path) })
+        report(jobs2[0].destination.lastPathComponent == "IMG_0001-3.jpg",
+               "an existing file is stepped over, not written through",
+               jobs2[0].destination.lastPathComponent)
+
+        // ⚠ And the two rules compose: one source collides with disk, the next
+        // with the first source's *new* name.
+        let jobs3 = BatchExport.plan(sources: [sources[0], sources[1]], into: out,
+                                     extension: "jpg",
+                                     exists: { $0.path == "/out/IMG_0001.jpg" })
+        report(jobs3[0].destination.lastPathComponent == "IMG_0001-2.jpg"
+               && jobs3[1].destination.lastPathComponent == "IMG_0001-3.jpg",
+               "the in-batch and on-disk rules compose",
+               jobs3.map(\.destination.lastPathComponent).joined(separator: ", "))
+    }
+
+    /// ⚠ One bad file does not abandon the rest, and cancelling stops promptly.
+    ///
+    /// A folder is likely to contain something the decoder cannot read, and
+    /// losing forty good photographs to the eleventh being a stray PNG is not
+    /// what anybody wants.
+    static func testBatchKeepsGoingAfterAFailure() {
+        struct Boom: LocalizedError { var errorDescription: String? { "no" } }
+
+        let jobs = (1...5).map {
+            BatchExport.Job(source: URL(fileURLWithPath: "/in/\($0).ARW"),
+                            destination: URL(fileURLWithPath: "/out/\($0).jpg"))
+        }
+
+        var opened: [String] = []
+        let outcome = BatchExport.run(
+            jobs,
+            openAndRestore: { url in
+                opened.append(url.lastPathComponent)
+                if url.lastPathComponent == "3.ARW" { throw Boom() }
+            },
+            exportTo: { _ in })
+
+        report(outcome.written.count == 4 && outcome.failed.count == 1,
+               "a failure is collected and the batch continues",
+               "\(outcome.written.count) written, \(outcome.failed.count) failed")
+        report(opened.count == 5, "every source was still attempted",
+               "\(opened.count)")
+        report(outcome.failed.first?.0.lastPathComponent == "3.ARW",
+               "and the one that failed is named",
+               outcome.failed.first?.0.lastPathComponent ?? "none")
+        report(outcome.summary.contains("4") && outcome.summary.contains("1 failed"),
+               "the summary says both numbers", outcome.summary)
+
+        // Cancelling: stops before the next photograph, and says it stopped.
+        var done = 0
+        let stopped = BatchExport.run(
+            jobs,
+            openAndRestore: { _ in done += 1 },
+            exportTo: { _ in },
+            isCancelled: { done >= 2 })
+        report(stopped.written.count == 2 && stopped.cancelled,
+               "cancelling stops the batch and is reported",
+               "\(stopped.written.count) written, cancelled \(stopped.cancelled)")
+        report(stopped.summary.contains("stopped early"),
+               "and the summary says so", stopped.summary)
+
+        // Progress is reported once per photograph plus a final call, so a bar
+        // reaches its end rather than stopping one short.
+        var seen: [Int] = []
+        _ = BatchExport.run(jobs, openAndRestore: { _ in }, exportTo: { _ in },
+                            progress: { i, _ in seen.append(i) })
+        report(seen.first == 0 && seen.last == jobs.count,
+               "progress starts at zero and reaches the total",
+               "\(seen)")
     }
 }
