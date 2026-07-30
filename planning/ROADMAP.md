@@ -139,7 +139,9 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
   photographs**, at the level of the JSON keys, so a photo that has never been
   edited keeps its as-shot white balance. ⚠ "Across a selection" is across
   every photo in view; the filmstrip has no multi-selection yet
-- Batch export
+- ✅ Batch export — 2026-07-30. One engine reused across the list (466 ms a
+  photo, peak RSS flat); each photo'+chr(39)+'s own sidecar restored before it is
+  exported; nothing overwritten and no two sources colliding
 - Snapshots/versions, perspective correction, film grain
 
 ---

@@ -4,8 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**copy, paste and sync** · a sidecar bug two
-sessions old)
+**Last updated:** 2026-07-30 (**batch export — the last v1 feature**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
@@ -18,24 +17,25 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **batch export** (`ROADMAP.md` M4) — the last v1 item. The
-export path itself is built and tested; what is missing is running it over a
-list without holding a folder of decoded frames in memory at once.
+**Next story:** ⚠ **`degrade-then-refine`** — `ROADMAP.md`'s M1 Interaction
+epic, and now the largest thing left by a distance. It is the only open item a
+user has actually complained about, it has been measured and costed since
+2026-07-29 (`repro/slider-drag-cost.txt`: exposure 9.4 ms a tick, clarity 65.7,
+dehaze 116.4), and every feature story that could reasonably come before it is
+done.
 
-Two smaller things this session named rather than did:
+**M4's v1 feature list is complete.** What remains in the milestone is polish
+and two named extensions:
 
-- **Multi-selection in the filmstrip.** Sync applies to every photo *in view*
-  because there is no selection to apply it to. The `SyncSettings` half takes a
-  list of URLs and does not care where it came from.
-- Colour range masks, and sky (needs a bundled model — RMBG is the licence
-  trap).
+| Left | Note |
+|---|---|
+| Multi-selection in the filmstrip | Sync and batch both apply to every photo *in view* because there is nothing narrower to apply them to. `SyncSettings` and `BatchExport` both take a list of URLs already |
+| Colour range masks | Needs a colour distance and so a colour space — `research/masking.md` §4b names CIE76 and CIEDE2000 |
+| Sky | ⚠ No Apple API. Needs a bundled BiRefNet or U²-Net; RMBG is the licence trap |
 
-⚠ **`degrade-then-refine` is still the largest open reported bug**, and the
-only item here a user has actually complained about.
-
-**Suites:** `orion-tests` **454 checks** · `orion-viewport-tests` **3337
+**Suites:** `orion-tests` **454 checks** · `orion-viewport-tests` **3351
 checks** · **13 `repro/` scenarios, 64 checks** · all 0 failures. Bench exits 0
-on all three frames: M0 gate **10.75 ms p95**, 127 nodes, 6427 MiB.
+on all three frames: M0 gate **9.39 ms p95**, 127 nodes, 6427 MiB.
 
 ### Known gaps, carried forward
 
@@ -55,6 +55,68 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30f — batch export, and M4's feature list closes
+
+⚠ **Thirteenth arrival of the stale M3 prompt.** Not re-litigated.
+
+The export path was built and tested in M1. What was missing is running it over
+a list — and the interesting parts of that are not the loop.
+
+### One engine, reused, and the trap in reusing it
+
+`Engine.open` keeps its compiled graph when the next frame has the same shape,
+so a batch is one engine opening files in turn. Measured over the three
+samples, which are *not* all the same shape: **466 ms each, peak RSS 1.37 GB and
+flat**.
+
+⚠ **Each photograph must have its own sidecar restored before it is exported.**
+The engine carries the previous photo's adjustments until something replaces
+them, so a loop that only called `open` would export the second frame with the
+first frame's grade. It would look plausible on a contact sheet, which is the
+dangerous kind of wrong.
+
+Verified with real files, not argued: a heavily edited sidecar on one photo gave
+**12319.8 KB** against **9603.1** unedited, and the next photo in the same batch
+came out **byte-identical** to exporting it alone. Deleting the restore call
+drops the first back to 9603.1 — the mutation is visible in a file size.
+
+### Nothing is overwritten
+
+Export is the one operation here that writes files a photographer may already
+have, and a batch is where both ways of losing one live: a target already on
+disk, and two sources from different folders sharing a basename. Both get a
+numbered suffix, the two rules compose, and `exists` is injected so all of it is
+tested without a filesystem. One failure does not abandon the rest — a folder
+will contain something the decoder cannot read sooner or later.
+
+### Two small tools that made it testable
+
+- `--batch-export <folder> <photos...>` runs a real batch. A feature shipped on
+  the strength of its unit tests is a feature nobody has run.
+- `save <path>` in the scenario runner writes a photo's sidecar, which is what
+  set the leak test above up.
+
+`BatchExport` is in both targets and `BatchExportDriver` only in the app — the
+same split as `MatteGeometry` and `SubjectMatte` — so everything except the
+twenty lines needing an `Engine` is checkable without a GPU.
+
+⚠ **Honest about the threading:** the loop runs on the main actor because the
+engine does, yielding between photographs so progress paints and Stop responds.
+That is not the same as running off the main thread, and the interface is
+disabled while it works. A folder of three hundred is about two and a half
+minutes.
+
+### Where this leaves the milestone
+
+**M4's v1 feature list is complete.** Everything `ROADMAP.md` listed under it is
+built: gradient masks, mask groups, guided refinement, the raster component,
+Vision subject and person, luminance range masks, spot removal, presets,
+copy/paste/sync and batch export.
+
+⚠ What that makes next obvious: **degrade-then-refine**. It is the only open
+item a user has actually complained about, it has been measured and costed since
+`2026-07-29`, and there is no longer a feature story standing in front of it.
 
 ## Session 2026-07-30e — sync, and a sidecar bug it uncovered
 
