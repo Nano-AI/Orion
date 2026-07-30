@@ -225,4 +225,62 @@ BayerImage decodeBayer(const std::string& path) {
     return out;
 }
 
+BayerImage decimate(const BayerImage& image, int scale) {
+    if (scale < 2 || (scale % 2) != 0) return image;
+
+    // Whole cells only. A mosaic whose width is not a multiple of the stride
+    // loses its last partial cell rather than sampling across the edge, which
+    // would take the phase with it.
+    // One output *pixel* stands for `scale` input pixels per axis, so one
+    // output *cell* — two pixels — stands for 2*scale input pixels, which is
+    // `scale` input cells. Getting this ratio wrong is how the first version
+    // produced a mosaic twice the intended size while every phase check still
+    // passed.
+    const int cell = scale;
+    const std::uint32_t outCellsX = image.width  / std::uint32_t(2 * scale);
+    const std::uint32_t outCellsY = image.height / std::uint32_t(2 * scale);
+    if (outCellsX == 0 || outCellsY == 0) return image;
+
+    BayerImage out = image;
+    out.width  = outCellsX * 2;
+    out.height = outCellsY * 2;
+    out.samples.assign(std::size_t(out.width) * out.height, 0);
+
+    for (std::uint32_t J = 0; J < outCellsY; ++J) {
+        for (std::uint32_t I = 0; I < outCellsX; ++I) {
+            // The four positions within a CFA cell, each averaged over the
+            // cell x cell block of input cells this output cell stands for.
+            for (int dy = 0; dy < 2; ++dy) {
+                for (int dx = 0; dx < 2; ++dx) {
+                    std::uint32_t sum = 0;
+                    std::uint32_t n = 0;
+                    for (int cy = 0; cy < cell; ++cy) {
+                        for (int cx = 0; cx < cell; ++cx) {
+                            const std::uint32_t sx =
+                                (I * std::uint32_t(cell) + std::uint32_t(cx)) * 2
+                                + std::uint32_t(dx);
+                            const std::uint32_t sy =
+                                (J * std::uint32_t(cell) + std::uint32_t(cy)) * 2
+                                + std::uint32_t(dy);
+                            if (sx >= image.width || sy >= image.height) continue;
+                            sum += image.samples[std::size_t(sy) * image.width + sx];
+                            ++n;
+                        }
+                    }
+                    const std::uint32_t ox = I * 2 + std::uint32_t(dx);
+                    const std::uint32_t oy = J * 2 + std::uint32_t(dy);
+                    out.samples[std::size_t(oy) * out.width + ox] =
+                        static_cast<std::uint16_t>(n ? sum / n : 0);
+                }
+            }
+        }
+    }
+
+    // ⚠ `filters` is deliberately carried across unchanged. The output starts
+    // on the same cell boundary as the input and every sample keeps its phase,
+    // so the pattern is the same pattern — recomputing it would be inventing a
+    // second source of truth for something that did not change.
+    return out;
+}
+
 }  // namespace orion::raw

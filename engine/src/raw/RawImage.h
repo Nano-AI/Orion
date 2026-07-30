@@ -102,4 +102,25 @@ std::vector<std::uint8_t> extractThumbnail(const std::string& path);
 /// Throws std::runtime_error with LibRaw's message on failure.
 BayerImage decodeBayer(const std::string& path);
 
+/// A smaller mosaic, for a preview that has to be rendered while a slider moves.
+///
+/// research: none needed — this is decimation, not a filter. What it has to get
+/// right is the one thing decimating a *mosaic* can get wrong.
+///
+/// ⚠ **The CFA phase must survive.** A Bayer mosaic is only meaningful with its
+/// pattern: sample it on any stride that is not a multiple of the 2x2 cell and
+/// the red pixels land where the demosaic expects green. The result does not
+/// look soft, it looks like a colour-swapped nightmare — and `filters` would
+/// still say the pattern was intact, so nothing downstream would notice.
+///
+/// So the output is built cell by cell: output cell (I, J) averages the input
+/// cells in the `scale/2` square starting at (I*scale/2, J*scale/2), channel by
+/// channel. Averaging rather than point-sampling because a mosaic point-sampled
+/// at stride four moires badly on fabric and foliage, and a preview that
+/// shimmers while a slider moves is worse than one that is soft.
+///
+/// `scale` must be even and at least 2; anything else returns the image
+/// unchanged rather than guessing.
+[[nodiscard]] BayerImage decimate(const BayerImage& image, int scale);
+
 }  // namespace orion::raw
