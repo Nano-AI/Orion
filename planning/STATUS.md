@@ -172,6 +172,40 @@ component's range fields.** The lesson recorded then — a round trip is only as
 good as the state it round-trips — applied to the outer struct and was not
 carried into the inner one.
 
+### Also this session: presets on their own tab, and a build
+
+**Presets moved out of Light** — a hundred and twenty-three lines sitting in
+front of the Exposure slider. Light opens on White Balance now. ⚠ The sixth tab
+had the longest name of the six and `PRESETS` wrapped inside its plate; every
+label is a point smaller and clamped to one line. Found by screenshotting, not
+by reading.
+
+**The export overlay guard finally has a test**, closing the oldest gap in the
+table above. The runner gained `export` (through `Engine.export`, the call the
+panel makes) and `identical`, which compares two files **byte for byte** — a
+size comparison passes on two JPEGs that differ everywhere and compress alike.
+Deleting the guard fails two of four.
+
+**`v0.4.0-alpha.3` is published.** Version stays 0.4.0 per decision #64: M4 is
+not closed while sky is open.
+
+⚠ **Two claims in the previous release notes were stale and would have been
+republished.** `8-bit TIFF` has been listed as a limitation since alpha.1 and is
+false — exports are 16 bits per channel, checked with `sips` on this build
+rather than trusted. The 256-dab truncation listed beside it was fixed a session
+ago. A "known limitations" list is a thing that rots silently, because nothing
+fails when it is wrong.
+
+The dmg was verified the way the first one was: mounted, and run with
+`build/shaders` and `data/lensfun` moved aside — **with the control**, which is
+that the build-tree app fails on the same run. Without the control the test
+proves only that something rendered.
+
+⚠ And the landing page's version appears in **two forms** — `v0.4.0-alpha.3` in
+the links and `0.4.0-alpha.3` in the JSON-LD `softwareVersion`. A replace over
+the tag name misses the second, so the page advertised one version to readers
+and another to anything parsing its structured data.
+
 ## Session 2026-07-30j — multi-selection in the filmstrip
 
 The story this file has named for two sessions. ⚠ **Seventeenth arrival of the
