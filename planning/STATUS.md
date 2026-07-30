@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M4 — **step 2 complete**, mask groups end to end)
+**Last updated:** 2026-07-29 (M4 step 2 complete · design pass · **v0.4.0-alpha.1 released**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** —
 step 1 of `research/masking.md` is finished and reachable by hand; **step 2's
 engine half is done**: a mask is now a *list* of components folded per §6
@@ -40,6 +40,77 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-29s — the interface reads as an instrument, and there is a build
+
+Two things, both asked for directly.
+
+### The design pass (decision #63)
+
+Brief settled by asking rather than guessing: hardware-literal in the register of
+**Halide and Capture One**, density unchanged — the problem was hierarchy, not
+packing — and film-rebate amber as **structure only, never near the photograph**.
+
+**The histogram carries the identity.** It was a grey blob with three words under
+it. It is a recessed plate now, with an engraved rail whose marks are ranked long
+at the named divisions and short at the quarters, and clipping flags at both ends
+that fly with the real percentage beside them. Position says which end, so both
+flags are cut in one amber instead of inventing a second ink.
+
+⚠️ **The flags found a real bug in the curve.** Its ceiling was the 99th
+percentile over every bin, justified in a comment as stopping one blown bin from
+flattening the curve. It does not: with 3 × 256 bins the 99th percentile *is* the
+eighth-largest value, so a night frame with 10% of its pixels at black kept a
+ceiling set by the clipping spike and squashed the photograph into a band along
+the bottom — the grey blob. End bins are excluded from the ceiling now, which is
+honest rather than a fudge precisely because the flags report what sits in them
+as a number.
+
+⚠️ **No EV scale on the rail, and the reason is in the file.** The obvious
+instrument engraves stops. The output is AgX-mapped with **no sRGB encode**, so a
+code value becomes stops only by inverting the AgX polynomial in the interface —
+a second copy of the display transform, drifting from the shader the first time
+either is touched. If stops are wanted the engine should report the mapping.
+
+Hierarchy elsewhere: section names became engraved nameplates with a hairline to
+the panel edge and a mark when anything inside has moved — **reported upward by
+the controls as a SwiftUI preference, not listed at the call site**, because a
+hand-kept list of what a section contains is exactly how `lutStrength` shipped a
+dead slider. Three of four tool tabs were a bare SF Symbol with no label; all
+four are named. The canvas hint moved off the photograph into the footer.
+
+**No bundled font.** San Francisco carries expanded widths and tabular figures,
+so the engraved register costs no license file and has no fallback to worry about.
+
+### v0.4.0-alpha.1 — the first build outside the source tree
+
+**https://github.com/Nano-AI/Orion/releases/tag/v0.4.0-alpha.1** · 3.0 MB dmg,
+linked from the landing page.
+
+`tools/package-app.sh`. The development bundle was not runnable by anyone else
+and none of the reasons were visible in it:
+
+| Blocker | Fix |
+|---|---|
+| `ORION_SHADER_DIR` / `ORION_DATA_DIR` are absolute paths into the build tree | `src/ResourcePaths.cpp` prefers `Contents/Resources`, falls back to the compile-time path (decision #65) |
+| Homebrew `libraw` by absolute path, pulling `libomp`, `libjpeg`, `liblcms2` | Dependency graph **walked**, not listed — that list is a property of how Homebrew built libraw |
+| Rewriting a Mach-O voids its signature; unsigned does not launch on arm64 | Re-signed ad-hoc *after* `install_name_tool`; bundle rpath added at link time |
+| LibRaw is LGPL-2.1 | License texts copied verbatim from the installed packages, never retyped |
+
+**The verification is the part worth keeping.** Any reference outside the bundle
+is a hard error in the script, and then the *published* dmg was downloaded,
+mounted, and run with `build/shaders` and `data/lensfun` moved aside — it
+rendered. The control run, the build-tree app under the same conditions, failed
+on a missing metallib. That control is what says the test was real rather than
+the fallback quietly working.
+
+**Version is 0.4.0, not 1.0.0** (decision #64). Minor tracks the milestone in
+flight; `FEATURES.md` still lists range masks, spot removal, presets, sync and
+batch export as v1, and a build calling itself v1 promises them.
+
+⚠️ **Still true of the release:** arm64 only, 8-bit TIFF, and the 256-dab
+truncation. All three are named in the release notes rather than left to be
+found.
 
 ## Session 2026-07-29r — mask groups reach the interface
 
