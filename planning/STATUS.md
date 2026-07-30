@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**batch export — the last v1 feature**)
+**Last updated:** 2026-07-30 (**degrade-then-refine — the last reported bug**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
@@ -17,25 +17,23 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** ⚠ **`degrade-then-refine`** — `ROADMAP.md`'s M1 Interaction
-epic, and now the largest thing left by a distance. It is the only open item a
-user has actually complained about, it has been measured and costed since
-2026-07-29 (`repro/slider-drag-cost.txt`: exposure 9.4 ms a tick, clarity 65.7,
-dehaze 116.4), and every feature story that could reasonably come before it is
-done.
+**Next story:** nothing is *reported* and nothing in M4's v1 list is unbuilt.
+Three named extensions remain, in the order they are worth doing:
 
-**M4's v1 feature list is complete.** What remains in the milestone is polish
-and two named extensions:
-
-| Left | Note |
+| Story | Note |
 |---|---|
-| Multi-selection in the filmstrip | Sync and batch both apply to every photo *in view* because there is nothing narrower to apply them to. `SyncSettings` and `BatchExport` both take a list of URLs already |
-| Colour range masks | Needs a colour distance and so a colour space — `research/masking.md` §4b names CIE76 and CIEDE2000 |
-| Sky | ⚠ No Apple API. Needs a bundled BiRefNet or U²-Net; RMBG is the licence trap |
+| **Multi-selection in the filmstrip** | Sync and batch both apply to every photo *in view* because there is nothing narrower to apply them to. `SyncSettings` and `BatchExport` already take a list of URLs |
+| **Colour range masks** | Needs a colour distance and so a colour space — `research/masking.md` §4b names CIE76 and CIEDE2000 |
+| **Sky** | ⚠ No Apple API; needs a bundled BiRefNet or U²-Net. RMBG is the licence trap |
 
-**Suites:** `orion-tests` **454 checks** · `orion-viewport-tests` **3351
-checks** · **13 `repro/` scenarios, 64 checks** · all 0 failures. Bench exits 0
-on all three frames: M0 gate **9.39 ms p95**, 127 nodes, 6427 MiB.
+⚠ **Worth a session of its own before more features: the 256-dab brush
+truncation**, which is the oldest carried-forward gap in this file and the only
+one that silently loses a photographer's work.
+
+**Suites:** `orion-tests` **465 checks** · `orion-viewport-tests` **3351
+checks** · **14 `repro/` scenarios, 67 checks** · all 0 failures. Bench exits 0
+on all three frames: M0 gate **9.24 ms p95**, 127 nodes, 6427 MiB — plus a
+preview graph at 1/16 that, about 400 MiB.
 
 ### Known gaps, carried forward
 
@@ -43,7 +41,6 @@ Small, named, and none of them blocking the next story:
 
 | Gap | Where |
 |---|---|
-| **Sliders render at full resolution.** Measured: exposure 9.4 ms/tick, clarity 65.7, dehaze 116.4 on a 24 MP frame — see `repro/slider-drag-cost.txt`. M1's Interaction epic named degrade-then-refine and it was never built. **This is the largest open reported item and it is a story, not a fix** | `Pipeline::render`, `Engine.pushAndRender` |
 | A brush stroke over **256 dabs is truncated** (warns on stderr). The kernel now carries the fix's shape — `accumulate` continues a stroke and skips the fold — but nothing spends a spare component node on the continuation | `DevelopPipeline::apply` |
 | **No bench probe for the brush.** ✅ *Unblocked* — `Probe` gained a `prepare` hook for out-of-band state when the matte probe needed one, and a stroke can use the same hook. Still not written | `apps/bench` |
 | **A matte is not saved with the photo.** It is a raster and the sidecar holds parameters, so reopening leaves a Subject or Person row empty until it is run again. Said out loud in the panel rather than left to be discovered | `Sidecar`, `DevelopPanels` |
@@ -55,6 +52,75 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30g — degrade-then-refine, and the report list empties
+
+⚠ **Fourteenth arrival of the stale M3 prompt.** Not re-litigated.
+
+The last open reported bug. Measured a day earlier and left named while M4's
+feature list was finished, which turned out to be the right order — it meant
+this session could spend all of itself on the architecture.
+
+| tick | before | after |
+|---|---|---|
+| clarity | 57.2 ms, 17 fps | **5.1 ms, 195 fps** |
+| dehaze | 115.4 ms, 9 fps | **7.1 ms, 141 fps** |
+
+A second `DevelopPipeline` over a **quarter-linear** mosaic. Quarter, not half:
+the target is 116 ms inside a 16 ms frame and four is the first power of two
+that manages it — two would leave dehaze at 29 ms. Cost: intermediates at 1/16
+the size (~400 MiB against 6427) and **16 ms** on the open of a photograph whose
+shape needs a new graph, measured at 114 → 130 ms.
+
+### The mosaic is decimated, and that is its own hazard
+
+Committed separately. ⚠ Sample a Bayer mosaic on a stride that is not a multiple
+of its 2×2 cell and the red samples land where the demosaic expects green;
+`filters` still reports the pattern intact, so nothing downstream notices and
+the demosaic gets the blame. Averaged rather than point-sampled, because a
+mosaic point-sampled at stride four moires on fabric and a preview that shimmers
+under a slider is worse than one that is soft.
+
+⚠ **The ratio was wrong first time and the phase check did not catch it** — one
+output *pixel* stands for `scale` input pixels, so one output *cell* stands for
+`scale` input cells, not `scale/2`. The mosaic came out twice the intended size
+with every phase assertion passing. A correct invariant is not a complete test;
+the dimension check is what found it.
+
+### Three properties, and only the first is about speed
+
+- ⚠ **It settles to the full-resolution answer.** Every tick goes to the
+  preview, so when the hand stops the full graph has never seen those values —
+  stale by the whole gesture, not by a little.
+- ⚠ **The preview shows the value being dragged.** This needed a *new
+  measurement surface*. A version that stopped fanning adjustments out to the
+  preview passed everything else: the settled picture was still right, and the
+  only thing wrong was what the photographer saw *during* the drag, which
+  nothing could see.
+- ⚠ **Only the canvas reads it.** Export, the histogram, the eyedropper and the
+  screenshot harness all go through `outputTexture`. A preview-resolution export
+  is a mistake only the person receiving the file would find.
+
+### Two caught before shipping
+
+The blit computes its valid rectangle from `engine.imageWidth` — the *full*
+graph's. Handed the preview it would have sampled a corner and blown it up over
+the canvas, so the photograph would appear to zoom on every drag.
+
+And the compare original is a full-resolution copy sampled through the same UVs,
+so the split is suspended for the length of a drag. The line that does it was
+first written **after** `setFragmentBytes`, where it did nothing.
+
+### The control arms it, not a timer
+
+Every slider calls `beginInteraction`/`endInteraction`, not only the slow ones.
+Which controls are expensive is a property of the graph and it changes; a
+hand-kept list of "the slow ones" is the shape of thing this file has recorded
+being bitten by more than once. A timer would also render the *first* tick of
+every drag at full resolution — the expensive one, since it dirties the graph.
+
+The preview graph is built after the full one and **allowed to fail**: a machine
+without room for it still edits, just without the fast path.
 
 ## Session 2026-07-30f — batch export, and M4's feature list closes
 
