@@ -451,9 +451,45 @@ extension Editor {
                             engine.commitMaskGroupEdit("Remove mask")
                         }
                         .disabled(engine.maskComponents.isEmpty)
+
                         Spacer(minLength: 0)
+
+                        // ⚠ Order is part of the edit, not a display
+                        // preference: the group folds **left**, so subtract and
+                        // intersect mean different things depending on what is
+                        // above them. A row list you cannot reorder is a fold
+                        // you cannot express.
+                        Button {
+                            engine.moveMaskComponent(from: engine.selectedMask, by: -1)
+                        } label: { Image(systemName: "chevron.up") }
+                            .disabled(engine.selectedMask <= 0)
+                        Button {
+                            engine.moveMaskComponent(from: engine.selectedMask, by: 1)
+                        } label: { Image(systemName: "chevron.down") }
+                            .disabled(engine.selectedMask >= engine.maskComponents.count - 1)
                     }
                     .font(.system(size: 11))
+
+                    // Changing what an existing row *is*, which the six-cell
+                    // grid used to do and the Add menu does not — that one
+                    // creates rows. Losing it was a regression from
+                    // reorganising the panel.
+                    if !engine.maskComponents.isEmpty {
+                        HStack(spacing: 6) {
+                            Text("Kind").foregroundStyle(Palette.faint)
+                            Menu(Self.maskKindName(engine.maskKind)) {
+                                Button("Linear") { engine.setMaskKind(1, at: engine.selectedMask) }
+                                Button("Radial") { engine.setMaskKind(2, at: engine.selectedMask) }
+                                Button("Brush") { engine.setMaskKind(3, at: engine.selectedMask) }
+                                Button("Brightness range") { engine.setMaskKind(5, at: engine.selectedMask) }
+                                Button("Colour range") { engine.setMaskKind(6, at: engine.selectedMask) }
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                            Spacer(minLength: 0)
+                        }
+                        .font(.system(size: 11))
+                    }
                 }
 
                 if engine.maskComponents.isEmpty { addMenu.font(.system(size: 11)) }

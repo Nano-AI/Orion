@@ -842,8 +842,52 @@ final class Engine {
     /// sidecar and undo like anything else.
     func toggleMaskHidden(_ index: Int) {
         guard maskComponents.indices.contains(index) else { return }
-        edit(maskComponents[index].hidden ? "Show mask row" : "Hide mask row") {
+        let label = maskComponents[index].hidden ? "Show mask row" : "Hide mask row"
+        edit(label) {
             maskComponents[index].hidden.toggle()
+            // ⚠ **The render is not implied.** `edit` runs the change and
+            // records history; it does not push. Every other control gets its
+            // render from a `didSet` on the property it writes, and
+            // `maskComponents` has none — so mutating a row inside `edit` and
+            // stopping there changes the model, the sidecar and the undo stack
+            // and leaves the picture exactly as it was. The eye toggled, the
+            // list dimmed, and the photograph did not move.
+            //
+            // Decision #67 records the same shape from the other direction: a
+            // bare assignment that renders but records nothing. This is the
+            // mirror of it, and it is why `editSelected` calls this explicitly.
+            pushAndRender()
+        }
+    }
+
+    /// Moves a row up or down the fold.
+    ///
+    /// ⚠ **Every stroke has to be re-sent.** The engine indexes brush strokes
+    /// by component, so swapping two rows in this array leaves their paint
+    /// where it was — row 2's stroke would render under row 1's geometry. The
+    /// same hazard removal already documents.
+    func moveMaskComponent(from index: Int, by offset: Int) {
+        let to = index + offset
+        guard maskComponents.indices.contains(index),
+              maskComponents.indices.contains(to) else { return }
+        edit("Reorder mask") {
+            maskComponents.swapAt(index, to)
+            selectedMask = to
+            pushStrokes()
+            pushAndRender()
+        }
+    }
+
+    /// Changes the selected row's primitive, keeping everything else.
+    ///
+    /// ⚠ Not `maskKind`'s setter: that one adds a component when the group is
+    /// empty and removes it on `No mask`, which is what the old picker needed
+    /// and is wrong for "this row is a radial now".
+    func setMaskKind(_ kind: Int32, at index: Int) {
+        guard maskComponents.indices.contains(index) else { return }
+        edit("Mask kind") {
+            maskComponents[index].kind = kind
+            pushAndRender()
         }
     }
 
@@ -1012,6 +1056,19 @@ final class Engine {
 
     /// A drag started. Renders go to the preview graph until `endInteraction`.
     func beginInteraction() {
+        // ⚠ **Not while comparing.** The preview graph renders at a quarter
+        // linear, and the split samples the held original and the edited render
+        // through *one* set of UVs taken from the edited one — so with a
+        // preview-sized edited texture the two no longer line up, and the
+        // canvas dealt with that by suspending the split for the length of the
+        // drag. Which means the Original side showed the edited picture while a
+        // slider moved: the exact thing compare exists to prevent, at the exact
+        // moment someone is using it to judge a change.
+        //
+        // Compare is a deliberate, short-lived viewing mode. Paying
+        // full-resolution latency inside it is the right trade against a split
+        // that lies.
+        guard !comparing else { return }
         guard isLoaded, previewTexture != nil, !interacting else { return }
         log.interacting(true)
         interacting = true

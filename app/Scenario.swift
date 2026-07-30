@@ -45,6 +45,11 @@ import SwiftUI
 ///                                       fraction of the frame it covered
 ///     overlay on | off                  paint the coverage, as `Show mask` does
 ///     spot <x,y> [radius] [heal|clone]  place a dust spot, as a click does
+///     maskadd <kind>                    add a *row* — `mask <kind>` changes
+///                                       the selected row instead
+///     maskhide <n>                      the eye button on a mask row
+///     maskmove <n> <offset>             reorder a mask row in the fold
+///     maskkind <n> <kind>               change what an existing row is
 ///     spotdrag <n> source|dest <x,y>    drag one of a spot's two handles,
 ///                                       through the call the overlay makes
 ///     spotat <n> source|dest <x,y>      where the interface *draws* that
@@ -335,6 +340,49 @@ enum Scenario {
             guard engine.addSpot(atFrame: at) else {
                 throw Bad(what: "the engine refused the spot")
             }
+
+        case "maskadd":
+            // ⚠ Adds a *row*. `mask <kind>` does not: on a non-empty group its
+            // setter changes the selected row's kind, which is what the old
+            // segmented picker needed. A scenario that used it to build a
+            // second row silently tested a one-row group.
+            let named = ["linear": Int32(1), "radial": 2, "brush": 3,
+                         "matte": 4, "range": 5, "colour": 6, "color": 6]
+            guard let k = named[args.first ?? ""] else {
+                throw Bad(what: "maskadd needs a kind")
+            }
+            if engine.maskComponents.isEmpty {
+                engine.maskKind = k
+            } else {
+                guard engine.addMaskComponent(kind: k) else {
+                    throw Bad(what: "the group is full")
+                }
+                engine.commitMaskGroupEdit("Add mask")
+            }
+
+        case "maskhide":
+            // The eye button, through the same Engine call it makes. ⚠ Not
+            // `set maskHidden`, which goes through `editSelected` and pushes —
+            // that is precisely the path that could not see the bug.
+            guard let i = Int(args.first ?? "") else {
+                throw Bad(what: "maskhide needs a row index")
+            }
+            engine.toggleMaskHidden(i)
+
+        case "maskmove":
+            guard args.count >= 2, let i = Int(args[0]), let by = Int(args[1]) else {
+                throw Bad(what: "maskmove needs a row index and an offset")
+            }
+            engine.moveMaskComponent(from: i, by: by)
+
+        case "maskkind":
+            guard args.count >= 2, let i = Int(args[0]) else {
+                throw Bad(what: "maskkind needs a row index and a kind")
+            }
+            let named = ["none": Int32(0), "linear": 1, "radial": 2, "brush": 3,
+                         "matte": 4, "range": 5, "colour": 6, "color": 6]
+            guard let k = named[args[1]] else { throw Bad(what: "no kind \(args[1])") }
+            engine.setMaskKind(k, at: i)
 
         case "spotdrag":
             // Moves a spot's source or its destination, through the same
@@ -646,6 +694,7 @@ enum Scenario {
         case "maskRangeLo":   e.maskRangeLo = value
         case "maskRangeHi":   e.maskRangeHi = value
         case "maskRangeSoft": e.maskRangeSoft = value
+        case "maskCompose":   e.maskCompose = Int32(value)
         case "maskColourTol", "maskColorTol":   e.maskColourTol = value
         case "maskColourSoft", "maskColorSoft": e.maskColourSoft = value
         case "maskInvert":  e.maskInvert = value != 0

@@ -362,6 +362,11 @@ struct ImageCanvas: NSViewRepresentable {
             // preview would read it through the wrong window — the same defect
             // the geometry changes caused, by a different route. The split is
             // suspended for the length of a drag instead.
+            // ⚠ Belt to `beginInteraction`'s brace: interaction is refused
+            // while comparing, so this should never fire. It stays because the
+            // failure it guards — a split sampling two differently-sized
+            // textures through one set of UVs — draws a plausible picture
+            // rather than an obviously broken one.
             if engine.interacting { t.split = 1 }
 
             encoder.setRenderPipelineState(pipeline)

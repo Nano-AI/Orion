@@ -1,0 +1,73 @@
+# Three reports about the mask row list.
+#
+# 1. "Pressing eye on the mask does not hide the effects made by the mask."
+# 2. "There is no reordering of the masks either."
+# 3. "No option to edit the mask either" — no way to change what a row *is*
+#    once it exists, which was a regression from reorganising the panel.
+#
+# ⚠ The eye was the interesting one. `Engine.edit` runs the change and records
+# history; it does **not** render. Every other control gets its render from a
+# `didSet` on the property it writes, and `maskComponents` has none — so the
+# toggle changed the model, the sidecar and the undo stack and left the picture
+# exactly where it was. The row dimmed and the photograph did not move.
+#
+# `repro/mask-visibility.txt` could not see it: that file drives `set
+# maskHidden`, which goes through `editSelected`, which pushes. This one drives
+# the button.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask radial
+set maskCentreX 0.35
+set maskCentreY 0.5
+set maskRadiusX 0.22
+set maskRadiusY 0.22
+set localExposure -2.5
+
+measure 0.30,0.45,0.08,0.08 shown
+measure 0.80,0.20,0.06,0.06 outside
+
+# The eye, through the same call the button makes.
+maskhide 0
+measure 0.30,0.45,0.08,0.08 hidden
+measure 0.80,0.20,0.06,0.06 outsideHidden
+expect hidden != shown
+# Two-sided: hiding a mask must not change what was never masked.
+expect outsideHidden == outside
+
+maskhide 0
+measure 0.30,0.45,0.08,0.08 shownAgain
+expect shownAgain == shown
+
+# ── Changing what a row is ──────────────────────────────────────────────
+maskkind 0 linear
+measure 0.30,0.45,0.08,0.08 asLinear
+expect asLinear != shown
+
+maskkind 0 radial
+measure 0.30,0.45,0.08,0.08 backToRadial
+expect backToRadial == shown
+
+# ── Reordering ──────────────────────────────────────────────────────────
+#
+# ⚠ The fold runs left, so a subtract row means different things above and
+# below. Two rows where the second subtracts a hole from the first: swap them
+# and the subtract runs against nothing — the fold starts from zero — so the
+# hole vanishes and the big radial stands alone.
+#
+# ⚠ `maskadd`, not `mask`. On a non-empty group the `mask` verb changes the
+# *selected row's* kind rather than adding one, so the first draft of this file
+# built a one-row group and the reorder check passed against a swap that could
+# not happen.
+maskadd radial
+set maskCentreX 0.40
+set maskCentreY 0.5
+set maskRadiusX 0.10
+set maskRadiusY 0.10
+set maskCompose 1
+measure 0.30,0.45,0.08,0.08 withHole
+expect withHole != shown
+
+maskmove 1 -1
+measure 0.30,0.45,0.08,0.08 swapped
+expect swapped != withHole
