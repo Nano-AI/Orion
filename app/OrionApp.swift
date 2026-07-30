@@ -264,6 +264,14 @@ struct Editor: View {
     @State var presetName = ""
     @State var presetGroups: Set<PresetGroup> = PresetGroup.defaultSelection
 
+    /// The settings on the clipboard, if any. In memory only — a copied look is
+    /// not worth persisting across a launch, and pretending otherwise would
+    /// mean deciding what happens when the photograph it came from is gone.
+    @State var copied: DevelopState?
+    @State var confirmingSync = false
+    /// How many sidecars the last sync wrote, for the footer message.
+    @State var syncedCount = 0
+
     /// Set while a segmentation model is running, so the two buttons can say so
     /// and cannot be pressed twice. research/masking.md §5.
     @State var matteRunning = false
@@ -275,7 +283,7 @@ struct Editor: View {
     @State var message: String?
     @State private var exportSettings = ExportSettings()
     @State private var showingExport = false
-    @State private var library = Library()
+    @State var library = Library()
     @State private var current: URL?
     @State private var keyMonitor: Any?
 
@@ -336,6 +344,56 @@ struct Editor: View {
         } message: {
             Text(message ?? "")
         }
+        // ⚠ Confirmed, and the count is in the question. Sync writes a sidecar
+        // for every photograph in view — dozens of files, on disk, without
+        // opening any of them — and there is no undo across photographs. The
+        // groups are named too, because "sync settings" is exactly the phrase
+        // that hides which settings.
+        .alert("Sync to \(library.photos.count) photos?",
+               isPresented: $confirmingSync) {
+            Button("Cancel", role: .cancel) { }
+            Button("Sync", role: .destructive) { runSync() }
+        } message: {
+            Text(syncWarning)
+        }
+    }
+
+    /// What the sync confirmation says it will do.
+    ///
+    /// The groups are named rather than counted: "sync settings" is exactly the
+    /// phrase that hides *which* settings, and a photographer about to rewrite
+    /// forty sidecars should be able to read the list.
+    var syncWarning: String {
+        let names = PresetGroup.allCases
+            .filter { presetGroups.contains($0) }
+            .map(\.title)
+            .joined(separator: ", ")
+        return "Writes \(names) to every photo in view. This cannot be undone "
+             + "for photos other than the one open."
+    }
+
+    /// Applies the clipboard to every photo in view.
+    ///
+    /// ⚠ The photographs are not opened. Sync edits their sidecars, which are
+    /// the source of truth, at the level of the JSON keys — see the note in
+    /// `SyncSettings` for why decoding them into a `DevelopState` first would
+    /// rewhite-balance every photo that has never been edited.
+    ///
+    /// The open photo is handled separately, through the ordinary edit path:
+    /// it has unsaved state in memory, so writing its sidecar behind its back
+    /// would be undone by the next autosave.
+    private func runSync() {
+        guard let copied else { return }
+        let others = library.photos.map(\.url).filter { $0 != current }
+        let n = SyncSettings.sync(source: copied, groups: presetGroups, to: others)
+
+        if engine.isLoaded {
+            engine.apply(preset: Preset(name: "Sync", groups: presetGroups,
+                                        state: copied))
+        }
+        syncedCount = n
+        message = n == 1 ? "Synced 1 other photo."
+                         : "Synced \(n) other photos."
     }
 
     // MARK: Toolbar

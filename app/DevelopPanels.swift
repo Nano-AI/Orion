@@ -208,6 +208,36 @@ extension Editor {
                 // different people and the difference is exactly this list.
                 FlowGroups(selection: $presetGroups)
 
+                // Copy, paste and sync share the group checkboxes above: a
+                // paste *is* a preset that was never named, so offering it a
+                // second, separate list of groups would be two answers to one
+                // question.
+                HStack(spacing: 6) {
+                    Button("Copy") { copied = engine.state }
+                        .disabled(!engine.isLoaded)
+                    Button("Paste") {
+                        guard let copied else { return }
+                        engine.apply(preset: Preset(name: "Paste",
+                                                    groups: presetGroups,
+                                                    state: copied))
+                    }
+                    .disabled(copied == nil || presetGroups.isEmpty)
+                    Button("Sync all…") { confirmingSync = true }
+                        .disabled(copied == nil || presetGroups.isEmpty
+                                  || library.photos.count < 2)
+                    Spacer(minLength: 0)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                if copied != nil {
+                    Text("Settings copied. Paste puts them on this photo; "
+                       + "Sync writes them to every photo in view.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Text("A preset changes only the groups it carries and leaves "
                    + "everything else alone. The crop, the dust spots and the "
                    + "masks are never included — those belong to one photograph.")

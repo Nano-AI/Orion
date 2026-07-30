@@ -21,6 +21,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SubjectMatte.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Navigator.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
@@ -107,6 +108,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
@@ -121,6 +123,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
