@@ -36,7 +36,14 @@ Rule: every milestone ends with something you can actually shoot with. No milest
 - **Epic: Geometry** — crop, rotate, straighten
 - **Epic: Edit model** — op stack → XMP sidecar, undo/redo, history panel
 - **Epic: Export** — full-res tiled render path, JPEG/TIFF, resize, color space
-- **Epic: Interaction** — per-node caching, degrade-then-refine during drags
+- **Epic: Interaction** — per-node caching ✅, **degrade-then-refine during
+  drags — not built, and now the largest open reported bug.** Measured cost of
+  one tick on a 24 MP frame: exposure 9.4 ms, clarity 65.7, dehaze 116.4, each
+  blocking the main thread on `commitAndWait` (`repro/slider-drag-cost.txt`).
+  The graph compiles at a single resolution, so the shape is a second
+  `DevelopPipeline` at a quarter-linear proxy — about 380 MiB on top of 6092 —
+  fed by the same `apply`, with the full render scheduled on settle, and export,
+  the histogram and the eyedropper guaranteed never to read the proxy
 - **Epic: Look** — neutral-gray dark theme, panel layout
 
 ### Export panel — modeled on macOS Preview's export sheet

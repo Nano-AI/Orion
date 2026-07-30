@@ -4,25 +4,25 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M4 step 2 · design pass · **v0.4.0-alpha.2** · seven reported bugs fixed)
-**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** —
-step 1 of `research/masking.md` is finished and reachable by hand; **step 2's
-engine half is done**: a mask is now a *list* of components folded per §6
-(add/subtract/intersect), through the graph, the POD facade and the bench. The
-panel still drives one component — group rows in the interface are the
-remaining half of step 2.
+**Last updated:** 2026-07-29 (**four more reported bugs fixed** · the runner can
+see the canvas and the mask overlay · **v0.4.0-alpha.2**)
+**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** — steps
+1 and 2 of `research/masking.md` are finished end to end: a mask is a *list* of
+components folded per §6 (add/subtract/intersect), through the graph, the POD
+facade, the panel rows, the sidecar, undo and the bench.
 
 ⚠️ **M3 is done — do not rebuild it.** Dehaze, creative LUTs, exposure fusion
 and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
-stale kickoff prompt naming those four has arrived four times; the answer each
-time is that they exist.
+stale kickoff prompt naming those four has now arrived **five** times; the
+answer each time is that they exist.
 **Next story:** M4 **step 3** — guided-filter refinement (`research/masking.md`
 §4), a second input binding on a filter that is already built and tested for
-dehaze. Step 2 is finished: engine, facade, panel rows, sidecar and undo.
+dehaze.
 
-**Suites:** `orion-tests` **405 checks** · `orion-viewport-tests` **3252
-checks** · both 0 failures.
+**Suites:** `orion-tests` **415 checks** · `orion-viewport-tests` **3252
+checks** · **8 `repro/` scenarios, 41 checks** · all 0 failures. Bench: M0 gate
+**9.50 ms p95**, 118 nodes, 6092 MiB — unmoved.
 
 ### Known gaps, carried forward
 
@@ -30,16 +30,150 @@ Small, named, and none of them blocking the next story:
 
 | Gap | Where |
 |---|---|
+| **Sliders render at full resolution.** Measured: exposure 9.4 ms/tick, clarity 65.7, dehaze 116.4 on a 24 MP frame — see `repro/slider-drag-cost.txt`. M1's Interaction epic named degrade-then-refine and it was never built. **This is the largest open reported item and it is a story, not a fix** | `Pipeline::render`, `Engine.pushAndRender` |
 | A brush stroke over **256 dabs is truncated** (warns on stderr). The kernel now carries the fix's shape — `accumulate` continues a stroke and skips the fold — but nothing spends a spare component node on the continuation | `DevelopPipeline::apply` |
-| **The panel drives one mask component.** The engine takes four; rows, per-row compose pickers and multi-component sidecar/undo are the interface half of step 2 | `DevelopPanels`, `Sidecar` |
 | **No bench probe for the brush** — probes take `Adjustments&`, a stroke needs `setBrushStroke` | `apps/bench` |
 | The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph | `Engine.export` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
-| **98 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo | whole history |
+| **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo | whole history |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-29u — four more reported bugs, and the runner learns to see
+
+The three things session `29t` left open, plus one reported mid-session. What
+made all four findable is the same move each time: **teach the runner to measure
+the surface the bug actually lives on.** `29t` closed by naming that as the next
+step, and it was the whole session.
+
+### ⚠️ A radial mask was misplaced on every odd quarter turn
+
+Reported as "the mask is not aligned with the image at all", and the phrasing is
+accurate rather than exaggerated — but it is not a rotation bug in the sense it
+sounds like. **The EXIF turn counts**, so a portrait file was wrong with the
+rotate control never touched. Landscape frames were fine until turned. Linear
+gradients were never affected at all.
+
+`mask::radiusToFrame` swapped the semi-axes on an odd turn. The reasoning was
+that a semi-axis has an axis of its own, unlike a length, so it must swap when
+the picture goes on its side. What that misses: **`toFrame` has already turned
+the mask** — it subtracts k·π/2 from the angle, and the semi-axes are measured
+along the mask's *own* axes, not the frame's. Rotating the axes and then
+swapping the extents applies the turn twice. The algebra is in the header; the
+short version is that a quarter turn in normalized coordinates is rigid, so it
+contributes neither a swap nor a length change, and only the crop scales.
+
+⚠️ **The unit test asserted the swap.** It had checked the transform against the
+belief that produced it and never against a render, so it passed for as long as
+the defect existed and would have gone on passing. Fifth session running that a
+green check was not evidence — and the first where the check was not merely
+weak but actively wrong.
+
+### What found it: `maskcheck`, and why its shape matters
+
+The runner now compares **the mask the interface draws** against **the coverage
+the engine renders**. `CanvasLayout.maskAlpha` already existed as the overlay's
+own transcription of the kernel — the thing the outline and the handles are
+drawn from — so it is the oracle. `maskcheck` grids the frame, classifies every
+cell by that oracle, and demands the render agree.
+
+⚠️ **Two-sided, and that is the whole point.** Cells the interface draws clear
+must come back **bit-identical**; cells it draws covered must move. A one-sided
+"did something happen near here" check passes on a mask shifted by a tenth of
+the frame — it still darkens roughly the right region and still looks plausible
+in a screenshot. What a shifted mask cannot do is leave the clear cells
+untouched. With the bug in place: **14 of 207 clear cells carried coverage, the
+worst by 0.34 in luma.**
+
+Two things the first version of the check got wrong, both its own fault rather
+than the code's:
+
+- **Positive local exposure over clipped highlights moves nothing**, so a
+  covered cell on the blown dealership windows read as a failure. Negative
+  exposure instead — nothing in these frames is at pure black.
+- **"Clear" has to mean alpha *exactly* zero, not merely small.** At alpha 0.02
+  a two-stop local exposure moves luma about 0.005, past the one-code tolerance
+  and rightly so. Classifying that cell as clear reported a defect that was the
+  classifier's.
+
+`repro/mask-alignment.txt`: both frames at all four turns, plus a crop, a
+straighten, roundness 4 and a linear control — 24 checks. Two mutations dead
+(swap unconditionally; restore the original code exactly → 10 of 24 fail). The
+engine test now asserts the transform is turn-independent and that the crop
+scales each semi-axis along its own axis, and it dies under the same mutation.
+
+**Also checked and found correct**, before suspicion landed on the radii: the
+brush walks dabs to exactly where they are placed on both orientations at every
+turn; linear gradients hold their angle at 0°, 45° and 90° through all four
+turns; and the quadrant placement of a radial was right even while its *shape*
+was wrong, which is precisely why a coarse test had never caught it.
+
+### The compare split held an original of the wrong shape
+
+The blit samples the edited texture and the held original through **one** set of
+UVs, taken from the edited render's valid rectangle. Any geometry change under a
+live split therefore read the held copy through the wrong window: a crop put
+luma **0.7404** on the original side where 0.1432 belonged.
+
+`rotate` carried its own `captureOriginal()` call and `setCrop` carried nothing,
+so which of the two geometry controls worked was an accident of who remembered.
+The engine records the geometry its original was rendered at and re-takes it
+from `render()` when that moves — crop, straighten, quarter turn, crop preview,
+and anything added later. The three hand-listed capture sites are gone.
+
+Two supporting changes, both of which found something:
+
+- **`measure ... canvas` renders through the real blit offscreen.** The shader
+  and the transform moved to `CanvasBlit` so there is one copy. A CPU stand-in
+  for the compositing would have been the one piece of code these tests cannot
+  afford to fake.
+- ⚠️ **`expect a == b` now compares saturation as well as luma.** A mean is a
+  weak signature for a photograph: the rotate check passed against the wrong
+  picture entirely because the two frames agreed on mean luma to 0.0035 — inside
+  the tolerance — while differing by 0.28 in saturation.
+
+And the other half of "compare shows different settings": **`assign` reset the
+selected mask row to 0** on every undo, redo, history jump and compare capture.
+The `mask…` sliders are views onto the selected row, so the panel then read a
+different component's numbers. Clamped now.
+
+### The eyedropper's lag was 50 ms of animation
+
+**The engine read costs 2.4 µs** — measured with a new `time` verb, kept as
+`repro/eyedropper-latency.txt`. A 60 Hz frame is 16 000 µs, so none of the
+reported lag was in the sample path. It was `ColorLoupe`'s
+`.animation(.linear(duration: 0.05), value: point)`: the loupe was told to take
+50 ms to reach the pointer, so it was permanently behind and never arrived while
+the hand was moving.
+
+It was also **wrong rather than only slow** — the colour and the band updated the
+instant the sample landed while the crosshair interpolated, so a crosshair
+captioned "the exact sampled pixel" sat where no sample had been taken.
+
+### Optics is a tab
+
+The lens corrections sat second from the top of Detail and were reported
+missing. Distortion, vignetting and fringing are properties of the glass, and a
+photographer looking for them does not think "detail". The tab bar had already
+made this argument once, when three of four tabs were a bare SF Symbol.
+Screenshotted rather than trusted.
+
+### Sliders: measured, and deliberately not started
+
+`repro/slider-drag-cost.txt` is the number the report was missing — exposure
+**9.4 ms** a tick, clarity **65.7**, dehaze **116.4**, each tick blocking the
+main thread on `commitAndWait`. Not a defect in any one filter: session `29f`
+already established dehaze's six rank passes sit within 2% of each other, so
+there is nothing to fix in *one* of them.
+
+**The fix is degrade-then-refine and it is a story, not a bug fix.** The graph
+compiles at a single resolution, so the honest shape is a second `DevelopPipeline`
+at a quarter-linear proxy (~380 MiB on top of 6092), both fed by `apply`, with
+the full render scheduled on settle — plus the guarantee that export, the
+histogram and the eyedropper never read the proxy. Half-building it would leave
+the app worse than measured-and-slow. Left named, costed and unstarted.
 
 ## Session 2026-07-29t — seven reported bugs, and a runner that reproduces them
 

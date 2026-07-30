@@ -19,13 +19,49 @@ miss the view-model layer, which is where these failures are.
 |---|---|
 | `undo-after-auto.txt` | Passes — fixed: Auto recorded no history entry at all |
 | `eyedropper-color-mixer.txt` | Passes — fixed: `sampleAt` read an 8-bit texture as half float |
-| `compare-shows-wrong-image.txt` | Passes, and cannot see the reported bug — see below |
-| `rotate-then-compare.txt` | Passes, same limitation |
+| `compare-shows-wrong-image.txt` | Passes — measured through the canvas now, not around it |
+| `rotate-then-compare.txt` | Passes — same, and it took saturation as well as luma to make it honest |
+| `geometry-while-comparing.txt` | Passes — fixed: the held original is re-taken when the geometry moves |
+| `mask-alignment.txt` | Passes — fixed: a radial mask's semi-axes were swapped on every odd quarter turn |
+| `eyedropper-latency.txt` | A measurement, not an assertion: 2.4 µs a read |
+| `slider-drag-cost.txt` | A measurement, and an open story: 9.4 / 65.7 / 116.4 ms a tick |
 
-## ⚠️ What a scenario cannot see
+## The three surfaces a scenario can measure
 
-It measures `engine.outputTexture`, which is the *edited* render. Compare composites
-two textures in the canvas view, so a compare bug that lives in that compositing
-is invisible here and these two passing scenarios are **not** evidence that the
-reported behaviour is fine. Catching that needs the split to be measured through
-the canvas, which is the next thing this runner should learn.
+Which one a report lives on is usually the whole difficulty. Each of these was
+added because a bug was invisible to the ones before it.
+
+| Surface | How | Catches |
+|---|---|---|
+| The edited render | `measure <region> <name>` | anything the pipeline computes |
+| The canvas | `measure <region> <name> canvas` | the compare split, which composites **two** textures in the blit — invisible to the render alone |
+| The interface's own model | `maskcheck <cells> <ev>` | the mask the overlay *draws* disagreeing with the coverage the engine *renders* |
+
+`measure ... canvas` renders through `CanvasBlit` — the real shader, the real
+transform — rather than reimplementing the split on the CPU. `maskcheck`
+classifies with `CanvasLayout.maskAlpha`, the overlay's own transcription of the
+mask kernel. Both are deliberately the *actual* code the interface uses: a
+stand-in would be a second implementation with its own bugs and none of the
+first's.
+
+## ⚠️ Two lessons these files paid for
+
+**One number per patch is not a signature.** `expect a == b` between two
+recordings compares mean saturation as well as mean luma, because a
+rotate-while-comparing check passed against an entirely different picture: the
+two frames agreed on mean luma to 0.0035, inside the one-code tolerance, while
+differing by 0.28 in saturation.
+
+**A test of coverage has to be two-sided.** `maskcheck` demands that cells the
+interface draws *clear* come back bit-identical, not merely that covered cells
+moved. A mask shifted by a tenth of the frame still darkens roughly the right
+region and still looks plausible in a screenshot; what it cannot do is leave the
+clear cells untouched.
+
+## What a scenario still cannot see
+
+The brush has no closed form for the overlay to draw, so `maskcheck` refuses it;
+a brush stroke is checked by placing dabs at known coordinates and measuring a
+grid instead. And nothing here drives a real window, so gesture routing —
+which handle a press grabs, whether a drag tracks the cursor — remains the
+business of `orion-viewport-tests`.
