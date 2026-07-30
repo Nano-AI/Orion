@@ -4,10 +4,11 @@
 
 ---
 
-**Last updated:** 2026-07-29 (**M4 step 3 — guided feathering** · four reported
-bugs fixed earlier the same day · **v0.4.0-alpha.2**)
-**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 steps 1–3 done** —
-primitives, groups, and now guided refinement. A mask is a *list* of components
+**Last updated:** 2026-07-29 (**M4 step 4a — a raster mask component** · step 3
+guided feathering · four reported bugs, all the same day · **v0.4.0-alpha.2**)
+**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 steps 1–3 done, 4
+half done** — primitives, groups, guided refinement, and now somewhere for a
+raster matte to live. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
 photograph's own edges, through the graph, the POD facade, the panel rows, the
 sidecar, undo and the bench.
@@ -17,14 +18,27 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** M4 **step 4** — Vision subject and person selection
-(`research/masking.md` §5). `VNGenerateForegroundInstanceMaskRequest` on macOS
-14+, run async on a tone-mapped preview and refined by the step 3 chain that now
-exists. No new dependency and no new licence position.
+**Next story:** M4 **step 4b** — the Vision half. The engine now has mask kind 4
+and `orion_engine_set_mask_matte`; what is missing is a producer.
+`VNGenerateForegroundInstanceMaskRequest` on macOS 14+, run async, and the
+matte written into **frame** coordinates because that is the contract kind 4
+imposes. Then the kind picker gains "Subject" and "Person", and the guided
+refinement from step 3 is what recovers the boundary.
 
-**Suites:** `orion-tests` **426 checks** · `orion-viewport-tests` **3252
-checks** · **8 `repro/` scenarios, 41 checks** · all 0 failures. Bench exits 0 on
-all three frames: M0 gate **9.59 ms p95**, 125 nodes, 6243 MiB.
+⚠ **Decide the tone-mapped input first.** Vision wants an ordinary
+display-referred photo, not scene-linear Rec.2020. Two options, and the
+trade-off is real: a new tone-map node is a **second copy of the display
+transform**, which this codebase has been bitten by before; reading back the
+existing output texture avoids that but the result is in *displayed*
+coordinates, so the geometry has to be undone when writing the matte — and
+under a crop there is no matte data outside the crop rectangle. The leaning is
+the second, doing the resample once on a 1024-px raster off the hot path rather
+than per pixel per frame in the kernel. A fable subagent was asked and stalled
+without answering; this is unresolved, not settled.
+
+**Suites:** `orion-tests` **436 checks** · `orion-viewport-tests` **3252
+checks** · **9 `repro/` scenarios, 46 checks** · all 0 failures. Bench exits 0 on
+all three frames: M0 gate **10.08 ms p95**, 125 nodes, 6243 MiB.
 
 ### Known gaps, carried forward
 
@@ -34,7 +48,8 @@ Small, named, and none of them blocking the next story:
 |---|---|
 | **Sliders render at full resolution.** Measured: exposure 9.4 ms/tick, clarity 65.7, dehaze 116.4 on a 24 MP frame — see `repro/slider-drag-cost.txt`. M1's Interaction epic named degrade-then-refine and it was never built. **This is the largest open reported item and it is a story, not a fix** | `Pipeline::render`, `Engine.pushAndRender` |
 | A brush stroke over **256 dabs is truncated** (warns on stderr). The kernel now carries the fix's shape — `accumulate` continues a stroke and skips the fold — but nothing spends a spare component node on the continuation | `DevelopPipeline::apply` |
-| **No bench probe for the brush** — probes take `Adjustments&`, a stroke needs `setBrushStroke` | `apps/bench` |
+| **No bench probe for the brush.** ✅ *Unblocked* — `Probe` gained a `prepare` hook for out-of-band state when the matte probe needed one, and a stroke can use the same hook. Still not written | `apps/bench` |
+| **Mask kind 4 is not reachable from the interface.** Deliberate: the picker gains it when step 4b has a producer to fill it. A control that can only make an empty mask is worse than none | `DevelopPanels` |
 | The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph | `Engine.export` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo | whole history |
@@ -42,6 +57,81 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-29w — M4 step 4a, somewhere for a raster to live
+
+⚠ **The stale M3 kickoff prompt arrived a seventh time.** Answered with evidence
+again — research file, shader, GPU test and bench probe present for each of the
+four — and set aside.
+
+`research/masking.md` §5 wants Vision subject and person selection, and Vision
+produces a **raster**. Every mask component until now was parametric, evaluated
+as a pure function of position, so there was nowhere for a matte to go. This
+session built that place and stopped there: mask **kind 4**, sampled from an aux
+texture, one per component slot so a group can hold a subject on one row and a
+person on another.
+
+### The decision the rest of step 4 hangs on
+
+⚠ **The kernel samples in frame coordinates and does no geometry correction.**
+That is a contract on whoever *produces* the matte. The alternative — a matte in
+displayed coordinates — would need the crop, the straighten and the quarter
+turns undone per pixel inside the mask kernel, and would carry no data at all
+outside the crop rectangle. Keeping the kernel ignorant of geometry is what lets
+a matte survive a crop and a rotation for the same reason a gradient does.
+
+Allocated at **1024 on the long edge**, not the frame's: a segmentation network
+runs at a fixed internal resolution far below 24 MP, and step 3's guided
+refinement is what recovers the boundary. Four mattes cost about 4 MB together
+against 48 MB for one at full resolution. A matte larger than the allocation is
+**rejected, not downscaled** — silently resampling a boundary someone went to
+trouble for, then calling the result edge-aware, is worse than refusing.
+
+### What the tests pin, given Vision itself cannot be tested
+
+Vision's output moves between OS releases and "did it find the subject" is not
+a property this suite can assert. Everything *between* the matte and the picture
+can be, and that is where the silent failures live. Ten GPU checks; the load
+bearing one is the **half-texel convention** — a two-texel ramp is flat outside
+the texel centres, linear between them, and exactly half way across, which every
+plausible off-by-half convention breaks.
+
+⚠ **Two mutation results worth keeping.** Swapping the interpolation order
+survived *correctly*: bilinear is separable, so it is algebraically the same
+filter and not a defect — the same shape as the brush's radius cutoff. Removing
+the clamp on the sample coordinate **also** survived, and that one was a real
+gap: the ramp's first texel was 0, which is exactly what an out-of-bounds Metal
+read returns, so the test could not tell the two apart. A case with a first texel
+of 0.25 was added and the mutation now dies. Five real mutations, all dead.
+
+### A carried-forward gap closed on the way
+
+The bench probe needed out-of-band state — a matte is uploaded through its own
+call, like a brush stroke, and neither of `Probe`'s two `Adjustments&` hooks
+could reach it. That is precisely why **the brush has gone unprobed since it was
+built**. `Probe` gained a `prepare` hook; both are reachable now, and the matte
+probe uses it.
+
+`repro/matte-follows-the-frame.txt` drives it through `Engine`, and the
+discriminating case is the half-plane: one quarter turn sends the frame's left
+half across the displayed **top**, so a matte quietly stored in displayed
+coordinates would stay on the left. Measured 0.9884 on the left before the turn
+and 0.9883 across the top after it.
+
+### Deliberately not reachable yet
+
+The kind picker gains "Matte" when step 4b has a producer to fill it. An engine
+feature nobody can select is not finished — but a control that can only produce
+an empty mask is worse, so this is recorded as a gap rather than papered over.
+
+### ⚠ Housekeeping: uncommitted work found in the tree
+
+A landing-page **round six** — the hero's finder readout and a fix for the
+statement highlighter cutting its letters — was sitting uncommitted when this
+session started, along with its STATUS entry. A `git add -A` swept it into the
+engine commit; that commit was split and the web work committed on its own
+(`2cfab5c`), untouched and unreviewed by this session. Worth knowing the tree is
+not always clean at the start of one.
 
 ## Session 2026-07-29v — M4 step 3, guided feathering
 
