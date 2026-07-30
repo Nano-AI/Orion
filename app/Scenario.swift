@@ -19,6 +19,11 @@ import SwiftUI
 /// already known to work and miss the gesture and view-model layers, which is
 /// where the reported failures actually are.
 ///
+/// For the same reason `measure ... canvas` renders through `CanvasBlit` —
+/// the real shader, the real transform — rather than reimplementing the split
+/// on the CPU. The compare bugs live in that compositing, so a stand-in for it
+/// would be the one piece of code the test cannot afford to fake.
+///
 /// Usage:  Orion --scenario path/to/file.txt
 ///
 /// Grammar, one command per line, `#` comments and blank lines ignored:
@@ -27,6 +32,7 @@ import SwiftUI
 ///     rotate <quarter-turns>            through Engine.rotate, as the button does
 ///     straighten <degrees>
 ///     crop <x> <y> <w> <h>              normalized
+///     preview on | off                  the crop tool's context render
 ///     set <control> <value>             any slider by name
 ///     mask <kind>                       none | linear | radial | brush
 ///     brush <x,y> <x,y> ...             dabs walked by CanvasLayout, as the hand does
@@ -35,9 +41,18 @@ import SwiftUI
 ///     auto                              the Auto button
 ///     compare <split>                   1 = off, lower reveals the original
 ///     undo / redo
-///     measure <x,y,w,h> <name>          record a value under a name
+///     measure <x,y,w,h> <name> [where]  record a value under a name.
+///                                       `where` is `output` (default, the
+///                                       engine's edited render) or `canvas`
+///                                       (the blit the screen actually shows,
+///                                       which is where the compare split
+///                                       composites its two textures — a
+///                                       compare bug is invisible to `output`)
 ///     expect <name> <op> <value>        ==, !=, >, < against a recorded value
-///     expect <name> == <other-name>     two recordings, exactly equal
+///     expect <name> == <other-name>     two recordings, equal in *both* mean
+///                                       luma and mean saturation — one number
+///                                       per patch is too weak a signature to
+///                                       say two renders are the same picture
 ///     shot <path>                       write a PNG
 ///     print <text>
 ///
@@ -125,6 +140,16 @@ enum Scenario {
             engine.setCrop(x: Float(try number(0)), y: Float(try number(1)),
                            w: Float(try number(2)), h: Float(try number(3)))
 
+        case "preview":
+            // What opening the crop tool does to the render: the whole frame
+            // with the crop drawn as context, which is a different output shape
+            // and so a different thing for compare to hold.
+            switch args.first {
+            case "on":  engine.cropPreview = true
+            case "off": engine.cropPreview = false
+            default: throw Bad(what: "preview takes on or off")
+            }
+
         case "set":
             guard args.count >= 2 else { throw Bad(what: "set needs a name and a value") }
             // Through `edit`, because that is what a slider does and it is what
@@ -189,12 +214,20 @@ enum Scenario {
             guard args.count >= 2 else { throw Bad(what: "measure needs a region and a name") }
             let r = args[0].split(separator: ",").compactMap { Double($0) }
             guard r.count == 4 else { throw Bad(what: "region is x,y,w,h") }
+            let surface: Screenshot.Surface
+            switch args.count > 2 ? args[2] : "output" {
+            case "output": surface = .output
+            case "canvas": surface = .canvas
+            default: throw Bad(what: "measure takes output or canvas, got \(args[2])")
+            }
             let reading = try read(engine,
-                                  CGRect(x: r[0], y: r[1], width: r[2], height: r[3]))
+                                  CGRect(x: r[0], y: r[1], width: r[2], height: r[3]),
+                                  through: surface)
             readings[args[1]] = reading
             FileHandle.standardError.write(Data(String(
-                format: "  %-22@ luma %.4f  sat %.4f\n",
-                args[1] as NSString, reading.luma, reading.saturation).utf8))
+                format: "  %-22@ luma %.4f  sat %.4f  (%@)\n",
+                args[1] as NSString, reading.luma, reading.saturation,
+                (surface == .canvas ? "canvas" : "output") as NSString).utf8))
 
         case "expect":
             guard args.count >= 3 else { throw Bad(what: "expect needs name, op, value") }
@@ -268,8 +301,10 @@ enum Scenario {
         }
     }
 
-    private static func read(_ engine: Engine, _ region: CGRect) throws -> Reading {
-        guard let stats = Screenshot.regionStats(engine, region: region) else {
+    private static func read(_ engine: Engine, _ region: CGRect,
+                             through surface: Screenshot.Surface) throws -> Reading {
+        guard let stats = Screenshot.regionStats(engine, region: region,
+                                                 through: surface) else {
             throw Bad(what: "could not read the output — is a photo open?")
         }
         return Reading(luma: stats.luma, saturation: stats.saturation)
@@ -282,27 +317,41 @@ enum Scenario {
         }
         // The right-hand side is another recording when it names one, so a
         // scenario can assert two states are identical without knowing the value.
+        //
+        // ⚠️ Two recordings are compared on **saturation as well as luma**. A
+        // mean is a weak signature for a photograph: a rotate-while-comparing
+        // check passed against the wrong picture entirely because the two frames
+        // happened to agree on mean luma to 0.0035 — inside the tolerance — while
+        // differing by 0.06 in saturation. One number per patch is not enough to
+        // say "the same picture".
         let want: Double
-        if let other = readings[rhs] { want = other.luma }
+        var wantSat: Double?
+        if let other = readings[rhs] { want = other.luma; wantSat = other.saturation }
         else if let v = Double(rhs) { want = v }
         else { throw Bad(what: "\(rhs) is neither a number nor a recording") }
 
         // Tolerance is one 8-bit code. The output is eight bits for the screen,
         // so anything tighter is asserting against quantisation.
         let eps = 1.0 / 255.0
+        let sameLuma = abs(got.luma - want) < eps
+        let sameSat = wantSat.map { abs(got.saturation - $0) < eps } ?? true
         let ok: Bool
         switch op {
-        case "==": ok = abs(got.luma - want) < eps
-        case "!=": ok = abs(got.luma - want) >= eps
+        case "==": ok = sameLuma && sameSat
+        case "!=": ok = !sameLuma || !sameSat
         case ">":  ok = got.luma > want
         case "<":  ok = got.luma < want
         default: throw Bad(what: "unknown operator \(op)")
         }
         if !ok { failures += 1 }
+        let detail = wantSat.map {
+            String(format: "  (got %.4f/%.4f, wanted %.4f/%.4f luma/sat)",
+                   got.luma, got.saturation, want, $0)
+        } ?? String(format: "  (got %.4f, wanted %.4f)", got.luma, want)
         FileHandle.standardError.write(Data(String(format:
-            "  %@  %@ %@ %@  (got %.4f, wanted %.4f)\n",
+            "  %@  %@ %@ %@%@\n",
             (ok ? "ok  " : "FAIL") as NSString, name as NSString,
-            op as NSString, rhs as NSString, got.luma, want).utf8))
+            op as NSString, rhs as NSString, detail as NSString).utf8))
     }
 
     private static func fail(_ why: String) -> Never {

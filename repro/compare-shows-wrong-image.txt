@@ -1,15 +1,30 @@
 # Reported: "when I do compare, it shows different settings/images."
 #
 # Compare holds the as-shot render so the split can show both without
-# re-rendering. Turning it on must not change what the edited side looks like.
+# re-rendering. Checking it needs the *canvas*: the split composites two
+# textures in the blit, so measuring the engine's output alone sees only the
+# edited half and passes no matter what the other side shows.
 open samples/_PIC8220.ARW
+
+# What each half should read once the split is on.
+measure 0.10,0.40,0.20,0.20 asShotLeft
+measure 0.70,0.40,0.20,0.20 asShotRight
+
 set exposure 1.5
-measure 0.30,0.40,0.20,0.20 edited
+measure 0.10,0.40,0.20,0.20 editedLeft
+measure 0.70,0.40,0.20,0.20 editedRight
+expect editedLeft != asShotLeft
 
+# Turning compare on must not change the edited side.
 compare 0.5
-measure 0.30,0.40,0.20,0.20 whileComparing
-expect whileComparing == edited
+measure 0.70,0.40,0.20,0.20 rightWhileComparing canvas
+expect rightWhileComparing == editedRight
 
+# And the original side must be the photograph as shot, not the edit again.
+measure 0.10,0.40,0.20,0.20 leftWhileComparing canvas
+expect leftWhileComparing == asShotLeft
+
+# Turning it off leaves the edit exactly as it was.
 compare 1
-measure 0.30,0.40,0.20,0.20 afterComparing
-expect afterComparing == edited
+measure 0.10,0.40,0.20,0.20 leftAfter canvas
+expect leftAfter == editedLeft

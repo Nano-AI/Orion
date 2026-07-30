@@ -16,6 +16,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ImageCanvas.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/CanvasBlit.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Navigator.swift

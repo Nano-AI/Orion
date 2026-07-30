@@ -1,0 +1,63 @@
+# Found while chasing "when I do compare, it shows different settings/images."
+#
+# Compare holds one render of the unedited photograph and re-uses it for every
+# frame of the divider. The blit samples that copy and the edited texture
+# through ONE set of UVs, taken from the edited render's valid rectangle — so
+# any geometry change under a live split reads the held copy through the wrong
+# window. Before the fix the original side of a crop measured 0.7404 where
+# 0.1432 belonged: a different picture, at a glance.
+#
+# The order of the two halves is the whole test. Change the geometry first and
+# it works; change it while the split is up and it did not.
+open samples/_PIC8220.ARW
+
+crop 0.2 0.2 0.6 0.6
+measure 0.10,0.40,0.20,0.20 asShotLeft
+set exposure 1.5
+measure 0.70,0.40,0.20,0.20 editedRight
+
+compare 0.5
+measure 0.10,0.40,0.20,0.20 leftCropFirst canvas
+measure 0.70,0.40,0.20,0.20 rightCropFirst canvas
+expect leftCropFirst == asShotLeft
+expect rightCropFirst == editedRight
+
+# Same crop, arrived at with the split already up.
+compare 1
+crop 0 0 1 1
+compare 0.5
+crop 0.2 0.2 0.6 0.6
+measure 0.10,0.40,0.20,0.20 leftCropWhileComparing canvas
+measure 0.70,0.40,0.20,0.20 rightCropWhileComparing canvas
+expect leftCropWhileComparing == leftCropFirst
+expect rightCropWhileComparing == rightCropFirst
+
+# Straighten is the same defect by another route: it changes the valid
+# rectangle too.
+compare 1
+straighten 8
+compare 0.5
+measure 0.10,0.40,0.20,0.20 leftStraightenFirst canvas
+
+compare 1
+straighten 0
+compare 0.5
+straighten 8
+measure 0.10,0.40,0.20,0.20 leftStraightenWhileComparing canvas
+expect leftStraightenWhileComparing == leftStraightenFirst
+
+# And the crop tool's context render, which is a third output shape again. The
+# interface clears compare when that tool opens, so this is the one branch of
+# the geometry check no gesture can reach — which is exactly why it is asserted
+# here rather than left correct-by-construction.
+compare 1
+preview on
+compare 0.5
+measure 0.10,0.40,0.20,0.20 leftPreviewFirst canvas
+
+compare 1
+preview off
+compare 0.5
+preview on
+measure 0.10,0.40,0.20,0.20 leftPreviewWhileComparing canvas
+expect leftPreviewWhileComparing == leftPreviewFirst

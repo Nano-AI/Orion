@@ -476,9 +476,17 @@ enum Screenshot {
     /// arithmetic the printed report uses. Two implementations of "what does this
     /// patch measure" would let a scenario pass while the report it is supposed
     /// to correspond to says something else.
-    static func regionStats(_ engine: Engine,
-                            region: CGRect) -> (luma: Double, saturation: Double)? {
-        guard let src = engine.outputTexture else { return nil }
+    /// `through` names the surface: the engine's own output by default, or the
+    /// canvas composite, which is the only place the compare split exists.
+    enum Surface { case output, canvas }
+
+    static func regionStats(_ engine: Engine, region: CGRect,
+                            through surface: Surface = .output)
+        -> (luma: Double, saturation: Double)? {
+        let source: MTLTexture? = surface == .canvas
+            ? CanvasBlit.composite(engine: engine)
+            : engine.outputTexture
+        guard let src = source else { return nil }
         let w = Int(engine.imageWidth), h = Int(engine.imageHeight)
         guard w > 0, h > 0 else { return nil }
 

@@ -113,16 +113,9 @@ struct ImageCanvas: NSViewRepresentable {
         private var pipeline: MTLRenderPipelineState?
         private var sampler: MTLSamplerState?
 
-        /// Shader-side view transform.
-        private struct Transform {
-            var quadScale = SIMD2<Float>(1, 1)
-            var uvMin = SIMD2<Float>(0, 0)
-            var uvSize = SIMD2<Float>(1, 1)
-            var split: Float = 1
-            var vertical: UInt32 = 1
-            var surround = Orion.Components.surround
-            var pad: Float = 0
-        }
+        /// Shader-side view transform. Shared with the offscreen compositor —
+        /// see `CanvasBlit`.
+        private typealias Transform = CanvasBlit.Transform
 
         init(engine: Engine, viewport: Viewport, targeted: TargetedAdjust) {
             self.engine = engine
@@ -161,95 +154,8 @@ struct ImageCanvas: NSViewRepresentable {
             guard let device = view.device else { return }
             queue = device.makeCommandQueue()
 
-            // A fullscreen triangle. Compiled at runtime because it belongs to
-            // the view, not the pipeline — keeping it out of the engine's
-            // shader library keeps that purely about pixels.
-            let source = """
-            #include <metal_stdlib>
-            using namespace metal;
-
-            struct Transform {
-                float2 quadScale;
-                float2 uvMin;
-                float2 uvSize;
-                float  split;      // 0..1 along the axis; 1 = no split
-                uint   vertical;   // 1 splits left/right, 0 splits top/bottom
-                float3 surround;   // what empty space blends to
-                float  _pad;
-            };
-
-            struct VOut {
-                float4 pos [[position]];
-                float2 uv;
-                // Position across the drawn quad, 0..1, y downward — the same
-                // sense the panel's own geometry uses. Carried rather than
-                // recovered from uv, because uv is flipped in y and scaled into
-                // a sub-rectangle of the texture, and unpicking that in the
-                // fragment shader is what put the top/bottom split upside down.
-                float2 quad;
-            };
-
-            // A quad as a triangle strip, NOT the usual oversized fullscreen
-            // triangle. That trick relies on the triangle extending past the
-            // viewport so its hypotenuse is clipped away — scale it down to
-            // letterbox and the hypotenuse becomes visible as a diagonal edge
-            // with black on the far side.
-            vertex VOut orionBlitVertex(uint vid [[vertex_id]],
-                                        constant Transform& t [[buffer(0)]]) {
-                const float2 p = float2(float(vid & 1u), float(vid >> 1u));
-                VOut out;
-                out.pos  = float4((p * 2.0 - 1.0) * t.quadScale, 0.0, 1.0);
-                out.uv   = t.uvMin + float2(p.x, 1.0 - p.y) * t.uvSize;
-                out.quad = float2(p.x, 1.0 - p.y);
-                return out;
-            }
-
-            fragment float4 orionBlitFragment(VOut in [[stage_in]],
-                                              texture2d<float> image [[texture(0)]],
-                                              texture2d<float> original [[texture(1)]],
-                                              sampler samp [[sampler(0)]],
-                                              constant Transform& t [[buffer(0)]]) {
-                float4 edited = image.sample(samp, in.uv);
-
-                // Alpha is zero wherever the geometry pass found nothing —
-                // outside a rotated frame, for instance. Blending to the
-                // surround rather than showing black is what removes the
-                // apparent edge of a viewport: the picture just sits on the
-                // background like a print on a table.
-                edited.rgb = mix(t.surround, edited.rgb, edited.a);
-                edited.a = 1.0;
-
-                if (t.split >= 0.999) return edited;
-
-                // Which side of the divider this pixel is on. The divider runs
-                // across the drawn quad, not across the image, so it stays put
-                // while the image pans underneath — and it lands where the
-                // panel draws it, which at any zoom other than fit is not the
-                // same rectangle the image occupies when fitted.
-                const float where_ = (t.vertical != 0u) ? in.quad.x : in.quad.y;
-
-                if (where_ > t.split) return edited;
-
-                // A hairline so the boundary is visible against similar tones.
-                if (abs(where_ - t.split) < 0.0015) {
-                    return float4(1.0, 1.0, 1.0, 1.0);
-                }
-                float4 before = original.sample(samp, in.uv);
-                before.rgb = mix(t.surround, before.rgb, before.a);
-                return float4(before.rgb, 1.0);
-            }
-            """
-
-            do {
-                let library = try device.makeLibrary(source: source, options: nil)
-                let desc = MTLRenderPipelineDescriptor()
-                desc.vertexFunction = library.makeFunction(name: "orionBlitVertex")
-                desc.fragmentFunction = library.makeFunction(name: "orionBlitFragment")
-                desc.colorAttachments[0].pixelFormat = view.colorPixelFormat
-                pipeline = try device.makeRenderPipelineState(descriptor: desc)
-            } catch {
-                NSLog("Orion: could not build the display pipeline — \(error)")
-            }
+            pipeline = CanvasBlit.makePipeline(device: device,
+                                               pixelFormat: view.colorPixelFormat)
 
             let sd = MTLSamplerDescriptor()
             sd.minFilter = .linear
@@ -387,40 +293,8 @@ struct ImageCanvas: NSViewRepresentable {
         }
 
         private func transform(for view: MTKView, texture: MTLTexture) -> Transform {
-            // The orientation node writes into a square texture so a rotation
-            // never needs the graph recompiled — only the top-left rectangle is
-            // valid, and its size is what the engine reports.
-            let validW = CGFloat(engine.imageWidth)
-            let validH = CGFloat(engine.imageHeight)
-            guard validW > 0, validH > 0 else { return Transform() }
-
-            let validU = validW / CGFloat(texture.width)
-            let validV = validH / CGFloat(texture.height)
-
-            // The crop preview is rendered into a texture of the frame's own
-            // aspect — the extra context lives inside the picture rather than
-            // spilling past it — so there is nothing special to do here. The
-            // output is fitted to the view, cropping or not.
-            let imageAspect = validW / validH
-            let viewAspect = view.drawableSize.width / max(view.drawableSize.height, 1)
-
-            // Report true magnification so the toolbar can show a real percent.
-            viewport.fitScale = min(view.drawableSize.width / validW,
-                                    view.drawableSize.height / validH)
-
-            let visible = viewport.visibleFraction(imageAspect: imageAspect, viewAspect: viewAspect)
-            viewport.clamp(to: visible)
-
-            let quad = viewport.quadScale(imageAspect: imageAspect, viewAspect: viewAspect)
-
-            var t = Transform()
-            t.quadScale = SIMD2<Float>(Float(quad.width), Float(quad.height))
-            // Scale image-space UVs into the valid sub-rectangle of the texture.
-            t.uvSize = SIMD2<Float>(Float(visible.width * validU),
-                                    Float(visible.height * validV))
-            t.uvMin = SIMD2<Float>(Float((viewport.center.x - visible.width / 2) * validU),
-                                   Float((viewport.center.y - visible.height / 2) * validV))
-            return t
+            CanvasBlit.transform(engine: engine, viewport: viewport,
+                                 drawableSize: view.drawableSize, texture: texture)
         }
 
         // MARK: Draw

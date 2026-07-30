@@ -654,8 +654,11 @@ final class Engine {
 
         // The held original is the *previous* photo's unedited render. Keeping
         // it means compare shows one picture against another one entirely,
-        // which is worse than showing nothing.
+        // which is worse than showing nothing. Compare itself stays on across a
+        // switch — that is the point of it while culling — so the render below
+        // captures this photo's own original through `refreshOriginal`.
         originalTexture = nil
+        originalGeometry = nil
 
         // Reset to the camera's own settings before marking loaded, so the
         // didSet observers don't each trigger a render on a half-set model.
@@ -667,10 +670,6 @@ final class Engine {
         isLoaded = true
         history.reset(to: state)
         pushAndRender()
-
-        // Compare stays on across a switch — that is the point of it while
-        // culling — so the new photo needs its own original captured now.
-        if comparing { captureOriginal() }
     }
 
     /// Restores a state saved to a sidecar. Silent on malformed data: a
@@ -684,7 +683,6 @@ final class Engine {
         suspended = false
         history.reset(to: s)
         pushAndRender()
-        if comparing { captureOriginal() }
     }
 
     /// Rotates by a quarter turn, wrapping. Clockwise is positive.
@@ -698,12 +696,10 @@ final class Engine {
         // so the constraint that runs on the next edit has the right aspect.
         if turns % 2 != 0 { swap(&frameWidth, &frameHeight) }
         suspended = false
+        // The render this triggers re-takes the held original: a quarter turn
+        // swaps the output's width and height, and the split samples both
+        // textures through one valid rectangle. `refreshOriginal` sees that.
         rotateQuarters = ((rotateQuarters + turns) % 4 + 4) % 4
-
-        // The held original is the wrong shape now — a quarter turn swaps the
-        // output's width and height, and the split was sampling a texture whose
-        // valid rectangle no longer matches.
-        if comparing { captureOriginal() }
     }
 
     /// Returns every adjustment to its default, with white balance back to
@@ -834,7 +830,15 @@ final class Engine {
         // would restore the geometry and leave the previous photo's paint in the
         // engine under the same indices.
         maskComponents = Array(s.maskComponents.prefix(Self.maxMaskComponents))
-        selectedMask = maskComponents.isEmpty ? 0 : 0
+        // Clamped, not reset. Every route through here — undo, redo, a history
+        // jump, and compare's two back-to-back renders — used to send the panel
+        // back to row 1, and since the `mask…` sliders are views onto the
+        // selected row, the controls then read a different component's numbers.
+        // "Compare shows different settings" is what that looks like from the
+        // outside. Clamping is enough to keep the index in range, which is the
+        // only thing resetting was buying.
+        selectedMask = maskComponents.isEmpty
+            ? 0 : min(max(0, selectedMask), maskComponents.count - 1)
         pushStrokes()
         localExposureEv = s.localExposureEv
         fusion = s.fusion
@@ -885,10 +889,47 @@ final class Engine {
 
     var comparing: Bool { compareSplit < 0.999 }
 
+    /// The geometry the held original was rendered at.
+    ///
+    /// ⚠️ The blit samples the edited texture and the held original through
+    /// **one** set of UVs, derived from the *edited* render's valid rectangle.
+    /// So the moment a crop, a straighten or a quarter turn changes that
+    /// rectangle, the held copy is read through the wrong window and the two
+    /// halves stop being the same photograph. Measured: a crop under a live
+    /// split put luma 0.7404 on the original side where 0.1432 belonged.
+    ///
+    /// Recorded and compared rather than re-captured at each call site, because
+    /// hand-listing the sites is exactly what failed — `rotate` carried its own
+    /// `captureOriginal()` call and `setCrop` carried nothing, so one of the two
+    /// geometry controls was right by accident of who remembered.
+    private struct OriginalGeometry: Equatable {
+        var rotateQuarters: Int32
+        var straightenDeg: Float
+        var cropX: Float, cropY: Float, cropW: Float, cropH: Float
+        /// The crop preview renders the whole frame with the crop as context,
+        /// which is a different output shape again.
+        var cropPreview: Bool
+    }
+
+    private var originalGeometry: OriginalGeometry?
+
+    private var currentGeometry: OriginalGeometry {
+        OriginalGeometry(rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
+                         cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
+                         cropPreview: cropPreview)
+    }
+
+    /// `captureOriginal` renders twice, and every render asks whether the held
+    /// original is still good. Without this it would ask itself, forever.
+    private var capturingOriginal = false
+
     /// Renders the image as shot into a held texture, then restores the edit.
     /// Two renders once, rather than two renders per frame of the divider.
     func captureOriginal() {
-        guard isLoaded, let handle else { return }
+        guard isLoaded, !capturingOriginal else { return }
+        capturingOriginal = true
+        defer { capturingOriginal = false }
+        originalGeometry = currentGeometry
 
         let current = state
         var neutral = DevelopState()
@@ -926,11 +967,12 @@ final class Engine {
 
     func setCompare(split: Double) {
         // The split goes first. captureOriginal re-renders twice, and every
-        // render calls invalidateOriginal, which drops the held texture while
-        // the split still reads 1.0 — so the original was captured and thrown
-        // away in the same call, and compare showed the edit on both sides.
+        // render asks whether the held original is still good — which, while
+        // the split still reads 1.0, means dropping it. So the original was
+        // captured and thrown away in the same call, and compare showed the
+        // edit on both sides.
         compareSplit = min(max(split, 0), 1)
-        if originalTexture == nil && comparing { captureOriginal() }
+        refreshOriginal()
         generation &+= 1
     }
 
@@ -955,12 +997,32 @@ final class Engine {
     func clearCompare() {
         compareSplit = 1.0
         originalTexture = nil
+        originalGeometry = nil
         generation &+= 1
     }
 
-    /// The held original goes stale the moment an edit lands.
-    private func invalidateOriginal() {
-        if originalTexture != nil && compareSplit >= 0.999 { originalTexture = nil }
+    /// Brings the held original into line with what compare needs right now:
+    /// nothing when the split is off, and a render at the *current* geometry
+    /// when it is on.
+    ///
+    /// Called from `render`, so it covers every route into a geometry change —
+    /// the crop rectangle, the straighten slider, a quarter turn, the crop
+    /// preview, an undo that walks back through any of them — rather than the
+    /// handful of call sites someone remembered to annotate.
+    ///
+    /// It costs two full renders when it fires. That is affordable because the
+    /// only geometry control reachable while comparing is the rotate button,
+    /// which is a click: the crop tab clears compare on entry, so the sliders
+    /// that would trip this per tick cannot be moved with a split up.
+    private func refreshOriginal() {
+        guard !capturingOriginal else { return }
+        guard comparing else {
+            originalTexture = nil
+            originalGeometry = nil
+            return
+        }
+        guard originalTexture == nil || originalGeometry != currentGeometry else { return }
+        captureOriginal()
     }
 
     func undo() { if let s = history.undo() { apply(s) } }
@@ -1110,7 +1172,7 @@ final class Engine {
         }
 
         lastRenderMs = ms
-        invalidateOriginal()
+        refreshOriginal()
         generation &+= 1
         scheduleHistogram()
     }

@@ -1,9 +1,32 @@
 # Reported: "Rotating on compare also breaks."
+#
+# A quarter turn swaps the output's width and height. The held original was
+# rendered at the old shape, and the blit samples both textures with one set of
+# UVs — so an original that is not re-rendered is read through the wrong valid
+# rectangle and the two halves stop being the same picture.
 open samples/_PIC8220.ARW
+
+rotate 1
+measure 0.10,0.40,0.20,0.20 asShotLeft
+measure 0.70,0.40,0.20,0.20 asShotRight
+
 set exposure 1.5
+measure 0.70,0.40,0.20,0.20 editedRight
+
+# Rotate first, then compare. This is the baseline for the other order.
+compare 0.5
+measure 0.10,0.40,0.20,0.20 leftRotatedThenCompared canvas
+measure 0.70,0.40,0.20,0.20 rightRotatedThenCompared canvas
+expect leftRotatedThenCompared == asShotLeft
+expect rightRotatedThenCompared == editedRight
+
+# Now the reported order: turn the picture while the split is up. Back to the
+# same orientation by a different route, so the same two readings.
+compare 1
+rotate -1
 compare 0.5
 rotate 1
-measure 0.30,0.40,0.20,0.20 afterRotate
-compare 1
-measure 0.30,0.40,0.20,0.20 rotatedNoCompare
-expect afterRotate == rotatedNoCompare
+measure 0.10,0.40,0.20,0.20 leftComparedThenRotated canvas
+measure 0.70,0.40,0.20,0.20 rightComparedThenRotated canvas
+expect leftComparedThenRotated == leftRotatedThenCompared
+expect rightComparedThenRotated == rightRotatedThenCompared
