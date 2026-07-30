@@ -280,37 +280,44 @@ extension Editor {
         }
     }
 
-    var lightPanel: some View {
-        Group {
-            section("White Balance") {
-                slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0, resetsTo: engine.defaults.temperatureK)
-                slider("Tint", $engine.tint, -1...1, "", 2, resetsTo: engine.defaults.tint)
-            }
-            section("Light") {
-                // Auto-enhance writes Exposure, Whites and Blacks — three of
-                // the sliders directly below it — plus Lift and Clarity. It
-                // belongs with the controls it moves, not in a section of its
-                // own eleven rows further down.
-                HStack(spacing: 8) {
-                    PanelButton(title: "Auto") { engine.autoEnhance() }
-                    // Five control names, engraved, rather than the sentence
-                    // "sets Exposure, Whites, Blacks, Lift, Clarity". It is a
-                    // list of what the button touches, so it is set as a list —
-                    // and it now reads as chrome instead of as prose competing
-                    // with the section headings.
-                    Engraved.Label(text: "Exp · Wht · Blk · Lift · Clarity",
-                                   color: Palette.faint)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
+    /// Masks — "local" adjustments, on a tab of their own.
+    ///
+    /// ⚠ It was a section inside Light, and it was 264 lines of one: a row
+    /// list, a six-way kind picker, two model buttons, the placement sliders,
+    /// refinement and a local exposure. Light is the panel a photographer opens
+    /// on every photograph, and it opened on a mask editor.
+    ///
+    /// It also broke the window. The kind picker is a segmented control and a
+    /// sixth kind pushed its intrinsic width past the panel, so a segmented
+    /// control that cannot fit does not clip — it forces its parent wider, and
+    /// the whole layout went with it. The picker is a grid now, for the same
+    /// reason: six named things do not fit on one line at this width and never
+    /// will.
 
-                slider("Exposure", $engine.exposureEv, -5...5, " EV", 2, resetsTo: engine.defaults.exposureEv)
-                slider("Contrast", $engine.contrast, 0.5...2, "", 2, resetsTo: engine.defaults.contrast)
-                slider("Highlights", $engine.highlights, -1...1, "", 2, resetsTo: engine.defaults.highlights)
-                slider("Shadows", $engine.shadows, -1...1, "", 2, resetsTo: engine.defaults.shadows)
-                slider("Whites", $engine.whites, -1...1, "", 2, resetsTo: engine.defaults.whites)
-                slider("Blacks", $engine.blacks, -1...1, "", 2, resetsTo: engine.defaults.blacks)
-            }
+    /// One cell of the mask-kind grid. Selecting a kind on an empty group adds
+    /// a component; the picker's old meaning is unchanged.
+    @ViewBuilder
+    private func maskKindCell(_ name: String, _ kind: Int32) -> some View {
+        let on = engine.maskKind == kind
+        Button { engine.maskKind = kind } label: {
+            Text(name)
+                .font(.system(size: 11))
+                .foregroundStyle(on ? Palette.text : Palette.dim)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .background(on ? Palette.raised : Palette.panel)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(on ? Palette.accent : Palette.line, lineWidth: on ? 1.5 : 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .contentShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .buttonStyle(.plain)
+    }
+
+    var maskPanel: some View {
+        Group {
             section("Local") {
                 let maskDefaults = MaskComponentState()
 
@@ -372,16 +379,38 @@ extension Editor {
                     .font(.system(size: 11))
                 }
 
-                Picker("", selection: $engine.maskKind) {
-                    Text("No mask").tag(Int32(0))
-                    Text("Linear").tag(Int32(1))
-                    Text("Radial").tag(Int32(2))
-                    Text("Brush").tag(Int32(3))
-                    Text("Range").tag(Int32(5))
-                    Text("Colour").tag(Int32(6))
+                // ⚠ A grid, not a segmented control. Six named kinds do not
+                // fit on one line at this width — and a segmented control that
+                // cannot fit does not truncate or clip, it forces its parent
+                // wider, which took the whole window with it when the sixth
+                // kind arrived.
+                //
+                // Two rows of three, grouped by what they are: the top row is
+                // the three you *place* by hand, the bottom row the three the
+                // photograph decides. "No mask" is not among them — it is not a
+                // kind of mask, it is the absence of one, so it is the Remove
+                // button above rather than a seventh cell that looks like a
+                // choice.
+                Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+                    GridRow {
+                        maskKindCell("Linear", 1)
+                        maskKindCell("Radial", 2)
+                        maskKindCell("Brush", 3)
+                    }
+                    GridRow {
+                        maskKindCell("Range", 5)
+                        maskKindCell("Colour", 6)
+                        maskKindCell("Matte", 4)
+                    }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+
+                // ⚠ Beside the mask it describes. It was at the bottom of a
+                // 264-line section, so the control that shows you where the
+                // coverage *is* sat below every slider that moves it.
+                Toggle("Show mask", isOn: $engine.maskOverlay)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .font(.system(size: 11))
 
                 // ⚠ Subject and Person are buttons, not entries in the picker
                 // above. They are *actions* — each runs a model and fills the
@@ -464,12 +493,17 @@ extension Editor {
                         // is drawn — this is a label for the target, not a
                         // rendering of it.
                         HStack(spacing: 8) {
+                            // What was actually under the click. See
+                            // `maskColourSwatch` for why the stored target
+                            // cannot be drawn: it is peak-normalised, so every
+                            // colour would come back looking saturated.
+                            let sw = engine.maskColourSwatch
+                                ?? (r: Double(pow(max(engine.maskColour.r, 0), 1 / 2.2)),
+                                    g: Double(pow(max(engine.maskColour.g, 0), 1 / 2.2)),
+                                    b: Double(pow(max(engine.maskColour.b, 0), 1 / 2.2)))
                             RoundedRectangle(cornerRadius: 3)
-                                .fill(Color(.sRGB,
-                                            red: Double(pow(max(engine.maskColour.r, 0), 1 / 2.2)),
-                                            green: Double(pow(max(engine.maskColour.g, 0), 1 / 2.2)),
-                                            blue: Double(pow(max(engine.maskColour.b, 0), 1 / 2.2)),
-                                            opacity: 1))
+                                .fill(Color(.sRGB, red: sw.r, green: sw.g,
+                                            blue: sw.b, opacity: 1))
                                 .frame(width: 26, height: 18)
                                 .overlay(RoundedRectangle(cornerRadius: 3)
                                     .strokeBorder(Palette.line, lineWidth: 1))
@@ -562,8 +596,6 @@ extension Editor {
                             .toggleStyle(.checkbox)
                         // Not in the sidecar and not undoable: this is how you
                         // are looking at the photo, not an edit to it.
-                        Toggle("Show mask", isOn: $engine.maskOverlay)
-                            .toggleStyle(.checkbox)
                     }
                     .font(.system(size: 11))
                 }
@@ -574,6 +606,40 @@ extension Editor {
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.faint)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    var lightPanel: some View {
+        Group {
+            section("White Balance") {
+                slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0, resetsTo: engine.defaults.temperatureK)
+                slider("Tint", $engine.tint, -1...1, "", 2, resetsTo: engine.defaults.tint)
+            }
+            section("Light") {
+                // Auto-enhance writes Exposure, Whites and Blacks — three of
+                // the sliders directly below it — plus Lift and Clarity. It
+                // belongs with the controls it moves, not in a section of its
+                // own eleven rows further down.
+                HStack(spacing: 8) {
+                    PanelButton(title: "Auto") { engine.autoEnhance() }
+                    // Five control names, engraved, rather than the sentence
+                    // "sets Exposure, Whites, Blacks, Lift, Clarity". It is a
+                    // list of what the button touches, so it is set as a list —
+                    // and it now reads as chrome instead of as prose competing
+                    // with the section headings.
+                    Engraved.Label(text: "Exp · Wht · Blk · Lift · Clarity",
+                                   color: Palette.faint)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+
+                slider("Exposure", $engine.exposureEv, -5...5, " EV", 2, resetsTo: engine.defaults.exposureEv)
+                slider("Contrast", $engine.contrast, 0.5...2, "", 2, resetsTo: engine.defaults.contrast)
+                slider("Highlights", $engine.highlights, -1...1, "", 2, resetsTo: engine.defaults.highlights)
+                slider("Shadows", $engine.shadows, -1...1, "", 2, resetsTo: engine.defaults.shadows)
+                slider("Whites", $engine.whites, -1...1, "", 2, resetsTo: engine.defaults.whites)
+                slider("Blacks", $engine.blacks, -1...1, "", 2, resetsTo: engine.defaults.blacks)
             }
             section("Highlight Recovery") {
                 slider("Amount", $engine.highlightRecovery, 0...1, "", 2, resetsTo: engine.defaults.highlightRecovery)

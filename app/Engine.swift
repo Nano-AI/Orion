@@ -453,6 +453,21 @@ final class Engine {
     /// exactly as it does for spot placement.
     var colourPicking = false
 
+    /// What the picked pixel looked like **on screen**, for the panel's swatch.
+    ///
+    /// ⚠ The swatch cannot be drawn from the stored target. `sampleAt`
+    /// normalises the scene colour by its own peak — which is exactly right for
+    /// the metric, since Oklab chromaticity is scale invariant — but it means
+    /// the stored value always has a channel at 1.0. Drawn directly, a picked
+    /// navy sky came back as a bright periwinkle and a dark green as a vivid
+    /// one: every colour looked like a saturated version of itself, which is
+    /// what "the eyedropper pulls a very wrong colour" looks like from outside.
+    ///
+    /// View state, not edit state, so it is deliberately not in `DevelopState`:
+    /// it is a picture of a gesture, not part of the photograph. Reopening a
+    /// photo leaves it nil and the panel falls back to the target's hue.
+    private(set) var maskColourSwatch: (r: Double, g: Double, b: Double)?
+
     /// Takes the colour under a click on the displayed picture into the
     /// selected component. Returns false when there was nothing to sample.
     ///
@@ -476,6 +491,7 @@ final class Engine {
                 $0.colourB = Float(s.scene.b)
             }
         }
+        maskColourSwatch = s.display
         return true
     }
 
@@ -958,6 +974,7 @@ final class Engine {
         // captures this photo's own original through `refreshOriginal`.
         originalTexture = nil
         originalGeometry = nil
+        maskColourSwatch = nil
 
         // Reset to the camera's own settings before marking loaded, so the
         // didSet observers don't each trigger a render on a half-set model.

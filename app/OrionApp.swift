@@ -217,7 +217,7 @@ extension Orion.Palette {
 /// glass only means Detail to a person who already knows. Naming the thing is
 /// the fix both times.
 enum ToolTab: String, CaseIterable, Identifiable {
-    case light, color, detail, optics, crop, presets
+    case light, color, detail, optics, mask, crop, presets
     var id: String { rawValue }
 
     var title: String {
@@ -226,6 +226,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .color: "Color"
         case .detail: "Detail"
         case .optics: "Optics"
+        case .mask:   "Mask"
         case .crop:   "Crop"
         case .presets: "Presets"
         }
@@ -237,6 +238,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .color: "circle.lefthalf.filled"
         case .detail: "magnifyingglass"
         case .optics: "camera.aperture"
+        case .mask:   "theatermasks"
         case .crop:   "crop"
         case .presets: "square.stack"
         }
@@ -333,7 +335,7 @@ struct Editor: View {
             HStack(spacing: 0) {
                 canvas
                 Rectangle().fill(Palette.line).frame(width: 1)
-                tools.frame(width: 322)
+                tools.frame(width: 364)
             }
 
             if !library.photos.isEmpty {
@@ -910,6 +912,7 @@ struct Editor: View {
                     case .color: colorPanel
                     case .detail: detailPanel
                     case .optics: opticsPanel
+                    case .mask:   maskPanel
                     case .presets: presetsPanel
                     case .crop:
                         section("Aspect") {
@@ -1034,7 +1037,7 @@ struct Editor: View {
                     // than one tab being visibly different from the other five.
                     Engraved.Label(text: t.title,
                                    color: selected ? Palette.text : Palette.faint,
-                                   size: 9)
+                                   size: 9, tracking: 0.5)
                         .lineLimit(1)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity)

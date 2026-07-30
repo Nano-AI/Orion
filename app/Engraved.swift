@@ -23,6 +23,11 @@ enum Engraved {
         /// set smaller rather than only dimmer — two signals for one rank, which
         /// is what keeps the panel legible at a glance.
         var size: CGFloat = 10
+        /// ⚠ Letter-spacing is what makes these read as engraved, but it is
+        /// also pure horizontal cost — and the tab bar is the one place in the
+        /// program where seven labels compete for a fixed width. Overridable
+        /// there and nowhere else.
+        var tracking: CGFloat = 1.0
 
         var body: some View {
             Text(text.uppercased())
@@ -32,7 +37,7 @@ enum Engraved {
                 // ROUNDNESS and HIGHLIGHTS ran to the readout. Letter-spacing
                 // carries the same signal at a fraction of the horizontal cost.
                 .font(.system(size: size, weight: .medium))
-                .tracking(1.0)
+                .tracking(tracking)
                 .foregroundStyle(color)
         }
     }

@@ -261,11 +261,38 @@ struct Histogram: View {
         return peak
     }
 
+    /// ⚠ **The vertical axis is a square root, and it has to be.**
+    ///
+    /// A photographic histogram spans three or four orders of magnitude, and a
+    /// linear axis draws all but the tallest few bins as the floor. Measured on
+    /// the night frame at exposure zero: the tallest interior bin sits at
+    /// position 6 holding 19% of every pixel in the picture, and **nine of the
+    /// 126 interior bins** clear a tenth of it — so the plot is one spike and a
+    /// flat line, which is what "the levels chart looks incorrect" is looking
+    /// at.
+    ///
+    /// This was diagnosed once before and half-fixed: the *ceiling* moved off
+    /// the 99th percentile and onto the tallest non-end bin, which fixes a
+    /// clipping spike at bin 0 or 255 and does nothing at all when the mass
+    /// sits at bin 6. The scale was the other half.
+    ///
+    /// Square root rather than log: it is the conventional choice for this plot,
+    /// it is monotone so no bin can overtake a taller one, it maps zero to zero
+    /// so an empty bin is still empty, and it roughly doubles the visible
+    /// dynamic range without the floor-clamping a log needs to stay finite. The
+    /// axis is not labelled with counts anywhere, so nothing is being
+    /// misreported — the shape is the readout, and the clipping flags carry the
+    /// numbers.
+    private static func plotted(_ fraction: Double) -> CGFloat {
+        CGFloat(sqrt(max(fraction, 0)))
+    }
+
     private func channelPath(_ channel: Int, in size: CGSize, ceiling: UInt32) -> Path {
         Path { p in
             p.move(to: CGPoint(x: 0, y: size.height))
             for i in 0..<binCount {
-                let value = Double(bins[channel * binCount + i]) / Double(ceiling)
+                let raw = Double(bins[channel * binCount + i]) / Double(ceiling)
+                let value = Double(Self.plotted(raw))
                 let x = size.width * CGFloat(i) / CGFloat(binCount - 1)
                 let y = size.height * (1 - CGFloat(min(value, 1)))
                 p.addLine(to: CGPoint(x: x, y: y))
