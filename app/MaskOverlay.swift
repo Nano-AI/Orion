@@ -28,6 +28,10 @@ struct MaskOverlay: View {
     @State private var painting = false
     @State private var carry: CGFloat = 0
     @State private var stroke: [CGPoint] = []
+    /// Polarity per dab, parallel to `stroke`. Carried through the gesture so a
+    /// pass that erases does not have to rewrite the polarity of every dab laid
+    /// before it.
+    @State private var erasing: [Bool] = []
     @State private var last: CGPoint = .zero
     @State private var cursor: CGPoint?
 
@@ -233,9 +237,19 @@ struct MaskOverlay: View {
                     // accumulates source-over, which is what makes overlapping
                     // passes build rather than double.
                     stroke = engine.brushStroke
+                    erasing = engine.brushErasePolarity
+                    // ⚠ Padded before appending. The two arrays have to stay the
+                    // same length or a dab's polarity belongs to a different
+                    // dab, and the stroke on the picture is whatever the sidecar
+                    // held — which may predate erasing entirely.
+                    if erasing.count < stroke.count {
+                        erasing += Array(repeating: false,
+                                         count: stroke.count - erasing.count)
+                    }
                     stroke.append(here)
+                    erasing.append(engine.brushErasing)
                     last = here
-                    engine.setBrushStroke(stroke)
+                    engine.setBrushStroke(stroke, erasing: erasing)
                     return
                 }
                 let added = CanvasLayout.brushDabs(from: last, to: here,
@@ -243,8 +257,9 @@ struct MaskOverlay: View {
                                                    carry: &carry)
                 guard !added.isEmpty else { return }
                 stroke += added
+                erasing += Array(repeating: engine.brushErasing, count: added.count)
                 last = here
-                engine.setBrushStroke(stroke)
+                engine.setBrushStroke(stroke, erasing: erasing)
             }
             .onEnded { _ in
                 painting = false

@@ -647,10 +647,25 @@ final class Engine {
     /// not reach the sidecar or undo.
     private var brushRevisions = [UInt32](repeating: 0, count: Engine.maxMaskComponents)
 
-    func setBrushStroke(_ points: [CGPoint]) {
+    /// The selected component's per-dab polarity, as booleans.
+    var brushErasePolarity: [Bool] {
+        (selected?.brushErase ?? []).map { $0 != 0 }
+    }
+
+    /// Whether the brush is currently taking coverage away. Tool state, not
+    /// part of the photograph — it belongs to the hand, like `spotPlacing`.
+    var brushErasing = false
+
+    func setBrushStroke(_ points: [CGPoint], erasing: [Bool]? = nil) {
         guard selectedMask >= 0 && selectedMask < maskComponents.count else { return }
         maskComponents[selectedMask].brushStroke =
             points.flatMap { [Float($0.x), Float($0.y)] }
+        if let erasing {
+            maskComponents[selectedMask].brushErase = erasing.map { $0 ? 1 : 0 }
+        } else {
+            maskComponents[selectedMask].brushErase =
+                [Float](repeating: 0, count: points.count)
+        }
         guard pushStroke(selectedMask) else { return }
         pushAndRender()
     }
@@ -665,11 +680,23 @@ final class Engine {
         // An empty stroke is a real state — it is what clearing the brush
         // means — so pass the null the facade documents rather than a dangling
         // pointer into an empty array.
+        // ⚠ Padded to the dab count rather than trusted. The two arrays are
+        // written to the sidecar separately, so a file edited by hand — or by a
+        // build between these two changes — can arrive with a stroke and no
+        // polarity for the tail of it. Short means "paints", which is the same
+        // thing an absent array means.
+        var erase = maskComponents[index].brushErase
+        let dabs = xy.count / 2
+        if erase.count < dabs { erase += [Float](repeating: 0, count: dabs - erase.count) }
+
         let status: OrionStatus = xy.isEmpty
-            ? orion_engine_set_brush_stroke(handle, Int32(index), nil, 0)
-            : xy.withUnsafeBufferPointer {
-                  orion_engine_set_brush_stroke(handle, Int32(index),
-                                                $0.baseAddress, Int32(xy.count / 2))
+            ? orion_engine_set_brush_stroke(handle, Int32(index), nil, nil, 0)
+            : xy.withUnsafeBufferPointer { p in
+                  erase.withUnsafeBufferPointer { e in
+                      orion_engine_set_brush_stroke(handle, Int32(index),
+                                                    p.baseAddress, e.baseAddress,
+                                                    Int32(dabs))
+                  }
               }
         guard status == ORION_OK else { return false }
         brushRevisions[index] &+= 1
@@ -687,7 +714,7 @@ final class Engine {
                 // Clear the tail, or a component removed from a group of three
                 // leaves its paint in the engine for the next one added to
                 // inherit.
-                if orion_engine_set_brush_stroke(handle, Int32(i), nil, 0) == ORION_OK {
+                if orion_engine_set_brush_stroke(handle, Int32(i), nil, nil, 0) == ORION_OK {
                     brushRevisions[i] &+= 1
                 }
             }

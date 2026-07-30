@@ -4394,16 +4394,16 @@ void testMaskGpu() {
     // see mask_component.slang. One texel per dab, row-major.
     auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
                                               orion::pipe::params::kDabRows,
-                                              PixelFormat::RG32Float);
+                                              PixelFormat::RGBA32Float);
     const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
         std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
-                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+                                  * orion::pipe::params::kDabRows * 4, 0.0f);
         for (std::size_t i = 0; i < pts.size(); ++i) {
-            texels[i * 2 + 0] = pts[i].first;
-            texels[i * 2 + 1] = pts[i].second;
+            texels[i * 4 + 0] = pts[i].first;
+            texels[i * 4 + 1] = pts[i].second;
         }
         dabTex->upload(texels.data(),
-                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+                       std::size_t(orion::pipe::params::kDabStride) * 4 * sizeof(float));
     };
     std::vector<std::pair<float, float>> dabList;
     const auto setDabsAt = [&](int i, float x, float y) {
@@ -4606,16 +4606,16 @@ void testMaskBrushGpu() {
     // see mask_component.slang. One texel per dab, row-major.
     auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
                                               orion::pipe::params::kDabRows,
-                                              PixelFormat::RG32Float);
+                                              PixelFormat::RGBA32Float);
     const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
         std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
-                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+                                  * orion::pipe::params::kDabRows * 4, 0.0f);
         for (std::size_t i = 0; i < pts.size(); ++i) {
-            texels[i * 2 + 0] = pts[i].first;
-            texels[i * 2 + 1] = pts[i].second;
+            texels[i * 4 + 0] = pts[i].first;
+            texels[i * 4 + 1] = pts[i].second;
         }
         dabTex->upload(texels.data(),
-                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+                       std::size_t(orion::pipe::params::kDabStride) * 4 * sizeof(float));
     };
     std::vector<std::pair<float, float>> dabList;
     const auto setDabsAt = [&](int i, float x, float y) {
@@ -4859,17 +4859,17 @@ void testMaskCompositeGpu() {
 
     auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
                                               orion::pipe::params::kDabRows,
-                                              PixelFormat::RG32Float);
+                                              PixelFormat::RGBA32Float);
     std::vector<std::pair<float, float>> dabList;
     const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
         std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
-                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+                                  * orion::pipe::params::kDabRows * 4, 0.0f);
         for (std::size_t k = 0; k < pts.size(); ++k) {
-            texels[k * 2 + 0] = pts[k].first;
-            texels[k * 2 + 1] = pts[k].second;
+            texels[k * 4 + 0] = pts[k].first;
+            texels[k * 4 + 1] = pts[k].second;
         }
         dabTex->upload(texels.data(),
-                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+                       std::size_t(orion::pipe::params::kDabStride) * 4 * sizeof(float));
     };
     const auto setDabsAt = [&](int k, float x, float y) {
         if (int(dabList.size()) <= k) dabList.resize(std::size_t(k) + 1, {0.0f, 0.0f});
@@ -5742,7 +5742,7 @@ void testLongBrushStroke() {
     auto reference = orion::gpu::Texture::create(*device, kW, kH,
                                                  PixelFormat::RGBA16Float);
     auto dabTex = orion::gpu::Texture::create(*device, params::kDabStride,
-                                              params::kDabRows, PixelFormat::RG32Float);
+                                              params::kDabRows, PixelFormat::RGBA32Float);
 
     // A stroke straight across the frame, 400 dabs — comfortably past the old
     // 256 and past the end of the texture's first row, which is the other
@@ -5750,14 +5750,14 @@ void testLongBrushStroke() {
     constexpr int kDabs = 400;
     {
         std::vector<float> texels(std::size_t(params::kDabStride)
-                                  * params::kDabRows * 2, 0.0f);
+                                  * params::kDabRows * 4, 0.0f);
         for (int i = 0; i < kDabs; ++i) {
-            texels[std::size_t(i) * 2 + 0] =
+            texels[std::size_t(i) * 4 + 0] =
                 0.02f + 0.96f * float(i) / float(kDabs - 1);
-            texels[std::size_t(i) * 2 + 1] = 0.5f;
+            texels[std::size_t(i) * 4 + 1] = 0.5f;
         }
         dabTex->upload(texels.data(),
-                       std::size_t(params::kDabStride) * 2 * sizeof(float));
+                       std::size_t(params::kDabStride) * 4 * sizeof(float));
     }
 
     params::MaskComponent b{};
@@ -5825,6 +5825,156 @@ void testLongBrushStroke() {
     }
 }
 
+// Erasing with the brush — the other half of a brush.
+//
+// A component accumulates every stroke ever laid on it, so the polarity has to
+// travel with the *dab* rather than with the stroke. It rides in the aux
+// texture's third channel.
+//
+// ⚠ The property worth pinning is that paint and erase are **exact inverses**.
+// Erase is destination-out — `a -= cov*a` — against paint's source-over
+// `a += cov*(1-a)`, so painting takes the alpha a fraction of the way to one
+// and erasing takes it the same fraction of the way to zero. Subtracting the
+// coverage outright would drive the alpha negative wherever a slow hand
+// lingered, and the saturate at the end would hide that as a hard hole in a
+// soft brush.
+void testBrushErase() {
+    section("Brush erase (GPU)");
+
+    using orion::gpu::PixelFormat;
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 128, kH = 32;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto lib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/maskComponent.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
+
+    auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
+    auto dabTex = orion::gpu::Texture::create(*device, params::kDabStride,
+                                              params::kDabRows,
+                                              PixelFormat::RGBA32Float);
+    const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
+
+    /// Uploads a list of (x, erase) dabs, all at mid-height.
+    const auto setDabs = [&](const std::vector<std::pair<float, bool>>& pts) {
+        std::vector<float> texels(std::size_t(params::kDabStride)
+                                  * params::kDabRows * 4, 0.0f);
+        for (std::size_t i = 0; i < pts.size(); ++i) {
+            texels[i * 4 + 0] = pts[i].first;
+            texels[i * 4 + 1] = 0.5f;
+            texels[i * 4 + 2] = pts[i].second ? 1.0f : 0.0f;
+        }
+        dabTex->upload(texels.data(),
+                       std::size_t(params::kDabStride) * 4 * sizeof(float));
+    };
+
+    params::MaskComponent m{};
+    m.size[0] = kW; m.size[1] = kH;
+    m.kind = 3;
+    m.dabStride = params::kDabStride;
+    m.hardness = 1.0f;
+    m.nibPx = 12.0f;
+
+    const auto run = [&](int count) {
+        m.count = count;
+        src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(),
+                              dabTex.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.commitAndWait();
+        std::vector<__fp16> out(std::size_t(kW) * kH);
+        dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+        return out;
+    };
+    const auto at = [&](const std::vector<__fp16>& a, int x) {
+        return double(a[std::size_t(kH / 2) * kW + std::size_t(x)]);
+    };
+
+    // ── A full-flow erase over a full-flow paint clears it ────────────────
+    {
+        m.flow = 1.0f;
+        setDabs({{0.5f, false}});
+        const auto painted = run(1);
+        report(at(painted, kW / 2) > 0.999, "a dab at full flow covers fully",
+               std::to_string(at(painted, kW / 2)));
+
+        setDabs({{0.5f, true}, {0.5f, false}});
+        // ⚠ Order matters and this is the wrong way round on purpose: the erase
+        // is listed *first*, so it runs against nothing and the paint that
+        // follows is what stands. A kernel that applied the erase after — or
+        // that ignored order — would leave this empty.
+        const auto eraseThenPaint = run(2);
+        report(at(eraseThenPaint, kW / 2) > 0.999,
+               "dabs apply in listed order, so an erase before a paint is a no-op",
+               std::to_string(at(eraseThenPaint, kW / 2)));
+
+        setDabs({{0.5f, false}, {0.5f, true}});
+        const auto paintThenErase = run(2);
+        report(at(paintThenErase, kW / 2) < 1e-3,
+               "and a full erase over a full paint takes it back to nothing",
+               std::to_string(at(paintThenErase, kW / 2)));
+    }
+
+    // ── ⚠ Paint and erase are exact inverses at partial flow ──────────────
+    //
+    // Source-over then destination-out at the same flow f leaves f(1-f)... no:
+    // paint gives a = f, erase gives a = f - f*f = f(1-f). The point is that it
+    // is *reachable and bounded*, never negative, and that repeating the erase
+    // converges to zero geometrically rather than jumping there.
+    {
+        m.flow = 0.5f;
+        setDabs({{0.5f, false}});
+        const double one = at(run(1), kW / 2);
+        report(std::abs(one - 0.5) < 2e-3, "half flow lays down half",
+               std::to_string(one));
+
+        setDabs({{0.5f, false}, {0.5f, true}});
+        const double erased = at(run(2), kW / 2);
+        report(std::abs(erased - 0.25) < 2e-3,
+               "and half-erasing it leaves a quarter — destination-out, not a "
+               "subtraction",
+               std::to_string(erased));
+
+        // Four more erases: geometric decay toward zero, never past it.
+        setDabs({{0.5f, false}, {0.5f, true}, {0.5f, true}, {0.5f, true},
+                 {0.5f, true}, {0.5f, true}});
+        const double faded = at(run(6), kW / 2);
+        report(faded > 0.0 && faded < 0.02,
+               "repeated erasing decays toward zero and never below it",
+               std::to_string(faded));
+    }
+
+    // ── Erasing only where it was applied ─────────────────────────────────
+    //
+    // The two-sided half: an erase is a dab, so it has the nib's extent and
+    // nothing outside it may move.
+    {
+        m.flow = 1.0f;
+        setDabs({{0.25f, false}, {0.75f, false}});
+        const auto both = run(2);
+        setDabs({{0.25f, false}, {0.75f, false}, {0.75f, true}});
+        const auto oneGone = run(3);
+        report(at(oneGone, kW / 4) > 0.999 && at(both, kW / 4) > 0.999,
+               "erasing one dab leaves the other exactly as it was",
+               std::to_string(at(oneGone, kW / 4)));
+        report(at(oneGone, kW * 3 / 4) < 1e-3,
+               "and removes the one it was aimed at",
+               std::to_string(at(oneGone, kW * 3 / 4)));
+    }
+}
+
+
 // A luminance range mask — research/masking.md §4b.
 //
 // A band on what a pixel *is*. Three decisions to pin, and the shader's own
@@ -5858,16 +6008,16 @@ void testMaskRangeGpu() {
     // see mask_component.slang. One texel per dab, row-major.
     auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
                                               orion::pipe::params::kDabRows,
-                                              PixelFormat::RG32Float);
+                                              PixelFormat::RGBA32Float);
     const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
         std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
-                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+                                  * orion::pipe::params::kDabRows * 4, 0.0f);
         for (std::size_t i = 0; i < pts.size(); ++i) {
-            texels[i * 2 + 0] = pts[i].first;
-            texels[i * 2 + 1] = pts[i].second;
+            texels[i * 4 + 0] = pts[i].first;
+            texels[i * 4 + 1] = pts[i].second;
         }
         dabTex->upload(texels.data(),
-                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+                       std::size_t(orion::pipe::params::kDabStride) * 4 * sizeof(float));
     };
     std::vector<std::pair<float, float>> dabList;
     const auto setDabsAt = [&](int i, float x, float y) {
@@ -6097,7 +6247,7 @@ void testMaskColourGpu() {
     auto reference = orion::gpu::Texture::create(*device, kW, kH,
                                                  PixelFormat::RGBA16Float);
     auto dabTex = orion::gpu::Texture::create(*device, params::kDabStride,
-                                              params::kDabRows, PixelFormat::RG32Float);
+                                              params::kDabRows, PixelFormat::RGBA32Float);
     const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
 
     // ── The metric, on the CPU ────────────────────────────────────────────
@@ -6452,17 +6602,17 @@ void testMaskMatteGpu() {
 
     auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
                                               orion::pipe::params::kDabRows,
-                                              PixelFormat::RG32Float);
+                                              PixelFormat::RGBA32Float);
     std::vector<std::pair<float, float>> dabList;
     const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
         std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
-                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+                                  * orion::pipe::params::kDabRows * 4, 0.0f);
         for (std::size_t i = 0; i < pts.size(); ++i) {
-            texels[i * 2 + 0] = pts[i].first;
-            texels[i * 2 + 1] = pts[i].second;
+            texels[i * 4 + 0] = pts[i].first;
+            texels[i * 4 + 1] = pts[i].second;
         }
         dabTex->upload(texels.data(),
-                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+                       std::size_t(orion::pipe::params::kDabStride) * 4 * sizeof(float));
     };
     const auto setDabsAt = [&](int i, float x, float y) {
         if (int(dabList.size()) <= i) dabList.resize(std::size_t(i) + 1, {0.0f, 0.0f});
@@ -7030,6 +7180,7 @@ int main() {
     testMaskRefineGpu();
     testMaskMatteGpu();
     testLongBrushStroke();
+    testBrushErase();
     testMaskGeometryInverse();
     testMaskRangeGpu();
     testMaskColourGpu();

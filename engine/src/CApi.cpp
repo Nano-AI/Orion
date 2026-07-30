@@ -255,7 +255,8 @@ OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustm
 }
 
 OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
-                                          const float* xy, int count) {
+                                          const float* xy, const float* erase,
+                                          int count) {
     if (engine == nullptr) return ORION_ERR_BAD_ARG;
     // Rejected rather than clamped: paint landing in the wrong component is
     // worse than nothing happening.
@@ -264,7 +265,7 @@ OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
     // A null buffer with a positive count is a caller bug, not an empty stroke.
     if (xy == nullptr && count > 0) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        engine->impl.setBrushStroke(component, xy, count);
+        engine->impl.setBrushStroke(component, xy, erase, count);
         return ORION_OK;
     });
 }

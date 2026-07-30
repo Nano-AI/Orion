@@ -204,7 +204,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float>   src,   // coverage so far, 0..1
                    uniform Texture2D<float4>  reference,  // kind 5, see below
                    uniform Texture2D<float>   matte, // kind 4, frame coordinates
-                   uniform Texture2D<float2>  dabs,  // kind 3, one dab per texel
+                   uniform Texture2D<float4>  dabs,  // kind 3: xy centre, z erases when set
                    uniform RWTexture2D<float> dst,
                    uniform ConstantBuffer<MaskComponentParams> p)
 {
@@ -272,7 +272,8 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         const int stride = max(p.dabStride, 1);
         for (int i = 0; i < p.count; ++i)
         {
-            const float2 centre = dabs[int2(i % stride, i / stride)];
+            const float4 dab = dabs[int2(i % stride, i / stride)];
+            const float2 centre = dab.xy;
             const float2 e = (q - centre) * toPx;
 
             // Reject on the square first. A dab covers a disc, so most pixels
@@ -290,11 +291,21 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
             // radii out.
             if (d >= 1.0f) continue;
 
-            // Source-over, not addition. Two dabs at full flow must give full
-            // coverage and not two — adding would let a slow hand over the same
-            // spot drive the alpha past 1 and clip, which reads as the brush
-            // getting stronger the longer you hover.
-            own += flow * dabCoverage(d, p.hardness) * (1.0f - own);
+            const float cov = flow * dabCoverage(d, p.hardness);
+
+            // ⚠ Erase is **destination-out**, the exact inverse of the
+            // source-over below, and that pairing is what makes the two
+            // reversible against each other: painting takes the alpha a
+            // fraction of the way to one, erasing takes it the same fraction of
+            // the way to zero. Subtracting `cov` instead would drive the alpha
+            // negative wherever a slow hand lingered, and the saturate at the
+            // end would hide it as a hard hole rather than a soft one.
+            //
+            // Per *dab*, not per stroke: one component accumulates every stroke
+            // ever laid on it, so the polarity has to travel with the dab. It
+            // rides in the aux texture's third channel.
+            if (dab.z > 0.5f) own -= cov * own;
+            else              own += cov * (1.0f - own);
         }
 
         own = saturate(own);

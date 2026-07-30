@@ -576,11 +576,31 @@ extension Editor {
                     }
 
                     if engine.maskKind == 3 {
+                        // Paint or erase, on the same component. ⚠ A segmented
+                        // pair rather than a toggle labelled "Erase": a toggle
+                        // has an off state that has to be read as "paint", and
+                        // the two are equal acts. Which one is armed is the
+                        // first thing to know before drawing on the picture, so
+                        // it goes above the nib.
+                        Picker("", selection: $engine.brushErasing) {
+                            Text("Paint").tag(false)
+                            Text("Erase").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+
                         // A stroke has no centre or angle to type in — the
                         // whole point is that it is drawn. What is left is the
                         // nib, and those are the three the shader reads.
                         slider("Size", $engine.brushRadius, 0.01...0.4, "", 3,
                                resetsTo: maskDefaults.brushRadius)
+                        // ⚠ Flow, and it is not opacity. Each dab lays down
+                        // this fraction of what is left, source-over, so
+                        // overlapping passes *build* toward full coverage — a
+                        // low flow is a soft repeatable brush rather than a
+                        // ceiling. There is no separate opacity: a ceiling
+                        // would need the kernel to track a per-stroke maximum,
+                        // and Erase is the honest way to come back down.
                         slider("Flow", $engine.brushFlow, 0.01...1, "", 2,
                                resetsTo: maskDefaults.brushFlow)
                         slider("Hardness", $engine.brushHardness, 0...1, "", 2,

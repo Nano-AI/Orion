@@ -80,13 +80,14 @@ double Engine::renderPreview() {
     return preview_->render();
 }
 
-void Engine::setBrushStroke(int component, const float* xy, int count) {
+void Engine::setBrushStroke(int component, const float* xy,
+                            const float* erase, int count) {
     if (!develop_) throw std::runtime_error("no image open");
-    develop_->setBrushStroke(component, xy, count);
+    develop_->setBrushStroke(component, xy, erase, count);
     // Dabs are normalized displayed coordinates and the nib is a fraction of
     // the displayed picture, so the same stroke means the same thing on a
     // quarter-linear mosaic. Nothing is scaled here on purpose.
-    if (preview_) preview_->setBrushStroke(component, xy, count);
+    if (preview_) preview_->setBrushStroke(component, xy, erase, count);
 }
 
 bool Engine::setMaskMatte(int component, const float* alpha, int width, int height) {

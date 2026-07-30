@@ -55,7 +55,10 @@ import SwiftUI
 ///                                       every cell by `CanvasLayout.maskAlpha`
 ///                                       — the overlay's own oracle — and
 ///                                       demands the render agree
-///     brush <x,y> <x,y> ...             dabs walked by CanvasLayout, as the hand does
+///     brush <x,y> <x,y> ...             dabs walked by CanvasLayout, as the hand
+///                                       does. Appends to the stroke already
+///                                       there, and lays paint or erase
+///                                       according to `set brushErase`
 ///     pick <x,y>                        the colour-mixer eyedropper
 ///     maskcolour <x,y>                  the colour range mask's picker, as a
 ///                                       click on the canvas does it
@@ -238,17 +241,28 @@ enum Scenario {
             // canvas does with a real drag — not a hand-placed list of centres.
             // `carry` continues the spacing across segments, so a scripted
             // stroke has the same dabs a steady hand would lay.
-            var stroke: [CGPoint] = []
+            //
+            // ⚠ It **appends** to whatever the component already holds, exactly
+            // as the overlay does, because that is what makes a second pass
+            // build on the first — and it is the only way to script painting
+            // and then erasing over it.
+            var added: [CGPoint] = []
             var carry: CGFloat = 0
             let path = try args.map { try point($0) }
             guard path.count >= 2 else { throw Bad(what: "brush needs two or more points") }
-            stroke.append(path[0])
+            added.append(path[0])
             for i in 1..<path.count {
-                stroke += CanvasLayout.brushDabs(from: path[i - 1], to: path[i],
-                                                 radius: CGFloat(engine.brushRadius),
-                                                 carry: &carry)
+                added += CanvasLayout.brushDabs(from: path[i - 1], to: path[i],
+                                                radius: CGFloat(engine.brushRadius),
+                                                carry: &carry)
             }
-            engine.setBrushStroke(stroke)
+            let existing = engine.brushStroke
+            var polarity = engine.brushErasePolarity
+            if polarity.count < existing.count {
+                polarity += Array(repeating: false, count: existing.count - polarity.count)
+            }
+            polarity += Array(repeating: engine.brushErasing, count: added.count)
+            engine.setBrushStroke(existing + added, erasing: polarity)
             engine.commitBrushEdit()
 
         case "maskcheck":
@@ -635,6 +649,7 @@ enum Scenario {
         case "maskColourTol", "maskColorTol":   e.maskColourTol = value
         case "maskColourSoft", "maskColorSoft": e.maskColourSoft = value
         case "maskInvert":  e.maskInvert = value != 0
+        case "brushErase":  e.brushErasing = value != 0
         case "maskHidden":  e.maskHidden = value != 0
         case "brushHardness": e.brushHardness = value
         default: throw Bad(what: "no control named \(control)")

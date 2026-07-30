@@ -58,7 +58,8 @@ public:
     // here rather than through `developMutable()`, which is the full graph
     // only: a stroke sent to that one alone renders correctly when the hand is
     // still and vanishes for the length of every drag.
-    void setBrushStroke(int component, const float* xy, int count);
+    void setBrushStroke(int component, const float* xy, const float* erase,
+                        int count);
     bool setMaskMatte(int component, const float* alpha, int width, int height);
     void setCreativeLut(const pipe::CubeLut&);
     void clearCreativeLut();

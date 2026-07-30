@@ -1,0 +1,58 @@
+# Reported: "I should be able to brush and add more onto a given layer. There
+# should be some kind of brush where I can add and subtract to the mask."
+#
+# A brush could only ever lay coverage down. Painting past what you meant left
+# no way back except Clear stroke and starting over.
+#
+# ⚠ Polarity travels with the **dab**, not with the stroke, because one
+# component accumulates every stroke ever laid on it — so the component has to
+# remember which of its dabs added and which took away.
+#
+# And erase is destination-out (`a -= cov*a`), the exact inverse of paint's
+# source-over (`a += cov*(1-a)`). Subtracting the coverage outright would drive
+# the alpha negative wherever a slow hand lingered, and the saturate would hide
+# that as a hard hole in a soft brush.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask brush
+set brushRadius 0.12
+set brushFlow 1.0
+set brushHardness 0.8
+set localExposure -2.5
+
+measure 0.30,0.45,0.08,0.08 before
+measure 0.70,0.45,0.08,0.08 farBefore
+
+# Paint across the middle.
+brush 0.25,0.5 0.55,0.5
+measure 0.30,0.45,0.08,0.08 painted
+expect painted != before
+
+# ⚠ A second pass ADDS to the same component rather than replacing it — which
+# is the other half of the report. The far patch was untouched by the first
+# pass and has to move now.
+brush 0.62,0.5 0.80,0.5
+measure 0.70,0.45,0.08,0.08 farPainted
+expect farPainted != farBefore
+# ...and the first half is still there.
+measure 0.30,0.45,0.08,0.08 stillPainted
+expect stillPainted == painted
+
+# ── Erase takes it back ─────────────────────────────────────────────────
+set brushErase 1
+brush 0.25,0.5 0.55,0.5
+measure 0.30,0.45,0.08,0.08 erased
+expect erased == before
+
+# ⚠ Two-sided: erasing the left half must not touch the right. An erase is a
+# dab, so it has the nib's extent and nothing outside it may move.
+measure 0.70,0.45,0.08,0.08 farAfterErase
+expect farAfterErase == farPainted
+
+# And painting again over the erased part brings it back, so the two are
+# reversible against each other rather than one being destructive.
+set brushErase 0
+brush 0.25,0.5 0.55,0.5
+measure 0.30,0.45,0.08,0.08 repainted
+expect repainted == painted

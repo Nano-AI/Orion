@@ -24,8 +24,8 @@ licence) before it is a code one. That is the thing to settle first.
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **504 checks** · `orion-viewport-tests` **3382
-checks** · **22 `repro/` scenarios, 103 checks** · all 0 failures. Bench exits 0
+**Suites:** `orion-tests` **512 checks** · `orion-viewport-tests` **3382
+checks** · **25 `repro/` scenarios, 121 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -58,6 +58,113 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30m — the brush erases, and a log that is a scenario
+
+⚠ **Twentieth arrival of the stale M3 prompt.** Not re-litigated.
+
+Four reports from the developer using the alpha, and one durable ask.
+
+### The log, which is the durable one
+
+*"Create logs so that I can do something, mess it up, and then ask you to
+diagnose, create scenario, replicate, and fix."*
+
+`app/InteractionLog.swift` writes **`Scenario.swift`'s own grammar**, so a log
+*is* a reproduction: drop it in `repro/` and run it. File menu → Reveal Session
+Log. One line per *committed* edit, taken where undo counts, so a slider drag is
+one line and not sixty.
+
+⚠ **What changed is found by diffing `DevelopState`**, not by calling a logger
+from forty places — a field added to that struct is logged the day it is added.
+The state deliberately *outside* `DevelopState` (the compare split, the overlay,
+the tab) is recorded by its call sites, and that short list is the one part that
+can rot. It is named as such in the file.
+
+Two bugs in the log itself, both found by replaying it:
+
+- A component created **and** a slider moved in one commit emitted only the mask
+  line and dropped the slider. A missing line makes a replay diverge silently
+  from the session it claims to reproduce — the one failure this must not have.
+- `Int32 != Int32?` is always true, so every session grew a spurious `mask none`.
+
+### The bug it was built for
+
+**Compare could not be dragged after touching a mask.** `MaskOverlay` takes
+`contentShape(Rectangle())` — the whole canvas, which it needs, since dragging a
+radial's body or painting can start anywhere — and it sat **above**
+`CompareOverlay`. Any live mask swallowed the divider's press.
+
+Compare goes on top now. It claims a 28-point strip, so every press outside it
+still falls through to the mask; reordering rather than disabling, because
+editing through a split is a thing people do.
+
+### The brush erases
+
+*"There should be some kind of brush where I can add and subtract to the mask."*
+
+⚠ **Polarity travels with the dab, not the stroke.** One component accumulates
+every stroke ever laid on it, so the component has to remember which of its dabs
+added and which took away. It rides in the dab texture's third channel —
+RG32Float to RGBA32Float, 256 KB a component against 128.
+
+⚠ **Erase is destination-out**, `a -= cov·a`, the exact inverse of paint's
+source-over `a += cov·(1−a)`. So painting takes the alpha a fraction of the way
+to one and erasing takes it the same fraction of the way to zero, and the two are
+reversible against each other. Subtracting the coverage outright would drive the
+alpha negative wherever a slow hand lingered, and the `saturate` at the end would
+hide that as a hard hole in a soft brush. Three mutations dead, including that
+one.
+
+⚠ **Migration: a parallel array, not a third interleaved number.** `brushStroke`
+is a flat list of floats in the sidecar; re-interleaving it would read every
+stroke saved before erasing existed as garbage — silently, because a scrambled
+stroke is still a valid stroke. `brushErase` is absent in those files, which
+means "paints throughout", which is what they mean.
+
+The scenario runner's `brush` verb now **appends** to the stroke already there,
+as the overlay does, which is what makes a second pass build on the first and is
+the only way to script painting and then erasing over it.
+
+### Also, from the same reports
+
+- **One Add menu**, grouped by how the mask decides what it covers: Draw (placed
+  by hand), Detect (a model), Match (measures the pixels). It was three controls
+  for one act. Subject and Person stay *actions* — choosing one adds the row and
+  runs the model together, so there is still no way to select into an empty
+  matte.
+- **An eye on every row.** Hidden is a *disabled node*, not a zeroed coverage: a
+  component's node takes the fold-so-far as its first input and a disabled node
+  resolves to its first input, so hiding skips it exactly and costs nothing.
+- **Size, Flow and Hardness already existed.** ⚠ There is no separate *opacity*
+  and the panel now says why: Flow is per-dab buildup, not a ceiling, so
+  overlapping passes build toward full coverage. A ceiling would need the kernel
+  to track a per-stroke maximum; Erase is the honest way back down.
+
+### ⚠ The layer question, answered and staged rather than started
+
+Asked: should every edit be per-mask, with a master layer and blend modes?
+
+The arithmetic decides it. **Pointwise adjustments can be per-layer** — exposure,
+contrast, highlights/shadows, whites/blacks, vibrance, saturation, grading, the
+mixer, the curve. **Clarity, dehaze and exposure fusion cannot**: they are 16–32
+node pyramids each, and N copies destroys both the node count and the 6.4 GiB
+cache that makes a drag 10 ms. The honest version of "clarity on a mask" is to
+render the pyramid **once** globally and let each layer blend toward the input by
+α × amount.
+
+The shape: bake each layer's folded coverage to one R16F (46 MiB), one fused pass
+loops over layers per pixel. **Eight layers ≈ 370 MiB**, under 6% of budget, and
+the per-node cache survives — touching layer 3 does not recompute 1 and 2. The
+existing parameter-scaling rule generalises: exposure collapses to `2^(Σ αᵢEᵢ)`,
+order-independent. What must be **refused** is per-layer blend modes over
+*rendered frames* — blending two tone-curved images is a different operation
+needing N framebuffers. Layer opacity is a scalar into α.
+
+Staged: (1) the shell — eye, `+` menu — **done this session**; (2) N
+exposure-only layers with baked coverage and the fused pass, which is the
+load-bearing engine change; (3) widen to the pointwise whitelist; (4) optionally
+the masked blend of the single global pyramid.
 
 ## Session 2026-07-30l — a spot is a thing you drag
 

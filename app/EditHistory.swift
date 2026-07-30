@@ -137,6 +137,13 @@ struct MaskComponentState: Equatable, Codable {
     /// rather than a list of objects — a stroke is thousands of points and the
     /// object form doubles the file for nothing.
     var brushStroke: [Float] = []
+    /// One value per dab, 1 where the dab **erases**. ⚠ A parallel array rather
+    /// than a third number interleaved into `brushStroke`: that array is a flat
+    /// list of numbers in the sidecar, and re-interleaving it would read every
+    /// stroke saved before erasing existed as garbage — silently, because a
+    /// scrambled stroke is still a valid stroke. Absent means the whole stroke
+    /// paints, which is exactly what those older sidecars mean.
+    var brushErase: [Float] = []
 
     /// Decoding takes what the sidecar has and leaves the rest at its default,
     /// for the same reason `DevelopState` does: the synthesized decoder throws
@@ -163,7 +170,7 @@ struct MaskComponentState: Equatable, Codable {
         case radiusX, radiusY, feather, roundness
         case rangeLo, rangeHi, rangeSoft
         case colourR, colourG, colourB, colourTol, colourSoft
-        case brushRadius, brushFlow, brushHardness, brushStroke
+        case brushRadius, brushFlow, brushHardness, brushStroke, brushErase
     }
 
     init() {}
@@ -198,6 +205,7 @@ struct MaskComponentState: Equatable, Codable {
         brushFlow = float(.brushFlow) ?? brushFlow
         brushHardness = float(.brushHardness) ?? brushHardness
         brushStroke = (try? c.decode([Float].self, forKey: .brushStroke)) ?? brushStroke
+        brushErase = (try? c.decode([Float].self, forKey: .brushErase)) ?? brushErase
     }
 }
 

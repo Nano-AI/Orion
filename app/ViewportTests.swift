@@ -1897,6 +1897,7 @@ enum ViewportTests {
         m.centreX = 0.4; m.centreY = 0.7; m.angle = 0.9; m.length = 0.33
         m.radiusX = 0.21; m.radiusY = 0.44; m.feather = 0.66; m.roundness = 3.5
         m.brushRadius = 0.05; m.brushFlow = 0.8; m.brushHardness = 0.15
+        m.brushStroke = [0.1, 0.2, 0.3, 0.4]; m.brushErase = [0, 1]
         // ⚠ The range and colour fields too, and their absence here is what let
         // `rangeLo`, `rangeHi` and `rangeSoft` be written to every sidecar and
         // read back from none for five sessions. `DevelopState`'s own fixture

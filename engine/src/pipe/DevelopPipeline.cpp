@@ -508,8 +508,12 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                                PixelFormat::R16Float);
         // One texel per dab. 256 x 64 is 16,384 of them for 128 KB, against the
         // 256 a four-kilobyte constant block could hold.
+        // ⚠ RGBA rather than RG: the third channel carries whether the dab
+        // adds coverage or takes it away. 256 KB a component against 128, for
+        // the ability to erase — which is the difference between a brush and a
+        // one-way stamp.
         auxDabs_[i] = pipeline_.addAuxTexture(params::kDabStride, params::kDabRows,
-                                              PixelFormat::RG32Float);
+                                              PixelFormat::RGBA32Float);
     }
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         nMaskComponent_[i] =
@@ -626,6 +630,7 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
     // an invariant.
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         brushDabs_[std::size_t(i)].clear();
+        brushErase_[std::size_t(i)].clear();
         matteLive_[i][0] = 0;
         matteLive_[i][1] = 0;
         matteDirty_[i] = true;
@@ -702,14 +707,20 @@ float DevelopPipeline::whiteClipFor(const float multipliers[3]) const noexcept {
     return std::max(clip, 1e-3f);
 }
 
-void DevelopPipeline::setBrushStroke(int component, const float* xy, int count) {
+void DevelopPipeline::setBrushStroke(int component, const float* xy,
+                                    const float* erase, int count) {
     // Ignored rather than clamped: a stroke written into the wrong component
     // would put paint somewhere the photographer did not.
     if (component < 0 || component >= kMaxMaskComponents) return;
     auto& dabs = brushDabs_[std::size_t(component)];
+    auto& signs = brushErase_[std::size_t(component)];
     dabs.clear();
+    signs.clear();
     if (xy == nullptr || count <= 0) return;
     dabs.assign(xy, xy + std::size_t(count) * 2);
+    // A null `erase` is a stroke that paints throughout.
+    signs.assign(std::size_t(count), 0.0f);
+    if (erase != nullptr) signs.assign(erase, erase + std::size_t(count));
 }
 
 std::pair<float, float> DevelopPipeline::displayedToFrame(float x, float y) const {
@@ -1593,7 +1604,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             if (dabsStale) {
                 const auto& dabs = brushDabs_[std::size_t(i)];
                 std::vector<float> texels(
-                    std::size_t(params::kDabStride) * params::kDabRows * 2, 0.0f);
+                    std::size_t(params::kDabStride) * params::kDabRows * 4, 0.0f);
                 for (int d = 0; d < m.count; ++d) {
                     // Every dab goes through the *same* transform the gradient's
                     // centre does, and it did not before: the centres were
@@ -1611,11 +1622,16 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                         adj.straightenDeg * 3.14159265358979324f / 180.0f,
                         adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
                         rotW, rotH);
-                    texels[std::size_t(d) * 2 + 0] = p.centreX;
-                    texels[std::size_t(d) * 2 + 1] = p.centreY;
+                    const auto& signs = brushErase_[std::size_t(i)];
+                    const float erasing =
+                        (std::size_t(d) < signs.size() && signs[std::size_t(d)] != 0.0f)
+                            ? 1.0f : 0.0f;
+                    texels[std::size_t(d) * 4 + 0] = p.centreX;
+                    texels[std::size_t(d) * 4 + 1] = p.centreY;
+                    texels[std::size_t(d) * 4 + 2] = erasing;
                 }
                 pipeline_.updateAux(auxDabs_[std::size_t(i)], texels.data(),
-                                    std::size_t(params::kDabStride) * 2 * sizeof(float));
+                                    std::size_t(params::kDabStride) * 4 * sizeof(float));
             }
 
             // The nib, as a radius in *frame pixels*.

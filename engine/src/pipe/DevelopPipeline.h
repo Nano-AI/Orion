@@ -318,7 +318,11 @@ public:
     /// Out-of-range `component` is ignored rather than clamped: writing a stroke
     /// into the wrong component would put paint somewhere the photographer did
     /// not, which is worse than nothing happening.
-    void setBrushStroke(int component, const float* xy, int count);
+    /// `erase` is one value per dab: nonzero takes coverage away instead of
+    /// laying it down. Null means the whole stroke paints, which is what every
+    /// caller written before erasing existed sends.
+    void setBrushStroke(int component, const float* xy, const float* erase,
+                        int count);
 
     /// Uploads a raster matte for one component — a segmentation result, or
     /// anything else that is an image rather than a formula.
@@ -572,6 +576,12 @@ private:
     /// Each component's brush stroke, interleaved x, y. Lives here rather than
     /// in `Adjustments` because it is variable-length; see `setBrushStroke`.
     std::array<std::vector<float>, kMaxMaskComponents> brushDabs_;
+    /// One per dab, parallel to `brushDabs_`. ⚠ Parallel rather than
+    /// interleaved into the coordinate list on purpose: the stroke is written
+    /// to the sidecar as a flat array of numbers, and re-interleaving it would
+    /// read every stroke saved before erasing existed as garbage — silently,
+    /// since a scrambled stroke is still a valid stroke.
+    std::array<std::vector<float>, kMaxMaskComponents> brushErase_;
     bool         primed_ = false;
     WhiteBalance         asShot_{};
     std::array<float, 3> asShotMul_{1.0f, 1.0f, 1.0f};

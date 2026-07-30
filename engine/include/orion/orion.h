@@ -271,8 +271,12 @@ OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path);
  * deliberate — a drag sets the stroke once per frame and the revision is what
  * the engine compares, so the stroke never has to be walked to decide whether
  * it moved. */
+/// `erase` is one value per dab: nonzero takes coverage away instead of laying
+/// it down, so one component can be painted into and rubbed back out. Null
+/// means the whole stroke paints.
 OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
-                                          const float* xy, int count);
+                                          const float* xy, const float* erase,
+                                          int count);
 
 /* Uploads a raster matte for one component — kind 4, research/masking.md §5.
  *
