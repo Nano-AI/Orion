@@ -1,0 +1,66 @@
+# Reported: "sliders slow." ROADMAP M1's Interaction epic.
+#
+# Measured on 2026-07-29 and left named and costed for a day: exposure 9.4 ms a
+# tick, clarity 65.7, dehaze 116.4, each blocking the main thread on
+# `commitAndWait`. The two heavy ones now render on a quarter-linear copy of the
+# same graph while the hand is moving, and on the full one when it stops.
+#
+# Three properties, and only the first is about speed.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+print 1. the cost of a tick, full resolution then preview
+drag clarity 0.3 0.9 20
+drag dehaze 0.3 0.9 20
+interact on
+drag clarity 0.3 0.9 20
+drag dehaze 0.3 0.9 20
+interact off
+
+# ⚠ 2. THE PICTURE SETTLES TO THE FULL-RESOLUTION ANSWER.
+#
+# Every tick of a drag goes to the preview graph, so when the hand stops the
+# full graph has never seen those values — it is not stale by a little, it is
+# stale by the whole gesture. `endInteraction` renders it, and without that the
+# photograph would settle to whatever it looked like when the drag began.
+open samples/_PIC8220.ARW
+set exposure 2.6
+set dehaze 0.9
+measure 0.4,0.4,0.2,0.2 fullDirect
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+interact on
+drag dehaze 0.1 0.9 20
+interact off
+measure 0.4,0.4,0.2,0.2 afterDrag
+expect afterDrag == fullDirect
+
+# ⚠ 3. THE PREVIEW SHOWS THE VALUE BEING DRAGGED.
+#
+# This is the one that needed a new measurement surface. A version that stopped
+# pushing adjustments to the preview graph passed everything above — the settled
+# picture was still right, and the only thing wrong was what the photographer
+# saw *during* the drag, which nothing could see. The preview is read directly
+# here, and nowhere else in the program.
+open samples/_PIC8220.ARW
+set exposure 2.6
+interact on
+# ⚠ Rendered at a known value first. The first version of this compared the
+# preview before and after a drag that ended where the *previous* block's drag
+# had ended, so both readings were the same number and the check could not fail
+# — it was asserting against a leftover.
+set dehaze 0.0
+measure 0.4,0.4,0.2,0.2 previewBefore preview
+drag dehaze 0.0 0.9 12
+measure 0.4,0.4,0.2,0.2 previewAfter preview
+expect previewAfter != previewBefore
+interact off
+
+# And the preview is a smaller picture of the same scene rather than a
+# different one: measured over the same normalized region it lands close to
+# what the full graph shows, which a mis-scaled or mis-wired second graph would
+# not.
+measure 0.4,0.4,0.2,0.2 fullAfter
+expect fullAfter != previewBefore

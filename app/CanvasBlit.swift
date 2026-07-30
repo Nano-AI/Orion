@@ -124,13 +124,22 @@ enum CanvasBlit {
     ///
     /// Writes `viewport.fitScale` and clamps it, because both are functions of
     /// the drawable size and this is the only place that knows it.
+    /// ⚠ `valid` is the live rectangle of *this* texture, and it is a parameter
+    /// rather than read from `engine.imageWidth` because the canvas shows two
+    /// different textures. Mid-drag it shows the quarter-linear preview, whose
+    /// valid rectangle is a quarter the size — taking the full graph's numbers
+    /// would sample a corner of the preview and blow it up over the whole
+    /// canvas, which looks like the photograph suddenly zooming on every drag.
     static func transform(engine: Engine, viewport: Viewport,
-                          drawableSize: CGSize, texture: MTLTexture) -> Transform {
+                          drawableSize: CGSize, texture: MTLTexture,
+                          valid: (width: UInt32, height: UInt32)? = nil)
+        -> Transform {
         // The orientation node writes into a square texture so a rotation
         // never needs the graph recompiled — only the top-left rectangle is
         // valid, and its size is what the engine reports.
-        let validW = CGFloat(engine.imageWidth)
-        let validH = CGFloat(engine.imageHeight)
+        let size = valid ?? (engine.imageWidth, engine.imageHeight)
+        let validW = CGFloat(size.width)
+        let validH = CGFloat(size.height)
         guard validW > 0, validH > 0 else { return Transform() }
 
         let validU = validW / CGFloat(texture.width)

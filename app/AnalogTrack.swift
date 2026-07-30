@@ -28,6 +28,15 @@ struct AnalogTrack: View {
     /// a whole drag lands as one undo step.
     let set: (Float) -> Void
 
+    /// Called when the drag starts and again when it ends.
+    ///
+    /// ⚠ This is what arms degrade-then-refine, and it is the control that
+    /// says so rather than the engine guessing from how fast values arrive. A
+    /// timer-based guess renders the *first* tick of every drag at full
+    /// resolution — the expensive one, since it is the tick that dirties the
+    /// graph — and gets a keyboard nudge wrong in the other direction.
+    var interacting: (Bool) -> Void = { _ in }
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var dragging = false
@@ -193,6 +202,7 @@ struct AnalogTrack: View {
 
                 if startValue == nil {
                     dragging = true
+                    interacting(true)
                     // A press away from the thumb jumps to it, the way clicking
                     // a track does everywhere on this platform; a press on the
                     // thumb picks it up where it stands.
@@ -214,6 +224,7 @@ struct AnalogTrack: View {
             .onEnded { _ in
                 startValue = nil
                 dragging = false
+                interacting(false)
             }
     }
 

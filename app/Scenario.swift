@@ -69,6 +69,7 @@ import SwiftUI
 ///     time <n> <command...>             repeat a command and report what one
 ///                                       of them costs. "Slow" is not a report
 ///                                       anyone can act on; a number is
+///     interact on | off                  arm the preview graph, as a drag does
 ///     drag <control> <from> <to> <n>    sweep a slider and report the cost of
 ///                                       one tick. Distinct values, because a
 ///                                       repeated *same* value dirties nothing
@@ -364,7 +365,10 @@ enum Scenario {
             switch args.count > 2 ? args[2] : "output" {
             case "output": surface = .output
             case "canvas": surface = .canvas
-            default: throw Bad(what: "measure takes output or canvas, got \(args[2])")
+            case "preview": surface = .preview
+            default:
+                throw Bad(what: "measure takes output, canvas or preview, "
+                              + "got \(args[2])")
             }
             let reading = try read(engine,
                                   CGRect(x: r[0], y: r[1], width: r[2], height: r[3]),
@@ -377,6 +381,14 @@ enum Scenario {
         case "expect":
             guard args.count >= 3 else { throw Bad(what: "expect needs name, op, value") }
             try check(args[0], args[1], args[2])
+
+        case "interact":
+            // Arms or disarms the preview path, as a slider's drag does.
+            switch args.first {
+            case "on":  engine.beginInteraction()
+            case "off": engine.endInteraction()
+            default: throw Bad(what: "interact takes on or off")
+            }
 
         case "drag":
             // A slider drag, and what one tick of it costs.

@@ -278,6 +278,28 @@ OrionStatus orion_engine_set_mask_matte(OrionEngine* engine, int component,
     });
 }
 
+OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    if (!engine->impl.hasPreview()) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        const double ms = engine->impl.renderPreview();
+        if (out_ms) *out_ms = ms;
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_preview_size(const OrionEngine* engine,
+                                      unsigned* out_w, unsigned* out_h) {
+    if (engine == nullptr || out_w == nullptr || out_h == nullptr)
+        return ORION_ERR_BAD_ARG;
+    if (!engine->impl.hasPreview()) return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        *out_w = engine->impl.previewDevelop().outputWidth();
+        *out_h = engine->impl.previewDevelop().outputHeight();
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_quarter_turns(const OrionEngine* engine, int* out_turns) {
     if (engine == nullptr || out_turns == nullptr) return ORION_ERR_BAD_ARG;
     return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
@@ -430,6 +452,11 @@ void* orion_engine_output_texture(const OrionEngine* engine) {
     } catch (...) {
         return nullptr;
     }
+}
+
+void* orion_engine_preview_texture(const OrionEngine* engine) {
+    if (engine == nullptr || !engine->impl.hasPreview()) return nullptr;
+    return engine->impl.previewDevelop().output().raw();
 }
 
 void* orion_engine_metal_device(const OrionEngine* engine) {

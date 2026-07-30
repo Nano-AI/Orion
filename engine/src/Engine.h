@@ -29,6 +29,33 @@ public:
     void setAdjustments(const pipe::Adjustments&);
     double render();
 
+    // ── Degrade-then-refine (ROADMAP M1, Interaction) ─────────────────────
+    //
+    // A second graph over a quarter-linear mosaic, for rendering while a
+    // slider is moving. Sixteen times fewer pixels, so the two controls that
+    // made the report — clarity at 66 ms a tick and dehaze at 116 — come back
+    // inside a frame. The full graph renders when the hand stops.
+    //
+    // ⚠ **Both graphs get every adjustment**, always. Pushing only to the one
+    // being rendered would leave the other stale, and the stale one is the one
+    // that gets read the instant the drag ends: the photograph would settle to
+    // whatever it looked like several gestures ago. `setAdjustments` feeds both
+    // and that is not optional.
+    //
+    // ⚠ **Nothing but the canvas may read the preview.** Export, the histogram
+    // and the eyedropper all go through `develop()`, which is always the full
+    // graph — a preview-resolution export is the kind of mistake that is only
+    // discovered by the person who receives the file.
+
+    /// Renders the preview graph. Returns GPU milliseconds.
+    double renderPreview();
+
+    /// True once a preview graph exists for the open photo.
+    [[nodiscard]] bool hasPreview() const noexcept { return preview_ != nullptr; }
+
+    /// The preview graph's output, for the canvas to show mid-drag.
+    [[nodiscard]] const pipe::DevelopPipeline& previewDevelop() const;
+
     /// Rendered color at normalized image coordinates, 0..1 per channel.
     /// Samples at normalized *oriented* coordinates.
     ///
@@ -88,8 +115,18 @@ public:
     [[nodiscard]] const char* lastError() const noexcept { return lastError_.c_str(); }
 
 private:
+    /// How much smaller the preview mosaic is, per axis.
+    ///
+    /// Four, because the target is a filter that costs 116 ms coming back
+    /// inside a 16 ms frame and four is the first power of two that manages it
+    /// — sixteen times fewer pixels. Two would only be four times, which leaves
+    /// dehaze at 29 ms. Its cost is one more set of intermediates at 1/16 the
+    /// size: about 400 MiB against the full graph's 6.4 GiB.
+    static constexpr int kPreviewScale = 4;
+
     std::unique_ptr<gpu::Device>           device_;
     std::unique_ptr<pipe::DevelopPipeline> develop_;
+    std::unique_ptr<pipe::DevelopPipeline> preview_;
     std::string                            camera_;
     /// The RAW this was opened from. Export lifts its EXIF, so the file
     /// written carries the exposure, lens and date the picture was taken with.

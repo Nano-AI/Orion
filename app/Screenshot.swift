@@ -564,16 +564,29 @@ enum Screenshot {
     /// to correspond to says something else.
     /// `through` names the surface: the engine's own output by default, or the
     /// canvas composite, which is the only place the compare split exists.
-    enum Surface { case output, canvas }
+    /// ⚠ `preview` reads the quarter-linear graph directly, which nothing else
+    /// in the program does — the canvas shows it, but through `displayTexture`,
+    /// and every measurement, the histogram and the export read the full one.
+    /// It exists because a mutation that stopped fanning adjustments out to the
+    /// preview survived every test: the settled picture was still right, and
+    /// the only thing that had gone wrong was what the photographer saw *during*
+    /// the drag, which nothing could see.
+    enum Surface { case output, canvas, preview }
 
     static func regionStats(_ engine: Engine, region: CGRect,
                             through surface: Surface = .output)
         -> (luma: Double, saturation: Double)? {
-        let source: MTLTexture? = surface == .canvas
-            ? CanvasBlit.composite(engine: engine)
-            : engine.outputTexture
+        let source: MTLTexture?
+        var w = Int(engine.imageWidth), h = Int(engine.imageHeight)
+        switch surface {
+        case .canvas:  source = CanvasBlit.composite(engine: engine)
+        case .output:  source = engine.outputTexture
+        case .preview:
+            source = engine.previewTexture
+            let size = engine.previewSize
+            w = Int(size.width); h = Int(size.height)
+        }
         guard let src = source else { return nil }
-        let w = Int(engine.imageWidth), h = Int(engine.imageHeight)
         guard w > 0, h > 0 else { return nil }
 
         let x0 = max(0, min(w - 1, Int(region.minX * CGFloat(w))))

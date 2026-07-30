@@ -768,6 +768,67 @@ final class Engine {
         return Unmanaged<AnyObject>.fromOpaque(raw).takeUnretainedValue() as? MTLTexture
     }
 
+    // ── Degrade-then-refine (ROADMAP M1, Interaction) ─────────────────────
+    //
+    // Measured before it was built: exposure costs 9.4 ms a tick, clarity 65.7
+    // and dehaze 116.4 — `repro/slider-drag-cost.txt`. The two heavy ones are
+    // rendered on a quarter-linear graph while the hand is moving and on the
+    // full one when it stops.
+
+    /// True while a control is being dragged.
+    ///
+    /// ⚠ Set by the *control*, not inferred from how fast values arrive. A
+    /// timer-based guess renders the first tick of every drag at full
+    /// resolution — which is the expensive one, since it is the tick that
+    /// dirties the graph — and picks the wrong answer for a slider nudged by
+    /// the keyboard.
+    private(set) var interacting = false
+
+    /// The preview graph's output, or nil when there is none.
+    var previewTexture: MTLTexture? {
+        guard let handle, let raw = orion_engine_preview_texture(handle) else {
+            return nil
+        }
+        return Unmanaged<AnyObject>.fromOpaque(raw).takeUnretainedValue() as? MTLTexture
+    }
+
+    /// The texture the canvas should show right now.
+    ///
+    /// ⚠ Only the canvas asks. `outputTexture` is what export, the histogram,
+    /// the eyedropper and the screenshot harness read, and all of them must
+    /// keep reading it — a preview-resolution export is a mistake only the
+    /// person receiving the file would find.
+    var displayTexture: MTLTexture? {
+        (interacting ? previewTexture : nil) ?? outputTexture
+    }
+
+    var previewSize: (width: UInt32, height: UInt32) {
+        guard let handle else { return (0, 0) }
+        var w: UInt32 = 0, h: UInt32 = 0
+        guard orion_engine_preview_size(handle, &w, &h) == ORION_OK else {
+            return (0, 0)
+        }
+        return (w, h)
+    }
+
+    /// A drag started. Renders go to the preview graph until `endInteraction`.
+    func beginInteraction() {
+        guard isLoaded, previewTexture != nil, !interacting else { return }
+        interacting = true
+    }
+
+    /// The hand stopped. Renders the full graph once and goes back to it.
+    func endInteraction() {
+        guard interacting else { return }
+        interacting = false
+        // ⚠ The full graph is *stale* at this point — every tick of the drag
+        // went to the preview. This render is not a refinement of what is on
+        // screen, it is the first time the full graph has seen these values,
+        // and skipping it would leave the photograph at whatever it looked like
+        // when the drag began.
+        pushAndRender()
+    }
+
     /// The loaded creative LUT's title, or "" when none is loaded.
     private(set) var lutName: String = ""
 
@@ -1361,9 +1422,34 @@ final class Engine {
     private func pushAndRender() {
         guard isLoaded, !suspended, let handle else { return }
         var adj = cAdjustments()
+        // Both graphs, always — the engine fans this out. A preview left stale
+        // is the graph read the instant the drag ends.
         orion_engine_set_adjustments(handle, &adj)
-        render()
+
+        if interacting {
+            renderPreview()
+        } else {
+            render()
+        }
         onEdit?(state)
+    }
+
+    /// Renders the quarter-linear graph and publishes a frame.
+    ///
+    /// Deliberately does *not* re-read `imageWidth`, recompute the histogram or
+    /// drop the compare original: those all describe the full render, and the
+    /// preview is a stand-in for looking at, not a new state of the document.
+    private func renderPreview() {
+        guard let handle else { return }
+        var ms: Double = 0
+        guard orion_engine_render_preview(handle, &ms) == ORION_OK else {
+            // No preview graph on this machine. Fall back rather than showing
+            // nothing — degrade-then-refine is a comfort, not a requirement.
+            render()
+            return
+        }
+        lastRenderMs = ms
+        generation &+= 1
     }
 
     private func render() {

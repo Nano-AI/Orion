@@ -311,6 +311,23 @@ OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* ou
 /* Pushes adjustments; cheap enough to call on every slider tick. */
 OrionStatus orion_engine_set_adjustments(OrionEngine* engine, const OrionAdjustments* adj);
 
+/* Renders the *preview* graph — a quarter-linear copy of the same pipeline,
+ * for showing while a slider is moving. ROADMAP M1, Interaction.
+ *
+ * ⚠ Its output is for the canvas and nothing else. Export, the histogram and
+ * the eyedropper all read the full graph, and must: a preview-resolution export
+ * is a mistake only the person receiving the file would find.
+ *
+ * Returns ORION_ERR_BAD_ARG when there is no preview graph — a machine that
+ * could not find room for one still edits, just without the fast path. Not a
+ * distinct status code: there are three, and "you asked for something this
+ * engine does not have" is what BAD_ARG already means. */
+OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms);
+
+/* The preview graph's output dimensions, which are not the full graph's. */
+OrionStatus orion_engine_preview_size(const OrionEngine* engine,
+                                      unsigned* out_w, unsigned* out_h);
+
 /* Renders dirty nodes. *out_ms receives GPU-side milliseconds (may be NULL). */
 OrionStatus orion_engine_render(OrionEngine* engine, double* out_ms);
 
@@ -360,6 +377,10 @@ OrionStatus orion_engine_frame_size(const OrionEngine* engine,
 /* The pipeline's output as an id<MTLTexture>, for zero-copy display.
  * Non-owning; valid until the next open_raw. NULL when no image is open. */
 void* orion_engine_output_texture(const OrionEngine* engine);
+
+/* The preview graph's output texture, or NULL when there is no preview graph.
+ * See orion_engine_render_preview — the canvas only. */
+void* orion_engine_preview_texture(const OrionEngine* engine);
 
 /* The engine's id<MTLDevice>, so the view can share it. */
 void* orion_engine_metal_device(const OrionEngine* engine);

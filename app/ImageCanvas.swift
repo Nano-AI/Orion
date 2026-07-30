@@ -308,8 +308,12 @@ struct ImageCanvas: NSViewRepresentable {
         }
 
         private func transform(for view: MTKView, texture: MTLTexture) -> Transform {
-            CanvasBlit.transform(engine: engine, viewport: viewport,
-                                 drawableSize: view.drawableSize, texture: texture)
+            // The preview's valid rectangle is its own, not the full graph's.
+            let valid: (width: UInt32, height: UInt32)? =
+                engine.interacting ? engine.previewSize : nil
+            return CanvasBlit.transform(engine: engine, viewport: viewport,
+                                        drawableSize: view.drawableSize,
+                                        texture: texture, valid: valid)
         }
 
         // MARK: Draw
@@ -320,7 +324,12 @@ struct ImageCanvas: NSViewRepresentable {
 
         func draw(in view: MTKView) {
             guard let queue, let pipeline,
-                  let texture = engine.outputTexture,
+                  // ⚠ `displayTexture`, not `outputTexture`: the canvas is the
+                  // one consumer allowed to see the quarter-linear preview, and
+                  // only while a control is being dragged. Export, the
+                  // histogram, the eyedropper and the screenshot harness all
+                  // read the full graph and must keep doing so.
+                  let texture = engine.displayTexture,
                   let descriptor = view.currentRenderPassDescriptor,
                   let drawable = view.currentDrawable,
                   let buffer = queue.makeCommandBuffer(),
@@ -336,6 +345,14 @@ struct ImageCanvas: NSViewRepresentable {
 
             t.split = Float(engine.compareSplit)
             t.vertical = engine.compareVertical ? 1 : 0
+
+            // ⚠ Before the bytes are copied, not after. The held original is a
+            // *full-resolution* copy and the blit samples both textures through
+            // one set of UVs, so compositing it against a quarter-linear
+            // preview would read it through the wrong window — the same defect
+            // the geometry changes caused, by a different route. The split is
+            // suspended for the length of a drag instead.
+            if engine.interacting { t.split = 1 }
 
             encoder.setRenderPipelineState(pipeline)
             encoder.setVertexBytes(&t, length: MemoryLayout<Transform>.stride, index: 0)

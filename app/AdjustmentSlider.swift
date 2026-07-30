@@ -65,11 +65,20 @@ struct AdjustmentSlider: View {
             // panel's margin instead of indenting the column.
             .padding(.trailing, -5)
 
-            AnalogTrack(value: value, range: range, base: base) { v in
+            AnalogTrack(value: value, range: range, base: base, set: { v in
                 // Route through history so each control's drags coalesce into
                 // one undo step rather than a hundred.
                 engine.edit(name) { value = v }
-            }
+            }, interacting: { on in
+                // ⚠ Every slider arms it, not only the slow ones. Which
+                // controls are expensive is a property of the graph and it
+                // changes — dehaze and clarity today, whatever is added next
+                // tomorrow — and a hand-kept list of "the slow ones" is exactly
+                // the shape of thing this codebase has been bitten by before.
+                // A cheap control on the preview path costs nothing it was not
+                // already spending.
+                if on { engine.beginInteraction() } else { engine.endInteraction() }
+            })
             .accessibilityLabel(Text(name))
         }
         // The section's nameplate marks itself when anything under it has moved.

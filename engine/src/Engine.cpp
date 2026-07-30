@@ -34,8 +34,13 @@ void Engine::openRaw(const std::string& path) {
     // Rebuilding recompiles sixteen shaders and reallocates roughly 2.5 GiB of
     // textures — for a folder of frames from one camera, all of that is
     // identical work repeated per photo.
+    // The preview mosaic. Decimated once here rather than per render: it is
+    // the same pixels every time, and at 24 MP the decimation is not free.
+    const auto small = raw::decimate(image, kPreviewScale);
+
     if (develop_ && develop_->canReload(image)) {
         develop_->reload(image);
+        if (preview_ && preview_->canReload(small)) preview_->reload(small);
         camera_ = image.camera;
         return;
     }
@@ -43,13 +48,41 @@ void Engine::openRaw(const std::string& path) {
     // Replace only once decode and construction have both succeeded, so a
     // failed open leaves the previously open image intact.
     auto next = std::make_unique<pipe::DevelopPipeline>(*device_, res::shaderDir(), image);
+
+    // ⚠ Built after the full graph and allowed to fail. A machine that cannot
+    // find room for the preview's intermediates should still be able to edit
+    // the photograph — degrade-then-refine is a comfort, and losing it is not
+    // a reason to refuse the file. `renderPreview` reports zero when there is
+    // none and the caller falls back to the full graph.
+    std::unique_ptr<pipe::DevelopPipeline> smallNext;
+    try {
+        smallNext = std::make_unique<pipe::DevelopPipeline>(
+            *device_, res::shaderDir(), small);
+    } catch (const std::exception&) {
+        smallNext.reset();
+    }
+
     develop_ = std::move(next);
+    preview_ = std::move(smallNext);
     camera_  = image.camera;
 }
 
 void Engine::setAdjustments(const pipe::Adjustments& adj) {
     if (!develop_) throw std::runtime_error("no image open");
     develop_->apply(adj);
+    // ⚠ Both, always. See the note in the header: a preview left stale is the
+    // graph that gets read the instant the drag ends.
+    if (preview_) preview_->apply(adj);
+}
+
+double Engine::renderPreview() {
+    if (!preview_) return 0.0;
+    return preview_->render();
+}
+
+const pipe::DevelopPipeline& Engine::previewDevelop() const {
+    if (!preview_) throw std::runtime_error("no preview graph");
+    return *preview_;
 }
 
 double Engine::render() {
