@@ -35,6 +35,20 @@ enum Screenshot {
         var exposure: Float?
         /// Base contrast override, for the same reason.
         var contrast: Float?
+        /// Runs the Auto button, through the same facade call the panel uses.
+        ///
+        /// The bench has an auto-enhance probe, but it drives the policy
+        /// directly — so the two disagreeing is invisible to it. This flag is
+        /// the app's own path, which is where a reported failure was.
+        var auto = false
+        /// Repeats Auto, to catch a control that only misbehaves when the
+        /// measurement it starts from is already an auto-enhanced frame.
+        var autoTimes = 1
+        /// Tone endpoints, set directly. The pair is what a reported black frame
+        /// pointed at: whites low and blacks high put the white point below the
+        /// black point, and nothing in the interface stops them crossing.
+        var whites: Float?
+        var blacks: Float?
     }
 
     /// Parses the command line. Returns nil when this is an ordinary launch.
@@ -63,6 +77,14 @@ enum Screenshot {
                 if let next, let ev = Float(next) { o.exposure = ev; i += 1 }
             case "--contrast":
                 if let next, let c = Float(next) { o.contrast = c; i += 1 }
+            case "--whites":
+                if let next, let v = Float(next) { o.whites = v; i += 1 }
+            case "--blacks":
+                if let next, let v = Float(next) { o.blacks = v; i += 1 }
+            case "--auto":
+                o.auto = true
+                // An optional count, so `--auto 2` asks what a second press does.
+                if let next, let n = Int(next), n > 0 { o.autoTimes = n; i += 1 }
             case "--size":
                 if let next {
                     let parts = next.split(separator: "x").compactMap { Double($0) }
@@ -91,6 +113,21 @@ enum Screenshot {
             apply(scene: o.scene, to: engine)
             if let ev = o.exposure { engine.exposureEv = ev }
             if let c = o.contrast { engine.contrast = c }
+
+            if let v = o.whites { engine.whites = v }
+            if let v = o.blacks { engine.blacks = v }
+
+            if o.auto {
+                for pass in 1...o.autoTimes {
+                    engine.autoEnhance()
+                    FileHandle.standardError.write(Data(
+                        ("orion: auto pass \(pass) — "
+                         + String(format: "exposure %+.2f EV, whites %+.2f, "
+                                  + "blacks %+.2f, lift %.2f, clarity %.2f\n",
+                                  engine.exposureEv, engine.whites, engine.blacks,
+                                  engine.fusion, engine.clarity)).utf8))
+                }
+            }
 
             // `--measure` needs the wide tail: it resolves differences that
             // eight-bit quantisation would erase, and the changes hunted in
