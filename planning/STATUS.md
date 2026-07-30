@@ -4,25 +4,27 @@
 
 ---
 
-**Last updated:** 2026-07-29 (**four more reported bugs fixed** · the runner can
-see the canvas and the mask overlay · **v0.4.0-alpha.2**)
-**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** — steps
-1 and 2 of `research/masking.md` are finished end to end: a mask is a *list* of
-components folded per §6 (add/subtract/intersect), through the graph, the POD
-facade, the panel rows, the sidecar, undo and the bench.
+**Last updated:** 2026-07-29 (**M4 step 3 — guided feathering** · four reported
+bugs fixed earlier the same day · **v0.4.0-alpha.2**)
+**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 steps 1–3 done** —
+primitives, groups, and now guided refinement. A mask is a *list* of components
+folded per §6 (add/subtract/intersect), optionally feathered onto the
+photograph's own edges, through the graph, the POD facade, the panel rows, the
+sidecar, undo and the bench.
 
 ⚠️ **M3 is done — do not rebuild it.** Dehaze, creative LUTs, exposure fusion
 and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** M4 **step 3** — guided-filter refinement (`research/masking.md`
-§4), a second input binding on a filter that is already built and tested for
-dehaze.
+**Next story:** M4 **step 4** — Vision subject and person selection
+(`research/masking.md` §5). `VNGenerateForegroundInstanceMaskRequest` on macOS
+14+, run async on a tone-mapped preview and refined by the step 3 chain that now
+exists. No new dependency and no new licence position.
 
-**Suites:** `orion-tests` **415 checks** · `orion-viewport-tests` **3252
-checks** · **8 `repro/` scenarios, 41 checks** · all 0 failures. Bench: M0 gate
-**9.50 ms p95**, 118 nodes, 6092 MiB — unmoved.
+**Suites:** `orion-tests` **426 checks** · `orion-viewport-tests` **3252
+checks** · **8 `repro/` scenarios, 41 checks** · all 0 failures. Bench exits 0 on
+all three frames: M0 gate **9.59 ms p95**, 125 nodes, 6243 MiB.
 
 ### Known gaps, carried forward
 
@@ -40,6 +42,107 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-29v — M4 step 3, guided feathering
+
+`research/masking.md` §4. The section predicted this would be "a second input
+binding and nothing else" on the guided filter already in the tree, and that
+held: the guide stays the log2 luminance the highlight and shadow recovery chain
+computes, and only the *input* changes, from the image to the mask.
+
+⚠ **The stale M3 kickoff prompt arrived a sixth time** and was answered with
+evidence rather than assertion — research file, shader, GPU test and bench probe
+each present for all four of dehaze, creative LUTs, exposure fusion and
+auto-enhance — then set aside for the story this file actually names.
+
+### What was built
+
+| Kernel | Does |
+|---|---|
+| `mask_guide_prep` | gathers the four moments — mean I, I², p, I·p — straight onto the subsampled grid |
+| `mask_guide_ab` | `a = cov(I,p)/(var(I)+ε)`, the general form the self-guided kernel is the p = I case of |
+| `mask_guide_apply` | lifts the coefficients bilinearly and reconstructs `q = ā·I + b̄` |
+
+Seven nodes on the **folded group**, not per component: the boundary a
+photographer wants snapped is the one they can see. All seven disable at
+strength zero and the consumer resolves straight past them to the fold, so the
+M0 gate is unmoved at 9.59 ms. The chain costs **27 ms** when it runs, against
+clarity's 66 and dehaze's 116.
+
+The prep node does the subsample as well as the gather, unlike the self-guided
+chain which spends a node on each: a full-resolution RGBA32F moment texture is
+384 MB at 24 MP and would be read exactly once.
+
+### ⚠ Caught before it shipped, and it would have been silent
+
+`guide:prep` is **disabled whenever highlights and shadows are both zero**. A
+disabled node resolves to its producer, so the refine chain would have been
+handed `huesat`'s RGBA16F output through a `Texture2D<float2>` binding and read
+colour components as a luminance and its square. Not a crash — a
+plausible-looking wrong mask. That node is now enabled if *either* chain wants
+it, and it is deliberately no longer in the other chain's enable loop.
+
+### Neither constant is the paper's, and both derivations are written down
+
+`UNSOURCED.md` §20.
+
+- **r = maxdim/100.** The paper's r = 60 is 6–10% of its sub-megapixel figures;
+  carried across as a fraction that is ~500 px here. What transfers is that r is
+  a **search radius** — the local linear model can only pull a boundary onto an
+  edge inside the window — bounded by how far the placed mask misses, which
+  scales with the frame because the mask's *sources* do.
+- **ε = 0.01 squared log2-exposure units.** The paper's 1e-6 assumes [0,1]
+  intensity; converted faithfully it is 4e-5 stops². ⚠ That is unusable here
+  because `mask_guide_prep` area-averages both moments — the house convention,
+  since point-sampling aliases the variance — so `var` is the true
+  full-resolution window variance and carries the photograph's noise at full
+  strength. Deep shadows run to ~0.02 stops², so anything below that snaps the
+  matte to noise. 0.01 follows a half-stop edge and ignores a tenth-stop one.
+
+### The test, and the assertion that was wrong first
+
+Eleven GPU checks, against the filter **computed directly on the CPU** rather
+than against a magnitude. The subsampled chain reproduces the exact filter to
+0.02 of coverage, worst at the discontinuity where s = 4 smears the lift.
+
+⚠ **The first version asserted the refined boundary lands *on* the guide's
+edge. It does not, and should not.** With the mask 40 px out and r = 60 the
+exact filter puts the half-coverage crossing at 286; the GPU put it at 285. The
+assertion was wrong, not the shader — sixth session running that a first-draft
+check measured something other than its claim, and the first where an
+independent CPU model was what settled it. What the filter actually owes is a
+*discontinuity*: zero on the far side of the edge, then a jump of
+1 − (d/2r)(1 + ln(2r/d)) = 0.30. That is pinned now, closed form quoted, and it
+dies if the radius is ever quietly changed.
+
+**The check that earns its keep is the flat guide.** With no edge to attract it
+the boundary must stay exactly where it was placed and put no step anywhere —
+without that, every other assertion is also satisfied by a plain blur of the
+mask. Also pinned: a constant mask survives corners included (which is the box
+passes normalising honestly), strength 0 is bit-identical, the complement is
+symmetric because the filter is affine in p, and the jump at the edge
+discriminates this ε from **both** wrong answers — the recovery chain's 0.04
+loses the half-stop edge, the paper's 1e-6 snaps to a tenth-stop one.
+
+Four mutations, all dead: the self-guided formula, `b` dropped from the
+reconstruction, guide and mask swapped in the gather, and the bilinear lift
+replaced by a direct index.
+
+### Measured on photographs
+
+The bench probe's context is the **same mask unrefined**, so it cannot pass with
+the chain disabled. ⚠ Its floor is small — 0.008 of reference — and the reason
+is structural, recorded at the call site: refinement only moves a ~120 px
+boundary band and a whole-frame mean divides that by the rest of the frame. A
+near-binary full-width gradient was tried as a more sensitive shape and measured
+*lower*. What pins the behaviour is the GPU test; this line's job is that the
+graph still delivers it and has not become a no-op.
+
+Looked at as well as measured: with the overlay on, a hard radial across the
+silver car has its circular arc cut straight through the tarmac at strength 0,
+and at strength 1 the arc is gone and the coverage follows the car. The panel's
+`REFINE` slider was screenshotted rather than assumed — a control inserted
+without looking was silently not in the interface once before.
 
 ## Session 2026-07-29u — four more reported bugs, and the runner learns to see
 

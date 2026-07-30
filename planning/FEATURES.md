@@ -78,7 +78,8 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Linear + radial gradient masks | M4 | Cheapest — pure math, no painting infrastructure |
 | Luminance / color range masks | M4 | Cheap given the bilateral grid already exists from M1 |
 | Mask combine (add/subtract/intersect) | M4 | ✅ **Built 2026-07-29** (decision #62). One component kernel per node, folded left from zero; up to 4 components with a per-row op, in the panel, the sidecar and undo. Pre-group sidecars migrate to a single component |
-| AI subject / sky selection (Core ML) | M4 | Requires the mask system first |
+| Guided feathering of a mask | M4 | ✅ **Built 2026-07-29**. He, Sun & Tang's own named application of the guided filter — the second input binding `research/masking.md` §4 predicted, and nothing else changed in the filter. Seven nodes on the folded group, off at strength 0. Radius and epsilon are Orion's own: `UNSOURCED.md` §20 |
+| AI subject / sky selection (Core ML) | M4 | Requires the mask system first. The guided pass above is what refines and upsamples a coarse matte |
 | Brush mask | M4 | ✅ **Built 2026-07-29.** Reinstated from the v1 cut (DECISIONS #54) — the cost estimate was wrong: storage is a list of centres, not a raster, and edge-aware snapping is the guided filter already built. Paint on the canvas, Size/Flow/Hardness, persists in the sidecar. ⚠ A stroke over 256 dabs truncates (warns on stderr); the nib's constants are in UNSOURCED §17 |
 | Mask overlay (see the coverage) | M4 | ✅ **Built 2026-07-29.** Red over the picture, drawn in `develop:linear`. A viewing aid, not an edit: never in the sidecar, never in undo, forced off around an export. UNSOURCED §18 |
 
