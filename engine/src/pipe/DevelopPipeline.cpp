@@ -180,12 +180,31 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     nLens_ = pipeline_.add({"lens", "lensCorrect", {nAtrousShrink_[0]},
                             PixelFormat::RGBA16Float, {}});
 
+    // ── Spot removal ──────────────────────────────────────────────────────
+    //
+    // After the lens correction, which is the one stage that *warps* rather
+    // than acting pointwise: downstream of it a spot lives in the same space a
+    // mask does, so `mask::toFrame` carries it from the displayed picture and
+    // there is one transform rather than two. research/spot-removal.md §4.
+    //
+    // Before sharpening, so a healed patch is sharpened along with everything
+    // around it instead of arriving already sharp.
+    //
+    // The measure pass is an N x 1 texture — one boundary mean per spot —
+    // computed once rather than re-derived at every pixel of every disc.
+    nSpotMeasure_ = pipeline_.add({"spots:measure", "spotMeasure", {nLens_},
+                                   PixelFormat::RGBA32Float, {}, {},
+                                   true, params::kMaxSpots, 1});
+    nSpotApply_   = pipeline_.add({"spots:apply", "spotApply",
+                                   {nLens_, nSpotMeasure_},
+                                   PixelFormat::RGBA16Float, {}});
+
     // Capture sharpening belongs right after the denoise, and keeping it
     // upstream of the tone controls means an exposure drag never recomputes it.
     // Note the input: a disabled node passes its *first* input through, and
     // shrink 0's first input is the reconstruction — so switching the whole
     // chain off hands sharpen exactly what it would otherwise have got.
-    nSharpen_   = pipeline_.add({"sharpen", "sharpen", {nLens_},
+    nSharpen_   = pipeline_.add({"sharpen", "sharpen", {nSpotApply_},
                                  PixelFormat::RGBA16Float, {}});
     nMatrix_    = pipeline_.add({"camera->working", "cameraToWorking", {nSharpen_},
                                  PixelFormat::RGBA16Float, {}});
@@ -672,6 +691,20 @@ void DevelopPipeline::setBrushStroke(int component, const float* xy, int count) 
     dabs.clear();
     if (xy == nullptr || count <= 0) return;
     dabs.assign(xy, xy + std::size_t(count) * 2);
+}
+
+std::pair<float, float> DevelopPipeline::displayedToFrame(float x, float y) const {
+    const mask::Crop crop{lastAdj_.cropX, lastAdj_.cropY,
+                          lastAdj_.cropW, lastAdj_.cropH};
+    const bool swaps = (turns_ % 2) != 0;
+    const float rotW = float(swaps ? height_ : width_);
+    const float rotH = float(swaps ? width_  : height_);
+    const auto p = mask::toFrame(
+        {x, y, 0.0f}, crop, turns_,
+        lastAdj_.straightenDeg * 3.14159265358979324f / 180.0f,
+        lastAdj_.cropX + lastAdj_.cropW * 0.5f,
+        lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH);
+    return {p.centreX, p.centreY};
 }
 
 bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
@@ -1561,6 +1594,61 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         for (int n : {nGuideDown_, nGuideH1_, nGuideV1_,
                       nGuideAb_, nGuideH2_, nGuideV2_}) {
             pipeline_.setEnabled(n, needsGuide);
+        }
+    }
+
+    // ── Spot removal (research/spot-removal.md) ──────────────────────────
+    //
+    // Both nodes off when there are no spots, so a photograph with none pays
+    // their textures and nothing else — and the apply node's first input is the
+    // lens output, so disabled it resolves straight past to exactly what
+    // sharpening would otherwise have received.
+    {
+        const bool spotting = adj.spotCount > 0;
+        const bool wasSpotting = lastAdj_.spotCount > 0;
+        if (first || spotting != wasSpotting) {
+            pipeline_.setEnabled(nSpotMeasure_, spotting);
+            pipeline_.setEnabled(nSpotApply_, spotting);
+        }
+
+        const bool spotsMoved =
+            first || adj.spotCount != lastAdj_.spotCount ||
+            !std::equal(adj.spots.begin(), adj.spots.begin() + adj.spotCount,
+                        lastAdj_.spots.begin());
+        if (spotting && spotsMoved) {
+            params::SpotMeasure sm{};
+            sm.size[0] = size[0]; sm.size[1] = size[1];
+            sm.count = std::min(adj.spotCount, params::kMaxSpots);
+            // 32 rim samples. Orion's own number, with the reasoning in
+            // UNSOURCED.md §21: enough that the smallest usable spot still
+            // averages several distinct pixels, few enough that the largest
+            // does not spend longer on its rim than on its interior.
+            sm.samples = 32;
+
+            params::SpotApply sa{};
+            sa.size[0] = size[0]; sa.size[1] = size[1];
+            sa.count = sm.count;
+
+            // ⚠ No transform here, and that is the decision rather than an
+            // omission. A spot is stored in frame coordinates already —
+            // converted once by `displayedToFrame` when it was placed — because
+            // dust is on the sensor and has to follow the subject through a
+            // later crop or turn. Converting on every render would give a mask's
+            // behaviour instead, which is to stay put on screen.
+            //
+            // It also keeps the geometry out of the staleness comparison below,
+            // which is a trap this file has fallen into twice already.
+            for (int i = 0; i < sm.count; ++i) {
+                const SpotEdit& e = adj.spots[std::size_t(i)];
+                const float sp[4] = {e.destX, e.destY, e.srcX, e.srcY};
+                const float sh[4] = {e.radius, e.feather, e.heal ? 1.0f : 0.0f, 0.0f};
+                for (int k = 0; k < 4; ++k) {
+                    sm.spots[i][k] = sp[k]; sm.shape[i][k] = sh[k];
+                    sa.spots[i][k] = sp[k]; sa.shape[i][k] = sh[k];
+                }
+            }
+            pipeline_.setParams(nSpotMeasure_, &sm, sizeof sm);
+            pipeline_.setParams(nSpotApply_, &sa, sizeof sa);
         }
     }
 

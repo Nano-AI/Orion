@@ -254,6 +254,86 @@ final class Engine {
     /// photographer wants snapped to an edge is the coverage they can see.
     var maskRefine: Float = 0 { didSet { pushAndRender() } }
 
+    // ── Spot removal (research/spot-removal.md) ───────────────────────────
+
+    /// The most spots one photo can carry. Matches the engine's own cap.
+    static let maxSpots = 64
+
+    private(set) var spots: [SpotState] = []
+
+    /// True while the tool is armed and a click on the photo places a spot.
+    ///
+    /// View state, not an edit — like `maskOverlay` it never reaches the
+    /// sidecar, and unlike it there is nothing to re-render when it changes.
+    var spotPlacing = false
+
+    /// Nib settings for the *next* spot, and for the selected one. Not part of
+    /// `DevelopState`: they are how the tool is set up, and a photograph with
+    /// no spots on it should not remember a radius.
+    var spotRadius: Float = 0.02
+    var spotFeather: Float = 0.5
+    var spotHeal = true
+
+    /// Places a spot at a point on the displayed picture.
+    ///
+    /// ⚠ The source is chosen automatically, and the rule is Orion's own: the
+    /// same distance away as two and a half radii, along whichever axis has
+    /// room. Lightroom searches for a matching patch; that is a different and
+    /// much larger feature, and for sensor dust — which sits on smooth
+    /// backgrounds by definition — anywhere nearby is as good as anywhere else.
+    /// The photographer can see the result immediately and place it again if
+    /// the guess was poor.
+    @discardableResult
+    func addSpot(atFrame displayed: CGPoint) -> Bool {
+        guard isLoaded, let handle, spots.count < Self.maxSpots else { return false }
+
+        // ⚠ Converted here, once, rather than on every render. Dust is on the
+        // sensor, so a spot has to follow the subject through a later crop or
+        // quarter turn — the opposite of a mask, which stays where it was put on
+        // screen. Same transform, applied at a different moment, and that
+        // moment is the whole difference between the two behaviours.
+        var fx: Float = 0, fy: Float = 0
+        guard orion_engine_to_frame(handle, Float(displayed.x), Float(displayed.y),
+                                    &fx, &fy) == ORION_OK else { return false }
+        let p = CGPoint(x: CGFloat(fx), y: CGFloat(fy))
+
+        let step = spotRadius * 2.5
+        var sx = Float(p.x) + step
+        if sx > 1 - spotRadius { sx = Float(p.x) - step }
+        var sy = Float(p.y)
+        // Nowhere to go sideways on a very small frame; try the other axis.
+        if sx < spotRadius || sx > 1 - spotRadius {
+            sx = Float(p.x)
+            sy = Float(p.y) + step
+            if sy > 1 - spotRadius { sy = Float(p.y) - step }
+        }
+
+        var s = SpotState()
+        s.destX = Float(p.x); s.destY = Float(p.y)
+        s.srcX = min(max(sx, 0), 1); s.srcY = min(max(sy, 0), 1)
+        s.radius = spotRadius
+        s.feather = spotFeather
+        s.heal = spotHeal
+        spots.append(s)
+        pushAndRender()
+        history.record(state, label: "Spot")
+        return true
+    }
+
+    func removeLastSpot() {
+        guard !spots.isEmpty else { return }
+        spots.removeLast()
+        pushAndRender()
+        history.record(state, label: "Spot")
+    }
+
+    func clearSpots() {
+        guard !spots.isEmpty else { return }
+        spots.removeAll()
+        pushAndRender()
+        history.record(state, label: "Clear spots")
+    }
+
     var localExposureEv: Float = 0 { didSet { pushAndRender() } }
 
     /// The selected component, or nil when the group is empty.
@@ -899,6 +979,7 @@ final class Engine {
             lutStrength: lutStrength,
             maskComponents: maskComponents,
             maskRefine: maskRefine,
+            spots: spots,
             localExposureEv: localExposureEv,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
@@ -943,6 +1024,7 @@ final class Engine {
             ? 0 : min(max(0, selectedMask), maskComponents.count - 1)
         pushStrokes()
         maskRefine = s.maskRefine
+        spots = Array(s.spots.prefix(Self.maxSpots))
         localExposureEv = s.localExposureEv
         fusion = s.fusion
         dehaze = s.dehaze
@@ -1201,6 +1283,17 @@ final class Engine {
         a.mask_count = Int32(maskComponents.count)
         a.local_exposure_ev = localExposureEv
         a.mask_refine = maskRefine
+
+        a.spot_count = Int32(min(spots.count, Self.maxSpots))
+        withUnsafeMutableBytes(of: &a.spots) { raw in
+            let p = raw.baseAddress!.assumingMemoryBound(to: OrionSpot.self)
+            for (i, s) in spots.prefix(Self.maxSpots).enumerated() {
+                p[i] = OrionSpot(dest_x: s.destX, dest_y: s.destY,
+                                 src_x: s.srcX, src_y: s.srcY,
+                                 radius: s.radius, feather: s.feather,
+                                 heal: s.heal ? 1 : 0)
+            }
+        }
         a.mask_overlay = maskOverlay ? 1 : 0
 
         a.fusion = fusion; a.dehaze = dehaze; a.clarity = clarity

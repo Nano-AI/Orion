@@ -587,6 +587,9 @@ struct Editor: View {
                             // visible controls no longer explain.
                             targeted.isActive = false
                             targeted.clearHover()
+                            // Spot placing belongs to the panel that armed it,
+                            // for the same reason.
+                            engine.spotPlacing = false
 
                             // Compare holds a copy of the unedited render at the
                             // current geometry. Cropping changes that geometry

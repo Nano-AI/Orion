@@ -594,3 +594,48 @@ matte feathers straight across as though the edge were not there. The paper's
 colour variant (a 3 × 3 covariance, `a` becoming a 3-vector) fixes it and is
 citable, at three times the moment channels plus a small solve. Not built:
 grey-guide first, and upgrade only if real photographs show the failure.
+
+## §21 — Spot removal evaluates only the constant term of a published interpolant
+
+`research/spot-removal.md` §3. The framework is cited — Pérez, Gangnet & Blake
+(SIGGRAPH 2003) for what healing *is*, Farbman et al. (SIGGRAPH 2009) for the
+solver-free closed form. What Orion evaluates is the **zeroth-order term** of
+Farbman's mean-value interpolant: the mean of the boundary difference, applied
+uniformly inside the disc.
+
+That is a truncation, and truncations are the kind of thing that get written up
+as though they were the method. They are not the same:
+
+| | Correction inside the disc |
+|---|---|
+| Poisson (2003) | the harmonic function matching the boundary difference |
+| Mean-value coordinates (2009) | a geometry-weighted average of the boundary difference, per pixel |
+| **Orion** | **the boundary difference's mean, one number per spot** |
+
+**The three agree exactly when the boundary difference is constant**, and on a
+smooth background — sky, a wall, defocused foliage, which is where sensor dust
+is visible in the first place — it very nearly is. The higher-order terms buy
+the case where it varies, which `ROADMAP.md` explicitly puts out of scope:
+"sensor dust and blemishes, not Photoshop-grade healing."
+
+**The failure is bounded and known**, which is the argument for truncating on
+purpose. Place a spot straddling a hard edge and the correction is wrong on both
+sides by roughly half the edge's contrast, which reads as a disc that is too
+dark on one side and too light on the other. It does not diverge, smear or
+introduce colour; it is simply the wrong constant.
+
+### What would settle it
+
+Farbman's full interpolant is the same node with a loop over the boundary
+instead of a mean of it — a bounded, known change, not a rewrite. The number to
+watch before spending it is how often a spot is actually placed across an edge,
+which is a usage question rather than an algorithmic one.
+
+### And the boundary sample count is Orion's own too
+
+The mean is taken over **32 points** on the disc's rim. Nothing published fixes
+that number; it is chosen so that a spot at the smallest usable radius still
+averages several distinct pixels, while a spot at the largest does not spend
+more time on its boundary than on its interior. Too few and the correction
+picks up whatever noise happens to sit on the sampled points; the cost is one
+tiny dispatch per spot, so there is little reason to go lower.

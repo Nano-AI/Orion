@@ -499,6 +499,39 @@ int main(int argc, char** argv) {
                  // Half the smallest ratio over the three frames: 0.47, 0.44,
                  // 0.60 of the reference.
                  }, Metric::Luma, 0.22},
+                // Spot removal — research/spot-removal.md.
+                //
+                // ⚠ Four large spots, not one dust speck. A real dust spot is a
+                // few thousand pixels of twenty-four million and moves a
+                // whole-frame mean by nothing measurable — the same dilution
+                // the mask-refine probe hit. What this asks is that the graph
+                // still delivers the node on a photograph; the *behaviour*
+                // (heal keeps the destination's tone, clone does not) is pinned
+                // exactly by testSpotRemovalGpu on a synthetic frame where the
+                // right answer is a number rather than a tolerance.
+                //
+                // Clone rather than heal, deliberately: heal is designed to
+                // leave the local tone alone, so it moves a mean by as little
+                // as it can manage. Measuring the operation whose whole purpose
+                // is to be invisible would be calibrating a floor against a
+                // control working correctly.
+                {"spots clone x4", flat, [](auto& a) {
+                     a.spotCount = 4;
+                     for (int i = 0; i < 4; ++i) {
+                         auto& sp = a.spots[std::size_t(i)];
+                         sp.destX = 0.20f + 0.20f * float(i);
+                         sp.destY = 0.30f;
+                         sp.srcX  = 0.20f + 0.20f * float(i);
+                         sp.srcY  = 0.75f;
+                         sp.radius = 0.10f;
+                         sp.feather = 0.4f;
+                         sp.heal = false;
+                     }
+                 // Half the smallest ratio over the three frames: 0.46, 0.20,
+                 // 0.11 of the reference. The spread is what the four discs
+                 // happen to land on in each photograph, which is the honest
+                 // reason to calibrate against the smallest.
+                 }, Metric::Luma, 0.056},
                 // A luminance range mask — research/masking.md §4b. A band
                 // on the reference image, biased by the global exposure so its
                 // numbers mean what is on screen.

@@ -208,6 +208,17 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     }
     a.localExposureEv = adj->local_exposure_ev;
     a.maskRefine = std::clamp(adj->mask_refine, 0.0f, 1.0f);
+
+    a.spotCount = std::clamp(adj->spot_count, 0, ORION_MAX_SPOTS);
+    for (int i = 0; i < a.spotCount; ++i) {
+        const OrionSpot& in = adj->spots[i];
+        orion::pipe::SpotEdit& out = a.spots[std::size_t(i)];
+        out.destX = in.dest_x; out.destY = in.dest_y;
+        out.srcX  = in.src_x;  out.srcY  = in.src_y;
+        out.radius  = std::clamp(in.radius, 0.001f, 0.5f);
+        out.feather = std::clamp(in.feather, 0.0f, 1.0f);
+        out.heal = in.heal != 0;
+    }
     a.maskOverlay     = adj->mask_overlay != 0;
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;
@@ -271,6 +282,18 @@ OrionStatus orion_engine_quarter_turns(const OrionEngine* engine, int* out_turns
     if (engine == nullptr || out_turns == nullptr) return ORION_ERR_BAD_ARG;
     return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
         *out_turns = engine->impl.develop().quarterTurns();
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_to_frame(const OrionEngine* engine,
+                                  float x, float y, float* out_x, float* out_y) {
+    if (engine == nullptr || out_x == nullptr || out_y == nullptr)
+        return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        const auto p = engine->impl.develop().displayedToFrame(x, y);
+        *out_x = p.first;
+        *out_y = p.second;
         return ORION_OK;
     });
 }

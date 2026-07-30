@@ -1,0 +1,91 @@
+# Spot removal — research/spot-removal.md.
+#
+# ⚠ The claim worth checking is not "a spot changed the picture". It is that
+# **heal and clone differ in a specific direction**: both paste the same pixels,
+# and heal additionally adds the tone difference measured around the disc's rim.
+# So on a destination whose surroundings are darker than the source, clone
+# brings the source's brightness with it and heal does not.
+#
+# A test that only asserted "something happened" would pass on an implementation
+# where the heal correction was never added at all — which is exactly one of the
+# mutations the GPU suite kills. This is the same property, measured through
+# Engine on a photograph instead of on a synthetic frame.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+# The night sky, upper right. Dark, smooth, and a long way in tone from the lit
+# forecourt the automatic source lands on.
+measure 0.72,0.16,0.06,0.06 skyBefore
+
+spot 0.75,0.19 0.05 clone
+measure 0.72,0.16,0.06,0.06 skyCloned
+expect skyCloned != skyBefore
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+spot 0.75,0.19 0.05 heal
+measure 0.72,0.16,0.06,0.06 skyHealed
+
+# ⚠ Both moved the patch. The direction is what separates them: heal keeps the
+# sky's own tone, so it stays near where it started, while clone drags it toward
+# whatever the source happened to be.
+expect skyHealed != skyCloned
+
+# And a spot removed puts the photograph back exactly. Not "close to" — the
+# whole edit is a list, and dropping the last entry has to leave nothing behind.
+undo
+measure 0.72,0.16,0.06,0.06 skyRestored
+expect skyRestored == skyBefore
+
+# ⚠ A spot has to follow its dust through a quarter turn.
+#
+# **Dust is on the sensor**, so a spot is part of the picture and must travel
+# with the subject — the opposite of a mask, which is placed *against* a subject
+# and stays where the photographer put it on screen. Opposite behaviours, and
+# they need opposite storage: a spot is converted from the click into frame
+# coordinates once, when it is placed.
+#
+# ⚠ The first version of this file could not tell the two apart. It asserted
+# only that two different corners differed, which any pair of them satisfies,
+# and a mutation that removed the transform entirely passed it. Chasing that
+# found a real defect: the spot parameters were only re-pushed when the *spots*
+# changed, so rotating never re-transformed them and both versions were stale in
+# the same way. The assertion below is the one that distinguishes them.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+measure 0.72,0.16,0.06,0.06 cornerClean
+
+spot 0.75,0.19 0.05 clone
+measure 0.72,0.16,0.06,0.06 cornerSpotted
+expect cornerSpotted != cornerClean
+
+# One quarter turn clockwise sends a displayed point (x, y) to (1 - y, x), so a
+# spot at 0.75,0.19 travels with the picture to about 0.81,0.75.
+rotate 1
+measure 0.72,0.16,0.06,0.06 oldCornerAfterTurn
+measure 0.78,0.72,0.06,0.06 newPlaceAfterTurn
+
+# The corner it left shows untouched picture again...
+expect oldCornerAfterTurn != cornerSpotted
+# ...and the patch is at its new place carrying the SAME content. That equality
+# is the claim: a spot that had stayed put on screen, or one whose transform had
+# gone stale, would leave this reading whatever the turn brought into view.
+expect newPlaceAfterTurn == cornerSpotted
+
+# ⚠ And a spot placed WHILE the picture is turned lands where it was clicked.
+#
+# This is the case that actually pins the conversion. At zero rotation the
+# displayed-to-frame transform is the identity, so a version that skipped it
+# entirely passed everything above — the mutation was run and it survived.
+# Turned, the transform is not the identity, and skipping it puts the patch
+# somewhere the photographer did not click.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+rotate 1
+measure 0.30,0.30,0.06,0.06 turnedBefore
+spot 0.33,0.33 0.05 clone
+measure 0.30,0.30,0.06,0.06 turnedAfter
+expect turnedAfter != turnedBefore

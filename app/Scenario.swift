@@ -40,6 +40,7 @@ import SwiftUI
 ///     select subject | person           runs Vision for real, and reports what
 ///                                       fraction of the frame it covered
 ///     overlay on | off                  paint the coverage, as `Show mask` does
+///     spot <x,y> [radius] [heal|clone]  place a dust spot, as a click does
 ///     maskcheck <cells> <ev>            does the mask the *interface draws*
 ///                                       sit on the coverage the engine
 ///                                       *renders*? Grids the frame, classifies
@@ -278,6 +279,16 @@ enum Scenario {
                 throw Bad(what: "the engine refused the matte")
             }
             engine.maskKind = 4
+
+        case "spot":
+            // Places a spot at a point on the displayed picture, exactly as a
+            // click does. research/spot-removal.md.
+            let at = try point(args.first ?? "")
+            if args.count > 1 { engine.spotRadius = Float(try number(1)) }
+            if args.count > 2 { engine.spotHeal = args[2] != "clone" }
+            guard engine.addSpot(atFrame: at) else {
+                throw Bad(what: "the engine refused the spot")
+            }
 
         case "overlay":
             // Paint the coverage over the picture, as `Show mask` does. With

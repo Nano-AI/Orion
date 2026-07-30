@@ -163,6 +163,20 @@ struct MaskComponentState: Equatable, Codable {
     }
 }
 
+/// One spot: a disc taken from elsewhere in the frame.
+/// research/spot-removal.md.
+struct SpotState: Equatable, Codable {
+    var destX: Float = 0.5
+    var destY: Float = 0.5
+    var srcX: Float = 0.5
+    var srcY: Float = 0.5
+    /// Normalized against the frame's *width*, so a spot is round on any aspect.
+    var radius: Float = 0.02
+    var feather: Float = 0.5
+    /// Heal takes the destination's tone; clone does not.
+    var heal = true
+}
+
 struct DevelopState: Equatable, Codable {
     var temperatureK: Float = 5500
     var tint: Float = 0
@@ -199,6 +213,8 @@ struct DevelopState: Equatable, Codable {
     var maskComponents: [MaskComponentState] = []
     /// Guided feathering of the folded group, 0..1. research/masking.md §4.
     var maskRefine: Float = 0
+    /// Dust and blemishes. research/spot-removal.md.
+    var spots: [SpotState] = []
     var localExposureEv: Float = 0
 
     var fusion: Float = 0

@@ -203,6 +203,16 @@ struct ImageCanvas: NSViewRepresentable {
         func beginDrag(at point: CGPoint, in view: NSView) {
             dragAnchor = point
 
+            // Spot removal, armed from the Detail panel. Checked before the
+            // eyedropper because the two are never armed together and this one
+            // consumes the click outright — the photograph must not also pan.
+            if engine.spotPlacing, let uv = imageUV(point, in: view) {
+                dragAnchor = nil
+                engine.addSpot(atFrame: uv)
+                view.needsDisplay = true
+                return
+            }
+
             guard targeted.isActive,
                   let uv = imageUV(point, in: view),
                   let s = engine.sample(u: Float(uv.x), v: Float(uv.y)),

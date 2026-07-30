@@ -493,6 +493,57 @@ extension Editor {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Spots") {
+            HStack(spacing: 8) {
+                Picker("", selection: $engine.spotHeal) {
+                    Text("Heal").tag(true)
+                    Text("Clone").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 130)
+                Spacer(minLength: 0)
+                Text("\(engine.spots.count)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(Palette.faint)
+            }
+
+            slider("Size", $engine.spotRadius, 0.004...0.12, "", 3, resetsTo: 0.02)
+            slider("Softness", $engine.spotFeather, 0...1, "", 2, resetsTo: 0.5)
+
+            HStack(spacing: 8) {
+                // ⚠ Armed explicitly. Without this the caption's "click the
+                // photo" would be a promise the interface does not keep, and a
+                // click on the canvas would still pan — the same class of thing
+                // as a control that is drawn but not wired.
+                Toggle(isOn: $engine.spotPlacing) {
+                    Text(engine.spotPlacing ? "Placing…" : "Place spots")
+                        .font(.system(size: 11))
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 8) {
+                Button("Undo spot") { engine.removeLastSpot() }
+                    .disabled(engine.spots.isEmpty)
+                Button("Clear") { engine.clearSpots() }
+                    .disabled(engine.spots.isEmpty)
+                Spacer(minLength: 0)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Text("Turn on Place spots, then click the photo to cover one. Heal takes the "
+               + "brightness from around the spot and the detail from nearby, "
+               + "which is what makes it invisible on a sky. ⚠ It has one known "
+               + "limit: placed across a hard edge the correction is wrong on "
+               + "both sides, because it is a single number for the whole disc.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Look") {
             HStack(spacing: 6) {
                 PanelButton(title: engine.lutName.isEmpty ? "Load LUT…" : engine.lutName) {

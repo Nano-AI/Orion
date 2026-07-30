@@ -64,6 +64,8 @@ set(ORION_SHADERS
     mask_guide_prep:maskGuidePrep
     mask_guide_ab:maskGuideAb
     mask_guide_apply:maskGuideApply
+    spot_measure:spotMeasure
+    spot_apply:spotApply
     develop_linear:developLinear
     develop_display:developDisplay
     geometry:geometry

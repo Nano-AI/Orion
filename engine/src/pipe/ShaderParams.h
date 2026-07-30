@@ -122,6 +122,29 @@ struct MaskGuideApply {
 };
 static_assert(sizeof(MaskGuideApply) == 32);
 
+/// Spot removal — research/spot-removal.md. Shared by both kernels; the
+/// measure pass ignores the fields the apply pass needs and vice versa, which
+/// is cheaper than two nearly identical blocks that can drift apart.
+inline constexpr int kMaxSpots = 64;
+
+struct alignas(16) SpotMeasure {
+    std::uint32_t size[2];
+    std::int32_t  count;
+    std::int32_t  samples;
+    float         spots[kMaxSpots][4];   // xy destination, zw source
+    float         shape[kMaxSpots][4];   // x radius, y feather, z heal
+};
+static_assert(sizeof(SpotMeasure) == 16 + kMaxSpots * 32);
+
+struct alignas(16) SpotApply {
+    std::uint32_t size[2];
+    std::int32_t  count;
+    std::int32_t  _pad;
+    float         spots[kMaxSpots][4];
+    float         shape[kMaxSpots][4];
+};
+static_assert(sizeof(SpotApply) == 16 + kMaxSpots * 32);
+
 struct Atrous {
     std::uint32_t size[2];
     std::int32_t  step;

@@ -22,6 +22,7 @@
 #include "raw/RawImage.h"
 
 #include <array>
+#include <utility>
 #include <memory>
 #include <string>
 
@@ -79,6 +80,34 @@ struct MaskComponentEdit {
     /// silently omits it, which is exactly how `lutStrength` once shipped a
     /// slider that did nothing at all.
     bool operator==(const MaskComponentEdit&) const = default;
+};
+
+/// One spot: a disc taken from elsewhere in the frame. research/spot-removal.md.
+///
+/// ⚠ **Both centres are in FRAME coordinates, and a spot is the one thing here
+/// that wants them.** A mask is placed *against* a subject and stays where the
+/// photographer put it on screen; dust is *on the sensor* and is part of the
+/// picture, so a spot has to follow the subject through a later crop or quarter
+/// turn. Those are opposite behaviours and they need opposite storage.
+///
+/// The click is therefore converted once, when the spot is placed, by
+/// `displayedToFrame` — the same `mask::toFrame` a mask's centre goes through,
+/// applied at placement rather than at render. Converting on every render would
+/// give the mask's behaviour, and would also need the geometry in the
+/// staleness comparison, which is a trap this file has already fallen into
+/// twice.
+struct SpotEdit {
+    float destX = 0.5f, destY = 0.5f;
+    float srcX  = 0.5f, srcY  = 0.5f;
+    /// In normalized *x*, converted against the frame's width so a spot is a
+    /// disc rather than an ellipse on a non-square frame.
+    float radius = 0.02f;
+    float feather = 0.5f;
+    /// Heal takes the destination's tone, clone does not. The two operations
+    /// differ by exactly this.
+    bool  heal = true;
+
+    bool operator==(const SpotEdit&) const = default;
 };
 
 struct Adjustments {
@@ -188,6 +217,12 @@ struct Adjustments {
     std::array<MaskComponentEdit, kMaxMaskComponents> maskComponents{};
     int   maskCount = 0;
 
+    /// Dust and blemishes. research/spot-removal.md. Applied between the lens
+    /// correction and sharpening, so a healed patch is sharpened along with its
+    /// surroundings rather than pasted in already sharp.
+    std::array<SpotEdit, 64> spots{};
+    int   spotCount = 0;
+
     /// Guided feathering of the folded group, 0..1 — research/masking.md §4.
     ///
     /// Pulls the coverage boundary onto whatever edge in the photograph lies
@@ -282,6 +317,10 @@ public:
     /// Passing `nullptr` clears the matte, which is what "no longer a matte
     /// component" means.
     bool setMaskMatte(int component, const float* alpha, int width, int height);
+
+    /// A point on the displayed picture, in the frame the mask and spot
+    /// kernels work in. Uses the geometry last applied.
+    [[nodiscard]] std::pair<float, float> displayedToFrame(float x, float y) const;
 
     [[nodiscard]] std::uint32_t maxMatteWidth()  const noexcept { return matteW_; }
     [[nodiscard]] std::uint32_t maxMatteHeight() const noexcept { return matteH_; }
@@ -420,6 +459,8 @@ private:
     /// identity — so every component node has the same shape and a group of one
     /// exercises the same code path as a group of three. Unused components are
     /// disabled, which costs their texture and none of their time.
+    int nSpotMeasure_ = -1, nSpotApply_ = -1;
+
     int nMaskComponent_[kMaxMaskComponents]{};
 
     /// A raster component's matte, one per slot — research/masking.md §5.

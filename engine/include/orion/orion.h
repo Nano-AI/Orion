@@ -71,6 +71,23 @@ typedef struct OrionCurveChannel {
  * Geometry is in normalized coordinates of the *displayed* picture — the crop
  * and rotation the photographer is looking at. The engine moves it to the
  * frame the shader sees; the caller never does that transform. */
+/* Maximum spots one photo can carry. research/spot-removal.md. */
+#define ORION_MAX_SPOTS 64
+
+/* One spot: a disc taken from elsewhere in the frame.
+ *
+ * Both centres are normalized against the frame masks live in, so the same
+ * transform that carries a mask's centre from the displayed picture carries a
+ * spot. `radius` is in normalized x and is converted against the frame's width,
+ * so a spot is a disc rather than an ellipse on a non-square frame. */
+typedef struct OrionSpot {
+    float dest_x, dest_y;
+    float src_x, src_y;
+    float radius;
+    float feather;
+    int   heal;             /* 0 clones, nonzero takes the destination's tone */
+} OrionSpot;
+
 typedef struct OrionMaskComponent {
     int   kind;             /* 0 off, 1 linear, 2 radial, 3 brush,
                              * 4 matte, 5 luminance range */
@@ -179,6 +196,11 @@ typedef struct OrionAdjustments {
     int   mask_count;
     float local_exposure_ev;
 
+    /* Dust and blemishes. research/spot-removal.md. Applied between the lens
+     * correction and sharpening, in scene-linear light. */
+    OrionSpot spots[ORION_MAX_SPOTS];
+    int   spot_count;
+
     /* Guided feathering of the folded group, 0..1 — research/masking.md §4.
      * Pulls the coverage boundary onto whatever edge in the photograph lies
      * near it, and leaves it alone where there is none. Zero is the identity
@@ -267,6 +289,16 @@ OrionStatus orion_engine_set_mask_matte(OrionEngine* engine, int component,
  * A matte producer needs this: kind 4 wants frame coordinates, and a render it
  * reads back has been through the orientation node. research/masking.md §5. */
 OrionStatus orion_engine_quarter_turns(const OrionEngine* engine, int* out_turns);
+
+/* Carries a point on the displayed picture into the frame the mask and spot
+ * kernels work in, using the geometry currently set.
+ *
+ * The same transform mask centres go through. Exposed because a *spot* has to
+ * be converted once when it is placed rather than on every render: dust sits on
+ * the sensor, so a spot must follow the subject through a later crop or turn,
+ * which is the opposite of what a mask does. research/spot-removal.md §4. */
+OrionStatus orion_engine_to_frame(const OrionEngine* engine,
+                                  float x, float y, float* out_x, float* out_y);
 
 /* The largest matte this image will accept, in pixels. */
 OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
