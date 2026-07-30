@@ -60,7 +60,13 @@
   }
 
   try {
+    // The failsafe below fires only if the observer never delivers. A blanket
+    // showAll on a timer would also mark everything below the fold as already
+    // revealed, killing every entrance for a reader who pauses before
+    // scrolling — the cure must not be the disease.
+    var ioFired = false;
     var io = new IntersectionObserver(function (entries) {
+      ioFired = true;
       for (var i = 0; i < entries.length; i++) {
         if (!entries[i].isIntersecting) continue;
         var el = entries[i].target;
@@ -87,9 +93,10 @@
       }
     });
 
-    // Failsafe. If a block is still hidden well after load, show everything
-    // rather than leave content invisible.
-    window.setTimeout(showAll, 4000);
+    // Failsafe. The hero elements intersect at observe time, so a working
+    // observer has always fired within milliseconds. Silence after 4 s means
+    // it is broken — show everything rather than leave content invisible.
+    window.setTimeout(function () { if (!ioFired) showAll(); }, 4000);
   } catch (e) {
     showAll();
     return;
@@ -112,6 +119,8 @@
     var maskWrap = q('masks'), maskSweep = q('maskSweep'), hMask = q('hMask');
     var proof = q('proofShot');
     var hud = q('frameHud'), hudTxt = q('frameTxt');
+    var dl = q('dlChip');
+    var closeEl = document.querySelector('.close');
 
     if (!devWrap || !devImg || !wipeWrap || !maskWrap) return;
 
@@ -350,6 +359,12 @@
       drawPlx();
 
       if (hud) hud.classList.toggle('fr--on', devBottom < vh * 0.4);
+      // The chip is the shortcut for mid-roll; it leaves when the close's
+      // own CTA arrives — two download controls on screen is one too many.
+      if (dl) {
+        var closeTop = closeEl ? closeEl.getBoundingClientRect().top : Infinity;
+        dl.classList.toggle('dl--on', devBottom < vh * 0.4 && closeTop > vh * 0.75);
+      }
 
       if (settling || now - lastScroll < 200) {
         requestAnimationFrame(frame);

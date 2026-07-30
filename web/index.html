@@ -13,16 +13,36 @@
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#08090b">
-<link rel="preload" as="image" href="img/photo-aston-trio.jpg" fetchpriority="high">
+<link rel="preload" as="image" href="img/photo-aston-trio.jpg"
+      imagesrcset="img/photo-aston-trio-1200.jpg 1200w, img/photo-aston-trio.jpg 2400w"
+      imagesizes="100vw" fetchpriority="high">
 <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceMono-400.woff2">
 <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceGrotesk-var.woff2">
 <!-- The mark is Orion's Belt: Alnitak, Alnilam, Mintaka. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0c0d'/%3E%3Ccircle cx='9.5' cy='22' r='2.2' fill='%234DB6C4'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%234DB6C4'/%3E%3Ccircle cx='22.5' cy='10' r='2.5' fill='%234DB6C4'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Orion",
+  "operatingSystem": "macOS 14 or later",
+  "applicationCategory": "PhotographyApplication",
+  "softwareVersion": "0.4.0-alpha.2",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "downloadUrl": "https://github.com/Nano-AI/Orion/releases/tag/v0.4.0-alpha.2",
+  "url": "https://nano-ai.github.io/Orion/"
+}
+</script>
 </head>
 <body>
 
 <a class="skip" href="#main">Skip to content</a>
+
+<!-- The quiet route to the build. Hidden while the finder is up; surfaces
+     once the visitor is on the roll, same cue as the frame counter. The
+     close still owns the big CTA — this is the shortcut, not the pitch. -->
+<a class="dl mono" id="dlChip" href="https://github.com/Nano-AI/Orion/releases/tag/v0.4.0-alpha.2">Download <span class="dl__tag">alpha</span></a>
 
 <!-- ================================================================
      HERO — through the viewfinder.
@@ -60,7 +80,10 @@
            .vf carries its own opacity and would isolate the blend. -->
       <div class="vf__nd" aria-hidden="true"></div>
 
-      <div class="vf" id="vf">
+      <!-- The finder furniture and the EXIF theatre are one decorative
+           assembly — a screen reader should hear the name and the claim,
+           not a spec sheet read as prose. -->
+      <div class="vf" id="vf" aria-hidden="true">
         <div class="vf__frame" aria-hidden="true"></div>
         <div class="vf__grid" aria-hidden="true"></div>
         <div class="vf__af" aria-hidden="true"></div>
@@ -224,7 +247,7 @@
     <span class="l"><span>Every filter</span></span>
     <span class="l"><span>cites its paper</span></span>
   </h2>
-  <p class="ledger__lede rv d2">What isn't sourced yet is written down too, in public.</p>
+  <p class="ledger__lede rv d2">What isn't sourced yet is <a href="https://github.com/Nano-AI/Orion/tree/main/research">written down too, in public</a>.</p>
   <ul class="cites">
     <li class="rv"><span class="k">Haze removal</span><span class="v">He, Sun &amp; Tang · CVPR <b>2009</b></span></li>
     <li class="rv"><span class="k">Local contrast</span><span class="v">Paris, Hasinoff &amp; Kautz · SIGGRAPH <b>2011</b></span></li>

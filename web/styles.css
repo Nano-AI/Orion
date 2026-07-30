@@ -133,15 +133,6 @@ h2.disp {
 }
 .skip:focus { left: 0; top: 0; }
 
-.eyebrow {
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--body);
-  text-shadow: 0 1px 12px rgba(8,9,11,.9);
-}
-
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* Photographs surface like prints in the tray: from black, up to full
@@ -635,7 +626,6 @@ html.scrub .wipe__edge { will-change: transform, opacity; opacity: 1; }
   background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.88) 22%, rgba(8,9,11,.12) 62%);
 }
 .wipe__copy { position: relative; z-index: 1; max-width: 44rem; }
-.wipe__copy .mnote { margin-top: 1.2rem; }
 
 /* ---------- The mask sweep ---------- */
 
@@ -692,8 +682,7 @@ html.scrub .mask__sweep { transform: translate3d(0, 0, 0) rotate(-4deg); will-ch
   background: linear-gradient(to top, var(--ink) 1%, rgba(8,9,11,.86) 20%, transparent 58%);
 }
 .mask__copy { max-width: 44rem; }
-.mask__copy p:not(.mnote) { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
-.mask__copy .mnote { margin-top: 1.2rem; }
+.mask__copy p { margin-top: 1.2rem; max-width: var(--measure); color: var(--body); }
 
 /* ---------- Proof ----------
  * The screenshot lands like a print laid on a table: tilted away, settling
@@ -750,14 +739,22 @@ html.scrub .shot { will-change: transform; }
 .plx { top: -8%; height: 116%; }
 html.scrub .plx { will-change: transform; }
 
-.mnote { font-family: var(--mono); font-size: .74rem; color: var(--slate); letter-spacing: .04em; }
-.mnote b { color: var(--teal); font-weight: 700; font-variant-numeric: tabular-nums; }
-
 /* ---------- Ledger ---------- */
 
 .ledger { padding: clamp(6rem, 16vh, 13rem) var(--gut); }
 .ledger__lede { margin-top: 1.3rem; max-width: var(--measure); color: var(--body); }
-.ledger em { color: var(--ivory); font-style: italic; }
+/* The claim links to the evidence — the research/ directory, unsourced
+ * list and all. Quiet underline, same register as the source link below. */
+.ledger__lede a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(154,166,171,.55);
+  text-underline-offset: .25em;
+  transition: color .25s ease, text-decoration-color .25s ease;
+}
+.ledger__lede a:hover { color: var(--ivory); text-decoration-color: var(--ivory); }
+.ledger__lede a:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
 
 .cites { list-style: none; margin: 2.6rem 0 0; padding: 0; max-width: 56rem; }
 .cites li {
@@ -951,6 +948,37 @@ html.scrub .plx { will-change: transform; }
 @keyframes frtick { from { transform: translateY(120%); } to { transform: none; } }
 html:not(.scrub) .fr { display: none; }
 
+/* ---------- The download chip ----------
+ * The page's one job, reachable from anywhere on the roll. Dressed like the
+ * platform badge — hairline, blur, no fill — because teal is never a button.
+ * Hidden over the hero (the close owns the pitch), it surfaces on the same
+ * cue as the frame counter. Without the script the close CTA is the route. */
+.dl {
+  position: fixed; top: 1.1rem; right: clamp(1rem, 2.5vw, 2.2rem);
+  z-index: 60;
+  font-size: .66rem; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ivory); text-decoration: none;
+  padding: .7em 1.15em;
+  border: 1px solid rgba(240,243,244,.22);
+  border-radius: 999px;
+  background: rgba(20,22,24,.55);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  opacity: 0; visibility: hidden;
+  transform: translateY(-6px);
+  transition: opacity .45s ease, transform .45s ease,
+              border-color .25s ease, color .25s ease,
+              visibility 0s linear .45s;
+}
+.dl.dl--on {
+  opacity: 1; visibility: visible; transform: none;
+  transition: opacity .45s ease, transform .45s ease,
+              border-color .25s ease, color .25s ease;
+}
+.dl:hover { color: #fff; border-color: rgba(240,243,244,.5); }
+.dl:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.dl__tag { color: var(--slate); letter-spacing: .14em; }
+html:not(.scrub) .dl { display: none; }
+
 /* ---------- Narrow ---------- */
 
 @media (max-width: 900px) {
@@ -989,7 +1017,6 @@ html:not(.scrub) .fr { display: none; }
   .sidecar__what { display: none; }
   .dev__rail { display: none; }
   .hud--wide { display: none; }
-  .hud__cue { display: none; }
   /* The finder keeps the scale and the live stop on a phone; the focal
      length and the film speed are the ones a narrow line can spare. */
   .vf__shot { font-size: .66rem; gap: .3rem .7rem; }
