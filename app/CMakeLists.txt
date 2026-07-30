@@ -48,6 +48,8 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentSlider.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentCatalogue.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentGroup.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/AnalogTrack.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/RatingBar.swift
@@ -120,6 +122,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentCatalogue.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
@@ -138,6 +141,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentCatalogue.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift

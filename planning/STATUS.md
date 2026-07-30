@@ -24,7 +24,7 @@ licence) before it is a code one. That is the thing to settle first.
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3382
+**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3390
 checks** · **28 `repro/` scenarios, 136 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
@@ -58,6 +58,77 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30o — one catalogue, and the order made visible
+
+Asked: *"Is there no way to have layers in the settings menu? Everything applied
+before masking, then the masking section, then everything after. I want it clear
+what all you can use, and I want those reusable so we aren't wasting UI
+components or having different looks and feels."*
+
+Two asks, and both were fair.
+
+### The duplication was real, but not where it looked
+
+There is already **one** `AdjustmentSlider`, used by all fifty-one controls, so
+the look never differed. What was duplicated is the *description*: every control
+was hand-listed at its call site with its range, unit, decimals and default —
+fine for one panel, and not fine the moment the same adjustment appears twice.
+Giving a mask more than exposure had just made the Local section a second copy
+of the Light section's list with different numbers.
+
+`AdjustmentCatalogue` is the one copy. `AdjustmentGroup` renders any subset in
+any scope, so the global panel and a mask's panel are **the same specs through
+the same view** and cannot drift in look, behaviour, or in what they offer.
+
+⚠ **The binding table is a `switch` with no `default`.** Adding a case to
+`AdjustmentID` without binding it is a compile error rather than a control that
+draws nothing — which is exactly how `lutStrength` once shipped a dead slider.
+
+### ⚠ Stage belongs to the scope, not to the adjustment
+
+The first version put one `stage` on each spec, and it was wrong on the control
+that matters most for the question being asked. **Global contrast runs in
+`develop_display`, after the mask, on the combined result; local contrast runs
+inside the mask node.** The same named control sits on opposite sides of the
+mask depending on which is meant, and a single stage would have made the
+ordering readout state one of them falsely.
+
+Caught by writing the readout, not by reading the code. Pinned now.
+
+### What the panel says now
+
+The Local section is generated: the adjustments that *can* be local, then —
+below the mask's own controls, because it is reference rather than control — a
+**Where the mask sits** readout built from the same table, and a list of what a
+mask cannot reach **with the reason for each**:
+
+| Refused | Because |
+|---|---|
+| Temperature, Tint | applied before the demosaic — a local one means demosaicing twice |
+| Highlights, Shadows | read the guided-filter chain, which runs once for the frame |
+| Whites, Blacks | an endpoint, and an endpoint per region is not an endpoint |
+| Clarity, Dehaze, Lift | 16–32 node pyramids; §2's rule is not even defined for them |
+| Look | applied by the display transform, after the mask |
+
+⚠ Generated rather than written out, so a control that stops being local-able
+says so the day it changes — and a test fails if any refusal loses its reason,
+because a refusal without one is just a control that has gone missing.
+
+### Measured
+
+Eight new checks in `orion-viewport-tests`, on the catalogue rather than on the
+view. The load-bearing one asserts the catalogue's local set **equals the set
+the shader actually applies**, written out rather than derived — deriving it
+from the table it is checking would prove nothing. Three mutations dead:
+claiming white balance is local, silently dropping a local control, and a
+refusal losing its reason.
+
+### ⚠ The first layout was wrong and the screenshot said so
+
+The refusals went directly under the local sliders, where seven lines of prose
+sat between a mask's adjustments and the mask's own geometry. Reference material
+goes after the controls.
 
 ## Session 2026-07-30n — a mask does more than exposure
 

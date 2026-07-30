@@ -532,19 +532,15 @@ extension Editor {
                     // research/masking.md §6 is explicit that the adjustment is
                     // applied once through the combined coverage, or two
                     // overlapping components would apply it twice.
-                    slider("Exposure", $engine.localExposureEv, -3...3, " EV", 2,
-                           resetsTo: engine.defaults.localExposureEv)
-                    slider("Contrast", $engine.localContrast, -1...1, "", 2,
-                           resetsTo: engine.defaults.localContrast)
-                    slider("Saturation", $engine.localSaturation, -1...1, "", 2,
-                           resetsTo: engine.defaults.localSaturation)
-                    slider("Warmth", $engine.localWarmth, -1...1, "", 2,
-                           resetsTo: engine.defaults.localWarmth)
-                    slider("Tint", $engine.localTint, -1...1, "", 2,
-                           resetsTo: engine.defaults.localTint)
+                    // The same specs the global panel renders, pointed at the
+                    // local scope. One definition, so the two cannot drift in
+                    // look, behaviour or in what they offer.
+                    AdjustmentGroup(engine: engine,
+                                    specs: AdjustmentCatalogue.localSet,
+                                    scope: .local)
+
                     Text("Warmth and Tint are a colour cast where the mask "
-                       + "covers — not a white balance. White balance is "
-                       + "applied before the demosaic, so it cannot be local.")
+                       + "covers — not a white balance.")
                         .font(.system(size: 10))
                         .foregroundStyle(Palette.faint)
                         .fixedSize(horizontal: false, vertical: true)
@@ -721,6 +717,13 @@ extension Editor {
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.faint)
                     .fixedSize(horizontal: false, vertical: true)
+
+                // Reference material, so it goes **after** the controls rather
+                // than between them. The first version put it directly under
+                // the local sliders, where seven lines of prose separated a
+                // mask's adjustments from the mask's own geometry.
+                PipelineOrder()
+                LocalRefusals()
             }
         }
     }
