@@ -109,6 +109,14 @@ typedef struct OrionMaskComponent {
     float range_lo, range_hi;
     float range_soft;       /* stops each edge takes to ramp */
 
+    /* Colour range, when kind is 6. The picked shade as scene-linear Rec.2020
+     * RGB, plus a Euclidean tolerance in Oklab chromaticity (a/L, b/L) and how
+     * far its edge ramps. The kernel does the conversion, so the target and the
+     * pixel cannot disagree about what Oklab is. research/masking.md §4c. */
+    float colour_r, colour_g, colour_b;
+    float colour_tol;
+    float colour_soft;
+
     /* The brush, when kind is 3. One radius for the whole stroke. The dab
      * centres are not here — they are variable-length, and this struct is
      * compared field by field on every slider tick. Set them with

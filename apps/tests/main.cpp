@@ -5970,6 +5970,361 @@ void testMaskRangeGpu() {
     }
 }
 
+// A colour range mask — research/masking.md §4c.
+//
+// A band on chromaticity rather than on brightness. Checked against an
+// independent CPU model of the metric rather than against magnitudes, for the
+// same reason the guided filter is: a shader that is wrong by a factor still
+// moves the picture, and "it did something" is what let a blacks slider ship
+// delivering 39% of its effect.
+//
+// ⚠ The load-bearing property is not the falloff, which is shared with every
+// other kind. It is that the metric is **exactly invariant under exposure**,
+// because that is the whole reason lightness is excluded and the reason this
+// works at all on a scene-linear, unbounded input.
+void testMaskColourGpu() {
+    section("Colour range masks (GPU)");
+
+    using orion::gpu::PixelFormat;
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 64, kH = 64;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto lib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/maskComponent.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
+
+    auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
+    auto dabTex = orion::gpu::Texture::create(*device, params::kDabStride,
+                                              params::kDabRows, PixelFormat::RG32Float);
+    const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
+
+    // ── The metric, on the CPU ────────────────────────────────────────────
+    //
+    // The same numbers the shader carries, written out independently. This is
+    // the oracle: asserting the GPU against a magnitude would pass on a shader
+    // that had, say, dropped the division by L — which is precisely the term
+    // the whole design rests on.
+    const auto chroma = [](double r, double g, double b) {
+        r = std::max(r, 0.0); g = std::max(g, 0.0); b = std::max(b, 0.0);
+        const double l = 0.6166884417 * r + 0.3601590705 * g + 0.0230433072 * b;
+        const double m = 0.2651401962 * r + 0.6358564847 * g + 0.0990302685 * b;
+        const double s = 0.1001506451 * r + 0.2040043234 * g + 0.6963246874 * b;
+        const double l_ = std::cbrt(l), m_ = std::cbrt(m), s_ = std::cbrt(s);
+        const double L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
+        const double A = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+        const double B = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+        const double d = std::max(L, 0.1);
+        return std::pair<double, double>{A / d, B / d};
+    };
+    const auto distance = [&](std::array<double, 3> p, std::array<double, 3> q) {
+        const auto a = chroma(p[0], p[1], p[2]);
+        const auto b = chroma(q[0], q[1], q[2]);
+        return std::hypot(a.first - b.first, a.second - b.second);
+    };
+
+    // Six ordinary photographic colours, one per column band, and four
+    // exposures down the rows — 1/4, 1, 4 and 64 stops apart in brightness.
+    // The exposures are what make the invariance checkable at all.
+    const std::array<std::array<double, 3>, 6> colours{{
+        {0.05, 0.09, 0.22},   // blue sky
+        {0.55, 0.42, 0.03},   // yellow car
+        {0.09, 0.09, 0.10},   // grey tarmac
+        {0.35, 0.03, 0.02},   // red
+        {0.06, 0.12, 0.03},   // foliage
+        {0.40, 0.24, 0.18},   // skin
+    }};
+    const std::array<double, 4> exposures{0.25, 1.0, 4.0, 64.0};
+
+    const auto bandFor = [&](int x) { return std::min(5, x * 6 / int(kW)); };
+    const auto rowFor   = [&](int y) { return std::min(3, y * 4 / int(kH)); };
+
+    // ⚠ A lambda rather than a one-off, because the floor check below replaces
+    // the reference with deep-shadow pixels and every later case reads it. The
+    // first version did not put it back, and the *invert* check — the last one
+    // in the function — then ran against a frame of near-black and passed for
+    // the wrong reason. A shared fixture that one case mutates is a fixture
+    // every later case is quietly testing something else against.
+    const auto uploadColours = [&]() {
+        std::vector<__fp16> ref(std::size_t(kW) * kH * 4, __fp16(0.0f));
+        for (std::uint32_t y = 0; y < kH; ++y) {
+            for (std::uint32_t x = 0; x < kW; ++x) {
+                const auto& c = colours[std::size_t(bandFor(int(x)))];
+                const double k = exposures[std::size_t(rowFor(int(y)))];
+                const std::size_t i = (std::size_t(y) * kW + x) * 4;
+                ref[i + 0] = __fp16(c[0] * k);
+                ref[i + 1] = __fp16(c[1] * k);
+                ref[i + 2] = __fp16(c[2] * k);
+                ref[i + 3] = __fp16(1.0f);
+            }
+        }
+        reference->upload(ref.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+    };
+    uploadColours();
+
+    const auto run = [&](const params::MaskComponent& m) {
+        src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dst.get()},
+                    &m, sizeof m, kW, kH);
+        cb.commitAndWait();
+        std::vector<__fp16> out(std::size_t(kW) * kH);
+        dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+        return out;
+    };
+    const auto at = [&](const std::vector<__fp16>& a, int x, int y) {
+        return double(a[std::size_t(y) * kW + std::size_t(x)]);
+    };
+    // The centre of band `b` at exposure row `r`.
+    const auto sampleX = [&](int b) { return int((b * 2 + 1) * int(kW) / 12); };
+    const auto sampleY = [&](int r) { return int((r * 2 + 1) * int(kH) / 8); };
+
+    params::MaskComponent base{};
+    base.size[0] = kW; base.size[1] = kH;
+    base.kind = 6;
+    base.colourSoft = 0.02f;
+
+    const auto target = [&](params::MaskComponent& m, std::array<double, 3> c) {
+        m.colourR = float(c[0]); m.colourG = float(c[1]); m.colourB = float(c[2]);
+    };
+
+    // ── ⚠ Exposure invariance, which is the whole design ──────────────────
+    //
+    // The same shade at 1/4, 1, 4 and 64 times the light must give *identical*
+    // coverage. This is not a tolerance being generous — Oklab's nonlinearity
+    // is a pure cube root, so a/L and b/L are algebraically invariant under a
+    // multiply, and the only error here is half-float storage.
+    //
+    // A version measuring a and b themselves, or CIELAB's L*a*b* against any
+    // reference white, fails this at every row but one. So does anything that
+    // sneaks lightness into the distance.
+    {
+        params::MaskComponent m = base;
+        target(m, colours[0]);            // the blue sky, at ×1
+        m.colourTol = 0.05f;
+        const auto got = run(m);
+
+        double lo = 1.0, hi = 0.0;
+        for (int r = 0; r < 4; ++r) {
+            const double v = at(got, sampleX(0), sampleY(r));
+            lo = std::min(lo, v); hi = std::max(hi, v);
+        }
+        report(lo > 0.999 && hi - lo < 2e-3,
+               "the same colour selects identically across 8 stops of exposure",
+               "min " + std::to_string(lo) + ", spread " + std::to_string(hi - lo));
+
+        // And the target was picked at one exposure while the pixels sit at
+        // four, so this also says the *target* conversion is invariant.
+        params::MaskComponent bright = m;
+        target(bright, {colours[0][0] * 64, colours[0][1] * 64, colours[0][2] * 64});
+        const auto got2 = run(bright);
+        double worst = 0.0;
+        for (int r = 0; r < 4; ++r) {
+            worst = std::max(worst, std::abs(at(got, sampleX(0), sampleY(r))
+                                           - at(got2, sampleX(0), sampleY(r))));
+        }
+        report(worst < 2e-3,
+               "and picking that colour off a brighter pixel gives the same mask",
+               std::to_string(worst));
+    }
+
+    // ── The tolerance is a radius in the metric, checked against the model ──
+    //
+    // Every band, against the CPU distance: inside `tol` it is full, beyond
+    // `tol + soft` it is nothing, and the classification is the model's rather
+    // than a hand-written list of which colours are near the sky.
+    {
+        params::MaskComponent m = base;
+        target(m, colours[0]);
+        m.colourTol = 0.25f; m.colourSoft = 0.02f;
+        const auto got = run(m);
+
+        int agreed = 0, tested = 0;
+        for (int b = 0; b < 6; ++b) {
+            const double d = distance(colours[std::size_t(b)], colours[0]);
+            const double v = at(got, sampleX(b), sampleY(1));
+            if (d < m.colourTol - m.colourSoft) { ++tested; agreed += (v > 0.999); }
+            else if (d > m.colourTol + m.colourSoft * 2) { ++tested; agreed += (v < 1e-3); }
+        }
+        report(tested >= 5 && agreed == tested,
+               "each colour is inside or outside the radius as the model says",
+               std::to_string(agreed) + " of " + std::to_string(tested));
+
+        // The discriminating pair: tarmac and skin are the closest two at
+        // 0.126, so a tolerance between them separates colours a coarser check
+        // could not tell apart.
+        params::MaskComponent fine = base;
+        target(fine, colours[2]);          // tarmac
+        fine.colourTol = 0.08f; fine.colourSoft = 0.01f;
+        const auto tight = run(fine);
+        report(at(tight, sampleX(2), sampleY(1)) > 0.999 &&
+               at(tight, sampleX(5), sampleY(1)) < 1e-3,
+               "and the closest pair in the frame is still separable",
+               std::to_string(at(tight, sampleX(5), sampleY(1))));
+    }
+
+    // ── The ramp is the shared smootherstep, and it is one-sided ──────────
+    //
+    // A colour band is a disc around the target, not an interval, so there is
+    // no far edge to open. Half coverage lands exactly at `tol + soft/2`.
+    {
+        params::MaskComponent m = base;
+        target(m, colours[0]);
+        m.colourSoft = 0.30f;
+
+        // Pick the tolerance so the sky-to-foliage distance sits mid-ramp.
+        const double d = distance(colours[4], colours[0]);
+        m.colourTol = float(d - m.colourSoft * 0.5);
+        const auto got = run(m);
+        report(std::abs(at(got, sampleX(4), sampleY(2)) - 0.5) < 0.02,
+               "half coverage lands where the model puts the ramp's midpoint",
+               std::to_string(at(got, sampleX(4), sampleY(2))));
+    }
+
+    // ── Every neutral is one colour, at every brightness ──────────────────
+    //
+    // Neutrals collapse to the origin because a = b = 0 for them, so a grey
+    // target selects grey however light or dark. The residual is asserted as a
+    // bound rather than assumed away: the composed matrix's rows sum to
+    // 0.99989, 1.00003 and 1.00048 rather than exactly one, because Ottosson's
+    // published M1 is fitted and rounded, so a neutral lands at about 1.2e-4
+    // from the origin instead of on it. research/masking.md §4c.
+    {
+        const auto n = chroma(0.5, 0.5, 0.5);
+        const double residual = std::hypot(n.first, n.second);
+        report(residual < 1e-3,
+               "a neutral lands on the origin to within the matrix's own rounding",
+               std::to_string(residual));
+
+        params::MaskComponent m = base;
+        target(m, {0.18, 0.18, 0.18});
+        m.colourTol = 0.02f; m.colourSoft = 0.005f;
+        const auto got = run(m);
+        // Tarmac is very nearly neutral; the saturated bands are not.
+        report(at(got, sampleX(2), sampleY(0)) > 0.5 &&
+               at(got, sampleX(2), sampleY(3)) > 0.5,
+               "a grey target selects a near-neutral at both ends of the exposure range",
+               std::to_string(at(got, sampleX(2), sampleY(0))) + ", " +
+               std::to_string(at(got, sampleX(2), sampleY(3))));
+        report(at(got, sampleX(3), sampleY(1)) < 1e-3,
+               "and does not reach a saturated red",
+               std::to_string(at(got, sampleX(3), sampleY(1))));
+    }
+
+    // ── ⚠ The floor on L, without which the shadows fill with noise ───────
+    //
+    // The metric divides by L, so as a pixel goes to black the ratio goes to
+    // infinity and two nearly-black pixels a code apart in one channel land
+    // arbitrarily far apart. The floor at L = 0.1 — a linear luminance of 1e-3,
+    // about seven and a half stops below middle grey — pulls everything below
+    // it toward the origin instead.
+    //
+    // Checked as the property that matters: two deep-shadow pixels of very
+    // different hue must not be flung to opposite ends of the metric, or a
+    // colour mask speckles through every shadow in the frame.
+    {
+        // The two hues, at a level where the metric is still scale free.
+        const double open = distance({0.4, 0.1, 0.1}, {0.1, 0.1, 0.4});
+
+        // ⚠ The first version of this check asserted the wrong magnitude and
+        // failed against a correct shader. It put the deep pixels at 2e-4,
+        // where L is 0.09 — *barely* under the floor — and then demanded a
+        // fourfold suppression the floor cannot deliver there. The floor's
+        // effect is not a step, it is the ratio L/0.1, so how far under it you
+        // go is the whole question. Fifth time in this file's history that a
+        // first-draft assertion measured something other than its claim.
+        const double deep = 1e-6;
+        const double far = distance({deep * 4, deep, deep}, {deep, deep, deep * 4});
+        report(far < open * 0.2,
+               "two deep-shadow pixels of opposite hue collapse toward each other",
+               std::to_string(far) + " against " + std::to_string(open));
+
+        // Stronger than a bound, because the floor's behaviour is predictable:
+        // below it the ratio is scaled by L/0.1 exactly, so the suppression is
+        // a number this test can name rather than a direction it can hope for.
+        // (Not identical, because the two endpoints have slightly different L.)
+        const double lDeep = 0.0126;          // L of the first deep pixel
+        report(std::abs(far / open - lDeep / 0.1) < 0.02,
+               "and by the factor the floor predicts, not merely by some factor",
+               std::to_string(far / open) + " against " + std::to_string(lDeep / 0.1));
+
+        // And it does not reach up into ordinary shadow detail. This pair sits
+        // at L = 0.31, three times the floor, so it is untouched.
+        const double lit = distance({0.02, 0.03, 0.08}, {0.08, 0.03, 0.02});
+        report(lit > open * 0.85,
+               "while a normal shadow still separates by colour",
+               std::to_string(lit / open));
+
+        // ⚠ **On the GPU, not on the model.** Everything above compares the CPU
+        // oracle against itself: the oracle carries the same floor, so deleting
+        // the shader's floor entirely left all of it green. That mutation
+        // survived, and it is the same shape as the matte test's clamp — a
+        // check that cannot tell the code under test from its own stand-in.
+        //
+        // The property, stated so only the shader can satisfy it: with the
+        // floor, two deep-shadow pixels of opposite hue sit close enough that a
+        // tight band around one covers the other. Without it they are as far
+        // apart as a saturated red is from a saturated blue, and the band
+        // covers one and not the other — which on a photograph is a colour mask
+        // speckling through every shadow in the frame.
+        {
+            const double d = 1e-6;
+            const std::array<std::array<double, 3>, 2> shadows{{
+                {d * 4, d, d}, {d, d, d * 4},
+            }};
+            std::vector<__fp16> ref(std::size_t(kW) * kH * 4, __fp16(0.0f));
+            for (std::uint32_t y = 0; y < kH; ++y) {
+                for (std::uint32_t x = 0; x < kW; ++x) {
+                    const auto& c = shadows[x < kW / 2 ? 0 : 1];
+                    const std::size_t i = (std::size_t(y) * kW + x) * 4;
+                    ref[i + 0] = __fp16(c[0]); ref[i + 1] = __fp16(c[1]);
+                    ref[i + 2] = __fp16(c[2]); ref[i + 3] = __fp16(1.0f);
+                }
+            }
+            reference->upload(ref.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+
+            params::MaskComponent m = base;
+            m.colourR = float(shadows[0][0]);
+            m.colourG = float(shadows[0][1]);
+            m.colourB = float(shadows[0][2]);
+            m.colourTol = 0.10f; m.colourSoft = 0.01f;
+            const auto got = run(m);
+            report(at(got, int(kW) / 4, int(kH) / 2) > 0.999 &&
+                   at(got, int(kW) * 3 / 4, int(kH) / 2) > 0.999,
+                   "the shader's own floor holds two deep-shadow hues together",
+                   std::to_string(at(got, int(kW) * 3 / 4, int(kH) / 2)));
+            uploadColours();
+        }
+    }
+
+    // ── Invert and compose reach kind 6 like every other kind ─────────────
+    //
+    // The fourth dead control this codebase found was invert not reaching the
+    // brush, because a new kind was added past the line that applied it.
+    {
+        params::MaskComponent m = base;
+        target(m, colours[0]);
+        m.colourTol = 0.05f;
+        m.invert = 1;
+        const auto got = run(m);
+        report(at(got, sampleX(0), sampleY(1)) < 1e-3 &&
+               at(got, sampleX(3), sampleY(1)) > 0.999,
+               "invert applies to a colour band",
+               std::to_string(at(got, sampleX(0), sampleY(1))));
+    }
+}
+
+
 // A raster mask component — research/masking.md §5, the shape a segmentation
 // matte arrives in.
 //
@@ -6585,6 +6940,7 @@ int main() {
     testMaskMatteGpu();
     testLongBrushStroke();
     testMaskRangeGpu();
+    testMaskColourGpu();
     testBayerDecimation();
     testSpotRemovalGpu();
     testBrushDabsFollowTheFrame();

@@ -4,10 +4,10 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**multi-selection in the filmstrip**)
+**Last updated:** 2026-07-30 (**landing page polish**; engine story before it: multi-selection in the filmstrip)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
-component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
+component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
 photograph's own edges, through the graph, the POD facade, the panel rows, the
 sidecar, undo and the bench.
@@ -17,15 +17,16 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **colour range masks**, then sky. Multi-selection shipped this
-session; sync and batch export now act on a chosen set, and on the filter when
-nothing is chosen — which they did not before.
+**Next story:** **sky masks** — and `research/masking.md` §5 is explicit that
+Vision cannot produce one, so it is a model question before it is a code one.
+Colour range masks shipped this session, which closes §4c and leaves masking.md
+finished except for sky.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **470 checks** · `orion-viewport-tests` **3374
-checks** · **19 `repro/` scenarios, 82 checks** · all 0 failures. Bench exits 0
+**Suites:** `orion-tests` **483 checks** · `orion-viewport-tests` **3374
+checks** · **20 `repro/` scenarios, 87 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -45,6 +46,132 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30k — landing page polish (web/ only, no engine work)
+
+Seven small fixes, all verified in a live browser: the reveal failsafe no
+longer marks everything revealed 4 s after load (it now fires only if
+IntersectionObserver never delivered — the old blanket `showAll` killed every
+below-fold entrance for a reader who paused before scrolling); the hero
+preload carries `imagesrcset`/`imagesizes` so small screens stop downloading
+both the 2400w and 1200w files; the finder's EXIF theatre (`#vf`) is
+`aria-hidden`; a fixed "Download alpha" chip surfaces after the hero on the
+frame-counter's cue and bows out when the close's own CTA arrives; the
+ledger's "written down too, in public" now links to `research/` on GitHub;
+`SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
+`.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30k — colour range masks
+
+⚠ **Eighteenth arrival of the stale M3 prompt.** Not re-litigated; the evidence
+table has been produced twice in this session's own history.
+
+`research/masking.md` §4c, written before the code. §4b had deferred this
+explicitly — "choosing between them is a decision worth its own session" — and
+the answer was **neither of the two candidates it named**.
+
+### ⚠ Neither CIE76 nor CIEDE2000. Oklab, on chromaticity only.
+
+Three arguments, and the third is the one that decides it.
+
+- **CIEDE2000 is scoped to small differences.** Fitted against near-threshold
+  datasets, ΔE ≲ 5. A photographer dragging a tolerance works at 10–40, outside
+  its validated range — and any *monotone* miscalibration is absorbed by the
+  slider anyway, because the person is closing the loop with their eyes.
+- **CIELAB's shape is wrong exactly where it matters.** Its blue-to-purple hue
+  bend is long documented, and sky is the first thing anyone reaches a colour
+  mask for. So CIE76's flaw bites and CIEDE2000's virtue does not.
+- **CIEDE2000 is discontinuous.** Its mean-hue handling has genuine jumps
+  (Sharma, Wu & Dalal 2005). A discontinuous distance feeding a smootherstep
+  prints a *seam* across a smooth sky gradient. §4b already argued C² matters
+  more for a range mask than for a gradient; that disqualifies it outright,
+  before any argument about line count.
+
+Oklab (Ottosson 2020, and normatively W3C CSS Color 4 as `oklab()`) fixes the
+failure that matters at plain Euclidean cost.
+
+### ⚠ The identity the whole design rests on
+
+Oklab's nonlinearity is a **pure cube root** — no linear toe, no division by a
+white point — so scaling the input by k scales L, a and b uniformly by k^⅓, and
+
+>  **a/L and b/L are exactly invariant under exposure.**
+
+Verified, not asserted: a sky patch at ×0.25, ×1, ×4 and ×64 gives
+a/L = −0.081461 and b/L = −0.202005 at every one.
+
+That is what makes the control well-defined on a scene-linear, **unbounded**
+input. There is no honest `Yn` for a raw whose speculars run past 1.0, and every
+grey anchor is a convention that would need defending. CIELAB cannot dodge the
+question; Oklab makes it vanish.
+
+So **lightness is excluded** and delegated to §4b's luminance band via intersect.
+Two consequences, both wanted: a shade in shadow and the same shade in sun are
+one colour, and every neutral collapses to the origin.
+
+### The target is stored as RGB, and converted in the kernel
+
+Converting once on the host would be a second implementation of the transform,
+and this repository has been bitten by a duplicated colour transform twice. The
+per-pixel cost is about twenty flops; what it buys is that the target and the
+pixel cannot disagree about what Oklab is.
+
+### Measured
+
+12 GPU checks against an **independent CPU model** of the metric, not against
+magnitudes. Five shader mutations dead: dropping the division by L (6 failures),
+folding lightness into the distance (3), inverting the band's sense (6),
+dropping the cube root (4).
+
+⚠ **The sixth mutation survived, and it was the test's fault.** Deleting the
+floor on L changed nothing, because every floor check compared the CPU oracle
+against itself — and the oracle carries the same floor. The same shape as the
+matte test's clamp: a check that cannot tell the code from its own stand-in. A
+GPU-side case now asserts that two deep-shadow hues stay together, and the
+mutation dies.
+
+⚠ **And that case broke the one after it.** It re-uploads the reference texture
+and did not put it back, so the *invert* check — the last in the function — ran
+against a frame of near-black and passed for the wrong reason. A shared fixture
+that one case mutates is a fixture every later case is quietly testing something
+else against.
+
+Bench probe: a **neutral** target, because the three sample frames share almost
+no saturated colour and every photograph has near-neutrals. Measured 0.826, 0.226
+and 0.221 of reference; the spread is the probe working, since the forecourt is
+concrete and tarmac while the other two are not.
+
+### ⚠ The photograph decided the repro, twice
+
+The first scenario targeted the yellow Vantage and demanded the tarmac stay put.
+Measured through this metric on a forecourt lit by sodium, the tarmac, the silver
+car and the white building all sit within **0.10** of that yellow — everything
+artificially lit shares a hue. That was a false assertion about the photograph,
+not a defect. The target is the night sky now, which nothing else in the frame
+shares (tarmac 0.217, car 0.314, foliage 0.555).
+
+The second correction: an eight-percent patch of wet night tarmac is not one
+colour — it carries reflections of the sky — so its mean legitimately moves when
+the sky is selected. A region used to prove "nothing else was touched" has to be
+uniform in what is being measured.
+
+Also: the local exposure is **positive**, because negative exposure over a
+near-black sky moves almost nothing. `mask-alignment.txt` records the same trap
+from the other end.
+
+### A bug found on the way, and committed separately
+
+**A luminance range mask never survived reopening the photograph.**
+`MaskComponentState` names its coding keys `Key` rather than `CodingKeys`, so
+Swift synthesises the *encoder* from the stored properties while the decoder
+reads the hand-written list — `rangeLo`, `rangeHi` and `rangeSoft` were written
+to every sidecar and read back from none, from the session kind 5 shipped.
+
+⚠ `DevelopState` had the identical defect and was fixed with a round-trip test.
+That test could not see this one: **its fixture never filled the nested
+component's range fields.** The lesson recorded then — a round trip is only as
+good as the state it round-trips — applied to the outer struct and was not
+carried into the inner one.
 
 ## Session 2026-07-30j — multi-selection in the filmstrip
 

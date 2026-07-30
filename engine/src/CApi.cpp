@@ -201,6 +201,14 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.rangeLo       = s.range_lo;
         d.rangeHi       = s.range_hi;
         d.rangeSoft     = s.range_soft;
+        d.colour[0]     = s.colour_r;
+        d.colour[1]     = s.colour_g;
+        d.colour[2]     = s.colour_b;
+        // Clamped rather than trusted. A negative tolerance would make the
+        // falloff run backwards and select everything *except* the picked
+        // colour, which is a plausible-looking mask and not an obvious break.
+        d.colourTol     = std::clamp(s.colour_tol, 0.0f, 4.0f);
+        d.colourSoft    = std::clamp(s.colour_soft, 1e-4f, 4.0f);
         d.brushRadius   = s.brush_radius;
         d.brushFlow     = s.brush_flow;
         d.brushHardness = s.brush_hardness;

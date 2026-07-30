@@ -494,8 +494,19 @@ struct alignas(8) MaskComponent {
     /// allocated for the largest matte a producer might hand over. Zero
     /// disables the branch. research/masking.md §5.
     std::uint32_t matteSize[2];
+    /// Colour range (kind 6): the picked shade, as scene-linear Rec.2020 RGB,
+    /// converted to Oklab chromaticity by the kernel rather than by the host —
+    /// one implementation of the transform, so the target and the pixel cannot
+    /// disagree. `colourTol` is a Euclidean radius in (a/L, b/L) and
+    /// `colourSoft` is how far the edge ramps. research/masking.md §4c.
+    float         colourR;
+    float         colourG;
+    float         colourB;
+    float         colourTol;
+    float         colourSoft;
+    float         _pad4;
 };
-static_assert(sizeof(MaskComponent) == 128);
+static_assert(sizeof(MaskComponent) == 152);
 // Every float2 in the shader's struct must land on an eight-byte boundary, or
 // Metal pads and every field after the first pair shifts.
 static_assert(offsetof(MaskComponent, zero)   == 56);
@@ -505,6 +516,9 @@ static_assert(offsetof(MaskComponent, semi)      == 80);
 static_assert(offsetof(MaskComponent, rangeLo)   == 88);
 static_assert(offsetof(MaskComponent, dabStride) == 104);
 static_assert(offsetof(MaskComponent, matteSize) == 120);
+static_assert(offsetof(MaskComponent, colourR)    == 128);
+static_assert(offsetof(MaskComponent, colourTol)  == 140);
+static_assert(offsetof(MaskComponent, colourSoft) == 144);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {

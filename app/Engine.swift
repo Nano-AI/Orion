@@ -432,6 +432,53 @@ final class Engine {
         set { editSelected { $0.rangeSoft = newValue } }
     }
 
+    // ── The colour range (mask kind 6) ────────────────────────────────────
+    var maskColourTol: Float {
+        get { selected?.colourTol ?? 0.10 }
+        set { editSelected { $0.colourTol = newValue } }
+    }
+    var maskColourSoft: Float {
+        get { selected?.colourSoft ?? 0.05 }
+        set { editSelected { $0.colourSoft = newValue } }
+    }
+
+    /// The picked shade, scene-linear Rec.2020 RGB. Read for the panel's
+    /// swatch; written only by `pickMaskColour`.
+    var maskColour: (r: Float, g: Float, b: Float) {
+        guard let m = selected else { return (0.18, 0.18, 0.18) }
+        return (m.colourR, m.colourG, m.colourB)
+    }
+
+    /// Armed by the panel's picker button. The canvas consumes the next click,
+    /// exactly as it does for spot placement.
+    var colourPicking = false
+
+    /// Takes the colour under a click on the displayed picture into the
+    /// selected component. Returns false when there was nothing to sample.
+    ///
+    /// ⚠ The **scene** colour, not what is on screen: reading the edited result
+    /// would mean shifting hue through the mask changes what the mask selects.
+    /// Same texture the colour-mixer eyedropper reads, and the same reason.
+    ///
+    /// That value arrives normalised by its own peak, which does not matter
+    /// here and is the point of the metric: Oklab chromaticity is exactly
+    /// invariant under a multiply, so a normalised target and an unnormalised
+    /// pixel land in the same place. research/masking.md §4c.
+    @discardableResult
+    func pickMaskColour(at displayed: CGPoint) -> Bool {
+        guard isLoaded, selected != nil,
+              let s = sample(u: Float(displayed.x), v: Float(displayed.y))
+        else { return false }
+        edit("Mask colour") {
+            editSelected {
+                $0.colourR = Float(s.scene.r)
+                $0.colourG = Float(s.scene.g)
+                $0.colourB = Float(s.scene.b)
+            }
+        }
+        return true
+    }
+
     // ── The brush (mask kind 3) ───────────────────────────────────────────
     var brushRadius: Float {
         get { selected?.brushRadius ?? 0.08 }
@@ -1360,6 +1407,8 @@ final class Engine {
             c.feather = m.feather; c.roundness = m.roundness
             c.range_lo = m.rangeLo; c.range_hi = m.rangeHi
             c.range_soft = m.rangeSoft
+            c.colour_r = m.colourR; c.colour_g = m.colourG; c.colour_b = m.colourB
+            c.colour_tol = m.colourTol; c.colour_soft = m.colourSoft
             c.brush_radius = m.brushRadius; c.brush_flow = m.brushFlow
             c.brush_hardness = m.brushHardness
             c.brush_revision = brushRevisions[i]

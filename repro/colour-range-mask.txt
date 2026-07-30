@@ -1,0 +1,105 @@
+# The colour range mask — research/masking.md §4c.
+#
+# Selects by what colour a pixel is, ignoring how light or dark it is. The
+# metric is Euclidean distance in Oklab chromaticity (a/L, b/L), which is
+# *exactly* invariant under a multiply — that identity is the whole reason
+# lightness is excluded and the reason the control works at all on a
+# scene-linear, unbounded input.
+#
+# The GPU test pins the metric against an independent CPU model on a synthetic
+# frame. This file asserts what only a photograph and the view-model layer can
+# show: that the picker takes the colour under the click, that the coverage
+# lands on what that colour belongs to, and that it lands nowhere else.
+#
+# ⚠ **The frame chose these regions, not intuition.** _PIC8220 is a forecourt at
+# night under sodium light, and measured through this metric the tarmac, the
+# silver car and the white building all sit within 0.10 of the yellow Vantage —
+# everything artificially lit shares a hue. The first draft of this file
+# targeted the car and demanded the tarmac stay put, which is a false assertion
+# about this photograph rather than a defect in the shader. Measured distances
+# from the sky: tarmac 0.217, yellow car 0.314, foliage 0.555.
+#
+# So the target is the **night sky**, whose blue nothing else in the frame
+# shares, and the region that must not move is the yellow Vantage's paint.
+#
+# ⚠ The tarmac is *not* used as the untouched region, and that is a second thing
+# the frame decided rather than a convenience. An eight-percent patch of wet
+# night tarmac is not one colour: it carries reflections of the sky, so the
+# patch mean legitimately moves a little when the sky is selected. A region used
+# to prove "nothing else was touched" has to be uniform in the thing being
+# measured, or the check is asserting something false about the photograph. The
+# car's paint is uniform; the tarmac earns its place further down, where it is
+# the region the tolerance is supposed to reach.
+#
+# ⚠ And the local exposure is **positive**. Negative exposure over a near-black
+# sky moves almost nothing, so a wrongly-selected region would fail to show —
+# the same trap `mask-alignment.txt` records from the other end, where positive
+# exposure over clipped highlights moved nothing.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+measure 0.45,0.02,0.12,0.05 skyBefore
+measure 0.04,0.52,0.08,0.08 carBefore
+
+mask colour
+maskcolour 0.50,0.06
+set maskColourTol 0.12
+set maskColourSoft 0.03
+set localExposure 2.0
+
+measure 0.45,0.02,0.12,0.05 skyAfter
+measure 0.04,0.52,0.08,0.08 carAfter
+
+print the sky moves and the lit paint does not
+expect skyAfter != skyBefore
+# ⚠ The two-sided half. A tolerance wide enough to take the whole picture
+# satisfies the first check and is useless; what a *selection* cannot do is
+# touch a colour it was not pointed at.
+expect carAfter == carBefore
+
+# ── ⚠ AND IT IGNORES BRIGHTNESS ─────────────────────────────────────────
+#
+# The property that separates this from the luminance band, and the entire
+# argument for the metric.
+#
+# The same gesture two stops darker — a factor of four in what every pixel
+# *is*. Checked against its own before-reading, so this is not comparing two
+# exposures to each other: it asks whether the selection is the same selection.
+#
+# A metric carrying lightness — CIELAB against any reference white, or plain
+# Oklab a and b without the division by L — answers differently at each
+# exposure, and the sky is the darkest thing in the frame, so it is exactly
+# where a lightness term would show.
+
+open samples/_PIC8220.ARW
+set exposure 0.6
+measure 0.45,0.02,0.12,0.05 darkSkyBefore
+measure 0.04,0.52,0.08,0.08 darkCarBefore
+mask colour
+maskcolour 0.50,0.06
+set maskColourTol 0.12
+set maskColourSoft 0.03
+set localExposure 2.0
+measure 0.45,0.02,0.12,0.05 darkSkyAfter
+measure 0.04,0.52,0.08,0.08 darkCarAfter
+expect darkSkyAfter != darkSkyBefore
+expect darkCarAfter == darkCarBefore
+
+# ── The tolerance is a control, not a switch ─────────────────────────────
+#
+# Wide enough and the selection reaches the tarmac, 0.217 away. ⚠ This is the
+# shape of check that caught `lutStrength` shipping a dead slider: a feature
+# that works at one value and is never varied is a feature whose control has
+# not been tested.
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask colour
+maskcolour 0.50,0.06
+set maskColourSoft 0.02
+set maskColourTol 0.12
+set localExposure 2.0
+measure 0.80,0.85,0.08,0.08 tarmacNarrow
+set maskColourTol 0.40
+measure 0.80,0.85,0.08,0.08 tarmacWide
+expect tarmacWide != tarmacNarrow

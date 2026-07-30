@@ -25,7 +25,7 @@
 struct MaskComponentParams
 {
     uint2  size;
-    int    kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range
+    int    kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 colour
     int    invert;      // inverts *this component's* coverage, before the fold
 
     int    compose;     // kMaskAdd | kMaskSubtract | kMaskIntersect
@@ -75,6 +75,23 @@ struct MaskComponentParams
     /// Zero disables the branch rather than sampling an empty texture.
     uint2  matteSize;
 
+    /// Colour range (kind 6): the picked shade, as scene-linear Rec.2020 RGB.
+    ///
+    /// ⚠ Stored as RGB and converted *here*, not converted once on the host.
+    /// A host-side conversion would be a second implementation of the Oklab
+    /// transform, and two copies of a colour transform is a thing this codebase
+    /// has been bitten by twice. Twenty flops against a 24 MP pass buys the
+    /// guarantee that the target and the pixel cannot disagree.
+    /// research/masking.md §4c.
+    float  colourR;
+    float  colourG;
+    float  colourB;
+    /// Euclidean radius in (a/L, b/L). Ordinary photographic colours sit
+    /// 0.12–0.60 apart, so the interesting travel is the first third.
+    float  colourTol;
+    /// How wide the edge ramps, in the same units.
+    float  colourSoft;
+    float  _pad4;
 };
 
 /// One dab's coverage at normalized distance `d` from its centre, where 1 is
@@ -89,6 +106,55 @@ float dabCoverage(float d, float hardness)
 {
     const float h = clamp(hardness, 0.0f, 0.98f);
     return 1.0f - maskFalloff((d - h) / max(1.0f - h, 1e-3f));
+}
+
+/// Chromaticity in Oklab, as (a/L, b/L). research/masking.md §4c.
+///
+/// Björn Ottosson, *"A perceptual color space for image processing"* (2020),
+/// normatively specified by the W3C in CSS Color Module Level 4 as `oklab()`.
+///
+/// ⚠ **Why the ratio, and not a and b themselves.** Oklab's nonlinearity is a
+/// pure cube root with no linear toe and no division by a white point, so
+/// scaling the input by k scales L, a and b uniformly by k^(1/3) — which makes
+/// a/L and b/L *exactly* invariant under exposure. That identity is what lets
+/// this metric work on a scene-linear input that is unbounded above 1.0, where
+/// there is no honest reference white to normalise against. It also means a
+/// shade in shadow and the same shade in sun are one colour, and that every
+/// neutral collapses to the origin.
+///
+/// Lightness is deliberately not in the distance: kind 5 is that axis already,
+/// and §6's fold composes the two with intersect.
+///
+/// The matrix is Ottosson's XYZ->LMS composed with Rec.2020->XYZ, which is the
+/// inverse of the engine's own `kXyzToRec2020` and agrees with the published
+/// BT.2020 matrix to 3e-8. One 3x3, three cube roots, one more 3x3.
+float2 oklabChroma(float3 rgb)
+{
+    // ⚠ Negatives are possible: the working space is wider than the camera's
+    // gamut and a saturated stimulus lands outside it. cbrt is odd, so this is
+    // clamped rather than signed — a negative primary is not a colour anybody
+    // picked, and letting it through puts the chromaticity somewhere no real
+    // pixel is.
+    const float3 c = max(rgb, 0.0f);
+
+    const float l = 0.6166884417f * c.r + 0.3601590705f * c.g + 0.0230433072f * c.b;
+    const float m = 0.2651401962f * c.r + 0.6358564847f * c.g + 0.0990302685f * c.b;
+    const float s = 0.1001506451f * c.r + 0.2040043234f * c.g + 0.6963246874f * c.b;
+
+    const float l_ = pow(l, 1.0f / 3.0f);
+    const float m_ = pow(m, 1.0f / 3.0f);
+    const float s_ = pow(s, 1.0f / 3.0f);
+
+    const float L = 0.2104542553f * l_ + 0.7936177850f * m_ - 0.0040720468f * s_;
+    const float a = 1.9779984951f * l_ - 2.4285922050f * m_ + 0.4505937099f * s_;
+    const float b = 0.0259040371f * l_ + 0.7827717662f * m_ - 0.8086757660f * s_;
+
+    // ⚠ A floor on L, or the ratio explodes on near-black pixels and the mask
+    // fills with sensor noise. For a neutral, L is exactly Y^(1/3), so L = 0.1
+    // is a linear luminance of 1e-3 — about seven and a half stops below middle
+    // grey, which on a fourteen-stop raw is the floor of the noise rather than
+    // a colour. research/UNSOURCED.md.
+    return float2(a, b) / max(L, 0.1f);
 }
 
 /// Rec.2020 luminance — ITU-R BT.2020-2 (10/2015), Table 3.
@@ -282,6 +348,28 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         const float rise = maskFalloff((ev - p.rangeLo) / soft);
         const float fall = maskFalloff((p.rangeHi - ev) / soft);
         own = rise * fall;
+    }
+    else if (p.kind == 6)
+    {
+        // A band on what colour the pixel is. research/masking.md §4c.
+        //
+        // Same reference image as kind 5, and for the same reason: read the
+        // edited result and shifting hue through the mask would move what the
+        // mask selects.
+        //
+        // ⚠ No exposure bias here, and none is needed. Kind 5 needs one because
+        // stops measured before the tone controls are not the stops on screen;
+        // this metric is *exactly* invariant to exposure, so the number the
+        // photographer set against the picture is the number the kernel wants.
+        const float2 here = oklabChroma(reference[tid.xy].rgb);
+        const float2 want = oklabChroma(float3(p.colourR, p.colourG, p.colourB));
+        const float d = length(here - want);
+
+        // One edge, not two: a colour band is a disc around the target rather
+        // than an interval, so there is no far side to open. Full inside
+        // `colourTol`, ramping to nothing `colourSoft` further out.
+        const float soft = max(p.colourSoft, 1e-4f);
+        own = 1.0f - maskFalloff((d - p.colourTol) / soft);
     }
 
     // Invert applies to every kind, which it did not before: the old pair of

@@ -53,6 +53,8 @@ import SwiftUI
 ///                                       demands the render agree
 ///     brush <x,y> <x,y> ...             dabs walked by CanvasLayout, as the hand does
 ///     pick <x,y>                        the colour-mixer eyedropper
+///     maskcolour <x,y>                  the colour range mask's picker, as a
+///                                       click on the canvas does it
 ///     targeted <x,y> <delta>            pick, then drag, which is what applies it
 ///     auto                              the Auto button
 ///     preset <name>                     apply a built-in look by name
@@ -218,7 +220,7 @@ enum Scenario {
             // row is there and the raster is not. The `matte` verb below is the
             // other half — it uploads one.
             let kinds = ["none": Int32(0), "linear": 1, "radial": 2, "brush": 3,
-                         "matte": 4, "range": 5]
+                         "matte": 4, "range": 5, "colour": 6, "color": 6]
             guard let k = kinds[args.first ?? ""] else {
                 throw Bad(what: "mask takes none, linear, radial, brush, matte or range")
             }
@@ -347,6 +349,18 @@ enum Scenario {
             case "off": engine.maskOverlay = false
             default: throw Bad(what: "overlay takes on or off")
             }
+
+        case "maskcolour", "maskcolor":
+            // The mask colour picker, through the same call `ImageCanvas`
+            // makes on a click. A scenario that set the RGB directly would be
+            // testing a struct rather than the tool.
+            let p = try point(args.first ?? "")
+            guard engine.pickMaskColour(at: p) else {
+                throw Bad(what: "no colour at \(p.x),\(p.y) — is a mask row selected?")
+            }
+            let c = engine.maskColour
+            say(String(format: "  picked colour %.4f %.4f %.4f\n",
+                       c.r, c.g, c.b))
 
         case "pick":
             let p = try point(args.first ?? "")
@@ -537,6 +551,8 @@ enum Scenario {
         case "maskRangeLo":   e.maskRangeLo = value
         case "maskRangeHi":   e.maskRangeHi = value
         case "maskRangeSoft": e.maskRangeSoft = value
+        case "maskColourTol", "maskColorTol":   e.maskColourTol = value
+        case "maskColourSoft", "maskColorSoft": e.maskColourSoft = value
         case "maskInvert":  e.maskInvert = value != 0
         case "brushHardness": e.brushHardness = value
         default: throw Bad(what: "no control named \(control)")

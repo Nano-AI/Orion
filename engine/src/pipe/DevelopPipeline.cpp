@@ -1503,6 +1503,18 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         m.rangeLo = c.rangeLo;
         m.rangeHi = c.rangeHi;
         m.rangeSoft = c.rangeSoft;
+
+        // ⚠ No exposure bias on the colour band, unlike the luminance one. The
+        // metric is Oklab chromaticity, which is exactly invariant under a
+        // multiply — so the exposure slider cannot move it, and the number set
+        // against the picture is the number the kernel wants. That is also why
+        // `adj.exposureEv` being in the staleness comparison above is harmless
+        // here: it re-pushes a block whose colour fields did not change.
+        m.colourR = c.colour[0];
+        m.colourG = c.colour[1];
+        m.colourB = c.colour[2];
+        m.colourTol  = c.colourTol;
+        m.colourSoft = c.colourSoft;
         // Stops as displayed rather than as captured — see the kind-5 branch.
         m.rangeBias = adj.exposureEv + kBaselineExposureEv;
 

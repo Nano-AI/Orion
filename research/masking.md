@@ -234,16 +234,160 @@ edge through cloud or skin rather than as one clean Mach band.
 
 ### What is deliberately not built
 
-- **A colour range mask**, which needs a colour *distance* and therefore a
-  colour space — CIE76 ΔE*ab in CIELAB (CIE 15:2004) is the cheap defensible
-  choice, CIEDE2000 (CIE 142-2001; ISO/CIE 11664-6:2014) the accurate one, and
-  choosing between them is a decision worth its own session rather than a
-  footnote to this one.
+- **A colour range mask.** ⚠ Built now — §4c, and the answer was neither of the
+  two candidates this section named.
 - **A bilateral grid.** `FEATURES.md` claimed range masks were cheap *because*
   M1 had built one. ⚠ M1 did not build one — there is no bilateral grid in the
   tree — and it would not be the right tool anyway: a range mask is pointwise,
   and the edge-aware part is already covered by §4's guided refinement, which a
   range component composes with like any other.
+
+---
+
+## 4c. Colour range masks — a band on chromaticity
+
+§4b's band is on brightness. This one is on colour: pick a shade off the
+photograph, select what is near it. Composed with **intersect** it refines
+another component the way Lightroom's range masks do; composed with add it
+stands alone.
+
+Everything §4b decided applies here unchanged — it reads the **reference**
+image, and the falloff is the shared smootherstep. What is new is the *distance*,
+and that is the whole of this section.
+
+### ⚠ Neither CIE76 nor CIEDE2000. Oklab.
+
+§4b left this as a choice between CIE76 ΔE*ab (CIE 15:2004) and CIEDE2000
+(CIE 142-2001; ISO/CIE 11664-6:2014). Both were rejected, for reasons that only
+appear once you ask what the number is *for*.
+
+**CIEDE2000 is scoped to small differences.** It was fitted against datasets of
+near-threshold pairs — RIT-DuPont and its relatives, ΔE ≲ 5 — and the CIE scopes
+it to small colour differences. A photographer dragging a selection tolerance is
+working at ΔE 10–40, outside its validated range. Worse, its accuracy is spent
+on a property this control does not need: **any monotone miscalibration of the
+distance is absorbed by the slider**, because the person is closing the loop with
+their eyes on the overlay. What a slider cannot fix is the *shape* of the
+iso-distance surface — whether "equally far from this blue" follows perceived
+hue — and on that, CIEDE2000 buys little over CIE76.
+
+**CIELAB's shape is wrong exactly where it matters.** Its blue-to-purple hue
+bend is long documented, and sky is the first thing anyone reaches for a colour
+range mask to select. At a generous tolerance a CIELAB selection on sky bleeds
+into purples. So CIE76's flaw is the one that bites and CIEDE2000's virtue is the
+one that does not. CIE94 inherits the same bend; CIELUV's hue uniformity is
+worse still.
+
+**And CIEDE2000 is discontinuous.** Its mean-hue handling has genuine
+discontinuities — Sharma, Wu & Dalal, *Color Research & Application* 30(1), 2005,
+documented them while producing the reference implementation. A discontinuous
+distance field feeds a smootherstep and prints a **seam** across a smooth sky
+gradient. §4b already argued that a range mask's boundary follows the
+photograph's own texture, so C² continuity matters more here than for a gradient;
+a metric with a jump in it is disqualified for a mask on that ground alone,
+before any argument about line count.
+
+**Oklab** — Björn Ottosson, *"A perceptual color space for image processing"*,
+20 December 2020 — fixes precisely the failure that matters, at plain Euclidean
+cost. It is a blog post with its full derivation and fitting data, which on its
+own would be thin for this repository's sourcing rule; it is also **normatively
+specified by the W3C in CSS Color Module Level 4** as `oklab()` / `oklch()`,
+which is a standards-body document. Cited together, it clears the bar.
+
+### ⚠ Chromaticity only, and the reason is an exact identity
+
+Oklab's nonlinearity is a **pure cube root** — no linear toe, no division by a
+reference white. So scaling the input by k scales L, a and b uniformly by k^⅓,
+and therefore
+
+>  **a/L and b/L are exactly invariant under exposure.**
+
+Verified numerically rather than asserted: a sky patch at ×0.25, ×1, ×4 and ×64
+gives a/L = −0.081461 and b/L = −0.202005 at every one of them.
+
+That identity is what makes this control well-defined on a scene-linear,
+**unbounded** input. There is no honest `Yn` for a raw whose speculars run well
+above 1.0, and any grey anchor — 0.18 → L\* 50? — is a convention that would have
+to be defended. CIELAB cannot avoid the question: its `f(t)` has a linear toe and
+a division by the white point. Oklab makes it vanish.
+
+So the metric is Euclidean distance in **(a/L, b/L)**, and lightness is
+deliberately **not** in it. Two consequences, both wanted:
+
+- A shade in shadow and the same shade in sun are the same colour. Selecting the
+  blue of a sky should not stop at the point where a cloud shades it.
+- All neutrals collapse to the origin, so a colour range mask on grey selects
+  grey at every brightness — which is what "this colour" means.
+
+**The lightness axis already exists.** §4b's luminance band is exactly that, and
+§6's fold composes the two with intersect. Building lightness into this metric
+would be a second, worse copy of a control that is already there.
+
+### The transform, composed once
+
+Linear Rec.2020 → XYZ (D65) → LMS is two matrices and the shader carries their
+product, so the kernel does one 3×3, three cube roots and one more 3×3.
+
+    +0.6166884417  +0.3601590705  +0.0230433072
+    +0.2651401962  +0.6358564847  +0.0990302685
+    +0.1001506451  +0.2040043234  +0.6963246874
+
+⚠ **Derived from the engine's own matrix, not from a table.** `Rec.2020 → XYZ` is
+the inverse of `kXyzToRec2020` in `DevelopPipeline.cpp`; that inverse agrees with
+the published BT.2020 RGB→XYZ matrix to 3 × 10⁻⁸, which is the check that says
+the two halves of this program share one idea of the working space. Ottosson's
+M₁ and M₂ are used unmodified.
+
+⚠ **Residual, stated rather than tuned away.** The composed rows sum to 0.99989,
+1.00003 and 1.00048 rather than exactly 1, because Ottosson's published M₁ is
+fitted and rounded. A neutral therefore lands at |(a/L, b/L)| ≈ 1.2 × 10⁻⁴
+instead of exactly zero. That is three orders of magnitude below the smallest
+usable tolerance and it is asserted as a bound in the suite. Row-normalising the
+matrix would make the invariant exact and would also mean shipping numbers that
+are nobody's published ones.
+
+### Scale, so the slider has a range
+
+Distances between ordinary photographic colours, measured in (a/L, b/L):
+
+| | blue sky | yellow car | tarmac | red | foliage |
+|---|---|---|---|---|---|
+| **yellow car** | 0.425 | | | | |
+| **tarmac** | 0.203 | 0.235 | | | |
+| **red** | 0.604 | 0.405 | 0.433 | | |
+| **foliage** | 0.369 | 0.193 | 0.257 | 0.584 | |
+| **skin** | 0.323 | 0.184 | 0.126 | 0.314 | 0.299 |
+
+So a tolerance running to about 0.6 spans "this shade only" to "most of the
+picture", and the interesting travel is the first third of it. The nearest pair
+here — tarmac and skin at 0.126 — is the resolution the control has to be able
+to separate.
+
+### The target is stored as RGB, not as a converted pair
+
+The parameter block carries the picked colour as scene-linear Rec.2020 **RGB**
+and the shader converts it, per pixel, with the same function it uses on the
+pixel.
+
+⚠ Converting once on the host would be a second implementation of the transform,
+and this repository has been bitten by a duplicated transform twice — the display
+transform in the histogram, and the tone map for the segmentation input. The
+target conversion is about twenty flops against a twenty-four-megapixel pass, and
+buying that back would cost the one guarantee that matters: the target and the
+pixel cannot disagree about what Oklab is.
+
+The picker itself is the colour picker that already exists —
+`Engine::sampleAt`'s scene value. ⚠ That value is normalised by its own peak, and
+it does not matter here for exactly the reason above: the metric is scale
+invariant, so a normalised target and the unnormalised pixel land in the same
+place.
+
+### What is deliberately not built
+
+- **A hue-only or chroma-only variant.** Both fall out of composing this with the
+  luminance band; a third control would be a third thing to keep in step.
+- **Multiple target colours per component.** A group already holds four
+  components and `add` is `max`, so two colours is two rows.
 
 ---
 

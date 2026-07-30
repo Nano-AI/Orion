@@ -639,3 +639,52 @@ averages several distinct pixels, while a spot at the largest does not spend
 more time on its boundary than on its interior. Too few and the correction
 picks up whatever noise happens to sit on the sampled points; the cost is one
 tiny dispatch per spot, so there is little reason to go lower.
+
+---
+
+## §22 — The colour range mask's shadow floor, and its slider ranges
+
+`research/masking.md` §4c ships a colour range mask whose *metric* is fully
+cited — Oklab is Björn Ottosson's (2020) with its derivation published, and it
+is normatively specified by the W3C in CSS Color Module Level 4 as `oklab()`.
+The distance is plain Euclidean in that space's chromaticity. None of that is
+Orion's own.
+
+Two numbers around it are.
+
+### The floor on L, at 0.1
+
+The metric is `(a, b) / L`, and it is that ratio — rather than `a` and `b`
+themselves — precisely because the ratio is exactly invariant under exposure.
+The cost of the division is that as a pixel goes to black the ratio goes to
+infinity: two nearly-black pixels a code apart in one channel land arbitrarily
+far apart, so a colour mask would speckle through every shadow in the frame.
+
+`max(L, 0.1)` is the guard. **Derived rather than picked**, as far as anything
+here can be: for a neutral, Oklab's `L` is exactly `Y^(1/3)`, so `L = 0.1` is a
+linear luminance of `1e-3` — about **7.5 stops below middle grey**. On a
+fourteen-stop raw that is inside the noise floor, which is the level at which a
+pixel stops having a colour worth selecting on.
+
+What it does *not* do is a step change. Below the floor the chromaticity is
+scaled by `L/0.1`, so the suppression is gradual and predictable — the GPU test
+asserts the factor rather than merely a direction, and separately asserts that
+an ordinary shadow at `L = 0.31`, three times the floor, is untouched.
+
+⚠ **What would settle it.** A measurement of where a real sensor's chroma
+signal-to-noise crosses one, per ISO, rather than an argument from the raw's
+stated dynamic range. That is a per-body number and Orion supports one body.
+
+### The tolerance and softness ranges
+
+The tolerance slider runs 0.01 to 0.8 and softness 0.002 to 0.4; the defaults
+are 0.10 and 0.05. Nothing published fixes these — they come from measuring the
+metric on real colours, which §4c tabulates: ordinary photographic colours sit
+0.12 to 0.60 apart, and the closest pair measured (tarmac against skin, 0.126)
+is the resolution the control has to be able to separate. So the useful travel
+is the first third of the slider, and the top of the range exists to let a
+tolerance take most of a picture deliberately rather than by running out.
+
+⚠ These are *ranges*, not constants in a formula: a wrong one makes a control
+awkward, not a photograph wrong. Recorded because a slider range is exactly the
+kind of number that looks derived when it is not.

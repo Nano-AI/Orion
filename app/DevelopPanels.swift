@@ -362,6 +362,7 @@ extension Editor {
                     Text("Radial").tag(Int32(2))
                     Text("Brush").tag(Int32(3))
                     Text("Range").tag(Int32(5))
+                    Text("Colour").tag(Int32(6))
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -436,6 +437,44 @@ extension Editor {
                            + "the band cannot change what it selects. Push one "
                            + "end past the picture's range for just the "
                            + "highlights or just the shadows.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.faint)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if engine.maskKind == 6 {
+                        // The picked shade, shown as a swatch. Scene-linear, so
+                        // it is raised to something a screen can show before it
+                        // is drawn — this is a label for the target, not a
+                        // rendering of it.
+                        HStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(.sRGB,
+                                            red: Double(pow(max(engine.maskColour.r, 0), 1 / 2.2)),
+                                            green: Double(pow(max(engine.maskColour.g, 0), 1 / 2.2)),
+                                            blue: Double(pow(max(engine.maskColour.b, 0), 1 / 2.2)),
+                                            opacity: 1))
+                                .frame(width: 26, height: 18)
+                                .overlay(RoundedRectangle(cornerRadius: 3)
+                                    .strokeBorder(Palette.line, lineWidth: 1))
+                            Button(engine.colourPicking ? "Click the photo…" : "Pick colour") {
+                                engine.colourPicking.toggle()
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 11))
+                            .foregroundStyle(engine.colourPicking ? Palette.accent : Palette.text)
+                            Spacer(minLength: 0)
+                        }
+
+                        slider("Tolerance", $engine.maskColourTol, 0.01...0.8, "", 3,
+                               resetsTo: maskDefaults.colourTol)
+                        slider("Softness", $engine.maskColourSoft, 0.002...0.4, "", 3,
+                               resetsTo: maskDefaults.colourSoft)
+                        Text("Selects by colour rather than by brightness, and "
+                           + "ignores how light or dark it is — so a shade in "
+                           + "shadow and the same shade in sun are one "
+                           + "selection. Compose it with a brightness range to "
+                           + "narrow that.")
                             .font(.system(size: 10))
                             .foregroundStyle(Palette.faint)
                             .fixedSize(horizontal: false, vertical: true)

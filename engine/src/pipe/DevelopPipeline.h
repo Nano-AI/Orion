@@ -44,7 +44,7 @@ inline constexpr int kMaxMaskComponents = 4;
 ///
 /// research/masking.md §6.
 struct MaskComponentEdit {
-    int   kind = 0;                    // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range
+    int   kind = 0;                    // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 colour
     /// params::MaskCompose. The group folds from zero, the additive identity,
     /// so the first component's op has no effect when it is Add and zeroes the
     /// group when it is Subtract or Intersect — subtracting from nothing is
@@ -65,6 +65,19 @@ struct MaskComponentEdit {
     float rangeLo = -2.0f;
     float rangeHi = 2.0f;
     float rangeSoft = 1.0f;
+
+    /// Colour range (kind 6): the picked shade in scene-linear Rec.2020 RGB,
+    /// plus a Euclidean tolerance in Oklab chromaticity (a/L, b/L) and how far
+    /// its edge ramps. research/masking.md §4c.
+    ///
+    /// The default target is a mid grey, which selects every neutral in the
+    /// frame at any brightness — a visible, explicable starting state rather
+    /// than an empty mask that looks like the feature not working. The
+    /// tolerance's default is a little under the closest pair of ordinary
+    /// photographic colours the research measured (tarmac and skin, 0.126).
+    float colour[3]{0.18f, 0.18f, 0.18f};
+    float colourTol = 0.10f;
+    float colourSoft = 0.05f;
 
     /// The brush, when `kind` is 3. The dab centres are *not* here: they are a
     /// variable-length list and this struct is compared on every slider tick, so

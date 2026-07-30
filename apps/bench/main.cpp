@@ -567,6 +567,42 @@ int main(int argc, char** argv) {
                  // daylight one, so the same band moves six times as much in
                  // them.
                  }, Metric::Luma, 0.16},
+                // A colour range mask — research/masking.md §4c.
+                //
+                // ⚠ The target is a **neutral**, and deliberately so. A probe
+                // that picked a saturated shade would be measuring whether
+                // these three particular photographs happen to contain it —
+                // and the sample set is a night sky, a lit forecourt and a
+                // daylight cityscape, which share almost no saturated colour.
+                // Every photograph contains near-neutrals: tarmac, concrete,
+                // cloud, shadow. That is the same argument the band above makes
+                // for choosing shadows over highlights.
+                //
+                // ⚠ And the metric ignores lightness, which is what makes a
+                // neutral target a *large* selection rather than a token one:
+                // it takes every grey in the frame at every brightness. The
+                // tolerance is tight — 0.06 against the 0.126 that separates
+                // the closest pair the research measured — so this is still a
+                // selection and not the whole picture.
+                {"colour range, neutrals", [](orion::pipe::Adjustments& a) {
+                     a.exposureEv = 2.6f;
+                 }, [](auto& a) {
+                     auto& c = a.maskComponents[0];
+                     c.kind = 6;
+                     c.colour[0] = c.colour[1] = c.colour[2] = 0.18f;
+                     c.colourTol = 0.06f;
+                     c.colourSoft = 0.02f;
+                     a.maskCount = 1;
+                     a.localExposureEv = 2.0f;
+                 // Measured 0.826, 0.226 and 0.221 of reference on the three
+                 // frames; half the smallest, on the same rule as every other
+                 // probe here. ⚠ The spread is the probe working rather than
+                 // noise: the forecourt is concrete, tarmac and a white
+                 // building, so a neutral target takes most of it, while the
+                 // night sky and the daylight cityscape are mostly coloured.
+                 // A probe that measured the same on all three would be
+                 // selecting something that is not about colour.
+                 }, Metric::Luma, 0.11},
                 // A raster mask component — research/masking.md §5, the
                 // shape a segmentation matte arrives in.
                 //
