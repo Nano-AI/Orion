@@ -1,0 +1,15 @@
+# Reported: "when I do compare, it shows different settings/images."
+#
+# Compare holds the as-shot render so the split can show both without
+# re-rendering. Turning it on must not change what the edited side looks like.
+open samples/_PIC8220.ARW
+set exposure 1.5
+measure 0.30,0.40,0.20,0.20 edited
+
+compare 0.5
+measure 0.30,0.40,0.20,0.20 whileComparing
+expect whileComparing == edited
+
+compare 1
+measure 0.30,0.40,0.20,0.20 afterComparing
+expect afterComparing == edited

@@ -32,6 +32,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Library.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Filmstrip.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CompareOverlay.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Scenario.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveEditor.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift

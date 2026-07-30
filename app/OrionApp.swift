@@ -6,6 +6,11 @@ struct OrionApp: App {
     /// `--screenshot` renders the interface to a PNG and exits without ever
     /// showing a window. Checked here because App.init runs before the scene.
     init() {
+        // A scripted interaction, checked into repro/ — see app/Scenario.swift.
+        // Ahead of --screenshot because a scenario writes its own stills.
+        if let script = Scenario.path(CommandLine.arguments) {
+            Scenario.run(script)
+        }
         if let options = Screenshot.options(CommandLine.arguments) {
             Screenshot.run(options)
         }

@@ -470,6 +470,47 @@ enum Screenshot {
     /// Whether a filter works is a question about pixels, and a screenshot
     /// scaled to fit a review pane cannot answer it — noise that is obvious at
     /// 100% disappears into the downsampling. This reads the numbers.
+    /// A region's mean luma and saturation, as numbers.
+    ///
+    /// Factored out of `measure` so a scenario can assert against the same
+    /// arithmetic the printed report uses. Two implementations of "what does this
+    /// patch measure" would let a scenario pass while the report it is supposed
+    /// to correspond to says something else.
+    static func regionStats(_ engine: Engine,
+                            region: CGRect) -> (luma: Double, saturation: Double)? {
+        guard let src = engine.outputTexture else { return nil }
+        let w = Int(engine.imageWidth), h = Int(engine.imageHeight)
+        guard w > 0, h > 0 else { return nil }
+
+        let x0 = max(0, min(w - 1, Int(region.minX * CGFloat(w))))
+        let y0 = max(0, min(h - 1, Int(region.minY * CGFloat(h))))
+        let rw = max(1, min(w - x0, Int(region.width * CGFloat(w))))
+        let rh = max(1, min(h - y0, Int(region.height * CGFloat(h))))
+
+        let pixels = readNormalized(src, width: rw, height: rh, x: x0, y: y0)
+        var saturation = 0.0, luma = 0.0
+        for i in 0..<(rw * rh) {
+            let r = Double(min(max(Float(pixels[i * 4 + 0]), 0), 1))
+            let g = Double(min(max(Float(pixels[i * 4 + 1]), 0), 1))
+            let b = Double(min(max(Float(pixels[i * 4 + 2]), 0), 1))
+            let mx = max(r, max(g, b)), mn = min(r, min(g, b))
+            saturation += mx > 0.001 ? (mx - mn) / mx : 0
+            luma += 0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
+        let n = Double(rw * rh)
+        return (luma / n, saturation / n)
+    }
+
+    /// The developed canvas as a PNG, for a scenario that wants to be looked at.
+    static func writeCanvas(_ engine: Engine, to path: String) {
+        guard let image = developed(engine),
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:])
+        else { return }
+        try? png.write(to: URL(fileURLWithPath: path))
+    }
+
     private static func measure(_ engine: Engine, region: CGRect) {
         guard let src = engine.outputTexture else { return }
         let w = Int(engine.imageWidth), h = Int(engine.imageHeight)

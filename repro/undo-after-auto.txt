@@ -1,0 +1,17 @@
+# Reported: "Can't undo auto, gets rid of all changes."
+#
+# A hand edit, then Auto, then one undo. One undo should put the hand edit back —
+# not return the photograph to as-shot.
+open samples/_PIC8220.ARW
+
+set exposure 1.5
+set saturation 0.6
+measure 0.30,0.40,0.20,0.20 handEdit
+
+auto
+measure 0.30,0.40,0.20,0.20 afterAuto
+expect afterAuto != handEdit
+
+undo
+measure 0.30,0.40,0.20,0.20 afterOneUndo
+expect afterOneUndo == handEdit

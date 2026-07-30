@@ -1,0 +1,9 @@
+# Reported: "Rotating on compare also breaks."
+open samples/_PIC8220.ARW
+set exposure 1.5
+compare 0.5
+rotate 1
+measure 0.30,0.40,0.20,0.20 afterRotate
+compare 1
+measure 0.30,0.40,0.20,0.20 rotatedNoCompare
+expect afterRotate == rotatedNoCompare
