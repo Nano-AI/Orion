@@ -240,7 +240,8 @@ enum Screenshot {
             return .crop
         case "presets":
             return .presets
-        case "mask", "local":
+        case "mask", "local", "mask-linear", "mask-linear-feathered",
+             "mask-radial", "mask-off", "brush", "range", "colour":
             return .mask
         default:
             return .light

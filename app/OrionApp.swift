@@ -729,7 +729,7 @@ struct Editor: View {
                         // coordinates are the Metal view's exactly — applied
                         // after, every handle sits twenty points off the pixels.
                         .overlay {
-                            if tab == .light && engine.maskKind != 0 {
+                            if tab == .mask && engine.maskKind != 0 {
                                 GeometryReader { canvasGeo in
                                     MaskOverlay(engine: engine,
                                                 map: pictureMap(in: canvasGeo.size))
