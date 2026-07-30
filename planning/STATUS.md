@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**the 256-dab brush truncation, gone**)
+**Last updated:** 2026-07-30 (**a bug-hunting session: five defects, none reported**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
@@ -26,8 +26,8 @@ and `Library`. After that, colour range masks, then sky.
 below is down to three items, all of them either cosmetic or named-and-costed.
 
 **Suites:** `orion-tests` **470 checks** · `orion-viewport-tests` **3351
-checks** · **15 `repro/` scenarios, 70 checks** · all 0 failures. Bench exits 0
-on all three frames: M0 gate **9.24 ms p95**, 127 nodes, 6427 MiB — plus a
+checks** · **19 `repro/` scenarios, 82 checks** · all 0 failures. Bench exits 0
+on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
 ### Known gaps, carried forward
@@ -37,15 +37,115 @@ Small, named, and none of them blocking the next story:
 | Gap | Where |
 |---|---|
 | **No bench probe for the brush.** Unblocked — `Probe` gained a `prepare` hook when the matte probe needed one, and a stroke can use the same hook. Still not written | `apps/bench` |
-| **A matte is not saved with the photo.** It is a raster and the sidecar holds parameters, so reopening leaves a Subject or Person row empty until it is run again. Said out loud in the panel rather than left to be discovered | `Sidecar`, `DevelopPanels` |
+| **A matte is not saved with the photo.** It is a raster and the sidecar holds parameters, so reopening leaves a Subject or Person row empty until it is run again. Said out loud in the panel rather than left to be discovered. ⚠ It only *became* true this session — see below | `Sidecar`, `DevelopPanels` |
 | **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand | `SubjectMatte` |
-| The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph | `Engine.export` |
+| The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph. ⚠ The *analysis* guard has one now (`repro/analysis-render-has-no-overlay.txt`) and the export one could use the same shape | `Engine.export` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo | whole history |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30i — five defects, none of them reported
+
+No story. The instruction was "fix the bugs", the report list was empty, and all
+three suites plus fifteen scenarios were green — so the whole session was
+finding things nobody had run into yet. **Four new scenarios, twelve checks,
+every fix killed by reverting it.**
+
+⚠ **Sixteenth arrival of the stale M3 prompt.** Not re-litigated.
+
+### ⚠ The big one: degrade-then-refine only fanned out half its state
+
+`Engine::setAdjustments` sends the adjustment block to both graphs and the
+header says so in bold. **A brush stroke, a raster matte and a creative LUT are
+not in `Adjustments`.** All three went through `developMutable()`, which is the
+full graph and only the full graph — so the mask a photographer had painted
+disappeared for the length of every drag and came back when they let go.
+
+Worst on exactly what the preview exists for: local exposure *through* a brush
+mask is a slider, so every tick of it rendered with no coverage at all.
+
+This is the same shape as `matteDirty_` and `adj.exposureEv` before it — state a
+kernel reads that lives outside the compared struct — arriving by a fourth
+route. Not a missing dirty flag this time but a **missing recipient**. The rule
+in this file wants widening: *anything that is not an `Adjustments` field needs
+both a staleness answer and a delivery answer, and last session's architecture
+added a second place for the second one to be wrong.*
+
+`setWideOutput` is the one deliberate exception, and the reason is now at the
+call site rather than in someone's head.
+
+### A matte followed the graph instead of the photograph
+
+`openRaw` keeps the compiled graph when the next frame has the same shape —
+every frame of a folder from one camera — and `reload` re-pushed every parameter
+block while leaving the two things that are not parameters exactly where they
+were. So opening the next photo with a saved Subject row rendered **the previous
+photograph's subject**: full coverage, right coordinate space, wrong picture.
+
+⚠ Worth noticing that this file's own gap table asserted the opposite ("reopening
+leaves a Subject or Person row empty"). It was true of the app, which re-sends
+every stroke on open, and false of the engine, which is where the invariant
+belongs. A claim that holds only because a caller happens to do the right thing
+is not an invariant.
+
+### The eyedropper read the wrong pixel on a cropped photograph
+
+`sampleAt` returns two colours. The display one comes from the output texture
+and was right. The scene one — which is what the colour-mixer band is derived
+from — is looked up in the whole pre-geometry frame, and the code carrying the
+point there undid the **quarter turn and nothing else**. Under a crop it read
+whatever sat at that fraction of the uncropped frame: the yellow Vantage picks
+band YELLOW at 58.8°, and through the bug the same click picked MAGENTA at
+303.3° and moved a band the car is not in.
+
+Now through `displayedToFrame`, the transform a mask already uses.
+
+### ⚠ And the reason no scenario could see it
+
+`repro/eyedropper-color-mixer.txt` passed throughout, for two independent
+reasons, and the second is the interesting one:
+
+- it never crops, and
+- **the runner's `pick` derived the hue from the *display* colour while
+  `ImageCanvas` derives it from the *scene* colour.**
+
+Two different samples down two different code paths, and the runner was
+exercising the one that could not go wrong. That is the `crop` verb's missing
+`commitCropEdit` again, and it is now written down in `repro/README.md` as a
+thing to check whenever a verb stands in for a gesture.
+
+### Vision was handed the coverage overlay
+
+`renderForAnalysis` neutralises the crop, the straighten and the rotation around
+the render it gives a segmentation model, and left "Show mask" alone — so with
+the overlay on, the model analysed a red-tinted photograph. `Engine.export` has
+carried that guard since the overlay existed; this path never got it.
+
+⚠ The common case rather than a corner: the overlay is on precisely when someone
+is working with masks, which is precisely when they press Subject.
+
+**This needed a fifth measurement surface.** `measure ... analysis` reads the
+picture Vision is given, which nothing on screen ever shows — so the check is
+about what the model is *handed* rather than what it does with it, and it does
+not flake when Vision changes between OS releases.
+
+### One latent, fixed for consistency
+
+`orion_engine_preview_texture` was the only accessor in the facade without a
+`try`/`catch`. `output()` throws on a graph that never compiled, and a throw
+crossing that file terminates the process — which is the entire reason the file
+exists.
+
+### What the mutations said
+
+Every fix was reverted and the matching scenario failed: the preview one on both
+its brush and its matte halves, the matte-leak one on `emptyRowAfterOther`, the
+crop one on all three of its picks, the overlay one on the analysis surface.
+Each scenario also carries a positive control, because "nothing changed" passes
+too easily when the thing being measured has quietly stopped happening at all.
 
 ## Session 2026-07-30h — the brush stops losing the end of a stroke
 
