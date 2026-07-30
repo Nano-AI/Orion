@@ -726,6 +726,20 @@ std::pair<float, float> DevelopPipeline::displayedToFrame(float x, float y) cons
     return {p.centreX, p.centreY};
 }
 
+std::pair<float, float> DevelopPipeline::frameToDisplayed(float x, float y) const {
+    const mask::Crop crop{lastAdj_.cropX, lastAdj_.cropY,
+                          lastAdj_.cropW, lastAdj_.cropH};
+    const bool swaps = (turns_ % 2) != 0;
+    const float rotW = float(swaps ? height_ : width_);
+    const float rotH = float(swaps ? width_  : height_);
+    const auto p = mask::fromFrame(
+        {x, y, 0.0f}, crop, turns_,
+        lastAdj_.straightenDeg * 3.14159265358979324f / 180.0f,
+        lastAdj_.cropX + lastAdj_.cropW * 0.5f,
+        lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH);
+    return {p.centreX, p.centreY};
+}
+
 bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
                                    int width, int height) {
     // Ignored rather than clamped, for the same reason a brush stroke is: a

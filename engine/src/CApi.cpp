@@ -327,6 +327,18 @@ OrionStatus orion_engine_to_frame(const OrionEngine* engine,
     });
 }
 
+OrionStatus orion_engine_from_frame(const OrionEngine* engine,
+                                    float x, float y, float* out_x, float* out_y) {
+    if (engine == nullptr || out_x == nullptr || out_y == nullptr)
+        return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        const auto p = engine->impl.develop().frameToDisplayed(x, y);
+        *out_x = p.first;
+        *out_y = p.second;
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
                                         unsigned* out_w, unsigned* out_h) {
     if (engine == nullptr || out_w == nullptr || out_h == nullptr)

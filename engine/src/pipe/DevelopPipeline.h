@@ -335,6 +335,11 @@ public:
     /// kernels work in. Uses the geometry last applied.
     [[nodiscard]] std::pair<float, float> displayedToFrame(float x, float y) const;
 
+    /// The inverse. A spot is stored in frame coordinates, so drawing one takes
+    /// this — nothing else in the program needs it, because a mask is stored in
+    /// displayed coordinates already.
+    [[nodiscard]] std::pair<float, float> frameToDisplayed(float x, float y) const;
+
     [[nodiscard]] std::uint32_t maxMatteWidth()  const noexcept { return matteW_; }
     [[nodiscard]] std::uint32_t maxMatteHeight() const noexcept { return matteH_; }
 

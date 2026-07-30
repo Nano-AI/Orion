@@ -728,6 +728,20 @@ struct Editor: View {
                         // longer explain. It goes on before the padding, so its
                         // coordinates are the Metal view's exactly — applied
                         // after, every handle sits twenty points off the pixels.
+                        // Spots, on the tab that owns them. Drawn under the
+                        // mask overlay's slot so a mask's handles win a press
+                        // when both are somehow live — they cannot both be
+                        // armed, since the two live on different tabs, and this
+                        // is the belt to that brace.
+                        .overlay {
+                            if tab == .detail && !engine.spots.isEmpty || tab == .detail && engine.spotPlacing {
+                                GeometryReader { canvasGeo in
+                                    SpotOverlay(engine: engine,
+                                                map: pictureMap(in: canvasGeo.size))
+                                }
+                                .clipped()
+                            }
+                        }
                         .overlay {
                             if tab == .mask && engine.maskKind != 0 {
                                 GeometryReader { canvasGeo in

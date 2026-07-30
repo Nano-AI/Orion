@@ -312,6 +312,75 @@ enum CanvasLayout {
     }
 
     /// What a press can grab.
+    // MARK: Spots
+
+    /// One dust spot as the canvas handles it — both centres in **displayed**
+    /// coordinates, already carried out of frame space by the caller.
+    ///
+    /// ⚠ The engine stores a spot in frame coordinates, because dust is on the
+    /// sensor and has to follow the subject through a crop and a turn. Nothing
+    /// in this file knows that: it is handed displayed points and hands
+    /// displayed points back, and `Engine` does the two conversions. Putting
+    /// the transform here would mean the overlay carried a second copy of it.
+    struct SpotPlacement: Equatable {
+        var destination: CGPoint = .zero
+        var source: CGPoint = .zero
+        /// Radius as the engine stores it: a fraction of the frame's **width**,
+        /// so a spot is round on any aspect.
+        var radius: CGFloat = 0.02
+        var heal = true
+    }
+
+    enum SpotHandle: Hashable {
+        case destination(Int)
+        case source(Int)
+    }
+
+    /// A spot's radius in view points. Normalized against the frame's width, so
+    /// the height scale is not involved — the same convention `SpotEdit`
+    /// documents.
+    static func spotRadius(_ spot: SpotPlacement, in map: PictureMap) -> CGFloat {
+        spot.radius * map.scale.width
+    }
+
+    /// What a press at `p` grabs, or nil for empty canvas.
+    ///
+    /// ⚠ **Sources are tested before destinations, and later spots before
+    /// earlier ones.** A source disc sits a couple of radii from its
+    /// destination and they overlap constantly at any useful size; whichever is
+    /// tested first is the one that can always be grabbed, and the source is
+    /// the one with no other way to reach it — a destination can also be moved
+    /// by dragging the spot's body. Later-before-earlier matches the draw
+    /// order, so the disc drawn on top is the disc that answers.
+    static func spotHit(_ p: CGPoint, _ spots: [SpotPlacement],
+                        in map: PictureMap) -> SpotHandle? {
+        for i in spots.indices.reversed() {
+            let s = spots[i]
+            let r = max(spotRadius(s, in: map), spotHandleMin)
+            if hypot(p.x - map.point(s.source).x,
+                     p.y - map.point(s.source).y) <= r { return .source(i) }
+        }
+        for i in spots.indices.reversed() {
+            let s = spots[i]
+            let r = max(spotRadius(s, in: map), spotHandleMin)
+            if hypot(p.x - map.point(s.destination).x,
+                     p.y - map.point(s.destination).y) <= r { return .destination(i) }
+        }
+        return nil
+    }
+
+    /// A spot smaller than this is still grabbable. Dust is *supposed* to be
+    /// small — the size slider goes down to 0.004 of the frame, which is about
+    /// three view points at fit zoom, and a three-point target cannot be hit.
+    static let spotHandleMin: CGFloat = 11
+
+    /// Where a drag puts a point, clamped so a spot cannot be pushed off the
+    /// picture and lost.
+    static func spotDrag(to p: CGPoint, in map: PictureMap) -> CGPoint {
+        let u = map.unit(p)
+        return CGPoint(x: min(max(u.x, 0), 1), y: min(max(u.y, 0), 1))
+    }
+
     enum MaskHandle: Hashable {
         case centre, zeroEnd, fullEnd
         case plusX, minusX, plusY, minusY

@@ -45,6 +45,10 @@ import SwiftUI
 ///                                       fraction of the frame it covered
 ///     overlay on | off                  paint the coverage, as `Show mask` does
 ///     spot <x,y> [radius] [heal|clone]  place a dust spot, as a click does
+///     spotdrag <n> source|dest <x,y>    drag one of a spot's two handles,
+///                                       through the call the overlay makes
+///     spotat <n> source|dest <x,y>      where the interface *draws* that
+///                                       handle — the oracle for the geometry
 ///     maskcheck <cells> <ev>            does the mask the *interface draws*
 ///                                       sit on the coverage the engine
 ///                                       *renders*? Grids the frame, classifies
@@ -316,6 +320,52 @@ enum Scenario {
             if args.count > 2 { engine.spotHeal = args[2] != "clone" }
             guard engine.addSpot(atFrame: at) else {
                 throw Bad(what: "the engine refused the spot")
+            }
+
+        case "spotdrag":
+            // Moves a spot's source or its destination, through the same
+            // `Engine.moveSpot` the overlay's drag calls. The scenario names a
+            // point on the *displayed* picture, as a hand does; the engine does
+            // the conversion into frame coordinates.
+            guard args.count >= 3 else {
+                throw Bad(what: "spotdrag needs an index, source|dest and a point")
+            }
+            guard let index = Int(args[0]) else { throw Bad(what: "spotdrag needs an index") }
+            let to = try point(args[2])
+            switch args[1] {
+            case "source": engine.moveSpot(index, destination: nil, source: to)
+            case "dest":   engine.moveSpot(index, destination: to, source: nil)
+            default: throw Bad(what: "spotdrag takes source or dest")
+            }
+            engine.commitSpotEdit()
+
+        case "spotat":
+            // Where the interface *draws* a spot, in displayed coordinates —
+            // through `Engine.spotPlacements`, which is what the overlay reads.
+            // ⚠ This is the oracle for the geometry: a spot stored in frame
+            // coordinates has to come back to the point it was placed at, or
+            // the handles are drawn somewhere the photographer did not click.
+            guard args.count >= 3, let index = Int(args[0]) else {
+                throw Bad(what: "spotat needs an index, source|dest and a point")
+            }
+            let want = try point(args[2])
+            let places = engine.spotPlacements
+            guard places.indices.contains(index) else {
+                throw Bad(what: "no spot \(index) — there are \(places.count)")
+            }
+            let got = args[1] == "source" ? places[index].source
+                                          : places[index].destination
+            checks += 1
+            let off = hypot(got.x - want.x, got.y - want.y)
+            if off < 0.004 {
+                say(String(format: "  ok    spot %d %@ is drawn at %.4f,%.4f\n",
+                           index, args[1] as NSString, got.x, got.y))
+            } else {
+                failures += 1
+                say(String(format: "  FAIL  spot %d %@ drawn at %.4f,%.4f, "
+                         + "wanted %.4f,%.4f (off by %.4f)\n",
+                           index, args[1] as NSString, got.x, got.y,
+                           want.x, want.y, off))
             }
 
         case "preset":

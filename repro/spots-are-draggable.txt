@@ -1,0 +1,89 @@
+# Reported: "spot and heal should be like a dragable thing."
+#
+# A spot was a click. It placed a disc and chose the source for you — one radius
+# and a bit to the right, or downward if that ran off the frame — and then both
+# were invisible. No handles, no way to move either, no way to say "take it from
+# *there*". The only correction was Undo spot.
+#
+# Healing is a judgement about where the replacement comes from, so the source
+# has to be draggable. This file asserts the parts that are not the drawing: the
+# two handles move independently, and — the load-bearing one — a spot stored in
+# **frame** coordinates comes back to the point it was placed at, through every
+# geometry the photograph can be under.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+# ── The handles move independently ───────────────────────────────────────
+spot 0.30,0.40 0.03 clone
+measure 0.27,0.37,0.06,0.06 placed
+
+# Dragging the source takes the patch from somewhere else, so the healed
+# result has to change.
+spotdrag 0 source 0.62,0.72
+measure 0.27,0.37,0.06,0.06 newSource
+expect newSource != placed
+
+# ⚠ And dragging the destination moves the repair off the place it was. The
+# region it left must come back to what it was before any spot existed.
+measure 0.72,0.12,0.06,0.06 elsewhereBefore
+spotdrag 0 dest 0.75,0.15
+measure 0.27,0.37,0.06,0.06 vacated
+measure 0.72,0.12,0.06,0.06 elsewhereAfter
+expect vacated != newSource
+expect elsewhereAfter != elsewhereBefore
+
+# ── ⚠ THE HANDLES ARE DRAWN WHERE THEY WERE PUT ─────────────────────────
+#
+# This is the whole reason the story needed an inverse transform. A spot is
+# stored in frame coordinates, because dust is on the sensor and has to follow
+# the subject through a crop and a turn — so drawing one means carrying it back
+# out, and `mask::fromFrame` is the only place in the program that does.
+#
+# `spotat` reads `Engine.spotPlacements`, which is exactly what the overlay
+# draws from. Place at a point, ask where it is drawn, get the same point.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+spot 0.40,0.60 0.03
+spotdrag 0 source 0.20,0.30
+spotat 0 dest 0.40,0.60
+spotat 0 source 0.20,0.30
+
+# Under a crop, where the displayed picture is a window onto the frame.
+open samples/_PIC8220.ARW
+set exposure 2.6
+crop 0.15 0.25 0.5 0.5
+spot 0.40,0.60 0.03
+spotdrag 0 source 0.20,0.30
+spotat 0 dest 0.40,0.60
+spotat 0 source 0.20,0.30
+
+# ⚠ And under a crop AND a turn AND a straighten together. The forward
+# transform applies crop, straighten, turns in that order and the inverse must
+# undo them in the opposite order — which is only distinguishable when more than
+# one of the three is doing something. Any single one of them alone passes under
+# an inverse that is wrong.
+open samples/_PIC8220.ARW
+set exposure 2.6
+rotate 1
+straighten 4
+crop 0.1 0.2 0.6 0.5
+spot 0.40,0.60 0.03
+spotdrag 0 source 0.25,0.35
+spotat 0 dest 0.40,0.60
+spotat 0 source 0.25,0.35
+
+# ── A drag is one history entry, not sixty ──────────────────────────────
+#
+# The moves render without recording and the release records, the same split
+# `setCrop` and the brush use. One undo has to take the whole drag back to
+# where the spot was placed.
+open samples/_PIC8220.ARW
+set exposure 2.6
+spot 0.40,0.60 0.03
+spotat 0 dest 0.40,0.60
+spotdrag 0 dest 0.70,0.30
+spotat 0 dest 0.70,0.30
+undo
+spotat 0 dest 0.40,0.60

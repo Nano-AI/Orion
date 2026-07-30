@@ -232,7 +232,8 @@ enum Screenshot {
         switch scene {
         case "color":
             return .color
-        case "detail", "noisy", "denoise-off", "denoise-luma", "denoise-both":
+        case "detail", "noisy", "denoise-off", "denoise-luma",
+             "denoise-both", "spots":
             return .detail
         case "optics":
             return .optics
@@ -282,6 +283,18 @@ enum Screenshot {
             // — the last panel section inserted without looking was silently
             // not in the interface at all.
             engine.exposureEv = 2.6
+        case "spots":
+            // Two spots with their sources dragged somewhere deliberate, so the
+            // still shows the link lines rather than the automatic offset —
+            // which is the whole point of the tool being draggable.
+            engine.exposureEv = 2.6
+            engine.spotRadius = 0.045
+            _ = engine.addSpot(atFrame: CGPoint(x: 0.36, y: 0.55))
+            engine.moveSpot(0, destination: nil, source: CGPoint(x: 0.22, y: 0.74))
+            engine.spotHeal = false
+            _ = engine.addSpot(atFrame: CGPoint(x: 0.62, y: 0.42))
+            engine.moveSpot(1, destination: nil, source: CGPoint(x: 0.78, y: 0.60))
+            engine.selectedSpot = 1
         case "mask-off":
             // The control for `--measure`: the same frame and the same global
             // exposure with no mask, so the difference measured against

@@ -18,15 +18,14 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
 **Next story:** **sky masks** — and `research/masking.md` §5 is explicit that
-Vision cannot produce one, so it is a model question before it is a code one.
-Colour range masks shipped this session, which closes §4c and leaves masking.md
-finished except for sky.
+Vision cannot produce one, so it is a model question (which model, under what
+licence) before it is a code one. That is the thing to settle first.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **483 checks** · `orion-viewport-tests` **3374
-checks** · **21 `repro/` scenarios, 91 checks** · all 0 failures. Bench exits 0
+**Suites:** `orion-tests` **504 checks** · `orion-viewport-tests` **3382
+checks** · **22 `repro/` scenarios, 103 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -59,6 +58,87 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30l — a spot is a thing you drag
+
+⚠ **Nineteenth arrival of the stale M3 prompt.** Not re-litigated; verified
+against the tree three times in this session's own history.
+
+Taken ahead of the sky story this file names, because sky is blocked on a model
+question and this was reported by the developer using the alpha: *"spot and heal
+should be like a dragable thing."*
+
+### What was actually wrong with it
+
+A spot was a **click**. It placed a disc, chose the source for you — one radius
+and a bit to the right, or downward if that ran off the frame — and then both
+were invisible. No handles, no way to move either, no way to say "take it from
+*there*". The only correction available was Undo spot.
+
+That is the wrong shape for the tool: healing a blemish is a judgement about
+where the replacement comes from. The automatic source survives as the starting
+position, because a click that immediately does something sensible is worth
+keeping — it is a first guess now rather than the whole answer.
+
+### ⚠ The story needed a transform that did not exist
+
+A spot is stored in **frame** coordinates — dust is on the sensor, so it follows
+the subject through a crop and a turn. Drawing one therefore needs the transform
+the *other way*, and the program had only `toFrame`.
+
+`mask::fromFrame`, and the risk in it is not the algebra, it is the **order**.
+`toFrame` goes crop, then straighten, then turns; the inverse must go turns,
+then straighten, then crop. Applying the three in the forward order with negated
+angles is the mistake that looks right — and it is *exactly equivalent* whenever
+at most one of the three is doing anything, which is every case anybody checks
+by hand. So every test case turns on at least two at once, and the mutation that
+reuses the forward order dies on six of them.
+
+⚠ A round trip is also not enough on its own: two transforms each wrong in
+mirrored ways round-trip perfectly. That is the trap `MatteGeometry.undoTurns`
+had. One case is pinned against a hand-computed answer as well.
+
+### Where the geometry lives
+
+Hit-testing is in `CanvasLayout`, tested without a window, and the overlay draws
+what it is told — the rule `MaskOverlay` already follows. Four mutations dead,
+and two of them are about the ordering of a hit test:
+
+- ⚠ **The source wins where the two discs overlap.** They overlap constantly at
+  any useful radius, whichever is tested first is the one that can always be
+  grabbed, and the source is the one with no other route to it — a destination
+  can also be dragged by its body. Test destinations first and the source
+  becomes unreachable exactly when the spot is large.
+- ⚠ **Later spots beat earlier ones**, matching the draw order. Otherwise
+  placing a spot on top of another makes the new one — the one being looked at —
+  the only one that cannot be adjusted.
+- **The handle has a floor of 11 points** though the disc it draws does not. Dust
+  is *supposed* to be small: the size slider goes to 0.004 of the frame, about
+  three points at fit zoom, and a three-point target cannot be hit.
+
+### A bug the scenario found in the history layer
+
+`EditHistory` coalesces consecutive entries carrying the same label — which is
+what makes a slider drag one undo step instead of sixty. Placement and a later
+move were **both labelled "Spot"**, so they merged, and undoing a move deleted
+the spot. Two different acts need two different names; a move is "Move spot"
+now.
+
+The place-and-drag gesture is still deliberately *one* entry: `addSpot` has
+already recorded, and the overlay skips its commit while the spot whose source
+it is dragging is the one it just created.
+
+### Also caught
+
+The old click-to-place path was still in `ImageCanvas`. With the overlay
+mounted, two handlers for one press is how a single drag places two spots — it
+is gone, and the panel's copy describes the gesture that exists rather than the
+one that used to.
+
+⚠ And `contentShape(Rectangle())` on the overlay would have made it swallow
+every press on the photograph — pans, the eyedropper, everything — for as long
+as one spot existed anywhere in the frame. The hit region is the discs
+themselves, plus the whole picture only while the tool is armed.
 
 ## Session 2026-07-30k — colour range masks
 

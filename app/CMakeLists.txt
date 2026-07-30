@@ -34,6 +34,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CropOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MaskOverlay.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpotOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift

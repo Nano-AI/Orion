@@ -108,6 +108,50 @@ inline void unstraighten(float& x, float& y, float radians,
     return out;
 }
 
+/// The inverse of `toFrame`: a point in the frame, as a point on the displayed
+/// picture.
+///
+/// Needed the moment anything stored in *frame* coordinates has to be drawn —
+/// which is spots, and only spots. A mask is stored in displayed coordinates
+/// and needs no inverse to draw; dust is on the sensor, so it is stored where
+/// the sensor put it and has to be carried back out to be shown.
+///
+/// ⚠ **The order is the reverse of `toFrame`'s, not the same order with
+/// opposite signs.** `toFrame` goes crop, then straighten, then turns; this
+/// goes turns, then straighten, then crop. Applying the three in the forward
+/// order with negated angles is the mistake that looks right — it is only
+/// equivalent when at most one of them is doing anything, which is exactly the
+/// case anybody tests by hand.
+[[nodiscard]] inline Placement fromFrame(Placement p, const Crop& c, int turns,
+                                         float straightenRad = 0.0f,
+                                         float pivotX = 0.5f, float pivotY = 0.5f,
+                                         float frameW = 1.0f, float frameH = 1.0f) noexcept {
+    float x = p.centreX;
+    float y = p.centreY;
+
+    // Back into the rotated frame. `toFrame` sends (x, y) to (y, 1 - x) once
+    // per turn, so the inverse is (x, y) -> (1 - y, x), applied as many times.
+    const int k = ((turns % 4) + 4) % 4;
+    for (int i = 0; i < k; ++i) {
+        const float nx = 1.0f - y;
+        const float ny = x;
+        x = nx;
+        y = ny;
+    }
+
+    // Then the straighten, the other way about the same pivot.
+    unstraighten(x, y, -straightenRad, pivotX, pivotY, frameW, frameH);
+
+    // And out of the crop, which is what the displayed picture *is*.
+    Placement out{};
+    out.centreX = (x - c.x) / std::max(c.w, 1e-6f);
+    out.centreY = (y - c.y) / std::max(c.h, 1e-6f);
+
+    constexpr float kHalfPi = 1.57079632679489662f;
+    out.angle = p.angle - straightenRad + float(k) * kHalfPi;
+    return out;
+}
+
 /// A length on screen, as a length in the frame.
 ///
 /// A crop magnifies: a gradient spanning half the visible width spans half of

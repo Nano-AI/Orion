@@ -808,11 +808,14 @@ extension Editor {
             .buttonStyle(.bordered)
             .controlSize(.small)
 
-            Text("Turn on Place spots, then click the photo to cover one. Heal takes the "
-               + "brightness from around the spot and the detail from nearby, "
-               + "which is what makes it invisible on a sky. ⚠ It has one known "
-               + "limit: placed across a hard edge the correction is wrong on "
-               + "both sides, because it is a single number for the whole disc.")
+            Text("Turn on Place spots, then drag on the photo: press where the "
+               + "dust is and pull to choose what covers it. Drag either circle "
+               + "afterwards to move it — solid is the spot, dashed is where the "
+               + "replacement comes from. Heal takes the brightness from around "
+               + "the spot and the detail from the source, which is what makes "
+               + "it invisible on a sky. ⚠ It has one known limit: placed across "
+               + "a hard edge the correction is wrong on both sides, because it "
+               + "is a single number for the whole disc.")
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)

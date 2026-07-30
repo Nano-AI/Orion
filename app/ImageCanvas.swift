@@ -217,12 +217,11 @@ struct ImageCanvas: NSViewRepresentable {
                 return
             }
 
-            if engine.spotPlacing, let uv = imageUV(point, in: view) {
-                dragAnchor = nil
-                engine.addSpot(atFrame: uv)
-                view.needsDisplay = true
-                return
-            }
+            // ⚠ Spot placement is **not** here any more. It was a click that
+            // placed a spot and chose its source for you, with no way to see
+            // either afterwards; it is a press-and-drag on `SpotOverlay` now,
+            // which owns the whole gesture. Two handlers for one press is how a
+            // single drag places two spots.
 
             guard targeted.isActive,
                   let uv = imageUV(point, in: view),

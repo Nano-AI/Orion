@@ -5286,6 +5286,97 @@ void testMaskGeometry() {
     }
 }
 
+// The inverse geometry transform — `mask::fromFrame`.
+//
+// A spot is stored in FRAME coordinates, because dust is on the sensor and has
+// to follow the subject through a crop and a turn. Drawing one therefore needs
+// the transform the other way, and this is the only place in the program that
+// does.
+//
+// ⚠ The risk is not the algebra, it is the ORDER. `toFrame` goes crop, then
+// straighten, then turns; the inverse must go turns, then straighten, then
+// crop. Applying the three in the forward order with negated angles is the
+// mistake that looks right, and it is *exactly equivalent* whenever at most one
+// of the three is doing anything — which is every case anybody checks by hand.
+// So every case below turns on at least two at once.
+void testMaskGeometryInverse() {
+    section("Mask geometry, inverted");
+
+    namespace mask = orion::pipe::mask;
+    constexpr float kPi = 3.14159265358979324f;
+
+    struct Case {
+        const char* what;
+        mask::Crop crop;
+        int turns;
+        float straightenDeg;
+        float frameW, frameH;
+    };
+    const Case cases[] = {
+        {"no geometry at all",        {0.0f, 0.0f, 1.0f, 1.0f}, 0,  0.0f, 6024, 4024},
+        {"a crop alone",              {0.2f, 0.1f, 0.5f, 0.6f}, 0,  0.0f, 6024, 4024},
+        {"one quarter turn alone",    {0.0f, 0.0f, 1.0f, 1.0f}, 1,  0.0f, 4024, 6024},
+        {"a straighten alone",        {0.0f, 0.0f, 1.0f, 1.0f}, 0,  7.0f, 6024, 4024},
+        // ⚠ The discriminating ones: two or three at once, where an inverse
+        // that reuses the forward order stops agreeing.
+        {"crop and a turn",           {0.2f, 0.1f, 0.5f, 0.6f}, 1,  0.0f, 4024, 6024},
+        {"crop and a straighten",     {0.15f, 0.25f, 0.6f, 0.5f}, 0, 6.0f, 6024, 4024},
+        {"a turn and a straighten",   {0.0f, 0.0f, 1.0f, 1.0f}, 3, -5.0f, 4024, 6024},
+        {"all three, and an odd turn",{0.12f, 0.3f, 0.55f, 0.45f}, 1, 4.0f, 4024, 6024},
+        {"all three, two turns",      {0.3f, 0.05f, 0.4f, 0.7f}, 2, -8.0f, 6024, 4024},
+        {"a portrait frame's EXIF turn plus a crop",
+                                      {0.05f, 0.4f, 0.9f, 0.5f}, 3,  3.0f, 4024, 6024},
+    };
+
+    const float points[][2] = {
+        {0.5f, 0.5f}, {0.0f, 0.0f}, {1.0f, 1.0f}, {0.17f, 0.83f}, {0.92f, 0.08f},
+    };
+
+    for (const Case& k : cases) {
+        const float rad = k.straightenDeg * kPi / 180.0f;
+        const float px = k.crop.x + k.crop.w * 0.5f;
+        const float py = k.crop.y + k.crop.h * 0.5f;
+
+        double worst = 0.0, worstAngle = 0.0;
+        for (const auto& pt : points) {
+            const mask::Placement start{pt[0], pt[1], 0.7f};
+            const auto framed = mask::toFrame(start, k.crop, k.turns, rad,
+                                              px, py, k.frameW, k.frameH);
+            const auto back = mask::fromFrame(framed, k.crop, k.turns, rad,
+                                              px, py, k.frameW, k.frameH);
+            worst = std::max(worst, double(std::abs(back.centreX - start.centreX)));
+            worst = std::max(worst, double(std::abs(back.centreY - start.centreY)));
+            worstAngle = std::max(worstAngle,
+                                  double(std::abs(back.angle - start.angle)));
+        }
+        report(worst < 1e-5,
+               std::string("a point survives the round trip: ") + k.what,
+               std::to_string(worst));
+        report(worstAngle < 1e-5,
+               std::string("and so does its angle: ") + k.what,
+               std::to_string(worstAngle));
+    }
+
+    // ⚠ And the round trip is not enough on its own. A pair of transforms that
+    // are each wrong in mirrored ways round-trips perfectly — the same trap the
+    // matte's `undoTurns` had, where the test passed under a consistent
+    // reversal. So one case is pinned against a hand-computed answer.
+    //
+    // One clockwise quarter turn, no crop, no straighten. `toFrame` sends a
+    // displayed point (x, y) to (y, 1 - x). So the frame point (0.25, 0.90)
+    // came from the displayed point (1 - 0.90, 0.25) = (0.10, 0.25).
+    {
+        const auto out = mask::fromFrame({0.25f, 0.90f, 0.0f},
+                                         {0.0f, 0.0f, 1.0f, 1.0f}, 1);
+        report(std::abs(out.centreX - 0.10f) < 1e-5 &&
+               std::abs(out.centreY - 0.25f) < 1e-5,
+               "and one turn lands where the algebra says, not merely somewhere "
+               "the forward transform agrees with",
+               std::to_string(out.centreX) + ", " + std::to_string(out.centreY));
+    }
+}
+
+
 // Decimating a Bayer mosaic for the preview pipeline.
 //
 // ⚠ The failure this guards against is invisible in the obvious sense: sample a
@@ -6939,6 +7030,7 @@ int main() {
     testMaskRefineGpu();
     testMaskMatteGpu();
     testLongBrushStroke();
+    testMaskGeometryInverse();
     testMaskRangeGpu();
     testMaskColourGpu();
     testBayerDecimation();

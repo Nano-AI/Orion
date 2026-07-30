@@ -305,6 +305,12 @@ OrionStatus orion_engine_quarter_turns(const OrionEngine* engine, int* out_turns
  * be converted once when it is placed rather than on every render: dust sits on
  * the sensor, so a spot must follow the subject through a later crop or turn,
  * which is the opposite of what a mask does. research/spot-removal.md §4. */
+/// The inverse of `orion_engine_to_frame`: a point in frame coordinates, as a
+/// point on the displayed picture. Spots are stored in frame coordinates, so
+/// this is what draws one.
+OrionStatus orion_engine_from_frame(const OrionEngine* engine,
+                                    float x, float y, float* out_x, float* out_y);
+
 OrionStatus orion_engine_to_frame(const OrionEngine* engine,
                                   float x, float y, float* out_x, float* out_y);
 
