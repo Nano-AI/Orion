@@ -55,8 +55,26 @@ inline constexpr float kDamping = 1.0f;
 /// into a bigger one.
 inline constexpr float kMaxExposureEv = 5.0f;
 
-/// How many times to render, measure and adjust.
-inline constexpr int kPasses = 6;
+/// The most times to render, measure and adjust before giving up.
+///
+/// A ceiling, not a schedule: the solver stops as soon as the median is inside
+/// `kSettled` of the anchor, so an ordinary frame costs the two or three passes
+/// it always did and only a frame needing a large correction pays for more.
+///
+/// It was a flat six, and six was not enough. Because every step undershoots —
+/// see `kDamping` — a frame far from the anchor was still short of it when the
+/// passes ran out, and the button therefore did something *different* the second
+/// time it was pressed, converging over three presses. Measured on the sample
+/// frames: one needed 6 passes, one 11, one 17.
+inline constexpr int kMaxPasses = 24;
+
+/// How close to the anchor counts as arrived.
+///
+/// Tied to what the measurement can actually resolve rather than chosen for
+/// looks: the histogram is read from the screen-format output, eight bits per
+/// channel, so one code is 1/255 ≈ 0.0039 and a tolerance below that is chasing
+/// quantization noise. 0.005 is the first round number above it.
+inline constexpr float kSettled = 0.005f;
 
 
 /// What the histogram says about the rendered picture.

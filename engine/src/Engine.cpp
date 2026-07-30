@@ -123,6 +123,26 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
         return ae::measure(combined.data(), kBins, ae::kClipPerSide);
     };
 
+    // Auto owns five controls and **replaces** them, so it puts them back to
+    // their defaults before it measures anything. planning/DECISIONS.md #66.
+    //
+    // Without this the button is not a function of the photograph: press one
+    // leaves the frame corrected, press two measures that corrected frame,
+    // derives a different look from it, and therefore solves the tone controls
+    // differently. Measured before the change, on one frame: +2.25 EV with lift
+    // 0.16, then +2.99 EV with lift 0.00. It also made the comment below false
+    // on every press after the first — the look was responding to the
+    // correction, which is exactly what that comment says it must not do.
+    //
+    // Only these five. White balance, contrast, the crop, the curve and
+    // everything else the photographer set stays in place and is measured
+    // *through*, because those are not Auto's to discard.
+    adj.exposureEv = 0.0f;
+    adj.whites     = 0.0f;
+    adj.blacks     = 0.0f;
+    adj.fusion     = 0.0f;
+    adj.clarity    = 0.0f;
+
     // Measure the photograph as it stands first. The look controls respond to
     // the picture the photographer took, not to the correction about to be
     // applied to it — deriving them afterwards would let the solver's own work
@@ -134,15 +154,19 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     // Then solve, with the look already in place, because it moves the
     // histogram the solver is reading.
     ae::Controls c{};
-    c.exposureEv = adj.exposureEv;
-    c.blacks     = adj.blacks;
-    c.whites     = adj.whites;
 
-    for (int pass = 0; pass < ae::kPasses; ++pass) {
+    // Stop when the median arrives rather than after a fixed count. Every step
+    // undershoots — see kDamping — so a frame far from the anchor needs more
+    // steps than a frame near it, and a flat count either short-changes the
+    // first or makes the second pay for renders it does not need.
+    for (int pass = 0; pass < ae::kMaxPasses; ++pass) {
         adj.exposureEv = c.exposureEv;
         adj.blacks     = c.blacks;
         adj.whites     = c.whites;
-        c = ae::refine(c, measureNow());
+
+        const ae::Stats s = measureNow();
+        if (std::abs(s.median - ae::kMidGrey) < ae::kSettled) break;
+        c = ae::refine(c, s);
     }
 
     adj.exposureEv = c.exposureEv;

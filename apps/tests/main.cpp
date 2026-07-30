@@ -4260,7 +4260,7 @@ void testAutoEnhanceStats() {
         double worst = 0.0;
         for (const float scene : {0.05f, 0.08f, 0.35f, 1.2f, 4.0f}) {
             ae::Controls c{};
-            for (int pass = 0; pass < ae::kPasses; ++pass) {
+            for (int pass = 0; pass < ae::kMaxPasses; ++pass) {
                 ae::Stats st{};
                 st.median = renderStub(scene, c.exposureEv);
                 st.shadow = st.median * 0.4f;

@@ -855,11 +855,16 @@ int main(int argc, char** argv) {
             a.clarity = look.clarity;
 
             ae::Controls c{};
-            for (int pass = 0; pass < ae::kPasses; ++pass) {
+            // Mirrors Engine::autoEnhance: stop when the median arrives rather
+            // than after a fixed count, or this probe measures a different
+            // solver from the one the product runs.
+            for (int pass = 0; pass < ae::kMaxPasses; ++pass) {
                 a.exposureEv = c.exposureEv;
                 a.blacks     = c.blacks;
                 a.whites     = c.whites;
-                c = ae::refine(c, measure(a));
+                const auto st = measure(a);
+                if (std::abs(st.median - ae::kMidGrey) < ae::kSettled) break;
+                c = ae::refine(c, st);
             }
             a.exposureEv = c.exposureEv;
             a.blacks = c.blacks; a.whites = c.whites;
