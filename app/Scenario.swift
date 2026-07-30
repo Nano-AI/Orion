@@ -35,6 +35,13 @@ import SwiftUI
 ///     preview on | off                  the crop tool's context render
 ///     set <control> <value>             any slider by name
 ///     mask <kind>                       none | linear | radial | brush
+///     overlay on | off                  paint the coverage, as `Show mask` does
+///     maskcheck <cells> <ev>            does the mask the *interface draws*
+///                                       sit on the coverage the engine
+///                                       *renders*? Grids the frame, classifies
+///                                       every cell by `CanvasLayout.maskAlpha`
+///                                       — the overlay's own oracle — and
+///                                       demands the render agree
 ///     brush <x,y> <x,y> ...             dabs walked by CanvasLayout, as the hand does
 ///     pick <x,y>                        the colour-mixer eyedropper
 ///     targeted <x,y> <delta>            pick, then drag, which is what applies it
@@ -56,6 +63,10 @@ import SwiftUI
 ///     time <n> <command...>             repeat a command and report what one
 ///                                       of them costs. "Slow" is not a report
 ///                                       anyone can act on; a number is
+///     drag <control> <from> <to> <n>    sweep a slider and report the cost of
+///                                       one tick. Distinct values, because a
+///                                       repeated *same* value dirties nothing
+///                                       and would time an empty render
 ///     shot <path>                       write a PNG
 ///     print <text>
 ///
@@ -202,6 +213,22 @@ enum Scenario {
             engine.setBrushStroke(stroke)
             engine.commitBrushEdit()
 
+        case "maskcheck":
+            guard args.count >= 2, let cells = Int(args[0]), cells >= 2 else {
+                throw Bad(what: "maskcheck needs a grid size and a local exposure")
+            }
+            try maskCheck(engine: engine, cells: cells, ev: Float(try number(1)))
+
+        case "overlay":
+            // Paint the coverage over the picture, as `Show mask` does. With
+            // `shot`, this is how "is the mask where I put it" becomes
+            // something to look at rather than argue about.
+            switch args.first {
+            case "on":  engine.maskOverlay = true
+            case "off": engine.maskOverlay = false
+            default: throw Bad(what: "overlay takes on or off")
+            }
+
         case "pick":
             let p = try point(args.first ?? "")
             try eyedrop(engine: engine, targeted: targeted, at: p, drag: nil)
@@ -244,6 +271,37 @@ enum Scenario {
         case "expect":
             guard args.count >= 3 else { throw Bad(what: "expect needs name, op, value") }
             try check(args[0], args[1], args[2])
+
+        case "drag":
+            // A slider drag, and what one tick of it costs.
+            //
+            // Distinct values on purpose. `time 40 set dehaze 0.6` measures
+            // nothing at all: `apply` compares the adjustment block field by
+            // field, so the second tick dirties no node and the loop times an
+            // empty render. A drag is a *sweep*, and the sweep is what makes
+            // every tick pay for the frame.
+            guard args.count >= 4, let ticks = Int(args[3]), ticks > 1 else {
+                throw Bad(what: "drag needs a control, a start, an end and a tick count")
+            }
+            let control = args[0]
+            let from = try number(1), to = try number(2)
+            quiet = true
+            let dragBegan = DispatchTime.now().uptimeNanoseconds
+            for i in 0..<ticks {
+                let v = Float(from + (to - from) * Double(i) / Double(ticks - 1))
+                var thrown: Error?
+                engine.edit(control) {
+                    do { try apply(control: control, value: v, to: engine) }
+                    catch { thrown = error }
+                }
+                if let thrown { quiet = false; throw thrown }
+            }
+            let dragElapsed = DispatchTime.now().uptimeNanoseconds - dragBegan
+            quiet = false
+            let perTick = Double(dragElapsed) / 1_000_000.0 / Double(ticks)
+            say(String(format: "  drag %-12@ %.1f ms per tick  (%.0f fps, %d ticks)\n",
+                       control as NSString, perTick,
+                       perTick > 0 ? 1000.0 / perTick : 0, ticks))
 
         case "time":
             // Repeats another command and reports what one of them costs.
@@ -332,7 +390,135 @@ enum Scenario {
         case "maskCentreY": e.maskCentreY = value
         case "maskAngle":   e.maskAngle = value
         case "maskLength":  e.maskLength = value
+        case "maskRadiusX": e.maskRadiusX = value
+        case "maskRadiusY": e.maskRadiusY = value
+        case "maskFeather": e.maskFeather = value
+        case "maskRoundness": e.maskRoundness = value
+        case "maskInvert":  e.maskInvert = value != 0
+        case "brushHardness": e.brushHardness = value
         default: throw Bad(what: "no control named \(control)")
+        }
+    }
+
+    /// Does the mask the interface *draws* sit on the coverage the engine
+    /// *renders*?
+    ///
+    /// This is the question "the mask is not aligned with the image" asks, and
+    /// nothing could answer it before. The scenario runner measures the render;
+    /// the overlay is drawn from `CanvasLayout`, which carries its own
+    /// transcription of the mask kernel (`maskAlpha`) precisely so it can be an
+    /// oracle. Comparing the two is therefore comparing what the photographer
+    /// is shown against what they get.
+    ///
+    /// ⚠️ Asserted on **exact equality where coverage is zero**, not on a
+    /// correlation. A mask shifted by a tenth of the frame still darkens
+    /// roughly the right part of the picture and still looks plausible in a
+    /// screenshot; what it cannot do is leave the cells the interface calls
+    /// "outside" bit-identical. Cells on the falloff are skipped rather than
+    /// fudged with a tolerance — the two sides of the boundary are where the
+    /// answer is unambiguous.
+    private static func maskCheck(engine: Engine, cells: Int, ev: Float) throws {
+        var m = CanvasLayout.MaskPlacement()
+        m.kind = Int(engine.maskKind)
+        m.centre = CGPoint(x: CGFloat(engine.maskCentreX), y: CGFloat(engine.maskCentreY))
+        m.angle = CGFloat(engine.maskAngle)
+        m.length = CGFloat(engine.maskLength)
+        m.radius = CGSize(width: CGFloat(engine.maskRadiusX),
+                          height: CGFloat(engine.maskRadiusY))
+        m.feather = CGFloat(engine.maskFeather)
+        m.roundness = CGFloat(engine.maskRoundness)
+        m.invert = engine.maskInvert
+        guard m.kind == 1 || m.kind == 2 else {
+            throw Bad(what: "maskcheck needs a linear or radial mask; the brush "
+                          + "has no closed form for the overlay to draw")
+        }
+
+        // Classify every cell by what the interface believes, sampling inside
+        // the cell rather than at its centre: a cell whose centre is covered
+        // can still straddle the falloff.
+        let step = 1.0 / CGFloat(cells)
+        var inside: [(Int, Int)] = [], outside: [(Int, Int)] = []
+        var map = [[Character]](repeating: [Character](repeating: " ", count: cells),
+                                count: cells)
+        for j in 0..<cells {
+            for i in 0..<cells {
+                var lo: CGFloat = 1, hi: CGFloat = 0
+                for sj in 0...4 {
+                    for si in 0...4 {
+                        let q = CGPoint(x: (CGFloat(i) + CGFloat(si) / 4) * step,
+                                        y: (CGFloat(j) + CGFloat(sj) / 4) * step)
+                        let a = CanvasLayout.maskAlpha(q, m)
+                        lo = min(lo, a); hi = max(hi, a)
+                    }
+                }
+                // ⚠️ "Clear" means alpha *exactly* zero, not merely small.
+                // The invariant being checked is that zero coverage leaves the
+                // pixel bit-identical, and at alpha 0.02 a two-stop local
+                // exposure moves luma by about 0.005 — past the one-code
+                // tolerance, and rightly so. Calling that cell clear made the
+                // test report a defect that was its own classification.
+                // smootherstep saturates, so exact zero is reachable.
+                if lo >= 0.999 { inside.append((j, i)); map[j][i] = "#" }
+                else if hi <= 1e-6 { outside.append((j, i)); map[j][i] = "." }
+                else { map[j][i] = "~" }
+            }
+        }
+
+        func grid() throws -> [[Double]] {
+            var g = [[Double]](repeating: [Double](repeating: 0, count: cells), count: cells)
+            for j in 0..<cells {
+                for i in 0..<cells {
+                    let r = CGRect(x: CGFloat(i) * step, y: CGFloat(j) * step,
+                                   width: step, height: step)
+                    g[j][i] = try read(engine, r, through: .output).luma
+                }
+            }
+            return g
+        }
+
+        let held = engine.localExposureEv
+        engine.localExposureEv = 0
+        let base = try grid()
+        engine.localExposureEv = ev
+        let got = try grid()
+        engine.localExposureEv = held
+
+        let eps = 1.0 / 255.0
+        var strayed = 0, missed = 0
+        var worstStray = 0.0, worstStrayAt = (0, 0)
+        for (j, i) in outside where abs(got[j][i] - base[j][i]) >= eps {
+            strayed += 1
+            let d = abs(got[j][i] - base[j][i])
+            if d > worstStray { worstStray = d; worstStrayAt = (j, i) }
+            map[j][i] = "!"
+        }
+        for (j, i) in inside where abs(got[j][i] - base[j][i]) < eps {
+            missed += 1
+            map[j][i] = "o"
+        }
+
+        say("  the interface's mask, cell by cell "
+            + "(# covered, . clear, ~ falloff, ! leaked, o did nothing):\n")
+        for j in 0..<cells { say("    " + String(map[j]) + "\n") }
+
+        checks += 2
+        if strayed > 0 {
+            failures += 1
+            say(String(format:
+                "  FAIL  coverage where the interface draws none: %d of %d cells, "
+                + "worst %.4f luma at row %d col %d\n",
+                strayed, outside.count, worstStray, worstStrayAt.0, worstStrayAt.1))
+        } else {
+            say("  ok    every cell the interface draws clear is bit-identical "
+                + "(\(outside.count) cells)\n")
+        }
+        if missed > 0 {
+            failures += 1
+            say("  FAIL  no coverage where the interface draws it: "
+                + "\(missed) of \(inside.count) cells\n")
+        } else {
+            say("  ok    every cell the interface draws covered moved "
+                + "(\(inside.count) cells)\n")
         }
     }
 

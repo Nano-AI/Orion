@@ -351,6 +351,23 @@ enum Screenshot {
             engine.maskRadiusX = 0.3
             engine.maskRadiusY = 0.17
             engine.maskFeather = 0.55
+        case "mask-radial-overlay":
+            // The hardest case for "does the drawn outline sit on the coverage":
+            // a radial, turned, with unequal semi-axes, and the coverage painted
+            // on underneath it. Reported as "the mask is not aligned with the
+            // image at all" — the engine's placement measures correct through
+            // the scenario runner at every rotation, so what was left to check
+            // was the outline the photographer actually looks at.
+            engine.exposureEv = 2.6
+            engine.maskKind = 2
+            engine.localExposureEv = 1.4
+            engine.maskCentreX = 0.34
+            engine.maskCentreY = 0.40
+            engine.maskAngle = 0.6
+            engine.maskRadiusX = 0.30
+            engine.maskRadiusY = 0.14
+            engine.maskFeather = 0.10
+            engine.maskOverlay = true
         case "mask-square":
             // A rounded-rectangle mask, which is the case that separates an
             // outline sampled from the shader's superellipse from one drawn as

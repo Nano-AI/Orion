@@ -124,14 +124,38 @@ inline void unstraighten(float& x, float& y, float radians,
     return length * std::sqrt(std::max(c.w, 1e-6f) * std::max(c.h, 1e-6f));
 }
 
-/// Radial semi-axes, which unlike a gradient's length do have an axis each —
-/// and swap when the picture turns onto its side.
-[[nodiscard]] inline void radiusToFrame(float rx, float ry, const Crop& c, int turns,
+/// Radial semi-axes, scaled by the crop the same way a gradient's length is.
+///
+/// ⚠️ **The quarter turns do not enter here, and getting that wrong is what put
+/// every radial mask in the wrong place on a turned frame.** The reasoning that
+/// they should was: a semi-axis has an axis of its own, unlike a length, so it
+/// must swap when the picture goes on its side. What that misses is that
+/// `toFrame` has *already* turned the mask — it subtracts k·π/2 from the angle,
+/// and the semi-axes are measured along the mask's own axes, not the frame's.
+/// Rotating the axes and then swapping the extents applies the turn twice.
+///
+/// The algebra, for one turn, no crop. `toFrame` sends a displaced point
+/// e' = (x, y) in displayed coordinates to e = (y, −x) in the frame, and sets
+/// φ = θ − π/2, so cos φ = sin θ and sin φ = −cos θ. The shader then forms
+///
+///     u = ( cos φ·eₓ + sin φ·e_y)/Rₓ = ( cos θ·e'ₓ + sin θ·e'_y)/Rₓ
+///     v = (−sin φ·eₓ + cos φ·e_y)/R_y = (−sin θ·e'ₓ + cos θ·e'_y)/R_y
+///
+/// which is exactly what the interface computes with rx and ry. The two agree
+/// if and only if Rₓ = rx and R_y = ry. A quarter turn in normalized
+/// coordinates is rigid — it maps the unit square onto itself — so there is no
+/// length change for it to contribute either.
+///
+/// Measured, on both a landscape and a portrait frame, at all four turns:
+/// `repro/mask-alignment.txt`. With the swap, a radial mask leaked coverage
+/// into 14 of the 207 cells the interface draws clear, up to 0.34 in luma.
+///
+/// `turns` is gone from the signature rather than ignored: a parameter a caller
+/// still passes is a parameter the next reader assumes is used.
+[[nodiscard]] inline void radiusToFrame(float rx, float ry, const Crop& c,
                                         float& outX, float& outY) noexcept {
-    const int k = ((turns % 4) + 4) % 4;
-    const float a = rx * c.w;
-    const float b = ry * c.h;
-    if (k % 2 == 0) { outX = a; outY = b; } else { outX = b; outY = a; }
+    outX = rx * c.w;
+    outY = ry * c.h;
 }
 
 }  // namespace orion::pipe::mask

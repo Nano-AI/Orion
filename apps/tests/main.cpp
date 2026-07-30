@@ -5160,18 +5160,34 @@ void testMaskGeometry() {
         }
     }
 
-    // Semi-axes have an axis each, so they swap when the picture goes on its
-    // side — a wide ellipse over a landscape stays wide over the subject.
+    // ⚠️ This block used to assert the opposite, and the assertion was the bug.
+    //
+    // "Semi-axes have an axis each, so they swap when the picture goes on its
+    // side" sounds right and is wrong: `toFrame` has already turned the mask by
+    // subtracting k·π/2 from its angle, and the semi-axes are measured along
+    // the mask's own axes. Swapping them as well applies the turn twice, which
+    // put every radial mask in the wrong place on any frame at an odd total
+    // quarter turn — including a portrait file with the rotate control never
+    // touched, since its EXIF turn counts.
+    //
+    // The test passed for a year because it checked the transform against the
+    // belief that produced it, never against the render. `repro/mask-alignment.txt`
+    // checks it against the render, which is why it caught this.
     {
         float x = 0.0f, y = 0.0f;
-        mg::radiusToFrame(0.4f, 0.1f, none, 1, x, y);
-        report(std::abs(x - 0.1f) < 1e-6f && std::abs(y - 0.4f) < 1e-6f,
-               "radial semi-axes swap on an odd quarter turn",
+        mg::radiusToFrame(0.4f, 0.1f, none, x, y);
+        report(std::abs(x - 0.4f) < 1e-6f && std::abs(y - 0.1f) < 1e-6f,
+               "radial semi-axes do not swap on a quarter turn — the angle "
+               "already carries it",
                std::to_string(x) + ", " + std::to_string(y));
 
-        mg::radiusToFrame(0.4f, 0.1f, none, 2, x, y);
-        report(std::abs(x - 0.4f) < 1e-6f && std::abs(y - 0.1f) < 1e-6f,
-               "and stay put on an even one", "");
+        // The crop does scale them, and per axis, because a crop is the one
+        // part of the transform that is not rigid.
+        mg::Crop tight{0.25f, 0.25f, 0.5f, 0.25f};
+        mg::radiusToFrame(0.4f, 0.1f, tight, x, y);
+        report(std::abs(x - 0.2f) < 1e-6f && std::abs(y - 0.025f) < 1e-6f,
+               "and the crop scales each along its own axis",
+               std::to_string(x) + ", " + std::to_string(y));
     }
 }
 

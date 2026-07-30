@@ -1,0 +1,31 @@
+# Reported: "sliders slow."
+#
+# Real, and this file is the number behind it. Each `set` is one tick of a drag,
+# and every tick renders the whole frame at full resolution and blocks the main
+# thread on `commitAndWait` until the GPU is done.
+#
+# Measured on _PIC8220 (24 MP), 40 distinct values per control, wall clock minus
+# the cost of opening the file:
+#
+#     exposure   9.3 ms per tick    ~110 fps    fine
+#     clarity   60.5 ms per tick    ~17 fps     the report
+#     dehaze    67.3 ms per tick    ~15 fps     the report
+#
+# ⚠️ This is not a defect in any one filter. Clarity and dehaze are already the
+# subject of `research/local-laplacian.md` and session 2026-07-29f, which found
+# dehaze's six rank passes within 2% of each other — there is nothing to fix in
+# *one* of them. What is missing is the preview path: M1's Interaction epic
+# named degrade-then-refine and it was never built, so every tick pays full
+# resolution for a picture the hand is still moving. Only the crop tool has a
+# reduced-resolution path.
+#
+# Kept as a measurement rather than a threshold. A wall-clock `expect` fails on
+# a busy machine and teaches everyone to ignore it; this prints the cost so the
+# story that fixes it has a before to point at.
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+print one tick of a drag, at full resolution, on a 24 MP frame:
+drag exposure 2.0 2.6 40
+drag clarity 0.3 0.9 40
+drag dehaze 0.3 0.9 40

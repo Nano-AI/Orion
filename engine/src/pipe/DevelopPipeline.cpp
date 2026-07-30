@@ -1273,8 +1273,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             rotW, rotH);
 
         m.centre[0] = placed.centreX; m.centre[1] = placed.centreY;
-        mask::radiusToFrame(c.radius[0], c.radius[1], crop, turns,
-                            m.semi[0], m.semi[1]);
+        mask::radiusToFrame(c.radius[0], c.radius[1], crop, m.semi[0], m.semi[1]);
         m.angle     = placed.angle;
 
         // A linear gradient's endpoints, from the *placed* centre and angle.

@@ -1,0 +1,87 @@
+# Reported: "the mask is not aligned with the image at all."
+#
+# Radial masks were misplaced whenever the *total* quarter turns was odd. The
+# EXIF turn counts, so a portrait file was wrong with the rotate control never
+# touched — which is why this read as "not aligned at all" rather than as a
+# rotation bug. Linear gradients were never affected. Cause and derivation:
+# `mask::radiusToFrame` in engine/src/pipe/MaskGeometry.h.
+#
+# ⚠️ This checks the mask the interface *draws* against the coverage the engine
+# *renders*. `maskcheck` grids the frame and classifies every cell with
+# `CanvasLayout.maskAlpha` — the overlay's own transcription of the kernel, the
+# thing the outline and the handles are drawn from — then demands the render
+# agree: cells the interface draws clear must come back bit-identical, cells it
+# draws covered must move.
+#
+# That two-sided shape is the point. A mask shifted by a tenth of the frame
+# still darkens roughly the right part of the picture, still looks plausible in
+# a screenshot, and still passes any test that only asks "did something happen
+# near here". What it cannot do is leave the clear cells untouched. With the bug
+# in place, 14 of 207 clear cells carried coverage, the worst by 0.34 in luma.
+#
+# Negative local exposure on purpose: at +2.6 EV the dealership windows are
+# clipped white, and a *positive* local exposure over them changes nothing, so a
+# covered cell there reads as a failure that is really the photograph.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask radial
+set maskCentreX 0.34
+set maskCentreY 0.40
+set maskAngle 0.6
+set maskRadiusX 0.30
+set maskRadiusY 0.14
+set maskFeather 0.10
+
+print landscape frame, no EXIF turn — all four rotations
+maskcheck 12 -2.0
+rotate 1
+maskcheck 12 -2.0
+rotate 1
+maskcheck 12 -2.0
+rotate 1
+maskcheck 12 -2.0
+
+print and with a crop and a straighten under the turn
+rotate 1
+crop 0.15 0.20 0.60 0.55
+maskcheck 12 -2.0
+rotate 1
+straighten 9
+maskcheck 12 -2.0
+
+# ⚠️ A portrait file, and it is the case that matters most: its EXIF quarter
+# turn is already applied when it opens, so `rotate 0` here is an odd total and
+# was broken before anyone touched a control.
+open samples/_PIC8095.ARW
+set exposure 2.6
+mask radial
+set maskCentreX 0.34
+set maskCentreY 0.40
+set maskAngle 0.6
+set maskRadiusX 0.30
+set maskRadiusY 0.14
+set maskFeather 0.10
+
+print portrait frame, EXIF quarter turn — all four rotations
+maskcheck 12 -2.0
+rotate 1
+maskcheck 12 -2.0
+rotate 1
+maskcheck 12 -2.0
+rotate 1
+maskcheck 12 -2.0
+
+# A linear gradient through the same transform. It never carried the defect —
+# a length has no axis to swap — so this is the control that says the fix did
+# not simply move the error somewhere else.
+print linear gradient, portrait frame, odd and even turns
+mask none
+mask linear
+set maskCentreX 0.40
+set maskCentreY 0.45
+set maskAngle 0.6
+set maskLength 0.45
+maskcheck 12 -2.0
+rotate 1
+maskcheck 12 -2.0
