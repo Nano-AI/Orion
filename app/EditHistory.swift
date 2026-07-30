@@ -99,7 +99,7 @@ final class EditHistory {
 /// into — keeping them in parallel arrays is how a reorder puts someone's paint
 /// on the wrong component.
 struct MaskComponentState: Equatable, Codable {
-    var kind: Int32 = 0            // 1 linear, 2 radial, 3 brush, 4 matte, 5 range
+    var kind: Int32 = 0            // 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 colour
     /// 0 add, 1 subtract, 2 intersect. The group folds from zero, so the first
     /// component's op has no effect when it is add and zeroes the group when it
     /// is not — the panel does not offer one on the first row.
@@ -119,6 +119,15 @@ struct MaskComponentState: Equatable, Codable {
     var rangeHi: Float = 2
     var rangeSoft: Float = 1
 
+    /// Colour range (kind 6): the picked shade in scene-linear Rec.2020 RGB,
+    /// with a tolerance and a softness in Oklab chromaticity.
+    /// research/masking.md §4c.
+    var colourR: Float = 0.18
+    var colourG: Float = 0.18
+    var colourB: Float = 0.18
+    var colourTol: Float = 0.10
+    var colourSoft: Float = 0.05
+
     var brushRadius: Float = 0.08
     var brushFlow: Float = 0.5
     var brushHardness: Float = 0.5
@@ -131,9 +140,27 @@ struct MaskComponentState: Equatable, Codable {
     /// for the same reason `DevelopState` does: the synthesized decoder throws
     /// on a missing key, so adding one field would discard every component in
     /// every sidecar written before it.
+    /// ⚠ **Every stored property must appear here.** This enum is named `Key`
+    /// rather than `CodingKeys`, so Swift synthesises its *own* keys for the
+    /// encoder from the stored properties while the decoder below reads these —
+    /// which means a field added to the struct joins the sidecar immediately and
+    /// is read back never. No warning, and working code from both ends.
+    ///
+    /// That is exactly what happened: kind 5 shipped in session 2026-07-30b and
+    /// `rangeLo`, `rangeHi` and `rangeSoft` were written to every sidecar and
+    /// silently dropped on the way back in for five sessions. Set a luminance
+    /// band, close the photo, reopen it: the band is back at its default and the
+    /// mask selects something else.
+    ///
+    /// `DevelopState` had the identical defect and was fixed in 2026-07-30e with
+    /// a round-trip test — but that test's fixture never filled the *nested*
+    /// component's range fields, so the guard could not see them. A round trip
+    /// is only as good as the state it round-trips.
     private enum Key: String, CodingKey {
         case kind, compose, invert, centreX, centreY, angle, length
         case radiusX, radiusY, feather, roundness
+        case rangeLo, rangeHi, rangeSoft
+        case colourR, colourG, colourB, colourTol, colourSoft
         case brushRadius, brushFlow, brushHardness, brushStroke
     }
 
@@ -156,6 +183,14 @@ struct MaskComponentState: Equatable, Codable {
         radiusY = float(.radiusY) ?? radiusY
         feather = float(.feather) ?? feather
         roundness = float(.roundness) ?? roundness
+        rangeLo = float(.rangeLo) ?? rangeLo
+        rangeHi = float(.rangeHi) ?? rangeHi
+        rangeSoft = float(.rangeSoft) ?? rangeSoft
+        colourR = float(.colourR) ?? colourR
+        colourG = float(.colourG) ?? colourG
+        colourB = float(.colourB) ?? colourB
+        colourTol = float(.colourTol) ?? colourTol
+        colourSoft = float(.colourSoft) ?? colourSoft
         brushRadius = float(.brushRadius) ?? brushRadius
         brushFlow = float(.brushFlow) ?? brushFlow
         brushHardness = float(.brushHardness) ?? brushHardness

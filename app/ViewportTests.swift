@@ -1892,6 +1892,14 @@ enum ViewportTests {
         m.centreX = 0.4; m.centreY = 0.7; m.angle = 0.9; m.length = 0.33
         m.radiusX = 0.21; m.radiusY = 0.44; m.feather = 0.66; m.roundness = 3.5
         m.brushRadius = 0.05; m.brushFlow = 0.8; m.brushHardness = 0.15
+        // ⚠ The range and colour fields too, and their absence here is what let
+        // `rangeLo`, `rangeHi` and `rangeSoft` be written to every sidecar and
+        // read back from none for five sessions. `DevelopState`'s own fixture
+        // was made exhaustive in 2026-07-30e; the *nested* component's was not,
+        // so the guard could not see the fields it was guarding.
+        m.rangeLo = -3.25; m.rangeHi = 1.75; m.rangeSoft = 0.8
+        m.colourR = 0.42; m.colourG = 0.11; m.colourB = 0.27
+        m.colourTol = 0.19; m.colourSoft = 0.07
         s.maskComponents = [m]
         s.maskRefine = 0.72
         s.localExposureEv = 1.5
