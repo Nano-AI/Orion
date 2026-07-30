@@ -98,7 +98,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 ## 11. Presets & Batch
 | Feature | Status | Notes |
 |---|---|---|
-| User presets | M4 | |
+| User presets | M4 | ✅ **Built 2026-07-30**. A **patch** over DevelopState, not a state: only the groups it carries are applied. Crop, dust spots and masks are excluded from every group — they belong to one photograph. Four built-in looks, not written to the user file so improving one reaches everybody |
 | Built-in looks | M4 | Sells the "stunning" promise |
 | Copy/paste settings, sync across selection | M4 | Huge workflow win |
 | Batch export | M4 | |
