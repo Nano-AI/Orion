@@ -1,6 +1,7 @@
 #include "Engine.h"
 
 #include "pipe/AutoEnhance.h"
+#include "ResourcePaths.h"
 
 #include <stdexcept>
 #include <algorithm>
@@ -16,7 +17,7 @@ const pipe::LensDatabase& Engine::lensDatabase() {
     // Function-local static: parsed on the first open, never on a path where
     // nothing asks for it, and thread-safe initialization is the language's
     // problem rather than ours.
-    static const pipe::LensDatabase db(std::string(ORION_DATA_DIR) + "/lensfun");
+    static const pipe::LensDatabase db(res::dataDir() + "/lensfun");
     return db;
 }
 
@@ -41,7 +42,7 @@ void Engine::openRaw(const std::string& path) {
 
     // Replace only once decode and construction have both succeeded, so a
     // failed open leaves the previously open image intact.
-    auto next = std::make_unique<pipe::DevelopPipeline>(*device_, ORION_SHADER_DIR, image);
+    auto next = std::make_unique<pipe::DevelopPipeline>(*device_, res::shaderDir(), image);
     develop_ = std::move(next);
     camera_  = image.camera;
 }

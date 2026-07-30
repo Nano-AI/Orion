@@ -61,7 +61,13 @@ add_custom_command(
             ${SWIFT_SOURCES}
             -o ${APP_BINARY}
             -Xlinker -force_load -Xlinker $<TARGET_FILE:orion_engine>
+            # Two rpaths. The Homebrew one is for running out of the build
+            # tree; the bundle-relative one is what a shipped app loads from,
+            # and it is set here rather than patched in afterwards because
+            # adding an rpath to a signed binary invalidates the signature.
+            # tools/package-app.sh drops the Homebrew entry when it packages.
             -Xlinker -rpath -Xlinker /opt/homebrew/opt/libraw/lib
+            -Xlinker -rpath -Xlinker @executable_path/../Frameworks
             ${LIBRAW_LIBRARY}
             # The engine is C++ and throws internally, so the Swift link needs
             # libc++ and its unwinder even though nothing escapes the facade.

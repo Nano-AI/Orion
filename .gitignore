@@ -86,3 +86,8 @@ Samples/
 # them without a word and the site deployed with every image 404ing — a push
 # that reported success and a page that was visibly broken.
 !web/img/orion-*.jpg
+
+# --- Packaged builds ---------------------------------------------------------
+# tools/package-app.sh output. A .dmg is a build artifact; releases carry it as
+# an attachment, which lives outside git objects.
+dist/

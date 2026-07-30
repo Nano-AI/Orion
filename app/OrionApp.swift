@@ -874,7 +874,7 @@ struct Editor: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 5) {
             if engine.isLoaded {
-                Engraved.Label(text: hint, color: Palette.faint)
+                Engraved.Label(text: hint, color: Palette.faint, size: 9)
                     .lineLimit(1)
                 HStack(spacing: 0) {
                     Engraved.Readout(text: "\(engine.imageWidth) × \(engine.imageHeight)",
