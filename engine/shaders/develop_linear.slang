@@ -11,6 +11,12 @@
 #include "ops/tone_ops.slang"
 #include "ops/hsl_ops.slang"
 
+/// The log2 pivot a contrast bends about. `develop_display` uses the same one
+/// for its base contrast, and middle grey (0.18) is -2.47. Two pivots in one
+/// program would make a local contrast of zero visibly different from no local
+/// contrast at all near the crossover.
+static const float kContrastPivot = -2.5f;
+
 struct LinearAdjustParams
 {
     float exposureEv;
@@ -39,6 +45,14 @@ struct LinearAdjustParams
     /// artifact-free by construction. Blending two renders instead would mix
     /// two tone-mapped states and shift hue across the transition band.
     float localExposureEv;
+    /// The rest of the local set — all pointwise, all scaled by the coverage.
+    /// research/masking.md §2b names what is missing and why: white balance is
+    /// applied before the demosaic and the pyramid operators are not pointwise.
+    float localContrast;
+    float localSaturation;
+    /// A colour **cast**, not a white balance. See the note at the call site.
+    float localWarmth;
+    float localTint;
     float maskActive;
 
     /// Paint the coverage on screen instead of only acting through it.
@@ -132,10 +146,68 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     c = applyColor(c, p.vibrance, p.saturation);
     c = applyColorMixer(c, p.hueShift, p.satShift, p.lumShift);
 
-    // The local exposure, scaled by coverage. One multiply, no blend.
-    if (p.maskActive != 0.0f && p.localExposureEv != 0.0f)
+    // ── The local adjustments, each scaled by coverage ───────────────────
+    //
+    // research/masking.md §2 and §2b. The alpha multiplies the **parameter**,
+    // never the result: half coverage at one stop is 2^0.5, a smooth
+    // multiplicative ramp in linear light rather than a blend of two rendered
+    // frames. Everything here is pointwise, which is the test for whether an
+    // adjustment can be local at all — §2b says why white balance and the
+    // pyramid operators cannot be.
+    if (p.maskActive != 0.0f)
     {
-        c *= exp2(saturate(mask[tid.xy]) * p.localExposureEv);
+        const float a = saturate(mask[tid.xy]);
+
+        if (p.localExposureEv != 0.0f) c *= exp2(a * p.localExposureEv);
+
+        // Contrast, as a gain on the pixel's distance from the pivot measured
+        // in stops — so it is a multiply like the exposure above and keeps the
+        // colour's ratios, rather than bending each channel separately and
+        // pulling the hue toward whichever primary is largest.
+        //
+        // ⚠ The pivot is `develop_display`'s, not a new one. Middle grey is
+        // -2.47 in log2 and the display transform pivots at -2.5; a second
+        // pivot here would make a local contrast of zero visibly different
+        // from no local contrast at all near the crossover.
+        if (p.localContrast != 0.0f)
+        {
+            const float ev = log2(max(luminance2020(c), 1e-6f));
+            c *= exp2((ev - kContrastPivot) * (a * p.localContrast));
+        }
+
+        // Saturation, toward the pixel's own luminance. Same construction the
+        // global one uses, so the two agree about what grey means.
+        if (p.localSaturation != 0.0f)
+        {
+            const float y = luminance2020(c);
+            c = lerp(float3(y), c, 1.0f + a * p.localSaturation);
+        }
+
+        // ⚠ A colour **cast**, not a white balance. Temperature and tint are
+        // applied in `linearize`, before the demosaic, and cannot be local
+        // without demosaicing the frame twice — §2b. This is a per-channel
+        // multiply, it is named Warmth and Tint rather than Temperature and
+        // Tint, and the two are not the same operation.
+        if (p.localWarmth != 0.0f || p.localTint != 0.0f)
+        {
+            // ⚠ Taken *before* the multiply. The first version read the
+            // luminance on both sides of the cast from the same already-cast
+            // colour, so the ratio was one and the renormalisation did nothing
+            // — a line that looks like it is doing the work and is not.
+            const float before = luminance2020(c);
+
+            const float w = a * p.localWarmth;
+            const float t = a * p.localTint;
+            c *= float3(1.0f + w * 0.30f,
+                        1.0f + t * 0.30f,
+                        1.0f - w * 0.30f);
+
+            // Renormalised on luminance so a cast moves colour without also
+            // moving exposure — otherwise Warmth doubles as a brightness
+            // slider and the two controls fight over the same pixels.
+            const float after = luminance2020(c);
+            if (before > 1e-6f && after > 1e-6f) c *= before / after;
+        }
     }
 
     // The coverage, drawn over the picture. Last, so it sits on top of every

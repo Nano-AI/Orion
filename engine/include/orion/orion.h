@@ -204,6 +204,13 @@ typedef struct OrionAdjustments {
     OrionMaskComponent mask_components[ORION_MAX_MASK_COMPONENTS];
     int   mask_count;
     float local_exposure_ev;
+    /* The rest of the local set — pointwise only. Warmth and tint are a colour
+     * cast, NOT a white balance: temperature is applied before the demosaic
+     * and cannot be local. research/masking.md §2b. */
+    float local_contrast;
+    float local_saturation;
+    float local_warmth;
+    float local_tint;
 
     /* Dust and blemishes. research/spot-removal.md. Applied between the lens
      * correction and sharpening, in scene-linear light. */

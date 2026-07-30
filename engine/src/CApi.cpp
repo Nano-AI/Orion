@@ -216,6 +216,10 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.brushRevision = s.brush_revision;
     }
     a.localExposureEv = adj->local_exposure_ev;
+    a.localContrast   = std::clamp(adj->local_contrast, -1.0f, 1.0f);
+    a.localSaturation = std::clamp(adj->local_saturation, -1.0f, 1.0f);
+    a.localWarmth     = std::clamp(adj->local_warmth, -1.0f, 1.0f);
+    a.localTint       = std::clamp(adj->local_tint, -1.0f, 1.0f);
     a.maskRefine = std::clamp(adj->mask_refine, 0.0f, 1.0f);
 
     a.spotCount = std::clamp(adj->spot_count, 0, ORION_MAX_SPOTS);

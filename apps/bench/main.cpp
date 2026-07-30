@@ -567,6 +567,37 @@ int main(int argc, char** argv) {
                  // daylight one, so the same band moves six times as much in
                  // them.
                  }, Metric::Luma, 0.16},
+                // Local adjustments beyond exposure — research/masking.md §2b.
+                //
+                // ⚠ Measured on **chroma**, not luma, and that is the point of
+                // the probe rather than a detail: a colour cast that also moved
+                // the exposure would be caught by a luma floor and a correct
+                // one would not. The shader renormalises the cast on luminance
+                // precisely so it does not move brightness, so a luma probe
+                // here would measure zero on a working control.
+                {"local grade on a mask", [](orion::pipe::Adjustments& a) {
+                     a.exposureEv = 2.6f;
+                 }, [](auto& a) {
+                     auto& c = a.maskComponents[0];
+                     c.kind = 2;                       // a radial over the middle
+                     c.centre[0] = 0.5f; c.centre[1] = 0.5f;
+                     c.radius[0] = 0.35f; c.radius[1] = 0.35f;
+                     c.feather = 0.4f;
+                     a.maskCount = 1;
+                     a.localWarmth = 1.0f;
+                     a.localSaturation = 0.8f;
+                 // Measured 0.159, 0.210 and 0.049 of reference across the
+                 // three frames; half the smallest, on the same rule as every
+                 // other probe here.
+                 //
+                 // ⚠ The daylight cityscape moves a third of what the two dark
+                 // frames do, and that is the control working rather than
+                 // noise: it is already the most saturated of the three, so a
+                 // cast and a saturation lift over its middle have proportionally
+                 // less room. A floor set from the night frames alone would trip
+                 // on it — which is the mistake `DECISIONS.md` #47 records
+                 // paying for twice already.
+                 }, Metric::Chroma, 0.024},
                 // A colour range mask — research/masking.md §4c.
                 //
                 // ⚠ The target is a **neutral**, and deliberately so. A probe

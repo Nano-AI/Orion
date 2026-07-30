@@ -259,6 +259,12 @@ struct Adjustments {
     /// What the mask does. Scales the *parameter*, so alpha 0.5 with +1 EV is
     /// exactly 2^0.5 — not a blend between two rendered frames.
     float localExposureEv = 0.0f;
+    /// The rest of the local set. Pointwise only — research/masking.md §2b.
+    float localContrast = 0.0f;
+    float localSaturation = 0.0f;
+    /// A colour cast where the mask covers, **not** a white balance.
+    float localWarmth = 0.0f;
+    float localTint = 0.0f;
 
     /// Single-image exposure fusion, 0..1 — shadow lift that keeps local
     /// contrast. The value is a power applied to the emitted gain, so zero is

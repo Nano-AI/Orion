@@ -1,0 +1,66 @@
+# A mask can change more than exposure.
+#
+# Reported: "I should be able to color grade and do all of that editing on a
+# different mask instead of just doing certain presets."
+#
+# research/masking.md §2b decides what is allowed: an adjustment can be local
+# exactly when it is a **function of the pixel alone**, because §2's rule is
+# that the alpha scales the *parameter*. Exposure, contrast, saturation and a
+# colour cast qualify. White balance does not — it is applied in `linearize`,
+# before the demosaic — and neither do the pyramid operators.
+#
+# ⚠ Every check below is two-sided. A local adjustment that leaked outside the
+# coverage would still move the thing it was aimed at, and would look right in
+# a screenshot; what it cannot do is leave the uncovered part bit-identical.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask radial
+set maskCentreX 0.30
+set maskCentreY 0.50
+set maskRadiusX 0.16
+set maskRadiusY 0.16
+set maskFeather 0.2
+
+measure 0.27,0.47,0.06,0.06 inBefore
+measure 0.82,0.18,0.06,0.06 outBefore
+
+# ── Contrast ────────────────────────────────────────────────────────────
+set localContrast 0.8
+measure 0.27,0.47,0.06,0.06 contrastIn
+measure 0.82,0.18,0.06,0.06 contrastOut
+expect contrastIn != inBefore
+expect contrastOut == outBefore
+set localContrast 0
+
+# ── Saturation ──────────────────────────────────────────────────────────
+set localSaturation -1.0
+measure 0.27,0.47,0.06,0.06 satIn
+measure 0.82,0.18,0.06,0.06 satOut
+expect satIn != inBefore
+expect satOut == outBefore
+set localSaturation 0
+
+# ── A colour cast ───────────────────────────────────────────────────────
+set localWarmth 0.9
+measure 0.27,0.47,0.06,0.06 warmIn
+measure 0.82,0.18,0.06,0.06 warmOut
+expect warmIn != inBefore
+expect warmOut == outBefore
+
+# ⚠ The cast is signed and it is applied **after** saturation, which is the
+# order a grade wants: desaturating to grey and then casting gives a warm grey,
+# not a grey. The first draft of this file asserted the opposite and failed
+# against a correct shader — the claim was about ordering and was never checked
+# against the shader's.
+#
+# That it preserves *luminance* is an exact numeric property and is asserted in
+# the GPU test, where a single pixel can be read rather than a patch mean.
+set localWarmth -0.9
+measure 0.27,0.47,0.06,0.06 coolIn
+expect coolIn != warmIn
+
+# ── Everything back to zero is the picture with no mask at all ──────────
+set localWarmth 0
+measure 0.27,0.47,0.06,0.06 restored
+expect restored == inBefore

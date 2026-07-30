@@ -71,11 +71,18 @@ struct LinearAdjust {
     /// A local adjustment and its coverage. See mask_gradient.slang and
     /// research/masking.md — the alpha scales the parameter, not the result.
     float         localExposureEv;
+    /// The rest of the local set — pointwise only. research/masking.md §2b.
+    float         localContrast;
+    float         localSaturation;
+    /// A colour cast, not a white balance: temperature and tint are applied
+    /// before the demosaic and cannot be local.
+    float         localWarmth;
+    float         localTint;
     float         maskActive;
     /// Draw the coverage on screen. A viewing aid; never set for an export.
     float         maskOverlay;
 };
-static_assert(sizeof(LinearAdjust) == 156);
+static_assert(sizeof(LinearAdjust) == 172);
 
 struct GuidePrep {
     std::uint32_t size[2];

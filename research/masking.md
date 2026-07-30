@@ -108,6 +108,65 @@ is an explicit curve on alpha, not a change of compositing space.
 
 ---
 
+## 2b. What a mask is allowed to change, and what it is not
+
+§2 settled *how* a local adjustment is applied: the alpha scales the
+**parameter**, not the result, so half coverage at one stop is `2^0.5` — a
+smooth multiplicative ramp in linear light rather than a blend of two rendered
+frames. That rule decides which adjustments can be local at all, and the answer
+is narrower than it looks.
+
+### The test: is it pointwise?
+
+An adjustment can be local exactly when it is a **function of the pixel alone**.
+Then "scale the parameter by α" is well defined per pixel and costs one more
+term in a node that is already running.
+
+| Local | Why it works |
+|---|---|
+| Exposure | a multiply; `α·EV` in log is one add |
+| Contrast | a gain on the pixel's distance from the pivot, in log |
+| Saturation | a lerp toward the pixel's own luminance |
+| Colour cast | a per-channel multiply |
+
+### ⚠ White balance cannot be local, and the reason is structural
+
+Temperature and tint are applied in `linearize`, at the **head of the graph,
+before the demosaic** — because the demosaic interpolates white-balanced data
+and the clipping level a channel saturates at moves with its multiplier. A
+local white balance would mean demosaicing the frame twice and choosing between
+the results per pixel, which is not an adjustment, it is a second pipeline.
+
+So the local panel offers **Warmth** and **Tint** that are a *pointwise colour
+cast* — a per-channel multiply applied where the mask covers — and they are
+named differently from the global Temperature and Tint on purpose. They are not
+the same operation, they do not have the same units, and calling them the same
+thing would be the kind of lie that is only discovered when someone tries to
+neutralise a colour cast with one and finds it cannot.
+
+### ⚠ And the pyramid operators cannot be local either
+
+Clarity, dehaze and exposure fusion are 16–32 node pyramids each. A per-layer
+copy multiplies both the node count and the ~6.4 GiB of cached intermediates
+that make an exposure drag 10 ms rather than 67. You also cannot "half-apply" a
+Laplacian decomposition by scaling a parameter — the operator is not pointwise,
+so §2's rule does not even define what it would mean.
+
+The honest version, if it is ever wanted: render the pyramid **once** globally
+and let the mask blend its output toward its input by `α × amount`. One pyramid,
+one mask-weighted lerp. That is a different thing from a local clarity and
+should be described as what it is.
+
+### The contrast pivot
+
+`−2.5` in log2, which is the number `develop_display` already pivots its base
+contrast about, and middle grey (0.18) is `−2.47`. Sharing it means a local
+contrast and a global one bend the picture about the same point; two pivots in
+one program would make a local contrast of zero visibly different from no local
+contrast at all near the crossover.
+
+---
+
 ## 3. Brush masks under crop, straighten and rotate
 
 **Store strokes parametrically, in the uncropped image's normalized space, and

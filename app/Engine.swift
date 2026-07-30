@@ -415,6 +415,15 @@ final class Engine {
     }
 
     var localExposureEv: Float = 0 { didSet { pushAndRender() } }
+    /// The rest of the local set — pointwise adjustments applied through the
+    /// mask's coverage. research/masking.md §2b names what cannot be here.
+    var localContrast: Float = 0 { didSet { pushAndRender() } }
+    var localSaturation: Float = 0 { didSet { pushAndRender() } }
+    /// ⚠ A colour **cast**, not a white balance. Temperature is applied in
+    /// `linearize`, before the demosaic, so a local one would mean demosaicing
+    /// the frame twice. Named Warmth and Tint so the two are not confused.
+    var localWarmth: Float = 0 { didSet { pushAndRender() } }
+    var localTint: Float = 0 { didSet { pushAndRender() } }
 
     /// The selected component, or nil when the group is empty.
     private var selected: MaskComponentState? {
@@ -1319,6 +1328,8 @@ final class Engine {
             maskRefine: maskRefine,
             spots: spots,
             localExposureEv: localExposureEv,
+            localContrast: localContrast, localSaturation: localSaturation,
+            localWarmth: localWarmth, localTint: localTint,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
@@ -1364,6 +1375,8 @@ final class Engine {
         maskRefine = s.maskRefine
         spots = Array(s.spots.prefix(Self.maxSpots))
         localExposureEv = s.localExposureEv
+        localContrast = s.localContrast; localSaturation = s.localSaturation
+        localWarmth = s.localWarmth; localTint = s.localTint
         fusion = s.fusion
         dehaze = s.dehaze
         clarity = s.clarity
@@ -1633,6 +1646,10 @@ final class Engine {
         a.mask_components = (cs[0], cs[1], cs[2], cs[3])
         a.mask_count = Int32(maskComponents.count)
         a.local_exposure_ev = localExposureEv
+        a.local_contrast = localContrast
+        a.local_saturation = localSaturation
+        a.local_warmth = localWarmth
+        a.local_tint = localTint
         a.mask_refine = maskRefine
 
         a.spot_count = Int32(min(spots.count, Self.maxSpots))

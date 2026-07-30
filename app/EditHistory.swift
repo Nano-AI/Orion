@@ -262,6 +262,12 @@ struct DevelopState: Equatable, Codable {
     /// Dust and blemishes. research/spot-removal.md.
     var spots: [SpotState] = []
     var localExposureEv: Float = 0
+    /// The rest of the local set. research/masking.md §2b.
+    var localContrast: Float = 0
+    var localSaturation: Float = 0
+    /// A colour cast where the mask covers, not a white balance.
+    var localWarmth: Float = 0
+    var localTint: Float = 0
 
     var fusion: Float = 0
     var dehaze: Float = 0
@@ -300,6 +306,7 @@ extension DevelopState {
         case highlightRecovery, denoiseLuma, denoiseColor
         case gradeShadow, gradeMidtone, gradeHighlight
         case maskComponents, localExposureEv, maskRefine, spots
+        case localContrast, localSaturation, localWarmth, localTint
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case curve, hueShift, satShift, lumShift
 
@@ -369,6 +376,10 @@ extension DevelopState {
         denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
         lutStrength = float(.lutStrength) ?? lutStrength
         localExposureEv = float(.localExposureEv) ?? localExposureEv
+        localContrast = float(.localContrast) ?? localContrast
+        localSaturation = float(.localSaturation) ?? localSaturation
+        localWarmth = float(.localWarmth) ?? localWarmth
+        localTint = float(.localTint) ?? localTint
         maskRefine = float(.maskRefine) ?? maskRefine
 
         // ⚠ `spots` and `maskRefine` were written by the encoder and ignored

@@ -680,6 +680,10 @@ enum Scenario {
         case "dehaze":      e.dehaze = value
         case "fusion", "lift": e.fusion = value
         case "localExposure": e.localExposureEv = value
+        case "localContrast": e.localContrast = value
+        case "localSaturation": e.localSaturation = value
+        case "localWarmth": e.localWarmth = value
+        case "localTint": e.localTint = value
         case "maskRefine": e.maskRefine = value
         case "brushRadius": e.brushRadius = value
         case "brushFlow":   e.brushFlow = value

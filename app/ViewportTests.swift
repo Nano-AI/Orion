@@ -1909,6 +1909,8 @@ enum ViewportTests {
         s.maskComponents = [m]
         s.maskRefine = 0.72
         s.localExposureEv = 1.5
+        s.localContrast = 0.42; s.localSaturation = -0.33
+        s.localWarmth = 0.27; s.localTint = -0.19
         return s
     }
 

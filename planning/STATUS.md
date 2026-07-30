@@ -24,8 +24,8 @@ licence) before it is a code one. That is the thing to settle first.
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **512 checks** · `orion-viewport-tests` **3382
-checks** · **25 `repro/` scenarios, 121 checks** · all 0 failures. Bench exits 0
+**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3382
+checks** · **28 `repro/` scenarios, 136 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -58,6 +58,81 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30n — a mask does more than exposure
+
+⚠ **Twenty-first and twenty-second arrivals of the stale M3 prompt.** Not
+re-litigated.
+
+The developer's standing complaint: *"I should be able to colour grade and do
+all of that editing on a different mask instead of just doing certain presets."*
+A mask could change exactly one thing — the local exposure — since masks
+existed.
+
+⚠ **Taken before stage 2 of the layer plan, and deliberately.** #75 staged N
+layers first and widening the op set second; the reverse is the right order,
+because it defines **what a layer is** before multiplying layers. It is also far
+lower risk: no schema restructure, no graph change, and it delivers the actual
+complaint today.
+
+### `research/masking.md` §2b — what a mask may change
+
+The test is whether the adjustment is a **function of the pixel alone**. §2's
+rule is that the coverage scales the *parameter*; that is only well defined
+pointwise. Four pass: exposure, contrast, saturation, and a colour cast.
+
+⚠ **White balance cannot be local, and the reason is structural.** Temperature
+and tint are applied in `linearize`, at the head of the graph, **before the
+demosaic** — because the demosaic interpolates white-balanced data and the level
+a channel clips at moves with its multiplier. A local white balance means
+demosaicing the frame twice and choosing per pixel: not an adjustment, a second
+pipeline.
+
+So the panel offers **Warmth** and **Tint**, which are a pointwise colour cast,
+and they are named differently from the global Temperature and Tint on purpose.
+Calling them the same thing is the kind of lie only discovered when someone
+tries to neutralise a cast with one and finds it cannot.
+
+The pyramid operators are refused for the reason #75 records: not pointwise, so
+§2's rule does not even define what a half-applied Laplacian decomposition
+*means*.
+
+### Two things caught in my own code
+
+- ⚠ **The cast's luminance renormalisation did nothing.** It read the luminance
+  on both sides of the multiply from the same already-cast colour, so the ratio
+  was one. A line that looks like it is doing the work and is not — caught by
+  writing the GPU check for it, and the mutation that reinstates it fails two.
+- ⚠ **The scenario asserted the wrong ordering.** Saturation runs *before* the
+  cast, so desaturating to grey and then casting gives a warm grey, not a grey.
+  The first draft demanded the opposite and failed against a correct shader.
+  Sixth time in this file's history that a first-draft check measured something
+  other than its claim.
+
+### Measured
+
+10 GPU checks against exact numbers, not magnitudes. ⚠ The load-bearing one is
+that **zero coverage is bit-identical**: every other check says "it moved", and
+only this one says it moved *where the mask is*. Four mutations dead, including
+scaling the result rather than the parameter, and pivoting contrast at zero
+instead of at the display transform's −2.5.
+
+Bench probe on **chroma rather than luma**, and that is the probe's point: the
+cast is renormalised so it does not move brightness, so a luma floor would read
+zero on a working control. 0.159, 0.210 and 0.049 of reference across the three
+frames. ⚠ The daylight frame moves a third of what the night ones do — it is
+already the most saturated, so a cast has proportionally less room — and a floor
+calibrated on the dark frames alone would trip on it, which is the mistake
+`DECISIONS.md` #47 records paying for twice.
+
+M0 gate unmoved at 9.70 ms; the local set is four more terms in a node that was
+already running.
+
+### Still not done
+
+**Stage 2: N independent layers.** One group with one adjustment set today, so a
+subject can be graded — but not the subject one way and the sky another at the
+same time. That is the next engine change, and #75 has its shape.
 
 ## Session 2026-07-30m — the brush erases, and a log that is a scenario
 

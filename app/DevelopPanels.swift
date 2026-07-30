@@ -534,6 +534,20 @@ extension Editor {
                     // overlapping components would apply it twice.
                     slider("Exposure", $engine.localExposureEv, -3...3, " EV", 2,
                            resetsTo: engine.defaults.localExposureEv)
+                    slider("Contrast", $engine.localContrast, -1...1, "", 2,
+                           resetsTo: engine.defaults.localContrast)
+                    slider("Saturation", $engine.localSaturation, -1...1, "", 2,
+                           resetsTo: engine.defaults.localSaturation)
+                    slider("Warmth", $engine.localWarmth, -1...1, "", 2,
+                           resetsTo: engine.defaults.localWarmth)
+                    slider("Tint", $engine.localTint, -1...1, "", 2,
+                           resetsTo: engine.defaults.localTint)
+                    Text("Warmth and Tint are a colour cast where the mask "
+                       + "covers — not a white balance. White balance is "
+                       + "applied before the demosaic, so it cannot be local.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     // Guided feathering, research/masking.md §4. On the group
                     // for the same reason Exposure is: it refines the combined

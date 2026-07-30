@@ -2709,6 +2709,181 @@ void testToneBandsWithoutGuide() {
            "worst " + std::to_string(worstWhites) + " EV");
 }
 
+// Local adjustments beyond exposure — research/masking.md §2b.
+//
+// §2's rule is that the coverage scales the *parameter*, not the result, and
+// §2b's test for whether an adjustment can be local at all is whether it is a
+// function of the pixel alone. These are the four that pass it.
+//
+// ⚠ Asserted against exact numbers rather than magnitudes. Every one of these
+// is a small addition to a node that already runs, and "it moved" is what let a
+// blacks slider ship delivering 39% of its effect.
+void testLocalAdjustments() {
+    section("Local adjustments (GPU)");
+
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 64, kH = 8;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/developLinear.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "developLinear");
+
+    using orion::gpu::PixelFormat;
+    auto src  = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+    auto dst  = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+    auto mask = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+
+    // A tinted mid-grey everywhere, so saturation and a colour cast both have
+    // something to act on. Constant, because what is being measured is the
+    // coverage ramp rather than a response to the picture.
+    constexpr double kR = 0.22, kG = 0.18, kB = 0.14;
+    {
+        std::vector<__fp16> in(std::size_t(kW) * kH * 4);
+        for (std::size_t i = 0; i < std::size_t(kW) * kH; ++i) {
+            in[i * 4 + 0] = __fp16(kR); in[i * 4 + 1] = __fp16(kG);
+            in[i * 4 + 2] = __fp16(kB); in[i * 4 + 3] = __fp16(1.0f);
+        }
+        src->upload(in.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+    }
+    // Coverage ramps 0..1 across x, so one run measures the whole ramp.
+    {
+        std::vector<__fp16> a(std::size_t(kW) * kH);
+        for (std::uint32_t y = 0; y < kH; ++y)
+            for (std::uint32_t x = 0; x < kW; ++x)
+                a[std::size_t(y) * kW + x] = __fp16(float(x) / float(kW - 1));
+        mask->upload(a.data(), std::size_t(kW) * sizeof(__fp16));
+    }
+
+    params::LinearAdjust la{};
+    la.size[0] = kW; la.size[1] = kH;
+    la.guideSize[0] = kW; la.guideSize[1] = kH;
+    la.maskActive = 1.0f;
+
+    std::vector<__fp16> out(std::size_t(kW) * kH * 4);
+    const auto run = [&]() {
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), src.get(), src.get(), mask.get(), dst.get()},
+                    &la, sizeof la, kW, kH);
+        cb.commitAndWait();
+        dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+    };
+    const auto px = [&](int x, int c) {
+        return double(out[(std::size_t(kH / 2) * kW + std::size_t(x)) * 4 + std::size_t(c)]);
+    };
+    const auto luma = [&](int x) {
+        return 0.2627 * px(x, 0) + 0.6780 * px(x, 1) + 0.0593 * px(x, 2);
+    };
+    const double baseLuma = 0.2627 * kR + 0.6780 * kG + 0.0593 * kB;
+
+    // ── ⚠ Zero coverage is bit-identical to no local adjustment ───────────
+    //
+    // The load-bearing one. Every check below says "it moved"; this says it
+    // moved *only where the mask is*. Column 0 has alpha 0.
+    {
+        la.localContrast = 0.7f; la.localSaturation = -0.8f;
+        la.localWarmth = 0.6f; la.localTint = -0.4f;
+        run();
+        const bool same = std::abs(px(0, 0) - kR) < 2e-3
+                       && std::abs(px(0, 1) - kG) < 2e-3
+                       && std::abs(px(0, 2) - kB) < 2e-3;
+        report(same, "all four leave a pixel with no coverage exactly as it was",
+               std::to_string(px(0, 0)) + ", " + std::to_string(px(0, 1)) + ", "
+             + std::to_string(px(0, 2)));
+        la = params::LinearAdjust{};
+        la.size[0] = kW; la.size[1] = kH;
+        la.guideSize[0] = kW; la.guideSize[1] = kH;
+        la.maskActive = 1.0f;
+    }
+
+    // ── Contrast pivots where the display transform pivots ────────────────
+    //
+    // A gain on the pixel's distance from -2.5 in log2, so the answer at full
+    // coverage is exactly 2^((ev + 2.5) * k) times the input. The tinted grey
+    // sits above the pivot, so a positive contrast brightens it.
+    {
+        la.localContrast = 0.5f;
+        run();
+        const double ev = std::log2(baseLuma);
+        const double want = baseLuma * std::exp2((ev + 2.5) * 0.5);
+        report(std::abs(luma(kW - 1) - want) / want < 0.02,
+               "contrast is a gain on distance from the display transform's pivot",
+               std::to_string(luma(kW - 1)) + " against " + std::to_string(want));
+
+        // Half coverage gives half the gain in the exponent, which is what
+        // "the alpha scales the parameter" means for this control.
+        const double half = baseLuma * std::exp2((ev + 2.5) * 0.5 * 0.5);
+        const int mid = int(kW) / 2;
+        report(std::abs(luma(mid) - half) / half < 0.03,
+               "and half coverage applies half of it, in the exponent",
+               std::to_string(luma(mid)) + " against " + std::to_string(half));
+        la.localContrast = 0.0f;
+    }
+
+    // ── Saturation goes to the pixel's own luminance ──────────────────────
+    {
+        la.localSaturation = -1.0f;
+        run();
+        const int x = int(kW) - 1;
+        const double spread = std::max({px(x, 0), px(x, 1), px(x, 2)})
+                            - std::min({px(x, 0), px(x, 1), px(x, 2)});
+        report(spread < 2e-3, "full negative saturation reaches neutral",
+               std::to_string(spread));
+        report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
+               "and does it at the pixel's own luminance, not at grey",
+               std::to_string(luma(x)) + " against " + std::to_string(baseLuma));
+        la.localSaturation = 0.0f;
+    }
+
+    // ── ⚠ The colour cast moves colour and not exposure ───────────────────
+    //
+    // The channels are renormalised on luminance afterwards, or Warmth would
+    // double as a brightness slider and the two controls would fight over the
+    // same pixels. The first version of the shader read the luminance on both
+    // sides of the cast from the same already-cast colour, so the ratio was one
+    // and the line did nothing — this is the check that would have caught it.
+    {
+        la.localWarmth = 1.0f;
+        run();
+        const int x = int(kW) - 1;
+        report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
+               "a warm cast at full coverage leaves the luminance where it was",
+               std::to_string(luma(x)) + " against " + std::to_string(baseLuma));
+        report(px(x, 0) / px(x, 2) > (kR / kB) * 1.4,
+               "while moving red against blue",
+               std::to_string(px(x, 0) / px(x, 2)) + " against "
+             + std::to_string(kR / kB));
+
+        // And it is signed.
+        la.localWarmth = -1.0f;
+        run();
+        report(px(x, 0) / px(x, 2) < (kR / kB) * 0.75,
+               "and the other way when it is negative",
+               std::to_string(px(x, 0) / px(x, 2)));
+        la.localWarmth = 0.0f;
+    }
+
+    // ── Tint is the green axis, and independent of warmth ─────────────────
+    {
+        la.localTint = 1.0f;
+        run();
+        const int x = int(kW) - 1;
+        report(px(x, 1) / (px(x, 0) + px(x, 2)) > (kG / (kR + kB)) * 1.15,
+               "tint moves green against the magenta axis",
+               std::to_string(px(x, 1) / (px(x, 0) + px(x, 2))));
+        report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
+               "and holds the luminance too",
+               std::to_string(luma(x)));
+    }
+}
+
+
 /// The zoom that keeps a lens correction inside the frame.
 ///
 /// Host maths, so it is checked exhaustively rather than at the four points a
@@ -7182,6 +7357,7 @@ int main() {
     testLongBrushStroke();
     testBrushErase();
     testMaskGeometryInverse();
+    testLocalAdjustments();
     testMaskRangeGpu();
     testMaskColourGpu();
     testBayerDecimation();
