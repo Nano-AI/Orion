@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-29 (M4 step 2 complete · design pass · **v0.4.0-alpha.1 released**)
+**Last updated:** 2026-07-29 (M4 step 2 · design pass · **v0.4.0-alpha.2** · seven reported bugs fixed)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 in progress** —
 step 1 of `research/masking.md` is finished and reachable by hand; **step 2's
 engine half is done**: a mask is now a *list* of components folded per §6
@@ -40,6 +40,89 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-29t — seven reported bugs, and a runner that reproduces them
+
+The developer used the alpha and reported thirteen things. Seven are fixed. The
+lasting artefact is **`repro/`**: one text file per report, run by the app itself
+(`--scenario`), so a report becomes a file that fails until it is fixed and then
+stays as the regression test. `app/Scenario.swift` documents the grammar.
+
+⚠️ **The runner drives `Engine`, `CanvasLayout` and `TargetedAdjust`** — the same
+objects the interface drives — and never reaches around them into the pipeline.
+One that poked the pipeline would exercise code already known to work and miss the
+view-model layer, which is where every one of these failures actually was.
+
+### The brush was wrong in two independent ways
+
+**Dab centres were never transformed.** The gradient's centre went through
+`mask::toFrame`; the stroke's points were copied straight from displayed
+coordinates into the shader. So a stroke ignored the crop and the rotation — and
+because a **portrait file carries an EXIF quarter turn**, a stroke on one landed
+mirrored and ninety degrees off *with the rotate control untouched*. The gradients
+being right is exactly what hid it: `MaskGeometry` was built for them in session
+`29j` and the brush was wired up in `29n` without being put through it, while this
+file claimed strokes survived rotation. Measured after: under the stroke
+0.3520 → 0.6405, away from it 0.2190 → 0.2190 bit-identical.
+
+**The nib was an ellipse.** Measured in normalized coordinates, where one unit of
+x and one of y are different pixel counts on any non-square frame — 3:2 on a 3:2
+photograph, and Size stretched rather than grew it. It is a radius in frame pixels
+now, off the displayed picture's shorter side so it holds its on-screen size under
+a crop.
+
+### Two silent failures, both the same shape
+
+**The eyedropper read an 8-bit texture as half float.** `Engine::sampleAt` used
+`__fp16` whatever the format, and the screen tail is `RGBA8Unorm` — which does not
+fail, it reinterprets four bytes as two halves and returns **NaN**. The
+consequence was not a wrong colour but a silent one: `TargetedAdjust.hue`
+correctly refuses a pixel with no hue, and NaN reads as no hue, so the pick did
+nothing and said nothing. Same trap the bench's `output16` already records.
+
+**Auto recorded no history entry.** Its five sliders were set by bare assignment
+under a comment claiming that kept them on an ordinary edit's path. `edit(_:_:)`
+is what records history; an assignment records nothing. So undo stepped *past*
+Auto to the edit before it — reported as "can't undo auto, gets rid of all
+changes". Decision #67 makes the rule explicit, because the failure is invisible:
+the picture updates, the slider shows the new value, only the undo stack is wrong.
+
+### Auto-enhance was not idempotent (decision #66)
+
+Two causes. It derived its look from the frame **as it currently stands**, so the
+second press measured the frame the first had corrected — +2.25 EV with lift 0.16,
+then +2.99 EV with lift 0.00 — which also falsified the code's own comment about
+the look responding to the photograph rather than to the correction. And the
+solver ran a flat six passes when every step undershoots by construction, so a
+frame far from the anchor ran out of passes short of it; the sample frames need
+6, 11 and 17. It resets its five owned controls before measuring and stops on
+arrival now.
+
+### ⚠️ What the runner cannot see, and why two reports are still open
+
+It measures `engine.outputTexture`, the *edited* render. **Compare composites two
+textures in the canvas view**, so a compare bug living in that compositing is
+invisible to it — the two passing compare scenarios are **not** evidence the
+reported behaviour is fine. Teaching it to measure through the canvas is the next
+step, and is what the remaining reports need.
+
+### Still open from the report
+
+| Report | Note |
+|---|---|
+| Compare shows wrong settings; rotating while comparing breaks | Needs the runner to see the canvas composite |
+| Sliders slow | Real: **adjustments render at full resolution.** M1's Interaction epic named degrade-then-refine and it was never built, so dehaze (108 ms) and clarity (58 ms) run at 24 MP every tick. Only the crop has a preview path |
+| Eyedropper latency | Separate from the NaN; unmeasured |
+| Lens panel discoverability | It is in the Detail tab and nobody found it |
+
+### v0.4.0-alpha.2
+
+Cut because alpha.1 shipped every brush bug above. ⚠️ **`releases/latest`
+excludes prereleases**, so the site's download button had been redirecting to the
+releases *listing* rather than a download — found by following the redirect
+instead of trusting the URL. It points at the tag now, which also keeps the
+right-click-to-open instructions in front of a visitor; a direct `.dmg` link would
+skip them.
 
 ## Session 2026-07-29s — the interface reads as an instrument, and there is a build
 
