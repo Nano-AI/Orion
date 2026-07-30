@@ -4,10 +4,10 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**M4 step 4 — subject and person selection**)
-**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 steps 1–4 done** —
-primitives, groups, guided refinement, a raster mask component, and Vision
-filling it. Only §5's sky is left in the masking plan, and it has no API. A mask is a *list* of components
+**Last updated:** 2026-07-30 (**luminance range masks**)
+**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
+finished except sky** — primitives, groups, guided refinement, a raster
+component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
 photograph's own edges, through the graph, the POD facade, the panel rows, the
 sidecar, undo and the bench.
@@ -17,20 +17,23 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** M4's remaining v1 features, in `ROADMAP.md` order — **luminance
-and colour range masks** are the cheapest (the bilateral grid from M1 already
-exists and range masks are one more component kind, which kind 4 has just shown
-the shape of), then spot removal, presets, sync and batch export.
+**Next story:** **spot removal** (`ROADMAP.md` M4) — sensor dust and blemishes,
+not Photoshop-grade healing. Then presets, copy/sync across a selection, and
+batch export, which are the last v1 items.
 
-⚠ **Sky is not next and is not cheap.** `research/masking.md` §5: Apple's sky
-matte exists only as capture-time metadata and cannot be generated from an
-imported raw, so it needs a bundled model — BiRefNet or U²-Net, both
-permissively licensed. RMBG is the trap: it is what every tutorial reaches for
-and its licence forbids commercial use.
+Two masking stories remain and neither is next:
 
-**Suites:** `orion-tests` **436 checks** · `orion-viewport-tests` **3279
-checks** · **10 `repro/` scenarios, 49 checks** · all 0 failures. Bench exits 0
-on all three frames: M0 gate **9.30 ms p95**, 125 nodes, 6243 MiB.
+- **Colour range masks.** Need a colour *distance* and so a colour space: CIE76
+  ΔE*ab in CIELAB (CIE 15:2004) is the cheap defensible choice, CIEDE2000
+  (CIE 142-2001) the accurate one. `research/masking.md` §4b names both.
+- ⚠ **Sky, which is not cheap.** Apple has no API — its sky matte is
+  capture-time metadata and cannot be produced from an imported raw — so it
+  needs a bundled BiRefNet or U²-Net. RMBG is the trap every tutorial reaches
+  for and its licence forbids commercial use.
+
+**Suites:** `orion-tests` **447 checks** · `orion-viewport-tests` **3279
+checks** · **11 `repro/` scenarios, 53 checks** · all 0 failures. Bench exits 0
+on all three frames: M0 gate **9.38 ms p95**, 125 nodes, 6243 MiB.
 
 ### Known gaps, carried forward
 
@@ -50,6 +53,74 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30b — a band on brightness
+
+⚠ **Ninth arrival of the stale M3 prompt.** Not re-litigated; M3 has been
+verified against the tree twice in this session's history.
+
+`research/masking.md` **§4b**, written before the code. There is no algorithm to
+cite for a luminance band and the section says so rather than dressing one up —
+what it records are the three decisions that are easy to get wrong. Mask kind 5;
+composed with intersect it refines another component, which is what Lightroom's
+range masks do, and composed with add it stands alone. Both fall out of §6's
+fold for free.
+
+| Decision | Why |
+|---|---|
+| Reads the **reference** image | Read the edited result and raising exposure through a highlight band grows the band, which raises the exposure further |
+| Measures in **stops** | Linear luminance is unbounded and logarithmic in its interesting range — a fixed linear band is enormous in the shadows and a sliver in the highlights |
+| Rec.2020 luma, BT.2020-2 Table 3 | The coefficients `guide_prep` and `develop_display` already use |
+
+### ⚠ The bias, which is the difference between usable and baffling
+
+The band is measured before the tone controls, so the reference carries the
+*scene's* luminance and not the screen's. On this night frame lifted 2.6 stops,
+a band set by looking at the picture sat two and a half stops away from anything
+and **selected nothing at all**. That is what the first version did, and it
+looked exactly like the feature being unwired.
+
+The measured stops are biased by the global exposure — one add, since exposure
+is a multiply. The *measurement* still comes from the stable reference, so the
+tone controls and the local exposure this mask drives leave it alone.
+
+`adj.exposureEv` had to join the component-params comparison for the same reason
+`matteDirty_` exists last session: the bias is not part of `MaskComponentEdit`,
+so without it the band keeps the exposure it was created under and drifts off
+the picture as the slider moves. **Second session running that state living
+outside the compared struct went stale silently.** That is now a pattern worth
+naming, not a coincidence.
+
+### Two mutations survived, and both were the test's fault
+
+- The C² check computed its ramp position from a **constant** rather than from
+  the band being run. With `rangeLo` at -99 there is no ramp within sixty
+  columns of where it sampled, so it measured a flat plateau and passed for a
+  linear falloff.
+- Product-versus-sum for the two edges differ **only where both are partial**,
+  which needs a band narrower than twice its softness. A thin luminance slice is
+  exactly what someone reaches for to isolate a tone, and it is a case now.
+
+Both fixed, four mutations dead, and the log-versus-linear difference is
+asserted rather than trusted: the band −2..+1 stops has its midpoint at −0.5,
+while the same interval's linear midpoint is +0.17.
+
+### The bench probe is a shadow band, deliberately
+
+⚠ A highlight band measured **NO EFFECT** on the night frame, and correctly so:
+it has almost nothing above middle grey — the same shape as dehaze finding no
+haze in a clear sky. Widening the band until it moved would have "fixed" it by
+selecting the whole picture, which measures nothing about a *band*. Every
+photograph has shadows. Floors 2.15, 3.08 and 0.34 of reference; the spread is
+the band working, since the two dark frames have six times more below middle
+grey than the daylight one.
+
+### A planning claim corrected
+
+`FEATURES.md` said range masks were cheap **because M1 built a bilateral grid**.
+⚠ M1 did not — there is none in the tree — and a range mask is pointwise, so it
+would not have helped. The edge-aware part is §4's guided refinement, which a
+range component composes with like any other.
 
 ## Session 2026-07-30a — M4 step 4, and three defects only running it found
 

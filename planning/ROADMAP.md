@@ -115,7 +115,10 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 **Definition of done:** you can dodge, burn, and fix a specific area — then apply it across a shoot.
 
 - ✅ Gradient masks (linear + radial) — parametric, applied to the parameter
-- Luminance and color range masks — cheap given M1's bilateral grid
+- ✅ **Luminance** range mask — 2026-07-30, `research/masking.md` §4b. ⚠ The
+  old note here said this was cheap given M1's bilateral grid; M1 never built
+  one, and a range mask is pointwise so it would not have helped
+- Colour range mask — needs a colour distance and so a colour space
 - ✅ Mask combine operators (add/subtract/intersect) — 2026-07-29, decision #62
 - ✅ Guided feathering of the mask group — 2026-07-29, `research/masking.md`
   §4 *(He, Sun & Tang)*. The mask's edge is pulled onto the photograph's,
