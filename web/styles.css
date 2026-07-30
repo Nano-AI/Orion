@@ -798,6 +798,18 @@ html.scrub .plx { will-change: transform; }
 }
 .cta:focus-visible { outline: 2px solid var(--teal); outline-offset: 5px; }
 
+/* The secondary route. One page, one primary action: the download wears the
+ * viewfinder brackets and the source link is a plain underline, so which one
+ * the page wants you to take is never in question. */
+.close__body p.alt { margin-top: .7rem; font-size: .84rem; }
+.close__body p.alt a {
+  color: var(--slate); text-decoration: underline;
+  text-decoration-thickness: 1px; text-underline-offset: .25em;
+  transition: color .25s ease;
+}
+.close__body p.alt a:hover { color: var(--ivory); }
+.close__body p.alt a:focus-visible { outline: 2px solid var(--teal); outline-offset: 4px; }
+
 /* ---------- Footer ---------- */
 
 .bar {
