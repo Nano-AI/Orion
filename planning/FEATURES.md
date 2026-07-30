@@ -87,7 +87,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 ## 9. Repair
 | Feature | Status | Notes |
 |---|---|---|
-| Spot removal (clone/heal) | M4 | Kept in scope. Sensor dust and blemishes — the common case, not Photoshop-grade healing |
+| Spot removal (clone/heal) | M4 | ✅ **Built 2026-07-30**. `research/spot-removal.md`. The zeroth-order term of Farbman et al.'s mean-value interpolant — no solver. ⚠ Bounded failure across a hard edge, recorded in `UNSOURCED.md` §21 and stated in the panel |
 
 ## 10. Effects
 | Feature | Status | Notes |
