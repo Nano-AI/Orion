@@ -94,6 +94,7 @@ typedef struct OrionMaskComponent {
     int   compose;          /* 0 add, 1 subtract, 2 intersect — the fold starts
                              * from zero, so the first component should be 0 */
     int   invert;           /* inverts this component, before the fold */
+    int   hidden;           /* the eye button: keeps its settings, contributes nothing */
 
     float centre_x, centre_y;
     float angle;            /* radians */

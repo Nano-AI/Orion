@@ -51,6 +51,11 @@ struct MaskComponentEdit {
     /// nothing. The interface should not offer an op on the first row.
     int   compose = 0;
     bool  invert = false;
+    /// Hidden by the eye button. The component keeps every setting and simply
+    /// stops contributing — which costs nothing, because a disabled node
+    /// resolves to its first input and this node's first input *is* the fold so
+    /// far. Skipping a component is therefore exactly not running it.
+    bool  hidden = false;
 
     float centre[2]{0.5f, 0.5f};
     float angle = 0.0f;                // radians, both gradient kinds

@@ -1893,7 +1893,7 @@ enum ViewportTests {
         // decoder drops it on purpose, so a default-constructed one would make
         // this state fail a round trip for a reason that is not a bug.
         var m = MaskComponentState()
-        m.kind = 1; m.compose = 2; m.invert = true
+        m.kind = 1; m.compose = 2; m.invert = true; m.hidden = true
         m.centreX = 0.4; m.centreY = 0.7; m.angle = 0.9; m.length = 0.33
         m.radiusX = 0.21; m.radiusY = 0.44; m.feather = 0.66; m.roundness = 3.5
         m.brushRadius = 0.05; m.brushFlow = 0.8; m.brushHardness = 0.15

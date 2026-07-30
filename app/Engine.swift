@@ -804,6 +804,22 @@ final class Engine {
         history.record(state, label: "Clear brush"); log.committed(state, label: "Clear brush")
     }
 
+    /// The selected row's visibility, for the panel and the scenario runner.
+    var maskHidden: Bool {
+        get { selected?.hidden ?? false }
+        set { editSelected { $0.hidden = newValue } }
+    }
+
+    /// The eye button. View-ish but genuinely part of the edit: a hidden mask
+    /// is a decision about the photograph, so it round-trips through the
+    /// sidecar and undo like anything else.
+    func toggleMaskHidden(_ index: Int) {
+        guard maskComponents.indices.contains(index) else { return }
+        edit(maskComponents[index].hidden ? "Show mask row" : "Hide mask row") {
+            maskComponents[index].hidden.toggle()
+        }
+    }
+
     /// One history entry when a component is added or removed.
     func commitMaskGroupEdit(_ label: String) {
         history.record(state, label: label)
@@ -1516,6 +1532,7 @@ final class Engine {
             c.kind = m.kind
             c.compose = m.compose
             c.invert = m.invert ? 1 : 0
+            c.hidden = m.hidden ? 1 : 0
             c.centre_x = m.centreX; c.centre_y = m.centreY
             c.angle = m.angle; c.length = m.length
             c.radius_x = m.radiusX; c.radius_y = m.radiusY

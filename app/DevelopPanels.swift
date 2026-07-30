@@ -316,6 +316,69 @@ extension Editor {
         .buttonStyle(.plain)
     }
 
+
+    /// One way in, grouped by **how the mask decides what it covers**.
+    ///
+    /// It was three separate controls: an Add button that made a linear
+    /// gradient whether or not that was wanted, a six-cell grid of kinds, and a
+    /// pair of Subject/Person buttons off to one side — so adding a subject
+    /// selection meant Add, then ignore the grid, then find the button. Three
+    /// entry points for one act.
+    ///
+    /// The grouping is not decoration: it is the real distinction between the
+    /// three families. **Draw** is placed by hand and stays where it is put.
+    /// **Detect** runs a model over the photograph. **Match** measures what the
+    /// pixels *are*. That is also the order of how much the photograph is
+    /// allowed to decide.
+    ///
+    /// ⚠ Subject and Person are still *actions* rather than modes — each runs a
+    /// model and fills the row with what it found. Putting them in this menu
+    /// keeps that: choosing one adds a row **and** runs the model, so there is
+    /// no way to select into an empty matte, which is indistinguishable from
+    /// the feature being broken. research/masking.md §5.
+    private var addMenu: some View {
+        Menu {
+            Section("Draw") {
+                Button("Linear gradient") { add(kind: 1) }
+                Button("Radial gradient") { add(kind: 2) }
+                Button("Brush") { add(kind: 3) }
+            }
+            Section("Detect") {
+                Button("Subject") { addDetected(.subject) }
+                Button("Person") { addDetected(.person) }
+            }
+            Section("Match") {
+                Button("Brightness range") { add(kind: 5) }
+                Button("Colour range") { add(kind: 6) }
+            }
+        } label: {
+            Label("Add", systemImage: "plus")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(engine.maskComponents.count >= Engine.maxMaskComponents
+                  || matteRunning || !engine.isLoaded)
+    }
+
+    private func add(kind: Int32) {
+        if engine.maskComponents.isEmpty {
+            engine.maskKind = kind
+        } else if engine.addMaskComponent(kind: kind) {
+            engine.commitMaskGroupEdit("Add mask")
+        }
+    }
+
+    /// Adds the row and runs the model in one act, so a Subject row never
+    /// exists without having been filled.
+    private func addDetected(_ kind: SubjectMatte.Kind) {
+        if engine.maskComponents.isEmpty {
+            engine.maskKind = 4
+        } else if engine.addMaskComponent(kind: 4) {
+            engine.commitMaskGroupEdit("Add mask")
+        }
+        findMatte(kind)
+    }
+
     var maskPanel: some View {
         Group {
             section("Local") {
@@ -327,6 +390,21 @@ extension Editor {
                 if !engine.maskComponents.isEmpty {
                     VStack(spacing: 2) {
                         ForEach(Array(engine.maskComponents.enumerated()), id: \.offset) { i, m in
+                          HStack(spacing: 4) {
+                            // ⚠ Its own button, outside the row's. Inside it, a
+                            // press on the eye would also change which row is
+                            // selected — so hiding row 3 while working on row 1
+                            // would move you to row 3.
+                            Button { engine.toggleMaskHidden(i) } label: {
+                                Image(systemName: m.hidden ? "eye.slash" : "eye")
+                                    .font(.system(size: 10))
+                                    .frame(width: 16)
+                                    .foregroundStyle(m.hidden ? Palette.faint : Palette.dim)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .help(m.hidden ? "Show this mask" : "Hide this mask")
+
                             Button {
                                 engine.selectedMask = i
                             } label: {
@@ -359,16 +437,15 @@ extension Editor {
                                 .clipShape(RoundedRectangle(cornerRadius: 3))
                             }
                             .buttonStyle(.plain)
+                            // A hidden row is dimmed, so the list says at a
+                            // glance which of them are actually contributing.
+                            .opacity(m.hidden ? 0.45 : 1)
+                          }
                         }
                     }
 
                     HStack(spacing: 8) {
-                        Button("Add") {
-                            if engine.addMaskComponent() {
-                                engine.commitMaskGroupEdit("Add mask")
-                            }
-                        }
-                        .disabled(engine.maskComponents.count >= Engine.maxMaskComponents)
+                        addMenu
                         Button("Remove") {
                             engine.removeMaskComponent(at: engine.selectedMask)
                             engine.commitMaskGroupEdit("Remove mask")
@@ -379,30 +456,7 @@ extension Editor {
                     .font(.system(size: 11))
                 }
 
-                // ⚠ A grid, not a segmented control. Six named kinds do not
-                // fit on one line at this width — and a segmented control that
-                // cannot fit does not truncate or clip, it forces its parent
-                // wider, which took the whole window with it when the sixth
-                // kind arrived.
-                //
-                // Two rows of three, grouped by what they are: the top row is
-                // the three you *place* by hand, the bottom row the three the
-                // photograph decides. "No mask" is not among them — it is not a
-                // kind of mask, it is the absence of one, so it is the Remove
-                // button above rather than a seventh cell that looks like a
-                // choice.
-                Grid(horizontalSpacing: 4, verticalSpacing: 4) {
-                    GridRow {
-                        maskKindCell("Linear", 1)
-                        maskKindCell("Radial", 2)
-                        maskKindCell("Brush", 3)
-                    }
-                    GridRow {
-                        maskKindCell("Range", 5)
-                        maskKindCell("Colour", 6)
-                        maskKindCell("Matte", 4)
-                    }
-                }
+                if engine.maskComponents.isEmpty { addMenu.font(.system(size: 11)) }
 
                 // ⚠ Beside the mask it describes. It was at the bottom of a
                 // 264-line section, so the control that shows you where the
@@ -412,20 +466,11 @@ extension Editor {
                     .controlSize(.mini)
                     .font(.system(size: 11))
 
-                // ⚠ Subject and Person are buttons, not entries in the picker
-                // above. They are *actions* — each runs a model and fills the
-                // component with what it found — and a picker entry would be a
-                // mode a photographer could select into an empty mask, which is
-                // indistinguishable from the feature being broken.
-                // research/masking.md §5.
-                HStack(spacing: 6) {
-                    PanelButton(title: matteRunning ? "Selecting…" : "Subject") {
-                        findMatte(.subject)
-                    }
-                    PanelButton(title: "Person") { findMatte(.person) }
+                if matteRunning {
+                    Text("Selecting…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.faint)
                 }
-                .disabled(matteRunning || !engine.isLoaded)
-                .opacity(matteRunning ? 0.5 : 1)
 
                 if engine.maskKind == 4 {
                     Text(matteCaption)

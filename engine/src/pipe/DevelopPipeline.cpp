@@ -1477,9 +1477,27 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     const float rotW = float(swaps ? height_ : width_);
     const float rotH = float(swaps ? width_  : height_);
 
-    if (first || adj.maskCount != lastAdj_.maskCount) {
+    // ⚠ Hidden components are *disabled*, not zeroed. A disabled node resolves
+    // to its first input, and this node's first input is the fold so far — so a
+    // hidden component is skipped exactly, for free, and keeps every setting it
+    // had. Zeroing its coverage instead would still cost a full-resolution pass
+    // to produce nothing.
+    const auto liveCount = [](const Adjustments& a) {
+        int n = 0;
+        for (int i = 0; i < a.maskCount; ++i)
+            if (!a.maskComponents[std::size_t(i)].hidden) ++n;
+        return n;
+    };
+    bool visibilityMoved = first || adj.maskCount != lastAdj_.maskCount;
+    for (int i = 0; !visibilityMoved && i < kMaxMaskComponents; ++i) {
+        visibilityMoved = adj.maskComponents[std::size_t(i)].hidden
+                       != lastAdj_.maskComponents[std::size_t(i)].hidden;
+    }
+    if (visibilityMoved) {
         for (int i = 0; i < kMaxMaskComponents; ++i) {
-            pipeline_.setEnabled(nMaskComponent_[i], i < adj.maskCount);
+            pipeline_.setEnabled(nMaskComponent_[i],
+                                 i < adj.maskCount &&
+                                 !adj.maskComponents[std::size_t(i)].hidden);
         }
     }
 
@@ -1628,7 +1646,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     }
 
     const bool linearMoved =
-        first ||
+        first || visibilityMoved ||
         adj.localExposureEv != lastAdj_.localExposureEv ||
         adj.maskOverlay != lastAdj_.maskOverlay ||
         adj.maskCount != lastAdj_.maskCount ||
@@ -1763,7 +1781,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                                 {guideW_, guideH_},
                                 {}, {}, {}};
         la.localExposureEv = adj.localExposureEv;
-        la.maskActive  = (adj.maskCount > 0) ? 1.0f : 0.0f;
+        la.maskActive  = (liveCount(adj) > 0) ? 1.0f : 0.0f;
         la.maskOverlay = adj.maskOverlay ? 1.0f : 0.0f;
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
         std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);

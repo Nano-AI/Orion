@@ -190,6 +190,7 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.kind          = s.kind;
         d.compose       = s.compose;
         d.invert        = s.invert != 0;
+        d.hidden        = s.hidden != 0;
         d.centre[0]     = s.centre_x;
         d.centre[1]     = s.centre_y;
         d.angle         = s.angle;

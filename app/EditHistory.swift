@@ -105,6 +105,8 @@ struct MaskComponentState: Equatable, Codable {
     /// is not — the panel does not offer one on the first row.
     var compose: Int32 = 0
     var invert = false
+    /// Hidden by the eye button. Keeps every setting and contributes nothing.
+    var hidden = false
     var centreX: Float = 0.5
     var centreY: Float = 0.5
     var angle: Float = 0
@@ -157,7 +159,7 @@ struct MaskComponentState: Equatable, Codable {
     /// component's range fields, so the guard could not see them. A round trip
     /// is only as good as the state it round-trips.
     private enum Key: String, CodingKey {
-        case kind, compose, invert, centreX, centreY, angle, length
+        case kind, compose, invert, hidden, centreX, centreY, angle, length
         case radiusX, radiusY, feather, roundness
         case rangeLo, rangeHi, rangeSoft
         case colourR, colourG, colourB, colourTol, colourSoft
@@ -175,6 +177,7 @@ struct MaskComponentState: Equatable, Codable {
         kind = (try? c.decodeIfPresent(Int32.self, forKey: .kind)).flatMap { $0 } ?? kind
         compose = (try? c.decodeIfPresent(Int32.self, forKey: .compose)).flatMap { $0 } ?? compose
         invert = (try? c.decodeIfPresent(Bool.self, forKey: .invert)).flatMap { $0 } ?? invert
+        hidden = (try? c.decodeIfPresent(Bool.self, forKey: .hidden)).flatMap { $0 } ?? hidden
         centreX = float(.centreX) ?? centreX
         centreY = float(.centreY) ?? centreY
         angle = float(.angle) ?? angle

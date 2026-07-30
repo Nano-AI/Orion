@@ -1,0 +1,39 @@
+# The eye button: a hidden mask keeps its settings and contributes nothing.
+#
+# ⚠ Hidden is a *disabled node*, not a zeroed coverage. A mask component's node
+# takes the fold-so-far as its first input, and a disabled node in this graph
+# resolves to its first input — so hiding a component skips it exactly, at no
+# cost, rather than spending a full-resolution pass to produce nothing.
+#
+# The property that matters is that it is reversible without loss: hide, show,
+# and the picture has to come back bit-identical. A "hide" that quietly reset
+# the row would look identical until you unhid it.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask radial
+set maskCentreX 0.45
+set maskCentreY 0.45
+set maskRadiusX 0.3
+set maskRadiusY 0.3
+set localExposure -2.0
+
+measure 0.40,0.40,0.10,0.10 shown
+measure 0.90,0.90,0.06,0.06 outside
+
+# Hiding it must give back exactly the unmasked picture.
+set maskHidden 1
+measure 0.40,0.40,0.10,0.10 hidden
+expect hidden != shown
+
+# ⚠ And the two-sided half: outside the mask nothing was ever being changed, so
+# hiding must leave that untouched. Without this the check above passes on a
+# "hide" that darkened the whole frame.
+measure 0.90,0.90,0.06,0.06 outsideHidden
+expect outsideHidden == outside
+
+# Showing it again restores the same picture, not merely a similar one — the
+# settings survived being hidden.
+set maskHidden 0
+measure 0.40,0.40,0.10,0.10 shownAgain
+expect shownAgain == shown

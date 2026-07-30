@@ -635,6 +635,7 @@ enum Scenario {
         case "maskColourTol", "maskColorTol":   e.maskColourTol = value
         case "maskColourSoft", "maskColorSoft": e.maskColourSoft = value
         case "maskInvert":  e.maskInvert = value != 0
+        case "maskHidden":  e.maskHidden = value != 0
         case "brushHardness": e.brushHardness = value
         default: throw Bad(what: "no control named \(control)")
         }
