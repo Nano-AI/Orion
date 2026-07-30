@@ -1,0 +1,51 @@
+# A raster matte leaked from one photograph to the next.
+#
+# `Engine::openRaw` keeps the compiled graph whenever the next frame has the
+# same shape — which is every frame of a folder from one camera — and calls
+# `DevelopPipeline::reload`. Reload re-pushed every parameter block and left the
+# two pieces of state that are **not** parameters exactly where they were: the
+# brush dabs, and the matte textures with their live rectangles.
+#
+# ⚠ A matte is not written to the sidecar (`STATUS.md` says so, and says a
+# reopened Subject row comes back empty until it is run again). It came back
+# holding the *previous photograph's* subject instead — full coverage, in the
+# right coordinate space, on the wrong picture. Nothing about that looks like a
+# bug from outside; it looks like Vision having selected something odd.
+#
+# Both sample frames are 6024x4024 from the same body, so the second open takes
+# the reload path. That is the whole precondition.
+
+# ── What an untouched kind-4 row must look like ──────────────────────────
+open samples/_PIC8148.ARW
+set exposure 2.6
+set localExposure -3
+mask matte
+measure 0.45,0.45,0.10,0.10 emptyRowAlone
+
+# ── The same thing, after another photo has had a matte run on it ────────
+#
+# `matte disc` puts a centred disc on 8220 — it covers the region measured
+# above. Then 8148 opens through the reused graph and asks for a kind-4 row it
+# has never run anything for.
+open samples/_PIC8220.ARW
+set exposure 2.6
+set localExposure -3
+matte disc
+
+open samples/_PIC8148.ARW
+set exposure 2.6
+set localExposure -3
+mask matte
+measure 0.45,0.45,0.10,0.10 emptyRowAfterOther
+expect emptyRowAfterOther == emptyRowAlone
+
+# ⚠ And the positive control, because the check above also passes if `matte
+# disc` never did anything in the first place. The disc has to be visible on the
+# photo it was actually run on.
+open samples/_PIC8220.ARW
+set exposure 2.6
+set localExposure -3
+measure 0.45,0.45,0.10,0.10 discBefore
+matte disc
+measure 0.45,0.45,0.10,0.10 discAfter
+expect discAfter != discBefore

@@ -1,0 +1,65 @@
+# The preview graph never received a brush stroke or a raster matte.
+#
+# Degrade-then-refine renders drags on a second `DevelopPipeline` over a
+# quarter-linear mosaic. `Engine::setAdjustments` fans out to both graphs and
+# says so in the header — but a brush stroke, a matte and a creative LUT are
+# **not** in `Adjustments`. They went through `developMutable()`, which is the
+# full graph and only the full graph.
+#
+# ⚠ So the mask a photographer had painted vanished for the length of every
+# drag and came back when they let go. Worst on exactly the controls the preview
+# exists for: local exposure through a brush mask is a slider, so every tick of
+# it was rendered with no coverage at all.
+#
+# The same staleness this file has recorded three times — state a kernel reads
+# that is not a field of the compared struct. Here it is not a missing dirty
+# flag but a missing *recipient*.
+
+# ── A brush stroke ───────────────────────────────────────────────────────
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask brush
+set brushRadius 0.15
+set brushFlow 1
+
+# ⚠ Armed *before* the local exposure, so that `set` renders the preview. An
+# unrendered preview texture reads as zeros, and a first measurement of 0.0000
+# differs from everything — the check would pass on a preview graph that had
+# never run.
+interact on
+set localExposure -3
+measure 0.45,0.45,0.10,0.10 underBefore preview
+measure 0.02,0.02,0.10,0.10 awayBefore preview
+brush 0.4,0.5 0.6,0.5
+measure 0.45,0.45,0.10,0.10 underAfter preview
+measure 0.02,0.02,0.10,0.10 awayAfter preview
+
+# The paint has to reach the picture the drag is looking at...
+expect underAfter != underBefore
+# ...and nowhere else. Without this side a stroke that darkened the whole frame
+# would pass, which is what a mask with no coverage and a live local exposure
+# would actually look like.
+expect awayAfter == awayBefore
+interact off
+
+# And the two graphs agree about it: the preview is a smaller picture of the
+# same edit, not a different one.
+measure 0.45,0.45,0.10,0.10 fullUnder
+expect fullUnder != awayBefore
+
+# ── A raster matte ───────────────────────────────────────────────────────
+#
+# The other piece of out-of-band state, and it fails the same way. A centred
+# disc in frame coordinates, so no segmentation model is involved.
+open samples/_PIC8220.ARW
+set exposure 2.6
+interact on
+set localExposure -3
+measure 0.45,0.45,0.10,0.10 matteUnderBefore preview
+measure 0.02,0.02,0.10,0.10 matteAwayBefore preview
+matte disc
+measure 0.45,0.45,0.10,0.10 matteUnderAfter preview
+measure 0.02,0.02,0.10,0.10 matteAwayAfter preview
+expect matteUnderAfter != matteUnderBefore
+expect matteAwayAfter == matteAwayBefore
+interact off

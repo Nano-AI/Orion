@@ -34,7 +34,11 @@ import SwiftUI
 ///     crop <x> <y> <w> <h>              normalized
 ///     preview on | off                  the crop tool's context render
 ///     set <control> <value>             any slider by name
-///     mask <kind>                       none | linear | radial | brush | range
+///     mask <kind>                       none | linear | radial | brush |
+///                                       matte | range. `matte` selects the
+///                                       raster kind without uploading one,
+///                                       which is what a reopened photo with a
+///                                       saved Subject row actually is
 ///     matte disc | left                 a synthetic raster matte in frame
 ///                                       coordinates, for the kind-4 component
 ///     select subject | person           runs Vision for real, and reports what
@@ -60,7 +64,11 @@ import SwiftUI
 ///                                       (the blit the screen actually shows,
 ///                                       which is where the compare split
 ///                                       composites its two textures — a
-///                                       compare bug is invisible to `output`)
+///                                       compare bug is invisible to `output`),
+///                                       `preview` (the quarter-linear graph a
+///                                       drag renders on) or `analysis` (the
+///                                       picture handed to Vision, which
+///                                       nothing on screen ever shows)
 ///     expect <name> <op> <value>        ==, !=, >, < against a recorded value
 ///     expect <name> == <other-name>     two recordings, equal in *both* mean
 ///                                       luma and mean saturation — one number
@@ -205,10 +213,14 @@ enum Scenario {
             if let thrown { throw thrown }
 
         case "mask":
+            // `matte` selects the raster kind *without* uploading one, which is
+            // what a sidecar carrying a Subject row looks like on reopening: the
+            // row is there and the raster is not. The `matte` verb below is the
+            // other half — it uploads one.
             let kinds = ["none": Int32(0), "linear": 1, "radial": 2, "brush": 3,
-                         "range": 5]
+                         "matte": 4, "range": 5]
             guard let k = kinds[args.first ?? ""] else {
-                throw Bad(what: "mask takes none, linear, radial or brush")
+                throw Bad(what: "mask takes none, linear, radial, brush, matte or range")
             }
             engine.maskKind = k
 
@@ -366,9 +378,10 @@ enum Scenario {
             case "output": surface = .output
             case "canvas": surface = .canvas
             case "preview": surface = .preview
+            case "analysis": surface = .analysis
             default:
-                throw Bad(what: "measure takes output, canvas or preview, "
-                              + "got \(args[2])")
+                throw Bad(what: "measure takes output, canvas, preview or "
+                              + "analysis, got \(args[2])")
             }
             let reading = try read(engine,
                                   CGRect(x: r[0], y: r[1], width: r[2], height: r[3]),
@@ -465,12 +478,20 @@ enum Scenario {
         guard let s = engine.sample(u: Float(p.x), v: Float(p.y)) else {
             throw Bad(what: "no sample at \(p.x),\(p.y) — is a photo open?")
         }
-        guard let hue = TargetedAdjust.hue(r: s.display.r, g: s.display.g,
-                                          b: s.display.b) else {
+        // ⚠️ The **scene** colour, because that is what `ImageCanvas.beginDrag`
+        // reads. This took the display colour, which is a different sample
+        // through a different code path: the display value comes from the
+        // output texture and is already cropped and turned, while the scene
+        // value is looked up in the whole frame and has to be carried there.
+        // So the runner exercised the one that could not go wrong and the
+        // interface used the one that did — the same kind of fidelity gap the
+        // `crop` verb had when it skipped `commitCropEdit`.
+        guard let hue = TargetedAdjust.hue(r: s.scene.r, g: s.scene.g,
+                                          b: s.scene.b) else {
             throw Bad(what: String(format:
                 "the pixel at %.2f,%.2f is too near grey to have a hue "
-                + "(r %.3f g %.3f b %.3f) — the tool refuses, by design",
-                p.x, p.y, s.display.r, s.display.g, s.display.b))
+                + "(scene r %.3f g %.3f b %.3f) — the tool refuses, by design",
+                p.x, p.y, s.scene.r, s.scene.g, s.scene.b))
         }
         let band = TargetedAdjust.band(forHue: hue)
         targeted.begin(band: band, hue: hue)

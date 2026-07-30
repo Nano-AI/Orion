@@ -50,6 +50,19 @@ public:
     /// Renders the preview graph. Returns GPU milliseconds.
     double renderPreview();
 
+    // ── State that is not an adjustment ───────────────────────────────────
+    //
+    // ⚠ A brush stroke, a raster matte and a creative LUT are all graph state
+    // that `Adjustments` does not carry, and every one of them has to reach
+    // **both** graphs for the same reason `setAdjustments` does. Routed through
+    // here rather than through `developMutable()`, which is the full graph
+    // only: a stroke sent to that one alone renders correctly when the hand is
+    // still and vanishes for the length of every drag.
+    void setBrushStroke(int component, const float* xy, int count);
+    bool setMaskMatte(int component, const float* alpha, int width, int height);
+    void setCreativeLut(const pipe::CubeLut&);
+    void clearCreativeLut();
+
     /// True once a preview graph exists for the open photo.
     [[nodiscard]] bool hasPreview() const noexcept { return preview_ != nullptr; }
 

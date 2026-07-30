@@ -80,6 +80,38 @@ double Engine::renderPreview() {
     return preview_->render();
 }
 
+void Engine::setBrushStroke(int component, const float* xy, int count) {
+    if (!develop_) throw std::runtime_error("no image open");
+    develop_->setBrushStroke(component, xy, count);
+    // Dabs are normalized displayed coordinates and the nib is a fraction of
+    // the displayed picture, so the same stroke means the same thing on a
+    // quarter-linear mosaic. Nothing is scaled here on purpose.
+    if (preview_) preview_->setBrushStroke(component, xy, count);
+}
+
+bool Engine::setMaskMatte(int component, const float* alpha, int width, int height) {
+    if (!develop_) throw std::runtime_error("no image open");
+    const bool ok = develop_->setMaskMatte(component, alpha, width, height);
+    // The full graph's answer is the one the caller gets. The preview's
+    // allocation is derived from the frame's aspect and can round a texel
+    // differently, so a matte it refuses costs the drag its matte and nothing
+    // else — the same bargain as building the preview graph at all.
+    if (ok && preview_) preview_->setMaskMatte(component, alpha, width, height);
+    return ok;
+}
+
+void Engine::setCreativeLut(const pipe::CubeLut& lut) {
+    if (!develop_) throw std::runtime_error("no image open");
+    develop_->setCreativeLut(lut);
+    if (preview_) preview_->setCreativeLut(lut);
+}
+
+void Engine::clearCreativeLut() {
+    if (!develop_) throw std::runtime_error("no image open");
+    develop_->clearCreativeLut();
+    if (preview_) preview_->clearCreativeLut();
+}
+
 const pipe::DevelopPipeline& Engine::previewDevelop() const {
     if (!preview_) throw std::runtime_error("no preview graph");
     return *preview_;
@@ -133,22 +165,24 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
         }
     }
 
-    // The unedited scene color. The reference image is unrotated, so invert
-    // the orientation exactly as orient.slang applies it — a naive transpose
-    // is wrong for every quarter turn and samples a mirrored pixel.
+    // The unedited scene color. The reference image is the whole frame, before
+    // the geometry node — uncropped, unturned and unstraightened — so the
+    // displayed point has to be carried into it.
+    //
+    // ⚠️ **Through `displayedToFrame`, which is the transform a mask goes
+    // through, and not a hand-rolled inverse.** This undid the quarter turn and
+    // nothing else, so on a cropped photograph it read whatever sat at that
+    // fraction of the *uncropped* frame: click the yellow car, get the hue of
+    // the tarmac above it. Silent, because the colour-mixer band it picks is
+    // plausible either way, and invisible to `repro/eyedropper-color-mixer.txt`
+    // because that scenario never crops. A straighten was wrong the same way.
     if (outScene) {
         const std::uint32_t rw = develop_->width();
         const std::uint32_t rh = develop_->height();
 
-        std::uint32_t sx = x, sy = y;
-        switch (develop_->quarterTurns()) {
-            case 1: sx = y;              sy = rh - 1 - x; break;
-            case 2: sx = rw - 1 - x;     sy = rh - 1 - y; break;
-            case 3: sx = rw - 1 - y;     sy = x;          break;
-            default: break;
-        }
-        sx = std::min(sx, rw - 1);
-        sy = std::min(sy, rh - 1);
+        const auto f = develop_->displayedToFrame(clamp01(u), clamp01(v));
+        const auto sx = static_cast<std::uint32_t>(clamp01(f.first)  * float(rw - 1));
+        const auto sy = static_cast<std::uint32_t>(clamp01(f.second) * float(rh - 1));
 
         __fp16 px[4]{};
         develop_->referenceImage().readPixel(sx, sy, px);

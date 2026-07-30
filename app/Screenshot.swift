@@ -571,11 +571,23 @@ enum Screenshot {
     /// preview survived every test: the settled picture was still right, and
     /// the only thing that had gone wrong was what the photographer saw *during*
     /// the drag, which nothing could see.
-    enum Surface { case output, canvas, preview }
+    /// ⚠ `analysis` is the picture *Vision* is handed — `renderForAnalysis`, with
+    /// the crop, the straighten and the user's rotation neutralised. Nothing on
+    /// screen ever shows it, so anything wrong with it is invisible to every
+    /// other surface here. It exists because the coverage overlay was not being
+    /// turned off around it: "Show mask" tints the render red wherever the group
+    /// covers, and that tinted frame went to a segmentation model.
+    enum Surface { case output, canvas, preview, analysis }
 
     static func regionStats(_ engine: Engine, region: CGRect,
                             through surface: Surface = .output)
         -> (luma: Double, saturation: Double)? {
+        if surface == .analysis {
+            guard let image = engine.renderForAnalysis(
+                    longEdge: SubjectMatte.previewLongEdge) else { return nil }
+            return regionStats(of: image, region: region)
+        }
+
         let source: MTLTexture?
         var w = Int(engine.imageWidth), h = Int(engine.imageHeight)
         switch surface {
@@ -585,6 +597,7 @@ enum Screenshot {
             source = engine.previewTexture
             let size = engine.previewSize
             w = Int(size.width); h = Int(size.height)
+        case .analysis: source = nil   // handled above
         }
         guard let src = source else { return nil }
         guard w > 0, h > 0 else { return nil }
@@ -600,6 +613,48 @@ enum Screenshot {
             let r = Double(min(max(Float(pixels[i * 4 + 0]), 0), 1))
             let g = Double(min(max(Float(pixels[i * 4 + 1]), 0), 1))
             let b = Double(min(max(Float(pixels[i * 4 + 2]), 0), 1))
+            let mx = max(r, max(g, b)), mn = min(r, min(g, b))
+            saturation += mx > 0.001 ? (mx - mn) / mx : 0
+            luma += 0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
+        let n = Double(rw * rh)
+        return (luma / n, saturation / n)
+    }
+
+    /// The same two numbers over a `CGImage`, which is what the analysis render
+    /// is. Drawn into an 8-bit RGBA context rather than read through
+    /// `CGDataProvider`, so a source in any layout or colour space arrives in
+    /// one known one.
+    private static func regionStats(of image: CGImage, region: CGRect)
+        -> (luma: Double, saturation: Double)? {
+        let w = image.width, h = image.height
+        guard w > 0, h > 0 else { return nil }
+
+        let x0 = max(0, min(w - 1, Int(region.minX * CGFloat(w))))
+        let y0 = max(0, min(h - 1, Int(region.minY * CGFloat(h))))
+        let rw = max(1, min(w - x0, Int(region.width * CGFloat(w))))
+        let rh = max(1, min(h - y0, Int(region.height * CGFloat(h))))
+        guard let crop = image.cropping(
+                to: CGRect(x: x0, y: y0, width: rw, height: rh)) else { return nil }
+
+        var bytes = [UInt8](repeating: 0, count: rw * rh * 4)
+        let ok: Bool = bytes.withUnsafeMutableBytes { raw -> Bool in
+            guard let ctx = CGContext(
+                    data: raw.baseAddress, width: rw, height: rh,
+                    bitsPerComponent: 8, bytesPerRow: rw * 4,
+                    space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return false }
+            ctx.draw(crop, in: CGRect(x: 0, y: 0, width: rw, height: rh))
+            return true
+        }
+        guard ok else { return nil }
+
+        var saturation = 0.0, luma = 0.0
+        for i in 0..<(rw * rh) {
+            let r = Double(bytes[i * 4 + 0]) / 255.0
+            let g = Double(bytes[i * 4 + 1]) / 255.0
+            let b = Double(bytes[i * 4 + 2]) / 255.0
             let mx = max(r, max(g, b)), mn = min(r, min(g, b))
             saturation += mx > 0.001 ? (mx - mn) / mx : 0
             luma += 0.2126 * r + 0.7152 * g + 0.0722 * b

@@ -255,7 +255,7 @@ OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
     // A null buffer with a positive count is a caller bug, not an empty stroke.
     if (xy == nullptr && count > 0) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        engine->impl.developMutable().setBrushStroke(component, xy, count);
+        engine->impl.setBrushStroke(component, xy, count);
         return ORION_OK;
     });
 }
@@ -269,8 +269,7 @@ OrionStatus orion_engine_set_mask_matte(OrionEngine* engine, int component,
         return ORION_ERR_BAD_ARG;
     if (alpha == nullptr && (width > 0 || height > 0)) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        const bool ok = engine->impl.developMutable()
-                            .setMaskMatte(component, alpha, width, height);
+        const bool ok = engine->impl.setMaskMatte(component, alpha, width, height);
         // Too large for the aux texture. Reported rather than resampled — see
         // the header. A caller that gets this back should downscale on its own
         // terms, where it can choose the filter.
@@ -400,7 +399,7 @@ OrionStatus orion_engine_load_lut(OrionEngine* engine, const char* path) {
         // about which line of it did.
         if (!parsed.ok) throw std::runtime_error(parsed.error);
 
-        engine->impl.developMutable().setCreativeLut(parsed.lut);
+        engine->impl.setCreativeLut(parsed.lut);
         return ORION_OK;
     });
 }
@@ -408,7 +407,7 @@ OrionStatus orion_engine_load_lut(OrionEngine* engine, const char* path) {
 OrionStatus orion_engine_clear_lut(OrionEngine* engine) {
     if (engine == nullptr) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        engine->impl.developMutable().clearCreativeLut();
+        engine->impl.clearCreativeLut();
         return ORION_OK;
     });
 }
@@ -427,6 +426,10 @@ OrionStatus orion_engine_lut_title(const OrionEngine* engine, char* out, int cap
 OrionStatus orion_engine_set_wide_output(OrionEngine* engine, int wide) {
     if (engine == nullptr) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
+        // ⚠ The full graph only, and the one piece of out-of-band state that is
+        // deliberately not fanned out to the preview. Sixteen bits exist for
+        // export, export reads `develop()`, and widening the preview's tail
+        // would reallocate two textures for a picture nothing measures.
         engine->impl.developMutable().setWideOutput(wide != 0);
         return ORION_OK;
     });
@@ -456,7 +459,14 @@ void* orion_engine_output_texture(const OrionEngine* engine) {
 
 void* orion_engine_preview_texture(const OrionEngine* engine) {
     if (engine == nullptr || !engine->impl.hasPreview()) return nullptr;
-    return engine->impl.previewDevelop().output().raw();
+    // Guarded exactly as the full graph's texture is. `output()` throws on a
+    // pipeline that never compiled, and a throw crossing this file terminates
+    // the process — the one thing this file exists to stop.
+    try {
+        return engine->impl.previewDevelop().output().raw();
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 void* orion_engine_metal_device(const OrionEngine* engine) {

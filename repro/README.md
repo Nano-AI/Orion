@@ -25,8 +25,12 @@ miss the view-model layer, which is where these failures are.
 | `mask-alignment.txt` | Passes — fixed: a radial mask's semi-axes were swapped on every odd quarter turn |
 | `eyedropper-latency.txt` | A measurement, not an assertion: 2.4 µs a read |
 | `slider-drag-cost.txt` | A measurement, and an open story: 9.4 / 65.7 / 116.4 ms a tick |
+| `eyedropper-under-a-crop.txt` | Passes — fixed: the scene sample undid the quarter turn and not the crop |
+| `preview-carries-the-mask.txt` | Passes — fixed: strokes, mattes and LUTs never reached the preview graph |
+| `matte-does-not-follow-the-photo.txt` | Passes — fixed: a reused graph kept the previous photo's matte |
+| `analysis-render-has-no-overlay.txt` | Passes — fixed: Vision was handed the red coverage overlay |
 
-## The three surfaces a scenario can measure
+## The surfaces a scenario can measure
 
 Which one a report lives on is usually the whole difficulty. Each of these was
 added because a bug was invisible to the ones before it.
@@ -35,6 +39,8 @@ added because a bug was invisible to the ones before it.
 |---|---|---|
 | The edited render | `measure <region> <name>` | anything the pipeline computes |
 | The canvas | `measure <region> <name> canvas` | the compare split, which composites **two** textures in the blit — invisible to the render alone |
+| The preview graph | `measure <region> <name> preview` | what the photographer sees *during* a drag, which the settled picture cannot show |
+| The analysis render | `measure <region> <name> analysis` | the picture handed to Vision — neutralised geometry, no overlay — which nothing on screen ever shows |
 | The interface's own model | `maskcheck <cells> <ev>` | the mask the overlay *draws* disagreeing with the coverage the engine *renders* |
 
 `measure ... canvas` renders through `CanvasBlit` — the real shader, the real
@@ -43,6 +49,13 @@ classifies with `CanvasLayout.maskAlpha`, the overlay's own transcription of the
 mask kernel. Both are deliberately the *actual* code the interface uses: a
 stand-in would be a second implementation with its own bugs and none of the
 first's.
+
+⚠️ **The runner has to read what the interface reads, not what is convenient.**
+`pick` derived its hue band from the *display* colour while `ImageCanvas` derives
+it from the *scene* colour — two different samples down two different code paths
+— so the eyedropper scenario exercised the one that could not go wrong. That is
+the same fidelity gap the `crop` verb had when it skipped `commitCropEdit`, and
+it is worth checking for whenever a verb stands in for a gesture.
 
 ## ⚠️ Two lessons these files paid for
 

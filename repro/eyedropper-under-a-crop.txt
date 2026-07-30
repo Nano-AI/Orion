@@ -1,0 +1,59 @@
+# The colour-mixer eyedropper picked the wrong pixel on a cropped photograph.
+#
+# `Engine::sampleAt` returns two colours. The display one comes from the output
+# texture, which is already cropped and turned, and was right. The scene one is
+# looked up in the *reference* image — the whole frame, before the geometry node
+# — and the code that carried the point there undid the quarter turn and nothing
+# else. So under a crop it read whatever sat at that fraction of the uncropped
+# frame, and under a straighten it read past the rotation.
+#
+# ⚠ Silent, because a hue band is plausible whichever pixel it came from. The
+# yellow Vantage picks band YELLOW at hue 58.8 deg; through the bug the same
+# click picked MAGENTA at 303.3, so the drag moved a band the car is not in and
+# the photograph did not respond.
+#
+# Invisible to `eyedropper-color-mixer.txt` for one reason: that scenario never
+# crops. This one is the same gesture at the same physical pixel, reached
+# through displayed coordinates that only agree with frame coordinates when the
+# whole frame is showing.
+
+# ── 1. The positive control: uncropped, which always worked ──────────────
+#
+# Here so that a change gutting the eyedropper outright fails this file too,
+# rather than leaving the crop cases passing vacuously against a tool that
+# does nothing anywhere.
+open samples/_PIC8220.ARW
+set exposure 2.6
+measure 0.04,0.52,0.08,0.08 flatBefore
+targeted 0.07,0.55 0.8
+measure 0.04,0.52,0.08,0.08 flatAfter
+expect flatAfter != flatBefore
+
+# ── 2. The bug: the same pixel, under a crop ─────────────────────────────
+#
+# The car sits at frame (0.07, 0.55). A crop starting at y = 0.4 and 0.4 tall,
+# 0.4 wide, puts it at (0.07 - 0) / 0.4 = 0.175 across and
+# (0.55 - 0.4) / 0.4 = 0.375 down the displayed picture.
+open samples/_PIC8220.ARW
+set exposure 2.6
+crop 0 0.4 0.4 0.4
+measure 0.10,0.30,0.20,0.20 cropBefore
+targeted 0.175,0.375 0.8
+measure 0.10,0.30,0.20,0.20 cropAfter
+expect cropAfter != cropBefore
+
+# ── 3. A crop and a quarter turn composed ────────────────────────────────
+#
+# ⚠ The discriminating case, because the old code was *right* about the turn and
+# wrong about everything else — so a fix that only reordered the two would still
+# pass case 2. One clockwise turn sends frame (x, y) to displayed (1 - y, x), so
+# the car is at (0.45, 0.07) on the turned frame and at
+# ((0.45 - 0.2) / 0.6, 0.07 / 0.4) = (0.4167, 0.175) inside this crop.
+open samples/_PIC8220.ARW
+set exposure 2.6
+rotate 1
+crop 0.2 0 0.6 0.4
+measure 0.333,0.10,0.134,0.20 turnedBefore
+targeted 0.4167,0.175 0.8
+measure 0.333,0.10,0.134,0.20 turnedAfter
+expect turnedAfter != turnedBefore

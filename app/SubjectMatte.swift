@@ -70,7 +70,9 @@ enum SubjectMatte {
 
     /// Long edge handed to the model. See `MatteGeometry.previewSize` for why
     /// more than this buys nothing.
-    static let previewLongEdge = 1024
+    /// `nonisolated` because it is a constant, and the measurement path that
+    /// renders the analysis surface reads it from outside the actor.
+    nonisolated static let previewLongEdge = 1024
 
     /// Produces a matte for the open photo, in **frame** coordinates.
     ///

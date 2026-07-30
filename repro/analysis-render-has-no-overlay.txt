@@ -1,0 +1,41 @@
+# Vision was handed a red-tinted photograph whenever "Show mask" was on.
+#
+# `renderForAnalysis` neutralises the crop, the straighten and the user's
+# rotation around the render it gives a segmentation model — and left the
+# coverage overlay exactly where it was. The overlay paints the mask's coverage
+# over the picture in red, which is a viewing aid and not a photograph.
+#
+# ⚠ The common case, not a corner: "Show mask" is on precisely when someone is
+# working with masks, which is precisely when they press Subject or Person. And
+# the failure has no signature — the model returns *a* matte, just not the one
+# it would have returned for this photograph, so it reads as Vision being bad at
+# this picture. `Engine.export` has carried the same guard for the same reason
+# since the overlay existed.
+#
+# Measured on the analysis surface directly rather than through what Vision does
+# with it. The model's output moves between OS releases and cannot be asserted;
+# what it is *given* is entirely ours.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+# A mask with real coverage over the middle of the frame, so the overlay has
+# something to tint. Kind and geometry are irrelevant to the property.
+mask radial
+set maskCentreX 0.5
+set maskCentreY 0.5
+set maskRadiusX 0.4
+set maskRadiusY 0.4
+
+measure 0.4,0.4,0.2,0.2 analysisPlain analysis
+overlay on
+measure 0.4,0.4,0.2,0.2 analysisOverlaid analysis
+expect analysisOverlaid == analysisPlain
+
+# ⚠ The other side, and without it the check above passes on an overlay that
+# does nothing anywhere. On screen — which is the surface the overlay is *for*
+# — turning it on has to change the picture.
+measure 0.4,0.4,0.2,0.2 screenOverlaid
+overlay off
+measure 0.4,0.4,0.2,0.2 screenPlain
+expect screenOverlaid != screenPlain

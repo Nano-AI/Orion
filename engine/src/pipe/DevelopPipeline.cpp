@@ -616,6 +616,21 @@ bool DevelopPipeline::canReload(const raw::BayerImage& image) const noexcept {
 }
 
 void DevelopPipeline::reload(const raw::BayerImage& image) {
+    // ⚠ A reload is a *different photograph* through the same compiled graph,
+    // and paint and mattes are the two pieces of state `Adjustments` does not
+    // carry — so nothing above would replace them. A matte in particular is not
+    // written to a sidecar, so the second frame of a folder would open with a
+    // Subject row that had never been run on it, quietly covered by the
+    // previous photo's subject. Cleared here rather than left to the caller:
+    // the app happens to re-send every stroke on open, and "happens to" is not
+    // an invariant.
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        brushDabs_[std::size_t(i)].clear();
+        matteLive_[i][0] = 0;
+        matteLive_[i][1] = 0;
+        matteDirty_[i] = true;
+    }
+
     applyImageParams(image);
 
     // Force every parameter block to be re-pushed: the new file has different

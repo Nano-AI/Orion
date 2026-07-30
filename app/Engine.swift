@@ -583,11 +583,21 @@ final class Engine {
         neutral.rotateQuarters = 0
         let heldPreview = cropPreview
 
+        // ⚠ And the coverage overlay, for the same reason `export` turns it
+        // off: it tints the render red wherever the group covers, and this
+        // render is fed to a segmentation model. "Show mask" is on exactly when
+        // a photographer is working with masks, which is exactly when they
+        // press Subject — so the failure is the common case, not a corner, and
+        // it would look like the model being bad at this photograph.
+        let heldOverlay = maskOverlay
+
+        maskOverlay = false
         cropPreview = false
         apply(neutral)
         defer {
             apply(held)
             cropPreview = heldPreview
+            maskOverlay = heldOverlay
         }
 
         let size = MatteGeometry.previewSize(frameWidth: Int(imageWidth),
