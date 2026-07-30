@@ -4,11 +4,10 @@
 
 ---
 
-**Last updated:** 2026-07-29 (**M4 step 4a — a raster mask component** · step 3
-guided feathering · four reported bugs, all the same day · **v0.4.0-alpha.2**)
-**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 steps 1–3 done, 4
-half done** — primitives, groups, guided refinement, and now somewhere for a
-raster matte to live. A mask is a *list* of components
+**Last updated:** 2026-07-30 (**M4 step 4 — subject and person selection**)
+**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **M4 steps 1–4 done** —
+primitives, groups, guided refinement, a raster mask component, and Vision
+filling it. Only §5's sky is left in the masking plan, and it has no API. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
 photograph's own edges, through the graph, the POD facade, the panel rows, the
 sidecar, undo and the bench.
@@ -18,27 +17,20 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** M4 **step 4b** — the Vision half. The engine now has mask kind 4
-and `orion_engine_set_mask_matte`; what is missing is a producer.
-`VNGenerateForegroundInstanceMaskRequest` on macOS 14+, run async, and the
-matte written into **frame** coordinates because that is the contract kind 4
-imposes. Then the kind picker gains "Subject" and "Person", and the guided
-refinement from step 3 is what recovers the boundary.
+**Next story:** M4's remaining v1 features, in `ROADMAP.md` order — **luminance
+and colour range masks** are the cheapest (the bilateral grid from M1 already
+exists and range masks are one more component kind, which kind 4 has just shown
+the shape of), then spot removal, presets, sync and batch export.
 
-⚠ **Decide the tone-mapped input first.** Vision wants an ordinary
-display-referred photo, not scene-linear Rec.2020. Two options, and the
-trade-off is real: a new tone-map node is a **second copy of the display
-transform**, which this codebase has been bitten by before; reading back the
-existing output texture avoids that but the result is in *displayed*
-coordinates, so the geometry has to be undone when writing the matte — and
-under a crop there is no matte data outside the crop rectangle. The leaning is
-the second, doing the resample once on a 1024-px raster off the hot path rather
-than per pixel per frame in the kernel. A fable subagent was asked and stalled
-without answering; this is unresolved, not settled.
+⚠ **Sky is not next and is not cheap.** `research/masking.md` §5: Apple's sky
+matte exists only as capture-time metadata and cannot be generated from an
+imported raw, so it needs a bundled model — BiRefNet or U²-Net, both
+permissively licensed. RMBG is the trap: it is what every tutorial reaches for
+and its licence forbids commercial use.
 
-**Suites:** `orion-tests` **436 checks** · `orion-viewport-tests` **3252
-checks** · **9 `repro/` scenarios, 46 checks** · all 0 failures. Bench exits 0 on
-all three frames: M0 gate **10.08 ms p95**, 125 nodes, 6243 MiB.
+**Suites:** `orion-tests` **436 checks** · `orion-viewport-tests` **3279
+checks** · **10 `repro/` scenarios, 49 checks** · all 0 failures. Bench exits 0
+on all three frames: M0 gate **9.30 ms p95**, 125 nodes, 6243 MiB.
 
 ### Known gaps, carried forward
 
@@ -49,7 +41,8 @@ Small, named, and none of them blocking the next story:
 | **Sliders render at full resolution.** Measured: exposure 9.4 ms/tick, clarity 65.7, dehaze 116.4 on a 24 MP frame — see `repro/slider-drag-cost.txt`. M1's Interaction epic named degrade-then-refine and it was never built. **This is the largest open reported item and it is a story, not a fix** | `Pipeline::render`, `Engine.pushAndRender` |
 | A brush stroke over **256 dabs is truncated** (warns on stderr). The kernel now carries the fix's shape — `accumulate` continues a stroke and skips the fold — but nothing spends a spare component node on the continuation | `DevelopPipeline::apply` |
 | **No bench probe for the brush.** ✅ *Unblocked* — `Probe` gained a `prepare` hook for out-of-band state when the matte probe needed one, and a stroke can use the same hook. Still not written | `apps/bench` |
-| **Mask kind 4 is not reachable from the interface.** Deliberate: the picker gains it when step 4b has a producer to fill it. A control that can only make an empty mask is worse than none | `DevelopPanels` |
+| **A matte is not saved with the photo.** It is a raster and the sidecar holds parameters, so reopening leaves a Subject or Person row empty until it is run again. Said out loud in the panel rather than left to be discovered | `Sidecar`, `DevelopPanels` |
+| **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand | `SubjectMatte` |
 | The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph | `Engine.export` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo | whole history |
@@ -57,6 +50,77 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30a — M4 step 4, and three defects only running it found
+
+⚠ **The stale M3 kickoff prompt arrived an eighth time.** M3 has been verified
+against the tree twice in this session's history; not re-litigated.
+
+Step 4a built the raster component last session. This session filled it.
+`VNGenerateForegroundInstanceMaskRequest` for class-agnostic subject lifting and
+`VNGeneratePersonSegmentationRequest` for people — macOS 14+, on device, no new
+dependency, no licence question.
+
+### The design question step 4a left open, answered
+
+Vision wants an ordinary display-referred photograph, and the tempting way to
+get one is a node that tone-maps the pre-geometry image. ⚠ **That is a second
+copy of the display transform**, which this codebase has been bitten by before.
+
+Instead the *existing* render is read back — already AgX-mapped, already eight
+bits — taken with the crop reset, the straighten at zero and the user's rotation
+at zero. That leaves exactly one difference from the frame coordinates kind 4
+requires: the EXIF quarter turn, which is an exact permutation of pixels and
+needs no resample. Neutralising the rest rather than correcting for it is the
+other half of the argument — a crop would leave the matte with no data outside
+the crop rectangle.
+
+`MatteGeometry` is pure array logic so `orion-viewport-tests` can pin it without
+a GPU, a window or a model. ⚠ Its load-bearing check is **agreement with the
+point transform the parametric masks use**: reverse the raster's direction and
+a matte and a gradient placed on the same subject land on opposite sides of the
+picture, each internally consistent. The round-trip test passes under a
+consistent reversal; only the agreement check catches it. Three mutations, all
+dead.
+
+### ⚠ Three defects, none of them findable by reading
+
+**The matte was invisible.** Uploaded correctly, `select` reported 15.4%
+coverage, and the render was untouched. `apply` skips a component whose
+`MaskComponentEdit` has not changed — and a matte is not in that struct, so
+`matteSize` never reached the shader and kind 4 read it as zero. Present,
+correct, reported, and drawing nothing. The brush has the same problem and
+answers it with `brushRevision`, a field the *caller* must remember to bump;
+this is `matteDirty_`, the engine remembering instead, which is the version a
+caller cannot get wrong.
+
+**An empty person matte was silent.** The person request does not report "no
+people" by returning no observation — it returns an observation whose mask is
+entirely zero. The guard written for exactly this never fired, and on a
+forecourt with no people the result was no error and no coverage, which is
+indistinguishable from a broken feature.
+
+**Nothing rendered at all on the first look.** That is what sent me looking, and
+it is the third session running where the screenshot was the instrument. The
+suites were green through all three defects.
+
+### What is checked, given the model cannot be
+
+Vision's output moves between OS releases and "did it pick the car" is not a
+property this suite can own. `repro/subject-selection.txt` asserts the *wiring*:
+the model runs, returns coverage, that coverage reaches the picture in the right
+coordinate space, and it stops somewhere rather than covering everything. It
+fails without `matteDirty_`.
+
+Measured across the samples: subject **15.4%** on the forecourt and **10.8%** on
+the plaza; person correctly finds nothing on either car frame and says so.
+Looked at as well — with the overlay on, the coverage sits on the two foreground
+Astons and stops at their bodies, leaving the white car behind, the building and
+the tarmac untouched.
+
+Subject and Person are **buttons, not picker entries**: they are actions, and a
+picker entry would be a mode a photographer could select into an empty mask. The
+panel was screenshotted rather than assumed.
 
 ## Session 2026-07-29w — M4 step 4a, somewhere for a raster to live
 

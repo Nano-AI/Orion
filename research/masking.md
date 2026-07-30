@@ -260,7 +260,7 @@ The plan above is the plan of record; this is the state of it.
 | 1. Primitives — brush dabs | ✅ paintable on the canvas |
 | 2. Groups and compositing (§6) | ✅ **done** — `mask_component.slang` folds per §6 (add = max, subtract, intersect), one node per component, `kMaxMaskComponents = 4`. Panel rows with a per-row op, sidecar and undo all carry the list; pre-group sidecars migrate to one component |
 | 3. Guided refinement (§4) | ✅ **done** — `mask_guide_prep` / `mask_guide_ab` / `mask_guide_apply`, seven nodes on the *folded group*, disabled at strength 0. The second input binding §4 asked for, and nothing else changed in the filter. Radius and epsilon are Orion's own: `UNSOURCED.md` §20 |
-| 4. Vision subject and person (§5) | ❌ not started |
+| 4. Vision subject and person (§5) | ✅ **done** — `SubjectMatte.swift`. Mask kind 4 is the raster component; the matte is read back from the *existing* render with the geometry neutralised, so no second copy of the display transform, and only the EXIF turn is undone. Sky is still unavailable and §5 says why |
 | 5. Sky | ❌ not started |
 
 The two primitive kernels are gone as separate files: one `mask_component.slang`

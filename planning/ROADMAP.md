@@ -120,9 +120,11 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 - ✅ Guided feathering of the mask group — 2026-07-29, `research/masking.md`
   §4 *(He, Sun & Tang)*. The mask's edge is pulled onto the photograph's,
   and left alone where there is none to find
-- AI subject/sky selection (Core ML) — needs the mask system first; the
-  guided pass above is what a coarse Vision matte gets refined and
-  upsampled by, which is why it came first
+- ✅ AI **subject and person** selection — 2026-07-30, Apple Vision, no bundled
+  model and no new dependency. **Sky is not done and is not cheap**: Apple has
+  no API for it (its matte is capture-time metadata only), so it needs a
+  bundled BiRefNet or U²-Net — both MIT/Apache. ⚠ RMBG is the trap every
+  tutorial reaches for and its licence forbids commercial use
 - Spot removal (sensor dust and blemishes, not Photoshop-grade healing)
 - Brush masks — **reinstated 2026-07-29**, see DECISIONS #54 (was cut from v1)
 - Presets (user + built-in looks)
