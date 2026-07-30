@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**degrade-then-refine — the last reported bug**)
+**Last updated:** 2026-07-30 (**the 256-dab brush truncation, gone**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
@@ -17,21 +17,16 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** nothing is *reported* and nothing in M4's v1 list is unbuilt.
-Three named extensions remain, in the order they are worth doing:
+**Next story:** **multi-selection in the filmstrip.** Sync and batch export both
+apply to every photo *in view* because there is nothing narrower to apply them
+to, and both already take a list of URLs — the work is entirely in `Filmstrip`
+and `Library`. After that, colour range masks, then sky.
 
-| Story | Note |
-|---|---|
-| **Multi-selection in the filmstrip** | Sync and batch both apply to every photo *in view* because there is nothing narrower to apply them to. `SyncSettings` and `BatchExport` already take a list of URLs |
-| **Colour range masks** | Needs a colour distance and so a colour space — `research/masking.md` §4b names CIE76 and CIEDE2000 |
-| **Sky** | ⚠ No Apple API; needs a bundled BiRefNet or U²-Net. RMBG is the licence trap |
+⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
+below is down to three items, all of them either cosmetic or named-and-costed.
 
-⚠ **Worth a session of its own before more features: the 256-dab brush
-truncation**, which is the oldest carried-forward gap in this file and the only
-one that silently loses a photographer's work.
-
-**Suites:** `orion-tests` **465 checks** · `orion-viewport-tests` **3351
-checks** · **14 `repro/` scenarios, 67 checks** · all 0 failures. Bench exits 0
+**Suites:** `orion-tests` **470 checks** · `orion-viewport-tests` **3351
+checks** · **15 `repro/` scenarios, 70 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **9.24 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -41,8 +36,7 @@ Small, named, and none of them blocking the next story:
 
 | Gap | Where |
 |---|---|
-| A brush stroke over **256 dabs is truncated** (warns on stderr). The kernel now carries the fix's shape — `accumulate` continues a stroke and skips the fold — but nothing spends a spare component node on the continuation | `DevelopPipeline::apply` |
-| **No bench probe for the brush.** ✅ *Unblocked* — `Probe` gained a `prepare` hook for out-of-band state when the matte probe needed one, and a stroke can use the same hook. Still not written | `apps/bench` |
+| **No bench probe for the brush.** Unblocked — `Probe` gained a `prepare` hook when the matte probe needed one, and a stroke can use the same hook. Still not written | `apps/bench` |
 | **A matte is not saved with the photo.** It is a raster and the sidecar holds parameters, so reopening leaves a Subject or Person row empty until it is run again. Said out loud in the panel rather than left to be discovered | `Sidecar`, `DevelopPanels` |
 | **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand | `SubjectMatte` |
 | The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph | `Engine.export` |
@@ -52,6 +46,53 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30h — the brush stops losing the end of a stroke
+
+⚠ **Fifteenth arrival of the stale M3 prompt.** Not re-litigated.
+
+The oldest carried-forward gap in this file, and the only one that silently lost
+a photographer's work: everything past 256 dabs was dropped, with a warning on
+stderr that the person painting the stroke would never see.
+
+### ⚠ The recorded plan was reasoning from the wrong constraint
+
+This file said, for four sessions, that the fix was **more nodes** chained
+through the kernel's `accumulate` flag, and that it was "more nodes, not a
+bigger buffer". That was wrong. The cap came from **Metal's four-kilobyte limit
+on `setBytes`** — the parameter block was already two kilobytes, so an inline
+dab list could hold 256 and no more.
+
+Moving the stroke into an auxiliary **texture** removes the cap outright. It is
+a binding the pipeline already supports for the mask matte, it costs 128 KB for
+four components, and it needs no chain, no spare component and no second code
+path. 256 × 64 texels is 16,384 dabs — about eighty frame-widths of stroke.
+
+Worth recording as a pattern: a plan written next to a symptom, four sessions
+before anyone tried it, described the shape of the *kernel* rather than the
+shape of the *limit*.
+
+### Two traps on the way
+
+- ⚠ `dabStride` went **before** the range block in the C++ struct and **after**
+  it in the shader. The two would have disagreed from offset 88 onward, and
+  every field past it would have been read from the wrong place — a plausible
+  mask rather than an obviously broken one. The offset asserts caught it, which
+  is exactly what they exist for.
+- ⚠ A zero-initialised `MaskComponent` leaves `dabStride` at zero, and the
+  kernel's `max(stride, 1)` then puts dab 1 on row 1 of the texture, where
+  nothing was written. A two-dab source-over check silently measured one dab.
+
+### ⚠ One mutation needed a second level of test
+
+Four mutations; three died against `orion-tests`. The fourth — reinstating the
+cap in `DevelopPipeline::apply` — **passed the entire GPU suite**, because that
+suite drives the kernel directly and never asks what the pipeline chose to
+upload. `repro/long-brush-stroke.txt` paints ~360 dabs through `Engine` and
+fails without the fix.
+
+That is the third time this session a defect lived in the gap between two things
+that were each tested on their own.
 
 ## Session 2026-07-30g — degrade-then-refine, and the report list empties
 

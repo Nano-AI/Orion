@@ -347,11 +347,11 @@ node's output. Pinned by a GPU test now.
   **CenterWeight is called Hardness** in the interface, because that is the word
   photographers use.
 
-⚠ **A stroke longer than 256 dabs is truncated**, with a warning on stderr. The
-component kernel already carries the fix's shape — an `accumulate` flag that
-continues the stroke in its input and skips the fold — but nothing yet spends a
-second component node on the continuation. The fix is more nodes, not a bigger
-buffer.
+✅ **A long stroke is no longer truncated** (2026-07-30). ⚠ The note that stood
+here said the fix was more nodes chained through `accumulate`, and that it was
+"more nodes, not a bigger buffer" — reasoning from the wrong constraint. The cap
+was Metal'+chr(39)+'s four-kilobyte limit on `setBytes`; the stroke now lives in an
+auxiliary texture, 16,384 dabs, no chain and no spare component.
 
 ⚠ **The nib's constants are not sourced.** Dab spacing, the hardness clamp and
 the overlay tint are all Orion's own, recorded in `UNSOURCED.md` §17 and §18.
