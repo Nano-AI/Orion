@@ -264,6 +264,14 @@ OrionStatus orion_engine_set_mask_matte(OrionEngine* engine, int component,
     });
 }
 
+OrionStatus orion_engine_quarter_turns(const OrionEngine* engine, int* out_turns) {
+    if (engine == nullptr || out_turns == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        *out_turns = engine->impl.develop().quarterTurns();
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
                                         unsigned* out_w, unsigned* out_h) {
     if (engine == nullptr || out_w == nullptr || out_h == nullptr)

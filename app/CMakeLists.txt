@@ -19,6 +19,8 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasBlit.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/SubjectMatte.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Navigator.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorLoupe.swift
@@ -76,6 +78,7 @@ add_custom_command(
             -lc++ -lc++abi
             -framework Metal -framework MetalKit -framework Foundation
             -framework CoreGraphics -framework ImageIO -framework AppKit
+            -framework Vision -framework CoreVideo
     DEPENDS ${SWIFT_SOURCES}
             ${CMAKE_CURRENT_SOURCE_DIR}/Bridge.h
             ${CMAKE_CURRENT_BINARY_DIR}/Info.plist
@@ -101,6 +104,7 @@ add_custom_command(
             -target arm64-apple-macos14.0
             ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
@@ -113,6 +117,7 @@ add_custom_command(
             -o ${VIEWPORT_TESTS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift

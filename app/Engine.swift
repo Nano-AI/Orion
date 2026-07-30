@@ -457,6 +457,52 @@ final class Engine {
         }
     }
 
+    /// Total clockwise quarter turns — the camera's own EXIF orientation plus
+    /// the user's rotation. A matte producer needs it; see `MatteGeometry`.
+    var quarterTurns: Int {
+        guard let handle, isLoaded else { return 0 }
+        var t: Int32 = 0
+        guard orion_engine_quarter_turns(handle, &t) == ORION_OK else { return 0 }
+        return Int(t)
+    }
+
+    /// The developed picture with its geometry neutralised, for something that
+    /// wants to *analyse* it rather than show it — today, segmentation.
+    ///
+    /// ⚠ The crop, the straighten and the user's rotation are reset around the
+    /// render, so the only difference between what comes back and the frame the
+    /// mask kernel works in is the EXIF quarter turn — which is an exact
+    /// permutation and needs no resample. Neutralising rather than correcting
+    /// is what stops a matte having no data outside the crop rectangle.
+    /// research/masking.md §5.
+    ///
+    /// Two renders and a readback, and it restores the caller's state exactly —
+    /// the same shape as `captureOriginal`, for the same reason.
+    func renderForAnalysis(longEdge: Int) -> CGImage? {
+        guard isLoaded else { return nil }
+
+        let held = state
+        var neutral = held
+        neutral.cropX = 0; neutral.cropY = 0
+        neutral.cropW = 1; neutral.cropH = 1
+        neutral.straightenDeg = 0
+        neutral.rotateQuarters = 0
+        let heldPreview = cropPreview
+
+        cropPreview = false
+        apply(neutral)
+        defer {
+            apply(held)
+            cropPreview = heldPreview
+        }
+
+        let size = MatteGeometry.previewSize(frameWidth: Int(imageWidth),
+                                             frameHeight: Int(imageHeight),
+                                             longEdge: longEdge)
+        guard size.width > 0, size.height > 0 else { return nil }
+        return Screenshot.developedCGImage(self, fitting: size)
+    }
+
     /// Uploads a raster matte for the selected component — kind 4,
     /// research/masking.md §5.
     ///

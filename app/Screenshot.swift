@@ -490,6 +490,58 @@ enum Screenshot {
         return NSImage(cgImage: cg, size: NSSize(width: w, height: h))
     }
 
+    /// The developed picture as a `CGImage`, scaled to fit, eight bits.
+    ///
+    /// For anything that wants to *analyse* the render rather than measure it —
+    /// today, handing a segmentation model an ordinary display-referred photo
+    /// (research/masking.md §5). Eight bits and sRGB on purpose: that is what
+    /// those models were trained on, and it is what the screen path already
+    /// produces, so no second copy of the display transform is needed to get it.
+    ///
+    /// Drawn through CoreGraphics rather than sampled by hand, because the
+    /// downscale wants a real filter and CoreGraphics has one.
+    static func developedCGImage(_ engine: Engine,
+                                 fitting size: (width: Int, height: Int)) -> CGImage? {
+        guard let src = engine.outputTexture else { return nil }
+        let w = Int(engine.imageWidth), h = Int(engine.imageHeight)
+        guard w > 0, h > 0, w <= src.width, h <= src.height,
+              size.width > 0, size.height > 0 else { return nil }
+
+        let halves = readNormalized(src, width: w, height: h)
+        var pixels = [UInt8](repeating: 255, count: w * h * 4)
+        for i in 0..<(w * h) {
+            for c in 0..<3 {
+                let v = min(max(Float(halves[i * 4 + c]), 0), 1)
+                pixels[i * 4 + c] = UInt8(v * 255)
+            }
+            // Opaque. Alpha is zero outside a turned frame, and a segmentation
+            // model handed transparent corners reads them as content.
+            pixels[i * 4 + 3] = 255
+        }
+
+        let space = CGColorSpaceCreateDeviceRGB()
+        let info: CGBitmapInfo = CGBitmapInfo(
+            rawValue: CGImageAlphaInfo.noneSkipLast.rawValue)
+        let data = pixels.withUnsafeBufferPointer { Data(buffer: $0) }
+        guard let provider = CGDataProvider(data: data as CFData),
+              let full = CGImage(width: w, height: h, bitsPerComponent: 8,
+                                 bitsPerPixel: 32, bytesPerRow: w * 4,
+                                 space: space, bitmapInfo: info,
+                                 provider: provider, decode: nil,
+                                 shouldInterpolate: true, intent: .defaultIntent)
+        else { return nil }
+
+        if size.width == w && size.height == h { return full }
+
+        guard let ctx = CGContext(data: nil, width: size.width, height: size.height,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: space, bitmapInfo: info.rawValue)
+        else { return nil }
+        ctx.interpolationQuality = .high
+        ctx.draw(full, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+        return ctx.makeImage()
+    }
+
     /// Prints the mean and standard deviation of a region of the engine's
     /// output.
     ///

@@ -253,6 +253,13 @@ OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
 OrionStatus orion_engine_set_mask_matte(OrionEngine* engine, int component,
                                         const float* alpha, int width, int height);
 
+/* Total clockwise quarter turns currently applied — the camera's own EXIF
+ * orientation plus the user's rotation.
+ *
+ * A matte producer needs this: kind 4 wants frame coordinates, and a render it
+ * reads back has been through the orientation node. research/masking.md §5. */
+OrionStatus orion_engine_quarter_turns(const OrionEngine* engine, int* out_turns);
+
 /* The largest matte this image will accept, in pixels. */
 OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
                                         unsigned* out_w, unsigned* out_h);

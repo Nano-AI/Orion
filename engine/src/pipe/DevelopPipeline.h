@@ -428,6 +428,21 @@ private:
     /// The live rectangle of each matte, or zero where none has been uploaded.
     std::uint32_t matteLive_[kMaxMaskComponents][2]{};
 
+    /// ⚠ Set when a matte is uploaded, cleared when its component's params are
+    /// pushed.
+    ///
+    /// `apply` skips a component whose `MaskComponentEdit` has not changed, and
+    /// a matte is not in that struct — it is a raster uploaded out of band. So
+    /// without this the upload lands in the aux texture and `matteSize` never
+    /// reaches the shader, which reads it as zero and draws nothing: a matte
+    /// that is present, correct, reported as covering 15% of the frame, and
+    /// invisible. Found by looking at a render, not by reading the code.
+    ///
+    /// The brush has the same problem and answers it with `brushRevision`, a
+    /// field the *caller* has to remember to bump. This is the engine
+    /// remembering instead, which is the version a caller cannot get wrong.
+    bool matteDirty_[kMaxMaskComponents]{};
+
     /// Guided feathering of the folded group — research/masking.md §4.
     /// One chain for the whole group, not one per component: what gets snapped
     /// to an edge is the coverage the photographer can see.

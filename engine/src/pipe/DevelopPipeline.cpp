@@ -684,6 +684,7 @@ bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
     if (alpha == nullptr || width <= 0 || height <= 0) {
         matteLive_[slot][0] = 0;
         matteLive_[slot][1] = 0;
+        matteDirty_[slot] = true;
         return true;
     }
 
@@ -713,6 +714,7 @@ bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
 
     matteLive_[slot][0] = std::uint32_t(width);
     matteLive_[slot][1] = std::uint32_t(height);
+    matteDirty_[slot] = true;
     return true;
 }
 
@@ -1420,10 +1422,12 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         // A component past the count is disabled; its params cannot reach the
         // picture, so uploading them would only dirty a node that will not run.
         if (i >= adj.maskCount) continue;
-        if (!first && frameMoved == false && c == lastAdj_.maskComponents[std::size_t(i)] &&
+        if (!first && frameMoved == false && !matteDirty_[std::size_t(i)] &&
+            c == lastAdj_.maskComponents[std::size_t(i)] &&
             i < lastAdj_.maskCount) {
             continue;
         }
+        matteDirty_[std::size_t(i)] = false;
 
         params::MaskComponent m{};
         m.size[0] = width_; m.size[1] = height_;

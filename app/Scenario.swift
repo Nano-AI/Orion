@@ -37,6 +37,8 @@ import SwiftUI
 ///     mask <kind>                       none | linear | radial | brush
 ///     matte disc | left                 a synthetic raster matte in frame
 ///                                       coordinates, for the kind-4 component
+///     select subject | person           runs Vision for real, and reports what
+///                                       fraction of the frame it covered
 ///     overlay on | off                  paint the coverage, as `Show mask` does
 ///     maskcheck <cells> <ev>            does the mask the *interface draws*
 ///                                       sit on the coverage the engine
@@ -249,6 +251,29 @@ enum Scenario {
                 }
             }
             guard engine.setMaskMatte(a, width: mw, height: mh) else {
+                throw Bad(what: "the engine refused the matte")
+            }
+            engine.maskKind = 4
+
+        case "select":
+            // Runs a real segmentation model. ⚠ Not an assertion about what it
+            // finds — that moves between OS releases — but the only way the
+            // integration is exercised at all rather than shipped on the
+            // strength of compiling. research/masking.md §5.
+            let which: SubjectMatte.Kind
+            switch args.first {
+            case "subject": which = .subject
+            case "person":  which = .person
+            default: throw Bad(what: "select takes subject or person")
+            }
+            if engine.maskComponents.isEmpty { engine.addMaskComponent(kind: 4) }
+            let m = try SubjectMatte.generateBlocking(engine: engine, kind: which)
+            var covered = 0
+            for v in m.alpha where v > 0.5 { covered += 1 }
+            say(String(format: "  %@ matte %dx%d, %.1f%% covered\n",
+                       "\(which)" as NSString, m.width, m.height,
+                       100.0 * Double(covered) / Double(max(m.alpha.count, 1))))
+            guard engine.setMaskMatte(m.alpha, width: m.width, height: m.height) else {
                 throw Bad(what: "the engine refused the matte")
             }
             engine.maskKind = 4

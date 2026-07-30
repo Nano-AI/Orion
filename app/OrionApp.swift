@@ -258,8 +258,16 @@ struct Editor: View {
     }
 
     @State var band: HueBand = .blue
+
+    /// Set while a segmentation model is running, so the two buttons can say so
+    /// and cannot be pressed twice. research/masking.md §5.
+    @State var matteRunning = false
+    /// Which producer made the selected component's matte, for the label. Not
+    /// in `DevelopState`: the matte itself is not in the sidecar either, so
+    /// claiming a provenance that will not survive a reopen would be a lie.
+    @State var matteSource: String?
     @State var targeted = TargetedAdjust()
-    @State private var message: String?
+    @State var message: String?
     @State private var exportSettings = ExportSettings()
     @State private var showingExport = false
     @State private var library = Library()

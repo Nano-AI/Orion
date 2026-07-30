@@ -1,0 +1,39 @@
+# Vision subject selection — research/masking.md §5.
+#
+# ⚠ **This cannot assert what the model finds.** Vision's output moves between
+# OS releases, and "did it pick the car" is not a property a suite can own. What
+# it asserts is that the integration is *wired*: the model runs, it returns
+# coverage, that coverage reaches the picture in the right coordinate space, and
+# it stops somewhere rather than covering everything.
+#
+# That is worth a file because the failure it catches already happened once. The
+# matte uploaded correctly, `select` reported 15.4% coverage, and the render was
+# untouched — `apply` skips a component whose `MaskComponentEdit` has not
+# changed, and a matte is not in that struct, so `matteSize` never reached the
+# shader. Present, correct, reported, and invisible. Only looking at a render
+# found it; this file is what would have.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+measure 0.42,0.60,0.10,0.10 carBefore
+measure 0.80,0.85,0.08,0.08 tarmacBefore
+
+# Errors out if the model finds nothing, which is itself a result worth failing
+# on: it would mean this photograph stopped having a subject.
+select subject
+set localExposure 2.0
+
+measure 0.42,0.60,0.10,0.10 carAfter
+measure 0.80,0.85,0.08,0.08 tarmacAfter
+
+print the selection lands on the subject and nowhere near the foreground tarmac
+expect carAfter != carBefore
+expect tarmacAfter == tarmacBefore
+
+# ⚠ And it is a *selection*, not the whole frame. A matte that covered
+# everything would satisfy the first check above and be useless; this is what
+# separates the two.
+undo
+measure 0.80,0.85,0.08,0.08 tarmacRestored
+expect tarmacRestored == tarmacBefore

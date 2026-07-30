@@ -63,6 +63,53 @@ extension Editor {
         }
     }
 
+    /// ⚠ Says out loud that a matte does not survive a reopen. It is a raster
+    /// and the sidecar holds parameters, so it is not written — and a selection
+    /// that silently vanished when the photo was opened again would read as
+    /// data loss rather than as a limit.
+    var matteCaption: String {
+        guard let source = matteSource else {
+            return "A selection made earlier. It is not saved with the photo, "
+                 + "so reopening leaves this row empty until you run it again."
+        }
+        return "A \(source.lowercased()) selection. Press either button again "
+             + "to redo it after a big change to the picture. Not saved with "
+             + "the photo."
+    }
+
+    /// Runs a segmentation model and puts what it finds into the selected
+    /// component. research/masking.md §5.
+    ///
+    /// A component is added if the group is empty, so pressing Subject on a
+    /// fresh photo does the obvious thing rather than silently nothing.
+    func findMatte(_ kind: SubjectMatte.Kind) {
+        guard engine.isLoaded, !matteRunning else { return }
+        matteRunning = true
+
+        Task { @MainActor in
+            defer { matteRunning = false }
+            do {
+                let m = try await SubjectMatte.generate(engine: engine, kind: kind)
+                if engine.maskComponents.isEmpty { engine.addMaskComponent(kind: 4) }
+                guard engine.setMaskMatte(m.alpha, width: m.width, height: m.height)
+                else {
+                    message = "That selection was too large for this photo."
+                    return
+                }
+                engine.maskKind = 4
+                matteSource = kind.label
+                // One history entry for the whole operation, the way a brush
+                // stroke records once when the hand lifts rather than per dab.
+                engine.commitMaskGroupEdit("\(kind.label) selection")
+            } catch {
+                // Said out loud. "Nothing was found" is a real answer from the
+                // model, and a silently empty mask is indistinguishable from a
+                // broken feature.
+                message = error.localizedDescription
+            }
+        }
+    }
+
     var lightPanel: some View {
         Group {
             section("White Balance") {
@@ -163,6 +210,28 @@ extension Editor {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+
+                // ⚠ Subject and Person are buttons, not entries in the picker
+                // above. They are *actions* — each runs a model and fills the
+                // component with what it found — and a picker entry would be a
+                // mode a photographer could select into an empty mask, which is
+                // indistinguishable from the feature being broken.
+                // research/masking.md §5.
+                HStack(spacing: 6) {
+                    PanelButton(title: matteRunning ? "Selecting…" : "Subject") {
+                        findMatte(.subject)
+                    }
+                    PanelButton(title: "Person") { findMatte(.person) }
+                }
+                .disabled(matteRunning || !engine.isLoaded)
+                .opacity(matteRunning ? 0.5 : 1)
+
+                if engine.maskKind == 4 {
+                    Text(matteCaption)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if engine.maskKind != 0 {
                     // The op applies to the *selected* row, and only rows after
