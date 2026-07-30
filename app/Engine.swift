@@ -883,6 +883,21 @@ final class Engine {
         rotateQuarters = ((rotateQuarters + turns) % 4 + 4) % 4
     }
 
+    /// Applies a preset over the current state, as one history entry.
+    ///
+    /// One entry, not one per field: a preset is a single act from the
+    /// photographer's side, and undo should take it back in a single step the
+    /// way it takes back a brush stroke.
+    func apply(preset: Preset) {
+        guard isLoaded else { return }
+        let next = preset.applied(to: state)
+        suspended = true
+        assign(next)
+        suspended = false
+        pushAndRender()
+        history.record(state, label: preset.name)
+    }
+
     /// Returns every adjustment to its default, with white balance back to
     /// what the camera chose. One push, one render.
     func resetEdits() {

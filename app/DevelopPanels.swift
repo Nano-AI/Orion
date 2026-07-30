@@ -41,6 +41,35 @@ private struct PanelButton: View {
     }
 }
 
+/// The group toggles for saving a preset. A row of small switches rather than a
+/// menu: the set is short, it is the thing most worth seeing before pressing
+/// Save, and a menu would hide it behind a click.
+private struct FlowGroups: View {
+    @Binding var selection: Set<PresetGroup>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(PresetGroup.allCases) { g in
+                Toggle(isOn: Binding(
+                    get: { selection.contains(g) },
+                    set: { on in
+                        if on { selection.insert(g) } else { selection.remove(g) }
+                    })) {
+                    HStack(spacing: 4) {
+                        Text(g.title).font(.system(size: 10))
+                        Text(g.covers)
+                            .font(.system(size: 9))
+                            .foregroundStyle(Palette.faint)
+                            .lineLimit(1)
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .controlSize(.mini)
+            }
+        }
+    }
+}
+
 extension Editor {
 
     /// Row labels for the mask group. Named here rather than in the state struct
@@ -114,6 +143,78 @@ extension Editor {
 
     var lightPanel: some View {
         Group {
+            section("Presets") {
+                if presets.presets.isEmpty {
+                    Text("No presets yet.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                }
+                VStack(spacing: 2) {
+                    ForEach(presets.presets) { p in
+                        HStack(spacing: 6) {
+                            Button { engine.apply(preset: p) } label: {
+                                HStack(spacing: 6) {
+                                    Text(p.name)
+                                    Spacer(minLength: 0)
+                                    // What it will disturb, before it is
+                                    // pressed — a look that silently reset the
+                                    // sharpening would be a nasty surprise.
+                                    Text(p.groups.count == PresetGroup.allCases.count
+                                         ? "all" : "\(p.groups.count) groups")
+                                        .foregroundStyle(Palette.faint)
+                                }
+                                .font(.system(size: 11))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .frame(maxWidth: .infinity)
+                                .background(Palette.raised)
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                                .contentShape(RoundedRectangle(cornerRadius: 3))
+                            }
+                            .buttonStyle(.plain)
+
+                            if !p.builtIn {
+                                Button {
+                                    presets.remove(p)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(Palette.faint)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    TextField("New preset", text: $presetName)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11))
+                    Button("Save") {
+                        presets.add(name: presetName,
+                                    groups: presetGroups,
+                                    state: engine.state)
+                        presetName = ""
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(presetName.trimmingCharacters(in: .whitespaces).isEmpty
+                              || presetGroups.isEmpty)
+                }
+
+                // Which groups a *saved* preset will carry. Shown rather than
+                // assumed, because "save a preset" means different things to
+                // different people and the difference is exactly this list.
+                FlowGroups(selection: $presetGroups)
+
+                Text("A preset changes only the groups it carries and leaves "
+                   + "everything else alone. The crop, the dust spots and the "
+                   + "masks are never included — those belong to one photograph.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.faint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             section("White Balance") {
                 slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0, resetsTo: engine.defaults.temperatureK)
                 slider("Tint", $engine.tint, -1...1, "", 2, resetsTo: engine.defaults.tint)

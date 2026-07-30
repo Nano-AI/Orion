@@ -1,0 +1,58 @@
+# Presets — `app/Presets.swift`.
+#
+# ⚠ A preset is a **patch**, not a state. It copies only the groups it carries
+# and leaves everything else alone. The alternative — assigning a whole
+# `DevelopState` — is one line shorter and wrong in a way that shows up only in
+# use: dropping a look onto a photograph would silently reset its crop, its dust
+# spots and its masks, because those fields are in the state whether the preset
+# meant anything by them or not.
+#
+# `orion-viewport-tests` pins the patch semantics field by field without a GPU.
+# What this file adds is the same property measured through the *engine* on a
+# real photograph, which is where a field that reached the shader but not the
+# state — or the reverse — would show.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+# A crop and a dust spot, so the preset has something to wrongly disturb.
+crop 0.2 0.2 0.6 0.6
+spot 0.5,0.5 0.04 clone
+measure 0.4,0.4,0.15,0.15 before
+measure 0.47,0.47,0.05,0.05 spotBefore
+
+preset Punch
+measure 0.4,0.4,0.15,0.15 after
+expect after != before
+
+# ⚠ The spot is still there. Not checked by comparing the patch before and
+# after — the preset changes contrast and clarity, so the rendered value at the
+# spot legitimately moves, and the first version of this file asserted equality
+# and failed on its own arithmetic.
+#
+# Checked by running the *other* path instead: the same crop and the same
+# preset with no spot placed. If the preset had wiped the spot list, the two
+# would agree. They must not.
+measure 0.47,0.47,0.05,0.05 spotSurvives
+
+# One entry in history, not one per field: a preset is a single act and undo
+# should take it back in a single step.
+undo
+measure 0.4,0.4,0.15,0.15 undone
+expect undone == before
+
+# And a second preset applied over the first replaces the groups it names
+# rather than compounding with them — applying the same one twice is the same
+# as applying it once.
+preset Punch
+measure 0.4,0.4,0.15,0.15 once
+preset Punch
+measure 0.4,0.4,0.15,0.15 twice
+expect twice == once
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+crop 0.2 0.2 0.6 0.6
+preset Punch
+measure 0.47,0.47,0.05,0.05 neverSpotted
+expect spotSurvives != neverSpotted

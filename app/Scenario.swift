@@ -51,6 +51,7 @@ import SwiftUI
 ///     pick <x,y>                        the colour-mixer eyedropper
 ///     targeted <x,y> <delta>            pick, then drag, which is what applies it
 ///     auto                              the Auto button
+///     preset <name>                     apply a built-in look by name
 ///     compare <split>                   1 = off, lower reveals the original
 ///     undo / redo
 ///     measure <x,y,w,h> <name> [where]  record a value under a name.
@@ -168,6 +169,14 @@ enum Scenario {
         case "crop":
             engine.setCrop(x: Float(try number(0)), y: Float(try number(1)),
                            w: Float(try number(2)), h: Float(try number(3)))
+            // ⚠ And commit it, which is what `CropOverlay` does when the drag
+            // ends. `setCrop` renders but records nothing — that split exists so
+            // a drag is one history entry rather than one per frame — so a
+            // scenario that stopped at `setCrop` left the crop out of history
+            // and any `undo` after it stepped past the crop instead of over it.
+            // The runner's whole claim is that it drives what the interface
+            // drives; this was a place it did not.
+            engine.commitCropEdit()
 
         case "preview":
             // What opening the crop tool does to the render: the whole frame
@@ -289,6 +298,20 @@ enum Scenario {
             guard engine.addSpot(atFrame: at) else {
                 throw Bad(what: "the engine refused the spot")
             }
+
+        case "preset":
+            // Applies a built-in look by name, through the same Engine call the
+            // panel uses. A preset is a patch, so what a scenario can check is
+            // that it moved what it names and left the frame alone.
+            guard let want = args.first else { throw Bad(what: "preset needs a name") }
+            let store = PresetStore(url: nil)
+            guard let p = store.presets.first(where: {
+                $0.name.lowercased().hasPrefix(want.lowercased())
+            }) else {
+                throw Bad(what: "no preset named \(want)")
+            }
+            engine.apply(preset: p)
+            say("  applied preset \(p.name) (\(p.groups.count) groups)\n")
 
         case "overlay":
             // Paint the coverage over the picture, as `Show mask` does. With

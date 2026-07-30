@@ -56,6 +56,9 @@ enum ViewportTests {
         testPictureMapMatchesTheFitRectangle()
         testPictureMapRoundTrips()
         testPictureMapFollowsThePan()
+        testPresetIsAPatch()
+        testPresetNeverCarriesTheFrame()
+        testPresetStoreRoundTrip()
         testMatteTurnsRoundTrip()
         testMatteTurnAgreesWithTheMaskTransform()
         testMattePreviewSize()
@@ -1821,5 +1824,168 @@ enum ViewportTests {
                                           longEdge: 1024)
         report(c.width == 640 && c.height == 480,
                "a frame under the cap is passed at its own size", "\(c.width)x\(c.height)")
+    }
+
+    // MARK: Presets
+
+    /// A photograph with something set in every group, so any field a preset
+    /// wrongly copies shows up as a change.
+    static func busyState() -> DevelopState {
+        var s = DevelopState()
+        s.temperatureK = 4200; s.tint = 0.3
+        s.exposureEv = 1.1; s.contrast = 1.7; s.highlights = -0.4
+        s.shadows = 0.35; s.whites = 0.2; s.blacks = -0.15
+        s.vibrance = 0.4; s.saturation = -0.2
+        s.hueShift[3] = 0.5; s.satShift[5] = -0.3; s.lumShift[1] = 0.25
+        s.gradeShadow = [0.1, -0.2, 0.05]
+        s.sharpenAmount = 1.3; s.denoiseLuma = 2.0
+        s.lensDistortion = 0.4
+        s.clarity = 0.6; s.dehaze = 0.3; s.fusion = 0.7; s.lutStrength = 0.5
+        s.rotateQuarters = 1; s.straightenDeg = 4
+        s.cropX = 0.1; s.cropY = 0.2; s.cropW = 0.7; s.cropH = 0.6
+        s.spots = [SpotState()]
+        s.maskComponents = [MaskComponentState()]
+        s.localExposureEv = 1.5
+        return s
+    }
+
+    /// ⚠ The property the whole design rests on: a preset touches its groups
+    /// and *nothing else*. Checked one group at a time, because a preset that
+    /// assigned the whole state would pass any test that only enabled all of
+    /// them at once.
+    static func testPresetIsAPatch() {
+        let base = busyState()
+
+        // A preset carrying defaults everywhere. Applying it with one group
+        // enabled must move exactly that group's fields to the default and
+        // leave every other field of `base` untouched.
+        for group in PresetGroup.allCases {
+            let p = Preset(name: "t", groups: [group], state: DevelopState())
+            let out = p.applied(to: base)
+
+            // Pick one witness field from each *other* group and demand it
+            // survived. Fields, not the whole struct, so the failure message
+            // says which group leaked.
+            if group != .light {
+                report(out.exposureEv == base.exposureEv,
+                       "\(group.rawValue) leaves Light alone", "\(out.exposureEv)")
+            }
+            if group != .colour {
+                report(out.vibrance == base.vibrance && out.hueShift == base.hueShift,
+                       "\(group.rawValue) leaves Color alone", "\(out.vibrance)")
+            }
+            if group != .whiteBalance {
+                report(out.temperatureK == base.temperatureK,
+                       "\(group.rawValue) leaves White Balance alone",
+                       "\(out.temperatureK)")
+            }
+            if group != .detail {
+                report(out.sharpenAmount == base.sharpenAmount
+                       && out.denoiseLuma == base.denoiseLuma,
+                       "\(group.rawValue) leaves Detail alone", "\(out.sharpenAmount)")
+            }
+            if group != .effects {
+                report(out.clarity == base.clarity && out.dehaze == base.dehaze,
+                       "\(group.rawValue) leaves Effects alone", "\(out.clarity)")
+            }
+        }
+
+        // And the group it *does* name is actually applied — the checks above
+        // are all satisfied by a preset that does nothing whatever.
+        let light = Preset(name: "t", groups: [.light], state: DevelopState())
+        let out = light.applied(to: base)
+        report(out.exposureEv == 0 && out.contrast == DevelopState().contrast,
+               "and the group it names is applied",
+               "\(out.exposureEv), \(out.contrast)")
+    }
+
+    /// ⚠ Geometry, dust and masks are never carried, under any group — not even
+    /// all of them at once. A preset that reframed every photograph it touched
+    /// would be unusable, and this is the check that says it cannot.
+    static func testPresetNeverCarriesTheFrame() {
+        let base = busyState()
+
+        var look = DevelopState()
+        look.rotateQuarters = 3
+        look.straightenDeg = -9
+        look.cropX = 0.4; look.cropY = 0.4; look.cropW = 0.2; look.cropH = 0.2
+        look.spots = [SpotState(), SpotState()]
+        look.maskComponents = [MaskComponentState(), MaskComponentState()]
+        look.maskRefine = 0.9
+        look.localExposureEv = -2
+
+        let all = Preset(name: "everything", groups: Set(PresetGroup.allCases),
+                         state: look)
+        let out = all.applied(to: base)
+
+        report(out.rotateQuarters == base.rotateQuarters
+               && out.straightenDeg == base.straightenDeg,
+               "no group carries the rotation or the straighten",
+               "\(out.rotateQuarters), \(out.straightenDeg)")
+        report(out.cropX == base.cropX && out.cropW == base.cropW,
+               "nor the crop", "\(out.cropX), \(out.cropW)")
+        report(out.spots == base.spots, "nor the dust spots",
+               "\(out.spots.count) vs \(base.spots.count)")
+        report(out.maskComponents == base.maskComponents
+               && out.maskRefine == base.maskRefine
+               && out.localExposureEv == base.localExposureEv,
+               "nor the masks and their local adjustment",
+               "\(out.maskComponents.count) vs \(base.maskComponents.count)")
+
+        // Applying a preset twice is the same as applying it once — it is a
+        // patch, so it has to be idempotent or a double click would compound.
+        report(all.applied(to: out) == out, "and applying it twice changes nothing")
+    }
+
+    static func testPresetStoreRoundTrip() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orion-presets-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("presets.json")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let store = PresetStore(url: file)
+        let builtInCount = store.presets.count
+        report(builtInCount > 0, "the built-in looks are present on a fresh install")
+
+        var s = DevelopState()
+        s.contrast = 1.9
+        report(store.add(name: "Mine", groups: [.light], state: s),
+               "a preset can be saved")
+
+        // Saving the same name twice replaces rather than appends.
+        s.contrast = 1.3
+        store.add(name: "Mine", groups: [.light], state: s)
+        report(store.presets.filter { $0.name == "Mine" }.count == 1,
+               "and saving it again replaces it rather than piling up",
+               "\(store.presets.filter { $0.name == "Mine" }.count)")
+
+        let reopened = PresetStore(url: file)
+        let mine = reopened.presets.first { $0.name == "Mine" }
+        report(mine?.state.contrast == 1.3 && mine?.groups == [.light],
+               "and it survives a reopen with its groups",
+               "\(String(describing: mine?.state.contrast))")
+
+        // ⚠ Built-ins are not written to disk, so improving one in a later
+        // release reaches everybody rather than only new installs.
+        let raw = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        report(!raw.contains("Monochrome"),
+               "built-ins are not copied into the user's file")
+        report(reopened.presets.count == builtInCount + 1,
+               "and are not duplicated on reload",
+               "\(reopened.presets.count) vs \(builtInCount + 1)")
+
+        // A built-in cannot be deleted.
+        if let builtIn = reopened.presets.first(where: { $0.builtIn }) {
+            reopened.remove(builtIn)
+            report(reopened.presets.contains(where: { $0.id == builtIn.id }),
+                   "a built-in cannot be removed")
+        }
+
+        // An empty name or no groups is refused rather than saved as junk.
+        report(!reopened.add(name: "   ", groups: [.light], state: s),
+               "an empty name is refused")
+        report(!reopened.add(name: "Nothing", groups: [], state: s),
+               "and so is a preset that would change nothing")
     }
 }

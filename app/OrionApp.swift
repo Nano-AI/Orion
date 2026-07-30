@@ -259,6 +259,11 @@ struct Editor: View {
 
     @State var band: HueBand = .blue
 
+    /// Saved looks. research is not needed for these — see Presets.swift.
+    @State var presets = PresetStore()
+    @State var presetName = ""
+    @State var presetGroups: Set<PresetGroup> = PresetGroup.defaultSelection
+
     /// Set while a segmentation model is running, so the two buttons can say so
     /// and cannot be pressed twice. research/masking.md §5.
     @State var matteRunning = false
