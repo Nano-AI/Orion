@@ -1,0 +1,50 @@
+# Luminance range mask — research/masking.md §4b.
+#
+# A band on what a pixel *is*. Driven here through Engine, so what is checked is
+# the whole path: the band's numbers, the reference the shader measures, and the
+# exposure bias that makes the two agree.
+#
+# ⚠ The bias is the part worth a file. The band is measured on the reference
+# image — before the tone controls, so editing through it cannot change what it
+# selects — but the reference carries the *scene's* luminance, not the screen's.
+# On this night frame lifted 2.6 stops, a band set by looking at the picture sat
+# two and a half stops away from anything and selected nothing at all. That is
+# what the first version did, and it looked exactly like the feature being
+# unwired.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+measure 0.20,0.20,0.10,0.10 litBefore
+measure 0.71,0.25,0.08,0.08 skyBefore
+
+# Everything from half a stop above middle grey upward: the dealership's lit
+# frontage, and nothing like the night sky above it.
+mask range
+set maskRangeLo 0.5
+set maskRangeHi 99
+set maskRangeSoft 1
+set localExposure -2.0
+
+measure 0.20,0.20,0.10,0.10 litAfter
+measure 0.71,0.25,0.08,0.08 skyAfter
+
+print a highlight band darkens the lit frontage and leaves the night sky alone
+expect litAfter != litBefore
+expect skyAfter == skyBefore
+
+# ⚠ And the other way round, which is what says the band has two independent
+# ends rather than one threshold. Same photograph, same magnitude of edit, the
+# opposite half of the histogram.
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask range
+set maskRangeLo -99
+set maskRangeHi -3
+set maskRangeSoft 1
+set localExposure 2.0
+
+measure 0.20,0.20,0.10,0.10 litUnderShadowBand
+measure 0.71,0.25,0.08,0.08 skyUnderShadowBand
+expect skyUnderShadowBand != skyBefore
+expect litUnderShadowBand == litBefore

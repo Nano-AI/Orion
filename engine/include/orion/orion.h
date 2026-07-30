@@ -72,7 +72,8 @@ typedef struct OrionCurveChannel {
  * and rotation the photographer is looking at. The engine moves it to the
  * frame the shader sees; the caller never does that transform. */
 typedef struct OrionMaskComponent {
-    int   kind;             /* 0 off, 1 linear, 2 radial, 3 brush */
+    int   kind;             /* 0 off, 1 linear, 2 radial, 3 brush,
+                             * 4 matte, 5 luminance range */
     int   compose;          /* 0 add, 1 subtract, 2 intersect — the fold starts
                              * from zero, so the first component should be 0 */
     int   invert;           /* inverts this component, before the fold */
@@ -83,6 +84,13 @@ typedef struct OrionMaskComponent {
     float radius_x, radius_y; /* radial semi-axes */
     float feather;          /* radial, 0..1 */
     float roundness;        /* 2 is an ellipse */
+
+    /* Luminance range, when kind is 5. Stops of log2 Rec.2020 luminance on the
+     * reference image — measured before any user adjustment, so editing
+     * through the band cannot change what the band selects.
+     * research/masking.md §4b. */
+    float range_lo, range_hi;
+    float range_soft;       /* stops each edge takes to ramp */
 
     /* The brush, when kind is 3. One radius for the whole stroke. The dab
      * centres are not here — they are variable-length, and this struct is

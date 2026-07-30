@@ -4381,6 +4381,10 @@ void testMaskGpu() {
     // Bound but unread by kinds 1-3. The kernel takes a matte for kind 4
     // (research/masking.md §5) and the binding has to be present either way.
     auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    // Bound but unread by every kind except 5, which reads a luminance out of
+    // it (research/masking.md §4b). The binding has to be present regardless.
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
 
     // The fold's identity, which mask:base writes in the product. Every check
     // here runs a single component over it, where add-from-zero is the
@@ -4391,7 +4395,7 @@ void testMaskGpu() {
     const auto run = [&](const orion::pipe::params::MaskComponent& m) {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kMask.second, {src.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kMask.second, {src.get(), reference.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -4569,6 +4573,10 @@ void testMaskBrushGpu() {
     // Bound but unread by kinds 1-3. The kernel takes a matte for kind 4
     // (research/masking.md §5) and the binding has to be present either way.
     auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    // Bound but unread by every kind except 5, which reads a luminance out of
+    // it (research/masking.md §4b). The binding has to be present regardless.
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
 
     // A fresh stroke folds over the group's identity, so `src` is zeroed before
     // each run unless a check is deliberately chaining passes.
@@ -4577,7 +4585,7 @@ void testMaskBrushGpu() {
 
     const auto run = [&](const orion::pipe::params::MaskComponent& b) {
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), matte.get(), dst.get()}, &b, sizeof b, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()}, &b, sizeof b, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -4793,6 +4801,10 @@ void testMaskCompositeGpu() {
     // Bound but unread by kinds 1-3. The kernel takes a matte for kind 4
     // (research/masking.md §5) and the binding has to be present either way.
     auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    // Bound but unread by every kind except 5, which reads a luminance out of
+    // it (research/masking.md §4b). The binding has to be present regardless.
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
 
     // Chains a list of components exactly as DevelopPipeline does: the fold
     // starts from zero and each pass reads the one before it.
@@ -4801,7 +4813,7 @@ void testMaskCompositeGpu() {
         for (const auto& p : parts) {
             src->upload(alpha.data(), std::size_t(kW) * sizeof(__fp16));
             orion::gpu::CommandBuffer cb(*device);
-            cb.dispatch(*kernel, {src.get(), matte.get(), dst.get()}, &p, sizeof p, kW, kH);
+            cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()}, &p, sizeof p, kW, kH);
             cb.commitAndWait();
             dst->download(alpha.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
         }
@@ -5200,6 +5212,220 @@ void testMaskGeometry() {
     }
 }
 
+// A luminance range mask — research/masking.md §4b.
+//
+// A band on what a pixel *is*. Three decisions to pin, and the shader's own
+// comments name all three: it reads the reference image, it measures in stops,
+// and its two edges are independent.
+void testMaskRangeGpu() {
+    section("Range masks (GPU)");
+
+    using orion::gpu::PixelFormat;
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 64, kH = 64;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto lib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/maskComponent.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
+
+    auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
+
+    const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
+
+    // A neutral ramp across x, one stop per column band: column x carries
+    // luminance 2^(x/8 - 4), so the frame spans -4 to +4 stops.
+    const auto evAt = [&](int x) { return double(x) / 8.0 - 4.0; };
+    {
+        std::vector<__fp16> ref(std::size_t(kW) * kH * 4, __fp16(0.0f));
+        for (std::uint32_t y = 0; y < kH; ++y) {
+            for (std::uint32_t x = 0; x < kW; ++x) {
+                // Neutral, so Rec.2020's coefficients sum to one and the
+                // luminance is exactly the channel value — the test is about
+                // the band, not about the luma weights.
+                const float v = float(std::exp2(evAt(int(x))));
+                const std::size_t i = (std::size_t(y) * kW + x) * 4;
+                ref[i + 0] = __fp16(v); ref[i + 1] = __fp16(v);
+                ref[i + 2] = __fp16(v); ref[i + 3] = __fp16(1.0f);
+            }
+        }
+        reference->upload(ref.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+    }
+
+    const auto run = [&](const params::MaskComponent& m) {
+        src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()},
+                    &m, sizeof m, kW, kH);
+        cb.commitAndWait();
+        std::vector<__fp16> out(std::size_t(kW) * kH);
+        dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+        return out;
+    };
+    const auto at = [&](const std::vector<__fp16>& a, int x) {
+        return double(a[std::size_t(kH / 2) * kW + std::size_t(x)]);
+    };
+
+    params::MaskComponent base{};
+    base.size[0] = kW; base.size[1] = kH;
+    base.kind = 5;
+    base.rangeLo = -2.0f; base.rangeHi = 1.0f; base.rangeSoft = 0.5f;
+
+    // ── The band sits where the stops say, not where the linear values do ──
+    //
+    // ⚠ This is the assertion that separates a log band from a linear one, and
+    // the two are not subtly different — they are different by orders of
+    // magnitude. The band -2..+1 stops is luminance 0.25..2.0; its midpoint in
+    // *stops* is -0.5 (luminance 0.707), while the midpoint of the same
+    // interval in *linear* light is 1.125, which is +0.17 stops. A linear
+    // implementation puts the plateau's centre 0.67 stops to the right of where
+    // this checks it.
+    {
+        const auto got = run(base);
+
+        // Full inside, well clear of both ramps.
+        const int inside = int(std::lround((-0.5 + 4.0) * 8.0));
+        report(at(got, inside) > 0.99, "the band is full in its middle",
+               std::to_string(at(got, inside)));
+
+        // Zero outside, well clear of both ramps.
+        const int below = int(std::lround((-3.5 + 4.0) * 8.0));
+        const int above = int(std::lround((2.5 + 4.0) * 8.0));
+        report(at(got, below) < 0.01 && at(got, above) < 0.01,
+               "and zero outside it at both ends",
+               std::to_string(at(got, below)) + ", " + std::to_string(at(got, above)));
+
+        // The edges are where the stops put them: half coverage half a ramp in.
+        const int loHalf = int(std::lround((-2.0 + 0.25 + 4.0) * 8.0));
+        const int hiHalf = int(std::lround((1.0 - 0.25 + 4.0) * 8.0));
+        report(std::abs(at(got, loHalf) - 0.5) < 0.06 &&
+               std::abs(at(got, hiHalf) - 0.5) < 0.06,
+               "with each edge at half coverage half a ramp inside it",
+               std::to_string(at(got, loHalf)) + ", " + std::to_string(at(got, hiHalf)));
+
+        // ⚠ A band in linear light would have its plateau centred here instead.
+        // Asserting the difference rather than trusting the comment.
+        const int linearMid = int(std::lround((std::log2(1.125) + 4.0) * 8.0));
+        report(std::abs(linearMid - inside) > 4,
+               "and the log midpoint is nowhere near the linear one",
+               "stops " + std::to_string(inside) + " vs linear "
+               + std::to_string(linearMid));
+    }
+
+    // ── The two edges are independent ─────────────────────────────────────
+    //
+    // Pushing one past the frame's range turns the band into a one-sided
+    // selection, which is how "the highlights" and "the shadows" are expressed
+    // without a second control.
+    {
+        auto highs = base;
+        highs.rangeLo = 0.0f; highs.rangeHi = 99.0f;
+        const auto got = run(highs);
+        report(at(got, kW - 1) > 0.99 && at(got, 0) < 0.01,
+               "a high edge past the frame's range makes it a highlight selection",
+               std::to_string(at(got, 0)) + " -> " + std::to_string(at(got, kW - 1)));
+
+        auto lows = base;
+        lows.rangeLo = -99.0f; lows.rangeHi = 0.0f;
+        const auto shadow = run(lows);
+        report(at(shadow, 0) > 0.99 && at(shadow, kW - 1) < 0.01,
+               "and a low edge past it makes a shadow selection",
+               std::to_string(at(shadow, 0)) + " -> " + std::to_string(at(shadow, kW - 1)));
+    }
+
+    // ── Monotone, and smooth enough to be C² ──────────────────────────────
+    //
+    // The falloff is shared with every other mask, so what is checked here is
+    // that the range branch actually uses it: a linear ramp would be monotone
+    // too, but its second difference jumps at the ends of the ramp instead of
+    // going to zero.
+    {
+        auto lows = base;
+        lows.rangeLo = -99.0f; lows.rangeHi = 0.0f; lows.rangeSoft = 2.0f;
+        const auto got = run(lows);
+
+        bool monotone = true;
+        for (std::uint32_t x = 1; x < kW; ++x) {
+            if (at(got, int(x)) > at(got, int(x - 1)) + 1e-3) { monotone = false; break; }
+        }
+        report(monotone, "a single edge is monotone across the whole frame");
+
+        // ⚠ At the *foot* of its own ramp smootherstep is flat to second
+        // order; a straight line is not. The first version of this check
+        // computed the ramp's position from a constant instead of from the
+        // band actually being run — with rangeLo at -99 there is no ramp within
+        // sixty columns of where it sampled, so it measured a flat plateau and
+        // passed for any falloff whatever. A linear-ramp mutation survived it.
+        //
+        // The edge here is `fall = smootherstep((rangeHi - ev) / soft)` with
+        // rangeHi = 0 and soft = 2, so it is full at -2 stops and zero at 0 —
+        // the ramp spans [-2, 0] and its foot is at 0, not at +2. Getting that
+        // wrong is what let the linear-falloff mutation through the first time.
+        const int rampFoot = int(std::lround((0.0 + 4.0) * 8.0));
+        const double drop = at(got, rampFoot - 2) - at(got, rampFoot);
+        report(drop < 0.02 && drop >= 0,
+               "and it approaches the foot of its ramp flat, which a straight "
+               "line would not",
+               std::to_string(drop));
+
+        // The same at the ramp's midpoint, where smootherstep is steepest and a
+        // straight line is not — the pair together is what pins the shape
+        // rather than merely the endpoints.
+        const int rampMid = int(std::lround((-1.0 + 4.0) * 8.0));
+        const double steep = at(got, rampMid - 2) - at(got, rampMid + 2);
+        report(steep > 0.25, "and steepest in the middle of it",
+               std::to_string(steep));
+    }
+
+    // ── A band narrow enough for its two ramps to overlap ─────────────────
+    //
+    // ⚠ Added because a mutation survived. With a wide band the two edges never
+    // both sit part-way, so `rise * fall` and `rise + fall - 1` agree
+    // everywhere and the product could be replaced by the sum unnoticed. They
+    // differ only where both edges are partial — a thin luminance slice, which
+    // is exactly what someone reaches for to isolate a narrow tone.
+    {
+        auto narrow = base;
+        narrow.rangeLo = -0.5f; narrow.rangeHi = 0.5f; narrow.rangeSoft = 1.0f;
+        const auto got = run(narrow);
+
+        // At the band's centre each edge is exactly half its ramp in, so
+        // smootherstep gives 0.5 apiece: the product is 0.25 and the
+        // sum-minus-one is 0.
+        const int centre = int(std::lround((0.0 + 4.0) * 8.0));
+        const double peak = at(got, centre);
+        report(peak > 0.15 && peak < 0.4,
+               "overlapping edges multiply rather than add, so a narrow band "
+               "is partial everywhere instead of empty",
+               std::to_string(peak));
+    }
+
+    // ── Invert and compose reach kind 5 too ───────────────────────────────
+    {
+        auto inv = base;
+        inv.invert = 1;
+        const auto plain = run(base);
+        const auto flipped = run(inv);
+        double worst = 0.0;
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            worst = std::max(worst, std::abs((1.0 - at(plain, int(x)))
+                                             - at(flipped, int(x))));
+        }
+        report(worst < 2e-3, "invert reaches a range component",
+               "worst " + std::to_string(worst));
+    }
+}
+
 // A raster mask component — research/masking.md §5, the shape a segmentation
 // matte arrives in.
 //
@@ -5231,6 +5457,8 @@ void testMaskMatteGpu() {
     auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
     auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
     auto matte = orion::gpu::Texture::create(*device, kM, kM, PixelFormat::R16Float);
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
 
     const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
 
@@ -5254,7 +5482,7 @@ void testMaskMatteGpu() {
     const auto run = [&](const params::MaskComponent& m) {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -5384,7 +5612,7 @@ void testMaskMatteGpu() {
 
         src->upload(ones.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> got(std::size_t(kW) * kH);
         dst->download(got.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -5790,6 +6018,7 @@ int main() {
     testMaskGeometry();
     testMaskRefineGpu();
     testMaskMatteGpu();
+    testMaskRangeGpu();
     testBrushDabsFollowTheFrame();
     testHighlightHaloGpu();
     testOutputDepth();

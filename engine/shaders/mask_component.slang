@@ -25,7 +25,7 @@
 struct MaskComponentParams
 {
     uint2  size;
-    int    kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte
+    int    kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range
     int    invert;      // inverts *this component's* coverage, before the fold
 
     int    compose;     // kMaskAdd | kMaskSubtract | kMaskIntersect
@@ -51,6 +51,18 @@ struct MaskComponentParams
     float2 centre;      // radial
     float2 semi;        // radial semi-axes, normalized
 
+    /// Luminance range (kind 5), in **stops** — log2 of Rec.2020 luminance on
+    /// the reference image. `rangeLo` and `rangeHi` are the band's edges and
+    /// `rangeSoft` is how many stops each edge takes to ramp. The two edges are
+    /// independent, so pushing one past the frame's range turns the band into a
+    /// high-pass or a low-pass. research/masking.md §4b.
+    float  rangeLo;
+    float  rangeHi;
+    float  rangeSoft;
+    /// Added to the measured stops so the band's numbers mean what the
+    /// photographer is *looking at*. See the kind-5 branch.
+    float  rangeBias;
+
     /// Matte (kind 4): the live rectangle of the aux texture. A matte is
     /// uploaded at whatever size its producer had, into a texture allocated for
     /// the largest one, so the kernel has to be told how much of it is real.
@@ -72,6 +84,16 @@ float dabCoverage(float d, float hardness)
 {
     const float h = clamp(hardness, 0.0f, 0.98f);
     return 1.0f - maskFalloff((d - h) / max(1.0f - h, 1e-3f));
+}
+
+/// Rec.2020 luminance — ITU-R BT.2020-2 (10/2015), Table 3.
+///
+/// The same coefficients `guide_prep.slang` and `develop_display.slang` use.
+/// A second definition of brightness in one program is a bug waiting for the
+/// day the two disagree.
+float luminance2020(float3 c)
+{
+    return dot(c, float3(0.2627f, 0.6780f, 0.0593f));
 }
 
 /// A matte sampled bilinearly at a normalized frame position.
@@ -109,6 +131,7 @@ float sampleMatte(Texture2D<float> matte, float2 q, uint2 msize)
 [numthreads(16, 16, 1)]
 void maskComponent(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float>   src,   // coverage so far, 0..1
+                   uniform Texture2D<float4>  reference,  // kind 5, see below
                    uniform Texture2D<float>   matte, // kind 4, frame coordinates
                    uniform RWTexture2D<float> dst,
                    uniform ConstantBuffer<MaskComponentParams> p)
@@ -200,6 +223,46 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         // and it is a separate control precisely so a matte can be used raw when
         // the refinement would hurt.
         own = sampleMatte(matte, q, p.matteSize);
+    }
+    else if (p.kind == 5)
+    {
+        // A band on what the pixel *is*, not on where it is.
+        // research/masking.md §4b.
+        //
+        // ⚠ Read from the **reference** image — after white balance and the
+        // camera matrix, before any user adjustment. Reading the edited result
+        // instead would mean raising exposure through a highlight band grows
+        // the band, which raises the exposure further: a feedback loop, not a
+        // tool. Same reason the colour picker samples this texture.
+        //
+        // ⚠ And measured in **stops**. Scene-linear luminance is unbounded and
+        // its interesting range is logarithmic, so a band of fixed linear width
+        // is an enormous selection in the shadows and a sliver in the
+        // highlights — unusable across most of a slider's travel.
+        const float y = max(luminance2020(reference[tid.xy].rgb), 1e-6f);
+
+        // ⚠ Biased by the global exposure, and this is what makes the control
+        // usable rather than baffling. The reference is measured *before* the
+        // tone controls, so its luminance is the scene's, not the screen's — on
+        // a night frame lifted 2.6 stops, a band a photographer sets by looking
+        // at the picture would sit two and a half stops away from anything and
+        // select nothing at all. That is exactly what the first version did.
+        //
+        // Exposure is a multiply, so in log2 it is an add: one operation, exact,
+        // and the same fact the guided chain relies on to stay cached. The
+        // *measurement* still comes from the stable reference, so the band is
+        // not chasing its own adjustment — the tone controls, the local
+        // exposure this mask drives, and everything downstream leave it alone.
+        const float ev = log2(y) + p.rangeBias;
+
+        // Two independent edges, each a smootherstep ramp `rangeSoft` stops
+        // wide. Independent so the band can be opened at either end: push
+        // `rangeHi` past the frame's brightest pixel and it is a shadow
+        // selection, push `rangeLo` below its darkest and it is a highlight one.
+        const float soft = max(p.rangeSoft, 1e-3f);
+        const float rise = maskFalloff((ev - p.rangeLo) / soft);
+        const float fall = maskFalloff((p.rangeHi - ev) / soft);
+        own = rise * fall;
     }
 
     // Invert applies to every kind, which it did not before: the old pair of

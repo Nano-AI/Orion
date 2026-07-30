@@ -76,7 +76,8 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Feature | Status | Notes |
 |---|---|---|
 | Linear + radial gradient masks | M4 | Cheapest — pure math, no painting infrastructure |
-| Luminance / color range masks | M4 | Cheap given the bilateral grid already exists from M1 |
+| Luminance range mask | M4 | ✅ **Built 2026-07-30**. A band in log2 luminance on the *reference* image, so adjusting through it cannot change what it selects. ⚠ The old note here said this was cheap because M1 built a bilateral grid — M1 did not, and a range mask is pointwise so it would not have helped. `research/masking.md` §4b |
+| Color range mask | M4 | Needs a colour distance and so a colour space: CIE76 in CIELAB is the cheap answer, CIEDE2000 the accurate one. Its own story |
 | Mask combine (add/subtract/intersect) | M4 | ✅ **Built 2026-07-29** (decision #62). One component kernel per node, folded left from zero; up to 4 components with a per-row op, in the panel, the sidecar and undo. Pre-group sidecars migrate to a single component |
 | Guided feathering of a mask | M4 | ✅ **Built 2026-07-29**. He, Sun & Tang's own named application of the guided filter — the second input binding `research/masking.md` §4 predicted, and nothing else changed in the filter. Seven nodes on the folded group, off at strength 0. Radius and epsilon are Orion's own: `UNSOURCED.md` §20 |
 | AI subject / sky selection (Core ML) | M4 | Requires the mask system first. The guided pass above is what refines and upsamples a coarse matte |

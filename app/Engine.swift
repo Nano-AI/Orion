@@ -338,6 +338,20 @@ final class Engine {
         set { editSelected { $0.roundness = newValue } }
     }
 
+    // ── The luminance range (mask kind 5) ─────────────────────────────────
+    var maskRangeLo: Float {
+        get { selected?.rangeLo ?? -2 }
+        set { editSelected { $0.rangeLo = newValue } }
+    }
+    var maskRangeHi: Float {
+        get { selected?.rangeHi ?? 2 }
+        set { editSelected { $0.rangeHi = newValue } }
+    }
+    var maskRangeSoft: Float {
+        get { selected?.rangeSoft ?? 1 }
+        set { editSelected { $0.rangeSoft = newValue } }
+    }
+
     // ── The brush (mask kind 3) ───────────────────────────────────────────
     var brushRadius: Float {
         get { selected?.brushRadius ?? 0.08 }
@@ -1176,6 +1190,8 @@ final class Engine {
             c.angle = m.angle; c.length = m.length
             c.radius_x = m.radiusX; c.radius_y = m.radiusY
             c.feather = m.feather; c.roundness = m.roundness
+            c.range_lo = m.rangeLo; c.range_hi = m.rangeHi
+            c.range_soft = m.rangeSoft
             c.brush_radius = m.brushRadius; c.brush_flow = m.brushFlow
             c.brush_hardness = m.brushHardness
             c.brush_revision = brushRevisions[i]

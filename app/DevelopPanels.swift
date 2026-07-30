@@ -51,6 +51,8 @@ extension Editor {
         case 1:  return "Linear"
         case 2:  return "Radial"
         case 3:  return "Brush"
+        case 4:  return "Selection"
+        case 5:  return "Range"
         default: return "Off"
         }
     }
@@ -207,6 +209,7 @@ extension Editor {
                     Text("Linear").tag(Int32(1))
                     Text("Radial").tag(Int32(2))
                     Text("Brush").tag(Int32(3))
+                    Text("Range").tag(Int32(5))
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -264,6 +267,27 @@ extension Editor {
                         .font(.system(size: 10))
                         .foregroundStyle(Palette.faint)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    if engine.maskKind == 5 {
+                        // In stops, because that is the unit the band is
+                        // measured in — see research/masking.md §4b. A slider
+                        // in linear luminance would be unusable across most of
+                        // its travel.
+                        slider("From", $engine.maskRangeLo, -8...8, " EV", 1,
+                               resetsTo: maskDefaults.rangeLo)
+                        slider("To", $engine.maskRangeHi, -8...8, " EV", 1,
+                               resetsTo: maskDefaults.rangeHi)
+                        slider("Softness", $engine.maskRangeSoft, 0.05...4, " EV", 2,
+                               resetsTo: maskDefaults.rangeSoft)
+                        Text("Selects by brightness rather than by position, "
+                           + "measured before your edits — so adjusting through "
+                           + "the band cannot change what it selects. Push one "
+                           + "end past the picture's range for just the "
+                           + "highlights or just the shadows.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.faint)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
                     if engine.maskKind == 3 {
                         // A stroke has no centre or angle to type in — the

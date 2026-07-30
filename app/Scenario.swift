@@ -34,7 +34,7 @@ import SwiftUI
 ///     crop <x> <y> <w> <h>              normalized
 ///     preview on | off                  the crop tool's context render
 ///     set <control> <value>             any slider by name
-///     mask <kind>                       none | linear | radial | brush
+///     mask <kind>                       none | linear | radial | brush | range
 ///     matte disc | left                 a synthetic raster matte in frame
 ///                                       coordinates, for the kind-4 component
 ///     select subject | person           runs Vision for real, and reports what
@@ -193,7 +193,8 @@ enum Scenario {
             if let thrown { throw thrown }
 
         case "mask":
-            let kinds = ["none": Int32(0), "linear": 1, "radial": 2, "brush": 3]
+            let kinds = ["none": Int32(0), "linear": 1, "radial": 2, "brush": 3,
+                         "range": 5]
             guard let k = kinds[args.first ?? ""] else {
                 throw Bad(what: "mask takes none, linear, radial or brush")
             }
@@ -454,6 +455,9 @@ enum Scenario {
         case "maskRadiusY": e.maskRadiusY = value
         case "maskFeather": e.maskFeather = value
         case "maskRoundness": e.maskRoundness = value
+        case "maskRangeLo":   e.maskRangeLo = value
+        case "maskRangeHi":   e.maskRangeHi = value
+        case "maskRangeSoft": e.maskRangeSoft = value
         case "maskInvert":  e.maskInvert = value != 0
         case "brushHardness": e.brushHardness = value
         default: throw Bad(what: "no control named \(control)")

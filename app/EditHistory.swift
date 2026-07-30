@@ -99,7 +99,7 @@ final class EditHistory {
 /// into — keeping them in parallel arrays is how a reorder puts someone's paint
 /// on the wrong component.
 struct MaskComponentState: Equatable, Codable {
-    var kind: Int32 = 0            // 1 linear, 2 radial, 3 brush
+    var kind: Int32 = 0            // 1 linear, 2 radial, 3 brush, 4 matte, 5 range
     /// 0 add, 1 subtract, 2 intersect. The group folds from zero, so the first
     /// component's op has no effect when it is add and zeroes the group when it
     /// is not — the panel does not offer one on the first row.
@@ -113,6 +113,11 @@ struct MaskComponentState: Equatable, Codable {
     var radiusY: Float = 0.3
     var feather: Float = 0.5
     var roundness: Float = 2
+
+    /// Luminance range (kind 5), in stops. research/masking.md §4b.
+    var rangeLo: Float = -2
+    var rangeHi: Float = 2
+    var rangeSoft: Float = 1
 
     var brushRadius: Float = 0.08
     var brushFlow: Float = 0.5

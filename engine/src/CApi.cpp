@@ -198,6 +198,9 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.radius[1]     = s.radius_y;
         d.feather       = s.feather;
         d.roundness     = s.roundness;
+        d.rangeLo       = s.range_lo;
+        d.rangeHi       = s.range_hi;
+        d.rangeSoft     = s.range_soft;
         d.brushRadius   = s.brush_radius;
         d.brushFlow     = s.brush_flow;
         d.brushHardness = s.brush_hardness;

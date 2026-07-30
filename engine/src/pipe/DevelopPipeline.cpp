@@ -491,7 +491,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         nMaskComponent_[i] =
             pipeline_.add({"mask:" + std::to_string(i), "maskComponent",
-                           {prevMask}, PixelFormat::R16Float, {},
+                           {prevMask, nHueSat_}, PixelFormat::R16Float, {},
                            {auxMatte_[i]}});
         prevMask = nMaskComponent_[i];
     }
@@ -1422,7 +1422,14 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         // A component past the count is disabled; its params cannot reach the
         // picture, so uploading them would only dirty a node that will not run.
         if (i >= adj.maskCount) continue;
+        // ⚠ `adj.exposureEv` is in this comparison because a range component's
+        // bias is derived from it, and a bias is not part of
+        // `MaskComponentEdit`. Without it the band would keep the exposure it
+        // was created under and drift off the picture as the slider moved —
+        // the same staleness trap `matteDirty_` exists for, arriving by a
+        // different route.
         if (!first && frameMoved == false && !matteDirty_[std::size_t(i)] &&
+            adj.exposureEv == lastAdj_.exposureEv &&
             c == lastAdj_.maskComponents[std::size_t(i)] &&
             i < lastAdj_.maskCount) {
             continue;
@@ -1440,6 +1447,12 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             adj.straightenDeg * 3.14159265358979324f / 180.0f,
             adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
             rotW, rotH);
+
+        m.rangeLo = c.rangeLo;
+        m.rangeHi = c.rangeHi;
+        m.rangeSoft = c.rangeSoft;
+        // Stops as displayed rather than as captured — see the kind-5 branch.
+        m.rangeBias = adj.exposureEv + kBaselineExposureEv;
 
         m.matteSize[0] = matteLive_[std::size_t(i)][0];
         m.matteSize[1] = matteLive_[std::size_t(i)][1];

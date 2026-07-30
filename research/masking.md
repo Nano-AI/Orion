@@ -181,6 +181,72 @@ them.
 
 ---
 
+## 4b. Range masks — a band on the photograph, not on position
+
+A range mask selects by what a pixel *is* rather than where it is: "the bright
+part of this", "the sky's blue". Lightroom's own range masks *refine* an
+existing selection, and in Orion's model that falls out for free — a range
+component composed with **intersect** (§6) is exactly that, and composed with
+add it is a selection in its own right.
+
+There is no algorithm here to cite and this section says so rather than dressing
+one up. What there are, are three decisions that are easy to get wrong.
+
+### Which image it reads
+
+**The reference image — after white balance and the camera matrix, before any
+user adjustment.** `DevelopPipeline::referenceImage`, the same texture the
+colour picker samples, and for the same published-in-this-repo reason: read the
+*edited* result and adjusting a masked band changes which pixels the band
+selects, which is a feedback loop rather than a tool. Raise exposure through a
+highlight mask and the mask would grow, so the exposure would rise further.
+
+### Which luminance, and in what units
+
+Rec.2020 luminance, `Y = 0.2627 R + 0.6780 G + 0.0593 B` — ITU-R BT.2020-2
+(10/2015), Table 3, the coefficients already used by `guide_prep.slang` and
+`develop_display.slang`. Using a different luma here than the rest of the
+pipeline would mean two definitions of brightness in one program.
+
+⚠ **The band is in log2 luminance — stops — not in linear light.** Scene-linear
+luminance is unbounded and its interesting range is logarithmic: between 0.01
+and 0.02 lies a stop, and so does everything between 4.0 and 8.0. A band of
+fixed linear width is therefore an enormous selection in the shadows and a
+sliver in the highlights, and a slider drawn over it would be unusable across
+nine tenths of its travel. `guide_prep.slang` already works in log2 for the same
+reason and says so.
+
+This is the Weber–Fechner argument and it is not novel; it is written down here
+because the *linear* version looks correct in code and fails only when a
+photographer tries to drag it.
+
+### The falloff
+
+Perlin's smootherstep, shared with every other mask through
+`ops/mask_ops.slang` — Perlin, *"Improving Noise"*, ACM TOG 21(3), 2002. One
+edge ramps up, the other ramps down, and the two are independent so a band can
+be a high-pass or a low-pass by pushing one edge past the frame's range.
+
+C² rather than C¹ matters more here than for a gradient: a luminance band's
+boundary follows the *texture* of the photograph rather than a smooth line
+across it, so a discontinuity in the second derivative shows up as a mottled
+edge through cloud or skin rather than as one clean Mach band.
+
+### What is deliberately not built
+
+- **A colour range mask**, which needs a colour *distance* and therefore a
+  colour space — CIE76 ΔE*ab in CIELAB (CIE 15:2004) is the cheap defensible
+  choice, CIEDE2000 (CIE 142-2001; ISO/CIE 11664-6:2014) the accurate one, and
+  choosing between them is a decision worth its own session rather than a
+  footnote to this one.
+- **A bilateral grid.** `FEATURES.md` claimed range masks were cheap *because*
+  M1 had built one. ⚠ M1 did not build one — there is no bilateral grid in the
+  tree — and it would not be the right tool anyway: a range mask is pointwise,
+  and the edge-aware part is already covered by §4's guided refinement, which a
+  range component composes with like any other.
+
+---
+
 ## 5. Subject and sky
 
 **Vision handles subject and person.** `VNGenerateForegroundInstanceMaskRequest`

@@ -43,7 +43,7 @@ inline constexpr int kMaxMaskComponents = 4;
 ///
 /// research/masking.md §6.
 struct MaskComponentEdit {
-    int   kind = 0;                    // 0 off, 1 linear, 2 radial, 3 brush
+    int   kind = 0;                    // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range
     /// params::MaskCompose. The group folds from zero, the additive identity,
     /// so the first component's op has no effect when it is Add and zeroes the
     /// group when it is Subtract or Intersect — subtracting from nothing is
@@ -57,6 +57,13 @@ struct MaskComponentEdit {
     float radius[2]{0.3f, 0.3f};       // radial semi-axes
     float feather = 0.5f;
     float roundness = 2.0f;
+
+    /// Luminance range (kind 5), in stops of log2 Rec.2020 luminance on the
+    /// reference image. research/masking.md §4b. The defaults are a band around
+    /// middle grey, which is where a photographer reaching for one starts.
+    float rangeLo = -2.0f;
+    float rangeHi = 2.0f;
+    float rangeSoft = 1.0f;
 
     /// The brush, when `kind` is 3. The dab centres are *not* here: they are a
     /// variable-length list and this struct is compared on every slider tick, so

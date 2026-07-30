@@ -368,6 +368,14 @@ enum Screenshot {
             engine.maskRadiusY = 0.14
             engine.maskFeather = 0.10
             engine.maskOverlay = true
+        case "mask-range":
+            engine.exposureEv = 2.6
+            engine.maskKind = 5
+            engine.maskRangeLo = 0.5
+            engine.maskRangeHi = 99
+            engine.maskRangeSoft = 1
+            engine.localExposureEv = -1.5
+            engine.maskOverlay = true
         case "mask-square":
             // A rounded-rectangle mask, which is the case that separates an
             // outline sampled from the shader's superellipse from one drawn as

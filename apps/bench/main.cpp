@@ -499,6 +499,41 @@ int main(int argc, char** argv) {
                  // Half the smallest ratio over the three frames: 0.47, 0.44,
                  // 0.60 of the reference.
                  }, Metric::Luma, 0.22},
+                // A luminance range mask — research/masking.md §4b. A band
+                // on the reference image, biased by the global exposure so its
+                // numbers mean what is on screen.
+                //
+                // Everything from half a stop above middle grey up, darkened.
+                // On all three frames that is a real part of the picture and
+                // not the whole of it, which is the property the floor is
+                // calibrated against.
+                {"range +2 EV shadows", [](orion::pipe::Adjustments& a) {
+                     // ⚠ Judged on a normally exposed frame, not on the raw at
+                     // zero. These are night and dusk captures: at exposure 0
+                     // almost every pixel sits below middle grey, so a genuine
+                     // highlight band selects nothing and the probe reported NO
+                     // EFFECT on one of the three. Widening the band until it
+                     // moved would have "fixed" it by selecting the whole
+                     // picture, which measures nothing about a *band*.
+                     a.exposureEv = 2.6f;
+                 }, [](auto& a) {
+                     auto& c = a.maskComponents[0];
+                     c.kind = 5;
+                     // ⚠ A *shadow* band, not a highlight one. A highlight
+                     // band measured NO EFFECT on the night frame, and
+                     // correctly so — it has almost nothing above middle grey,
+                     // the same shape as dehaze finding no haze in a clear
+                     // sky. Every photograph has shadows, so this is the end
+                     // that exercises the band on all three.
+                     c.rangeLo = -99.0f; c.rangeHi = -1.0f; c.rangeSoft = 1.0f;
+                     a.maskCount = 1;
+                     a.localExposureEv = 2.0f;
+                 // Half the smallest ratio over the three frames: 2.15, 3.08,
+                 // 0.34 of the reference. The spread is the band doing its job —
+                 // the two dark frames have far more below middle grey than the
+                 // daylight one, so the same band moves six times as much in
+                 // them.
+                 }, Metric::Luma, 0.16},
                 // A raster mask component — research/masking.md §5, the
                 // shape a segmentation matte arrives in.
                 //
