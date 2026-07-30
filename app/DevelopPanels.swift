@@ -76,9 +76,13 @@ extension Editor {
                 // own eleven rows further down.
                 HStack(spacing: 8) {
                     PanelButton(title: "Auto") { engine.autoEnhance() }
-                    Text("sets Exposure, Whites, Blacks, Lift, Clarity")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Palette.faint)
+                    // Five control names, engraved, rather than the sentence
+                    // "sets Exposure, Whites, Blacks, Lift, Clarity". It is a
+                    // list of what the button touches, so it is set as a list —
+                    // and it now reads as chrome instead of as prose competing
+                    // with the section headings.
+                    Engraved.Label(text: "Exp · Wht · Blk · Lift · Clarity",
+                                   color: Palette.faint)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }

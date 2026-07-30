@@ -505,3 +505,19 @@ properties that matter are asserted by measurement rather than by taste:
 The convention it follows — red for a coverage overlay — is Photoshop's quick
 mask and Lightroom's mask overlay, i.e. what photographers already expect. That
 is a UI convention, not a published result, and is not claimed as one.
+
+## §19 — The histogram's clipping-flag threshold
+
+`Histogram.clipThreshold = 0.001`. Orion's own number, no source.
+
+A clipping flag has to distinguish "you have crushed the blacks" from "one pixel
+of sensor noise landed on zero". At 24 MP a single pixel is 0.000004% of the
+frame, so a flag lit by any nonzero count is lit on every photograph and
+therefore tells the photographer nothing. 0.1% of the frame is roughly 24,000
+pixels — a region, not a speck.
+
+Lightroom and Capture One both show clipping indicators without publishing a
+threshold, so there is nothing to cite and no way to match them. This is a
+display heuristic rather than a filter constant: it changes when a flag lights,
+never what a pixel renders as, and the exact percentage is printed beside the
+flag so the reader is never relying on the threshold alone.

@@ -21,6 +21,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Navigator.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorLoupe.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engraved.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Histogram.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift

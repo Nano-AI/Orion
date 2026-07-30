@@ -589,13 +589,12 @@ struct Editor: View {
                                       viewport: viewport,
                                       viewAspect: geo.size.width / max(geo.size.height, 1))
                         }
-                        Text(hint)
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.faint)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(Color.black.opacity(0.45),
-                                        in: RoundedRectangle(cornerRadius: 4))
-
+                        // Off the photograph. This used to be a dark chip pinned
+                        // over the lower-left corner of the picture — a caption
+                        // sitting on the print, competing with the thing being
+                        // judged, and covering whatever was in that corner. It
+                        // reads in the footer instead, where the app already
+                        // reports its own state.
                         Spacer(minLength: 10)
 
                         // Culling happens while looking at the picture, so the
@@ -706,22 +705,14 @@ struct Editor: View {
     private var tools: some View {
         VStack(spacing: 0) {
             if engine.isLoaded && !engine.histogramBins.isEmpty {
+                // The axis labels used to live out here, in a second row under
+                // the plate. They belong to the instrument: the marks and the
+                // words they name have to be one scale, or they drift apart the
+                // first time either moves. `Histogram` draws its own rail now.
                 Histogram(bins: engine.histogramBins, height: 84)
                     .padding(.horizontal, 14)
                     .padding(.top, 12)
-                    .padding(.bottom, 6)
-
-                HStack {
-                    Text("shadows").tracking(0.4)
-                    Spacer()
-                    Text("midtones").tracking(0.4)
-                    Spacer()
-                    Text("highlights").tracking(0.4)
-                }
-                .font(.system(size: 9))
-                .foregroundStyle(Palette.faint)
-                .padding(.horizontal, 14)
-                .padding(.bottom, 10)
+                    .padding(.bottom, 10)
             }
 
             tabBar
@@ -827,27 +818,42 @@ struct Editor: View {
     /// the perspective could not be checked by the screenshot suite at all
     /// (`cacheDisplay` drops 3D transforms). A tab that reads instantly beats a
     /// tab with a story.
+    /// Four engraved plates, all four named.
+    ///
+    /// The icons are gone and so is the collapse. Three of the four tabs used to
+    /// be a bare SF Symbol at 40 points — a contrast circle, a magnifier and a
+    /// crop mark — and only the selected one said what it was. Two costs: the
+    /// symbols are the same ones every editor reaches for, which is a large part
+    /// of what read as templated; and a photographer looking for Detail had to
+    /// know that a magnifying glass means sharpening. Four words fit the column
+    /// with room to spare, and the engraved caps carry the identity that the
+    /// borrowed glyphs did not.
+    ///
+    /// The selected plate is filled in the panel's own color so it reads as
+    /// continuous with the panel below it, and marked at its top edge in
+    /// film-rebate amber.
     private var tabBar: some View {
         HStack(alignment: .bottom, spacing: 2) {
             ForEach(ToolTab.allCases) { t in
                 let selected = t == tab
                 Button { withAnimation(.easeOut(duration: 0.16)) { tab = t } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: t.symbol).font(.system(size: 12))
-                        if selected {
-                            Text(t.title).font(.system(size: 11)).tracking(0.6)
+                    Engraved.Label(text: t.title,
+                                   color: selected ? Palette.text : Palette.faint)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: selected ? 30 : 26)
+                        .background(selected ? Palette.panel : Palette.raised)
+                        .overlay(alignment: .top) {
+                            Rectangle()
+                                .fill(Palette.star)
+                                .frame(height: 2)
+                                .opacity(selected ? 1 : 0)
                         }
-                    }
-                    .frame(maxWidth: selected ? .infinity : 40)
-                    .frame(height: selected ? 32 : 27)
-                    .background(selected ? Palette.panel : Palette.raised)
-                    .foregroundStyle(selected ? Palette.accent : Palette.faint)
-                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 5,
-                                                      topTrailingRadius: 5))
-                    .overlay(
-                        UnevenRoundedRectangle(topLeadingRadius: 5, topTrailingRadius: 5)
-                            .stroke(Palette.line, lineWidth: 1)
-                    )
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 4,
+                                                          topTrailingRadius: 4))
+                        .overlay(
+                            UnevenRoundedRectangle(topLeadingRadius: 4, topTrailingRadius: 4)
+                                .stroke(Palette.line, lineWidth: 1)
+                        )
                 }
                 .buttonStyle(.plain)
                 .help(t.title)
@@ -859,18 +865,27 @@ struct Editor: View {
     }
 
 
+    /// The instrument's own state: what is loaded, and how fast it is answering.
+    ///
+    /// Also where the canvas hint lives now, so no caption sits on the
+    /// photograph. Two lines rather than one: the hint changes with what you are
+    /// doing and the frame's numbers do not, and putting them on one row makes
+    /// the stable numbers jump every time the hint's length changes.
     private var footer: some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 5) {
             if engine.isLoaded {
-                Text("\(engine.imageWidth) × \(engine.imageHeight)")
-                Spacer()
-                Text(String(format: "%.1f ms", engine.lastRenderMs))
-                    .monospacedDigit()
-                    .foregroundStyle(engine.lastRenderMs < 16 ? Palette.accent : .orange)
+                Engraved.Label(text: hint, color: Palette.faint)
+                    .lineLimit(1)
+                HStack(spacing: 0) {
+                    Engraved.Readout(text: "\(engine.imageWidth) × \(engine.imageHeight)",
+                                     color: Palette.dim)
+                    Spacer(minLength: 8)
+                    Engraved.Readout(
+                        text: String(format: "%.1f ms", engine.lastRenderMs),
+                        color: engine.lastRenderMs < 16 ? Palette.accent : Palette.star)
+                }
             }
         }
-        .font(.system(size: 10))
-        .foregroundStyle(Palette.dim)
         .padding(.horizontal, 14).padding(.vertical, 8)
         .overlay(alignment: .top) { Rectangle().fill(Palette.line).frame(height: 1) }
     }
@@ -884,14 +899,8 @@ struct Editor: View {
     }
 
     func section<Content: View>(_ title: String,
-                                        @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 11) {
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.8)
-                .foregroundStyle(Palette.text)
-            content()
-        }
+                                        @ViewBuilder content: @escaping () -> Content) -> some View {
+        SectionPlate(title: title, content: content)
     }
 
     /// `resetsTo` is the value the control returns to for *this* photo, which

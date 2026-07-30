@@ -50,9 +50,11 @@ struct AdjustmentSlider: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 0) {
-                Text(name)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Palette.dim)
+                // Engraved caps, so the control's name sits a level below its
+                // section's nameplate and a level above the value it carries.
+                // The three used to be near-identical grey text, which is why a
+                // panel of forty rows read as a wall.
+                Engraved.Label(text: name)
                 Spacer(minLength: 8)
                 readout
             }
@@ -70,6 +72,10 @@ struct AdjustmentSlider: View {
             }
             .accessibilityLabel(Text(name))
         }
+        // The section's nameplate marks itself when anything under it has moved.
+        // Reported from here rather than listed there, so a slider added later
+        // cannot be left out of its own section's state.
+        .preference(key: SectionModifiedKey.self, value: modified)
     }
 
     /// The value, in a recessed window — the distance scale in a lens barrel
