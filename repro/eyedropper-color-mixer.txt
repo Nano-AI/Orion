@@ -1,11 +1,11 @@
 # Reported: "When I use the eye drop on color mixer, it doesn't render the color."
 #
-# The yellow Vantage fills the lower left of _PIC8220. Picking it should choose a
+# The yellow Vantage sits mid-left in _PIC8220. Picking its paint should choose a
 # band, and a drag on that band should move the colour under the pointer.
 open samples/_PIC8220.ARW
 set exposure 2.6
-measure 0.08,0.72,0.10,0.10 beforePick
-pick 0.13,0.77
-targeted 0.13,0.77 0.8
-measure 0.08,0.72,0.10,0.10 afterDrag
+measure 0.04,0.52,0.08,0.08 beforePick
+pick 0.07,0.55
+targeted 0.07,0.55 0.8
+measure 0.04,0.52,0.08,0.08 afterDrag
 expect afterDrag != beforePick

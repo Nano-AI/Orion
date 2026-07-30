@@ -127,7 +127,17 @@ enum Scenario {
 
         case "set":
             guard args.count >= 2 else { throw Bad(what: "set needs a name and a value") }
-            try apply(control: args[0], value: Float(try number(1)), to: engine)
+            // Through `edit`, because that is what a slider does and it is what
+            // records history. A bare assignment renders without recording, and
+            // a scenario that used one would not be standing in for the
+            // interface it is meant to be testing.
+            let name = args[0], v = Float(try number(1))
+            var thrown: Error?
+            engine.edit(name) {
+                do { try apply(control: name, value: v, to: engine) }
+                catch { thrown = error }
+            }
+            if let thrown { throw thrown }
 
         case "mask":
             let kinds = ["none": Int32(0), "linear": 1, "radial": 2, "brush": 3]

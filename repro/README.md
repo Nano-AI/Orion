@@ -17,8 +17,8 @@ miss the view-model layer, which is where these failures are.
 
 | Scenario | Verdict |
 |---|---|
-| `undo-after-auto.txt` | **FAILS** — one undo after Auto changes nothing at all |
-| `eyedropper-color-mixer.txt` | **FAILS** — `sample()` returns NaN, so the pick is refused |
+| `undo-after-auto.txt` | Passes — fixed: Auto recorded no history entry at all |
+| `eyedropper-color-mixer.txt` | Passes — fixed: `sampleAt` read an 8-bit texture as half float |
 | `compare-shows-wrong-image.txt` | Passes, and cannot see the reported bug — see below |
 | `rotate-then-compare.txt` | Passes, same limitation |
 

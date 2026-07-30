@@ -1057,14 +1057,29 @@ final class Engine {
         var adj = cAdjustments()
         guard orion_engine_auto_enhance(handle, &adj) == ORION_OK else { return }
 
-        // Each assignment re-renders, which for a one-click action is fine and
-        // is what keeps every value going through the same path an ordinary
-        // edit does.
-        exposureEv = adj.exposure_ev
-        blacks     = adj.blacks
-        whites     = adj.whites
-        fusion     = adj.fusion
-        clarity    = adj.clarity
+        // One history entry and one render for the whole button.
+        //
+        // ⚠️ It used to be five bare assignments, with a comment claiming that
+        // re-rendering per assignment kept them on the same path an ordinary
+        // edit takes. They were not on that path at all: an ordinary edit goes
+        // through `edit(_:_:)`, which is what records history, and a bare
+        // assignment records nothing. So Auto left no entry, and the next undo
+        // stepped past it to the edit *before* it — which is why undoing Auto
+        // appeared to throw away everything the photographer had done rather
+        // than the automatic correction. Reported exactly that way.
+        //
+        // Suspended around the five so the frame is rendered once, at the end,
+        // instead of four intermediate states nobody asked to see.
+        edit("Auto") {
+            suspended = true
+            exposureEv = adj.exposure_ev
+            blacks     = adj.blacks
+            whites     = adj.whites
+            fusion     = adj.fusion
+            clarity    = adj.clarity
+            suspended = false
+            pushAndRender()
+        }
     }
 
     private func pushAndRender() {

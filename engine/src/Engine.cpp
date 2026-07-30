@@ -71,11 +71,32 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
     const auto y = static_cast<std::uint32_t>(clamp01(v) * float(h - 1));
 
     // What is on screen.
+    //
+    // ⚠️ Format-aware, and it was not. The tail of the graph writes eight bits
+    // for the screen and sixteen only around an export, and this read the
+    // texture as `__fp16` either way. Reading an RGBA8Unorm texture as half
+    // float does not fail — it reinterprets four bytes as two halves and
+    // returns nonsense, including NaN, which is the same trap already recorded
+    // in the bench's `output16`.
+    //
+    // The consequence was not a wrong colour, it was a *silent* one: the
+    // colour-mixer eyedropper asks for this pixel's hue, `TargetedAdjust.hue`
+    // correctly refuses a pixel with no hue to speak of, and NaN reads as no
+    // hue. So the eyedropper picked nothing, said nothing, and looked broken.
     if (outDisplay) {
-        __fp16 px[4]{};
-        develop_->output().readPixel(x, y, px);
-        for (int i = 0; i < 3; ++i) {
-            outDisplay[i] = std::clamp(float(px[i]), 0.0f, 1.0f);
+        const auto& tex = develop_->output();
+        if (tex.format() == gpu::PixelFormat::RGBA16Float) {
+            __fp16 px[4]{};
+            tex.readPixel(x, y, px);
+            for (int i = 0; i < 3; ++i) {
+                outDisplay[i] = std::clamp(float(px[i]), 0.0f, 1.0f);
+            }
+        } else {
+            std::uint8_t px[4]{};
+            tex.readPixel(x, y, px);
+            for (int i = 0; i < 3; ++i) {
+                outDisplay[i] = float(px[i]) / 255.0f;
+            }
         }
     }
 
