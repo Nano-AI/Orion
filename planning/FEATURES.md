@@ -100,7 +100,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | User presets | M4 | ✅ **Built 2026-07-30**. A **patch** over DevelopState, not a state: only the groups it carries are applied. Crop, dust spots and masks are excluded from every group — they belong to one photograph. Four built-in looks, not written to the user file so improving one reaches everybody |
 | Built-in looks | M4 | Sells the "stunning" promise |
-| Copy/paste settings, sync across selection | M4 | Huge workflow win |
+| Copy/paste settings, sync across selection | M4 | ✅ **Built 2026-07-30**. Sync patches sidecars at the JSON-key level without decoding them, so an unedited photo keeps its as-shot white balance. Confirmed, with the group names in the question. ⚠ Applies to every photo in view — no multi-selection yet |
 | Batch export | M4 | |
 
 ## 12. Edit Model

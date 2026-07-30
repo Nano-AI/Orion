@@ -4,7 +4,8 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**presets**)
+**Last updated:** 2026-07-30 (**copy, paste and sync** · a sidecar bug two
+sessions old)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
@@ -17,20 +18,24 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **copy/paste/sync settings across a selection** (`ROADMAP.md`
-M4), then **batch export**. Both are library-and-edit-model work rather than
-pixels, and sync is presets' near neighbour — the same patch-not-state question,
-with "which groups" chosen per paste instead of per preset. `Preset.applied(to:)`
-is the piece to reuse.
+**Next story:** **batch export** (`ROADMAP.md` M4) — the last v1 item. The
+export path itself is built and tested; what is missing is running it over a
+list without holding a folder of decoded frames in memory at once.
 
-Still open and named elsewhere: colour range masks, sky (needs a bundled model —
-RMBG is the licence trap), and **degrade-then-refine**, which remains the
-largest reported bug and the only one of these a user has actually complained
-about.
+Two smaller things this session named rather than did:
 
-**Suites:** `orion-tests` **454 checks** · `orion-viewport-tests` **3319
+- **Multi-selection in the filmstrip.** Sync applies to every photo *in view*
+  because there is no selection to apply it to. The `SyncSettings` half takes a
+  list of URLs and does not care where it came from.
+- Colour range masks, and sky (needs a bundled model — RMBG is the licence
+  trap).
+
+⚠ **`degrade-then-refine` is still the largest open reported bug**, and the
+only item here a user has actually complained about.
+
+**Suites:** `orion-tests` **454 checks** · `orion-viewport-tests` **3337
 checks** · **13 `repro/` scenarios, 64 checks** · all 0 failures. Bench exits 0
-on all three frames: M0 gate **9.28 ms p95**, 127 nodes, 6427 MiB.
+on all three frames: M0 gate **10.75 ms p95**, 127 nodes, 6427 MiB.
 
 ### Known gaps, carried forward
 
@@ -50,6 +55,68 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30e — sync, and a sidecar bug it uncovered
+
+⚠ **Twelfth arrival of the stale M3 prompt.** Not re-litigated.
+
+### ⚠ The bug, which is the important part of this session
+
+**Dust spots and mask refinement never survived reopening a photograph.** Both
+were written to every sidecar and silently ignored on the way back in. Remove
+some dust, close the photo, open it again: the dust is back.
+
+`DevelopState` hand-writes its *decoder* against a private `Key` list and lets
+Swift synthesise its *encoder* from the stored properties. **A field added to
+the struct therefore joins the sidecar immediately and is read back never.** The
+asymmetry produces no warning and looks like working code from both ends. Two
+fields from this session's own earlier stories sat in that state.
+
+`testEveryFieldSurvivesTheSidecar` is the guard: encode a state with every field
+set, demand it come back identical. Testing the two that were broken would pin
+today's bug; this pins the shape of it.
+
+⚠ **And its first version could not see `maskRefine`**, because the fixture left
+that field at its default. A round-trip test is only as good as the state it
+round-trips, and a field the fixture forgets is a field the suite cannot see.
+`busyState()` is exhaustive now and says so. Three mutations confirm it.
+
+Found because a paste through the JSON path disagreed with the same paste
+through the struct path — which is exactly what the asymmetry looks like from
+outside.
+
+### Sync does not open the photographs it writes to
+
+Opening each target costs a quarter-second of RAW decode apiece and throws every
+one away. The sidecar is the source of truth, so sync edits it directly — but
+**not** by decoding it into a `DevelopState`.
+
+⚠ A photograph with no sidecar has **no stored white balance**: its white
+balance is whatever the camera recorded and is known only once the file is
+decoded. Decode the sidecar into a struct and the missing keys come back as the
+struct's defaults — 5500 K — and writing that back rewhite-balances every
+untouched photograph in the selection to a number nobody chose.
+
+So the patch is applied at the level of the **JSON keys**. A key the paste does
+not mention and the target never had stays absent all the way to `Engine.open`,
+which fills it from the camera.
+
+`SyncSettings.keys(for:)` and `Preset.applied(to:)` are the same decision
+written twice — against fields, and against key names. They cannot be merged
+without decoding, so a test applies both to the same state for every group and
+demands they agree.
+
+### Confirmed, with the list in the question
+
+Sync writes a sidecar for every photo in view without opening any, and there is
+no undo across photographs. The confirmation names the count *and the groups by
+name* — "sync settings" is the phrase that hides which settings.
+
+### Scope, stated
+
+"Across a selection" is across every photo **in view**: the library has no
+multi-selection and building one in the filmstrip is its own story. The
+`SyncSettings` half takes a list of URLs and does not care where it came from.
 
 ## Session 2026-07-30d — presets, and the runner was lying about crops
 

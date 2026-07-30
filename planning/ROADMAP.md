@@ -135,7 +135,10 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 - Brush masks — **reinstated 2026-07-29**, see DECISIONS #54 (was cut from v1)
 - ✅ Presets — 2026-07-30. A **patch**, not a state: only the groups it carries
   are applied, and the crop, the dust and the masks are never among them
-- Copy/paste/sync settings across a selection
+- ✅ Copy/paste/sync — 2026-07-30. Sync edits sidecars **without opening the
+  photographs**, at the level of the JSON keys, so a photo that has never been
+  edited keeps its as-shot white balance. ⚠ "Across a selection" is across
+  every photo in view; the filmstrip has no multi-selection yet
 - Batch export
 - Snapshots/versions, perspective correction, film grain
 
