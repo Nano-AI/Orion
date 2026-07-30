@@ -133,7 +133,8 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
   failure across a hard edge recorded in `UNSOURCED.md` §21 and stated in the
   panel
 - Brush masks — **reinstated 2026-07-29**, see DECISIONS #54 (was cut from v1)
-- Presets (user + built-in looks)
+- ✅ Presets — 2026-07-30. A **patch**, not a state: only the groups it carries
+  are applied, and the crop, the dust and the masks are never among them
 - Copy/paste/sync settings across a selection
 - Batch export
 - Snapshots/versions, perspective correction, film grain

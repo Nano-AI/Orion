@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**spot removal**)
+**Last updated:** 2026-07-30 (**presets**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
@@ -17,19 +17,20 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **presets** (`ROADMAP.md` M4) — user and built-in looks. Then
-copy/paste/sync across a selection, and batch export. Those three are the last
-v1 items, and none of them is a filter: they are all edit-model and library
-work, so the pattern of the last several sessions (research a paper, write a
-kernel, pin it with a GPU test) does not apply to any of them.
+**Next story:** **copy/paste/sync settings across a selection** (`ROADMAP.md`
+M4), then **batch export**. Both are library-and-edit-model work rather than
+pixels, and sync is presets' near neighbour — the same patch-not-state question,
+with "which groups" chosen per paste instead of per preset. `Preset.applied(to:)`
+is the piece to reuse.
 
-Still open and named elsewhere: colour range masks, sky (needs a bundled
-model — RMBG is the licence trap), and **degrade-then-refine**, which remains
-the largest reported bug.
+Still open and named elsewhere: colour range masks, sky (needs a bundled model —
+RMBG is the licence trap), and **degrade-then-refine**, which remains the
+largest reported bug and the only one of these a user has actually complained
+about.
 
-**Suites:** `orion-tests` **454 checks** · `orion-viewport-tests` **3279
-checks** · **12 `repro/` scenarios, 60 checks** · all 0 failures. Bench exits 0
-on all three frames: M0 gate **9.47 ms p95**, 127 nodes, 6427 MiB.
+**Suites:** `orion-tests` **454 checks** · `orion-viewport-tests` **3319
+checks** · **13 `repro/` scenarios, 64 checks** · all 0 failures. Bench exits 0
+on all three frames: M0 gate **9.28 ms p95**, 127 nodes, 6427 MiB.
 
 ### Known gaps, carried forward
 
@@ -49,6 +50,60 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30d — presets, and the runner was lying about crops
+
+⚠ **Eleventh arrival of the stale M3 prompt.** Not re-litigated.
+
+⚠ **No research file and no bench probe, deliberately.** Presets are not a
+filter: there is no algorithm to cite and no floor to measure. CLAUDE.md asks
+for both where a kernel is involved, and saying that plainly is better than
+manufacturing a citation for copying floats.
+
+### A preset is a patch, not a state
+
+A preset stores a full `DevelopState` *and* the groups it may touch, and
+applying it copies only those. Assigning the state wholesale is one line shorter
+and wrong in a way that only shows up in use — a black-and-white look would
+silently reset the photograph's exposure, its crop and its dust.
+
+Excluded from **every** group: the crop, straighten and rotation; the spots; the
+masks and their local adjustment. As-shot white balance is offerable but off by
+default. `applied(to:)` lists fields explicitly rather than reflecting, so
+adding a field to `DevelopState` is a decision instead of an accident.
+
+### The test that earns its keep
+
+Forty pure-logic checks, no GPU. The load-bearing one applies **each group on
+its own** over a state with something set everywhere, and demands every other
+group's witness field survive. A preset that assigned the whole state passes any
+test that enables all groups at once; it fails this one 25 times.
+
+⚠ **Two mutations survived and neither is a gap.** The lines re-asserting the
+crop and the spots from `base` are a backstop over values that are already
+`base`'s, so deleting them changes nothing today. They stay for the reason the
+brush kernel keeps its radius cutoff, and the comment now says outright that a
+test cannot distinguish a backstop from the thing it backs up.
+
+### ⚠ A fidelity bug in the scenario runner
+
+The `crop` verb called `setCrop` and stopped. **The interface does not** — the
+overlay calls `commitCropEdit()` on drag end, because `setCrop` renders without
+recording so that a drag is one history entry rather than sixty. So a scenario
+that cropped left the crop out of history, and any `undo` after it stepped
+*past* the crop instead of over it.
+
+The runner's whole claim, stated at the top of `Scenario.swift`, is that it
+drives what the interface drives. This was a place it did not, and twelve
+scenarios were written against it. It surfaced only because a preset test used
+undo after a crop — nothing else had that shape.
+
+### And a scenario that failed on its own arithmetic
+
+`repro/preset-is-a-patch.txt` first asserted that the rendered patch over a dust
+spot was unchanged by a preset. That is false by construction: the preset moves
+contrast and clarity, so the value there legitimately changes. It runs the other
+path instead — the same crop and preset with no spot placed, which must differ.
 
 ## Session 2026-07-30c — spot removal, and a pattern worth naming
 
