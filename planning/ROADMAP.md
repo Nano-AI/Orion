@@ -128,7 +128,10 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
   no API for it (its matte is capture-time metadata only), so it needs a
   bundled BiRefNet or U²-Net — both MIT/Apache. ⚠ RMBG is the trap every
   tutorial reaches for and its licence forbids commercial use
-- Spot removal (sensor dust and blemishes, not Photoshop-grade healing)
+- ✅ Spot removal — 2026-07-30, clone and heal. `research/spot-removal.md`;
+  the zeroth-order term of Farbman et al.'+chr(39)+'s interpolant, with the bounded
+  failure across a hard edge recorded in `UNSOURCED.md` §21 and stated in the
+  panel
 - Brush masks — **reinstated 2026-07-29**, see DECISIONS #54 (was cut from v1)
 - Presets (user + built-in looks)
 - Copy/paste/sync settings across a selection

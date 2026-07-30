@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**luminance range masks**)
+**Last updated:** 2026-07-30 (**spot removal**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
@@ -17,23 +17,19 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **spot removal** (`ROADMAP.md` M4) — sensor dust and blemishes,
-not Photoshop-grade healing. Then presets, copy/sync across a selection, and
-batch export, which are the last v1 items.
+**Next story:** **presets** (`ROADMAP.md` M4) — user and built-in looks. Then
+copy/paste/sync across a selection, and batch export. Those three are the last
+v1 items, and none of them is a filter: they are all edit-model and library
+work, so the pattern of the last several sessions (research a paper, write a
+kernel, pin it with a GPU test) does not apply to any of them.
 
-Two masking stories remain and neither is next:
+Still open and named elsewhere: colour range masks, sky (needs a bundled
+model — RMBG is the licence trap), and **degrade-then-refine**, which remains
+the largest reported bug.
 
-- **Colour range masks.** Need a colour *distance* and so a colour space: CIE76
-  ΔE*ab in CIELAB (CIE 15:2004) is the cheap defensible choice, CIEDE2000
-  (CIE 142-2001) the accurate one. `research/masking.md` §4b names both.
-- ⚠ **Sky, which is not cheap.** Apple has no API — its sky matte is
-  capture-time metadata and cannot be produced from an imported raw — so it
-  needs a bundled BiRefNet or U²-Net. RMBG is the trap every tutorial reaches
-  for and its licence forbids commercial use.
-
-**Suites:** `orion-tests` **447 checks** · `orion-viewport-tests` **3279
-checks** · **11 `repro/` scenarios, 53 checks** · all 0 failures. Bench exits 0
-on all three frames: M0 gate **9.38 ms p95**, 125 nodes, 6243 MiB.
+**Suites:** `orion-tests` **454 checks** · `orion-viewport-tests` **3279
+checks** · **12 `repro/` scenarios, 60 checks** · all 0 failures. Bench exits 0
+on all three frames: M0 gate **9.47 ms p95**, 127 nodes, 6427 MiB.
 
 ### Known gaps, carried forward
 
@@ -53,6 +49,78 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30c — spot removal, and a pattern worth naming
+
+⚠ **Tenth arrival of the stale M3 prompt.** Not re-litigated.
+
+`research/spot-removal.md`, written before the code. Sensor dust and blemishes,
+which is `ROADMAP.md`'s scope and not modesty — the case that makes healing hard
+is a blemish across a strong edge, and this deliberately does not solve it.
+
+### What is cited and what is truncated
+
+Pérez, Gangnet & Blake (SIGGRAPH 2003) is what healing *is*, and it needs a
+sparse solve — refused here for the same reason `masking.md` §4 refused one.
+Farbman et al. (SIGGRAPH 2009) is the published answer: mean-value coordinates
+give the Poisson interpolant in closed form.
+
+⚠ **Orion evaluates only that interpolant's zeroth-order term** — the mean of
+the boundary difference, one number per spot. `UNSOURCED.md` §21 records it as a
+truncation rather than a method, with the bounded failure it buys: across a hard
+edge the correction is wrong on both sides by half the edge's contrast. That
+limit is repeated in the panel rather than hidden.
+
+### ⚠ Spots store frame coordinates. Masks store displayed ones.
+
+Worth stating plainly because it looks like an inconsistency and is not:
+
+| | Stored in | Because |
+|---|---|---|
+| Mask | displayed coordinates | placed *against* a subject; stays where you put it on screen |
+| Spot | frame coordinates | dust is *on the sensor*; must follow the subject through a crop or turn |
+
+Same transform, applied at a different moment — once at placement through the
+new `orion_engine_to_frame`, rather than on every render.
+
+### The third staleness bug of the session, and how it was found
+
+A mutation removing the displayed-to-frame conversion **passed the whole
+scenario**, because at zero rotation that transform is the identity. Chasing why
+turned up a real defect: the spot parameters were re-pushed only when the
+*spots* changed, so a rotation never re-transformed them.
+
+⚠ **That is the third time this session** that state living outside the compared
+struct went stale silently — after `matteDirty_` for the Vision matte and
+`adj.exposureEv` for the range mask's bias. It is a pattern in this file's
+`apply`, not three coincidences: **anything a kernel reads that is not a field
+of `MaskComponentEdit` or of `Adjustments` needs either its own dirty flag or a
+place in the comparison.** Converting spots at placement removes the staleness
+path rather than adding a third flag to it.
+
+The repro file now covers the case that discriminates — a spot placed *while*
+the picture is turned, where the transform is not the identity.
+
+### Also caught first-draft-wrong
+
+- The research file's §4 argued for placing the node **before** the lens
+  correction. Checking the graph settled it the other way: lens is the one stage
+  that warps, so downstream of it a spot shares the space masks already use.
+  Corrected in place with the reasoning, not quietly.
+- The GPU test used flat fields throughout, so sampling the source once at its
+  centre passed everything — **copying detail was never actually checked**,
+  which is the entire reason clone exists. A striped-source case kills it now.
+
+### Measured
+
+Clone moved the night sky **0.0209** from where it started; heal moved it
+**0.0031** — tone preserved about sevenfold, which is the whole distinction.
+Seven GPU checks against exact numbers on a synthetic frame, six mutations dead.
+
+The bench probe is four large clone spots rather than one dust speck: a real
+spot is a few thousand pixels of twenty-four million. Clone rather than heal,
+because measuring the operation whose purpose is to be invisible would be
+calibrating a floor against a control working correctly.
 
 ## Session 2026-07-30b — a band on brightness
 
