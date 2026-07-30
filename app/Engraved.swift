@@ -26,8 +26,13 @@ enum Engraved {
 
         var body: some View {
             Text(text.uppercased())
-                .font(.system(size: size, weight: .medium).width(.expanded))
-                .tracking(0.9)
+                // Tracking, not an expanded width. Both read as engraving, and
+                // the expanded face was too wide in practice: a panel of forty
+                // labels at that width is a wall of letters, and long names like
+                // ROUNDNESS and HIGHLIGHTS ran to the readout. Letter-spacing
+                // carries the same signal at a fraction of the horizontal cost.
+                .font(.system(size: size, weight: .medium))
+                .tracking(1.0)
                 .foregroundStyle(color)
         }
     }

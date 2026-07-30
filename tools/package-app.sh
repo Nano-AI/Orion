@@ -16,7 +16,12 @@
 #      unsigned binary does not launch at all, so it has to be re-signed after
 #      install_name_tool, not before.
 #
-# Usage:  tools/package-app.sh [output-dir]
+# Usage:  tools/package-app.sh [output-dir] [version-label]
+#
+# The label goes in the disk image's name and its readme. It exists because the
+# plist carries 0.4.0 for both alpha.1 and alpha.2 — the prerelease suffix lives
+# in the git tag — and two different builds arriving as Orion-0.4.0.dmg is how
+# somebody ends up debugging the wrong binary.
 #
 # Produces a .dmg and leaves the staged .app beside it. Ad-hoc signed, not
 # notarized: first launch needs the quarantine flag cleared, and README-FIRST.txt
@@ -27,6 +32,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$ROOT/build"
 OUT="${1:-$ROOT/dist}"
+LABEL="${2:-}"
 
 APP_SRC="$BUILD/Orion.app"
 APP="$OUT/Orion.app"
@@ -36,7 +42,8 @@ APP="$OUT/Orion.app"
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
            "$APP_SRC/Contents/Info.plist")"
-echo "Orion $VERSION"
+NAME="${LABEL:-$VERSION}"
+echo "Orion $NAME"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -175,7 +182,7 @@ cp -R "$APP" "$STAGE/Orion.app"
 ln -s /Applications "$STAGE/Applications"
 
 cat > "$STAGE/README-FIRST.txt" <<TXT
-Orion $VERSION — unofficial alpha build
+Orion $NAME — unofficial alpha build
 
 Drag Orion to Applications, then open it ONCE from the right-click menu:
 
@@ -198,9 +205,9 @@ Third-party licenses are inside the app, at
 Orion.app/Contents/Resources/licenses.
 TXT
 
-DMG="$OUT/Orion-$VERSION.dmg"
+DMG="$OUT/Orion-$NAME.dmg"
 rm -f "$DMG"
-hdiutil create -volname "Orion $VERSION" -srcfolder "$STAGE" \
+hdiutil create -volname "Orion $NAME" -srcfolder "$STAGE" \
                -ov -format UDZO "$DMG" >/dev/null
 echo
 echo "$DMG"
