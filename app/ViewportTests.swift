@@ -56,7 +56,11 @@ enum ViewportTests {
         testPictureMapMatchesTheFitRectangle()
         testPictureMapRoundTrips()
         testPictureMapFollowsThePan()
+        testEveryFieldSurvivesTheSidecar()
         testPresetIsAPatch()
+        testSyncKeysMatchTheStructPatch()
+        testSyncLeavesUnknownWhiteBalanceAlone()
+        testSyncPatchesOnlyItsGroups()
         testPresetNeverCarriesTheFrame()
         testPresetStoreRoundTrip()
         testMatteTurnsRoundTrip()
@@ -1830,21 +1834,57 @@ enum ViewportTests {
 
     /// A photograph with something set in every group, so any field a preset
     /// wrongly copies shows up as a change.
+    /// A state with **every** field set to a non-default value.
+    ///
+    /// ⚠ Exhaustive on purpose, and it was not at first: `maskRefine` was left
+    /// at its default, so a mutation deleting its line from the decoder changed
+    /// nothing and survived. A round-trip test is only as good as the state it
+    /// round-trips — a field this function forgets is a field the suite cannot
+    /// see. Anything added to `DevelopState` belongs here the same day.
     static func busyState() -> DevelopState {
         var s = DevelopState()
         s.temperatureK = 4200; s.tint = 0.3
-        s.exposureEv = 1.1; s.contrast = 1.7; s.highlights = -0.4
-        s.shadows = 0.35; s.whites = 0.2; s.blacks = -0.15
+        s.exposureEv = 1.1; s.contrast = 1.7
+        s.highlights = -0.4; s.shadows = 0.35; s.whites = 0.2; s.blacks = -0.15
+        s.highlightRecovery = 0.65
         s.vibrance = 0.4; s.saturation = -0.2
         s.hueShift[3] = 0.5; s.satShift[5] = -0.3; s.lumShift[1] = 0.25
         s.gradeShadow = [0.1, -0.2, 0.05]
-        s.sharpenAmount = 1.3; s.denoiseLuma = 2.0
-        s.lensDistortion = 0.4
+        s.gradeMidtone = [-0.05, 0.15, 0.02]
+        s.gradeHighlight = [0.2, 0.03, -0.12]
+        s.sharpenAmount = 1.3; s.sharpenRadius = 2.2; s.sharpenMasking = 0.45
+        s.denoiseLuma = 2.0; s.denoiseColor = 1.4
+        s.lensDistortion = 0.4; s.lensVignette = -0.35
+        s.lensCaRed = 0.22; s.lensCaBlue = -0.18
         s.clarity = 0.6; s.dehaze = 0.3; s.fusion = 0.7; s.lutStrength = 0.5
+
+        var curve = ToneCurve()
+        curve.master = [CurvePoint(x: 0, y: 0.05),
+                        CurvePoint(x: 0.5, y: 0.42),
+                        CurvePoint(x: 1, y: 0.97)]
+        curve.red = [CurvePoint(x: 0, y: 0), CurvePoint(x: 0.6, y: 0.7),
+                     CurvePoint(x: 1, y: 1)]
+        s.curve = curve
+
         s.rotateQuarters = 1; s.straightenDeg = 4
         s.cropX = 0.1; s.cropY = 0.2; s.cropW = 0.7; s.cropH = 0.6
-        s.spots = [SpotState()]
-        s.maskComponents = [MaskComponentState()]
+
+        var spot = SpotState()
+        spot.destX = 0.31; spot.destY = 0.62
+        spot.srcX = 0.44; spot.srcY = 0.58
+        spot.radius = 0.035; spot.feather = 0.4; spot.heal = false
+        s.spots = [spot]
+
+        // ⚠ kind 1, not the default. A kind-0 component is "off" and the
+        // decoder drops it on purpose, so a default-constructed one would make
+        // this state fail a round trip for a reason that is not a bug.
+        var m = MaskComponentState()
+        m.kind = 1; m.compose = 2; m.invert = true
+        m.centreX = 0.4; m.centreY = 0.7; m.angle = 0.9; m.length = 0.33
+        m.radiusX = 0.21; m.radiusY = 0.44; m.feather = 0.66; m.roundness = 3.5
+        m.brushRadius = 0.05; m.brushFlow = 0.8; m.brushHardness = 0.15
+        s.maskComponents = [m]
+        s.maskRefine = 0.72
         s.localExposureEv = 1.5
         return s
     }
@@ -1987,5 +2027,192 @@ enum ViewportTests {
                "an empty name is refused")
         report(!reopened.add(name: "Nothing", groups: [], state: s),
                "and so is a preset that would change nothing")
+    }
+
+    // MARK: Copy, paste and sync
+
+    /// ⚠ The check this pair of files exists to have.
+    ///
+    /// `Preset.applied(to:)` patches a *struct*; `SyncSettings.keys(for:)`
+    /// patches its *JSON*. They are the same decision written twice — once
+    /// against fields, once against key names — because sync must not decode a
+    /// sidecar into a struct (see the note in SyncSettings). Two hand-written
+    /// lists drift the first time someone adds a field to one of them.
+    ///
+    /// So: apply a group both ways to the same state and demand the results
+    /// agree, field for field, for every group.
+    static func testSyncKeysMatchTheStructPatch() {
+        let base = busyState()
+        var source = DevelopState()
+        // Something different in every field a group can carry, so a key
+        // missing from the list shows up as a field that did not move.
+        source.temperatureK = 7100; source.tint = -0.44
+        source.exposureEv = -0.9; source.contrast = 1.11; source.highlights = 0.6
+        source.shadows = -0.5; source.whites = -0.3; source.blacks = 0.22
+        source.highlightRecovery = 0.7
+        source.vibrance = -0.6; source.saturation = 0.8
+        source.hueShift[2] = -0.7; source.satShift[0] = 0.9; source.lumShift[7] = -0.4
+        source.gradeShadow = [-0.3, 0.2, -0.1]
+        source.gradeMidtone = [0.05, 0.05, 0.05]
+        source.gradeHighlight = [0.2, -0.2, 0.1]
+        source.curve = ToneCurve()
+        source.sharpenAmount = 1.9; source.sharpenRadius = 2.4; source.sharpenMasking = 0.8
+        source.denoiseLuma = 3.1; source.denoiseColor = 0.9
+        source.lensDistortion = -0.6; source.lensVignette = 0.5
+        source.lensCaRed = 0.3; source.lensCaBlue = -0.3
+        source.clarity = -0.8; source.dehaze = 0.9; source.fusion = 0.4
+        source.lutStrength = 0.25
+
+        for group in PresetGroup.allCases {
+            let viaStruct = SyncSettings.pasted(source: source, onto: base,
+                                                groups: [group])
+
+            // The same patch through the JSON path, then decoded back so the
+            // two can be compared as states.
+            guard let storedBase = try? JSONEncoder().encode(base),
+                  let patched = SyncSettings.patched(stored: storedBase,
+                                                     source: source,
+                                                     groups: [group]),
+                  let viaJson = try? JSONDecoder().decode(DevelopState.self,
+                                                          from: patched)
+            else {
+                report(false, "\(group.rawValue) round-trips through JSON")
+                continue
+            }
+
+            report(viaJson == viaStruct,
+                   "\(group.rawValue): the JSON key list and the struct patch agree")
+        }
+    }
+
+    /// ⚠ A photograph with no sidecar must keep its as-shot white balance.
+    ///
+    /// Its white balance is whatever the camera recorded and is only known once
+    /// the file is decoded, so it is *absent* from storage rather than stored.
+    /// Decode the sidecar into a `DevelopState` and the missing keys come back
+    /// as the struct's defaults — 5500 K — and writing that back would
+    /// rewhite-balance every untouched photograph in a selection to a number
+    /// nobody chose. This is why sync patches keys and not structs.
+    static func testSyncLeavesUnknownWhiteBalanceAlone() {
+        var source = DevelopState()
+        source.temperatureK = 8000
+        source.tint = 0.5
+        source.clarity = 0.75
+
+        // No sidecar at all, and a paste that does not include White Balance.
+        guard let out = SyncSettings.patched(stored: nil, source: source,
+                                             groups: [.effects]),
+              let obj = try? JSONSerialization.jsonObject(with: out) as? [String: Any]
+        else {
+            report(false, "a patch onto a photo with no sidecar produces JSON")
+            return
+        }
+
+        report(obj["temperatureK"] == nil && obj["tint"] == nil,
+               "no white balance is written to a photo that never had one",
+               "keys: \(obj.keys.sorted().joined(separator: ", "))")
+        report((obj["clarity"] as? Double).map { abs($0 - 0.75) < 1e-6 } ?? false,
+               "and the group that was pasted is written",
+               "\(String(describing: obj["clarity"]))")
+
+        // With White Balance selected it *is* written — the photographer asked.
+        guard let withWb = SyncSettings.patched(stored: nil, source: source,
+                                                groups: [.effects, .whiteBalance]),
+              let wbObj = try? JSONSerialization.jsonObject(with: withWb)
+                as? [String: Any]
+        else {
+            report(false, "a white-balance patch produces JSON")
+            return
+        }
+        report((wbObj["temperatureK"] as? Double).map { abs($0 - 8000) < 1e-6 } ?? false,
+               "but it is written when the paste asks for it",
+               "\(String(describing: wbObj["temperatureK"]))")
+    }
+
+    /// A target that already has settings keeps the ones the paste does not
+    /// name — the same patch property as a preset, at the storage layer.
+    static func testSyncPatchesOnlyItsGroups() {
+        var target = DevelopState()
+        target.exposureEv = 2.2
+        target.clarity = -0.5
+        target.cropX = 0.3; target.cropW = 0.4
+        target.spots = [SpotState()]
+
+        var source = DevelopState()
+        source.exposureEv = -1.0
+        source.clarity = 0.9
+        source.cropX = 0.9; source.cropW = 0.05
+
+        guard let stored = try? JSONEncoder().encode(target),
+              let patched = SyncSettings.patched(stored: stored, source: source,
+                                                 groups: [.effects]),
+              let out = try? JSONDecoder().decode(DevelopState.self, from: patched)
+        else {
+            report(false, "the patch round-trips")
+            return
+        }
+
+        report(out.clarity == source.clarity, "sync writes the group it names",
+               "\(out.clarity)")
+        report(out.exposureEv == target.exposureEv,
+               "and leaves the groups it does not", "\(out.exposureEv)")
+
+        // ⚠ And never the frame or the dust, whatever is selected.
+        guard let everything = SyncSettings.patched(
+                stored: stored, source: source,
+                groups: Set(PresetGroup.allCases)),
+              let all = try? JSONDecoder().decode(DevelopState.self, from: everything)
+        else {
+            report(false, "an all-groups patch round-trips")
+            return
+        }
+        report(all.cropX == target.cropX && all.cropW == target.cropW,
+               "no group syncs the crop", "\(all.cropX), \(all.cropW)")
+        report(all.spots == target.spots, "nor the dust spots",
+               "\(all.spots.count)")
+
+        // The count sync reports is the count it wrote.
+        var wrote: [URL: Data] = [:]
+        let urls = (0..<3).map { URL(fileURLWithPath: "/tmp/orion-sync-\($0).ARW") }
+        let n = SyncSettings.sync(source: source, groups: [.light], to: urls,
+                                  read: { _ in nil },
+                                  write: { url, data in wrote[url] = data })
+        report(n == 3 && wrote.count == 3, "sync reports what it wrote", "\(n)")
+    }
+
+    /// ⚠ Every field of a fully-set state survives a sidecar round trip.
+    ///
+    /// This exists because two did not. `DevelopState` synthesises its
+    /// *encoder* from the stored properties and hand-writes its *decoder*
+    /// against a `Key` list — so a field added to the struct is written to
+    /// every sidecar and never read back. `spots` and `maskRefine` were both
+    /// in that state for two sessions: dust removal and guided feathering were
+    /// saved faithfully and silently gone on reopen.
+    ///
+    /// The general check is the point. Testing the two that were broken would
+    /// pin today's bug; this pins the shape of it, and the next field to be
+    /// added fails here rather than in someone's photographs.
+    static func testEveryFieldSurvivesTheSidecar() {
+        let original = busyState()
+        guard let data = try? JSONEncoder().encode(original),
+              let back = try? JSONDecoder().decode(DevelopState.self, from: data)
+        else {
+            report(false, "a busy state encodes and decodes")
+            return
+        }
+
+        report(back == original,
+               "every field of a fully-set state survives the sidecar")
+
+        // Named separately so a failure says which one, rather than only that
+        // two structs differ.
+        report(back.spots == original.spots, "the dust spots survive",
+               "\(back.spots.count) of \(original.spots.count)")
+        report(back.maskRefine == original.maskRefine,
+               "the mask refinement survives",
+               "\(back.maskRefine) vs \(original.maskRefine)")
+        report(back.maskComponents == original.maskComponents,
+               "the mask group survives",
+               "\(back.maskComponents.count) of \(original.maskComponents.count)")
     }
 }

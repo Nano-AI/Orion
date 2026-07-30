@@ -253,7 +253,7 @@ extension DevelopState {
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue
         case highlightRecovery, denoiseLuma, denoiseColor
         case gradeShadow, gradeMidtone, gradeHighlight
-        case maskComponents, localExposureEv
+        case maskComponents, localExposureEv, maskRefine, spots
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case curve, hueShift, satShift, lumShift
 
@@ -323,6 +323,19 @@ extension DevelopState {
         denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
         lutStrength = float(.lutStrength) ?? lutStrength
         localExposureEv = float(.localExposureEv) ?? localExposureEv
+        maskRefine = float(.maskRefine) ?? maskRefine
+
+        // ⚠ `spots` and `maskRefine` were written by the encoder and ignored
+        // here for two sessions. Encoding is synthesised from the stored
+        // properties; decoding is this hand-written list, so a field added to
+        // the struct joins the sidecar and never comes back out. Dust removal
+        // and guided feathering both silently vanished on reopen, and nothing
+        // noticed because no test round-tripped a state with everything set.
+        // `testEveryFieldSurvivesTheSidecar` is that test now.
+        if let list = (try? c.decodeIfPresent([SpotState].self, forKey: .spots))
+            .flatMap({ $0 }) {
+            spots = list
+        }
 
         // The group, or the single mask a pre-group sidecar carried lifted into
         // one. A component list that is present wins outright: a file holding
