@@ -408,7 +408,7 @@ struct alignas(8) MaskComponent {
     std::int32_t  compose;     // MaskCompose
     std::int32_t  count;       // dabs this pass, <= kMaskDabsPerPass
     std::int32_t  accumulate;  // 1 continues the stroke in `src` and skips the fold
-    float         radius;      // brush nib, normalized
+    float         nibPx;       // brush nib radius, in frame pixels
     float         flow;        // 0..1 per dab
     float         hardness;    // 0 soft, 1 hard-edged
     float         feather;     // radial, 0..1

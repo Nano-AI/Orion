@@ -4584,7 +4584,10 @@ void testMaskBrushGpu() {
     orion::pipe::params::MaskComponent base{};
     base.size[0] = kW; base.size[1] = kH;
     base.kind = 3;
-    base.radius = 0.2f;
+    // 0.2 of the 128-pixel test frame. The nib is in frame pixels now,
+    // so the checks below that compute an expected falloff from a
+    // normalized distance stay valid on this square frame.
+    base.nibPx = 0.2f * float(kW);
     base.flow = 1.0f;
     base.hardness = 0.5f;
 
@@ -4896,7 +4899,7 @@ void testMaskCompositeGpu() {
         s.size[0] = kW; s.size[1] = kH;
         s.kind = 3;
         s.invert = 1;
-        s.radius = 0.2f; s.flow = 1.0f; s.hardness = 0.5f;
+        s.nibPx = 0.2f * float(kW); s.flow = 1.0f; s.hardness = 0.5f;
         s.count = 1;
         s.dabs[0][0] = 0.5f; s.dabs[0][1] = 0.5f;
         const auto got = fold({s});
@@ -4923,7 +4926,7 @@ void testMaskCompositeGpu() {
         s.size[0] = kW; s.size[1] = kH;
         s.kind = 3;
         s.compose = 1;   // subtract
-        s.radius = 0.15f; s.flow = 1.0f; s.hardness = 0.5f;
+        s.nibPx = 0.15f * float(kW); s.flow = 1.0f; s.hardness = 0.5f;
         s.count = 1;
         s.dabs[0][0] = 0.75f; s.dabs[0][1] = 0.5f;
 
@@ -4943,6 +4946,88 @@ void testMaskCompositeGpu() {
 }
 
 /// A mask has to stay on its subject when the picture is turned or cropped.
+/// A brush stroke has to go through the same transform a gradient's centre does.
+///
+/// It did not. `DevelopPipeline` ran the gradient centre through
+/// `mask::toFrame` and copied the dab centres straight from displayed
+/// coordinates into the shader, so a stroke ignored the crop and the rotation —
+/// and because a portrait file carries an EXIF quarter turn, a stroke on one
+/// landed mirrored and ninety degrees off with the rotate control untouched.
+///
+/// The gradients being right is what hid it, so the check is written as the
+/// gradients' own invariant applied to a *stroke*: transform the points, and
+/// they must sit where the same transform puts a gradient centre placed at each
+/// of them. If the two ever disagree again, a mask's shapes have stopped
+/// agreeing about where the picture is.
+void testBrushDabsFollowTheFrame() {
+    section("Brush dabs under crop and rotation");
+
+    namespace mg = orion::pipe::mask;
+
+    // An off-centre asymmetric stroke: a symmetric one survives a flip, and a
+    // centred one survives a rotation, so neither would catch a mirrored axis.
+    const float stroke[][2] = {{0.20f, 0.30f}, {0.35f, 0.32f}, {0.55f, 0.41f}};
+
+    struct Case { const char* name; mg::Crop crop; int turns; float straighten; };
+    const Case cases[] = {
+        {"no crop, no turn",   mg::Crop{},                      0, 0.0f},
+        {"one quarter turn",   mg::Crop{},                      1, 0.0f},
+        {"three quarter turns",mg::Crop{},                      3, 0.0f},
+        {"a tight crop",       mg::Crop{0.1f, 0.2f, 0.5f, 0.6f},0, 0.0f},
+        {"crop and a turn",    mg::Crop{0.1f, 0.2f, 0.5f, 0.6f},1, 0.0f},
+        {"and a straighten",   mg::Crop{0.1f, 0.2f, 0.5f, 0.6f},1, 0.05f},
+    };
+
+    for (const auto& c : cases) {
+        const bool swaps = (c.turns % 2) != 0;
+        const float rotW = swaps ? 4024.0f : 6024.0f;
+        const float rotH = swaps ? 6024.0f : 4024.0f;
+        const float pivotX = c.crop.x + c.crop.w * 0.5f;
+        const float pivotY = c.crop.y + c.crop.h * 0.5f;
+
+        double worst = 0.0;
+        for (const auto& dab : stroke) {
+            const auto asDab = mg::toFrame({dab[0], dab[1], 0.0f}, c.crop, c.turns,
+                                           c.straighten, pivotX, pivotY, rotW, rotH);
+            // The same point, placed as a gradient centre. One transform or two.
+            const auto asCentre = mg::toFrame({dab[0], dab[1], 0.7f}, c.crop, c.turns,
+                                              c.straighten, pivotX, pivotY, rotW, rotH);
+            worst = std::max(worst,
+                             std::max(std::abs(double(asDab.centreX - asCentre.centreX)),
+                                      std::abs(double(asDab.centreY - asCentre.centreY))));
+        }
+        report(worst < 1e-6,
+               std::string("a dab lands where a gradient centre does — ") + c.name,
+               "worst " + std::to_string(worst));
+    }
+
+    // And the property that says the transform is the right one rather than
+    // merely consistent: put a stroke where the subject appears, carry it
+    // forward through the same rotation, and it must land back where it was put.
+    for (int turns = 0; turns < 4; ++turns) {
+        const bool swaps = (turns % 2) != 0;
+        const float rotW = swaps ? 4024.0f : 6024.0f;
+        const float rotH = swaps ? 6024.0f : 4024.0f;
+        double worst = 0.0;
+        for (const auto& dab : stroke) {
+            const auto f = mg::toFrame({dab[0], dab[1], 0.0f}, mg::Crop{}, turns,
+                                       0.0f, 0.5f, 0.5f, rotW, rotH);
+            // Undo it by turning the other way the same number of times.
+            float x = f.centreX, y = f.centreY;
+            for (int i = 0; i < ((4 - turns) % 4); ++i) {
+                const float nx = y, ny = 1.0f - x;
+                x = nx; y = ny;
+            }
+            worst = std::max(worst, std::max(std::abs(double(x - dab[0])),
+                                             std::abs(double(y - dab[1]))));
+        }
+        report(worst < 1e-6,
+               "a stroke turned forward and back lands where it was painted, "
+                   + std::to_string(turns) + " turns",
+               "worst " + std::to_string(worst));
+    }
+}
+
 void testMaskGeometry() {
     section("Mask geometry");
 
@@ -5124,6 +5209,7 @@ int main() {
     testMaskBrushGpu();
     testMaskCompositeGpu();
     testMaskGeometry();
+    testBrushDabsFollowTheFrame();
     testHighlightHaloGpu();
     testOutputDepth();
     testLensDatabase();

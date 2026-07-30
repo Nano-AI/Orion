@@ -1288,7 +1288,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         m.feather   = c.feather;
         m.roundness = c.roundness;
 
-        m.radius   = c.brushRadius;
+        // `nibPx` is set in the brush branch below, where the crop is to hand.
         m.flow     = c.brushFlow;
         m.hardness = c.brushHardness;
 
@@ -1297,9 +1297,44 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             m.count = std::min(have, params::kMaskDabsPerPass);
             const auto& dabs = brushDabs_[std::size_t(i)];
             for (int d = 0; d < m.count; ++d) {
-                m.dabs[d][0] = dabs[std::size_t(d) * 2 + 0];
-                m.dabs[d][1] = dabs[std::size_t(d) * 2 + 1];
+                // Every dab goes through the *same* transform the gradient's
+                // centre does, and it did not before: the centres were copied
+                // straight from displayed coordinates into the shader, so a
+                // stroke ignored the crop and the rotation entirely.
+                //
+                // This is not only a rotated-frame problem. A portrait file
+                // carries an EXIF quarter turn, so `turns` is nonzero with the
+                // rotate control untouched — which is why a stroke on a portrait
+                // frame landed mirrored, at ninety degrees to the hand. The
+                // gradients were right the whole time, which is what hid it:
+                // MaskGeometry was built for them, and the brush was wired up
+                // two sessions later without being put through it.
+                const auto p = mask::toFrame(
+                    {dabs[std::size_t(d) * 2 + 0],
+                     dabs[std::size_t(d) * 2 + 1], 0.0f},
+                    crop, turns,
+                    adj.straightenDeg * 3.14159265358979324f / 180.0f,
+                    adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
+                    rotW, rotH);
+                m.dabs[d][0] = p.centreX;
+                m.dabs[d][1] = p.centreY;
             }
+
+            // The nib, as a radius in *frame pixels*.
+            //
+            // The kernel used to measure the dab in normalized coordinates,
+            // where one unit of x and one unit of y are different numbers of
+            // pixels on any frame that is not square — so the nib was an ellipse
+            // on screen, 3:2 on a 3:2 photograph, and the Size slider stretched
+            // it rather than growing it. A brush has to be round under the
+            // cursor; that is the whole contract of a brush.
+            //
+            // Measured against the *displayed* picture's shorter side, so the
+            // nib keeps its size on screen as the picture is cropped tighter,
+            // exactly as `lengthToFrame` keeps a gradient's ramp.
+            const float shownW = float(width_)  * std::max(adj.cropW, 1e-6f);
+            const float shownH = float(height_) * std::max(adj.cropH, 1e-6f);
+            m.nibPx = c.brushRadius * std::min(shownW, shownH);
             // ⚠️ A stroke longer than one pass is silently truncated here. The
             // kernel can continue a stroke — that is what its `accumulate` flag
             // is for — but nothing yet spends a second component on the

@@ -38,7 +38,7 @@ struct MaskComponentParams
     /// DevelopPipeline — but it is the shape the fix takes.
     int    accumulate;
 
-    float  radius;      // brush nib, normalized — one per stroke
+    float  nibPx;       // brush nib radius, in frame pixels — one per stroke
     float  flow;        // 0..1, how much one dab lays down
     float  hardness;    // 0 soft, 1 hard-edged
     float  feather;     // radial, 0..1
@@ -116,12 +116,18 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         // stroke starts from nothing.
         if (p.accumulate != 0) own = src[tid.xy];
 
-        const float r = max(p.radius, 1e-6f);
+        // In pixels, not in normalized coordinates. One normalized unit of x and
+        // one of y are different numbers of pixels on any frame that is not
+        // square, so measuring the dab in normalized space drew an ellipse — 3:2
+        // on a 3:2 photograph — and made the Size slider stretch the nib instead
+        // of growing it. A brush has to be round under the cursor.
+        const float r = max(p.nibPx, 1e-6f);
         const float flow = saturate(p.flow);
+        const float2 toPx = float2(p.size);
 
         for (int i = 0; i < p.count; ++i)
         {
-            const float2 e = q - p.dabs[i];
+            const float2 e = (q - p.dabs[i]) * toPx;
 
             // Reject on the square first. A dab covers a disc, so most pixels
             // miss most dabs, and this turns the common case into two compares
