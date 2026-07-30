@@ -143,6 +143,50 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 
 ---
 
+
+## Per-layer adjustments — the decomposition, costed
+
+Decision #75 settled *what* (pointwise adjustments per layer, pyramids stay
+global) and #76 settled *which* (exposure, contrast, saturation, warmth, tint).
+#77 removed the UI cost — the catalogue renders N layers with no new controls.
+What follows is the engine work, measured rather than guessed, so it can start
+clean rather than be discovered mid-change.
+
+### ⚠ The constraint that shapes it: the graph is static
+
+Nodes and their inputs are fixed at construction. Which component *ends* a layer
+is a runtime property, so a layer's coverage cannot be a node chosen per render.
+
+The way through: **`develop:linear` binds all four component outputs**, and a
+per-layer parameter says which index carries that layer's coverage. Components
+group into layers by a `startsLayer` flag — a layer is a run of consecutive
+rows, which is how the row list already reads.
+
+### The pieces, in order
+
+| # | Piece | Cost |
+|---|---|---|
+| 1 | `startsLayer` on `MaskComponentEdit`; kernel starts its fold from zero rather than from `src` | one kernel branch |
+| 2 | **Four refine chains, one per component slot** rather than one on the fold | **+21 nodes** (7 each), ~138 MiB more R16F |
+| 3 | `develop:linear` takes four coverages, loops layers per pixel | 4 bindings; one pass, not four |
+| 4 | `LinearAdjust` carries four local sets plus each layer's coverage index | ~30 more floats |
+| 5 | Sidecar: per-layer local sets, legacy single set migrates to layer 1 | schema version |
+| 6 | Panel: layer boundaries in the row list, `AdjustmentGroup` per layer | no new controls (#77) |
+
+Measured against today: **127 nodes → 148**, 6427 MiB → about **6565 MiB** (+2%).
+Both affordable. The refine chains disable at strength zero exactly as the
+single one does, so an unrefined stack costs their textures and none of their
+time.
+
+### ⚠ What must not be done along the way
+
+- **Raising the four-component cap.** Each live component is a full-resolution
+  R16F pass; the cap is a memory number and layers do not change it. Four
+  components split across four layers is the same 184 MiB as four in one group.
+- **Per-layer clarity, dehaze or fusion.** #75. Not pointwise, so the rule that
+  the coverage scales the parameter is not even defined for them.
+- **Blend modes over rendered frames.** #75. Layer opacity is a scalar into α.
+
 ## M5 — Advanced
 
 - ML denoise (NAFNet-class via Core ML) as a **background pass**, not a live slider

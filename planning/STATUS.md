@@ -35,7 +35,6 @@ Small, named, and none of them blocking the next story:
 
 | Gap | Where |
 |---|---|
-| **No bench probe for the brush.** Unblocked — `Probe` gained a `prepare` hook when the matte probe needed one, and a stroke can use the same hook. Still not written | `apps/bench` |
 | **A matte is not saved with the photo.** It is a raster and the sidecar holds parameters, so reopening leaves a Subject or Person row empty until it is run again. Said out loud in the panel rather than left to be discovered. ⚠ It only *became* true this session — see below | `Sidecar`, `DevelopPanels` |
 | **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand | `SubjectMatte` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
@@ -58,6 +57,60 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30p — the oldest gap closes, and stage 2 is costed rather than started
+
+⚠ **Twenty-third arrival of the stale M3 prompt.** Not re-litigated.
+
+### ⚠ Per-layer adjustments: costed, and deliberately not begun
+
+Everything was in place for #75's stage 2 — #76 says what a layer carries, #77
+means N layers need no new controls. So it was scoped properly first, and the
+scoping is the reason it was not started.
+
+**The constraint that shapes it:** the graph is static. Which component *ends* a
+layer is a runtime property, so a layer's coverage cannot be a node picked per
+render. The way through is that `develop:linear` binds **all four** component
+outputs and a per-layer parameter says which index carries that layer.
+
+The cost, measured rather than guessed: **four refine chains instead of one**
+(+21 nodes), four coverage bindings, ~30 more floats of parameters, a sidecar
+schema version, and layer boundaries in the row list. **127 nodes → 148**,
+6427 MiB → about **6565 MiB**. Both affordable.
+
+It is also ten files of coupled change, and starting it here would have left it
+half-built — which this file has recorded as the wrong move twice
+(`degrade-then-refine`, and the crop preview). The decomposition is in
+`ROADMAP.md`, in order, with what must **not** be done along the way: raising
+the four-component cap, per-layer pyramids, or blend modes over rendered frames.
+
+### The brush has a bench probe, six sessions late
+
+The oldest carried-forward gap in this file. A stroke is uploaded out of band,
+so neither `Adjustments&` hook could reach it; the `prepare` hook added for the
+matte probe has been sitting unused by anything else since.
+
+⚠ **The dabs run on a diagonal**, not along an axis: they go through
+`mask::toFrame` on the way in, so a stroke across the frame exercises the
+transform as well as the kernel — an axis-aligned stroke still lands correctly
+under a transform that had dropped or swapped a term.
+
+Measured 0.205, 0.199 and 0.147 of reference; floor at half the smallest.
+
+### ⚠ And the number the probe existed to find
+
+**A 120-dab stroke costs 110–138 ms to render.** The kernel loops every dab at
+every pixel with a bounding-square reject, so the cost is linear in the stroke's
+length — a long stroke is not free the way a gradient is.
+
+Degrade-then-refine hides it while the hand is moving, since the preview graph
+has a sixteenth of the pixels; what this measures is the full render on settle.
+Recorded rather than acted on: it is inside the budget today, and the answer if
+strokes get longer is a bounding box per block of dabs rather than a faster
+inner test. At the 16,384-dab cap this loop would be unusable.
+
+That is what an unprobed control costs — the number was unknown for six
+sessions, and nothing in the suite would have noticed it getting worse.
 
 ## Session 2026-07-30o — one catalogue, and the order made visible
 

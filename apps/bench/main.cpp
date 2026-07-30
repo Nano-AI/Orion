@@ -671,6 +671,67 @@ int main(int argc, char** argv) {
                      }
                      d.setMaskMatte(0, a.data(), int(mw), int(mh));
                  }},
+                // A brush stroke — research/masking.md §1 and §3.
+                //
+                // ⚠ **The oldest gap in `STATUS.md` closes here.** The brush has
+                // been unprobed since it was built, because a stroke is uploaded
+                // out of band — like a matte — and neither `Adjustments&` hook
+                // could reach it. The `prepare` hook that the matte probe needed
+                // is what makes this one possible; it has existed for several
+                // sessions and nothing had used it twice.
+                //
+                // ⚠ Dabs are in **displayed** coordinates and go through
+                // `mask::toFrame` on the way in, so a stroke laid on a diagonal
+                // exercises the transform as well as the kernel. A stroke along
+                // one axis would still land correctly under a transform that had
+                // swapped or dropped a term.
+                //
+                // A stroke of 120 dabs at radius 0.05 covers a band roughly a
+                // tenth of the frame, so a two-stop local exposure through it
+                // moves about a tenth of what an unmasked one would — the same
+                // shape of ratio the matte probe is calibrated against, and what
+                // separates a working stroke from one that covered everything or
+                // nothing.
+                {"brush +2 EV", flat, [](auto& a) {
+                     auto& c = a.maskComponents[0];
+                     c.kind = 3;
+                     c.brushRadius = 0.05f;
+                     c.brushFlow = 1.0f;
+                     c.brushHardness = 0.7f;
+                     // ⚠ The revision has to move or `apply` skips the
+                     // component entirely — the trap the header documents and
+                     // the reason a caller cannot be trusted to remember it.
+                     c.brushRevision = 1;
+                     a.maskCount = 1;
+                     a.localExposureEv = 2.0f;
+                 // Measured 0.205, 0.199 and 0.147 of reference across the
+                 // three frames; half the smallest, on the rule every probe
+                 // here follows.
+                 //
+                 // ⚠ **And the number this probe existed to find: a 120-dab
+                 // stroke costs 112-162 ms to render.** The kernel loops every
+                 // dab at every pixel, rejecting on a bounding square first, so
+                 // the cost is linear in the stroke's length — a long stroke is
+                 // not free the way a gradient is. Degrade-then-refine hides it
+                 // while the hand is moving, because the preview graph has a
+                 // sixteenth of the pixels; the full render on settle is what
+                 // this measures. Worth watching if strokes get longer: at the
+                 // 16,384-dab cap this shape of loop would be unusable, and the
+                 // answer then is a bounding box per dab-block rather than a
+                 // faster inner test.
+                 }, Metric::Luma, 0.073, nullptr,
+                 [](orion::pipe::DevelopPipeline& d) {
+                     // A diagonal, corner to corner, at even spacing.
+                     constexpr int kDabs = 120;
+                     std::vector<float> xy;
+                     xy.reserve(std::size_t(kDabs) * 2);
+                     for (int i = 0; i < kDabs; ++i) {
+                         const float t = float(i) / float(kDabs - 1);
+                         xy.push_back(0.10f + 0.80f * t);
+                         xy.push_back(0.15f + 0.70f * t);
+                     }
+                     d.setBrushStroke(0, xy.data(), nullptr, kDabs);
+                 }},
                 // Guided feathering, research/masking.md §4.
                 //
                 // ⚠ The context is the *same mask, unrefined*, so what is
