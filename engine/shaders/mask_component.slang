@@ -63,13 +63,18 @@ struct MaskComponentParams
     /// photographer is *looking at*. See the kind-5 branch.
     float  rangeBias;
 
+    /// How many dabs sit on one row of the dab texture. See the brush branch:
+    /// the stroke is a 2D texture read as a 1D list, because a stroke long
+    /// enough to matter does not fit in a constant block at all.
+    int    dabStride;
+    int    _pad3[3];
+
     /// Matte (kind 4): the live rectangle of the aux texture. A matte is
     /// uploaded at whatever size its producer had, into a texture allocated for
     /// the largest one, so the kernel has to be told how much of it is real.
     /// Zero disables the branch rather than sampling an empty texture.
     uint2  matteSize;
 
-    float2 dabs[256];   // brush centres, normalized
 };
 
 /// One dab's coverage at normalized distance `d` from its centre, where 1 is
@@ -133,6 +138,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float>   src,   // coverage so far, 0..1
                    uniform Texture2D<float4>  reference,  // kind 5, see below
                    uniform Texture2D<float>   matte, // kind 4, frame coordinates
+                   uniform Texture2D<float2>  dabs,  // kind 3, one dab per texel
                    uniform RWTexture2D<float> dst,
                    uniform ConstantBuffer<MaskComponentParams> p)
 {
@@ -186,9 +192,22 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         const float flow = saturate(p.flow);
         const float2 toPx = float2(p.size);
 
+        // ⚠ The stroke lives in a *texture*, not in this parameter block, and
+        // that is the whole reason a long one is no longer truncated.
+        //
+        // Metal's `setBytes` caps a constant block at four kilobytes. The block
+        // was already two, so the list could hold 256 dabs — about one stroke
+        // across a frame — and everything past that was dropped with a warning
+        // on stderr. The note in DevelopPipeline said the fix was more nodes
+        // chained by the `accumulate` flag; it is not, and this is the cheaper
+        // answer: an auxiliary texture is a binding the pipeline already
+        // supports for the matte, it costs 128 KB for four components, and it
+        // needs no chain, no spare component and no second code path.
+        const int stride = max(p.dabStride, 1);
         for (int i = 0; i < p.count; ++i)
         {
-            const float2 e = (q - p.dabs[i]) * toPx;
+            const float2 centre = dabs[int2(i % stride, i / stride)];
+            const float2 e = (q - centre) * toPx;
 
             // Reject on the square first. A dab covers a disc, so most pixels
             // miss most dabs, and this turns the common case into two compares

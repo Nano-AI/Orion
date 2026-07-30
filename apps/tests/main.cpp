@@ -4390,12 +4390,34 @@ void testMaskGpu() {
     // here runs a single component over it, where add-from-zero is the
     // component's own coverage — so all of the numbers pinned before the merge
     // must reproduce exactly.
+    // The stroke lives in a texture now rather than in the parameter block —
+    // see mask_component.slang. One texel per dab, row-major.
+    auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
+                                              orion::pipe::params::kDabRows,
+                                              PixelFormat::RG32Float);
+    const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
+        std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
+                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+        for (std::size_t i = 0; i < pts.size(); ++i) {
+            texels[i * 2 + 0] = pts[i].first;
+            texels[i * 2 + 1] = pts[i].second;
+        }
+        dabTex->upload(texels.data(),
+                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+    };
+    std::vector<std::pair<float, float>> dabList;
+    const auto setDabsAt = [&](int i, float x, float y) {
+        if (int(dabList.size()) <= i) dabList.resize(std::size_t(i) + 1, {0.0f, 0.0f});
+        dabList[std::size_t(i)] = {x, y};
+        setDabs(dabList);
+    };
+
     const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
 
     const auto run = [&](const orion::pipe::params::MaskComponent& m) {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kMask.second, {src.get(), reference.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kMask.second, {src.get(), reference.get(), matte.get(), dabTex.get(), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -4580,12 +4602,34 @@ void testMaskBrushGpu() {
 
     // A fresh stroke folds over the group's identity, so `src` is zeroed before
     // each run unless a check is deliberately chaining passes.
+    // The stroke lives in a texture now rather than in the parameter block —
+    // see mask_component.slang. One texel per dab, row-major.
+    auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
+                                              orion::pipe::params::kDabRows,
+                                              PixelFormat::RG32Float);
+    const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
+        std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
+                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+        for (std::size_t i = 0; i < pts.size(); ++i) {
+            texels[i * 2 + 0] = pts[i].first;
+            texels[i * 2 + 1] = pts[i].second;
+        }
+        dabTex->upload(texels.data(),
+                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+    };
+    std::vector<std::pair<float, float>> dabList;
+    const auto setDabsAt = [&](int i, float x, float y) {
+        if (int(dabList.size()) <= i) dabList.resize(std::size_t(i) + 1, {0.0f, 0.0f});
+        dabList[std::size_t(i)] = {x, y};
+        setDabs(dabList);
+    };
+
     const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
     src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
 
     const auto run = [&](const orion::pipe::params::MaskComponent& b) {
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()}, &b, sizeof b, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dst.get()}, &b, sizeof b, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -4597,7 +4641,13 @@ void testMaskBrushGpu() {
 
     orion::pipe::params::MaskComponent base{};
     base.size[0] = kW; base.size[1] = kH;
+    // ⚠ Set explicitly. A zero-initialised `MaskComponent` leaves `dabStride`
+    // at zero, and the kernel's `max(stride, 1)` then puts dab 1 on row 1 of
+    // the texture, where nothing was written — so a two-dab check silently
+    // measured one dab. The pipeline always sets it; a test that forgets is
+    // testing something else.
     base.kind = 3;
+    base.dabStride = orion::pipe::params::kDabStride;
     // 0.2 of the 128-pixel test frame. The nib is in frame pixels now,
     // so the checks below that compute an expected falloff from a
     // normalized distance stay valid on this square frame.
@@ -4614,7 +4664,7 @@ void testMaskBrushGpu() {
     {
         auto b = base;
         b.count = 1;
-        b.dabs[0][0] = 0.5f; b.dabs[0][1] = 0.5f;
+        setDabsAt(0, 0.5f, 0.5f);
         const auto a = run(b);
 
         const auto falloff = [](double t) {
@@ -4655,8 +4705,8 @@ void testMaskBrushGpu() {
         auto b = base;
         b.flow = 0.5f;
         b.count = 2;
-        b.dabs[0][0] = 0.5f; b.dabs[0][1] = 0.5f;
-        b.dabs[1][0] = 0.5f; b.dabs[1][1] = 0.5f;
+        setDabsAt(0, 0.5f, 0.5f);
+        setDabsAt(1, 0.5f, 0.5f);
         const auto a = run(b);
         report(std::abs(at(a, 64, 64) - 0.75) < 2e-3,
                "two half-flow dabs compose source-over, not by addition",
@@ -4672,7 +4722,7 @@ void testMaskBrushGpu() {
         auto b = base;
         b.flow = 0.5f;
         b.count = 1;
-        b.dabs[0][0] = 0.5f; b.dabs[0][1] = 0.5f;
+        setDabsAt(0, 0.5f, 0.5f);
         const auto first = run(b);
 
         // Feed the result back in and lay the same dab again.
@@ -4722,10 +4772,11 @@ void testMaskBrushGpu() {
         auto b = base;
         b.flow = 0.0f;
         b.count = 8;
+        std::vector<std::pair<float, float>> pts;
         for (int i = 0; i < 8; ++i) {
-            b.dabs[i][0] = 0.3f + 0.05f * float(i);
-            b.dabs[i][1] = 0.5f;
+            pts.push_back({0.3f + 0.05f * float(i), 0.5f});
         }
+        setDabs(pts);
         const auto a = run(b);
         double worst = 0;
         for (std::size_t i = 0; i < a.size(); ++i) worst = std::max(worst, double(a[i]));
@@ -4752,7 +4803,7 @@ void testMaskBrushGpu() {
         auto b = base;
         b.flow = 0.002f;
         b.count = 1;
-        b.dabs[0][0] = 0.5f; b.dabs[0][1] = 0.5f;
+        setDabsAt(0, 0.5f, 0.5f);
 
         std::vector<__fp16> zero(std::size_t(kW) * kH, __fp16(0.0f));
         src->upload(zero.data(), std::size_t(kW) * sizeof(__fp16));
@@ -4806,6 +4857,27 @@ void testMaskCompositeGpu() {
     auto reference = orion::gpu::Texture::create(*device, kW, kH,
                                                  PixelFormat::RGBA16Float);
 
+    auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
+                                              orion::pipe::params::kDabRows,
+                                              PixelFormat::RG32Float);
+    std::vector<std::pair<float, float>> dabList;
+    const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
+        std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
+                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+        for (std::size_t k = 0; k < pts.size(); ++k) {
+            texels[k * 2 + 0] = pts[k].first;
+            texels[k * 2 + 1] = pts[k].second;
+        }
+        dabTex->upload(texels.data(),
+                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+    };
+    const auto setDabsAt = [&](int k, float x, float y) {
+        if (int(dabList.size()) <= k) dabList.resize(std::size_t(k) + 1, {0.0f, 0.0f});
+        dabList[std::size_t(k)] = {x, y};
+        setDabs(dabList);
+    };
+    (void)setDabs; (void)setDabsAt;
+
     // Chains a list of components exactly as DevelopPipeline does: the fold
     // starts from zero and each pass reads the one before it.
     const auto fold = [&](const std::vector<orion::pipe::params::MaskComponent>& parts) {
@@ -4813,7 +4885,7 @@ void testMaskCompositeGpu() {
         for (const auto& p : parts) {
             src->upload(alpha.data(), std::size_t(kW) * sizeof(__fp16));
             orion::gpu::CommandBuffer cb(*device);
-            cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()}, &p, sizeof p, kW, kH);
+            cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dst.get()}, &p, sizeof p, kW, kH);
             cb.commitAndWait();
             dst->download(alpha.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
         }
@@ -4919,10 +4991,11 @@ void testMaskCompositeGpu() {
         orion::pipe::params::MaskComponent s{};
         s.size[0] = kW; s.size[1] = kH;
         s.kind = 3;
+        s.dabStride = orion::pipe::params::kDabStride;
         s.invert = 1;
         s.nibPx = 0.2f * float(kW); s.flow = 1.0f; s.hardness = 0.5f;
         s.count = 1;
-        s.dabs[0][0] = 0.5f; s.dabs[0][1] = 0.5f;
+        setDabsAt(0, 0.5f, 0.5f);
         const auto got = fold({s});
         report(std::abs(at(got, 4, 4) - 1.0) < 1e-3 &&
                at(got, 32, 32) < 1e-3,
@@ -4946,10 +5019,11 @@ void testMaskCompositeGpu() {
         orion::pipe::params::MaskComponent s{};
         s.size[0] = kW; s.size[1] = kH;
         s.kind = 3;
+        s.dabStride = orion::pipe::params::kDabStride;
         s.compose = 1;   // subtract
         s.nibPx = 0.15f * float(kW); s.flow = 1.0f; s.hardness = 0.5f;
         s.count = 1;
-        s.dabs[0][0] = 0.75f; s.dabs[0][1] = 0.5f;
+        setDabsAt(0, 0.75f, 0.5f);
 
         const auto grad = fold({g});
         const auto stroke = fold({[&]{ auto t = s; t.compose = 0; return t; }()});
@@ -5541,6 +5615,125 @@ void testSpotRemovalGpu() {
     }
 }
 
+// ⚠ A stroke longer than a constant block can carry.
+//
+// This is the oldest carried-forward gap in planning/STATUS.md: everything past
+// 256 dabs was dropped, with a warning on stderr that a photographer painting a
+// long stroke would never see. The note beside it said the fix was more nodes,
+// chained through the kernel's `accumulate` flag. It was not — the cap came
+// from Metal's four-kilobyte limit on `setBytes`, and moving the stroke into an
+// auxiliary texture removes it without a chain, a spare component or a second
+// code path.
+//
+// What this checks is the far end of a long stroke, which is exactly what used
+// to go missing.
+void testLongBrushStroke() {
+    section("Long brush strokes");
+
+    using orion::gpu::PixelFormat;
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 256, kH = 64;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto lib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/maskComponent.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
+
+    auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
+    auto dabTex = orion::gpu::Texture::create(*device, params::kDabStride,
+                                              params::kDabRows, PixelFormat::RG32Float);
+
+    // A stroke straight across the frame, 400 dabs — comfortably past the old
+    // 256 and past the end of the texture's first row, which is the other
+    // thing that could go wrong now that the list is two-dimensional.
+    constexpr int kDabs = 400;
+    {
+        std::vector<float> texels(std::size_t(params::kDabStride)
+                                  * params::kDabRows * 2, 0.0f);
+        for (int i = 0; i < kDabs; ++i) {
+            texels[std::size_t(i) * 2 + 0] =
+                0.02f + 0.96f * float(i) / float(kDabs - 1);
+            texels[std::size_t(i) * 2 + 1] = 0.5f;
+        }
+        dabTex->upload(texels.data(),
+                       std::size_t(params::kDabStride) * 2 * sizeof(float));
+    }
+
+    params::MaskComponent b{};
+    b.size[0] = kW; b.size[1] = kH;
+    b.kind = 3;
+    b.dabStride = params::kDabStride;
+    b.count = kDabs;
+    b.flow = 1.0f;
+    b.hardness = 0.5f;
+    b.nibPx = 4.0f;
+
+    const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
+    src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
+    orion::gpu::CommandBuffer cb(*device);
+    cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(),
+                          dst.get()}, &b, sizeof b, kW, kH);
+    cb.commitAndWait();
+
+    std::vector<__fp16> out(std::size_t(kW) * kH);
+    dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+    const auto at = [&](int x) {
+        return double(out[std::size_t(kH / 2) * kW + std::size_t(x)]);
+    };
+
+    // ⚠ The far end. Dab 255 lands around x = 0.02 + 0.96*255/399 = 0.63, so
+    // anything past about column 165 is only covered by dabs the old build
+    // threw away.
+    report(at(int(0.95 * kW)) > 0.9,
+           "the last dab of a 400-dab stroke is painted",
+           std::to_string(at(int(0.95 * kW))));
+    report(at(int(0.75 * kW)) > 0.9,
+           "and so is everything past the old 256-dab cap",
+           std::to_string(at(int(0.75 * kW))));
+
+    // The near end is still there — a fix that dropped the *start* instead
+    // would satisfy the two checks above.
+    report(at(int(0.05 * kW)) > 0.9, "with the start of the stroke intact",
+           std::to_string(at(int(0.05 * kW))));
+
+    // And nothing outside it.
+    report(at(0) < 0.5 && at(int(kW) - 1) < 0.5,
+           "and the frame beyond either end left alone",
+           std::to_string(at(0)) + ", " + std::to_string(at(int(kW) - 1)));
+
+    // ⚠ Rows past the first are read correctly. With `count` at 300 the stroke
+    // spans two rows of the dab texture, and an index that ignored the stride
+    // would wrap back onto row zero and repaint the beginning.
+    {
+        auto c = b;
+        c.count = 300;
+        src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
+        orion::gpu::CommandBuffer cb2(*device);
+        cb2.dispatch(*kernel, {src.get(), reference.get(), matte.get(),
+                               dabTex.get(), dst.get()}, &c, sizeof c, kW, kH);
+        cb2.commitAndWait();
+        dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+
+        // Dab 299 sits at 0.02 + 0.96*299/399 = 0.74; dab 300 onward is not
+        // drawn, so the stroke must stop there rather than reaching the end.
+        report(at(int(0.70 * kW)) > 0.9 && at(int(0.90 * kW)) < 0.5,
+               "a stroke spanning two rows of the texture stops where its "
+               "count says",
+               std::to_string(at(int(0.70 * kW))) + ", "
+               + std::to_string(at(int(0.90 * kW))));
+    }
+}
+
 // A luminance range mask — research/masking.md §4b.
 //
 // A band on what a pixel *is*. Three decisions to pin, and the shader's own
@@ -5570,6 +5763,28 @@ void testMaskRangeGpu() {
     auto reference = orion::gpu::Texture::create(*device, kW, kH,
                                                  PixelFormat::RGBA16Float);
 
+    // The stroke lives in a texture now rather than in the parameter block —
+    // see mask_component.slang. One texel per dab, row-major.
+    auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
+                                              orion::pipe::params::kDabRows,
+                                              PixelFormat::RG32Float);
+    const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
+        std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
+                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+        for (std::size_t i = 0; i < pts.size(); ++i) {
+            texels[i * 2 + 0] = pts[i].first;
+            texels[i * 2 + 1] = pts[i].second;
+        }
+        dabTex->upload(texels.data(),
+                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+    };
+    std::vector<std::pair<float, float>> dabList;
+    const auto setDabsAt = [&](int i, float x, float y) {
+        if (int(dabList.size()) <= i) dabList.resize(std::size_t(i) + 1, {0.0f, 0.0f});
+        dabList[std::size_t(i)] = {x, y};
+        setDabs(dabList);
+    };
+
     const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
 
     // A neutral ramp across x, one stop per column band: column x carries
@@ -5594,7 +5809,7 @@ void testMaskRangeGpu() {
     const auto run = [&](const params::MaskComponent& m) {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()},
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dst.get()},
                     &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
@@ -5789,6 +6004,27 @@ void testMaskMatteGpu() {
     auto reference = orion::gpu::Texture::create(*device, kW, kH,
                                                  PixelFormat::RGBA16Float);
 
+    auto dabTex = orion::gpu::Texture::create(*device, orion::pipe::params::kDabStride,
+                                              orion::pipe::params::kDabRows,
+                                              PixelFormat::RG32Float);
+    std::vector<std::pair<float, float>> dabList;
+    const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
+        std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
+                                  * orion::pipe::params::kDabRows * 2, 0.0f);
+        for (std::size_t i = 0; i < pts.size(); ++i) {
+            texels[i * 2 + 0] = pts[i].first;
+            texels[i * 2 + 1] = pts[i].second;
+        }
+        dabTex->upload(texels.data(),
+                       std::size_t(orion::pipe::params::kDabStride) * 2 * sizeof(float));
+    };
+    const auto setDabsAt = [&](int i, float x, float y) {
+        if (int(dabList.size()) <= i) dabList.resize(std::size_t(i) + 1, {0.0f, 0.0f});
+        dabList[std::size_t(i)] = {x, y};
+        setDabs(dabList);
+    };
+    (void)setDabs; (void)setDabsAt;
+
     const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
 
     // The matte texture is allocated for the largest matte a producer might
@@ -5811,7 +6047,7 @@ void testMaskMatteGpu() {
     const auto run = [&](const params::MaskComponent& m) {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -5941,7 +6177,7 @@ void testMaskMatteGpu() {
 
         src->upload(ones.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> got(std::size_t(kW) * kH);
         dst->download(got.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -6347,6 +6583,7 @@ int main() {
     testMaskGeometry();
     testMaskRefineGpu();
     testMaskMatteGpu();
+    testLongBrushStroke();
     testMaskRangeGpu();
     testBayerDecimation();
     testSpotRemovalGpu();

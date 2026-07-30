@@ -433,7 +433,12 @@ static_assert(sizeof(MaskBase) == 16);
 /// several components chained nose to tail. Capping instead would either leave
 /// gaps in a long stroke or silently resample the photographer's stroke into
 /// something they did not draw. research/masking.md §1.
-inline constexpr int kMaskDabsPerPass = 256;
+/// How many dabs sit on one row of a component's dab texture, and how many
+/// rows it has. 256 x 64 is 16,384 dabs — at the nib's spacing that is roughly
+/// eighty frame-widths of stroke, against the 256 a constant block could hold.
+inline constexpr int kDabStride = 256;
+inline constexpr int kDabRows   = 64;
+inline constexpr int kMaxDabs   = kDabStride * kDabRows;
 
 /// How a component folds into the coverage before it. research/masking.md §6,
 /// and the same values `ops/mask_ops.slang` names.
@@ -454,7 +459,7 @@ struct alignas(8) MaskComponent {
     std::int32_t  kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range
     std::int32_t  invert;      // inverts this component, before the fold
     std::int32_t  compose;     // MaskCompose
-    std::int32_t  count;       // dabs this pass, <= kMaskDabsPerPass
+    std::int32_t  count;       // dabs in this component's stroke
     std::int32_t  accumulate;  // 1 continues the stroke in `src` and skips the fold
     float         nibPx;       // brush nib radius, in frame pixels
     float         flow;        // 0..1 per dab
@@ -475,13 +480,22 @@ struct alignas(8) MaskComponent {
     float         rangeSoft;
     /// Added to the measured stops so the band matches what is on screen.
     float         rangeBias;
+    /// Dabs per row of the dab texture. See mask_component.slang.
+    ///
+    /// ⚠ Placed here, after the range block, because that is where the shader
+    /// puts it. The first version of this change inserted it *before* the range
+    /// block on this side and after it on the other — the two structs would
+    /// have disagreed from offset 88 onward, and every field past it would have
+    /// been read from the wrong place. That is precisely what the asserts below
+    /// exist to catch, and they did.
+    std::int32_t  dabStride;
+    std::int32_t  _pad3[3];
     /// Matte (kind 4): the live rectangle of the aux texture, which is
     /// allocated for the largest matte a producer might hand over. Zero
     /// disables the branch. research/masking.md §5.
     std::uint32_t matteSize[2];
-    float         dabs[kMaskDabsPerPass][2];   // brush centres, normalized
 };
-static_assert(sizeof(MaskComponent) == 112 + kMaskDabsPerPass * 8);
+static_assert(sizeof(MaskComponent) == 128);
 // Every float2 in the shader's struct must land on an eight-byte boundary, or
 // Metal pads and every field after the first pair shifts.
 static_assert(offsetof(MaskComponent, zero)   == 56);
@@ -489,8 +503,8 @@ static_assert(offsetof(MaskComponent, full)   == 64);
 static_assert(offsetof(MaskComponent, centre) == 72);
 static_assert(offsetof(MaskComponent, semi)      == 80);
 static_assert(offsetof(MaskComponent, rangeLo)   == 88);
-static_assert(offsetof(MaskComponent, matteSize) == 104);
-static_assert(offsetof(MaskComponent, dabs)      == 112);
+static_assert(offsetof(MaskComponent, dabStride) == 104);
+static_assert(offsetof(MaskComponent, matteSize) == 120);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {

@@ -1,0 +1,47 @@
+# The oldest carried-forward gap in planning/STATUS.md: a brush stroke longer
+# than 256 dabs was truncated, with a warning on stderr that the photographer
+# painting it would never see. The end of a long stroke simply did nothing.
+#
+# ⚠ The cap was Metal's four-kilobyte limit on `setBytes`, not the graph's
+# shape. The note beside the gap said the fix was more nodes chained through the
+# kernel's `accumulate` flag; it was not. The stroke moved into an auxiliary
+# texture — a binding the pipeline already had for the matte — which removes the
+# cap without a chain, a spare component or a second code path.
+#
+# `orion-tests` pins the *kernel* reading a long stroke. This pins the
+# *pipeline* sending one: a mutation that reinstated the cap in
+# `DevelopPipeline::apply` passed the whole GPU suite, because the suite drives
+# the kernel directly and never asks what the pipeline chose to upload.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+# A fine nib, so the walk lays down far more than 256 dabs across the frame.
+mask brush
+set brushRadius 0.01
+set brushFlow 1.0
+set brushHardness 0.8
+
+measure 0.86,0.48,0.05,0.05 farEndBefore
+measure 0.06,0.48,0.05,0.05 nearEndBefore
+
+# One stroke straight across, left to right. At a spacing of a quarter of the
+# nib that is roughly 360 dabs — well past the old cap, so the right-hand end of
+# this line is exactly what used to be dropped.
+brush 0.05,0.5 0.95,0.5
+set localExposure 2.5
+
+measure 0.86,0.48,0.05,0.05 farEndAfter
+measure 0.06,0.48,0.05,0.05 nearEndAfter
+
+print the far end of a long stroke is painted, not truncated
+expect farEndAfter != farEndBefore
+
+# ⚠ And the near end too. A fix that dropped the *start* of the stroke instead
+# of its end would satisfy the check above on its own.
+expect nearEndAfter != nearEndBefore
+
+# Nothing above or below the line: the stroke is a line, not a flood.
+measure 0.5,0.05,0.06,0.06 aboveTheLine
+measure 0.5,0.85,0.06,0.06 belowTheLine
+expect aboveTheLine != belowTheLine

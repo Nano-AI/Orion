@@ -472,6 +472,10 @@ private:
     /// component does.
     static constexpr std::uint32_t kMaxMatteEdge = 1024;
     int auxMatte_[kMaxMaskComponents]{-1, -1, -1, -1};
+    /// One texel per brush dab. See the note in `apply`: the stroke outgrew
+    /// what a constant block can carry, and a texture is a binding the pipeline
+    /// already had.
+    int auxDabs_[kMaxMaskComponents]{-1, -1, -1, -1};
     std::uint32_t matteW_ = 0, matteH_ = 0;
     /// The live rectangle of each matte, or zero where none has been uploaded.
     std::uint32_t matteLive_[kMaxMaskComponents][2]{};

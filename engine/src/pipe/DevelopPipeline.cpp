@@ -506,12 +506,16 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         auxMatte_[i] = pipeline_.addAuxTexture(matteW_, matteH_,
                                                PixelFormat::R16Float);
+        // One texel per dab. 256 x 64 is 16,384 of them for 128 KB, against the
+        // 256 a four-kilobyte constant block could hold.
+        auxDabs_[i] = pipeline_.addAuxTexture(params::kDabStride, params::kDabRows,
+                                              PixelFormat::RG32Float);
     }
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         nMaskComponent_[i] =
             pipeline_.add({"mask:" + std::to_string(i), "maskComponent",
                            {prevMask, nHueSat_}, PixelFormat::R16Float, {},
-                           {auxMatte_[i]}});
+                           {auxMatte_[i], auxDabs_[i]}});
         prevMask = nMaskComponent_[i];
     }
 
@@ -1511,57 +1515,72 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
         if (c.kind == 3) {
             const int have = brushDabCount(i);
-            m.count = std::min(have, params::kMaskDabsPerPass);
-            const auto& dabs = brushDabs_[std::size_t(i)];
-            for (int d = 0; d < m.count; ++d) {
-                // Every dab goes through the *same* transform the gradient's
-                // centre does, and it did not before: the centres were copied
-                // straight from displayed coordinates into the shader, so a
-                // stroke ignored the crop and the rotation entirely.
-                //
-                // This is not only a rotated-frame problem. A portrait file
-                // carries an EXIF quarter turn, so `turns` is nonzero with the
-                // rotate control untouched — which is why a stroke on a portrait
-                // frame landed mirrored, at ninety degrees to the hand. The
-                // gradients were right the whole time, which is what hid it:
-                // MaskGeometry was built for them, and the brush was wired up
-                // two sessions later without being put through it.
-                const auto p = mask::toFrame(
-                    {dabs[std::size_t(d) * 2 + 0],
-                     dabs[std::size_t(d) * 2 + 1], 0.0f},
-                    crop, turns,
-                    adj.straightenDeg * 3.14159265358979324f / 180.0f,
-                    adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
-                    rotW, rotH);
-                m.dabs[d][0] = p.centreX;
-                m.dabs[d][1] = p.centreY;
+            m.count = std::min(have, params::kMaxDabs);
+            m.dabStride = params::kDabStride;
+
+            // ⚠ The stroke goes into an auxiliary *texture*, not into the
+            // parameter block, and only when it has actually changed. Uploading
+            // it on every tick would dirty the mask node on every tick, which
+            // is the cost this graph exists to avoid.
+            //
+            // The geometry counts as a change: every centre goes through
+            // `mask::toFrame`, so a crop or a quarter turn moves all of them.
+            const bool dabsStale =
+                first || frameMoved ||
+                i >= lastAdj_.maskCount ||
+                c.brushRevision != lastAdj_.maskComponents[std::size_t(i)].brushRevision ||
+                lastAdj_.maskComponents[std::size_t(i)].kind != 3;
+
+            if (dabsStale) {
+                const auto& dabs = brushDabs_[std::size_t(i)];
+                std::vector<float> texels(
+                    std::size_t(params::kDabStride) * params::kDabRows * 2, 0.0f);
+                for (int d = 0; d < m.count; ++d) {
+                    // Every dab goes through the *same* transform the gradient's
+                    // centre does, and it did not before: the centres were
+                    // copied straight from displayed coordinates into the
+                    // shader, so a stroke ignored the crop and the rotation.
+                    //
+                    // Not only a rotated-frame problem. A portrait file carries
+                    // an EXIF quarter turn, so `turns` is nonzero with the
+                    // rotate control untouched — which is why a stroke on a
+                    // portrait frame landed mirrored and ninety degrees off.
+                    const auto p = mask::toFrame(
+                        {dabs[std::size_t(d) * 2 + 0],
+                         dabs[std::size_t(d) * 2 + 1], 0.0f},
+                        crop, turns,
+                        adj.straightenDeg * 3.14159265358979324f / 180.0f,
+                        adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
+                        rotW, rotH);
+                    texels[std::size_t(d) * 2 + 0] = p.centreX;
+                    texels[std::size_t(d) * 2 + 1] = p.centreY;
+                }
+                pipeline_.updateAux(auxDabs_[std::size_t(i)], texels.data(),
+                                    std::size_t(params::kDabStride) * 2 * sizeof(float));
             }
 
             // The nib, as a radius in *frame pixels*.
             //
             // The kernel used to measure the dab in normalized coordinates,
             // where one unit of x and one unit of y are different numbers of
-            // pixels on any frame that is not square — so the nib was an ellipse
-            // on screen, 3:2 on a 3:2 photograph, and the Size slider stretched
-            // it rather than growing it. A brush has to be round under the
-            // cursor; that is the whole contract of a brush.
+            // pixels on any frame that is not square — so the nib was an
+            // ellipse on screen and the Size slider stretched it rather than
+            // growing it. A brush has to be round under the cursor.
             //
             // Measured against the *displayed* picture's shorter side, so the
-            // nib keeps its size on screen as the picture is cropped tighter,
-            // exactly as `lengthToFrame` keeps a gradient's ramp.
+            // nib keeps its size on screen as the picture is cropped tighter.
             const float shownW = float(width_)  * std::max(adj.cropW, 1e-6f);
             const float shownH = float(height_) * std::max(adj.cropH, 1e-6f);
             m.nibPx = c.brushRadius * std::min(shownW, shownH);
-            // ⚠️ A stroke longer than one pass is silently truncated here. The
-            // kernel can continue a stroke — that is what its `accumulate` flag
-            // is for — but nothing yet spends a second component on the
-            // continuation. Said out loud rather than left to be discovered as
-            // "the end of my stroke did nothing".
+
+            // ⚠ Still a cap, at sixty-four times the old one: about eighty
+            // frame-widths of stroke. Said out loud rather than left to be
+            // discovered as "the end of my stroke did nothing".
             if (have > m.count) {
                 std::fprintf(stderr,
                              "orion: brush stroke truncated, %d of %d dabs "
                              "(one component holds %d)\n",
-                             m.count, have, params::kMaskDabsPerPass);
+                             m.count, have, params::kMaxDabs);
             }
         }
         pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
