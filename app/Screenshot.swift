@@ -238,6 +238,8 @@ enum Screenshot {
             return .optics
         case "crop", "crop-angle":
             return .crop
+        case "presets":
+            return .presets
         default:
             return .light
         }

@@ -141,7 +141,18 @@ extension Editor {
         }
     }
 
-    var lightPanel: some View {
+    /// Presets, on a tab of their own.
+    ///
+    /// ⚠ It lived at the top of Light, where it was a hundred and twenty lines
+    /// in front of the Exposure slider — the single most-reached-for control in
+    /// the program. A section that has to be scrolled *past* on every
+    /// photograph is in the wrong place however good it is, and Light had five
+    /// sections of which this was by far the largest.
+    ///
+    /// Last in the bar rather than first: the tab order runs most-used to
+    /// least, and a preset is applied occasionally while Light is touched on
+    /// every frame.
+    var presetsPanel: some View {
         Group {
             section("Presets") {
                 if presets.presets.isEmpty {
@@ -266,6 +277,11 @@ extension Editor {
                     .foregroundStyle(Palette.faint)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    var lightPanel: some View {
+        Group {
             section("White Balance") {
                 slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0, resetsTo: engine.defaults.temperatureK)
                 slider("Tint", $engine.tint, -1...1, "", 2, resetsTo: engine.defaults.tint)

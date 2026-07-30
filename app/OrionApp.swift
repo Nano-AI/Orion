@@ -217,7 +217,7 @@ extension Orion.Palette {
 /// glass only means Detail to a person who already knows. Naming the thing is
 /// the fix both times.
 enum ToolTab: String, CaseIterable, Identifiable {
-    case light, color, detail, optics, crop
+    case light, color, detail, optics, crop, presets
     var id: String { rawValue }
 
     var title: String {
@@ -227,6 +227,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .detail: "Detail"
         case .optics: "Optics"
         case .crop:   "Crop"
+        case .presets: "Presets"
         }
     }
 
@@ -237,6 +238,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .detail: "magnifyingglass"
         case .optics: "camera.aperture"
         case .crop:   "crop"
+        case .presets: "square.stack"
         }
     }
 }
@@ -908,6 +910,7 @@ struct Editor: View {
                     case .color: colorPanel
                     case .detail: detailPanel
                     case .optics: opticsPanel
+                    case .presets: presetsPanel
                     case .crop:
                         section("Aspect") {
                             // Ratios photographers actually shoot and print to.
@@ -1022,8 +1025,18 @@ struct Editor: View {
             ForEach(ToolTab.allCases) { t in
                 let selected = t == tab
                 Button { withAnimation(.easeOut(duration: 0.16)) { tab = t } } label: {
+                    // ⚠ Nine point rather than the panel's ten, and one line
+                    // rather than as many as it likes. A sixth tab arrived with
+                    // the longest name of the six, and PRESETS wrapped inside
+                    // its plate — the word broke after PRESET and the S sat on a
+                    // second line, half outside the tab. Every label is set a
+                    // point smaller so the bar stays one typographic rank rather
+                    // than one tab being visibly different from the other five.
                     Engraved.Label(text: t.title,
-                                   color: selected ? Palette.text : Palette.faint)
+                                   color: selected ? Palette.text : Palette.faint,
+                                   size: 9)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity)
                         .frame(height: selected ? 30 : 26)
                         .background(selected ? Palette.panel : Palette.raised)
@@ -1044,7 +1057,7 @@ struct Editor: View {
                 .help(t.title)
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 8)
         .padding(.top, 6)
         .background(Palette.ground)
     }
