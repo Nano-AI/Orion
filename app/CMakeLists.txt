@@ -36,6 +36,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/MaskOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Library.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Filmstrip.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CompareOverlay.swift
@@ -112,6 +113,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
@@ -128,6 +130,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift

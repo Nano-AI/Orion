@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The filmstrip — browsing and culling, drawn as film.
@@ -157,7 +158,7 @@ struct Filmstrip: View {
                     ForEach(library.visible) { photo in
                         cell(photo)
                             .id(photo.url)
-                            .onTapGesture { onSelect(photo.url) }
+                            .onTapGesture { tap(photo.url) }
                             // Tap-only cells were unreachable without a mouse
                             // and invisible to VoiceOver beyond a tooltip. A
                             // button is the right shape: it is one thing, it
@@ -165,7 +166,8 @@ struct Filmstrip: View {
                             // how to focus and announce it.
                             .accessibilityElement(children: .combine)
                             .accessibilityAddTraits(
-                                photo.url == selected ? [.isButton, .isSelected] : .isButton)
+                                photo.url == selected || library.isSelected(photo.url)
+                                    ? [.isButton, .isSelected] : .isButton)
                             .accessibilityLabel(Text(spoken(photo)))
                             .accessibilityAction { onSelect(photo.url) }
                             .accessibilityAction(named: Text(photo.rejected ? "Keep" : "Reject")) {
@@ -187,11 +189,38 @@ struct Filmstrip: View {
         }
     }
 
+    /// A click on a frame, with whatever modifiers the hand was holding.
+    ///
+    /// ⚠ The modifiers come from `NSEvent.modifierFlags` rather than from a
+    /// `TapGesture().modifiers(_:)` stack. Three gestures competing for one tap
+    /// have a resolution order, and getting it wrong fails *silently* — a
+    /// command-click that falls through to the plain handler looks exactly like
+    /// a plain click. One handler asking what is held has one outcome, and the
+    /// decision it feeds is in `PhotoSelection`, where the suite can see it.
+    private func tap(_ url: URL) {
+        let flags = NSEvent.modifierFlags
+        var modifiers: PhotoSelection.Modifiers = []
+        if flags.contains(.command) { modifiers.insert(.command) }
+        if flags.contains(.shift)   { modifiers.insert(.shift) }
+
+        if let open = library.click(url, modifiers: modifiers) { onSelect(open) }
+    }
+
+    /// What a rating or a rejection from this cell applies to.
+    ///
+    /// The clicked photo alone unless it is part of a real selection — acting
+    /// on a group the click was not part of is how a context menu rates the
+    /// wrong forty photographs.
+    private func scope(_ url: URL) -> [URL] { library.cullScope(url) }
+
     /// What VoiceOver says for one frame. The name first, because that is what
     /// the photographer is looking for, then the marks that decide whether it
     /// stays — a rating nobody can hear is a rating nobody can check.
     private func spoken(_ photo: Library.Photo) -> String {
         var parts = [photo.name]
+        if library.hasExplicitSelection && library.isSelected(photo.url) {
+            parts.append("selected")
+        }
         if photo.rejected { parts.append("rejected") }
         if photo.rating > 0 { parts.append("\(photo.rating) star\(photo.rating == 1 ? "" : "s")") }
         if let label = photo.colorLabel, !label.isEmpty { parts.append("label \(label)") }
@@ -199,7 +228,12 @@ struct Filmstrip: View {
     }
 
     private func cell(_ photo: Library.Photo) -> some View {
-        let isSelected = photo.url == selected
+        let isCurrent = photo.url == selected
+        // ⚠ Two different marks, because they answer two different questions.
+        // The accent gate says "this is the photograph on the canvas"; the
+        // dimmer one says "this is in the set a batch will act on". One mark for
+        // both would make a forty-frame selection look like forty open photos.
+        let inSelection = library.hasExplicitSelection && library.isSelected(photo.url)
         let frameWidth = cellHeight * 1.5
 
         return VStack(spacing: 0) {
@@ -234,8 +268,10 @@ struct Filmstrip: View {
             // So: line on the picture, base outside the line.
             .overlay(
                 Rectangle()
-                    .strokeBorder(isSelected ? Palette.accent : .white.opacity(0.09),
-                                  lineWidth: isSelected ? 2 : 1)
+                    .strokeBorder(isCurrent ? Palette.accent
+                                  : inSelection ? Palette.accent.opacity(0.55)
+                                  : .white.opacity(0.09),
+                                  lineWidth: isCurrent ? 2 : inSelection ? 1.5 : 1)
             )
             // Horizontal only. Vertical padding put a strip of base between the
             // perforated margin and the top of the picture, so the frame read
@@ -252,16 +288,21 @@ struct Filmstrip: View {
         .contentShape(Rectangle())
         .help(photo.name)
         .contextMenu {
-            Button(photo.rejected ? "Keep" : "Reject") {
-                library.toggleRejected(photo.url)
+            let urls = scope(photo.url)
+            // Named with the count when it is a group, because "Reject" over a
+            // selection of forty and "Reject" over one frame are very different
+            // acts and the menu is the last thing read before either happens.
+            let suffix = urls.count > 1 ? " (\(urls.count) photos)" : ""
+            Button((photo.rejected ? "Keep" : "Reject") + suffix) {
+                library.setRejected(!photo.rejected, for: urls)
             }
             Divider()
             ForEach(1...5, id: \.self) { n in
-                Button("\(n) star\(n == 1 ? "" : "s")") {
-                    library.setRating(n, for: photo.url)
+                Button("\(n) star\(n == 1 ? "" : "s")" + suffix) {
+                    library.setRating(n, for: urls)
                 }
             }
-            Button("No rating") { library.setRating(0, for: photo.url) }
+            Button("No rating" + suffix) { library.setRating(0, for: urls) }
         }
     }
 

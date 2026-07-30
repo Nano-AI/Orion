@@ -49,7 +49,16 @@ final class Library {
     private(set) var photos: [Photo] = []
     private(set) var loading = false
 
-    var filter: Filter = .all
+    var filter: Filter = .all {
+        // ⚠ A filter change is the one moment a selection can come to contain
+        // photographs nobody can see. Confining here rather than at every
+        // reader is what keeps `targets` honest.
+        didSet { if filter != oldValue { selection.confine(to: visibleURLs) } }
+    }
+
+    /// Which photographs a batch acts on. The rules are in `PhotoSelection`;
+    /// this class only supplies the list and the filesystem.
+    private(set) var selection = PhotoSelection()
 
     /// Photos passing the current filter, in the order they appear on disk.
     var visible: [Photo] {
@@ -63,14 +72,49 @@ final class Library {
         }
     }
 
+    var visibleURLs: [URL] { visible.map(\.url) }
+
     var summary: String {
         let total = photos.count
         let rejected = photos.filter(\.rejected).count
         guard total > 0 else { return "" }
-        return rejected > 0
-            ? "\(total) photos · \(rejected) rejected"
-            : "\(total) photos"
+        var parts = ["\(total) photos"]
+        if rejected > 0 { parts.append("\(rejected) rejected") }
+        // Only once it means something: `PhotoSelection` treats one photo as no
+        // selection at all, and a readout saying "1 selected" beside a batch
+        // that acts on forty would be worse than no readout.
+        let chosen = selection.summary(in: visibleURLs)
+        if !chosen.isEmpty { parts.append(chosen) }
+        return parts.joined(separator: " · ")
     }
+
+    // MARK: Selection
+
+    /// The photographs a batch operation should act on, in strip order.
+    var targets: [URL] { selection.targets(in: visibleURLs) }
+
+    /// True when the photographer has actually chosen a set, rather than simply
+    /// having one photo open.
+    var hasExplicitSelection: Bool { selection.isExplicit }
+
+    /// The canvas moved. Every route into `OrionApp.load` goes through this.
+    func focus(_ url: URL?) { selection.focus(url) }
+
+    /// A filmstrip click. Returns the photo to open, or nil when the click only
+    /// changed the selection.
+    func click(_ url: URL, modifiers: PhotoSelection.Modifiers) -> URL? {
+        selection.click(url, modifiers: modifiers, in: visibleURLs)
+    }
+
+    /// What a rating or a rejection aimed at `url` should cover: the selection
+    /// when `url` is part of a real one, and that photo alone otherwise.
+    func cullScope(_ url: URL) -> [URL] {
+        hasExplicitSelection && isSelected(url) ? targets : [url]
+    }
+
+    func selectAll() { selection.selectAll(in: visibleURLs) }
+    func collapseSelection() { selection.collapse() }
+    func isSelected(_ url: URL) -> Bool { selection.contains(url) }
 
     /// What the open panel offers and what a folder scan picks up — one list,
     /// because two drifted: the panel took eight extensions and the scan ten,
@@ -109,6 +153,11 @@ final class Library {
     func open(folder url: URL) async {
         folder = url
         photos = []
+        // A selection is a set of URLs and nothing stops those URLs existing in
+        // the next folder too. Cleared outright rather than confined, because
+        // "the same filename in a different folder" is a photograph nobody
+        // picked.
+        selection = PhotoSelection()
         loading = true
 
         // Directory listing off the main thread; the folder may be on a
@@ -233,6 +282,26 @@ final class Library {
         photos[i].rejected.toggle()
         if photos[i].rejected { photos[i].rating = 0 }
         persist(photos[i])
+    }
+
+    /// Rating and rejection over a set of photographs.
+    ///
+    /// ⚠ Rejection is *set*, not toggled, across a group. Toggling each one
+    /// individually would flip a mixed selection into its own negative — half
+    /// the frames rejected, the other half un-rejected — which is never what
+    /// anybody means by pressing Reject on a group. The clicked photo decides
+    /// the direction and the rest follow it.
+    func setRating(_ rating: Int, for urls: [URL]) {
+        for url in urls { setRating(rating, for: url) }
+    }
+
+    func setRejected(_ rejected: Bool, for urls: [URL]) {
+        for url in urls {
+            guard let i = photos.firstIndex(where: { $0.url == url }) else { continue }
+            photos[i].rejected = rejected
+            if rejected { photos[i].rating = 0 }
+            persist(photos[i])
+        }
     }
 
     private func persist(_ photo: Photo) {

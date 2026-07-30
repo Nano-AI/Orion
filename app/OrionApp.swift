@@ -115,6 +115,22 @@ private struct PhotoCommands: Commands {
 
             Divider()
 
+            // ⌘A and ⌘⇧A rather than ⌘A and Escape: Escape already cancels the
+            // crop, and a key that does two unrelated things depending on which
+            // tool is open is a key nobody trusts.
+            Button("Select All Photos") { cull?.selectAll() }
+                .keyboardShortcut("a", modifiers: [.command])
+                .disabled(idle)
+            Button(cull.map { $0.selectionCount > 1
+                              ? "Deselect \($0.selectionCount) Photos"
+                              : "Deselect" } ?? "Deselect") {
+                cull?.collapseSelection()
+            }
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .disabled((cull?.selectionCount ?? 0) < 2)
+
+            Divider()
+
             Button("Apply Crop  (⏎)") { cull?.applyCrop() }
                 .disabled(cull?.cropping != true)
             Button("Cancel Crop  (⎋)") { cull?.cancelCrop() }
@@ -142,6 +158,12 @@ struct CullActions: Equatable {
     let cropping: Bool
     let applyCrop: () -> Void
     let cancelCrop: () -> Void
+
+    /// How many photographs a batch will act on, or 0 when no selection has
+    /// been made and it is simply everything in view.
+    let selectionCount: Int
+    let selectAll: () -> Void
+    let collapseSelection: () -> Void
 
     /// Which tool panel is showing, and how to change it. On the menu so the
     /// four panels have shortcuts, and so a keyboard user can reach the tools
@@ -376,14 +398,23 @@ struct Editor: View {
     /// off the main thread, and honest about it: the panel says "working" and
     /// the rest of the interface is disabled while it does.
     func runBatchExport() {
-        guard engine.isLoaded, !library.photos.isEmpty else { return }
+        // ⚠ `targets`, not `photos`. This exported the whole folder regardless
+        // of the filter, so culling to Rated and pressing Export all wrote every
+        // reject alongside the keepers — into a folder the photographer had just
+        // told it was for their picks. The selection subsumes that: with none
+        // made it is everything *in view*, which is what the panel already
+        // claimed to be doing.
+        let targets = library.targets
+        guard engine.isLoaded, !targets.isEmpty else { return }
 
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.prompt = "Export Here"
-        panel.message = "Choose a folder for \(library.photos.count) exported photos."
+        panel.message = library.hasExplicitSelection
+            ? "Choose a folder for the \(targets.count) selected photos."
+            : "Choose a folder for \(targets.count) exported photos."
         guard panel.runModal() == .OK, let folder = panel.url else { return }
 
         // Anything owed to the open photo is written first: batch reads
@@ -392,7 +423,7 @@ struct Editor: View {
 
         let ext = exportSettings.format == .jpeg ? "jpg"
                                                  : exportSettings.format.rawValue
-        let jobs = BatchExport.plan(sources: library.photos.map(\.url),
+        let jobs = BatchExport.plan(sources: targets,
                                     into: folder, extension: ext)
         batchCancelled = false
         batchProgress = (0, jobs.count)
@@ -422,7 +453,14 @@ struct Editor: View {
             .filter { presetGroups.contains($0) }
             .map(\.title)
             .joined(separator: ", ")
-        return "Writes \(names) to every photo in view. This cannot be undone "
+        // The count as well as the names, and *which* list it came from. "Every
+        // photo in view" and "the eleven you picked" are different promises, and
+        // the difference is invisible in a dialog that says neither.
+        let n = library.targets.count
+        let scope = library.hasExplicitSelection
+            ? "the \(n) selected photos"
+            : "all \(n) photos in view"
+        return "Writes \(names) to \(scope). This cannot be undone "
              + "for photos other than the one open."
     }
 
@@ -438,7 +476,10 @@ struct Editor: View {
     /// would be undone by the next autosave.
     private func runSync() {
         guard let copied else { return }
-        let others = library.photos.map(\.url).filter { $0 != current }
+        // Same correction as the batch export: this wrote the whole folder,
+        // filter and selection alike ignored, under a warning that said "every
+        // photo in view".
+        let others = library.targets.filter { $0 != current }
         let n = SyncSettings.sync(source: copied, groups: presetGroups, to: others)
 
         if engine.isLoaded {
@@ -1101,6 +1142,12 @@ struct Editor: View {
         autosave.stop()
 
         current = url
+        // ⚠ Every route to a new photograph goes through here — the filmstrip,
+        // the arrow keys, opening a folder — so this is the one place the
+        // selection has to follow the canvas. It collapses onto the new photo
+        // rather than growing, or arrowing through a folder would quietly build
+        // a selection of everything walked past.
+        library.focus(url)
 
         // Crop and straighten belong to the photo that was open, not the one
         // arriving. Carrying them over composites the old geometry against the
@@ -1135,8 +1182,19 @@ struct Editor: View {
             url: current,
             isRejected: photo?.rejected ?? false,
             rating: photo?.rating ?? 0,
-            toggleReject: { if let current { library.toggleRejected(current) } },
-            rate: { stars in if let current { library.setRating(stars, for: current) } },
+            // ⚠ Over the selection when there is one, so the Photo menu and the
+            // filmstrip's context menu agree about what R and the digits do.
+            // Two rating paths with two scopes is how a photographer rates one
+            // frame from the menu and forty from the strip and cannot say which
+            // rule they are under.
+            toggleReject: {
+                guard let current, let photo else { return }
+                library.setRejected(!photo.rejected, for: library.cullScope(current))
+            },
+            rate: { stars in
+                guard let current else { return }
+                library.setRating(stars, for: library.cullScope(current))
+            },
             step: { offset in step(offset) },
             fit: { viewport.reset() },
             actualSize: { viewport.toggleFitAndActual() },
@@ -1146,6 +1204,9 @@ struct Editor: View {
             // and the engine renders the crop itself.
             applyCrop: { tab = .light },
             cancelCrop: { engine.edit("Crop") { engine.resetCrop() }; tab = .light },
+            selectionCount: library.hasExplicitSelection ? library.targets.count : 0,
+            selectAll: { library.selectAll() },
+            collapseSelection: { library.collapseSelection() },
             tab: tab,
             selectTab: { tab = $0 },
             comparing: engine.comparing,

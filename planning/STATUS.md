@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**a bug-hunting session: five defects, none reported**)
+**Last updated:** 2026-07-30 (**multi-selection in the filmstrip**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished except sky** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Five mask kinds. A mask is a *list* of components
@@ -17,15 +17,14 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **multi-selection in the filmstrip.** Sync and batch export both
-apply to every photo *in view* because there is nothing narrower to apply them
-to, and both already take a list of URLs — the work is entirely in `Filmstrip`
-and `Library`. After that, colour range masks, then sky.
+**Next story:** **colour range masks**, then sky. Multi-selection shipped this
+session; sync and batch export now act on a chosen set, and on the filter when
+nothing is chosen — which they did not before.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **470 checks** · `orion-viewport-tests` **3351
+**Suites:** `orion-tests` **470 checks** · `orion-viewport-tests` **3374
 checks** · **19 `repro/` scenarios, 82 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
@@ -46,6 +45,94 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-30j — multi-selection in the filmstrip
+
+The story this file has named for two sessions. ⚠ **Seventeenth arrival of the
+stale M3 prompt**, answered with the table again — research file, shader, GPU
+test section and bench probe for each of dehaze, creative LUTs, exposure fusion
+and auto-enhance — and set aside.
+
+### ⚠ One selected photo is not a selection
+
+The whole feature rests on this. The photograph on the canvas is always in the
+set, because every route to a new photo collapses the selection onto it — so a
+selection of *one* is the resting state of the interface, not a decision anybody
+made. `targets` therefore means **everything in view until there are two**.
+
+The obvious rule — "act on the selection whenever it is non-empty" — makes
+Export All silently export one photograph, for every user, on every folder, and
+it would read as the button being broken. The alternative to counting is a flag
+recording whether a selection was *deliberate*, which is a second piece of state
+that can disagree with the first. Counting needs none, and the filmstrip shows
+the count only once it means something, so what a batch will do is what the
+strip says it will do.
+
+### The bug the story uncovered, which is the part worth keeping
+
+⚠ **Sync and batch export ignored the filter entirely.** Both read
+`library.photos` — the whole folder — under a warning that said "every photo in
+view" and a panel that offered to export "N photos". Cull to Rated, press Export
+all, and every reject lands in the folder you just said was for the picks.
+
+Two copies of "what this acts on" disagreeing, one in the code and one in the
+sentence beside the button. `library.targets` is now the only answer to that
+question and both callers ask it.
+
+### Rules, and where they live
+
+`PhotoSelection` is a pure value type in its own file — no AppKit, no facade
+call — so `orion-viewport-tests` pins it without a GPU or a folder of raws. Same
+split as `MatteGeometry` and `BatchExport`.
+
+| Gesture | Does |
+|---|---|
+| click | selects one, opens it |
+| ⌘-click | toggles, opens nothing |
+| ⇧-click | range from the anchor, opens nothing |
+| ⌘⇧-click | unions a second range |
+| ⌘A / ⌘⇧A | all in view / back to the open photo |
+
+⚠ **A modified click opens nothing.** Building a selection of forty frames is
+not forty requests to look at one, and it would be forty raw decodes.
+
+⚠ **The open photograph cannot be ⌘-clicked out of the set.** Its settings are
+what a sync copies *from* and its panel is what is being read while the decision
+is made; a sync that wrote the other thirty-nine and skipped it would be
+indefensible, and nothing on screen would say so.
+
+⚠ **A filter change confines the selection.** A selection is a set of URLs and
+the filter is a view over a different list; nothing connects them unless
+something does it on purpose. Without it, filtering to Rated and exporting
+writes rejects the photographer cannot see, in a list they cannot check.
+
+### Two marks, because there are two questions
+
+The accent gate says *this is the photograph on the canvas*; a dimmer accent ring
+says *this is in the set a batch will act on*. One mark for both would make a
+forty-frame selection look like forty open photos. Rating and rejection follow
+the selection from both the context menu and the Photo menu — two scopes for the
+same key is how someone rates one frame from the menu and forty from the strip
+and cannot say which rule they were under. ⚠ Rejection over a group is **set**,
+not toggled, or a mixed selection flips into its own negative.
+
+Modifiers come from `NSEvent.modifierFlags` rather than a stack of
+`TapGesture().modifiers(_:)`: three gestures competing for one tap have a
+resolution order, and getting it wrong fails silently — a command-click falling
+through to the plain handler looks exactly like a plain click.
+
+### Measured, and looked at
+
+23 new checks in `orion-viewport-tests`, **six mutations, all dead** — including
+the two that matter most: treating any non-empty selection as explicit (5
+failures) and letting `confine` do nothing (2). Screenshotted rather than
+assumed: the ring draws on the two chosen frames and the bar reads
+`3 photos · 2 selected`.
+
+⚠ **No repro scenario.** The runner drives `Engine`, `CanvasLayout` and
+`TargetedAdjust`; it has no `Library`, and giving it one is its own story. The
+rules are pure and fully pinned; the wiring is not, and that is stated rather
+than papered over.
 
 ## Session 2026-07-30i — five defects, none of them reported
 
@@ -1265,6 +1352,31 @@ finished-page-rewound contract:
   Plus: parallax inside the two flowing photo sections, the app screenshot
   lands like a print settling flat, the lens count ticks up on arrival,
   static grain over the two darkest scenes.
+
+**Round seven — the wordmark was measured, not argued about** (decision #71).
+The developer said twice that ORION and its line had little contrast. Sampling
+the plate behind the type settled it: max luminance **1.000**, 15% of the box
+above L 0.5, worst-case contrast **1.0:1**. The name lands on the blown
+showroom — white on white, genuinely invisible, not a matter of taste. The
+subtitle measured 16:1 and was never the problem.
+
+The fix is a centre-spot ND, the filter a photographer would screw on for
+exactly this. Neutral black at 0.56 alpha composites to a multiply by 0.44,
+so it scales light instead of adding ink: the clipped highlight drops about a
+stop and a half and the asphalt at L 0.008 does not move, which is why the
+photograph keeps its shape and the yellow and white cars keep theirs. A flat
+wash would have flattened all three. The wordmark's two text-shadows — a 34px
+and a 70px blur, which light the area around a letter without defining it,
+and one of them teal — became the thin dark keyline a finder's glyphs carry.
+Worst case 1.0:1 → **3.64:1** (past the 3:1 large-text floor), mean 4.6 →
+13.6. Two follow-ons from looking: the first ND core was too tight and left
+the N standing on the white car unfiltered, and the new `A7 III` status
+corner was washing out on the lit showroom at .52 opacity.
+
+Not verified: the narrow layout after this change. The browser window was
+stuck maximised and `resize_window` reported success while `innerWidth` stayed
+1500. The ND is proportional so it should scale, but that is reasoning, not a
+screenshot.
 
 **Round six, same day — the finder gets a readout, and the highlighter stops
 eating the line above.** The developer sent a Nikon Z5 product shot of an EVF

@@ -243,8 +243,26 @@ html.scrub .dev__img { will-change: filter, transform; }
 .dev__eye { position: absolute; inset: 0; }
 html.scrub .dev__eye { will-change: clip-path; }
 
-.vf {
+/* ---------- Centre-spot ND ----------
+ * A real filter, not a scrim. Multiply is what a neutral density does to
+ * light — it scales rather than adds — so the clipped showroom behind the
+ * wordmark comes down about a stop and a half while the asphalt, already at
+ * L 0.008, does not move at all. The photograph keeps its shape; a flat
+ * black wash would have flattened it. Elliptical and softly fallen off, so
+ * the yellow car on one edge and the white one on the other stay lit. */
+.vf__nd {
   position: absolute; inset: 0; z-index: 1;
+  /* Neutral black at 0.56 alpha, which composites to exactly a multiply by
+   * 0.44 — the density without the blend mode, one less compositing layer,
+   * and no mask needed because the gradient is its own falloff. The core
+   * holds out to 52%: the tracked wordmark is wider than the viewport, so a
+   * tighter core left the last letter standing on the white car unfiltered. */
+  background: radial-gradient(ellipse 58% 34% at 50% 47%,
+    rgba(0,0,0,.56) 0%, rgba(0,0,0,.56) 52%, rgba(0,0,0,0) 100%);
+}
+
+.vf {
+  position: absolute; inset: 0; z-index: 2;
   transform-origin: 50% 50%;
 }
 /* Hidden until the eye reaches the finder; the script fades it up. */
@@ -349,12 +367,20 @@ html.scrub .vf { will-change: transform, opacity; opacity: 0; }
   text-transform: uppercase;
   line-height: 1;
   color: #fff;
-  text-shadow: 0 0 70px rgba(77,182,196,.25), 0 2px 34px rgba(8,9,11,.85);
+  /* A contact edge, not a glow. The old pair was a 34px and a 70px blur —
+   * at that radius they light the area around a letter without ever
+   * defining it, and the teal one read as a rendering artifact. Display
+   * glyphs in a finder carry a thin dark edge so they survive whatever the
+   * scene is doing; this is that edge, plus one wide blur for weight. */
+  text-shadow:
+    0 0 2px rgba(8,9,11,.85),
+    0 0 5px rgba(8,9,11,.6),
+    0 2px 30px rgba(8,9,11,.7);
 }
 .vf__sub {
   color: var(--ivory);
   font-size: clamp(1rem, .95rem + .4vw, 1.25rem);
-  text-shadow: 0 1px 14px rgba(8,9,11,.8);
+  text-shadow: 0 0 3px rgba(8,9,11,.8), 0 1px 16px rgba(8,9,11,.85);
 }
 
 /* Top status line. Tiny, tracked, pushed to the corners of the frame the
@@ -366,8 +392,11 @@ html.scrub .vf { will-change: transform, opacity; opacity: 0; }
   top: calc(clamp(14px, 3.5vw, 44px) + 12px);
   display: flex; justify-content: space-between;
   font-size: .58rem; letter-spacing: .22em; text-transform: uppercase;
-  color: rgba(240,243,244,.52);
-  text-shadow: 0 1px 10px rgba(8,9,11,.9);
+  /* The corners sit outside the ND, and the left one lands on the lit
+   * showroom — .52 disappeared there. A finder's engraving is quiet, not
+   * faint, and it carries the same contact edge the wordmark does. */
+  color: rgba(240,243,244,.74);
+  text-shadow: 0 0 3px rgba(8,9,11,.95), 0 1px 12px rgba(8,9,11,.9);
 }
 
 /* ---------- The readout ----------
