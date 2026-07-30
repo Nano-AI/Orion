@@ -26,7 +26,7 @@ finished except for sky.
 below is down to three items, all of them either cosmetic or named-and-costed.
 
 **Suites:** `orion-tests` **483 checks** · `orion-viewport-tests` **3374
-checks** · **20 `repro/` scenarios, 87 checks** · all 0 failures. Bench exits 0
+checks** · **21 `repro/` scenarios, 91 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -39,7 +39,6 @@ Small, named, and none of them blocking the next story:
 | **No bench probe for the brush.** Unblocked — `Probe` gained a `prepare` hook when the matte probe needed one, and a stroke can use the same hook. Still not written | `apps/bench` |
 | **A matte is not saved with the photo.** It is a raster and the sidecar holds parameters, so reopening leaves a Subject or Person row empty until it is run again. Said out loud in the panel rather than left to be discovered. ⚠ It only *became* true this session — see below | `Sidecar`, `DevelopPanels` |
 | **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand | `SubjectMatte` |
-| The **overlay's export guard has no test**. Correct by construction; an export with it on would write a red-tinted photograph. ⚠ The *analysis* guard has one now (`repro/analysis-render-has-no-overlay.txt`) and the export one could use the same shape | `Engine.export` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo | whole history |
 

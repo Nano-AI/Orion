@@ -85,6 +85,9 @@ import SwiftUI
 ///                                       repeated *same* value dirties nothing
 ///                                       and would time an empty render
 ///     save <path>                       write the state to that photo's sidecar
+///     export <path>                     write a real export, through the same
+///                                       Engine.export the panel calls
+///     identical <path> <path>           two files, byte for byte
 ///     shot <path>                       write a PNG
 ///     print <text>
 ///
@@ -470,6 +473,34 @@ enum Scenario {
                        ([inner] + innerArgs).joined(separator: " ") as NSString, n,
                        Double(elapsed) / 1000.0 / Double(n),
                        Double(elapsed) / 1_000_000.0))
+
+        case "export":
+            // Through `Engine.export`, which is the call the Export panel
+            // makes. ⚠ The point of driving the real one is the overlay guard
+            // inside it: `export` forces the coverage overlay off around the
+            // write and restores it after, and that guard has never had a test.
+            guard let path = args.first else { throw Bad(what: "export needs a path") }
+            do { try engine.export(to: path) }
+            catch { throw Bad(what: "export failed — \(error.localizedDescription)") }
+            let size = (try? FileManager.default
+                .attributesOfItem(atPath: path)[.size] as? Int) ?? nil
+            say(String(format: "  wrote %@ (%d bytes)\n",
+                       (path as NSString).lastPathComponent as NSString, size ?? -1))
+
+        case "identical":
+            // Two files, byte for byte. A size comparison would pass on two
+            // JPEGs that differ in every pixel and happen to compress alike.
+            guard args.count >= 2 else { throw Bad(what: "identical needs two paths") }
+            let a = FileManager.default.contents(atPath: args[0])
+            let b = FileManager.default.contents(atPath: args[1])
+            checks += 1
+            if let a, let b, a == b {
+                say("  ok    \(args[0]) and \(args[1]) are byte-identical\n")
+            } else {
+                failures += 1
+                say("  FAIL  \(args[0]) and \(args[1]) differ — "
+                  + "\(a?.count ?? -1) vs \(b?.count ?? -1) bytes\n")
+            }
 
         case "shot":
             guard let p = args.first else { throw Bad(what: "shot needs a path") }

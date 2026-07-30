@@ -1,0 +1,51 @@
+# An export must not carry the coverage overlay.
+#
+# `Show mask` paints the mask's coverage over the picture in red. It is a
+# viewing aid, deliberately not part of `DevelopState`, and `Engine.export`
+# forces it off around the write and restores it afterwards — including when
+# the export throws.
+#
+# ⚠ That guard has been correct by construction and **untested** since the
+# overlay existed; `STATUS.md` has carried it as a named gap for six sessions.
+# An export with the overlay on writes a red-tinted photograph and nothing in
+# the file says why, so the person who finds it is whoever received the file.
+#
+# The companion guard on the *analysis* render got a test when it turned out to
+# be missing entirely (`analysis-render-has-no-overlay.txt`). This is the same
+# property on the path that writes files.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+# A mask with real coverage over the middle of the frame, so the overlay has
+# something to tint.
+mask radial
+set maskCentreX 0.5
+set maskCentreY 0.5
+set maskRadiusX 0.4
+set maskRadiusY 0.4
+
+overlay off
+export /tmp/orion-export-plain.jpg
+overlay on
+export /tmp/orion-export-overlaid.jpg
+
+# Byte for byte, not by size: two JPEGs that differ in every pixel can compress
+# to within a few bytes of each other.
+identical /tmp/orion-export-plain.jpg /tmp/orion-export-overlaid.jpg
+
+# ⚠ And the other side. Without this the check above passes on an overlay that
+# does nothing anywhere — which is exactly what a broken overlay would look
+# like. On screen, turning it on has to change the picture.
+measure 0.4,0.4,0.2,0.2 screenOverlaid
+overlay off
+measure 0.4,0.4,0.2,0.2 screenPlain
+expect screenOverlaid != screenPlain
+
+# And the guard restores what it found: the overlay was on when the second
+# export ran, so it must still be on afterwards.
+overlay on
+export /tmp/orion-export-again.jpg
+identical /tmp/orion-export-plain.jpg /tmp/orion-export-again.jpg
+measure 0.4,0.4,0.2,0.2 stillOverlaid
+expect stillOverlaid == screenOverlaid
