@@ -265,12 +265,17 @@ struct ImageCanvas: NSViewRepresentable {
 
             // The band comes from the scene color, which does not move as you
             // edit.
-            if let hue = TargetedAdjust.hue(r: s.scene.r, g: s.scene.g, b: s.scene.b) {
-                targeted.hoverBand = TargetedAdjust.band(forHue: hue)
-                targeted.hoverIsNeutral = false
-            } else {
-                targeted.hoverBand = nil
-                targeted.hoverIsNeutral = true
+            //
+            // Written only when they change. An `@Observable` property notifies
+            // on every assignment, equal value or not, and this runs on every
+            // mouse-moved event — but the band under the cursor holds still for
+            // most of a gesture, so most of those notifications were asking the
+            // loupe's caption to redraw the word it was already showing.
+            let hue = TargetedAdjust.hue(r: s.scene.r, g: s.scene.g, b: s.scene.b)
+            let band = hue.map(TargetedAdjust.band(forHue:))
+            if targeted.hoverBand != band { targeted.hoverBand = band }
+            if targeted.hoverIsNeutral != (hue == nil) {
+                targeted.hoverIsNeutral = (hue == nil)
             }
         }
 

@@ -182,8 +182,16 @@ extension Orion.Palette {
     static let rated    = star
 }
 
+/// ⚠️ **Optics is its own tab because nobody could find it.** The lens
+/// corrections sat second from the top of Detail and were reported missing:
+/// distortion, vignetting and fringing are properties of the glass, not of
+/// sharpening and noise, and a photographer looking for them does not think
+/// "detail". The tab bar had already made this argument once — three of the
+/// four tabs were a bare SF Symbol until someone pointed out that a magnifying
+/// glass only means Detail to a person who already knows. Naming the thing is
+/// the fix both times.
 enum ToolTab: String, CaseIterable, Identifiable {
-    case light, color, detail, crop
+    case light, color, detail, optics, crop
     var id: String { rawValue }
 
     var title: String {
@@ -191,6 +199,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .light:  "Light"
         case .color: "Color"
         case .detail: "Detail"
+        case .optics: "Optics"
         case .crop:   "Crop"
         }
     }
@@ -200,6 +209,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .light:  "sun.max"
         case .color: "circle.lefthalf.filled"
         case .detail: "magnifyingglass"
+        case .optics: "camera.aperture"
         case .crop:   "crop"
         }
     }
@@ -728,6 +738,7 @@ struct Editor: View {
                     case .light:  lightPanel
                     case .color: colorPanel
                     case .detail: detailPanel
+                    case .optics: opticsPanel
                     case .crop:
                         section("Aspect") {
                             // Ratios photographers actually shoot and print to.

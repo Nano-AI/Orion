@@ -51,7 +51,17 @@ struct ColorLoupe: View {
             // under the pointer itself.
             .position(x: point.x, y: point.y - diameter)
             .allowsHitTesting(false)
-            .animation(.linear(duration: 0.05), value: point)
+            // ⚠️ No animation on the position, and this is the reported
+            // "eyedropper latency". It carried `.linear(duration: 0.05)`, which
+            // means the loupe is *always* 50 ms behind the pointer and never
+            // arrives while the hand is still moving. The engine read behind it
+            // costs 2.4 us — measured, `repro/eyedropper-latency.txt` — so
+            // every millisecond of the lag was this line.
+            //
+            // It is also wrong rather than merely slow: the colour and the band
+            // change the instant the sample lands while the crosshair
+            // interpolates, so a crosshair captioned "the exact sampled pixel"
+            // sat somewhere the sample was not taken.
         }
     }
 

@@ -53,6 +53,9 @@ import SwiftUI
 ///                                       luma and mean saturation — one number
 ///                                       per patch is too weak a signature to
 ///                                       say two renders are the same picture
+///     time <n> <command...>             repeat a command and report what one
+///                                       of them costs. "Slow" is not a report
+///                                       anyone can act on; a number is
 ///     shot <path>                       write a PNG
 ///     print <text>
 ///
@@ -74,6 +77,16 @@ enum Scenario {
     private static var readings: [String: Reading] = [:]
     private static var failures = 0
     private static var checks = 0
+
+    /// Set while `time` is running its repeats. Every informational write goes
+    /// through `say`, so a timed loop reports its own number instead of the
+    /// cost of two thousand lines of stderr.
+    private static var quiet = false
+
+    private static func say(_ text: String) {
+        guard !quiet else { return }
+        FileHandle.standardError.write(Data(text.utf8))
+    }
 
     static func run(_ file: String) -> Never {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -224,21 +237,43 @@ enum Scenario {
                                   CGRect(x: r[0], y: r[1], width: r[2], height: r[3]),
                                   through: surface)
             readings[args[1]] = reading
-            FileHandle.standardError.write(Data(String(
-                format: "  %-22@ luma %.4f  sat %.4f  (%@)\n",
-                args[1] as NSString, reading.luma, reading.saturation,
-                (surface == .canvas ? "canvas" : "output") as NSString).utf8))
+            say(String(format: "  %-22@ luma %.4f  sat %.4f  (%@)\n",
+                       args[1] as NSString, reading.luma, reading.saturation,
+                       (surface == .canvas ? "canvas" : "output") as NSString))
 
         case "expect":
             guard args.count >= 3 else { throw Bad(what: "expect needs name, op, value") }
             try check(args[0], args[1], args[2])
+
+        case "time":
+            // Repeats another command and reports what one of them costs.
+            //
+            // "Slow" is not a bug report anyone can act on; a number is. The
+            // repeats run quiet, because at a few microseconds a call the
+            // stderr line dominates whatever is being measured.
+            guard args.count >= 2, let n = Int(args[0]), n > 0 else {
+                throw Bad(what: "time needs a count and a command")
+            }
+            let inner = args[1]
+            let innerArgs = Array(args.dropFirst(2))
+            quiet = true
+            let began = DispatchTime.now().uptimeNanoseconds
+            for _ in 0..<n {
+                try step(inner, innerArgs, engine: engine, targeted: targeted)
+            }
+            let elapsed = DispatchTime.now().uptimeNanoseconds - began
+            quiet = false
+            say(String(format: "  %@ x%d: %.1f us each (%.1f ms total)\n",
+                       ([inner] + innerArgs).joined(separator: " ") as NSString, n,
+                       Double(elapsed) / 1000.0 / Double(n),
+                       Double(elapsed) / 1_000_000.0))
 
         case "shot":
             guard let p = args.first else { throw Bad(what: "shot needs a path") }
             Screenshot.writeCanvas(engine, to: p)
 
         case "print":
-            FileHandle.standardError.write(Data(("  " + args.joined(separator: " ") + "\n").utf8))
+            say("  " + args.joined(separator: " ") + "\n")
 
         default:
             throw Bad(what: "unknown command \(verb)")
@@ -263,8 +298,8 @@ enum Scenario {
         }
         let band = TargetedAdjust.band(forHue: hue)
         targeted.begin(band: band, hue: hue)
-        FileHandle.standardError.write(Data(String(format:
-            "  picked hue %.1f deg -> band %@\n", hue, "\(band)" as NSString).utf8))
+        say(String(format: "  picked hue %.1f deg -> band %@\n",
+                   hue, "\(band)" as NSString))
 
         if let drag {
             // What the drag does to the band it picked. Saturation is the tool's
@@ -348,10 +383,9 @@ enum Scenario {
             String(format: "  (got %.4f/%.4f, wanted %.4f/%.4f luma/sat)",
                    got.luma, got.saturation, want, $0)
         } ?? String(format: "  (got %.4f, wanted %.4f)", got.luma, want)
-        FileHandle.standardError.write(Data(String(format:
-            "  %@  %@ %@ %@%@\n",
-            (ok ? "ok  " : "FAIL") as NSString, name as NSString,
-            op as NSString, rhs as NSString, detail as NSString).utf8))
+        say(String(format: "  %@  %@ %@ %@%@\n",
+                   (ok ? "ok  " : "FAIL") as NSString, name as NSString,
+                   op as NSString, rhs as NSString, detail as NSString))
     }
 
     private static func fail(_ why: String) -> Never {

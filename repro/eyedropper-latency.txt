@@ -1,0 +1,22 @@
+# Reported: the eyedropper is slow.
+#
+# Separate from the NaN in `sampleAt` — that one made it pick nothing at all.
+# This one is about how it feels, and "slow" is not something anyone can act on,
+# so the point of this file is the number.
+#
+# ⚠️ It is not the engine. One pick — texture read, hue, band, hand to
+# TargetedAdjust — measures ~2.4 us. A 60 Hz frame is 16000 us, so the whole
+# sample path is under two ten-thousandths of a frame.
+#
+# The lag was `ColorLoupe`'s `.animation(.linear(duration: 0.05), value: point)`:
+# the loupe was told to take 50 ms to reach wherever the pointer had got to, so
+# it was always behind and never arrived while the hand was moving. Removed.
+#
+# There is no `expect` here on purpose. A wall-clock threshold in a test fails
+# on a busy machine and teaches everyone to ignore it; this run prints the cost
+# so a regression is visible in the number.
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+print one eyedropper read, through the same path the canvas hover uses:
+time 5000 pick 0.07,0.55

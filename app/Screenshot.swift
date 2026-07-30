@@ -234,6 +234,8 @@ enum Screenshot {
             return .color
         case "detail", "noisy", "denoise-off", "denoise-luma", "denoise-both":
             return .detail
+        case "optics":
+            return .optics
         case "crop", "crop-angle":
             return .crop
         default:
@@ -268,6 +270,13 @@ enum Screenshot {
             engine.denoiseColor = 2.4
             engine.sharpenAmount = 0.8
             engine.sharpenMasking = 0.4
+        case "optics":
+            // The tab that exists because the lens corrections could not be
+            // found inside Detail. Screenshotted so the claim that they are now
+            // in front of the photographer can be looked at rather than assumed
+            // — the last panel section inserted without looking was silently
+            // not in the interface at all.
+            engine.exposureEv = 2.6
         case "mask-off":
             // The control for `--measure`: the same frame and the same global
             // exposure with no mask, so the difference measured against
