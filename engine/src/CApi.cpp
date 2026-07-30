@@ -204,6 +204,7 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.brushRevision = s.brush_revision;
     }
     a.localExposureEv = adj->local_exposure_ev;
+    a.maskRefine = std::clamp(adj->mask_refine, 0.0f, 1.0f);
     a.maskOverlay     = adj->mask_overlay != 0;
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;

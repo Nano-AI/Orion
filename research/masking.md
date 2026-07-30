@@ -259,7 +259,7 @@ The plan above is the plan of record; this is the state of it.
 | 1. Primitives — linear, radial | ✅ draggable on the canvas |
 | 1. Primitives — brush dabs | ✅ paintable on the canvas |
 | 2. Groups and compositing (§6) | ✅ **done** — `mask_component.slang` folds per §6 (add = max, subtract, intersect), one node per component, `kMaxMaskComponents = 4`. Panel rows with a per-row op, sidecar and undo all carry the list; pre-group sidecars migrate to one component |
-| 3. Guided refinement (§4) | ❌ not started — **the next story** |
+| 3. Guided refinement (§4) | ✅ **done** — `mask_guide_prep` / `mask_guide_ab` / `mask_guide_apply`, seven nodes on the *folded group*, disabled at strength 0. The second input binding §4 asked for, and nothing else changed in the filter. Radius and epsilon are Orion's own: `UNSOURCED.md` §20 |
 | 4. Vision subject and person (§5) | ❌ not started |
 | 5. Sky | ❌ not started |
 

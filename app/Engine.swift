@@ -247,6 +247,13 @@ final class Engine {
         }
     }
 
+    /// Guided feathering of the folded group, 0..1 — research/masking.md §4.
+    ///
+    /// A property of the group rather than of a component, so it lives here
+    /// beside the local adjustment rather than in `MaskComponentState`: what a
+    /// photographer wants snapped to an edge is the coverage they can see.
+    var maskRefine: Float = 0 { didSet { pushAndRender() } }
+
     var localExposureEv: Float = 0 { didSet { pushAndRender() } }
 
     /// The selected component, or nil when the group is empty.
@@ -797,6 +804,7 @@ final class Engine {
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             lutStrength: lutStrength,
             maskComponents: maskComponents,
+            maskRefine: maskRefine,
             localExposureEv: localExposureEv,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
@@ -840,6 +848,7 @@ final class Engine {
         selectedMask = maskComponents.isEmpty
             ? 0 : min(max(0, selectedMask), maskComponents.count - 1)
         pushStrokes()
+        maskRefine = s.maskRefine
         localExposureEv = s.localExposureEv
         fusion = s.fusion
         dehaze = s.dehaze
@@ -1095,6 +1104,7 @@ final class Engine {
         a.mask_components = (cs[0], cs[1], cs[2], cs[3])
         a.mask_count = Int32(maskComponents.count)
         a.local_exposure_ev = localExposureEv
+        a.mask_refine = maskRefine
         a.mask_overlay = maskOverlay ? 1 : 0
 
         a.fusion = fusion; a.dehaze = dehaze; a.clarity = clarity

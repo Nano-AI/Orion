@@ -61,6 +61,9 @@ set(ORION_SHADERS
     fuse_apply:fuseApply
     mask_base:maskBase
     mask_component:maskComponent
+    mask_guide_prep:maskGuidePrep
+    mask_guide_ab:maskGuideAb
+    mask_guide_apply:maskGuideApply
     develop_linear:developLinear
     develop_display:developDisplay
     geometry:geometry

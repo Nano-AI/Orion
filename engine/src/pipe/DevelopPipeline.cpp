@@ -478,8 +478,51 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         prevMask = nMaskComponent_[i];
     }
 
+    // ── Guided feathering of the folded group (research/masking.md §4) ────
+    //
+    // The second input binding §4 asks for, and it hangs off the *group* rather
+    // than off each component: what a photographer wants snapped to an edge is
+    // the coverage they can see, which is the fold. Six nodes once, not six per
+    // component.
+    //
+    // Every one of them is disabled when the strength is zero, so a photograph
+    // with no refinement pays for their textures and none of their time — and
+    // the consumer reads straight past them to the fold, because `resolve`
+    // follows a disabled node back to a live producer.
+    nMaskGuidePrep_ = pipeline_.add({"mask:guide prep", "maskGuidePrep",
+                                     {nGuidePrep_, prevMask},
+                                     PixelFormat::RGBA32Float, {}, {},
+                                     true, guideW_, guideH_});
+    nMaskGuideH1_   = pipeline_.add({"mask:guide blur h", "boxBlur4",
+                                     {nMaskGuidePrep_},
+                                     PixelFormat::RGBA32Float, {}, {},
+                                     true, guideW_, guideH_});
+    nMaskGuideV1_   = pipeline_.add({"mask:guide blur v", "boxBlur4",
+                                     {nMaskGuideH1_},
+                                     PixelFormat::RGBA32Float, {}, {},
+                                     true, guideW_, guideH_});
+    nMaskGuideAb_   = pipeline_.add({"mask:guide coeffs", "maskGuideAb",
+                                     {nMaskGuideV1_},
+                                     PixelFormat::RG32Float, {}, {},
+                                     true, guideW_, guideH_});
+    nMaskGuideH2_   = pipeline_.add({"mask:guide blur h2", "boxBlur",
+                                     {nMaskGuideAb_},
+                                     PixelFormat::RG32Float, {}, {},
+                                     true, guideW_, guideH_});
+    nMaskGuideV2_   = pipeline_.add({"mask:guide blur v2", "boxBlur",
+                                     {nMaskGuideH2_},
+                                     PixelFormat::RG32Float, {}, {},
+                                     true, guideW_, guideH_});
+
+    // ⚠ The mask is this node's *first* input, so a disabled refine resolves to
+    // the fold rather than to a coefficient texture. Getting that order wrong
+    // would hand develop:linear a two-channel coefficient grid as its coverage.
+    nMaskRefine_    = pipeline_.add({"mask:refine", "maskGuideApply",
+                                     {prevMask, nMaskGuideV2_, nGuidePrep_},
+                                     PixelFormat::R16Float, {}});
+
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
-                                 {nFusion_, nGuideV2_, nGuidePrep_, prevMask},
+                                 {nFusion_, nGuideV2_, nGuidePrep_, nMaskRefine_},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
@@ -720,6 +763,68 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
 
     params::GuideAb ga{{guideW_, guideH_}, 0.04f, 0.0f};
     pipeline_.setParams(nGuideAb_, &ga, sizeof ga);
+
+    // ── Guided feathering of the mask group (research/masking.md §4) ──────
+    //
+    // The static half: everything but the strength, which is the only thing a
+    // slider moves. Set once per image and served by the per-node cache after.
+    {
+        params::MaskGuidePrep mp{};
+        mp.outSize[0] = guideW_; mp.outSize[1] = guideH_;
+        mp.inSize[0]  = size[0]; mp.inSize[1]  = size[1];
+        mp.scale = kGuideScale;
+        pipeline_.setParams(nMaskGuidePrep_, &mp, sizeof mp);
+
+        // ⚠ A *feathering* radius, not the recovery chain's, and the paper's
+        // r = 60 is not transferable — its figures are sub-megapixel, so 60
+        // there is 6-10% of the frame and would be ~500 px here.
+        //
+        // The mechanism does transfer: the local linear model can only pull the
+        // boundary onto an edge that lies *inside* the window, so r is a search
+        // radius and wants to be a small multiple of how far the placed mask
+        // misses by. That error belongs to the mask's source — a brush stroke
+        // laid at fit zoom, or a segmenter run at a fixed internal size — and
+        // those scale with the frame, which is what makes a frame fraction the
+        // right law rather than a constant. maxdim/100 is 60 px at 6024, 15 on
+        // the subsampled grid. Orion's own number: UNSOURCED.md §19.
+        const int refineFull   = std::max(8, static_cast<int>(
+                                     std::max(width_, height_) / 100));
+        const int refineRadius = std::max(2, refineFull / kGuideScale);
+
+        params::BoxBlur rh{{guideW_, guideH_}, refineRadius, 1};
+        params::BoxBlur rv{{guideW_, guideH_}, refineRadius, 0};
+        pipeline_.setParams(nMaskGuideH1_, &rh, sizeof rh);
+        pipeline_.setParams(nMaskGuideV1_, &rv, sizeof rv);
+        pipeline_.setParams(nMaskGuideH2_, &rh, sizeof rh);
+        pipeline_.setParams(nMaskGuideV2_, &rv, sizeof rv);
+
+        // ⚠ Epsilon is in squared log2-exposure units, because the guide is the
+        // same log2 luminance the recovery chain uses. The paper's 1e-6 assumes
+        // I in [0,1] display-encoded intensity and does **not** transfer: near
+        // midtones d(encoded)/d(stop) is about 0.15, so their sigma of 1e-3
+        // encoded units is roughly 0.0065 of a stop, i.e. 4e-5 stops squared.
+        //
+        // That faithful conversion is unusable here, and the reason is a
+        // departure this chain inherits: `mask_guide_prep` area-averages both
+        // moments over the s x s block, exactly as `guide_down.slang` does, so
+        // `var` is the true *full-resolution* window variance and carries the
+        // photograph's noise at full strength. (Subsampling the signal first
+        // would divide that noise variance by about s^2 — He & Sun's own
+        // arrangement — but it aliases the variance term, which is why this
+        // codebase does not do it.) Deep shadows on a 14-stop raw run to a
+        // window variance around 0.02 stops squared, so an epsilon below that
+        // snaps the matte to shadow noise.
+        //
+        // 0.01 is the compromise, and it is a tenth of a stop of spread. A step
+        // of height h across half a window has variance h^2/4, so the filter
+        // follows a half-stop edge at a = 0.86 and ignores a tenth-stop one at
+        // a = 0.2 — which is the behaviour wanted, since a mask boundary is
+        // placed against a subject and not against texture. A quarter of the
+        // recovery chain's 0.04, because feathering should follow weaker edges
+        // than tone recovery should. Orion's own number: UNSOURCED.md §19.
+        params::MaskGuideAb mab{{guideW_, guideH_}, 0.01f, 0.0f};
+        pipeline_.setParams(nMaskGuideAb_, &mab, sizeof mab);
+    }
 
     // Anchor on the camera's actual multipliers, not on a temperature we
     // inferred from them. The temperature is only a handle for the user to
@@ -1373,10 +1478,46 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     const bool needsGuide = adj.highlights != 0.0f || adj.shadows != 0.0f;
     if (first || needsGuide != (lastAdj_.highlights != 0.0f ||
                                 lastAdj_.shadows != 0.0f)) {
-        for (int n : {nGuidePrep_, nGuideDown_, nGuideH1_, nGuideV1_,
+        for (int n : {nGuideDown_, nGuideH1_, nGuideV1_,
                       nGuideAb_, nGuideH2_, nGuideV2_}) {
             pipeline_.setEnabled(n, needsGuide);
         }
+    }
+
+    // ── Guided feathering of the mask group (research/masking.md §4) ──────
+    const bool refining = adj.maskCount > 0 && adj.maskRefine > 0.0f;
+    const bool wasRefining =
+        lastAdj_.maskCount > 0 && lastAdj_.maskRefine > 0.0f;
+
+    // ⚠ `guide:prep` is shared, and it is the one node of the self-guided chain
+    // that mask refinement also reads. It must therefore be enabled if *either*
+    // wants it — and it is deliberately not in the loop above any more.
+    //
+    // The failure this avoids is silent and ugly: a disabled node resolves to
+    // its producer, so with highlights and shadows at zero the refine chain
+    // would have been handed `huesat`'s RGBA16F output through a
+    // `Texture2D<float2>` binding and read colour components as a luminance and
+    // its square. Not a crash — a plausible-looking wrong mask.
+    if (first || (needsGuide || refining) !=
+                 ((lastAdj_.highlights != 0.0f || lastAdj_.shadows != 0.0f) ||
+                  wasRefining)) {
+        pipeline_.setEnabled(nGuidePrep_, needsGuide || refining);
+    }
+
+    if (first || refining != wasRefining) {
+        for (int n : {nMaskGuidePrep_, nMaskGuideH1_, nMaskGuideV1_,
+                      nMaskGuideAb_, nMaskGuideH2_, nMaskGuideV2_,
+                      nMaskRefine_}) {
+            pipeline_.setEnabled(n, refining);
+        }
+    }
+
+    if (first || adj.maskRefine != lastAdj_.maskRefine) {
+        params::MaskGuideApply mga{};
+        mga.size[0] = size[0];       mga.size[1] = size[1];
+        mga.coeffSize[0] = guideW_;  mga.coeffSize[1] = guideH_;
+        mga.strength = adj.maskRefine;
+        pipeline_.setParams(nMaskRefine_, &mga, sizeof mga);
     }
 
     if (linearMoved) {

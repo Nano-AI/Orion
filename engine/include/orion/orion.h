@@ -171,6 +171,13 @@ typedef struct OrionAdjustments {
     int   mask_count;
     float local_exposure_ev;
 
+    /* Guided feathering of the folded group, 0..1 — research/masking.md §4.
+     * Pulls the coverage boundary onto whatever edge in the photograph lies
+     * near it, and leaves it alone where there is none. Zero is the identity
+     * and disables the whole chain. A property of the group, not of a
+     * component: what a photographer wants snapped is the boundary they see. */
+    float mask_refine;
+
     /* Paint the mask's coverage over the picture so it can be placed by eye.
      * A viewing aid only — an export must never set it. */
     int   mask_overlay;

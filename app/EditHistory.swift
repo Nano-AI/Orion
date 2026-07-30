@@ -192,6 +192,8 @@ struct DevelopState: Equatable, Codable {
     /// The mask group, folded left in listed order. Empty means no mask.
     /// research/masking.md §6.
     var maskComponents: [MaskComponentState] = []
+    /// Guided feathering of the folded group, 0..1. research/masking.md §4.
+    var maskRefine: Float = 0
     var localExposureEv: Float = 0
 
     var fusion: Float = 0

@@ -181,6 +181,17 @@ struct Adjustments {
     std::array<MaskComponentEdit, kMaxMaskComponents> maskComponents{};
     int   maskCount = 0;
 
+    /// Guided feathering of the folded group, 0..1 — research/masking.md §4.
+    ///
+    /// Pulls the coverage boundary onto whatever edge in the photograph lies
+    /// near it, and leaves it alone where there is no edge to snap to. Zero is
+    /// the identity and disables all seven of its nodes, so a photograph that
+    /// does not ask for it pays their textures and none of their time.
+    ///
+    /// A property of the *group*, not of a component: the boundary a
+    /// photographer wants snapped is the one they can see, which is the fold.
+    float maskRefine = 0.0f;
+
     /// Paint the mask's coverage over the picture, so it can be placed by eye.
     /// A viewing aid — `Engine` forces it off around an export.
     bool  maskOverlay = false;
@@ -384,6 +395,13 @@ private:
     /// exercises the same code path as a group of three. Unused components are
     /// disabled, which costs their texture and none of their time.
     int nMaskComponent_[kMaxMaskComponents]{};
+
+    /// Guided feathering of the folded group — research/masking.md §4.
+    /// One chain for the whole group, not one per component: what gets snapped
+    /// to an edge is the coverage the photographer can see.
+    int nMaskGuidePrep_ = -1, nMaskGuideH1_ = -1, nMaskGuideV1_ = -1;
+    int nMaskGuideAb_ = -1, nMaskGuideH2_ = -1, nMaskGuideV2_ = -1;
+    int nMaskRefine_ = -1;
     std::uint32_t fuseW_[kFuseLevels]{}, fuseH_[kFuseLevels]{};
 
     /// The simulated-image plan. Derived from the frame's median, so it is a

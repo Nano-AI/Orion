@@ -97,6 +97,31 @@ struct GuideAb {
 };
 static_assert(sizeof(GuideAb) == 16);
 
+// ── Guided feathering of the mask group (research/masking.md §4) ───────────
+
+struct MaskGuidePrep {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    std::int32_t  scale;
+    std::int32_t  _pad[3];
+};
+static_assert(sizeof(MaskGuidePrep) == 32);
+
+struct MaskGuideAb {
+    std::uint32_t size[2];
+    float         epsilon;
+    float         _pad;
+};
+static_assert(sizeof(MaskGuideAb) == 16);
+
+struct MaskGuideApply {
+    std::uint32_t size[2];
+    std::uint32_t coeffSize[2];
+    float         strength;
+    float         _pad[3];
+};
+static_assert(sizeof(MaskGuideApply) == 32);
+
 struct Atrous {
     std::uint32_t size[2];
     std::int32_t  step;

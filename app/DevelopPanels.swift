@@ -184,6 +184,18 @@ extension Editor {
                     slider("Exposure", $engine.localExposureEv, -3...3, " EV", 2,
                            resetsTo: engine.defaults.localExposureEv)
 
+                    // Guided feathering, research/masking.md §4. On the group
+                    // for the same reason Exposure is: it refines the combined
+                    // coverage, which is the boundary the photographer sees.
+                    slider("Refine", $engine.maskRefine, 0...1, "", 2,
+                           resetsTo: engine.defaults.maskRefine)
+                    Text("Pulls the mask's edge onto the nearest edge in the "
+                       + "photograph, and leaves it where you put it when there "
+                       + "is none to find.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     if engine.maskKind == 3 {
                         // A stroke has no centre or angle to type in — the
                         // whole point is that it is drawn. What is left is the

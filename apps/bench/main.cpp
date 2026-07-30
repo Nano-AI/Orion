@@ -488,6 +488,40 @@ int main(int argc, char** argv) {
                  // Half the smallest ratio over the three frames: 0.47, 0.44,
                  // 0.60 of the reference.
                  }, Metric::Luma, 0.22},
+                // Guided feathering, research/masking.md §4.
+                //
+                // ⚠ The context is the *same mask, unrefined*, so what is
+                // measured is what the refinement itself does. Against a flat
+                // frame this would be reporting the local exposure's effect and
+                // would pass with the entire chain disabled.
+                //
+                // ⚠ **The floor is small, and the reason is structural rather
+                // than a weakness in the filter.** Refinement only moves the
+                // mask's *boundary*, so at a radius of 60 pixels it can touch a
+                // band about 120 pixels wide — one or two percent of a 24 MP
+                // frame — and a whole-frame mean divides its effect by the other
+                // ninety-eight. A near-binary full-width gradient was tried as a
+                // more sensitive shape and measured *lower* (0.008-0.018 of
+                // reference), for the same reason. What pins this control is
+                // testMaskRefineGpu, which checks the chain against the filter
+                // computed directly; this line's job is that the graph still
+                // delivers it on a photograph and has not become a no-op.
+                //
+                // A hard-edged radial across the silver car, deliberately: the
+                // filter can only move a boundary onto an edge near it, so a
+                // mask placed in open sky would correctly measure nothing and
+                // the floor would be demanding the filter invent structure.
+                // Half the smallest ratio over the three frames: 0.021, 0.023,
+                // 0.016 of the reference.
+                {"mask refine 1.0", [](orion::pipe::Adjustments& a) {
+                     auto& c = a.maskComponents[0];
+                     c.kind = 2;
+                     c.centre[0] = 0.42f; c.centre[1] = 0.55f;
+                     c.radius[0] = 0.18f; c.radius[1] = 0.18f;
+                     c.feather = 0.02f;
+                     a.maskCount = 1;
+                     a.localExposureEv = 2.0f;
+                 }, [](auto& a) { a.maskRefine = 1.0f; }, Metric::Luma, 0.008},
                 {"fusion 1.0",     flat, [](auto& a) { a.fusion = 1.0f; }, Metric::Luma, 0.57},
                 {"dehaze 1.0",     flat, [](auto& a) { a.dehaze = 1.0f; }, Metric::Luma, 0.028,
                  "a haze-free frame has nothing to remove; t = 1 is the right answer"},

@@ -521,3 +521,76 @@ threshold, so there is nothing to cite and no way to match them. This is a
 display heuristic rather than a filter constant: it changes when a flag lights,
 never what a pixel renders as, and the exact percentage is printed beside the
 flag so the reader is never relying on the threshold alone.
+
+## §20 — Guided feathering of the mask group: the radius and the epsilon
+
+`research/masking.md` §4 is fully sourced for the *method* — He, Sun & Tang name
+mask refinement as an application of the guided filter and give the formula. Two
+constants in `DevelopPipeline::applyImageParams` are not, and copying the
+paper's would have been worse than admitting it.
+
+### The radius: `max(width, height) / 100`
+
+The paper's figure uses **r = 60**. That number does not transfer, and the way
+it fails is instructive: the paper's figures are sub-megapixel, roughly 600–1000
+pixels on the long side, so its r = 60 is 6–10% of the frame. Carried across as
+a fraction, that is a radius of about 500 pixels on a 6024-wide frame — a window
+covering a tenth of the picture, which is not a feather.
+
+What does transfer is the mechanism, and it is in the paper's own local linear
+model: the filter can only pull a boundary onto an edge that lies **inside the
+window**. So r is a *search radius*, and it should be a small multiple of how
+far the placed mask misses the real edge by.
+
+That miss is a property of the mask's **source**, not of the photograph. A brush
+stroke laid at fit zoom, or a segmentation run at a fixed internal resolution,
+produces a boundary error that scales linearly with the output resolution when
+lifted to full size. That is the argument for a frame fraction rather than a
+constant, and it is Orion's, not the paper's. `maxdim / 100` is 60 pixels at
+6024 — 15 on the subsampled grid — which matches the paper's absolute number by
+coincidence rather than by derivation, and the coincidence is not the reason.
+
+### The epsilon: 0.01 squared log2-exposure units
+
+The paper's **ε = 10⁻⁶** assumes the guide is display-encoded intensity in
+[0, 1]. Orion's guide is log2 luminance, shared with the highlight and shadow
+recovery chain, so ε carries different units and the number cannot be copied.
+
+The faithful conversion, for the record: near midtones d(encoded)/d(stop) ≈
+0.15, so their σ = 10⁻³ encoded units is about 0.0065 of a stop, i.e. **ε ≈
+4 × 10⁻⁵ stops²**.
+
+⚠ **That value is unusable here, for a reason specific to this codebase.**
+`mask_guide_prep.slang` area-averages both moments over the s × s block, exactly
+as `guide_down.slang` does, so `var` is the true *full-resolution* window
+variance and carries the photograph's noise at full strength. He & Sun's own
+arrangement subsamples the signal first, which divides the noise variance by
+roughly s² — but it also aliases the variance term, and this codebase chose
+against it deliberately and says so in both shaders. Deep shadows on a 14-stop
+raw run to a window variance around 0.02 stops², so any ε below that snaps the
+matte to shadow noise instead of to edges.
+
+**0.01 is the compromise**: a tenth of a stop of spread. A step of height h
+across half a window has variance h²/4, so the filter follows a half-stop edge
+at a = 0.86 and ignores a tenth-stop one at a = 0.2. That is the behaviour
+wanted — a mask boundary is placed against a subject, not against texture. It is
+a quarter of the recovery chain's 0.04, because feathering should follow weaker
+edges than tone recovery should.
+
+### What would settle either of them
+
+A measurement on photographs rather than an argument: place a mask deliberately
+off a hard subject edge, refine, and measure how much of the boundary error is
+recovered as r and ε vary. Neither constant is load-bearing for correctness —
+the GPU test pins the *algebra* (a constant mask is unchanged, the complement is
+symmetric, the boundary moves toward the guide's edge), and these two only
+decide how far and how eagerly.
+
+### One limit worth naming, not a constant
+
+The guide is a single luminance channel, so an **iso-luminant** boundary — a red
+subject against a tonally matched green background — has var(I) ≈ 0 and the
+matte feathers straight across as though the edge were not there. The paper's
+colour variant (a 3 × 3 covariance, `a` becoming a 3-vector) fixes it and is
+citable, at three times the moment channels plus a small solve. Not built:
+grey-guide first, and upgrade only if real photographs show the failure.

@@ -384,6 +384,7 @@ enum Scenario {
         case "dehaze":      e.dehaze = value
         case "fusion", "lift": e.fusion = value
         case "localExposure": e.localExposureEv = value
+        case "maskRefine": e.maskRefine = value
         case "brushRadius": e.brushRadius = value
         case "brushFlow":   e.brushFlow = value
         case "maskCentreX": e.maskCentreX = value
