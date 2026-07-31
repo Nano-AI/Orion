@@ -32,6 +32,7 @@ miss the view-model layer, which is where these failures are.
 | `matte-survives-a-reopen.txt` | Passes — fixed: a raster matte was written nowhere, so a Subject, Person or Sky row reopened present and empty |
 | `sky-mask.txt` | Passes — ⚠ its refusal half asserted nothing until 2026-07-31: it never called `select`, so it was green whatever the detector did |
 | `dehaze-reaches-the-picture.txt` | Passes — ⚠ closes the gap where dehaze could be **deleted** from the product and all three suites plus the bench stayed green |
+| `auto-applies-every-field.txt` | Passes — ⚠ Auto writes five fields and `undo-after-auto.txt` caught **none** of the five being dropped |
 
 ## The surfaces a scenario can measure
 
@@ -52,6 +53,14 @@ classifies with `CanvasLayout.maskAlpha`, the overlay's own transcription of the
 mask kernel. Both are deliberately the *actual* code the interface uses: a
 stand-in would be a second implementation with its own bugs and none of the
 first's.
+
+⚠️ **"The picture changed" is one assertion, however many things the control
+writes.** The Auto button sets five fields. `undo-after-auto.txt` asserted the
+frame moved and that one undo put it back — and every one of the five
+assignments could be deleted on its own with that file still green, because the
+remaining four still move the frame. Measured, 5 for 5. When a control writes
+more than one thing, assert the things, not the outcome: that is what the
+`control` verb is for.
 
 ⚠️ **A GPU test proves the mathematics; only a scenario proves it is reachable.**
 `apps/tests` dispatches each kernel directly with parameters it sets itself, so

@@ -98,6 +98,11 @@ import SwiftUI
 ///                                       drag renders on) or `analysis` (the
 ///                                       picture handed to Vision, which
 ///                                       nothing on screen ever shows)
+///     control <name> <op> <value>       what a control *holds*, not what the
+///                                       picture looks like. For buttons that
+///                                       write several fields, where "the
+///                                       picture changed" is satisfied by any
+///                                       one of them landing
 ///     expect <name> <op> <value>        ==, !=, >, < against a recorded value
 ///     expect <name> == <other-name>     two recordings, equal in *both* mean
 ///                                       luma and mean saturation — one number
@@ -400,6 +405,45 @@ enum Scenario {
             engine.maskKind = 4
             try persistMatte(m.alpha, width: m.width, height: m.height,
                              engine: engine, source: which.label)
+
+        case "control":
+            // Asserts what a control *holds*, not what the picture looks like.
+            //
+            // ⚠ This exists because "the picture changed" is far too weak an
+            // assertion about a button that writes five fields. Measured
+            // 2026-07-31: `repro/undo-after-auto.txt` asserted only that Auto
+            // moved the frame, and **four of the five assignments could be
+            // deleted one at a time with the scenario still green** — the
+            // remaining fields moved the picture enough to satisfy it. A button
+            // that quietly stopped setting clarity, or whites, or the shadow
+            // lift, looked exactly like a working one.
+            guard args.count >= 3 else {
+                throw Bad(what: "control needs a name, an operator and a value")
+            }
+            let ctlName = args[0], ctlOp = args[1]
+            guard let want = Double(args[2]) else {
+                throw Bad(what: "control needs a number, got \(args[2])")
+            }
+            guard let got = controlValue(ctlName, engine).map(Double.init) else {
+                throw Bad(what: "no readable control named \(ctlName)")
+            }
+            checks += 1
+            let ok: Bool
+            switch ctlOp {
+            case "==": ok = abs(got - want) <= 1e-3
+            case "!=": ok = abs(got - want) > 1e-3
+            case ">":  ok = got > want
+            case "<":  ok = got < want
+            default: throw Bad(what: "control takes ==, !=, > or <")
+            }
+            if ok {
+                say(String(format: "  ok    %@ %@ %g  (holds %g)\n",
+                           ctlName as NSString, ctlOp as NSString, want, got))
+            } else {
+                failures += 1
+                say(String(format: "  FAIL  %@ %@ %g  (holds %g)\n",
+                           ctlName as NSString, ctlOp as NSString, want, got))
+            }
 
         case "refuses":
             // Asserts a detector **declines** this photograph.
@@ -786,6 +830,27 @@ enum Scenario {
             let before = engine.satShift[band.rawValue]
             engine.satShift[band.rawValue] = min(1, max(-1, before + Float(drag)))
             targeted.end()
+        }
+    }
+
+    /// Reads a control back off the engine, for `control`.
+    ///
+    /// ⚠ Deliberately a **short** list rather than a mirror of every setter.
+    /// Every entry here is one a scenario has an actual reason to read — which
+    /// today means the five fields the Auto button writes. A getter for a
+    /// control nobody asserts is a second copy of the setter table waiting to
+    /// disagree with it.
+    private static func controlValue(_ name: String, _ e: Engine) -> Float? {
+        switch name {
+        case "exposure":       return e.exposureEv
+        case "whites":         return e.whites
+        case "blacks":         return e.blacks
+        case "clarity":        return e.clarity
+        case "fusion", "lift": return e.fusion
+        case "contrast":       return e.contrast
+        case "saturation":     return e.saturation
+        case "dehaze":         return e.dehaze
+        default:               return nil
         }
     }
 

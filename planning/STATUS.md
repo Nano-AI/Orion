@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**dehaze could be deleted and everything stayed green** — the wiring was never pinned)
+**Last updated:** 2026-07-31 (**Auto writes five fields and nothing checked four of them** — five for five now)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -44,6 +44,78 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-31f — Auto writes five fields and nothing checked four of them
+
+⚠ **Thirty-fifth arrival of the stale M3 prompt.** Verified and set aside.
+
+Started by testing **my own** parting claim from last session: "the other three
+M3 features have unwaived bench floors, so the bench is their wiring test." It
+was asserted, not measured, which is precisely the habit these sessions keep
+finding.
+
+### ✅ The claim held for two of the three
+
+Disabled at the host, one line each:
+
+| Mutation | `orion-bench` | `orion-tests` |
+|---|---|---|
+| fusion dead | **exit 1** ✅ | 0 failures |
+| creative LUT dead | **exit 1** ✅ | 0 failures |
+
+The bench catches both. `orion-tests` catches neither, which is the same
+kernel-versus-wiring split dehaze showed — worth having confirmed rather than
+assumed.
+
+### ⚠ Auto-enhance is not a filter, and the claim did not reach it
+
+Auto is a *policy* that writes five sliders, so there is no pipeline gate to
+disable and the bench's probe drives the C++ policy directly, never the button.
+`repro/undo-after-auto.txt` covers the button — and covers it far more weakly
+than it reads. Deleting one assignment at a time from `Engine.autoEnhance`:
+
+| Dropped | `undo-after-auto.txt` |
+|---|---|
+| clarity | 0 failures |
+| fusion | 0 failures |
+| whites | 0 failures |
+| blacks | 0 failures |
+| **exposure** | 0 failures |
+
+**Five for five.** The file asserts the frame moved and that one undo puts it
+back; both are true, both worth keeping, and both are satisfied by whichever
+fields remain. A button that had quietly stopped setting most of what it
+computes looked exactly like a working one.
+
+### The fix: assert the fields, not the outcome
+
+A `control <name> <op> <value>` verb reads what a control *holds*.
+`repro/auto-applies-every-field.txt` uses it, and now all five drops fail —
+between 1 and 4 checks each, **5 for 5** against the old file's 0.
+
+⚠ **Two frames, because no single frame exercises all five.** The policy is
+scene-dependent and that is the point of it: the daylight plaza has blacks to
+pull and no shadow lift to give (`fusion` 0.00); the night forecourt is the
+reverse. A one-frame version would silently stop covering whichever field that
+frame happens not to use.
+
+### ⚠ And I nearly wrote a fifth number-about-its-fixture into a test
+
+The first draft quoted `Screenshot --auto`'s figures for the night frame
+(exposure −0.70) and the check failed: from a **clean open** the policy gives
+**+0.09**. Neither is wrong — that harness applies a scene first and the policy
+reads the state it is handed. Two paths, two answers, and I had pinned one path's
+number into a test that takes the other.
+
+⚠ The sign matters too. Exposure is *negative* on the bright plaza and
+**positive** on the dark forecourt, so "Auto reduces exposure" would have been a
+rule read off one photograph. The file says so where the bound is.
+
+### Where this leaves the sweep
+
+Every M3 feature now has something that fails when its wiring breaks: fusion and
+LUTs via the bench, dehaze via `repro/dehaze-reaches-the-picture.txt`, auto via
+`repro/auto-applies-every-field.txt`. **32 scenarios.**
 
 ## Session 2026-07-31e — dehaze could be deleted and everything stayed green
 

@@ -1,0 +1,76 @@
+# The Auto button writes five fields, and all five have to arrive.
+#
+# ⚠ **`undo-after-auto.txt` could not see four of them.** It asserts that Auto
+# moves the picture and that one undo puts it back — both true, both worth
+# keeping, and both satisfied by a button that has quietly stopped setting most
+# of what it computes. Measured 2026-07-31 by deleting one assignment at a time
+# from `Engine.autoEnhance`:
+#
+#   drop clarity   2 checks, 0 failures
+#   drop fusion    2 checks, 0 failures
+#   drop whites    2 checks, 0 failures
+#   drop blacks    2 checks, 0 failures
+#
+# Four for four. The remaining fields still move the frame, so "the picture
+# changed" is satisfied whichever one goes missing. That is the same shape as
+# the dehaze gap closed the session before: an instrument that proves the
+# feature is *alive* and nothing about whether it is *whole*.
+#
+# The `control` verb reads what a control holds rather than what the frame looks
+# like, which is the only way to tell five assignments from one.
+#
+# ⚠ **Two frames, because no single frame exercises all five.** The policy is
+# scene-dependent and that is the point of it: on the daylight plaza there is no
+# shadow lift to give (`fusion` 0.00) and there are blacks to pull; on the night
+# forecourt it is the other way round. A one-frame version of this file would
+# silently stop covering whichever field that frame happens not to use.
+
+# ── Daylight: exposure, whites, blacks, clarity ──────────────────────────
+#
+# Measured on this build, **from a clean open**: exposure -1.01 EV,
+# whites +0.375, blacks -0.047, fusion 0.00, clarity 0.25.
+#
+# ⚠ `Screenshot --auto` reports different numbers for the same frame (-1.18,
+# +1.00, -0.10) and neither is wrong: that harness applies a scene first, and
+# the policy reads the state it is handed. Quoting its figures here would have
+# been a number measured on one path pinned into a test that takes another —
+# which is the mistake this repository has now recorded four times. The first
+# draft of this file did exactly that and the night-frame bound below failed.
+#
+# The bounds are loose on purpose — this file
+# pins that each field *arrives*, not what the policy decides, which is the
+# bench's auto-enhance probe's job. A tight bound here would fail every time
+# the taste is retuned and teach whoever hits it to widen the number.
+open samples/_PIC8095.ARW
+measure 0.35,0.35,0.20,0.20 plazaBefore
+auto
+measure 0.35,0.35,0.20,0.20 plazaAfter
+
+print auto moves the picture, and every field it computed arrives
+expect plazaAfter != plazaBefore
+control exposure < -0.2
+control whites > 0.2
+control blacks < -0.01
+control clarity > 0.05
+
+# ── Night: the shadow lift, which the daylight frame does not exercise ───
+#
+# Measured from a clean open: exposure +0.09 EV, fusion 1.00, clarity 0.25.
+# ⚠ The exposure is *positive* here — a dark forecourt gets lifted, where the
+# bright plaza above gets pulled down. Asserting "auto reduces exposure" would
+# have been a rule read off one photograph.
+open samples/_PIC8220.ARW
+auto
+
+print and the shadow lift arrives on a frame that needs one
+control fusion > 0.2
+control exposure > 0.02
+control clarity > 0.05
+
+# ⚠ And Auto starts from the photograph, not from wherever the sliders happen to
+# sit. Without this, a button that merely *added* to the current state would pass
+# everything above — and pressing it twice would walk the picture further each
+# time rather than settling. `Screenshot --auto 2` exists for the same reason.
+auto
+control fusion > 0.2
+control exposure > 0.02
