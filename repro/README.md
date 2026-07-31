@@ -108,6 +108,16 @@ moved. A mask shifted by a tenth of the frame still darkens roughly the right
 region and still looks plausible in a screenshot; what it cannot do is leave the
 clear cells untouched.
 
+⚠️ **The suite can be green because it was never in a position to fail.** A
+running app compiled a shader rebuilt underneath it, bound five textures to a
+kernel that wanted six, and rendered every mask as blank — while every mask test
+passed, because the tests ran the binary the shader was built with. No scenario
+here could have caught that: they all exercise the matched pair. What caught it
+was the session log, which dated the photo open against the process start; what
+prevents it now is `testBindingCount`, which asks Metal what the *compiled*
+kernel needs. When a class of bug is invisible to a suite by construction, the
+fix is an assertion at the boundary, not more coverage inside it.
+
 ## What a scenario still cannot see
 
 The brush has no closed form for the overlay to draw, so `maskcheck` refuses it;

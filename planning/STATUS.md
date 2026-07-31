@@ -30,7 +30,7 @@ standing violation of a stated hard constraint is `apps/tests/main.cpp` at
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** `orion-tests` **525 checks** · `orion-viewport-tests` **3437
+**Suites:** `orion-tests` **545 checks** · `orion-viewport-tests` **3437
 checks** · **32 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
 three sample frames: 148 nodes, 6878 MiB, M0 gate **10.63 ms p95** on
 `_PIC8220` — plus a preview graph at 1/16 that.
@@ -98,6 +98,59 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-07-31k — every mask covered zero, and no test could see it
+
+**Reported live**: "none of the masks are working" — brush, range, all of them.
+Fixed by quitting the app. The interesting part is why that was the fix.
+
+`perf: reject brush dabs a run of 64 at a time` (9546757) added a sixth texture
+to `mask_component.slang`, moving that kernel's output from slot 4 to slot 5,
+and changed `DevelopPipeline` to bind it. Both halves landed in one commit and
+the suite passed. But an Orion process from the previous evening was still
+running, and **`Pipeline::compile` loads metallibs from disk by path** — so
+opening a photograph made the July 30 binary compile the July 31 kernel. It
+bound five textures. The kernel wrote to the sixth.
+
+⚠ **Metal does not call that an error.** An unbound slot is nil: reads give
+zero, writes are discarded, no diagnostic unless the validation layer is on. The
+kernel dispatched, completed, and wrote nothing — for every mask kind at once,
+because they all run through that one kernel.
+
+### What found it
+
+The session log, in four lines. It dated the photo open at 12:38 against a
+process start of 22:53 the night before. That is what `InteractionLog` was built
+for and the first time it has paid.
+
+### The guard
+
+`Kernel::create` now takes Metal's reflection and records one past the highest
+texture index the compiled shader refers to. ⚠ Highest **used** index, not the
+declared argument count — an argument a shader never reads can be eliminated,
+and counting declarations would refuse bindings that are in fact complete.
+`Pipeline::compile` compares it against what it is about to bind and throws,
+naming the kernel and the node.
+
+`testBindingCount` runs first in `orion-tests`, because a shader and a binary
+that disagree make every other GPU result a guess. It asserts the refusal *and*
+that six bindings for six slots still compile — without that second half it
+would pass on a guard that refused everything — and that the develop graph
+itself satisfies the rule, which is the check that would have gone red the
+moment the shader changed without the bind. Mutation-checked: disabling the
+guard fails 3, an off-by-one in the slot count fails 4.
+
+### ⚠ The lesson, which is not "rebuild more often"
+
+This is the sixth instance of the class in `repro/README.md`: **a green suite
+that was never in a position to fail.** The tests ran the matching binary, so
+they could not observe the one thing that was wrong. What made it invisible was
+not the mistake — it was Metal's silence about it. The fix is the assertion, not
+the discipline.
+
+**Still open**: `engine/shaders/grain.slang` is written but uncommitted and not
+in `engine/shaders/CMakeLists.txt`. Grain pieces 1, 3–7 unstarted.
+
 
 ## Session 2026-07-31j — the grain plate, built and pinned
 
