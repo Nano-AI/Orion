@@ -521,6 +521,9 @@ private:
     /// what a constant block can carry, and a texture is a binding the pipeline
     /// already had.
     int auxDabs_[kMaxMaskComponents]{-1, -1, -1, -1};
+    /// One axis-aligned box per run of `kDabBlock` dabs, so a pixel can skip a
+    /// whole run with one test. research/brush-acceleration.md.
+    int auxDabBounds_[kMaxMaskComponents]{-1, -1, -1, -1};
     std::uint32_t matteW_ = 0, matteH_ = 0;
     /// The live rectangle of each matte, or zero where none has been uploaded.
     std::uint32_t matteLive_[kMaxMaskComponents][2]{};

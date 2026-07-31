@@ -514,12 +514,22 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         // one-way stamp.
         auxDabs_[i] = pipeline_.addAuxTexture(params::kDabStride, params::kDabRows,
                                               PixelFormat::RGBA32Float);
+        // One box per run of 64 dabs: (minX, minY, maxX, maxY) of the centres.
+        // 256 texels, 4 KB. research/brush-acceleration.md.
+        //
+        // ⚠ A texture rather than the parameter block, and not the dab's spare
+        // `w` channel either. 256 boxes is 4 KB on its own — the whole `setBytes`
+        // limit, of which this struct already spends 152 bytes a component — and
+        // scattering a four-float box across four dab texels would cost four
+        // fetches to read the thing that exists to save fetches.
+        auxDabBounds_[i] = pipeline_.addAuxTexture(params::kMaxDabBlocks, 1,
+                                                   PixelFormat::RGBA32Float);
     }
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         nMaskComponent_[i] =
             pipeline_.add({"mask:" + std::to_string(i), "maskComponent",
                            {prevMask, nHueSat_}, PixelFormat::R16Float, {},
-                           {auxMatte_[i], auxDabs_[i]}});
+                           {auxMatte_[i], auxDabs_[i], auxDabBounds_[i]}});
         prevMask = nMaskComponent_[i];
     }
 
@@ -1654,6 +1664,18 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                 }
                 pipeline_.updateAux(auxDabs_[std::size_t(i)], texels.data(),
                                     std::size_t(params::kDabStride) * 4 * sizeof(float));
+
+                // One box per run of `kDabBlock` dabs, so the kernel can skip 64
+                // fetches with one test. research/brush-acceleration.md.
+                //
+                // ⚠ Built from `texels` — the values actually uploaded — and by
+                // the same function the GPU tests call. See `buildDabBounds`.
+                std::vector<float> bounds(
+                    std::size_t(params::kMaxDabBlocks) * 4, 0.0f);
+                params::buildDabBounds(texels.data(), m.count, bounds.data());
+                pipeline_.updateAux(auxDabBounds_[std::size_t(i)], bounds.data(),
+                                    std::size_t(params::kMaxDabBlocks) * 4
+                                        * sizeof(float));
             }
 
             // The nib, as a radius in *frame pixels*.

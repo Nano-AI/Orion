@@ -454,6 +454,77 @@ inline constexpr int kDabStride = 256;
 inline constexpr int kDabRows   = 64;
 inline constexpr int kMaxDabs   = kDabStride * kDabRows;
 
+/// How many consecutive dabs share one bounding box.
+/// `research/brush-acceleration.md` — Clark (1976), hierarchical bounding
+/// volumes, one level.
+///
+/// The kernel's cost is one texture fetch per dab **per pixel**, so at 2400 dabs
+/// it was 2.1 seconds a render. A box per run of 64 lets a pixel skip 64 fetches
+/// with one test.
+///
+/// ⚠ 64 is the equilibrium between the two ways this loses: the `count/64`
+/// bounds fetches every pixel pays whatever happens (1024 of them at a block of
+/// 16, which is worse than the disease) and the wasted inner work when a block
+/// is entered (256 dabs dragged in at a block of 256, on a box that a curving
+/// run leaves slack).
+///
+/// ⚠ **Runs of consecutive dabs, never a spatial partition.** Paint is
+/// source-over and erase is destination-out and the two do not commute, so the
+/// dabs over a pixel must be applied in the order they were laid. An index range
+/// keeps that for free; a per-tile bin has to rebuild it.
+inline constexpr int kDabBlock  = 64;
+inline constexpr int kMaxDabBlocks = (kMaxDabs + kDabBlock - 1) / kDabBlock;
+
+/// ⚠ `DAB_BLOCK` in `mask_component.slang` must be this number. The two cannot
+/// be shared — one is C++ and the other is Slang — so this assert is the tripwire:
+/// changing the block size here fails the build and sends whoever did it to the
+/// shader. Disagreeing silently is not a crash, it is a box read against the
+/// wrong run of dabs, which drops paint out of the middle of a stroke and looks
+/// like a brush that skips.
+static_assert(kDabBlock == 64, "mask_component.slang DAB_BLOCK must match");
+
+/// Builds the per-block boxes from the dab texels that were uploaded.
+///
+/// `texels` is the RGBA32F dab texture's contents, four floats a dab, and
+/// `bounds` receives `kMaxDabBlocks` × 4 floats: `(minX, minY, maxX, maxY)` of
+/// the centres in each run of `kDabBlock`.
+///
+/// ⚠ **It takes the texels, deliberately, rather than the positions they came
+/// from.** The kernel's rejection is bit-identical only because every centre in
+/// a block is ≥ that block's stored minimum; a box computed from
+/// higher-precision values before the write can round tighter than the float32
+/// that actually lands in the texture, and the kernel would then skip a dab the
+/// full loop would have composited.
+///
+/// ⚠ And it lives here rather than in `DevelopPipeline.cpp` because the GPU
+/// tests dispatch the kernel directly and need the same boxes. A second
+/// implementation in the test would be a stand-in with its own bugs, checking
+/// the product against a copy of the product's own mistake.
+inline void buildDabBounds(const float* texels, int count, float* bounds)
+{
+    for (int i = 0; i < kMaxDabBlocks * 4; ++i) bounds[i] = 0.0f;
+    const int blocks = (count + kDabBlock - 1) / kDabBlock;
+    for (int b = 0; b < blocks; ++b) {
+        const int lo = b * kDabBlock;
+        const int hi = (lo + kDabBlock < count) ? lo + kDabBlock : count;
+        float minX = texels[std::size_t(lo) * 4 + 0];
+        float minY = texels[std::size_t(lo) * 4 + 1];
+        float maxX = minX, maxY = minY;
+        for (int d = lo + 1; d < hi; ++d) {
+            const float x = texels[std::size_t(d) * 4 + 0];
+            const float y = texels[std::size_t(d) * 4 + 1];
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+        bounds[std::size_t(b) * 4 + 0] = minX;
+        bounds[std::size_t(b) * 4 + 1] = minY;
+        bounds[std::size_t(b) * 4 + 2] = maxX;
+        bounds[std::size_t(b) * 4 + 3] = maxY;
+    }
+}
+
 /// How a component folds into the coverage before it. research/masking.md §6,
 /// and the same values `ops/mask_ops.slang` names.
 enum class MaskCompose : std::int32_t { Add = 0, Subtract = 1, Intersect = 2 };

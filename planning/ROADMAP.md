@@ -187,6 +187,49 @@ time.
   the coverage scales the parameter is not even defined for them.
 - **Blend modes over rendered frames.** #75. Layer opacity is a scalar into α.
 
+## Incremental brush accumulation — costed, not started
+
+Decision #80 made each re-evaluation of a stroke ~30× cheaper. It did **not**
+make them fewer: painting appends dabs, and every appended dab still re-runs the
+loop over every dab laid so far. Rejection means each of those passes is cheap;
+the count of passes is still quadratic in the stroke.
+
+⚠ **A frame-filling scribble defeats the boxes entirely** — every run's box spans
+the frame, no reject fires, and the cost returns to the old one. This is the fix
+for that case, and it is the only one.
+
+### The shape
+
+Keep a persistent accumulator per brush component. On an append, the kernel
+starts from the stored coverage, composites only dabs `[firstDab, count)`, and
+writes it back. `_pad3` in `MaskComponent` has a spare slot for `firstDab`, so
+the struct does not change size.
+
+| Piece | Cost |
+|---|---|
+| Persistent R32F accumulator per brush component | **~97 MB each at 24 Mpx**, lazily allocated |
+| `firstDab` in the params, kernel starts from the accumulator | one branch, ~25 shader lines |
+| Host predicate deciding when the prefix is unchanged | ~35 lines, and the whole risk |
+
+**R32F, not R16F.** The accumulator has to round-trip the coverage exactly or the
+result stops being bit-identical to a full evaluation, which is the invariant
+#80's test asserts.
+
+### ⚠ Why it is not started
+
+The predicate is the danger. It must compare the **post-transform** texels of the
+new stroke against the previous upload, prefix for prefix, and fall back to a
+full re-evaluation on any mismatch — geometry change, nib change, undo, row
+reorder. The tempting cheap version is "did the count grow?", and its failure
+mode is the worst kind this repository knows: undo three dabs, paint three
+different ones, and a stale accumulator keeps the old coverage and renders **a
+completely plausible brushstroke**. Every screenshot passes. Every perceptual
+check passes. Only a test that returns the count to a previously seen value with
+a different prefix can see it.
+
+That is a session with its own tests, not an addition to one that has already
+landed.
+
 ## M5 — Advanced
 
 - ML denoise (NAFNet-class via Core ML) as a **background pass**, not a live slider

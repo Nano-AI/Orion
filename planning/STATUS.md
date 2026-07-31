@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**a matte is saved with the photograph** — the oldest gap in the table below, closed)
+**Last updated:** 2026-07-31 (**the brush stops being quadratic** — 2148 ms → 65.6 ms on a long stroke)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -25,10 +25,10 @@ through smooth ground (a colour predicate alongside the gradient one), and
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3430
+**Suites:** `orion-tests` **525 checks** · `orion-viewport-tests` **3430
 checks** · **30 `repro/` scenarios** · all 0 failures. Bench exits 0: 148 nodes,
-6878 MiB, M0 gate **13.53 ms p95** on `_PIC8220` — plus a preview graph at 1/16
-that.
+6878 MiB, M0 gate **10.63 ms p95** on `_PIC8220` — plus a preview graph at 1/16
+that. Brush probe **127.22 → 36.27 ms**.
 
 ### Known gaps, carried forward
 
@@ -44,6 +44,114 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-31b — the brush stops being quadratic
+
+⚠ **Thirtieth and thirty-first arrivals of the stale M3 prompt.** Verified
+against the tree once more and set aside.
+
+`research/brush-acceleration.md`, decision #80. The largest measured latency in
+the project, and the number this file carried for it was wrong.
+
+### ⚠ The recorded figure was a number about the fixture
+
+Session `2026-07-30p` wrote "a 120-dab stroke costs 110–138 ms" and called it
+"inside the budget today". That came from the bench probe's own short stroke.
+Measured across stroke lengths, with the fixed cost isolated:
+
+| Dabs | Node re-render | Loop alone |
+|---|---|---|
+| 0 | 12.0 ms | — (a radial drag is 11.8 ms: same node, no loop) |
+| 2 | 14.1 ms | ~2.1 ms |
+| ~300 | 152.3 ms | ~140 ms |
+| ~2400 | **2148.4 ms** | ~2136 ms |
+
+Fifteen times worse than the figure on file at eight frame-widths, and the cap
+allows seven times more again.
+
+### ⚠ Two measurements that were of the wrong thing, one of them mine
+
+The first attempt dragged **local exposure** and reported a flat 10.5 ms at every
+stroke length — which is true, and says nothing, because that control does not
+dirty the mask node so the dab loop never re-runs. The loop only re-runs when the
+stroke or the nib changes. Dragging the nib is what produced the table above.
+
+Worth keeping as a fact about the product, not just about the test: most drags
+are unaffected. The cost lands on **painting**, where every appended dab re-runs
+the loop over every dab so far.
+
+### The fix, and why the obvious version of it is wrong
+
+⚠ **The cost is the fetch, not the arithmetic** — one texture read per dab per
+pixel is ~58 billion reads at 2400 dabs on 24 Mpx. So a faster inner test was
+never the answer. One level of hierarchical bounding volumes (Clark 1976): a box
+per run of 64 consecutive dabs, in a 4 KB aux texture, skipping 64 reads with one
+test.
+
+⚠ **Runs, never a spatial partition.** Paint is source-over, erase is
+destination-out, and the two do not commute — an index range keeps application
+order for free where a per-tile bin has to rebuild it with a stable scatter or a
+sort, which is three kernels and a prefix sum inside a static graph.
+
+⚠ **The boxes are unexpanded, and tested in the per-dab test's own expression
+shape.** Growing each box by the nib radius on the host is the version that looks
+right and is not: `fl(q·W) − fl(c·W)` is not `fl((q−c)·W)`, floating point does
+not distribute, and the two tests would disagree on some pixel near some rim.
+Written as the same comparison, monotone rounding does the work — when the block
+test fires, every dab in the run takes the existing `continue`, which performs no
+floating-point operation on the accumulator, so the skip runs exactly the
+instruction stream the full loop would have.
+
+⚠ And the boxes come from the **float32 texels actually uploaded**, not from the
+values before the geometry transform, or a box can round tighter than what is
+stored and skip a real dab.
+
+### Measured
+
+| Stroke | Before | After |
+|---|---|---|
+| ~2 dabs | 14.1 ms | 11.4 ms |
+| ~300 dabs | 152.3 ms | **14.5 ms** |
+| ~2400 dabs | 2148.4 ms | **65.6 ms** |
+
+Bench probe 127.22 → **36.27 ms**, floor and coverage unchanged. M0 gate 10.63 ms.
+148 nodes and 6878 MiB both unmoved — the boxes are 4 KB a component.
+
+### ⚠ The oracle is the kernel itself, with rejection disabled
+
+The new test renders the same 999-dab stroke twice: once with the boxes widened
+to the whole plane, which disables every rejection exactly and *is* the
+unaccelerated loop, and once with the real boxes. Bit-identical, not close. A CPU
+model would have been a stand-in with its own bugs, and bit-identity is the one
+claim a stand-in cannot support.
+
+⚠ **And a third render, because the first two are circular on their own.** If the
+kernel ignored the boxes, they would agree trivially. Boxes placed far from the
+stroke must therefore return an *empty* frame — and the mutation that disables
+rejection passes the identity check and fails exactly that one.
+
+The fixture is 999 dabs (not a multiple of 64, so the partial run is exercised),
+self-crossing so runs overlap, every seventh dab erasing so order decides the
+answer, and eight centres off the frame edge.
+
+**Three mutations dead:** the shader's block size disagreeing with the host's
+(6549 texels differ, and it takes three older tests with it), dropping the
+partial-block clamp (6 failures), and disabling rejection (the positive control).
+
+⚠ **One mutation survives and it is not a defect**: `>` → `>=` in the block test.
+At exact equality every dab in the run is `r` away, so `d ≥ 1` and all of them
+hit the existing continue. `>` is kept because that argument leans on `sqrt` at
+the boundary and the strict form needs no argument at all. Written down in the
+research file rather than left as an unexplained green.
+
+### Deliberately not done
+
+**Incremental accumulation**, which would make painting O(1) in stroke length and
+is the only fix for the frame-filling-scribble case that defeats the boxes
+entirely. It needs a persistent ~97 MB R32F accumulator per brush component and a
+host predicate deciding when the stroke's prefix is unchanged — and the cheap
+version of that predicate ("did the count grow?") fails by rendering a completely
+plausible brushstroke from a stale accumulator. Costed in `ROADMAP.md`.
 
 ## Session 2026-07-31a — a matte is saved with the photograph
 

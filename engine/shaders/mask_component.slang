@@ -22,6 +22,15 @@
 
 #include "ops/mask_ops.slang"
 
+/// How many consecutive dabs share one bounding box.
+///
+/// ⚠ Must equal `params::kDabBlock` in `ShaderParams.h`, which is what builds
+/// the boxes. Disagreeing is not a crash: the kernel would read a box covering
+/// the wrong run of dabs and drop paint out of the middle of a stroke, which
+/// looks like a brush that skips rather than like anything broken. Pinned by a
+/// static assert on the C++ side and by the bit-identity test.
+static const int DAB_BLOCK = 64;
+
 struct MaskComponentParams
 {
     uint2  size;
@@ -209,6 +218,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float4>  reference,  // kind 5, see below
                    uniform Texture2D<float>   matte, // kind 4, frame coordinates
                    uniform Texture2D<float4>  dabs,  // kind 3: xy centre, z erases when set
+                   uniform Texture2D<float4>  dabBounds, // kind 3: per-block box
                    uniform RWTexture2D<float> dst,
                    uniform ConstantBuffer<MaskComponentParams> p)
 {
@@ -274,7 +284,43 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         // supports for the matte, it costs 128 KB for four components, and it
         // needs no chain, no spare component and no second code path.
         const int stride = max(p.dabStride, 1);
-        for (int i = 0; i < p.count; ++i)
+
+        // ⚠ Two levels, because the cost here is the **fetch**, not the
+        // arithmetic: one texture read per dab per pixel is 58 billion reads on
+        // a 24 Mpx frame with a 2400-dab stroke, and that measured 2.1 seconds a
+        // render. A box per run of `kDabBlock` dabs lets a pixel skip 64 of
+        // those reads with one test. research/brush-acceleration.md, after
+        // Clark (1976).
+        //
+        // ⚠ **Runs of consecutive dabs, walked in order.** Paint is source-over
+        // and erase is destination-out; the two do not commute, so the dabs over
+        // a pixel must be applied in the order they were laid. An index range
+        // preserves that with no bookkeeping — which is the reason this is not a
+        // per-tile bin, where order has to be rebuilt.
+        const int blocks = (p.count + DAB_BLOCK - 1) / DAB_BLOCK;
+        for (int b = 0; b < blocks; ++b)
+        {
+            // ⚠ The bounds are of the dab **centres**, unexpanded, and the test
+            // below is written in the same expression shape as the per-dab one
+            // rather than as a containment test against a box grown by `r`.
+            //
+            // That is not a style choice. `fl(q*W) - fl(c*W)` is not
+            // `fl((q-c)*W)` — floating point does not distribute — so a
+            // pre-expanded box would be a *different computation* from the
+            // per-dab reject and the two would disagree on some pixel near some
+            // rim. Here every operation matches: subtraction is correctly
+            // rounded and therefore monotone, and `c.x >= box.x` gives
+            // `fl(box.x - q.x) <= fl(c.x - q.x)`, so whenever this fires every
+            // dab in the run takes the `continue` below — which touches `own`
+            // with no floating-point operation at all. Skipping the run runs
+            // exactly the instruction stream on `own` that the full loop would.
+            const float4 box = dabBounds[int2(b, 0)];
+            if ((box.x - q.x) * toPx.x > r || (q.x - box.z) * toPx.x > r ||
+                (box.y - q.y) * toPx.y > r || (q.y - box.w) * toPx.y > r) continue;
+
+            const int lo = b * DAB_BLOCK;
+            const int hi = min(lo + DAB_BLOCK, p.count);
+            for (int i = lo; i < hi; ++i)
         {
             const float4 dab = dabs[int2(i % stride, i / stride)];
             const float2 centre = dab.xy;
@@ -310,6 +356,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
             // rides in the aux texture's third channel.
             if (dab.z > 0.5f) own -= cov * own;
             else              own += cov * (1.0f - own);
+        }
         }
 
         own = saturate(own);
