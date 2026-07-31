@@ -5,7 +5,7 @@ Fast, subscription-free desktop RAW photo editor for macOS. Modern minimal UI, c
 ## Read these first
 Everything lives in `planning/`. On a fresh session, read in this order:
 
-1. **`planning/STATUS.md`** — where we are right now, what's in flight, what's blocked. **Always start here.**
+1. **`planning/STATUS.md`** — where we are right now, what's in flight, what's blocked. **Always start here.** Keep it short enough that "start here" is a thing anyone can do: the current state, the gap table, and the recent sessions. Older sessions move to `planning/HISTORY.md`, which is the archive and is **not** part of the read order.
 2. `planning/VISION.md` — what Orion is and isn't
 3. `planning/DECISIONS.md` — every settled choice + why. Don't relitigate these.
 4. `planning/ARCHITECTURE.md` — stack, engine design, open questions
@@ -59,7 +59,7 @@ texture. Two shipped bugs — a torn frame and a purple cast — were invisible 
 inspection and obvious to a five-line assertion.
 
 ## Working agreement
-- One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable.
+- One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable. **Prune it in the same breath:** it reached 4,643 lines over 56 sessions before anyone noticed that a recovery point nobody can read is not one. Six or so recent sessions is plenty; the rest belongs in `HISTORY.md`.
 - Log any new decision in `DECISIONS.md` with its reason.
 - Benchmark every milestone. Latency regressions block new features.
 - Planning docs stay concise. Dense tables over prose.

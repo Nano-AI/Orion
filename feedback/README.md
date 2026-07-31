@@ -37,7 +37,8 @@ review because the entire sample corpus was two night frames.
 Findings are closed in code, and the reasoning is recorded in:
 
 - `planning/DECISIONS.md` — every settled choice, numbered, with its reason
-- `planning/STATUS.md` — the session log, including corrections to overstated
+- `planning/HISTORY.md` — the archived session log, 50 sessions and counting
+- `planning/STATUS.md` — current state plus the recent session log, including corrections to overstated
   commit messages
 - `research/UNSOURCED.md` — the honest register of what is our own formulation
   rather than a published algorithm
