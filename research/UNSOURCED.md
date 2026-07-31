@@ -688,3 +688,34 @@ tolerance take most of a picture deliberately rather than by running out.
 ⚠ These are *ranges*, not constants in a formula: a wrong one makes a control
 awkward, not a photograph wrong. Recorded because a slider range is exactly the
 kind of number that looks derived when it is not.
+
+---
+
+## §23 — The sky detector's own numbers (not shipped)
+
+`research/sky-detection.md` implements Shen & Wang (2013) and **does not ship
+it**; the header there says why. The published method fixes none of the
+following, and they are recorded because the code exists and will be picked up
+again.
+
+- **24 threshold steps between the gradient's 5th and 95th percentiles.** The
+  paper searches a fixed absolute range, which assumes 8-bit camera JPEGs; this
+  runs on an AgX-mapped render whose gradient scale is different, so the search
+  is made frame-relative.
+- **Coverage bounded to 2%–90%, applied during the search rather than after.**
+  The paper's energy assumes a uniform sky, and a real one is not — it runs
+  light at the horizon and deep at the zenith. A one-row sky is perfectly
+  uniform and therefore always scored best: measured before this guard, 673 of
+  684 columns cut inside the top eighth and every photograph reported no sky.
+- **A smoothness ratio of 0.5 on mean gradient magnitude**, sky against ground.
+  The method's premise is that sky is calmer; nothing else checked it. ⚠ The
+  first version compared colour *covariance* and rejected genuine skies — a sky
+  with a gentle gradient has wide colour spread and no edges in it, which is
+  precisely the thing being looked for.
+- **A median over width/40 columns** on the border. A horizon is smooth in x and
+  nothing else said so.
+
+⚠ **And an approximation inside the energy:** the largest eigenvalue of each
+covariance is taken as its largest *diagonal* entry. A 3×3 symmetric solve per
+threshold per frame is real work for a term that only breaks ties. Untested
+against the exact form, because the detector is not shipped.

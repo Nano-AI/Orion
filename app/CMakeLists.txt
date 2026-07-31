@@ -25,6 +25,7 @@ set(SWIFT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExportDriver.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SubjectMatte.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/SkyDetector.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Navigator.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorLoupe.swift
@@ -123,6 +124,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentCatalogue.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/SkyDetector.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
@@ -142,6 +144,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentCatalogue.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/SkyDetector.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift

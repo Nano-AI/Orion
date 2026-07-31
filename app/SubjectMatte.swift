@@ -47,8 +47,19 @@ enum SubjectMatte {
     enum Kind {
         case subject
         case person
+        /// ⚠ Not a model. `research/sky-detection.md` — no Apple API produces a
+        /// sky matte from an imported RAW, and no segmentation network has a
+        /// clean enough licence to bundle (`DECISIONS.md` #78), so this is the
+        /// classical gradient-energy detector.
+        case sky
 
-        var label: String { self == .subject ? "Subject" : "Person" }
+        var label: String {
+            switch self {
+            case .subject: "Subject"
+            case .person:  "Person"
+            case .sky:     "Sky"
+            }
+        }
     }
 
     enum Failure: LocalizedError {
@@ -63,7 +74,7 @@ enum SubjectMatte {
             case .couldNotRender:  return "Could not read the rendered picture."
             case .nothingFound:
                 return "Nothing was found to select in this photograph."
-            case .vision(let m):   return "Vision could not analyse this photo: \(m)"
+            case .vision(let m):   return m
             }
         }
     }
@@ -126,11 +137,25 @@ enum SubjectMatte {
 
     private nonisolated static func infer(_ image: CGImage, kind: Kind,
                                           width: Int, height: Int) throws -> [Float] {
+        // ⚠ Sky is not Vision's, and does not pretend to be. It runs the
+        // classical detector on the same rendered picture the models get, so
+        // everything downstream — the frame coordinates, the guided refinement,
+        // the brush on top — is identical whichever produced the matte.
+        if kind == .sky {
+            switch SkyDetector.detect(rgb: rgbFloats(from: image),
+                                      width: width, height: height) {
+            case .found(let alpha, _):  return alpha
+            case .noSky(let reason):    throw Failure.vision(reason)
+            }
+        }
         do {
             let handler = VNImageRequestHandler(cgImage: image, options: [:])
             let buffer: CVPixelBuffer
 
             switch kind {
+            case .sky:
+                // Handled above; the compiler wants the case named.
+                throw Failure.nothingFound
             case .subject:
                 let request = VNGenerateForegroundInstanceMaskRequest()
                 do { try handler.perform([request]) }
@@ -183,6 +208,29 @@ enum SubjectMatte {
             guard lit * 200 >= alpha.count else { throw Failure.nothingFound }
             return alpha
         }
+    }
+
+    /// The rendered picture as row-major RGB floats, for the classical
+    /// detector. Drawn into an 8-bit context rather than read through a data
+    /// provider, so a source in any layout or colour space arrives in one.
+    private nonisolated static func rgbFloats(from image: CGImage) -> [Float] {
+        let w = image.width, h = image.height
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
+        bytes.withUnsafeMutableBytes { raw in
+            if let ctx = CGContext(data: raw.baseAddress, width: w, height: h,
+                                   bitsPerComponent: 8, bytesPerRow: w * 4,
+                                   space: CGColorSpaceCreateDeviceRGB(),
+                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+                ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            }
+        }
+        var out = [Float](repeating: 0, count: w * h * 3)
+        for i in 0..<(w * h) {
+            out[i * 3]     = Float(bytes[i * 4]) / 255
+            out[i * 3 + 1] = Float(bytes[i * 4 + 1]) / 255
+            out[i * 3 + 2] = Float(bytes[i * 4 + 2]) / 255
+        }
+        return out
     }
 
     /// A Vision mask buffer as coverage, resampled to the preview's own grid.

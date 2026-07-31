@@ -80,6 +80,11 @@ enum ViewportTests {
         testBrushDabsAreEvenlySpaced()
         testBrushSpacingSurvivesTheEventRate()
 
+        testSkyFindsAHorizon()
+        testSkyNeverAsksWhatSkyLooksLike()
+        testSkyRefusesAFrameWithNone()
+        testSkyEnergyPicksTheBorder()
+
         testCatalogueCoversEveryAdjustment()
         testCatalogueAgreesWithTheShaderAboutWhatIsLocal()
         testEveryRefusalGivesAReason()
@@ -2766,5 +2771,163 @@ extension ViewportTests {
         report(AdjustmentCatalogue.refusedLocally.count >= 5,
                "and the panel has a real list to show",
                "\(AdjustmentCatalogue.refusedLocally.count)")
+    }
+}
+
+// MARK: - Sky detection
+//
+// research/sky-detection.md. Shen & Wang (2013): sky is smooth, the ground is
+// not, so the boundary is where the gradient first becomes large scanning down
+// a column — and the problem is choosing how large. Pure arithmetic, so it is
+// pinned here on synthetic frames whose answer is known exactly.
+
+extension ViewportTests {
+
+    /// Builds an RGB image row-major from a per-pixel closure.
+    static func frame(_ w: Int, _ h: Int,
+                      _ f: (Int, Int) -> (Float, Float, Float)) -> [Float] {
+        var out = [Float](repeating: 0, count: w * h * 3)
+        for y in 0..<h {
+            for x in 0..<w {
+                let (r, g, b) = f(x, y)
+                let i = (y * w + x) * 3
+                out[i] = r; out[i + 1] = g; out[i + 2] = b
+            }
+        }
+        return out
+    }
+
+    /// A flat sky over textured ground, with the horizon at a known row.
+    static func testSkyFindsAHorizon() {
+        let w = 64, h = 64, horizon = 24
+        // ⚠ The ground is *noisy*, not merely darker. The energy is about how
+        // uniform each half is, so a smooth dark ground would be as good a
+        // "sky" as the sky — and a test with one would pass on a detector that
+        // simply cut at the largest brightness step.
+        let img = frame(w, h) { x, y in
+            if y < horizon { return (0.55, 0.62, 0.80) }
+            let n = Float((x &* 37 &+ y &* 61) % 23) / 23.0
+            return (0.18 + n * 0.35, 0.16 + n * 0.30, 0.12 + n * 0.25)
+        }
+
+        switch SkyDetector.detect(rgb: img, width: w, height: h) {
+        case .noSky(let why):
+            report(false, "a flat sky over textured ground is found", why)
+        case .found(let alpha, let coverage):
+            let want = Double(horizon) / Double(h)
+            report(abs(coverage - want) < 0.06,
+                   "the horizon lands where it was drawn",
+                   String(format: "%.3f against %.3f", coverage, want))
+            // Two-sided: covered above, clear below.
+            let above = alpha[(horizon / 2) * w + w / 2]
+            let below = alpha[(horizon + (h - horizon) / 2) * w + w / 2]
+            report(above > 0.5 && below < 0.5,
+                   "with the sky covered and the ground not",
+                   "above \(above), below \(below)")
+        }
+    }
+
+    /// ⚠ **No hue prior.** The method scores how uniform each half is; it never
+    /// asks whether the top is blue. A detector that had quietly grown a blue
+    /// test would pass every other check here and fail on overcast — which is
+    /// most of the photographs anyone reaches for this on.
+    static func testSkyNeverAsksWhatSkyLooksLike() {
+        let w = 64, h = 64, horizon = 30
+        // A grey overcast sky. Nothing blue anywhere in the frame.
+        let img = frame(w, h) { x, y in
+            if y < horizon { return (0.78, 0.78, 0.77) }
+            let n = Float((x &* 29 &+ y &* 53) % 19) / 19.0
+            return (0.22 + n * 0.30, 0.20 + n * 0.26, 0.18 + n * 0.22)
+        }
+        switch SkyDetector.detect(rgb: img, width: w, height: h) {
+        case .noSky(let why):
+            report(false, "an overcast sky is found without a colour prior", why)
+        case .found(_, let coverage):
+            let want = Double(horizon) / Double(h)
+            report(abs(coverage - want) < 0.08,
+                   "an overcast sky is found without a colour prior",
+                   String(format: "%.3f against %.3f", coverage, want))
+        }
+    }
+
+    /// ⚠ A frame with no sky must say so. Returning "everything" is
+    /// indistinguishable from the feature being broken — the failure the person
+    /// matte had before it learned to report an empty result.
+    static func testSkyRefusesAFrameWithNone() {
+        let w = 48, h = 48
+        // Texture everywhere, no smooth region touching the top.
+        let noise = frame(w, h) { x, y in
+            let n = Float((x &* 41 &+ y &* 67) % 17) / 17.0
+            return (0.15 + n * 0.6, 0.14 + n * 0.55, 0.13 + n * 0.5)
+        }
+        if case .found(_, let c) = SkyDetector.detect(rgb: noise, width: w, height: h) {
+            report(false, "a frame of pure texture reports no sky",
+                   String(format: "covered %.3f", c))
+        } else {
+            report(true, "a frame of pure texture reports no sky")
+        }
+
+        // And a completely flat frame: no edges at all, so no horizon exists.
+        let flat = frame(w, h) { _, _ in (0.5, 0.5, 0.5) }
+        switch SkyDetector.detect(rgb: flat, width: w, height: h) {
+        case .noSky:
+            report(true, "and so does a frame with no edges in it")
+        case .found(_, let c):
+            report(false, "and so does a frame with no edges in it",
+                   String(format: "covered %.3f", c))
+        }
+    }
+}
+
+extension ViewportTests {
+
+    /// ⚠ **The energy, and the sky-to-the-bottom rule, both actually exercised.**
+    ///
+    /// The first three checks could not see either. Their sky is *perfectly*
+    /// flat, so its gradient is exactly zero and every candidate threshold finds
+    /// the same first exceedance — the horizon — whatever the energy says. Two
+    /// mutations survived on that: scoring the sky alone and ignoring the
+    /// ground, and treating a column with no edge as having no sky.
+    ///
+    /// This frame has **mild grain in the sky**, as a real one does, so
+    /// different thresholds give genuinely different borders and the energy has
+    /// to choose. And its ground stops two thirds of the way across, so the
+    /// remaining columns have no strong edge anywhere and must be sky all the
+    /// way down.
+    static func testSkyEnergyPicksTheBorder() {
+        let w = 64, h = 64, horizon = 34
+        let img = frame(w, h) { x, y in
+            let grain = Float((x &* 13 &+ y &* 7) % 5) / 5.0 * 0.02
+            if y >= horizon && x < (w * 2) / 3 {
+                let n = Float((x &* 43 &+ y &* 71) % 21) / 21.0
+                return (0.20 + n * 0.40, 0.18 + n * 0.34, 0.15 + n * 0.28)
+            }
+            return (0.52 + grain, 0.60 + grain, 0.79 + grain)
+        }
+
+        switch SkyDetector.detect(rgb: img, width: w, height: h) {
+        case .noSky(let why):
+            report(false, "a grainy sky over a partial horizon is found", why)
+        case .found(let alpha, let coverage):
+            // Two thirds of the columns end at the horizon; the last third is
+            // sky to the bottom. Expected coverage is the weighted mix.
+            let want = (2.0 / 3.0) * (Double(horizon) / Double(h)) + (1.0 / 3.0)
+            report(abs(coverage - want) < 0.08,
+                   "the energy chooses the horizon even when thresholds disagree",
+                   String(format: "%.3f against %.3f", coverage, want))
+
+            // ⚠ A column with no edge in it is sky all the way down — the
+            // paper's rule, and what makes a frame of nothing but sky come out
+            // covered rather than empty.
+            let openColumn = w - 4
+            report(alpha[(h - 2) * w + openColumn] > 0.5,
+                   "and a column with no edge in it is sky to the bottom",
+                   "\(alpha[(h - 2) * w + openColumn])")
+
+            // ...while a column that does have one still stops at it.
+            report(alpha[(h - 2) * w + 4] < 0.5,
+                   "while a column that has one still stops there",
+                   "\(alpha[(h - 2) * w + 4])")
+        }
     }
 }

@@ -41,7 +41,7 @@ import SwiftUI
 ///                                       saved Subject row actually is
 ///     matte disc | left                 a synthetic raster matte in frame
 ///                                       coordinates, for the kind-4 component
-///     select subject | person           runs Vision for real, and reports what
+///     select subject | person | sky     runs the detector for real, and reports what
 ///                                       fraction of the frame it covered
 ///     overlay on | off                  paint the coverage, as `Show mask` does
 ///     spot <x,y> [radius] [heal|clone]  place a dust spot, as a click does
@@ -319,6 +319,7 @@ enum Scenario {
             switch args.first {
             case "subject": which = .subject
             case "person":  which = .person
+            case "sky":     which = .sky
             default: throw Bad(what: "select takes subject or person")
             }
             if engine.maskComponents.isEmpty { engine.addMaskComponent(kind: 4) }

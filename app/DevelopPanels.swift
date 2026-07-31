@@ -346,6 +346,9 @@ extension Editor {
             Section("Detect") {
                 Button("Subject") { addDetected(.subject) }
                 Button("Person") { addDetected(.person) }
+                // ⚠ Sky is deliberately absent. `SkyDetector` is written and
+                // tested, and it does not work well enough on a photograph to
+                // put in front of anyone — see research/sky-detection.md.
             }
             Section("Match") {
                 Button("Brightness range") { add(kind: 5) }

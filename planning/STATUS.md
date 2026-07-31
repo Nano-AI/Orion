@@ -17,15 +17,15 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **the classical sky detector** — decision #78 settled the
-question that was blocking it. A coarse matte from a gradient-energy border
-search, feeding the raster-matte path that already exists. The interim step, a
-composed sky preset, is smaller still.
+**Next story:** **sky, attempt two — a flood fill from the top edge.** Attempt
+one is written, tested and deliberately not shipped; `research/sky-detection.md`
+opens with why. A per-column border cannot express a region, which is the cause
+rather than a symptom. The composed-mask preset remains the cheap interim.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3398
+**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3406
 checks** · **29 `repro/` scenarios, 144 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
@@ -58,6 +58,64 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30t — a sky detector, built and not shipped
+
+⚠ **Twenty-seventh arrival of the stale M3 prompt.** Not re-litigated.
+
+Shen & Wang (2013) implemented as `app/SkyDetector.swift`, cited in
+`research/sky-detection.md`, pinned by six checks in `orion-viewport-tests`, and
+**not put in the interface**, because on a photograph it does not produce a sky.
+
+### ⚠ The lesson is the number
+
+Every stage of this reported a plausible figure. The detector said **18.2%
+covered** on the daylight frame — an entirely reasonable amount of sky. Drawn
+with the overlay on, it was **vertical stripes**. Median-smoothing the border
+turned it into a few wide vertical bands running from the top edge down through
+the trees, and the coverage figure stayed just as reasonable.
+
+Nothing except looking at it would have caught that. The synthetic tests pass —
+they pin real properties and they are worth keeping — and every one of them is
+satisfied by a comb, because a comb has the right coverage and the right
+above/below answer at the column they sample.
+
+### What is actually wrong
+
+A per-column first-exceedance border **cannot express a region**. It assumes the
+sky is a function of x, one row per column, and on a frame with a tower's
+lattice or an irregular treeline the column answers are unrelated to each other.
+The median filter reduces the comb and does not touch the cause.
+
+The next attempt is a **flood fill from the top edge** over a smoothness
+predicate, which produces a region rather than a function.
+
+### Four real defects found and fixed along the way, none of which was enough
+
+- ⚠ **The energy always preferred a one-row sky.** The paper assumes a uniform
+  sky; a real one runs light at the horizon and deep at the zenith, so its
+  covariance is far from zero while a single row's is exactly zero. Before the
+  fix: 673 of 684 columns cut inside the top eighth, and *every* photograph
+  reported no sky. The coverage bounds now constrain the search rather than only
+  filtering its result.
+- ⚠ **The smoothness check was on colour covariance and rejected genuine skies.**
+  A sky with a gentle gradient has wide colour spread and no edges in it — which
+  is exactly the thing being looked for. It is mean gradient magnitude now.
+- ⚠ **The Sobel left its border rows at zero**, so the very top of every frame
+  looked perfectly smooth — and the method reads downward from the top edge,
+  which is precisely where that artefact sits.
+- ⚠ **Two mutations survived because the synthetic sky was too clean.** A
+  perfectly flat sky has zero gradient, so every candidate threshold finds the
+  same border and the energy is never exercised. A frame with grain in the sky
+  kills one of them; scoring the sky alone still survives, and that gap is
+  recorded rather than papered over.
+
+### Why it is not shipped
+
+`DECISIONS.md` #78 argued a *visibly* wrong mask is acceptable because the
+photographer sees the overlay and fixes it with the brush. That argument covers
+a mask that is roughly right. It does not cover stripes, and stretching it to
+would be the kind of reasoning this file exists to catch.
 
 ## Session 2026-07-30s — sky unblocked, and a migration that was never checked
 
