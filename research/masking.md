@@ -476,6 +476,61 @@ exactly §4's joint-upsampling case, and it is why §4 comes before §5.
 ⚠ Latency at 24 MP is not published by Apple. Run async, cache as a mask node,
 measure on target hardware.
 
+### ⚠ Settled: there is no Apple route to a sky matte, and no clean model to bundle
+
+This section long said sky "is not available this way". Checked properly, and
+the answer is firmer than that.
+
+**No first-party API can produce one from an imported RAW.** Vision offers
+people, class-agnostic subjects and saliency. Saliency is actively the wrong
+tool — sky is the *least* salient region in almost every frame, and the
+attention request returns a coarse heatmap rather than a matte.
+`AVSemanticSegmentationMatte`, and the matching ImageIO auxiliary-data
+constants, *do* include a sky matte — but they are **read accessors for a matte
+the capturing iPhone embedded at shutter time**. `AVCapturePhotoOutput` is the
+only producer and it needs a live capture session. A Sony ARW will never carry
+one. Core Image's segmentation filter wraps Vision's person request; the Photos
+framework hands back embedded auxiliary images with the same limitation.
+
+**And bundling a segmentation network is refused, on the grounds already written
+down for camera profiles.** Sky appears as a class in ADE20K, COCO-Stuff and
+Cityscapes; Cityscapes is research-only, ADE20K's terms are unclear, and weights
+inherit their training data's ambiguity even when the architecture's code is
+permissive. No sky-capable model is known here whose architecture, weights *and*
+training data all carry a clean redistribution grant — and saying that is better
+than naming one and hoping. It would also add a Python and coremltools
+conversion step for a solo maintainer of a C++ and Swift program to keep alive.
+Same reasoning as `DECISIONS.md` #44.
+
+### What to build instead
+
+⚠ **A classical detector, and it is honest about being an estimate.** Sky is
+smooth, bright, connected, touches the top edge, and is separated from the
+ground by a strong gradient — the gradient-energy border search of Shen & Wang
+(2013) and Hoiem's geometric-context work before it. Roughly 80–90% right on
+daytime landscapes.
+
+It fails on sunsets, on water and glass reflecting the sky, on white overcast
+against white buildings, on night skies, and on sky seen through foliage. That
+failure list is not a reason to refuse it, and the distinction matters: the
+purple cast was dangerous because it was **invisible** wrong output. A mask is a
+proposal the photographer inspects as an overlay and corrects with the brush.
+Visibly wrong and correctable is a different category from silently wrong.
+
+The pipeline is already built for exactly this: a coarse matte at 1024 px on the
+long edge, §4's guided filter recovering the boundary, and add/subtract brushing
+on top.
+
+**And an interim that costs nothing:** a composed preset — a linear gradient from
+the top, intersected with a luminance range and a colour range. ⚠ Note that an
+*inverted subject matte* is **not** sky: trees and buildings are also
+not-the-subject.
+
+**What it must not claim.** Night skies, reflections, sky-through-foliage
+transparency, or any semantic notion beyond "smooth bright region connected to
+the top edge". The control should say estimated, and the panel should not
+pretend otherwise.
+
 ### Model licences, if a sky model is ever added
 
 | Model | Licence | Usable |

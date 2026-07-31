@@ -17,14 +17,15 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **sky masks** — and `research/masking.md` §5 is explicit that
-Vision cannot produce one, so it is a model question (which model, under what
-licence) before it is a code one. That is the thing to settle first.
+**Next story:** **the classical sky detector** — decision #78 settled the
+question that was blocking it. A coarse matte from a gradient-energy border
+search, feeding the raster-matte path that already exists. The interim step, a
+composed sky preset, is smaller still.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3390
+**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3398
 checks** · **29 `repro/` scenarios, 144 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
@@ -57,6 +58,64 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30s — sky unblocked, and a migration that was never checked
+
+⚠ **Twenty-sixth arrival of the stale M3 prompt.** Not re-litigated.
+
+### ⚠ The layer migration was a claim, not a test
+
+Last session's layers changed `DevelopState`: five scalar keys became a list.
+The decoder was written to read the old keys into layer 1 and the claim was made
+in a commit message — and nothing checked it.
+
+That is precisely the shape this file has paid for twice: `localExposureEv`
+keeping its name through the mask-group change, and `MaskComponentState`
+encoding three range fields it never decoded for five sessions. The encoder is
+**synthesised from the stored properties**, so the moment those scalars stopped
+being properties they stopped being written — and if the decoder had stopped
+reading them too, every local grade ever made would have opened at zero on a
+photograph that still had its mask.
+
+Two cases now, and both mutations die: the legacy scalars landing in layer 1, and
+a sidecar carrying **both** forms preferring the layer list — because preferring
+the scalars there silently discards layers 2 and up, which is the exact failure
+the mask-group migration had.
+
+### ⚠ Sky: settled, and the answer is a refusal plus a plan
+
+`masking.md` §5 said sky "is not available this way". Checked properly, it is
+firmer than that.
+
+**No Apple API can produce a sky matte from an imported RAW.** Vision has people,
+subjects and saliency — and saliency is the *wrong* tool, because sky is the
+least salient region in almost every frame. `AVSemanticSegmentationMatte` and the
+ImageIO auxiliary constants do include a sky matte, but they are **read
+accessors for a matte the capturing iPhone embedded at shutter time**;
+`AVCapturePhotoOutput` is the only producer and it needs a live capture session.
+A Sony ARW will never carry one.
+
+**Bundling a segmentation network is refused**, on exactly the grounds already
+written for camera profiles (#44). Sky appears in ADE20K, COCO-Stuff and
+Cityscapes — terms unclear, unclear and research-only — and weights inherit
+their training data's ambiguity however permissive the architecture's code is.
+No model is known whose architecture, weights *and* data all carry a clean
+redistribution grant, and saying that is better than naming one and hoping.
+
+**What to build:** a classical gradient-energy sky detector — Shen & Wang (2013),
+Hoiem's geometric context before it — feeding the raster-matte path that already
+exists. 80–90% on daytime landscapes.
+
+⚠ **Its failure list is acceptable, and the reason is a distinction worth
+keeping.** It fails on sunsets, water and glass reflections, white overcast
+against white buildings, night skies, and sky through foliage. The purple cast
+was dangerous because it was **invisible** wrong output; a mask is a proposal
+inspected as an overlay and corrected with the brush. Visibly wrong and
+correctable is a different category.
+
+An interim that costs nothing: a composed preset — a gradient from the top,
+intersected with a luminance range and a colour range. ⚠ An *inverted subject
+matte* is not sky; trees and buildings are also not-the-subject.
 
 ## Session 2026-07-30r — the compose op that emptied a layer
 

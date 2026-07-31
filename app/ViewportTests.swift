@@ -707,6 +707,59 @@ enum ViewportTests {
             report(false, "a pre-group sidecar decodes at all")
         }
 
+        // ── ⚠ A pre-LAYER sidecar: the single local set becomes layer 1 ──────
+        //
+        // Every photograph edited before layers existed carries exactly one set
+        // of local adjustments, under the scalar keys `localExposureEv`,
+        // `localContrast`, `localSaturation`, `localWarmth` and `localTint`.
+        // Those keys no longer exist as stored properties, so the synthesised
+        // encoder never writes them again — and if the decoder had stopped
+        // reading them too, every local grade ever made would have opened at
+        // zero, silently, on a photograph that still had its mask.
+        //
+        // This is the same shape as the two migrations this file has already
+        // paid for: `localExposureEv` keeping its name through the group
+        // change, and `MaskComponentState` encoding three range fields it never
+        // decoded.
+        let legacyLocal = #"""
+        {"exposureEv":1.0,"maskKind":2,"localExposureEv":-1.6,"localContrast":0.4,
+         "localSaturation":-0.7,"localWarmth":0.25,"localTint":-0.15}
+        """#
+        if let s = decode(legacyLocal) {
+            report(s.layers.count == 1,
+                   "a pre-layer sidecar produces exactly one layer",
+                   "\(s.layers.count)")
+            if let l = s.layers.first {
+                near(CGFloat(l.exposureEv), -1.6, 1e-6, "carrying its local exposure")
+                near(CGFloat(l.contrast), 0.4, 1e-6, "its contrast")
+                near(CGFloat(l.saturation), -0.7, 1e-6, "its saturation")
+                near(CGFloat(l.warmth), 0.25, 1e-6, "its warmth")
+                near(CGFloat(l.tint), -0.15, 1e-6, "and its tint")
+            }
+        } else {
+            report(false, "a pre-layer sidecar decodes")
+        }
+
+        // ⚠ And a sidecar carrying **both** — which a newer build writes,
+        // because the encoder is synthesised from the stored properties and the
+        // legacy keys may still be present from a hand edit — must prefer the
+        // layers. Preferring the scalars would silently discard layers 2 and up,
+        // which is the exact failure the mask-group migration had.
+        let bothForms = #"""
+        {"localExposureEv":-1.6,
+         "layers":[{"exposureEv":0.5,"contrast":0,"saturation":0,"warmth":0,"tint":0},
+                   {"exposureEv":-2.0,"contrast":0,"saturation":0,"warmth":0,"tint":0}]}
+        """#
+        if let s = decode(bothForms) {
+            report(s.layers.count == 2,
+                   "a sidecar with both forms keeps every layer",
+                   "\(s.layers.count)")
+            near(CGFloat(s.layers.first?.exposureEv ?? 0), 0.5, 1e-6,
+                 "and takes the layer list rather than the legacy scalar")
+        } else {
+            report(false, "a sidecar with both forms decodes")
+        }
+
         // A pre-group brush, whose stroke lived beside the mask rather than in it.
         let legacyBrush = #"""
         {"maskKind":3,"brushRadius":0.07,"brushFlow":0.55,"brushHardness":0.45,
