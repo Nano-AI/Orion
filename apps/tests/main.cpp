@@ -14,6 +14,10 @@
 int main() {
     std::printf("orion-tests\n\n");
 
+    // First, because it is the one that catches a shader and a binary that
+    // disagree — a state in which every other GPU test's result is a guess.
+    testBindingCount();
+
     testWhiteBalance();
     testPlanckianLocus();
     testToneCurve();

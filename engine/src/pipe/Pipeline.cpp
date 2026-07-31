@@ -81,7 +81,27 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
     for (const auto& node : nodes_) {
         auto lib = gpu::Library::createFromFile(
             device_, shaderDir_ + "/" + node.kernel + ".metallib");
-        kernels_.push_back(gpu::Kernel::create(device_, *lib, node.kernel));
+        auto kernel = gpu::Kernel::create(device_, *lib, node.kernel);
+
+        // ⚠ **The shader and the code that feeds it must agree, and Metal will
+        // not say so if they do not.** An unbound texture slot is nil, not an
+        // error: reads give zero and writes go nowhere, so a kernel one slot
+        // short of its shader runs to completion and produces nothing. Because
+        // metallibs are loaded from disk by path, right here, a long-running
+        // process picks up shaders rebuilt underneath it — which is exactly how
+        // every mask silently covered zero for an hour while the suite stayed
+        // green. Cheap to check once per node at compile; impossible to see
+        // afterwards.
+        const std::size_t binding = node.inputs.size() + node.aux.size() + 1;
+        if (binding < kernel->textureSlotsUsed()) {
+            throw std::runtime_error(
+                "kernel '" + node.kernel + "' (node '" + node.name + "') uses " +
+                std::to_string(kernel->textureSlotsUsed()) +
+                " texture slots but the graph binds " + std::to_string(binding) +
+                " — the shader and the binary disagree; rebuild both");
+        }
+
+        kernels_.push_back(std::move(kernel));
         libraries_.push_back(std::move(lib));
 
         const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;

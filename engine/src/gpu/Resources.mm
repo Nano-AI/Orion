@@ -156,10 +156,28 @@ std::unique_ptr<Kernel> Kernel::create(Device& device, Library& library,
     if (fn == nil) throw std::runtime_error("no kernel named '" + entryPoint + "' in library");
 
     NSError* err = nil;
-    k->impl_->pso = [dev(device) newComputePipelineStateWithFunction:fn error:&err];
+    // ⚠ Reflection, not the plain overload, so `textureSlotsUsed` can be
+    // answered — see the note on that accessor for what it prevents.
+    MTLComputePipelineReflection* refl = nil;
+    k->impl_->pso = [dev(device) newComputePipelineStateWithFunction:fn
+                                                             options:MTLPipelineOptionBindingInfo
+                                                          reflection:&refl
+                                                               error:&err];
     if (k->impl_->pso == nil) {
         const char* why = err ? err.localizedDescription.UTF8String : "unknown";
         throw std::runtime_error("pipeline for '" + entryPoint + "' failed: " + why);
+    }
+
+    // One past the highest texture index the compiled kernel refers to.
+    //
+    // ⚠ Deliberately the highest *used* index rather than the declared argument
+    // count. An argument the shader never reads can be eliminated, and would
+    // otherwise make this refuse a binding that is in fact complete.
+    for (id<MTLBinding> b in refl.bindings) {
+        if (b.type == MTLBindingTypeTexture) {
+            k->textureSlots_ = std::max(k->textureSlots_,
+                                        static_cast<std::uint32_t>(b.index) + 1u);
+        }
     }
 
     k->execWidth_  = static_cast<std::uint32_t>(k->impl_->pso.threadExecutionWidth);

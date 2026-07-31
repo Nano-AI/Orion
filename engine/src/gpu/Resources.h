@@ -96,6 +96,23 @@ public:
     [[nodiscard]] std::uint32_t threadExecutionWidth() const noexcept { return execWidth_; }
     [[nodiscard]] std::uint32_t maxThreadsPerGroup()  const noexcept { return maxThreads_; }
 
+    /// How many texture slots this kernel needs bound: one past the highest
+    /// texture index it actually refers to.
+    ///
+    /// ⚠ **This exists because binding too few textures is silent.** Metal
+    /// leaves an unbound slot nil; reads return zero and writes are discarded,
+    /// with no error unless the validation layer is on. A caller that binds
+    /// five textures to a kernel whose output sits in slot six therefore
+    /// renders nothing at all, successfully.
+    ///
+    /// That is not hypothetical. Adding one texture to `mask_component.slang`
+    /// moved its output from slot 4 to slot 5; a process still running the
+    /// previous binary reloaded the new metallib from disk — `Pipeline::compile`
+    /// reads them by path — and every mask silently covered zero, for an hour,
+    /// with the whole test suite green because the tests ran the matching
+    /// binary. `Pipeline::compile` compares this against what it will bind.
+    [[nodiscard]] std::uint32_t textureSlotsUsed() const noexcept { return textureSlots_; }
+
 private:
     Kernel() = default;
     struct Impl;
@@ -103,6 +120,7 @@ private:
     std::string   name_;
     std::uint32_t execWidth_  = 32;
     std::uint32_t maxThreads_ = 1024;
+    std::uint32_t textureSlots_ = 0;
 };
 
 /// One batch of work. Encode every dispatch, then commit once — a single

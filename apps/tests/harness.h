@@ -63,6 +63,7 @@ void section(const char* name);
 // Every test, in one list. ⚠ A test defined and not declared here is a test that
 // does not link; a test declared and not called is one that never runs, which is
 // why `main.cpp` is now short enough to read its call list at a glance.
+void testBindingCount();
 void testPlanckianLocus();
 void testWhiteBalance();
 void testToneCurve();
