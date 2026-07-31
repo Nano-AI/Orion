@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**the brush stops being quadratic** — 2148 ms → 65.6 ms on a long stroke)
+**Last updated:** 2026-07-31 (**the sky check that could not fail** — and what it was hiding)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -44,6 +44,102 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-31c — the sky check that could not fail
+
+⚠ **Thirty-second arrival of the stale M3 prompt.** Verified and set aside.
+
+Chasing the loose end session `a` flagged and did not follow: the screenshot
+harness produced a sky matte on a night frame, where this file said both night
+frames refuse.
+
+### ⚠ First: last session's parting claim was wrong, and it was mine
+
+Session `b` closed by naming the 12 ms fixed render cost as "75% of the frame
+budget before any brush work happens… the next real lever". Measured, with
+`interact on`:
+
+| | Settled | Interactive |
+|---|---|---|
+| Exposure drag | 9.5 ms | **1.7 ms** (594 fps) |
+| Brush, 2400 dabs | 64.7 ms | **5.1 ms** (197 fps) |
+
+Degrade-then-refine already covers the drag; the 9.5 ms is paid **once when the
+hand stops**, not per tick. There was no lever there. (Session `b`'s own work
+still stands and reads better in this light: it took interactive painting from
+about 134 ms a tick — 7 fps, unusable — to 5.1 ms.)
+
+Nothing is now over budget on the interactive path, which is why this session is
+not a performance story.
+
+### ⚠ The check asserted nothing, and had asserted nothing since it was written
+
+`repro/sky-mask.txt`'s refusal half read:
+
+```
+open samples/_PIC8148.ARW
+set exposure 2.6
+measure ... nightBefore
+set localExposure -2.0
+measure ... nightAfter
+expect nightAfter == nightBefore
+```
+
+It never calls `select`. With no mask row on the photograph a local exposure
+does nothing, so the two measurements are equal **by construction** — the check
+passed whether the detector refused, accepted, or did not exist. Its own comment
+explained the compromise: "`select` throws when the detector declines, so a
+scenario cannot assert the refusal without failing."
+
+That is the second time this project has shipped a green check that could not go
+red, and both times the tell was the same: a check written *around* an
+inconvenience rather than the inconvenience being fixed. The fix was one verb.
+`refuses subject|person|sky` asserts a decline as the result it is.
+
+### ⚠ What it was hiding: the answer depends on the edit
+
+Same photograph, same detector, different exposure:
+
+| Exposure | `_PIC8148` |
+|---|---|
+| 0 EV | **accepts**, 4.6% — and covers the **treetops**, sky unselected |
+| +1 EV | accepts, same inversion |
+| +2.6 EV | refuses |
+
+So "both night frames refuse" was true only at the exposure the scenario
+happened to set. At 0 EV it does not refuse — it **inverts**. Screenshotted and
+looked at: the overlay sits on the treetops along the top edge and on the
+top-right tree, and the entire starry sky is clear.
+
+The cause is not a wrong line. The search is frame-relative by construction —
+thresholds are percentiles of *this render's* gradient, the guard compares
+against *this render's* mean — and on a grainy high-ISO sky over flat black
+silhouettes the calmest region joined to the top edge genuinely **is** the
+foliage. Lifting the shadows lifts the grain, which is what pushes it past the
+guard at 2.6 and not at 0.
+
+⚠ **Compounded by the gap table**: a matte is never regenerated when the edit
+changes, so whichever answer the photographer was looking at when they pressed
+the button is frozen into the edit.
+
+### Not fixed, and why
+
+The detector is left alone. Its failure list already covers this frame, #78
+already argues a visibly wrong mask is acceptable because it is inspected as an
+overlay and corrected with the brush, and the overlay does show it plainly.
+Tightening the guard to make the old sentence true would mean inventing a
+constant to fit a claim — which is the shape of the purple cast, not its cure.
+
+What was wrong was the **test and the record**, and those are fixed: the
+refusal is asserted for real at 2.6, and the inversion at 0 EV is pinned as
+shipped behaviour — the treetops move under a local exposure and the open sky
+comes back bit-identical.
+
+**Two mutations dead:** a detector that never refuses (the `refuses` check goes
+red) and one that always refuses (the daylight frame's `select` throws). ⚠ The
+old check survives **both**, by construction — it never asked.
+
+`research/sky-detection.md` and this file's session `u` entry both corrected.
 
 ## Session 2026-07-31b — the brush stops being quadratic
 
@@ -299,6 +395,12 @@ Daylight frame: **71% covered**, and with the overlay on the tint covers the sky
 goes round the tower and stops at the treeline. Both night frames **refuse** —
 the ground is calmer than the sky there, which is the first entry in the
 documented failure list.
+
+> ⚠ **Corrected 2026-07-31, session `c`.** "Both night frames refuse" was
+> measured only at the exposure the scenario happened to set, and the check that
+> was supposed to prove it never called the detector at all. At 0 EV `_PIC8148`
+> does not refuse: it accepts, and it selects the **treetops** rather than the
+> sky. See that session's entry.
 
 The scenario measures the *picture*, not the coverage figure, and the
 load-bearing half is that the ground below the treeline comes back

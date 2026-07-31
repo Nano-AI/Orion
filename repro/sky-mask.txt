@@ -28,18 +28,44 @@ expect skyAfter != skyBefore
 # fail this one.
 expect groundAfter == groundBefore
 
-# ── ⚠ And it refuses rather than guessing ────────────────────────────────
+# ── ⚠ And it refuses rather than guessing — at this exposure ─────────────
 #
-# The night frames are in the documented failure list: the ground is often
-# calmer than the sky, so no region joined to the top edge is calm enough. The
-# detector says so instead of returning something.
+# The night frames are in the documented failure list: the sky is grainy with
+# high-ISO noise while the tree silhouettes are flat black, so the calmest
+# region joined to the top edge is the *foliage*.
 #
-# `select` throws when the detector declines, so a scenario cannot assert the
-# refusal without failing. What it can do is show the mask never arrived: the
-# picture is unchanged after asking.
+# ⚠ **This check used to prove nothing at all.** It opened the frame, set a
+# local exposure and asserted the picture had not moved — without ever calling
+# `select`. With no mask row on the photograph a local exposure does nothing, so
+# it passed whether the detector refused, accepted, or did not exist. The claim
+# in STATUS.md that both night frames refuse rested on it. `refuses` exists so
+# a refusal can be asserted as the result it is.
 open samples/_PIC8148.ARW
 set exposure 2.6
-measure 0.40,0.20,0.20,0.15 nightBefore
-set localExposure -2.0
-measure 0.40,0.20,0.20,0.15 nightAfter
-expect nightAfter == nightBefore
+refuses sky
+
+# ── ⚠ And the answer depends on the edit, which nothing recorded ─────────
+#
+# The same photograph, the same detector, a different exposure — and a different
+# answer. The search is frame-relative by construction: thresholds come from this
+# render's own gradient percentiles and the guard compares the region against
+# this render's own mean. Lifting the shadows lifts the sky's grain with them,
+# which is what pushes the region past the guard at 2.6 and not at 0.
+#
+# ⚠ At EV 0 it does **not** refuse. It returns the inverse of a sky: about 4.6%
+# of the frame, and what it covers is the treetops along the top edge. Pinned as
+# the behaviour that ships rather than left as a surprise, because the gap table
+# also records that a matte is never regenerated — so whichever answer the
+# photographer happened to be looking at when they pressed the button is the one
+# frozen into the edit.
+open samples/_PIC8148.ARW
+measure 0.05,0.02,0.10,0.06 treetopsBefore
+measure 0.40,0.45,0.15,0.15 openSkyBefore
+select sky
+set localExposure -2.5
+
+print at EV 0 the selection lands on the treetops and not on the sky
+measure 0.05,0.02,0.10,0.06 treetopsAfter
+measure 0.40,0.45,0.15,0.15 openSkyAfter
+expect treetopsAfter != treetopsBefore
+expect openSkyAfter == openSkyBefore

@@ -85,7 +85,7 @@ license truncating anything whose output nobody sees.
 | Sunsets | the sky is not internally uniform; the energy prefers a cut *inside* it |
 | Water, glass, car paint reflecting sky | the reflection has the sky's statistics and is smooth |
 | White overcast against a white building | no gradient at the boundary to find |
-| Night skies | the ground is often darker and smoother than the sky |
+| Night skies | the sky is grainy with high-ISO noise while silhouettes are flat black, so the calmest region joined to the top edge is the **foliage** — see below, it inverts rather than refusing |
 | Sky through foliage | the gaps are smaller than the fill's connectivity |
 | Smooth ground touching the sky | the fill can leak through a calm wall or road |
 
@@ -94,6 +94,38 @@ acceptable at all: the purple cast was dangerous because it was **invisible**
 wrong output, whereas a mask is a proposal the photographer sees as an overlay
 and fixes with the brush. Visibly wrong and correctable is a different category
 from silently wrong. `DECISIONS.md` #78.
+
+### ⚠ The answer depends on the edit, not only on the photograph
+
+Measured 2026-07-31 on `_PIC8148`, a starry sky over a treeline:
+
+| Exposure | Answer |
+|---|---|
+| 0 EV | **accepts**, 4.6% covered — and what it covers is the *treetops along the top edge*, with the sky itself unselected |
+| +1 EV | accepts, same inversion |
+| +2.6 EV | **refuses** — "no calmer than the picture as a whole" |
+
+Nothing here is a bug in the sense of a wrong line. The search is frame-relative
+by construction — the thresholds are percentiles of *this render's* gradient and
+the guard compares against *this render's* mean — and the render is the graded
+one, because the detector reads the picture after the display transform on
+purpose, since that is the picture the method's assumptions are about. Lifting
+the shadows lifts the sky's high-ISO grain with them, and past some lift the
+region stops looking calm.
+
+⚠ **Two consequences worth saying out loud.** The night-frame entry above is not
+"it refuses", it is "it inverts": on a grainy sky over flat black silhouettes,
+the calmest region joined to the top edge is the *foliage*. And because a matte
+is never regenerated when the edit changes (`STATUS.md`'s gap table), whichever
+answer the photographer was looking at when they pressed the button is the one
+frozen into the edit.
+
+⚠ **This went unrecorded because the check that was supposed to catch it could
+not fail.** `repro/sky-mask.txt` asserted the night frame was refused by opening
+it, setting a local exposure and measuring that the picture had not moved — with
+no mask row on the photograph, a local exposure does nothing, so it passed
+whether the detector refused, accepted, or did not exist. The scenario now calls
+`refuses`, and pins the inversion at 0 EV as the behaviour that ships.
 
 ## Orion's own numbers
 

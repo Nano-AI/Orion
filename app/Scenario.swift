@@ -51,6 +51,11 @@ import SwiftUI
 ///                                       sweep orphans
 ///     select subject | person | sky     runs the detector for real, and reports what
 ///                                       fraction of the frame it covered
+///     refuses subject | person | sky    asserts the detector declines this
+///                                       photograph. A refusal is a result and
+///                                       gets asserted like one — without this
+///                                       verb the only way to "check" one was to
+///                                       not ask
 ///     overlay on | off                  paint the coverage, as `Show mask` does
 ///     spot <x,y> [radius] [heal|clone]  place a dust spot, as a click does
 ///     maskadd <kind>                    add a *row* — `mask <kind>` changes
@@ -395,6 +400,41 @@ enum Scenario {
             engine.maskKind = 4
             try persistMatte(m.alpha, width: m.width, height: m.height,
                              engine: engine, source: which.label)
+
+        case "refuses":
+            // Asserts a detector **declines** this photograph.
+            //
+            // ⚠ This verb exists because its absence made a check that could not
+            // fail. `repro/sky-mask.txt` wanted to pin that the night frames are
+            // refused, `select` throws when the detector declines, and a throw
+            // fails the scenario — so the file settled for opening the frame,
+            // setting a local exposure and asserting the picture had not moved.
+            // With no mask row on the photograph a local exposure does nothing,
+            // so that check passed whether the detector refused, accepted, or
+            // did not exist. It was green for a year of sessions and proved
+            // nothing.
+            //
+            // A refusal is a *result*, so it gets to be asserted like one.
+            let refusedKind: SubjectMatte.Kind
+            switch args.first {
+            case "subject": refusedKind = .subject
+            case "person":  refusedKind = .person
+            case "sky":     refusedKind = .sky
+            default: throw Bad(what: "refuses takes subject, person or sky")
+            }
+            checks += 1
+            do {
+                let m = try SubjectMatte.generateBlocking(engine: engine, kind: refusedKind)
+                var covered = 0
+                for v in m.alpha where v > 0.5 { covered += 1 }
+                failures += 1
+                say(String(format: "  FAIL  %@ was expected to refuse, and returned "
+                                   + "%.1f%% coverage\n",
+                           "\(refusedKind)" as NSString,
+                           100.0 * Double(covered) / Double(max(m.alpha.count, 1))))
+            } catch {
+                say("  ok    \(refusedKind) refuses — \(error.localizedDescription)\n")
+            }
 
         case "spot":
             // Places a spot at a point on the displayed picture, exactly as a

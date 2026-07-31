@@ -30,6 +30,7 @@ miss the view-model layer, which is where these failures are.
 | `matte-does-not-follow-the-photo.txt` | Passes — fixed: a reused graph kept the previous photo's matte |
 | `analysis-render-has-no-overlay.txt` | Passes — fixed: Vision was handed the red coverage overlay |
 | `matte-survives-a-reopen.txt` | Passes — fixed: a raster matte was written nowhere, so a Subject, Person or Sky row reopened present and empty |
+| `sky-mask.txt` | Passes — ⚠ its refusal half asserted nothing until 2026-07-31: it never called `select`, so it was green whatever the detector did |
 
 ## The surfaces a scenario can measure
 
@@ -50,6 +51,15 @@ classifies with `CanvasLayout.maskAlpha`, the overlay's own transcription of the
 mask kernel. Both are deliberately the *actual* code the interface uses: a
 stand-in would be a second implementation with its own bugs and none of the
 first's.
+
+⚠️ **A check written *around* an inconvenience usually asserts nothing.** The sky
+scenario wanted to pin that a night frame is refused; `select` throws on a
+refusal and a throw fails the run, so it settled for asserting the picture was
+unchanged after "asking" — without asking. With no mask row a local exposure
+does nothing, so it was green by construction, and the claim in `STATUS.md` that
+rested on it was false. The verb it needed took nine lines. When a check has to
+be phrased as the absence of an effect, ask what makes the direct assertion
+awkward and fix *that*.
 
 ⚠️ **A fixture with no mid-values cannot see a mid-value bug.** Every matte
 fixture here was binary — a disc, a half-plane — and a binary matte survives a
