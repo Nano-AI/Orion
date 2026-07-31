@@ -292,9 +292,55 @@ enum SkyDetector {
                  + c[2] * (c[3] * c[7] - c[4] * c[6])
         }
 
+        /// The largest eigenvalue of the covariance — exactly, in closed form.
+        ///
+        /// > Oliver K. Smith, **"Eigenvalues of a symmetric 3 × 3 matrix"**,
+        /// > *Communications of the ACM* 4(4), p. 168, April 1961.
+        /// > [doi:10.1145/355578.366316](https://doi.org/10.1145/355578.366316)
+        ///
+        /// ⚠ **This used to be the largest diagonal entry, and that was wrong in
+        /// both of its justifications.** The diagonal is a lower bound, equal to
+        /// the largest eigenvalue only when the covariance is already diagonal,
+        /// and the comment claimed it "orders candidates the same way in every
+        /// case measured" — true only because every case measured had the same
+        /// covariance *shape*. Given populations that are wide in different
+        /// channels, the proxy reorders a pair against the exact value; measured
+        /// 2026-07-31, 1 pair in 21.
+        ///
+        /// The second justification was that an exact solve is "real work". It
+        /// is not: this runs once per candidate threshold per region, so 48
+        /// times in a whole detection, against a Sobel over every pixel. The
+        /// cost it was avoiding was never on the table.
+        ///
+        /// Smith's method is a closed form — no iteration, no convergence
+        /// criterion, and therefore no way for it to be slow or to not
+        /// terminate.
         func largestVariance() -> Double {
             let c = covariance()
-            return max(c[0], max(c[4], c[8]))
+            let p1 = c[1] * c[1] + c[2] * c[2] + c[5] * c[5]
+            // Already diagonal: the eigenvalues are the diagonal entries.
+            if p1 <= 0 { return max(c[0], max(c[4], c[8])) }
+
+            let q = (c[0] + c[4] + c[8]) / 3
+            let d0 = c[0] - q, d4 = c[4] - q, d8 = c[8] - q
+            let p2 = d0 * d0 + d4 * d4 + d8 * d8 + 2 * p1
+            let p = (p2 / 6).squareRoot()
+            guard p > 0 else { return q }
+
+            // det((A - qI) / p) / 2
+            let b = [d0 / p, c[1] / p, c[2] / p,
+                     c[3] / p, d4 / p, c[5] / p,
+                     c[6] / p, c[7] / p, d8 / p]
+            let det = b[0] * (b[4] * b[8] - b[5] * b[7])
+                    - b[1] * (b[3] * b[8] - b[5] * b[6])
+                    + b[2] * (b[3] * b[7] - b[4] * b[6])
+            // ⚠ Clamped before `acos`. Rounding can push this a hair outside
+            // [-1, 1] on a near-degenerate covariance, and `acos` of that is
+            // NaN — which would propagate into the energy and make the search
+            // pick whichever candidate happened to compare false against a NaN.
+            let r = min(max(det / 2, -1), 1)
+            let phi = Foundation.acos(r) / 3
+            return q + 2 * p * Foundation.cos(phi)
         }
     }
 }

@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**the sky check that could not fail** — and what it was hiding)
+**Last updated:** 2026-07-31 (**the two mutations the register admitted survived** — both dead, one of them found a wrong line)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -44,6 +44,63 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-31d — the two mutations the register admitted survived
+
+⚠ **Thirty-third arrival of the stale M3 prompt.** Verified and set aside.
+
+`UNSOURCED.md` §23 named two claims as untested and one mutation as known to
+survive. Both closed. One of them turned out to be hiding a wrong line.
+
+### ✅ The four-connected fill, tested at last
+
+§23 has said since the detector shipped: "the synthetic frames have no one-pixel
+diagonal gap, and the mutation that adds diagonal neighbours survives."
+
+The fixture is a wall of hard gradient between a calm sky and calm ground,
+breached by two calm pixels touching **only at their corner**. Four-connected,
+the fill reaches the first and stops — its four neighbours are wall, wall, sky,
+wall. Eight-connected it steps diagonally into the second and floods everything:
+the mutation now fills **384 of 384** ground pixels and fails two checks.
+
+### ⚠ The eigenvalue proxy: the test found the code wrong, not the reverse
+
+The energy took each covariance's largest **diagonal entry** as its largest
+eigenvalue, justified in a comment as ordering candidates "the same way in every
+case measured".
+
+That was true only because every case measured had the same covariance
+**shape**. My first fixture reproduced the same mistake — it varied one overall
+spread, so every channel's variance scaled together, and then the *smallest*
+diagonal entry orders the candidates identically too. The `min` mutation
+survived it. Rebuilt with populations wide in different channels, the proxy
+**reorders a pair in 21** against the true eigenvalue.
+
+⚠ **And the stated reason for the approximation was false.** "A 3×3 symmetric
+solve per threshold per frame is real work" — it runs 48 times in a whole
+detection, against a Sobel over every pixel. Nobody had checked; the number was
+plausible and wrong, which is the third time in four sessions.
+
+It is Smith's closed form now (CACM 1961) — published, exact, non-iterative — so
+this stops being a departure from the published method at all. Pinned against a
+**Jacobi rotation**, deliberately a different algorithm and iterative where the
+product's is closed form, agreeing to under 1e-9 across seven shapes.
+
+⚠ **It changed no output.** Coverage on all three sample frames is identical to
+the digit — 67.5%, 4.6%, 14.6%. The term really does only break ties and on this
+corpus the ties do not arise. The value is that an unsourced approximation and a
+false justification are gone, not that any photograph looks different, and
+inflating it into more than that would be the thing this file exists to catch.
+
+### The fixture guards itself
+
+Both new tests carry a check on their own sharpness: that the covariances are
+genuinely off-diagonal (or the agreement would be trivially true of the old code
+too), and that the old diagonal shortcut still visibly reorders them (or the
+fixture has gone bland). ⚠ Written after the first draft passed for the wrong
+reason.
+
+**+7 checks**, 3430 → 3437.
 
 ## Session 2026-07-31c — the sky check that could not fail
 

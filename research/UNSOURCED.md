@@ -713,11 +713,44 @@ the reason its header gives. The published method fixes none of the following.
   precisely the thing being looked for.
 - **Four-connected rather than eight.** A diagonal step lets the region squeeze
   through a one-pixel gap in a branch, which is how a fill escapes into the
-  ground and takes the whole frame. ⚠ Not covered by a test: the synthetic
-  frames have no one-pixel diagonal gap, and the mutation that adds diagonal
-  neighbours survives. Recorded rather than claimed.
+  ground and takes the whole frame. ✅ **Covered 2026-07-31.**
+  `testSkyFillCannotSqueezeThroughADiagonal` builds a wall breached by two calm
+  pixels touching only at their corner; the eight-connected mutation now fills
+  **384 of 384** ground pixels and fails two checks. The gap stood from the day
+  the detector shipped.
 
-⚠ **And an approximation inside the energy:** the largest eigenvalue of each
-covariance is taken as its largest *diagonal* entry. A 3×3 symmetric solve per
-threshold per frame is real work for a term that only breaks ties, and the
-diagonal is a lower bound. Untested against the exact form.
+### ~~An approximation inside the energy~~ — REMOVED 2026-07-31
+
+The entry read:
+
+> ⚠ **And an approximation inside the energy:** the largest eigenvalue of each
+> covariance is taken as its largest *diagonal* entry. A 3×3 symmetric solve per
+> threshold per frame is real work for a term that only breaks ties, and the
+> diagonal is a lower bound. Untested against the exact form.
+
+⚠ **Both halves of that were wrong, and writing the test is what showed it.**
+
+*"Orders candidates the same way in every case measured"* — the claim the code's
+own comment made — held only because every case measured had the same covariance
+**shape**. Given populations wide in different channels, the diagonal entry
+reorders a pair in 21 against the true eigenvalue.
+
+*"Real work"* — it is not. The solve runs once per candidate threshold per
+region: **48 times in a whole detection**, against a Sobel over every pixel. The
+cost it was avoiding was never on the table, and nobody had checked.
+
+It is now Smith's closed form, which is published, exact and non-iterative:
+
+> Oliver K. Smith, **"Eigenvalues of a symmetric 3 × 3 matrix"**,
+> *Communications of the ACM* 4(4), p. 168, April 1961.
+> [doi:10.1145/355578.366316](https://doi.org/10.1145/355578.366316)
+
+So this stops being a departure from the published method at all. Pinned against
+a Jacobi rotation — a different algorithm, iterative where this one is closed
+form — agreeing to under 1e-9 on seven covariance shapes.
+
+⚠ **And it changed no output.** Coverage on all three sample frames is identical
+to the digit: 67.5%, 4.6%, 14.6%. The term really does only break ties, and on
+this corpus the ties do not arise. Said plainly rather than dressed up — the
+value here is that an unsourced approximation and a false justification are gone,
+not that any photograph looks different.
