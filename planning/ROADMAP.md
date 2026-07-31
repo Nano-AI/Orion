@@ -230,6 +230,55 @@ a different prefix can see it.
 That is a session with its own tests, not an addition to one that has already
 landed.
 
+## Film grain — costed, not started
+
+`research/film-grain.md` is written and settles the method: a precomputed
+correlated grain plate (AV1's architecture, Norkin & Birkbeck 2018) carrying
+Newson, Delon & Galerne's (CGF 2017) `√(Y(1−Y))` variance law, applied by one
+pointwise node after the display transform.
+
+### ⚠ The constraint that shapes it, found while costing
+
+**`develop:display` outputs `RGBA8Unorm`.** Grain has to be added to unquantised
+values, so a grain node reading that output would be adding noise to values that
+are already 8-bit — banding, and the dither ordering becomes meaningless.
+
+So the quantisation boundary has to move: `develop:display` becomes
+`RGBA16Float` always, and the **grain node becomes the one that quantises**,
+carrying the Bayer dither block that currently ends `develop_display.slang`.
+`setWideOutput` then toggles the grain and geometry nodes rather than display
+and geometry.
+
+That is not free: one more full-resolution `RGBA16Float` intermediate is
+**+194 MB** (24.2 Mpx × 8 B), about 3% on 6878 MiB, plus ~12 MB on the preview
+graph. 148 nodes → 149.
+
+⚠ At Amount 0 the grain node must be a **bit-exact copy plus the dither it
+inherited**, or every existing `identical` baseline silently rebases.
+
+### The pieces, in order
+
+| # | Piece | Cost |
+|---|---|---|
+| 1 | `grain.slang` — plate fetch, hand-rolled trilinear, `σ(Y)` weight, dither | ~90 lines |
+| 2 | Plate generation: PCG32 + Box–Muller, CPU box-filtered mip chain, 2048² R32F | ~60 lines, one aux texture |
+| 3 | `develop:display` → `RGBA16Float`; new node; `setWideOutput` retargeted | +194 MB, +1 node |
+| 4 | `GrainParams` + offset asserts; `gridStep` uniform so both graphs sample one field | small |
+| 5 | `amount` / `size` through `Adjustments` → `orion.h` → `CApi.cpp` → Swift | ~10 files |
+| 6 | Catalogue entry, two sliders, sidecar fields | ~4 files |
+| 7 | `testGrainGpu`, bench probe on **mean absolute difference**, wiring scenario | — |
+
+### ⚠ What must not be done along the way
+
+- **A hardware sampler.** Filtering precision is unspecified across GPU
+  families, so export and preview could differ by device. Hand-rolled trilinear.
+- **`std::normal_distribution` or `generateMipmaps`.** Both are
+  implementation-defined; the plate would differ between toolchains.
+- **A hash of the pixel coordinate.** The preview graph is a different grid, so
+  preview and export become different *realisations* rather than different
+  resolutions of one — and the preview reads an order of magnitude grainier.
+- **Per-channel grain.** That is sensor noise, not film.
+
 ## M5 — Advanced
 
 - ML denoise (NAFNet-class via Core ML) as a **background pass**, not a live slider
