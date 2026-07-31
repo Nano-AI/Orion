@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**the grain plate, built and pinned** — piece 2 of the film-grain decomposition)
+**Last updated:** 2026-07-31 (**a shader and a binary that disagreed, and the assertion that now catches it**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -23,9 +23,11 @@ four now also has something that fails when its *wiring* breaks — see sessions
 **Next story:** open. `research/masking.md` is **finished** — every kind it
 plans is built, sky included. The named candidates left are the fill leaking
 through smooth ground (a colour predicate alongside the gradient one), and
-`ROADMAP.md`'s per-layer decomposition beyond what stage 2 shipped. The largest
-standing violation of a stated hard constraint is `apps/tests/main.cpp` at
-**7,656 lines** against `CLAUDE.md`'s thousand — see the gap table.
+`ROADMAP.md`'s per-layer decomposition beyond what stage 2 shipped. Film grain
+is mid-decomposition: the plate is built and pinned, `engine/shaders/grain.slang`
+is written but **uncommitted and not in `engine/shaders/CMakeLists.txt`**, and
+pieces 1 and 3–7 are unstarted. The largest standing violation of a stated hard
+constraint is now `DevelopPipeline.cpp` at **2,192 lines** — see the gap table.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
