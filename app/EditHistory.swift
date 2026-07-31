@@ -148,6 +148,21 @@ struct MaskComponentState: Equatable, Codable {
     /// paints, which is exactly what those older sidecars mean.
     var brushErase: [Float] = []
 
+    /// Raster matte (kind 4): the id of the sibling PNG holding it, and which
+    /// producer made it. See `MatteStore`.
+    ///
+    /// ⚠ **The raster itself is deliberately not here.** A matte is ~700k alpha
+    /// values; JSON-encoding it into the sidecar attribute would be about seven
+    /// megabytes of text rewritten every time autosave settles, 900 ms after any
+    /// slider moves. What lives in the state is the reference.
+    ///
+    /// `matteSource` is the label the panel shows ("Subject", "Sky"). It is
+    /// stored rather than derived because it cannot be recovered from the
+    /// raster, and a row that reopens saying only "a selection" is a row nobody
+    /// can tell apart from the one below it.
+    var matteId: String?
+    var matteSource: String?
+
     /// Decoding takes what the sidecar has and leaves the rest at its default,
     /// for the same reason `DevelopState` does: the synthesized decoder throws
     /// on a missing key, so adding one field would discard every component in
@@ -174,6 +189,7 @@ struct MaskComponentState: Equatable, Codable {
         case rangeLo, rangeHi, rangeSoft
         case colourR, colourG, colourB, colourTol, colourSoft
         case brushRadius, brushFlow, brushHardness, brushStroke, brushErase
+        case matteId, matteSource
     }
 
     init() {}
@@ -210,6 +226,8 @@ struct MaskComponentState: Equatable, Codable {
         brushHardness = float(.brushHardness) ?? brushHardness
         brushStroke = (try? c.decode([Float].self, forKey: .brushStroke)) ?? brushStroke
         brushErase = (try? c.decode([Float].self, forKey: .brushErase)) ?? brushErase
+        matteId = (try? c.decodeIfPresent(String.self, forKey: .matteId)).flatMap { $0 }
+        matteSource = (try? c.decodeIfPresent(String.self, forKey: .matteSource)).flatMap { $0 }
     }
 }
 

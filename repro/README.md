@@ -29,6 +29,7 @@ miss the view-model layer, which is where these failures are.
 | `preview-carries-the-mask.txt` | Passes — fixed: strokes, mattes and LUTs never reached the preview graph |
 | `matte-does-not-follow-the-photo.txt` | Passes — fixed: a reused graph kept the previous photo's matte |
 | `analysis-render-has-no-overlay.txt` | Passes — fixed: Vision was handed the red coverage overlay |
+| `matte-survives-a-reopen.txt` | Passes — fixed: a raster matte was written nowhere, so a Subject, Person or Sky row reopened present and empty |
 
 ## The surfaces a scenario can measure
 
@@ -49,6 +50,14 @@ classifies with `CanvasLayout.maskAlpha`, the overlay's own transcription of the
 mask kernel. Both are deliberately the *actual* code the interface uses: a
 stand-in would be a second implementation with its own bugs and none of the
 first's.
+
+⚠️ **A fixture with no mid-values cannot see a mid-value bug.** Every matte
+fixture here was binary — a disc, a half-plane — and a binary matte survives a
+wrong colour space, a wrong bit depth and a wrong byte order, because 0 and 1
+land on 0 and 1 however the curve between them is mangled. The `ramp` shape
+exists for that reason, and the persistence bug it guards against (grey being
+gamma-managed on the way to disk, so 0.5 comes back 0.735) is invisible to every
+other fixture in this folder.
 
 ⚠️ **The runner has to read what the interface reads, not what is convenient.**
 `pick` derived its hue band from the *display* colour while `ImageCanvas` derives

@@ -322,16 +322,15 @@ struct Editor: View {
     /// Set while a segmentation model is running, so the two buttons can say so
     /// and cannot be pressed twice. research/masking.md §5.
     @State var matteRunning = false
-    /// Which producer made the selected component's matte, for the label. Not
-    /// in `DevelopState`: the matte itself is not in the sidecar either, so
-    /// claiming a provenance that will not survive a reopen would be a lie.
-    @State var matteSource: String?
     @State var targeted = TargetedAdjust()
     @State var message: String?
     @State private var exportSettings = ExportSettings()
     @State private var showingExport = false
     @State var library = Library()
-    @State private var current: URL?
+    /// Not `private`: `findMatte` in `DevelopPanels.swift` needs it, because a
+    /// matte is saved beside the photograph and so cannot be written without
+    /// knowing which photograph is open.
+    @State var current: URL?
     @State private var keyMonitor: Any?
 
     /// Edits reach the sidecar on their own — see `Autosave`. Held here rather
@@ -1219,6 +1218,15 @@ struct Editor: View {
                 viewport.reset()
                 if let saved = Sidecar.read(for: url)?.develop {
                     engine.restore(encoded: saved)
+                    // ⚠ Both of these are inside the successful-parse branch,
+                    // and the sweep especially. A sidecar that failed to parse
+                    // yields no components, and sweeping against that would
+                    // read as "nothing is referenced" and delete every matte
+                    // the photograph has — turning a recoverable parse failure
+                    // into permanent loss of work.
+                    engine.restoreMattes(photo: url)
+                    MatteStore.sweep(photo: url,
+                                     keeping: MatteStore.referenced(engine.maskComponents))
                 }
                 // Arm only once the photo is settled, with what its sidecar
                 // already holds — so opening a file does not write straight

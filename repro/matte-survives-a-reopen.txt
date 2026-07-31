@@ -1,0 +1,67 @@
+# A raster matte is saved with the photograph — `app/MatteStore.swift`.
+#
+# The gap this closes was the oldest carried-forward entry in STATUS.md: every
+# other mask kind is a handful of numbers and rides in the sidecar, and kind 4
+# is a raster that was never written anywhere. A Subject, Person or Sky row came
+# back present and empty, and the only route to it again was to re-run a model.
+#
+# ⚠ **The ramp is the load-bearing choice in this file.** Every other matte
+# fixture here is binary — a disc, a half-plane — and a binary matte survives a
+# wrong colour space, a wrong bit depth and a wrong byte order, because 0 and 1
+# land on 0 and 1 however the curve between them is mangled. A feathered
+# selection is made of the values in between, and only those can tell. The
+# gradient is measured in three vertical bands whose coverage differs by design,
+# so the check is on the *shape* of the matte and not merely on its presence.
+#
+# ⚠ And it goes through `reopen`, which re-runs the whole loading path — decode,
+# read the sidecar, restore the state, upload the saved mattes — rather than
+# calling restore alone. A matte is not in `DevelopState`, so a reopen that only
+# restored the state could not tell a saved matte from one never written.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+# ⚠ The unmasked baseline, taken first and used at the very end. Without it
+# there is no way to say the reopened matte is *doing* anything: the three bands
+# below differ from each other on the bare photograph too, so "the bands still
+# differ" passes just as happily on a matte that came back empty. Measured
+# before any local exposure exists, which is what makes it a baseline.
+measure 0.12,0.45,0.08,0.08 leftBare
+measure 0.46,0.45,0.08,0.08 midBare
+measure 0.80,0.45,0.08,0.08 rightBare
+
+print an x-ramp matte grades three bands by increasing amounts
+matte ramp
+set localExposure 2.5
+measure 0.12,0.45,0.08,0.08 leftBefore
+measure 0.46,0.45,0.08,0.08 midBefore
+measure 0.80,0.45,0.08,0.08 rightBefore
+
+# The positive control: the matte reaches the picture at all, and reaches the
+# three bands by different amounts, which is the gradient.
+expect leftBefore != leftBare
+expect midBefore != midBare
+expect rightBefore != rightBare
+
+save samples/_PIC8220.ARW
+
+print and every band comes back identical after the photograph is reopened
+reopen
+set localExposure 2.5
+measure 0.12,0.45,0.08,0.08 leftAfter
+measure 0.46,0.45,0.08,0.08 midAfter
+measure 0.80,0.45,0.08,0.08 rightAfter
+
+expect leftAfter == leftBefore
+expect midAfter == midBefore
+expect rightAfter == rightBefore
+
+# ⚠ And against the bare photograph, which is the check the first draft of this
+# file got wrong. It asserted only that the reopened bands still differ *from
+# each other* — and they do that on a photograph with no mask at all, because
+# the picture itself varies across the frame. Measured with the matte deleted,
+# that draft reported three of five green. Against the baseline there is nowhere
+# for an empty matte to hide.
+expect leftAfter != leftBare
+expect midAfter != midBare
+expect rightAfter != rightBare

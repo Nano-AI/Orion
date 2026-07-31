@@ -239,6 +239,16 @@ final class Engine {
 
     private(set) var maskComponents: [MaskComponentState] = []
 
+    /// Rows whose saved matte file could not be read when the photograph opened.
+    ///
+    /// ⚠ Not a cosmetic flag. Without it a kind-4 row whose PNG has gone missing
+    /// renders with no coverage — the picture changes and nothing on screen says
+    /// why, which is the shape of failure this project keeps paying for. The
+    /// panel reads this and says the matte is missing.
+    ///
+    /// Cleared by `open`, since it is an answer about the photograph in hand.
+    var missingMattes: Set<Int> = []
+
     /// Which row the panel and the canvas are editing. Clamped on every read,
     /// because removing a row can leave it past the end and a stale index would
     /// silently edit the wrong component.
@@ -848,12 +858,18 @@ final class Engine {
     ///
     /// Returns false if the matte is larger than the engine will take, which is
     /// reported rather than silently downscaled.
+    /// `index` defaults to the selected row, which is what every gesture means.
+    /// Restoring a saved matte passes one explicitly: it walks the whole list on
+    /// open, and moving the selection to each row in turn would be a visible
+    /// side effect of loading a file.
     @discardableResult
-    func setMaskMatte(_ alpha: [Float], width: Int, height: Int) -> Bool {
+    func setMaskMatte(_ alpha: [Float], width: Int, height: Int,
+                      at index: Int? = nil) -> Bool {
+        let which = index ?? selectedMask
         guard let handle, isLoaded,
-              selectedMask >= 0, selectedMask < maskComponents.count else { return false }
+              which >= 0, which < maskComponents.count else { return false }
         let status = alpha.withUnsafeBufferPointer {
-            orion_engine_set_mask_matte(handle, Int32(selectedMask),
+            orion_engine_set_mask_matte(handle, Int32(which),
                                         $0.baseAddress, Int32(width), Int32(height))
         }
         guard status == ORION_OK else { return false }
@@ -862,6 +878,54 @@ final class Engine {
         pushAndRender()
         return true
     }
+
+    /// Records which saved file holds the selected row's matte, and which
+    /// producer made it. `MatteStore` writes the file first and calls this with
+    /// the id it got back, so the state never names a file that is not there.
+    func setMatteReference(id: String?, source: String?) {
+        editSelected { $0.matteId = id; $0.matteSource = source }
+        missingMattes.remove(selectedMask)
+    }
+
+    /// Uploads every saved matte the restored state names, and records the rows
+    /// whose file could not be read.
+    ///
+    /// ⚠ A missing file is **recorded, not swallowed**. Leaving the row with no
+    /// coverage would change how the picture looks with nothing on screen
+    /// saying why — the same shape as every silent-output defect this project
+    /// has paid for. The panel reads `missingMattes` and says so.
+    ///
+    /// Called after `restore`, because it walks the components that call put
+    /// there.
+    func restoreMattes(photo: URL) {
+        var missing: Set<Int> = []
+        for (i, c) in maskComponents.enumerated() {
+            guard c.kind == 4, let id = c.matteId else { continue }
+            guard let m = MatteStore.read(photo: photo, id: id) else {
+                missing.insert(i); continue
+            }
+            if !setMaskMatte(m.alpha, width: m.width, height: m.height, at: i) {
+                missing.insert(i)
+            }
+        }
+        missingMattes = missing
+    }
+
+    /// The label to describe the selected row's matte, if it has one.
+    var maskMatteSource: String? { selected?.matteSource }
+
+    /// Whether the selected row's matte is on disk beside the photograph.
+    ///
+    /// ⚠ Separate from `maskMatteSource` on purpose. A matte can exist in the
+    /// engine and not yet in a file — the screenshot harness makes one that
+    /// way, and so does any run with no photograph open — and a caption that
+    /// read the label and then promised the file would be claiming a save that
+    /// did not happen. That is the class of lie this panel's copy exists to
+    /// avoid, not to commit.
+    var maskMatteSaved: Bool { selected?.matteId != nil }
+
+    /// True when the selected row is a matte whose file could not be read.
+    var maskMatteMissing: Bool { missingMattes.contains(selectedMask) }
 
     /// The largest matte this image will accept.
     var maxMatteSize: (width: Int, height: Int) {
@@ -1210,6 +1274,9 @@ final class Engine {
         imageWidth = w
         imageHeight = h
         camera = String(cString: orion_engine_camera(handle))
+        // An answer about the photograph being left. `MatteStore.restore` fills
+        // it again for the one arriving.
+        missingMattes = []
 
         var profile = OrionLensProfile()
         if orion_engine_lens_profile(handle, &profile) == ORION_OK, profile.found != 0 {

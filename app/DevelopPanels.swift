@@ -94,18 +94,27 @@ extension Editor {
         }
     }
 
-    /// ⚠ Says out loud that a matte does not survive a reopen. It is a raster
-    /// and the sidecar holds parameters, so it is not written — and a selection
-    /// that silently vanished when the photo was opened again would read as
-    /// data loss rather than as a limit.
+    /// ⚠ Three states, and the third is the one that must not be silent. A matte
+    /// whose file has gone says so, because the alternative is a row that
+    /// renders no coverage while the panel claims a selection.
     var matteCaption: String {
-        guard let source = matteSource else {
-            return "A selection made earlier. It is not saved with the photo, "
-                 + "so reopening leaves this row empty until you run it again."
+        if engine.maskMatteMissing {
+            return "This selection's file is missing, so the row covers nothing. "
+                 + "Press Subject, Person or Sky to make it again."
         }
-        return "A \(source.lowercased()) selection. Press either button again "
-             + "to redo it after a big change to the picture. Not saved with "
-             + "the photo."
+        guard let source = engine.maskMatteSource else {
+            return "An empty selection. Press Subject, Person or Sky to fill "
+                 + "this row."
+        }
+        let redo = "Press either button again to redo it after a big change to "
+                 + "the picture — it is not re-run on its own, because a model "
+                 + "that has changed since would quietly give a different "
+                 + "selection."
+        guard engine.maskMatteSaved else {
+            return "A \(source.lowercased()) selection. Not written down yet, "
+                 + "so it will not survive reopening the photo. \(redo)"
+        }
+        return "A \(source.lowercased()) selection, saved beside the photo. \(redo)"
     }
 
     /// Runs a segmentation model and puts what it finds into the selected
@@ -122,13 +131,29 @@ extension Editor {
             do {
                 let m = try await SubjectMatte.generate(engine: engine, kind: kind)
                 if engine.maskComponents.isEmpty { engine.addMaskComponent(kind: 4) }
+
+                // ⚠ The file goes down **before** the engine sees the matte and
+                // before the id reaches the state. A write that fails must fail
+                // the whole selection: uploading anyway would leave a matte that
+                // renders now and is gone on reopen, which is the bug this
+                // whole story exists to remove.
+                //
+                // The id is fresh every time and nothing is overwritten in
+                // place, so the worst a crash here can leave is an orphan file,
+                // and orphans are swept when the photograph is next opened.
+                var id: String?
+                if let photo = current {
+                    id = try MatteStore.write(m.alpha, width: m.width,
+                                              height: m.height, photo: photo)
+                }
+
                 guard engine.setMaskMatte(m.alpha, width: m.width, height: m.height)
                 else {
                     message = "That selection was too large for this photo."
                     return
                 }
                 engine.maskKind = 4
-                matteSource = kind.label
+                engine.setMatteReference(id: id, source: kind.label)
                 // One history entry for the whole operation, the way a brush
                 // stroke records once when the hand lifts rather than per dab.
                 engine.commitMaskGroupEdit("\(kind.label) selection")

@@ -315,6 +315,10 @@ enum Screenshot {
             if let m = MainActor.assumeIsolated({ try? SubjectMatte.generateBlocking(engine: engine, kind: .sky) }) {
                 engine.maskKind = 4
                 _ = engine.setMaskMatte(m.alpha, width: m.width, height: m.height)
+                // The label, and deliberately no file id: this harness renders a
+                // picture, it does not write mattes beside somebody's raws. The
+                // caption reads the two separately and says so.
+                engine.setMatteReference(id: nil, source: "Sky")
                 engine.maskOverlay = true
             }
         case "mask-off":

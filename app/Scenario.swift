@@ -39,8 +39,16 @@ import SwiftUI
 ///                                       raster kind without uploading one,
 ///                                       which is what a reopened photo with a
 ///                                       saved Subject row actually is
-///     matte disc | left                 a synthetic raster matte in frame
-///                                       coordinates, for the kind-4 component
+///     matte disc | left | ramp          a synthetic raster matte in frame
+///                                       coordinates, for the kind-4 component.
+///                                       Saved beside the photo, as the panel
+///                                       saves one. `ramp` is the only shape
+///                                       with mid-values, so it is the only one
+///                                       that can catch a persistence bug
+///     reopen                            close and open the photo again, through
+///                                       the whole of `Editor.load` — decode,
+///                                       sidecar, restore, upload saved mattes,
+///                                       sweep orphans
 ///     select subject | person | sky     runs the detector for real, and reports what
 ///                                       fraction of the frame it covered
 ///     overlay on | off                  paint the coverage, as `Show mask` does
@@ -170,6 +178,25 @@ enum Scenario {
         var errorDescription: String? { what }
     }
 
+    /// The photograph `open` last opened. A matte is saved beside its
+    /// photograph, so the verbs that make one need to know which.
+    private static var photo: URL?
+
+    /// Writes the matte down and records the reference on the selected row —
+    /// exactly what `findMatte` does when the panel runs a model.
+    ///
+    /// ⚠ Here rather than left out of the runner, because `repro/README.md`'s
+    /// standing warning is that a verb standing in for a gesture must do what
+    /// the gesture does. A `matte` verb that skipped the file would exercise the
+    /// upload and prove nothing about the save — which is the same gap the
+    /// `crop` verb had when it skipped `commitCropEdit`.
+    private static func persistMatte(_ alpha: [Float], width: Int, height: Int,
+                                     engine: Engine, source: String) throws {
+        guard let p = photo else { return }
+        let id = try MatteStore.write(alpha, width: width, height: height, photo: p)
+        engine.setMatteReference(id: id, source: source)
+    }
+
     private static func step(_ verb: String, _ args: [String], engine: Engine,
                              targeted: TargetedAdjust) throws {
         func point(_ s: String) throws -> CGPoint {
@@ -187,7 +214,28 @@ enum Scenario {
         switch verb {
         case "open":
             guard let p = args.first else { throw Bad(what: "open needs a path") }
+            photo = URL(fileURLWithPath: p)
             try engine.open(path: p)
+
+        case "reopen":
+            // Closes and opens the photograph again, through the same steps
+            // `Editor.load` takes: decode, read the sidecar, restore the state,
+            // upload the saved mattes, sweep the orphans.
+            //
+            // ⚠ It deliberately re-runs the *loading* path rather than calling
+            // `engine.restore` alone. Everything this scenario is about lives
+            // between those two — a matte is not in `DevelopState`, so a
+            // "reopen" that only restored the state could not tell a saved
+            // matte from one that was never written.
+            guard let p = photo else { throw Bad(what: "reopen needs an open photo") }
+            try engine.open(path: p.path)
+            guard let saved = Sidecar.read(for: p)?.develop else {
+                throw Bad(what: "no develop state in the sidecar to reopen with")
+            }
+            engine.restore(encoded: saved)
+            engine.restoreMattes(photo: p)
+            MatteStore.sweep(photo: p,
+                             keeping: MatteStore.referenced(engine.maskComponents))
 
         case "rotate":
             engine.rotate(Int32(try number(0)))
@@ -281,12 +329,19 @@ enum Scenario {
         case "matte":
             // A synthetic matte, in frame coordinates, so the raster component
             // can be driven without a segmentation model. `disc` is a centred
-            // circle, `left` a half-plane — both have an answer you can predict
-            // and neither depends on a model whose output moves between OS
-            // releases. research/masking.md §5.
+            // circle, `left` a half-plane, `ramp` a horizontal 0→1 gradient —
+            // all three have an answer you can predict and none depends on a
+            // model whose output moves between OS releases.
+            // research/masking.md §5.
+            //
+            // ⚠ `ramp` exists for the persistence round trip and the reason is
+            // the whole point: a matte of nothing but 0 and 1 survives a wrong
+            // colour space, a wrong bit depth and a wrong endianness, because
+            // black and white land on black and white however the curve between
+            // them is mangled. Only the mid-values can tell.
             let shape = args.first ?? ""
-            guard shape == "disc" || shape == "left" else {
-                throw Bad(what: "matte takes disc or left")
+            guard shape == "disc" || shape == "left" || shape == "ramp" else {
+                throw Bad(what: "matte takes disc, left or ramp")
             }
             let (mw, mh) = engine.maxMatteSize
             guard mw > 0, mh > 0 else { throw Bad(what: "no photo open") }
@@ -296,6 +351,10 @@ enum Scenario {
                 for x in 0..<mw {
                     let u = (Double(x) + 0.5) / Double(mw)
                     let v = (Double(y) + 0.5) / Double(mh)
+                    if shape == "ramp" {
+                        a[y * mw + x] = Float(u)
+                        continue
+                    }
                     let on: Bool
                     if shape == "left" { on = u < 0.5 }
                     else {
@@ -309,6 +368,7 @@ enum Scenario {
                 throw Bad(what: "the engine refused the matte")
             }
             engine.maskKind = 4
+            try persistMatte(a, width: mw, height: mh, engine: engine, source: shape)
 
         case "select":
             // Runs a real segmentation model. ⚠ Not an assertion about what it
@@ -333,6 +393,8 @@ enum Scenario {
                 throw Bad(what: "the engine refused the matte")
             }
             engine.maskKind = 4
+            try persistMatte(m.alpha, width: m.width, height: m.height,
+                             engine: engine, source: which.label)
 
         case "spot":
             // Places a spot at a point on the displayed picture, exactly as a

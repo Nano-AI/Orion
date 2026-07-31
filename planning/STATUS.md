@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-30 (**landing page polish**; engine story before it: multi-selection in the filmstrip)
+**Last updated:** 2026-07-31 (**a matte is saved with the photograph** — the oldest gap in the table below, closed)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -25,10 +25,10 @@ through smooth ground (a colour predicate alongside the gradient one), and
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
-**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3406
-checks** · **30 `repro/` scenarios, 147 checks** · all 0 failures. Bench exits 0
-on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
-preview graph at 1/16 that, about 400 MiB.
+**Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3430
+checks** · **30 `repro/` scenarios** · all 0 failures. Bench exits 0: 148 nodes,
+6878 MiB, M0 gate **13.53 ms p95** on `_PIC8220` — plus a preview graph at 1/16
+that.
 
 ### Known gaps, carried forward
 
@@ -36,14 +36,105 @@ Small, named, and none of them blocking the next story:
 
 | Gap | Where |
 |---|---|
-| **A matte is not saved with the photo.** It is a raster and the sidecar holds parameters, so reopening leaves a Subject or Person row empty until it is run again. Said out loud in the panel rather than left to be discovered. ⚠ It only *became* true this session — see below | `Sidecar`, `DevelopPanels` |
-| **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand | `SubjectMatte` |
+| **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand — and #79 now adds a second reason it must stay on demand: a model that has changed between OS releases would give a *different* selection, silently, on a finished edit | `SubjectMatte` |
+| **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo | whole history |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-31a — a matte is saved with the photograph
+
+⚠ **Twenty-ninth arrival of the stale M3 prompt.** Verified against the tree
+again rather than re-litigated — research file, code, GPU test section and bench
+probe for each of dehaze, creative LUTs, exposure fusion and auto-enhance — then
+set aside, and the oldest entry in the gap table taken instead.
+
+Every other mask kind is a handful of numbers in the sidecar. Kind 4 is a raster
+of ~700k alpha values and was written **nowhere**, so a Subject, Person or Sky
+row reopened present and empty. `app/MatteStore.swift`, decision #79.
+
+### ⚠ The trap was colour management, and it is the purple cast's shape
+
+CoreGraphics colour-manages greyscale. Write 0.5 through a Gamma-2.2 grey space
+and read it back as linear and it comes back **0.735** — every feathered edge on
+every reopened photograph shifted, nothing crashing, nothing to see. Both ends
+name `CGColorSpace.linearGray` and the mutation that changes one of them fails
+five checks.
+
+⚠ **Which is why the fixture is a gradient ramp.** Every matte fixture this
+repository had was binary — a disc, a half-plane — and a binary matte survives a
+wrong colour space, a wrong bit depth *and* a wrong byte order, because 0 and 1
+land on 0 and 1 however the curve between them is mangled. Only mid-values can
+tell, and a feathered selection is made of mid-values.
+
+### ⚠ The ramp could not see a flip, and a `CGBitmapContext` origin is bottom-left
+
+The ramp varies along x only, so a **vertical flip leaves it identical** — and
+the decode draws a top-down `CGImage` into a bottom-left-origin context, which
+is exactly where a flip would come from. A flipped matte is not a broken-looking
+mask; it is a plausible selection of the wrong half of the photograph. One
+bright corner pins both axes, and the mutation that flips the draw fails it.
+
+### ⚠ And the scenario's first draft measured something other than its claim
+
+It asserted the reopened bands still differ *from each other*. They do that on a
+photograph with **no mask at all**, because the picture itself varies across the
+frame — measured with the matte deleted, that draft reported three of five
+green. There is an unmasked baseline taken before any local exposure now, and
+nowhere for an empty matte to hide. **Eighth time in this file's history** that
+a first-draft check measured something other than its claim.
+
+### What was decided, and what it refuses
+
+Sibling `PHOTO.orion-matte-<uuid>.png` beside `PHOTO.xmp` — storage, not cache,
+because Vision's models move between macOS releases and re-running on open would
+silently change a finished edit on an OS update. Base64 in the XMP is refused:
+autosave rewrites that attribute 900 ms after any slider moves. Files are
+immutable and the **write precedes the reference**, so the sidecar can never
+name a file that is not on disk and the only reachable crash window leaves an
+orphan. Orphans are swept on open and **only after the sidecar parses** — an
+unreadable sidecar yields no components, and sweeping against that would delete
+every matte the photograph has.
+
+⚠ **A missing file is reported, not swallowed.** `Engine.missingMattes` and a
+panel caption; leaving the row with no coverage would change the picture with
+nothing on screen saying why.
+
+⚠ **`MaskComponentState` names its coding keys `Key`, not `CodingKeys`**, so the
+encoder is synthesised from the stored properties while the decoder reads the
+hand-written list. `matteId` failing that way would have been written to every
+sidecar, read back never, and **swept away by this feature's own cleanup** on
+the next open. Pinned.
+
+### Measured, and looked at
+
+24 new checks in `orion-viewport-tests` (3406 → 3430) on `MatteStore` alone — it
+deliberately knows nothing about `Engine`, so the round trip is pinned without a
+GPU. Plus `repro/matte-survives-a-reopen.txt`, 9 checks through the whole
+loading path via a new `reopen` verb. **Five mutations dead:** the gamma space
+(5 failures), the dropped clamp (2 — 1.5 wrapping to 0.5, a hole punched in the
+most-covered region), 8-bit quantisation (5), the flipped draw (2), and saving
+nothing at all (6). Both captions screenshotted.
+
+M0 gate unmoved — nothing here is in the render path.
+
+### Also: the panel says which of three states it is in
+
+Saved, made-but-not-written, and file-missing are three different sentences.
+⚠ `maskMatteSaved` is separate from `maskMatteSource` on purpose: the screenshot
+harness makes a matte without writing one, and a caption that read the label and
+then promised the file would claim a save that did not happen.
+
+### One observation, not chased
+
+The `sky` screenshot scene lifts exposure +1 EV and then **does** produce a
+matte on `_PIC8220`, a night frame — where session `2026-07-30u` records both
+night frames refusing. The detector's smoothness ratio is frame-relative, so a
+lifted frame plausibly passes a check the unlifted one fails. Not this story,
+not investigated, written down rather than left unnoticed.
 
 ## Session 2026-07-30k — landing page polish (web/ only, no engine work)
 
