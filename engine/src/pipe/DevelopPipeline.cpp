@@ -608,9 +608,24 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // grid is 4.4 MB, which is nothing beside the frame buffers.
     auxCube_ = pipeline_.addAuxTexture(kMaxCubeSize, kMaxCubeSize * kMaxCubeSize,
                                        PixelFormat::RGBA32Float);
+    // ⚠ **Float, not eight bits, and unconditionally.** Grain has to be added
+    // to unquantised values or it is noise on top of banding, so the display
+    // node no longer quantises — `develop:grain` below does, and it inherited
+    // the Bayer dither that used to end `develop_display.slang`. That costs one
+    // more full-resolution RGBA16Float intermediate, about 194 MB at 24 Mpx and
+    // 3% of the graph. #81 weighed that against the alternative, which was
+    // adding grain in scene-linear where the variance law does not hold.
     nDisplay_   = pipeline_.add({"develop:display", "developDisplay", {nGrade_},
-                                 PixelFormat::RGBA8Unorm, {},
+                                 PixelFormat::RGBA16Float, {},
                                  {auxCurveLut_, auxCube_}});
+
+    // The grain plate: a stacked mip chain in one texture, uploaded once and
+    // never touched again. See GrainPlate.h for why the chain is stacked by
+    // hand rather than mipmapped, and why the levels are not renormalised.
+    auxGrainPlate_ = pipeline_.addAuxTexture(grain::kPlateSize, grain::kPlateHeight,
+                                             PixelFormat::R32Float);
+    nGrain_ = pipeline_.add({"develop:grain", "grain", {nDisplay_},
+                             PixelFormat::RGBA8Unorm, {}, {auxGrainPlate_}});
 
     // Orientation is last, and is the only node whose output dimensions differ
     // from its input — a quarter turn swaps them.
@@ -620,11 +635,21 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // grows the frame by sqrt(2)).
     const std::uint32_t maxSide =
         static_cast<std::uint32_t>(std::max(width_, height_) * 1.45f);
-    nGeometry_ = pipeline_.add({"geometry", "geometry", {nDisplay_},
+    nGeometry_ = pipeline_.add({"geometry", "geometry", {nGrain_},
                                 PixelFormat::RGBA8Unorm, {}, {},
                                 true, maxSide, maxSide});
 
     pipeline_.compile(width_, height_);
+
+    // Once. The plate is 33 MB and identical for every photograph, but it is
+    // per-`Pipeline` because the aux texture is — building it here rather than
+    // caching it statically keeps the ownership obvious and costs one upload
+    // per graph, of which there are two.
+    {
+        const auto plate = grain::buildPlate();
+        pipeline_.updateAux(auxGrainPlate_, plate.data(),
+                            static_cast<std::size_t>(grain::kPlateSize) * sizeof(float));
+    }
 
     applyImageParams(image);
 
@@ -1896,6 +1921,27 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         pushDisplayParams(adj);
     }
 
+    // ⚠ Guarded like every other push, and the guard is the whole slider. The
+    // display node's own guard omitted `lutStrength` once and the LUT slider
+    // was simply dead; the same shape of mistake here would be a grain slider
+    // that does nothing until some unrelated control happens to move.
+    if (first || adj.grainAmount != lastAdj_.grainAmount ||
+        adj.grainSize != lastAdj_.grainSize) {
+        // ⚠ Crossing zero is not a parameter push, it is a change of which node
+        // writes the eight bits — so it retargets the chain rather than just
+        // re-uploading the block. Everything else here disables to nothing when
+        // it is off and this has to as well: a pointwise pass at full
+        // resolution is ~6 ms of every frame of every drag, whatever it is
+        // multiplying the noise by.
+        const bool graining = adj.grainAmount > 0.0f;
+        if (first || graining != graining_) {
+            graining_ = graining;
+            retargetOutputChain(adj);
+        } else {
+            pushGrainParams(adj);
+        }
+    }
+
     // Rebuilding the LUT walks four splines. Skip it when the curve has not
     // moved, which is every frame of an exposure drag.
     if (curveMoved) {
@@ -1993,8 +2039,9 @@ void DevelopPipeline::pushDisplayParams(const Adjustments& adj) {
     d.resolution    = kCurveResolution;
     d.size[0] = width_; d.size[1] = height_;
     // Dither only when this node is the one quantising. At sixteen bits there
-    // is nothing to hide.
-    d.dither = wideOutput_ ? 0u : 1u;
+    // is nothing to hide, and with grain on this node hands float to the node
+    // that rounds. See `retargetOutputChain`.
+    d.dither = (!wideOutput_ && !graining_) ? 1u : 0u;
 
     // A strength of zero is the same as no LUT at all, and saying so here means
     // the shader skips the lookup entirely rather than interpolating a table it
@@ -2065,15 +2112,71 @@ void DevelopPipeline::clearCreativeLut() {
 void DevelopPipeline::setWideOutput(bool wide) {
     if (wide == wideOutput_) return;
     wideOutput_ = wide;
+    retargetOutputChain(lastAdj_);
+}
 
-    const auto format = wide ? gpu::PixelFormat::RGBA16Float
-                             : gpu::PixelFormat::RGBA8Unorm;
-    pipeline_.setNodeFormat(nDisplay_, format);
-    pipeline_.setNodeFormat(nGeometry_, format);
+/// Which node writes the eight bits, and therefore which one dithers.
+///
+/// ⚠ **Exactly one node quantises, and there are two candidates.** Grain has to
+/// be added to unquantised values, so with the Amount slider up `develop:grain`
+/// is the last writer and `develop:display` hands it float. With grain off the
+/// node is disabled entirely and `develop:display` is the last writer again.
+/// Deciding that in two places is how the narrow path ends up rounding twice —
+/// or not at all, which is the banding the dither exists to prevent — so it is
+/// decided here and nowhere else.
+///
+/// | wide | grain | display | grain node | dither |
+/// |---|---|---|---|---|
+/// | no  | off | `RGBA8Unorm`  | disabled      | display |
+/// | no  | on  | `RGBA16Float` | `RGBA8Unorm`  | grain   |
+/// | yes | off | `RGBA16Float` | disabled      | neither |
+/// | yes | on  | `RGBA16Float` | `RGBA16Float` | neither |
+///
+/// ⚠ The `graining_` half of this is not a tidiness: a grain node left enabled
+/// at Amount 0 is a full-resolution pointwise pass on every frame of every
+/// drag, and `develop:display` writing float is a second one. Measured on
+/// `_PIC8220`, the two together took the exposure slider from 3 nodes and
+/// 10.63 ms p95 to 4 nodes and **17.03 ms** — past the 16 ms M0 gate, and the
+/// slowdown that was reported from the app before the bench was next run.
+/// ⚠ Takes the adjustments rather than reading `lastAdj_`. Inside `apply` the
+/// member still holds the *previous* frame's values, so a version that read it
+/// pushed Amount 0 to the node it had just switched on — the node ran, took the
+/// shader's early exit, and the bench reported the control as having no effect
+/// while the gate and every test stayed green.
+void DevelopPipeline::retargetOutputChain(const Adjustments& adj) {
+    const auto wideFmt   = gpu::PixelFormat::RGBA16Float;
+    const auto narrowFmt = gpu::PixelFormat::RGBA8Unorm;
+    const auto outFmt    = wideOutput_ ? wideFmt : narrowFmt;
 
-    // The dither flag moved with the format, and the normal push is guarded on
-    // contrast and the curve — neither of which changed.
-    pushDisplayParams(lastAdj_);
+    pipeline_.setEnabled(nGrain_, graining_);
+    pipeline_.setNodeFormat(nDisplay_, graining_ ? wideFmt : outFmt);
+    pipeline_.setNodeFormat(nGrain_, outFmt);
+    pipeline_.setNodeFormat(nGeometry_, outFmt);
+
+    // Both, because the dither flag moved between them and the normal pushes
+    // are guarded on values that did not change.
+    pushDisplayParams(adj);
+    pushGrainParams(adj);
+}
+
+void DevelopPipeline::setGridStep(float step) {
+    gridStep_ = step > 0.0f ? step : 1.0f;
+    pushGrainParams(lastAdj_);
+}
+
+void DevelopPipeline::pushGrainParams(const Adjustments& adj) {
+    params::Grain g{};
+    g.size[0] = width_; g.size[1] = height_;
+    // ⚠ Only when this node is the one that quantises, which needs grain to be
+    // on as well as the output to be narrow. See `retargetOutputChain`.
+    g.dither    = (!wideOutput_ && graining_) ? 1u : 0u;
+    g.amount    = std::max(adj.grainAmount, 0.0f);
+    // ⚠ Clamped, not just guarded against zero. `kGrainSizeMin` is above 1.0
+    // because a rate of exactly one plate texel per frame pixel interpolates
+    // nothing and comes back 14% louder than its neighbours on the slider.
+    g.grainSize = std::clamp(adj.grainSize, params::kGrainSizeMin, params::kGrainSizeMax);
+    g.gridStep  = gridStep_;
+    pipeline_.setParams(nGrain_, &g, sizeof(g));
 }
 
 void DevelopPipeline::pushFusionPlan() {

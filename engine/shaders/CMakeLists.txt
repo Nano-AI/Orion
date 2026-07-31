@@ -68,6 +68,7 @@ set(ORION_SHADERS
     spot_apply:spotApply
     develop_linear:developLinear
     develop_display:developDisplay
+    grain:grain
     geometry:geometry
 )
 

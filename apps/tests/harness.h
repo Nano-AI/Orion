@@ -111,3 +111,5 @@ void testMaskColourGpu();
 void testMaskMatteGpu();
 void testMaskRefineGpu();
 void testGrainPlate();
+void testGrainGpu();
+void testGrainWiring();

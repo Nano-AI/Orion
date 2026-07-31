@@ -219,6 +219,19 @@ struct Adjustments {
     /// adjustment — it is a file, set through `setCreativeLut`.
     float lutStrength = 1.0f;
 
+    /// Film grain. `research/film-grain.md`, decision #81.
+    ///
+    /// `grainAmount` is the peak standard deviation in display units — peak
+    /// because the Boolean model's variance law puts the noise in the midtones
+    /// and none of it at either end. Zero takes the shader's early exit, which
+    /// is what makes the node free when it is off.
+    ///
+    /// `grainSize` is the grain radius in *frame* pixels, so it is keyed to the
+    /// negative: a crop enlarges the grain the way enlarging more of a negative
+    /// does, rather than resampling it with the output.
+    float grainAmount = 0.0f;   // 0..~0.06
+    float grainSize   = 1.5f;   // frame pixels
+
     // ── Local adjustments (M4) ────────────────────────────────────────────
     //
     // A mask is its parameters, not an image: normalized coordinates in, alpha
@@ -418,6 +431,17 @@ public:
     void setWideOutput(bool wide);
     [[nodiscard]] bool wideOutput() const noexcept { return wideOutput_; }
 
+    /// Frame pixels per pixel of this graph: 1 for the full render, and the
+    /// preview's decimation factor for the preview graph.
+    ///
+    /// ⚠ **This is what makes the two graphs sample one grain field rather than
+    /// two realisations of it.** The plate is addressed in frame coordinates,
+    /// so without it a preview pixel would show the per-pixel variance of the
+    /// field where the settled render averages `step^2` of them — and the
+    /// preview would read an order of magnitude grainier than the picture it
+    /// previews. See research/film-grain.md and decision #81.
+    void setGridStep(float step);
+
     /// The image after white balance and the camera matrix, but before any user
     /// adjustment. This is what the color picker must sample: reading the
     /// edited result would mean adjusting a band changes which band you would
@@ -436,7 +460,7 @@ private:
     std::uint32_t width_ = 0, height_ = 0;
     int nLinearize_ = -1, nDirs_ = -1, nLpf_ = -1, nGreen_ = -1, nRgb_ = -1;
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
-    int nGeometry_ = -1;
+    int nGeometry_ = -1, nGrain_ = -1;
     int nHighlights_ = -1;
     int nLens_ = -1;
     int nGrade_ = -1;
@@ -593,7 +617,16 @@ private:
     bool wideOutput_ = false;
 
     void pushDisplayParams(const Adjustments&);
+    void pushGrainParams(const Adjustments&);
+    /// Decides which of `develop:display` and `develop:grain` writes the eight
+    /// bits, in one place. See the table on the definition.
+    void retargetOutputChain(const Adjustments&);
+    /// Whether the grain node runs at all. ⚠ Not a mirror of `grainAmount`: it
+    /// is what `retargetOutputChain` keys on, and it moves the dither with it.
+    bool graining_ = false;
     int  auxCube_ = -1;
+    int  auxGrainPlate_ = -1;
+    float gridStep_ = 1.0f;
     int  lutSize_ = 0;                       // 0 when none is loaded
     std::array<float, 3> lutMin_{0.0f, 0.0f, 0.0f};
     std::array<float, 3> lutMax_{1.0f, 1.0f, 1.0f};

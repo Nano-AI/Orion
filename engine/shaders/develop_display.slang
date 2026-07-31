@@ -7,6 +7,8 @@
 //
 // There is exactly ONE display transform in the pipeline, and this is it.
 
+#include "ops/dither_ops.slang"
+
 struct DisplayParams
 {
     float contrast;     // slope of the sigmoid at middle gray
@@ -14,7 +16,10 @@ struct DisplayParams
     uint  curveIdentity;// skip the LUT entirely when the curve is untouched
     uint  resolution;   // LUT entries per row
     uint2 size;
-    uint  dither;       // nonzero when this node writes eight bits
+    // Nonzero when this node writes eight bits, which it does whenever film
+    // grain is off. With grain on it writes RGBA16Float and develop:grain
+    // rounds instead — see ops/dither_ops.slang.
+    uint  dither;
     uint  lutSize;      // creative LUT grid edge; 0 when none is loaded
     float lutStrength;
     float _pad[3];
@@ -97,21 +102,6 @@ float3 sampleCube(Texture2D<float4> cube, float3 c, uint size,
     const float3 b = cubeCorner(cube, i0, int3(1, 1, 0), size);
     return c000 + f.g * (a - c000) + f.r * (b - a) + f.b * (c111 - b);
 }
-
-/// Ordered dithering (Bayer, 1973), 4x4.
-///
-/// Eight bits is all the drawable holds, so quantising here costs nothing on
-/// its own — but the geometry node then *resamples* these values and quantises
-/// again, and two roundings of a smooth gradient is exactly where contouring
-/// comes from. A night sky at 200% is the case that shows it. A sub-LSB offset
-/// that varies with position turns the contour into noise the eye integrates
-/// away; it is what every eight-bit display pipeline does, and it is free.
-static const float kBayer4x4[16] = {
-     0.0f,  8.0f,  2.0f, 10.0f,
-    12.0f,  4.0f, 14.0f,  6.0f,
-     3.0f, 11.0f,  1.0f,  9.0f,
-    15.0f,  7.0f, 13.0f,  5.0f,
-};
 
 static const float kMinEv = -12.47393f;
 static const float kMaxEv =   4.026069f;
@@ -228,11 +218,13 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
     // applying a transfer function on top encodes the signal twice. That is
     // what washed the image out: middle gray landed at 0.74 instead of 0.50,
     // lifting everything and flattening color along with it.
-    if (p.dither != 0u)
-    {
-        const uint i = (tid.y & 3u) * 4u + (tid.x & 3u);
-        c += (kBayer4x4[i] / 16.0f - 0.5f) / 255.0f;
-    }
+    // ⚠ The dither is applied by whichever node writes the eight bits, and by
+    // only that one. That is this node when grain is off and `develop:grain`
+    // when it is on — grain has to be added to unquantised values, so with the
+    // slider up this node writes float and the rounding happens one node later.
+    // `DevelopPipeline::retargetOutputChain` is the single place that decides,
+    // and the table it holds is why this is a flag rather than a fact.
+    if (p.dither != 0u) c += bayerOffset(tid.xy);
 
     dst[tid.xy] = float4(saturate(c), 1.0f);
 }

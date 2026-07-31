@@ -58,6 +58,12 @@ void Engine::openRaw(const std::string& path) {
     try {
         smallNext = std::make_unique<pipe::DevelopPipeline>(
             *device_, res::shaderDir(), small);
+        // ⚠ One grain field at two resolutions, not two realisations of it.
+        // The plate is addressed in frame coordinates, so the preview has to
+        // say how many frame pixels each of its pixels covers or it will show
+        // the per-pixel variance where the settled render averages sixteen —
+        // and read an order of magnitude grainier than the picture it previews.
+        smallNext->setGridStep(static_cast<float>(kPreviewScale));
     } catch (const std::exception&) {
         smallNext.reset();
     }

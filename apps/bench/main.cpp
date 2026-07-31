@@ -772,6 +772,26 @@ int main(int argc, char** argv) {
                 {"clarity +1",     flat, [](auto& a) { a.clarity = 1.0f; }, Metric::Detail, 0.062},
                 {"clarity -1",     flat, [](auto& a) { a.clarity = -1.0f; }, Metric::Detail, 0.055},
                 {"denoise 2.0",    flat, [](auto& a) { a.denoiseLuma = 2.0f; }, Metric::Detail, 0.018},
+                // ⚠ **Detail, not luma.** Film grain is zero-mean by
+                // construction — that is the property that keeps it from
+                // shifting exposure — so a probe on mean brightness reads
+                // exactly zero for a working grain node and exactly zero for
+                // one that was never dispatched. `Metric::Detail` is the mean
+                // *absolute* difference between neighbours, which is the one
+                // thing grain unambiguously raises.
+                // ⚠ A real floor, not a 0.0 that only looks like one. It sat at
+                // 0.0 for an afternoon, and 0.0 is what this probe reads when
+                // the node was never dispatched — which is what the retarget
+                // did when it pushed the previous frame's Amount.
+                //
+                // Measured 0.127, 0.123 and 0.125 of the exposure reference on
+                // `_PIC8220`, `_PIC8095` and `_PIC8148`. That the three agree
+                // to a percent is the point: grain's amplitude comes from the
+                // slider rather than from the scene, so unlike every filter
+                // around it this floor does not have to be set from the frame
+                // that shows the effect least. Half of it, which leaves room
+                // for the plate to be reseeded without a false red.
+                {"grain 0.04",     flat, [](auto& a) { a.grainAmount = 0.04f; }, Metric::Detail, 0.06},
                 {"mixer blue lum", flat, [](auto& a) { a.lumShift[5] = -1.0f; }, Metric::Luma, 0.068},
                 {"mixer blue sat", flat, [](auto& a) { a.satShift[5] = 1.0f; }, Metric::Chroma, 0.03},
                 // Lens. Distortion only resamples, so mean luma barely moves —

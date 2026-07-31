@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "pipe/GrainPlate.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -194,7 +196,11 @@ struct alignas(16) Display {
     std::uint32_t curveIdentity;
     std::uint32_t resolution;
     std::uint32_t size[2];
-    /// Nonzero when this node writes eight bits. See develop_display.slang.
+    /// Nonzero when this node writes eight bits. ⚠ It is no longer always the
+    /// node that does: film grain must be added to unquantised values, so with
+    /// the Amount slider up this node writes `RGBA16Float` and `develop:grain`
+    /// carries the flag instead. Exactly one of the two holds it at a time and
+    /// `DevelopPipeline::retargetOutputChain` is the only place that decides.
     std::uint32_t dither;
     /// Edge length of the creative LUT's grid; zero when none is loaded, which
     /// is what makes the lookup free rather than an identity table's worth of
@@ -644,6 +650,54 @@ struct AtrousShrink {
     float _pad;
 };
 static_assert(sizeof(AtrousShrink) == 32);
+
+/// What one unit of `Grain::amount` actually delivers as peak standard
+/// deviation, **measured** — `testGrainGpu` pins it.
+///
+/// ⚠ Not 1.0, and the gap is not a defect. The plate is resampled bilinearly at
+/// a rate the Size slider sets, and interpolating a correlated random field
+/// reduces its variance; this is what is left. It is flat to ~1.5% across the
+/// whole reachable Size range, which is the property that matters — Size
+/// changes how big the grain is, not how strong.
+///
+/// ⚠ The one rate where it does *not* hold is exactly 1.0 frame pixels per
+/// plate texel, where every sample lands on a texel centre, no interpolation
+/// happens, and the field comes back at its full 1.0. That is a knife edge —
+/// 1.02 already measures 0.888 — so `kGrainSizeMin` puts it out of reach rather
+/// than leaving a 14% step in the middle of a slider.
+inline constexpr float kGrainSigmaFactor = 0.875f;
+
+/// Grain radius in frame pixels, at the ends of the Size slider. The floor is
+/// above 1.0 deliberately; see `kGrainSigmaFactor`. It is also where the
+/// physics agrees: grain finer than the pixel it lands in is aliasing.
+inline constexpr float kGrainSizeMin = 1.2f;
+inline constexpr float kGrainSizeMax = 8.0f;
+
+/// Film grain. Mirrors GrainParams in grain.slang; research/film-grain.md, #81.
+struct alignas(16) Grain {
+    std::uint32_t size[2];
+    /// Nonzero when this node writes eight bits. ⚠ Inherited from `Display`:
+    /// grain has to be added to unquantised values, so this node is the one
+    /// that quantises and the Bayer dither moved here with the flag.
+    std::uint32_t dither;
+    /// Peak standard deviation in display units. Zero disables the branch.
+    float         amount;
+    /// Grain radius in frame pixels.
+    float         grainSize;
+    /// Frame pixels per node pixel: 1 in the full graph, `kPreviewScale` in the
+    /// preview. ⚠ What makes the two graphs sample **one field** at two
+    /// resolutions rather than two realisations of it.
+    float         gridStep;
+    float         _pad[2];
+};
+static_assert(sizeof(Grain) == 32);
+
+/// ⚠ The shader hard-codes these; it cannot include a C++ header. Two
+/// derivations of one plate geometry is how a level gets read from the wrong
+/// rows — plausible noise over the wrong grain size, which looks like a taste
+/// problem rather than a bug.
+static_assert(grain::kPlateSize == 2048, "PLATE_SIZE in grain.slang");
+static_assert(grain::kPlateLevels == 12, "PLATE_LEVELS in grain.slang");
 
 struct Geometry {
     std::uint32_t outSize[2];
