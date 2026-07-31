@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**the recovery point could not be recovered from** — 4,643 lines split into a status and an archive)
+**Last updated:** 2026-07-31 (**both test files split** — 7,656 and 3,297 lines, output byte-identical)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -45,7 +45,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken seven ways**, and `CLAUDE.md` calls it a hard constraint. `apps/tests/main.cpp` **7,656**, `ViewportTests.swift` **3,297**, `DevelopPipeline.cpp` 2,170, `Engine.swift` 1,910, `OrionApp.swift` 1,425, `bench/main.cpp` 1,272, `DevelopPanels.swift` 1,140. ⚠ The two largest are the two that grow every session, this one included | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` 2,192, `Engine.swift` 1,977, `OrionApp.swift` 1,433, `bench/main.cpp` 1,293, `DevelopPanels.swift` 1,165, `Scenario.swift` 1,080. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session | whole tree |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
@@ -98,6 +98,57 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-07-31h — both test files split
+
+⚠ **Thirty-seventh through thirty-ninth arrivals of the stale M3 prompt.**
+Verified and set aside; the story was named at the end of session `g`.
+
+`apps/tests/main.cpp` was **7,656 lines** and `ViewportTests.swift` **3,297**,
+against a limit `CLAUDE.md` calls a hard constraint. Both were files these
+sessions kept adding to.
+
+### What it looks like now
+
+| | Before | After | Largest |
+|---|---|---|---|
+| `orion-tests` | 1 file, 7,656 | 15 files | **969** |
+| `orion-viewport-tests` | 1 file, 3,297 | 13 files | **552** |
+
+C++: twelve translation units by subject, `harness.{h,cpp}` for the counter and
+the three helpers, and a `main.cpp` that is the running order and nothing else.
+The counters move to `harness.cpp` behind `extern`, so every unit adds to one
+tally. Swift: the file was already part extensions, so the split follows the
+shape it had — `ViewportTests+<subject>.swift`, one `extension ViewportTests`
+each.
+
+### ⚠ Verified as a refactor, not asserted to be one
+
+The pre-split binary was rebuilt from `git stash` and its **full stdout diffed**
+against the new one, both suites. Identical line for line — not just the same
+totals, the same output in the same order. A check count alone would have missed
+a test that had stopped running and another that had started failing.
+
+### ⚠ Two things worth recording
+
+The first pass cut each chunk at its `static func`, which **orphaned every doc
+comment** at the tail of the previous file — the comment explaining a test
+ending up in a file that no longer contained it. Redone with boundaries walked
+back over the attached comment block. Caught by reading the output, not by the
+compiler, which was perfectly happy.
+
+And the count went from seven violations to **six, not five**:
+`app/Scenario.swift` crossed 1,000 during these same sessions, from the `reopen`,
+`refuses` and `control` verbs I added to it. Splitting two files while growing a
+third past the line is worth naming rather than rounding off.
+
+### What is left
+
+Six, all product code: `DevelopPipeline.cpp` 2,192, `Engine.swift` 1,977,
+`OrionApp.swift` 1,433, `bench/main.cpp` 1,293, `DevelopPanels.swift` 1,165,
+`Scenario.swift` 1,080. Splitting those is riskier than splitting tests — there
+is no byte-identical-output check available for a library — and wants its own
+session.
 
 ## Session 2026-07-31g — the recovery point could not be recovered from
 

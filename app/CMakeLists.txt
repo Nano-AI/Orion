@@ -132,6 +132,18 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Curve.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Canvas.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MatteGeom.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Selection.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Spot.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Catalogue.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sky.swift
             ${CMAKE_CURRENT_BINARY_DIR}/main.swift
             -o ${VIEWPORT_TESTS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
@@ -153,6 +165,18 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Curve.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Canvas.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MatteGeom.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Selection.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Spot.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Catalogue.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sky.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
     COMMENT "swiftc    orion-viewport-tests"
     VERBATIM
