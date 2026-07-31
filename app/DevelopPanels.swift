@@ -94,27 +94,27 @@ extension Editor {
         }
     }
 
-    /// ⚠ Three states, and the third is the one that must not be silent. A matte
-    /// whose file has gone says so, because the alternative is a row that
-    /// renders no coverage while the panel claims a selection.
+    /// ⚠ Short on purpose, and the two that remain are the two that are *news*.
+    ///
+    /// A missing file and an unsaved selection both mean the row will not do
+    /// what it looks like it does, so they still get a sentence. "It worked"
+    /// does not: a saved selection says which producer made it and stops. The
+    /// long version — that it is never re-run on its own because a model that
+    /// changed between OS releases would silently give a different selection —
+    /// is in `DECISIONS.md` #79 and the gap table, which is where a reason
+    /// belongs when it is not something to act on.
     var matteCaption: String {
         if engine.maskMatteMissing {
-            return "This selection's file is missing, so the row covers nothing. "
-                 + "Press Subject, Person or Sky to make it again."
+            return "Missing file — this row covers nothing. Run it again."
         }
         guard let source = engine.maskMatteSource else {
-            return "An empty selection. Press Subject, Person or Sky to fill "
-                 + "this row."
+            return "Empty. Press Subject, Person or Sky."
         }
-        let redo = "Press either button again to redo it after a big change to "
-                 + "the picture — it is not re-run on its own, because a model "
-                 + "that has changed since would quietly give a different "
-                 + "selection."
         guard engine.maskMatteSaved else {
-            return "A \(source.lowercased()) selection. Not written down yet, "
-                 + "so it will not survive reopening the photo. \(redo)"
+            return "\(source) selection — not saved yet, so it will not survive "
+                 + "reopening."
         }
-        return "A \(source.lowercased()) selection, saved beside the photo. \(redo)"
+        return "\(source) selection, saved with the photo."
     }
 
     /// Runs a segmentation model and puts what it finds into the selected
@@ -618,24 +618,11 @@ extension Editor {
                                     specs: AdjustmentCatalogue.localSet,
                                     scope: .local)
 
-                    Text("Warmth and Tint are a colour cast where the mask "
-                       + "covers — not a white balance.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Palette.faint)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     // Guided feathering, research/masking.md §4. On the group
                     // for the same reason Exposure is: it refines the combined
                     // coverage, which is the boundary the photographer sees.
                     slider("Refine", $engine.maskRefine, 0...1, "", 2,
                            resetsTo: engine.defaults.maskRefine)
-                    Text("Pulls the mask's edge onto the nearest edge in the "
-                       + "photograph, and leaves it where you put it when there "
-                       + "is none to find.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Palette.faint)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     if engine.maskKind == 5 {
                         // In stops, because that is the unit the band is
                         // measured in — see research/masking.md §4b. A slider
@@ -647,14 +634,6 @@ extension Editor {
                                resetsTo: maskDefaults.rangeHi)
                         slider("Softness", $engine.maskRangeSoft, 0.05...4, " EV", 2,
                                resetsTo: maskDefaults.rangeSoft)
-                        Text("Selects by brightness rather than by position, "
-                           + "measured before your edits — so adjusting through "
-                           + "the band cannot change what it selects. Push one "
-                           + "end past the picture's range for just the "
-                           + "highlights or just the shadows.")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.faint)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     if engine.maskKind == 6 {
@@ -690,14 +669,6 @@ extension Editor {
                                resetsTo: maskDefaults.colourTol)
                         slider("Softness", $engine.maskColourSoft, 0.002...0.4, "", 3,
                                resetsTo: maskDefaults.colourSoft)
-                        Text("Selects by colour rather than by brightness, and "
-                           + "ignores how light or dark it is — so a shade in "
-                           + "shadow and the same shade in sun are one "
-                           + "selection. Compose it with a brightness range to "
-                           + "narrow that.")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.faint)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     if engine.maskKind == 3 {
@@ -790,19 +761,18 @@ extension Editor {
                     .font(.system(size: 11))
                 }
 
-                Text("A masked exposure scales the parameter, so half coverage "
-                   + "at one stop is 2^0.5 \u{2014} a smooth multiplicative ramp "
-                   + "in linear light, not a blend of two rendered frames.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Palette.faint)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // Reference material, so it goes **after** the controls rather
-                // than between them. The first version put it directly under
-                // the local sliders, where seven lines of prose separated a
-                // mask's adjustments from the mask's own geometry.
-                PipelineOrder()
-                LocalRefusals()
+                // ⚠ Three explanatory blocks used to sit here — how a masked
+                // exposure scales the parameter, `PipelineOrder` (where the
+                // mask sits, three lines listing every adjustment), and
+                // `LocalRefusals` (nine controls and a reason each). Roughly
+                // twenty lines of prose under a panel of sliders. Removed at
+                // the developer's request: the reasoning is right and belongs
+                // in `research/masking.md` and `DECISIONS.md` #76, which is
+                // where it now lives alone. A panel is for controls.
+                //
+                // Both views are kept and still tested — `LocalRefusals` is the
+                // reason `AdjustmentSpec.localRefusal` cannot be silently
+                // dropped — so restoring either is one line.
             }
         }
     }
