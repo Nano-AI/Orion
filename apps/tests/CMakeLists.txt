@@ -17,6 +17,7 @@ add_executable(orion-tests
     tests_brush.cpp
     tests_mask_range.cpp
     tests_mask_matte.cpp
+    tests_grain.cpp
 )
 
 target_include_directories(orion-tests PRIVATE ${CMAKE_SOURCE_DIR}/engine/src)

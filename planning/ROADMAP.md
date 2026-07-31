@@ -261,7 +261,7 @@ inherited**, or every existing `identical` baseline silently rebases.
 | # | Piece | Cost |
 |---|---|---|
 | 1 | `grain.slang` — plate fetch, hand-rolled trilinear, `σ(Y)` weight, dither | ~90 lines |
-| 2 | Plate generation: PCG32 + Box–Muller, CPU box-filtered mip chain, 2048² R32F | ~60 lines, one aux texture |
+| 2 | ✅ **Done 2026-07-31.** `GrainPlate.h`: PCG32 + Box–Muller, band-limiting blur, CPU box-filtered chain. ⚠ Stacked **vertically into one 2048×4096 R32F** rather than real mip levels — the aux-texture API has none, and adding them would change the GPU layer for nothing, since the shader must filter by hand anyway. `levelOffset(l)` is the closed form both sides use | 182 lines, 33 MB, 14 checks |
 | 3 | `develop:display` → `RGBA16Float`; new node; `setWideOutput` retargeted | +194 MB, +1 node |
 | 4 | `GrainParams` + offset asserts; `gridStep` uniform so both graphs sample one field | small |
 | 5 | `amount` / `size` through `Adjustments` → `orion.h` → `CApi.cpp` → Swift | ~10 files |

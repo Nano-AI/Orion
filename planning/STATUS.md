@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**film grain researched and costed, deliberately not started** — the quantisation boundary has to move first)
+**Last updated:** 2026-07-31 (**the grain plate, built and pinned** — piece 2 of the film-grain decomposition)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -98,6 +98,55 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-07-31j — the grain plate, built and pinned
+
+⚠ **Forty-first arrival of the stale M3 prompt.** Verified and set aside.
+
+Piece 2 of `ROADMAP.md`'s film-grain decomposition: `GrainPlate.h`, the
+precomputed field of correlated noise everything else hangs off.
+
+⚠ **Scoped to the plate alone on purpose.** It is a self-contained unit with
+properties that can be asserted on the CPU, where the shader and the node wiring
+around it are not — and the last two sessions both recorded that starting a
+multi-part change and leaving it half-built is the move this file has already
+paid for twice.
+
+### ⚠ The aux-texture API has no mip levels
+
+The design needs a chain: a preview pixel covering sixteen frame pixels has to
+see the *average* of sixteen, or the 1/16 preview reads an order of magnitude
+grainier than the render it previews.
+
+Adding real mip support would be a change to the GPU layer for nothing — the
+shader has to filter **by hand** regardless, because a hardware sampler's
+precision is not specified across GPU families and export could then differ by
+device. So the chain is **stacked vertically into one 2048×4096 R32F**, 33 MB,
+with `levelOffset(l)` a closed form that both sides compute from the same
+expression. Two derivations of one offset is how a level gets read from the
+wrong rows.
+
+### What is pinned, and the check that matters
+
+14 checks. The load-bearing one is that **the standard deviation falls down the
+chain** — 1.0, then measurably less, then less again.
+
+⚠ That is the property, not a defect, and it is the one an obvious "fix" would
+destroy. Renormalising every level back to unit variance looks tidier and makes
+the 1/16 preview exactly as grainy as the full render — the precise failure the
+plate exists to prevent. The mutation that does it fails two checks.
+
+Also pinned: neighbouring texels are **correlated** (0.3+), because uncorrelated
+noise is a digital sensor rather than film — the mutation that skips the
+band-limiting blur fails it — and two builds from one seed are **bit-identical**,
+which is why PCG32 and Box–Muller are written out rather than taken from
+`<random>`, whose algorithms differ between standard libraries.
+
+### Still to do
+
+Pieces 1 and 3–7: the shader, moving the quantisation boundary (`develop:display`
+→ `RGBA16Float`, +194 MB), the adjustment through 20 files, two sliders, and the
+GPU test. The design is settled in #81; none of it is guesswork now.
 
 ## Session 2026-07-31i — film grain, researched and costed rather than started
 
