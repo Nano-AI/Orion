@@ -62,6 +62,7 @@ enum ViewportTests {
         testPictureMapMatchesTheFitRectangle()
         testPictureMapRoundTrips()
         testPictureMapFollowsThePan()
+        testBrushCursorIsRound()
         testBatchNeverOverwrites()
         testBatchKeepsGoingAfterAFailure()
         testEveryFieldSurvivesTheSidecar()

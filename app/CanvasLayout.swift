@@ -680,19 +680,38 @@ enum CanvasLayout {
         return out
     }
 
-    /// The brush's outline on screen: a circle in *normalized* coordinates, so
-    /// on a picture that is not square it is drawn as an ellipse — because that
-    /// is the shape the kernel actually stamps. `mask_brush.slang` measures its
-    /// distance in normalized space, exactly as the gradients do.
+    /// The brush's outline on screen: **round**, because that is the shape the
+    /// kernel stamps.
+    ///
+    /// ⚠ This drew an ellipse until 2026-07-31, and its comment justified it —
+    /// "`mask_brush.slang` measures its distance in normalized space, exactly as
+    /// the gradients do". That shader no longer exists. Decision #62 folded it
+    /// into `mask_component.slang`, and the fold carried the fix: the dab is
+    /// measured in **frame pixels** now, `nibPx = brushRadius × min(shownW,
+    /// shownH)`. The paint went round and the cursor over it did not, so the
+    /// brush drew an outline half again as wide as the paint it laid on a 3:2
+    /// frame — reported from the app as, simply, the circle is an oval.
+    ///
+    /// A stale comment is what kept it: it named a file, the file was gone, and
+    /// nothing failed. There is a check on the shape now.
+    ///
+    /// `scale` is view points per normalized unit **per axis**, so its two
+    /// components are the displayed picture's two sides in points; the smaller
+    /// is the side `nibPx` is measured against. Taking it here rather than from
+    /// `rect` is what makes this correct while zoomed, where only part of the
+    /// picture is in `rect`.
     static func brushCursor(at unit: CGPoint, radius: CGFloat,
                             _ map: PictureMap, samples: Int = 64) -> [CGPoint] {
         guard samples >= 3, radius > 0 else { return [] }
+        let centre = map.point(unit)
+        let s = map.scale
+        let r = radius * min(s.width, s.height)
         var out: [CGPoint] = []
         out.reserveCapacity(samples)
         for i in 0..<samples {
             let t = CGFloat(i) / CGFloat(samples) * 2 * .pi
-            out.append(map.point(CGPoint(x: unit.x + cos(t) * radius,
-                                         y: unit.y + sin(t) * radius)))
+            out.append(CGPoint(x: centre.x + cos(t) * r,
+                               y: centre.y + sin(t) * r))
         }
         return out
     }

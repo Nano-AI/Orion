@@ -190,12 +190,15 @@ struct MaskOverlay: View {
 
     // MARK: The brush
 
-    /// The nib, drawn where the pointer is.
+    /// The nib, drawn where the pointer is. **Round**, because the paint is.
     ///
-    /// An ellipse on any frame that is not square, because that is the shape
-    /// the kernel stamps — `mask_brush.slang` measures distance in normalized
-    /// coordinates exactly as the gradients do. A screen-round cursor would
-    /// promise a shape the paint does not have.
+    /// ⚠ This said the opposite until 2026-07-31 — "an ellipse on any frame
+    /// that is not square, because that is the shape the kernel stamps" — and
+    /// cited `mask_brush.slang`, which decision #62 folded away. The fold moved
+    /// the dab into frame pixels and the cursor was left behind, so it drew half
+    /// again as wide as the paint on every landscape photograph. The shape lives
+    /// in `CanvasLayout.brushCursor` and `testBrushCursorIsRound` pins it.
+    ///
     /// Built in a plain function, not in the `ViewBuilder` — a `for` loop
     /// cannot live inside one.
     private func cursorPath(_ at: CGPoint) -> Path {

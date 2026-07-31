@@ -303,4 +303,60 @@ extension ViewportTests {
     }
 
     // MARK: Gradient masks
+
+    /// The brush cursor is round on screen, because the paint is round on the
+    /// picture.
+    ///
+    /// ⚠ It was an ellipse until 2026-07-31, and it had a comment defending
+    /// that: the dab used to be measured in normalized coordinates, so on a 3:2
+    /// frame it really did stamp an ellipse. Decision #62 folded
+    /// `mask_brush.slang` into `mask_component.slang` and the fold moved the dab
+    /// into **frame pixels** — `nibPx = brushRadius × min(shownW, shownH)`. The
+    /// paint went round; the outline over it did not, and drew half again as
+    /// wide as the paint on every landscape photograph.
+    ///
+    /// Nothing failed, because the only thing tying the two together was a
+    /// comment naming a file that had been deleted.
+    static func testBrushCursorIsRound() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+
+        // ⚠ Square is in the list to keep the check honest, not for coverage: a
+        // square picture is the one shape on which the old elliptical form was
+        // already correct, so a fixture of squares alone would pass either way.
+        for image in [landscape, portrait, 1.0] as [CGFloat] {
+            for zoom in [1.0, 3.0] as [CGFloat] {
+                let v = Viewport()
+                v.zoomBy(zoom, anchor: CGPoint(x: 0.5, y: 0.5),
+                         visible: CGSize(width: 1, height: 1))
+                let vis = v.visibleFraction(imageAspect: image, viewAspect: viewAspect)
+                v.clamp(to: vis)
+                let map = CanvasLayout.pictureMap(
+                    quadScale: v.quadScale(imageAspect: image, viewAspect: viewAspect),
+                    visible: vis, center: v.center, in: view)
+
+                let at = CGPoint(x: 0.5, y: 0.5)
+                let pts = CanvasLayout.brushCursor(at: at, radius: 0.08, map)
+                let c = map.point(at)
+
+                var lo = CGFloat.greatestFiniteMagnitude
+                var hi: CGFloat = 0
+                for p in pts {
+                    let d = hypot(p.x - c.x, p.y - c.y)
+                    lo = min(lo, d); hi = max(hi, d)
+                }
+                // Every sample the same distance from the centre. The old form
+                // gave hi/lo = the frame's aspect, ~1.497 on a 3:2 picture.
+                near(hi, lo, 1e-6, "brush cursor is round (\(image), zoom \(zoom))")
+
+                // And it is the size the kernel stamps: `nibPx` against the
+                // shorter displayed side, in view points. Roundness alone is
+                // satisfied by a cursor of any radius at all.
+                let s = map.scale
+                near(hi, 0.08 * min(s.width, s.height), 1e-6,
+                     "and matches nibPx (\(image), zoom \(zoom))")
+            }
+        }
+    }
+
 }
