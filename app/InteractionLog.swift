@@ -151,7 +151,20 @@ final class InteractionLog: @unchecked Sendable {
         f("clarity", a.clarity, b.clarity)
         f("dehaze", a.dehaze, b.dehaze)
         f("fusion", a.fusion, b.fusion)
-        f("localExposure", a.localExposureEv, b.localExposureEv)
+        // ⚠ Per layer, and the layer index is emitted with it — a bare
+        // `set localExposure` would replay onto whichever layer the runner
+        // happened to have selected, which is not the one that moved.
+        for i in 0..<max(a.layers.count, b.layers.count) {
+            let x = i < a.layers.count ? a.layers[i] : LocalAdjustState()
+            let y = i < b.layers.count ? b.layers[i] : LocalAdjustState()
+            guard x != y else { continue }
+            out.append("masklayer \(i)")
+            f("localExposure", x.exposureEv, y.exposureEv)
+            f("localContrast", x.contrast, y.contrast)
+            f("localSaturation", x.saturation, y.saturation)
+            f("localWarmth", x.warmth, y.warmth)
+            f("localTint", x.tint, y.tint)
+        }
         f("maskRefine", a.maskRefine, b.maskRefine)
 
         // Geometry has verbs of its own rather than `set`.

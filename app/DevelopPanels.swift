@@ -440,6 +440,30 @@ extension Editor {
                             // A hidden row is dimmed, so the list says at a
                             // glance which of them are actually contributing.
                             .opacity(m.hidden ? 0.45 : 1)
+
+                            // ⚠ The layer break. Rows in one run fold together
+                            // into a single coverage and share one set of
+                            // adjustments; a break starts a new coverage with
+                            // its own. Row 1 always begins a layer, so it has
+                            // no control — a first row that could "continue"
+                            // would continue from nothing.
+                            if i > 0 {
+                                Button { engine.toggleLayerBreak(at: i) } label: {
+                                    Image(systemName: m.startsLayer
+                                          ? "rectangle.split.1x2" : "link")
+                                        .font(.system(size: 10))
+                                        .frame(width: 16)
+                                        .foregroundStyle(m.startsLayer
+                                                         ? Palette.accent : Palette.faint)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .help(m.startsLayer
+                                      ? "Starts its own layer — click to fold into the one above"
+                                      : "Folds into the layer above — click to start its own")
+                            } else {
+                                Color.clear.frame(width: 16)
+                            }
                           }
                         }
                     }
@@ -532,6 +556,16 @@ extension Editor {
                     // research/masking.md §6 is explicit that the adjustment is
                     // applied once through the combined coverage, or two
                     // overlapping components would apply it twice.
+                    // ⚠ Which layer these belong to, said out loud. With a
+                    // stack, a set of sliders that did not name its layer would
+                    // be five controls whose target is a property of the row
+                    // selection three rows above them.
+                    if engine.layerCount > 1 {
+                        Engraved.Label(
+                            text: "Layer \(engine.selectedLayer + 1) of \(engine.layerCount)",
+                            color: Palette.accent, size: 9)
+                    }
+
                     // The same specs the global panel renders, pointed at the
                     // local scope. One definition, so the two cannot drift in
                     // look, behaviour or in what they offer.

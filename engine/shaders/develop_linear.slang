@@ -17,6 +17,19 @@
 /// contrast at all near the crossover.
 static const float kContrastPivot = -2.5f;
 
+/// One layer's coverage. ⚠ A branch rather than an array index: Slang cannot
+/// index a set of texture parameters, and the graph is static so which slot a
+/// layer uses is only known at render.
+float coverage(int slot, uint2 p,
+               Texture2D<float> m0, Texture2D<float> m1,
+               Texture2D<float> m2, Texture2D<float> m3)
+{
+    if (slot == 0) return m0[p];
+    if (slot == 1) return m1[p];
+    if (slot == 2) return m2[p];
+    return m3[p];
+}
+
 struct LinearAdjustParams
 {
     float exposureEv;
@@ -44,15 +57,24 @@ struct LinearAdjustParams
     /// `x * 2^(alpha * stops)` — a smooth multiplicative ramp in linear light,
     /// artifact-free by construction. Blending two renders instead would mix
     /// two tone-mapped states and shift hue across the transition band.
-    float localExposureEv;
-    /// The rest of the local set — all pointwise, all scaled by the coverage.
-    /// research/masking.md §2b names what is missing and why: white balance is
-    /// applied before the demosaic and the pyramid operators are not pointwise.
-    float localContrast;
-    float localSaturation;
+    /// One layer's worth of local adjustment. All pointwise, all scaled by
+    /// that layer's coverage. research/masking.md §2b names what is missing and
+    /// why: white balance is applied before the demosaic and the pyramid
+    /// operators are not pointwise.
+    ///
+    /// ⚠ Four sets, not one. A layer is a run of mask components with its own
+    /// coverage, so the subject can be graded one way and the sky another.
+    float layerExposureEv[4];
+    float layerContrast[4];
+    float layerSaturation[4];
     /// A colour **cast**, not a white balance. See the note at the call site.
-    float localWarmth;
-    float localTint;
+    float layerWarmth[4];
+    float layerTint[4];
+    /// Which of the four coverage textures carries each layer. ⚠ The graph is
+    /// static, so a layer's coverage cannot be a node chosen per render — the
+    /// kernel binds all four and this says which one to read.
+    int   layerMask[4];
+    int   layerCount;
     float maskActive;
 
     /// Paint the coverage on screen instead of only acting through it.
@@ -91,7 +113,10 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float4>   src,
                    uniform Texture2D<float2>   guideAb,   // a, b from the guided filter
                    uniform Texture2D<float2>   guideRaw,  // log2 luminance
-                   uniform Texture2D<float>    mask,      // local alpha, 0..1
+                   uniform Texture2D<float>    mask0,     // layer coverages,
+                   uniform Texture2D<float>    mask1,     // one per component
+                   uniform Texture2D<float>    mask2,     // slot; `layerMask`
+                   uniform Texture2D<float>    mask3,     // picks per layer
                    uniform RWTexture2D<float4> dst,
                    uniform ConstantBuffer<LinearAdjustParams> p)
 {
@@ -146,19 +171,24 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     c = applyColor(c, p.vibrance, p.saturation);
     c = applyColorMixer(c, p.hueShift, p.satShift, p.lumShift);
 
-    // ── The local adjustments, each scaled by coverage ───────────────────
+    // ── The local adjustments, layer by layer ────────────────────────────
     //
     // research/masking.md §2 and §2b. The alpha multiplies the **parameter**,
     // never the result: half coverage at one stop is 2^0.5, a smooth
     // multiplicative ramp in linear light rather than a blend of two rendered
     // frames. Everything here is pointwise, which is the test for whether an
-    // adjustment can be local at all — §2b says why white balance and the
-    // pyramid operators cannot be.
-    if (p.maskActive != 0.0f)
+    // adjustment can be local at all.
+    //
+    // ⚠ **One pass over the frame, not one per layer.** Layers apply in stack
+    // order inside this loop, so four layers cost four sets of arithmetic on a
+    // pixel already in registers rather than four passes over 24 megapixels.
+    for (int L = 0; L < p.layerCount; ++L)
     {
-        const float a = saturate(mask[tid.xy]);
+        const float a = saturate(coverage(p.layerMask[L], tid.xy,
+                                          mask0, mask1, mask2, mask3));
+        if (a <= 0.0f) continue;
 
-        if (p.localExposureEv != 0.0f) c *= exp2(a * p.localExposureEv);
+        if (p.layerExposureEv[L] != 0.0f) c *= exp2(a * p.layerExposureEv[L]);
 
         // Contrast, as a gain on the pixel's distance from the pivot measured
         // in stops — so it is a multiply like the exposure above and keeps the
@@ -169,35 +199,32 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
         // -2.47 in log2 and the display transform pivots at -2.5; a second
         // pivot here would make a local contrast of zero visibly different
         // from no local contrast at all near the crossover.
-        if (p.localContrast != 0.0f)
+        if (p.layerContrast[L] != 0.0f)
         {
             const float ev = log2(max(luminance2020(c), 1e-6f));
-            c *= exp2((ev - kContrastPivot) * (a * p.localContrast));
+            c *= exp2((ev - kContrastPivot) * (a * p.layerContrast[L]));
         }
 
         // Saturation, toward the pixel's own luminance. Same construction the
         // global one uses, so the two agree about what grey means.
-        if (p.localSaturation != 0.0f)
+        if (p.layerSaturation[L] != 0.0f)
         {
             const float y = luminance2020(c);
-            c = lerp(float3(y), c, 1.0f + a * p.localSaturation);
+            c = lerp(float3(y), c, 1.0f + a * p.layerSaturation[L]);
         }
 
         // ⚠ A colour **cast**, not a white balance. Temperature and tint are
-        // applied in `linearize`, before the demosaic, and cannot be local
-        // without demosaicing the frame twice — §2b. This is a per-channel
-        // multiply, it is named Warmth and Tint rather than Temperature and
-        // Tint, and the two are not the same operation.
-        if (p.localWarmth != 0.0f || p.localTint != 0.0f)
+        // applied in `linearize`, before the demosaic, and cannot be local —
+        // research/masking.md §2b. This is a per-channel multiply.
+        if (p.layerWarmth[L] != 0.0f || p.layerTint[L] != 0.0f)
         {
             // ⚠ Taken *before* the multiply. The first version read the
             // luminance on both sides of the cast from the same already-cast
-            // colour, so the ratio was one and the renormalisation did nothing
-            // — a line that looks like it is doing the work and is not.
+            // colour, so the ratio was one and the renormalisation did nothing.
             const float before = luminance2020(c);
 
-            const float w = a * p.localWarmth;
-            const float t = a * p.localTint;
+            const float w = a * p.layerWarmth[L];
+            const float t = a * p.layerTint[L];
             c *= float3(1.0f + w * 0.30f,
                         1.0f + t * 0.30f,
                         1.0f - w * 0.30f);
@@ -221,7 +248,16 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     // where a photographer most wants to check coverage.
     if (p.maskOverlay != 0.0f && p.maskActive != 0.0f)
     {
-        const float a = saturate(mask[tid.xy]);
+        // ⚠ The **union** of every layer, not one of them. Show mask answers
+        // "where is the mask", and with a stack that question is about all of
+        // it — an overlay showing only the last layer would report a stack of
+        // four as if three of them were not there.
+        float a = 0.0f;
+        for (int L = 0; L < p.layerCount; ++L)
+        {
+            a = max(a, saturate(coverage(p.layerMask[L], tid.xy,
+                                         mask0, mask1, mask2, mask3)));
+        }
         const float3 red = float3(0.35f, 0.012f, 0.02f);
         c = lerp(c, red + c * 0.25f, a * 0.6f);
     }

@@ -107,6 +107,9 @@ struct MaskComponentState: Equatable, Codable {
     var invert = false
     /// Hidden by the eye button. Keeps every setting and contributes nothing.
     var hidden = false
+    /// Begins a new layer. A layer is a run of consecutive components with its
+    /// own coverage and its own adjustments; row 1 always starts one.
+    var startsLayer = false
     var centreX: Float = 0.5
     var centreY: Float = 0.5
     var angle: Float = 0
@@ -166,7 +169,7 @@ struct MaskComponentState: Equatable, Codable {
     /// component's range fields, so the guard could not see them. A round trip
     /// is only as good as the state it round-trips.
     private enum Key: String, CodingKey {
-        case kind, compose, invert, hidden, centreX, centreY, angle, length
+        case kind, compose, invert, hidden, startsLayer, centreX, centreY, angle, length
         case radiusX, radiusY, feather, roundness
         case rangeLo, rangeHi, rangeSoft
         case colourR, colourG, colourB, colourTol, colourSoft
@@ -185,6 +188,7 @@ struct MaskComponentState: Equatable, Codable {
         compose = (try? c.decodeIfPresent(Int32.self, forKey: .compose)).flatMap { $0 } ?? compose
         invert = (try? c.decodeIfPresent(Bool.self, forKey: .invert)).flatMap { $0 } ?? invert
         hidden = (try? c.decodeIfPresent(Bool.self, forKey: .hidden)).flatMap { $0 } ?? hidden
+        startsLayer = (try? c.decodeIfPresent(Bool.self, forKey: .startsLayer)).flatMap { $0 } ?? startsLayer
         centreX = float(.centreX) ?? centreX
         centreY = float(.centreY) ?? centreY
         angle = float(.angle) ?? angle
@@ -221,6 +225,16 @@ struct SpotState: Equatable, Codable {
     var feather: Float = 0.5
     /// Heal takes the destination's tone; clone does not.
     var heal = true
+}
+
+/// One layer's local adjustments — pointwise only, research/masking.md §2b.
+struct LocalAdjustState: Equatable, Codable {
+    var exposureEv: Float = 0
+    var contrast: Float = 0
+    var saturation: Float = 0
+    /// A colour cast where the mask covers, not a white balance.
+    var warmth: Float = 0
+    var tint: Float = 0
 }
 
 struct DevelopState: Equatable, Codable {
@@ -261,13 +275,13 @@ struct DevelopState: Equatable, Codable {
     var maskRefine: Float = 0
     /// Dust and blemishes. research/spot-removal.md.
     var spots: [SpotState] = []
-    var localExposureEv: Float = 0
-    /// The rest of the local set. research/masking.md §2b.
-    var localContrast: Float = 0
-    var localSaturation: Float = 0
-    /// A colour cast where the mask covers, not a white balance.
-    var localWarmth: Float = 0
-    var localTint: Float = 0
+    /// ⚠ **One set per layer.** A layer is a run of mask components with its
+    /// own coverage, so the subject can be graded one way and the sky another.
+    ///
+    /// The legacy scalar keys are still read into layer 1 — every sidecar
+    /// written before layers existed carries exactly one set, and that set is
+    /// what layer 1 means.
+    var layers: [LocalAdjustState] = [LocalAdjustState()]
 
     var fusion: Float = 0
     var dehaze: Float = 0
@@ -307,6 +321,7 @@ extension DevelopState {
         case gradeShadow, gradeMidtone, gradeHighlight
         case maskComponents, localExposureEv, maskRefine, spots
         case localContrast, localSaturation, localWarmth, localTint
+        case layers
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case curve, hueShift, satShift, lumShift
 
@@ -375,11 +390,22 @@ extension DevelopState {
         denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
         denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
         lutStrength = float(.lutStrength) ?? lutStrength
-        localExposureEv = float(.localExposureEv) ?? localExposureEv
-        localContrast = float(.localContrast) ?? localContrast
-        localSaturation = float(.localSaturation) ?? localSaturation
-        localWarmth = float(.localWarmth) ?? localWarmth
-        localTint = float(.localTint) ?? localTint
+        // ⚠ The new key wins when present, and the legacy scalars fill layer 1
+        // when it is not. A sidecar written by a newer build carries both,
+        // because the encoder is synthesised from the stored properties — and
+        // preferring the scalars there would silently discard layers 2 and up.
+        if let ls = (try? c.decodeIfPresent([LocalAdjustState].self, forKey: .layers))
+                        .flatMap({ $0 }), !ls.isEmpty {
+            layers = ls
+        } else {
+            var first = LocalAdjustState()
+            first.exposureEv = float(.localExposureEv) ?? first.exposureEv
+            first.contrast = float(.localContrast) ?? first.contrast
+            first.saturation = float(.localSaturation) ?? first.saturation
+            first.warmth = float(.localWarmth) ?? first.warmth
+            first.tint = float(.localTint) ?? first.tint
+            layers = [first]
+        }
         maskRefine = float(.maskRefine) ?? maskRefine
 
         // ⚠ `spots` and `maskRefine` were written by the encoder and ignored

@@ -25,7 +25,7 @@ licence) before it is a code one. That is the thing to settle first.
 below is down to three items, all of them either cosmetic or named-and-costed.
 
 **Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3390
-checks** · **28 `repro/` scenarios, 136 checks** · all 0 failures. Bench exits 0
+checks** · **29 `repro/` scenarios, 143 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -57,6 +57,72 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30q — independent layers
+
+⚠ **Twenty-fourth arrival of the stale M3 prompt.** Not re-litigated.
+
+Decision #75's stage 2, executed against the decomposition costed last session.
+The subject can be graded one way and the sky another, in one render.
+
+### A layer is a run of components
+
+There is no separate layer list, because the row list already is one. Rows in a
+run fold together into a single coverage and share one set of adjustments; a
+break starts a new coverage with its own. One bool per component — no schema
+restructure, and reordering keeps working because the grouping is read from the
+rows rather than stored beside them.
+
+⚠ **The layer index is derived, never stored.** Which layer a row belongs to is
+how many breaks precede it, and that moves whenever a row is added, removed or
+reordered. A stored index would be a second copy of the grouping and the two
+would disagree the first time a row moved.
+
+### ⚠ The constraint that shaped it
+
+The graph is static, so a layer's coverage cannot be a node picked per render.
+`develop:linear` binds **all four** component slots and `layerMask[L]` says
+which one ends each layer. That is also why there are now **four refine chains**
+rather than one — a layer's coverage is whichever component ends its run, so
+every slot needs a chain and the parameter picks.
+
+**Predicted 148 nodes and ~6565 MiB. Measured 148 nodes and 6878 MiB.** The node
+count was exact; the memory ran 313 MiB over, because the estimate counted the
+refine outputs and forgot each chain's own subsampled coefficient textures. M0
+gate 9.70 → **10.85 ms**, still well inside 16.
+
+### Three bugs on the way, all mine
+
+- ⚠ **The kernel's `startsLayer` was never pushed.** The flag existed end to end
+  — struct, facade, Swift, shader — and `apply` never wrote it into the
+  parameter block, so the fold never restarted and every layer read one merged
+  coverage. The scenario caught it; nothing else could have, because every unit
+  test drives the kernel directly with parameters it sets itself.
+- ⚠ **`1...upTo` traps when `upTo` is zero.** Selecting the first row crashed
+  the process outright — Swift traps on an invalid range rather than yielding an
+  empty sequence. Exit 133, no output, no message.
+- ⚠ **The first scenario asserted a threshold picked by eye** (`left < 0.35`)
+  and failed at 0.42 against a working stack. The claim is that two layers move
+  in *opposite directions at once*, which is a statement about each region
+  against its own unmasked value. Seventh time in this file that a first-draft
+  check measured something other than its claim.
+
+### What the scenario pins
+
+Two radials over opposite sides, one pulled down two and a half stops and the
+other lifted one and a half, **in one render** — which a single shared
+adjustment cannot do. Then each layer's grade reaching only its own coverage,
+both ways round, and the region between them bit-identical throughout.
+
+Three mutations dead: ignoring the layer flag, pointing every layer at the last
+coverage, and giving every layer layer-0's adjustments.
+
+### Deliberately unchanged
+
+The **four-component cap**. Layers do not change it: four components split
+across four layers is the same 184 MiB as four in one group, because the cap is
+a memory number. Per-layer clarity, dehaze and fusion stay refused (#75), and so
+do blend modes over rendered frames.
 
 ## Session 2026-07-30p — the oldest gap closes, and stage 2 is costed rather than started
 

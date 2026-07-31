@@ -70,19 +70,26 @@ struct LinearAdjust {
     float         lumShift[8];
     /// A local adjustment and its coverage. See mask_gradient.slang and
     /// research/masking.md — the alpha scales the parameter, not the result.
-    float         localExposureEv;
-    /// The rest of the local set — pointwise only. research/masking.md §2b.
-    float         localContrast;
-    float         localSaturation;
+    /// ⚠ Four local sets, one per layer. A layer is a run of mask components
+    /// with its own coverage, so the subject can be graded one way and the sky
+    /// another. All pointwise — research/masking.md §2b.
+    float         layerExposureEv[4];
+    float         layerContrast[4];
+    float         layerSaturation[4];
     /// A colour cast, not a white balance: temperature and tint are applied
     /// before the demosaic and cannot be local.
-    float         localWarmth;
-    float         localTint;
+    float         layerWarmth[4];
+    float         layerTint[4];
+    /// Which coverage texture each layer reads. ⚠ The graph is static, so a
+    /// layer's coverage cannot be a node picked per render — the kernel binds
+    /// all four component slots and this says which one ends each layer.
+    std::int32_t  layerMask[4];
+    std::int32_t  layerCount;
     float         maskActive;
     /// Draw the coverage on screen. A viewing aid; never set for an export.
     float         maskOverlay;
 };
-static_assert(sizeof(LinearAdjust) == 172);
+static_assert(sizeof(LinearAdjust) == 252);
 
 struct GuidePrep {
     std::uint32_t size[2];
@@ -511,7 +518,8 @@ struct alignas(8) MaskComponent {
     float         colourB;
     float         colourTol;
     float         colourSoft;
-    float         _pad4;
+    /// Non-zero when this component begins a layer — the fold restarts here.
+    std::int32_t  startsLayer;
 };
 static_assert(sizeof(MaskComponent) == 152);
 // Every float2 in the shader's struct must land on an eight-byte boundary, or

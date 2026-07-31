@@ -56,6 +56,10 @@ struct MaskComponentEdit {
     /// resolves to its first input and this node's first input *is* the fold so
     /// far. Skipping a component is therefore exactly not running it.
     bool  hidden = false;
+    /// Begins a new layer. A layer is a run of consecutive components with its
+    /// own coverage and its own local adjustments; component 0 always starts
+    /// one. research/masking.md §6 and ROADMAP's per-layer decomposition.
+    bool  startsLayer = false;
 
     float centre[2]{0.5f, 0.5f};
     float angle = 0.0f;                // radians, both gradient kinds
@@ -258,13 +262,21 @@ struct Adjustments {
 
     /// What the mask does. Scales the *parameter*, so alpha 0.5 with +1 EV is
     /// exactly 2^0.5 — not a blend between two rendered frames.
-    float localExposureEv = 0.0f;
-    /// The rest of the local set. Pointwise only — research/masking.md §2b.
-    float localContrast = 0.0f;
-    float localSaturation = 0.0f;
-    /// A colour cast where the mask covers, **not** a white balance.
-    float localWarmth = 0.0f;
-    float localTint = 0.0f;
+    /// One layer's local adjustments. Pointwise only — research/masking.md §2b
+    /// says what cannot be here and why.
+    struct LocalEdit {
+        float exposureEv = 0.0f;
+        float contrast = 0.0f;
+        float saturation = 0.0f;
+        /// A colour cast where the mask covers, **not** a white balance.
+        float warmth = 0.0f;
+        float tint = 0.0f;
+        bool operator==(const LocalEdit&) const = default;
+    };
+    /// ⚠ One per layer, so the subject can be graded one way and the sky
+    /// another. Index 0 is what a single-group photograph used to carry, which
+    /// is what makes the sidecar migration a rename rather than a conversion.
+    std::array<LocalEdit, kMaxMaskComponents> layers{};
 
     /// Single-image exposure fusion, 0..1 — shadow lift that keeps local
     /// contrast. The value is a power applied to the emitted gain, so zero is
@@ -531,9 +543,18 @@ private:
     /// Guided feathering of the folded group — research/masking.md §4.
     /// One chain for the whole group, not one per component: what gets snapped
     /// to an edge is the coverage the photographer can see.
-    int nMaskGuidePrep_ = -1, nMaskGuideH1_ = -1, nMaskGuideV1_ = -1;
-    int nMaskGuideAb_ = -1, nMaskGuideH2_ = -1, nMaskGuideV2_ = -1;
-    int nMaskRefine_ = -1;
+    /// ⚠ **One chain per component slot, not one per group.** A layer's
+    /// coverage is the last component of its run, and which component that is
+    /// changes at runtime — so every slot gets a chain and `layerMask` picks
+    /// the one that matters. Seven nodes each, all disabled at strength zero,
+    /// so an unrefined stack pays for their textures and none of their time.
+    int nMaskGuidePrep_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int nMaskGuideH1_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int nMaskGuideV1_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int nMaskGuideAb_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int nMaskGuideH2_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int nMaskGuideV2_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int nMaskRefine_[kMaxMaskComponents]{-1, -1, -1, -1};
     std::uint32_t fuseW_[kFuseLevels]{}, fuseH_[kFuseLevels]{};
 
     /// The simulated-image plan. Derived from the frame's median, so it is a

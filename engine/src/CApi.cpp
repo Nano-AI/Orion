@@ -191,6 +191,7 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.compose       = s.compose;
         d.invert        = s.invert != 0;
         d.hidden        = s.hidden != 0;
+        d.startsLayer   = s.starts_layer != 0;
         d.centre[0]     = s.centre_x;
         d.centre[1]     = s.centre_y;
         d.angle         = s.angle;
@@ -215,11 +216,14 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.brushHardness = s.brush_hardness;
         d.brushRevision = s.brush_revision;
     }
-    a.localExposureEv = adj->local_exposure_ev;
-    a.localContrast   = std::clamp(adj->local_contrast, -1.0f, 1.0f);
-    a.localSaturation = std::clamp(adj->local_saturation, -1.0f, 1.0f);
-    a.localWarmth     = std::clamp(adj->local_warmth, -1.0f, 1.0f);
-    a.localTint       = std::clamp(adj->local_tint, -1.0f, 1.0f);
+    for (int i = 0; i < ORION_MAX_MASK_COMPONENTS; ++i) {
+        auto& e = a.layers[std::size_t(i)];
+        e.exposureEv = adj->local_exposure_ev[i];
+        e.contrast   = std::clamp(adj->local_contrast[i], -1.0f, 1.0f);
+        e.saturation = std::clamp(adj->local_saturation[i], -1.0f, 1.0f);
+        e.warmth     = std::clamp(adj->local_warmth[i], -1.0f, 1.0f);
+        e.tint       = std::clamp(adj->local_tint[i], -1.0f, 1.0f);
+    }
     a.maskRefine = std::clamp(adj->mask_refine, 0.0f, 1.0f);
 
     a.spotCount = std::clamp(adj->spot_count, 0, ORION_MAX_SPOTS);

@@ -65,22 +65,26 @@ struct AdjustmentGroup: View {
     /// asks the engine instead of the spec.
     private func reset(_ id: AdjustmentID, _ scope: Scope) -> Float {
         let d = engine.defaults
+        // ⚠ A layer's defaults are zero, not the photograph's — `defaults` is
+        // the as-shot state and its layer list may be shorter than the stack.
+        let l = d.layers.indices.contains(engine.selectedLayer)
+            ? d.layers[engine.selectedLayer] : LocalAdjustState()
         switch (id, scope) {
         case (.exposure, .global):    return d.exposureEv
-        case (.exposure, .local):     return d.localExposureEv
+        case (.exposure, .local):     return l.exposureEv
         case (.contrast, .global):    return d.contrast
-        case (.contrast, .local):     return d.localContrast
+        case (.contrast, .local):     return l.contrast
         case (.highlights, _):        return d.highlights
         case (.shadows, _):           return d.shadows
         case (.whites, _):            return d.whites
         case (.blacks, _):            return d.blacks
         case (.vibrance, _):          return d.vibrance
         case (.saturation, .global):  return d.saturation
-        case (.saturation, .local):   return d.localSaturation
+        case (.saturation, .local):   return l.saturation
         case (.temperature, _):       return d.temperatureK
         case (.tint, _):              return d.tint
-        case (.warmth, _):            return d.localWarmth
-        case (.localTint, _):         return d.localTint
+        case (.warmth, _):            return l.warmth
+        case (.localTint, _):         return l.tint
         case (.clarity, _):           return d.clarity
         case (.dehaze, _):            return d.dehaze
         case (.fusion, _):            return d.fusion

@@ -1,0 +1,71 @@
+# Independent layers — decision #75 stage 2, ROADMAP's decomposition.
+#
+# Reported repeatedly: "I should be able to colour grade and do all of that
+# editing on a different mask", and "one master mask by default, and I can
+# apply each and every edit mask by mask."
+#
+# A layer is a **run of consecutive mask components**. Rows in one run fold
+# together into a single coverage and share one set of adjustments; a break
+# starts a new coverage with its own. That is why there is no separate layer
+# list: the row list already is one.
+#
+# ⚠ The load-bearing property is independence — two layers over different parts
+# of the picture, each with its own grade, and neither reaching the other.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+# ⚠ Baselines first. The claim is that two layers move in **opposite
+# directions at once**, and that is a statement about each region against its
+# own unmasked value — not against a threshold picked by eye. The first draft
+# asserted `left < 0.35` and failed at 0.42 against a working stack.
+measure 0.19,0.47,0.06,0.06 leftBase
+measure 0.75,0.47,0.06,0.06 rightBase
+
+# Layer 1: a radial over the left.
+mask radial
+set maskCentreX 0.22
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+set localExposure -2.5
+
+# Layer 2: a radial over the right, its own row and its own break.
+maskadd radial
+masksplit 1
+set maskCentreX 0.78
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+set localExposure 1.5
+
+measure 0.19,0.47,0.06,0.06 left
+measure 0.75,0.47,0.06,0.06 right
+measure 0.48,0.10,0.06,0.06 between
+
+# ⚠ Opposite signs at the same time. One shared adjustment cannot do this: the
+# left is pulled down two and a half stops while the right is lifted one and a
+# half, in one render.
+expect left < leftBase
+expect right > rightBase
+
+# ── Each layer's grade reaches only its own coverage ────────────────────
+masklayer 0
+set localSaturation -1.0
+measure 0.19,0.47,0.06,0.06 leftDesat
+measure 0.75,0.47,0.06,0.06 rightUntouched
+expect leftDesat != left
+expect rightUntouched == right
+
+# ── And the other way ───────────────────────────────────────────────────
+masklayer 1
+set localWarmth 1.0
+measure 0.75,0.47,0.06,0.06 rightWarm
+measure 0.19,0.47,0.06,0.06 leftUntouched
+expect rightWarm != rightUntouched
+expect leftUntouched == leftDesat
+
+# ⚠ And nothing between them moved at any point — two layers must not add up to
+# a global adjustment.
+measure 0.48,0.10,0.06,0.06 betweenAfter
+expect betweenAfter == between

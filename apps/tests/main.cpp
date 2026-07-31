@@ -2619,7 +2619,8 @@ void testToneBandsWithoutGuide() {
                     {src.get(),
                      live ? guideAb.get() : src.get(),
                      live ? guideRaw.get() : src.get(),
-                     maskStub.get(),
+                     maskStub.get(), maskStub.get(),
+                     maskStub.get(), maskStub.get(),
                      dst.get()},
                     &la, sizeof la, kW, kH);
         cb.commitAndWait();
@@ -2765,11 +2766,16 @@ void testLocalAdjustments() {
     la.size[0] = kW; la.size[1] = kH;
     la.guideSize[0] = kW; la.guideSize[1] = kH;
     la.maskActive = 1.0f;
+    // One layer, reading coverage slot 0.
+    la.layerCount = 1;
+    la.layerMask[0] = 0;
 
     std::vector<__fp16> out(std::size_t(kW) * kH * 4);
     const auto run = [&]() {
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), src.get(), src.get(), mask.get(), dst.get()},
+        cb.dispatch(*kernel, {src.get(), src.get(), src.get(),
+                              mask.get(), mask.get(), mask.get(), mask.get(),
+                              dst.get()},
                     &la, sizeof la, kW, kH);
         cb.commitAndWait();
         dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
@@ -2787,8 +2793,8 @@ void testLocalAdjustments() {
     // The load-bearing one. Every check below says "it moved"; this says it
     // moved *only where the mask is*. Column 0 has alpha 0.
     {
-        la.localContrast = 0.7f; la.localSaturation = -0.8f;
-        la.localWarmth = 0.6f; la.localTint = -0.4f;
+        la.layerContrast[0] = 0.7f; la.layerSaturation[0] = -0.8f;
+        la.layerWarmth[0] = 0.6f; la.layerTint[0] = -0.4f;
         run();
         const bool same = std::abs(px(0, 0) - kR) < 2e-3
                        && std::abs(px(0, 1) - kG) < 2e-3
@@ -2800,6 +2806,8 @@ void testLocalAdjustments() {
         la.size[0] = kW; la.size[1] = kH;
         la.guideSize[0] = kW; la.guideSize[1] = kH;
         la.maskActive = 1.0f;
+        la.layerCount = 1;
+        la.layerMask[0] = 0;
     }
 
     // ── Contrast pivots where the display transform pivots ────────────────
@@ -2808,7 +2816,7 @@ void testLocalAdjustments() {
     // coverage is exactly 2^((ev + 2.5) * k) times the input. The tinted grey
     // sits above the pivot, so a positive contrast brightens it.
     {
-        la.localContrast = 0.5f;
+        la.layerContrast[0] = 0.5f;
         run();
         const double ev = std::log2(baseLuma);
         const double want = baseLuma * std::exp2((ev + 2.5) * 0.5);
@@ -2823,12 +2831,12 @@ void testLocalAdjustments() {
         report(std::abs(luma(mid) - half) / half < 0.03,
                "and half coverage applies half of it, in the exponent",
                std::to_string(luma(mid)) + " against " + std::to_string(half));
-        la.localContrast = 0.0f;
+        la.layerContrast[0] = 0.0f;
     }
 
     // ── Saturation goes to the pixel's own luminance ──────────────────────
     {
-        la.localSaturation = -1.0f;
+        la.layerSaturation[0] = -1.0f;
         run();
         const int x = int(kW) - 1;
         const double spread = std::max({px(x, 0), px(x, 1), px(x, 2)})
@@ -2838,7 +2846,7 @@ void testLocalAdjustments() {
         report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
                "and does it at the pixel's own luminance, not at grey",
                std::to_string(luma(x)) + " against " + std::to_string(baseLuma));
-        la.localSaturation = 0.0f;
+        la.layerSaturation[0] = 0.0f;
     }
 
     // ── ⚠ The colour cast moves colour and not exposure ───────────────────
@@ -2849,7 +2857,7 @@ void testLocalAdjustments() {
     // sides of the cast from the same already-cast colour, so the ratio was one
     // and the line did nothing — this is the check that would have caught it.
     {
-        la.localWarmth = 1.0f;
+        la.layerWarmth[0] = 1.0f;
         run();
         const int x = int(kW) - 1;
         report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
@@ -2861,17 +2869,17 @@ void testLocalAdjustments() {
              + std::to_string(kR / kB));
 
         // And it is signed.
-        la.localWarmth = -1.0f;
+        la.layerWarmth[0] = -1.0f;
         run();
         report(px(x, 0) / px(x, 2) < (kR / kB) * 0.75,
                "and the other way when it is negative",
                std::to_string(px(x, 0) / px(x, 2)));
-        la.localWarmth = 0.0f;
+        la.layerWarmth[0] = 0.0f;
     }
 
     // ── Tint is the green axis, and independent of warmth ─────────────────
     {
-        la.localTint = 1.0f;
+        la.layerTint[0] = 1.0f;
         run();
         const int x = int(kW) - 1;
         report(px(x, 1) / (px(x, 0) + px(x, 2)) > (kG / (kR + kB)) * 1.15,
@@ -4711,12 +4719,17 @@ void testMaskGpu() {
         orion::pipe::params::LinearAdjust la{};
         la.size[0] = kW; la.size[1] = 1;
         la.guideEnabled = 0.0f;
-        la.localExposureEv = 1.0f;
+        la.layerExposureEv[0] = 1.0f;
         la.maskActive = 1.0f;
+        // One layer reading coverage slot 0. The kernel binds four slots
+        // because a layer's coverage cannot be a node picked per render.
+        la.layerCount = 1;
+        la.layerMask[0] = 0;
 
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*kLinear.second,
-                    {src.get(), guide.get(), guide.get(), mask.get(), out.get()},
+                    {src.get(), guide.get(), guide.get(),
+                     mask.get(), mask.get(), mask.get(), mask.get(), out.get()},
                     &la, sizeof la, kW, 1);
         cb.commitAndWait();
 

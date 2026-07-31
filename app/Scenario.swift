@@ -47,6 +47,8 @@ import SwiftUI
 ///     spot <x,y> [radius] [heal|clone]  place a dust spot, as a click does
 ///     maskadd <kind>                    add a *row* — `mask <kind>` changes
 ///                                       the selected row instead
+///     masklayer <n>                     select layer n (by its first row)
+///     masksplit <n>                     start or end a layer at row n
 ///     maskhide <n>                      the eye button on a mask row
 ///     maskmove <n> <offset>             reorder a mask row in the fold
 ///     maskkind <n> <kind>               change what an existing row is
@@ -359,6 +361,26 @@ enum Scenario {
                 }
                 engine.commitMaskGroupEdit("Add mask")
             }
+
+        case "masklayer":
+            // Selects a layer by index, by selecting its first row. Layers are
+            // runs of components, so there is no separate layer list to index.
+            guard let want = Int(args.first ?? "") else {
+                throw Bad(what: "masklayer needs an index")
+            }
+            var seen = 0
+            var found = -1
+            for (i, m) in engine.maskComponents.enumerated() {
+                if i == 0 || m.startsLayer { if seen == want { found = i; break }; seen += 1 }
+            }
+            guard found >= 0 else { throw Bad(what: "no layer \(want)") }
+            engine.selectedMask = found
+
+        case "masksplit":
+            guard let i = Int(args.first ?? "") else {
+                throw Bad(what: "masksplit needs a row index")
+            }
+            engine.toggleLayerBreak(at: i)
 
         case "maskhide":
             // The eye button, through the same Engine call it makes. ⚠ Not

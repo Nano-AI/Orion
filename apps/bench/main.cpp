@@ -470,7 +470,7 @@ int main(int argc, char** argv) {
                      c.angle = 0.0f;
                      c.length = 0.8f;
                      a.maskCount = 1;
-                     a.localExposureEv = 2.0f;
+                     a.layers[0].exposureEv = 2.0f;
                  }, Metric::Luma, 0.36},
                 // The same edit with a radial subtracted from the ramp's full
                 // side — the only thing in the product that drives a mask group
@@ -495,7 +495,7 @@ int main(int argc, char** argv) {
                      s.radius[0] = 0.3f; s.radius[1] = 0.55f;
                      s.feather = 0.5f;
                      a.maskCount = 2;
-                     a.localExposureEv = 2.0f;
+                     a.layers[0].exposureEv = 2.0f;
                  // Half the smallest ratio over the three frames: 0.47, 0.44,
                  // 0.60 of the reference.
                  }, Metric::Luma, 0.22},
@@ -560,7 +560,7 @@ int main(int argc, char** argv) {
                      // that exercises the band on all three.
                      c.rangeLo = -99.0f; c.rangeHi = -1.0f; c.rangeSoft = 1.0f;
                      a.maskCount = 1;
-                     a.localExposureEv = 2.0f;
+                     a.layers[0].exposureEv = 2.0f;
                  // Half the smallest ratio over the three frames: 2.15, 3.08,
                  // 0.34 of the reference. The spread is the band doing its job —
                  // the two dark frames have far more below middle grey than the
@@ -584,8 +584,8 @@ int main(int argc, char** argv) {
                      c.radius[0] = 0.35f; c.radius[1] = 0.35f;
                      c.feather = 0.4f;
                      a.maskCount = 1;
-                     a.localWarmth = 1.0f;
-                     a.localSaturation = 0.8f;
+                     a.layers[0].warmth = 1.0f;
+                     a.layers[0].saturation = 0.8f;
                  // Measured 0.159, 0.210 and 0.049 of reference across the
                  // three frames; half the smallest, on the same rule as every
                  // other probe here.
@@ -624,7 +624,7 @@ int main(int argc, char** argv) {
                      c.colourTol = 0.06f;
                      c.colourSoft = 0.02f;
                      a.maskCount = 1;
-                     a.localExposureEv = 2.0f;
+                     a.layers[0].exposureEv = 2.0f;
                  // Measured 0.826, 0.226 and 0.221 of reference on the three
                  // frames; half the smallest, on the same rule as every other
                  // probe here. ⚠ The spread is the probe working rather than
@@ -652,7 +652,7 @@ int main(int argc, char** argv) {
                      auto& c = a.maskComponents[0];
                      c.kind = 4;
                      a.maskCount = 1;
-                     a.localExposureEv = 2.0f;
+                     a.layers[0].exposureEv = 2.0f;
                  // Half the smallest ratio over the three frames: 0.43, 0.48,
                  // 0.35 of the reference.
                  }, Metric::Luma, 0.17, nullptr,
@@ -703,7 +703,7 @@ int main(int argc, char** argv) {
                      // the reason a caller cannot be trusted to remember it.
                      c.brushRevision = 1;
                      a.maskCount = 1;
-                     a.localExposureEv = 2.0f;
+                     a.layers[0].exposureEv = 2.0f;
                  // Measured 0.205, 0.199 and 0.147 of reference across the
                  // three frames; half the smallest, on the rule every probe
                  // here follows.
@@ -764,7 +764,7 @@ int main(int argc, char** argv) {
                      c.radius[0] = 0.18f; c.radius[1] = 0.18f;
                      c.feather = 0.02f;
                      a.maskCount = 1;
-                     a.localExposureEv = 2.0f;
+                     a.layers[0].exposureEv = 2.0f;
                  }, [](auto& a) { a.maskRefine = 1.0f; }, Metric::Luma, 0.008},
                 {"fusion 1.0",     flat, [](auto& a) { a.fusion = 1.0f; }, Metric::Luma, 0.57},
                 {"dehaze 1.0",     flat, [](auto& a) { a.dehaze = 1.0f; }, Metric::Luma, 0.028,

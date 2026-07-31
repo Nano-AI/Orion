@@ -91,7 +91,11 @@ struct MaskComponentParams
     float  colourTol;
     /// How wide the edge ramps, in the same units.
     float  colourSoft;
-    float  _pad4;
+    /// ⚠ Non-zero when this component **begins a layer**. The fold then starts
+    /// from nothing rather than from `src`, so a stack of components becomes
+    /// several independent coverages rather than one. A layer is a run of
+    /// consecutive components, which is how the row list already reads.
+    int    startsLayer;
 };
 
 /// One dab's coverage at normalized distance `d` from its centre, where 1 is
@@ -393,5 +397,9 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
     // than folds — folding would compose the stroke against its own first half.
     if (p.accumulate != 0) { dst[tid.xy] = saturate(own); return; }
 
-    dst[tid.xy] = saturate(maskCompose(src[tid.xy], own, p.compose));
+    // ⚠ A component that begins a layer ignores what came before it. Folding
+    // into `src` regardless is what makes a stack one coverage; this is the one
+    // line that makes it several.
+    const float under = (p.startsLayer != 0) ? 0.0f : src[tid.xy];
+    dst[tid.xy] = saturate(maskCompose(under, own, p.compose));
 }

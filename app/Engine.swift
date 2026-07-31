@@ -414,16 +414,67 @@ final class Engine {
         history.record(state, label: "Clear spots")
     }
 
-    var localExposureEv: Float = 0 { didSet { pushAndRender() } }
-    /// The rest of the local set — pointwise adjustments applied through the
-    /// mask's coverage. research/masking.md §2b names what cannot be here.
-    var localContrast: Float = 0 { didSet { pushAndRender() } }
-    var localSaturation: Float = 0 { didSet { pushAndRender() } }
+    /// One local adjustment set per layer.
+    private(set) var layers: [LocalAdjustState] = [LocalAdjustState()]
+
+    /// ⚠ **Derived, not stored.** Which layer a component belongs to is how
+    /// many layer boundaries precede it, and that moves whenever a row is
+    /// added, removed or reordered. Storing it would be a second copy of the
+    /// grouping, and the two would disagree the first time a row moved.
+    var selectedLayer: Int {
+        guard !maskComponents.isEmpty else { return 0 }
+        let upTo = min(max(selectedMask, 0), maskComponents.count - 1)
+        // ⚠ `1...upTo` is an invalid range when `upTo` is zero, and Swift traps
+        // on it rather than producing an empty sequence — selecting the first
+        // row crashed the process. A half-open range over a prefix has no such
+        // edge, which is why it is written this way now.
+        var n = 0
+        for m in maskComponents[..<upTo].dropFirst() where m.startsLayer { n += 1 }
+        if upTo > 0 && maskComponents[upTo].startsLayer { n += 1 }
+        return min(n, Engine.maxMaskComponents - 1)
+    }
+
+    /// How many layers the stack has.
+    var layerCount: Int {
+        guard !maskComponents.isEmpty else { return 0 }
+        return maskComponents.dropFirst().reduce(1) { $1.startsLayer ? $0 + 1 : $0 }
+    }
+
+    private func editLayer(_ change: (inout LocalAdjustState) -> Void) {
+        let i = selectedLayer
+        while layers.count <= i { layers.append(LocalAdjustState()) }
+        change(&layers[i])
+        pushAndRender()
+    }
+    private var layer: LocalAdjustState {
+        let i = selectedLayer
+        return layers.indices.contains(i) ? layers[i] : LocalAdjustState()
+    }
+
+    /// The selected layer's adjustments, as the panel binds them.
+    var localExposureEv: Float {
+        get { layer.exposureEv }
+        set { editLayer { $0.exposureEv = newValue } }
+    }
+    var localContrast: Float {
+        get { layer.contrast }
+        set { editLayer { $0.contrast = newValue } }
+    }
+    var localSaturation: Float {
+        get { layer.saturation }
+        set { editLayer { $0.saturation = newValue } }
+    }
     /// ⚠ A colour **cast**, not a white balance. Temperature is applied in
     /// `linearize`, before the demosaic, so a local one would mean demosaicing
     /// the frame twice. Named Warmth and Tint so the two are not confused.
-    var localWarmth: Float = 0 { didSet { pushAndRender() } }
-    var localTint: Float = 0 { didSet { pushAndRender() } }
+    var localWarmth: Float {
+        get { layer.warmth }
+        set { editLayer { $0.warmth = newValue } }
+    }
+    var localTint: Float {
+        get { layer.tint }
+        set { editLayer { $0.tint = newValue } }
+    }
 
     /// The selected component, or nil when the group is empty.
     private var selected: MaskComponentState? {
@@ -865,6 +916,21 @@ final class Engine {
             // Decision #67 records the same shape from the other direction: a
             // bare assignment that renders but records nothing. This is the
             // mirror of it, and it is why `editSelected` calls this explicitly.
+            pushAndRender()
+        }
+    }
+
+    /// Starts or ends a layer at this row.
+    ///
+    /// ⚠ Row 1 always begins one — a stack has to start somewhere, and a first
+    /// row that could be "continue" would continue from nothing.
+    func toggleLayerBreak(at index: Int) {
+        guard maskComponents.indices.contains(index), index > 0 else { return }
+        let starting = maskComponents[index].startsLayer
+        edit(starting ? "Merge layer" : "Split layer") {
+            maskComponents[index].startsLayer.toggle()
+            // A new layer needs somewhere to keep its adjustments.
+            while layers.count < layerCount { layers.append(LocalAdjustState()) }
             pushAndRender()
         }
     }
@@ -1327,9 +1393,7 @@ final class Engine {
             maskComponents: maskComponents,
             maskRefine: maskRefine,
             spots: spots,
-            localExposureEv: localExposureEv,
-            localContrast: localContrast, localSaturation: localSaturation,
-            localWarmth: localWarmth, localTint: localTint,
+            layers: layers,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
@@ -1374,9 +1438,7 @@ final class Engine {
         pushStrokes()
         maskRefine = s.maskRefine
         spots = Array(s.spots.prefix(Self.maxSpots))
-        localExposureEv = s.localExposureEv
-        localContrast = s.localContrast; localSaturation = s.localSaturation
-        localWarmth = s.localWarmth; localTint = s.localTint
+        layers = s.layers.isEmpty ? [LocalAdjustState()] : s.layers
         fusion = s.fusion
         dehaze = s.dehaze
         clarity = s.clarity
@@ -1630,6 +1692,7 @@ final class Engine {
             c.compose = m.compose
             c.invert = m.invert ? 1 : 0
             c.hidden = m.hidden ? 1 : 0
+            c.starts_layer = m.startsLayer ? 1 : 0
             c.centre_x = m.centreX; c.centre_y = m.centreY
             c.angle = m.angle; c.length = m.length
             c.radius_x = m.radiusX; c.radius_y = m.radiusY
@@ -1645,11 +1708,19 @@ final class Engine {
         }
         a.mask_components = (cs[0], cs[1], cs[2], cs[3])
         a.mask_count = Int32(maskComponents.count)
-        a.local_exposure_ev = localExposureEv
-        a.local_contrast = localContrast
-        a.local_saturation = localSaturation
-        a.local_warmth = localWarmth
-        a.local_tint = localTint
+        // Padded to the facade's fixed arrays: a stack with two layers still
+        // sends four, and the engine reads only `layerCount` of them.
+        var ev = [Float](repeating: 0, count: Self.maxMaskComponents)
+        var ct = ev, sa = ev, wa = ev, ti = ev
+        for (i, l) in layers.prefix(Self.maxMaskComponents).enumerated() {
+            ev[i] = l.exposureEv; ct[i] = l.contrast; sa[i] = l.saturation
+            wa[i] = l.warmth; ti[i] = l.tint
+        }
+        a.local_exposure_ev = (ev[0], ev[1], ev[2], ev[3])
+        a.local_contrast = (ct[0], ct[1], ct[2], ct[3])
+        a.local_saturation = (sa[0], sa[1], sa[2], sa[3])
+        a.local_warmth = (wa[0], wa[1], wa[2], wa[3])
+        a.local_tint = (ti[0], ti[1], ti[2], ti[3])
         a.mask_refine = maskRefine
 
         a.spot_count = Int32(min(spots.count, Self.maxSpots))

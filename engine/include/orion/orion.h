@@ -95,6 +95,7 @@ typedef struct OrionMaskComponent {
                              * from zero, so the first component should be 0 */
     int   invert;           /* inverts this component, before the fold */
     int   hidden;           /* the eye button: keeps its settings, contributes nothing */
+    int   starts_layer;     /* begins a new layer — the fold restarts here */
 
     float centre_x, centre_y;
     float angle;            /* radians */
@@ -203,14 +204,16 @@ typedef struct OrionAdjustments {
      * rendered frames. */
     OrionMaskComponent mask_components[ORION_MAX_MASK_COMPONENTS];
     int   mask_count;
-    float local_exposure_ev;
-    /* The rest of the local set — pointwise only. Warmth and tint are a colour
-     * cast, NOT a white balance: temperature is applied before the demosaic
+    /* One layer's local adjustments, one entry per layer. A layer is a run of
+     * mask components with its own coverage, so the subject can be graded one
+     * way and the sky another. All pointwise: warmth and tint are a colour
+     * cast, NOT a white balance — temperature is applied before the demosaic
      * and cannot be local. research/masking.md §2b. */
-    float local_contrast;
-    float local_saturation;
-    float local_warmth;
-    float local_tint;
+    float local_exposure_ev[ORION_MAX_MASK_COMPONENTS];
+    float local_contrast[ORION_MAX_MASK_COMPONENTS];
+    float local_saturation[ORION_MAX_MASK_COMPONENTS];
+    float local_warmth[ORION_MAX_MASK_COMPONENTS];
+    float local_tint[ORION_MAX_MASK_COMPONENTS];
 
     /* Dust and blemishes. research/spot-removal.md. Applied between the lens
      * correction and sharpening, in scene-linear light. */

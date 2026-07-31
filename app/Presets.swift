@@ -155,7 +155,10 @@ struct Preset: Codable, Identifiable, Equatable {
         out.spots = base.spots
         out.maskComponents = base.maskComponents
         out.maskRefine = base.maskRefine
-        out.localExposureEv = base.localExposureEv
+        // ⚠ Layers travel with the mask, not with the look — a preset that
+        // carried them would apply one photograph's local grade to another
+        // photograph's subject.
+        out.layers = base.layers
 
         return out
     }

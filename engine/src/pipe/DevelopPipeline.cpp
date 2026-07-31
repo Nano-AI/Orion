@@ -534,40 +534,47 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // with no refinement pays for their textures and none of their time — and
     // the consumer reads straight past them to the fold, because `resolve`
     // follows a disabled node back to a live producer.
-    nMaskGuidePrep_ = pipeline_.add({"mask:guide prep", "maskGuidePrep",
-                                     {nGuidePrep_, prevMask},
-                                     PixelFormat::RGBA32Float, {}, {},
-                                     true, guideW_, guideH_});
-    nMaskGuideH1_   = pipeline_.add({"mask:guide blur h", "boxBlur4",
-                                     {nMaskGuidePrep_},
-                                     PixelFormat::RGBA32Float, {}, {},
-                                     true, guideW_, guideH_});
-    nMaskGuideV1_   = pipeline_.add({"mask:guide blur v", "boxBlur4",
-                                     {nMaskGuideH1_},
-                                     PixelFormat::RGBA32Float, {}, {},
-                                     true, guideW_, guideH_});
-    nMaskGuideAb_   = pipeline_.add({"mask:guide coeffs", "maskGuideAb",
-                                     {nMaskGuideV1_},
-                                     PixelFormat::RG32Float, {}, {},
-                                     true, guideW_, guideH_});
-    nMaskGuideH2_   = pipeline_.add({"mask:guide blur h2", "boxBlur",
-                                     {nMaskGuideAb_},
-                                     PixelFormat::RG32Float, {}, {},
-                                     true, guideW_, guideH_});
-    nMaskGuideV2_   = pipeline_.add({"mask:guide blur v2", "boxBlur",
-                                     {nMaskGuideH2_},
-                                     PixelFormat::RG32Float, {}, {},
-                                     true, guideW_, guideH_});
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        const std::string tag = "mask" + std::to_string(i) + ":";
+        nMaskGuidePrep_[i] = pipeline_.add({tag + "guide prep", "maskGuidePrep",
+                                            {nGuidePrep_, nMaskComponent_[i]},
+                                            PixelFormat::RGBA32Float, {}, {},
+                                            true, guideW_, guideH_});
+        nMaskGuideH1_[i]   = pipeline_.add({tag + "guide blur h", "boxBlur4",
+                                            {nMaskGuidePrep_[i]},
+                                            PixelFormat::RGBA32Float, {}, {},
+                                            true, guideW_, guideH_});
+        nMaskGuideV1_[i]   = pipeline_.add({tag + "guide blur v", "boxBlur4",
+                                            {nMaskGuideH1_[i]},
+                                            PixelFormat::RGBA32Float, {}, {},
+                                            true, guideW_, guideH_});
+        nMaskGuideAb_[i]   = pipeline_.add({tag + "guide coeffs", "maskGuideAb",
+                                            {nMaskGuideV1_[i]},
+                                            PixelFormat::RG32Float, {}, {},
+                                            true, guideW_, guideH_});
+        nMaskGuideH2_[i]   = pipeline_.add({tag + "guide blur h2", "boxBlur",
+                                            {nMaskGuideAb_[i]},
+                                            PixelFormat::RG32Float, {}, {},
+                                            true, guideW_, guideH_});
+        nMaskGuideV2_[i]   = pipeline_.add({tag + "guide blur v2", "boxBlur",
+                                            {nMaskGuideH2_[i]},
+                                            PixelFormat::RG32Float, {}, {},
+                                            true, guideW_, guideH_});
 
-    // ⚠ The mask is this node's *first* input, so a disabled refine resolves to
-    // the fold rather than to a coefficient texture. Getting that order wrong
-    // would hand develop:linear a two-channel coefficient grid as its coverage.
-    nMaskRefine_    = pipeline_.add({"mask:refine", "maskGuideApply",
-                                     {prevMask, nMaskGuideV2_, nGuidePrep_},
-                                     PixelFormat::R16Float, {}});
+        // ⚠ The mask is this node's *first* input, so a disabled refine
+        // resolves to its component rather than to a coefficient texture.
+        // Getting that order wrong hands develop:linear a two-channel
+        // coefficient grid as its coverage.
+        nMaskRefine_[i]    = pipeline_.add({tag + "refine", "maskGuideApply",
+                                            {nMaskComponent_[i], nMaskGuideV2_[i],
+                                             nGuidePrep_},
+                                            PixelFormat::R16Float, {}});
+    }
 
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
-                                 {nFusion_, nGuideV2_, nGuidePrep_, nMaskRefine_},
+                                 {nFusion_, nGuideV2_, nGuidePrep_,
+                                  nMaskRefine_[0], nMaskRefine_[1],
+                                  nMaskRefine_[2], nMaskRefine_[3]},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
@@ -912,7 +919,8 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
         mp.outSize[0] = guideW_; mp.outSize[1] = guideH_;
         mp.inSize[0]  = size[0]; mp.inSize[1]  = size[1];
         mp.scale = kGuideScale;
-        pipeline_.setParams(nMaskGuidePrep_, &mp, sizeof mp);
+        for (int i = 0; i < kMaxMaskComponents; ++i)
+            pipeline_.setParams(nMaskGuidePrep_[i], &mp, sizeof mp);
 
         // ⚠ A *feathering* radius, not the recovery chain's, and the paper's
         // r = 60 is not transferable — its figures are sub-megapixel, so 60
@@ -932,10 +940,12 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
 
         params::BoxBlur rh{{guideW_, guideH_}, refineRadius, 1};
         params::BoxBlur rv{{guideW_, guideH_}, refineRadius, 0};
-        pipeline_.setParams(nMaskGuideH1_, &rh, sizeof rh);
-        pipeline_.setParams(nMaskGuideV1_, &rv, sizeof rv);
-        pipeline_.setParams(nMaskGuideH2_, &rh, sizeof rh);
-        pipeline_.setParams(nMaskGuideV2_, &rv, sizeof rv);
+        for (int i = 0; i < kMaxMaskComponents; ++i) {
+            pipeline_.setParams(nMaskGuideH1_[i], &rh, sizeof rh);
+            pipeline_.setParams(nMaskGuideV1_[i], &rv, sizeof rv);
+            pipeline_.setParams(nMaskGuideH2_[i], &rh, sizeof rh);
+            pipeline_.setParams(nMaskGuideV2_[i], &rv, sizeof rv);
+        }
 
         // ⚠ Epsilon is in squared log2-exposure units, because the guide is the
         // same log2 luminance the recovery chain uses. The paper's 1e-6 assumes
@@ -962,7 +972,8 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
         // recovery chain's 0.04, because feathering should follow weaker edges
         // than tone recovery should. Orion's own number: UNSOURCED.md §19.
         params::MaskGuideAb mab{{guideW_, guideH_}, 0.01f, 0.0f};
-        pipeline_.setParams(nMaskGuideAb_, &mab, sizeof mab);
+        for (int i = 0; i < kMaxMaskComponents; ++i)
+            pipeline_.setParams(nMaskGuideAb_[i], &mab, sizeof mab);
     }
 
     // Anchor on the camera's actual multipliers, not on a temperature we
@@ -1536,6 +1547,10 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         m.kind    = c.kind;
         m.invert  = c.invert ? 1 : 0;
         m.compose = c.compose;
+        // ⚠ Row 0 always begins a layer whatever it says, because the fold has
+        // to start somewhere. Without this the first component folds into
+        // `mask:base`'s zero by luck rather than by rule.
+        m.startsLayer = (i == 0 || c.startsLayer) ? 1 : 0;
 
         const auto placed = mask::toFrame(
             {c.centre[0], c.centre[1], c.angle}, crop, turns,
@@ -1663,11 +1678,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
     const bool linearMoved =
         first || visibilityMoved ||
-        adj.localExposureEv != lastAdj_.localExposureEv ||
-        adj.localContrast != lastAdj_.localContrast ||
-        adj.localSaturation != lastAdj_.localSaturation ||
-        adj.localWarmth != lastAdj_.localWarmth ||
-        adj.localTint != lastAdj_.localTint ||
+        adj.layers != lastAdj_.layers ||
         adj.maskOverlay != lastAdj_.maskOverlay ||
         adj.maskCount != lastAdj_.maskCount ||
         adj.hueShift != lastAdj_.hueShift ||
@@ -1771,10 +1782,12 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     }
 
     if (first || refining != wasRefining) {
-        for (int n : {nMaskGuidePrep_, nMaskGuideH1_, nMaskGuideV1_,
-                      nMaskGuideAb_, nMaskGuideH2_, nMaskGuideV2_,
-                      nMaskRefine_}) {
-            pipeline_.setEnabled(n, refining);
+        for (int i = 0; i < kMaxMaskComponents; ++i) {
+            for (int n : {nMaskGuidePrep_[i], nMaskGuideH1_[i], nMaskGuideV1_[i],
+                          nMaskGuideAb_[i], nMaskGuideH2_[i], nMaskGuideV2_[i],
+                          nMaskRefine_[i]}) {
+                pipeline_.setEnabled(n, refining);
+            }
         }
     }
 
@@ -1783,7 +1796,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         mga.size[0] = size[0];       mga.size[1] = size[1];
         mga.coeffSize[0] = guideW_;  mga.coeffSize[1] = guideH_;
         mga.strength = adj.maskRefine;
-        pipeline_.setParams(nMaskRefine_, &mga, sizeof mga);
+        for (int i = 0; i < kMaxMaskComponents; ++i)
+            pipeline_.setParams(nMaskRefine_[i], &mga, sizeof mga);
     }
 
     if (linearMoved) {
@@ -1800,11 +1814,32 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                                 {size[0], size[1]},
                                 {guideW_, guideH_},
                                 {}, {}, {}};
-        la.localExposureEv = adj.localExposureEv;
-        la.localContrast   = adj.localContrast;
-        la.localSaturation = adj.localSaturation;
-        la.localWarmth     = adj.localWarmth;
-        la.localTint       = adj.localTint;
+        // ⚠ Layers are runs of components, resolved here rather than stored:
+        // a layer's coverage is the **last** component of its run, and which
+        // component that is moves whenever a row is added, removed or
+        // reordered. Storing the index would be a second copy of the grouping,
+        // and this file has been bitten by a second copy of a claim before.
+        int layer = -1;
+        for (int i = 0; i < adj.maskCount; ++i) {
+            const auto& c = adj.maskComponents[std::size_t(i)];
+            if (i == 0 || c.startsLayer) {
+                if (layer + 1 >= kMaxMaskComponents) break;
+                ++layer;
+            }
+            if (layer < 0) continue;
+            // Hidden components still end a run — hiding one must not silently
+            // merge its layer into the next.
+            la.layerMask[layer] = i;
+        }
+        la.layerCount = layer + 1;
+        for (int L = 0; L < kMaxMaskComponents; ++L) {
+            const auto& e = adj.layers[std::size_t(L)];
+            la.layerExposureEv[L] = e.exposureEv;
+            la.layerContrast[L]   = e.contrast;
+            la.layerSaturation[L] = e.saturation;
+            la.layerWarmth[L]     = e.warmth;
+            la.layerTint[L]       = e.tint;
+        }
         la.maskActive  = (liveCount(adj) > 0) ? 1.0f : 0.0f;
         la.maskOverlay = adj.maskOverlay ? 1.0f : 0.0f;
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);

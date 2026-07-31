@@ -701,7 +701,7 @@ enum ViewportTests {
                 report(m.compose == 0,
                        "and folds with add, the only op a single mask can have meant")
             }
-            near(CGFloat(s.localExposureEv), -1.6, 1e-6,
+            near(CGFloat(s.layers.first?.exposureEv ?? 0), -1.6, 1e-6,
                  "and the local exposure it was applying through that mask")
         } else {
             report(false, "a pre-group sidecar decodes at all")
@@ -788,7 +788,7 @@ enum ViewportTests {
         var c = MaskComponentState()
         c.kind = 2; c.compose = 2; c.invert = true; c.roundness = 4
         full.maskComponents = [a, b, c]
-        full.localExposureEv = 1.75
+        full.layers = [LocalAdjustState(exposureEv: 1.75)]
         if let data = try? JSONEncoder().encode(full),
            let back = try? JSONDecoder().decode(DevelopState.self, from: data) {
             report(back == full, "a three-component group round-trips unchanged")
@@ -1898,6 +1898,7 @@ enum ViewportTests {
         // this state fail a round trip for a reason that is not a bug.
         var m = MaskComponentState()
         m.kind = 1; m.compose = 2; m.invert = true; m.hidden = true
+        m.startsLayer = true
         m.centreX = 0.4; m.centreY = 0.7; m.angle = 0.9; m.length = 0.33
         m.radiusX = 0.21; m.radiusY = 0.44; m.feather = 0.66; m.roundness = 3.5
         m.brushRadius = 0.05; m.brushFlow = 0.8; m.brushHardness = 0.15
@@ -1912,9 +1913,12 @@ enum ViewportTests {
         m.colourTol = 0.19; m.colourSoft = 0.07
         s.maskComponents = [m]
         s.maskRefine = 0.72
-        s.localExposureEv = 1.5
-        s.localContrast = 0.42; s.localSaturation = -0.33
-        s.localWarmth = 0.27; s.localTint = -0.19
+        // ⚠ Two layers, not one: a fixture with a single layer cannot see a
+        // round trip that drops every layer after the first.
+        s.layers = [LocalAdjustState(exposureEv: 1.5, contrast: 0.42,
+                                     saturation: -0.33, warmth: 0.27, tint: -0.19),
+                    LocalAdjustState(exposureEv: -0.8, contrast: -0.2,
+                                     saturation: 0.66, warmth: -0.4, tint: 0.31)]
         return s
     }
 
@@ -1981,7 +1985,7 @@ enum ViewportTests {
         look.spots = [SpotState(), SpotState()]
         look.maskComponents = [MaskComponentState(), MaskComponentState()]
         look.maskRefine = 0.9
-        look.localExposureEv = -2
+        look.layers = [LocalAdjustState(exposureEv: -2)]
 
         let all = Preset(name: "everything", groups: Set(PresetGroup.allCases),
                          state: look)
@@ -1997,7 +2001,7 @@ enum ViewportTests {
                "\(out.spots.count) vs \(base.spots.count)")
         report(out.maskComponents == base.maskComponents
                && out.maskRefine == base.maskRefine
-               && out.localExposureEv == base.localExposureEv,
+               && out.layers == base.layers,
                "nor the masks and their local adjustment",
                "\(out.maskComponents.count) vs \(base.maskComponents.count)")
 
