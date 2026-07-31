@@ -43,9 +43,10 @@ enum SkyDetector {
     static let minCoverage = 0.02
     static let maxCoverage = 0.90
 
-    /// How much calmer than the ground the sky has to be, as a ratio of mean
-    /// gradient magnitude. The method's whole premise, turned into a check —
-    /// see `detect`. Orion's own number.
+    /// How much calmer than the **whole frame** the sky has to be, as a ratio
+    /// of mean gradient magnitude. The method's premise, turned into a check —
+    /// see `detect` for why it is not compared against the ground. Orion's own
+    /// number.
     static let smoothnessRatio = 0.5
 
     /// `rgb` is row-major, three floats per pixel, 0..1.
@@ -79,31 +80,26 @@ enum SkyDetector {
         // after it. They were already the definition of an answer worth
         // returning; using them to choose is the same statement made earlier.
         var bestScore = -Double.infinity
-        var bestBorder: [Int] = []
+        var best: [Bool] = []
         for step in 0..<searchSteps {
             let t = lo + (hi - lo) * Float(step) / Float(searchSteps - 1)
-            let border = smoothed(borderFor(grad: grad, width: width,
-                                            height: height, threshold: t),
-                                  width: width)
-            let cov = Double(border.reduce(0) { $0 + min(max($1, 0), height) })
-                    / Double(width * height)
+            let region = fill(grad: grad, width: width, height: height, threshold: t)
+            let cov = Double(region.lazy.filter { $0 }.count) / Double(width * height)
+            // ⚠ A candidate that is not a plausible partition is not a
+            // candidate. The energy prefers the *smallest* uniform region, so
+            // without this the search settles on a sliver every time.
             if cov < minCoverage || cov > maxCoverage { continue }
-            let score = energy(rgb: rgb, width: width, height: height, border: border)
-            if score > bestScore { bestScore = score; bestBorder = border }
+            let score = energy(rgb: rgb, width: width, height: height, inSky: region)
+            if score > bestScore { bestScore = score; best = region }
         }
-        guard !bestBorder.isEmpty else {
-            return .noSky(reason: "no horizon divides this picture into a sky "
-                                + "and a ground")
+        guard !best.isEmpty else {
+            return .noSky(reason: "no region connected to the top edge divides "
+                                + "this picture into a sky and a ground")
         }
 
         var alpha = [Float](repeating: 0, count: width * height)
         var lit = 0
-        for x in 0..<width {
-            let b = bestBorder[x]
-            if b <= 0 { continue }
-            for y in 0..<b { alpha[y * width + x] = 1 }
-            lit += b
-        }
+        for i in 0..<(width * height) where best[i] { alpha[i] = 1; lit += 1 }
         let coverage = Double(lit) / Double(width * height)
 
         // ⚠ Both ends. Too little is no sky; too much is a frame the energy gave
@@ -132,21 +128,28 @@ enum SkyDetector {
         //
         // Mean gradient magnitude is the quantity the premise is actually about,
         // and it is already computed.
-        var skySum = 0.0, groundSum = 0.0
-        var skyN = 0, groundN = 0
-        for x in 0..<width {
-            let b = min(max(bestBorder[x], 0), height)
-            for yy in 0..<height {
-                let v = Double(grad[yy * width + x])
-                if yy < b { skySum += v; skyN += 1 } else { groundSum += v; groundN += 1 }
-            }
+        // ⚠ **Against the whole frame, not against the ground.** Comparing the
+        // two halves is circular: the fill *defines* them by gradient, so the
+        // unfilled part is rougher by construction and the check can never
+        // fail. On a frame of pure texture the region grew to 81% and the
+        // comparison happily passed it.
+        //
+        // The frame's own mean is not circular in the same way. A real sky is
+        // far calmer than the picture containing it; a region that merely
+        // flooded across noise has the picture's own roughness in it.
+        var skySum = 0.0, allSum = 0.0
+        var skyN = 0
+        for i in 0..<(width * height) {
+            let v = Double(grad[i])
+            allSum += v
+            if best[i] { skySum += v; skyN += 1 }
         }
-        if skyN > 0 && groundN > 0 {
+        if skyN > 0 {
             let calm = skySum / Double(skyN)
-            let rough = groundSum / Double(groundN)
-            if rough > 1e-9 && calm > rough * smoothnessRatio {
-                return .noSky(reason: "nothing at the top of the frame is calmer "
-                                    + "than what is under it")
+            let overall = allSum / Double(width * height)
+            if overall > 1e-9 && calm > overall * smoothnessRatio {
+                return .noSky(reason: "the calmest region joined to the top edge "
+                                    + "is no calmer than the picture as a whole")
             }
         }
         return .found(alpha: alpha, coverage: coverage)
@@ -183,47 +186,55 @@ enum SkyDetector {
         return g
     }
 
-    /// The first row in each column whose gradient exceeds `threshold`.
+    /// The sky region: a flood fill from the top edge over pixels calm enough
+    /// to belong to it.
     ///
-    /// ⚠ A column that never exceeds it is sky **all the way down**, which is
-    /// the paper's rule and the reason an all-sky frame comes out covered rather
-    /// than empty. Treating it as "no sky here" instead would make a photograph
-    /// of nothing but sky return nothing.
-    static func borderFor(grad: [Float], width: Int, height: Int,
-                          threshold: Float) -> [Int] {
-        var border = [Int](repeating: height, count: width)
-        for x in 0..<width {
-            for yy in 0..<height where grad[yy * width + x] > threshold {
-                border[x] = yy
-                break
-            }
+    /// ⚠ **This replaced a per-column border, and the difference is the whole
+    /// story of the first attempt.** Taking the first row in each column whose
+    /// gradient exceeds a threshold assumes the sky is a *function of x* — one
+    /// row per column — and on a frame with a tower's lattice or an irregular
+    /// treeline the column answers are unrelated to each other. It reported
+    /// 18.2% coverage on the daylight frame, which read as a perfectly
+    /// reasonable amount of sky, and drew as **vertical stripes**. A median
+    /// filter across columns reduced the comb and did not touch the cause.
+    ///
+    /// A fill is 2D and connected, so it can go around the tower, stop at the
+    /// treeline, and cannot produce a stripe: every pixel it takes is joined to
+    /// the top edge by a path of calm pixels.
+    ///
+    /// Four-connected rather than eight: a diagonal step lets the region squeeze
+    /// through a one-pixel gap in a branch, which is how a fill escapes into the
+    /// ground and takes the whole frame.
+    static func fill(grad: [Float], width: Int, height: Int,
+                     threshold: Float) -> [Bool] {
+        var inSky = [Bool](repeating: false, count: width * height)
+        var queue: [Int] = []
+        queue.reserveCapacity(width * 4)
+
+        // Seeds: the top row, wherever it is calm enough to be sky at all.
+        for x in 0..<width where grad[x] <= threshold {
+            inSky[x] = true
+            queue.append(x)
         }
-        return border
+
+        var head = 0
+        while head < queue.count {
+            let i = queue[head]; head += 1
+            let x = i % width, y = i / width
+            // Four-connected.
+            if x > 0            { visit(i - 1, &inSky, &queue, grad, threshold) }
+            if x < width - 1    { visit(i + 1, &inSky, &queue, grad, threshold) }
+            if y > 0            { visit(i - width, &inSky, &queue, grad, threshold) }
+            if y < height - 1   { visit(i + width, &inSky, &queue, grad, threshold) }
+        }
+        return inSky
     }
 
-    /// ⚠ **A horizon is smooth in x, and nothing above says so.**
-    ///
-    /// Per-column first-exceedance is a comb on a real photograph: grain, and
-    /// fine structure like a tower's lattice, make adjacent columns stop at
-    /// wildly different rows. Measured on the daylight frame, the raw border
-    /// gave 18.2% coverage that *looked* plausible as a number and was vertical
-    /// stripes when drawn — which is why the overlay is the check that matters
-    /// and a coverage figure is not.
-    ///
-    /// A median over a window is the standard repair and it is the right one
-    /// here: it removes the spikes without rounding off a genuine step, which a
-    /// mean would. The window is a fraction of the width so it does not need
-    /// retuning per resolution. Orion's own number — `UNSOURCED.md`.
-    static func smoothed(_ border: [Int], width: Int) -> [Int] {
-        let half = max(2, width / 40)
-        var out = border
-        for x in 0..<width {
-            let lo = max(0, x - half), hi = min(width - 1, x + half)
-            var window = Array(border[lo...hi])
-            window.sort()
-            out[x] = window[window.count / 2]
-        }
-        return out
+    private static func visit(_ i: Int, _ inSky: inout [Bool], _ queue: inout [Int],
+                              _ grad: [Float], _ threshold: Float) {
+        guard !inSky[i], grad[i] <= threshold else { return }
+        inSky[i] = true
+        queue.append(i)
     }
 
     /// The paper's energy: `1 / (γ·det(Σs) + det(Σg) + γ·λs₁² + λg₁²)`, with
@@ -236,15 +247,11 @@ enum SkyDetector {
     /// diagonal is a lower bound that orders candidates the same way in every
     /// case measured. Recorded in `UNSOURCED.md` as a departure.
     static func energy(rgb: [Float], width: Int, height: Int,
-                       border: [Int]) -> Double {
+                       inSky: [Bool]) -> Double {
         var sky = Stats(), ground = Stats()
-        for x in 0..<width {
-            let b = min(max(border[x], 0), height)
-            for yy in 0..<height {
-                let i = (yy * width + x) * 3
-                let p = (Double(rgb[i]), Double(rgb[i + 1]), Double(rgb[i + 2]))
-                if yy < b { sky.add(p) } else { ground.add(p) }
-            }
+        for i in 0..<(width * height) {
+            let p = (Double(rgb[i * 3]), Double(rgb[i * 3 + 1]), Double(rgb[i * 3 + 2]))
+            if inSky[i] { sky.add(p) } else { ground.add(p) }
         }
         // A partition with nothing on one side is not a partition.
         guard sky.n > 1, ground.n > 1 else { return -.infinity }

@@ -242,7 +242,7 @@ enum Screenshot {
         case "presets":
             return .presets
         case "mask", "local", "mask-linear", "mask-linear-feathered",
-             "mask-radial", "mask-off", "brush", "range", "colour", "layers":
+             "mask-radial", "mask-off", "brush", "range", "colour", "layers", "sky":
             return .mask
         default:
             return .light
@@ -310,6 +310,13 @@ enum Screenshot {
             engine.maskRadiusX = 0.15; engine.maskRadiusY = 0.15
             engine.localExposureEv = 1.5
             engine.localWarmth = 1.0
+        case "sky":
+            engine.exposureEv = 1.0
+            if let m = MainActor.assumeIsolated({ try? SubjectMatte.generateBlocking(engine: engine, kind: .sky) }) {
+                engine.maskKind = 4
+                _ = engine.setMaskMatte(m.alpha, width: m.width, height: m.height)
+                engine.maskOverlay = true
+            }
         case "mask-off":
             // The control for `--measure`: the same frame and the same global
             // exposure with no mask, so the difference measured against

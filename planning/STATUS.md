@@ -6,7 +6,7 @@
 
 **Last updated:** 2026-07-30 (**landing page polish**; engine story before it: multi-selection in the filmstrip)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
-finished except sky** — primitives, groups, guided refinement, a raster
+finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
 photograph's own edges, through the graph, the POD facade, the panel rows, the
@@ -17,16 +17,16 @@ and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, and the cost table below). A
 stale kickoff prompt naming those four has now arrived **five** times; the
 answer each time is that they exist.
-**Next story:** **sky, attempt two — a flood fill from the top edge.** Attempt
-one is written, tested and deliberately not shipped; `research/sky-detection.md`
-opens with why. A per-column border cannot express a region, which is the cause
-rather than a symptom. The composed-mask preset remains the cheap interim.
+**Next story:** open. `research/masking.md` is **finished** — every kind it
+plans is built, sky included. The named candidates left are the fill leaking
+through smooth ground (a colour predicate alongside the gradient one), and
+`ROADMAP.md`'s per-layer decomposition beyond what stage 2 shipped.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** The gap table
 below is down to three items, all of them either cosmetic or named-and-costed.
 
 **Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3406
-checks** · **29 `repro/` scenarios, 144 checks** · all 0 failures. Bench exits 0
+checks** · **30 `repro/` scenarios, 147 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -58,6 +58,59 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30u — sky, attempt two, and it works
+
+⚠ **Twenty-eighth arrival of the stale M3 prompt.** Not re-litigated.
+
+Attempt one drew stripes and was deliberately not shipped. This is the fix the
+diagnosis called for, and it is one substitution.
+
+### ⚠ A region, not a function of x
+
+The paper takes the first row per column whose gradient exceeds a threshold.
+That assumes the sky is **a function of x** — one row per column — and on a
+frame with a tower's lattice or an irregular treeline the column answers are
+unrelated to each other. It reported 18.2% coverage, which read as a perfectly
+reasonable amount of sky, and drew as vertical stripes.
+
+A **flood fill from the top edge** is 2D and connected. Every pixel it takes is
+joined to the top by a path of calm pixels, so it goes around the Space Needle,
+stops at the treeline, and *cannot* produce a stripe.
+
+Four-connected rather than eight, because a diagonal step squeezes through a
+one-pixel gap in a branch and that is how a fill escapes into the ground.
+⚠ Untested — the synthetic frames have no such gap and the mutation survives.
+Recorded in `UNSOURCED.md` rather than claimed.
+
+### ⚠ The guard that could never fail
+
+The smoothness check compared the sky against the ground. That is **circular**:
+the fill defines both by gradient, so the unfilled part is rougher by
+construction. On a frame of pure texture the region grew to 81% and the check
+passed it happily.
+
+Against the **whole frame** it is not circular in the same way — a real sky is
+far calmer than the picture containing it, and a region that merely flooded
+across noise carries the picture's own roughness.
+
+### Measured, and looked at
+
+Daylight frame: **71% covered**, and with the overlay on the tint covers the sky,
+goes round the tower and stops at the treeline. Both night frames **refuse** —
+the ground is calmer than the sky there, which is the first entry in the
+documented failure list.
+
+The scenario measures the *picture*, not the coverage figure, and the
+load-bearing half is that the ground below the treeline comes back
+**bit-identical**: a matte that leaked across the whole frame would satisfy "the
+sky changed" and fail that.
+
+### `research/masking.md` is finished
+
+Every kind it plans is built: linear, radial, brush with erase, raster matte,
+Vision subject and person, luminance range, colour range, guided refinement,
+groups, layers, and now sky.
 
 ## Session 2026-07-30t — a sky detector, built and not shipped
 

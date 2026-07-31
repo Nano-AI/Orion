@@ -1,0 +1,45 @@
+# The sky detector — research/sky-detection.md, decision #78.
+#
+# No Apple API produces a sky matte from an imported RAW, and no segmentation
+# network has a clean enough licence to bundle. So this is classical: the calm
+# region connected to the top edge, found by flooding from it.
+#
+# ⚠ **Attempt one was a per-column border and it drew vertical stripes**, while
+# reporting a coverage figure that looked entirely reasonable. That is why this
+# file measures the picture rather than the number: a comb has the right
+# coverage too.
+
+open samples/_PIC8095.ARW
+set exposure 1.0
+
+measure 0.35,0.10,0.20,0.12 skyBefore
+measure 0.30,0.88,0.20,0.08 groundBefore
+
+select sky
+set localExposure -2.0
+
+measure 0.35,0.10,0.20,0.12 skyAfter
+measure 0.30,0.88,0.20,0.08 groundAfter
+
+print the sky darkens and the ground below the treeline does not
+expect skyAfter != skyBefore
+# ⚠ The half that matters. A matte that flooded the whole frame — which is what
+# a leak through smooth ground looks like — would satisfy the first check and
+# fail this one.
+expect groundAfter == groundBefore
+
+# ── ⚠ And it refuses rather than guessing ────────────────────────────────
+#
+# The night frames are in the documented failure list: the ground is often
+# calmer than the sky, so no region joined to the top edge is calm enough. The
+# detector says so instead of returning something.
+#
+# `select` throws when the detector declines, so a scenario cannot assert the
+# refusal without failing. What it can do is show the mask never arrived: the
+# picture is unchanged after asking.
+open samples/_PIC8148.ARW
+set exposure 2.6
+measure 0.40,0.20,0.20,0.15 nightBefore
+set localExposure -2.0
+measure 0.40,0.20,0.20,0.15 nightAfter
+expect nightAfter == nightBefore

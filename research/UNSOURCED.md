@@ -691,12 +691,11 @@ kind of number that looks derived when it is not.
 
 ---
 
-## §23 — The sky detector's own numbers (not shipped)
+## §23 — The sky detector's own numbers
 
-`research/sky-detection.md` implements Shen & Wang (2013) and **does not ship
-it**; the header there says why. The published method fixes none of the
-following, and they are recorded because the code exists and will be picked up
-again.
+`research/sky-detection.md` implements Shen & Wang (2013) with one substitution
+— a flood fill from the top edge in place of the paper's per-column border, for
+the reason its header gives. The published method fixes none of the following.
 
 - **24 threshold steps between the gradient's 5th and 95th percentiles.** The
   paper searches a fixed absolute range, which assumes 8-bit camera JPEGs; this
@@ -712,10 +711,13 @@ again.
   first version compared colour *covariance* and rejected genuine skies — a sky
   with a gentle gradient has wide colour spread and no edges in it, which is
   precisely the thing being looked for.
-- **A median over width/40 columns** on the border. A horizon is smooth in x and
-  nothing else said so.
+- **Four-connected rather than eight.** A diagonal step lets the region squeeze
+  through a one-pixel gap in a branch, which is how a fill escapes into the
+  ground and takes the whole frame. ⚠ Not covered by a test: the synthetic
+  frames have no one-pixel diagonal gap, and the mutation that adds diagonal
+  neighbours survives. Recorded rather than claimed.
 
 ⚠ **And an approximation inside the energy:** the largest eigenvalue of each
 covariance is taken as its largest *diagonal* entry. A 3×3 symmetric solve per
-threshold per frame is real work for a term that only breaks ties. Untested
-against the exact form, because the detector is not shipped.
+threshold per frame is real work for a term that only breaks ties, and the
+diagonal is a lower bound. Untested against the exact form.

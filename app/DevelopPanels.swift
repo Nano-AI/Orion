@@ -346,9 +346,11 @@ extension Editor {
             Section("Detect") {
                 Button("Subject") { addDetected(.subject) }
                 Button("Person") { addDetected(.person) }
-                // ⚠ Sky is deliberately absent. `SkyDetector` is written and
-                // tested, and it does not work well enough on a photograph to
-                // put in front of anyone — see research/sky-detection.md.
+                // ⚠ "estimated" in the name, deliberately. It is not a model
+                // and not a semantic classifier — it finds the calm region
+                // joined to the top edge, and research/sky-detection.md lists
+                // what that misses.
+                Button("Sky (estimated)") { addDetected(.sky) }
             }
             Section("Match") {
                 Button("Brightness range") { add(kind: 5) }

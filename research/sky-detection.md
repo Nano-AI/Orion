@@ -1,29 +1,25 @@
 # Sky detection, without a model
 
-> ## ⚠ STATUS: WRITTEN, TESTED, AND NOT SHIPPED
+> ## ⚠ Attempt one drew stripes. This is attempt two.
 >
-> The algorithm below is implemented in `app/SkyDetector.swift` and pinned by
-> `orion-viewport-tests`. **It is not in the interface**, because on a
-> photograph it does not produce a sky. Measured on `_PIC8095`, the one daylight
-> frame in the sample set: 18.2% coverage that read as a plausible *number* and
-> was **vertical stripes** when drawn, and after median-smoothing the border,
-> a few wide vertical bands running from the top edge down through the trees.
+> The first version followed the paper literally: a **per-column border**, the
+> first row in each column whose gradient exceeds a threshold. On the daylight
+> frame it reported **18.2% coverage** — an entirely reasonable amount of sky —
+> and drew as **vertical stripes**. Median-smoothing across columns reduced the
+> comb into a few wide vertical bands and left the coverage figure just as
+> reasonable.
 >
-> The number is the lesson. Coverage looked reasonable at every stage; only the
-> overlay showed what it was. A control that produced this would be worse than
-> no control, so it is not offered — `DECISIONS.md` #78 argued that a *visibly*
-> wrong mask is acceptable because it can be corrected, and that argument covers
-> a mask that is roughly right, not one that is stripes.
+> **The number never showed it. Only the overlay did.** Every synthetic test
+> passed throughout, and they were not weak tests — a comb has the right
+> coverage and the right above/below answer wherever you sample it.
 >
-> **What is wrong, and what would fix it.** A per-column first-exceedance border
-> cannot express a region: it assumes the sky is a function of x, one row per
-> column, and on a frame with a tower's lattice or an irregular treeline the
-> column-wise answers are unrelated to each other. Median smoothing reduces the
-> comb and does not address the cause. The two candidates worth trying next are
-> a **flood fill from the top edge** over a smoothness predicate, which produces
-> a region rather than a function, and the paper's own §3.4 K-means refinement,
-> which this deliberately truncated.
-
+> The cause was structural. A per-column border assumes the sky is a **function
+> of x**, one row per column, and on a frame with a tower's lattice or an
+> irregular treeline the column answers are unrelated to each other.
+>
+> What ships is a **flood fill from the top edge**: 2D and connected, so it goes
+> around the tower, stops at the treeline, and cannot produce a stripe, because
+> every pixel it takes is joined to the top by a path of calm ones.
 
 `research/masking.md` §5 and `planning/DECISIONS.md` #78 settled why this is not
 a segmentation network: **no Apple API produces a sky matte from an imported
@@ -42,14 +38,16 @@ coarse layout can be recovered from colour, texture and position priors alone.
 
 ### What the paper does
 
-Sky is smooth, and the ground is not. So the boundary between them is where the
-image gradient first becomes large, scanning down each column — and the whole
-problem becomes choosing *how large*.
+Sky is smooth, and the ground is not. So the region is the calm one, and the
+whole problem becomes choosing *how calm*.
 
 1. **Gradient.** Sobel magnitude over the greyscale image.
-2. **A border for a given threshold.** For threshold `t`, the sky border in
-   column `x` is the first row whose gradient exceeds `t`; if none does, the
-   column is sky all the way down.
+2. **A region for a given threshold.** ⚠ The paper takes the first row per
+   column whose gradient exceeds `t`. Orion **floods from the top edge**
+   instead, four-connected, over pixels at or below `t` — see the note at the
+   top for why. Four-connected rather than eight: a diagonal step squeezes
+   through a one-pixel gap in a branch, which is how a fill escapes into the
+   ground and takes the frame.
 3. **Score that partition.** The paper's energy is
 
    > `J = 1 / ( γ·det(Σs) + det(Σg) + γ·λs₁² + λg₁² )`
@@ -88,7 +86,8 @@ license truncating anything whose output nobody sees.
 | Water, glass, car paint reflecting sky | the reflection has the sky's statistics and is smooth |
 | White overcast against a white building | no gradient at the boundary to find |
 | Night skies | the ground is often darker and smoother than the sky |
-| Sky through foliage | a per-column border cannot express holes |
+| Sky through foliage | the gaps are smaller than the fill's connectivity |
+| Smooth ground touching the sky | the fill can leak through a calm wall or road |
 
 **This list is why the control says *estimated*.** And why the failure is
 acceptable at all: the purple cast was dangerous because it was **invisible**
@@ -108,10 +107,15 @@ Recorded in `UNSOURCED.md` because the paper fixes none of them:
 - **A column with no gradient above the threshold is sky to the bottom**, which
   is the paper's rule, and the reason an all-sky frame comes out fully covered
   rather than empty.
-- **A result covering more than 90% or less than 2% of the frame is rejected**
-  as no-sky. Without it, a frame with no sky at all returns "everything", which
-  is indistinguishable from the feature being broken — the same failure the
-  person matte had before it learned to say "nothing found".
+- **Coverage is bounded to 2%-90%, and the bound is applied *during* the
+  search.** The paper's energy assumes a uniform sky and a real one is not — it
+  runs light at the horizon and deep at the zenith — so a sliver, being
+  perfectly uniform, always scores best. Measured before this guard: every
+  photograph reported no sky.
+- ⚠ **The smoothness check is against the whole frame, not against the ground.**
+  Comparing the two regions is circular: the fill *defines* them by gradient, so
+  the unfilled part is rougher by construction and the check can never fail. On
+  a frame of pure texture the region grew to 81% and the comparison passed it.
 
 ## What it must not claim
 
