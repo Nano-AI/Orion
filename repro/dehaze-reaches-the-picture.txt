@@ -1,0 +1,69 @@
+# Dehaze is connected to its slider — research/dehaze.md, He, Sun & Tang (2009).
+#
+# ⚠ **Nothing checked this until 2026-07-31, and the gap was structural rather
+# than an oversight.** Measured by disabling the feature at the host — one line,
+# `dehazing_ = false`, so the node never runs and the control does nothing on any
+# photograph:
+#
+#   orion-tests            525 checks, 0 failures
+#   orion-viewport-tests  3437 checks, 0 failures
+#   orion-bench            exit 0
+#
+# All three, green, with the feature entirely gone.
+#
+# `testDehazeGpu` could not see it because it dispatches the kernel directly with
+# parameters it sets itself — it proves the mathematics, never that the
+# mathematics is reachable from the slider. And dehaze is the **only waived probe
+# in the bench**: on a frame with no haze the correct output is no change at all,
+# so a floor there would demand a filter invent haze. The waiver is right and its
+# blast radius was wrong — it also excused "does nothing, on every frame".
+#
+# This file is the missing half. It drives `Engine`, which is what the panel
+# drives.
+
+# ── It acts where there is haze ───────────────────────────────────────────
+open samples/_PIC8095.ARW
+measure 0.30,0.20,0.25,0.20 hazyBefore
+set dehaze 1.0
+measure 0.30,0.20,0.25,0.20 hazyAfter
+
+print dehaze changes a hazy frame
+expect hazyAfter != hazyBefore
+
+# ⚠ And zero is not "a small amount of dehaze" — it is the untouched picture.
+# `DevelopPipeline` claims the node passes through and costs nothing at zero;
+# this is the check on that claim. Without it, a dehaze wired to always run at
+# some baseline strength would satisfy everything above.
+set dehaze 0.0
+measure 0.30,0.20,0.25,0.20 hazyOff
+expect hazyOff == hazyBefore
+
+# ⚠ And the slider is a *dial*, not a switch — which the two checks above cannot
+# tell apart, and that gap is not hypothetical. There are two mechanisms here:
+# a gate (`dehazing_`, which disables the node) and a strength (`omega`, scaled
+# by the slider). At exactly zero the gate alone decides, so the mutation that
+# makes omega ignore the slider entirely survives both checks above. Only a
+# partial strength separates them.
+set dehaze 0.35
+measure 0.30,0.20,0.25,0.20 hazyPartial
+expect hazyPartial != hazyBefore
+expect hazyPartial != hazyAfter
+
+# ── And not where there is none ───────────────────────────────────────────
+#
+# ⚠ This half is what makes the file discriminating, and it is the reason the
+# bench waiver exists in the first place. On the starry frame the dark channel is
+# near zero everywhere, the atmospheric light lands on a light source, and
+# Eq. (12) gives t = 1 — the method reporting, correctly, that there is no veil.
+#
+# A dehaze that always did something passes the first half and fails this one. A
+# dehaze that never did anything passes this one and fails the first. Neither
+# check is worth much alone; the pair pins that the control is *reading the
+# photograph* rather than applying a fixed gesture.
+open samples/_PIC8148.ARW
+measure 0.35,0.25,0.25,0.20 clearBefore
+set dehaze 1.0
+measure 0.35,0.25,0.25,0.20 clearAfter
+
+print and correctly leaves a frame with no veil alone
+expect clearAfter == clearBefore

@@ -824,6 +824,7 @@ int main(int argc, char** argv) {
                     refMoved = results[i].moved;
             }
 
+            int waivedHere = 0;
             for (std::size_t i = 0; i < std::size(probes); ++i) {
                 const auto& p = probes[i];
                 const auto& r = results[i];
@@ -845,9 +846,29 @@ int main(int argc, char** argv) {
                 // The floor prints on every line, passing or not. A threshold
                 // nobody can see is a threshold nobody maintains.
                 std::printf(" [>= %.4f]", floor);
-                if (p.waived && (!moved || !enough))
+                if (p.waived && (!moved || !enough)) {
                     std::printf("  WAIVED: %s", p.waived);
+                    ++waivedHere;
+                }
                 std::printf("\n");
+            }
+
+            // ⚠ A waiver that only appears mid-table is a waiver nobody reads.
+            //
+            // Measured 2026-07-31: with dehaze disabled at the host in one line,
+            // this bench exited 0 and both test suites passed — the control was
+            // gone from the product and every instrument said fine. The waiver
+            // itself is right (on a frame with no veil the correct output is no
+            // change, and a floor there would demand a filter invent haze); what
+            // was wrong is that it excused the control on *every* frame while
+            // saying so in one line among thirty.
+            //
+            // The wiring is pinned by `repro/dehaze-reaches-the-picture.txt`
+            // now. This line exists so the next waiver cannot be quiet.
+            if (waivedHere > 0) {
+                std::printf("  ⚠ %d control%s waived on this frame — not pinned "
+                            "here. See repro/ for what covers them.\n",
+                            waivedHere, waivedHere == 1 ? "" : "s");
             }
             develop.apply(base);
             develop.render();

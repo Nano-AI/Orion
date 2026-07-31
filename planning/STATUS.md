@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**the two mutations the register admitted survived** — both dead, one of them found a wrong line)
+**Last updated:** 2026-07-31 (**dehaze could be deleted and everything stayed green** — the wiring was never pinned)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -44,6 +44,80 @@ Small, named, and none of them blocking the next story:
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
 imagery was screened for this and twelve frames were rejected.
+
+## Session 2026-07-31e — dehaze could be deleted and everything stayed green
+
+⚠ **Thirty-fourth arrival of the stale M3 prompt.** Verified and set aside — and
+this session is about one of the four features it names, which makes the point
+better than another evidence table would.
+
+### ⚠ The measurement
+
+`dehazing_ = false`, one line in `DevelopPipeline`. The node never runs, the
+control does nothing on any photograph. Then:
+
+| | |
+|---|---|
+| `orion-tests` | 525 checks, **0 failures** |
+| `orion-viewport-tests` | 3437 checks, **0 failures** |
+| `orion-bench` | **exit 0** |
+
+The feature was gone from the product and every instrument said fine.
+
+### Why each one missed it
+
+**The GPU test dispatches the kernel directly**, with parameters it sets itself.
+`testDehazeGpu` proves Eq. (12) and Eq. (16); it can never prove they are
+reachable from the slider. (It does catch a dead *kernel* — mutating the recover
+shader to pass through fails it. It is the wiring it cannot see.)
+
+**The bench waives dehaze**, and it is the only waived probe in the table. The
+reason is sound and stays: on a frame with no veil the dark channel is near zero,
+the atmospheric light lands on a light source, Eq. (12) gives t = 1, and the
+correct output is *no change* — a floor there would be a floor demanding a filter
+invent haze. What was wrong is the blast radius. The waiver excused the control
+on **every** frame, so "correctly does nothing here" and "does nothing anywhere"
+were the same green.
+
+**No scenario touched it.** Two mention dehaze; both measure cost, not output.
+
+### The fix
+
+`repro/dehaze-reaches-the-picture.txt`, which starts at `Engine` — the object the
+panel drives. Three claims, and the pairing is what makes them sharp:
+
+- a hazy frame **changes** (`_PIC8095`, 0.5485 → 0.3691 luma)
+- a frame with no veil is **left alone** (`_PIC8148`, identical) — so a dehaze
+  that always acted would fail as surely as one that never did
+- zero is the untouched picture, and **0.35 is neither zero nor full**
+
+⚠ **That last check was an afterthought and it earned its place.** There are two
+mechanisms — a gate (`dehazing_`) and a strength (`omega`) — and at exactly zero
+the gate alone decides, so the mutation making `omega` ignore the slider survived
+both of the first two checks. Only a partial strength separates a dial from a
+switch.
+
+**Mutations:** never wired up → **3 failures**; omega ignores the slider → **1**.
+⚠ A third, forcing the gate always on, **survives** — and it is not a defect: at
+zero strength the chain computes an identity, so it is output-preserving and
+merely wastes 15 nodes of GPU work. Only a timing check would see it. Said rather
+than left as an unexplained green.
+
+### ⚠ And I misread my own measurement on the way
+
+The partial-strength check failed once on what I called a clean build, and I
+went looking for a staleness bug in the dehaze chain. There was none: I had
+restored the source and re-run the scenario **without rebuilding**, so the
+previous mutation was still compiled in. The ramp measures monotonically —
+0.5485, 0.5143, 0.4718, 0.4197, 0.3691 — and always did. Every mutation in this
+session was re-run afterwards with a forced rebuild between each.
+
+### The bench says so out loud now
+
+A waived control prints a summary line naming the count. A waiver buried in one
+row of thirty is a waiver nobody reads, and the next one should not be quiet.
+The exit code is unchanged — the waiver is still correct, it is the silence that
+was not.
 
 ## Session 2026-07-31d — the two mutations the register admitted survived
 

@@ -31,6 +31,7 @@ miss the view-model layer, which is where these failures are.
 | `analysis-render-has-no-overlay.txt` | Passes — fixed: Vision was handed the red coverage overlay |
 | `matte-survives-a-reopen.txt` | Passes — fixed: a raster matte was written nowhere, so a Subject, Person or Sky row reopened present and empty |
 | `sky-mask.txt` | Passes — ⚠ its refusal half asserted nothing until 2026-07-31: it never called `select`, so it was green whatever the detector did |
+| `dehaze-reaches-the-picture.txt` | Passes — ⚠ closes the gap where dehaze could be **deleted** from the product and all three suites plus the bench stayed green |
 
 ## The surfaces a scenario can measure
 
@@ -51,6 +52,14 @@ classifies with `CanvasLayout.maskAlpha`, the overlay's own transcription of the
 mask kernel. Both are deliberately the *actual* code the interface uses: a
 stand-in would be a second implementation with its own bugs and none of the
 first's.
+
+⚠️ **A GPU test proves the mathematics; only a scenario proves it is reachable.**
+`apps/tests` dispatches each kernel directly with parameters it sets itself, so
+it is blind to the wiring — whether the node is scheduled, whether the slider's
+value arrives, whether the gate lets it run. Dehaze was disabled at the host in
+one line and `orion-tests` (525), `orion-viewport-tests` (3437) and the bench all
+stayed green with the feature gone from the product. Every control needs one
+check that starts at `Engine`.
 
 ⚠️ **A check written *around* an inconvenience usually asserts nothing.** The sky
 scenario wanted to pin that a night frame is refused; `select` throws on a
