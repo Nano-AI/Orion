@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**a shader and a binary that disagreed, and the assertion that now catches it**)
+**Last updated:** 2026-07-31 (**the grain node ran when it was off, and the brush cursor was an oval**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -20,22 +20,31 @@ arrived **36 times**; the answer each time is that they exist, and each of the
 four now also has something that fails when its *wiring* breaks — see sessions
 `31e` and `31f`.
 
-**Next story:** open. `research/masking.md` is **finished** — every kind it
-plans is built, sky included. The named candidates left are the fill leaking
-through smooth ground (a colour predicate alongside the gradient one), and
-`ROADMAP.md`'s per-layer decomposition beyond what stage 2 shipped. Film grain
-is mid-decomposition: the plate is built and pinned, `engine/shaders/grain.slang`
-is written but **uncommitted and not in `engine/shaders/CMakeLists.txt`**, and
-pieces 1 and 3–7 are unstarted. The largest standing violation of a stated hard
-constraint is now `DevelopPipeline.cpp` at **2,192 lines** — see the gap table.
+**Next story:** **finish film grain.** Pieces 1–4 and most of 7 are done and in
+the build; what is left is the value through `orion.h` → `CApi` → Swift → the
+catalogue → the sidecar (piece 5, ~10 files), two sliders (piece 6, ~4 files) and
+a `repro/` wiring scenario. Nothing about it is guesswork now.
+
+After that, `ROADMAP.md`'s **slider latency, end to end** is the named story with
+the best reason to exist: a slowdown was reported from the app on 2026-07-31 and
+found, but the instrument that found it stops at the C++ boundary and nothing in
+this repository times a tick the way the app issues one. `research/masking.md` is
+**finished**; its leftovers are the fill leaking through smooth ground and the
+per-layer decomposition beyond stage 2. The largest standing violation of a
+stated hard constraint is `DevelopPipeline.cpp`, now **2,295 lines**.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** `orion-tests` **545 checks** · `orion-viewport-tests` **3437
+**Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3449
 checks** · **31 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: 148 nodes, 6878 MiB, M0 gate **10.63 ms p95** on
+three sample frames: **149 nodes, 6971 MiB**, M0 gate **13.68 ms p95** on
 `_PIC8220` — plus a preview graph at 1/16 that.
+
+⚠ **That p95 is only meaningful next to one taken minutes away from it.** The
+same binary measured 8.97, 16.75, 44.53 and 40.69 ms on this machine within an
+hour, tracking GUI load rather than anything in the graph. HEAD measured
+16.99/44.75/37.81 in the same window. Compare paired runs or do not compare.
 
 ### Known gaps, carried forward
 
@@ -47,7 +56,8 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` 2,192, `Engine.swift` 1,977, `OrionApp.swift` 1,433, `bench/main.cpp` 1,293, `DevelopPanels.swift` 1,165, `Scenario.swift` 1,080. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 1,977, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` 1,135, `Scenario.swift` 1,080. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
+| **Nothing times a slider tick the way the app issues one.** The bench stops at the C++ boundary; `EditHistory.record` and `InteractionLog.committed` do per-tick work on the main thread that nothing measures. Named and costed in `ROADMAP.md` — and the reason it is named is that a slowdown *inside* the measured part still reached the developer before the bench did | `ROADMAP.md` |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
@@ -84,7 +94,8 @@ candidate fixes in order.
 ## The session log
 
 The six most recent sessions are below. **Everything older lives in
-[`HISTORY.md`](HISTORY.md)** — 50 sessions, moved there verbatim on 2026-07-31.
+[`HISTORY.md`](HISTORY.md)** — 56 sessions, moved there verbatim on 2026-07-31
+in two passes, the second in the same breath as this update.
 
 ⚠ This file had grown to **4,643 lines across 56 sessions**, which broke the one
 job it has. `CLAUDE.md` calls it the recovery point and says to read it first on
@@ -100,6 +111,122 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-07-31l — the grain node ran when it was off, and the cursor was an oval
+
+Two things reported live, one afternoon apart: **"it starts to get slow when I
+adjust it"** and **"the circle is an OVAL"**. Both were real, both had a cause in
+the tree, and neither was a hard problem once measured. Grain pieces 1, 3, 4 and
+most of 7 landed along the way.
+
+### ⚠ The slowdown was the grain node, running at Amount 0
+
+`orion-bench` said so on the first run of the session — **exit 1**, M0 gate
+**17.03 ms** against a 16 ms limit, and the exposure drag up from 3 nodes to 4.
+
+The in-flight grain work had followed #81's costing literally: `develop:display`
+to `RGBA16Float` unconditionally, and a new node after it. So every frame of
+every drag paid a full-resolution pointwise pass *and* a doubled write on the
+node feeding it, to multiply noise by zero.
+
+Every other expensive thing in this graph disables to nothing when it is off.
+The only reason grain looked different is that it is also the node that
+**quantises** — so `retargetOutputChain` moves the two facts together, in one
+place, and #82 has the table. The +194 MB is paid only while the slider is up;
+the resting cost is the idle node's own **93 MB** (6878 → 6971 MiB).
+
+| Exposure drag, `_PIC8220` | nodes | p95 |
+|---|---|---|
+| before grain | 3 | 13.63 ms |
+| grain as first built | 4 | 17.03 ms — **gate FAIL** |
+| after `retargetOutputChain` | 3 | 13.68 ms |
+
+### ⚠ Then the fix looked like it had done nothing, and that was a second bug
+
+The gate passed and the bench immediately reported the grain control as
+**NO EFFECT**. `retargetOutputChain` pushed its parameters from `lastAdj_` —
+which inside `apply` still holds the *previous* frame's values — so it switched
+the node on and handed it Amount 0. The kernel ran and took its early exit.
+
+Every test was green. Only the bench's control probe saw it, and only because it
+measures the picture rather than the graph.
+
+⚠ **And the probe had a floor of `0.0`**, which is not a floor: `0.0` is exactly
+what it reads when the node was never dispatched. It is 0.06 of the exposure
+reference now — measured at 0.127, 0.123 and 0.125 on the three sample frames,
+which agree to a percent because grain's amplitude comes from the slider and not
+from the scene.
+
+### `testGrainWiring`, and one draft of it that was wrong
+
+`testGrainGpu` dispatches the kernel with parameters it sets itself, so it can
+never see the wiring — the same split that let dehaze be deleted with every
+instrument green. The new test drives `DevelopPipeline` on a 64×64 synthetic and
+asserts what actually broke: the node does not run at 0, it does run at 0.04 and
+moves most of the frame, 0 is bit-identical to never having touched it, and an
+exposure tick costs the same as before grain existed.
+
+⚠ **The first draft compared 2 nodes against 12** and failed, correctly: it put a
+warm render next to the cold first one. A drag is warm by definition.
+
+⚠ **The fixture is a ramp, not a flat patch**, and the reason is the dither
+check: on one flat value, whether a sub-LSB offset changes the rounded byte
+depends on where that value happens to sit between two levels, so "dithered" and
+"not dithered" can produce the same bytes. A ramp crosses every boundary.
+
+**Mutations:** the node left enabled → 3 failures. The `lastAdj_` push → 2. The
+dither flag dropped → 1.
+
+⚠ **Two mutations survive and are written down rather than left green.** Leaving
+`develop:display` on float with the node disabled passes everything — correctly,
+because the offset is added in the shader whatever that node's own format is. It
+costs 194 MB and a doubled write, which is a *latency* claim and the bench's job.
+And dithering in both nodes at once with the slider up doubles the offset; real,
+and not covered here.
+
+### The oval was the brush cursor, and it was 1.497× wide
+
+`CanvasLayout.brushCursor` built a circle in **normalized** coordinates and
+mapped it out, so on a 3:2 frame it drew exactly the frame's aspect wider than
+tall. The paint underneath is round: decision #62 folded `mask_brush.slang` into
+`mask_component.slang` and moved the dab into frame pixels so the Size slider
+would stop stretching it. The outline was left behind.
+
+⚠ **What kept it alive is the interesting part.** The only thing tying the cursor
+to the kernel was a *comment*, and the comment named `mask_brush.slang` — a file
+that no longer exists. Nothing compiled against it, nothing tested it, and it
+read as a considered decision rather than a leftover. Both copies of that comment
+are corrected and `testBrushCursorIsRound` pins the shape *and* the radius
+against `nibPx`; reverting it fails 8 checks.
+
+⚠ **The radial mask is still an ellipse in normalized coordinates**, deliberately
+and for now. Its semi-axes are per-axis and photographer-set, so unlike the nib
+its shape is something you choose — and changing the convention changes what
+`radius[1]` means in every sidecar already written. #83 records it as open rather
+than as settled.
+
+### ⚠ The M0 gate is not readable on a busy machine, and I nearly misattributed it
+
+The final bench run failed at **49.49 ms** with no engine change since a run that
+passed at 8.97. Three runs of the *same binary*: 16.75, 44.53, 40.69. Three runs
+of **HEAD**, stashed and rebuilt under the same load: 16.99, 44.75, 37.81.
+
+Identical distributions, so it is the machine — `WindowServer` was at 38% — and
+not the change. Recorded because the honest comparison is the paired one: HEAD
+and the fixed tree, back to back, which is 13.63 against 13.68. A single absolute
+p95 from this bench means nothing unless it is paired with one taken minutes
+either side of it.
+
+### Still to do
+
+Grain pieces 5 and 6 — the value through `orion.h`, `CApi`, Swift, the
+catalogue, two sliders and the sidecar, about 20 files — and a `repro/` scenario
+for the wiring.
+
+⚠ **`grain.slang` is in `engine/shaders/CMakeLists.txt` and builds, but the whole
+of this session is still uncommitted** at the time of writing. Session `31k` is
+the standing argument for why that matters: a binary and a shader that disagree
+produce nothing and say nothing.
 
 ## Session 2026-07-31k — every mask covered zero, and no test could see it
 
@@ -357,502 +484,3 @@ rather than fixed, and recorded pointedly: the two worst offenders are the two I
 have added to nearly every session. Splitting them is a session of its own, and
 `CLAUDE.md` now says to prune this file in the same breath as updating it, so
 the same thing does not happen again by default.
-
-## Session 2026-07-31f — Auto writes five fields and nothing checked four of them
-
-⚠ **Thirty-fifth arrival of the stale M3 prompt.** Verified and set aside.
-
-Started by testing **my own** parting claim from last session: "the other three
-M3 features have unwaived bench floors, so the bench is their wiring test." It
-was asserted, not measured, which is precisely the habit these sessions keep
-finding.
-
-### ✅ The claim held for two of the three
-
-Disabled at the host, one line each:
-
-| Mutation | `orion-bench` | `orion-tests` |
-|---|---|---|
-| fusion dead | **exit 1** ✅ | 0 failures |
-| creative LUT dead | **exit 1** ✅ | 0 failures |
-
-The bench catches both. `orion-tests` catches neither, which is the same
-kernel-versus-wiring split dehaze showed — worth having confirmed rather than
-assumed.
-
-### ⚠ Auto-enhance is not a filter, and the claim did not reach it
-
-Auto is a *policy* that writes five sliders, so there is no pipeline gate to
-disable and the bench's probe drives the C++ policy directly, never the button.
-`repro/undo-after-auto.txt` covers the button — and covers it far more weakly
-than it reads. Deleting one assignment at a time from `Engine.autoEnhance`:
-
-| Dropped | `undo-after-auto.txt` |
-|---|---|
-| clarity | 0 failures |
-| fusion | 0 failures |
-| whites | 0 failures |
-| blacks | 0 failures |
-| **exposure** | 0 failures |
-
-**Five for five.** The file asserts the frame moved and that one undo puts it
-back; both are true, both worth keeping, and both are satisfied by whichever
-fields remain. A button that had quietly stopped setting most of what it
-computes looked exactly like a working one.
-
-### The fix: assert the fields, not the outcome
-
-A `control <name> <op> <value>` verb reads what a control *holds*.
-`repro/auto-applies-every-field.txt` uses it, and now all five drops fail —
-between 1 and 4 checks each, **5 for 5** against the old file's 0.
-
-⚠ **Two frames, because no single frame exercises all five.** The policy is
-scene-dependent and that is the point of it: the daylight plaza has blacks to
-pull and no shadow lift to give (`fusion` 0.00); the night forecourt is the
-reverse. A one-frame version would silently stop covering whichever field that
-frame happens not to use.
-
-### ⚠ And I nearly wrote a fifth number-about-its-fixture into a test
-
-The first draft quoted `Screenshot --auto`'s figures for the night frame
-(exposure −0.70) and the check failed: from a **clean open** the policy gives
-**+0.09**. Neither is wrong — that harness applies a scene first and the policy
-reads the state it is handed. Two paths, two answers, and I had pinned one path's
-number into a test that takes the other.
-
-⚠ The sign matters too. Exposure is *negative* on the bright plaza and
-**positive** on the dark forecourt, so "Auto reduces exposure" would have been a
-rule read off one photograph. The file says so where the bound is.
-
-### Where this leaves the sweep
-
-Every M3 feature now has something that fails when its wiring breaks: fusion and
-LUTs via the bench, dehaze via `repro/dehaze-reaches-the-picture.txt`, auto via
-`repro/auto-applies-every-field.txt`. **31 scenarios** — the figure said 32,
-which was a miscount; `ls repro/*.txt` is 31 and all 31 exit 0.
-
-## Session 2026-07-31e — dehaze could be deleted and everything stayed green
-
-⚠ **Thirty-fourth arrival of the stale M3 prompt.** Verified and set aside — and
-this session is about one of the four features it names, which makes the point
-better than another evidence table would.
-
-### ⚠ The measurement
-
-`dehazing_ = false`, one line in `DevelopPipeline`. The node never runs, the
-control does nothing on any photograph. Then:
-
-| | |
-|---|---|
-| `orion-tests` | 525 checks, **0 failures** |
-| `orion-viewport-tests` | 3437 checks, **0 failures** |
-| `orion-bench` | **exit 0** |
-
-The feature was gone from the product and every instrument said fine.
-
-### Why each one missed it
-
-**The GPU test dispatches the kernel directly**, with parameters it sets itself.
-`testDehazeGpu` proves Eq. (12) and Eq. (16); it can never prove they are
-reachable from the slider. (It does catch a dead *kernel* — mutating the recover
-shader to pass through fails it. It is the wiring it cannot see.)
-
-**The bench waives dehaze**, and it is the only waived probe in the table. The
-reason is sound and stays: on a frame with no veil the dark channel is near zero,
-the atmospheric light lands on a light source, Eq. (12) gives t = 1, and the
-correct output is *no change* — a floor there would be a floor demanding a filter
-invent haze. What was wrong is the blast radius. The waiver excused the control
-on **every** frame, so "correctly does nothing here" and "does nothing anywhere"
-were the same green.
-
-**No scenario touched it.** Two mention dehaze; both measure cost, not output.
-
-### The fix
-
-`repro/dehaze-reaches-the-picture.txt`, which starts at `Engine` — the object the
-panel drives. Three claims, and the pairing is what makes them sharp:
-
-- a hazy frame **changes** (`_PIC8095`, 0.5485 → 0.3691 luma)
-- a frame with no veil is **left alone** (`_PIC8148`, identical) — so a dehaze
-  that always acted would fail as surely as one that never did
-- zero is the untouched picture, and **0.35 is neither zero nor full**
-
-⚠ **That last check was an afterthought and it earned its place.** There are two
-mechanisms — a gate (`dehazing_`) and a strength (`omega`) — and at exactly zero
-the gate alone decides, so the mutation making `omega` ignore the slider survived
-both of the first two checks. Only a partial strength separates a dial from a
-switch.
-
-**Mutations:** never wired up → **3 failures**; omega ignores the slider → **1**.
-⚠ A third, forcing the gate always on, **survives** — and it is not a defect: at
-zero strength the chain computes an identity, so it is output-preserving and
-merely wastes 15 nodes of GPU work. Only a timing check would see it. Said rather
-than left as an unexplained green.
-
-### ⚠ And I misread my own measurement on the way
-
-The partial-strength check failed once on what I called a clean build, and I
-went looking for a staleness bug in the dehaze chain. There was none: I had
-restored the source and re-run the scenario **without rebuilding**, so the
-previous mutation was still compiled in. The ramp measures monotonically —
-0.5485, 0.5143, 0.4718, 0.4197, 0.3691 — and always did. Every mutation in this
-session was re-run afterwards with a forced rebuild between each.
-
-### The bench says so out loud now
-
-A waived control prints a summary line naming the count. A waiver buried in one
-row of thirty is a waiver nobody reads, and the next one should not be quiet.
-The exit code is unchanged — the waiver is still correct, it is the silence that
-was not.
-
-## Session 2026-07-31d — the two mutations the register admitted survived
-
-⚠ **Thirty-third arrival of the stale M3 prompt.** Verified and set aside.
-
-`UNSOURCED.md` §23 named two claims as untested and one mutation as known to
-survive. Both closed. One of them turned out to be hiding a wrong line.
-
-### ✅ The four-connected fill, tested at last
-
-§23 has said since the detector shipped: "the synthetic frames have no one-pixel
-diagonal gap, and the mutation that adds diagonal neighbours survives."
-
-The fixture is a wall of hard gradient between a calm sky and calm ground,
-breached by two calm pixels touching **only at their corner**. Four-connected,
-the fill reaches the first and stops — its four neighbours are wall, wall, sky,
-wall. Eight-connected it steps diagonally into the second and floods everything:
-the mutation now fills **384 of 384** ground pixels and fails two checks.
-
-### ⚠ The eigenvalue proxy: the test found the code wrong, not the reverse
-
-The energy took each covariance's largest **diagonal entry** as its largest
-eigenvalue, justified in a comment as ordering candidates "the same way in every
-case measured".
-
-That was true only because every case measured had the same covariance
-**shape**. My first fixture reproduced the same mistake — it varied one overall
-spread, so every channel's variance scaled together, and then the *smallest*
-diagonal entry orders the candidates identically too. The `min` mutation
-survived it. Rebuilt with populations wide in different channels, the proxy
-**reorders a pair in 21** against the true eigenvalue.
-
-⚠ **And the stated reason for the approximation was false.** "A 3×3 symmetric
-solve per threshold per frame is real work" — it runs 48 times in a whole
-detection, against a Sobel over every pixel. Nobody had checked; the number was
-plausible and wrong, which is the third time in four sessions.
-
-It is Smith's closed form now (CACM 1961) — published, exact, non-iterative — so
-this stops being a departure from the published method at all. Pinned against a
-**Jacobi rotation**, deliberately a different algorithm and iterative where the
-product's is closed form, agreeing to under 1e-9 across seven shapes.
-
-⚠ **It changed no output.** Coverage on all three sample frames is identical to
-the digit — 67.5%, 4.6%, 14.6%. The term really does only break ties and on this
-corpus the ties do not arise. The value is that an unsourced approximation and a
-false justification are gone, not that any photograph looks different, and
-inflating it into more than that would be the thing this file exists to catch.
-
-### The fixture guards itself
-
-Both new tests carry a check on their own sharpness: that the covariances are
-genuinely off-diagonal (or the agreement would be trivially true of the old code
-too), and that the old diagonal shortcut still visibly reorders them (or the
-fixture has gone bland). ⚠ Written after the first draft passed for the wrong
-reason.
-
-**+7 checks**, 3430 → 3437.
-
-## Session 2026-07-31c — the sky check that could not fail
-
-⚠ **Thirty-second arrival of the stale M3 prompt.** Verified and set aside.
-
-Chasing the loose end session `a` flagged and did not follow: the screenshot
-harness produced a sky matte on a night frame, where this file said both night
-frames refuse.
-
-### ⚠ First: last session's parting claim was wrong, and it was mine
-
-Session `b` closed by naming the 12 ms fixed render cost as "75% of the frame
-budget before any brush work happens… the next real lever". Measured, with
-`interact on`:
-
-| | Settled | Interactive |
-|---|---|---|
-| Exposure drag | 9.5 ms | **1.7 ms** (594 fps) |
-| Brush, 2400 dabs | 64.7 ms | **5.1 ms** (197 fps) |
-
-Degrade-then-refine already covers the drag; the 9.5 ms is paid **once when the
-hand stops**, not per tick. There was no lever there. (Session `b`'s own work
-still stands and reads better in this light: it took interactive painting from
-about 134 ms a tick — 7 fps, unusable — to 5.1 ms.)
-
-Nothing is now over budget on the interactive path, which is why this session is
-not a performance story.
-
-### ⚠ The check asserted nothing, and had asserted nothing since it was written
-
-`repro/sky-mask.txt`'s refusal half read:
-
-```
-open samples/_PIC8148.ARW
-set exposure 2.6
-measure ... nightBefore
-set localExposure -2.0
-measure ... nightAfter
-expect nightAfter == nightBefore
-```
-
-It never calls `select`. With no mask row on the photograph a local exposure
-does nothing, so the two measurements are equal **by construction** — the check
-passed whether the detector refused, accepted, or did not exist. Its own comment
-explained the compromise: "`select` throws when the detector declines, so a
-scenario cannot assert the refusal without failing."
-
-That is the second time this project has shipped a green check that could not go
-red, and both times the tell was the same: a check written *around* an
-inconvenience rather than the inconvenience being fixed. The fix was one verb.
-`refuses subject|person|sky` asserts a decline as the result it is.
-
-### ⚠ What it was hiding: the answer depends on the edit
-
-Same photograph, same detector, different exposure:
-
-| Exposure | `_PIC8148` |
-|---|---|
-| 0 EV | **accepts**, 4.6% — and covers the **treetops**, sky unselected |
-| +1 EV | accepts, same inversion |
-| +2.6 EV | refuses |
-
-So "both night frames refuse" was true only at the exposure the scenario
-happened to set. At 0 EV it does not refuse — it **inverts**. Screenshotted and
-looked at: the overlay sits on the treetops along the top edge and on the
-top-right tree, and the entire starry sky is clear.
-
-The cause is not a wrong line. The search is frame-relative by construction —
-thresholds are percentiles of *this render's* gradient, the guard compares
-against *this render's* mean — and on a grainy high-ISO sky over flat black
-silhouettes the calmest region joined to the top edge genuinely **is** the
-foliage. Lifting the shadows lifts the grain, which is what pushes it past the
-guard at 2.6 and not at 0.
-
-⚠ **Compounded by the gap table**: a matte is never regenerated when the edit
-changes, so whichever answer the photographer was looking at when they pressed
-the button is frozen into the edit.
-
-### Not fixed, and why
-
-The detector is left alone. Its failure list already covers this frame, #78
-already argues a visibly wrong mask is acceptable because it is inspected as an
-overlay and corrected with the brush, and the overlay does show it plainly.
-Tightening the guard to make the old sentence true would mean inventing a
-constant to fit a claim — which is the shape of the purple cast, not its cure.
-
-What was wrong was the **test and the record**, and those are fixed: the
-refusal is asserted for real at 2.6, and the inversion at 0 EV is pinned as
-shipped behaviour — the treetops move under a local exposure and the open sky
-comes back bit-identical.
-
-**Two mutations dead:** a detector that never refuses (the `refuses` check goes
-red) and one that always refuses (the daylight frame's `select` throws). ⚠ The
-old check survives **both**, by construction — it never asked.
-
-`research/sky-detection.md` and this file's session `u` entry both corrected.
-
-## Session 2026-07-31b — the brush stops being quadratic
-
-⚠ **Thirtieth and thirty-first arrivals of the stale M3 prompt.** Verified
-against the tree once more and set aside.
-
-`research/brush-acceleration.md`, decision #80. The largest measured latency in
-the project, and the number this file carried for it was wrong.
-
-### ⚠ The recorded figure was a number about the fixture
-
-Session `2026-07-30p` wrote "a 120-dab stroke costs 110–138 ms" and called it
-"inside the budget today". That came from the bench probe's own short stroke.
-Measured across stroke lengths, with the fixed cost isolated:
-
-| Dabs | Node re-render | Loop alone |
-|---|---|---|
-| 0 | 12.0 ms | — (a radial drag is 11.8 ms: same node, no loop) |
-| 2 | 14.1 ms | ~2.1 ms |
-| ~300 | 152.3 ms | ~140 ms |
-| ~2400 | **2148.4 ms** | ~2136 ms |
-
-Fifteen times worse than the figure on file at eight frame-widths, and the cap
-allows seven times more again.
-
-### ⚠ Two measurements that were of the wrong thing, one of them mine
-
-The first attempt dragged **local exposure** and reported a flat 10.5 ms at every
-stroke length — which is true, and says nothing, because that control does not
-dirty the mask node so the dab loop never re-runs. The loop only re-runs when the
-stroke or the nib changes. Dragging the nib is what produced the table above.
-
-Worth keeping as a fact about the product, not just about the test: most drags
-are unaffected. The cost lands on **painting**, where every appended dab re-runs
-the loop over every dab so far.
-
-### The fix, and why the obvious version of it is wrong
-
-⚠ **The cost is the fetch, not the arithmetic** — one texture read per dab per
-pixel is ~58 billion reads at 2400 dabs on 24 Mpx. So a faster inner test was
-never the answer. One level of hierarchical bounding volumes (Clark 1976): a box
-per run of 64 consecutive dabs, in a 4 KB aux texture, skipping 64 reads with one
-test.
-
-⚠ **Runs, never a spatial partition.** Paint is source-over, erase is
-destination-out, and the two do not commute — an index range keeps application
-order for free where a per-tile bin has to rebuild it with a stable scatter or a
-sort, which is three kernels and a prefix sum inside a static graph.
-
-⚠ **The boxes are unexpanded, and tested in the per-dab test's own expression
-shape.** Growing each box by the nib radius on the host is the version that looks
-right and is not: `fl(q·W) − fl(c·W)` is not `fl((q−c)·W)`, floating point does
-not distribute, and the two tests would disagree on some pixel near some rim.
-Written as the same comparison, monotone rounding does the work — when the block
-test fires, every dab in the run takes the existing `continue`, which performs no
-floating-point operation on the accumulator, so the skip runs exactly the
-instruction stream the full loop would have.
-
-⚠ And the boxes come from the **float32 texels actually uploaded**, not from the
-values before the geometry transform, or a box can round tighter than what is
-stored and skip a real dab.
-
-### Measured
-
-| Stroke | Before | After |
-|---|---|---|
-| ~2 dabs | 14.1 ms | 11.4 ms |
-| ~300 dabs | 152.3 ms | **14.5 ms** |
-| ~2400 dabs | 2148.4 ms | **65.6 ms** |
-
-Bench probe 127.22 → **36.27 ms**, floor and coverage unchanged. M0 gate 10.63 ms.
-148 nodes and 6878 MiB both unmoved — the boxes are 4 KB a component.
-
-### ⚠ The oracle is the kernel itself, with rejection disabled
-
-The new test renders the same 999-dab stroke twice: once with the boxes widened
-to the whole plane, which disables every rejection exactly and *is* the
-unaccelerated loop, and once with the real boxes. Bit-identical, not close. A CPU
-model would have been a stand-in with its own bugs, and bit-identity is the one
-claim a stand-in cannot support.
-
-⚠ **And a third render, because the first two are circular on their own.** If the
-kernel ignored the boxes, they would agree trivially. Boxes placed far from the
-stroke must therefore return an *empty* frame — and the mutation that disables
-rejection passes the identity check and fails exactly that one.
-
-The fixture is 999 dabs (not a multiple of 64, so the partial run is exercised),
-self-crossing so runs overlap, every seventh dab erasing so order decides the
-answer, and eight centres off the frame edge.
-
-**Three mutations dead:** the shader's block size disagreeing with the host's
-(6549 texels differ, and it takes three older tests with it), dropping the
-partial-block clamp (6 failures), and disabling rejection (the positive control).
-
-⚠ **One mutation survives and it is not a defect**: `>` → `>=` in the block test.
-At exact equality every dab in the run is `r` away, so `d ≥ 1` and all of them
-hit the existing continue. `>` is kept because that argument leans on `sqrt` at
-the boundary and the strict form needs no argument at all. Written down in the
-research file rather than left as an unexplained green.
-
-### Deliberately not done
-
-**Incremental accumulation**, which would make painting O(1) in stroke length and
-is the only fix for the frame-filling-scribble case that defeats the boxes
-entirely. It needs a persistent ~97 MB R32F accumulator per brush component and a
-host predicate deciding when the stroke's prefix is unchanged — and the cheap
-version of that predicate ("did the count grow?") fails by rendering a completely
-plausible brushstroke from a stale accumulator. Costed in `ROADMAP.md`.
-
-## Session 2026-07-31a — a matte is saved with the photograph
-
-⚠ **Twenty-ninth arrival of the stale M3 prompt.** Verified against the tree
-again rather than re-litigated — research file, code, GPU test section and bench
-probe for each of dehaze, creative LUTs, exposure fusion and auto-enhance — then
-set aside, and the oldest entry in the gap table taken instead.
-
-Every other mask kind is a handful of numbers in the sidecar. Kind 4 is a raster
-of ~700k alpha values and was written **nowhere**, so a Subject, Person or Sky
-row reopened present and empty. `app/MatteStore.swift`, decision #79.
-
-### ⚠ The trap was colour management, and it is the purple cast's shape
-
-CoreGraphics colour-manages greyscale. Write 0.5 through a Gamma-2.2 grey space
-and read it back as linear and it comes back **0.735** — every feathered edge on
-every reopened photograph shifted, nothing crashing, nothing to see. Both ends
-name `CGColorSpace.linearGray` and the mutation that changes one of them fails
-five checks.
-
-⚠ **Which is why the fixture is a gradient ramp.** Every matte fixture this
-repository had was binary — a disc, a half-plane — and a binary matte survives a
-wrong colour space, a wrong bit depth *and* a wrong byte order, because 0 and 1
-land on 0 and 1 however the curve between them is mangled. Only mid-values can
-tell, and a feathered selection is made of mid-values.
-
-### ⚠ The ramp could not see a flip, and a `CGBitmapContext` origin is bottom-left
-
-The ramp varies along x only, so a **vertical flip leaves it identical** — and
-the decode draws a top-down `CGImage` into a bottom-left-origin context, which
-is exactly where a flip would come from. A flipped matte is not a broken-looking
-mask; it is a plausible selection of the wrong half of the photograph. One
-bright corner pins both axes, and the mutation that flips the draw fails it.
-
-### ⚠ And the scenario's first draft measured something other than its claim
-
-It asserted the reopened bands still differ *from each other*. They do that on a
-photograph with **no mask at all**, because the picture itself varies across the
-frame — measured with the matte deleted, that draft reported three of five
-green. There is an unmasked baseline taken before any local exposure now, and
-nowhere for an empty matte to hide. **Eighth time in this file's history** that
-a first-draft check measured something other than its claim.
-
-### What was decided, and what it refuses
-
-Sibling `PHOTO.orion-matte-<uuid>.png` beside `PHOTO.xmp` — storage, not cache,
-because Vision's models move between macOS releases and re-running on open would
-silently change a finished edit on an OS update. Base64 in the XMP is refused:
-autosave rewrites that attribute 900 ms after any slider moves. Files are
-immutable and the **write precedes the reference**, so the sidecar can never
-name a file that is not on disk and the only reachable crash window leaves an
-orphan. Orphans are swept on open and **only after the sidecar parses** — an
-unreadable sidecar yields no components, and sweeping against that would delete
-every matte the photograph has.
-
-⚠ **A missing file is reported, not swallowed.** `Engine.missingMattes` and a
-panel caption; leaving the row with no coverage would change the picture with
-nothing on screen saying why.
-
-⚠ **`MaskComponentState` names its coding keys `Key`, not `CodingKeys`**, so the
-encoder is synthesised from the stored properties while the decoder reads the
-hand-written list. `matteId` failing that way would have been written to every
-sidecar, read back never, and **swept away by this feature's own cleanup** on
-the next open. Pinned.
-
-### Measured, and looked at
-
-24 new checks in `orion-viewport-tests` (3406 → 3430) on `MatteStore` alone — it
-deliberately knows nothing about `Engine`, so the round trip is pinned without a
-GPU. Plus `repro/matte-survives-a-reopen.txt`, 9 checks through the whole
-loading path via a new `reopen` verb. **Five mutations dead:** the gamma space
-(5 failures), the dropped clamp (2 — 1.5 wrapping to 0.5, a hole punched in the
-most-covered region), 8-bit quantisation (5), the flipped draw (2), and saving
-nothing at all (6). Both captions screenshotted.
-
-M0 gate unmoved — nothing here is in the render path.
-
-### Also: the panel says which of three states it is in
-
-Saved, made-but-not-written, and file-missing are three different sentences.
-⚠ `maskMatteSaved` is separate from `maskMatteSource` on purpose: the screenshot
-harness makes a matte without writing one, and a caption that read the label and
-then promised the file would claim a save that did not happen.
-
-### One observation, not chased
-
-The `sky` screenshot scene lifts exposure +1 EV and then **does** produce a
-matte on `_PIC8220`, a night frame — where session `2026-07-30u` records both
-night frames refusing. The detector's smoothness ratio is frame-relative, so a
-lifted frame plausibly passes a check the unlifted one fails. Not this story,
-not investigated, written down rather than left unnoticed.

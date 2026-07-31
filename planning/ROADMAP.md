@@ -187,6 +187,59 @@ time.
   the coverage scales the parameter is not even defined for them.
 - **Blend modes over rendered frames.** #75. Layer opacity is a scalar into α.
 
+## Slider latency, end to end — reported, not yet measured
+
+**Reported live 2026-07-31: "it starts to get slow when I adjust it."** One cause
+was found the same afternoon and fixed — see below — but it does not close this,
+because the instrument that found it cannot see most of the path.
+
+### What is measured today, and what is not
+
+`orion-bench` drives `DevelopPipeline` directly. It reports an exposure tick at
+**3 nodes and 8.7–13.7 ms p95** at full resolution, and session `2026-07-31c`
+measured **1.7 ms** with `interact on`, which is where a real drag runs. By that
+instrument there is no problem.
+
+⚠ **The instrument stops at the C++ boundary.** A tick in the app is a SwiftUI
+gesture → `Engine.edit` → `EditHistory.record` → `InteractionLog.committed` →
+`cAdjustments()` → the POD facade → `apply` → `render` → `MTKView`. The bench
+runs the last two. **Nothing in this repository times the first five**, and two
+of them do per-tick work that grows with the edit rather than staying flat:
+
+| Per tick, on the main thread | Why it is a candidate |
+|---|---|
+| `EditHistory.record` copies the whole `DevelopState` | value type carrying the mask components and the spot list |
+| `InteractionLog.committed` runs `diff(from:to:)` over every field and formats strings | allocation per tick, and the log only grows |
+| `cAdjustments()` assigns ~80 fields into the C block | flat, but it is on the same thread as the frame |
+
+⚠ **Candidates, not causes.** This project has twice recorded a performance
+claim that turned out to be about the fixture rather than the product — the
+120-dab stroke figure in `2026-07-30p`, and my own "12 ms is 75% of the budget"
+in `2026-07-31b`, which was wrong because degrade-then-refine already paid it.
+Do not optimise any row of that table before it has a number.
+
+### The pieces, in order
+
+| # | Piece | Cost |
+|---|---|---|
+| 1 | A scenario verb or bench mode that times **a tick as the app issues it**, from the gesture callback to the frame being presented. Without this the rest is guesswork | the story |
+| 2 | Attribute the tick: history, log, facade, engine, present | — |
+| 3 | Fix whatever piece 2 names, and only that | unknown by construction |
+| 4 | A floor in the bench, so it cannot regress silently the way it just did | small |
+
+### ✅ One cause found and fixed, 2026-07-31
+
+The film-grain node was added **enabled**, so it ran at Amount 0 on every frame
+of every drag, and `develop:display` was writing `RGBA16Float` to feed it. The
+exposure slider went from **3 nodes and 10.6 ms p95 to 4 and 17.03 ms** — past
+the 16 ms M0 gate. `DevelopPipeline::retargetOutputChain` now disables the node
+and moves the Bayer dither back, and `testGrainWiring` pins that a tick costs
+the same as it did before grain existed.
+
+⚠ **That this shipped into a working tree at all is the argument for piece 1.**
+The regression was in the engine, where the instrument *does* reach — and it was
+still reported by a person using the app before the bench was next run.
+
 ## Incremental brush accumulation — costed, not started
 
 Decision #80 made each re-evaluation of a stroke ~30× cheaper. It did **not**
@@ -260,13 +313,13 @@ inherited**, or every existing `identical` baseline silently rebases.
 
 | # | Piece | Cost |
 |---|---|---|
-| 1 | `grain.slang` — plate fetch, hand-rolled trilinear, `σ(Y)` weight, dither | ~90 lines |
+| 1 | ✅ **Done 2026-07-31.** `grain.slang` — plate fetch, hand-rolled trilinear, `σ(Y)` weight, dither | 131 lines |
 | 2 | ✅ **Done 2026-07-31.** `GrainPlate.h`: PCG32 + Box–Muller, band-limiting blur, CPU box-filtered chain. ⚠ Stacked **vertically into one 2048×4096 R32F** rather than real mip levels — the aux-texture API has none, and adding them would change the GPU layer for nothing, since the shader must filter by hand anyway. `levelOffset(l)` is the closed form both sides use | 182 lines, 33 MB, 14 checks |
-| 3 | `develop:display` → `RGBA16Float`; new node; `setWideOutput` retargeted | +194 MB, +1 node |
-| 4 | `GrainParams` + offset asserts; `gridStep` uniform so both graphs sample one field | small |
+| 3 | ✅ **Done 2026-07-31.** New node; `setWideOutput` retargeted. ⚠ **Not** `develop:display` → `RGBA16Float` unconditionally, which is what the costing above assumed and what shipped first: a node that runs at Amount 0 is a full-resolution pointwise pass on every frame of every drag, and it took the M0 gate from 10.63 to **17.03 ms**. `retargetOutputChain` disables the node and hands the dither back to the display node instead, so the +194 MB and the +1 node are paid **only while the slider is up** | +93 MB idle, +194 MB on |
+| 4 | ✅ **Done 2026-07-31.** `GrainParams` + offset asserts; `gridStep` uniform so both graphs sample one field | small |
 | 5 | `amount` / `size` through `Adjustments` → `orion.h` → `CApi.cpp` → Swift | ~10 files |
 | 6 | Catalogue entry, two sliders, sidecar fields | ~4 files |
-| 7 | `testGrainGpu`, bench probe on **mean absolute difference**, wiring scenario | — |
+| 7 | `testGrainGpu` ✅ and `testGrainWiring` ✅ (the node's *wiring*, which the kernel test cannot see); bench probe on **mean absolute difference** ✅, floor 0.06 of the exposure reference. Wiring scenario in `repro/` still to do | 26 checks |
 
 ### ⚠ What must not be done along the way
 

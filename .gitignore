@@ -91,3 +91,7 @@ Samples/
 # tools/package-app.sh output. A .dmg is a build artifact; releases carry it as
 # an attachment, which lives outside git objects.
 dist/
+
+# --- Editor and tool indexes -----------------------------------------------
+# clangd writes its index here whenever anything opens the compile database.
+.cache/
