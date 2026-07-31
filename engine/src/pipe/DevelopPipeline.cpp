@@ -1551,6 +1551,13 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         // to start somewhere. Without this the first component folds into
         // `mask:base`'s zero by luck rather than by rule.
         m.startsLayer = (i == 0 || c.startsLayer) ? 1 : 0;
+        // ⚠ A row that begins a layer folds from **zero**, so `subtract` gives
+        // 0·(1−α) = 0 and `intersect` gives 0·α = 0 — the layer comes out empty
+        // whatever is painted into it. Forced to add rather than left to the
+        // caller, because the failure is a mask that draws nothing and looks
+        // exactly like a mask that was placed wrong. Same reasoning as the
+        // first row of a group, which has always had this property.
+        if (m.startsLayer != 0) m.compose = int(params::MaskCompose::Add);
 
         const auto placed = mask::toFrame(
             {c.centre[0], c.centre[1], c.angle}, crop, turns,

@@ -417,7 +417,13 @@ extension Editor {
                                     // cannot mean anything: the fold starts from
                                     // zero, so add is the identity there and the
                                     // other two give an empty group.
-                                    if i > 0 {
+                                    // ⚠ Only where it can mean something. A row
+                                    // that begins a layer folds from zero, so
+                                    // add is the identity and the other two
+                                    // empty the layer — the engine forces add
+                                    // there, and showing an op the engine
+                                    // ignores is a label that lies.
+                                    if i > 0 && !m.startsLayer {
                                         Text(Self.composeName(m.compose))
                                             .foregroundStyle(Palette.faint)
                                     }
@@ -540,9 +546,18 @@ extension Editor {
                 }
 
                 if engine.maskKind != 0 {
-                    // The op applies to the *selected* row, and only rows after
-                    // the first have one.
-                    if engine.selectedMask > 0 {
+                    // The op applies to the *selected* row, and only to a row
+                    // that **continues** a layer.
+                    //
+                    // ⚠ A row that begins one folds from zero, where add is the
+                    // identity and subtract and intersect both give an empty
+                    // layer whatever is painted into it. The engine forces add
+                    // there; offering the choice anyway would be a control that
+                    // silently does nothing on two of its three settings, and
+                    // an emptied layer looks exactly like a mask placed wrong.
+                    let continues = engine.selectedMask > 0
+                        && !engine.maskComponents[engine.selectedMask].startsLayer
+                    if continues {
                         Picker("", selection: $engine.maskCompose) {
                             Text("Add").tag(Int32(0))
                             Text("Subtract").tag(Int32(1))

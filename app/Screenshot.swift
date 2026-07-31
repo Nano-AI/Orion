@@ -242,7 +242,7 @@ enum Screenshot {
         case "presets":
             return .presets
         case "mask", "local", "mask-linear", "mask-linear-feathered",
-             "mask-radial", "mask-off", "brush", "range", "colour":
+             "mask-radial", "mask-off", "brush", "range", "colour", "layers":
             return .mask
         default:
             return .light
@@ -295,6 +295,21 @@ enum Screenshot {
             _ = engine.addSpot(atFrame: CGPoint(x: 0.62, y: 0.42))
             engine.moveSpot(1, destination: nil, source: CGPoint(x: 0.78, y: 0.60))
             engine.selectedSpot = 1
+        case "layers":
+            // Two layers over opposite sides, graded in opposite directions —
+            // which one shared adjustment cannot do.
+            engine.exposureEv = 2.6
+            engine.maskKind = 2
+            engine.maskCentreX = 0.22; engine.maskCentreY = 0.5
+            engine.maskRadiusX = 0.15; engine.maskRadiusY = 0.15
+            engine.localExposureEv = -2.5
+            engine.localSaturation = -1.0
+            _ = engine.addMaskComponent(kind: 2)
+            engine.toggleLayerBreak(at: 1)
+            engine.maskCentreX = 0.78; engine.maskCentreY = 0.5
+            engine.maskRadiusX = 0.15; engine.maskRadiusY = 0.15
+            engine.localExposureEv = 1.5
+            engine.localWarmth = 1.0
         case "mask-off":
             // The control for `--measure`: the same frame and the same global
             // exposure with no mask, so the difference measured against

@@ -69,3 +69,40 @@ expect leftUntouched == leftDesat
 # a global adjustment.
 measure 0.48,0.10,0.06,0.06 betweenAfter
 expect betweenAfter == between
+
+# ── ⚠ A row that begins a layer cannot be subtracted into nothing ───────
+#
+# Found by looking at the panel: row 2 started a layer and still showed an "add"
+# op. The op is not merely decorative there — the fold starts from zero, so
+# subtract gives 0·(1−α) and intersect gives 0·α, and the layer comes out empty
+# whatever is painted into it.
+#
+# Splitting a row that already carried Subtract would therefore have silently
+# emptied its layer, which looks exactly like a mask placed wrong. The engine
+# forces add on any row that begins a layer.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+mask radial
+set maskCentreX 0.22
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+
+maskadd radial
+set maskCentreX 0.78
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+# Row 2 subtracts while it is still part of layer 1.
+set maskCompose 1
+set localExposure -2.5
+measure 0.75,0.47,0.06,0.06 subtracted
+
+# Now split it into its own layer and give that layer the same exposure. The
+# subtract must stop applying, or the layer renders nothing.
+masksplit 1
+masklayer 1
+set localExposure -2.5
+measure 0.75,0.47,0.06,0.06 ownLayer
+expect ownLayer != subtracted

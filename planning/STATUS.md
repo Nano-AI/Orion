@@ -25,7 +25,7 @@ licence) before it is a code one. That is the thing to settle first.
 below is down to three items, all of them either cosmetic or named-and-costed.
 
 **Suites:** `orion-tests` **522 checks** · `orion-viewport-tests` **3390
-checks** · **29 `repro/` scenarios, 143 checks** · all 0 failures. Bench exits 0
+checks** · **29 `repro/` scenarios, 144 checks** · all 0 failures. Bench exits 0
 on all three frames: M0 gate **10.30 ms p95**, 127 nodes, 6427 MiB — plus a
 preview graph at 1/16 that, about 400 MiB.
 
@@ -57,6 +57,42 @@ frame-counter's cue and bows out when the close's own CTA arrives; the
 ledger's "written down too, in public" now links to `research/` on GitHub;
 `SoftwareApplication` JSON-LD added; dead CSS removed (`.eyebrow`, `.mnote`,
 `.hud__cue`, `.ledger em`).
+
+## Session 2026-07-30r — the compose op that emptied a layer
+
+⚠ **Twenty-fifth arrival of the stale M3 prompt.** Not re-litigated.
+
+Layers shipped last session and **the interface was never looked at**, which is
+the one step this file has recorded paying for more than any other. Screenshotted
+this session, and it found a defect in the first frame.
+
+### ⚠ A row that begins a layer still offered a compose op
+
+Row 2 read `2 Radial add`, with the Add/Subtract/Intersect picker live beneath
+it. That op is not decoration there and it is not harmless: a layer-starting row
+folds from **zero**, so subtract gives `0·(1−α)` and intersect gives `0·α` — the
+layer comes out **empty whatever is painted into it**.
+
+So splitting a row that already carried Subtract silently emptied its layer, and
+an empty layer looks exactly like a mask placed in the wrong spot.
+
+Two fixes, because one is not enough:
+
+- **The engine forces add on any row that begins a layer.** The same property
+  the first row of a group has always had, now stated rather than implied.
+- **The panel stops offering the choice**, in the row label and in the picker.
+  A control that silently does nothing on two of its three settings is the class
+  of dead control this project has shipped four times.
+
+The scenario pins it from the direction that matters: a row subtracting inside a
+layer, then split into its own, has to stop subtracting — and the mutation that
+removes the forcing fails it.
+
+### What the screenshot confirmed otherwise
+
+Two rows, the second marked as starting its own layer, `LAYER 2 OF 2` in accent
+above the sliders, and the two cars graded in opposite directions in one render.
+The feature is reachable and does what it says.
 
 ## Session 2026-07-30q — independent layers
 
