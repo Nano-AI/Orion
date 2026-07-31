@@ -31,7 +31,7 @@ standing violation of a stated hard constraint is `apps/tests/main.cpp` at
 below is either cosmetic, named-and-costed, or needs the developer.
 
 **Suites:** `orion-tests` **545 checks** · `orion-viewport-tests` **3437
-checks** · **32 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+checks** · **31 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
 three sample frames: 148 nodes, 6878 MiB, M0 gate **10.63 ms p95** on
 `_PIC8220` — plus a preview graph at 1/16 that.
 
@@ -426,7 +426,8 @@ rule read off one photograph. The file says so where the bound is.
 
 Every M3 feature now has something that fails when its wiring breaks: fusion and
 LUTs via the bench, dehaze via `repro/dehaze-reaches-the-picture.txt`, auto via
-`repro/auto-applies-every-field.txt`. **32 scenarios.**
+`repro/auto-applies-every-field.txt`. **31 scenarios** — the figure said 32,
+which was a miscount; `ls repro/*.txt` is 31 and all 31 exit 0.
 
 ## Session 2026-07-31e — dehaze could be deleted and everything stayed green
 
