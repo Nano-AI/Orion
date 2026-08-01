@@ -276,6 +276,10 @@ struct CurveEditor: View {
                 }
 
                 guard let index = dragging, index < points.count else { return }
+                // Armed here rather than at the top: every path above this line
+                // either grabs a point, creates one, or `return`s without
+                // touching the picture. Decision #84.
+                engine.beginInteraction()
                 points = engine.curve[channel]
 
                 // The ends stay pinned to their edges: they set the black and
@@ -304,6 +308,7 @@ struct CurveEditor: View {
                 }
                 dragging = nil
                 engine.history.record(engine.state, label: "Curve")
+                engine.endInteraction()
             }
     }
 

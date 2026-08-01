@@ -1,0 +1,99 @@
+# Arming the preview graph changes what you SEE during a gesture. It must never
+# change what you GET after one.
+#
+# Every gesture on the picture now arms degrade-then-refine (decision #84), so a
+# drag renders the quarter-linear preview graph and `endInteraction` renders the
+# full graph once when the hand stops. That is safe only if the settled picture
+# is the same either way.
+#
+# ⚠ This is the check the four gestures added on 2026-08-01 were held back for.
+# Crop is the reason: its rectangle *is* the geometry being changed, and this
+# project has already shipped one bug of exactly this shape — the compare split
+# sampling two differently-sized textures through one set of UVs. A gesture that
+# left the canvas on the preview, or that computed its geometry against the
+# texture rather than the picture, would look plausible and be wrong.
+#
+# The pattern below is the same three steps for each control:
+#   1. drive it with the preview graph OFF, measure the settled picture
+#   2. reset, drive it identically with the preview graph ON, measure again
+#   3. expect the two measurements to be equal
+#
+# `expect a == b` compares mean luma AND mean saturation, because one number per
+# frame is too weak a signature to say two renders are the same picture.
+
+open samples/_PIC8220.ARW
+
+# ── Crop, the riskiest one ────────────────────────────────────────────────
+crop 0.15 0.2 0.6 0.55
+measure 0.25,0.25,0.5,0.5 crop_unarmed
+open samples/_PIC8220.ARW
+interact on
+crop 0.15 0.2 0.6 0.55
+interact off
+measure 0.25,0.25,0.5,0.5 crop_armed
+expect crop_armed == crop_unarmed
+
+# ── The tone curve ────────────────────────────────────────────────────────
+open samples/_PIC8220.ARW
+drag contrast 1.0 1.6 12
+measure 0.25,0.25,0.5,0.5 curve_unarmed
+
+open samples/_PIC8220.ARW
+interact on
+drag contrast 1.0 1.6 12
+interact off
+measure 0.25,0.25,0.5,0.5 curve_armed
+expect curve_armed == curve_unarmed
+
+# ── A grading wheel — ⚠ NOT COVERED, and said rather than skipped quietly ──
+#
+# `ColorWheel` arms too, and nothing here can drive it: the wheels write
+# `gradeShadow`/`gradeMidtone`/`gradeHighlight`, which are three-component
+# tuples, and `Scenario`'s control table is scalar. Adding a verb for them is
+# worth doing; until then the wheel's arming rests on the same argument as the
+# other four and on nothing measured.
+
+# ── A spot ────────────────────────────────────────────────────────────────
+open samples/_PIC8220.ARW
+spot 0.4,0.4 0.05
+spotdrag 0 source 0.6,0.6
+measure 0.30,0.30,0.4,0.4 spot_unarmed
+
+open samples/_PIC8220.ARW
+interact on
+spot 0.4,0.4 0.05
+spotdrag 0 source 0.6,0.6
+interact off
+measure 0.30,0.30,0.4,0.4 spot_armed
+expect spot_armed == spot_unarmed
+
+# ── A mask placed and painted ─────────────────────────────────────────────
+open samples/_PIC8220.ARW
+maskadd radial
+set localExposure 1.5
+drag maskCentreX 0.3 0.65 10
+measure 0.25,0.25,0.5,0.5 mask_unarmed
+
+open samples/_PIC8220.ARW
+maskadd radial
+set localExposure 1.5
+interact on
+drag maskCentreX 0.3 0.65 10
+interact off
+measure 0.25,0.25,0.5,0.5 mask_armed
+expect mask_armed == mask_unarmed
+
+open samples/_PIC8220.ARW
+maskadd brush
+set localExposure 1.5
+paint 0.2,0.5 0.8,0.5 40
+measure 0.25,0.35,0.5,0.3 paint_unarmed
+
+open samples/_PIC8220.ARW
+maskadd brush
+set localExposure 1.5
+interact on
+paint 0.2,0.5 0.8,0.5 40
+interact off
+measure 0.25,0.35,0.5,0.3 paint_armed
+expect paint_armed == paint_unarmed

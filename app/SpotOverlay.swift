@@ -136,6 +136,10 @@ struct SpotOverlay: View {
                     } else {
                         return
                     }
+                    // Armed only once a spot is grabbed or placed — the `return`
+                    // above is a press that hit nothing and pans the picture
+                    // instead. Decision #84.
+                    engine.beginInteraction()
                 }
 
                 let u = CanvasLayout.spotDrag(to: g.location, in: map)
@@ -160,6 +164,8 @@ struct SpotOverlay: View {
                 if dragging != nil && placing == nil { engine.commitSpotEdit() }
                 dragging = nil
                 placing = nil
+                // Unconditional: it returns immediately when nothing armed.
+                engine.endInteraction()
             }
     }
 }

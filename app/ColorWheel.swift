@@ -122,6 +122,10 @@ struct ColorWheel: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { g in
+                    // ⚠ On the transition only. `onChanged` fires per event and
+                    // `beginInteraction` is guarded against re-arming, but
+                    // saying so here keeps the pairing with `onEnded` visible.
+                    if !dragging { engine.beginInteraction() }
                     dragging = true
                     let r = size / 2 - puck / 2
                     var x = (g.location.x - size / 2) / r
@@ -139,7 +143,10 @@ struct ColorWheel: View {
                         value[1] = Float(y)
                     }
                 }
-                .onEnded { _ in dragging = false }
+                .onEnded { _ in
+                    dragging = false
+                    engine.endInteraction()
+                }
         )
         // Keyboard and VoiceOver reach the same two numbers the drag does.
         // A wheel that only answers to a mouse is a control a VoiceOver user

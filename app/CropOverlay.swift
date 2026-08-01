@@ -165,6 +165,18 @@ struct CropOverlay: View {
                     startRect = CGRect(x: CGFloat(engine.cropX), y: CGFloat(engine.cropY),
                                        width: CGFloat(engine.cropW),
                                        height: CGFloat(engine.cropH))
+                    // A drag on the picture, so it arms the preview graph the
+                    // way every slider does. Decision #84.
+                    //
+                    // ⚠ This is the riskiest of the four, and the reason is that
+                    // this overlay's rectangle *is* the geometry being changed.
+                    // Nothing here reads the texture's size though — the maths
+                    // is in view points against `frame` and normalized crop
+                    // coordinates against `engine.previewCanvas`, and the canvas
+                    // blits whatever it has into the same rect. `repro/
+                    // gesture-preview-agrees.txt` pins that the picture after
+                    // the drag is the same either way.
+                    engine.beginInteraction()
                 }
                 guard let start = startRect, frame.width > 0, frame.height > 0 else { return }
 
@@ -202,6 +214,9 @@ struct CropOverlay: View {
                 dragging = nil
                 startRect = nil
                 engine.commitCropEdit()
+                // After the commit: `endInteraction` renders the full graph
+                // once, and every tick of the drag went to the preview.
+                engine.endInteraction()
             }
     }
 }
