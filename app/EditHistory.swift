@@ -304,6 +304,12 @@ struct DevelopState: Equatable, Codable {
     var fusion: Float = 0
     var dehaze: Float = 0
     var clarity: Float = 0
+    /// Film grain — research/film-grain.md, decisions #81 and #82. `grainAmount`
+    /// is the peak standard deviation in display units; `grainSize` the grain
+    /// radius in *frame* pixels, so a crop enlarges the grain rather than
+    /// resampling it.
+    var grainAmount: Float = 0
+    var grainSize: Float = 1.5
     var sharpenAmount: Float = 0
     var sharpenRadius: Float = 1
     var sharpenMasking: Float = 0
@@ -341,6 +347,7 @@ extension DevelopState {
         case localContrast, localSaturation, localWarmth, localTint
         case layers
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
+        case grainAmount, grainSize
         case curve, hueShift, satShift, lumShift
 
         /// What `denoiseColor` was called before the interface moved to
@@ -470,6 +477,12 @@ extension DevelopState {
         fusion = float(.fusion) ?? fusion
         dehaze = float(.dehaze) ?? dehaze
         clarity = float(.clarity) ?? clarity
+        // ⚠ `?? grainAmount` keeps the default, so a sidecar written before
+        // grain existed reopens with grain off rather than at some decoded
+        // zero-ish value — and `grainSize` keeps its 1.5 rather than becoming
+        // an out-of-range 0 the shader would clamp silently.
+        grainAmount = float(.grainAmount) ?? grainAmount
+        grainSize = float(.grainSize) ?? grainSize
         sharpenAmount = float(.sharpenAmount) ?? sharpenAmount
         sharpenRadius = float(.sharpenRadius) ?? sharpenRadius
         sharpenMasking = float(.sharpenMasking) ?? sharpenMasking

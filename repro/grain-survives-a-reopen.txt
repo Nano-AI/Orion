@@ -1,0 +1,41 @@
+# Film grain, through the whole loop: slider -> DevelopState -> sidecar -> decode.
+#
+# ⚠ This file exists because of a near-miss, not a theory. `Engine.state` builds
+# `DevelopState` with the **memberwise initializer**, which is positional over
+# eighty arguments — and when the two grain fields were added to the struct but
+# not to that call, Swift filled them with the struct's defaults and compiled
+# without a word. Grain rendered on screen and reached the sidecar as 0.
+#
+# 569 engine checks, 3449 viewport checks and 31 scenarios all stayed green.
+#
+# `cAdjustments()` in the same file already carries a comment refusing the
+# memberwise form for exactly this reason: "a transposed pair of same-typed
+# floats would compile and ship". `state` uses it anyway, so this is the check
+# that stands in for the one the compiler will not do.
+
+open samples/_PIC8220.ARW
+
+set grainAmount 0.045
+set grainSize 4.5
+control grainAmount == 0.045
+control grainSize == 4.5
+
+# The picture actually moves. Grain is zero-mean, so a mean-brightness check
+# reads the same for a working node and one that was never dispatched — this
+# compares two regions' *saturation and luma* signature instead, which noise
+# does shift.
+measure 0.3,0.3,0.4,0.4 grainy
+
+save samples/_PIC8220.xmp
+reopen
+
+# ⚠ The reopen is the half that catches the memberwise omission. Setting the
+# property and reading it back never leaves `Engine`; only a round trip through
+# `state` can tell whether the field is carried.
+control grainAmount == 0.045
+control grainSize == 4.5
+
+# And off again is off — Amount 0 disables the node entirely, so this also
+# asserts the graph comes back to what it costs without the feature.
+set grainAmount 0
+control grainAmount == 0

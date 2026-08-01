@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**the canvas never told the engine a gesture was happening**)
+**Last updated:** 2026-08-01 (**a leak `leaks` could not see, and film grain finished**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -20,29 +20,31 @@ arrived **36 times**; the answer each time is that they exist, and each of the
 four now also has something that fails when its *wiring* breaks — see sessions
 `31e` and `31f`.
 
-**Next story:** `ROADMAP.md` carries an **⚠ ACTION ITEM — a full performance
-audit of the application**, asked for directly on 2026-08-01. Four canvas
-gestures still never arm degrade-then-refine (crop, spot, the curve editor, the
-grading wheels) and the two that were fixed that day were worth **10–14×** each.
-They were deliberately not fixed in the same breath: each swaps the canvas to a
-differently-sized texture mid-gesture with an overlay drawn over it, which is a
-bug this repository has already shipped once.
+**Next story:** ⚠ **Three findings from the 2026-08-01 stress pass are measured
+and unfixed**, and they are the shortlist:
 
-Also open: **finish film grain** — pieces 1–4 and most of 7 are done and in the
-build, leaving the value through `orion.h` → `CApi` → Swift → the catalogue →
-the sidecar (piece 5, ~10 files), two sliders (piece 6, ~4 files) and a `repro/`
-wiring scenario. `research/masking.md` is **finished**; its leftovers are the
-fill leaking through smooth ground and the per-layer decomposition beyond stage
-2. The largest standing violation of a stated hard constraint is
-`DevelopPipeline.cpp`, now **2,295 lines**.
+1. **Dehaze's drag cost has roughly doubled** and nobody noticed. Normalised
+   against exposure *in the same process*, so machine load cannot explain it:
+   **7.2× → 11.8–13.5×**. Needs a bisect, not a theory.
+2. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
+   iterations. ~240 MB across a 5,000-photo cull.
+3. **Brush cost is linear in accumulated dabs, forever** — 16 ms at ~500 dabs
+   unarmed, ~12,300 armed, then an unexplained plateau. `ROADMAP.md`'s
+   incremental accumulation is the fix.
+
+Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
+the performance action item is in `ROADMAP.md`. `research/masking.md` is
+**finished**; its leftovers are the fill leaking through smooth ground and the
+per-layer decomposition beyond stage 2. The largest standing violation of a
+stated hard constraint is `DevelopPipeline.cpp`, now **2,295 lines**.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3449
-checks** · **31 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: **149 nodes, 6971 MiB**, M0 gate **13.68 ms p95** on
-`_PIC8220` — plus a preview graph at 1/16 that.
+**Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3453
+checks** · **33 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
+plus a preview graph at 1/16 that.
 
 ⚠ **That p95 is only meaningful next to one taken minutes away from it.** The
 same binary measured 8.97, 16.75, 44.53 and 40.69 ms on this machine within an
@@ -56,13 +58,14 @@ Small, named, and none of them blocking the next story:
 | Gap | Where |
 |---|---|
 | **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand — and #79 now adds a second reason it must stay on demand: a model that has changed between OS releases would give a *different* selection, silently, on a finished edit | `SubjectMatte` |
-| **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero | `MatteStore` |
+| **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
 | **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 1,977, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` 1,135, `Scenario.swift` 1,080. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
-| **Four canvas gestures never arm degrade-then-refine** — `CropOverlay`, `SpotOverlay`, `CurveEditor`, `ColorWheel`. Each therefore renders the full graph at full resolution once per pointer event, where every slider renders a sixteenth of it. The two that were fixed on 2026-08-01 were worth 10–14× | the ⚠ ACTION ITEM in `ROADMAP.md` |
-| **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the lines that matter are reachable only by reading them. The four above were found by `grep`, not by a red test | `Scenario.swift` |
-| **The tick is timed whole, not attributed.** `EditHistory.record` copies the entire `DevelopState`, `InteractionLog.committed` diffs every field and formats strings, and `setBrushStroke` re-flattens the whole stroke — all per event, all O(size of the edit). ⚠ Candidates only: armed, a 784-dab stroke is 1.8 ms an event, so this may not be worth touching at all | `ROADMAP.md` |
+| **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
+| **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
+| **The tick is timed whole, not attributed.** `EditHistory.record` copies the entire `DevelopState`, `InteractionLog.committed` diffs every field and formats strings, and `setBrushStroke` re-flattens the whole stroke — all per event, all O(size of the edit). ⚠ Candidates only: armed, a 784-dab stroke is 1.8 ms an event | `ROADMAP.md` |
+| **`Engine.state` uses the memberwise initializer**, positional over eighty arguments. `cAdjustments()` in the same file refuses it in a comment for exactly that reason; `state` does not. Adding a field to `DevelopState` and forgetting this call compiles silently — it happened on 2026-08-01 with film grain and every suite stayed green | `Engine.swift` |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
@@ -116,6 +119,85 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01b — a leak the leak checker could not see
+
+Asked for: leaks, a performance pass, and finishing what was unfinished. Two
+agents ran read-only while the edits happened here.
+
+### ⚠ The leak: ARC does not drain pools, and nothing here turns a run loop
+
+**No `@autoreleasepool` anywhere in the engine's Metal layer.** Every autoreleased
+temporary accumulated for the life of the process — 393 B a texture descriptor,
+1.6 KB a library load, 2.3 KB a kernel — which is **~0.64 MB per graph built**
+and ~1.3 MB per photograph opened, since a photograph builds two.
+
+⚠ **`leaks --atExit` reports zero for this, on both binaries, and is right to.**
+The blocks are still *reachable* from an undrained pool, so they are not leaks by
+its definition. Only a footprint measurement finds it. LSan is unavailable on
+macOS/arm64, so the tool that would have found it does not exist here.
+
+⚠ **The app was shielded by accident**: `pushAndRender` runs on the main thread,
+whose run loop drains each cycle. The bench, the tests and the scenario runner
+are not — and moving a photo open to a background queue would have exposed it.
+
+Six pools inside `Resources.mm`, decision #86. Verified on the harness that
+found it: the same 15-iteration loop went **+8.92 MB, linear → +0.58 MB, flat
+from iteration 13**.
+
+Also: `Pipeline::compile` loaded a `MTLLibrary` **per node** — 149 nodes over 48
+distinct metallibs, so ~101 redundant libraries per graph, doubled per photo.
+Memoized by kernel name.
+
+### ⚠ Orphan mattes accumulated forever on any photo that had never been saved
+
+`MatteStore.sweep` ran only inside the successful-parse branch. That guard is
+right about a sidecar which *exists and did not parse*. It is wrong about one
+that is **absent** — a matte id lives only in a sidecar, so nothing can reference
+those files. Measured: **26 orphans, 512 KB, beside one sample frame, oldest
+three days old.**
+
+Three cases now, in one function, because the policy had already been written
+twice — the loader and the scenario runner's `reopen`, which claims in its own
+comment to take the same steps. Decision #87. Mutations: the old two-case form
+fails the absent check, an always-sweep form fails the unreadable check.
+
+### Film grain finished — and it nearly shipped dead
+
+Pieces 5 and 6: through `orion.h`, `CApi`, `DevelopState`, `Engine`, the
+catalogue, two sliders, the sidecar, presets, sync, the log and the scenario.
+
+⚠ **`Engine.state` builds `DevelopState` with the memberwise initializer**, which
+is positional over eighty arguments. Adding the two fields to the struct and not
+to that call compiled without a word: Swift filled them with the struct's
+defaults, grain rendered on screen and reached the sidecar as **0**. 569 engine
+checks, 3449 viewport checks and 31 scenarios all stayed green.
+
+`cAdjustments()` in the same file already refuses the memberwise form, in a
+comment, for exactly this reason. `state` uses it anyway.
+`repro/grain-survives-a-reopen.txt` is the check that stands in for the compiler;
+the mutation fails 2.
+
+### What the stress pass found and I did **not** fix
+
+Named in `ROADMAP.md`'s action item rather than guessed at:
+
+- **Dehaze's drag cost has roughly doubled.** Normalised against exposure in the
+  same process, so load cannot explain it: **7.2× → 11.8–13.5×**. The next step
+  is a bisect, not a theory.
+- **`reopen` grows 25–49 KB a cycle**; plain `open` is flat over 300 iterations.
+  `InteractionLog` is capped at 2000 lines and ruled out.
+- **Brush cost is linear in accumulated dabs, forever** — 16 ms at ~500 dabs
+  unarmed, ~12,300 armed, then an unexplained 27 ms plateau at ~13,400.
+
+### Held flat
+
+Repeated opens (300×, +0.8 KB), export loops, 300 interact cycles, 2000 history
+pushes, the spot cap at 64 and the mask cap at 4 — all measured, all flat, all
+listed in the report rather than left implied.
+
+**Suites:** 569 · **3453** · **33 scenarios** · bench exit 0 on all three frames,
+M0 gate 11.39–14.13 ms p95.
 
 ## Session 2026-08-01a — the canvas never told the engine a gesture was happening
 
@@ -475,54 +557,3 @@ new *node* that is roughly true. For a new *adjustment* it is 20 files, because
 the value threads engine → `orion.h` → `CApi` → Swift → catalogue → sidecar →
 presets → sync → log → scenario. Not a defect, but worth having counted, and
 worth remembering the next time that sentence is used to size a story.
-
-## Session 2026-07-31h — both test files split
-
-⚠ **Thirty-seventh through thirty-ninth arrivals of the stale M3 prompt.**
-Verified and set aside; the story was named at the end of session `g`.
-
-`apps/tests/main.cpp` was **7,656 lines** and `ViewportTests.swift` **3,297**,
-against a limit `CLAUDE.md` calls a hard constraint. Both were files these
-sessions kept adding to.
-
-### What it looks like now
-
-| | Before | After | Largest |
-|---|---|---|---|
-| `orion-tests` | 1 file, 7,656 | 15 files | **969** |
-| `orion-viewport-tests` | 1 file, 3,297 | 13 files | **552** |
-
-C++: twelve translation units by subject, `harness.{h,cpp}` for the counter and
-the three helpers, and a `main.cpp` that is the running order and nothing else.
-The counters move to `harness.cpp` behind `extern`, so every unit adds to one
-tally. Swift: the file was already part extensions, so the split follows the
-shape it had — `ViewportTests+<subject>.swift`, one `extension ViewportTests`
-each.
-
-### ⚠ Verified as a refactor, not asserted to be one
-
-The pre-split binary was rebuilt from `git stash` and its **full stdout diffed**
-against the new one, both suites. Identical line for line — not just the same
-totals, the same output in the same order. A check count alone would have missed
-a test that had stopped running and another that had started failing.
-
-### ⚠ Two things worth recording
-
-The first pass cut each chunk at its `static func`, which **orphaned every doc
-comment** at the tail of the previous file — the comment explaining a test
-ending up in a file that no longer contained it. Redone with boundaries walked
-back over the attached comment block. Caught by reading the output, not by the
-compiler, which was perfectly happy.
-
-And the count went from seven violations to **six, not five**:
-`app/Scenario.swift` crossed 1,000 during these same sessions, from the `reopen`,
-`refuses` and `control` verbs I added to it. Splitting two files while growing a
-third past the line is worth naming rather than rounding off.
-
-### What is left
-
-Six, all product code: `DevelopPipeline.cpp` 2,192, `Engine.swift` 1,977,
-`OrionApp.swift` 1,433, `bench/main.cpp` 1,293, `DevelopPanels.swift` 1,165,
-`Scenario.swift` 1,080. Splitting those is riskier than splitting tests — there
-is no byte-identical-output check available for a library — and wants its own
-session.

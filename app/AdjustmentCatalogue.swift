@@ -66,6 +66,7 @@ enum AdjustmentID: String, CaseIterable, Sendable {
     case temperature, tint
     case warmth, localTint
     case clarity, dehaze, fusion
+    case grainAmount, grainSize
     case lutStrength
 }
 
@@ -170,6 +171,18 @@ enum AdjustmentCatalogue {
         .init(id: .lutStrength, title: "Look",
               global: .init(lower: 0, upper: 1, stage: .display), local: nil,
               localRefusal: "applied by the display transform, after the mask"),
+
+        // Last of all, and later than the display transform. Grain is added to
+        // the finished picture because film grain is in the print, not in the
+        // scene — #81 has the reasoning, including why scene-linear is the
+        // wrong side of the transform for it.
+        .init(id: .grainAmount, title: "Grain",
+              global: .init(lower: 0, upper: 0.06, stage: .display), local: nil,
+              localRefusal: "added after the display transform, past where a "
+                          + "mask's coverage exists"),
+        .init(id: .grainSize, title: "Grain size",
+              global: .init(lower: 1.2, upper: 8, stage: .display), local: nil,
+              localRefusal: "a property of the negative, not of a region of it"),
     ]
 
     static func spec(_ id: AdjustmentID) -> AdjustmentSpec {

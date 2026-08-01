@@ -6,6 +6,7 @@
 #include <cstring>
 #include <queue>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace orion::pipe {
 
@@ -78,9 +79,29 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
     libraries_.reserve(n);
     kernels_.reserve(n);
     outputs_.reserve(n);
+    // ⚠ One `MTLLibrary` per distinct metallib, not one per node. The develop
+    // graph is 149 nodes over **48** distinct kernels, so loading per node
+    // created ~101 redundant libraries and held them for the graph's lifetime —
+    // doubled, because a photograph builds a full graph and a preview graph.
+    // Not a leak (they were released with the graph) but resident waste, and
+    // each load also costs a file read and ~1.6 KB of autoreleased temporaries.
+    //
+    // ⚠ Keyed by kernel name because that *is* the file's basename, one line
+    // below. Keying by anything else would let two nodes naming one file get
+    // two libraries again, quietly.
+    std::unordered_map<std::string, gpu::Library*> byKernel;
+
     for (const auto& node : nodes_) {
-        auto lib = gpu::Library::createFromFile(
-            device_, shaderDir_ + "/" + node.kernel + ".metallib");
+        gpu::Library* lib = nullptr;
+        if (auto it = byKernel.find(node.kernel); it != byKernel.end()) {
+            lib = it->second;
+        } else {
+            auto owned = gpu::Library::createFromFile(
+                device_, shaderDir_ + "/" + node.kernel + ".metallib");
+            lib = owned.get();
+            byKernel.emplace(node.kernel, lib);
+            libraries_.push_back(std::move(owned));
+        }
         auto kernel = gpu::Kernel::create(device_, *lib, node.kernel);
 
         // ⚠ **The shader and the code that feeds it must agree, and Metal will
@@ -102,7 +123,6 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
         }
 
         kernels_.push_back(std::move(kernel));
-        libraries_.push_back(std::move(lib));
 
         const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;
         const std::uint32_t h = node.outHeight ? node.outHeight : height_;

@@ -1038,6 +1038,20 @@ extension Editor {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Grain") {
+            slider("Amount", $engine.grainAmount, 0...0.06, "", 3,
+                   resetsTo: engine.defaults.grainAmount)
+            slider("Size", $engine.grainSize, 1.2...8, " px", 1,
+                   resetsTo: engine.defaults.grainSize)
+            Text("Film grain, added to the finished picture rather than to the "
+               + "scene — it belongs to the print, not to the light. Loudest in "
+               + "the midtones and silent at both ends, which is how a real "
+               + "emulsion behaves. Size is in pixels of the *negative*, so "
+               + "cropping enlarges the grain instead of resampling it.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Dehaze") {
             slider("Dehaze", $engine.dehaze, 0...1, "", 2,
                    resetsTo: engine.defaults.dehaze)

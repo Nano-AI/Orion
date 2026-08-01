@@ -131,6 +131,8 @@ struct Preset: Codable, Identifiable, Equatable {
             out.dehaze = state.dehaze
             out.fusion = state.fusion
             out.lutStrength = state.lutStrength
+            out.grainAmount = state.grainAmount
+            out.grainSize = state.grainSize
         }
 
         // ⚠ Never copied, under any group. See the note on PresetGroup: the

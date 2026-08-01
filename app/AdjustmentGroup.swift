@@ -57,6 +57,8 @@ struct AdjustmentGroup: View {
         case (.dehaze, _):            $engine.dehaze
         case (.fusion, _):            $engine.fusion
         case (.lutStrength, _):       $engine.lutStrength
+        case (.grainAmount, _):       $engine.grainAmount
+        case (.grainSize, _):         $engine.grainSize
         }
     }
 
@@ -89,6 +91,8 @@ struct AdjustmentGroup: View {
         case (.dehaze, _):            return d.dehaze
         case (.fusion, _):            return d.fusion
         case (.lutStrength, _):       return d.lutStrength
+        case (.grainAmount, _):       return d.grainAmount
+        case (.grainSize, _):         return d.grainSize
         }
     }
 }

@@ -19,7 +19,57 @@ point — but nothing in them should be taken as current.
 ---
 Sessions `2026-07-31a` through `2026-07-31f` were moved here on 2026-07-31,
 in the same breath as the STATUS update that pushed the count past six.
-They are newer than everything below them.
+They are newer than everything below them.## Session 2026-07-31h — both test files split
+
+⚠ **Thirty-seventh through thirty-ninth arrivals of the stale M3 prompt.**
+Verified and set aside; the story was named at the end of session `g`.
+
+`apps/tests/main.cpp` was **7,656 lines** and `ViewportTests.swift` **3,297**,
+against a limit `CLAUDE.md` calls a hard constraint. Both were files these
+sessions kept adding to.
+
+### What it looks like now
+
+| | Before | After | Largest |
+|---|---|---|---|
+| `orion-tests` | 1 file, 7,656 | 15 files | **969** |
+| `orion-viewport-tests` | 1 file, 3,297 | 13 files | **552** |
+
+C++: twelve translation units by subject, `harness.{h,cpp}` for the counter and
+the three helpers, and a `main.cpp` that is the running order and nothing else.
+The counters move to `harness.cpp` behind `extern`, so every unit adds to one
+tally. Swift: the file was already part extensions, so the split follows the
+shape it had — `ViewportTests+<subject>.swift`, one `extension ViewportTests`
+each.
+
+### ⚠ Verified as a refactor, not asserted to be one
+
+The pre-split binary was rebuilt from `git stash` and its **full stdout diffed**
+against the new one, both suites. Identical line for line — not just the same
+totals, the same output in the same order. A check count alone would have missed
+a test that had stopped running and another that had started failing.
+
+### ⚠ Two things worth recording
+
+The first pass cut each chunk at its `static func`, which **orphaned every doc
+comment** at the tail of the previous file — the comment explaining a test
+ending up in a file that no longer contained it. Redone with boundaries walked
+back over the attached comment block. Caught by reading the output, not by the
+compiler, which was perfectly happy.
+
+And the count went from seven violations to **six, not five**:
+`app/Scenario.swift` crossed 1,000 during these same sessions, from the `reopen`,
+`refuses` and `control` verbs I added to it. Splitting two files while growing a
+third past the line is worth naming rather than rounding off.
+
+### What is left
+
+Six, all product code: `DevelopPipeline.cpp` 2,192, `Engine.swift` 1,977,
+`OrionApp.swift` 1,433, `bench/main.cpp` 1,293, `DevelopPanels.swift` 1,165,
+`Scenario.swift` 1,080. Splitting those is riskier than splitting tests — there
+is no byte-identical-output check available for a library — and wants its own
+session.
+
 ## Session 2026-07-31g — the recovery point could not be recovered from
 
 ⚠ **Thirty-sixth arrival of the stale M3 prompt.** Verified and set aside.

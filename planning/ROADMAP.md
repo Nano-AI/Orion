@@ -298,7 +298,12 @@ sed.
 
 | Area | The question |
 |---|---|
-| **The four gestures above** | before/after per event, and a screenshot proving the overlay still lands on the picture |
+| ✅ **The four gestures above** | Done 2026-08-01. All six canvas gestures arm now, and `repro/gesture-preview-agrees.txt` pins that the settled picture is identical either way — the mutation that stops `endInteraction` settling fails all five controls. ⚠ The grading wheel's arming is still unmeasured: `Scenario`'s control table is scalar and the wheels write three-component tuples |
+| ✅ **Autorelease pools** | Done 2026-08-01, decision #86. ~1.3 MB per photo open, invisible to `leaks` by construction. +8.92 MB → +0.58 MB over 15 pipeline builds |
+| ✅ **Orphan matte files** | Done 2026-08-01, decision #87. 26 orphans, 512 KB, beside one sample frame |
+| ⚠ **Dehaze's drag cost has roughly doubled and nobody noticed** | Normalised against exposure *in the same process*, so machine load cannot explain it: dehaze/exposure was **7.2×** when `repro/slider-drag-cost.txt` was written and is **11.8–13.5×** now. `orion-bench` agrees independently — dehaze does twice the work of clarity in 40% of the nodes. Not chased: this file has twice recorded a performance claim that was about the fixture, and the honest next step is a bisect, not a guess |
+| ⚠ **`reopen` grows 25–49 KB per cycle; plain `open` is flat** | 300 iterations of each, monotonic, and it resumes at the same slope after the allocator releases. A mask component roughly doubles the rate. The difference between the two paths is `Sidecar.read` → `restore` → `restoreMattes` → `sweep`. `InteractionLog` is capped at 2000 lines and ruled out. ~240 MB over a 5,000-photo cull |
+| ⚠ **Brush cost is linear in accumulated dabs, forever** | Full resolution it crosses 16 ms at **~500 dabs** — 1.4 strokes across the frame. Armed it crosses at ~12,300, then steps to a 27 ms plateau at ~13,400 that nobody has explained. Arming bought 14× and moved the wall; it did not remove it. The fix is ROADMAP's incremental accumulation |
 | **The tick, attributed** | `EditHistory.record` copies the whole `DevelopState`; `InteractionLog.committed` diffs every field and formats strings; `setBrushStroke` re-flattens the entire stroke per pointer event. All three are per-tick and O(size of the edit). ⚠ Candidates — the armed stroke is still linear (0.4 ms at 46 dabs, 1.8 at 784), which is 200 fps at the dab cap and may simply not be worth touching |
 | **Cold open** | decode 36 ms + full render 72–92 ms. What does the photographer see in between? |
 | **Library** | no SQLite index and no persistent thumbnail cache. Every open rescans the folder and re-reads every sidecar |
@@ -358,7 +363,7 @@ a different prefix can see it.
 That is a session with its own tests, not an addition to one that has already
 landed.
 
-## Film grain — costed, not started
+## Film grain — ✅ shipped 2026-08-01
 
 `research/film-grain.md` is written and settles the method: a precomputed
 correlated grain plate (AV1's architecture, Norkin & Birkbeck 2018) carrying
@@ -392,8 +397,8 @@ inherited**, or every existing `identical` baseline silently rebases.
 | 2 | ✅ **Done 2026-07-31.** `GrainPlate.h`: PCG32 + Box–Muller, band-limiting blur, CPU box-filtered chain. ⚠ Stacked **vertically into one 2048×4096 R32F** rather than real mip levels — the aux-texture API has none, and adding them would change the GPU layer for nothing, since the shader must filter by hand anyway. `levelOffset(l)` is the closed form both sides use | 182 lines, 33 MB, 14 checks |
 | 3 | ✅ **Done 2026-07-31.** New node; `setWideOutput` retargeted. ⚠ **Not** `develop:display` → `RGBA16Float` unconditionally, which is what the costing above assumed and what shipped first: a node that runs at Amount 0 is a full-resolution pointwise pass on every frame of every drag, and it took the M0 gate from 10.63 to **17.03 ms**. `retargetOutputChain` disables the node and hands the dither back to the display node instead, so the +194 MB and the +1 node are paid **only while the slider is up** | +93 MB idle, +194 MB on |
 | 4 | ✅ **Done 2026-07-31.** `GrainParams` + offset asserts; `gridStep` uniform so both graphs sample one field | small |
-| 5 | `amount` / `size` through `Adjustments` → `orion.h` → `CApi.cpp` → Swift | ~10 files |
-| 6 | Catalogue entry, two sliders, sidecar fields | ~4 files |
+| 5 | ✅ **Done 2026-08-01.** `amount` / `size` through `Adjustments` → `orion.h` → `CApi.cpp` → `DevelopState` → `Engine` → `cAdjustments` | 8 files |
+| 6 | ✅ **Done 2026-08-01.** Catalogue entry, two sliders, sidecar fields, presets, sync, the interaction log and the scenario's control table. ⚠ `repro/grain-survives-a-reopen.txt` exists because `Engine.state` builds `DevelopState` with the **memberwise initializer**, and when the two fields were added to the struct but not to that call Swift filled them with defaults and compiled silently — grain rendered on screen and reached the sidecar as 0, with 569 + 3449 checks and 31 scenarios all green | 6 files |
 | 7 | `testGrainGpu` ✅ and `testGrainWiring` ✅ (the node's *wiring*, which the kernel test cannot see); bench probe on **mean absolute difference** ✅, floor 0.06 of the exposure reference. Wiring scenario in `repro/` still to do | 26 checks |
 
 ### ⚠ What must not be done along the way

@@ -194,6 +194,20 @@ typedef struct OrionAdjustments {
      * having none loaded. */
     float lut_strength;
 
+    /* Film grain, applied after the display transform. research/film-grain.md,
+     * decisions #81 and #82.
+     *
+     * grain_amount is the PEAK standard deviation in display units -- peak
+     * because the Boolean model's variance law puts the noise in the midtones
+     * and none of it at either end. Zero is not merely silent: it disables the
+     * node, so the graph costs exactly what it did before grain existed.
+     *
+     * grain_size is the grain radius in FRAME pixels, so it is keyed to the
+     * negative. A crop enlarges the grain the way enlarging more of a negative
+     * does, rather than resampling it with the output. */
+    float grain_amount;    /* 0..0.06                    */
+    float grain_size;      /* 1.2..8, in frame pixels    */
+
     /* The mask group: components folded left in listed order into one coverage,
      * and the local adjustment applied once through it — never twice because two
      * components overlap. research/masking.md §6.

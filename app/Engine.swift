@@ -225,6 +225,15 @@ final class Engine {
     /// loaded through `loadLut`, not an adjustment.
     var lutStrength: Float = 1     { didSet { pushAndRender() } }
 
+    /// Film grain. Amount is the peak standard deviation in display units; Size
+    /// is the grain radius in *frame* pixels. research/film-grain.md, #81/#82.
+    ///
+    /// ⚠ Amount 0 does not merely render silent grain — it disables the node,
+    /// so the graph costs exactly what it did before the feature existed. See
+    /// `DevelopPipeline::retargetOutputChain`.
+    var grainAmount: Float = 0     { didSet { pushAndRender() } }
+    var grainSize: Float = 1.5     { didSet { pushAndRender() } }
+
     // ── Local adjustments: the mask group (M4) ────────────────────────────
     //
     // A mask is a *list* of components folded left in listed order
@@ -1462,6 +1471,7 @@ final class Engine {
             spots: spots,
             layers: layers,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
+            grainAmount: grainAmount, grainSize: grainSize,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
@@ -1488,6 +1498,7 @@ final class Engine {
         gradeHighlight = s.gradeHighlight
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         lutStrength = s.lutStrength
+        grainAmount = s.grainAmount; grainSize = s.grainSize
         // The whole group at once, then every stroke re-sent — the engine keeps
         // strokes outside the adjustment block, so assigning the list alone
         // would restore the geometry and leave the previous photo's paint in the
@@ -1742,6 +1753,7 @@ final class Engine {
         a.grade_highlight = (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2])
         a.denoise_luma = denoiseLuma; a.denoise_color = denoiseColor
         a.lut_strength = lutStrength
+        a.grain_amount = grainAmount; a.grain_size = grainSize
 
         // The mask group. An empty list is a count of zero — not one live
         // component that happens to cover nothing.

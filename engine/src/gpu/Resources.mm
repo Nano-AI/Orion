@@ -67,6 +67,24 @@ std::unique_ptr<Texture> Texture::create(Device& device, std::uint32_t width,
     t->height_ = height;
     t->format_ = format;
 
+    // ⚠ **Pool discipline lives in this file and nowhere above it.** ARC is on
+    // here, so strong members are released correctly — but ARC does not *drain*
+    // autorelease pools, and nothing in this engine turns a run loop. Every
+    // autoreleased Metal temporary therefore accumulated for the life of the
+    // process: measured at 393 B per texture, 1.6 KB per library load, 2.3 KB
+    // per kernel, adding to **~0.64 MB per DevelopPipeline built** and so ~1.3
+    // MB per photo opened, since a photo builds two graphs.
+    //
+    // ⚠ `leaks` reports zero for this, and correctly: the blocks are still
+    // *reachable* from an undrained pool, so they are not leaks by its
+    // definition. Only a footprint measurement finds it. The app is shielded by
+    // accident today — `pushAndRender` runs on the main thread, whose run loop
+    // drains each cycle — but the bench, the tests and the scenario runner are
+    // not, and moving a photo open to a background queue would expose it.
+    //
+    // Safe around a factory: ARC retains into the returned object's strong
+    // member before the pool drains.
+    @autoreleasepool {
     MTLTextureDescriptor* desc =
         [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:toMetal(format)
                                                            width:width
@@ -78,6 +96,7 @@ std::unique_ptr<Texture> Texture::create(Device& device, std::uint32_t width,
     desc.storageMode = MTLStorageModeShared;
 
     t->impl_->tex = [dev(device) newTextureWithDescriptor:desc];
+    }
     if (t->impl_->tex == nil) throw std::runtime_error("texture allocation failed");
 
     return t;
@@ -126,13 +145,18 @@ std::unique_ptr<Library> Library::createFromFile(Device& device, const std::stri
     auto l = std::unique_ptr<Library>(new Library());
     l->impl_ = std::make_unique<Impl>();
 
-    NSError* err = nil;
-    NSURL* url = [NSURL fileURLWithPath:@(path.c_str())];
-    l->impl_->lib = [dev(device) newLibraryWithURL:url error:&err];
+    // See the note in Texture::create. `@(path)`, the NSURL and the NSError are
+    // all autoreleased; the message below is copied into a std::string before
+    // the pool drains, and @autoreleasepool unwinds correctly on a throw.
+    @autoreleasepool {
+        NSError* err = nil;
+        NSURL* url = [NSURL fileURLWithPath:@(path.c_str())];
+        l->impl_->lib = [dev(device) newLibraryWithURL:url error:&err];
 
-    if (l->impl_->lib == nil) {
-        const char* why = err ? err.localizedDescription.UTF8String : "unknown";
-        throw std::runtime_error("could not load metallib at " + path + ": " + why);
+        if (l->impl_->lib == nil) {
+            const char* why = err ? err.localizedDescription.UTF8String : "unknown";
+            throw std::runtime_error("could not load metallib at " + path + ": " + why);
+        }
     }
     return l;
 }
@@ -151,6 +175,9 @@ std::unique_ptr<Kernel> Kernel::create(Device& device, Library& library,
     k->impl_ = std::make_unique<Impl>();
     k->name_ = entryPoint;
 
+    // ⚠ The pool has to enclose the reflection loop below, not just the
+    // pipeline call: `refl` is autoreleased and is read after the pso exists.
+    @autoreleasepool {
     id<MTLLibrary> lib = (__bridge id<MTLLibrary>)library.raw();
     id<MTLFunction> fn = [lib newFunctionWithName:@(entryPoint.c_str())];
     if (fn == nil) throw std::runtime_error("no kernel named '" + entryPoint + "' in library");
@@ -182,6 +209,7 @@ std::unique_ptr<Kernel> Kernel::create(Device& device, Library& library,
 
     k->execWidth_  = static_cast<std::uint32_t>(k->impl_->pso.threadExecutionWidth);
     k->maxThreads_ = static_cast<std::uint32_t>(k->impl_->pso.maxTotalThreadsPerThreadgroup);
+    }
     return k;
 }
 
@@ -196,10 +224,16 @@ struct CommandBuffer::Impl {
 };
 
 CommandBuffer::CommandBuffer(Device& device) : impl_(std::make_unique<Impl>()) {
-    id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)device.rawQueue();
-    impl_->cb = [queue commandBuffer];
-    if (impl_->cb == nil) throw std::runtime_error("could not create command buffer");
-    impl_->enc = [impl_->cb computeCommandEncoder];
+    // ⚠ Both are autoreleased and both outlive this constructor — which is
+    // fine, because `Impl`'s members are `__strong` and ARC retains into them
+    // before the pool drains. This is the per-frame site: one command buffer
+    // and one encoder per render, ~0.22 KB a frame left behind without it.
+    @autoreleasepool {
+        id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)device.rawQueue();
+        impl_->cb = [queue commandBuffer];
+        if (impl_->cb == nil) throw std::runtime_error("could not create command buffer");
+        impl_->enc = [impl_->cb computeCommandEncoder];
+    }
 }
 
 CommandBuffer::~CommandBuffer() = default;
@@ -229,10 +263,12 @@ void CommandBuffer::commitAndWait() {
     [impl_->cb commit];
     [impl_->cb waitUntilCompleted];
 
-    if (impl_->cb.status == MTLCommandBufferStatusError) {
-        const char* why = impl_->cb.error ? impl_->cb.error.localizedDescription.UTF8String
-                                          : "unknown";
-        throw std::runtime_error(std::string("GPU work failed: ") + why);
+    @autoreleasepool {
+        if (impl_->cb.status == MTLCommandBufferStatusError) {
+            const char* why = impl_->cb.error
+                ? impl_->cb.error.localizedDescription.UTF8String : "unknown";
+            throw std::runtime_error(std::string("GPU work failed: ") + why);
+        }
     }
     impl_->gpuMs = (impl_->cb.GPUEndTime - impl_->cb.GPUStartTime) * 1000.0;
 }

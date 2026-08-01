@@ -250,8 +250,7 @@ enum Scenario {
             }
             engine.restore(encoded: saved)
             engine.restoreMattes(photo: p)
-            MatteStore.sweep(photo: p,
-                             keeping: MatteStore.referenced(engine.maskComponents))
+            MatteStore.sweepAfterLoad(photo: p, parsed: engine.maskComponents)
 
         case "rotate":
             engine.rotate(Int32(try number(0)))
@@ -929,6 +928,8 @@ enum Scenario {
         case "contrast":       return e.contrast
         case "saturation":     return e.saturation
         case "dehaze":         return e.dehaze
+        case "grainAmount":    return e.grainAmount
+        case "grainSize":      return e.grainSize
         default:               return nil
         }
     }
@@ -947,6 +948,8 @@ enum Scenario {
         case "tint":        e.tint = value
         case "clarity":     e.clarity = value
         case "dehaze":      e.dehaze = value
+        case "grainAmount": e.grainAmount = value
+        case "grainSize":   e.grainSize = value
         case "fusion", "lift": e.fusion = value
         case "localExposure": e.localExposureEv = value
         case "localContrast": e.localContrast = value

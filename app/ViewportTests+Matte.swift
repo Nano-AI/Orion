@@ -174,4 +174,84 @@ extension ViewportTests {
                                    id: "abc")
         report(matte != other, "two photographs do not share a matte file")
     }
+
+    /// The sweep's three cases. ⚠ It had two, and the missing one leaked files
+    /// forever.
+    ///
+    /// The load path swept only inside the successful-parse branch, guarded by a
+    /// comment that is right about a sidecar which *exists and did not parse* —
+    /// sweeping against that reads as "nothing is referenced" and would delete a
+    /// photograph's work. But a photograph that had simply never been saved fell
+    /// into the same `else`, and a matte id lives only in a sidecar, so nothing
+    /// on disk could ever reference its PNGs. They accumulated: measured at
+    /// **26 orphans, 512 KB** beside one sample frame, oldest three days old,
+    /// because pressing Subject mints a fresh UUID and writes a new file.
+    ///
+    /// ⚠ Tested here rather than through a scenario because `Scenario` cannot
+    /// reach it — its `reopen` requires a sidecar to reopen *with*, so the
+    /// no-sidecar case is unreachable from the runner. Testing the policy where
+    /// the policy lives is also what stopped it being written out twice.
+    static func testSweepDistinguishesAbsentFromUnreadable() {
+        let fm = FileManager.default
+
+        /// A throwaway folder holding a photograph and three matte files.
+        func fixture(_ label: String) -> (photo: URL, dir: URL) {
+            let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("orion-sweep-\(label)-\(UUID().uuidString)")
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let photo = dir.appendingPathComponent("_PIC0001.ARW")
+            fm.createFile(atPath: photo.path, contents: Data([0]))
+            for id in ["keep", "drop1", "drop2"] {
+                fm.createFile(atPath: MatteStore.url(photo: photo, id: id).path,
+                              contents: Data([0]))
+            }
+            return (photo, dir)
+        }
+        func mattes(_ photo: URL) -> Int {
+            let dir = photo.deletingLastPathComponent()
+            let prefix = "_PIC0001.orion-matte-"
+            let all = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+            return all.filter { $0.hasPrefix(prefix) }.count
+        }
+
+        // ── 1. Parsed: keep exactly what it references ─────────────────────
+        do {
+            let (photo, dir) = fixture("parsed")
+            defer { try? fm.removeItem(at: dir) }
+            var component = MaskComponentState()
+            component.kind = 4
+            component.matteId = "keep"
+            MatteStore.sweepAfterLoad(photo: photo, parsed: [component])
+            report(mattes(photo) == 1,
+                   "a parsed sidecar keeps only what it references",
+                   "\(mattes(photo)) files left")
+            report(fm.fileExists(atPath: MatteStore.url(photo: photo, id: "keep").path),
+                   "and the one it keeps is the referenced one")
+        }
+
+        // ── 2. Absent: collect everything ─────────────────────────────────
+        do {
+            let (photo, dir) = fixture("absent")
+            defer { try? fm.removeItem(at: dir) }
+            MatteStore.sweepAfterLoad(photo: photo, parsed: nil)
+            report(mattes(photo) == 0,
+                   "no sidecar at all collects every matte — nothing can reference one",
+                   "\(mattes(photo)) files left")
+        }
+
+        // ── 3. Present but unreadable: collect nothing ────────────────────
+        //
+        // ⚠ The load-bearing half. Without it the fix above turns a recoverable
+        // parse failure into permanent loss of a photograph's selections.
+        do {
+            let (photo, dir) = fixture("unreadable")
+            defer { try? fm.removeItem(at: dir) }
+            fm.createFile(atPath: Sidecar.url(for: photo).path,
+                          contents: Data("this is not xml".utf8))
+            MatteStore.sweepAfterLoad(photo: photo, parsed: nil)
+            report(mattes(photo) == 3,
+                   "an unreadable sidecar collects nothing",
+                   "\(mattes(photo)) files left")
+        }
+    }
 }

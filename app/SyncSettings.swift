@@ -56,7 +56,8 @@ enum SyncSettings {
                     "denoiseLuma", "denoiseColor",
                     "lensDistortion", "lensVignette", "lensCaRed", "lensCaBlue"]
         case .effects:
-            return ["clarity", "dehaze", "fusion", "lutStrength"]
+            return ["clarity", "dehaze", "fusion", "lutStrength",
+                    "grainAmount", "grainSize"]
         }
     }
 

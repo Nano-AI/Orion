@@ -150,6 +150,8 @@ final class InteractionLog: @unchecked Sendable {
         f("tint", a.tint, b.tint)
         f("clarity", a.clarity, b.clarity)
         f("dehaze", a.dehaze, b.dehaze)
+        f("grainAmount", a.grainAmount, b.grainAmount)
+        f("grainSize", a.grainSize, b.grainSize)
         f("fusion", a.fusion, b.fusion)
         // ⚠ Per layer, and the layer index is emitted with it — a bare
         // `set localExposure` would replay onto whichever layer the runner

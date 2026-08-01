@@ -1216,18 +1216,20 @@ struct Editor: View {
             do {
                 try engine.open(path: url.path)
                 viewport.reset()
-                if let saved = Sidecar.read(for: url)?.develop {
+                let saved = Sidecar.read(for: url)?.develop
+                if let saved {
                     engine.restore(encoded: saved)
-                    // ⚠ Both of these are inside the successful-parse branch,
-                    // and the sweep especially. A sidecar that failed to parse
-                    // yields no components, and sweeping against that would
-                    // read as "nothing is referenced" and delete every matte
-                    // the photograph has — turning a recoverable parse failure
-                    // into permanent loss of work.
+                    // ⚠ Inside the successful-parse branch, because a sidecar
+                    // that failed to parse yields no components and restoring
+                    // from that would discard the photograph's edits.
                     engine.restoreMattes(photo: url)
-                    MatteStore.sweep(photo: url,
-                                     keeping: MatteStore.referenced(engine.maskComponents))
                 }
+                // ⚠ Outside it, and that is the fix. The sweep's policy has
+                // three cases, not two, and it lives in `MatteStore` so the
+                // scenario runner cannot drift from it.
+                MatteStore.sweepAfterLoad(photo: url,
+                                          parsed: saved == nil ? nil
+                                                               : engine.maskComponents)
                 // Arm only once the photo is settled, with what its sidecar
                 // already holds — so opening a file does not write straight
                 // back what it just read.

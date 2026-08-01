@@ -240,6 +240,8 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;
     a.lutStrength     = adj->lut_strength;
+    a.grainAmount     = adj->grain_amount;
+    a.grainSize       = adj->grain_size;
     a.clarity         = adj->clarity;
     a.sharpenAmount   = adj->sharpen_amount;
     a.sharpenRadius   = adj->sharpen_radius;

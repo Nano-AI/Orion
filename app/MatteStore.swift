@@ -176,6 +176,38 @@ enum MatteStore {
     }
 
     /// Every matte id the state names. The set `sweep` must keep.
+    /// The sweep's whole policy, in one place, because there are **three**
+    /// states of a sidecar and conflating two of them leaked files forever.
+    ///
+    /// | The sidecar | What may be collected |
+    /// |---|---|
+    /// | parsed | everything it does not reference |
+    /// | **absent** | everything — a matte id lives only in a sidecar, so with no
+    ///   sidecar nothing on disk can reference one |
+    /// | present but unreadable | **nothing** |
+    ///
+    /// ⚠ That middle row is the fix. The load path used to sweep only inside
+    /// the successful-parse branch, with a comment defending it against the
+    /// third row — correctly. But a photograph that had simply never been saved
+    /// fell into the same `else`, so its mattes could never be collected at
+    /// all. Measured on `samples/_PIC8095.ARW`: **26 orphans, 512 KB, the
+    /// oldest three days old**, because pressing Subject mints a fresh UUID
+    /// every time and writes a new file.
+    ///
+    /// ⚠ And it is one function rather than a rule repeated at each call site.
+    /// It was already written twice — the app's loader and the scenario
+    /// runner's `reopen`, which claims in its own comment to take "the same
+    /// steps `Editor.load` takes". Two copies of a delete policy is how one of
+    /// them quietly stops matching.
+    static func sweepAfterLoad(photo: URL, parsed: [MaskComponentState]?) {
+        if let parsed {
+            sweep(photo: photo, keeping: referenced(parsed))
+        } else if !FileManager.default.fileExists(
+                    atPath: Sidecar.url(for: photo).path) {
+            sweep(photo: photo, keeping: [])
+        }
+    }
+
     static func referenced(_ components: [MaskComponentState]) -> Set<String> {
         Set(components.compactMap { $0.matteId })
     }
