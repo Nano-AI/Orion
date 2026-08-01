@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-07-31 (**the grain node ran when it was off, and the brush cursor was an oval**)
+**Last updated:** 2026-08-01 (**the canvas never told the engine a gesture was happening**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -20,18 +20,21 @@ arrived **36 times**; the answer each time is that they exist, and each of the
 four now also has something that fails when its *wiring* breaks — see sessions
 `31e` and `31f`.
 
-**Next story:** **finish film grain.** Pieces 1–4 and most of 7 are done and in
-the build; what is left is the value through `orion.h` → `CApi` → Swift → the
-catalogue → the sidecar (piece 5, ~10 files), two sliders (piece 6, ~4 files) and
-a `repro/` wiring scenario. Nothing about it is guesswork now.
+**Next story:** `ROADMAP.md` carries an **⚠ ACTION ITEM — a full performance
+audit of the application**, asked for directly on 2026-08-01. Four canvas
+gestures still never arm degrade-then-refine (crop, spot, the curve editor, the
+grading wheels) and the two that were fixed that day were worth **10–14×** each.
+They were deliberately not fixed in the same breath: each swaps the canvas to a
+differently-sized texture mid-gesture with an overlay drawn over it, which is a
+bug this repository has already shipped once.
 
-After that, `ROADMAP.md`'s **slider latency, end to end** is the named story with
-the best reason to exist: a slowdown was reported from the app on 2026-07-31 and
-found, but the instrument that found it stops at the C++ boundary and nothing in
-this repository times a tick the way the app issues one. `research/masking.md` is
-**finished**; its leftovers are the fill leaking through smooth ground and the
-per-layer decomposition beyond stage 2. The largest standing violation of a
-stated hard constraint is `DevelopPipeline.cpp`, now **2,295 lines**.
+Also open: **finish film grain** — pieces 1–4 and most of 7 are done and in the
+build, leaving the value through `orion.h` → `CApi` → Swift → the catalogue →
+the sidecar (piece 5, ~10 files), two sliders (piece 6, ~4 files) and a `repro/`
+wiring scenario. `research/masking.md` is **finished**; its leftovers are the
+fill leaking through smooth ground and the per-layer decomposition beyond stage
+2. The largest standing violation of a stated hard constraint is
+`DevelopPipeline.cpp`, now **2,295 lines**.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
@@ -57,7 +60,9 @@ Small, named, and none of them blocking the next story:
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
 | **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 1,977, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` 1,135, `Scenario.swift` 1,080. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
-| **Nothing times a slider tick the way the app issues one.** The bench stops at the C++ boundary; `EditHistory.record` and `InteractionLog.committed` do per-tick work on the main thread that nothing measures. Named and costed in `ROADMAP.md` — and the reason it is named is that a slowdown *inside* the measured part still reached the developer before the bench did | `ROADMAP.md` |
+| **Four canvas gestures never arm degrade-then-refine** — `CropOverlay`, `SpotOverlay`, `CurveEditor`, `ColorWheel`. Each therefore renders the full graph at full resolution once per pointer event, where every slider renders a sixteenth of it. The two that were fixed on 2026-08-01 were worth 10–14× | the ⚠ ACTION ITEM in `ROADMAP.md` |
+| **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the lines that matter are reachable only by reading them. The four above were found by `grep`, not by a red test | `Scenario.swift` |
+| **The tick is timed whole, not attributed.** `EditHistory.record` copies the entire `DevelopState`, `InteractionLog.committed` diffs every field and formats strings, and `setBrushStroke` re-flattens the whole stroke — all per event, all O(size of the edit). ⚠ Candidates only: armed, a 784-dab stroke is 1.8 ms an event, so this may not be worth touching at all | `ROADMAP.md` |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
@@ -111,6 +116,90 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01a — the canvas never told the engine a gesture was happening
+
+**Reported live: "I feel like there are forced updates per stroke, but this makes
+things a lot slower."** Exactly right, and it named the mechanism.
+
+### ⚠ The cause, which is not slowness anywhere
+
+`AdjustmentSlider` arms degrade-then-refine through `AnalogTrack`. **No gesture
+on the picture ever did.** So a slider tick rendered a quarter-linear preview and
+a brush stroke rendered the **full graph at full resolution**, once per pointer
+event, on a photograph that gets more expensive with every dab already laid.
+
+Nothing was written badly. The preview graph has existed since 2026-07-30 and
+the canvas simply never opted in.
+
+### The instrument came first, and it had to
+
+`scenario brush` hands the engine one finished stroke in a single
+`setBrushStroke`. `MaskOverlay.paint` calls it again on **every pointer event**,
+appending. Nothing in the repository issued a stroke the second way, so nothing
+could see the cost — which is ROADMAP piece 1, now built as `paint <x,y> <x,y>
+<n>`.
+
+| Stroke, in dabs | Unarmed | Armed |
+|---|---|---|
+| 41 | 7.6 ms/event | **0.7 ms** |
+| 123 | 15.2 | 1.1 |
+| 246 | 27.3 — **37 fps** | **1.9 ms** |
+| 784 | — | 1.8 |
+
+And placing a radial mask that carries a local exposure, `drag maskCentreX`:
+**13.0 ms a tick → 1.3 ms**.
+
+⚠ **The verb deliberately does not arm the preview graph itself.** One that did
+would report the same number whether `MaskOverlay` still called
+`beginInteraction` or not — a measurement that cannot see the thing it exists to
+measure, which is the defect this file has recorded three times.
+
+### Fixed: two lines, in two gestures
+
+Paint arms on the press and disarms in `onEnded`, after the history commit —
+`endInteraction` renders the full graph once, and that is the first time the
+full graph sees the paint rather than a refinement of it.
+
+⚠ **The placement drag arms after the hit test, not before it.** A press that
+grabs no handle falls through to the picture and pans it; arming first would
+swap the canvas to the preview texture for a gesture that is not an edit.
+`endInteraction` is called unconditionally, because it returns immediately when
+nothing was armed and a grab that never moved still has to come off the preview.
+
+### ⚠ Four more gestures do the same thing, and were left alone on purpose
+
+`grep beginInteraction` finds them: `CropOverlay`, `SpotOverlay`, `CurveEditor`,
+`ColorWheel`. All four still render the full graph per event.
+
+They are **not** a sed. Each swaps the canvas to a differently-sized texture
+mid-gesture with an overlay drawn over it, and this repository has already
+shipped precisely that bug once — the compare split sampling two textures
+through one set of UVs. The crop overlay is the worst of them, because its
+rectangle *is* the geometry being changed. Each wants a before/after and a look
+at the screen.
+
+That, plus cold open, the library scan, memory on a lesser GPU, and the
+measuring protocol itself, is the new **⚠ ACTION ITEM — a full performance audit
+of the application** in `ROADMAP.md`, asked for in the same message.
+
+### ⚠ What is still not covered
+
+**Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and
+`CanvasLayout`, never a SwiftUI view, so the two lines added today are reachable
+only by reading them — and the four above were found by grepping, not by a red
+test. In the gap table rather than implied to be handled.
+
+### Deliberately not optimised
+
+Armed, painting is **still linear** in stroke length: 0.4 ms an event at 46 dabs,
+1.8 at 784. The host-side reasons are known and named — `setBrushStroke`
+re-flattens the whole stroke per event, `EditHistory.record` copies the whole
+`DevelopState`, `InteractionLog.committed` diffs every field. At that slope the
+dab cap lands around 5 ms an event, which is 200 fps.
+
+⚠ Yesterday's own ROADMAP entry says not to optimise any of those rows before it
+has a number. They have one now and the number says leave them alone.
 
 ## Session 2026-07-31l — the grain node ran when it was off, and the cursor was an oval
 
@@ -437,50 +526,3 @@ Six, all product code: `DevelopPipeline.cpp` 2,192, `Engine.swift` 1,977,
 `Scenario.swift` 1,080. Splitting those is riskier than splitting tests — there
 is no byte-identical-output check available for a library — and wants its own
 session.
-
-## Session 2026-07-31g — the recovery point could not be recovered from
-
-⚠ **Thirty-sixth arrival of the stale M3 prompt.** Verified and set aside.
-
-No code. This file was **4,643 lines across 56 sessions**, and `CLAUDE.md` opens
-by calling it the recovery point and saying to read it first.
-
-⚠ **Nobody was reading it, including me.** Across the six sessions before this
-one I opened it, read the first fifty lines, and appended another hundred to the
-end. Every session made the problem worse and none noticed, because the part
-that matters is at the top and the cost is at the bottom. The working agreement
-says updating this file is "what makes context loss survivable"; at that length
-it was the opposite.
-
-### What moved
-
-50 sessions to `HISTORY.md`, verbatim. Six most recent stay. **588 lines now.**
-
-Checked rather than assumed: 6 + 50 = 56 headings, and a line-by-line
-comparison against `HEAD` shows the only original lines absent from the pair are
-eleven I deliberately rewrote in the header.
-
-### ⚠ Two things the move exposed
-
-**The tail had been false for weeks.** A "Where we are" section still described
-a **7-node, 971 MiB** pipeline — it is 148 and 6878 — and "In flight" read
-"nothing in flight, planning is complete enough to start coding". Both kept in
-`HISTORY.md`, marked as superseded, because they record what was believed at the
-time. Neither was reachable by anyone reading from the top, which is exactly why
-they rotted.
-
-**The header pointed at "the cost table below", 3,392 lines below.** That table
-is the standing answer to the kickoff prompt that has now arrived 36 times, and
-it was the least findable thing in the file. It sits under the gap table now.
-
-Also corrected while there: the suite counts had drifted (3430/30 against the
-real 3437/32), and "arrived five times" was five sessions stale.
-
-### The gap table gained a row
-
-`CLAUDE.md` calls the thousand-line limit a hard constraint and the tree breaks
-it seven ways, worst at `apps/tests/main.cpp` — **7,656 lines**. ⚠ Recorded
-rather than fixed, and recorded pointedly: the two worst offenders are the two I
-have added to nearly every session. Splitting them is a session of its own, and
-`CLAUDE.md` now says to prune this file in the same breath as updating it, so
-the same thing does not happen again by default.

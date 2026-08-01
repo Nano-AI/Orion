@@ -187,11 +187,32 @@ time.
   the coverage scales the parameter is not even defined for them.
 - **Blend modes over rendered frames.** #75. Layer opacity is a scalar into α.
 
-## Slider latency, end to end — reported, not yet measured
+## Interaction latency, end to end — instrument built, two gestures fixed
 
-**Reported live 2026-07-31: "it starts to get slow when I adjust it."** One cause
-was found the same afternoon and fixed — see below — but it does not close this,
-because the instrument that found it cannot see most of the path.
+**Reported live 2026-07-31: "it starts to get slow when I adjust it."** Then
+2026-08-01: **"forced updates per stroke."** Both were right, and the second
+named the mechanism exactly.
+
+⚠ **The root cause was not slowness anywhere. It was that the canvas never told
+the engine a gesture was in progress.** `AdjustmentSlider` arms
+degrade-then-refine through `AnalogTrack`; no gesture *on the picture* did. So a
+slider tick rendered a quarter-linear preview and a brush stroke rendered the
+**full graph at full resolution**, once per pointer event, sixty times a second,
+against a photograph that gets more expensive with every dab already laid.
+
+Measured with the new `paint` verb on `_PIC8220`:
+
+| Stroke, in dabs | Unarmed (was) | Armed (now) |
+|---|---|---|
+| 41 | 7.6 ms/event | **0.7 ms** |
+| 246 | 27.3 ms/event — 37 fps | **1.9 ms** |
+| 784 | — | 1.8 ms |
+
+and on placing a radial mask carrying a local exposure, `drag maskCentreX`:
+**13.0 ms a tick → 1.3 ms**.
+
+✅ Fixed 2026-08-01 in `MaskOverlay`: both the paint gesture and the placement
+drag now arm. ⚠ **Four gestures still do not** — see the audit below.
 
 ### What is measured today, and what is not
 
@@ -222,10 +243,15 @@ Do not optimise any row of that table before it has a number.
 
 | # | Piece | Cost |
 |---|---|---|
-| 1 | A scenario verb or bench mode that times **a tick as the app issues it**, from the gesture callback to the frame being presented. Without this the rest is guesswork | the story |
-| 2 | Attribute the tick: history, log, facade, engine, present | — |
+| 1 | ✅ **Done 2026-08-01.** `scenario paint <x,y> <x,y> <n>` — a stroke as the *canvas* issues it, one push per pointer event, reporting ms per event. ⚠ Deliberately does **not** arm the preview graph itself: a verb that did would report the same number whether `MaskOverlay` still called `beginInteraction` or not | one verb |
+| 2 | Attribute the tick: history, log, facade, engine, present. Still open — piece 1 times the whole thing, not its parts | — |
 | 3 | Fix whatever piece 2 names, and only that | unknown by construction |
 | 4 | A floor in the bench, so it cannot regress silently the way it just did | small |
+
+⚠ **What piece 1 does not cover.** `Scenario` drives `Engine` and `CanvasLayout`,
+never a SwiftUI view, so **nothing asserts that a gesture arms**. The two lines
+that matter in `MaskOverlay` are reachable only by reading them, and the four
+gestures below were found by grepping for `beginInteraction`, not by a red test.
 
 ### ✅ One cause found and fixed, 2026-07-31
 
@@ -239,6 +265,55 @@ the same as it did before grain existed.
 ⚠ **That this shipped into a working tree at all is the argument for piece 1.**
 The regression was in the engine, where the instrument *does* reach — and it was
 still reported by a person using the app before the bench was next run.
+
+## ⚠ ACTION ITEM — a full performance audit of the application
+
+**Asked for directly, 2026-08-01.** Not a story about one slider: a pass over
+everything a photographer touches, with a number against each.
+
+### Why it is its own item rather than more of the section above
+
+Two gestures were fixed on 2026-08-01 by adding one line each. Both were found by
+`grep beginInteraction`, and **four more came back in the same grep**:
+
+| Gesture | Arms the preview graph? |
+|---|---|
+| Every slider, via `AnalogTrack` | ✅ |
+| `MaskOverlay` paint | ✅ 2026-08-01 |
+| `MaskOverlay` placement drag | ✅ 2026-08-01 |
+| `CropOverlay` | ❌ |
+| `SpotOverlay` | ❌ |
+| `CurveEditor` | ❌ |
+| `ColorWheel` | ❌ |
+
+⚠ **They were not fixed in the same breath, on purpose.** Each swaps the canvas
+to a differently-sized texture mid-gesture while an overlay is drawn over it,
+and this codebase has already shipped exactly that bug once — the compare split
+sampling two textures through one set of UVs. The crop overlay is the riskiest
+of the four, because its rectangle *is* the geometry being changed. Each needs
+its own before/after and its own look at the screen. That is the audit, not a
+sed.
+
+### What the audit must cover
+
+| Area | The question |
+|---|---|
+| **The four gestures above** | before/after per event, and a screenshot proving the overlay still lands on the picture |
+| **The tick, attributed** | `EditHistory.record` copies the whole `DevelopState`; `InteractionLog.committed` diffs every field and formats strings; `setBrushStroke` re-flattens the entire stroke per pointer event. All three are per-tick and O(size of the edit). ⚠ Candidates — the armed stroke is still linear (0.4 ms at 46 dabs, 1.8 at 784), which is 200 fps at the dab cap and may simply not be worth touching |
+| **Cold open** | decode 36 ms + full render 72–92 ms. What does the photographer see in between? |
+| **Library** | no SQLite index and no persistent thumbnail cache. Every open rescans the folder and re-reads every sidecar |
+| **Scroll, zoom, pan, filmstrip** | never measured at all |
+| **Memory** | 6971 MiB of intermediates on a 24 MP frame. What happens on 8 GB, or on a GPU that is not an M4? |
+| **Export** | 345 ms JPEG, 571 ms TIFF. Fine, but unwatched |
+| **The measuring protocol itself** | ⚠ 2026-07-31 recorded the M0 gate swinging **8.97 → 44.53 ms on an identical binary** with GUI load. Any number this audit produces is worthless unpaired. Decide the protocol first |
+
+### ⚠ The rule that governs it
+
+`CLAUDE.md`: latency regressions block new features. Twice now a performance
+claim in this repository turned out to be about the fixture rather than the
+product, and once — the 120-dab stroke — it was off by fifteen times. **Measure,
+then fix, then measure again.** Nothing in the table above gets touched on the
+strength of looking wrong.
 
 ## Incremental brush accumulation — costed, not started
 

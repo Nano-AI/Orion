@@ -235,6 +235,23 @@ struct MaskOverlay: View {
                 if !painting {
                     painting = true
                     carry = 0
+                    // ⚠ **Painting is a drag and had never said so.** Every
+                    // slider armed the preview graph through `AnalogTrack`;
+                    // this gesture did not, so a stroke re-rendered the *full*
+                    // graph at full resolution on every pointer event while a
+                    // slider tick paid a sixteenth of that. Measured with
+                    // `scenario paint`, which exists because nothing else
+                    // issued a stroke the way this gesture does:
+                    //
+                    //   dabs |  unarmed  |  armed
+                    //     41 |   7.6 ms  |  0.7 ms
+                    //    246 |  27.3 ms  |  1.9 ms
+                    //
+                    // and a real stroke is thousands of dabs, not hundreds.
+                    // `beginInteraction` refuses while comparing and with no
+                    // preview graph, so this falls back to the old path rather
+                    // than breaking on either.
+                    engine.beginInteraction()
                     // Start from the stroke already on the picture, so a second
                     // pass adds to it rather than replacing it. The engine
                     // accumulates source-over, which is what makes overlapping
@@ -269,6 +286,13 @@ struct MaskOverlay: View {
                 carry = 0
                 // One history entry for the whole stroke, not one per dab.
                 if !stroke.isEmpty { engine.commitBrushEdit() }
+                // ⚠ After the commit, and unconditionally. `endInteraction`
+                // renders the full graph once — every event of the stroke went
+                // to the preview, so this is the first time the full graph sees
+                // the paint, not a refinement of what is on screen. Skipping it
+                // on an empty stroke would strand the canvas on the preview
+                // texture after a press that laid nothing.
+                engine.endInteraction()
             }
     }
 
@@ -292,6 +316,16 @@ struct MaskOverlay: View {
                     dragging = h
                     grab = value.startLocation
                     start = mask
+                    // ⚠ Here, not at the top of `onChanged`. A press that grabs
+                    // no handle falls through to the picture and pans it, and
+                    // arming before the hit test would swap the canvas to the
+                    // preview texture for a gesture that is not an edit at all.
+                    //
+                    // Measured with `drag maskCentreX 0.2 0.8 40` on a radial
+                    // mask carrying a local exposure: 13.0 ms a tick unarmed,
+                    // 1.3 ms armed. Placing a mask by eye is exactly when the
+                    // picture has to keep up with the hand.
+                    engine.beginInteraction()
                 }
                 guard let h = dragging, let from = start else { return }
                 engine.maskPlacement = CanvasLayout.maskDrag(
@@ -305,6 +339,11 @@ struct MaskOverlay: View {
                 // releases without moving is not an edit, and recording it
                 // would put an entry in the history that undoes to itself.
                 if moved { engine.commitMaskEdit() }
+                // Unconditional, unlike the commit. `endInteraction` returns
+                // immediately when nothing was armed, so a press that grabbed
+                // no handle costs nothing here — and a press that grabbed one
+                // and did not move still has to come off the preview texture.
+                engine.endInteraction()
             }
     }
 }

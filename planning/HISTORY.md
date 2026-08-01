@@ -20,6 +20,52 @@ point — but nothing in them should be taken as current.
 Sessions `2026-07-31a` through `2026-07-31f` were moved here on 2026-07-31,
 in the same breath as the STATUS update that pushed the count past six.
 They are newer than everything below them.
+## Session 2026-07-31g — the recovery point could not be recovered from
+
+⚠ **Thirty-sixth arrival of the stale M3 prompt.** Verified and set aside.
+
+No code. This file was **4,643 lines across 56 sessions**, and `CLAUDE.md` opens
+by calling it the recovery point and saying to read it first.
+
+⚠ **Nobody was reading it, including me.** Across the six sessions before this
+one I opened it, read the first fifty lines, and appended another hundred to the
+end. Every session made the problem worse and none noticed, because the part
+that matters is at the top and the cost is at the bottom. The working agreement
+says updating this file is "what makes context loss survivable"; at that length
+it was the opposite.
+
+### What moved
+
+50 sessions to `HISTORY.md`, verbatim. Six most recent stay. **588 lines now.**
+
+Checked rather than assumed: 6 + 50 = 56 headings, and a line-by-line
+comparison against `HEAD` shows the only original lines absent from the pair are
+eleven I deliberately rewrote in the header.
+
+### ⚠ Two things the move exposed
+
+**The tail had been false for weeks.** A "Where we are" section still described
+a **7-node, 971 MiB** pipeline — it is 148 and 6878 — and "In flight" read
+"nothing in flight, planning is complete enough to start coding". Both kept in
+`HISTORY.md`, marked as superseded, because they record what was believed at the
+time. Neither was reachable by anyone reading from the top, which is exactly why
+they rotted.
+
+**The header pointed at "the cost table below", 3,392 lines below.** That table
+is the standing answer to the kickoff prompt that has now arrived 36 times, and
+it was the least findable thing in the file. It sits under the gap table now.
+
+Also corrected while there: the suite counts had drifted (3430/30 against the
+real 3437/32), and "arrived five times" was five sessions stale.
+
+### The gap table gained a row
+
+`CLAUDE.md` calls the thousand-line limit a hard constraint and the tree breaks
+it seven ways, worst at `apps/tests/main.cpp` — **7,656 lines**. ⚠ Recorded
+rather than fixed, and recorded pointedly: the two worst offenders are the two I
+have added to nearly every session. Splitting them is a session of its own, and
+`CLAUDE.md` now says to prune this file in the same breath as updating it, so
+the same thing does not happen again by default.
 
 ## Session 2026-07-31f — Auto writes five fields and nothing checked four of them
 

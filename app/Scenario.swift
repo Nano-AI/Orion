@@ -116,6 +116,12 @@ import SwiftUI
 ///                                       one tick. Distinct values, because a
 ///                                       repeated *same* value dirties nothing
 ///                                       and would time an empty render
+///     paint <x,y> <x,y> <n>             a stroke as the *canvas* issues it —
+///                                       one push per pointer event, appending
+///                                       — and what one event costs. ⚠ Not
+///                                       `brush`, which hands over a finished
+///                                       stroke in one call and so measures the
+///                                       one thing a photographer never does
 ///     save <path>                       write the state to that photo's sidecar
 ///     export <path>                     write a real export, through the same
 ///                                       Engine.export the panel calls
@@ -731,6 +737,79 @@ enum Scenario {
             say(String(format: "  drag %-12@ %.1f ms per tick  (%.0f fps, %d ticks)\n",
                        control as NSString, perTick,
                        perTick > 0 ? 1000.0 / perTick : 0, ticks))
+
+        case "paint":
+            // A brush stroke as the **canvas** issues it, and what one pointer
+            // event of it costs.
+            //
+            // ⚠ This is not what `brush` measures, and the difference is the
+            // whole point. `brush` hands the engine one finished stroke in a
+            // single `setBrushStroke`; `MaskOverlay.paint` calls it again on
+            // every pointer event, appending as the hand moves. Sixty of those a
+            // second, each one re-flattening a stroke that is growing, is the
+            // cost a photographer actually feels — and nothing in this
+            // repository measured it until this verb existed. See ROADMAP,
+            // "Slider latency, end to end".
+            //
+            // The walk mirrors the gesture exactly: `carry` continues the dab
+            // spacing across events so a scripted stroke lays the dabs a steady
+            // hand would, and the first event appends the press point alone.
+            //
+            // ⚠ **It does not arm the preview graph, and must not.** The real
+            // gesture does, as of 2026-08-01 — but a verb that armed it itself
+            // would report the same number whether `MaskOverlay` still called
+            // `beginInteraction` or not, which is a measurement that cannot see
+            // the thing it exists to measure. Arming is the `interact` verb's
+            // job, so a scenario can time both sides.
+            //
+            // ⚠ What that leaves uncovered: nothing here asserts the *gesture*
+            // arms. `Scenario` drives `Engine` and `CanvasLayout`, never a
+            // SwiftUI view, so the one line that matters is reachable only by
+            // reading it. Said plainly rather than implied to be tested.
+            guard args.count >= 3, let events = Int(args[2]), events > 1 else {
+                throw Bad(what: "paint needs a start point, an end point and an event count")
+            }
+            let a = try point(args[0]), b = try point(args[1])
+
+            var stroke = engine.brushStroke
+            var polarity = engine.brushErasePolarity
+            if polarity.count < stroke.count {
+                polarity += Array(repeating: false, count: stroke.count - polarity.count)
+            }
+
+            var carry: CGFloat = 0
+            var last = a
+            let began = DispatchTime.now().uptimeNanoseconds
+            quiet = true
+            for i in 0..<events {
+                let t = CGFloat(i) / CGFloat(events - 1)
+                let here = CGPoint(x: a.x + (b.x - a.x) * t,
+                                   y: a.y + (b.y - a.y) * t)
+                if i == 0 {
+                    stroke.append(here)
+                    polarity.append(engine.brushErasing)
+                } else {
+                    let added = CanvasLayout.brushDabs(from: last, to: here,
+                                                       radius: CGFloat(engine.brushRadius),
+                                                       carry: &carry)
+                    // ⚠ The gesture returns early on an event that laid no dab,
+                    // so this one must too. Pushing anyway would measure a
+                    // cheaper tick than the app ever issues.
+                    if added.isEmpty { last = here; continue }
+                    stroke += added
+                    polarity += Array(repeating: engine.brushErasing, count: added.count)
+                }
+                last = here
+                engine.setBrushStroke(stroke, erasing: polarity)
+            }
+            let elapsed = DispatchTime.now().uptimeNanoseconds - began
+            quiet = false
+            engine.commitBrushEdit()
+
+            let perEvent = Double(elapsed) / 1_000_000.0 / Double(events)
+            say(String(format: "  paint %d events, %d dabs  %.1f ms per event  (%.0f fps)\n",
+                       events, stroke.count, perEvent,
+                       perEvent > 0 ? 1000.0 / perEvent : 0))
 
         case "time":
             // Repeats another command and reports what one of them costs.
