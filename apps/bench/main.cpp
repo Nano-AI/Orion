@@ -1327,9 +1327,10 @@ int main(int argc, char** argv) {
                 const std::uint32_t w = develop.width(), h = develop.height();
                 const std::size_t n = std::size_t(w) * h;
 
-                std::vector<__fp16> in(n * 4), out(n * 4);
+                std::vector<__fp16> in(n * 4), out(n * 4), got(n * 4);
                 st.input->download(in.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
                 st.output->download(out.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+                st.filled->download(got.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
 
                 const float limit    = st.clip * st.gamma;
                 const float shoulder = st.clip * 0.35f;   // highlights.slang's kShoulder
@@ -1413,7 +1414,7 @@ int main(int argc, char** argv) {
                 // evidence pixel as rho: f*_k = (rho_k/rho_j)*f_j over the
                 // clipped channels, with j the pixel's own valid channels.
                 double sumMove = 0.0, worstProposed = 0.0;
-                std::size_t moved = 0, capped = 0;
+                std::size_t moved = 0, capped = 0, floored = 0;
                 for (std::size_t i = 0; i < n; ++i) {
                     if (cls[i] == 2) {
                         deepest = std::max<std::size_t>(deepest, dist[i]);
@@ -1455,6 +1456,10 @@ int main(int argc, char** argv) {
                         // An unreachable clamp reads as a guard somebody is
                         // relying on — `hl_pull.slang` lost one for that.
                         if (proposed > 2.0 * double(st.clip)) ++capped;
+                        // And the floor beneath it: a clipped channel read at
+                        // least its own level, so an estimate below that
+                        // contradicts the measurement.
+                        if (proposed < double(c0[k])) ++floored;
                         worstHere = std::max(worstHere,
                                              std::abs(proposed - double(c0[k])));
                     }
@@ -1462,6 +1467,37 @@ int main(int argc, char** argv) {
                     worstProposed = std::max(worstProposed, worstHere);
                     ++moved;
                 }
+
+                // ⚠ **The one assertion in this block, and it is exact.** Piece
+                //   2's rule is that where Masood et al.'s measurement and this
+                //   interpolant are both available, the measurement wins. On a
+                //   photograph that means: every pixel with no channel still at
+                //   the ceiling must leave `hl:fill` bit-identical to how it
+                //   left `highlights` — the unclipped ones and, more to the
+                //   point, the ones the window fit recovered.
+                //
+                //   ⚠ It exists because the fixture in `orion-tests` cannot see
+                //   this. There the recovered ring is uniform, so rho equals the
+                //   picture over it and §3.3's ratio is the identity whatever
+                //   predicate the apply pass uses. A photograph has texture, rho
+                //   is a quarter-resolution box average of it, and the identity
+                //   stops holding — which is what makes the predicate load
+                //   bearing rather than decorative.
+                std::size_t trespass = 0;
+                for (std::size_t i = 0; i < n; ++i) {
+                    bool stillClipped = false;
+                    for (int k = 0; k < 3; ++k) {
+                        if (float(in[i * 4 + k]) >= limit &&
+                            !(float(out[i * 4 + k]) > float(in[i * 4 + k]))) {
+                            stillClipped = true;
+                        }
+                    }
+                    if (stillClipped) continue;
+                    for (int k = 0; k < 3; ++k) {
+                        if (got[i * 4 + k] != out[i * 4 + k]) { ++trespass; break; }
+                    }
+                }
+                if (trespass != 0) invariantsPass = false;
 
                 // ⚠ And the question that decides whether §3.3 is decoration or
                 //   a correction to piece 3: the pixels that set rho for a
@@ -1519,7 +1555,11 @@ int main(int argc, char** argv) {
                             "against clip %.4f: mean %.5f, worst %.5f (%zu px)\n",
                             st.clip, moved ? sumMove / double(moved) : 0.0,
                             worstProposed, moved);
-                std::printf("  ...of which kMaxGain would cap: %zu channel(s)\n", capped);
+                std::printf("  ...of which kMaxGain would cap: %zu channel(s), "
+                            "and the 'may only raise it' floor: %zu\n", capped, floored);
+                std::printf("  %-34s %10zu  %s\n",
+                            "pixels the fill touched but must not", trespass,
+                            trespass == 0 ? "ok" : "THE FILL OVERWROTE THE WINDOW FIT");
                 std::printf("  the ring that sets rho for every core: %zu px, "
                             "%zu beyond 12 px (%.1f%%), %zu untouched (%.1f%%)\n",
                             rimAll, rimBeyond,
