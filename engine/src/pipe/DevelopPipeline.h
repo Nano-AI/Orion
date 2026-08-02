@@ -241,6 +241,106 @@ public:
     [[nodiscard]] std::uint32_t height() const noexcept { return height_; }
 
 private:
+    // ── How this class is laid out across five files (decision #113) ───────
+    //
+    // The graph has four regions, and each one owns a `.cpp` that holds *both*
+    // halves of it: the nodes it adds at construction and the parameters it
+    // pushes per frame. That pairing is the whole point. Adding a node used to
+    // mean editing the constructor and then `apply` twelve hundred lines
+    // further down; now the two edits are adjacent.
+    //
+    // | file | region | builds | pushes |
+    // |---|---|---|---|
+    // | `DevelopCapture.cpp` | sensor to profile | linearize, demosaic, highlights, fill, denoise, lens, spots, sharpen, matrix, hue/sat | white balance, highlights, lens, denoise, spots, sharpen |
+    // | `DevelopLocal.cpp`   | the multi-node operators | dehaze, clarity, fusion, guided filter | the same four, and their two frame reductions |
+    // | `DevelopMask.cpp`    | the mask group | base, components, refine chains, the brush accumulator | components, strokes, feathering |
+    // | `DevelopOutput.cpp`  | tone to the screen | develop:linear, grade, display, grain, geometry | tone, grade, display, grain, geometry |
+    // | `DevelopPipeline.cpp`| the spine | the calls below, in order | `ApplyContext`, then the calls below, in order |
+    //
+    // ⚠ **Both call lists are order-critical and neither may be sorted.**
+    // Nodes are added in graph order and their indices are held in the members
+    // below, so a reordered `build` compiles and changes which node feeds
+    // which. `apply`'s order is preserved for the weaker reason that it was
+    // never proved not to matter — the stages push to distinct nodes, but that
+    // is a claim about 1,300 lines, and #113 was a refactor rather than a
+    // place to start making claims.
+
+    /// What one `apply` derives once and several stages then read.
+    ///
+    /// ⚠ **Derived per call, never stored.** Every field is a pure function of
+    /// the adjustments handed in, `lastAdj_` and the frame's shape. It exists
+    /// because the stages are *not* independent: the mask's placement and the
+    /// geometry node's matrix are the same perspective, and a second
+    /// derivation of it is exactly how a mask ends up a few percent off its
+    /// subject on a corrected photograph.
+    struct ApplyContext {
+        /// Nothing that was pushed can be assumed — the first apply, or a
+        /// different photograph through the same graph.
+        bool first = false;
+
+        /// The composed keystone, or **null** when the control is neutral.
+        /// Null rather than an identity matrix, so the neutral case takes the
+        /// branch a build without perspective took and stays bit-identical.
+        const persp::Matrix3* perspective = nullptr;
+
+        /// The crop, the total quarter turns and the rotated frame's shape, as
+        /// `geometry.slang` sees them. Every mask centre and every brush dab
+        /// goes through these — pipe/MaskGeometry.h.
+        mask::Crop crop{};
+        int   turns = 0;
+        float rotW = 0.0f, rotH = 0.0f;
+
+        /// Anything a mask's placement depends on moved: the crop, the turns,
+        /// the straighten or the perspective.
+        bool frameMoved = false;
+        /// A component was added, removed, hidden or shown.
+        bool visibilityMoved = false;
+
+        /// The guided filter feeds the local highlight and shadow masks only.
+        /// Read by the mask stage as well, because `guide:prep` is shared and
+        /// must be enabled if *either* consumer wants it.
+        bool needsGuide = false;
+        /// Guided feathering of the fold is on.
+        bool refining = false;
+    };
+
+    /// Composes the above. The one place any of it is derived.
+    [[nodiscard]] ApplyContext contextFor(const Adjustments&);
+
+    // The four regions' constructors, called in this order and no other.
+    void buildCaptureNodes();
+    void buildLocalNodes();
+    void buildMaskNodes();
+    void buildOutputNodes();
+
+    // The size- and image-derived blocks, pushed once per photograph rather
+    // than per tick. ⚠ Decision #92: a block re-pushed for a value nothing
+    // reads still dirties everything downstream of it.
+    void pushStaticCaptureParams(const raw::BayerImage&);
+    void pushStaticLocalParams();
+    void pushStaticMaskParams();
+    /// The grain plate. After `compile`, because it is an upload rather than a
+    /// declaration.
+    void uploadGrainPlate();
+
+    // One per stage of `apply`, in the order `apply` calls them.
+    void applyWhiteBalance(const Adjustments&, const ApplyContext&);
+    void applyHighlights(const Adjustments&, const ApplyContext&);
+    void applyGrade(const Adjustments&, const ApplyContext&);
+    void applyLens(const Adjustments&, const ApplyContext&);
+    void applyDenoise(const Adjustments&, const ApplyContext&);
+    void applyDehaze(const Adjustments&, const ApplyContext&);
+    void applyFusion(const Adjustments&, const ApplyContext&);
+    void applyClarity(const Adjustments&, const ApplyContext&);
+    void applyMaskComponents(const Adjustments&, const ApplyContext&);
+    void applyGuide(const Adjustments&, const ApplyContext&);
+    void applySpots(const Adjustments&, const ApplyContext&);
+    void applyMaskRefine(const Adjustments&, const ApplyContext&);
+    void applyTone(const Adjustments&, const ApplyContext&);
+    void applySharpen(const Adjustments&, const ApplyContext&);
+    void applyOutput(const Adjustments&, const ApplyContext&);
+    void applyGeometry(const Adjustments&, const ApplyContext&);
+
     Pipeline      pipeline_;
     std::uint32_t width_ = 0, height_ = 0;
     int nLinearize_ = -1, nDirs_ = -1, nLpf_ = -1, nGreen_ = -1, nRgb_ = -1;
