@@ -1,4 +1,4 @@
-# The creative vignette — research/vignette.md, decision #96.
+# The creative vignette — research/vignette.md, decision #103.
 #
 # Two halves, and neither is reachable from `orion-tests`.
 #

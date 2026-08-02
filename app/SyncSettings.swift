@@ -48,7 +48,8 @@ enum SyncSettings {
                     "whites", "blacks", "highlightRecovery"]
         case .colour:
             return ["vibrance", "saturation", "hueShift", "satShift", "lumShift",
-                    "gradeShadow", "gradeMidtone", "gradeHighlight"]
+                    "gradeShadow", "gradeMidtone", "gradeHighlight",
+                    "gradeBalance"]
         case .curve:
             return ["curve"]
         case .detail:

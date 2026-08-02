@@ -67,6 +67,7 @@ enum AdjustmentID: String, CaseIterable, Sendable {
     case warmth, localTint
     case clarity, dehaze, fusion
     case grainAmount, grainSize
+    case gradeBalance
     case vignetteAmount, vignetteFieldAngle
     case lutStrength
 }
@@ -185,7 +186,20 @@ enum AdjustmentCatalogue {
               global: .init(lower: 1.2, upper: 8, stage: .display), local: nil,
               localRefusal: "a property of the negative, not of a region of it"),
 
-        // The creative vignette — research/vignette.md, decision #96. Fused
+        // Balance — decision #101. Not a fourth wheel: it moves the zones the
+        // three wheels already act on, so it lives with them on the grading
+        // panel and reads in the same units the zones are defined in.
+        //
+        // ⚠ `.display` is a statement about the graph, not about the control:
+        // the grade is fused into the same pass as the vignette, which is after
+        // the mask node. Nothing here can be local.
+        .init(id: .gradeBalance, title: "Balance",
+              global: .init(lower: -1, upper: 1, decimals: 2, stage: .display),
+              local: nil,
+              localRefusal: "the split point the three wheels share, in a pass "
+                          + "that runs after the mask"),
+
+        // The creative vignette — research/vignette.md, decision #103. Fused
         // into the grading pass, which is after the mask node, so it is
         // `.display` for the same reason the LUT is.
         //

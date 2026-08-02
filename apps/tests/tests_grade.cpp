@@ -360,6 +360,191 @@ void testColorGradeGpu() {
            "and leaves the far zone's brightness alone",
            std::to_string(level[atHighlight]) + " -> " + std::to_string(untouched));
     g.shadow[3] = 0.0f;
+
+    // ── Balance: where the split between the three zones sits (#101) ──────
+    //
+    // Every assertion above ran with `g.balance` at its zero-initialized zero,
+    // so they are themselves the regression on Balance being centred. What
+    // follows pins the thing they cannot see: that centred means *exactly* the
+    // old -2.5 / 0 / +2.5, and that off-centre moves the zones the right way,
+    // by the right amount, without ever reordering them.
+    //
+    // The weights are read straight out of the render rather than inferred.
+    // With every offset zero and one zone's slope at 1, the kernel computes
+    // `out = in * (1 + w)` for that zone alone — so `out / in - 1` is the
+    // weight the shader actually used, not a proxy for it. `in` is read back
+    // from the uploaded half-float rather than from `level`, because the two
+    // differ by up to a part in two thousand and that is the size of the
+    // effect being measured.
+    const auto zoneWeights = [&](int zone, float balance) {
+        for (float* z : {g.shadow, g.midtone, g.highlight}) {
+            z[0] = z[1] = z[2] = 0.0f;
+            z[3] = 0.0f;
+        }
+        (zone == 0 ? g.shadow : zone == 1 ? g.midtone : g.highlight)[3] = 1.0f;
+        g.balance = balance;
+        run();
+        std::vector<double> w(kW);
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = (std::size_t(kH / 2) * kW + x) * 4;
+            w[x] = double(out[i]) / double(input[i]) - 1.0;
+        }
+        return w;
+    };
+    const auto evOf = [&](std::uint32_t x) {
+        const std::size_t i = (std::size_t(kH / 2) * kW + x) * 4;
+        return std::log2(double(input[i]) / 0.18);
+    };
+
+    // The partition this file documents, on the host, with the centres written
+    // out. A shift of `-balance * 1.25` EV, positive toward the highlights.
+    const auto predicted = [](double ev, double balance) {
+        const double shift = -balance * 1.25;
+        const double center[3] = {-2.5 + shift, shift, 2.5 + shift};
+        double raw[3], total = 1e-6;
+        for (int i = 0; i < 3; ++i) {
+            const double d = (ev - center[i]) / 1.6;
+            raw[i] = std::exp(-0.5 * d * d);
+            total += raw[i];
+        }
+        return std::array<double, 3>{raw[0] / total, raw[1] / total,
+                                     raw[2] / total};
+    };
+
+    // ⚠ **Balance centred is the zones this shader has always had.** This is
+    // the check that stops a new control quietly rebasing every baseline in the
+    // repository: if the centres moved by a twentieth of a stop, or if zero on
+    // the slider stopped meaning zero shift, the bench pins and the repro
+    // expectations would all still be *green* and all be measuring a different
+    // picture. Nudging `kEvShadow` by 0.05, or `kBalanceEv`'s neutral point,
+    // fails here and nowhere else.
+    {
+        double worst = 0.0;
+        for (int zone = 0; zone < 3; ++zone) {
+            const auto w = zoneWeights(zone, 0.0f);
+            for (std::uint32_t x = 0; x < kW; ++x)
+                worst = std::max(worst, std::abs(w[x] - predicted(evOf(x), 0.0)[zone]));
+        }
+        report(worst < 3e-3,
+               "Balance centred is the old fixed -2.5 / 0 / +2.5 EV partition",
+               "worst weight error " + std::to_string(worst));
+    }
+
+    // And off-centre is the same partition, translated. Checked against the
+    // analytic form rather than against "it moved", because "it moved" is
+    // satisfied by a control that moves the zones by any amount in any pattern.
+    {
+        double worst = 0.0;
+        for (float b : {-1.0f, -0.5f, 0.5f, 1.0f})
+            for (int zone = 0; zone < 3; ++zone) {
+                const auto w = zoneWeights(zone, b);
+                for (std::uint32_t x = 0; x < kW; ++x)
+                    worst = std::max(worst,
+                                     std::abs(w[x] - predicted(evOf(x), b)[zone]));
+            }
+        report(worst < 3e-3, "and off-centre is that partition translated",
+               "worst weight error " + std::to_string(worst));
+    }
+
+    // The shadow zone's half-weight point — the EV where the shadow wheel stops
+    // owning the majority of a pixel, which is the "split point" the control is
+    // named for. It has to slide monotonically and by the documented distance.
+    const auto halfPointEv = [&](const std::vector<double>& w) {
+        for (std::uint32_t x = 1; x < kW; ++x)
+            if (w[x] <= 0.5 && w[x - 1] > 0.5) {
+                const double t = (w[x - 1] - 0.5) / (w[x - 1] - w[x]);
+                return evOf(x - 1) + t * (evOf(x) - evOf(x - 1));
+            }
+        return 1e30;   // never crossed — the wedge no longer spans the zones
+    };
+    {
+        const float b[5] = {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f};
+        double split[5];
+        for (int i = 0; i < 5; ++i) split[i] = halfPointEv(zoneWeights(0, b[i]));
+
+        bool monotone = true;
+        for (int i = 1; i < 5; ++i)
+            if (!(split[i] < split[i - 1] - 0.4)) monotone = false;
+        report(monotone,
+               "the split point slides monotonically, shadows to highlights",
+               "-1 " + std::to_string(split[0]) + "  0 " + std::to_string(split[2])
+               + "  +1 " + std::to_string(split[4]) + " EV");
+
+        // Full travel is 2 x kBalanceEv. A control whose slider ran to a
+        // different EV than its comment claims fails here.
+        report(std::abs((split[0] - split[4]) - 2.5) < 0.15,
+               "and full travel is 2.5 EV, the zone spacing",
+               std::to_string(split[0] - split[4]) + " EV end to end");
+        std::printf("  split point: %.2f EV at Balance -1, %.2f at 0, %.2f at +1\n",
+                    split[0], split[2], split[4]);
+    }
+
+    // The zones stay ordered and stay apart at every setting.
+    //
+    // ⚠ Measured as the two **crossovers** — where shadow and midtone carry a
+    // pixel equally, and where midtone and highlight do — and not as where each
+    // zone's weight peaks. The weights are normalized, so the shadow weight
+    // falls monotonically across the whole wedge and the highlight weight
+    // rises: their maxima are at the ends of the test image no matter where the
+    // centres are, and a check on them would be green for every possible
+    // Balance. It was written that way first.
+    //
+    // The crossovers are the ordering. A rigid shift keeps them exactly the
+    // zone spacing apart wherever it puts them; a Balance that re-spaced the
+    // centres instead — `kEvShadow + shift, kEvMidtone, kEvHighlight - shift` —
+    // squeezes them to 1.25 EV at full deflection and, with a larger constant,
+    // to zero, which is two wheels fighting over one zone.
+    {
+        const auto crossoverEv = [&](const std::vector<double>& lo,
+                                     const std::vector<double>& hi) {
+            for (std::uint32_t x = 1; x < kW; ++x)
+                if (lo[x] <= hi[x] && lo[x - 1] > hi[x - 1]) {
+                    const double a = lo[x - 1] - hi[x - 1], b = lo[x] - hi[x];
+                    const double t = a / (a - b);
+                    return evOf(x - 1) + t * (evOf(x) - evOf(x - 1));
+                }
+            return 1e30;
+        };
+        bool ordered = true;
+        double worstGap = 1e30;
+        for (float b : {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f}) {
+            const auto ws = zoneWeights(0, b);
+            const auto wm = zoneWeights(1, b);
+            const auto wh = zoneWeights(2, b);
+            const double sm = crossoverEv(ws, wm);
+            const double mh = crossoverEv(wm, wh);
+            if (!(sm < mh)) ordered = false;
+            worstGap = std::min(worstGap, mh - sm);
+        }
+        report(ordered && std::abs(worstGap - 2.5) < 0.15,
+               "and the two crossovers stay ordered and one zone apart",
+               "closest " + std::to_string(worstGap) + " EV");
+    }
+
+    // ⚠ **Balance costs nothing when the wheels are centred.** Not "nearly
+    // nothing" — the render is bit-for-bit the input, because every offset is
+    // zero and every slope is one whatever the weights are. The host relies on
+    // exactly this to refuse to switch the node on for a Balance drag, so a
+    // Balance that touched luminance would make that refusal a silent bug
+    // rather than an optimisation.
+    {
+        for (float* z : {g.shadow, g.midtone, g.highlight}) {
+            z[0] = z[1] = z[2] = 0.0f;
+            z[3] = 0.0f;
+        }
+        double worst = 0.0;
+        for (float b : {-1.0f, 1.0f}) {
+            g.balance = b;
+            run();
+            for (std::size_t i = 0; i < std::size_t(kW) * kH * 4; ++i)
+                worst = std::max(worst,
+                                 std::abs(double(out[i]) - double(input[i])));
+        }
+        report(worst == 0.0,
+               "with the wheels centred, any Balance is the exact identity",
+               "worst " + std::to_string(worst));
+    }
+    g.balance = 0.0f;
 }
 
 /// The tone bands, with the guided-filter chain switched off.

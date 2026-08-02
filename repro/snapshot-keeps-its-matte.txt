@@ -1,4 +1,4 @@
-# A saved version keeps the raster mask it was saved with — decision #96.
+# A saved version keeps the raster mask it was saved with — decision #99.
 #
 # ⚠ **This is the failure that made snapshots more than a struct and a file.**
 # A `DevelopState` is not the whole edit: a raster mask is a sibling PNG named

@@ -225,7 +225,7 @@ struct alignas(16) Grade {
     float         shadow[4];
     float         midtone[4];
     float         highlight[4];
-    /// The creative vignette — research/vignette.md, decision #96. The circle
+    /// The creative vignette — research/vignette.md, decision #103. The circle
     /// is the *composition's*, not the frame's: center normalized in this
     /// frame, radius its half-diagonal in units of the frame's height, both
     /// derived on the host from the crop rectangle by
@@ -237,7 +237,12 @@ struct alignas(16) Grade {
     /// tan of the half-diagonal field angle of the lens being imitated, so the
     /// kernel evaluates cos^4 with no trigonometry.
     float         vignetteTanTheta;
-    float         _pad2[3];
+    /// Balance, -1..+1 — decision #101, research/UNSOURCED.md §26. Slides all
+    /// three zone centres along log2(Y/0.18); positive moves them down, so more
+    /// of the picture counts as highlight. Zero is bit-identical to no Balance,
+    /// and it takes one of the three pad words rather than growing the block.
+    float         balance;
+    float         _pad2[2];
 };
 static_assert(sizeof(Grade) == 96);
 

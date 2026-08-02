@@ -1131,6 +1131,14 @@ enum Scenario {
         case "dehaze":         return e.dehaze
         case "grainAmount":    return e.grainAmount
         case "grainSize":      return e.grainSize
+        case "gradeBalance":   return e.gradeBalance
+        // The shadow wheel's two puck coordinates. Balance is only observable
+        // in a render when some wheel is off centre — it moves the zones, and a
+        // zone with nothing in it looks like every other zone with nothing in
+        // it — so a scenario that asserts Balance changes the picture needs to
+        // be able to push a wheel first.
+        case "gradeShadowX":   return e.gradeShadow[0]
+        case "gradeShadowY":   return e.gradeShadow[1]
         case "perspectiveVertical":   return e.perspectiveVertical
         case "perspectiveHorizontal": return e.perspectiveHorizontal
         case "perspectiveAspect":     return e.perspectiveAspect
@@ -1156,6 +1164,12 @@ enum Scenario {
         case "dehaze":      e.dehaze = value
         case "grainAmount": e.grainAmount = value
         case "grainSize":   e.grainSize = value
+        case "gradeBalance": e.gradeBalance = value
+        // ⚠ Whole-array assignment, because `gradeShadow` is `[Float]` with a
+        // `didSet` — mutating one element in place would still fire it, but
+        // spelling it out keeps the push explicit.
+        case "gradeShadowX": e.gradeShadow = [value, e.gradeShadow[1], e.gradeShadow[2]]
+        case "gradeShadowY": e.gradeShadow = [e.gradeShadow[0], value, e.gradeShadow[2]]
         case "perspectiveVertical":   e.perspectiveVertical = value
         case "perspectiveHorizontal": e.perspectiveHorizontal = value
         case "perspectiveAspect":     e.perspectiveAspect = value

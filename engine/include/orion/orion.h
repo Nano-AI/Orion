@@ -199,7 +199,17 @@ typedef struct OrionAdjustments {
     float grade_midtone[3];
     float grade_highlight[3];
 
-    /* The CREATIVE vignette -- research/vignette.md, decision #96.
+    /* Balance, -1..+1 -- decision #101. The three zones above are Gaussians
+     * fixed at -2.5 / 0 / +2.5 EV; this slides all three centres together, so
+     * the photographer decides how much of the picture counts as shadow.
+     * Positive is toward the highlights, the same direction as Adobe's slider.
+     *
+     * Zero is bit-identical to no Balance at all, and with the three wheels
+     * centred it does nothing whatever value it holds -- it changes weights
+     * that multiply zero, and it never switches the grading node on. */
+    float grade_balance;
+
+    /* The CREATIVE vignette -- research/vignette.md, decision #103.
      *
      * Not lens_vignette above. That one divides out a falloff a lens measured;
      * this one puts one in on purpose, after the grade, centred on the CROP

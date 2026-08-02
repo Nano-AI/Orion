@@ -597,7 +597,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // both. It is pointwise and wants the same light, and a node of its own
     // would be a second full-resolution round trip for six lines of arithmetic
     // — the trade the creative LUT already lost inside `develop:display`.
-    // research/vignette.md, decision #96.
+    // research/vignette.md, decision #103.
     nGrade_     = pipeline_.add({"grade + vignette", "colorGrade", {nLinear_},
                                  PixelFormat::RGBA16Float, {}});
 
@@ -1251,21 +1251,33 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     // geometry change matters here **only** while the vignette is on, so a
     // straighten drag on a photograph without one does not dirty the grade.
     const bool vignetting = adj.vignetteAmount != 0.0f;
+
+    // ⚠ Hoisted out of the push below because **Balance is read by the kernel
+    // only while a wheel is off centre**. It slides the zone centres, and with
+    // every wheel centred those weights multiply an all-zero offset and a slope
+    // of one — so a Balance drag on an ungraded photograph must dirty nothing
+    // and switch nothing on. That is decision #92's rule (a block re-pushed for
+    // a value nothing reads) and #82's (a node run at zero strength), and both
+    // of them shipped once already.
+    const auto zoneIsFlat = [](const float z[3]) {
+        return z[0] == 0.0f && z[1] == 0.0f && z[2] == 0.0f;
+    };
+    const bool grading = !zoneIsFlat(adj.gradeShadow)
+                      || !zoneIsFlat(adj.gradeMidtone)
+                      || !zoneIsFlat(adj.gradeHighlight);
+    const bool balanceMoved = adj.gradeBalance != lastAdj_.gradeBalance;
+
     if (first || zoneMoved(adj.gradeShadow, lastAdj_.gradeShadow)
               || zoneMoved(adj.gradeMidtone, lastAdj_.gradeMidtone)
               || zoneMoved(adj.gradeHighlight, lastAdj_.gradeHighlight)
               || vignetteMoved
+              || (grading && balanceMoved)
               || (vignetting && cropMoved)) {
-
-        const auto zoneIsFlat = [](const float z[3]) {
-            return z[0] == 0.0f && z[1] == 0.0f && z[2] == 0.0f;
-        };
-        const bool grading = !zoneIsFlat(adj.gradeShadow)
-                          || !zoneIsFlat(adj.gradeMidtone)
-                          || !zoneIsFlat(adj.gradeHighlight);
 
         // A whole pass over the frame, so it is switched off rather than run
         // as an identity. A disabled node passes its first input through.
+        //
+        // ⚠ `grading` deliberately excludes Balance: see above.
         pipeline_.setEnabled(nGrade_, grading || vignetting);
 
         if (grading || vignetting) {
@@ -1280,6 +1292,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             fill(adj.gradeShadow,    g.shadow);
             fill(adj.gradeMidtone,   g.midtone);
             fill(adj.gradeHighlight, g.highlight);
+            g.balance = std::clamp(adj.gradeBalance, -1.0f, 1.0f);
 
             // ⚠ Read from `adj`, never from `lastAdj_`. That mistake shipped
             // once already — the grain retarget switched its node on and handed

@@ -4,10 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**the incremental brush's predicate ships alone, six mutations at it — #102**)
-**Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
+**Last updated:** 2026-08-01 (**grading Balance, and the incremental brush's predicate alone — #103, #104**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
-items are now closed, one built and one refused (#96, #97). **`research/masking.md` is
+items are now closed, one built and one refused (#103 built, #101 refused). **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
@@ -102,7 +101,7 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
 
 Closed since this list was last written, in the order they went:
 **dehaze's drag cost** (#92), the **`reopen` leak** (#90), **M1's library gap**
-(#91), the **export panel** (#93-#95), and now the **creative vignette** (#96)
+(#91), the **export panel** (#93-#95), and now the **creative vignette** (#103)
 with **split toning refused** (#97).
 
 ✅ **M1's library gap is closed** — SQLite index and persistent thumbnail cache,
@@ -175,7 +174,7 @@ The original brief for each:
 
 | Working on | Scope, and the trap named to it |
 |---|---|
-| Grading **Balance** + perspective's **mask-extent** term | Both small and both already specified — #101 named Balance as split toning's one real remainder; #100 measured the extent term's leak at 2 of 60 cells past 0.28 frame-width |
+| Grading **Balance** ✅ **landed 2026-08-01, decision #104** (session `2026-08-01m` below) + perspective's **mask-extent** term | Both small and both already specified — #101 named Balance as split toning's one real remainder; #100 measured the extent term's leak at 2 of 60 cells past 0.28 frame-width |
 | Incremental brush accumulation, **session one only** | The predicate alone, no accumulator. ⚠ The cheap version ("the count grew") must fail on **undo three dabs, paint three different ones** — same count, different prefix, and it renders a plausible stroke from stale pixels |
 | Highlight fill, **pieces 2–3** | ⚠ The memory number *is* the decision: +25 nodes and ~516 MB on a graph at 149 / 6971 MiB. Told to establish whether the pyramid can subsample first — the guided filter and fusion both already do. Wiring it reopens **#29** |
 | X-Trans — research, decomposition, and piece 1 only | ⚠ Explicitly **not** expected to finish; it is multi-week. Markesteijn is implemented by darktable and RawTherapee, both GPL, so the real question is whether a description exists **outside** GPL source. An honest "it does not" is the valuable answer |
@@ -342,6 +341,64 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01m — grading Balance, the remainder #101 named
+
+**Story:** the one thing split toning had that three grading wheels did not.
+Decision **#104**; `research/color-grading.md#balance`, `UNSOURCED.md` §26.
+
+**What it is.** The zones the wheels act on were Gaussians fixed at −2.5 / 0 /
++2.5 EV with σ = 1.6 and nothing moved them. Balance slides all three centres
+together by `−balance × 1.25` EV on the same log2 axis — positive toward the
+highlights, the direction Adobe's slider has. Five lines in the shader, one
+float through thirteen files, a slider under the three wheels.
+
+**⚠ Rigid shift, not a re-spacing.** A partition of unity translated along its
+own axis is still one, and the three zones keep their 2.5 EV spacing so no two
+centres can collide. The obvious alternative — pull shadow and highlight toward
+one end — squeezes the two crossovers to **1.24 EV** at full deflection and is
+one step from two Gaussians on one centre, which is one zone with two wheels
+fighting over it. The test fails on it.
+
+**⚠ Neutral rebases nothing and costs nothing.** The shift at Balance 0 is
+`−0.0f` and `x + (−0.0f) == x` bit for bit, so no existing baseline moves —
+confirmed end to end by running the bench against the **pre-change shader**:
+`grade shadows 0.0105 / −0.0163`, `midtones 0.0124 / +0.0056`, `highlights
+0.0043 / +0.0132` on a 24 MP frame, identical either side. And with the wheels
+centred Balance scales weights that multiply an all-zero offset and a slope of
+one, so it does not enter the node's enable test (#82) and does not dirty the
+parameter block (#92).
+
+**⚠ One of the new checks could not fail, and was rewritten.** The zone-ordering
+check asserted where each zone's weight *peaks*. The weights are normalized, so
+the shadow weight falls monotonically across the whole test wedge and the
+highlight weight rises — their maxima sit at the ends of the image wherever the
+centres are. It was green for every possible Balance, including one wired to
+nothing. It now measures the two **crossovers**, which is the ordering.
+
+**The mutations, all confirmed red:**
+
+| Mutation | What goes red |
+|---|---|
+| Revert `color_grade.slang` to its pre-Balance form | 3 GPU checks. ⚠ The *centred* check stays green — which is the bit-identity claim, stated as a test |
+| `kEvShadow` −2.5 → −2.45 | "Balance centred is the old fixed partition", worst weight error 0.0078 |
+| `kBalanceEv` 1.25 → 1.0 | "full travel is 2.5 EV", measured 2.00 |
+| Re-space instead of translate | 4 checks, including the crossovers at 1.24 EV |
+| `grading` also true when Balance ≠ 0 | bench: `BALANCE RUNS THE GRADE FOR NOTHING`, 8 ticks |
+| Drop `(grading && balanceMoved)` from the re-push | bench: `BALANCE DOES NOT REACH THE GRADE`, 0 of 4 |
+| Drop `gradeBalance:` from `Engine.state`'s memberwise init — **compiles silently** | `repro/balance-survives-a-reopen.txt` only; 696 engine and 3620 viewport checks stay green |
+
+**Citation.** The control and its direction are Adobe's — Split Toning, Camera
+Raw 4 (2007), carried into the Color Grading panel that replaced it in Camera
+Raw 13.0 / Lightroom Classic 10.0, October 2020. The **slider-to-EV mapping is
+mine**: `UNSOURCED.md` §26, with the argument (half the zone spacing) and the
+five invariants held in place of the constant.
+
+**Gates.** `orion-tests` **696 checks**, `orion-viewport-tests` **3620 checks**,
+**39 `repro/` scenarios** — all 0 failures, all exit 0. Bench exits 0 on
+`_PIC8220.ARW`. ⚠ The **first** bench run reported p95 **18.52 ms** and failed
+the M0 gate; the two runs after it, on a quiet machine, gave **8.83** and
+**8.89 ms**. The binary did not change between them. Trust the node counts.
 
 ## Session 2026-08-01l — the brush predicate, alone, and six mutations at it
 
@@ -752,7 +809,7 @@ queue rather than smuggled into this session.
 
 ### The vignette: cos⁴, in stops, in scene-linear light, on the crop
 
-Decision #96, `research/vignette.md`. `V(r) = 1/(1 + (r·T)²)²` — the cos⁴ law of
+Decision #103, `research/vignette.md`. `V(r) = 1/(1 + (r·T)²)²` — the cos⁴ law of
 illumination (Reiss, *JOSA* 35(4), 1945; Kingslake, *Optics in Photography*,
 1992) written through `cos² = 1/(1+tan²)` so the kernel has no trigonometry in
 it. Normalized so that **Amount is the exposure change at the corner in stops**

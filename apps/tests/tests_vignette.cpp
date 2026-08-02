@@ -1,4 +1,4 @@
-/*  The creative vignette — research/vignette.md, decision #96.
+/*  The creative vignette — research/vignette.md, decision #103.
  *
  *  Two tests, and they cover different failures on purpose.
  *

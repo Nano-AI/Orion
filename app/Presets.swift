@@ -111,6 +111,9 @@ struct Preset: Codable, Identifiable, Equatable {
             out.gradeShadow = state.gradeShadow
             out.gradeMidtone = state.gradeMidtone
             out.gradeHighlight = state.gradeHighlight
+            // With the wheels — a look copied without the split point they were
+            // graded against is not the same look.
+            out.gradeBalance = state.gradeBalance
         }
         if groups.contains(.curve) {
             out.curve = state.curve

@@ -1,4 +1,4 @@
-# Saved versions — `app/Snapshots.swift`, decision #96.
+# Saved versions — `app/Snapshots.swift`, decision #99.
 #
 # The story M4 was missing: save the edit under a name, keep working, come back
 # to it. Not undo (fifty deep, coalescing, dies with the process) and not a

@@ -228,6 +228,15 @@ final class Engine {
     var gradeMidtone: [Float] = [0, 0, 0] { didSet { pushAndRender() } }
     var gradeHighlight: [Float] = [0, 0, 0] { didSet { pushAndRender() } }
 
+    /// Where the split between those three zones sits, -1..+1. The zones are
+    /// Gaussians fixed at -2.5 / 0 / +2.5 EV; this slides all three centres
+    /// together, so the photographer decides how much of the picture counts as
+    /// shadow. Positive is toward the highlights. Decision #101.
+    ///
+    /// With every wheel centred it is a no-op — the engine will not switch the
+    /// grading node on for it, and will not re-push the block for it either.
+    var gradeBalance: Float = 0 { didSet { pushAndRender() } }
+
     /// Profiled wavelet denoise, in multiples of the frame's own measured
     /// noise level. Zero switches eight nodes off rather than running them at
     /// no strength.
@@ -247,7 +256,7 @@ final class Engine {
     var grainAmount: Float = 0     { didSet { pushAndRender() } }
     var grainSize: Float = 1.5     { didSet { pushAndRender() } }
 
-    /// The **creative** vignette. `research/vignette.md`, decision #96.
+    /// The **creative** vignette. `research/vignette.md`, decision #103.
     ///
     /// ⚠ Not `lensVignette`, which removes a falloff the lens measured. This
     /// one adds one, centred on the crop rather than on the frame, and a
@@ -1657,7 +1666,7 @@ final class Engine {
             lensCaRed: lensCaRed, lensCaBlue: lensCaBlue,
             highlightRecovery: highlightRecovery,
             gradeShadow: gradeShadow, gradeMidtone: gradeMidtone,
-            gradeHighlight: gradeHighlight,
+            gradeHighlight: gradeHighlight, gradeBalance: gradeBalance,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             lutStrength: lutStrength,
             maskComponents: maskComponents,
@@ -1694,6 +1703,7 @@ final class Engine {
         gradeShadow = s.gradeShadow
         gradeMidtone = s.gradeMidtone
         gradeHighlight = s.gradeHighlight
+        gradeBalance = s.gradeBalance
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         lutStrength = s.lutStrength
         grainAmount = s.grainAmount; grainSize = s.grainSize
@@ -1968,6 +1978,7 @@ final class Engine {
         a.grade_shadow = (gradeShadow[0], gradeShadow[1], gradeShadow[2])
         a.grade_midtone = (gradeMidtone[0], gradeMidtone[1], gradeMidtone[2])
         a.grade_highlight = (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2])
+        a.grade_balance = gradeBalance
         a.denoise_luma = denoiseLuma; a.denoise_color = denoiseColor
         a.lut_strength = lutStrength
         a.grain_amount = grainAmount; a.grain_size = grainSize
