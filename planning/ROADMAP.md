@@ -648,7 +648,7 @@ hundreds of pixels across, so this is the common case, not the corner.
 | 1 | ✅ **Done 2026-08-01.** `hl_pull.slang` + `hl_push.slang` — the Dirichlet fill, as Gortler et al.'s (SIGGRAPH 1996 §3.5.1) pull-push. `pipe/HighlightFill.h` carries the host twin **and** a Gauss-Seidel reference run to convergence, so the approximation error is printed every run rather than assumed: **6.1% of rim span**. Not wired to the graph | 87 + 82 lines, 9 checks |
 | 2 | ✅ **Done 2026-08-01.** `hl_mask.slang` — `Ω^∩` as the hole, the picture as the Dirichlet data, box-restricted onto the solve grid in the same pass. Reads the same `whiteClipFor(m)` the linearize node used. ⚠ **`Ω^∩`, not `Ω^∪`**: the union's partial case already has a node, and replacing Masood et al.'s per-pixel cross-channel fit with a smooth interpolant would be strictly worse. Known also requires the shoulder (`kShoulder`, cited to the same place), which is what stops the night sky being read as evidence about the lamp | 101 lines |
 | 3 | ✅ **Done 2026-08-01.** The node chain: mask, 11 pulls, 11 pushes, `hl_apply.slang`. ⚠ **Costed wrong, and the number was the decision** — see below. Disables to nothing at `highlightRecovery` 0, asserted by name in `apps/bench` | **+24 nodes, +215 MiB** |
-| 4 | §3.3's cross-channel detail transfer: a second solve, over `Ω_k` per channel, with Eq. 7's confidence weighting (Eq. 8, `m = 0.65`, `ε = 10⁻³`). ⚠ It wants `Ω^∪`, which is a **different mask** from piece 2's — the sets differ per channel — so it is a second kernel, not a switch on this one. ⚠ The pyramid can be reused: piece 3's is 30 MiB and its shape is a function of the frame, so a second solve is +23 nodes and +30 MiB, not another 215 | +23 nodes, ~30 MiB |
+| 4 | ✅ **Done 2026-08-01, decision #109.** §3.3's cross-channel detail transfer — as its **model** and not its solve, in two shader edits. ⚠ **The estimate beside this row was wrong and is kept below with the reason.** Built: `hl_mask.slang`'s hole becomes the part of `Ω^∪` the window fit did not recover (read off the node as `rec > raw`, not off a threshold), and `hl_apply.slang` writes `f*_k = (ρ_k/ρ_j)·f_j` where some channel never clipped. It is a **correction to piece 3** before it is a feature: the ring supplying `ρ` for every blown core was itself still clipped over 58%/69% of its length | **+0 nodes, +0 MiB** |
 | 5 | §3.4's log-space gradient fill-in for `Ω^∩`, which is what gives a blown core its falloff back. ⚠ **This is now the visible gap**: piece 3 leaves a plateau. No Mach band at the rim — `ρ|∂Ω = f|∂Ω` makes the join continuous by construction — but a blown lamp comes back with its rim's color and none of its shape | 2 more solves |
 | 6 | Its own control, if it wants one. ⚠ **Piece 3 did not add one**: the fill runs on `highlightRecovery`, which is already plumbed end to end, and one control for both halves of one coverage is the honest default — a photograph that wants its highlights left alone wants both left alone. Splitting them is a slider, eight files and an argument that the two are separable, and nothing so far says they are | 0 files, until it is wanted |
 
@@ -680,9 +680,39 @@ fewer levels, not a smaller grid.
 grade rather than pay it; there is nothing to fuse into here, because the fill
 has to land after `highlights` and before the denoise.
 
-**Revised total: one more session for piece 4, one for piece 5.** Piece 4's
-"reuse the pyramid" question is answered — it can, and the answer is why it is
-now the cheaper of the two.
+### ⚠ What piece 4 cost, and why "reuse the pyramid" was wrong
+
+The row above read **+23 nodes and ~30 MiB, reusing piece 3's pyramid**, and that
+is what made piece 4 look like the cheaper of the two remaining pieces. Measured:
+**+0 and +0.** Neither half of the estimate survived being checked against the
+shipped code.
+
+| | Estimate | Built |
+|---|---|---|
+| Nodes | +23 | **0** (173 → 173) |
+| Memory | ~30 MiB | **0** (7186 → 7186 MiB) |
+
+**"Reuse" was the wrong word, not the wrong number.** `hl_mask.slang` wrote `Ω^∩`
+as the hole, so every pixel outside it and above the shoulder was *known* with
+`rgb = f` — which makes **`ρ ≡ f` over `Ω^∪ \ Ω^∩`, §3.3's whole domain**, and
+`f*_k = (ρ_k/ρ_j)·f_j` the identity. `hl_apply.slang`'s own comment already said
+so. There was nothing to reuse; §3.3 wanted a `ρ` over a *different hole*.
+
+**And pull-push cannot solve §3.3 in any case.** §3.2 is Laplace, which a
+pull-push interpolant approximates. §3.3 is Poisson with a source, and pull-push
+has no residual and no relaxation to put one in. What ships is §3.3's model with
+the integration replaced by a clamp — `research/UNSOURCED.md` §27.
+
+**The census is what changed the answer.** `apps/bench` block 3e, on real frames:
+the set §3.3 newly serves is 0.023%–0.068% of a frame, which does not buy 23
+nodes. But the ring supplying `ρ` for **every** blown core is 11,901 / 20,563 px
+and 58% / 69% of it comes back untouched by the window fit, so piece 3 was
+solving every core from a rim that was itself clipped. That is a correction, it
+needed none of the nodes, and no estimate made from the outside would have found
+it.
+
+**Revised total: one more session, for piece 5**, which is now the only visible
+gap — a blown lamp comes back with the right color and no falloff.
 
 ### ⚠ What must not be done along the way
 

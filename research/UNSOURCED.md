@@ -989,3 +989,55 @@ axis and the neutral all match, and the neutral is the part that matters.
 **To fix:** calibrate the travel against reference renders of the same file at
 matched Balance settings, and replace the number with a measured one. The tests
 above are invariants and would survive it.
+
+---
+
+## §27 — Rouf et al. §3.3 as its model without its solve, and two clamps on it
+
+**What is not sourced.** Not a constant this time — a **deviation from a
+published method**, which the folder's rule covers for the same reason.
+
+Rouf, Lau & Heidrich (PROCAMS 2012) §3.3 transfers detail into a clipped channel
+by a Poisson solve,
+
+```
+∇²f*_k = ∇·g*_k   over Ω_k,   f*_k|∂Ω_k = f_k|∂Ω_k,   g*_k = (ρ_k/ρ_j)·g_j
+```
+
+Orion ships the **pointwise model** `f*_k = (ρ_k/ρ_j)·f_j` and drops the
+integration. Decision #109, `research/highlight-reconstruction.md` §5c.
+
+**Why.** The solver in the graph is a pull-push interpolant (Gortler et al. 1996
+§3.5.1), which approximates **Laplace** with a Dirichlet condition and has no
+residual and no relaxation — there is nowhere in it to put a source term. Writing
+`f* = r·f_j + u` for `r = ρ_k/ρ_j` gives `∇²u = f_j ∇²r + ∇r·∇f_j`, which is zero
+only where the hue ratio is constant, and the neglected `∇r·∇f_j` is of the size
+of the detail being transferred. Building the paper's solve means a multigrid
+V-cycle: a relaxation kernel per level and roughly twice the chain, against a
+domain measured at 0.023%–0.068% of a frame.
+
+**What that costs, and it is not measured.** The integration is what makes `f*_k`
+continuous with the picture across `∂Ω_k`. Piece 3 gets its continuity for free
+from `ρ|∂Ω = f|∂Ω`; this branch does not, and how visible that is has **not been
+measured**. Nothing in the suite would see a seam a pixel wide.
+
+**The two clamps, and what is known about them.** `hl_apply.slang` bounds the
+estimate to `[f_k, kMaxGain·clip]`. Both bounds are `highlights.slang`'s, at its
+values and cited to Masood et al. through it. Measured in `apps/bench` block 3e:
+
+| Clamp | `_PIC8220` | `_PIC8095` |
+|---|---|---|
+| "may only raise it" floor | binds on **150** channels | **645** |
+| `kMaxGain` ceiling | **0** | **0** |
+
+⚠ The ceiling is therefore **unexercised on every sample frame in the
+repository**, and the repository's own habit is to delete a guard nothing
+reaches — `hl_pull.slang` lost its `min(1, Σ)` weight cap for exactly that. It
+was kept, and the difference is that the weight cap was *provably* unreachable
+(the taps are a partition of unity) while this one is only unexercised: the
+ratio's denominator is `max(ρ_j, 1e-6)` and nothing bounds it below.
+
+**To fix.** Either measure the seam and, if it is visible, build the V-cycle —
+the same two kernels with a residual pass and a relaxation between them, which
+piece 1's entry already names as the upgrade path — or find a frame that reaches
+`kMaxGain` and pin it, or delete the ceiling and say so.
