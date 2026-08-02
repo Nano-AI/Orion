@@ -470,10 +470,19 @@ void testPerspectiveMaskGeometry() {
 /// conformal, and it leaked coverage past the rim of a large mask under a
 /// strong keystone while staying perfect at its centre.
 ///
-/// ⚠ **Every check below fails on the isotropic version**, which is what makes
-/// them checks rather than descriptions. The mutation is one line: return
-/// `{ax·s, ay·s, 0}` for `s = √|det J|` instead of the eigen-decomposition.
-/// Named cases and what they do to it are on each block.
+/// ⚠ **Five of the checks below fail on the isotropic version**, which is what
+/// makes them checks rather than descriptions: both axes of check 1, the turn in
+/// check 2, the rim invariant in check 3, and the two-to-one ratio in check 6.
+/// The mutation is one line: return `{ax·s, ay·s, 0}` for `s = √|det J|` instead
+/// of the eigen-decomposition. Named cases and what they do to it are on each
+/// block.
+///
+/// ⚠ **The rest are deliberately blind to it and say so where they sit** —
+/// check 4 preserves area, check 5 is the neutral control, and 6b is aimed at a
+/// different mutation entirely (the conjugation, which lives in `unperspective`
+/// and not here). This paragraph used to read "every check below", which was
+/// wrong about four of them before 6b existed and is the same over-claim #130
+/// went looking for: measured, not asserted.
 void testPerspectiveMaskExtent() {
     section("Perspective — a mask's extent");
 
@@ -614,6 +623,15 @@ void testPerspectiveMaskExtent() {
     //    conjugation W⁻¹JW wrong on a 3:2 frame is a plausible wrong answer of
     //    exactly the kind this file exists for: it is invisible on the square
     //    fixtures and wrong on every photograph.
+    //
+    // ⚠ **Two fixtures, and the second one is here because the first cannot
+    //    keep that promise.** A pure aspect squeeze has a *diagonal* Jacobian,
+    //    so b = c = 0 and the conjugation multiplies two zeros: deleting it
+    //    outright left every check in this file green (#129). The squeeze block
+    //    stays, because what it does assert — that a shape and not just an area
+    //    survives the trip — it asserts well. The conjugation needs an
+    //    off-diagonal derivative, which means a keystone, and that is the block
+    //    after it.
     {
         const float frameW = 600.0f, frameH = 400.0f;
         const auto h = persp::compose({0.0f, 0.0f, 1.0f}, frameW, frameH);
@@ -638,5 +656,109 @@ void testPerspectiveMaskExtent() {
         // number of pixels, in the wrong ones.
         checkNear(double(e.semiX) * e.semiY, 0.04 * double(placed.scale) * placed.scale,
                   1e-6, "and the isotropic scale it replaced carries their area");
+
+        // ⚠ And the reason the block above cannot be the whole check, stated as
+        // a check so a future fixture cannot quietly go back to being blind: the
+        // squeeze's derivative is diagonal, and every one of the conjugation's
+        // two corrected terms is multiplied by a zero here.
+        report(placed.jac.b == 0.0f && placed.jac.c == 0.0f,
+               "the squeeze's derivative is diagonal, so the conjugation is a "
+               "no-op on it",
+               "b " + std::to_string(placed.jac.b) + ", c " +
+                   std::to_string(placed.jac.c));
+    }
+
+    // 6b. **The keystone: the fixture that can see the conjugation.**
+    //
+    //     A converging-verticals correction is not axis-aligned anywhere but the
+    //     centre line, so its derivative has real off-diagonal terms — and the
+    //     conjugation scales those two by W/H and H/W, which on 3:2 is 1.5 and
+    //     0.667. That is the mistake the block above describes and cannot catch.
+    //
+    //     The answer is checked against **where the pipeline itself puts the
+    //     mask's neighbours**: a central difference of `toFrame`'s own centres.
+    //     That is an independent derivation rather than the same algebra twice,
+    //     because a *position* never passes through the conjugated matrix — it
+    //     goes into texels, through `persp::apply`, and back out divided by the
+    //     frame. So the two agree only if `Placement::jac` really is the
+    //     derivative of the map the placement performs, expressed in the
+    //     normalized coordinates its own documentation claims.
+    {
+        const float frameW = 600.0f, frameH = 400.0f;
+        const auto h = persp::compose({0.8f, 0.6f, 0.0f}, frameW, frameH);
+        report(!persp::isIdentity(h), "a two-way keystone is not the identity");
+
+        // Off the centre line in both axes, and at four mask angles: b and c
+        // vanish on the axes of symmetry, which is how a fixture ends up blind.
+        struct Spot { float x, y, angle; };
+        const Spot spots[] = {{0.30f, 0.25f,  0.0f}, {0.30f, 0.25f,  0.7f},
+                              {0.45f, 0.60f, -1.1f}, {0.20f, 0.45f,  0.4f}};
+
+        constexpr float kPi = 3.14159265358979324f;
+        constexpr float kStep = 2e-3f;   // ~1 texel; the map is smooth over it
+        double worstJac = 0.0, worstAxis = 0.0;
+        double leastOffDiagonal = 1e9;
+
+        for (const auto& s : spots) {
+            const auto placed = mask::toFrame({s.x, s.y, s.angle}, none, 0, 0.0f,
+                                              0.5f, 0.5f, frameW, frameH, &h);
+            leastOffDiagonal = std::min(leastOffDiagonal,
+                                        double(std::min(std::fabs(placed.jac.b),
+                                                        std::fabs(placed.jac.c))));
+
+            const auto centre = [&](float dx, float dy) {
+                const auto o = mask::toFrame({s.x + dx, s.y + dy, 0.0f}, none, 0,
+                                             0.0f, 0.5f, 0.5f, frameW, frameH, &h);
+                return std::pair<float, float>{o.centerX, o.centerY};
+            };
+            const auto px = centre(kStep, 0.0f), mx = centre(-kStep, 0.0f);
+            const auto py = centre(0.0f, kStep), my = centre(0.0f, -kStep);
+            const persp::Jacobian fd{(px.first  - mx.first ) / (2.0f * kStep),
+                                     (py.first  - my.first ) / (2.0f * kStep),
+                                     (px.second - mx.second) / (2.0f * kStep),
+                                     (py.second - my.second) / (2.0f * kStep)};
+
+            worstJac = std::max(worstJac,
+                                std::max(std::max(std::fabs(double(placed.jac.a - fd.a)),
+                                                  std::fabs(double(placed.jac.b - fd.b))),
+                                         std::max(std::fabs(double(placed.jac.c - fd.c)),
+                                                  std::fabs(double(placed.jac.d - fd.d)))));
+
+            // And what the difference does to the mask the kernel is actually
+            // handed: `DevelopMask.cpp` sends the ellipse out at
+            // `placed.angle + ext.angleDelta`, with `ext` taken at the mask's
+            // *source* angle. Formed the same way here from each derivative.
+            const float cs = std::cos(s.angle), sn = std::sin(s.angle);
+            const auto got  = mask::radiusToFrame(0.20f, 0.14f, none, placed.jac, s.angle);
+            const auto want = mask::radiusToFrame(0.20f, 0.14f, none, fd, s.angle);
+            const float fdAngle = std::atan2(fd.c * cs + fd.d * sn,
+                                             fd.a * cs + fd.b * sn);
+            float d = (placed.angle + got.angleDelta) - (fdAngle + want.angleDelta);
+            d -= kPi * std::round(d / kPi);      // an axis, not a direction
+            worstAxis = std::max(worstAxis, std::fabs(double(d)));
+        }
+
+        std::printf("  keystone: least |off-diagonal| %.4f, worst dJ %.2e, "
+                    "worst axis %.2e rad\n",
+                    leastOffDiagonal, worstJac, worstAxis);
+
+        // The fixture's own premise, asserted rather than assumed. Without this
+        // the two checks below pass on a fixture that has quietly become
+        // diagonal again, which is exactly how the squeeze block got away with
+        // naming a mutation it could not see.
+        report(leastOffDiagonal > 0.02,
+               "the keystone's derivative is off-diagonal at every spot, which "
+               "the squeeze's is nowhere",
+               "least " + std::to_string(leastOffDiagonal));
+
+        report(worstJac < 1e-3,
+               "the placement's derivative is the one the pipeline's own "
+               "neighbouring centres trace out, in normalized coordinates",
+               "worst " + std::to_string(worstJac));
+
+        report(worstAxis < 5e-3,
+               "so the ellipse handed to the kernel points where those "
+               "neighbours say it points",
+               "worst " + std::to_string(worstAxis) + " rad");
     }
 }
