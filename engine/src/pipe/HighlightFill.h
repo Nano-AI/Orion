@@ -152,6 +152,104 @@ inline Level push(const Level& fine, const Level& coarse) {
     return out;
 }
 
+/// The factor the pyramid is solved at, relative to the picture.
+///
+/// ⚠ **This is a memory decision, and it was measured before it was taken.**
+/// ROADMAP costed the chain at full resolution: 13 levels, level zero 194 MB at
+/// 24 MP, ~516 MB for the two chains. Solving on a grid `kSolveScale` times
+/// coarser and lifting the answer back costs `kSolveScale^2` less — 32 MB at
+/// four — and the node count barely moves, because the level count is
+/// logarithmic in the frame.
+///
+/// The reason it is allowed at all is what §3.2 asks for: `rho` is the solution
+/// of `grad^2 rho = 0`, which is *harmonic*, so it has no detail to lose. It is
+/// smooth by construction and the only place it varies quickly is at the rim,
+/// where it is pinned to data the apply pass reads at full resolution anyway.
+/// `testHighlightFillGpu` sweeps the factor against the Gauss-Seidel solution
+/// every run and prints what each one costs, so this constant is checkable
+/// rather than asserted.
+///
+/// Four, not eight or sixteen, for the same reason the guided filter and the
+/// dehaze chain both use four: it is where the measured error stops being
+/// smaller than the pull-push approximation the solver already carries.
+inline constexpr int kSolveScale = 4;
+
+/// Restrict a premultiplied field onto a grid `scale` times coarser, by
+/// box-averaging. Level zero of the pyramid, when the pyramid is solved small.
+///
+/// ⚠ Averaging the *premultiplied* pair is what makes this correct rather than
+/// convenient: `sum(w*f)/N` over `sum(w)/N` is the mean of the known colors in
+/// the block and ignores the hole entirely, so a coarse texel straddling a rim
+/// carries the rim's color and a weight saying how much of it was known. An
+/// un-premultiplied average would mix black into it in proportion to the hole.
+inline Level restrictBy(const Level& fine, int scale) {
+    Level out;
+    out.width  = std::max(1, (fine.width  + scale - 1) / scale);
+    out.height = std::max(1, (fine.height + scale - 1) / scale);
+    out.texels.assign(std::size_t(out.width) * out.height, Sample{});
+
+    const float norm = 1.0f / float(scale * scale);
+    for (int y = 0; y < out.height; ++y) {
+        for (int x = 0; x < out.width; ++x) {
+            Sample acc{};
+            for (int dy = 0; dy < scale; ++dy) {
+                const int sy = std::min(y * scale + dy, fine.height - 1);
+                for (int dx = 0; dx < scale; ++dx) {
+                    const int sx = std::min(x * scale + dx, fine.width - 1);
+                    const Sample& s = fine.at(sx, sy);
+                    for (int k = 0; k < 3; ++k) acc.v[k] += s.v[k];
+                    acc.w += s.w;
+                }
+            }
+            for (int k = 0; k < 3; ++k) acc.v[k] *= norm;
+            acc.w *= norm;
+            out.at(x, y) = acc;
+        }
+    }
+    return out;
+}
+
+/// Bilinear lift of a coarse field back onto the full grid. ⚠ Must match
+/// `hl_apply.slang`'s sampling, half texel for half texel; the two are compared
+/// by `testHighlightFillGpu`.
+inline Level lift(const Level& coarse, int width, int height, int scale) {
+    Level out;
+    out.width  = width;
+    out.height = height;
+    out.texels.assign(std::size_t(width) * height, Sample{});
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const float fx = (float(x) + 0.5f) / float(scale) - 0.5f;
+            const float fy = (float(y) + 0.5f) / float(scale) - 0.5f;
+            const int   x0 = int(std::floor(fx));
+            const int   y0 = int(std::floor(fy));
+            const float ax = fx - float(x0);
+            const float ay = fy - float(y0);
+
+            const int xa = std::clamp(x0,     0, coarse.width  - 1);
+            const int xb = std::clamp(x0 + 1, 0, coarse.width  - 1);
+            const int ya = std::clamp(y0,     0, coarse.height - 1);
+            const int yb = std::clamp(y0 + 1, 0, coarse.height - 1);
+
+            const auto blend = [&](float a, float b, float c, float d) {
+                const float top = a + (b - a) * ax;
+                const float bot = c + (d - c) * ax;
+                return top + (bot - top) * ay;
+            };
+
+            Sample& o = out.at(x, y);
+            for (int k = 0; k < 3; ++k) {
+                o.v[k] = blend(coarse.at(xa, ya).v[k], coarse.at(xb, ya).v[k],
+                               coarse.at(xa, yb).v[k], coarse.at(xb, yb).v[k]);
+            }
+            o.w = blend(coarse.at(xa, ya).w, coarse.at(xb, ya).w,
+                        coarse.at(xa, yb).w, coarse.at(xb, yb).w);
+        }
+    }
+    return out;
+}
+
 /// The whole interpolant: pull to a single texel, push back down.
 ///
 /// Returns level zero. Divide `v` by `w` for the color; `w` is 1 everywhere
@@ -166,6 +264,17 @@ inline Level pullPush(const Level& input) {
         chain[std::size_t(l)] = push(chain[std::size_t(l)], chain[std::size_t(l) + 1]);
     }
     return chain.front();
+}
+
+/// The interpolant as the graph runs it: restrict by `scale`, solve there, lift
+/// the answer back. `scale == 1` is exactly `pullPush`.
+///
+/// The host twin of the whole node chain — the mask node's box average, the
+/// pull/push pyramid, and the apply node's bilinear read, in that order.
+inline Level pullPushScaled(const Level& input, int scale) {
+    if (scale <= 1) return pullPush(input);
+    const Level small = pullPush(restrictBy(input, scale));
+    return lift(small, input.width, input.height, scale);
 }
 
 /// The ground truth: Laplace with Dirichlet data, by Gauss-Seidel.

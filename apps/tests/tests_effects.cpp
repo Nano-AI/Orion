@@ -462,6 +462,64 @@ void testHighlightFillGpu() {
         report(dev < 0.10 * span,
                "pull-push tracks the harmonic solution within 10% of rim span",
                "deviation " + std::to_string(dev) + " of span " + std::to_string(span));
+
+        // ── What solving it small costs ──────────────────────────────────
+        //
+        // ⚠ This sweep is the reason the chain is 34 nodes and 41 MiB rather
+        // than the +25 nodes and ~516 MB ROADMAP costed it at. The question is
+        // not whether a smaller solve is cheaper — it obviously is — but
+        // whether it is *the same answer*, and that is a measurement, so it is
+        // taken here against the same Gauss-Seidel reference the full-resolution
+        // solver is judged by. Printed for every factor, every run.
+        //
+        // The hole is 68 px across, so at scale 4 it is 17 coarse texels: the
+        // same coarse width a 140 px blown lamp has on a real frame at the same
+        // factor. What makes this legitimate is that rho is harmonic — it has no
+        // detail to lose — and the only place it moves quickly is the rim, which
+        // the apply pass reads at full resolution.
+        const auto deviationAtScale = [&](int scale) {
+            const hf::Level small = hf::pullPushScaled(in, scale);
+            double worstHere = 0.0;
+            for (int y = 0; y < kN; ++y) {
+                for (int x = 0; x < kN; ++x) {
+                    if (in.at(x, y).w > 0.0f) continue;
+                    for (int k = 0; k < 3; ++k) {
+                        worstHere = std::max(worstHere,
+                                             std::fabs(double(colorAt(small, x, y, k)) -
+                                                       double(truth.at(x, y).v[k])));
+                    }
+                }
+            }
+            return worstHere;
+        };
+
+        double devAtScale[5] = {};
+        for (int i = 0; i < 5; ++i) {
+            const int scale = 1 << i;
+            devAtScale[i] = deviationAtScale(scale);
+            std::printf("  solved at 1/%-2d (%3d x %3d, hole %2d texels): worst %.4f "
+                        "(%.1f%% of rim span)\n",
+                        scale, (kN + scale - 1) / scale, (kN + scale - 1) / scale,
+                        68 / scale, devAtScale[i], 100.0 * devAtScale[i] / span);
+        }
+
+        // The claim the graph is built on, stated so it can fail: at the factor
+        // the chain actually runs, subsampling costs less than the pyramid
+        // already costs against the same reference. If that stops being true the
+        // chain has no argument for running small and this check says so.
+        report(devAtScale[2] < 2.0 * devAtScale[0],
+               "solving at 1/4 costs less than the pull-push approximation itself",
+               "1/4 " + std::to_string(devAtScale[2]) + " vs full "
+                   + std::to_string(devAtScale[0]));
+
+        // And the other end, because a check with no failing side is decoration:
+        // at 1/16 the hole is four coarse texels across and the rim is no longer
+        // resolved. This is what says the factor is a real choice and not a free
+        // one.
+        report(devAtScale[4] > 1.5 * devAtScale[2],
+               "and 1/16 is measurably worse, so the factor is not free",
+               "1/16 " + std::to_string(devAtScale[4]) + " vs 1/4 "
+                   + std::to_string(devAtScale[2]));
     }
 
     // ── 3. The reach the window fit does not have ────────────────────────
