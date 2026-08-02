@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**the folder index and the thumbnail cache — M1's last real gap**)
+**Last updated:** 2026-08-01 (**M3's last item renamed and its solver built — decisions #96, #97**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
 **Last updated:** 2026-08-01 (**the export panel's last three controls; every export had been 16-bit**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
@@ -186,6 +186,94 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01e — M3's last item was misnamed, and the name was the blocker
+
+**Story:** "segmentation-based highlight reconstruction", the last unbuilt M3
+line. Decisions **#96** and **#97**; `research/highlight-reconstruction.md`.
+
+### ⚠ The name was wrong, and that is why it sat unbuilt
+
+A connected-component pass is the one shape this project cannot take: union-find
+is a CPU algorithm over a 24 Mpx buffer behind a readback stall, and the GPU
+alternatives are iterative label propagation whose **pass count depends on the
+picture**, against a static graph.
+
+**Rouf, Lau & Heidrich (PROCAMS 2012) remove the requirement rather than
+satisfying it.** Their §3.2 estimates a clipped region's color by solving
+`∇²ρ = 0 over Ω^∪` with the region's own rim as a Dirichlet condition — and a
+Dirichlet solve is **already region-scoped**. Nothing crosses a pixel outside
+`Ω^∪`, so each connected blown region is solved on its own, from its own
+boundary, without being labelled. Labelling would give the same answer more
+slowly.
+
+The roadmap item is renamed, not dropped. What was wanted was region-scoped
+reconstruction with a propagated gradient. That is exactly what this is.
+
+### ⚠ The gap is real, and it is measured rather than argued
+
+`highlights.slang` reaches **12 pixels** (`kRadius`), and under decision #29 —
+which clips every channel to one common ceiling before demosaic — its
+`count == 3` branch is a **literal identity**, because a blown pixel already
+arrives as `(clip, clip, clip)`. So a fully blown core is untouched at *any*
+distance, and a blown lamp or window on a 6024×4024 frame is hundreds of pixels
+across.
+
+On a 140 px blown disc, asserted in the suite: `highlightRecover` returns the
+core at **R/B 1.000**, its input unchanged. The new fill returns **4.091**
+against a rim of **4.091**.
+
+### What was built — piece 1 only, and not wired
+
+`hl_pull.slang` (87) + `hl_push.slang` (82) + `pipe/HighlightFill.h`: the
+Dirichlet fill as the pull-push interpolant of Gortler et al. (SIGGRAPH 1996
+§3.5.1). Premultiplied storage makes the push exactly source-over, which makes
+every value a convex combination of known pixels — the maximum principle for
+free, where the window fit needs three explicit clamps to get it.
+
+⚠ **`HighlightFill.h` carries a Gauss-Seidel reference run to convergence**, so
+the approximation error against the harmonic solution Rouf et al. solve by
+multigrid is **printed every run**: 0.0368, **6.1% of rim span**. Not a memory
+of a session.
+
+⚠ **Deliberately not wired to the graph.** Pieces 2–6 are costed in ROADMAP at
+**+25 nodes and ~516 MB** for the pyramid alone — three or four sessions. Node
+count is unchanged at 149 and the M0 gate is unmoved (8.92 ms p95 against 8.77
+before, same machine, same hour).
+
+### The mutations, including the one that did not bite
+
+| Mutation | Effect |
+|---|---|
+| Drop half-texel centering in the push | **2 failures** |
+| Source-over → plain add in the push | **2 failures** |
+| Truncate the pyramid to 4 levels | **runs as a check every build** — the hole's centre must stay unresolved |
+| Remove Gortler's `min(1, Σ)` weight cap | **nothing changed, to seven digits** |
+
+⚠ The last one is the finding. The cap is **unreachable** here: the taps are a
+partition of unity, so the pull is an average of weights already in [0,1] and
+cannot exceed one. It was deleted — an unreachable branch reads as a guard
+somebody is relying on. ⚠ Also worth carrying: the constant-rim check **survives
+both of the first two mutations**, because a uniform scale and a half-texel
+shift both leave a constant field constant. The cheap invariant proves the
+normalization; only the host twin and the Gauss-Seidel reference prove the
+filter.
+
+### ⚠ A citation was wrong in five files
+
+The cross-channel paper's third author is **M. F. Tappen**, not Tang. Verified
+against the reference list of Rouf et al. and the paper's own listing; the
+likely origin is He, Sun & **Tang**, cited correctly five times here for the
+guided filter and the dark channel prior.
+
+Nothing in any suite can catch this class — a citation that cannot be looked up
+makes every constant under it uncheckable, and the only defence is reading the
+source you claim to have read. Decision #97.
+
+### Gates
+
+595 engine checks (+9), 3561 viewport, 34 `repro/` scenarios, bench exit 0,
+M0 gate 8.92 ms p95.
 
 ## Session 2026-08-01d — the reopen leak was the folder, not the photograph
 

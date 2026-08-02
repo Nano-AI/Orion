@@ -134,7 +134,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     nRgb_       = pipeline_.add({"rcd:red/blue", "rcdRedBlue",
                                  {nLinearize_, nGreen_, nDirs_},
                                  PixelFormat::RGBA16Float, {}});
-    // ── Highlight reconstruction (Masood, Zhu & Tang) ─────────────────────
+    // ── Highlight reconstruction (Masood, Zhu & Tappen) ─────────────────────
     //
     // Straight after the demosaic, so it has all three channels per pixel, and
     // before everything else, so no later stage ever sees the false color that

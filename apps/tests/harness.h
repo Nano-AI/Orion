@@ -31,6 +31,7 @@
 #include "pipe/ExposureFusion.h"
 #include "pipe/Dehaze.h"
 #include "pipe/LocalLaplacian.h"
+#include "pipe/HighlightFill.h"
 #include <set>
 
 #include "pipe/MaskGeometry.h"
@@ -89,6 +90,7 @@ void testLocalAdjustments();
 void testLensAutoScale();
 void testOutputDepth();
 void testHighlightHaloGpu();
+void testHighlightFillGpu();
 void testLocalLaplacianGpu();
 void testDehazeGpu();
 void testCreativeLut();

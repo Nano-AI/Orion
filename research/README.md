@@ -32,6 +32,7 @@ support what it is attached to.
 | [`camera-profiles.md`](camera-profiles.md) | The rest of a DNG profile — BaselineExposure and HueSatMap |
 | [`demosaic.md`](demosaic.md) | CFA interpolation, and the gap between what we ship and RCD proper |
 | [`tone-and-local-contrast.md`](tone-and-local-contrast.md) | Guided filter, local shadows/highlights, curves |
+| [`highlight-reconstruction.md`](highlight-reconstruction.md) | Clipped highlights beyond the window fit — why the segmentation pass is not needed, and the Dirichlet solver that replaces it |
 | [`local-laplacian.md`](local-laplacian.md) | Clarity — Paris et al. 2011, and Aubry et al.'s fast approximation |
 | [`dehaze.md`](dehaze.md) | The dark channel prior, and the guided filter as its refinement |
 | [`luts.md`](luts.md) | `.cube` files and tetrahedral interpolation |

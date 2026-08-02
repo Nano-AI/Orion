@@ -1,6 +1,6 @@
 // Highlight reconstruction — cross-channel correlation.
 //
-// Reference: Masood, Zhu & Tang (2009), "Automatic Correction of Saturated
+// Reference: Masood, Zhu & Tappen (2009), "Automatic Correction of Saturated
 // Regions in Photographs using Cross-Channel Correlation", Computer Graphics
 // Forum 28(7), 1861-1869. Restated in research/deep-research-2026-07-27.md §1.
 //
