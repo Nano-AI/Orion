@@ -99,6 +99,23 @@ void controlProbes(Bench& b) {
             /// a probe can put a mask in place and then measure a control
             /// *through* it. research/masking.md §5.
             void (*prepare)(orion::pipe::DevelopPipeline&) = nullptr;
+            /// ⚠ Fewest nodes this control must recompute, or 0 for "do not
+            /// check". This exists because a control can keep moving the
+            /// picture by the right amount while a whole chain under it has
+            /// gone dead.
+            ///
+            /// `highlights` and `shadows` are the case that proved it. They
+            /// drive a seven-node guided filter; hardwire `needsGuide` false at
+            /// its source and the chain dies, these two fall from ten nodes to
+            /// three, the picture still moves plenty (the tone curve alone
+            /// does that), and **the whole bench exits 0**. The dedicated
+            /// `guide off/on` invariant is blind to it too — it renders the
+            /// chain-off frame twice and two identical frames agree perfectly.
+            /// Found by mutation in decision #113's split, confirmed again by
+            /// #118's, reproduced and fixed here. Ten holds on all three sample
+            /// frames; `whites` and `blacks` sit at three, so the gap is
+            /// exactly the chain.
+            int leastNodes = 0;
         };
 
         const auto flat = [](orion::pipe::Adjustments&) {};
@@ -147,8 +164,8 @@ void controlProbes(Bench& b) {
 
         const Probe probes[] = {
             {"exposure +1 EV", flat, [](auto& a) { a.exposureEv = 1.0f; }, Metric::Luma, 0.5},
-            {"highlights -1",  lift, [](auto& a) { a.highlights = -1.0f; }, Metric::Luma, 0.237},
-            {"shadows +1",     flat, [](auto& a) { a.shadows = 1.0f; }, Metric::Luma, 0.311},
+            {"highlights -1",  lift, [](auto& a) { a.highlights = -1.0f; }, Metric::Luma, 0.237, nullptr, nullptr, 10},
+            {"shadows +1",     flat, [](auto& a) { a.shadows = 1.0f; }, Metric::Luma, 0.311, nullptr, nullptr, 10},
             // Whites and blacks are endpoint controls: they move the ends
             // and leave the middle alone, so their means move less than
             // exposure's. The floors are low; the guide-chain pair check
@@ -623,10 +640,15 @@ void controlProbes(Bench& b) {
             const bool moved = r.moved > 2e-4;
             const bool enough = r.moved >= floor;
 
-            const char* verdict = !moved  ? "NO EFFECT"
-                                : !enough ? "TOO WEAK"
-                                          : "ok";
-            if ((!moved || !enough) && !p.waived) controlsPass = false;
+            // ⚠ A control can move the picture by the right amount with a
+            // whole chain under it dead. See `leastNodes`.
+            const bool wholeChain = p.leastNodes == 0 || r.nodes >= p.leastNodes;
+
+            const char* verdict = !moved      ? "NO EFFECT"
+                                : !enough     ? "TOO WEAK"
+                                : !wholeChain ? "CHAIN MISSING"
+                                              : "ok";
+            if ((!moved || !enough || !wholeChain) && !p.waived) controlsPass = false;
 
             std::printf("  %-18s moved %.4f  %-6s %+.4f  %6.2f ms  %2d nodes  %-9s",
                         p.name, r.moved,
@@ -637,6 +659,7 @@ void controlProbes(Bench& b) {
             // The floor prints on every line, passing or not. A threshold
             // nobody can see is a threshold nobody maintains.
             std::printf(" [>= %.4f]", floor);
+            if (p.leastNodes) std::printf(" [>= %d nodes]", p.leastNodes);
             if (p.waived && (!moved || !enough)) {
                 std::printf("  WAIVED: %s", p.waived);
                 ++waivedHere;
