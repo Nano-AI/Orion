@@ -462,6 +462,64 @@ void testHighlightFillGpu() {
         report(dev < 0.10 * span,
                "pull-push tracks the harmonic solution within 10% of rim span",
                "deviation " + std::to_string(dev) + " of span " + std::to_string(span));
+
+        // ── What solving it small costs ──────────────────────────────────
+        //
+        // ⚠ This sweep is the reason the chain is 34 nodes and 41 MiB rather
+        // than the +25 nodes and ~516 MB ROADMAP costed it at. The question is
+        // not whether a smaller solve is cheaper — it obviously is — but
+        // whether it is *the same answer*, and that is a measurement, so it is
+        // taken here against the same Gauss-Seidel reference the full-resolution
+        // solver is judged by. Printed for every factor, every run.
+        //
+        // The hole is 68 px across, so at scale 4 it is 17 coarse texels: the
+        // same coarse width a 140 px blown lamp has on a real frame at the same
+        // factor. What makes this legitimate is that rho is harmonic — it has no
+        // detail to lose — and the only place it moves quickly is the rim, which
+        // the apply pass reads at full resolution.
+        const auto deviationAtScale = [&](int scale) {
+            const hf::Level small = hf::pullPushScaled(in, scale);
+            double worstHere = 0.0;
+            for (int y = 0; y < kN; ++y) {
+                for (int x = 0; x < kN; ++x) {
+                    if (in.at(x, y).w > 0.0f) continue;
+                    for (int k = 0; k < 3; ++k) {
+                        worstHere = std::max(worstHere,
+                                             std::fabs(double(colorAt(small, x, y, k)) -
+                                                       double(truth.at(x, y).v[k])));
+                    }
+                }
+            }
+            return worstHere;
+        };
+
+        double devAtScale[5] = {};
+        for (int i = 0; i < 5; ++i) {
+            const int scale = 1 << i;
+            devAtScale[i] = deviationAtScale(scale);
+            std::printf("  solved at 1/%-2d (%3d x %3d, hole %2d texels): worst %.4f "
+                        "(%.1f%% of rim span)\n",
+                        scale, (kN + scale - 1) / scale, (kN + scale - 1) / scale,
+                        68 / scale, devAtScale[i], 100.0 * devAtScale[i] / span);
+        }
+
+        // The claim the graph is built on, stated so it can fail: at the factor
+        // the chain actually runs, subsampling costs less than the pyramid
+        // already costs against the same reference. If that stops being true the
+        // chain has no argument for running small and this check says so.
+        report(devAtScale[2] < 2.0 * devAtScale[0],
+               "solving at 1/4 costs less than the pull-push approximation itself",
+               "1/4 " + std::to_string(devAtScale[2]) + " vs full "
+                   + std::to_string(devAtScale[0]));
+
+        // And the other end, because a check with no failing side is decoration:
+        // at 1/16 the hole is four coarse texels across and the rim is no longer
+        // resolved. This is what says the factor is a real choice and not a free
+        // one.
+        report(devAtScale[4] > 1.5 * devAtScale[2],
+               "and 1/16 is measurably worse, so the factor is not free",
+               "1/16 " + std::to_string(devAtScale[4]) + " vs 1/4 "
+                   + std::to_string(devAtScale[2]));
     }
 
     // ── 3. The reach the window fit does not have ────────────────────────
@@ -564,6 +622,198 @@ void testHighlightFillGpu() {
                "the filled core is warm, in the rim's own channel order",
                std::to_string(fr) + " " + std::to_string(fg) + " " + std::to_string(fb));
     }
+}
+
+/// The fill in the develop graph, on a frame the shipping node cannot help.
+///
+/// ⚠ `testHighlightFillGpu` above drives the kernels directly, which proves the
+/// solver and proves nothing about the wiring. Every bug this project has
+/// shipped in a *correct* kernel lived in the wiring: a node left running at
+/// zero strength, a parameter block pushed with the wrong texture's size, a
+/// binding shifted by one. So this one builds the real `DevelopPipeline` and
+/// reads what comes out of it.
+///
+/// The fixture is a night frame in miniature, and it is built so the existing
+/// recovery **visibly fails** on it. A lamp 96 pixels across, saturated in every
+/// channel — so under decision #29 it arrives at `highlights.slang` as
+/// (clip, clip, clip) and its `count == 3` branch is a literal identity — inside
+/// a warm annulus where only red is clipped, on a dark warm background. The
+/// annulus is what the window fit is for and it handles it. The core is 48
+/// pixels from the nearest valid pixel, four times its 12-pixel reach, and it
+/// comes back exactly as neutral as it went in.
+void testHighlightFillWiring() {
+    section("Harmonic highlight fill (wiring)");
+
+    namespace pipe = orion::pipe;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    constexpr std::uint32_t kN = 256;
+    constexpr double kCore = 48.0;      // fully blown out to here
+    constexpr double kRim  = 64.0;      // partially clipped out to here
+
+    // With black 0, white 4095 and camMul (2.0, 1.0, 1.5), `whiteClipFor` is the
+    // lowest of the three post-balance levels, which is green's 1.0. A channel
+    // therefore clips at the sensor count where its own gain takes it to 1.0:
+    // red at 2048, blue at 2730, green only at 4095.
+    //
+    //   4095 -> (1.00, 1.00, 1.00)   every channel at the ceiling: Omega^inter
+    //   2500 -> (1.00, 0.61, 0.92)   red clipped, green and blue still valid
+    //    300 -> (0.15, 0.07, 0.11)   dark, warm, and not evidence about a lamp
+    orion::raw::BayerImage img;
+    img.width = kN;
+    img.height = kN;
+    img.samples.resize(std::size_t(kN) * kN);
+    img.filters = 0x94949494u;             // RGGB
+    img.white = 4095;
+    img.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
+    img.camToXyz = {0.4124f, 0.3576f, 0.1805f,
+                    0.2126f, 0.7152f, 0.0722f,
+                    0.0193f, 0.1192f, 0.9505f};
+
+    const double cx = kN / 2.0, cy = kN / 2.0;
+    for (std::uint32_t y = 0; y < kN; ++y) {
+        for (std::uint32_t x = 0; x < kN; ++x) {
+            const double d = std::hypot(double(x) - cx, double(y) - cy);
+            const std::uint16_t v = (d < kCore) ? 4095 : (d < kRim ? 2500 : 300);
+            img.samples[std::size_t(y) * kN + x] = v;
+        }
+    }
+
+    std::unique_ptr<pipe::DevelopPipeline> dev;
+    try {
+        dev = std::make_unique<pipe::DevelopPipeline>(
+            *device, std::string(ORION_SHADER_DIR), img);
+    } catch (const std::exception& e) {
+        report(false, "develop graph builds with the fill in it", e.what());
+        return;
+    }
+
+    /// How many `hl:` nodes dispatched on the last render.
+    const auto fillRan = [&] {
+        int n = 0;
+        for (const auto& t : dev->graph().lastRun()) {
+            if (t.executed && t.name.rfind("hl:", 0) == 0) ++n;
+        }
+        return n;
+    };
+
+    // Scene-linear Rec.2020, straight out of the camera profile and before any
+    // user adjustment — which is where a hue is a hue. The 8-bit tail would not
+    // do: a blown core lands on white through the display transform whether or
+    // not it has a color, so the check would pass on a dead node.
+    std::vector<__fp16> ref(std::size_t(kN) * kN * 4);
+    const auto reference = [&] {
+        dev->referenceImage().download(ref.data(), std::size_t(kN) * 4 * sizeof(__fp16),
+                                       kN, kN);
+    };
+
+    /// (r, g) chromaticity, which is what "the same color, whatever its
+    /// brightness" means here.
+    const auto chroma = [&](std::size_t i, double out[2]) {
+        const double r = double(ref[i * 4 + 0]);
+        const double g = double(ref[i * 4 + 1]);
+        const double b = double(ref[i * 4 + 2]);
+        const double s = std::max(r + g + b, 1e-6);
+        out[0] = r / s;
+        out[1] = g / s;
+    };
+    const auto distance = [](const double a[2], const double b[2]) {
+        return std::hypot(a[0] - b[0], a[1] - b[1]);
+    };
+
+    const std::size_t centre = std::size_t(kN / 2) * kN + kN / 2;
+    const std::size_t corner = std::size_t(4) * kN + 4;
+    const std::size_t onRim  = std::size_t(kN / 2) * kN + kN / 2 + 56;   // in the annulus
+
+    pipe::Adjustments adj{};
+    adj.wb = dev->asShotWhiteBalance();
+
+    // ── 1. Off is off ────────────────────────────────────────────────────
+    adj.highlightRecovery = 0.0f;
+    dev->apply(adj);
+    dev->render();
+    report(fillRan() == 0, "no fill node runs at highlightRecovery 0",
+           std::to_string(fillRan()) + " ran");
+
+    reference();
+    double coreOff[2], rimOff[2], cornerOff[2];
+    chroma(centre, coreOff);
+    chroma(onRim,  rimOff);
+    chroma(corner, cornerOff);
+    const double cornerOffValue = double(ref[corner * 4 + 1]);
+
+    // ── 2. On is on ──────────────────────────────────────────────────────
+    adj.highlightRecovery = 0.8f;
+    dev->apply(adj);
+    dev->render();
+    const int ranOn = fillRan();
+    report(ranOn >= 12, "the whole chain runs when the slider is up",
+           std::to_string(ranOn) + " fill nodes");
+
+    reference();
+    double coreOn[2], cornerOn[2];
+    chroma(centre, coreOn);
+    chroma(corner, cornerOn);
+
+    const double offGap = distance(coreOff, rimOff);
+    const double onGap  = distance(coreOn,  rimOff);
+
+    std::printf("  core chromaticity  off (%.4f, %.4f)  on (%.4f, %.4f)  "
+                "rim (%.4f, %.4f)\n",
+                coreOff[0], coreOff[1], coreOn[0], coreOn[1], rimOff[0], rimOff[1]);
+    std::printf("  distance from the rim's own color: off %.4f, on %.4f\n",
+                offGap, onGap);
+
+    // ⚠ The check the feature exists for. The shipping recovery is *on* in the
+    // second run too — one control drives both — so what this measures is the
+    // fill, since the window fit's count == 3 branch cannot move this pixel and
+    // `testHighlightFillGpu` asserts separately that it does not.
+    report(offGap > 0.02,
+           "the blown core does not have the rim's color to begin with",
+           "distance " + std::to_string(offGap));
+    report(onGap < 0.25 * offGap,
+           "the fill carries the rim's color into the core, through the graph",
+           "off " + std::to_string(offGap) + " -> on " + std::to_string(onGap));
+
+    // ⚠ And a tighter one, which exists to hold `hl_mask.slang`'s shoulder rule
+    // in place. Deleting it — `w = blown ? 0 : 1`, letting the dark background
+    // count as evidence about the lamp — leaves the check above passing at
+    // 0.0687 and fails this one, because the background is then averaged into
+    // every coarse texel of the rim and drags the fill 30% further off. That is
+    // the whole failure Masood et al.'s Omega exists to prevent, one node over.
+    report(onGap < 0.06 * offGap,
+           "and the dark background is not treated as evidence about the lamp",
+           "ratio " + std::to_string(onGap / offGap));
+
+    // ── 3. And it touches nothing else ───────────────────────────────────
+    //
+    // A corner pixel has no clipped channel and is below the shoulder, so it is
+    // neither in the hole nor evidence about it. The apply pass must hand it
+    // back unchanged — bit for bit, since it takes an early return.
+    report(distance(cornerOff, cornerOn) < 1e-6 &&
+               std::fabs(cornerOffValue - double(ref[corner * 4 + 1])) < 1e-9,
+           "an unclipped pixel is returned untouched",
+           "delta " + std::to_string(distance(cornerOff, cornerOn)));
+
+    // ── 4. Back to zero is back to where it started ──────────────────────
+    adj.highlightRecovery = 0.0f;
+    dev->apply(adj);
+    dev->render();
+    report(fillRan() == 0, "and the chain switches off again");
+
+    reference();
+    double coreAgain[2];
+    chroma(centre, coreAgain);
+    report(distance(coreAgain, coreOff) < 1e-6,
+           "the core is back to the color it had before the slider moved",
+           "delta " + std::to_string(distance(coreAgain, coreOff)));
 }
 
 /// Local Laplacian clarity, against Paris et al.'s own algorithm.

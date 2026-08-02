@@ -25,7 +25,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Demosaic: bilinear for thumbs/zoomed-out | M0 | |
 | Demosaic: dual (RCD+VNG4) quality option | M4 | |
 | Highlight recon: clip + inpaint-opposed | M1 | Cheap, stable default |
-| Highlight recon: region-scoped (Dirichlet fill) | M3 | Quality option for blown skies. ⚠ Renamed from "segmentation-based" — decision #99: a Dirichlet solve is already region-scoped, so there is no component pass. Solver built 2026-08-01, **not wired**; +25 nodes and ~516 MB costed in ROADMAP |
+| Highlight recon: region-scoped (Dirichlet fill) | M3 | ✅ **Built and wired 2026-08-01**, `research/highlight-reconstruction.md`, decisions #96, #102, #103. Rouf, Lau & Heidrich (PROCAMS 2012) §3.2 as Gortler et al.'s pull-push. ⚠ Renamed from "segmentation-based" — a Dirichlet solve is already region-scoped, so there is no component pass. Fills `Ω^∩`, the fully blown core `highlights.slang` cannot reach; runs on the existing Highlights slider and is off at zero. **+24 nodes, +215 MiB** — the pyramid is solved at a quarter resolution and costs 30 MiB of that, against ROADMAP's ~516 MB estimate at full. §3.3's detail transfer and §3.4's falloff remain |
 
 ## 3. Global Adjustments
 | Feature | Status | Notes |

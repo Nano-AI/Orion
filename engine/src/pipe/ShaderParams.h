@@ -738,6 +738,29 @@ struct Highlights {
 };
 static_assert(sizeof(Highlights) == 32);
 
+/// The clipping mask. Mirrors HlMaskParams in hl_mask.slang.
+struct HlMask {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+    std::uint32_t scale;
+    float         clip;
+    float         gamma;
+    float         shoulder;
+};
+static_assert(sizeof(HlMask) == 32);
+
+/// The fill, lifted back into the picture. Mirrors HlApplyParams in
+/// hl_apply.slang.
+struct HlApply {
+    std::uint32_t size[2];
+    std::uint32_t fillSize[2];
+    std::uint32_t scale;
+    float         clip;
+    float         gamma;
+    float         strength;
+};
+static_assert(sizeof(HlApply) == 32);
+
 /// Harmonic fill, pull half. Mirrors HlPullParams in hl_pull.slang.
 struct HlPull {
     std::uint32_t outSize[2];

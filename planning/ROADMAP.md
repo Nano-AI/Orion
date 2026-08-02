@@ -140,7 +140,9 @@ Two things turned up while finishing it:
   the wheels centred it does not run the node at all
 - ✅ Creative LUTs (.cube, tetrahedral) *(Adobe Cube LUT Specification 1.0; Sakamoto & Itooka 1981)*
 - Highlight reconstruction beyond the window fit — **renamed from
-  "segmentation-based", solver built 2026-08-01, not wired.** Costed below
+  "segmentation-based"; solver, mask and node chain built and wired 2026-08-01,
+  off by default.** Rouf, Lau & Heidrich §3.2 as pull-push. §3.3's detail
+  transfer and §3.4's falloff remain. Costed below
 
 ---
 
@@ -637,15 +639,43 @@ hundreds of pixels across, so this is the common case, not the corner.
 | # | Piece | Cost |
 |---|---|---|
 | 1 | ✅ **Done 2026-08-01.** `hl_pull.slang` + `hl_push.slang` — the Dirichlet fill, as Gortler et al.'s (SIGGRAPH 1996 §3.5.1) pull-push. `pipe/HighlightFill.h` carries the host twin **and** a Gauss-Seidel reference run to convergence, so the approximation error is printed every run rather than assumed: **6.1% of rim span**. Not wired to the graph | 87 + 82 lines, 9 checks |
-| 2 | The clipping mask — `Ω_k`, `Ω^∪`, `Ω^∩` as a weight channel. One pointwise kernel. ⚠ It must read the **same** `whiteClipFor(m)` the linearize node used, or the mask disagrees with the clip that made it | ~50 lines |
-| 3 | The node chain, and it is the expensive piece. A 24 Mpx pyramid is **13 levels**, so 13 pull nodes + 12 push nodes = **+25 nodes** on 149, and the chain is `RGBA16Float` at full resolution: level 0 is 194 MB and the pyramid sums to ~1.33×, so **~258 MB pulled + ~258 MB pushed ≈ 516 MB**, about 7% on 7447 MiB. ⚠ Must disable to nothing at Amount 0 — decision #82 is the precedent and it cost 10.63 → 17.03 ms to learn | +25 nodes, ~516 MB |
-| 4 | §3.3's cross-channel detail transfer: a second solve, over `Ω_k` per channel, with Eq. 7's confidence weighting (Eq. 8, `m = 0.65`, `ε = 10⁻³`). ⚠ Costs a **second** pyramid unless piece 3's is reused across the two solves | +25 nodes or a reuse argument |
-| 5 | §3.4's log-space gradient fill-in for `Ω^∩`, which is what gives a blown core its falloff back instead of a plateau with a Mach band at the rim | 2 more solves |
-| 6 | One control through `Adjustments` → `orion.h` → `CApi.cpp` → `DevelopState` → `Engine` → catalogue → sidecar → presets → sync, plus a `repro/` scenario. ⚠ #81 piece 6 is the warning: `Engine.state`'s memberwise initializer took a new field silently and it reached the sidecar as 0 | 8–14 files |
+| 2 | ✅ **Done 2026-08-01.** `hl_mask.slang` — `Ω^∩` as the hole, the picture as the Dirichlet data, box-restricted onto the solve grid in the same pass. Reads the same `whiteClipFor(m)` the linearize node used. ⚠ **`Ω^∩`, not `Ω^∪`**: the union's partial case already has a node, and replacing Masood et al.'s per-pixel cross-channel fit with a smooth interpolant would be strictly worse. Known also requires the shoulder (`kShoulder`, cited to the same place), which is what stops the night sky being read as evidence about the lamp | 101 lines |
+| 3 | ✅ **Done 2026-08-01.** The node chain: mask, 11 pulls, 11 pushes, `hl_apply.slang`. ⚠ **Costed wrong, and the number was the decision** — see below. Disables to nothing at `highlightRecovery` 0, asserted by name in `apps/bench` | **+24 nodes, +215 MiB** |
+| 4 | §3.3's cross-channel detail transfer: a second solve, over `Ω_k` per channel, with Eq. 7's confidence weighting (Eq. 8, `m = 0.65`, `ε = 10⁻³`). ⚠ It wants `Ω^∪`, which is a **different mask** from piece 2's — the sets differ per channel — so it is a second kernel, not a switch on this one. ⚠ The pyramid can be reused: piece 3's is 30 MiB and its shape is a function of the frame, so a second solve is +23 nodes and +30 MiB, not another 215 | +23 nodes, ~30 MiB |
+| 5 | §3.4's log-space gradient fill-in for `Ω^∩`, which is what gives a blown core its falloff back. ⚠ **This is now the visible gap**: piece 3 leaves a plateau. No Mach band at the rim — `ρ|∂Ω = f|∂Ω` makes the join continuous by construction — but a blown lamp comes back with its rim's color and none of its shape | 2 more solves |
+| 6 | Its own control, if it wants one. ⚠ **Piece 3 did not add one**: the fill runs on `highlightRecovery`, which is already plumbed end to end, and one control for both halves of one coverage is the honest default — a photograph that wants its highlights left alone wants both left alone. Splitting them is a slider, eight files and an argument that the two are separable, and nothing so far says they are | 0 files, until it is wanted |
 
-**Honest total: three or four sessions after this one.** Pieces 3 and 4 are each
-a session on their own, and piece 4's "reuse the pyramid" question should be
-answered before piece 3 is built, not after.
+### ⚠ What piece 3 actually cost, and why the estimate was 16× out
+
+The estimate above was **+25 nodes and ~516 MB**, at full resolution. Measured:
+
+| | Estimate | Built |
+|---|---|---|
+| Nodes | +25 | **+24** (149 → 173) |
+| Memory | ~516 MB, pyramid only | **+215 MiB total** — pyramid **30 MiB**, apply node **185 MiB** |
+
+Two things the estimate got wrong, in opposite directions.
+
+**The pyramid runs at a quarter resolution and the estimate never asked.** `ρ` is
+harmonic — no detail to lose — so the solve was swept against the Gauss-Seidel
+reference before a node was written: 6.1% of rim span at full, **6.9% at 1/4**,
+12.6% at 1/16. Decision #102. Sixteen times less memory for 0.8 points on top of
+an approximation already worth 6.1.
+
+**Subsampling does not save nodes**, which is the half the estimate had right for
+the wrong reason. The level count is logarithmic in the frame, so 1/4 removes two
+levels and nothing else. If a chain of this shape is ever the problem, the fix is
+fewer levels, not a smaller grid.
+
+**And the apply pass is the real cost.** One full-resolution `RGBA16Float` node,
+185 MiB, six times the whole pyramid, and no factor subsamples it away. Decision
+#96 measured the same 194 MB for the creative vignette and fused it into the
+grade rather than pay it; there is nothing to fuse into here, because the fill
+has to land after `highlights` and before the denoise.
+
+**Revised total: one more session for piece 4, one for piece 5.** Piece 4's
+"reuse the pyramid" question is answered — it can, and the answer is why it is
+now the cheaper of the two.
 
 ### ⚠ What must not be done along the way
 
@@ -659,11 +689,13 @@ answered before piece 3 is built, not after.
   The published descriptions are fair game and the paper is the source used.
 - **Wiring a piece without its measurement.** The solver approximates a
   multigrid solve; the number that says how well is a test, not a memory.
-- **Quietly reopening decision #29.** #29 clips every channel to one ceiling so
-  blown cores render neutral. Piece 3 puts hue back into them. That is defensible
-  — #29's magenta was the white-balance gains, evidence of nothing, while `ρ` is
-  measured from the region's own rim — but it is an argument that belongs in
-  DECISIONS on the day the node lands.
+- **Quietly reopening decision #29.** ✅ Argued 2026-08-01 as **decision #103**,
+  on the day the node landed. #29's magenta was the white-balance gains — the
+  same magenta on every blown pixel of every frame, evidence of nothing — while
+  `ρ` is the harmonic interpolant of the region's own rim and by the maximum
+  principle cannot leave that rim's range. A neutral rim still gives a neutral
+  core, so #29's outcome is reached by evidence rather than by decree, and the
+  clip itself is untouched.
 
 ## M5 — Advanced
 

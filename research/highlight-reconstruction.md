@@ -253,25 +253,122 @@ proves the normalization, and only a reference implementation proves the filter.
 
 ---
 
+## 5b. What was wired — pieces 2 and 3
+
+`hl_mask.slang`, `hl_apply.slang`, and 24 nodes between `highlights` and the
+denoise chain. **149 → 173 nodes, 6971 → 7186 MiB.** Off at
+`highlightRecovery = 0`, which is the default.
+
+### ⚠ The pyramid runs at a quarter resolution, and that was measured first
+
+ROADMAP costed piece 3 at **+25 nodes and ~516 MB**, at full resolution, and that
+number was the reason this was a three-session item. `ρ` is harmonic — it has no
+detail to lose, and the only place it moves quickly is the rim, which the apply
+pass reads at full resolution anyway — so the factor was swept against the same
+Gauss-Seidel reference the solver itself is judged by, before any node was
+written. `testHighlightFillGpu` prints all five every run:
+
+| Solved at | Hole, in coarse texels | Worst deviation | Of rim span |
+|---|---|---|---|
+| 1/1 | 68 | 0.0368 | 6.1% |
+| 1/2 | 34 | 0.0376 | 6.3% |
+| **1/4** | **17** | **0.0416** | **6.9%** |
+| 1/8 | 8 | 0.0523 | 8.7% |
+| 1/16 | 4 | 0.0758 | 12.6% |
+
+A quarter costs 0.8 points on top of an approximation already worth 6.1 — less
+than the pull-push approximation itself — for a sixteenth of the memory. Both
+ends are pinned by a check, so the factor is a measured choice and not a free
+one. Decision #102.
+
+⚠ **What it does not buy is node count.** The level count is logarithmic in the
+frame, so a quarter removes two levels and nothing else: 24 nodes where the
+estimate said 25. The estimate's node number was right for the wrong reason, and
+its memory number was wrong by 16×.
+
+⚠ **And the real cost is not the pyramid.** Of the +215 MiB, the pyramid is
+**30 MiB** and the apply node is **185 MiB** — one full-resolution `RGBA16Float`
+pass, which no factor subsamples away. Decision #96 measured the same 194 MB for
+the creative vignette and fused it into the grade rather than pay it; there is
+nothing to fuse into here, because the fill must land after `highlights` and
+before the denoise.
+
+### The mask is `Ω^∩`, not the `Ω^∪` §3.2 nominally solves over
+
+§3.2's `ρ` is defined over the union. Filling the union here would be a
+regression, because the union's partial case is exactly what `highlights.slang`
+already does — Masood et al.'s cross-channel fit, per pixel, from real evidence —
+and replacing measurement with a smooth interpolant is strictly worse. §3.3 is
+the step that wants the union, and it wants it *per channel*, which is a
+different mask from a different kernel.
+
+The mask also requires the **shoulder**: known means not blown *and* brighter
+than `kShoulder · clip`, at `highlights.slang`'s own 0.35 and for its own reason.
+It is what stops the night sky being read as evidence about the lamp, and it is
+what makes the box restriction safe — a one-pixel annulus in a coarse texel would
+otherwise be averaged with the sky. ⚠ It does not break decision #96's region
+scoping: `Ω^∩` is enclosed by its own shoulder ring, which is known, so a core is
+solved from its own rim regardless of what the background is marked as.
+
+### What it leaves
+
+A **plateau**. `ρ|∂Ω = f|∂Ω` makes the join continuous, so there is no Mach band
+at the rim — but a harmonic function inside a roughly circular rim is nearly
+flat, so a blown lamp comes back with its rim's color and none of its falloff.
+That is §3.4's job and it is piece 5. Rescaling `ρ` here to imitate a falloff
+would be inventing the shape their paper derives.
+
+### Measured, in the graph
+
+`testHighlightFillWiring` builds a real `DevelopPipeline` on a night frame in
+miniature: a lamp 96 px across saturated in every channel, a warm annulus where
+only red is clipped, a dark warm background. The existing recovery fails on it by
+construction — `count == 3` is an identity, and the core is 48 px from the
+nearest valid pixel against a 12 px reach.
+
+| Check | Result |
+|---|---|
+| Core chromaticity, recovery off | (0.3333, 0.3333) — neutral |
+| Core chromaticity, recovery on | (0.6525, −0.0452) |
+| The annulus's own chromaticity | (0.6796, −0.0462) |
+| Distance from the rim's color | **0.5137 → 0.0271** |
+| An unclipped corner pixel | unchanged, bit for bit |
+
+### The mutations
+
+| Mutation | Effect |
+|---|---|
+| `filling = true` — the chain never switches off | ⚠ **Passed the bench as written.** The fill is upstream of exposure, so once run it stays cached and a drag never touches it. The check moved to the full render after the control goes to zero; it now reads 24 fill nodes and exits 1 |
+| Drop the mask's shoulder rule | ⚠ **Passed every check as written**, at 0.0687 against a bound of 0.25. The wiring test gained the tighter check it fails: 0.0528 clean, bound 0.06 |
+| Re-push the pyramid's params per tick | 23 fill nodes on an exposure tick — decision #92's shape exactly |
+| Apply the fill outside `Ω^∩` | "an unclipped pixel is returned untouched" fails, delta 0.082 |
+| Hand the apply the picture's size as the fill grid's | **No effect.** The clamp binds only at the frame's right and bottom edge, and premultiplication makes even the out-of-bounds read harmless: `rgb` and `a` are attenuated together, so `rgb/a` survives it. Recorded rather than patched, like `hl_pull`'s unreachable weight cap |
+
+⚠ Two of five mutations found a check that could not fail. Both were checks
+written against the state that was easy to measure — the drag, and the
+feature-level distance — rather than against the thing the code actually
+promises.
+
+---
+
 ## 6. Honest limits
 
-- **The solver is not wired into the develop graph**, on purpose. Pieces 2–4 in
-  `ROADMAP.md` are the clipping mask, the node chain and the controls. A solver
-  with a measured error is worth having; a half-wired node is the outcome this
-  project has twice recorded as the worst one.
+- **§3.3 and §3.4 are not built.** The fill puts a measured hue into a blown
+  core and leaves it flat. Pieces 4 and 5 in `ROADMAP.md`.
 - **Rouf et al.'s own stated failure case applies to Orion's sample frames.**
   Their assumption is that hue is independent of luminance over Ω<sup>∪</sup>, so
   the rim's hue describes the core. Their §4 shows it violated by sunsets, where
   hue and intensity are correlated and the correct core hue "is not observed
   anywhere in the image". Night frames with sodium lights are the good case; a
   sunset is the bad one, and the control must be able to be turned off.
-- ⚠ **It reopens ground decision #29 settled, and must be argued when it is
-  wired.** #29 clips every channel to one ceiling *because* a blown light
-  rendered magenta, and its whole effect is to make blown cores neutral. Piece 3
-  puts hue back into them. The difference is that #29's magenta was the white
-  balance gains — an artifact of the arithmetic, evidence of nothing — while `ρ`
-  is measured from the region's own boundary. That distinction is the argument,
-  and it should be written into DECISIONS when the node lands, not assumed.
+- ⚠ **It reopened ground decision #29 settled, and the argument is
+  decision #103**, written the day the node landed. #29's magenta was the white
+  balance gains — the same magenta on every blown pixel of every frame, evidence
+  of nothing — while `ρ` is the harmonic interpolant of the region's own rim and
+  by the maximum principle cannot leave that rim's range. A neutral rim still
+  gives a neutral core, so #29's *outcome* is reached by evidence rather than by
+  decree, and #29 itself is untouched: the clip still happens, still pre-demosaic,
+  still before RCD interpolates across it.
 - **The headroom is gone before this node can see it.** #29 clips pre-demosaic,
   so the reconstruction works from clipped data and can only recover the shape
   and hue implied by the rim, never the sensor's original counts. Recovering
@@ -284,6 +381,11 @@ proves the normalization, and only a reference implementation proves the filter.
 
 ## History
 
+- **2026-08-01** — Pieces 2 and 3. `hl_mask.slang` and `hl_apply.slang`, 24 nodes
+  wired between `highlights` and the denoise chain, off by default. Measured that
+  the pyramid runs at a quarter resolution before spending ROADMAP's ~516 MB on
+  it (decision #102), and argued the reopening of #29 (decision #103). Two of
+  five mutations found a check that could not fail; both are recorded above.
 - **2026-08-01** — Written. Corrected the Masood et al. author error across six
   files. Chose Rouf, Lau & Heidrich (PROCAMS 2012) over Zhang & Brainard and
   Guo et al. Recorded the finding that a Dirichlet solve makes the
