@@ -174,6 +174,24 @@ inline Level push(const Level& fine, const Level& coarse) {
 /// smaller than the pull-push approximation the solver already carries.
 inline constexpr int kSolveScale = 4;
 
+/// How close to the ceiling a channel must read to count as clipped, as a
+/// fraction of it. The same 0.97 `DevelopPipeline::apply` already hands
+/// `highlights.slang`, and it must stay the same: the two nodes are the two
+/// halves of one coverage — Masood et al.'s window fit over the partial case and
+/// this fill over the fully blown one — and a pixel that only one of them thinks
+/// is clipped is a pixel neither of them handles.
+inline constexpr float kClipGamma = 0.97f;
+
+/// How bright a pixel must be, as a fraction of the ceiling, to be evidence
+/// about a highlight's color.
+///
+/// ⚠ This is `highlights.slang`'s `kShoulder`, at its value and for its reason:
+/// it is Masood et al.'s Omega, the shoulder of the saturated region rather than
+/// the general neighborhood. Around a small light at night the neighborhood is
+/// almost all dark background, and a color taken from background pixels
+/// describes the background. The shipping node learned that as a purple halo.
+inline constexpr float kShoulder = 0.35f;
+
 /// Restrict a premultiplied field onto a grid `scale` times coarser, by
 /// box-averaging. Level zero of the pyramid, when the pyramid is solved small.
 ///
