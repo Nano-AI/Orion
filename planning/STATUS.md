@@ -231,7 +231,10 @@ API session limit with nothing committed. Both accounts, and the one lesson
 worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
-first wave is merged and the second was relaunched and is the table below.
+first wave is merged and the second was relaunched and landed. ⚠ **Waves two
+through six, and their write-ups, moved to `HISTORY.md` at the 2026-08-02 prune
+(#132)** — this line used to end "and is the table below", and the table is
+there now.
 
 ### ✅ 2026-08-02 — `Screenshot.swift` is five files, and the oracle did not move (#131)
 
@@ -694,7 +697,7 @@ session and wave blocks** — the same failure the 4,643-line prune was for.
 the concurrent-sidecar note, two stale *In flight* tables, and the second, third,
 fourth and fifth wave write-ups) and the six `## Session` entries that were the
 tail of this log — `2026-08-02a`, `2026-08-01r`, `q`, `p`, `o` and `n`. Nothing
-was edited on the way across, and **742 lines are left here**.
+was edited on the way across, and **745 lines are left here**.
 
 ⚠ **A prune moves; it never copies.** The 2026-08-01 prune left `2026-07-31j` in
 both files byte for byte, and a duplicated entry is invisible from either end
