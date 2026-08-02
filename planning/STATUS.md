@@ -229,6 +229,51 @@ headers. **No moved line was edited.** The cost is #117's exactly — Swift's
 `private` is file-scoped, so five stored properties, eleven views and methods and
 `PhotoCommands` widened to internal; nine members stayed `private`.
 
+⚠ **Eight mutations, and the three that stayed green everywhere are the finding.**
+
+| # | Mutation | What went red |
+|---|---|---|
+| M5 | a `@State` moved into `extension Editor` | **build** — `error: extensions must not contain stored properties`. The seam's constraint is a compile error, not a preference (#117's M1) |
+| M1 | `--library-open` dispatch deleted from `init()` | the library probe only. **All four repo gates green** |
+| M2 | `--scenario` dispatch deleted | the **scenario gate**, 3/3. The only CLI mode the repository itself checks |
+| M3 | `--batch-export` dispatch deleted | the batch probe only. **All four repo gates green** |
+| M4 | `--screenshot` dispatch deleted | the screenshot probe only, 3/3. **All four repo gates green** |
+| M6 | the **Reset Adjustments menu command deleted** | ⚠ **nothing.** Three scenarios, three byte-compared frames, both other modes, all four gates |
+| M7 | `--screenshot` moved ahead of `--scenario` in `init()` | ⚠ **nothing** |
+| M8 | the footer's `engine.lastFailure` branch deleted | ⚠ **nothing**, including `nofailure` |
+
+⚠ **M6: a menu item can be deleted from the product and nothing anywhere
+notices.** `Screenshot.swift:211` builds `Editor` directly and never builds
+`OrionApp`'s `Scene`, so `PhotoCommands` is in no captured hierarchy at all, and
+no scenario verb opens a menu. The whole Photo menu is unreachable from every
+check in the repository.
+
+⚠ **M7: the `init()` ordering comment is defensive, not load-bearing.** It says
+`--scenario` precedes `--screenshot` "because a scenario writes its own stills",
+but `Screenshot.options` returns nil unless `--screenshot` is in `argv` and no
+invocation passes both flags. The eight repro files that write stills use the
+`shot` *verb*, which calls `Screenshot.writeCanvas` directly and never the CLI
+mode. **The order is kept anyway** — it costs nothing and the next reader should
+find the comment beside what it describes.
+
+⚠ **M8: `nofailure` pins the engine's value, not the line that shows it.** The
+verb added in `9d9158d` asserts `Engine.lastFailure` clears on a successful
+render; deleting the footer branch that *displays* it leaves that green, and no
+scene renders a failed frame so the byte comparison is blind too. #117 recorded
+that `lastFailure` had no oracle anywhere; half of it now does, and the half
+that reaches the photographer still does not.
+
+⚠ **All three are written down and none is fixed**, because a behaviour change
+hidden inside a refactor is unreviewable.
+
+⚠ **The mutation harness itself was wrong twice and both were caught by
+self-testing it before trusting it.** `timeout` is GNU and absent on macOS, so
+the first run exited 127 everywhere and **every check went red under every
+mutation**; the replacement then clobbered the caller's loop variable, so three
+screenshot checks reported a scene called `180`. A check that cannot pass proves
+as little as one that cannot fail. The harness now smoke-tests both verdicts
+before it runs, and was confirmed all-green on the clean tree first.
+
 ### ✅ 2026-08-02 — `Engine.swift` is eight files, and no pixel moved (#117)
 
 **2,331 lines against a ceiling of 1,000** — the largest violation left once
