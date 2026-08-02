@@ -165,6 +165,21 @@ SIDD at 65 GMACs, the best quality-per-compute in the literature.
 2 MP/s on GPU — about 12 seconds for a 24 MP frame.
 [DxO's own figures](https://support.dxo.com/hc/en-us/articles/7077934620701-DeepPRIME-and-DeepPRIME-XD-hardware-acceleration-further-information).
 ML denoising can therefore only ever be a background pass, never a live slider.
+⚠ **That link could not be re-verified on 2026-08-01** — the page returns HTTP
+403 to an unauthenticated fetch. The claim is carried forward as this file wrote
+it, flagged, and wants a check by hand. It is no longer load-bearing:
+[`denoise-learned.md`](denoise-learned.md) §6 derives the same conclusion from
+NAFNet's own published MACs, which are checkable.
+
+➡ **Investigated in full on 2026-08-01 —
+[`denoise-learned.md`](denoise-learned.md), decision #111, six pieces in
+`ROADMAP.md`. Nothing built, by design.** ⚠ **The one line to carry back here:**
+the denoise chain above runs **after** RCD and **before** `camera->working`, in
+linear camera RGB. That is neither the sRGB domain SIDD's leaderboard measures
+nor the Bayer domain raw denoisers are trained on, so **the 40.30 dB above is
+not a number any checkpoint would reach at this node's insertion point**, and
+dropping an sRGB-trained model in here would be plausible, wrong, and invisible
+to inspection.
 
 ---
 

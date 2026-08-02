@@ -113,6 +113,19 @@ against 28–54 ms warm, 12.9–17.2×**. The leftovers are named and costed in
 an X-Trans demosaic (Markesteijn), a Windows port, Core ML denoise and
 user-loadable DCP profiles, each a multi-week epic on its own.
 
+✅ **One of those four is now researched — Core ML denoise, 2026-08-01, decision
+#111.** `research/denoise-learned.md` plus a six-piece table in `ROADMAP.md`.
+**Nothing was built and that was the deliverable.** The line above is confirmed
+rather than contradicted: it is **not a graph node** (one fp16 32-channel
+activation at 24 Mpx is 1,480 MiB — exactly what the whole existing 8-node
+denoise chain costs) and **not a slider** (NAFNet's own 65 GMAC is 48.1 TFLOP a
+frame, ≥1.6 s on optimistic hardware against a 16 ms budget). ⚠ **The real
+blocker is the domain, and it was mis-stated everywhere until now**: Orion's
+noise *fit* is pre-demosaic but its *filter* runs post-demosaic in linear camera
+RGB, which is neither the sRGB nor the Bayer domain any published checkpoint is
+trained for. Pieces 1–3 are two measurements and a decision that is allowed to
+say stop.
+
 Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
 the performance action item is in `ROADMAP.md`. The largest standing violation of
 a stated hard constraint is `DevelopPipeline.cpp`, now **2,549 lines**.
@@ -327,6 +340,108 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01p — Core ML denoise, researched and deliberately not built
+
+**Story:** M5's "ML denoise (NAFNet-class via Core ML)", on the roadmap since
+the first milestone list and never once investigated. **Research and
+decomposition only. Nothing was built, no build was run, and neither test suite
+was run — there was nothing to test.** That was the brief and it is the outcome.
+
+**Shipped:** `research/denoise-learned.md`, `ROADMAP.md`'s six-piece table,
+`UNSOURCED.md` §27, decision #111, and corrections to `FEATURES.md` and this
+file.
+
+### ⚠ The premise was wrong, and the wrong half decides everything
+
+Every statement of this line — the roadmap, `FEATURES.md`, and the brief for the
+session — assumed Orion's noise handling is pre-demosaic. Read out of the source
+rather than assumed:
+
+| Piece | Where | Domain |
+|---|---|---|
+| The **fit**, `estimateNoise(const BayerImage&)` | `raw/NoiseProfile.cpp`, CPU, before any node | Bayer, sensor counts |
+| The **filter**, `denoise:blur 0..3` / `denoise:shrink 3..0` | GPU, **after `rcd:red/blue`, before `camera->working`** | **Linear camera RGB**, demosaiced, `rgba16f` |
+
+The node's own comment says why: `var = a·x + b` only holds in linear camera RGB
+and the matrix would mix the variances along with the channels. So Orion has a
+**third domain**. Published denoisers are trained on sRGB — gamma-encoded,
+tone-mapped, 8-bit, which is what SIDD's 40.30 dB measures — or on the Bayer
+mosaic (Brooks et al., CVPR 2019, the paper that names this problem). **Neither
+is Orion's.**
+
+⚠ **An sRGB checkpoint dropped in at the current insertion point would look
+plausible and be wrong for a reason invisible to inspection.** That is the purple
+cast's exact shape, and no test in either suite would catch it.
+
+### The two pieces of arithmetic that decide the rest
+
+**It is not a node.** At 6024×4024 one `RGBA16Float` node is 185 MiB. One fp16
+**32-channel** activation is **1,480 MiB** — and so is the entire existing 8-node
+denoise chain, because 32 × 2 and 8 × 8 are both 64 B/px. Not a coincidence, an
+identity, and it makes the point in one line: **one feature map of a width-32
+network costs the whole denoiser Orion ships.** A four-level U-net is ~2,868 MiB
+for one activation per level and a guessed 4–8 GiB in practice, on top of 7,186.
+
+**It is not a slider.** NAFNet's Table 6 gives 65 GMAC at 256×256 = 0.992
+MMAC/px → **48.1 TFLOP** a frame, 65.5 tiled. No sustained fp16 throughput was
+measured here, so it stops at a function: 13.1 s at 5 TFLOP/s, **1.6 s at 40**.
+M0's budget is 16 ms. The cheapest row is **100×** it.
+
+### ⚠ The blocker was never the facade
+
+Verified in this machine's SDK headers rather than remembered: `MLModel`,
+`+[MLFeatureValue featureValueWithPixelBuffer:]` (`MLFeatureValue.h:60`) and
+`-[MLMultiArray initWithPixelBuffer:shape:]` (`MLMultiArray.h:178`) are all
+**Objective-C**. The engine already compiles three `.mm` units, so Core ML is
+callable from inside the engine with no Swift and no facade crossing. It fails
+by `NSError`, so the wrapper returns a status code — an exception crossing would
+terminate the process.
+
+`MPSGraphTensorData initWithMTLBuffer:shape:dataType:` (`MPSGraphTensorData.h:57`)
+is the fallback if the pixel-buffer path turns out to copy: it takes an
+`MTLBuffer` directly. ⚠ Its price is hand-building the network in ObjC, which is
+a thousand-line file by construction and against the maintainability constraint.
+**Core ML first; MPSGraph only if piece 2 forces it.**
+
+### Licences, all checked rather than remembered
+
+| Artefact | Licence | Usable |
+|---|---|---|
+| NAFNet code (`megvii-research/NAFNet`) | MIT + Apache-2.0 (BasicSR) | ✅ |
+| Restormer code (`swz30/Restormer`) | MIT | ✅ |
+| **DnCNN**, **FFDNet** (`cszn/*`) | ⚠ **No licence file at all** — 404 from GitHub's licence API | ❌ No grant. `cszn/KAIR` is MIT and re-implements both |
+| DND (Darmstadt) | "**non-commercial purposes**" | ❌ Benchmark only |
+| SIDD | Project page claims MIT | ⚠ Single unverified source. Read the archive before shipping |
+| `coremltools` | BSD-3-Clause | ✅ |
+
+Decision #78's rule transfers unchanged: **weights inherit their training data's
+terms however permissive the architecture's code is.** NAFNet being MIT does not
+make NAFNet's checkpoints MIT.
+
+### The decomposition, and the order is the decision
+
+Six pieces in `ROADMAP.md`. **Pieces 1 and 2 are measurements, piece 3 is a
+written argument that is allowed to conclude "stop here", and nothing is
+converted or trained before them.** `research/highlight-reconstruction.md`'s
+estimate was 16× out because the measurement came after the cost; this is the
+same trap one milestone later, and the piece table has a guess column so it is
+at least visible.
+
+⚠ **Do not start at piece 5.** Pieces 1 and 4 are worth doing regardless: piece
+1 gives Orion the paired fixture and full-reference metric **it does not have
+today** — there is no clean reference in this repo and therefore **no dB figure
+for the shipped denoiser, and none should be quoted** — and piece 4's tiler is
+what a full-resolution export path wants anyway.
+
+### Gates
+
+⚠ **None run, and this says so plainly rather than claiming otherwise.** No
+build, no `orion-tests`, no `orion-viewport-tests`. Nothing under `engine/`,
+`app/` or `apps/` was touched; the diff is `research/` and four planning files.
+Three other agents were editing the engine in the same hour.
+
+---
 
 ## Session 2026-08-01o — a mask under a keystone is an ellipse, and had been staying round
 

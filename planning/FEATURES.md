@@ -63,7 +63,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Sharpening (amount/radius/masking) | M2 | |
 | Denoise: profiled wavelet (à-trous) | M2 | Per-camera/ISO noise model |
 | Denoise: NLM luma option | M4 | |
-| Denoise: ML (NAFNet-class, Core ML) | M5 | **Background pass, not a live slider** (~12s/24MP) |
+| Denoise: ML (NAFNet-class, Core ML) | M5 | **On-demand pass — not a graph node, not a slider.** Researched and costed 2026-08-01, **not built**: `research/denoise-learned.md`, decision #111, six pieces in `ROADMAP.md`. ⚠ The blocker is the *domain*, not the framework — Orion's denoise runs post-demosaic in linear camera RGB, which is neither the sRGB nor the Bayer domain any published checkpoint is trained for. ⚠ The ~12s/24MP figure is DxO's, carried over and **not re-verifiable** (their page 403s); NAFNet's own 65 GMAC works out to 48.1 TFLOP a frame, ≥1.6 s on optimistic hardware |
 
 ## 7. Optics & Geometry
 | Feature | Status | Notes |
