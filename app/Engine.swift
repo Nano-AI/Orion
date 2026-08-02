@@ -44,6 +44,17 @@ final class Engine {
     private(set) var lastRenderMs: Double = 0
     private(set) var isLoaded = false
 
+    /// Why the last render failed, or `nil` if it did not.
+    ///
+    /// ⚠ This exists because a failed render used to be **completely silent**.
+    /// `render()` guarded on the status and returned, `lastRenderMs` stayed at
+    /// its initial 0, and the canvas kept whatever texture it had — which, on
+    /// the first render after an open, is nothing. The photographer saw a black
+    /// rectangle, "0.0 ms", and no explanation, on a file the engine renders
+    /// correctly from the scenario runner. The detail was there the whole time:
+    /// `orion_last_error` had it and nobody read it.
+    private(set) var lastFailure: String?
+
     var temperatureK: Float = 5500 { didSet { pushAndRender() } }
     var tint: Float = 0            { didSet { pushAndRender() } }
     var exposureEv: Float = 0      { didSet { pushAndRender() } }
@@ -2120,6 +2131,7 @@ final class Engine {
             render()
             return
         }
+        lastFailure = nil
         lastRenderMs = ms
         generation &+= 1
     }
@@ -2127,7 +2139,17 @@ final class Engine {
     private func render() {
         guard let handle else { return }
         var ms: Double = 0
-        guard orion_engine_render(handle, &ms) == ORION_OK else { return }
+        let status = orion_engine_render(handle, &ms)
+        guard status == ORION_OK else {
+            // ⚠ Say so. See `lastFailure`: this used to return silently and
+            // leave a black canvas reading 0.0 ms.
+            let why = errorText(status)
+            lastFailure = why
+            FileHandle.standardError.write(Data("orion: render failed — \(why)\n".utf8))
+            generation &+= 1
+            return
+        }
+        lastFailure = nil
 
         // Re-read the size every frame. A quarter turn swaps width and height,
         // and the canvas uses these to work out which part of the (square)

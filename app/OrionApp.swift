@@ -1161,15 +1161,28 @@ struct Editor: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 5) {
             if engine.isLoaded {
-                Engraved.Label(text: hint, color: Palette.faint, size: 9)
-                    .lineLimit(1)
+                // ⚠ A failed render reads as a *fast* one if all you show is
+                // the millisecond count: it stays at 0.0, which is the best
+                // number on the bar, beside a black canvas. So the failure
+                // takes the whole line and takes it in the warning colour.
+                if let why = engine.lastFailure {
+                    Engraved.Label(text: "Render failed — \(why)",
+                                   color: Palette.star, size: 9)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                } else {
+                    Engraved.Label(text: hint, color: Palette.faint, size: 9)
+                        .lineLimit(1)
+                }
                 HStack(spacing: 0) {
                     Engraved.Readout(text: "\(engine.imageWidth) × \(engine.imageHeight)",
                                      color: Palette.dim)
                     Spacer(minLength: 8)
                     Engraved.Readout(
-                        text: String(format: "%.1f ms", engine.lastRenderMs),
-                        color: engine.lastRenderMs < 16 ? Palette.accent : Palette.star)
+                        text: engine.lastFailure == nil
+                            ? String(format: "%.1f ms", engine.lastRenderMs) : "failed",
+                        color: engine.lastFailure != nil ? Palette.star
+                             : engine.lastRenderMs < 16 ? Palette.accent : Palette.star)
                 }
             }
         }
