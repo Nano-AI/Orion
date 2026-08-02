@@ -17,6 +17,26 @@ import SwiftUI
 /// developed output, read back through the export path, drawn as a still rather
 /// than through `MTKView` — AppKit's `cacheDisplay` does not capture a Metal
 /// layer. Canvas-specific geometry stays the viewport suite's job.
+///
+/// ## ⚠ Three scenes are checks rather than pictures
+///
+/// Each was written against a named mutation that deleted shipped interface with
+/// every check in the repository green (decision #125). Two of the three exit
+/// nonzero by themselves; the third is a frame, compared byte for byte against
+/// the same scene from the binary before the change, which is how every frame
+/// here is read.
+///
+/// ```
+/// --scene detail-tail    --photo x.ARW   the Detail panel scrolled to its end
+/// --scene render-failed  --photo x.ARW   the status line's failure warning
+/// --scene menu                           the real menu bar, 26 commands
+/// ```
+///
+/// | Scene | Fires when | Exits nonzero |
+/// |---|---|---|
+/// | `detail-tail` | anything below the fold in Detail is deleted or moved | when nothing overflows the panel column |
+/// | `render-failed` | the footer stops drawing `engine.lastFailure` | no — the frame differs |
+/// | `menu` | a `PhotoCommands` item is deleted or renamed | when a command is missing |
 enum Screenshot {
 
     struct Options {
@@ -49,10 +69,19 @@ enum Screenshot {
         /// black point, and nothing in the interface stops them crossing.
         var whites: Float?
         var blacks: Float?
+        /// True once `--size` has been given. A scene may ask for a window of
+        /// its own (see `minimumHeight`), and it must not overrule a size the
+        /// caller stated out loud.
+        var sizeExplicit = false
     }
 
     /// Parses the command line. Returns nil when this is an ordinary launch.
+    ///
+    /// ⚠ Also nil on the *second* pass. `--scene menu` hands the process back to
+    /// `OrionApp` (see `checkMenu`), which runs `App.init` again with the same
+    /// `argv` — and without this the harness would call itself forever.
     static func options(_ arguments: [String]) -> Options? {
+        guard !relaunched else { return nil }
         guard arguments.contains("--screenshot") else { return nil }
 
         var o = Options()
@@ -88,7 +117,10 @@ enum Screenshot {
             case "--size":
                 if let next {
                     let parts = next.split(separator: "x").compactMap { Double($0) }
-                    if parts.count == 2 { o.size = CGSize(width: parts[0], height: parts[1]) }
+                    if parts.count == 2 {
+                        o.size = CGSize(width: parts[0], height: parts[1])
+                        o.sizeExplicit = true
+                    }
                     i += 1
                 }
             default: break
@@ -99,7 +131,16 @@ enum Screenshot {
     }
 
     /// Runs the capture and exits. Never returns.
-    static func run(_ o: Options) -> Never {
+    static func run(_ options: Options) -> Never {
+        var o = options
+
+        // Not a picture: the one scene that has to be the real `Scene`.
+        if o.scene == "menu" { checkMenu() }
+
+        if !o.sizeExplicit, let h = minimumHeight(o.scene) {
+            o.size.height = max(o.size.height, h)
+        }
+
         // A background accessory app: no Dock icon, no menu bar, no window.
         NSApplication.shared.setActivationPolicy(.accessory)
 
@@ -208,13 +249,30 @@ enum Screenshot {
             if ready { break }
         }
 
+        // ⚠ Set last, after every render this run will do, and with the engine
+        // suspended — **both halves were needed, and the first capture proved
+        // it.** `render()` clears `lastFailure` on success, and laying the
+        // interface out renders: the canvas's `onAppear` assigns
+        // `engine.cropPreview`, whose `didSet` is `pushAndRender()`. So the
+        // first version of this scene planted a failure, SwiftUI wiped it during
+        // layout, and the frame came back showing the ordinary hint and
+        // `0.0 ms` — a photograph of the bug this line exists to prevent,
+        // captioned as a photograph of the fix. Suspending is what a failed
+        // engine looks like from the panel's side: no successful frame arrives
+        // to take the warning down.
+        if o.scene == "render-failed" {
+            engine.suspended = true
+            engine.lastFailure = failureText
+        }
+
         let view = Editor(engine: engine, startTab: tab(for: o.scene),
                           startLibrary: library,
                           startSnapshots: snapshots(for: o.scene, photo: o.photo))
             .frame(width: o.size.width, height: o.size.height)
             .preferredColorScheme(.dark)
 
-        guard let png = render(view, size: o.size) else {
+        guard let png = render(view, size: o.size,
+                               scrolledToBottom: scrolls(o.scene)) else {
             fail("the view produced no image")
         }
 
@@ -227,13 +285,179 @@ enum Screenshot {
         exit(0)
     }
 
+    // MARK: The menu
+
+    /// Set once this process has handed itself back to `OrionApp`.
+    nonisolated(unsafe) private static var relaunched = false
+
+    /// Every command `PhotoCommands` puts in front of a photographer.
+    ///
+    /// ⚠ **Titles, not closures, and that distinction is the whole point.** The
+    /// actions behind these live on `CullActions`, and `CullActions` is reachable
+    /// from a test — so a check written against it would have gone green on the
+    /// mutation that motivated this one, which deletes the *button* and leaves
+    /// the action it called sitting there unreferenced. What was unchecked was
+    /// whether the command is in a menu at all.
+    ///
+    /// Written out one by one rather than counted: a count says the menu is the
+    /// size it was, and this says which command went missing. The parenthetical
+    /// keys are part of the title — the bare keys are the local monitor's, so
+    /// the menu spells them out instead of owning them (`OrionApp+Commands`).
+    /// The three titles that change with state are given in their idle form,
+    /// which is the form a launch with nothing open produces either way: `cull`
+    /// is nil before a window takes focus, and its `url` is nil after.
+    private static let requiredCommands: [String] = [
+        // The tool tabs, ⌘1–⌘7.
+        "Light", "Color", "Detail", "Optics", "Mask", "Crop", "Presets",
+        // ⚠ **Two characters short of what the source says, and that is a
+        // finding rather than a typo here.** `OrionApp+Commands` writes
+        // `"Compare Original  (\\)"`, which is `Compare Original  (\)` in
+        // Swift — but a `Button`'s string is a `LocalizedStringKey`, and a
+        // backslash is that grammar's escape character, so AppKit installs
+        // **`Compare Original  ()`**: the one item whose key is spelled only in
+        // its title has lost the key. Nothing in the repository could see it
+        // until something read the real menu bar. Pinned as it ships, because
+        // the fix is a line in `OrionApp+Commands.swift` and that file belongs
+        // to another story; a check that is red the day it lands is not a check.
+        // When it *is* fixed this goes red and prints the bar, which is the
+        // right way round.
+        "Compare Original  (\\)",
+        "Fit in Window  (0)", "Actual Size  (9)",
+        "Export…", "Reveal Session Log in Finder",
+        "Reset Adjustments",
+        "Reject  (R)",
+        "1 Star  (1)", "2 Stars  (2)", "3 Stars  (3)", "4 Stars  (4)",
+        "5 Stars  (5)", "No Rating  (`)",
+        "Next Photo  (→)", "Previous Photo  (←)",
+        "Select All Photos", "Deselect",
+        "Apply Crop  (⏎)", "Cancel Crop  (⎋)",
+    ]
+
+    /// `Orion --screenshot x --scene menu` — the Photo and View menus, checked
+    /// against the menu bar AppKit actually builds.
+    ///
+    /// ## ⚠ Why this re-launches the app instead of rendering something
+    ///
+    /// Every other scene here builds `Editor` directly, and `PhotoCommands` is
+    /// not in `Editor` — it is a `Commands`, attached to `OrionApp`'s `Scene`.
+    /// A `Commands` is not a `View`: there is no hosting view to put it in and
+    /// nothing to photograph. So decision #121's M6 deleted the Reset
+    /// Adjustments command from the product and **every check in the repository
+    /// stayed green**, because nothing anywhere had ever built the `Scene`.
+    ///
+    /// The only honest way to see that menu is to let the app launch: clear the
+    /// harness's own hook (`relaunched`), call `OrionApp.main()`, and read
+    /// `NSApp.mainMenu` once AppKit has installed it. What comes back is the
+    /// shipping menu bar, built by the shipping `Scene` from the shipping
+    /// `PhotoCommands` — not a second list of what it ought to contain.
+    ///
+    /// ⚠ **A window really does open**, for about the second this takes. That is
+    /// the price of the only path to the thing, and it is why this is a scene
+    /// somebody runs rather than a frame in the sweep.
+    ///
+    /// ⚠ **It asserts presence, not that the items work.** The commands are
+    /// disabled at launch — nothing is open, so `cull?.url` is nil and every
+    /// item greys out — and firing one would need a photograph, a key window and
+    /// focus. Presence is exactly the hole that was measured, and the actions
+    /// behind the titles are `CullActions`, which the scenario runner drives.
+    private static func checkMenu() -> Never {
+        relaunched = true
+
+        // The menu bar is built during launch, after `App.init` returns. Read it
+        // from the main queue once the run loop is turning.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            guard let bar = NSApp.mainMenu else {
+                fail("the app launched with no main menu at all")
+            }
+
+            var found: [String] = []
+            func walk(_ menu: NSMenu, depth: Int) {
+                for item in menu.items where !item.isSeparatorItem {
+                    found.append(item.title)
+                    if let sub = item.submenu { walk(sub, depth: depth + 1) }
+                }
+            }
+            walk(bar, depth: 0)
+
+            let missing = requiredCommands.filter { !found.contains($0) }
+            let report = "orion: the menu bar carries \(found.count) items; "
+                + "\(requiredCommands.count - missing.count) of "
+                + "\(requiredCommands.count) commands present\n"
+            FileHandle.standardError.write(Data(report.utf8))
+            for title in missing {
+                FileHandle.standardError.write(Data(
+                    "orion: MISSING from the menu bar — \"\(title)\"\n".utf8))
+            }
+            // The whole bar, when something is missing: a command that has been
+            // *renamed* is indistinguishable from one that has been deleted
+            // until you can see what is there instead.
+            if !missing.isEmpty {
+                for title in found {
+                    FileHandle.standardError.write(Data("orion:   · \(title)\n".utf8))
+                }
+            }
+            exit(missing.isEmpty ? 0 : 1)
+        }
+
+        // A launch that never finishes must not look like a menu that is
+        // complete. Longer than the wait above by enough that a slow machine is
+        // not a failure, and short enough that a hang is not a hang.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+            fail("the app did not finish launching, so the menu was never read")
+        }
+
+        OrionApp.main()
+        // `main()` is typed as returning, and does not.
+        fail("the app's own launch returned before the menu was read")
+    }
+
     // MARK: Scenes
+
+    /// The failure a photographer is shown when the graph refuses a frame.
+    ///
+    /// Worded like the engine's own `errorText`, and held in one place so the
+    /// string the scene plants and the string a reviewer looks for are the same
+    /// string.
+    static let failureText = "the compute pipeline could not be built"
+
+    /// Scenes that capture the panel column scrolled to its end rather than at
+    /// rest.
+    ///
+    /// ⚠ **This exists because the Detail panel is taller than the window and
+    /// the harness only ever photographed the top of it.** Deleting Grain,
+    /// Vignette, Dehaze, Clarity and Sharpening — 60 lines of shipped controls,
+    /// every one of them below the fold at 1680×1050 — left every check in the
+    /// repository green (decision #122, mutation M9), while deleting Noise
+    /// Reduction eleven lines higher reddened six frames. The panel was covered
+    /// exactly as far as it was tall.
+    private static func scrolls(_ scene: String) -> Bool {
+        scene == "detail-tail"
+    }
+
+    /// The window a scene needs when the default one cannot hold what the scene
+    /// exists to show.
+    ///
+    /// ⚠ **Measured, not guessed, and the measurement is why the number is
+    /// here rather than 1050.** The Detail panel's content is **1,701 points**
+    /// and the default window gives its scroll view **681** — so the scene at
+    /// rest accounts for 0–681 and a frame scrolled to the end accounts for
+    /// 1,020–1,701, and *Grain sits in the 339-point band between them*, seen
+    /// by neither. Confirmed by looking at the first capture, which reached
+    /// Vignette and stopped: a scroll that lands past the section it was
+    /// written for is the same hole one flick lower down. At 1,500 the window
+    /// holds 1,131, the end of the panel is 570 points down, and the two frames
+    /// overlap by 111 points with nothing between them. A taller window is a
+    /// state the interface is really in — it is a resizable window on a taller
+    /// display — and the scroll is still real and still asserted.
+    private static func minimumHeight(_ scene: String) -> CGFloat? {
+        scene == "detail-tail" ? 1500 : nil
+    }
 
     private static func tab(for scene: String) -> ToolTab {
         switch scene {
         case "color":
             return .color
-        case "detail", "noisy", "denoise-off", "denoise-luma",
+        case "detail", "detail-tail", "noisy", "denoise-off", "denoise-luma",
              "denoise-both", "spots":
             return .detail
         case "optics":
@@ -317,6 +541,26 @@ enum Screenshot {
             engine.denoiseColor = 2.4
             engine.sharpenAmount = 0.8
             engine.sharpenMasking = 0.4
+        case "detail-tail":
+            // Every control the Detail panel keeps below the fold, each at a
+            // value it does not hold by default, so the section is legible in
+            // the frame by its readouts as well as by its title. Captured
+            // scrolled — see `scrolls(_:)`.
+            engine.exposureEv = 2.6
+            engine.grainAmount = 0.028
+            engine.grainSize = 3.4
+            engine.vignetteAmount = -1.25
+            engine.vignetteFieldAngle = 34
+            engine.dehaze = 0.45
+            engine.clarity = 0.55
+            engine.sharpenAmount = 1.2
+            engine.sharpenRadius = 1.4
+            engine.sharpenMasking = 0.35
+        case "render-failed":
+            // The status line's failure branch. The value itself is planted
+            // after the last render, in `run` — a scene applied here is applied
+            // before one, and a successful render clears it.
+            engine.exposureEv = 2.6
         case "optics":
             // The tab that exists because the lens corrections could not be
             // found inside Detail. Screenshotted so the claim that they are now
@@ -847,7 +1091,50 @@ enum Screenshot {
 
     // MARK: Rendering
 
-    private static func render<V: View>(_ view: V, size: CGSize) -> Data? {
+    /// Scrolls the interface's tallest scrolling region to its end, and says how
+    /// far it went.
+    ///
+    /// The panel column is a plain SwiftUI `ScrollView`, which AppKit backs with
+    /// an `NSScrollView` — so the scroll is the real one, performed on the real
+    /// view, and what the capture shows afterwards is what a photographer sees
+    /// after a flick of the wheel. Chosen by overflow rather than by name: the
+    /// filmstrip is the other scroll view in the hierarchy and it scrolls
+    /// sideways, so its document is exactly as tall as its clip and it can never
+    /// win.
+    ///
+    /// ⚠ Returns nil when the hierarchy holds no scroll view at all, and 0 when
+    /// nothing overflows. **Both are refused by the caller**, because a scene
+    /// whose whole purpose is to photograph what is past the fold and which
+    /// finds no fold has stopped covering anything — which is the failure this
+    /// scene was written against, and it must not be able to reappear as a pass.
+    /// The height of the scrolling region `scrollToEnd` last moved, so the
+    /// diagnostic can say what fraction of the panel a frame accounts for.
+    private static var panelClip: CGFloat = 0
+
+    private static func scrollToEnd(_ root: NSView) -> CGFloat? {
+        var best: (scroll: NSScrollView, overflow: CGFloat)?
+        func walk(_ v: NSView) {
+            if let s = v as? NSScrollView, let doc = s.documentView {
+                let overflow = doc.frame.height - s.contentView.bounds.height
+                if best == nil || overflow > best!.overflow { best = (s, overflow) }
+            }
+            for sub in v.subviews { walk(sub) }
+        }
+        walk(root)
+
+        guard let found = best else { return nil }
+        panelClip = found.scroll.contentView.bounds.height
+        guard found.overflow > 1, let doc = found.scroll.documentView else { return 0 }
+        // A flipped document counts down from the top, so its end is the
+        // overflow; an unflipped one counts up from the bottom, so its end is 0.
+        found.scroll.contentView.scroll(to: NSPoint(x: 0,
+                                                    y: doc.isFlipped ? found.overflow : 0))
+        found.scroll.reflectScrolledClipView(found.scroll.contentView)
+        return found.overflow
+    }
+
+    private static func render<V: View>(_ view: V, size: CGSize,
+                                        scrolledToBottom: Bool = false) -> Data? {
         let hosting = NSHostingView(rootView: view)
         hosting.frame = CGRect(origin: .zero, size: size)
 
@@ -868,6 +1155,29 @@ enum Screenshot {
         }
         hosting.layoutSubtreeIfNeeded()
         hosting.displayIfNeeded()
+
+        if scrolledToBottom {
+            guard let overflow = scrollToEnd(hosting) else {
+                fail("no scrolling region in the interface — this scene "
+                     + "photographs what is past the fold and there is no fold")
+            }
+            guard overflow > 1 else {
+                fail("nothing overflows the panel column, so a scene that "
+                     + "captures it scrolled captures the same thing as the "
+                     + "scene that does not")
+            }
+            FileHandle.standardError.write(Data(
+                String(format: "orion: scrolled the panel column %.1f points "
+                       + "(%.1f of content past a %.1f-point window)\n",
+                       overflow, overflow + panelClip, panelClip).utf8))
+            // The scroll is a layout change like any other: settle again before
+            // the capture, or the frame is the interface mid-move.
+            for _ in 0..<6 {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            }
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+        }
 
         guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
             return nil

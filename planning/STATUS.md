@@ -132,7 +132,8 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    hole the frame comparison cannot see: the Detail panel scrolls, and five
    whole sections below the fold — Grain, Vignette, Dehaze, Clarity, Sharpening
    — can be deleted with every check in the repository green.** Recorded, not
-   fixed.
+   fixed — and ✅ **closed 2026-08-02 by #125**, along with the Photo menu and
+   the footer's failure line, which had the same cause.
 
    **The product's large files are down to `OrionApp.swift`**; the rest of the
    ceiling's survivors are in `apps/tests/`, which is a different argument. See
@@ -225,6 +226,72 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — three holes in the interface's coverage, and they were one hole (#125)
+
+Two splits found, by mutation, that shipped UI could be deleted with every check
+green, and left them: a fix inside a refactor is unreviewable. All three are now
+closed, and **they had one cause** — `Screenshot.swift` builds `Editor` directly
+and drives only what is on screen at rest. So the panel was covered as far as it
+was tall, the menu was not covered at all because a `Commands` is not in
+`Editor`, and the status line's warning branch was never in a state that draws
+it.
+
+| Hole | The check now | Shape |
+|---|---|---|
+| **The Detail panel scrolls, and coverage stopped at the fold** (#122 M9) | `--scene detail-tail` | scrolls the real `NSScrollView` to its end and **refuses to write a frame when nothing overflows** |
+| **The Photo menu is unreachable from every check** (#121 M6) | `--scene menu` | clears the harness's hook, calls `OrionApp.main()`, reads `NSApp.mainMenu` — 26 commands by title, exit 1 naming any that is missing |
+| **The footer's `lastFailure` branch has no oracle** (#121 M8) | `--scene render-failed` | plants the failure **and suspends the engine**, so the warning is in a frame |
+
+**The mutations, each the exact deletion the two splits described.** Every check
+in the repository was green on all three before this session.
+
+| # | Mutation | Before | After |
+|---|---|---|---|
+| **M1** | delete Grain, Vignette, Dehaze, Clarity, Sharpening from `DevelopPanels+Detail.swift` — 60 lines | `detail-tail` exit 0 | ⚠ **exit 1**, *"nothing overflows the panel column"*. `--scene detail` byte-identical, 40 scenarios green, `menu` green — the old coverage is still blind, which is the point |
+| **M2** | delete the `Reset Adjustments` command from `PhotoCommands` | `menu` exit 0, 26/26 | ⚠ **exit 1**, *"MISSING from the menu bar — "Reset Adjustments""*, 25 of 26, bar 75 → 74 items. All three frames byte-identical, 40 scenarios green |
+| **M3** | delete the footer's `else if let why = engine.lastFailure` branch — 5 lines | `render-failed.png` | ⚠ **frame differs** (`cmp`, char 11,672,187). Looked at: the amber line is gone, the ordinary hint is back and only the 9-point `failed` readout remains — the reported bug exactly. `detail`, `detail-tail` and `menu` green, 40 scenarios green **including `nofailure`**, which pins the value and not the line |
+
+⚠ **The scroll landed past the section it was written for, and looking at the
+PNG is what caught it.** The Detail panel's content is **1,701 points** and the
+default window gives its scroll view **681**, so at 1680×1050 the scene at rest
+accounts for 0–681 and a frame scrolled to the *end* accounts for 1,020–1,701 —
+and **Grain sits in the 339-point band between them**, seen by neither. The
+scene asks for a 1,500-tall window (a resizable window on a taller display),
+which holds 1,131, leaves the end 570 points down, and makes the two frames
+overlap by 111 points with nothing between them. Confirmed by reading the
+capture, not by trusting the offset.
+
+⚠ **The planted failure was wiped by the layout, and the first capture
+photographed the bug while claiming to photograph the fix.** `render()` clears
+`lastFailure` on success and *laying the interface out renders*: the canvas's
+`onAppear` assigns `engine.cropPreview`, whose `didSet` is `pushAndRender()`.
+The frame came back showing the ordinary hint and `0.0 ms`. Suspending the
+engine is what a failed one looks like from the panel's side — no successful
+frame arrives to take the warning down.
+
+⚠ **A defect nobody was looking for, found on the menu check's first run.** The
+menu bar ships **`Compare Original  ()`**: `OrionApp+Commands.swift` writes
+`"Compare Original  (\\)"`, but a `Button`'s string is a `LocalizedStringKey`
+and a backslash is that grammar's escape character, so **the one item whose key
+is spelled only in its title has lost the key**. Nothing in the repository could
+see it until something read the real menu bar. Pinned as it ships and left
+alone: the fix is a line in a file this story does not own, and a check that is
+red the day it lands is not a check.
+
+⚠ **Reaching `PhotoCommands` honestly cost a re-launch, and the alternative was
+worse.** `CullActions` is reachable from a test and driving it would have been
+easy — and **green on M2**, which deletes the *button* and leaves the action it
+called sitting there. What was unchecked was whether the command is in a menu at
+all, so the check reads the menu. The price is that a window really does open
+for about a second, and that the check asserts presence rather than firing:
+the items are disabled at launch and firing one needs a photograph, a key window
+and focus. That is #110.3's shape — reach for the real thing, and say plainly
+which link is still unpinned.
+
+**Gates:** 800 / 3708 / 40 of 40 / bench exit 0, before and after. The three new
+checks are **byte-stable across two runs of one binary** (self-checked before
+being trusted — `versions.png` is not, and that is why).
 
 ### ✅ 2026-08-02 — a scenario that measures nothing no longer passes (#124)
 
@@ -1202,9 +1269,11 @@ Small, named, and none of them blocking the next story:
 
 | **The 1000-line rule is broken six ways, and it has moved out of `app/`**: `apps/tests/tests_effects.cpp` **1,716**, `app/OrionApp.swift` **1,557**, `app/DevelopPanels.swift` **1,366**, `apps/tests/tests_brush.cpp` **1,142**, `apps/tests/tests_perspective.cpp` **1,110**, `apps/tests/tests_grade.cpp` **1,029**; next below is `ShaderParams.h` at **905**. ⚠ **Recounted by sweep 2026-08-02 at `9d9158d` + #120**, over every `.swift/.cpp/.h/.hpp/.mm` under `app/ apps/ engine/ Sources/` — not by adjusting the previous numbers, which is what this row has always gone wrong by. ⚠ **The previous row was not stale; the tree moved under it.** It read "broken three ways, all in `app/`" and named `ShaderParams.h` at 905 as the next below — which is only consistent with `apps/tests` being *under* the ceiling, and it was: at `0b8061d` those files stood at **969 / 770 / 844** and `tests_perspective.cpp` did not exist. **Four test files crossed the ceiling in a single day**, three by growth and one on arrival. The violation is now mostly in the tests, and nobody sweeping only `app/` will see it. ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself. Of the originals, `DevelopPipeline.cpp` (#113, 2,896 → 451), `bench/main.cpp` (#118, 2,289 → 85), `Engine.swift` (#117, 2,331 → 795) and `Scenario.swift` (#120, 1,615 → 301) are done | whole tree |
 
-| ⚠ **The whole Photo menu is unreachable from every check.** Deleting the Reset Adjustments command is green on 800, 3702, all 40 scenarios, the bench and every byte-compared frame (#121, M6). `Screenshot.swift:211` builds `Editor` directly and never builds `OrionApp`'s `Scene`, so `PhotoCommands` is in no captured hierarchy; no scenario verb opens a menu. Every menu item, its title, its shortcut and its greyed-out state rest on reading the code | `OrionApp+Commands.swift` |
+| ~~⚠ **The whole Photo menu is unreachable from every check.**~~ ✅ **closed 2026-08-02, decision #125.** `--screenshot --scene menu` hands the process back to `OrionApp.main()` and reads `NSApp.mainMenu` — the shipping `Scene` building the shipping `PhotoCommands` — and asserts **26 commands by title**, exiting 1 and printing the whole 75-item bar when one is missing. Deleting Reset Adjustments now prints `MISSING from the menu bar — "Reset Adjustments"` and exits 1, with every frame and all 40 scenarios still green. ⚠ It asserts **presence, not firing**: the items are disabled at launch and firing one needs a photograph, a key window and focus (#110.3's shape). ⚠ It is not driven through `CullActions`, deliberately — that would be green on the mutation, which deletes the button and leaves the action | `Screenshot.swift` |
+| ⚠ **The Compare Original menu item ships without its key.** The bar reads **`Compare Original  ()`**: the source writes `"Compare Original  (\\)"`, and a `Button`'s string is a `LocalizedStringKey` whose escape character is the backslash, so the one item that spells its key only in its title has lost it. Found by the menu check's first run, 2026-08-02; **pinned as it ships** so the check is green on the tree as it stands, and it will go red — printing the whole bar — the moment somebody fixes it, which is the right way round. The fix is `Text(verbatim:)` or a different spelling | `OrionApp+Commands.swift` |
 | ⚠ **Three of the four command-line modes are checked by nothing in the repository.** `--screenshot`, `--batch-export` and `--library-open` each have their four-line dispatch in `OrionApp.init`, and deleting any one of them is green on all four gates (#121, M1/M3/M4). Only `--scenario` is exercised, because only it is what the 40-file sweep runs. ⚠ Structural, not a coverage oversight: `apps/tests` and `apps/bench` are pure C++ and name no Swift, and `orion-viewport-tests` compiles a Swift list with **zero** `OrionApp*` files | `OrionApp.swift` |
-| **`Engine.lastFailure` is pinned, the line that displays it is not.** `nofailure` (`9d9158d`) asserts the engine clears the failure on a successful render. Deleting the footer branch that renders "Render failed — …" is green on everything including that verb (#121, M8), and no screenshot scene produces a failed frame, so the byte comparison is blind as well. Half of what #117 reported is closed; the half a photographer actually sees is not | `OrionApp+Chrome.swift` |
+| ~~**`Engine.lastFailure` is pinned, the line that displays it is not.**~~ ✅ **closed 2026-08-02, decision #125.** `--scene render-failed` plants the failure **and suspends the engine** — laying the interface out renders, and a successful render clears the value, which wiped the first attempt and photographed the ordinary hint — so the amber "Render failed — …" line is in a byte-compared frame. Deleting the branch changes the frame; `nofailure` stays green on the same mutation, which is exactly the distinction: it pins the state, this pins the line | `Screenshot.swift` |
+| ⚠ **The three interface checks are run by hand, like every other frame here.** `detail-tail`, `render-failed` and `menu` are `--screenshot` scenes, and **no gate in the repository runs `--screenshot` at all** (#121: the only mode the 40-file sweep drives is `--scenario`). Two of the three exit nonzero by themselves, so they need no reference image — but somebody has to invoke them. Same standing as the 42-frame comparison, which is also nobody's gate | `Screenshot.swift` |
 | **One screenshot scene is not byte-stable, so it cannot be an oracle.** `--scene versions` builds its rows in `Screenshot.snapshots` from `Date()` and the panel prints an absolute clock time, so **two runs of the same binary disagree** — 37/38 scenes byte-identical, `versions.png` differing by 2,380 bytes purely in the timestamp glyphs. Found by self-checking the oracle before trusting it (#121); every other scene is stable across runs and across the split. ⚠ Left alone rather than fixed, because a behaviour change hidden inside a refactor is unreviewable. The fix is a fixed `Date` in the harness, not in the product | `Screenshot.swift` |
 | **The 1000-line rule is broken six ways**, and ⚠ **the largest file in the tree was never in this row**: `apps/tests/tests_effects.cpp` **1,716**, `app/Scenario.swift` **1,615**, `app/DevelopPanels.swift` **1,366**, `apps/tests/tests_brush.cpp` **1,142**, `apps/tests/tests_perspective.cpp` **1,110**, `apps/tests/tests_grade.cpp` **1,029**. ⚠ Swept live across **every** tracked source at the 2026-08-02 merge, not just product code — the row had said *"three files, all in `app/`"* and *"the next file below the survivors is `ShaderParams.h` at 905"*, and both were wrong: four test files sit above it and the biggest of them is bigger than anything the splitting wave was chartered against. Scenario.swift was also listed at 1,596 when it is 1,615. ⚠ **Recount by sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself, and every figure written into it today was stale within hours because agents write it before the others land. Four splits landed 2026-08-02: `DevelopPipeline.cpp` 2,896→451, `Engine.swift` 2,331→795, `bench/main.cpp` 2,289→85, `OrionApp.swift` 1,557→299. Two more are in flight | whole tree |
 | **Nothing asserts that a gesture *arms*** — narrowed 2026-08-01, decision #110.3, and it is now the *first* link only. `repro/gesture-preview-agrees.txt` used to compare an armed run against an unarmed one and demand they agree, which is green when arming does nothing; it now also asserts arming has an effect (the preview surface goes 0.2323/0.2918 → 0.4814/0.2037 over the same eight ticks), so a no-op `beginInteraction` fails. What is still unreachable is a `DragGesture` closure calling it: **attempted** — `NSHostingView` off-screen lays the wheel out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s call is green across 744 / 3624 / 39, measured | `Scenario.swift` |

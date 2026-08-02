@@ -44,8 +44,18 @@ struct PhotoCommands: Commands {
 
             Divider()
 
-            Button(cull?.comparing == true ? "Hide Original  (\\)" : "Compare Original  (\\)") {
+            // ⚠ `Text(verbatim:)`, not a bare string. A `Button`'s title is a
+            // `LocalizedStringKey`, whose escape character is the backslash — so
+            // `"Compare Original  (\\)"` is `Compare Original  (\)` in Swift and
+            // ships as **`Compare Original  ()`**. The one item in the bar that
+            // spells its shortcut only in its title was the one item that lost
+            // it, and it read as a typo rather than a bug. Found by the menu
+            // check on its first run (#125); fixed here.
+            Button {
                 cull?.toggleCompare()
+            } label: {
+                Text(verbatim: cull?.comparing == true
+                     ? "Hide Original  (\\)" : "Compare Original  (\\)")
             }
             .disabled(idle)
 
