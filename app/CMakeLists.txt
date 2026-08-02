@@ -14,6 +14,12 @@ set(SWIFT_SOURCES
     ${CMAKE_SOURCE_DIR}/Sources/OrionUI/DesignTokens.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Light.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Color.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Detail.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Optics.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Mask.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Presets.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Geometry.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Spots.swift
