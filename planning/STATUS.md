@@ -126,6 +126,31 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
+### ⚠ In flight — third wave, four agents, isolated worktrees, 2026-08-01
+
+⚠ **Decision numbers are assigned in the brief this time, not chosen by the
+agent.** Five agents collided on numbers today — four of them all picked #96 —
+and every collision cost a renumber across a dozen files at merge. #108 to #111
+are spoken for.
+
+| Working on | Decision | Scope, and the trap named to it |
+|---|---|---|
+| Brush accumulation, **session two — the accumulator** | #108 | The half behind #102's predicate, and the item that answers *"no brush stroke should take 155 ms"*. ⚠ The budget is part of the decision: ~97 MB a component at 24 Mpx against a graph already at 173 nodes / 7186 MiB, so six components would cost 580 MB and the number decides the design. ⚠ `unchangedPrefix` returning N means the texture is valid *up to* N — an accumulator out of sync with it renders a plausible stroke from stale pixels and nothing looks wrong |
+| Highlight fill, **piece 4** (§3.3 detail transfer) | #109 | Re-costed at **+23 nodes and +30 MiB** because it reuses piece 3's pyramid — told to verify that from the inside rather than trust it. ⚠ #106's maximum-principle argument covers the *fill* and may not cover a detail transfer, which can plausibly move a pixel outside the rim's range; if so it owes #29 a new argument |
+| Three Swift-layer gaps: the memberwise-init trap, gesture arming, the grading wheel's number | #110 | ⚠ The memberwise trap has now silently shipped **two** dead features (film grain, then Balance) and each cost a `repro/` scenario written afterwards. Told to fix the *shape* and prove it — add a field, show the compiler rejects it, quote the error. A fix that merely looks safer is the same trap with better formatting |
+| **Core ML denoise — research and decomposition only, no build** | #111 | ⚠ Told explicitly not to build. Raw-domain vs sRGB-domain is the load-bearing question (most published denoisers are trained on JPEG noise, which a Bayer sensor does not produce), and the license of any **weights** matters as much as the paper's. "Not worth building, here is the arithmetic" is a first-class outcome |
+
+**Deliberately not deployed this wave, and why:**
+
+- ⚠ **Splitting `DevelopPipeline.cpp`** (2,549 lines, the largest standing violation
+  of a hard constraint). Two agents are editing that file this hour; a split
+  landing beside them is a merge nobody can resolve. It goes alone, after this
+  wave, and it is the next thing.
+- **The persisted-key migration** (#89) — **needs the developer's sign-off before
+  anyone starts.** It rewrites sidecars on disk, and a renamed key does not fail
+  to parse: it yields a perfectly valid mask sitting in the middle of the frame.
+- **Windows** — multi-week and needs a machine to test on.
+
 ### ✅ The second wave, all four merged — 2026-08-01
 
 | What it was sent for | What came back |
