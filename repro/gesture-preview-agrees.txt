@@ -20,10 +20,60 @@
 #
 # `expect a == b` compares mean luma AND mean saturation, because one number per
 # frame is too weak a signature to say two renders are the same picture.
+#
+# ⚠ WHAT THIS FILE STILL CANNOT SEE, stated rather than implied. The chain is
+#
+#     a SwiftUI gesture  ->  engine.beginInteraction()  ->  the preview graph
+#
+# and only the second link is reachable from here. `Scenario` drives `Engine`
+# and `CanvasLayout`; it never hosts a `View`, so the seven `beginInteraction`
+# calls in AdjustmentSlider, CurveEditor, ColorWheel, CropOverlay, MaskOverlay
+# (twice) and SpotOverlay are still verified by reading them. Deleting one is
+# green everywhere, and that was measured rather than assumed — decision #110.
+#
+# What changed is that the second link now has teeth: the block immediately
+# below fails if arming does nothing, which the six agreement checks could not.
 
 open samples/_PIC8220.ARW
 
+# ── ⚠ FIRST: that arming does anything at all ─────────────────────────────
+#
+# Every block below compares an armed run against an unarmed one and demands
+# they agree. That is the *safety* property and it is silent about whether
+# arming has any effect: make `beginInteraction` a no-op and all six stay green,
+# because both halves are then the same unarmed run. A file of six checks that a
+# gutted feature passes is worth saying out loud.
+#
+# The preview graph is rendered only while armed — `Engine.pushAndRender` is
+# `if interacting { renderPreview() } else { render() }` — so the preview
+# surface is where arming is observable from here. Unarmed, a drag leaves it
+# where it was; armed, every tick of the drag goes into it.
+open samples/_PIC8220.ARW
+interact on
+drag exposure 0.0 0.0 2
+interact off
+measure 0.25,0.25,0.5,0.5 preview_at_rest preview
+
+# Unarmed: eight ticks of a two-and-a-half-stop drag, and the preview graph must
+# not have seen one of them.
+drag exposure 0.0 2.5 8
+measure 0.25,0.25,0.5,0.5 preview_unarmed preview
+expect preview_unarmed == preview_at_rest
+
+# Armed: the same eight ticks, and now the preview graph is what renders them.
+open samples/_PIC8220.ARW
+interact on
+drag exposure 0.0 2.5 8
+measure 0.25,0.25,0.5,0.5 preview_armed preview
+interact off
+expect preview_armed != preview_unarmed
+
 # ── Crop, the riskiest one ────────────────────────────────────────────────
+# ⚠ Reopened. The block above leaves exposure at 2.5, and the crop block used to
+# inherit the file's opening `open` — an unarmed crop measured on a brightened
+# frame against an armed one measured on a clean reopen is a comparison of two
+# different photographs, and it fails.
+open samples/_PIC8220.ARW
 crop 0.15 0.2 0.6 0.55
 measure 0.25,0.25,0.5,0.5 crop_unarmed
 open samples/_PIC8220.ARW
