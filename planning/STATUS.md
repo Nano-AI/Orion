@@ -399,6 +399,31 @@ genuinely correct and the photographer loses nothing. It may not be silent when
 the result *looks* right and is not — that is the class that produced the black
 canvas, the deleted mattes and the film grain that shipped at zero.
 
+### ⚠ 2026-08-02 — concurrent agents were writing each other's sidecars
+
+A one-off: `repro/grain-survives-a-reopen.txt` failed once in a suite of forty,
+passed alone, and passed forty-for-forty twice more. Not a product bug, and not
+left as a mystery — **a flaky gate nobody owns is worse than a red one**, and
+this project has just spent a decision (#116) on exactly that.
+
+The mechanism. That scenario does `save samples/_PIC8220.xmp` then `reopen`, and
+`tools/worktree-setup.sh` gave every worktree **one symlink to the main repo's
+`samples` directory**. So every agent running the scenario suite was writing the
+same sidecar, the same matte PNGs and the same `orion-snapshots.json` as every
+other agent and as the main checkout. The evidence was in the folder: another
+agent's matte files landing there seconds apart while my suite ran.
+
+**Fixed in the script.** `third_party` stays one directory symlink — a build only
+reads it. `samples` is now a **private directory of symlinks to the raw files**,
+so the 50 MB originals are still shared and never copied, while the sidecars,
+mattes and snapshots each run writes belong to that worktree alone. Both branches
+retested: refuses in the main repo, and a write inside a worktree no longer
+reaches the shared folder.
+
+⚠ **The three agents already running were started under the old script** and
+still share the folder, so one more flake of this shape is possible before they
+land. It is this, not the product.
+
 ### ⚠ In flight — fifth wave, two splits, isolated worktrees, 2026-08-02
 
 The session limit reset, so the 1000-line rule gets its next two files. **Five
