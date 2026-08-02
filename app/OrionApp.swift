@@ -22,10 +22,12 @@
 //   OrionApp+Files.swift      everything that touches a file on disk
 //   DevelopPanels.swift       the seven tool panels themselves
 //
-// ⚠ The cost is the same one `Engine.swift` paid — Swift's `private` is
-// file-scoped, so eleven members that only `Editor` had any business calling
-// are now internal to the app target and rest on convention. They are marked
-// where they widened.
+// ⚠ The cost is the same one `Engine.swift` paid in #117 — Swift's `private` is
+// file-scoped, so seventeen declarations that only this file had any business
+// touching are now internal to the app target and rest on convention: five
+// stored properties (marked below), eleven views and methods, and
+// `PhotoCommands`, which was a private type and is now merely an internal one.
+// There is no way to split a Swift type across files without paying this.
 
 import AppKit
 import SwiftUI
