@@ -12,17 +12,12 @@
  */
 #include "pipe/DevelopPipeline.h"
 
-#include "pipe/LensGeometry.h"
 #include "pipe/ShaderParams.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
-#include <stdexcept>
 #include <string>
 #include <vector>
-
 
 namespace orion::pipe {
 

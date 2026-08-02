@@ -20,8 +20,6 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
-#include <vector>
-
 
 namespace orion::pipe {
 namespace {

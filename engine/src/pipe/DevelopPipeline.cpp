@@ -1,20 +1,10 @@
 #include "pipe/DevelopPipeline.h"
 
-#include "pipe/LensGeometry.h"
-#include "pipe/ShaderParams.h"
-
-#include <algorithm>
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
-#include <stdexcept>
 #include <string>
-#include <vector>
-
 
 namespace orion::pipe {
 namespace {
-
 
 /// LibRaw's flip flag as clockwise quarter turns.
 int quarterTurnsFor(int flip) {
@@ -40,8 +30,6 @@ int quarterTurnsFor(int flip) {
 DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
                                  const raw::BayerImage& image)
     : pipeline_(device, shaderDir), width_(image.width), height_(image.height) {
-
-    using gpu::PixelFormat;
 
     buildCaptureNodes();
     buildLocalNodes();
@@ -275,7 +263,6 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     exifQuarters_ = quarterTurnsFor(image.flip);
     filters_      = image.filters;
 
-
     pushStaticCaptureParams(image);
     pushStaticLocalParams();
     pushStaticMaskParams();
@@ -375,16 +362,19 @@ DevelopPipeline::contextFor(const Adjustments& adj) {
     for (int i = 0; !visibilityMoved && i < kMaxMaskComponents; ++i) {
         visibilityMoved = adj.maskComponents[std::size_t(i)].hidden
                        != lastAdj_.maskComponents[std::size_t(i)].hidden;
-    }    ctx.visibilityMoved = visibilityMoved;
+    }
+    ctx.visibilityMoved = visibilityMoved;
 
     // The guided filter is six nodes and only feeds the local highlight and
     // shadow masks. With both at zero it is pure cost, and white balance —
     // which rewrites the head of the graph and reruns everything — pays it on
     // every tick. Skipping it takes a temperature drag from sixteen nodes to
     // ten.
-    const bool needsGuide = adj.highlights != 0.0f || adj.shadows != 0.0f;    ctx.needsGuide = needsGuide;
+    const bool needsGuide = adj.highlights != 0.0f || adj.shadows != 0.0f;
+    ctx.needsGuide = needsGuide;
 
-    const bool refining = adj.maskCount > 0 && adj.maskRefine > 0.0f;    ctx.refining = refining;
+    const bool refining = adj.maskCount > 0 && adj.maskRefine > 0.0f;
+    ctx.refining = refining;
 
     return ctx;
 }
