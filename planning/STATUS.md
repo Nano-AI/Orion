@@ -126,16 +126,25 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
-### ⚠ In flight — two agents left of four, isolated worktrees, 2026-08-01 (second wave)
+### ✅ The second wave, all four merged — 2026-08-01
 
-| Working on | Scope, and the trap named to it |
+| What it was sent for | What came back |
 |---|---|
-| Grading **Balance** ✅ **landed, merged 2026-08-01, decision #104** (session `2026-08-01m` below) + perspective's **mask-extent** term, still running | Both small and both already specified — #101 named Balance as split toning's one real remainder; #100 measured the extent term's leak at 2 of 60 cells past 0.28 frame-width |
-| Incremental brush accumulation, **session one only** ✅ **landed, merged 2026-08-01, decision #102** (session `2026-08-01l` below) | The predicate alone, no accumulator. ⚠ The cheap version ("the count grew") must fail on **undo three dabs, paint three different ones** — same count, different prefix, and it renders a plausible stroke from stale pixels |
-| Highlight fill, **pieces 2–3** | ⚠ The memory number *is* the decision: +25 nodes and ~516 MB on a graph at 149 / 6971 MiB. Told to establish whether the pyramid can subsample first — the guided filter and fusion both already do. Wiring it reopens **#29** |
+| Grading **Balance** | ✅ #104. Rigid shift of the three zone centres. Bit-identity at centre **measured against a rebuilt pre-change shader**, not asserted. Seven mutations red; one of its own checks could not fail and it rewrote it |
+| Perspective's **mask-extent** term | ✅ #107. ⚠ **The brief's premise was wrong** — #100's leak table does not reproduce, and the bug it did find (aspect, 0.1461 luma, a mask staying round over a picture squeezed 2:1) is an order worse than the one it was sent for |
+| Incremental brush accumulation, **session one only** | ✅ #102. The predicate alone, no accumulator. Fails correctly on **undo three, paint three different**; six mutations red; no rendered pixel moved, compared byte for byte rather than argued |
+| Highlight fill, **pieces 2–3** | ✅ #105, #106. ⚠ It **measured** the subsampling question before spending the estimate: a quarter costs 0.8 points on a 6.1-point approximation, so 1/4 it is. ROADMAP's memory number was wrong by 16×. Real cost 149 → 173 nodes, 6971 → 7186 MiB, off by default |
 
-⚠ Two of these are instructed to stop at a costed decomposition rather than
-half-build. That is the recorded preference, three times over.
+⚠ **Two of the four found a check of their own that could not fail**, and said so
+unprompted — Balance's zone ordering (normalized weights peak at the image ends
+whatever the centres do) and the fill's disable test (upstream of exposure, so a
+drag never re-runs it and the probe passed while the chain was wired always-on).
+That is the habit worth keeping, and it is worth more than any of the four
+features.
+
+⚠ **Commit-early worked.** The first attempt at these four was killed by an API
+session limit with nothing committed; relaunched with that as the loudest line in
+each brief, all four landed 5, 5, 7 and 5 commits deep.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
