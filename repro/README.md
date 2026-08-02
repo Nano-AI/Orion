@@ -8,6 +8,13 @@ Exits nonzero when an `expect` fails, so a report becomes a file that fails unti
 the bug is fixed and then stays as the regression test. The grammar is documented
 at the top of `app/Scenario.swift`.
 
+⚠️ **And nonzero when the run asserted nothing.** The floor is one check, and a
+file that means to assert less says `minchecks <n>` in itself — decision #124.
+Two of the forty do: `eyedropper-latency.txt` and `slider-drag-cost.txt` are
+instruments rather than tests. Every other file is guarded without having to say
+anything, which is the point: a new scenario that forgets to check is red on the
+day it is written, not a year later.
+
 A scenario drives `Engine`, `CanvasLayout` and `TargetedAdjust` — the same objects
 the interface drives — and never reaches around them into the pipeline. A runner
 that poked the pipeline directly would exercise code already known to work and
@@ -23,8 +30,8 @@ miss the view-model layer, which is where these failures are.
 | `rotate-then-compare.txt` | Passes — same, and it took saturation as well as luma to make it honest |
 | `geometry-while-comparing.txt` | Passes — fixed: the held original is re-taken when the geometry moves |
 | `mask-alignment.txt` | Passes — fixed: a radial mask's semi-axes were swapped on every odd quarter turn |
-| `eyedropper-latency.txt` | A measurement, not an assertion: 2.4 µs a read |
-| `slider-drag-cost.txt` | A measurement, and an open story: 9.4 / 65.7 / 116.4 ms a tick |
+| `eyedropper-latency.txt` | A measurement, not an assertion: 2.4 µs a read. ⚠ Declares `minchecks 0` — the only other file that does is the one below, and the declaration is what separates an instrument from a scenario that quietly stopped checking |
+| `slider-drag-cost.txt` | A measurement, and an open story: 9.4 / 65.7 / 116.4 ms a tick. ⚠ Declares `minchecks 0`, as above |
 | `eyedropper-under-a-crop.txt` | Passes — fixed: the scene sample undid the quarter turn and not the crop |
 | `preview-carries-the-mask.txt` | Passes — fixed: strokes, mattes and LUTs never reached the preview graph |
 | `matte-does-not-follow-the-photo.txt` | Passes — fixed: a reused graph kept the previous photo's matte |
@@ -80,6 +87,18 @@ assignments could be deleted on its own with that file still green, because the
 remaining four still move the frame. Measured, 5 for 5. When a control writes
 more than one thing, assert the things, not the outcome: that is what the
 `control` verb is for.
+
+⚠️ **A run that measured nothing used to be a pass.** `Scenario` exited 0 on
+`orion: 0 checks, 0 failures`, so the strongest mutation anyone has run against
+this folder — one verb family claiming every verb, three quarters of the
+vocabulary silently doing nothing — left **39 of 40 files exiting 0**, 38 of them
+having asserted not one thing. Only the byte comparison of rendered frames and a
+diff of the runner's whole output saw it; the exit codes, which are what the gate
+reads, saw nothing. The floor in #124 takes that to 3 of 40. ⚠ The residual three
+are worth knowing: two are the declared instruments, and `snapshot-keeps-its-matte`
+survives on three real checks that the mutated family happens to implement itself.
+**A floor says a file measured something. It cannot say it measured the right
+thing** — that is still what a two-sided check and a byte comparison are for.
 
 ⚠️ **A GPU test proves the mathematics; only a scenario proves it is reachable.**
 `apps/tests` dispatches each kernel directly with parameters it sets itself, so
