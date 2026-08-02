@@ -49,6 +49,10 @@ enum Screenshot {
         /// black point, and nothing in the interface stops them crossing.
         var whites: Float?
         var blacks: Float?
+        /// True once `--size` has been given. A scene may ask for a window of
+        /// its own (see `minimumHeight`), and it must not overrule a size the
+        /// caller stated out loud.
+        var sizeExplicit = false
     }
 
     /// Parses the command line. Returns nil when this is an ordinary launch.
@@ -88,7 +92,10 @@ enum Screenshot {
             case "--size":
                 if let next {
                     let parts = next.split(separator: "x").compactMap { Double($0) }
-                    if parts.count == 2 { o.size = CGSize(width: parts[0], height: parts[1]) }
+                    if parts.count == 2 {
+                        o.size = CGSize(width: parts[0], height: parts[1])
+                        o.sizeExplicit = true
+                    }
                     i += 1
                 }
             default: break
@@ -99,7 +106,12 @@ enum Screenshot {
     }
 
     /// Runs the capture and exits. Never returns.
-    static func run(_ o: Options) -> Never {
+    static func run(_ options: Options) -> Never {
+        var o = options
+        if !o.sizeExplicit, let h = minimumHeight(o.scene) {
+            o.size.height = max(o.size.height, h)
+        }
+
         // A background accessory app: no Dock icon, no menu bar, no window.
         NSApplication.shared.setActivationPolicy(.accessory)
 
@@ -208,13 +220,30 @@ enum Screenshot {
             if ready { break }
         }
 
+        // ⚠ Set last, after every render this run will do, and with the engine
+        // suspended — **both halves were needed, and the first capture proved
+        // it.** `render()` clears `lastFailure` on success, and laying the
+        // interface out renders: the canvas's `onAppear` assigns
+        // `engine.cropPreview`, whose `didSet` is `pushAndRender()`. So the
+        // first version of this scene planted a failure, SwiftUI wiped it during
+        // layout, and the frame came back showing the ordinary hint and
+        // `0.0 ms` — a photograph of the bug this line exists to prevent,
+        // captioned as a photograph of the fix. Suspending is what a failed
+        // engine looks like from the panel's side: no successful frame arrives
+        // to take the warning down.
+        if o.scene == "render-failed" {
+            engine.suspended = true
+            engine.lastFailure = failureText
+        }
+
         let view = Editor(engine: engine, startTab: tab(for: o.scene),
                           startLibrary: library,
                           startSnapshots: snapshots(for: o.scene, photo: o.photo))
             .frame(width: o.size.width, height: o.size.height)
             .preferredColorScheme(.dark)
 
-        guard let png = render(view, size: o.size) else {
+        guard let png = render(view, size: o.size,
+                               scrolledToBottom: scrolls(o.scene)) else {
             fail("the view produced no image")
         }
 
@@ -229,11 +258,51 @@ enum Screenshot {
 
     // MARK: Scenes
 
+    /// The failure a photographer is shown when the graph refuses a frame.
+    ///
+    /// Worded like the engine's own `errorText`, and held in one place so the
+    /// string the scene plants and the string a reviewer looks for are the same
+    /// string.
+    static let failureText = "the compute pipeline could not be built"
+
+    /// Scenes that capture the panel column scrolled to its end rather than at
+    /// rest.
+    ///
+    /// ⚠ **This exists because the Detail panel is taller than the window and
+    /// the harness only ever photographed the top of it.** Deleting Grain,
+    /// Vignette, Dehaze, Clarity and Sharpening — 60 lines of shipped controls,
+    /// every one of them below the fold at 1680×1050 — left every check in the
+    /// repository green (decision #122, mutation M9), while deleting Noise
+    /// Reduction eleven lines higher reddened six frames. The panel was covered
+    /// exactly as far as it was tall.
+    private static func scrolls(_ scene: String) -> Bool {
+        scene == "detail-tail"
+    }
+
+    /// The window a scene needs when the default one cannot hold what the scene
+    /// exists to show.
+    ///
+    /// ⚠ **Measured, not guessed, and the measurement is why the number is
+    /// here rather than 1050.** The Detail panel's content is **1,701 points**
+    /// and the default window gives its scroll view **681** — so the scene at
+    /// rest accounts for 0–681 and a frame scrolled to the end accounts for
+    /// 1,020–1,701, and *Grain sits in the 339-point band between them*, seen
+    /// by neither. Confirmed by looking at the first capture, which reached
+    /// Vignette and stopped: a scroll that lands past the section it was
+    /// written for is the same hole one flick lower down. At 1,500 the window
+    /// holds 1,131, the end of the panel is 570 points down, and the two frames
+    /// overlap by 111 points with nothing between them. A taller window is a
+    /// state the interface is really in — it is a resizable window on a taller
+    /// display — and the scroll is still real and still asserted.
+    private static func minimumHeight(_ scene: String) -> CGFloat? {
+        scene == "detail-tail" ? 1500 : nil
+    }
+
     private static func tab(for scene: String) -> ToolTab {
         switch scene {
         case "color":
             return .color
-        case "detail", "noisy", "denoise-off", "denoise-luma",
+        case "detail", "detail-tail", "noisy", "denoise-off", "denoise-luma",
              "denoise-both", "spots":
             return .detail
         case "optics":
@@ -317,6 +386,26 @@ enum Screenshot {
             engine.denoiseColor = 2.4
             engine.sharpenAmount = 0.8
             engine.sharpenMasking = 0.4
+        case "detail-tail":
+            // Every control the Detail panel keeps below the fold, each at a
+            // value it does not hold by default, so the section is legible in
+            // the frame by its readouts as well as by its title. Captured
+            // scrolled — see `scrolls(_:)`.
+            engine.exposureEv = 2.6
+            engine.grainAmount = 0.028
+            engine.grainSize = 3.4
+            engine.vignetteAmount = -1.25
+            engine.vignetteFieldAngle = 34
+            engine.dehaze = 0.45
+            engine.clarity = 0.55
+            engine.sharpenAmount = 1.2
+            engine.sharpenRadius = 1.4
+            engine.sharpenMasking = 0.35
+        case "render-failed":
+            // The status line's failure branch. The value itself is planted
+            // after the last render, in `run` — a scene applied here is applied
+            // before one, and a successful render clears it.
+            engine.exposureEv = 2.6
         case "optics":
             // The tab that exists because the lens corrections could not be
             // found inside Detail. Screenshotted so the claim that they are now
@@ -847,7 +936,50 @@ enum Screenshot {
 
     // MARK: Rendering
 
-    private static func render<V: View>(_ view: V, size: CGSize) -> Data? {
+    /// Scrolls the interface's tallest scrolling region to its end, and says how
+    /// far it went.
+    ///
+    /// The panel column is a plain SwiftUI `ScrollView`, which AppKit backs with
+    /// an `NSScrollView` — so the scroll is the real one, performed on the real
+    /// view, and what the capture shows afterwards is what a photographer sees
+    /// after a flick of the wheel. Chosen by overflow rather than by name: the
+    /// filmstrip is the other scroll view in the hierarchy and it scrolls
+    /// sideways, so its document is exactly as tall as its clip and it can never
+    /// win.
+    ///
+    /// ⚠ Returns nil when the hierarchy holds no scroll view at all, and 0 when
+    /// nothing overflows. **Both are refused by the caller**, because a scene
+    /// whose whole purpose is to photograph what is past the fold and which
+    /// finds no fold has stopped covering anything — which is the failure this
+    /// scene was written against, and it must not be able to reappear as a pass.
+    /// The height of the scrolling region `scrollToEnd` last moved, so the
+    /// diagnostic can say what fraction of the panel a frame accounts for.
+    private static var panelClip: CGFloat = 0
+
+    private static func scrollToEnd(_ root: NSView) -> CGFloat? {
+        var best: (scroll: NSScrollView, overflow: CGFloat)?
+        func walk(_ v: NSView) {
+            if let s = v as? NSScrollView, let doc = s.documentView {
+                let overflow = doc.frame.height - s.contentView.bounds.height
+                if best == nil || overflow > best!.overflow { best = (s, overflow) }
+            }
+            for sub in v.subviews { walk(sub) }
+        }
+        walk(root)
+
+        guard let found = best else { return nil }
+        panelClip = found.scroll.contentView.bounds.height
+        guard found.overflow > 1, let doc = found.scroll.documentView else { return 0 }
+        // A flipped document counts down from the top, so its end is the
+        // overflow; an unflipped one counts up from the bottom, so its end is 0.
+        found.scroll.contentView.scroll(to: NSPoint(x: 0,
+                                                    y: doc.isFlipped ? found.overflow : 0))
+        found.scroll.reflectScrolledClipView(found.scroll.contentView)
+        return found.overflow
+    }
+
+    private static func render<V: View>(_ view: V, size: CGSize,
+                                        scrolledToBottom: Bool = false) -> Data? {
         let hosting = NSHostingView(rootView: view)
         hosting.frame = CGRect(origin: .zero, size: size)
 
@@ -868,6 +1000,29 @@ enum Screenshot {
         }
         hosting.layoutSubtreeIfNeeded()
         hosting.displayIfNeeded()
+
+        if scrolledToBottom {
+            guard let overflow = scrollToEnd(hosting) else {
+                fail("no scrolling region in the interface — this scene "
+                     + "photographs what is past the fold and there is no fold")
+            }
+            guard overflow > 1 else {
+                fail("nothing overflows the panel column, so a scene that "
+                     + "captures it scrolled captures the same thing as the "
+                     + "scene that does not")
+            }
+            FileHandle.standardError.write(Data(
+                String(format: "orion: scrolled the panel column %.1f points "
+                       + "(%.1f of content past a %.1f-point window)\n",
+                       overflow, overflow + panelClip, panelClip).utf8))
+            // The scroll is a layout change like any other: settle again before
+            // the capture, or the frame is the interface mid-move.
+            for _ in 0..<6 {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            }
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+        }
 
         guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
             return nil
