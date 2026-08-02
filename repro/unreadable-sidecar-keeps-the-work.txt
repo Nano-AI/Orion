@@ -1,0 +1,82 @@
+# A sidecar that will not parse must cost nothing — decision #115.
+#
+# `Engine.restore` returned silently on a develop blob that would not decode.
+# Two things downstream read "the sidecar carried a blob" and took it to mean
+# "and it is now in the engine":
+#
+#   * `MatteStore.sweepAfterLoad` was handed `engine.maskComponents`, which
+#     after a failed decode is the DEFAULT empty list. Every matte PNG beside
+#     the photograph was then collected. That is not recoverable — the model
+#     has to be run again, and Vision's answer moves between OS releases.
+#   * `Autosave.begin` armed with the default state as its baseline, so the
+#     first slider tick wrote a blank develop blob over a sidecar that had
+#     only failed to *parse*.
+#
+# ⚠ **This whole file was green before the fix**, on a build that deleted the
+# matte — because there was no way to ask whether the restore had worked. That
+# is the point of `reopenrefused`: it asserts the answer exists, is `false`,
+# and reaches `lastFailure`, and then that the file is still on disk. Reverting
+# `restore` to `-> Void` will not compile; reverting `sweepAfterLoad` to take
+# `engine.maskComponents` unconditionally compiles and fails here.
+#
+# The matte is a ramp for the reason `matte-survives-a-reopen.txt` gives: a
+# binary matte survives a wrong colour space, a wrong bit depth and a wrong
+# byte order, and only the mid-values can tell.
+
+open samples/_PIC8220.ARW
+set exposure 2.6
+
+measure 0.12,0.45,0.08,0.08 leftBare
+measure 0.46,0.45,0.08,0.08 midBare
+measure 0.80,0.45,0.08,0.08 rightBare
+
+print a saved ramp matte grades three bands by increasing amounts
+matte ramp
+set localExposure 2.5
+measure 0.12,0.45,0.08,0.08 leftBefore
+measure 0.46,0.45,0.08,0.08 midBefore
+measure 0.80,0.45,0.08,0.08 rightBefore
+
+expect leftBefore != leftBare
+expect midBefore != midBare
+expect rightBefore != rightBare
+
+save samples/_PIC8220.ARW
+
+# The develop blob becomes valid base64 that is not a `DevelopState` — a
+# sidecar written by a newer build, or one a sync half-wrote.
+print the sidecar is corrupted, and the reopen refuses instead of collecting
+corrupt samples/_PIC8220.ARW
+
+# ⚠ The step itself carries three assertions and any of them failing exits 1:
+# the restore returned false, it published a reason, and every matte the
+# previous state named is still on disk.
+reopenrefused
+
+# And the photograph is still openable and still renders — an unreadable
+# sidecar must not cost the picture as well as the edits.
+measure 0.12,0.45,0.08,0.08 leftAfter
+expect leftAfter != 0
+
+# ⚠ `repair`, not `save`. The refused reopen called `engine.open`, which reset
+# to the camera's own settings — so saving from the engine here would write an
+# empty component list, which is the exact mistake this file is about, made by
+# the test for it. `corrupt` stashed the good blob and this puts it back.
+print the matte is intact, so a repaired sidecar restores it exactly
+repair samples/_PIC8220.ARW
+reopen
+set localExposure 2.5
+measure 0.12,0.45,0.08,0.08 leftFinal
+measure 0.46,0.45,0.08,0.08 midFinal
+measure 0.80,0.45,0.08,0.08 rightFinal
+
+expect leftFinal == leftBefore
+expect midFinal == midBefore
+expect rightFinal == rightBefore
+
+# ⚠ Against the bare photograph too. "The bands still differ from each other"
+# is green on a photograph with no mask at all, because the picture varies
+# across the frame — the mistake `matte-survives-a-reopen.txt` records making.
+expect leftFinal != leftBare
+expect midFinal != midBare
+expect rightFinal != rightBare

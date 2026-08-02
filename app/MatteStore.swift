@@ -179,17 +179,51 @@ enum MatteStore {
     /// +1.2 KB per load at either folder size, which is the open loop's own
     /// number. `testSweepDoesNotHoardTheDirectory` fails if this is removed.
     static func sweep(photo: URL, keeping ids: Set<String>) {
-        let dir = photo.deletingLastPathComponent()
+        // ⚠ **Resolved, and this is a bug fix rather than tidying.**
+        // `deletingLastPathComponent()` hands back a URL with `hasDirectoryPath`
+        // set, and `contentsOfDirectory(at:)` on a directory URL that is itself
+        // a **symlink to a directory** fails outright — POSIX 20, `ENOTDIR`,
+        // "The file “samples” couldn't be opened". The `atPath:` spelling of the
+        // same call succeeds on the same path, so this is the URL API declining
+        // to follow the final link rather than anything about permissions.
+        //
+        // The consequence was silent and unbounded: a photographer whose folder
+        // is reached through a symlink — an aliased card, a NAS mount, a
+        // worktree's `samples` — swept **nothing, ever**, and every regenerated
+        // matte stayed on disk forever. That is decision #87's leak with a
+        // different trigger, and #87 is the reason this function exists.
+        //
+        // The URL API is kept rather than swapped for `atPath:` because
+        // `testSweepDoesNotHoardTheDirectory` pins this call's *memory*
+        // behaviour (see the autorelease note above), and changing the API
+        // would quietly retire that measurement.
+        let dir = photo.deletingLastPathComponent().resolvingSymlinksInPath()
         let prefix = "\(photo.deletingPathExtension().lastPathComponent).orion-matte-"
         autoreleasepool {
-            guard let entries = try? FileManager.default.contentsOfDirectory(
-                    at: dir, includingPropertiesForKeys: nil) else { return }
+            let entries: [URL]
+            do {
+                entries = try FileManager.default.contentsOfDirectory(
+                    at: dir, includingPropertiesForKeys: nil)
+            } catch {
+                // ⚠ Said out loud. A `try?` here is how the above went unnoticed
+                // for as long as it did: an enumeration that cannot run looks
+                // exactly like a folder with nothing to collect.
+                FileHandle.standardError.write(Data(
+                    ("orion: could not sweep mattes beside \(dir.path) — "
+                     + "\(error.localizedDescription)\n").utf8))
+                return
+            }
             for entry in entries {
                 let name = entry.lastPathComponent
                 guard name.hasPrefix(prefix), name.hasSuffix(".png") else { continue }
                 let id = String(name.dropFirst(prefix.count).dropLast(4))
                 guard !ids.contains(id) else { continue }
-                try? FileManager.default.removeItem(at: entry)
+                do { try FileManager.default.removeItem(at: entry) }
+                catch {
+                    FileHandle.standardError.write(Data(
+                        ("orion: could not collect \(name) — "
+                         + "\(error.localizedDescription)\n").utf8))
+                }
             }
         }
     }
@@ -235,6 +269,49 @@ enum MatteStore {
     /// means **collect nothing at all**, whatever the sidecar says — an empty
     /// set there would take every version's mattes on a file Orion only failed
     /// to parse.
+    /// Which of the three sidecar states the loader is in.
+    ///
+    /// ⚠ **This exists because the third row was derived by hand at two call
+    /// sites and both got it wrong the same way.** They branched on *"the
+    /// sidecar carried a develop blob"*, which is not the same question as
+    /// *"and it decoded"* — `Engine.restore` used to return `Void`, so there was
+    /// no way to ask the second one. A blob that failed to decode therefore
+    /// landed in the `parsed` branch carrying the engine's **default** component
+    /// list, and the sweep deleted every matte beside the photograph.
+    ///
+    /// | blob | decoded | state | what may be collected |
+    /// |---|---|---|---|
+    /// | absent | — | `.noSidecar` | what no saved version names |
+    /// | present | yes | `.parsed` | what neither it nor a version names |
+    /// | present | **no** | `.unreadable` | **nothing** |
+    enum SidecarState: Equatable {
+        case noSidecar
+        case parsed
+        case unreadable
+
+        static func of(blob: Data?, restored: Bool) -> SidecarState {
+            guard blob != nil else { return .noSidecar }
+            return restored ? .parsed : .unreadable
+        }
+    }
+
+    /// The sweep, taking the two facts a loader actually has rather than the
+    /// conclusion it has to draw from them. Both loaders call this one.
+    static func sweepAfterLoad(photo: URL, blob: Data?, restored: Bool,
+                               components: @autoclosure () -> [MaskComponentState]) {
+        switch SidecarState.of(blob: blob, restored: restored) {
+        case .noSidecar:   sweepAfterLoad(photo: photo, parsed: nil)
+        case .parsed:      sweepAfterLoad(photo: photo, parsed: components())
+        // ⚠ Spelled out rather than routed through `parsed: nil`. That path
+        // reaches the same answer *via a second `fileExists` check* — it
+        // separates absent from unreadable by looking at the disk again — and
+        // relying on it here would make this branch correct by coincidence.
+        // `components()` is deliberately not evaluated: after a failed decode
+        // it is the default list, which is the value that did the damage.
+        case .unreadable:  break
+        }
+    }
+
     static func sweepAfterLoad(photo: URL, parsed: [MaskComponentState]?) {
         guard let pinned = SnapshotStore.pinnedMattes(photo: photo) else { return }
         if let parsed {

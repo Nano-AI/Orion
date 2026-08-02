@@ -272,11 +272,34 @@ final class PresetStore {
         return rows.compactMap(\.value)
     }
 
-    private func save() {
-        guard let url else { return }
+    /// Why the last save did not land, or `nil` if it did.
+    ///
+    /// ⚠ A preset save that fails is invisible until the next launch, which is
+    /// the worst possible moment to find out: the row is in the list, it
+    /// applies, it survives a quit-and-relaunch *in the same session's memory*,
+    /// and it is simply gone the next morning. The write used to be
+    /// `try? data.write(...)` and `add` returned `true` regardless.
+    private(set) var lastFailure: String?
+
+    @discardableResult
+    private func save() -> Bool {
+        guard let url else {
+            lastFailure = "Orion has nowhere to keep presets on this machine."
+            return false
+        }
         let user = presets.filter { !$0.builtIn }
-        guard let data = try? JSONEncoder().encode(user) else { return }
-        try? data.write(to: url, options: .atomic)
+        do {
+            let data = try JSONEncoder().encode(user)
+            try data.write(to: url, options: .atomic)
+            lastFailure = nil
+            return true
+        } catch {
+            let why = "presets could not be saved — \(error.localizedDescription)"
+            lastFailure = "That preset could not be saved. "
+                        + error.localizedDescription
+            FileHandle.standardError.write(Data("orion: \(why)\n".utf8))
+            return false
+        }
     }
 
     /// Adds a preset, replacing a user one of the same name.
@@ -296,14 +319,18 @@ final class PresetStore {
         } else {
             presets.insert(p, at: presets.firstIndex(where: { $0.builtIn }) ?? presets.count)
         }
-        save()
-        return true
+        // ⚠ The answer is the *save*, not the validation. Returning `true` on a
+        // write that never happened is what let a saved look vanish overnight.
+        return save()
     }
 
-    func remove(_ preset: Preset) {
-        guard !preset.builtIn else { return }
+    @discardableResult
+    func remove(_ preset: Preset) -> Bool {
+        guard !preset.builtIn else { return false }
         presets.removeAll { $0.id == preset.id }
-        save()
+        // A delete that does not reach the file comes back on the next launch,
+        // which is the same lie in the other direction.
+        return save()
     }
 
     // MARK: The built-ins

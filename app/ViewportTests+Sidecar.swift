@@ -581,6 +581,113 @@ extension ViewportTests {
              "the last state noted is the one written")
     }
 
+    /// A sidecar write that does not land must not be treated as one that did.
+    ///
+    /// ⚠ **This is the failure the black-canvas bug had in a second place.**
+    /// `Sidecar.write` caught its error into `NSLog` and returned `Void`, so
+    /// `Autosave.flush` dropped the job and moved its baseline forward whatever
+    /// happened. A read-only card, a full disk or a folder the sandbox had lost
+    /// meant: `isDirty` false, no retry, no message, and the session's edits
+    /// gone at quit — with the only trace in a log nobody has open.
+    ///
+    /// The refusing writer is the whole point. A test that only exercised the
+    /// happy path is green on code that cannot report a failure at all, which is
+    /// the shape this session was sent to find.
+    static func testAFailedAutosaveIsNotForgotten() {
+        let a = URL(fileURLWithPath: "/tmp/orion-autosave-refused-a.ARW")
+        let b = URL(fileURLWithPath: "/tmp/orion-autosave-refused-b.ARW")
+
+        func edited(_ ev: Float) -> DevelopState {
+            var s = DevelopState()
+            s.exposureEv = ev
+            return s
+        }
+
+        // A disk that refuses everything, then relents.
+        var accepting = false
+        var landed: [(URL, Float)] = []
+        var fire: (() -> Void)?
+        let save = Autosave(deferral: { fire = $0 },
+                            write: { url, state in
+                                guard accepting else { return false }
+                                landed.append((url, state.exposureEv))
+                                return true
+                            })
+
+        save.begin(url: a, saved: DevelopState())
+        save.note(edited(1.5))
+        fire?()
+
+        report(landed.isEmpty, "a refused write puts nothing on disk")
+        report(save.isDirty, "the work is still owed after a refused write",
+               "isDirty \(save.isDirty)")
+        report(save.lastFailure != nil, "and the photographer is told",
+               save.lastFailure ?? "nil")
+        report(save.lastFailure?.contains("orion-autosave-refused-a.ARW") == true,
+               "the message names the photograph", save.lastFailure ?? "nil")
+
+        // ⚠ The baseline must not have moved. If it had, the retry below would
+        // find `state == saved` and write nothing, which is the silent loss
+        // wearing a retry's clothes.
+        save.note(edited(1.5))
+        report(save.isDirty, "the baseline did not move under a refused write")
+
+        // The card comes back. Nothing was asked for and the work lands.
+        accepting = true
+        save.flush()
+        report(landed.count == 1 && landed.first?.0 == a
+               && landed.first?.1 == 1.5,
+               "the retry writes the edit that was refused",
+               "\(landed.map { ($0.0.lastPathComponent, $0.1) })")
+        report(!save.isDirty, "and it is not owed any more")
+        report(save.lastFailure == nil, "and the complaint is withdrawn",
+               save.lastFailure ?? "nil")
+
+        // A refusal for a photograph already left is still that photograph's.
+        accepting = false
+        save.note(edited(4.0))
+        save.begin(url: b, saved: DevelopState())     // begin() flushes first
+        report(save.isDirty, "a refused write survives the photo switch")
+        accepting = true
+        save.flush()
+        report(landed.last?.0 == a && landed.last?.1 == 4.0,
+               "and lands on the photograph it was queued for",
+               "\(landed.last.map { ($0.0.lastPathComponent, $0.1) } as Any)")
+
+        // ⚠ And the clean path still says nothing. A warning on every save is
+        // its own defect, and a `lastFailure` that never clears is that warning.
+        save.note(edited(-1.0))
+        save.flush()
+        report(save.lastFailure == nil, "a working disk is never complained about")
+    }
+
+    /// `Sidecar.write` reports rather than only logging.
+    ///
+    /// A directory that does not exist is the cheapest reachable failure, and it
+    /// is the same class as the read-only card: `FileManager` refuses, the
+    /// `catch` fires, and the answer has to come back.
+    static func testSidecarWriteReportsRefusal() {
+        let nowhere = URL(fileURLWithPath:
+            "/tmp/orion-no-such-folder-\(UUID().uuidString)/photo.ARW")
+        var s = Sidecar()
+        s.rating = 3
+        report(s.write(for: nowhere) == false,
+               "a sidecar that cannot be written says so")
+        report(Sidecar.merge(into: nowhere) { $0.rating = 3 } == false,
+               "and merge carries that answer out")
+
+        // The other half: a write that works still returns true, or the check
+        // above passes on a function that returns false unconditionally.
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orion-sidecar-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir,
+                                                 withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let real = dir.appendingPathComponent("photo.ARW")
+        report(s.write(for: real) == true, "a sidecar that can be written does")
+        report(Sidecar.read(for: real)?.rating == 3, "and holds what it was given")
+    }
+
     /// Escaping compounds unless reading undoes it.
     ///
     /// `Library.persist` reads, modifies and rewrites the whole sidecar on

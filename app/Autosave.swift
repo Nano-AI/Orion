@@ -28,6 +28,12 @@ import Foundation
 /// No SwiftUI and no AppKit here on purpose — the lifecycle notifications are
 /// the shell's job (`Editor`), which keeps this compilable into the viewport
 /// test binary where the invariant is actually checked.
+/// ⚠ `@Observable` only so `lastFailure` reaches the status line. Nothing here
+/// imports SwiftUI and nothing may — this file compiles into
+/// `orion-viewport-tests`, which is what lets the retry invariant below be
+/// pinned without a window. `Observation` is a standard-library module, not a
+/// SwiftUI one, so the seam holds.
+@Observable
 final class Autosave {
 
     /// How a queued write gets deferred. The app hands in a real timer; the
@@ -36,7 +42,10 @@ final class Autosave {
     typealias Deferral = (@escaping () -> Void) -> Void
 
     private let deferral: Deferral
-    private let write: (URL, DevelopState) -> Void
+
+    /// ⚠ **Returns whether the write landed.** It used to return `Void`, which
+    /// made every failure of `Sidecar.write` invisible from here — see `flush`.
+    private let write: (URL, DevelopState) -> Bool
 
     /// The photo being edited, and what its sidecar is already known to hold.
     private var target: URL?
@@ -47,10 +56,15 @@ final class Autosave {
     private var scheduled = false
 
     init(deferral: @escaping Deferral = Autosave.afterSettling,
-         write: @escaping (URL, DevelopState) -> Void = Autosave.toSidecar) {
+         write: @escaping (URL, DevelopState) -> Bool = Autosave.toSidecar) {
         self.deferral = deferral
         self.write = write
     }
+
+    /// Why the last write did not land, or `nil` if it did. The footer shows
+    /// it: an autosave that cannot write is the one failure a photographer must
+    /// be told about *before* they quit, because quitting is when it costs.
+    private(set) var lastFailure: String?
 
     /// 900 ms. Long enough that a slider drag becomes one write rather than
     /// sixty; short enough that a crash costs the last gesture and not the
@@ -61,9 +75,13 @@ final class Autosave {
         Timer.scheduledTimer(withTimeInterval: 0.9, repeats: false) { _ in body() }
     }
 
-    static func toSidecar(_ url: URL, _ state: DevelopState) {
-        guard let encoded = try? JSONEncoder().encode(state) else { return }
-        Sidecar.merge(into: url) { $0.develop = encoded }
+    /// ⚠ The encode is reported too. It cannot fail for a `DevelopState` of
+    /// floats today, but "it cannot fail today" is how the render path came to
+    /// return silently — and a field added later that is not `Encodable`-clean
+    /// would turn every autosave into a no-op with nothing to see.
+    static func toSidecar(_ url: URL, _ state: DevelopState) -> Bool {
+        guard let encoded = try? JSONEncoder().encode(state) else { return false }
+        return Sidecar.merge(into: url) { $0.develop = encoded }
     }
 
     // MARK: The photo in hand
@@ -110,8 +128,21 @@ final class Autosave {
         scheduled = false
 
         guard let job = pending else { return }
+
+        // ⚠ **The job is only dropped once it has landed, and the baseline only
+        // moves then.** Both used to happen unconditionally: a sidecar that
+        // would not write left `Autosave` believing the photograph was saved,
+        // so nothing retried, `isDirty` read false, and the whole session's work
+        // was gone at quit with the only trace in `NSLog`. Keeping the job means
+        // the next settle, the next photo switch and the quit each try again —
+        // and a disk that comes back finishes the write with nothing asked.
+        guard write(job.url, job.state) else {
+            lastFailure = "The edits to \(job.url.lastPathComponent) could not "
+                        + "be saved. Orion will keep trying; do not quit yet."
+            return
+        }
         pending = nil
-        write(job.url, job.state)
+        lastFailure = nil
 
         // Only the photo still in hand gets its baseline moved. A late write
         // for a photo already left must not teach us anything about this one.

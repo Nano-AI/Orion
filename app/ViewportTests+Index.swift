@@ -58,6 +58,58 @@ extension ViewportTests {
         index.record(thumbnail: Data(repeating: 9, count: 512), for: photo, stamp: stamp)
     }
 
+    // MARK: The folder a row is filed under
+
+    /// A photograph reached through a symlink is filed under the folder it was
+    /// **listed in**, not the folder its bytes live in.
+    ///
+    /// ⚠ **This retired the entire index in silence.** `dir` was the parent of
+    /// the *resolved* file path while `plan` queries `WHERE dir = key(the folder
+    /// you opened)`, so a folder of aliases — an imported card, a shoot
+    /// symlinked into a working directory — missed on every field of every
+    /// photograph, forever. Nothing looked wrong: the listing was right, the
+    /// pictures were right, and the only symptom was an open that stayed slow.
+    /// `--library-open` read 0/3 info hits, 0/3 marks, **3/3 thumbnails** — the
+    /// thumbnails hitting because they are keyed by `path` alone. Decision #115.
+    ///
+    /// **Mutation:** put `(key as NSString).deletingLastPathComponent` back in
+    /// `folderKey` and the last two checks fail.
+    static func testARowIsFiledUnderTheFolderItWasListedIn() {
+        let (dir, photo, db) = indexFixture("symlinked-file")
+        defer { try? fm.removeItem(at: dir) }
+
+        // A second folder holding an alias to the same photograph — the shape
+        // `samples/` has, and the shape an imported card has.
+        let alias = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("orion-index-alias-\(UUID().uuidString)")
+        try? fm.createDirectory(at: alias, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: alias) }
+        let linked = alias.appendingPathComponent("_PIC0001.ARW")
+        try? fm.createSymbolicLink(at: linked, withDestinationURL: photo)
+
+        // The identity is still the file's own, so one photograph is one row
+        // however many ways it is reached.
+        report(PhotoIndex.key(linked) == PhotoIndex.key(photo),
+               "a symlink and its target are one row",
+               "\(PhotoIndex.key(linked)) vs \(PhotoIndex.key(photo))")
+        // …and the folder is the one it was listed in.
+        report(PhotoIndex.folderKey(linked) == PhotoIndex.key(alias),
+               "but it is filed under the folder it was listed in",
+               "\(PhotoIndex.folderKey(linked)) vs \(PhotoIndex.key(alias))")
+        report(PhotoIndex.folderKey(linked) != PhotoIndex.key(dir),
+               "and not under the folder its bytes live in")
+
+        // End to end: file it through the alias, then ask for the alias folder.
+        let index = PhotoIndex(at: db)
+        index.record(info: indexInfo(), for: linked, stamp: PhotoIndex.Stamp.of(linked))
+        guard let row = index.plan(folder: alias, contents: [linked]).first else {
+            report(false, "the aliased folder has a row"); return
+        }
+        report(row.info == indexInfo(),
+               "a warm open of the aliased folder hits", String(describing: row.info))
+        report(!row.needsInfo, "and does not re-read the raw")
+    }
+
     // MARK: Cold, warm, and across a restart
 
     /// A fresh index vouches for nothing; a filed one vouches for every field.

@@ -54,6 +54,8 @@ enum ViewportTests {
         testAmericanKeyMigration()
         testSidecarEscapingDoesNotCompound()
         testEditsSurviveAQuit()
+        testSidecarWriteReportsRefusal()
+        testAFailedAutosaveIsNotForgotten()
 
         testMattePngRoundTripsItsMidTones()
         testMatteKeepsItsOrientation()
@@ -122,6 +124,7 @@ enum ViewportTests {
         testSpotHandleHasAMinimumSize()
         testSpotDragStaysOnThePicture()
 
+        testARowIsFiledUnderTheFolderItWasListedIn()
         testIndexIsColdBeforeItIsWarm()
         testARewrittenRawInvalidatesByMtime()
         testARewrittenRawInvalidatesBySizeAlone()

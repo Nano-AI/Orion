@@ -58,6 +58,13 @@ final class Library {
     }
 
     private(set) var folder: URL?
+
+    /// Why the last folder could not be listed, or `nil` if it could.
+    ///
+    /// ⚠ Distinct from `photos.isEmpty`. A refused listing and an empty folder
+    /// used to be the same state, so "Open Folder" on an aliased card looked
+    /// like a card with nothing on it.
+    private(set) var lastFailure: String?
     private(set) var photos: [Photo] = []
     private(set) var loading = false
 
@@ -195,11 +202,14 @@ final class Library {
         // Directory listing off the main thread; the folder may be on a
         // slow volume and the window must stay responsive.
         let index = self.index
-        let (found, plans) = await Task.detached(priority: .userInitiated) {
+        let (found, plans, failure) = await Task.detached(priority: .userInitiated) {
             Self.scan(url, index: index)
         }.value
 
         photos = found
+        // ⚠ A folder that could not be listed is not a folder with no photos in
+        // it, and the interface has to be able to tell them apart.
+        lastFailure = failure
         loading = false
 
         loadTask = Task {
@@ -248,13 +258,34 @@ final class Library {
     }
 
     /// The listing, and the index's answer for it.
-    private nonisolated static func scan(_ url: URL, index: PhotoIndex)
-        -> (photos: [Photo], plans: [PhotoIndex.Plan]) {
+    /// ⚠ **The listing's failure comes back rather than reading as an empty
+    /// folder.** It was `try? … else { return ([], []) }`, and the two are not
+    /// the same thing at all: a folder Orion cannot read looked exactly like a
+    /// folder with no raw files in it, and "Open Folder" simply did nothing.
+    ///
+    /// It is reachable and it was reached. `contentsOfDirectory(at:)` fails
+    /// with POSIX 20 `ENOTDIR` when the URL is a **symlink to a directory** —
+    /// an aliased card, a NAS mount, a `ln -s`'d shoot folder — while the
+    /// `atPath:` spelling of the same call succeeds on the same path. The
+    /// directory is resolved before the call for that reason; `MatteStore.sweep`
+    /// carried the identical bug and swept nothing, ever, on the same folders.
+    /// ⚠ Not `private`, so `orion-viewport-tests` can drive the listing without
+    /// a window. The invariant it pins — a symlinked folder is listed rather
+    /// than read as empty — has no other route to a check.
+    nonisolated static func scan(_ url: URL, index: PhotoIndex)
+        -> (photos: [Photo], plans: [PhotoIndex.Plan], failure: String?) {
         let keys: [URLResourceKey] = [.isRegularFileKey]
-        guard let items = try? FileManager.default.contentsOfDirectory(
-            at: url, includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants])
-        else { return ([], []) }
+        let items: [URL]
+        do {
+            items = try FileManager.default.contentsOfDirectory(
+                at: url.resolvingSymlinksInPath(), includingPropertiesForKeys: keys,
+                options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants])
+        } catch {
+            let why = "Orion could not read \(url.lastPathComponent) — "
+                    + error.localizedDescription
+            FileHandle.standardError.write(Data("orion: \(why)\n".utf8))
+            return ([], [], why)
+        }
 
         let files = items
             .filter { rawExtensions.contains($0.pathExtension.lowercased()) }
@@ -268,7 +299,7 @@ final class Library {
             if let marks = plan.marks { photo.apply(marks) }
             return photo
         }
-        return (photos, plans)
+        return (photos, plans, nil)
     }
 
     /// Reads only the halves the index could not vouch for, and records what it
@@ -371,10 +402,23 @@ final class Library {
     private func persist(_ photo: Photo) {
         // Merged, not rebuilt: the develop settings live in the same file and
         // are none of this function's business.
-        Sidecar.merge(into: photo.url) {
+        //
+        // ⚠ **The answer is kept.** The row below is refreshed from the file,
+        // so the *index* was already honest — but the in-memory `Photo` keeps
+        // the star and the flag whatever happened, and that is what the
+        // filmstrip draws. On a locked card an entire cull therefore read back
+        // as done: two hundred frames rejected on screen, nothing in any
+        // sidecar, and the only trace in a log. One sentence, not a dialog per
+        // frame — a cull is a hundred keystrokes and a modal on each is its own
+        // defect.
+        if !Sidecar.merge(into: photo.url, {
             $0.rating = photo.rating
             $0.rejected = photo.rejected
             $0.label = photo.colorLabel
+        }) {
+            lastFailure = "Ratings could not be saved for "
+                        + "\(photo.url.lastPathComponent). The card or folder "
+                        + "may be read-only."
         }
         // ⚠ The index is refreshed by **reading the file back**, never from the
         // values above. A merge that failed — a read-only card, a full disk —

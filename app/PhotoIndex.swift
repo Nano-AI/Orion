@@ -371,7 +371,7 @@ final class PhotoIndex: @unchecked Sendable {
               aperture=excluded.aperture, captured=excluded.captured
             """) else { return }
         let key = Self.key(url)
-        bind(stmt, 1, key); bind(stmt, 2, (key as NSString).deletingLastPathComponent)
+        bind(stmt, 1, key); bind(stmt, 2, Self.folderKey(url))
         sqlite3_bind_int64(stmt, 3, stamp.mtime); sqlite3_bind_int64(stmt, 4, stamp.size)
         sqlite3_bind_int64(stmt, 5, Int64(info.width))
         sqlite3_bind_int64(stmt, 6, Int64(info.height))
@@ -401,7 +401,7 @@ final class PhotoIndex: @unchecked Sendable {
               rating=excluded.rating, rejected=excluded.rejected, label=excluded.label
             """) else { return }
         let key = Self.key(url)
-        bind(stmt, 1, key); bind(stmt, 2, (key as NSString).deletingLastPathComponent)
+        bind(stmt, 1, key); bind(stmt, 2, Self.folderKey(url))
         sqlite3_bind_int64(stmt, 3, stamp.mtime); sqlite3_bind_int64(stmt, 4, stamp.size)
         sqlite3_bind_int64(stmt, 5, Int64(marks.rating))
         sqlite3_bind_int64(stmt, 6, marks.rejected ? 1 : 0)
@@ -489,7 +489,7 @@ final class PhotoIndex: @unchecked Sendable {
             if step(old) == SQLITE_ROW { previous = sqlite3_column_int64(old, 0) }
             sqlite3_finalize(old)
         }
-        bind(stmt, 1, key); bind(stmt, 2, (key as NSString).deletingLastPathComponent)
+        bind(stmt, 1, key); bind(stmt, 2, Self.folderKey(url))
         sqlite3_bind_int64(stmt, 3, stamp.mtime); sqlite3_bind_int64(stmt, 4, stamp.size)
         sqlite3_bind_int64(stmt, 5, clock())
         bytes.withUnsafeBytes { raw in
@@ -580,6 +580,27 @@ final class PhotoIndex: @unchecked Sendable {
     /// cannot disagree about what a path is.
     static func key(_ url: URL) -> String {
         url.resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    /// The `dir` column: the folder a photograph was **listed in**, not the
+    /// folder its bytes turned out to live in.
+    ///
+    /// ⚠ **The two are different the moment a photograph is a symlink, and
+    /// conflating them silently retired the whole index.** `dir` was the parent
+    /// of the *resolved* file path, while `plan` queries `WHERE dir = key(the
+    /// folder you opened)` — so for a folder of aliases every `SELECT` returned
+    /// nothing, every field missed, and every open re-read every raw and every
+    /// sidecar. Nothing looked wrong: the listing was correct, the pictures were
+    /// correct, `agree` passed, and the only symptom was that opening a folder
+    /// stayed slow forever. `--library-open` is the gate that shows it — **0 of
+    /// 3 info hits, 0 of 3 mark hits, 3 of 3 thumbnail hits**, the thumbnails
+    /// hitting because they are keyed by `path` alone and never consult `dir`.
+    ///
+    /// Resolving the *parent* rather than taking the parent of the resolved
+    /// path is the whole fix, and it keeps `path` fully resolved so one file
+    /// reached two ways is still one row.
+    static func folderKey(_ url: URL) -> String {
+        key(url.deletingLastPathComponent())
     }
 
     /// Takes the index out of service on the two codes that mean the file is

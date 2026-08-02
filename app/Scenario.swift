@@ -239,6 +239,16 @@ enum Scenario {
     /// one of the things a scenario is here to be able to see.
     private static let snapshots = SnapshotStore()
 
+    /// The develop blob `corrupt` overwrote, so `repair` can put it back.
+    ///
+    /// ⚠ Held here rather than re-derived from the engine, and that is the
+    /// whole reason `repair` exists: the refused reopen calls `engine.open`,
+    /// which resets to the camera's own settings, so by then the good state is
+    /// gone from memory. Re-saving from the engine at that point would write an
+    /// *empty* component list — which is the very mistake this file is about,
+    /// committed by the test for it.
+    private static var stashedDevelop: Data?
+
     /// Writes the matte down and records the reference on the selected row —
     /// exactly what `findMatte` does when the panel runs a model.
     ///
@@ -290,10 +300,18 @@ enum Scenario {
             guard let saved = Sidecar.read(for: p)?.develop else {
                 throw Bad(what: "no develop state in the sidecar to reopen with")
             }
-            engine.restore(encoded: saved)
-            engine.restoreMattes(photo: p)
+            // ⚠ The parse's answer, exactly as `Editor.load` reads it, and
+            // through the same classifier. Handing `engine.maskComponents` to
+            // the sweep after a *failed* decode deletes every matte beside the
+            // photograph — see `MatteStore.SidecarState`.
+            let restored = engine.restore(encoded: saved)
+            if restored { engine.restoreMattes(photo: p) }
             snapshots.open(photo: p)
-            MatteStore.sweepAfterLoad(photo: p, parsed: engine.maskComponents)
+            MatteStore.sweepAfterLoad(photo: p, blob: saved, restored: restored,
+                                      components: engine.maskComponents)
+            guard restored else {
+                throw Bad(what: "the sidecar's develop state would not decode")
+            }
 
         case "rotate":
             engine.rotate(Int32(try number(0)))
@@ -817,7 +835,83 @@ enum Scenario {
             guard let encoded = try? JSONEncoder().encode(engine.state) else {
                 throw Bad(what: "could not encode the state")
             }
-            Sidecar.merge(into: URL(fileURLWithPath: p)) { $0.develop = encoded }
+            guard Sidecar.merge(into: URL(fileURLWithPath: p),
+                                { $0.develop = encoded }) else {
+                throw Bad(what: "the sidecar refused the write")
+            }
+
+        case "corrupt":
+            // **Truncates** the sidecar's develop blob — what a half-written
+            // file, a bad card or a sync tool that rewrote the XMP leaves
+            // behind. Half a JSON object is not a JSON object, so the decoder
+            // throws and `Engine.restore` answers false.
+            //
+            // ⚠ Truncation rather than substitution, and the difference is the
+            // interesting part. `DevelopState.init(from:)` is **total** by
+            // design (see its comment): every field is `decodeIfPresent`, so
+            // *any* well-formed JSON object decodes to a state, keys it has
+            // never seen and all. A sidecar from a newer build therefore stays
+            // readable, which is the point — and it also means a substituted
+            // `{"nope":1}` would decode happily and this branch would never be
+            // reached. The reachable failure is bytes that are not JSON.
+            //
+            // ⚠ This verb is the only way the loader's *unreadable* branch is
+            // reachable headlessly. Without it, the branch that decides whether
+            // to delete every matte beside a photograph could only be reasoned
+            // about.
+            guard let p = args.first else { throw Bad(what: "corrupt needs a path") }
+            let target = URL(fileURLWithPath: p)
+            guard let good = Sidecar.read(for: target)?.develop, good.count > 8 else {
+                throw Bad(what: "no develop state in \(p) to corrupt")
+            }
+            stashedDevelop = good
+            let half = good.prefix(good.count / 2)
+            guard Sidecar.merge(into: target, { $0.develop = Data(half) }) else {
+                throw Bad(what: "the sidecar refused the write")
+            }
+
+        case "repair":
+            // Puts back the blob `corrupt` replaced, byte for byte.
+            guard let p = args.first else { throw Bad(what: "repair needs a path") }
+            guard let good = stashedDevelop else {
+                throw Bad(what: "nothing was corrupted, so there is nothing to repair")
+            }
+            guard Sidecar.merge(into: URL(fileURLWithPath: p),
+                                { $0.develop = good }) else {
+                throw Bad(what: "the sidecar refused the write")
+            }
+
+        case "reopenrefused":
+            // `reopen`, but the sidecar is expected NOT to decode — the
+            // photograph is left openable and nothing is collected.
+            //
+            // ⚠ Every assertion here was green before 2026-08-02 on code that
+            // deleted the matte, because `Engine.restore` had no way to say it
+            // had failed and `sweepAfterLoad` was handed the *default* empty
+            // component list. Decision #115.
+            guard let p = photo else { throw Bad(what: "reopenrefused needs an open photo") }
+            let before = engine.maskComponents.compactMap(\.matteId)
+            try engine.open(path: p.path)
+            guard let blob = Sidecar.read(for: p)?.develop else {
+                throw Bad(what: "no develop state in the sidecar")
+            }
+            let took = engine.restore(encoded: blob)
+            if took { throw Bad(what: "a corrupt develop blob decoded") }
+            guard engine.lastFailure != nil else {
+                throw Bad(what: "a refused restore said nothing")
+            }
+            snapshots.open(photo: p)
+            MatteStore.sweepAfterLoad(photo: p, blob: blob, restored: took,
+                                      components: engine.maskComponents)
+            // The files the previous state named must all still be there.
+            for id in before {
+                let f = MatteStore.url(photo: p, id: id)
+                guard FileManager.default.fileExists(atPath: f.path) else {
+                    throw Bad(what: "matte \(id) was collected on an unreadable sidecar")
+                }
+            }
+            say("  \(before.count) matte(s) kept, restore refused: "
+                + "\(engine.lastFailure ?? "")\n")
 
         case "overlay":
             // Paint the coverage over the picture, as `Show mask` does. With

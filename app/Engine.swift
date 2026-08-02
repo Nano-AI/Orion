@@ -892,12 +892,40 @@ final class Engine {
                                               Int32(dabs))
             }
         }
-        guard ok == ORION_OK else { return }
+        // ⚠ Reported rather than dropped. A refused stroke is paint that does
+        // not appear under a hand that is still moving, which reads as a dead
+        // trackpad rather than as an error — and the next dab tries again, so
+        // without a message there is nothing anywhere to say it happened.
+        guard ok == ORION_OK else {
+            noteBrushRefusal(ok)
+            return
+        }
         brushRevisions[liveIndex] &+= 1
 
         var adj = cAdjustments()
-        orion_engine_set_adjustments(handle, &adj)
+        let pushed = orion_engine_set_adjustments(handle, &adj)
+        guard pushed == ORION_OK else {
+            noteBrushRefusal(pushed)
+            return
+        }
         if interacting { renderPreview() } else { render() }
+    }
+
+    /// One place for the two brush pushes to complain from.
+    ///
+    /// ⚠ The stderr line is rate-limited to the *first* refusal of a run of
+    /// them. A pointer event fires dozens of times a second, so a line per dab
+    /// would be a megabyte of log for one bad stroke and would bury the first
+    /// one, which is the only one that carries information. `lastFailure` is
+    /// set every time — it is a single published value, and the footer showing
+    /// the newest reason is right.
+    private func noteBrushRefusal(_ status: OrionStatus) {
+        let why = errorText(status)
+        if lastFailure == nil {
+            FileHandle.standardError.write(
+                Data("orion: the brush stroke was refused — \(why)\n".utf8))
+        }
+        lastFailure = why
     }
 
     func setBrushStroke(_ points: [CGPoint], erasing: [Bool]? = nil) {
@@ -942,7 +970,10 @@ final class Engine {
                                                     Int32(dabs))
                   }
               }
-        guard status == ORION_OK else { return false }
+        guard status == ORION_OK else {
+            noteBrushRefusal(status)
+            return false
+        }
         brushRevisions[index] &+= 1
         return true
     }
@@ -1452,8 +1483,13 @@ final class Engine {
             throw Failure.open(errorText(status))
         }
 
+        // ⚠ Only assigned when the call answered. Discarding the status wrote
+        // the zeroed out-parameters over the size, and every consumer —
+        // `frameAspect`, the crop normalization, the export's longest edge —
+        // then worked against 0 × 0 on a photograph that had opened fine.
         var w: UInt32 = 0, h: UInt32 = 0
-        orion_engine_image_size(handle, &w, &h)
+        let sized = orion_engine_image_size(handle, &w, &h)
+        guard sized == ORION_OK else { throw Failure.open(errorText(sized)) }
         imageWidth = w
         imageHeight = h
         camera = String(cString: orion_engine_camera(handle))
@@ -1499,17 +1535,38 @@ final class Engine {
         pushAndRender()
     }
 
-    /// Restores a state saved to a sidecar. Silent on malformed data: a
-    /// sidecar written by a newer build should leave the photo openable.
-    func restore(encoded: Data) {
+    /// Restores a state saved to a sidecar. Returns false when the blob would
+    /// not decode, and the photograph is then left openable — a sidecar written
+    /// by a newer build must not make a file unopenable.
+    ///
+    /// ⚠ **The `false` is load bearing and used to be a bare `return`.** Two
+    /// things downstream read "the sidecar had a develop blob" and took it to
+    /// mean "and it is now in the engine":
+    ///
+    /// - `MatteStore.sweepAfterLoad` was handed `engine.maskComponents`, which
+    ///   after a failed decode is the *default* empty list. The sweep then
+    ///   deleted every matte PNG beside the photograph. That is #87's lesson
+    ///   reached by a second route, and it is not recoverable — the model has
+    ///   to be run again, and Vision's answer moves between OS releases.
+    /// - `Autosave.begin` was armed with the default state as its baseline, so
+    ///   the first slider tick wrote a blank develop blob over the sidecar that
+    ///   had only failed to *parse*. An hour's work, gone on a keystroke.
+    ///
+    /// Both callers now branch on the answer, and both say so out loud.
+    @discardableResult
+    func restore(encoded: Data) -> Bool {
         guard let s = try? JSONDecoder().decode(DevelopState.self, from: encoded) else {
-            return
+            let why = "the saved edits could not be read"
+            lastFailure = why
+            FileHandle.standardError.write(Data("orion: restore failed — \(why)\n".utf8))
+            return false
         }
         suspended = true
         assign(s)
         suspended = false
         history.reset(to: s)
         pushAndRender()
+        return true
     }
 
     /// Rotates by a quarter turn, wrapping. Clockwise is positive.
@@ -1624,7 +1681,13 @@ final class Engine {
                 maxDimension: UInt32 = 0, space: Int32 = 0,
                 rating: Int32 = -1, metadata: Int32 = 1,
                 depth: Int32 = 0, sharpen: Int32 = 0) throws {
-        guard let handle else { return }
+        // ⚠ Throws rather than returning. A bare `return` here is an export
+        // that reports success and writes no file — and the person who finds
+        // that out is whoever was sent the photograph. `isLoaded` is checked
+        // for the same reason: the engine exists from launch, so exporting with
+        // nothing open used to hand the facade a graph with no source and the
+        // failure, if any, came back through a path nobody read.
+        guard let handle, isLoaded else { throw Failure.export("no photo is open") }
 
         // The coverage overlay is a viewing aid. Exporting with it on would
         // write a red-tinted photograph and nothing in the file would say why,
@@ -1765,11 +1828,23 @@ final class Engine {
     /// "reset temperature" has to mean the camera's number, not 5500 K.
     private(set) var defaults = DevelopState()
 
+    /// ⚠ **The status is read, and the fallback is the struct's own defaults.**
+    /// It was discarded, and `OrionAdjustments()` is *zeroed* — so a refused
+    /// call did not leave white balance alone, it set the photograph to 0 K and
+    /// tint 0. The picture opens deep blue, "reset temperature" puts it back
+    /// there, and nothing anywhere says the camera was never asked.
     private func asShotState() -> DevelopState {
         var fresh = DevelopState()
         guard let handle else { return fresh }
         var asShot = OrionAdjustments()
-        orion_engine_as_shot(handle, &asShot)
+        let status = orion_engine_as_shot(handle, &asShot)
+        guard status == ORION_OK else {
+            let why = errorText(status)
+            lastFailure = "the camera's white balance could not be read — \(why)"
+            FileHandle.standardError.write(
+                Data("orion: as-shot white balance unavailable — \(why)\n".utf8))
+            return fresh
+        }
         fresh.temperatureK = asShot.temperature_k
         fresh.tint = asShot.tint
         return fresh
@@ -2107,7 +2182,22 @@ final class Engine {
         var adj = cAdjustments()
         // Both graphs, always — the engine fans this out. A preview left stale
         // is the graph read the instant the drag ends.
-        orion_engine_set_adjustments(handle, &adj)
+        //
+        // ⚠ **The status is read.** It was discarded, and the failure that
+        // produces is the worst-looking one in this file: the push is refused,
+        // the render below then succeeds *on the previous adjustments*, and the
+        // photographer gets a fast, correct-looking frame of the wrong picture.
+        // Every number on the bar is green. Swift imports C functions as
+        // implicitly discardable, so nothing warned.
+        let pushed = orion_engine_set_adjustments(handle, &adj)
+        guard pushed == ORION_OK else {
+            let why = errorText(pushed)
+            lastFailure = why
+            FileHandle.standardError.write(
+                Data("orion: the edit did not reach the engine — \(why)\n".utf8))
+            generation &+= 1
+            return
+        }
 
         if interacting {
             renderPreview()

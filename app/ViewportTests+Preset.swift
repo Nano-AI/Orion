@@ -451,12 +451,48 @@ extension ViewportTests {
                "\(all.spots.count)")
 
         // The count sync reports is the count it wrote.
+        //
+        // ⚠ **This check could not fail until 2026-08-02, decision #115.** The
+        // `write` closure returned `Void`, so `sync` incremented its counter
+        // beside it unconditionally and there was no way for a write to say it
+        // had not happened. The block below — a `write` that refuses — is the
+        // half that makes the line above mean anything.
         var wrote: [URL: Data] = [:]
         let urls = (0..<3).map { URL(fileURLWithPath: "/tmp/orion-sync-\($0).ARW") }
-        let n = SyncSettings.sync(source: source, groups: [.light], to: urls,
-                                  read: { _ in nil },
-                                  write: { url, data in wrote[url] = data })
-        report(n == 3 && wrote.count == 3, "sync reports what it wrote", "\(n)")
+        let ok = SyncSettings.sync(source: source, groups: [.light], to: urls,
+                                   read: { _ in nil },
+                                   write: { url, data in wrote[url] = data; return true })
+        report(ok.written == 3 && wrote.count == 3 && ok.failed.isEmpty,
+               "sync reports what it wrote", "\(ok.written)")
+
+        // A card that will not take the second file. The count must be 2, the
+        // refused photograph must be named, and the sentence must exist.
+        var attempts = 0
+        let partial = SyncSettings.sync(
+            source: source, groups: [.light], to: urls,
+            read: { _ in nil },
+            write: { url, _ in
+                attempts += 1
+                return url != urls[1]
+            })
+        report(attempts == 3, "every photo is attempted", "\(attempts)")
+        report(partial.written == 2, "a refused write is not counted",
+               "\(partial.written)")
+        report(partial.failed == [urls[1]], "and it is named",
+               "\(partial.failed)")
+        report(partial.complaint?.contains("orion-sync-1.ARW") == true,
+               "the status line says which one", "\(partial.complaint ?? "nil")")
+
+        // And nothing is complained about when nothing went wrong — a warning
+        // on every successful sync is its own defect.
+        report(ok.complaint == nil, "a clean sync says nothing extra")
+
+        // Every write refused: the count is zero rather than the photo count.
+        let none = SyncSettings.sync(source: source, groups: [.light], to: urls,
+                                     read: { _ in nil },
+                                     write: { _, _ in false })
+        report(none.written == 0 && none.failed.count == 3,
+               "a locked card reports nothing written", "\(none.written)")
     }
 
     /// ⚠ Every field of a fully-set state survives a sidecar round trip.

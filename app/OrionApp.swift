@@ -526,15 +526,20 @@ struct Editor: View {
         // filter and selection alike ignored, under a warning that said "every
         // photo in view".
         let others = library.targets.filter { $0 != current }
-        let n = SyncSettings.sync(source: copied, groups: presetGroups, to: others)
+        let outcome = SyncSettings.sync(source: copied, groups: presetGroups,
+                                        to: others)
 
         if engine.isLoaded {
             engine.apply(preset: Preset(name: "Sync", groups: presetGroups,
                                         state: copied))
         }
+        let n = outcome.written
         syncedCount = n
-        message = n == 1 ? "Synced 1 other photo."
-                         : "Synced \(n) other photos."
+        let done = n == 1 ? "Synced 1 other photo."
+                          : "Synced \(n) other photos."
+        // ⚠ One sentence, not one dialog per photograph. The count used to be
+        // the *attempt* count, so a locked card reported a full success.
+        message = outcome.complaint.map { "\(done) \($0)" } ?? done
     }
 
     // MARK: Toolbar
@@ -1158,14 +1163,39 @@ struct Editor: View {
     /// photograph. Two lines rather than one: the hint changes with what you are
     /// doing and the frame's numbers do not, and putting them on one row makes
     /// the stable numbers jump every time the hint's length changes.
+    /// What the status line has to say, worst first.
+    ///
+    /// ⚠ **Ordered by what it costs, not by what is newest.** An autosave that
+    /// cannot write is the one line a photographer must see *before* they quit,
+    /// because quitting is the moment it costs them the session; a folder that
+    /// could not be listed costs them the folder; a failed render costs a
+    /// redraw. `nil` when there is nothing to say, so the ordinary hint keeps
+    /// the line it has always had — a warning that is always on is not one.
+    private var complaint: String? {
+        autosave.lastFailure ?? library.lastFailure
+    }
+
     private var footer: some View {
         VStack(alignment: .leading, spacing: 5) {
+            // ⚠ Outside `isLoaded`. A folder that could not be listed leaves
+            // nothing open, and the footer used to render nothing at all in
+            // that state — so the one message explaining an empty window had
+            // nowhere to appear.
+            if !engine.isLoaded, let why = complaint {
+                Engraved.Label(text: why, color: Palette.star, size: 9)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
             if engine.isLoaded {
                 // ⚠ A failed render reads as a *fast* one if all you show is
                 // the millisecond count: it stays at 0.0, which is the best
                 // number on the bar, beside a black canvas. So the failure
                 // takes the whole line and takes it in the warning colour.
-                if let why = engine.lastFailure {
+                if let why = complaint {
+                    Engraved.Label(text: why, color: Palette.star, size: 9)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                } else if let why = engine.lastFailure {
                     Engraved.Label(text: "Render failed — \(why)",
                                    color: Palette.star, size: 9)
                         .lineLimit(2)
@@ -1282,12 +1312,16 @@ struct Editor: View {
                 try engine.open(path: url.path)
                 viewport.reset()
                 let saved = Sidecar.read(for: url)?.develop
+                // ⚠ `restored` is the parse's *answer*, not "a blob was
+                // present". They used to be conflated and the two lines below
+                // both read the wrong one. See `Engine.restore`.
+                var restored = false
                 if let saved {
-                    engine.restore(encoded: saved)
+                    restored = engine.restore(encoded: saved)
                     // ⚠ Inside the successful-parse branch, because a sidecar
                     // that failed to parse yields no components and restoring
                     // from that would discard the photograph's edits.
-                    engine.restoreMattes(photo: url)
+                    if restored { engine.restoreMattes(photo: url) }
                 }
                 // ⚠ Outside it, and that is the fix. The sweep's policy has
                 // three cases, not two, and it lives in `MatteStore` so the
@@ -1298,13 +1332,28 @@ struct Editor: View {
                 // but a reader who assumes the sweep depends on it should find
                 // the order it expects rather than one that happens to work.
                 snapshots.open(photo: url)
-                MatteStore.sweepAfterLoad(photo: url,
-                                          parsed: saved == nil ? nil
-                                                               : engine.maskComponents)
-                // Arm only once the photo is settled, with what its sidecar
-                // already holds — so opening a file does not write straight
-                // back what it just read.
-                autosave.begin(url: url, saved: engine.state)
+                // ⚠ The two facts, handed over as facts. The conclusion is
+                // `MatteStore`'s, so this loader and the scenario runner's
+                // cannot drift — see `MatteStore.SidecarState`.
+                MatteStore.sweepAfterLoad(photo: url, blob: saved,
+                                          restored: restored,
+                                          components: engine.maskComponents)
+                if MatteStore.SidecarState.of(blob: saved, restored: restored)
+                    == .unreadable {
+                    // Present but unreadable. Say so, and **do not arm
+                    // autosave**: its baseline would be the default state, and
+                    // the first slider tick would write that over edits that
+                    // had only failed to parse. Leaving the sidecar alone is
+                    // what keeps this recoverable by hand.
+                    message = "Orion could not read the saved edits for "
+                            + "\(url.lastPathComponent). They have been left on "
+                            + "disk untouched; editing now would overwrite them."
+                } else {
+                    // Arm only once the photo is settled, with what its sidecar
+                    // already holds — so opening a file does not write straight
+                    // back what it just read.
+                    autosave.begin(url: url, saved: engine.state)
+                }
             } catch {
                 message = error.localizedDescription
             }
