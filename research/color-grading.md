@@ -197,20 +197,48 @@ they retired it in favour of, which Orion already ships." A second panel would b
 two ways to do one thing, disagreeing at the edges, and the maintenance is
 permanent.
 
-### ⚠ What split toning has that these wheels do not, said plainly
+### ⚠ What split toning had that these wheels did not — ✅ **built 2026-08-01**
 
-**Balance.** Orion's zones are Gaussians fixed at −2.5 / 0 / +2.5 EV with
-σ = 1.6; nothing moves them. Split toning's Balance, and Color Grading's, slides
-the crossover so a photographer can decide how much of the picture counts as
-shadow. That is a real gap and it is the only one.
+## Balance
 
-It is also **five lines in `color_grade.slang`** — the three centres shifted by a
-signed offset in EV — and one float through the twenty files any adjustment
-crosses. It belongs *on the grading panel*, beside the wheels whose bands it
-moves, and not in a second panel wearing an older name. Costed in `ROADMAP.md`
-rather than built in the same session as the vignette: one story per session, and
-a half-threaded adjustment is the failure mode this repository has already paid
-for twice.
+**The gap.** Orion's zones were Gaussians fixed at −2.5 / 0 / +2.5 EV with
+σ = 1.6 and nothing moved them. Split toning's Balance, and Color Grading's,
+slides the crossover so a photographer decides how much of the picture counts as
+shadow. That was the only thing #101's refusal left on the table, and it is now
+a slider under the three wheels rather than a second panel wearing an older name.
+
+**Reference.** Adobe's, on Split Toning from Camera Raw 4 (2007) and carried
+into the Color Grading panel that replaced it in Camera Raw 13.0 / Lightroom
+Classic 10.0, October 2020. Documented as balancing the effect between the
+highlight and shadow ranges; positive favours the highlights, and Orion's does
+the same in the same direction.
+
+**A rigid shift, not a re-spacing.** All three centres move together by
+`−balance × 1.25` EV along the same log2 axis they are defined on. Three reasons,
+in order:
+
+1. A partition of unity translated along its own axis is still a partition of
+   unity, so an untouched photograph still comes back unchanged at any Balance.
+2. The zones keep their 2.5 EV spacing, so they stay ordered and none can pass
+   or collide with another. A re-spacing Balance — shadow and highlight pulled
+   toward one end — squeezes the two crossovers together, and two Gaussians on
+   one centre is one zone with two wheels fighting over it.
+3. "Slide the crossover" is what the control is *for*, and a translation is
+   exactly that and nothing else.
+
+**Neutral is free, and neutral is the old behaviour.** The shift at Balance 0 is
+`−0.0f`, and `x + (−0.0f) == x` bit for bit, so every render, bench pin and
+sidecar written before this existed is untouched rather than rebased by a ulp.
+With the three wheels centred, Balance changes weights that multiply an all-zero
+offset and a slope of one — an exact identity — so the engine does not switch the
+grading node on for it and does not re-push the parameter block for it either
+(decisions #82 and #92, both of which are that mistake). The bench asserts both
+halves: the node runs zero times over a Balance drag on an ungraded frame, and
+every tick over one on a graded frame.
+
+**`kBalanceEv = 1.25` is chosen** — half the zone spacing, the largest travel
+where every crossover stays strictly between the two centres it separates.
+`UNSOURCED.md` §26 has the argument and the invariants held in its place.
 
 ## Position in the graph
 

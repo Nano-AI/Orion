@@ -36,7 +36,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Tone curve (parametric + point, per-channel) | M2 | |
 | HSL / color mixer (8 hue bands) | M2 | |
 | Color grading wheels (ASC CDL slope/offset/power) | M3 | |
-| Split toning | **cut** | ❌ **Refused 2026-08-01, decision #97.** It is the grading wheels with fewer controls, and Adobe retired the panel it copies in Oct 2020 in favour of exactly what Orion already ships. Its one real remainder — **Balance**, a signed EV offset on the three zone centres — is costed in `ROADMAP.md` and belongs on the grading panel |
+| Split toning | **cut** | ❌ **Refused 2026-08-01, decision #97.** It is the grading wheels with fewer controls, and Adobe retired the panel it copies in Oct 2020 in favour of exactly what Orion already ships. Its one real remainder — **Balance**, a signed EV offset on the three zone centres — ✅ **shipped 2026-08-01, decision #102**, on the grading panel under the wheels it moves |
 
 ## 4. Color Science
 | Feature | Status | Notes |

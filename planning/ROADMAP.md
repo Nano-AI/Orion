@@ -133,10 +133,11 @@ Two things turned up while finishing it:
   both directions
 - ❌ **Split toning — refused, decision #97.** It is the wheels with fewer
   controls, and Adobe retired the panel it copies in October 2020 in favour of
-  exactly what Orion already ships. **Its one real remainder is Balance**, a
-  signed EV offset on the three zone centres — ~5 lines of shader plus one float
-  through the usual twenty files, and it belongs on the grading panel beside the
-  bands it moves. ~half a session, unstarted
+  exactly what Orion already ships. **Its one real remainder was Balance** — ✅
+  **built 2026-08-01, decision #102.** A rigid shift of all three zone centres,
+  ±1.25 EV at full travel, on the grading panel under the wheels it moves.
+  Centred is bit-identical to the fixed −2.5 / 0 / +2.5 EV partition, and with
+  the wheels centred it does not run the node at all
 - ✅ Creative LUTs (.cube, tetrahedral) *(Adobe Cube LUT Specification 1.0; Sakamoto & Itooka 1981)*
 - Highlight reconstruction beyond the window fit — **renamed from
   "segmentation-based", solver built 2026-08-01, not wired.** Costed below

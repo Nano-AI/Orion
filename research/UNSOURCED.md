@@ -919,3 +919,58 @@ with it. If a published creative-vignette parametrization turns up — Adobe
 publishes none, and neither does any of darktable's or RawTherapee's
 documentation — items 1 and 2 should be replaced by it and this entry struck
 through.
+
+---
+
+## §26 — Balance's slider-to-EV mapping, though not the control itself
+
+**Where:** `color_grade.slang`, `kBalanceEv`. Threaded through
+`ShaderParams::Grade::balance` and `Adjustments::gradeBalance`. Full entry in
+[`color-grading.md`](color-grading.md#balance).
+
+**Sourced:** the control's existence and its behaviour. Balance is Adobe's, on
+the Split Toning panel from Camera Raw 4 (2007) and carried into the Color
+Grading panel that replaced it in Camera Raw 13.0 / Lightroom Classic 10.0
+(October 2020); Adobe documents it as balancing the effect between the highlight
+and shadow ranges, positive favouring the highlights. Orion's does the same
+thing in the same direction, and decision #101 named it as the one thing split
+toning had that three grading wheels did not.
+
+Sourced also, and separately, is the *form*: the zones are a partition of unity
+of Gaussians on log2(Y/0.18), and translating a partition of unity along its own
+axis leaves it a partition of unity. That is why Balance is a rigid shift of all
+three centres rather than a re-spacing — a re-spacing can bring two centres
+together, and two Gaussians on one centre is one zone with two wheels fighting
+over it.
+
+**Not sourced:** `kBalanceEv = 1.25`, the EV the slider's full deflection is
+worth. Adobe's Balance runs −100..+100 against a partition they have never
+published, so there is no number to copy and no way to match their feel.
+
+**Said plainly: I chose it.** The argument for 1.25 is that it is *half the zone
+spacing* — the largest travel where every crossover stays strictly between the
+two centres it separates. At full deflection the shadow/midtone crossover lands
+exactly on a neighbouring zone centre and never past it. That is derived from a
+constant already in the file rather than picked, but the decision to spend
+exactly one half-spacing of travel on the slider is still taste.
+
+**What is held instead.** The invariants, in `testColorGradeGpu`:
+
+- Balance centred is the fixed −2.5 / 0 / +2.5 EV partition the shader has
+  always had, checked against the analytic weights to 3e-3. **This is what stops
+  a new control silently rebasing every baseline in the repository** — the
+  arithmetic makes it exact (`x + (-0.0f) == x`), and this makes it checkable.
+  Moving `kEvShadow` by 0.05 EV fails here and nowhere else.
+- Off-centre is that same partition, translated — checked against the analytic
+  form at five settings, not against "something moved".
+- The split point slides monotonically and travels 2.50 EV end to end.
+- The two crossovers stay ordered and stay one zone spacing apart.
+- With the wheels centred, any Balance is the **exact** identity, bit for bit.
+
+**Cost:** low. "Balance +0.5" will not mean Adobe's "+50", the same way none of
+Orion's tone controls numerically match theirs. The direction, the units of the
+axis and the neutral all match, and the neutral is the part that matters.
+
+**To fix:** calibrate the travel against reference renders of the same file at
+matched Balance settings, and replace the number with a measured one. The tests
+above are invariants and would survive it.
