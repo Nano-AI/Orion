@@ -120,9 +120,18 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    identical against `ab6f9b2`. ⚠ Two of seven mutations were green everywhere
    and were defects in the *checks*, both rewritten; and `lastFailure` turns out
    to have no oracle anywhere, which is recorded rather than fixed.
-   **Four files are left over the ceiling** — `apps/bench/main.cpp` 2,289,
-   `Scenario.swift` 1,596, `OrionApp.swift` 1,557, `DevelopPanels.swift` 1,366 —
-   and they are the harder half, because two of them are what does the checking.
+6. ~~`Scenario.swift` against the same ceiling~~ — ✅ **done 2026-08-02, decision
+   #120.** **1,615** lines, **977 of them one `switch`**; now five files, largest
+   **546**, and `Scenario.swift` itself **301**. Same seam again — region of the
+   problem — cutting the *switch* rather than lifting helpers away from it, so a
+   new verb is one edit in the family it resembles and a new slider is one edit
+   in `Scenario+Controls.swift`. ⚠ A **pure move on an interface** (#89): all 158
+   `case` labels are an identical multiset before and after, so no alias pair
+   merged. All 40 scenarios byte-identical in *output*, and 51 rendered artefacts
+   byte-identical against `9d9158d`. ⚠ **Mutation M4 found a check that cannot
+   fail** — disable three quarters of the verbs and 39 of 40 scenarios still exit
+   0, because 38 then run **zero checks** and the runner exits 0 on a run that
+   asserted nothing. Recorded, not fixed.
 
 Closed since this list was last written, in the order they went:
 **dehaze's drag cost** (#92), the **`reopen` leak** (#90), **M1's library gap**
@@ -183,6 +192,105 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — `Scenario.swift` is five files, and the language did not move (#120)
+
+**1,615 lines against a ceiling of 1,000, and 977 of them were one `switch`.**
+The last of the three violations in `app/`, and the one where the file is an
+*interface*: decision #89 records that renaming its verbs collapsed four alias
+pairs into duplicate cases and failed fourteen checked-in `repro/*.txt` at once,
+and the session log the app writes is itself a runnable scenario. So: a pure
+move, nothing added, renamed or removed.
+
+**The seam.** #113's and #117's, for their reason — by region of the problem.
+The tempting cut lifts `apply`, `eyedrop`, `maskCheck` and `check` out and
+leaves the switch standing: 350 lines moved and "where does a new verb go" still
+answered by "somewhere in the middle of the largest function in the app". So the
+*switch itself* is cut, by what a verb drives, and each family answers whether
+it took the verb.
+
+| File | Lines | Owns |
+|---|---|---|
+| `Scenario.swift` | **301** | the grammar comment, the run loop, shared state, the dispatcher, `point`/`number` |
+| `Scenario+Frame.swift` | 306 | the photograph: open, reopen, geometry, history, presets, versions, sidecars |
+| `Scenario+Controls.swift` | 362 | sliders, wheels, drags, the eyedropper — **and both control tables** |
+| `Scenario+Mask.swift` | 546 | rows, brush, rasters, colour and range pickers, spots, overlay |
+| `Scenario+Report.swift` | 220 | measurement, assertion, instruments, files written and read back |
+
+A new verb is one edit in the family it resembles. A new **slider** is one edit
+in `Scenario+Controls.swift`, because `apply` and `controlValue` moved to sit
+under the verbs that call them.
+
+**Verbatim motion, proved.** Extracted by line range with a script that asserts
+every one of the 1,616 lines is claimed by exactly one destination, and the
+**multiset of all 158 `case` labels is identical before and after** — the check
+that matters here, because it is what says no alias pair merged and no verb was
+lost. `maskcolor`/`maskcolour`, `maskCenterX`/`maskCentreX`, `color`/`colour`,
+`fusion`/`lift` all intact. Exactly two lines of a verb body changed shape:
+`point` and `number` were closures over `step`'s `args`, so `number` is
+`number(args, i)` at 45 call sites and nothing else moved.
+
+**Swift's `private` is file-scoped, so the ceiling costs encapsulation again**
+(#117 paid the same). Twelve members widened to internal; the nine used by one
+file alone stayed private, and M6 shows the widening is load-bearing rather than
+blanket.
+
+**Nothing moved, checked two ways, and the oracle was self-checked first.** Two
+runs of the *pre-split* binary agree on all 40 scenarios and all 51 rendered
+artefacts, so a difference would be a difference. After: 40/40 exit 0, repro
+output **byte-identical** once timing lines are normalised (raw diff 70 lines,
+all of them `ms per tick` / `us each`), and **51/51 artefacts byte-identical**
+by `cmp` against a baseline built from `9d9158d` — 48 canvas PNGs across tone,
+grading, grain, vignette, perspective, the whole geometry stack with the crop
+preview, six mask kinds over two layers with hiding and reordering, brush and
+pointer-event paint, three rasters, both colour spellings, spots and their
+handles, Vision, presets, versions and compare; plus two JPEG exports and a
+16-bit TIFF.
+
+### ⚠ The finding: a check that cannot fail, and it is the repository's, not this split's
+
+**M4** makes `frameStep` claim every verb, so three quarters of the vocabulary
+silently does nothing — and **39 of 40 scenarios still exit 0**. Because 38 of
+them then run **zero checks**, and `Scenario` exits 0 on a run that asserted
+nothing: `orion: 0 checks, 0 failures` → exit 0. A scenario that measured
+nothing is indistinguishable from one that passed.
+
+The byte comparison caught it completely (**0 of 51** frames identical) and the
+repro *output* diff caught it (1,013 lines). The exit codes did not. This is
+exactly why "diff the full output, not the exit codes" is the rule, and a
+`--min-checks` floor belongs on the runner. **Not fixed here** — a behaviour
+change hidden inside a refactor is unreviewable.
+
+### The mutation table
+
+⚠ **Only two checks in the repository can see `Scenario.swift` at all.**
+`orion-tests` is C++, `orion-viewport-tests` does not compile the file, and
+`orion-bench` links no Swift — so all three are structurally blind to every
+mutation below, and running them eight times would have proved nothing. Stated
+rather than padded out.
+
+| # | Mutation | Repro exit | Repro output | Frames |
+|---|---|---|---|---|
+| M1 | drop `"maskcolour"` from its alias pair (#89's exact shape) | 39/40 | 24 lines | 47/51 |
+| M2 | drop `"maskCentreX"` from its alias pair | **31/40** | 404 lines | 31/51 |
+| M3 | remove `maskStep` from the dispatcher | **15/40** | 769 lines | 22/51 |
+| M4 | `frameStep` claims every verb | 39/40 ⚠ | 1,013 lines | **0/51** |
+| M5 | off-by-one in the moved `number` | **1/40** | 1,086 lines | 1/51 |
+| M6 | restore `private` on `step` | **does not compile** | — | — |
+| M7 | delete the `nofailure` verb (landed hours earlier) | 39/40 | 8 lines | 44/51 |
+| M8 | moved `clampToDisc` stops clamping | 39/40 | 12 lines | 41/51 |
+
+Every mutation is red somewhere. **M4 is red only in the two output oracles**,
+which is the finding above. M7 confirms the freshly-landed verb survived the
+move. M8 confirms the byte comparison can see a helper that changed file.
+
+### Gates
+
+`cmake --build` clean · `orion-tests` **800 / 0** · `orion-viewport-tests`
+**3702 / 0** · **40/40** scenarios exit 0 · `orion-bench` exits **0**.
+⚠ The bench's **M0 gate failed once at 28.00 ms and passed at 13.20 ms on a
+quiet machine** — it is a latency gate and the bench links no Swift, so this
+change cannot reach it. Recorded rather than hidden.
 
 ### ✅ 2026-08-02 — `Engine.swift` is eight files, and no pixel moved (#117)
 
@@ -710,7 +818,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken three ways**, all in `app/`: `Scenario.swift` **1,596**, `OrionApp.swift` **1,557**, `DevelopPanels.swift` **1,366**. ⚠ **Recounted live at the merge, 2026-08-02**, taking neither split agent's figure — both wrote their row before the other landed, and #117's recount showed the row it replaced had been stale *on the day it was written* (claimed `bench/main.cpp` 2,251 and `Engine.swift` 2,241; actual 2,289 and 2,331). ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself. Seven files were over the ceiling this morning; `DevelopPipeline.cpp` (#113, 2,896 → 451), `bench/main.cpp` (#118, 2,289 → 85) and `Engine.swift` (#117, 2,331 → 795) took four of them out, and the next file below the survivors is `ShaderParams.h` at 905 | whole tree |
+| **The 1000-line rule is broken six ways, and it has moved out of `app/`**: `apps/tests/tests_effects.cpp` **1,716**, `app/OrionApp.swift` **1,557**, `app/DevelopPanels.swift` **1,366**, `apps/tests/tests_brush.cpp` **1,142**, `apps/tests/tests_perspective.cpp` **1,110**, `apps/tests/tests_grade.cpp` **1,029**; next below is `ShaderParams.h` at **905**. ⚠ **Recounted by sweep 2026-08-02 at `9d9158d` + #120**, over every `.swift/.cpp/.h/.hpp/.mm` under `app/ apps/ engine/ Sources/` — not by adjusting the previous numbers, which is what this row has always gone wrong by. ⚠ **The previous row was not stale; the tree moved under it.** It read "broken three ways, all in `app/`" and named `ShaderParams.h` at 905 as the next below — which is only consistent with `apps/tests` being *under* the ceiling, and it was: at `0b8061d` those files stood at **969 / 770 / 844** and `tests_perspective.cpp` did not exist. **Four test files crossed the ceiling in a single day**, three by growth and one on arrival. The violation is now mostly in the tests, and nobody sweeping only `app/` will see it. ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself. Of the originals, `DevelopPipeline.cpp` (#113, 2,896 → 451), `bench/main.cpp` (#118, 2,289 → 85), `Engine.swift` (#117, 2,331 → 795) and `Scenario.swift` (#120, 1,615 → 301) are done | whole tree |
 | **Nothing asserts that a gesture *arms*** — narrowed 2026-08-01, decision #110.3, and it is now the *first* link only. `repro/gesture-preview-agrees.txt` used to compare an armed run against an unarmed one and demand they agree, which is green when arming does nothing; it now also asserts arming has an effect (the preview surface goes 0.2323/0.2918 → 0.4814/0.2037 over the same eight ticks), so a no-op `beginInteraction` fails. What is still unreachable is a `DragGesture` closure calling it: **attempted** — `NSHostingView` off-screen lays the wheel out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s call is green across 744 / 3624 / 39, measured | `Scenario.swift` |
 | ~~**The grading wheel's arming is unmeasured.**~~ ✅ **closed 2026-08-01, decision #110.2.** `wheel` and `dragwheel` drive a three-component control, added beside the scalar spellings rather than replacing them (#89). **9.6 ms per tick unarmed against 1.2 armed, 8.0×**, settled picture identical at luma 0.2268 / sat 0.5136 | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
