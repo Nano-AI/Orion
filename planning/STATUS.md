@@ -159,9 +159,13 @@ the target and the destination are the same path — the entry becomes a symlink
 to itself. It was written into five briefs. One agent ran it with the main repo
 as its working directory and both entries were replaced by self-links.
 
-⚠ **The fix is not "tell agents to be careful."** The line goes out of every
-brief. A worktree that needs those paths gets them from a relative target, or
-from a setup script that refuses to run anywhere but a worktree.
+⚠ **The fix is not "tell agents to be careful."** The line is out of every
+brief and replaced by **`tools/worktree-setup.sh`**, whose entire reason for
+existing is the guard rather than the linking: a linked worktree has a `.git`
+*file* and the main worktree has a `.git` *directory*, so the script exits on
+the main repo before it can touch anything, and it refuses to replace any entry
+that is not already a symlink. Both branches are tested — it refuses in the main
+repo, links in a worktree, and leaves the main repo's entries alone.
 
 **What was lost, and what was not:**
 
