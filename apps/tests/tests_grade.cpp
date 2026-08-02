@@ -479,24 +479,46 @@ void testColorGradeGpu() {
                     split[0], split[2], split[4]);
     }
 
-    // The zones stay ordered at every setting. A re-spacing Balance — one that
-    // pulls shadow and highlight toward one end instead of translating all
-    // three — can collide two centres, and two Gaussians on one centre is one
-    // zone with two wheels fighting over it. Replacing the rigid shift with
-    // `kEvShadow + shift, kEvMidtone, kEvHighlight - shift` fails this.
+    // The zones stay ordered and stay apart at every setting.
+    //
+    // ⚠ Measured as the two **crossovers** — where shadow and midtone carry a
+    // pixel equally, and where midtone and highlight do — and not as where each
+    // zone's weight peaks. The weights are normalized, so the shadow weight
+    // falls monotonically across the whole wedge and the highlight weight
+    // rises: their maxima are at the ends of the test image no matter where the
+    // centres are, and a check on them would be green for every possible
+    // Balance. It was written that way first.
+    //
+    // The crossovers are the ordering. A rigid shift keeps them exactly the
+    // zone spacing apart wherever it puts them; a Balance that re-spaced the
+    // centres instead — `kEvShadow + shift, kEvMidtone, kEvHighlight - shift` —
+    // squeezes them to 1.25 EV at full deflection and, with a larger constant,
+    // to zero, which is two wheels fighting over one zone.
     {
-        const auto peakEv = [&](int zone, float b) {
-            const auto w = zoneWeights(zone, b);
-            std::uint32_t best = 0;
-            for (std::uint32_t x = 1; x < kW; ++x) if (w[x] > w[best]) best = x;
-            return evOf(best);
+        const auto crossoverEv = [&](const std::vector<double>& lo,
+                                     const std::vector<double>& hi) {
+            for (std::uint32_t x = 1; x < kW; ++x)
+                if (lo[x] <= hi[x] && lo[x - 1] > hi[x - 1]) {
+                    const double a = lo[x - 1] - hi[x - 1], b = lo[x] - hi[x];
+                    const double t = a / (a - b);
+                    return evOf(x - 1) + t * (evOf(x) - evOf(x - 1));
+                }
+            return 1e30;
         };
         bool ordered = true;
+        double worstGap = 1e30;
         for (float b : {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f}) {
-            const double s = peakEv(0, b), m = peakEv(1, b), h = peakEv(2, b);
-            if (!(s < m - 1.5 && m < h - 1.5)) ordered = false;
+            const auto ws = zoneWeights(0, b);
+            const auto wm = zoneWeights(1, b);
+            const auto wh = zoneWeights(2, b);
+            const double sm = crossoverEv(ws, wm);
+            const double mh = crossoverEv(wm, wh);
+            if (!(sm < mh)) ordered = false;
+            worstGap = std::min(worstGap, mh - sm);
         }
-        report(ordered, "and stay ordered and apart at every Balance");
+        report(ordered && std::abs(worstGap - 2.5) < 0.15,
+               "and the two crossovers stay ordered and one zone apart",
+               "closest " + std::to_string(worstGap) + " EV");
     }
 
     // ⚠ **Balance costs nothing when the wheels are centred.** Not "nearly

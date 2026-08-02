@@ -1,0 +1,52 @@
+# Balance, through the whole loop: slider -> DevelopState -> sidecar -> decode,
+# and the render at both ends of its travel.
+#
+# ⚠ Same shape as `grain-survives-a-reopen.txt`, and for the same reason.
+# `Engine.state` builds `DevelopState` with the **memberwise initializer**,
+# which is positional over eighty arguments — and `gradeBalance` has a default,
+# so leaving it out of that call compiles without a word. The control would work
+# on screen and reach the sidecar as 0. That is exactly how the two grain fields
+# were lost, with 569 engine checks and 31 scenarios green throughout.
+#
+# The engine suite pins what Balance does to the zone weights. It cannot see
+# whether the value ever leaves the view model, and that is this file's half.
+
+open samples/_PIC8220.ARW
+
+# ⚠ Balance has to be measured with a wheel off centre. It slides the zones the
+# wheels act on; with every wheel neutral it is an exact identity by
+# construction, and the engine deliberately does not even run the grade node for
+# it. So a render check with the wheels centred would be green for a Balance
+# that was never wired to anything at all.
+set gradeShadowX -0.6
+set gradeShadowY -0.6
+
+set gradeBalance -1
+measure 0.3,0.3,0.4,0.4 shadowsWide
+
+set gradeBalance 1
+measure 0.3,0.3,0.4,0.4 shadowsNarrow
+
+# The same tint, the same patch, the same everything but where the zones sit.
+# At -1 the shadow band reaches up into the midtones and the patch carries the
+# tint; at +1 the band has slid a full 2.5 EV down and left it behind.
+expect shadowsNarrow != shadowsWide
+
+control gradeBalance == 1
+
+save samples/_PIC8220.xmp
+reopen
+
+# ⚠ The reopen is the half that catches the memberwise omission. Setting the
+# property and reading it back never leaves `Engine`; only a round trip through
+# `state` and the sidecar can tell whether the field is carried at all.
+control gradeBalance == 1
+control gradeShadowX == -0.6
+
+# And back to centre is the partition every photograph edited before Balance
+# existed was graded on — so this also asserts the control has a real zero
+# rather than a midpoint of its own.
+set gradeBalance 0
+control gradeBalance == 0
+measure 0.3,0.3,0.4,0.4 centred
+expect centred != shadowsNarrow
