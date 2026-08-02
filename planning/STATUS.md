@@ -105,8 +105,13 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    ~half a session.
 3. **Americanising the persisted keys**, if wanted — a schema migration with
    dual reads, not a rename. ~1 session, needs sign-off (#89).
-4. `DevelopPipeline.cpp` is **2,418 lines** against a stated ceiling of 1,000,
-   and it grew again this session. Splitting product code wants its own session.
+4. ~~`DevelopPipeline.cpp` against a stated ceiling of 1,000~~ — ✅ **done
+   2026-08-02, decision #113.** It had reached **2,896** lines and its header
+   **917**; both are now five files, largest **757**. The seam is the graph's
+   four regions and each file holds *both* halves of its region — the nodes the
+   constructor adds and the blocks `apply` pushes into them, which used to be
+   twelve hundred lines apart. Pure refactor, proved rather than asserted: nine
+   canvas renders byte-for-byte identical, 173 nodes and 7186 MiB unchanged.
 
 Closed since this list was last written, in the order they went:
 **dehaze's drag cost** (#92), the **`reopen` leak** (#90), **M1's library gap**
@@ -136,8 +141,10 @@ trained for. Pieces 1–3 are two measurements and a decision that is allowed to
 say stop.
 
 Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
-the performance action item is in `ROADMAP.md`. The largest standing violation of
-a stated hard constraint is `DevelopPipeline.cpp`, now **2,549 lines**.
+the performance action item is in `ROADMAP.md`. `DevelopPipeline.cpp` was the
+largest standing violation of a stated hard constraint and **is not any more**
+(#113, 2026-08-02); the largest is now `apps/bench/main.cpp` at **2,251**, and
+the gap row below has been recounted rather than edited.
 
 ### ⚠ The first wave, and the wave that died — both in `HISTORY.md`
 
@@ -147,6 +154,58 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — `DevelopPipeline.cpp` is five files, and no pixel moved (#113)
+
+**2,896 lines and a 917-line header, against a ceiling of 1,000.** The last
+entry in the gap table that anyone had costed, held back until it could go
+alone because a split landing beside two other agents is a merge nobody can
+resolve.
+
+**The seam is the graph's four regions, and each file holds *both* halves of
+its region** — the nodes the constructor adds and the parameter blocks `apply`
+pushes into them. That pairing is the whole decision. Adding dehaze meant
+editing the constructor at line 400 and `apply` at line 1,628; those two edits
+are now adjacent, and *which* file is answered by where in the picture the
+feature lives.
+
+| file | lines | region |
+|---|---|---|
+| `DevelopPipeline.cpp` | 2,896 → **452** | the spine: two call lists and little else |
+| `DevelopCapture.cpp` | **715** | sensor to profile — demosaic, highlights, fill, denoise, lens, spots, sharpen, matrix |
+| `DevelopLocal.cpp` | **686** | dehaze, clarity, fusion, guided filter — the multi-node operators |
+| `DevelopMask.cpp` | **757** | the mask group, the brush, the feathering |
+| `DevelopOutput.cpp` | **586** | tone, grade, display, grain, geometry |
+| `DevelopPipeline.h` | 917 → **691** | + `Adjustments.h` **345**, `DevelopInternal.h` **45** |
+
+⚠ **`ApplyContext` is the only thing that is new.** Ten values one stage derives
+and another reads — the perspective, the crop and turns, `frameMoved`,
+`needsGuide`. Everything else is verbatim code motion, extracted by line range
+rather than retyped, so each moved body is byte-identical to what it replaced.
+Each stage function opens with a preamble aliasing what it takes from the
+context, which is why no moved line needed touching.
+
+⚠ **Not one pixel moved, and that is checked rather than claimed.** Nine canvas
+renders — tone, white balance, the three local operators, grading and the
+vignette, spots and grain, four kinds of mask over two layers with feathering,
+and the whole geometry stack including the crop preview — are **byte-for-byte
+identical** before and after, by `cmp`. 173 nodes and 7186 MiB unchanged; the
+whole bench differs only in wall-clock percentages and one tie-break in a
+hottest-N list.
+
+⚠ **Neither call list may be sorted.** Node construction order is load-bearing —
+indices are held in members, so a reordered `build` compiles and changes which
+node feeds which. `apply`'s order is preserved for a weaker reason, written on
+the function: the stages push to distinct nodes so it very probably does not
+matter, but "very probably" is a claim about 1,300 lines and a refactor is not
+where to start making claims.
+
+⚠ **Four stages cannot be driven from a scenario** — `highlightRecovery`,
+denoise, the lens correction and capture sharpening have no `set` name in the
+grammar, so the byte-check does not cover them and they rest on `orion-tests`'
+real GPU renders instead. Stated rather than papered over; adding four names to
+`Scenario.swift` would close it and is a small job for whoever is next in that
+file.
 
 ### ⚠⚠ 2026-08-02 — the build is down, and the instruction that did it was mine
 
@@ -223,10 +282,9 @@ check in either suite would catch it. Same class as the purple cast.
 
 **Deliberately not deployed this wave, and why:**
 
-- ⚠ **Splitting `DevelopPipeline.cpp`** (2,549 lines, the largest standing violation
-  of a hard constraint). Two agents are editing that file this hour; a split
-  landing beside them is a merge nobody can resolve. It goes alone, after this
-  wave, and it is the next thing.
+- ~~⚠ **Splitting `DevelopPipeline.cpp`**~~ — ✅ **done 2026-08-02, decision
+  #113**, alone and after the wave, exactly as this note said it had to go. It
+  was 2,896 lines by the time it went.
 - **The persisted-key migration** (#89) — **needs the developer's sign-off before
   anyone starts.** It rewrites sidecars on disk, and a renamed key does not fail
   to parse: it yields a perfectly valid mask sitting in the middle of the frame.
@@ -321,7 +379,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken six ways**, all in product code. ⚠ **Recounted 2026-08-01 and this table had carried *four* copies of this row**, each with different numbers, each written by a different agent's merge and none of them deleted — a gap table that contradicts itself four ways is worse than one that is silent. One row now, counted with `grep -c ''` at the time of writing: `DevelopPipeline.cpp` **2,549**, `Engine.swift` **2,219**, `bench/main.cpp` **1,725**, `OrionApp.swift` **1,495**, `Scenario.swift` **1,387**, `DevelopPanels.swift` **1,359**. A sweep of every tracked `*.cpp`/`*.swift`/`*.h`/`*.mm` outside `apps/tests/` finds these six and no others, so the count is six and it is now measured rather than remembered. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31, but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session | whole tree |
+| **The 1000-line rule is broken five ways**, all in product code. ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place.** It once carried *four* contradictory copies of itself, each written by a different agent's merge and none deleted, and a gap table that disagrees with itself four ways is worse than one that is silent. Counted 2026-08-02 with `git ls-files '*.cpp' '*.h' '*.swift' '*.mm' | grep -v ^apps/tests/` and `grep -c ''`: `bench/main.cpp` **2,251**, `Engine.swift` **2,241**, `OrionApp.swift` **1,508**, `Scenario.swift` **1,502**, `DevelopPanels.swift` **1,359**. Five and no others. ⚠ **`DevelopPipeline.cpp` left this row on 2026-08-02** (decision #113): 2,896 lines and a 917-line header, now five files with the largest at 757. It was the only entry here anyone had costed, and the split is a worked example of the shape the rest want — the seam was the graph's four regions, and each file holds both the nodes its region builds *and* the parameters it pushes, so a feature is one file rather than two edits twelve hundred lines apart. ⚠ Four of the five remaining **grew** between 2026-08-01 and 2026-08-02 while this row sat still, which is the argument for recounting rather than trusting it. Splitting product code is riskier than splitting tests and each one wants its own session | whole tree |
 | **Nothing asserts that a gesture *arms*** — narrowed 2026-08-01, decision #110.3, and it is now the *first* link only. `repro/gesture-preview-agrees.txt` used to compare an armed run against an unarmed one and demand they agree, which is green when arming does nothing; it now also asserts arming has an effect (the preview surface goes 0.2323/0.2918 → 0.4814/0.2037 over the same eight ticks), so a no-op `beginInteraction` fails. What is still unreachable is a `DragGesture` closure calling it: **attempted** — `NSHostingView` off-screen lays the wheel out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s call is green across 744 / 3624 / 39, measured | `Scenario.swift` |
 | ~~**The grading wheel's arming is unmeasured.**~~ ✅ **closed 2026-08-01, decision #110.2.** `wheel` and `dragwheel` drive a three-component control, added beside the scalar spellings rather than replacing them (#89). **9.6 ms per tick unarmed against 1.2 armed, 8.0×**, settled picture identical at luma 0.2268 / sat 0.5136 | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
