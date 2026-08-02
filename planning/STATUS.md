@@ -149,6 +149,14 @@ each brief, all four landed 5, 5, 7 and 5 commits deep.
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
+⚠ **Measured 2026-08-01 after session `p`, with all four gates run.** Every
+other `Suites:` block below this line is stale and is kept only because a merge
+put it there; this one is the current count.
+
+**Suites:** `orion-tests` **750 checks** · `orion-viewport-tests` **3620
+checks** · **39 `repro/` scenarios** · all 0 failures. Bench exits 0:
+**173 nodes, 7186 MiB**, M0 gate advisory.
+
 **Suites:** `orion-tests` **722 checks** · `orion-viewport-tests` **3620
 checks** · **39 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
 three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
@@ -302,6 +310,103 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01p — §3.3, and the estimate that was wrong in one word
+
+**Story:** piece 4 of `research/highlight-reconstruction.md` — Rouf, Lau &
+Heidrich §3.3, cross-channel detail transfer. Decision **#109**; `UNSOURCED.md`
+§27.
+
+**173 nodes, 7186 MiB — both unchanged.** ROADMAP costed this at **+23 nodes and
+~30 MiB**, which is what made it the cheaper of the two remaining pieces.
+
+### ⚠ The re-cost, and it is a word rather than a number
+
+The estimate read *"the pyramid can be reused"*. Two things kill it, and both are
+readable in the shipped code rather than measurable only after building:
+
+- **Piece 3's `ρ` is `f` everywhere §3.3 operates.** `hl_mask.slang` writes `Ω^∩`
+  as the hole, so every pixel outside it and above the shoulder is *known* with
+  `rgb = f`. Over `Ω^∪ \ Ω^∩` — §3.3's entire domain — `ρ ≡ f`, and
+  `f*_k = (ρ_k/ρ_j)·f_j` is the identity. `hl_apply.slang`'s own comment said so
+  already.
+- **Pull-push solves Laplace; §3.3 is Poisson.** There is no residual and no
+  relaxation in a pull-push interpolant, so there is nowhere to put `∇·g*_k`.
+  Substituting `f* = r·f_j + u` gives `∇²u = f_j∇²r + ∇r·∇f_j`, whose neglected
+  term is the size of the detail being transferred.
+
+### ⚠ The census came first, and it changed which thing got built
+
+`apps/bench` block **3e** counts the clip sets on `highlights`' own two sides,
+against the ceiling that node was given. On real frames:
+
+| | `_PIC8220` | `_PIC8095` | `_PIC8148` |
+|---|---|---|---|
+| `Ω^∩` | 112,618 | 54,704 | 17 |
+| `Ω^∪ \ Ω^∩` | 86,894 | 89,415 | 77 |
+| ...untouched by the window fit | 69% | 78% | all |
+| ...and beyond its 12 px reach | 5,608 | 16,578 | 0 |
+
+**0.023%–0.068% of a frame does not buy 23 nodes.** What does is the next row:
+the ring that supplies `ρ` for **every** blown core is 11,901 and 20,563 px, of
+which **58% and 69%** the window fit hands back untouched. Piece 2 was feeding
+still-clipped pixels to the solver as Dirichlet data, so every core in the frame
+was solved from a rim that was itself wrong by a mean of 0.14–0.22 of the clip.
+
+So piece 4 is a **correction to piece 3** before it is a feature, and it needed
+none of the nodes: `hl_mask`'s hole becomes the part of `Ω^∪` the window fit did
+not recover — read off the node as `rec > raw`, not off a threshold — and
+`hl_apply` writes the ratio where some channel never clipped. `nRgb_` already
+existed, so the second binding costs nothing.
+
+### The two sets piece 2 conflated
+
+Which pixels the fill may **write** and which pixels are **evidence** are
+different questions. Piece 2's rule about the first is right and untouched —
+Masood et al.'s measurement wins wherever it exists. Nothing in that argument
+makes a still-clipped pixel evidence.
+
+### The #29 argument, and it is not #106's
+
+#106 leans on the maximum principle. That does not cover this branch:
+`(ρ_k/ρ_j)·f_j` multiplies a rim ratio by the pixel's own measured channel and
+can exceed the rim's range in level, which is the point. What is bounded is the
+**chromaticity** — `ρ` is a convex combination of known colors, so the ratio is
+one the rim exhibited. A neutral rim gives `ρ_k = ρ_j`, hence `f*_k = f_j`. And
+under #29's clip the domain is *empty* at a neutral white balance, since equal
+gains put `Ω_R = Ω_G = Ω_B`.
+
+### The mutations — seven, and three of them are about the tests
+
+| Mutation | Effect |
+|---|---|
+| `hl_mask`: hole reverts to `Ω^∩` | **3 red** — §3.3 becomes the identity, 0.0836 → 0.0836 |
+| `hl_apply`: write `ρ` instead of the ratio | **2 red** — green 0.610 → 0.505, the measured detail discarded |
+| `hl_mask`: drop the shoulder rule | **1 red** |
+| `hl_apply`: predicate is a level test, not `rec > raw` | ⚠ **750 engine checks green, bench red at 13,135 px, exit 1.** The fixture's recovered ring is uniform, so `ρ` equals the picture over it and the ratio is the identity whatever predicate is used. Moved to `apps/bench` 3e |
+| `hl_apply`: recovered channels count as reference | ⚠ **Equivalent mutation.** `highlights.slang` declines *per pixel*, so either every clipped channel is lifted (and §3.3 never runs) or none is. Nothing can distinguish the two spellings |
+| Drop the "may only raise it" floor | ⚠ Nothing red; the census says it binds on **150** and **645** channels on real frames |
+| Remove the `kMaxGain` ceiling | ⚠ Nothing red, and it caps **0** channels on either frame. Kept rather than deleted — unlike `hl_pull`'s weight cap it is not *provably* unreachable. `UNSOURCED.md` §27 |
+
+### ⚠ Two fixture defects found and fixed, and the older one was worse
+
+- **The test's target was itself clipped.** Every ring in the wiring fixture is
+  neutral at the sensor, so the truth about the lamp is 2 : 1 : 1.5 — and the
+  partial ring reads 1.00 : 0.61 : 0.92 because its red hit the ceiling. The test
+  asked whether the core took *that* ring's color, which is the error piece 4
+  removes. A bright wholly-unclipped ring is now the target.
+- **The fixture recovered nothing at all**, so two mutations that overwrite the
+  window fit's answer were invisible. The partial ring is 32 px wide now and
+  straddles the 12 px reach; the radial profile is printed.
+- ⚠ And a `kMaxGain` assertion was **written and deleted** rather than shipped: it
+  was green for every value the constant could take.
+
+### Gates
+
+`orion-tests` **750 checks, 0 failures**. `orion-viewport-tests` **3620, 0**. All
+**39** `repro/*.txt` exit 0. `orion-bench` exit 0 on `_PIC8220`, **173 nodes,
+7186 MiB**, M0 gate PASS at p95 10.06 ms — advisory, and the load-bearing numbers
+are the node count and the new exact pixel invariant, both unmoved.
 
 ## Session 2026-08-01o — a mask under a keystone is an ellipse, and had been staying round
 
