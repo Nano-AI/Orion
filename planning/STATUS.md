@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-02 (**`apps/tests/` is entirely under the 1000-line ceiling; one file in the tree is over it — #129**)
+**Last updated:** 2026-08-02 (**both checks that named their own mutation and missed it now fail on it — #130**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#103 built, #101 refused). **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
@@ -230,6 +230,46 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — the two checks that claimed more than they checked (#130)
+
+**Decision #130.** The two holes #127 and #129 found by mutation and left alone
+are closed, and **a third of the same kind turned up while proving the first**.
+Both fixes are in `apps/tests/`; no engine line changed.
+
+⚠ **`testPerspectiveMaskExtent` check 6 named the `W⁻¹JW` conjugation and drove
+a pure aspect squeeze, whose Jacobian is diagonal — so the conjugation
+multiplied two zeros.** The squeeze block stays and now *asserts* that its
+derivative is diagonal, so the blindness is on the record rather than implied.
+Beside it, **6b drives a two-way keystone** (`{0.8, 0.6, 0}` on 600×400) at four
+off-axis spots, whose least |off-diagonal| is **0.0674**, and checks the carried
+derivative against **a central difference of `toFrame`'s own neighbouring
+centres** — an independent answer, because a *position* never passes through the
+conjugated matrix. Deleting the conjugation now prints **`worst 0.072389`**
+(tolerance 1e-3) and **`1.483727 rad`** (tolerance 5e-3) and exits 1.
+
+⚠ **The third hole was the file's own header**: *"every check below fails on the
+isotropic version"*. Running that mutation reddens **five**, and four checks are
+deliberately blind to it — check 4 preserves area on purpose, check 5 is the
+neutral control. Counted from the run, not from the sentence.
+
+⚠ **The highlight-fill comment was rewritten *and* the check strengthened.** *"A
+constant rim fills with that constant"* claimed *"any weighting error, any lost
+normalization, any half-texel drift … shows here"* and reached none of them:
+with constant data every value in the pyramid is c·w for one c, so any blend
+carrying colour and weight through the same arithmetic returns c whatever its
+weights are. The naive un-premultiplied `lerp(up, f, f.a)` — the mistake
+`hl_push.slang`'s own header warns about — leaves it green at **3e-7** and
+reddens only the CPU-twin check. The comment now says what it does assert (the
+*pairing*: the fill divides by the weight it accumulated). The one piece of the
+old claim that could be made true here is now **a check**: both kernels promise
+w stays in [0, 1] — the pull's taps are a partition of unity, the push's
+w + (1−w)·w_up is convex — and neither said so in a test. Dropping the
+premultiplied guard carries the weight to **7.12** and it now goes red at the
+block itself instead of two files away.
+
+Gates: **806** checks (800 + 6 new), **3708**, **40 of 40**, bench exit 0, M0
+p95 **9.21 ms** against 16.
 
 ### ✅ 2026-08-02 — the last three oversize test files, split at the fixture (#129)
 
