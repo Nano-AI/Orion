@@ -1499,17 +1499,38 @@ final class Engine {
         pushAndRender()
     }
 
-    /// Restores a state saved to a sidecar. Silent on malformed data: a
-    /// sidecar written by a newer build should leave the photo openable.
-    func restore(encoded: Data) {
+    /// Restores a state saved to a sidecar. Returns false when the blob would
+    /// not decode, and the photograph is then left openable — a sidecar written
+    /// by a newer build must not make a file unopenable.
+    ///
+    /// ⚠ **The `false` is load bearing and used to be a bare `return`.** Two
+    /// things downstream read "the sidecar had a develop blob" and took it to
+    /// mean "and it is now in the engine":
+    ///
+    /// - `MatteStore.sweepAfterLoad` was handed `engine.maskComponents`, which
+    ///   after a failed decode is the *default* empty list. The sweep then
+    ///   deleted every matte PNG beside the photograph. That is #87's lesson
+    ///   reached by a second route, and it is not recoverable — the model has
+    ///   to be run again, and Vision's answer moves between OS releases.
+    /// - `Autosave.begin` was armed with the default state as its baseline, so
+    ///   the first slider tick wrote a blank develop blob over the sidecar that
+    ///   had only failed to *parse*. An hour's work, gone on a keystroke.
+    ///
+    /// Both callers now branch on the answer, and both say so out loud.
+    @discardableResult
+    func restore(encoded: Data) -> Bool {
         guard let s = try? JSONDecoder().decode(DevelopState.self, from: encoded) else {
-            return
+            let why = "the saved edits could not be read"
+            lastFailure = why
+            FileHandle.standardError.write(Data("orion: restore failed — \(why)\n".utf8))
+            return false
         }
         suspended = true
         assign(s)
         suspended = false
         history.reset(to: s)
         pushAndRender()
+        return true
     }
 
     /// Rotates by a quarter turn, wrapping. Clockwise is positive.

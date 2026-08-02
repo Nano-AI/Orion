@@ -290,7 +290,12 @@ enum Scenario {
             guard let saved = Sidecar.read(for: p)?.develop else {
                 throw Bad(what: "no develop state in the sidecar to reopen with")
             }
-            engine.restore(encoded: saved)
+            // ⚠ The parse's answer, exactly as `Editor.load` reads it. Handing
+            // `engine.maskComponents` to the sweep after a *failed* decode
+            // deletes every matte beside the photograph — see `Engine.restore`.
+            guard engine.restore(encoded: saved) else {
+                throw Bad(what: "the sidecar's develop state would not decode")
+            }
             engine.restoreMattes(photo: p)
             snapshots.open(photo: p)
             MatteStore.sweepAfterLoad(photo: p, parsed: engine.maskComponents)
