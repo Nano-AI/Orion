@@ -165,7 +165,163 @@ produced that number rather than an answer left over from an earlier event.
 `apply` skips a component whose edit did not change, so a forgotten
 `brushRevision` bump would leave a stale prefix reading exactly like a fast path.
 
-## ⚠ What this does *not* fix
+## The accumulator, built 2026-08-01 — session two
+
+Decision #108. The predicate's answer is now read: `mask_component.slang`
+kind 3 continues from a persistent R32Float coverage texture instead of
+re-laying the stroke, and the cost of a pointer event stops depending on how
+much has already been painted.
+
+`mask:0` alone, on the full graph, appending 49 dabs against re-laying the
+same stroke because one dab of its head moved — same dab count, same host
+work, same blocks, same boxes, interleaved rep by rep in one process
+(`orion-bench` block **3d**), two runs:
+
+| Dabs already down | Append 49 | Head moved: re-lay all |
+|---|---|---|
+| 49 | 4.66 / 9.19 ms | 7.65 / 14.53 ms |
+| 294 | 5.20 / 5.80 ms | **36.46 / 46.87 ms** |
+
+**The left column is flat in what is already painted and the right one is
+linear in it.** That is the whole claim. The right column is also the cost
+before this change, which is the check that the fixture did not move.
+
+### The memory, decided in the open
+
+| | Full graph | Preview | Both | On 7186 MiB |
+|---|---|---|---|---|
+| One accumulator, for the live component | 92.47 MiB | 5.78 MiB | **98.25 MiB** | **+1.37%** |
+| One per component, as ROADMAP costed it | 370 MiB | 23 MiB | 393 MiB | +5.5% |
+
+⚠ **One texture, not four**, and the argument is that the second row buys
+almost nothing. Painting is a single-component gesture: the accumulator is
+only useful to the component under the cursor, and the cost of having one is
+a single full evaluation when the photographer moves to a different row —
+one event out of a gesture's hundreds. Four of them would be 393 MiB paid by
+every photograph with four brush rows, whether or not any of them is being
+painted.
+
+⚠ **R32Float, not R16Float.** The invariant is bit-identity with a full
+evaluation, and only float32 round-trips float32 exactly. Measured, not
+argued: switching the accumulator to R16Float turns the ten-event
+bit-identity check red and nothing else.
+
+⚠ **Half-resolution accumulation was considered and is not possible here**,
+for the same reason. It would be a different computation from the full loop,
+so the comparison the whole design rests on could not be made at all.
+
+⚠ **Registered at 1×1 and grown on the first dab**, and given back to 1×1
+when no component is a brush any more. A photograph that is never painted on
+pays four bytes.
+
+⚠ **The bench's "7186 MiB" does not include any of this.**
+`Pipeline::intermediateBytes()` sums node *outputs* only, so every auxiliary
+texture — the four dab textures, their bounds, the mattes, the curve and cube
+LUTs, the grain plate, and now the accumulator — is outside the number the
+bench prints. That is a pre-existing gap and it is stated here rather than
+left to make "173 nodes, 7186 MiB, unchanged" read as "nothing was
+allocated".
+
+### ⚠ The predicate answered a question the accumulator does not ask
+
+Session one updated `brushPrev_` when a stroke was **uploaded**. That is
+right for a predicate nobody reads and wrong the moment something does,
+because an accumulator is a *texture* and a texture only changes when the
+graph is **rendered** — and those are not the same moment. `Engine::
+setAdjustments` applies to both graphs on every pointer event while only the
+preview is rendered, so during a gesture the full graph receives a hundred
+strokes and renders once.
+
+A host that recorded its claim at push time would then start the catch-up
+render 180 dabs into a texture holding none of them. So `brushPrev_` is now
+advanced from `Pipeline::lastRun()` — from what the graph reports having
+**executed** — and `brushPending_` holds the claim in between. The mutation
+that puts it back turns two checks red, one of them a frame comparison.
+
+### ⚠ A kernel that accumulates is not idempotent, and nothing else here is
+
+Every other node in this graph is a pure function of its inputs, so running
+one twice is a waste and never a wrong answer. Run this one twice on one set
+of parameters and the dabs in `[firstDab, count)` go down twice: a heavier
+stroke, in the right place, in the right shape.
+
+That can happen without `apply` seeing it coming. White balance moves and the
+reference image behind every mask component changes; a matte is uploaded;
+`setEnabled` brings a hidden component back. In each case the node is dirty
+again with parameters it has already run on.
+
+The guard is `DevelopPipeline::reconcileBrushAccum`, and **its placement is
+the argument**: immediately before the render, where nothing can intervene
+afterwards. It asks `Pipeline::nodeDirty` and refuses the fast path to any
+node about to run on parameters this `apply` did not push. The alternative —
+proving that nothing else in a 2,500-line file dirties that node — is a claim
+the next edit breaks silently.
+
+### The mutations — ten, and three of them found real gaps
+
+| Mutation | Checks red |
+|---|---|
+| `firstDab` set from the predicate's `prefix` rather than from what the accumulator holds | **2** — the undo-and-repaint frame among them |
+| the claim recorded at push time instead of from `lastRun()` | **2** — the gesture's twelve applies and one render |
+| `reconcileBrushAccum` removed | **2** — the white-balance double-composite |
+| the block walk restarts at the block boundary instead of at `firstDab` | **3** — three bit-identity comparisons |
+| the accumulator is R16Float | **1** |
+| `firstDab` is always 0 — the vacuity check | **15** |
+| ⚠ the old owner keeps `accumUse` when the accumulator changes hands | **0, then 1** |
+| ⚠ the refusal keyed on the host's record rather than the node's `firstDab` | **0, then 2** |
+| ⚠ `ensureBrushAccum` does not clear claims on a reallocation | **0, then 1** |
+| `saturate(own)` stored instead of the raw value | **0, and it stands** |
+
+The three marked ⚠ passed everything and were defects in the checks:
+
+- **The hand-off has a direction.** Mask nodes run in component order, so
+  moving the accumulator from component 0 to component 1 has the stale writer
+  running *before* the new owner and being harmlessly overwritten. Moving it
+  from 1 back to 0 reverses that, and component 1 lands its own coverage on
+  top of the accumulator component 0 just filled. Only the second direction
+  can see it, and the test only had the first.
+- **The refusal was too wide.** Keying it on "this component has something in
+  the accumulator" is correct and gives the whole feature back the first time
+  an unrelated slider moves. The check that catches it asserts the refusal
+  count *did not* move.
+- **A safety net that could not fire.** The reallocation only ever ran on the
+  first dab, when there are no claims to clear. Making the accumulator
+  actually go back to 1×1 when the last brush component stops being one —
+  which `ROADMAP.md` promised and nothing had implemented — made it reachable.
+
+### ⚠ The survivor, and why it is not a gap
+
+Storing `saturate(own)` into the accumulator instead of the raw value passes
+every check. Both composites are closed on [0,1] — source-over is
+`own + cov·(1−own)`, whose exact value never exceeds 1 for `own, cov` in
+[0,1], and destination-out is `own·(1−cov)`, which is never negative — and
+correct rounding cannot carry a result past a bound the exact value respects.
+The clamp has nothing to do, so the two stores are the same number. Same
+shape as the `>=` survivor recorded above.
+
+The raw store is kept anyway, because that argument is about the operations
+*currently* in the loop. A composite added later that is not closed on [0,1]
+would make a clamped store disagree with a full loop that keeps `own`
+unclamped to the end. The raw store needs no such argument.
+
+### What is still linear
+
+The first render after a gesture that started from nothing. The accumulator
+makes the *marginal* dab cheap, not the first evaluation, so a component
+carrying 2,000 dabs still pays for all 2,000 the first time it is drawn —
+after a reload, after a geometry change, after the nib moves. Every one of
+those is an event a photographer waits for once rather than a hundred times.
+
+The frame-filling scribble is unchanged as a *first* evaluation and fixed as
+an append, which is what the note below asks for.
+
+## ⚠ What this does *not* fix — ✅ fixed 2026-08-01 by #108, above
+
+⚠ **"per brush component" was wrong, and the budget check is what found it.**
+One texture, for the component under the cursor, is 98 MiB rather than 393 and
+buys every event of a gesture but the first. See *The memory, decided in the
+open*. The paragraph is kept as written because the shape of the fix it
+predicted is the shape that shipped.
 
 Painting appends dabs, and every appended dab re-runs the loop over all dabs laid
 so far. Rejection makes each of those passes cheaper; it does not make them
