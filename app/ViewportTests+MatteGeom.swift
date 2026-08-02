@@ -45,7 +45,7 @@ extension ViewportTests {
     static func testMatteTurnAgreesWithTheMaskTransform() {
         let w = 8, h = 5
 
-        // One lit pixel, off-centre in both axes so no symmetry can rescue a
+        // One lit pixel, off-center in both axes so no symmetry can rescue a
         // wrong answer.
         let sx = 6, sy = 1
         var src = [Float](repeating: 0, count: w * h)

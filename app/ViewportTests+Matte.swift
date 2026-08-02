@@ -11,13 +11,13 @@ extension ViewportTests {
     ///
     /// ⚠ **The ramp is the test.** Every earlier matte fixture in this file is
     /// binary — a disc, a half-plane — and a binary matte survives a wrong
-    /// colour space, a wrong bit depth and a wrong byte order, because 0 and 1
+    /// color space, a wrong bit depth and a wrong byte order, because 0 and 1
     /// land on 0 and 1 however the curve between them is mangled. Only the
     /// mid-values can tell, and mid-values are exactly what a feathered
     /// selection is made of.
     ///
-    /// The specific defect this exists to catch: CoreGraphics colour-manages
-    /// greyscale. Write 0.5 through a Gamma-2.2 grey space and read it back as
+    /// The specific defect this exists to catch: CoreGraphics color-manages
+    /// grayscale. Write 0.5 through a Gamma-2.2 gray space and read it back as
     /// linear and it comes back near 0.22 or 0.73 — every feathered edge on
     /// every reopened photograph shifted, nothing crashing, nothing to see
     /// unless it is measured. That is the purple cast's shape exactly.

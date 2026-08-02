@@ -242,7 +242,7 @@ enum Screenshot {
         case "presets":
             return .presets
         case "mask", "local", "mask-linear", "mask-linear-feathered",
-             "mask-radial", "mask-off", "brush", "range", "colour", "layers", "sky":
+             "mask-radial", "mask-off", "brush", "range", "color", "layers", "sky":
             return .mask
         default:
             return .light
@@ -300,13 +300,13 @@ enum Screenshot {
             // which one shared adjustment cannot do.
             engine.exposureEv = 2.6
             engine.maskKind = 2
-            engine.maskCentreX = 0.22; engine.maskCentreY = 0.5
+            engine.maskCenterX = 0.22; engine.maskCenterY = 0.5
             engine.maskRadiusX = 0.15; engine.maskRadiusY = 0.15
             engine.localExposureEv = -2.5
             engine.localSaturation = -1.0
             _ = engine.addMaskComponent(kind: 2)
             engine.toggleLayerBreak(at: 1)
-            engine.maskCentreX = 0.78; engine.maskCentreY = 0.5
+            engine.maskCenterX = 0.78; engine.maskCenterY = 0.5
             engine.maskRadiusX = 0.15; engine.maskRadiusY = 0.15
             engine.localExposureEv = 1.5
             engine.localWarmth = 1.0
@@ -356,8 +356,8 @@ enum Screenshot {
             engine.exposureEv = 2.6
             engine.maskKind = 1
             engine.localExposureEv = -1.6
-            engine.maskCentreX = 0.46
-            engine.maskCentreY = 0.44
+            engine.maskCenterX = 0.46
+            engine.maskCenterY = 0.44
             engine.maskAngle = 1.05
             engine.maskLength = 0.55
             engine.maskOverlay = true
@@ -369,8 +369,8 @@ enum Screenshot {
             engine.exposureEv = 2.6
             engine.maskKind = 1
             engine.localExposureEv = -1.6
-            engine.maskCentreX = 0.46
-            engine.maskCentreY = 0.44
+            engine.maskCenterX = 0.46
+            engine.maskCenterY = 0.44
             engine.maskAngle = 1.05
             engine.maskLength = 0.55
         case "mask-linear-feathered":
@@ -380,8 +380,8 @@ enum Screenshot {
             engine.exposureEv = 2.6
             engine.maskKind = 1
             engine.localExposureEv = -1.6
-            engine.maskCentreX = 0.46
-            engine.maskCentreY = 0.44
+            engine.maskCenterX = 0.46
+            engine.maskCenterY = 0.44
             engine.maskAngle = 1.05
             engine.maskLength = 0.55
             engine.maskFeather = 0.02
@@ -389,8 +389,8 @@ enum Screenshot {
             engine.exposureEv = 2.6
             engine.maskKind = 2
             engine.localExposureEv = 1.4
-            engine.maskCentreX = 0.44
-            engine.maskCentreY = 0.52
+            engine.maskCenterX = 0.44
+            engine.maskCenterY = 0.52
             engine.maskAngle = 0.6
             engine.maskRadiusX = 0.3
             engine.maskRadiusY = 0.17
@@ -405,8 +405,8 @@ enum Screenshot {
             engine.exposureEv = 2.6
             engine.maskKind = 2
             engine.localExposureEv = 1.4
-            engine.maskCentreX = 0.34
-            engine.maskCentreY = 0.40
+            engine.maskCenterX = 0.34
+            engine.maskCenterY = 0.40
             engine.maskAngle = 0.6
             engine.maskRadiusX = 0.30
             engine.maskRadiusY = 0.14
@@ -427,8 +427,8 @@ enum Screenshot {
             engine.exposureEv = 2.6
             engine.maskKind = 2
             engine.localExposureEv = 1.6
-            engine.maskCentreX = 0.45
-            engine.maskCentreY = 0.5
+            engine.maskCenterX = 0.45
+            engine.maskCenterY = 0.5
             engine.maskAngle = 0.35
             engine.maskRadiusX = 0.3
             engine.maskRadiusY = 0.22
@@ -482,7 +482,7 @@ enum Screenshot {
         // Distortion at each end of its travel. Negative k₁ is the case that
         // pushes the sample point past the frame edge, so it is the one that
         // says whether the picture still fills the frame.
-        // Shadow wheel alone, hard over, so "does this colour the whole
+        // Shadow wheel alone, hard over, so "does this color the whole
         // picture" can be answered with a number instead of an impression.
         case "grade-shadow-only":
             engine.gradeShadow = [-0.9, -0.9, 0.0]
@@ -544,7 +544,7 @@ enum Screenshot {
 
     /// The developed picture as a `CGImage`, scaled to fit, eight bits.
     ///
-    /// For anything that wants to *analyse* the render rather than measure it —
+    /// For anything that wants to *analyze* the render rather than measure it —
     /// today, handing a segmentation model an ordinary display-referred photo
     /// (research/masking.md §5). Eight bits and sRGB on purpose: that is what
     /// those models were trained on, and it is what the screen path already
@@ -667,7 +667,7 @@ enum Screenshot {
 
     /// The same two numbers over a `CGImage`, which is what the analysis render
     /// is. Drawn into an 8-bit RGBA context rather than read through
-    /// `CGDataProvider`, so a source in any layout or colour space arrives in
+    /// `CGDataProvider`, so a source in any layout or color space arrives in
     /// one known one.
     private static func regionStats(of image: CGImage, region: CGRect)
         -> (luma: Double, saturation: Double)? {

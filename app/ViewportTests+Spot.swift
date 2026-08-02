@@ -90,7 +90,7 @@ extension ViewportTests {
                "and the floor does not make the whole picture one big handle")
     }
 
-    /// A drag cannot push a spot off the photograph. Both centres are
+    /// A drag cannot push a spot off the photograph. Both centers are
     /// normalized picture coordinates and the shader clamps its reads, so an
     /// off-picture source would silently heal from the edge pixel — a spot that
     /// looks placed and quietly does something else.

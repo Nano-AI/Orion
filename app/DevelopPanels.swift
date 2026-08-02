@@ -82,6 +82,9 @@ extension Editor {
         case 3:  return "Brush"
         case 4:  return "Selection"
         case 5:  return "Range"
+        // ⚠ Kind 6 was missing, so every Color range row was labelled "Off" —
+        // the one word that says a row is doing nothing, on a row that is.
+        case 6:  return "Color"
         default: return "Off"
         }
     }
@@ -379,7 +382,7 @@ extension Editor {
             }
             Section("Match") {
                 Button("Brightness range") { add(kind: 5) }
-                Button("Colour range") { add(kind: 6) }
+                Button("Color range") { add(kind: 6) }
             }
         } label: {
             Label("Add", systemImage: "plus")
@@ -542,7 +545,7 @@ extension Editor {
                                 Button("Radial") { engine.setMaskKind(2, at: engine.selectedMask) }
                                 Button("Brush") { engine.setMaskKind(3, at: engine.selectedMask) }
                                 Button("Brightness range") { engine.setMaskKind(5, at: engine.selectedMask) }
-                                Button("Colour range") { engine.setMaskKind(6, at: engine.selectedMask) }
+                                Button("Color range") { engine.setMaskKind(6, at: engine.selectedMask) }
                             }
                             .menuStyle(.borderlessButton)
                             .fixedSize()
@@ -613,7 +616,7 @@ extension Editor {
 
                     // The same specs the global panel renders, pointed at the
                     // local scope. One definition, so the two cannot drift in
-                    // look, behaviour or in what they offer.
+                    // look, behavior or in what they offer.
                     AdjustmentGroup(engine: engine,
                                     specs: AdjustmentCatalogue.localSet,
                                     scope: .local)
@@ -643,37 +646,37 @@ extension Editor {
                         // rendering of it.
                         HStack(spacing: 8) {
                             // What was actually under the click. See
-                            // `maskColourSwatch` for why the stored target
-                            // cannot be drawn: it is peak-normalised, so every
-                            // colour would come back looking saturated.
-                            let sw = engine.maskColourSwatch
-                                ?? (r: Double(pow(max(engine.maskColour.r, 0), 1 / 2.2)),
-                                    g: Double(pow(max(engine.maskColour.g, 0), 1 / 2.2)),
-                                    b: Double(pow(max(engine.maskColour.b, 0), 1 / 2.2)))
+                            // `maskColorSwatch` for why the stored target
+                            // cannot be drawn: it is peak-normalized, so every
+                            // color would come back looking saturated.
+                            let sw = engine.maskColorSwatch
+                                ?? (r: Double(pow(max(engine.maskColor.r, 0), 1 / 2.2)),
+                                    g: Double(pow(max(engine.maskColor.g, 0), 1 / 2.2)),
+                                    b: Double(pow(max(engine.maskColor.b, 0), 1 / 2.2)))
                             RoundedRectangle(cornerRadius: 3)
                                 .fill(Color(.sRGB, red: sw.r, green: sw.g,
                                             blue: sw.b, opacity: 1))
                                 .frame(width: 26, height: 18)
                                 .overlay(RoundedRectangle(cornerRadius: 3)
                                     .strokeBorder(Palette.line, lineWidth: 1))
-                            Button(engine.colourPicking ? "Click the photo…" : "Pick colour") {
-                                engine.colourPicking.toggle()
+                            Button(engine.colorPicking ? "Click the photo…" : "Pick color") {
+                                engine.colorPicking.toggle()
                             }
                             .buttonStyle(.plain)
                             .font(.system(size: 11))
-                            .foregroundStyle(engine.colourPicking ? Palette.accent : Palette.text)
+                            .foregroundStyle(engine.colorPicking ? Palette.accent : Palette.text)
                             Spacer(minLength: 0)
                         }
 
-                        slider("Tolerance", $engine.maskColourTol, 0.01...0.8, "", 3,
+                        slider("Tolerance", $engine.maskColorTol, 0.01...0.8, "", 3,
                                resetsTo: maskDefaults.colourTol)
-                        slider("Softness", $engine.maskColourSoft, 0.002...0.4, "", 3,
+                        slider("Softness", $engine.maskColorSoft, 0.002...0.4, "", 3,
                                resetsTo: maskDefaults.colourSoft)
                     }
 
                     if engine.maskKind == 3 {
                         // Paint or erase, on the same component. ⚠ A segmented
-                        // pair rather than a toggle labelled "Erase": a toggle
+                        // pair rather than a toggle labeled "Erase": a toggle
                         // has an off state that has to be read as "paint", and
                         // the two are equal acts. Which one is armed is the
                         // first thing to know before drawing on the picture, so
@@ -685,7 +688,7 @@ extension Editor {
                         .pickerStyle(.segmented)
                         .labelsHidden()
 
-                        // A stroke has no centre or angle to type in — the
+                        // A stroke has no center or angle to type in — the
                         // whole point is that it is drawn. What is left is the
                         // nib, and those are the three the shader reads.
                         slider("Size", $engine.brushRadius, 0.01...0.4, "", 3,
@@ -715,9 +718,9 @@ extension Editor {
                     }
 
                     if engine.maskKind == 1 || engine.maskKind == 2 {
-                        slider("Centre X", $engine.maskCentreX, 0...1, "", 2,
+                        slider("Center X", $engine.maskCenterX, 0...1, "", 2,
                                resetsTo: maskDefaults.centreX)
-                        slider("Centre Y", $engine.maskCentreY, 0...1, "", 2,
+                        slider("Center Y", $engine.maskCenterY, 0...1, "", 2,
                                resetsTo: maskDefaults.centreY)
                         slider("Angle", $engine.maskAngle, -3.15...3.15, " rad", 2,
                                resetsTo: maskDefaults.angle)

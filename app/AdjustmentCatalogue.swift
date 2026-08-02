@@ -32,7 +32,7 @@ enum AdjustmentStage: Int, CaseIterable, Sendable {
         case .capture:  "Capture"
         case .detail:   "Detail"
         case .effects:  "Effects"
-        case .tone:     "Tone and colour"
+        case .tone:     "Tone and color"
         case .display:  "Display"
         case .geometry: "Geometry"
         }

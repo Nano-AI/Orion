@@ -156,7 +156,7 @@ struct Histogram: View {
                 ZStack(alignment: .topLeading) {
                     // Named marks carry more weight than the quarters between
                     // them — the ranking a scale is read by. Two passes because
-                    // one stroke colour cannot say both.
+                    // one stroke color cannot say both.
                     marks(in: geo.size, every: 2, length: 6)
                         .stroke(Palette.dim, lineWidth: 1)
                     marks(in: geo.size, every: 1, length: 3, skipEvery: 2)
@@ -242,7 +242,7 @@ struct Histogram: View {
     /// 3 × 256 bins the 99th percentile is still the eighth-largest value, so a
     /// night frame — 10% of its pixels at black — kept a ceiling set by the
     /// clipping spike and squashed the whole photograph into a band along the
-    /// bottom. Which is what the developer meant by calling it a grey blob.
+    /// bottom. Which is what the developer meant by calling it a gray blob.
     ///
     /// The end bins are excluded instead of discounted, and that is now honest
     /// rather than a fudge: the flags above report exactly how much sits in them,
@@ -280,7 +280,7 @@ struct Histogram: View {
     /// it is monotone so no bin can overtake a taller one, it maps zero to zero
     /// so an empty bin is still empty, and it roughly doubles the visible
     /// dynamic range without the floor-clamping a log needs to stay finite. The
-    /// axis is not labelled with counts anywhere, so nothing is being
+    /// axis is not labeled with counts anywhere, so nothing is being
     /// misreported — the shape is the readout, and the clipping flags carry the
     /// numbers.
     private static func plotted(_ fraction: Double) -> CGFloat {

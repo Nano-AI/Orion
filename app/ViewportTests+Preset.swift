@@ -459,7 +459,7 @@ extension ViewportTests {
                jobs3.map(\.destination.lastPathComponent).joined(separator: ", "))
     }
 
-    /// ⚠ One bad file does not abandon the rest, and cancelling stops promptly.
+    /// ⚠ One bad file does not abandon the rest, and canceling stops promptly.
     ///
     /// A folder is likely to contain something the decoder cannot read, and
     /// losing forty good photographs to the eleventh being a stray PNG is not
@@ -492,16 +492,16 @@ extension ViewportTests {
         report(outcome.summary.contains("4") && outcome.summary.contains("1 failed"),
                "the summary says both numbers", outcome.summary)
 
-        // Cancelling: stops before the next photograph, and says it stopped.
+        // Canceling: stops before the next photograph, and says it stopped.
         var done = 0
         let stopped = BatchExport.run(
             jobs,
             openAndRestore: { _ in done += 1 },
             exportTo: { _ in },
-            isCancelled: { done >= 2 })
-        report(stopped.written.count == 2 && stopped.cancelled,
-               "cancelling stops the batch and is reported",
-               "\(stopped.written.count) written, cancelled \(stopped.cancelled)")
+            isCanceled: { done >= 2 })
+        report(stopped.written.count == 2 && stopped.canceled,
+               "canceling stops the batch and is reported",
+               "\(stopped.written.count) written, canceled \(stopped.canceled)")
         report(stopped.summary.contains("stopped early"),
                "and the summary says so", stopped.summary)
 

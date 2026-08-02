@@ -23,10 +23,10 @@ import UniformTypeIdentifiers
 /// `PHOTO.xmp`. So what travels with a photograph is the raw, its sidecar, and
 /// its mattes — all sharing the basename, all caught by a `PHOTO.*` copy.
 ///
-/// **16-bit greyscale, and the colour space is stated rather than left to
-/// ImageIO.** PNG carries greyscale samples big-endian (ISO/IEC 15948:2004 §7.1)
-/// and CoreGraphics will happily colour-manage them: write 0.5 through a
-/// Gamma-2.2 grey space and read it back as linear and every feathered edge on
+/// **16-bit grayscale, and the color space is stated rather than left to
+/// ImageIO.** PNG carries grayscale samples big-endian (ISO/IEC 15948:2004 §7.1)
+/// and CoreGraphics will happily color-manage them: write 0.5 through a
+/// Gamma-2.2 gray space and read it back as linear and every feathered edge on
 /// every reopened photograph shifts, with nothing to see and nothing to crash.
 /// Both ends name `CGColorSpace.linearGray`, so the conversion is the identity,
 /// and `MatteStore.roundTrip` in `orion-viewport-tests` fails if that ever stops
@@ -93,7 +93,7 @@ enum MatteStore {
         return out as Data
     }
 
-    /// The inverse. Draws through a linear-grey context rather than reading the
+    /// The inverse. Draws through a linear-gray context rather than reading the
     /// decoded image's own rows: the file states its space, the context states
     /// the same one, and CoreGraphics is then doing an identity conversion it
     /// can be trusted with — where reading raw rows would be trusting that

@@ -337,7 +337,7 @@ struct CurveEditor: View {
 
     private func clamp01(_ v: Float) -> Float { min(max(v, 0), 1) }
 
-    /// Keeps an interior point strictly between its neighbours, so the control
+    /// Keeps an interior point strictly between its neighbors, so the control
     /// points stay ascending — the interpolator relies on it.
     private func bounded(_ v: Float, between lower: Float, and upper: Float) -> Float {
         min(max(v, lower + 0.005), upper - 0.005)

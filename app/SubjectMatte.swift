@@ -212,7 +212,7 @@ enum SubjectMatte {
 
     /// The rendered picture as row-major RGB floats, for the classical
     /// detector. Drawn into an 8-bit context rather than read through a data
-    /// provider, so a source in any layout or colour space arrives in one.
+    /// provider, so a source in any layout or color space arrives in one.
     private nonisolated static func rgbFloats(from image: CGImage) -> [Float] {
         let w = image.width, h = image.height
         var bytes = [UInt8](repeating: 0, count: w * h * 4)
@@ -239,7 +239,7 @@ enum SubjectMatte {
     /// the input's — `generateScaledMaskForImage` scales to the image but the
     /// person request does not, and assuming either would silently stretch the
     /// matte across the frame. The buffer's own dimensions are read and mapped,
-    /// nearest-neighbour: the boundary here is coarse by construction and the
+    /// nearest-neighbor: the boundary here is coarse by construction and the
     /// guided refinement is what recovers it, so a smoother resample would only
     /// be inventing detail before the filter that exists to do that.
     private nonisolated static func floats(from buffer: CVPixelBuffer,

@@ -170,10 +170,10 @@ extension ViewportTests {
             near(map.rect.width, fit.width, 1e-6, "map w matches frameRect (\(image))")
             near(map.rect.height, fit.height, 1e-6, "map h matches frameRect (\(image))")
 
-            // The picture's centre is the rectangle's centre.
+            // The picture's center is the rectangle's center.
             let c = map.point(CGPoint(x: 0.5, y: 0.5))
-            near(c.x, fit.midX, 1e-6, "picture centre is the rect centre x (\(image))")
-            near(c.y, fit.midY, 1e-6, "picture centre is the rect centre y (\(image))")
+            near(c.x, fit.midX, 1e-6, "picture center is the rect center x (\(image))")
+            near(c.y, fit.midY, 1e-6, "picture center is the rect center y (\(image))")
 
             // And the corners are the corners.
             let tl = map.point(.zero)
@@ -182,7 +182,7 @@ extension ViewportTests {
         }
     }
 
-    /// View to normalized and back, at zoom and off centre. An overlay that
+    /// View to normalized and back, at zoom and off center. An overlay that
     /// only round-trips at fit is an overlay that comes off the picture the
     /// moment anybody zooms in, which is when a mask is placed carefully.
     static func testPictureMapRoundTrips() {
@@ -225,7 +225,7 @@ extension ViewportTests {
     /// pan with a constant origin passed all 3100 checks — the overlay would
     /// have sat still while the picture panned under it, which is the compare
     /// divider's old bug wearing a different hat. What follows measures the
-    /// origin against `ImageCanvas.transform`: `uvMin = centre − visible/2` at
+    /// origin against `ImageCanvas.transform`: `uvMin = center − visible/2` at
     /// the quad's leading edge and `uvMin + uvSize` at its trailing one.
     static func testPictureMapFollowsThePan() {
         let view = CGSize(width: 1400, height: 900)
@@ -258,11 +258,11 @@ extension ViewportTests {
                     near(trail.y, v.center.y + vis.height / 2, 1e-9,
                          "trailing edge is uvMin + uvSize y (\(tag))")
 
-                    // Whatever the zoom, the viewport's centre is drawn at the
-                    // centre of the rectangle the picture covers.
+                    // Whatever the zoom, the viewport's center is drawn at the
+                    // center of the rectangle the picture covers.
                     let mid = map.point(v.center)
-                    near(mid.x, map.rect.midX, 1e-6, "viewport centre is drawn centred x (\(tag))")
-                    near(mid.y, map.rect.midY, 1e-6, "viewport centre is drawn centred y (\(tag))")
+                    near(mid.x, map.rect.midX, 1e-6, "viewport center is drawn centerd x (\(tag))")
+                    near(mid.y, map.rect.midY, 1e-6, "viewport center is drawn centerd y (\(tag))")
                 }
             }
         }
@@ -294,7 +294,7 @@ extension ViewportTests {
             report(moved > 1e-6, "panning moves the picture under a fixed point (\(image))",
                    String(format: "moved %.9f", moved))
 
-            // And by the centre's own displacement, not some other amount.
+            // And by the center's own displacement, not some other amount.
             near(after.x - before.x, v.center.x - was.x, 1e-9,
                  "the picture moves by the pan x (\(image))")
             near(after.y - before.y, v.center.y - was.y, 1e-9,
@@ -345,7 +345,7 @@ extension ViewportTests {
                     let d = hypot(p.x - c.x, p.y - c.y)
                     lo = min(lo, d); hi = max(hi, d)
                 }
-                // Every sample the same distance from the centre. The old form
+                // Every sample the same distance from the center. The old form
                 // gave hi/lo = the frame's aspect, ~1.497 on a 3:2 picture.
                 near(hi, lo, 1e-6, "brush cursor is round (\(image), zoom \(zoom))")
 

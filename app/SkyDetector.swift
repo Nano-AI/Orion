@@ -112,18 +112,18 @@ enum SkyDetector {
                                 + "what this looks like when there is no horizon")
         }
 
-        // ⚠ **The assumption, checked — on the gradient, not on colour.**
+        // ⚠ **The assumption, checked — on the gradient, not on color.**
         //
         // The method rests on sky being smoother than the ground, and nothing
         // above verifies it: on a frame of pure texture the search still returns
         // whichever cut scores best, and a thin band across the top passes the
         // coverage floor while being nothing at all.
         //
-        // The first version of this check compared the two regions' colour
+        // The first version of this check compared the two regions' color
         // *covariance* and rejected genuine skies — measured on a flat sky over
         // noisy ground, the sky's covariance came out **larger** than the
-        // ground's. Colour spread is not smoothness: a sky with a gentle
-        // top-to-bottom gradient has a wide colour distribution and no edges in
+        // ground's. Color spread is not smoothness: a sky with a gentle
+        // top-to-bottom gradient has a wide color distribution and no edges in
         // it at all, which is exactly the thing being looked for.
         //
         // Mean gradient magnitude is the quantity the premise is actually about,
@@ -169,7 +169,7 @@ enum SkyDetector {
         // a thin band across the top of a frame of pure texture passed the
         // smoothness check, because the zero row dragged its mean down. The
         // whole method reads downward from the top edge, which is precisely
-        // where that artefact sits.
+        // where that artifact sits.
         let at = { (col: Int, row: Int) -> Float in
             y[min(max(row, 0), height - 1) * width + min(max(col, 0), width - 1)]
         }
@@ -238,7 +238,7 @@ enum SkyDetector {
     }
 
     /// The paper's energy: `1 / (γ·det(Σs) + det(Σg) + γ·λs₁² + λg₁²)`, with
-    /// `γ = 2`. Maximising it minimises the spread *within* each region, so the
+    /// `γ = 2`. Maximising it minimizes the spread *within* each region, so the
     /// best border is the one that makes both halves internally uniform.
     ///
     /// ⚠ The largest eigenvalue is approximated by the largest **diagonal**

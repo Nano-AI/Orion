@@ -206,13 +206,13 @@ struct ImageCanvas: NSViewRepresentable {
             // Spot removal, armed from the Detail panel. Checked before the
             // eyedropper because the two are never armed together and this one
             // consumes the click outright — the photograph must not also pan.
-            // The mask colour picker, armed from the Mask panel. Same shape as
+            // The mask color picker, armed from the Mask panel. Same shape as
             // spot placement below and checked first for the same reason: it
             // consumes the click outright, so the photograph must not also pan.
-            if engine.colourPicking, let uv = imageUV(point, in: view) {
+            if engine.colorPicking, let uv = imageUV(point, in: view) {
                 dragAnchor = nil
-                engine.pickMaskColour(at: uv)
-                engine.colourPicking = false
+                engine.pickMaskColor(at: uv)
+                engine.colorPicking = false
                 view.needsDisplay = true
                 return
             }

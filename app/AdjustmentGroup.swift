@@ -4,7 +4,7 @@ import SwiftUI
 /// the call site.
 ///
 /// The global panel and a mask's local panel render **the same specs through
-/// the same view**, so they cannot drift in look, in behaviour or in what they
+/// the same view**, so they cannot drift in look, in behavior or in what they
 /// offer. That was the ask: one set of controls, defined once, pointed at
 /// whichever scope is being edited.
 ///
@@ -120,7 +120,7 @@ struct LocalRefusals: View {
 
 /// Where the mask sits in the pipeline, named rather than implied.
 ///
-/// The panel is organised by *kind* of adjustment — Light, Colour, Detail — and
+/// The panel is organized by *kind* of adjustment — Light, Color, Detail — and
 /// that is the right way to find a control. It is the wrong way to understand
 /// why some of them can be local and others cannot, because that is decided by
 /// **order**, and order is invisible in a tab bar.

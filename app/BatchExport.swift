@@ -31,7 +31,7 @@ enum BatchExport {
     struct Outcome {
         var written: [URL] = []
         var failed: [(URL, String)] = []
-        var cancelled = false
+        var canceled = false
 
         var summary: String {
             if written.isEmpty && failed.isEmpty { return "Nothing to export." }
@@ -41,7 +41,7 @@ enum BatchExport {
             if !failed.isEmpty {
                 parts.append(failed.count == 1 ? "1 failed" : "\(failed.count) failed")
             }
-            if cancelled { parts.append("stopped early") }
+            if canceled { parts.append("stopped early") }
             return parts.joined(separator: ", ") + "."
         }
     }
@@ -54,7 +54,7 @@ enum BatchExport {
     /// losing one both live: a target that already exists on disk, and two
     /// sources from different folders sharing a basename. Both get a numbered
     /// suffix — `IMG_0001-2.jpg` — which is what every other application does
-    /// and what a photographer will recognise.
+    /// and what a photographer will recognize.
     ///
     /// `exists` is injected so the collision rules are testable without a
     /// filesystem, which is most of what makes them testable at all.
@@ -100,12 +100,12 @@ enum BatchExport {
                     openAndRestore: (URL) throws -> Void,
                     exportTo: (URL) throws -> Void,
                     progress: (Int, Int) -> Void = { _, _ in },
-                    isCancelled: () -> Bool = { false }) -> Outcome {
+                    isCanceled: () -> Bool = { false }) -> Outcome {
         var outcome = Outcome()
 
         for (i, job) in jobs.enumerated() {
-            if isCancelled() {
-                outcome.cancelled = true
+            if isCanceled() {
+                outcome.canceled = true
                 break
             }
             progress(i, jobs.count)

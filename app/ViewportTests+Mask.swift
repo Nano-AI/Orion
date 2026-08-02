@@ -14,7 +14,7 @@ extension ViewportTests {
     /// the shader's own question rather than "did we draw an ellipse" — every
     /// point of the boundary curve must be exactly the end of the ramp, and
     /// every point of the inner curve exactly the start of it. A test that only
-    /// checked the outline was closed and centred would pass on a plain screen
+    /// checked the outline was closed and centerd would pass on a plain screen
     /// circle, which is the wrong curve on every frame that is not square.
     static func testMaskOutlineLandsOnTheFalloff() {
         for roundness in [2.0, 4.0, 8.0] as [CGFloat] {
@@ -22,7 +22,7 @@ extension ViewportTests {
                 for angle in [0.0, 0.4, 1.1, -0.9] as [CGFloat] {
                     var m = CanvasLayout.MaskPlacement()
                     m.kind = 2
-                    m.centre = CGPoint(x: 0.42, y: 0.55)
+                    m.center = CGPoint(x: 0.42, y: 0.55)
                     m.radius = CGSize(width: 0.3, height: 0.18)
                     m.angle = angle
                     m.feather = feather
@@ -76,7 +76,7 @@ extension ViewportTests {
             for length in [0.2, 0.6, 1.4] as [CGFloat] {
                 var m = CanvasLayout.MaskPlacement()
                 m.kind = 1
-                m.centre = CGPoint(x: 0.45, y: 0.52)
+                m.center = CGPoint(x: 0.45, y: 0.52)
                 m.angle = angle
                 m.length = length
 
@@ -125,7 +125,7 @@ extension ViewportTests {
 
             var m = CanvasLayout.MaskPlacement()
             m.kind = 1
-            m.centre = CGPoint(x: 0.5, y: 0.5)
+            m.center = CGPoint(x: 0.5, y: 0.5)
 
             let grab = CanvasLayout.maskHandlePoint(.fullEnd, m, map)
             for target in [CGPoint(x: 700, y: 430), CGPoint(x: 540, y: 330),
@@ -139,16 +139,16 @@ extension ViewportTests {
                     near(where_.y, target.y, 1e-6,
                          "\(handle) lands on the cursor y (\(image))")
 
-                    // The centre does not move when an end is pulled.
-                    near(moved.centre.x, m.centre.x, 1e-9, "endpoint drag keeps the centre x")
-                    near(moved.centre.y, m.centre.y, 1e-9, "endpoint drag keeps the centre y")
+                    // The center does not move when an end is pulled.
+                    near(moved.center.x, m.center.x, 1e-9, "endpoint drag keeps the center x")
+                    near(moved.center.y, m.center.y, 1e-9, "endpoint drag keeps the center y")
                 }
             }
         }
     }
 
     /// The rotate handle keeps a fixed screen distance and stays on the ray
-    /// from the centre through the cursor. It cannot sit *on* the cursor —
+    /// from the center through the cursor. It cannot sit *on* the cursor —
     /// it is a lollipop at a fixed stem length — so the property to check is
     /// the direction, and on screen, which is where the hand is.
     static func testMaskRotateStaysOnTheCursorRay() {
@@ -164,8 +164,8 @@ extension ViewportTests {
 
             var m = CanvasLayout.MaskPlacement()
             m.kind = 2
-            m.centre = CGPoint(x: 0.5, y: 0.5)
-            let origin = map.point(m.centre)
+            m.center = CGPoint(x: 0.5, y: 0.5)
+            let origin = map.point(m.center)
             let grab = CanvasLayout.maskHandlePoint(.rotate, m, map)
 
             for target in [CGPoint(x: 800, y: 300), CGPoint(x: 400, y: 620),
@@ -193,7 +193,7 @@ extension ViewportTests {
                 // Rotating changes nothing but the angle.
                 near(moved.radius.width, m.radius.width, 1e-9, "rotate keeps radius x")
                 near(moved.radius.height, m.radius.height, 1e-9, "rotate keeps radius y")
-                near(moved.centre.x, m.centre.x, 1e-9, "rotate keeps the centre")
+                near(moved.center.x, m.center.x, 1e-9, "rotate keeps the center")
             }
         }
     }
@@ -217,16 +217,16 @@ extension ViewportTests {
 
                 var m = CanvasLayout.MaskPlacement()
                 m.kind = 2
-                m.centre = CGPoint(x: 0.5, y: 0.5)
+                m.center = CGPoint(x: 0.5, y: 0.5)
 
-                let grab = map.point(m.centre)
+                let grab = map.point(m.center)
                 let delta = CGSize(width: 37, height: -21)
                 let to = CGPoint(x: grab.x + delta.width, y: grab.y + delta.height)
 
-                for handle in [CanvasLayout.MaskHandle.body, .centre] {
+                for handle in [CanvasLayout.MaskHandle.body, .center] {
                     let moved = CanvasLayout.maskDrag(handle, from: grab, to: to,
                                                       start: m, map)
-                    let now = map.point(moved.centre)
+                    let now = map.point(moved.center)
                     near(now.x - grab.x, delta.width, 1e-6,
                          "\(handle) drag moves by the drag x (\(image), \(zoom)x)")
                     near(now.y - grab.y, delta.height, 1e-6,
@@ -257,7 +257,7 @@ extension ViewportTests {
         for angle in [0.0, 0.6, -1.3] as [CGFloat] {
             var m = CanvasLayout.MaskPlacement()
             m.kind = 2
-            m.centre = CGPoint(x: 0.5, y: 0.5)
+            m.center = CGPoint(x: 0.5, y: 0.5)
             m.angle = angle
 
             for handle in [CanvasLayout.MaskHandle.plusX, .minusX, .plusY, .minusY] {
@@ -268,8 +268,8 @@ extension ViewportTests {
                                                   start: m, map)
 
                 near(moved.angle, angle, 1e-12, "\(handle) does not rotate (a\(angle))")
-                near(moved.centre.x, m.centre.x, 1e-12, "\(handle) does not move x")
-                near(moved.centre.y, m.centre.y, 1e-12, "\(handle) does not move y")
+                near(moved.center.x, m.center.x, 1e-12, "\(handle) does not move x")
+                near(moved.center.y, m.center.y, 1e-12, "\(handle) does not move y")
 
                 let onX = (handle == .plusX || handle == .minusX)
                 near(onX ? moved.radius.height : moved.radius.width,
@@ -279,8 +279,8 @@ extension ViewportTests {
                 // Pulling outward from the edge grows the mask on that axis.
                 let out = map.unit(to)
                 let axis = onX ? m.axisX : m.axisY
-                let reach = abs((out.x - m.centre.x) * axis.width
-                              + (out.y - m.centre.y) * axis.height)
+                let reach = abs((out.x - m.center.x) * axis.width
+                              + (out.y - m.center.y) * axis.height)
                 near(onX ? moved.radius.width : moved.radius.height,
                      min(max(reach, 0.02), 1), 1e-9,
                      "\(handle) takes the drag's reach along its own axis")
@@ -311,7 +311,7 @@ extension ViewportTests {
         for kind in [1, 2] {
             var m = CanvasLayout.MaskPlacement()
             m.kind = kind
-            m.centre = CGPoint(x: 0.5, y: 0.5)
+            m.center = CGPoint(x: 0.5, y: 0.5)
 
             for handle in CanvasLayout.maskHandles(m) {
                 let grab = CanvasLayout.maskHandlePoint(handle, m, map)
@@ -319,10 +319,10 @@ extension ViewportTests {
                     let r = CanvasLayout.maskDrag(handle, from: grab, to: to,
                                                   start: m, map)
                     let tag = "\(handle) kind \(kind)"
-                    report(CanvasLayout.maskCentreRange.contains(r.centre.x),
-                           "centre x stays in range (\(tag))", "\(r.centre.x)")
-                    report(CanvasLayout.maskCentreRange.contains(r.centre.y),
-                           "centre y stays in range (\(tag))", "\(r.centre.y)")
+                    report(CanvasLayout.maskCenterRange.contains(r.center.x),
+                           "center x stays in range (\(tag))", "\(r.center.x)")
+                    report(CanvasLayout.maskCenterRange.contains(r.center.y),
+                           "center y stays in range (\(tag))", "\(r.center.y)")
                     report(CanvasLayout.maskLengthRange.contains(r.length),
                            "length stays in range (\(tag))", "\(r.length)")
                     report(CanvasLayout.maskRadiusRange.contains(r.radius.width),
@@ -354,7 +354,7 @@ extension ViewportTests {
         for kind in [1, 2] {
             var m = CanvasLayout.MaskPlacement()
             m.kind = kind
-            m.centre = CGPoint(x: 0.5, y: 0.5)
+            m.center = CGPoint(x: 0.5, y: 0.5)
 
             for handle in CanvasLayout.maskHandles(m) {
                 let at = CanvasLayout.maskHandlePoint(handle, m, map)
@@ -408,9 +408,9 @@ extension ViewportTests {
                 center: v.center, in: view)
             var m = CanvasLayout.MaskPlacement()
             m.kind = 1
-            m.centre = CGPoint(x: 0.5, y: 0.5)
+            m.center = CGPoint(x: 0.5, y: 0.5)
             m.angle = angle
-            let a = map.point(m.centre)
+            let a = map.point(m.center)
             let b = map.point(m.fullEnd)
             return atan2(b.y - a.y, b.x - a.x)
         }

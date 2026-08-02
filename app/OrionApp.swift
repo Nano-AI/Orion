@@ -207,11 +207,11 @@ extension FocusedValues {
 // The palette is `design/tokens.json`, generated into
 // `Sources/OrionUI/DesignTokens.swift`. This is an alias, not a copy: the file
 // that used to sit here was a hand-kept mirror, and it had already drifted —
-// different names, a token dropped, two colours invented, and every value built
+// different names, a token dropped, two colors invented, and every value built
 // in sRGB against a generator that emitted Display P3.
 //
 // Two names differ from the token file and are mapped rather than renamed in
-// either direction: the tokens describe what the colour *is* (`reject`,
+// either direction: the tokens describe what the color *is* (`reject`,
 // `star`), the app reads better saying what the thing *does*.
 typealias Palette = Orion.Palette
 
@@ -447,7 +447,7 @@ struct Editor: View {
             let outcome = BatchExport.run(
                 jobs: jobs, engine: engine, settings: exportSettings,
                 progress: { done, total in batchProgress = (done, total) },
-                isCancelled: { batchCancelled })
+                isCanceled: { batchCancelled })
 
             batchProgress = nil
             message = outcome.summary
@@ -1403,7 +1403,7 @@ struct Editor: View {
     }
 
     private func step(_ offset: Int) {
-        guard let current, let next = library.neighbour(of: current, offset: offset) else {
+        guard let current, let next = library.neighbor(of: current, offset: offset) else {
             return
         }
         load(next)

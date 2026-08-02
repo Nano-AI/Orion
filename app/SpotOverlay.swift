@@ -8,7 +8,7 @@ import SwiftUI
 /// move it, and no way to say "no, take it from *there*". The only correction
 /// available was Undo spot.
 ///
-/// That is the wrong shape for the tool. Healing a blemish is a judgement about
+/// That is the wrong shape for the tool. Healing a blemish is a judgment about
 /// *where the replacement comes from*, and every editor that does this well
 /// makes the source a thing you drag. The automatic source stays as the
 /// starting position, because a click that immediately does something sensible

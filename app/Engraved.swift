@@ -61,7 +61,7 @@ enum Engraved {
     /// panel edge, and a mark when anything inside has been moved.
     ///
     /// The hairline is the hierarchy. Section names and control names were both
-    /// small grey text before, so a panel of forty rows had no level to it and
+    /// small gray text before, so a panel of forty rows had no level to it and
     /// nothing read first — the developer's own first complaint.
     struct Plate: View {
         let title: String

@@ -52,7 +52,7 @@ struct AdjustmentSlider: View {
             HStack(spacing: 0) {
                 // Engraved caps, so the control's name sits a level below its
                 // section's nameplate and a level above the value it carries.
-                // The three used to be near-identical grey text, which is why a
+                // The three used to be near-identical gray text, which is why a
                 // panel of forty rows read as a wall.
                 Engraved.Label(text: name)
                 Spacer(minLength: 8)

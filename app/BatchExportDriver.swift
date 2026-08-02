@@ -80,7 +80,7 @@ extension BatchExport {
     @MainActor
     static func run(jobs: [Job], engine: Engine, settings: ExportSettings,
                     progress: @escaping (Int, Int) -> Void = { _, _ in },
-                    isCancelled: @escaping () -> Bool = { false }) -> Outcome {
+                    isCanceled: @escaping () -> Bool = { false }) -> Outcome {
         run(jobs,
             openAndRestore: { url in
                 try engine.open(path: url.path)
@@ -97,7 +97,7 @@ extension BatchExport {
                     metadata: settings.metadata.rawValue)
             },
             progress: progress,
-            isCancelled: isCancelled)
+            isCanceled: isCanceled)
     }
 
 }

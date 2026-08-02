@@ -34,7 +34,7 @@ import Foundation
 /// named.
 ///
 /// Not actor-isolated: it touches no UI and only a file, and `Engine` builds
-/// one in its own initialiser. Isolating it would put an await in front of a
+/// one in its own initializer. Isolating it would put an await in front of a
 /// property observer.
 final class InteractionLog: @unchecked Sendable {
 
@@ -215,8 +215,8 @@ final class InteractionLog: @unchecked Sendable {
             f("maskRangeLo", x.rangeLo, y.rangeLo)
             f("maskRangeHi", x.rangeHi, y.rangeHi)
             f("maskRangeSoft", x.rangeSoft, y.rangeSoft)
-            f("maskColourTol", x.colourTol, y.colourTol)
-            f("maskColourSoft", x.colourSoft, y.colourSoft)
+            f("maskColorTol", x.colourTol, y.colourTol)
+            f("maskColorSoft", x.colourSoft, y.colourSoft)
             if x.brushStroke.count != y.brushStroke.count {
                 out.append("# brush stroke: \(y.brushStroke.count / 2) dabs")
             }
@@ -256,7 +256,7 @@ final class InteractionLog: @unchecked Sendable {
         case 3: "brush"
         case 4: "matte"
         case 5: "range"
-        case 6: "colour"
+        case 6: "color"
         default: "none"
         }
     }

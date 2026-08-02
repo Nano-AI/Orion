@@ -3,7 +3,7 @@ import SwiftUI
 /// The gradient mask, drawn on the canvas and dragged there.
 ///
 /// Sliders can express every one of these numbers and that is exactly the
-/// problem: nobody places a gradient by deciding its centre is 0.42. The
+/// problem: nobody places a gradient by deciding its center is 0.42. The
 /// controls stay — they are precise, keyboard-reachable and the only way to
 /// reach feather and roundness — but the placing happens here.
 ///
@@ -160,7 +160,7 @@ struct MaskOverlay: View {
 
     @ViewBuilder private func knob(_ h: CanvasLayout.MaskHandle) -> some View {
         switch h {
-        case .centre:
+        case .center:
             // Larger and ringed, because it is the one you reach for to move
             // the whole thing and it has to be findable among the others.
             ZStack {
@@ -286,7 +286,7 @@ struct MaskOverlay: View {
     ///
     /// The crop overlay gives each corner its own gesture on its own box, which
     /// works because its handles never overlap. A mask's do — pull a radial
-    /// mask small and the centre, both axis handles and the rotate lollipop are
+    /// mask small and the center, both axis handles and the rotate lollipop are
     /// all within a few points of each other — and stacked SwiftUI gestures
     /// resolve by draw order, so whichever was drawn last would win regardless
     /// of which is nearer the cursor. `CanvasLayout.maskHit` decides instead,
@@ -305,7 +305,7 @@ struct MaskOverlay: View {
                     // arming before the hit test would swap the canvas to the
                     // preview texture for a gesture that is not an edit at all.
                     //
-                    // Measured with `drag maskCentreX 0.2 0.8 40` on a radial
+                    // Measured with `drag maskCenterX 0.2 0.8 40` on a radial
                     // mask carrying a local exposure: 13.0 ms a tick unarmed,
                     // 1.3 ms armed. Placing a mask by eye is exactly when the
                     // picture has to keep up with the hand.

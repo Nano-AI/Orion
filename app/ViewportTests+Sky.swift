@@ -31,7 +31,7 @@ extension ViewportTests {
     ///
     /// ⚠ `UNSOURCED.md` §23 has recorded this as **untested** since the sky
     /// detector shipped: "the synthetic frames have no one-pixel diagonal gap,
-    /// and the mutation that adds diagonal neighbours survives." It is the
+    /// and the mutation that adds diagonal neighbors survives." It is the
     /// difference between a sky mask and a mask of the entire photograph, so it
     /// is worth a fixture that has one.
     ///
@@ -46,7 +46,7 @@ extension ViewportTests {
     /// ```
     ///
     /// Four-connected, the fill reaches the first gap and stops: that pixel's
-    /// four neighbours are wall, wall, sky and wall. Eight-connected, it steps
+    /// four neighbors are wall, wall, sky and wall. Eight-connected, it steps
     /// diagonally into the second gap and floods the ground — which is exactly
     /// how a fill escapes through a gap in a branch and takes the whole frame.
     static func testSkyFillCannotSqueezeThroughADiagonal() {
@@ -250,7 +250,7 @@ extension ViewportTests {
     /// most of the photographs anyone reaches for this on.
     static func testSkyNeverAsksWhatSkyLooksLike() {
         let w = 64, h = 64, horizon = 30
-        // A grey overcast sky. Nothing blue anywhere in the frame.
+        // A gray overcast sky. Nothing blue anywhere in the frame.
         let img = frame(w, h) { x, y in
             if y < horizon { return (0.78, 0.78, 0.77) }
             let n = Float((x &* 29 &+ y &* 53) % 19) / 19.0
@@ -258,11 +258,11 @@ extension ViewportTests {
         }
         switch SkyDetector.detect(rgb: img, width: w, height: h) {
         case .noSky(let why):
-            report(false, "an overcast sky is found without a colour prior", why)
+            report(false, "an overcast sky is found without a color prior", why)
         case .found(_, let coverage):
             let want = Double(horizon) / Double(h)
             report(abs(coverage - want) < 0.08,
-                   "an overcast sky is found without a colour prior",
+                   "an overcast sky is found without a color prior",
                    String(format: "%.3f against %.3f", coverage, want))
         }
     }

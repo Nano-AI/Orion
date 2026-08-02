@@ -190,7 +190,7 @@ enum CanvasLayout {
     /// The map between normalized picture coordinates and view points.
     ///
     /// The renderer draws the picture across `rect` and shows `visible` of it
-    /// about the viewport's centre; this is the inverse of exactly that, built
+    /// about the viewport's center; this is the inverse of exactly that, built
     /// from the same two numbers that go into the vertex shader. An overlay
     /// made from anything else is a second opinion about where the pixels are,
     /// and this repository has already shipped the bug where the second opinion
@@ -268,7 +268,7 @@ enum CanvasLayout {
     /// is how they drift apart tomorrow.
     struct MaskPlacement: Equatable {
         var kind: Int = 0                    // 0 none, 1 linear, 2 radial
-        var centre = CGPoint(x: 0.5, y: 0.5)
+        var center = CGPoint(x: 0.5, y: 0.5)
         var angle: CGFloat = 0               // radians
         var length: CGFloat = 0.5            // linear: zero-to-full distance
         var radius = CGSize(width: 0.3, height: 0.3)   // radial semi-axes
@@ -283,13 +283,13 @@ enum CanvasLayout {
         var axisY: CGSize { CGSize(width: -sin(angle), height: cos(angle)) }
 
         /// Where the effect is zero and where it is full. The engine derives
-        /// the shader's two endpoints from centre and angle the same way, so a
+        /// the shader's two endpoints from center and angle the same way, so a
         /// linear gradient needs no separate angle once these exist.
         var zeroEnd: CGPoint { along(axisX, -length / 2) }
         var fullEnd: CGPoint { along(axisX, length / 2) }
 
         func along(_ a: CGSize, _ d: CGFloat) -> CGPoint {
-            CGPoint(x: centre.x + a.width * d, y: centre.y + a.height * d)
+            CGPoint(x: center.x + a.width * d, y: center.y + a.height * d)
         }
 
         /// A handle's spot in normalized picture coordinates.
@@ -299,7 +299,7 @@ enum CanvasLayout {
         /// any zoom, which no normalized position can express.
         func handleUnit(_ h: MaskHandle) -> CGPoint? {
             switch h {
-            case .centre:  return centre
+            case .center:  return center
             case .zeroEnd: return zeroEnd
             case .fullEnd: return fullEnd
             case .plusX:   return along(axisX, radius.width)
@@ -314,7 +314,7 @@ enum CanvasLayout {
     /// What a press can grab.
     // MARK: Spots
 
-    /// One dust spot as the canvas handles it — both centres in **displayed**
+    /// One dust spot as the canvas handles it — both centers in **displayed**
     /// coordinates, already carried out of frame space by the caller.
     ///
     /// ⚠ The engine stores a spot in frame coordinates, because dust is on the
@@ -382,7 +382,7 @@ enum CanvasLayout {
     }
 
     enum MaskHandle: Hashable {
-        case centre, zeroEnd, fullEnd
+        case center, zeroEnd, fullEnd
         case plusX, minusX, plusY, minusY
         case rotate
         case body
@@ -400,15 +400,15 @@ enum CanvasLayout {
     /// A drag must not produce a mask the sliders cannot show, or the canvas
     /// and the panel disagree about the state and the next touch of a slider
     /// silently snaps the mask somewhere the photographer did not put it.
-    static let maskCentreRange: ClosedRange<CGFloat> = 0...1
+    static let maskCenterRange: ClosedRange<CGFloat> = 0...1
     static let maskLengthRange: ClosedRange<CGFloat> = 0.05...1.5
     static let maskRadiusRange: ClosedRange<CGFloat> = 0.02...1
 
     /// Which handles a mask of this kind shows.
     static func maskHandles(_ m: MaskPlacement) -> [MaskHandle] {
         switch m.kind {
-        case 1: return [.zeroEnd, .fullEnd, .centre]
-        case 2: return [.plusX, .minusX, .plusY, .minusY, .rotate, .centre]
+        case 1: return [.zeroEnd, .fullEnd, .center]
+        case 2: return [.plusX, .minusX, .plusY, .minusY, .rotate, .center]
         default: return []
         }
     }
@@ -430,7 +430,7 @@ enum CanvasLayout {
             return CGPoint(x: base.x + dx * maskRotateStem,
                            y: base.y + dy * maskRotateStem)
         }
-        guard let u = m.handleUnit(h) else { return map.point(m.centre) }
+        guard let u = m.handleUnit(h) else { return map.point(m.center) }
         return map.point(u)
     }
 
@@ -492,7 +492,7 @@ enum CanvasLayout {
     /// 1 is the boundary.
     static func maskRadialR(_ q: CGPoint, _ m: MaskPlacement) -> CGFloat {
         let c = cos(m.angle), s = sin(m.angle)
-        let ex = q.x - m.centre.x, ey = q.y - m.centre.y
+        let ex = q.x - m.center.x, ey = q.y - m.center.y
         let u = ( c * ex + s * ey) / max(m.radius.width, 1e-6)
         let v = (-s * ex + c * ey) / max(m.radius.height, 1e-6)
         let n = max(m.roundness, 0.1)
@@ -548,14 +548,14 @@ enum CanvasLayout {
             let u = copysign(pow(abs(ct), 2 / n), ct) * level
             let v = copysign(pow(abs(st), 2 / n), st) * level
             let ex = u * m.radius.width, ey = v * m.radius.height
-            out.append(CGPoint(x: m.centre.x + c * ex - s * ey,
-                               y: m.centre.y + s * ex + c * ey))
+            out.append(CGPoint(x: m.center.x + c * ex - s * ey,
+                               y: m.center.y + s * ex + c * ey))
         }
         return out
     }
 
     /// One of a linear gradient's iso-alpha lines: `t = 0` is where the effect
-    /// is zero, `0.5` the centre, `1` where it is full.
+    /// is zero, `0.5` the center, `1` where it is full.
     ///
     /// Perpendicular to the ramp *in normalized coordinates*, which is not
     /// perpendicular on screen. Drawing these square to the ramp as it appears
@@ -593,18 +593,18 @@ enum CanvasLayout {
         var m = start
 
         switch h {
-        case .centre, .body:
+        case .center, .body:
             let d = map.unitVector(CGSize(width: p.x - grab.x, height: p.y - grab.y))
-            m.centre = CGPoint(
-                x: clamp(start.centre.x + d.width, maskCentreRange),
-                y: clamp(start.centre.y + d.height, maskCentreRange))
+            m.center = CGPoint(
+                x: clamp(start.center.x + d.width, maskCenterRange),
+                y: clamp(start.center.y + d.height, maskCenterRange))
 
         case .zeroEnd, .fullEnd:
             // An endpoint carries angle and length at once, which is why a
             // linear gradient needs no rotate handle: the point goes exactly
             // where the cursor is and the angle is whatever that implies.
             let q = map.unit(p)
-            let dx = q.x - start.centre.x, dy = q.y - start.centre.y
+            let dx = q.x - start.center.x, dy = q.y - start.center.y
             let r = hypot(dx, dy)
             guard r > 1e-9 else { break }
             m.length = clamp(2 * r, maskLengthRange)
@@ -615,7 +615,7 @@ enum CanvasLayout {
             // — pulling a side sideways must not quietly rotate the mask. The
             // rotate handle is the one thing that changes the angle.
             let q = map.unit(p)
-            let dx = q.x - start.centre.x, dy = q.y - start.centre.y
+            let dx = q.x - start.center.x, dy = q.y - start.center.y
             let onX = (h == .plusX || h == .minusX)
             let axis = onX ? start.axisX : start.axisY
             let along = abs(dx * axis.width + dy * axis.height)
@@ -627,7 +627,7 @@ enum CanvasLayout {
 
         case .rotate:
             let q = map.unit(p)
-            let dx = q.x - start.centre.x, dy = q.y - start.centre.y
+            let dx = q.x - start.center.x, dy = q.y - start.center.y
             guard hypot(dx, dy) > 1e-9 else { break }
             m.angle = atan2(dy, dx)
         }
@@ -649,7 +649,7 @@ enum CanvasLayout {
     /// where the scalloping on the edge of a stroke becomes visible.
     static let brushSpacing: CGFloat = 0.25
 
-    /// The dab centres a drag from `a` to `b` should add, given what the stroke
+    /// The dab centers a drag from `a` to `b` should add, given what the stroke
     /// already ends with.
     ///
     /// A pointer delivers a handful of positions a second and a fast hand moves
@@ -703,15 +703,15 @@ enum CanvasLayout {
     static func brushCursor(at unit: CGPoint, radius: CGFloat,
                             _ map: PictureMap, samples: Int = 64) -> [CGPoint] {
         guard samples >= 3, radius > 0 else { return [] }
-        let centre = map.point(unit)
+        let center = map.point(unit)
         let s = map.scale
         let r = radius * min(s.width, s.height)
         var out: [CGPoint] = []
         out.reserveCapacity(samples)
         for i in 0..<samples {
             let t = CGFloat(i) / CGFloat(samples) * 2 * .pi
-            out.append(CGPoint(x: centre.x + cos(t) * r,
-                               y: centre.y + sin(t) * r))
+            out.append(CGPoint(x: center.x + cos(t) * r,
+                               y: center.y + sin(t) * r))
         }
         return out
     }

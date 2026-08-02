@@ -201,15 +201,15 @@ final class Engine {
     /// fitted on will invent whatever it likes. The guards added since —
     /// fitting only on the highlight's shoulder, refusing to extrapolate past
     /// the brightest pixel that informed the fit, and capping each channel at a
-    /// ratio the neighbourhood actually showed — make it much more
+    /// ratio the neighborhood actually showed — make it much more
     /// conservative, but "much more conservative" is not the same as verified,
     /// and a correction that damages pictures should not be the default while
     /// that is still true.
     var highlightRecovery: Float = 0 { didSet { pushAndRender() } }
 
-    /// Three-way colour grading. Each is [x, y, luminance] — the wheel's puck
+    /// Three-way color grading. Each is [x, y, luminance] — the wheel's puck
     /// in the unit disc, then that zone's slope. The engine turns (x, y) into a
-    /// zero-sum RGB offset, which is what keeps a wheel a colour control rather
+    /// zero-sum RGB offset, which is what keeps a wheel a color control rather
     /// than a second brightness one. research/color-grading.md.
     var gradeShadow: [Float] = [0, 0, 0] { didSet { pushAndRender() } }
     var gradeMidtone: [Float] = [0, 0, 0] { didSet { pushAndRender() } }
@@ -313,7 +313,7 @@ final class Engine {
         // sensor, so a spot has to follow the subject through a later crop or
         // quarter turn — the opposite of a mask, which stays where it was put on
         // screen. Same transform, applied at a different moment, and that
-        // moment is the whole difference between the two behaviours.
+        // moment is the whole difference between the two behaviors.
         var fx: Float = 0, fy: Float = 0
         guard orion_engine_to_frame(handle, Float(displayed.x), Float(displayed.y),
                                     &fx, &fy) == ORION_OK else { return false }
@@ -401,7 +401,7 @@ final class Engine {
     /// ⚠ **Labelled "Move spot", not "Spot".** `EditHistory` coalesces
     /// consecutive entries carrying the same label — which is what makes a
     /// slider drag one undo step instead of sixty — so a placement and a later
-    /// move both labelled "Spot" merged into one entry, and undoing the move
+    /// move both labeled "Spot" merged into one entry, and undoing the move
     /// deleted the spot instead. Two different acts need two different names.
     ///
     /// The place-and-drag gesture is deliberately *not* two entries: `addSpot`
@@ -483,7 +483,7 @@ final class Engine {
         get { layer.saturation }
         set { editLayer { $0.saturation = newValue } }
     }
-    /// ⚠ A colour **cast**, not a white balance. Temperature is applied in
+    /// ⚠ A color **cast**, not a white balance. Temperature is applied in
     /// `linearize`, before the demosaic, so a local one would mean demosaicing
     /// the frame twice. Named Warmth and Tint so the two are not confused.
     var localWarmth: Float {
@@ -544,11 +544,11 @@ final class Engine {
         get { selected?.compose ?? 0 }
         set { editSelected { $0.compose = newValue } }
     }
-    var maskCentreX: Float {
+    var maskCenterX: Float {
         get { selected?.centreX ?? 0.5 }
         set { editSelected { $0.centreX = newValue } }
     }
-    var maskCentreY: Float {
+    var maskCenterY: Float {
         get { selected?.centreY ?? 0.5 }
         set { editSelected { $0.centreY = newValue } }
     }
@@ -591,66 +591,66 @@ final class Engine {
         set { editSelected { $0.rangeSoft = newValue } }
     }
 
-    // ── The colour range (mask kind 6) ────────────────────────────────────
-    var maskColourTol: Float {
+    // ── The color range (mask kind 6) ────────────────────────────────────
+    var maskColorTol: Float {
         get { selected?.colourTol ?? 0.10 }
         set { editSelected { $0.colourTol = newValue } }
     }
-    var maskColourSoft: Float {
+    var maskColorSoft: Float {
         get { selected?.colourSoft ?? 0.05 }
         set { editSelected { $0.colourSoft = newValue } }
     }
 
     /// The picked shade, scene-linear Rec.2020 RGB. Read for the panel's
-    /// swatch; written only by `pickMaskColour`.
-    var maskColour: (r: Float, g: Float, b: Float) {
+    /// swatch; written only by `pickMaskColor`.
+    var maskColor: (r: Float, g: Float, b: Float) {
         guard let m = selected else { return (0.18, 0.18, 0.18) }
         return (m.colourR, m.colourG, m.colourB)
     }
 
     /// Armed by the panel's picker button. The canvas consumes the next click,
     /// exactly as it does for spot placement.
-    var colourPicking = false
+    var colorPicking = false
 
     /// What the picked pixel looked like **on screen**, for the panel's swatch.
     ///
     /// ⚠ The swatch cannot be drawn from the stored target. `sampleAt`
-    /// normalises the scene colour by its own peak — which is exactly right for
+    /// normalizes the scene color by its own peak — which is exactly right for
     /// the metric, since Oklab chromaticity is scale invariant — but it means
     /// the stored value always has a channel at 1.0. Drawn directly, a picked
     /// navy sky came back as a bright periwinkle and a dark green as a vivid
-    /// one: every colour looked like a saturated version of itself, which is
-    /// what "the eyedropper pulls a very wrong colour" looks like from outside.
+    /// one: every color looked like a saturated version of itself, which is
+    /// what "the eyedropper pulls a very wrong color" looks like from outside.
     ///
     /// View state, not edit state, so it is deliberately not in `DevelopState`:
     /// it is a picture of a gesture, not part of the photograph. Reopening a
     /// photo leaves it nil and the panel falls back to the target's hue.
-    private(set) var maskColourSwatch: (r: Double, g: Double, b: Double)?
+    private(set) var maskColorSwatch: (r: Double, g: Double, b: Double)?
 
-    /// Takes the colour under a click on the displayed picture into the
+    /// Takes the color under a click on the displayed picture into the
     /// selected component. Returns false when there was nothing to sample.
     ///
-    /// ⚠ The **scene** colour, not what is on screen: reading the edited result
+    /// ⚠ The **scene** color, not what is on screen: reading the edited result
     /// would mean shifting hue through the mask changes what the mask selects.
-    /// Same texture the colour-mixer eyedropper reads, and the same reason.
+    /// Same texture the color-mixer eyedropper reads, and the same reason.
     ///
-    /// That value arrives normalised by its own peak, which does not matter
+    /// That value arrives normalized by its own peak, which does not matter
     /// here and is the point of the metric: Oklab chromaticity is exactly
-    /// invariant under a multiply, so a normalised target and an unnormalised
+    /// invariant under a multiply, so a normalized target and an unnormalized
     /// pixel land in the same place. research/masking.md §4c.
     @discardableResult
-    func pickMaskColour(at displayed: CGPoint) -> Bool {
+    func pickMaskColor(at displayed: CGPoint) -> Bool {
         guard isLoaded, selected != nil,
               let s = sample(u: Float(displayed.x), v: Float(displayed.y))
         else { return false }
-        edit("Mask colour") {
+        edit("Mask color") {
             editSelected {
                 $0.colourR = Float(s.scene.r)
                 $0.colourG = Float(s.scene.g)
                 $0.colourB = Float(s.scene.b)
             }
         }
-        maskColourSwatch = s.display
+        maskColorSwatch = s.display
         return true
     }
 
@@ -930,7 +930,7 @@ final class Engine {
     }
 
     /// The developed picture with its geometry neutralised, for something that
-    /// wants to *analyse* it rather than show it — today, segmentation.
+    /// wants to *analyze* it rather than show it — today, segmentation.
     ///
     /// ⚠ The crop, the straighten and the user's rotation are reset around the
     /// render, so the only difference between what comes back and the frame the
@@ -1180,7 +1180,7 @@ final class Engine {
         get {
             CanvasLayout.MaskPlacement(
                 kind: Int(maskKind),
-                centre: CGPoint(x: CGFloat(maskCentreX), y: CGFloat(maskCentreY)),
+                center: CGPoint(x: CGFloat(maskCenterX), y: CGFloat(maskCenterY)),
                 angle: CGFloat(maskAngle),
                 length: CGFloat(maskLength),
                 radius: CGSize(width: CGFloat(maskRadiusX), height: CGFloat(maskRadiusY)),
@@ -1196,8 +1196,8 @@ final class Engine {
     func setMask(_ m: CanvasLayout.MaskPlacement) {
         guard isLoaded else { return }
         suspended = true
-        maskCentreX  = Float(m.centre.x)
-        maskCentreY  = Float(m.centre.y)
+        maskCenterX  = Float(m.center.x)
+        maskCenterY  = Float(m.center.y)
         maskAngle    = Float(m.angle)
         maskLength   = Float(m.length)
         maskRadiusX  = Float(m.radius.width)
@@ -1430,7 +1430,7 @@ final class Engine {
         // captures this photo's own original through `refreshOriginal`.
         originalTexture = nil
         originalGeometry = nil
-        maskColourSwatch = nil
+        maskColorSwatch = nil
 
         // Reset to the camera's own settings before marking loaded, so the
         // didSet observers don't each trigger a render on a half-set model.

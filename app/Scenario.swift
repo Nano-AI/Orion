@@ -79,8 +79,8 @@ import SwiftUI
 ///                                       does. Appends to the stroke already
 ///                                       there, and lays paint or erase
 ///                                       according to `set brushErase`
-///     pick <x,y>                        the colour-mixer eyedropper
-///     maskcolour <x,y>                  the colour range mask's picker, as a
+///     pick <x,y>                        the color-mixer eyedropper
+///     maskcolor <x,y>                  the color range mask's picker, as a
 ///                                       click on the canvas does it
 ///     targeted <x,y> <delta>            pick, then drag, which is what applies it
 ///     auto                              the Auto button
@@ -300,7 +300,7 @@ enum Scenario {
             // row is there and the raster is not. The `matte` verb below is the
             // other half — it uploads one.
             let kinds = ["none": Int32(0), "linear": 1, "radial": 2, "brush": 3,
-                         "matte": 4, "range": 5, "colour": 6, "color": 6]
+                         "matte": 4, "range": 5, "color": 6, "colour": 6]
             guard let k = kinds[args.first ?? ""] else {
                 throw Bad(what: "mask takes none, linear, radial, brush, matte or range")
             }
@@ -308,7 +308,7 @@ enum Scenario {
 
         case "brush":
             // Walked through CanvasLayout at a fixed spacing, which is what the
-            // canvas does with a real drag — not a hand-placed list of centres.
+            // canvas does with a real drag — not a hand-placed list of centers.
             // `carry` continues the spacing across segments, so a scripted
             // stroke has the same dabs a steady hand would lay.
             //
@@ -343,7 +343,7 @@ enum Scenario {
 
         case "matte":
             // A synthetic matte, in frame coordinates, so the raster component
-            // can be driven without a segmentation model. `disc` is a centred
+            // can be driven without a segmentation model. `disc` is a centerd
             // circle, `left` a half-plane, `ramp` a horizontal 0→1 gradient —
             // all three have an answer you can predict and none depends on a
             // model whose output moves between OS releases.
@@ -351,7 +351,7 @@ enum Scenario {
             //
             // ⚠ `ramp` exists for the persistence round trip and the reason is
             // the whole point: a matte of nothing but 0 and 1 survives a wrong
-            // colour space, a wrong bit depth and a wrong endianness, because
+            // color space, a wrong bit depth and a wrong endianness, because
             // black and white land on black and white however the curve between
             // them is mangled. Only the mid-values can tell.
             let shape = args.first ?? ""
@@ -501,7 +501,7 @@ enum Scenario {
             // segmented picker needed. A scenario that used it to build a
             // second row silently tested a one-row group.
             let named = ["linear": Int32(1), "radial": 2, "brush": 3,
-                         "matte": 4, "range": 5, "colour": 6, "color": 6]
+                         "matte": 4, "range": 5, "color": 6, "colour": 6]
             guard let k = named[args.first ?? ""] else {
                 throw Bad(what: "maskadd needs a kind")
             }
@@ -554,7 +554,7 @@ enum Scenario {
                 throw Bad(what: "maskkind needs a row index and a kind")
             }
             let named = ["none": Int32(0), "linear": 1, "radial": 2, "brush": 3,
-                         "matte": 4, "range": 5, "colour": 6, "color": 6]
+                         "matte": 4, "range": 5, "color": 6, "colour": 6]
             guard let k = named[args[1]] else { throw Bad(what: "no kind \(args[1])") }
             engine.setMaskKind(k, at: i)
 
@@ -639,16 +639,16 @@ enum Scenario {
             default: throw Bad(what: "overlay takes on or off")
             }
 
-        case "maskcolour", "maskcolor":
-            // The mask colour picker, through the same call `ImageCanvas`
+        case "maskcolor", "maskcolour":
+            // The mask color picker, through the same call `ImageCanvas`
             // makes on a click. A scenario that set the RGB directly would be
             // testing a struct rather than the tool.
             let p = try point(args.first ?? "")
-            guard engine.pickMaskColour(at: p) else {
-                throw Bad(what: "no colour at \(p.x),\(p.y) — is a mask row selected?")
+            guard engine.pickMaskColor(at: p) else {
+                throw Bad(what: "no color at \(p.x),\(p.y) — is a mask row selected?")
             }
-            let c = engine.maskColour
-            say(String(format: "  picked colour %.4f %.4f %.4f\n",
+            let c = engine.maskColor
+            say(String(format: "  picked color %.4f %.4f %.4f\n",
                        c.r, c.g, c.b))
 
         case "pick":
@@ -891,7 +891,7 @@ enum Scenario {
         }
     }
 
-    /// The colour-mixer eyedropper, through the path the canvas uses: sample the
+    /// The color-mixer eyedropper, through the path the canvas uses: sample the
     /// pixel, derive its hue, ask which band that is, and hand it to
     /// `TargetedAdjust`. A `drag` then moves that band, which is the half that
     /// actually changes the picture.
@@ -900,8 +900,8 @@ enum Scenario {
         guard let s = engine.sample(u: Float(p.x), v: Float(p.y)) else {
             throw Bad(what: "no sample at \(p.x),\(p.y) — is a photo open?")
         }
-        // ⚠️ The **scene** colour, because that is what `ImageCanvas.beginDrag`
-        // reads. This took the display colour, which is a different sample
+        // ⚠️ The **scene** color, because that is what `ImageCanvas.beginDrag`
+        // reads. This took the display color, which is a different sample
         // through a different code path: the display value comes from the
         // output texture and is already cropped and turned, while the scene
         // value is looked up in the whole frame and has to be carried there.
@@ -911,7 +911,7 @@ enum Scenario {
         guard let hue = TargetedAdjust.hue(r: s.scene.r, g: s.scene.g,
                                           b: s.scene.b) else {
             throw Bad(what: String(format:
-                "the pixel at %.2f,%.2f is too near grey to have a hue "
+                "the pixel at %.2f,%.2f is too near gray to have a hue "
                 + "(scene r %.3f g %.3f b %.3f) — the tool refuses, by design",
                 p.x, p.y, s.scene.r, s.scene.g, s.scene.b))
         }
@@ -977,8 +977,8 @@ enum Scenario {
         case "maskRefine": e.maskRefine = value
         case "brushRadius": e.brushRadius = value
         case "brushFlow":   e.brushFlow = value
-        case "maskCentreX", "maskCenterX": e.maskCentreX = value
-        case "maskCentreY", "maskCenterY": e.maskCentreY = value
+        case "maskCenterX", "maskCentreX": e.maskCenterX = value
+        case "maskCenterY", "maskCentreY": e.maskCenterY = value
         case "maskAngle":   e.maskAngle = value
         case "maskLength":  e.maskLength = value
         case "maskRadiusX": e.maskRadiusX = value
@@ -989,8 +989,8 @@ enum Scenario {
         case "maskRangeHi":   e.maskRangeHi = value
         case "maskRangeSoft": e.maskRangeSoft = value
         case "maskCompose":   e.maskCompose = Int32(value)
-        case "maskColourTol", "maskColorTol":   e.maskColourTol = value
-        case "maskColourSoft", "maskColorSoft": e.maskColourSoft = value
+        case "maskColorTol", "maskColourTol":   e.maskColorTol = value
+        case "maskColorSoft", "maskColourSoft": e.maskColorSoft = value
         case "maskInvert":  e.maskInvert = value != 0
         case "brushErase":  e.brushErasing = value != 0
         case "maskHidden":  e.maskHidden = value != 0
@@ -1019,7 +1019,7 @@ enum Scenario {
     private static func maskCheck(engine: Engine, cells: Int, ev: Float) throws {
         var m = CanvasLayout.MaskPlacement()
         m.kind = Int(engine.maskKind)
-        m.centre = CGPoint(x: CGFloat(engine.maskCentreX), y: CGFloat(engine.maskCentreY))
+        m.center = CGPoint(x: CGFloat(engine.maskCenterX), y: CGFloat(engine.maskCenterY))
         m.angle = CGFloat(engine.maskAngle)
         m.length = CGFloat(engine.maskLength)
         m.radius = CGSize(width: CGFloat(engine.maskRadiusX),
@@ -1033,7 +1033,7 @@ enum Scenario {
         }
 
         // Classify every cell by what the interface believes, sampling inside
-        // the cell rather than at its centre: a cell whose centre is covered
+        // the cell rather than at its center: a cell whose center is covered
         // can still straddle the falloff.
         let step = 1.0 / CGFloat(cells)
         var inside: [(Int, Int)] = [], outside: [(Int, Int)] = []

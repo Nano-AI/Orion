@@ -121,7 +121,7 @@ final class Library {
     /// so a folder could show a file the Open dialog refused.
     ///
     /// Everything here decodes through LibRaw. Bayer sensors develop; X-Trans
-    /// and Foveon files are recognised and refused by name in `decodeBayer`
+    /// and Foveon files are recognized and refused by name in `decodeBayer`
     /// rather than rendering as garbage, which is why `raf` is on the list at
     /// all — a Fujifilm file should say what is wrong with it.
     nonisolated static let rawExtensions: [String] =
@@ -317,7 +317,7 @@ final class Library {
     func index(of url: URL) -> Int? { visible.firstIndex { $0.url == url } }
 
     /// Next or previous photo passing the filter, for arrow-key navigation.
-    func neighbour(of url: URL, offset: Int) -> URL? {
+    func neighbor(of url: URL, offset: Int) -> URL? {
         let list = visible
         guard let i = list.firstIndex(where: { $0.url == url }) else {
             return list.first?.url

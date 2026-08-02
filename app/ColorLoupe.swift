@@ -58,7 +58,7 @@ struct ColorLoupe: View {
             // costs 2.4 us — measured, `repro/eyedropper-latency.txt` — so
             // every millisecond of the lag was this line.
             //
-            // It is also wrong rather than merely slow: the colour and the band
+            // It is also wrong rather than merely slow: the color and the band
             // change the instant the sample lands while the crosshair
             // interpolates, so a crosshair captioned "the exact sampled pixel"
             // sat somewhere the sample was not taken.
