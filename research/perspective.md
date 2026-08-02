@@ -184,7 +184,11 @@ Four properties, each exact or explicitly not:
 | a mask's **center**, a brush dab, a spot | **exact** — it is a point, and H maps points |
 | a linear gradient's **direction** | **exact** — H takes lines to lines, and the image line's direction is the Jacobian applied to the original direction |
 | a radial mask's **semi-axes** and **angle** | **exact under the derivative** — the ellipse J makes of the ellipse, in closed form. All of the anisotropy; none of the curvature |
-| a gradient's **ramp length** | **isotropic, first order** — √\|det J\| at the mask's own center |
+| a gradient's **ramp length** | **exact under the derivative** — \|J·u\| along the ramp's own pre-image direction. All of the anisotropy; none of the curvature, and none of the non-uniformity along the ramp |
+
+⚠ The fourth row read **isotropic, first order — √\|det J\| at the mask's own
+center** until 2026-08-02; see *The ramp*, below, for what replaced it and for
+how little it was worth.
 
 ### The ellipse, and what it did and did not fix
 
@@ -266,6 +270,56 @@ sweep varied the other one. The numbers above are the ones a re-run produces.
 `repro/perspective-carries-the-mask.txt` sits at 0.34 now, and its aspect
 section is what fails when the ellipse is reverted.
 
+### The ramp, which the ellipse did not touch
+
+The ellipse rescued the *radial* mask's extent and left the linear gradient's
+alone: the fourth row stayed √|det J| for another day. A ramp has exactly one
+direction, and the geometric mean of two axis scales is not the scale along it.
+`mask::lengthAlong` (decision #134, 2026-08-02) returns **|J·u|** for the ramp's
+own pre-image direction — the length of the image of a unit vector, which is the
+same singular-value picture as above read along one direction instead of two,
+and exactly 1 at the identity by construction rather than by rounding.
+
+The direction was never the problem. H takes lines to lines, so the ramp's
+*angle* was already exact under the second row of the table; only its length went
+through the isotropic number.
+
+⚠ **The size of the error is the interesting part, and it is small.** Measured on
+`_PIC8220`, off-centre angled ramp at 0.6 rad, vertical 0.45 with horizontal
+0.30, on a patch straddling the ramp's edge:
+
+| Correction | Isotropic √\|det J\| | \|J·u\| | Difference |
+|---|---|---|---|
+| aspect squeeze, any g | identical | identical | **none at all** |
+| keystone, V 0.45 + H 0.30 | 0.6753 | 0.6734 | 0.0019 luma |
+
+The first row is the surprise, and it is the opposite way round from the radial
+case. An aspect squeeze is where √|det J| is *blindest* for an ellipse — det is
+exactly 1 while the picture stretches two to one — but `perspectiveAspect` on its
+own leaves `Placement::jac` the **identity**, so for the ramp both formulas
+multiply by 1 and the frames come out byte-identical. Only a real keystone makes
+the derivative anisotropic, and there the whole term is worth 0.002 luma against
+the **0.1461** the radial first-order error reached.
+
+⚠ **So the call site is not pinned, and that is deliberate rather than
+overlooked.** `lengthAlong` itself has four checks in `tests_mask_geom.cpp` —
+identity, `diag(2, ½)` along each axis where √|det J| would answer 1, and a shear
+along y where the answer is √1.25 and cannot come from reading one matrix entry.
+What no check covers is `DevelopMask.cpp` calling it: 0.002 luma flips no cell at
+12 cells or at 20, and a golden-value check with that margin fails for reasons
+other than the defect. `repro/perspective-carries-the-mask.txt` §4b carries the
+same warning in the file that would otherwise imply the coverage.
+
+⚠ **The first fixture written for this could not fail.** It was built around the
+aspect squeeze — the case that had rescued the radial mask — it passed, and it
+passed identically with the fix reverted, for the reason the first table row
+gives. That is recorded here because "the case that caught the last bug" is not
+the same as "the case that catches this one".
+
+The **non**-uniformity along the ramp remains and cannot be removed the same way:
+a projective map preserves cross-ratios along a line, not ratios, so a linear
+gradient stays linear in the pre-image and not in the picture.
+
 ## The range is a control choice, not a measurement
 
 Corner travel at full slider is **0.35**, and aspect's g spans 2^±½. Neither
@@ -298,10 +352,21 @@ magnification of the source, so the ceiling is a picture-quality judgement.
   of the ellipse that comes back, over a squeeze, a shear each way and a general
   2×2; the area is |det J|; and a neutral control returns the crop's answer
   **to the bit**
+- `mask::lengthAlong` — four checks in `tests_mask_geom.cpp`: the identity
+  returns exactly 1.0f; `diag(2, ½)` returns 2 along x and ½ along y, where
+  √|det J| would answer 1 for both; and a shear `{1, ½, 0, 1}` along y returns
+  √1.25, which no single matrix entry gives
 
 `repro/`: `perspective-carries-the-mask.txt` — the control moves the picture, a
 mask stays on its subject with the control up, its extent survives an aspect
-squeeze, and all three fields survive a reopen.
+squeeze, a *linear* mask's placement survives a keystone (§4b), and all three
+fields survive a reopen.
+
+⚠ **Not pinned:** the call site that reaches `lengthAlong`, in
+`DevelopMask.cpp`. The fix moves the frame 0.6753 → 0.6734 luma, which no cell
+classification sees; §4b says so in the file rather than leaving it to be
+discovered, and the number is there for whoever decides a 0.002-margin golden
+check is worth its flakiness after all.
 
 `orion-bench`: a `perspective` control probe with a magnitude floor, per
 decision #37.

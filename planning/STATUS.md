@@ -4,16 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-02 (**no file in the tree is over the 1000-line ceiling — `Screenshot.swift` was the last, #131**)
+**Last updated:** 2026-08-02 (**the last first-order term in a mask's extent is
+gone, #134** — and no file in the tree is over the 1000-line ceiling, #131)
 
-**Last updated:** 2026-08-02 (**both checks that named their own mutation and missed it now fail on it — #130**)
-**Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
-items are now closed, one built and one refused (#103 built, #101 refused). **`research/masking.md` is
-finished** — primitives, groups, guided refinement, a raster
-component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
-folded per §6 (add/subtract/intersect), optionally feathered onto the
-photograph's own edges, through the graph, the POD facade, the panel rows, the
-sidecar, undo and the bench.
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
 raster component, Vision filling it, and a band on brightness. Six mask kinds. A
@@ -21,11 +14,18 @@ mask is a *list* of components folded per §6 (add/subtract/intersect), optional
 feathered onto the photograph's own edges, through the graph, the POD facade, the
 panel rows, the sidecar, undo and the bench.
 
-⚠ **Three duplicated blocks were removed from this header on 2026-08-01** — two
-`Last updated` lines, two overlapping queues numbered 4/5 twice, and three
-`Suites:` paragraphs, one of them two sessions stale. Four sessions had each
-edited the top of this file without reading what was already there, which is the
-same failure mode the 4,643-line prune was for.
+⚠ **Duplicated blocks were removed from this header on 2026-08-01, and they grew
+back by 2026-08-02** — which is the useful part of the story. The first clean-up
+took out two `Last updated` lines, two overlapping queues numbered 4/5 twice, and
+three `Suites:` paragraphs, one of them two sessions stale. A day later the
+header carried **two `Last updated` lines and two `Phase:` blocks** again, and the
+queue had **three** copies rather than two. Nobody added a duplicate on purpose:
+each session appends to the top of this file without reading what is already
+there, and appending is invisible in a diff that is already long.
+
+⚠ **So check the top of this file for a second copy of what you are about to
+write, before you write it.** The header is one `Last updated` line, one `Phase:`
+block, and one queue. That is the whole rule, and it has now failed twice.
 
 ⚠️ **M3 is done — do not rebuild it.** Dehaze, creative LUTs, exposure fusion
 and auto-enhance all shipped with research files, GPU tests and bench probes
@@ -34,139 +34,123 @@ table is immediately below). A stale kickoff prompt naming those four has now
 arrived **36 times**; the answer each time is that they exist, and each of the
 four now also has something that fails when its *wiring* breaks.
 
-**Next story:** the queue, in order, each with a cost. ⚠ This list had grown two
-overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
+**Next story:** the queue, in order, each with a cost.
 
-1. ~~**Dehaze's drag cost**~~ — ✅ **done 2026-08-01, decision #92.** The cause
-   was `DevelopPipeline.cpp:1325`: the dehaze chain's parameter blocks were
-   re-pushed on every tick, and `setParams` dirties the whole downstream
-   subgraph whether or not the bytes changed. **Only omega moves with the
-   slider**; the dark channel, the six rank passes and the candidate pooling
-   are functions of the frame's size, the paper's constants and A — nine nodes,
-   six of them full-resolution over 24 MP, redone for a value none of them
-   read. Paired A/B, two rounds, interleaved binaries: **147.3/146.4 → 102.7/
-   100.6 ms** and **127.1/120.6 → 87.0/87.7 ms** — 0.69–0.71×, ~30% off the
-   tick, with exposure and clarity unmoved in the same process. Pinned by the
-   bench's `dehaze drag` invariant, which counts *named* nodes rather than
-   milliseconds; reverting the guard prints `DEHAZE REDOES THE DARK CHANNEL`
-   and exits 1. ⚠ Two claims in this file were **wrong** and are corrected
-   below.
-2. ~~**`reopen` grows 25–49 KB a cycle**~~ — ✅ **closed 2026-08-02 by
-   measurement, decision #133.** It does not, any more. **240 reopens: one
-   556 MB step on the first cycle, then +0.9 KB a cycle over the remaining
-   ~230** — the `open` control's own slope. Decision #90's fix held. Numbers and
-   the methodology trap in the session entry below.
-3. ~~**Incremental brush accumulation.**~~ ✅ **done 2026-08-01, #102 and
-   #108.** Both sessions shipped. A pointer event's cost is now flat in what
-   is already painted — `mask:0` **5.20 ms appending 49 dabs to 294 against
-   36.46 ms re-laying them**, same dab count and same host work, interleaved.
-   One R32Float accumulator for the live component, **98.25 MiB** rather than
-   the 393 a per-component one would have cost, decided from the arithmetic
-   rather than assumed. Ten mutations; three passed and were defects in the
-   checks. The first evaluation of a component is still linear, which is once
-   after a reload rather than once an event. Original note follows.
-   **Cause proved 2026-08-01** — it is
-   `mask:0`, on **both** graphs, and the cost is `Σ blocks × box area`, not the
-   dab count. Appending grows the block count and leaves the boxes their size,
-   so it is linear. Host side is flat and three orders down (0.057 ms an event
-   at any stroke length). ⚠ The bench's "the mask kernel is flat in dabs" was a
-   **fixture artifact** and is withdrawn — it subdivided a stroke of fixed
-   extent, which shrinks every box in exact proportion to the block count.
-   Decomposed into two sessions in `ROADMAP.md`; **the predicate ships first,
-   alone.** ✅ **Session one done 2026-08-01, decision #102** —
-   `params::unchangedPrefix`, six mutations, no pixel moved and nothing reading
-   its answer yet. **Session two is the accumulator behind it**, and its budget
-   check (~97 MB a component at 24 Mpx, lazily allocated) comes before the
-   code. ~1 session left.
-4. ~~**M1's library gap**~~ — ✅ done 2026-08-01, decision #91. SQLite index and
-   a persistent thumbnail cache; see the note below for the numbers.
-5. ~~**Export panel**: bit depth, metadata policy, output sharpening.~~ ✅ done
-   2026-08-01. ⚠ The premise was wrong in two ways: metadata policy had been
-   built and wired for some time, and 16-bit was not "not offered" — it was the
-   *only* mode, so every file Orion had written was 16-bit. The work was the
-   8-bit path, output sharpening, and a location strip that also removes the
-   IPTC place names. Decisions #90–#92.
-6. **Americanising the persisted keys**, if wanted — a schema migration with
-1. ~~**`reopen` grows 25–49 KB a cycle**~~ — ✅ **re-measured 2026-08-02 and
-   closed, decision #133.** This entry said "re-measure before spending a
-   session on it", and that was the right instruction: the slope is gone.
-2. **Incremental brush accumulation.** ⚠ Now *located*: the host-side O(N) is
-   gone and the slope did not change, so the residual is the **GPU dab loop**.
-   Costed in `ROADMAP.md`. ~1–2 sessions.
-3. ~~**A mask's extent under a perspective correction is first order.**~~ — the
-   radial half closed 2026-08-01 (#102), **the gradient's ramp length closed
-   2026-08-02 (#134)**. What is left is the map's *curvature*, which no
-   derivative at a point can see, and which `ROADMAP.md` records as uncosted.
-4. **Snapshots / versions** — the last unbuilt line of M4 now that perspective
-   has shipped. Unestimated.
-5. **Americanising the persisted keys**, if wanted — a schema migration with
-1. **Incremental brush accumulation.** ⚠ *Located*, not guessed: the host-side
-   O(N) is gone and the slope did not change, so the residual is the **GPU dab
-   loop**. Costed in `ROADMAP.md`. ~1-2 sessions.
-2. **The grading panel's Balance** — the one thing split toning has that the
-   wheels do not (#97). A signed EV offset on the three zone centres: ~5 lines
-   in `color_grade.slang` plus one float through the usual twenty files.
-   ~half a session.
-3. **Americanising the persisted keys**, if wanted — a schema migration with
-   dual reads, not a rename. ~1 session, needs sign-off (#89).
-4. ~~`DevelopPipeline.cpp` against a stated ceiling of 1,000~~ — ✅ **done
-   2026-08-02, decision #113.** It had reached **2,896** lines and its header
-   **917**; both are now five files, largest **757**. The seam is the graph's
-   four regions and each file holds *both* halves of its region — the nodes the
-   constructor adds and the blocks `apply` pushes into them, which used to be
-   twelve hundred lines apart. Pure refactor, proved rather than asserted: nine
-   canvas renders byte-for-byte identical, 173 nodes and 7186 MiB unchanged.
-5. ~~`Engine.swift` against the same ceiling~~ — ✅ **done 2026-08-02, decision
-   #117.** **2,331** lines, now eight files, largest **795**. Same seam as
-   #113 — region of the problem — plus the constraint Swift adds: `Engine` is
-   `@Observable`, so every **stored property** had to stay in the class body and
-   only behaviour moved into `extension Engine`. 27 canvas renders byte-for-byte
-   identical against `ab6f9b2`. ⚠ Two of seven mutations were green everywhere
-   and were defects in the *checks*, both rewritten; and `lastFailure` turns out
-   to have no oracle anywhere, which is recorded rather than fixed.
-6. ~~`DevelopPanels.swift` against the same ceiling~~ — ✅ **done 2026-08-02,
-   decision #122.** **1,366** lines, now seven files, largest **580**. The seam
-   is the **tool tab**, because that is the unit a change arrives in: a slider
-   belongs to exactly one tab, so the file named after the tab is the file you
-   open. ⚠ **No SwiftUI state moved** — the file declared one property wrapper in
-   1,366 lines and it travelled inside its own type; the panels are extensions
-   on `Editor`, so they cannot hold storage. 41 of 42 interface renders
-   byte-for-byte identical (the 42nd stamps the wall clock and is compared by
-   eye), repro output identical, 800 / 3702 / bench 0. ⚠ **Its mutation found a
-   hole the frame comparison cannot see: the Detail panel scrolls, and five
-   whole sections below the fold — Grain, Vignette, Dehaze, Clarity, Sharpening
-   — can be deleted with every check in the repository green.** Recorded, not
-   fixed — and ✅ **closed 2026-08-02 by #125**, along with the Photo menu and
-   the footer's failure line, which had the same cause.
+⚠ **This list had grown to three overlapping copies**, numbered 1-6, 1-5 and
+1-6, each spliced into the next **mid-sentence** — so the seams were invisible
+unless you read the whole thing end to end, and the second copy began in the
+middle of the first copy's item 6. They disagreed about the one thing a fresh
+session would act on: **incremental brush accumulation** was the top open story
+in two of the three, costed at "~1-2 sessions", and it **shipped on 2026-08-01**
+(#102 and #108; `ROADMAP.md` heads its section *"Incremental brush accumulation
+— ✅ shipped"*). Merged 2026-08-02. Closed items are now one line each with the
+decision that closed them; **every measurement removed from here was checked to
+exist in `DECISIONS.md`, `HISTORY.md` or `ROADMAP.md` first**, so this is a
+shortening and not a deletion.
 
-   **The product's large files are down to `OrionApp.swift`**; the ceiling's
-   survivors were then all in `apps/tests/`, which is a different argument —
-   and #127 and #129 have since taken all four of those. The last file over the
-   ceiling anywhere was `app/Screenshot.swift`, and **#131 took it — nothing in
-   the tree is over 1,000 now**. See the gap table, recounted by sweep.
+**Open, in order:**
 
-6. ~~`Scenario.swift` against the same ceiling~~ — ✅ **done 2026-08-02, decision
-   #120.** **1,615** lines, **977 of them one `switch`**; now five files, largest
-   **546**, and `Scenario.swift` itself **301**. Same seam again — region of the
-   problem — cutting the *switch* rather than lifting helpers away from it, so a
-   new verb is one edit in the family it resembles and a new slider is one edit
-   in `Scenario+Controls.swift`. ⚠ A **pure move on an interface** (#89): all 158
-   `case` labels are an identical multiset before and after, so no alias pair
-   merged. All 40 scenarios byte-identical in *output*, and 51 rendered artefacts
-   byte-identical against `9d9158d`. ⚠ **Mutation M4 found a check that cannot
-   fail** — disable three quarters of the verbs and 39 of 40 scenarios still exit
-   0, because 38 then run **zero checks** and the runner exits 0 on a run that
-   asserted nothing. Recorded, not fixed.
+1. **The perspective map's curvature across a large mask.** ⚠ **Uncosted** — the
+   only item here without an estimate, and `ROADMAP.md` says so rather than
+   inventing one. Both first-order terms are now gone: the radial ellipse
+   (#102, 2026-08-01) and the gradient's ramp length (#134, 2026-08-02). What
+   remains is second order — the map's curvature across the mask, which no
+   Jacobian at a point can see. It is measured, not hypothetical: **4 of 48
+   clear cells at 0.0862 luma** at the worst setting in
+   `repro/perspective-carries-the-mask.txt` §3, a mask 0.34 of the frame wide
+   under vertical 1.00. Removing it means splitting the ellipse into pieces
+   small enough that the derivative holds, or carrying the conic through H
+   exactly. Neither has been costed, and the honest question first is whether a
+   photographer ever sets both a mask that big and a keystone that strong.
+2. **Americanising the persisted keys**, if wanted — a schema migration with
+   dual reads, not a rename, because a persisted key is an interface and not a
+   private name (#89). ~1 session. ⚠ **Needs sign-off before it starts**: it
+   rewrites sidecars already on disk.
 
-Closed since this list was last written, in the order they went:
-**dehaze's drag cost** (#92), the **`reopen` leak** (#90), **M1's library gap**
-(#91), the **export panel** (#93-#95), and now the **creative vignette** (#103)
-with **split toning refused** (#97).
+⚠ **That is the whole open list, and it is two items long.** The merged copies
+offered four, and **two of the four had already shipped** — see the last two
+entries of the closed list. Both were checked against the tree and not against
+this file, which is the only way a queue this old can be trusted.
 
-✅ **M1's library gap is closed** — SQLite index and persistent thumbnail cache,
-2026-08-01, decision #91. 300 frames with the page cache warm: **454–688 ms cold
-against 28–54 ms warm, 12.9–17.2×**. The leftovers are named and costed in
-`ROADMAP.md` under *Library index — what is not done*.
+**Blocked on the developer, not on work** — these cannot move from this side:
+
+- ⚠ **The flat frame.** A photograph came back as one flat brown rectangle on
+  the developer's screen, twice, and nothing in this repository could reproduce
+  it: the engine renders that file correctly with the developer's own sidecar
+  restored, and so do the export path, `--screenshot`, both suites and ten real
+  window opens. Instrumentation shipped instead of a guess (#b3ee5a1) — the
+  footer now reads **"Not a photograph — the render is one flat colour,
+  rgb(…)"** when it happens. What is needed is one reproduction and the file
+  `~/Library/Logs/Orion/session.txt`. ⚠ **Copy that log before running any
+  Orion command**, including the CLI ones — every launch rewrites it.
+- **Does the brush feel fast?** The numbers say yes (#108); nobody has said so
+  with a stylus in hand.
+- **Approval to download CC0 X-Trans frames** for piece 0. Without them the
+  X-Trans path has no real sensor to test against.
+
+**Closed, each with the decision that closed it** — the full write-ups are in
+`DECISIONS.md` and the session log below:
+
+- ~~**Dehaze's drag cost**~~ ✅ **#92, 2026-08-01.** The chain's parameter blocks
+  were re-pushed every tick and `setParams` dirties the whole downstream
+  subgraph whether or not the bytes changed, so nine nodes — six of them
+  full-resolution over 24 MP — were redone for a value none of them read.
+  **147.3/146.4 → 102.7/100.6 ms**, paired and interleaved. Pinned by the
+  bench's `dehaze drag` invariant, which counts *named nodes* rather than
+  milliseconds; reverting the guard prints `DEHAZE REDOES THE DARK CHANNEL`.
+- ~~**`reopen` grows 25-49 KB a cycle**~~ ✅ **#133, 2026-08-02, closed by
+  measurement** — it does not, any more. 240 reopens: one 556 MB step on the
+  first cycle, then **+0.9 KB a cycle** over the remaining ~230, which is the
+  `open` control's own slope. Decision #90's fix held. ⚠ The methodology trap is
+  the more useful half and is in the session entry below.
+- ~~**Incremental brush accumulation**~~ ✅ **#102 and #108, 2026-08-01, both
+  sessions.** A pointer event's cost is now flat in what is already painted —
+  `mask:0` **5.20 ms appending 49 dabs to 294 against 36.46 ms re-laying them**,
+  same dab count and same host work, interleaved. One R32Float accumulator for
+  the live component, **98.25 MiB** rather than the 393 a per-component one
+  would have cost, decided from the arithmetic before the code. ⚠ The *first*
+  evaluation of a component is still linear — once after a reload, not once an
+  event. ⚠ The bench's old "the mask kernel is flat in dabs" was a fixture
+  artifact and is withdrawn.
+- ~~**A mask's extent under a perspective correction is first order**~~ ✅ the
+  radial half #102 (2026-08-01), the ramp length #134 (2026-08-02). What is left
+  is open item 1 above.
+- ~~**M1's library gap**~~ ✅ **#91, 2026-08-01.** SQLite index and a persistent
+  thumbnail cache: 300 frames with the page cache warm, **454-688 ms cold
+  against 28-54 ms warm, 12.9-17.2×**. The leftovers are named and costed in
+  `ROADMAP.md` under *Library index — what is not done*.
+- ~~**The creative vignette**~~ ✅ **#103, 2026-08-01** — an exposure change in
+  scene-linear light, shaped by the cos⁴ law and centred on the crop. ⚠ Its
+  sibling, **split toning, was refused** (#97): the grading wheels already do
+  it, and the one thing it has that they do not is Balance, which is open item 3
+  above.
+- ~~**Export panel**: bit depth, metadata policy, output sharpening~~ ✅
+  **#93-#95, 2026-08-01.** ⚠ The premise was wrong in two ways: metadata policy
+  had been built and wired for some time, and 16-bit was not "not offered" — it
+  was the *only* mode, so every file Orion had ever written was 16-bit. The work
+  was the 8-bit path, output sharpening, and a location strip that also removes
+  the IPTC place names.
+- ~~**Eleven files over the 1,000-line ceiling**~~ ✅ **#113, #117, #118, #120,
+  #121, #122, #127, #129, #131.** `DevelopPipeline.cpp` 2,896→452,
+  `Engine.swift` 2,331→795, `bench/main.cpp` 2,289→85, `tests_effects.cpp`
+  1,716→555, `Scenario.swift` 1,615→301, `OrionApp.swift` 1,557→299,
+  `DevelopPanels.swift` 1,366→56, `Screenshot.swift` 1,196→315, and #129's three
+  test files. **Nothing in the tree is over 1,000**; the gap table below carries
+  the sweep that says so and the warning about believing it. ⚠ Three of these
+  splits found checks that **cannot fail** and recorded them rather than quietly
+  fixing them: #122's five panel sections below the fold (since closed by #125),
+  #120's runner exiting 0 on a scenario that asserts nothing, and #117's two
+  mutations that were green everywhere.
+- ~~**Snapshots / versions**~~ ✅ **#99, 2026-08-01.** This photograph's whole
+  state under a name, in a sibling `PHOTO.orion-snapshots.json`. ⚠ **Two of the
+  three merged queue copies still called this "the last unbuilt line of M4",
+  unestimated**, while `app/Snapshots.swift` and `ROADMAP.md`'s ✅ had both been
+  in the tree since the day it shipped.
+- ~~**The grading panel's Balance**~~ ✅ **#104, 2026-08-01** — a rigid shift of
+  all three zone centres, ±1.25 EV at full travel; `color_grade.slang` carries
+  `float balance` and the reference behaviour (Adobe's Balance, Camera Raw 4,
+  2007). ⚠ **Also still listed as open at "~half a session"** in the copy it
+  came from, citing #97's remainder — which is exactly what #104 built.
 
 ⚠ **M5 is months, not sessions**, and saying otherwise would be a lie: it holds
 an X-Trans demosaic (Markesteijn), a Windows port, Core ML denoise and
@@ -683,6 +667,59 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-02e` — the queue was offering two shipped features as the next story
+
+Asked whether the docs were up to date. They were not, in two ways, and the
+second one matters.
+
+**`research/perspective.md` was a day stale on #134.** Its four-property table
+still said a gradient's ramp length is *isotropic, first order — √|det J|*, the
+section on the ellipse covered only the radial row, and "What is pinned" did not
+mention `lengthAlong`. That is the document `CLAUDE.md` names as required
+reading **before touching a filter**, so a stale row there is worth more than a
+stale row anywhere else. It now carries *The ramp, which the ellipse did not
+touch*: the |J·u| construction, the four checks, the measured 0.6753 → 0.6734,
+the fact that an aspect squeeze changes **nothing** for a ramp because
+`perspectiveAspect` leaves `Placement::jac` the identity — the opposite way round
+from the radial case — and the admission that the call site is unpinned.
+
+**`STATUS.md`'s header had regrown its duplicates**, one day after a prune
+removed them: two `Last updated` lines, two `Phase:` blocks, three copies of the
+queue. Three agents had looked at this and declined it as cosmetic. ⚠ **It was
+not cosmetic.** The three copies disagreed, and merging them is what showed it:
+
+| Queue item | Two copies said | The tree said |
+|---|---|---|
+| Incremental brush accumulation | open, "~1-2 sessions" | ✅ shipped #102, #108 |
+| Snapshots / versions | "the last unbuilt line of M4", unestimated | ✅ shipped #99, `app/Snapshots.swift` |
+| The grading panel's Balance | open, "~half a session" | ✅ shipped #104, `color_grade.slang` |
+
+Four open items; two of them finished. A recovery point that sends the next
+session to rebuild `app/Snapshots.swift` is worse than not having one.
+
+⚠ **Every item was checked against the tree rather than against this file** —
+grep for the code, then the ROADMAP ✅ — which is the only method a queue this
+old admits. The open list is now **two** items: the perspective map's curvature
+(uncosted) and the persisted-key migration (#89, needs sign-off).
+
+⚠ **The export panel's decision numbers were wrong** in one copy and right four
+lines later: #93-#95, not #90-#92. #90 is directory enumeration and #92 is
+dehaze.
+
+**`HISTORY.md` held 771 lines of byte-identical duplicate sessions** — whole
+blocks pasted three times, `2026-08-01a`/`b` and `2026-07-31k`/`l` at three
+copies each. Deleted under an assertion that no removed line existed nowhere
+else in the file; the script refused to write unless that set was empty. Two
+further pairs were **label collisions**, not copies — two different sessions
+sharing `2026-07-30k` (landing page vs colour range masks) and `2026-08-01m`
+(Balance #104 vs the accumulator #108). Relabelled to free letters with a note
+that the letter carries **no claim about ordering**, because the sequence cannot
+be recovered and inventing one would be the same failure in a new place. A
+session's reliable identifier is its decision number.
+
+Decision #135. Doc-only: no engine, app or shader file was touched, and the
+gates were run anyway to say so with evidence rather than by reasoning about it.
 
 ## Session `2026-08-02d` — the ramp length, and a fixture that passed either way
 
