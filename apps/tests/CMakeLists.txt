@@ -1,6 +1,9 @@
-# One translation unit per subject. `main.cpp` is the running order, `harness.*`
-# is the counter and the three helpers, and every file here is under the
-# thousand-line limit CLAUDE.md calls a hard constraint — which the single
+# One translation unit per fixture — the frame and the state a group of checks
+# share, not the subject they are about (decision #127: a test file answers
+# "what broke?", so a check separated from the fixture it reads is worse off in a
+# short file than it was in a long one). `main.cpp` is the running order,
+# `harness.*` is the counter and the three helpers, and every file here is under
+# the thousand-line limit CLAUDE.md calls a hard constraint — which the single
 # main.cpp this replaced had exceeded sevenfold.
 add_executable(orion-tests
     main.cpp
@@ -12,6 +15,8 @@ add_executable(orion-tests
     tests_tone.cpp
     tests_grade.cpp
     tests_effects.cpp
+    tests_display.cpp
+    tests_highlights.cpp
     tests_fusion.cpp
     tests_mask.cpp
     tests_mask_geom.cpp

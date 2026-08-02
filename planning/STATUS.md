@@ -200,8 +200,10 @@ Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
 the performance action item is in `ROADMAP.md`. `DevelopPipeline.cpp` was the
 largest standing violation of a stated hard constraint and **is not any more**
 (#113, 2026-08-02); `apps/bench/main.cpp` was the second and **is not any
-more** either (#118, same day, **2,289 → 85**). Every remaining violation is
-in `app/`, and the gap row below has been **recounted** rather than edited.
+more** either (#118, same day, **2,289 → 85**). `apps/tests/tests_effects.cpp`
+was the third and the largest file in the tree, and **is not any more** (#127,
+same day, **1,716 → 555 + 865 + 331**, cut at the fixture). The gap row below has
+been **recounted by sweep** rather than edited.
 
 ### ⚠ In flight — seventh wave, two agents, 2026-08-02
 
@@ -226,6 +228,53 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — `tests_effects.cpp` is three files, and every check kept its fixture (#127)
+
+**1,716 lines, the largest file in the tree**, and the first split cut at the
+**fixture** rather than the region — #126's seam, applied to the file it was
+raised about.
+
+| File | Lines | The fixture it is named for |
+|---|---|---|
+| `tests_display.cpp` | **331** | One row of scene-linear ramp through `developDisplay`, with a curve LUT and a cube bound. `testOutputDepth` + `testCreativeLut` |
+| `tests_highlights.cpp` | **865** | A blown lamp in a warm surround, in three forms. `testHighlightHaloGpu` + `testHighlightFillGpu` + `testHighlightFillWiring` |
+| `tests_effects.cpp` | **555** | Two operators that each build their own frame and read nobody else's. `testLocalLaplacianGpu` + `testDehazeGpu` |
+
+⚠ **Seven test functions, four fixture families — fewer fixtures than subjects,
+which is the whole reason the seam is not the subject.** Output depth and
+creative LUTs are different subjects on the *same dispatch*, and the depth test's
+own comment already has to explain the cube it never samples (*"or every texture
+after it shifts by one, which is silent and total"*); a subject split puts that
+comment in one file and its texture in another. The three highlight tests are one
+scene, and the wiring test's checks are **written against the solver test's** —
+*"`testHighlightFillGpu` asserts separately that it does not"* — so separating
+them leaves each half asserting a premise it no longer establishes.
+
+⚠ **Proved a pure move rather than asserted one.** 1,708 body lines were sliced
+out of the original **by index** and compared back against `HEAD` line for line,
+and `orion-tests` output is **byte-identical** before and after — `diff` clean,
+**800 checks, 0 failures**, same names, same order, because the running order
+lives in `main.cpp` and a translation unit has none.
+
+| # | Mutation | Check it reddened |
+|---|---|---|
+| M1 | `develop_display.slang` quantised to eight bits | *the output resolves far finer than eight bits could* — 2 distinct values |
+| M2 | red and blue swapped in `cubeCorner` | *an identity LUT leaves every pixel where it was* — worst 28/255 |
+| M3 | premultiplied guard dropped in `hl_push.slang` | *the shader and its host twin agree* — worst 6.55 |
+| M4 | `hl_apply.slang` §3.3 made a replacement | *it moves only the clipped channel* |
+| M5 | Burt downsample shifted one texel | 9 red, led by *alpha = 1 collapses back to the input* |
+| M6 | dark-channel stage skipped in `airlightFrom` | *the atmospheric light is the haze, not the brightest pixel* — A.r 3.0 |
+
+⚠ **One finding, written down and left alone.** *"a constant rim fills with that
+constant"* claims in its comment that *"any weighting error … shows here"*, and
+it does not: M3 scales colour and weight together, so `v/w` is unchanged and that
+check stays green while three of its neighbours go red. It is not unfailable — it
+is narrower than its comment says. Also left: a doc comment for
+`testExposureFusionMath` has been dangling at the end of this file since the
+2026-07-31 split, describing a test that lives in `tests_fusion.cpp`.
+
+Gates: 800 / 3,708 / 40 scenarios / bench exit 0.
 
 ### ✅ 2026-08-02 — three holes in the interface's coverage, and they were one hole (#125)
 
@@ -1265,9 +1314,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| ⚠ **The 1000-line rule now binds nothing in product code, and whether it binds tests is unsettled.** Swept live across every tracked source at the 2026-08-02 merge: the only files over are **`apps/tests/tests_effects.cpp` 1,716, `tests_brush.cpp` 1,142, `tests_perspective.cpp` 1,110, `tests_grade.cpp` 1,029** — all four in `apps/tests/`, none in `app/` or `engine/`. **Six splits landed in one day**: `DevelopPipeline.cpp` 2,896→451 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `OrionApp.swift` 1,557→299 (#121), `Scenario.swift` 1,615→301 (#120), `DevelopPanels.swift` 1,366→56 (#122). ✅ **Settled 2026-08-02, decision #126: the rule applies, the seam is the fixture rather than the region, and it is not urgent.** `CLAUDE.md` says *"No 1000-line anything"* and gives the reason — *"the developer must be able to hand-edit any file later"* — which applies to a test file as much as to a shader. But the two test files already split on 2026-07-31 were split for navigability, not because a rule demanded it, and a test file's cost of being long is different from a dispatcher's: nobody hunts for where to add a case. ⚠ Note also that **the tree moves under this row faster than the row is rewritten** — `tests_effects.cpp` went 969 → 1,716 in a single day, so it was *under* the ceiling on the morning of the sweep that missed it. **Recount by sweep before editing; do not adjust the numbers in place** | `apps/tests/` |
-
-| **The 1000-line rule is broken six ways, and it has moved out of `app/`**: `apps/tests/tests_effects.cpp` **1,716**, `app/OrionApp.swift` **1,557**, `app/DevelopPanels.swift` **1,366**, `apps/tests/tests_brush.cpp` **1,142**, `apps/tests/tests_perspective.cpp` **1,110**, `apps/tests/tests_grade.cpp` **1,029**; next below is `ShaderParams.h` at **905**. ⚠ **Recounted by sweep 2026-08-02 at `9d9158d` + #120**, over every `.swift/.cpp/.h/.hpp/.mm` under `app/ apps/ engine/ Sources/` — not by adjusting the previous numbers, which is what this row has always gone wrong by. ⚠ **The previous row was not stale; the tree moved under it.** It read "broken three ways, all in `app/`" and named `ShaderParams.h` at 905 as the next below — which is only consistent with `apps/tests` being *under* the ceiling, and it was: at `0b8061d` those files stood at **969 / 770 / 844** and `tests_perspective.cpp` did not exist. **Four test files crossed the ceiling in a single day**, three by growth and one on arrival. The violation is now mostly in the tests, and nobody sweeping only `app/` will see it. ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself. Of the originals, `DevelopPipeline.cpp` (#113, 2,896 → 451), `bench/main.cpp` (#118, 2,289 → 85), `Engine.swift` (#117, 2,331 → 795) and `Scenario.swift` (#120, 1,615 → 301) are done | whole tree |
+| **The 1000-line rule is broken four ways, and one of them is `app/Screenshot.swift` at 1,194, which no previous copy of this row has ever named.** ⚠ **Recounted by sweep 2026-08-02 at `0b8061d` + #127**, over all **233** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files — `git ls-files`, not a directory list, so nothing is out of scope by being somewhere nobody thought to look. Over: **`app/Screenshot.swift` 1,194**, **`apps/tests/tests_brush.cpp` 1,142**, **`apps/tests/tests_perspective.cpp` 1,110**, **`apps/tests/tests_grade.cpp` 1,029**. Next below: `ShaderParams.h` **905**, then `tests_highlights.cpp` **865** and `tests_tone.cpp` **858**. ⚠ **`Screenshot.swift` is the lesson, again**: it was 809 lines this morning and #125's three interface checks took it past the ceiling on the same day the row was rewritten twice, by agents who were counting the files they had been chartered against. ⚠ This sweep is of **one worktree at `0b8061d`** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling. Seven splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `tests_effects.cpp` 1,716→555 + 865 + 331 (#127, the first cut at the **fixture** rather than the region, per #126). ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into this one on 2026-08-02 | whole tree |
 
 | ~~⚠ **The whole Photo menu is unreachable from every check.**~~ ✅ **closed 2026-08-02, decision #125.** `--screenshot --scene menu` hands the process back to `OrionApp.main()` and reads `NSApp.mainMenu` — the shipping `Scene` building the shipping `PhotoCommands` — and asserts **26 commands by title**, exiting 1 and printing the whole 75-item bar when one is missing. Deleting Reset Adjustments now prints `MISSING from the menu bar — "Reset Adjustments"` and exits 1, with every frame and all 40 scenarios still green. ⚠ It asserts **presence, not firing**: the items are disabled at launch and firing one needs a photograph, a key window and focus (#110.3's shape). ⚠ It is not driven through `CullActions`, deliberately — that would be green on the mutation, which deletes the button and leaves the action | `Screenshot.swift` |
 | ⚠ **The Compare Original menu item ships without its key.** The bar reads **`Compare Original  ()`**: the source writes `"Compare Original  (\\)"`, and a `Button`'s string is a `LocalizedStringKey` whose escape character is the backslash, so the one item that spells its key only in its title has lost it. Found by the menu check's first run, 2026-08-02; **pinned as it ships** so the check is green on the tree as it stands, and it will go red — printing the whole bar — the moment somebody fixes it, which is the right way round. The fix is `Text(verbatim:)` or a different spelling | `OrionApp+Commands.swift` |
@@ -1275,7 +1322,6 @@ Small, named, and none of them blocking the next story:
 | ~~**`Engine.lastFailure` is pinned, the line that displays it is not.**~~ ✅ **closed 2026-08-02, decision #125.** `--scene render-failed` plants the failure **and suspends the engine** — laying the interface out renders, and a successful render clears the value, which wiped the first attempt and photographed the ordinary hint — so the amber "Render failed — …" line is in a byte-compared frame. Deleting the branch changes the frame; `nofailure` stays green on the same mutation, which is exactly the distinction: it pins the state, this pins the line | `Screenshot.swift` |
 | ⚠ **The three interface checks are run by hand, like every other frame here.** `detail-tail`, `render-failed` and `menu` are `--screenshot` scenes, and **no gate in the repository runs `--screenshot` at all** (#121: the only mode the 40-file sweep drives is `--scenario`). Two of the three exit nonzero by themselves, so they need no reference image — but somebody has to invoke them. Same standing as the 42-frame comparison, which is also nobody's gate | `Screenshot.swift` |
 | **One screenshot scene is not byte-stable, so it cannot be an oracle.** `--scene versions` builds its rows in `Screenshot.snapshots` from `Date()` and the panel prints an absolute clock time, so **two runs of the same binary disagree** — 37/38 scenes byte-identical, `versions.png` differing by 2,380 bytes purely in the timestamp glyphs. Found by self-checking the oracle before trusting it (#121); every other scene is stable across runs and across the split. ⚠ Left alone rather than fixed, because a behaviour change hidden inside a refactor is unreviewable. The fix is a fixed `Date` in the harness, not in the product | `Screenshot.swift` |
-| **The 1000-line rule is broken six ways**, and ⚠ **the largest file in the tree was never in this row**: `apps/tests/tests_effects.cpp` **1,716**, `app/Scenario.swift` **1,615**, `app/DevelopPanels.swift` **1,366**, `apps/tests/tests_brush.cpp` **1,142**, `apps/tests/tests_perspective.cpp` **1,110**, `apps/tests/tests_grade.cpp` **1,029**. ⚠ Swept live across **every** tracked source at the 2026-08-02 merge, not just product code — the row had said *"three files, all in `app/`"* and *"the next file below the survivors is `ShaderParams.h` at 905"*, and both were wrong: four test files sit above it and the biggest of them is bigger than anything the splitting wave was chartered against. Scenario.swift was also listed at 1,596 when it is 1,615. ⚠ **Recount by sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself, and every figure written into it today was stale within hours because agents write it before the others land. Four splits landed 2026-08-02: `DevelopPipeline.cpp` 2,896→451, `Engine.swift` 2,331→795, `bench/main.cpp` 2,289→85, `OrionApp.swift` 1,557→299. Two more are in flight | whole tree |
 | **Nothing asserts that a gesture *arms*** — narrowed 2026-08-01, decision #110.3, and it is now the *first* link only. `repro/gesture-preview-agrees.txt` used to compare an armed run against an unarmed one and demand they agree, which is green when arming does nothing; it now also asserts arming has an effect (the preview surface goes 0.2323/0.2918 → 0.4814/0.2037 over the same eight ticks), so a no-op `beginInteraction` fails. What is still unreachable is a `DragGesture` closure calling it: **attempted** — `NSHostingView` off-screen lays the wheel out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s call is green across 744 / 3624 / 39, measured | `Scenario.swift` |
 | ~~**The grading wheel's arming is unmeasured.**~~ ✅ **closed 2026-08-01, decision #110.2.** `wheel` and `dragwheel` drive a three-component control, added beside the scalar spellings rather than replacing them (#89). **9.6 ms per tick unarmed against 1.2 armed, 8.0×**, settled picture identical at luma 0.2268 / sat 0.5136 | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
