@@ -1791,21 +1791,36 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         m.matteSize[1] = matteLive_[std::size_t(i)][1];
 
         m.center[0] = placed.centerX; m.center[1] = placed.centerY;
-        mask::radiusToFrame(c.radius[0], c.radius[1], crop, m.semi[0], m.semi[1]);
-        // ⚠ And the perspective's own scale at *this* mask's center, which the
-        // crop's cannot carry: a homography's magnification is different at
-        // every point, so it travels with the placement rather than living in
-        // `radiusToFrame`. Exactly 1 when the control is neutral.
-        m.semi[0] *= placed.scale;
-        m.semi[1] *= placed.scale;
-        m.angle     = placed.angle;
+
+        // ⚠ And the perspective's own derivative at *this* mask's centre, which
+        // the crop's scale cannot carry: a homography's magnification differs at
+        // every point and in every direction, so the whole 2×2 travels with the
+        // placement. It is exactly the identity when the control is neutral, and
+        // `radiusToFrame` then returns the crop's answer untouched.
+        //
+        // The angle it hands back is a *delta*, because `placed.angle` has
+        // already been through the quarter turns and this must not turn them
+        // again (decision #83).
+        const auto ext = mask::radiusToFrame(
+            c.radius[0], c.radius[1], crop, placed.jac,
+            c.angle + adj.straightenDeg * 3.14159265358979324f / 180.0f);
+        m.semi[0] = ext.semiX;
+        m.semi[1] = ext.semiY;
+        m.angle   = placed.angle + ext.angleDelta;
 
         // A linear gradient's endpoints, from the *placed* center and angle.
         // Half the length either side, so rotating about the center does not
         // also move the ramp.
+        //
+        // ⚠ `placed.angle`, not `m.angle`: the ramp's direction is the image of
+        // the mask's own direction, which a homography carries exactly, while
+        // `m.angle` now names the *ellipse's* principal axis — a different line
+        // whenever the map is anisotropic. Its length is still the isotropic
+        // √|det J|, and is the one first-order term left in a mask's extent;
+        // `research/UNSOURCED.md` §24 says so.
         const float len = mask::lengthToFrame(c.length, crop) * placed.scale;
-        const float dx = std::cos(m.angle) * len * 0.5f;
-        const float dy = std::sin(m.angle) * len * 0.5f;
+        const float dx = std::cos(placed.angle) * len * 0.5f;
+        const float dy = std::sin(placed.angle) * len * 0.5f;
         m.zero[0] = m.center[0] - dx; m.zero[1] = m.center[1] - dy;
         m.full[0] = m.center[0] + dx; m.full[1] = m.center[1] + dy;
         m.feather   = c.feather;

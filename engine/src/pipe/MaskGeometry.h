@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace orion::pipe::mask {
 
@@ -32,7 +33,23 @@ struct Placement {
     /// crop's scale is the same everywhere and is handled by
     /// `lengthToFrame`/`radiusToFrame`, but a homography's is not, so it has to
     /// travel with the point it was measured at. research/perspective.md.
+    ///
+    /// ⚠ **Isotropic, and therefore not the whole story.** It is √|det J| — the
+    /// geometric mean of the two axis scales — which is right for a length whose
+    /// direction is not being tracked and wrong for a *shape*. A radial mask's
+    /// semi-axes go through `jac` instead, and the difference between the two is
+    /// what leaked coverage past the rim of a large mask under a strong
+    /// keystone.
     float scale   = 1.0f;
+
+    /// The map's derivative at this point, **in normalized coordinates** —
+    /// W⁻¹·J·W for the frame's W = diag(width, height), since `persp::jacobian`
+    /// is posed in texels and everything here is not.
+    ///
+    /// Exactly the identity when no perspective is in play, which is what lets
+    /// every consumer short-circuit rather than compute a transform that is the
+    /// identity in exact arithmetic and not in float.
+    persp::Jacobian jac{};
 };
 
 /// The crop rectangle, normalized against the rotated frame — the same
@@ -87,13 +104,15 @@ inline void unstraighten(float& x, float& y, float radians,
 /// this. `frameW` and `frameH` are the frame's dimensions after any quarter
 /// turns, the same two `unstraighten` takes.
 ///
-/// Fills `outScale` with the local isotropic scale at the point, and rotates
-/// `angle` by the map's derivative there. The angle is **exact** — a homography
-/// takes lines to lines, and the image line's direction is the Jacobian applied
-/// to the original direction — while the scale is first order, which
-/// `research/perspective.md` states rather than implies.
+/// Fills `outScale` with the local isotropic scale at the point, `outJac` with
+/// the whole derivative there, and rotates `angle` by it. The angle is
+/// **exact** — a homography takes lines to lines, and the image line's
+/// direction is the Jacobian applied to the original direction — while the
+/// scale is isotropic and therefore first order, which
+/// `research/perspective.md` states rather than implies. A shape that needs the
+/// anisotropy takes `outJac`; `radiusToFrame` does.
 inline void unperspective(float& x, float& y, float& angle, float& outScale,
-                          const persp::Matrix3* h,
+                          persp::Jacobian& outJac, const persp::Matrix3* h,
                           float frameW, float frameH) noexcept {
     if (h == nullptr || persp::isIdentity(*h)) return;
 
@@ -105,17 +124,26 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
 
     const persp::Jacobian j = persp::jacobian(*h, px, py);
 
-    // The mask's angle is measured in *normalized* frame coordinates, so the
-    // derivative has to be conjugated by the axis scales before it can turn
-    // one: a direction (cos, sin) is (cos·W, sin·H) in texels, and comes back
-    // divided by the same two.
-    const float dx = std::cos(angle) * w;
-    const float dy = std::sin(angle) * t;
-    const float tx = (j.a * dx + j.b * dy) / w;
-    const float ty = (j.c * dx + j.d * dy) / t;
+    // Everything here is measured in *normalized* frame coordinates, so the
+    // derivative has to be conjugated by the axis scales before it can turn an
+    // angle or carry a shape: a direction (cos, sin) is (cos·W, sin·H) in
+    // texels, and comes back divided by the same two. That conjugation is
+    // W⁻¹·J·W, and it is done once here rather than at each use.
+    const persp::Jacobian jn{j.a, j.b * t / w, j.c * w / t, j.d};
+
+    const float cs = std::cos(angle), sn = std::sin(angle);
+    const float tx = jn.a * cs + jn.b * sn;
+    const float ty = jn.c * cs + jn.d * sn;
     if (tx != 0.0f || ty != 0.0f) angle = std::atan2(ty, tx);
 
     outScale *= persp::areaScale(*h, px, py);
+    // Composed rather than assigned. Only one perspective ever applies today,
+    // but a second call that silently discarded the first would be a bug whose
+    // symptom is a mask the right size in the wrong place.
+    outJac = persp::Jacobian{jn.a * outJac.a + jn.b * outJac.c,
+                             jn.a * outJac.b + jn.b * outJac.d,
+                             jn.c * outJac.a + jn.d * outJac.c,
+                             jn.c * outJac.b + jn.d * outJac.d};
 
     persp::apply(*h, px, py);
     x = (px + 0.5f) / w;
@@ -150,7 +178,8 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
     // straighten, before the turns.
     float angle = p.angle + straightenRad;
     float scale = p.scale;
-    unperspective(x, y, angle, scale, perspective, frameW, frameH);
+    persp::Jacobian jac = p.jac;
+    unperspective(x, y, angle, scale, jac, perspective, frameW, frameH);
 
     // Out of the rotation. A quarter turn clockwise sends a frame point (x, y)
     // to (1 - y, x) on screen, so coming back is the inverse of that, applied
@@ -167,6 +196,12 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
     out.centerX = x;
     out.centerY = y;
     out.scale   = scale;
+    // ⚠ Not turned. The quarter turns are rigid in normalized coordinates, so
+    // they change no extent — and `radiusToFrame` returns its angle *relative*
+    // to `out.angle`, which has already been turned. Turning the derivative as
+    // well would apply the turn twice, which is decision #83's mistake in a new
+    // costume.
+    out.jac     = jac;
 
     // The angle turns with it. Anticlockwise here, because this undoes the
     // rotation the viewer sees — and the straighten is a rotation too, so it
@@ -216,7 +251,8 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
     // Then the perspective, undone, before the straighten is.
     float angle = p.angle + float(k) * kHalfPi;
     float scale = p.scale;
-    unperspective(x, y, angle, scale, perspectiveInverse, frameW, frameH);
+    persp::Jacobian jac = p.jac;
+    unperspective(x, y, angle, scale, jac, perspectiveInverse, frameW, frameH);
 
     // Then the straighten, the other way about the same pivot.
     unstraighten(x, y, -straightenRad, pivotX, pivotY, frameW, frameH);
@@ -226,6 +262,7 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
     out.centerX = (x - c.x) / std::max(c.w, 1e-6f);
     out.centerY = (y - c.y) / std::max(c.h, 1e-6f);
     out.scale   = scale;
+    out.jac     = jac;
     out.angle   = angle - straightenRad;
     return out;
 }
@@ -274,10 +311,118 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
 ///
 /// `turns` is gone from the signature rather than ignored: a parameter a caller
 /// still passes is a parameter the next reader assumes is used.
-[[nodiscard]] inline void radiusToFrame(float rx, float ry, const Crop& c,
-                                        float& outX, float& outY) noexcept {
-    outX = rx * c.w;
-    outY = ry * c.h;
+///
+/// ## And the perspective, which is where the per-axis story stops being enough
+///
+/// A crop scales each axis on its own, so it can be applied to each semi-axis
+/// on its own. A homography cannot: its derivative J at the mask's centre is a
+/// general 2×2, and a general 2×2 takes a circle to an **ellipse at an angle of
+/// its own**. What shipped with decision #100 was √|det J| — one isotropic
+/// number standing in for two, exact only where the map happens to be conformal.
+/// That is what leaked coverage past the rim of a large mask under a strong
+/// keystone, and never at its centre. `research/perspective.md` has the table.
+///
+/// The exact image, to first order in the mask's size:
+///
+/// - The ellipse with semi-axes (aₓ, a_y) at angle φ is the image of the unit
+///   disc under **A = R(φ)·diag(aₓ, a_y)**.
+/// - Its image under J is the image of the unit disc under **B = J·A**, whose
+///   semi-axis lengths are B's singular values along its left singular vectors
+///   — Golub & Van Loan, *Matrix Computations*, 4th ed., JHU Press 2013,
+///   §2.4.1: the image of the unit sphere under a matrix is a hyperellipse
+///   whose semiaxes are σᵢ·uᵢ.
+/// - Those are read off **S = B·Bᵀ**, symmetric positive semi-definite: its
+///   eigenvalues are σ², its eigenvectors the axes. (Note BᵀB would give the
+///   *pre*-image's axes, which is the mistake that looks identical.)
+/// - The 2×2 symmetric eigenproblem is closed form — Golub & Van Loan §8.5.2,
+///   the symmetric Schur decomposition Jacobi's method is built on. For
+///   S = [[p, q], [q, r]]:
+///
+///       λ± = (p + r)/2 ± √( ((p − r)/2)² + q² ),   ψ = ½·atan2(2q, p − r)
+///
+/// ⚠ **This is the image under the map's *derivative*, which is not the image
+/// under the map.** A projective map takes a conic to a conic but not an
+/// ellipse to a similar ellipse, so what is removed here is the whole
+/// first-order error — all of the anisotropy — and what remains is second
+/// order, the map's curvature across the mask. Said plainly because the version
+/// this replaces was also described as exact by somebody who had only checked
+/// the middle of the frame.
+///
+/// ⚠ **Smith's closed form (CACM 1961) was *not* reused, though the repository
+/// has it.** `SkyDetector.Stats.largestVariance()` is Swift, it is the 3×3
+/// case, and it returns the largest eigenvalue and no eigenvector — this needs
+/// both eigenvalues and an axis, in C++, on the other side of the facade.
+/// Smith's construction reduces to the quadratic formula above at n = 2, so
+/// what is written here is that reduction and not a second derivation.
+///
+/// The returned angle is a **delta**, to be added to `Placement::angle`. Two
+/// reasons, and both are load-bearing: it keeps the quarter turns out of this
+/// function (they are already in `Placement::angle`, decision #83), and it is
+/// **exactly zero** at a neutral control, so a photograph with the perspective
+/// slider at rest renders bit-for-bit as it did before any of this existed.
+struct Extent {
+    float semiX = 0.0f;       ///< the frame ellipse's semi-axis along its angle
+    float semiY = 0.0f;       ///< and the one across it
+    float angleDelta = 0.0f;  ///< add to `Placement::angle`
+};
+
+[[nodiscard]] inline Extent radiusToFrame(float rx, float ry, const Crop& c,
+                                          const persp::Jacobian& j,
+                                          float angle) noexcept {
+    const float ax = rx * c.w;
+    const float ay = ry * c.h;
+
+    // ⚠ Neutral is short-circuited rather than solved, for the reason
+    // `persp::inTexels` gives: the algebra below returns (ax, ay, 0) at the
+    // identity in exact arithmetic and not in float.
+    if (j.a == 1.0f && j.b == 0.0f && j.c == 0.0f && j.d == 1.0f) {
+        return {ax, ay, 0.0f};
+    }
+
+    constexpr float kPi = 3.14159265358979324f;
+    const float cs = std::cos(angle), sn = std::sin(angle);
+
+    // B = J·R(angle)·diag(ax, ay), column by column.
+    const float b00 = (j.a * cs + j.b * sn) * ax;
+    const float b10 = (j.c * cs + j.d * sn) * ax;
+    const float b01 = (-j.a * sn + j.b * cs) * ay;
+    const float b11 = (-j.c * sn + j.d * cs) * ay;
+
+    // S = B·Bᵀ.
+    const float p = b00 * b00 + b01 * b01;
+    const float q = b00 * b10 + b01 * b11;
+    const float r = b10 * b10 + b11 * b11;
+
+    const float mid  = 0.5f * (p + r);
+    const float rad  = std::sqrt(0.25f * (p - r) * (p - r) + q * q);
+    // Clamped at zero: S is positive semi-definite in exact arithmetic, and a
+    // degenerate mask can put the smaller root a rounding error below it.
+    float s1 = std::sqrt(std::max(mid + rad, 0.0f));
+    float s2 = std::sqrt(std::max(mid - rad, 0.0f));
+    float psi = 0.5f * std::atan2(2.0f * q, p - r);
+
+    // Which principal axis to call "x". Either naming describes the *same*
+    // ellipse — the kernel is symmetric under (semi.x ↔ semi.y, angle + π/2),
+    // which holds for the superellipse exponent too since |u|ⁿ + |v|ⁿ is
+    // symmetric in the two — so this is about continuity, not correctness:
+    // keeping the first axis next to the one the mask itself calls x stops the
+    // returned angle jumping ninety degrees as the two radii pass each other.
+    //
+    // The image of the mask's own x direction, which is what `unperspective`
+    // put into `Placement::angle`:
+    const float tx = j.a * cs + j.b * sn;
+    const float ty = j.c * cs + j.d * sn;
+    const float phi = (tx != 0.0f || ty != 0.0f) ? std::atan2(ty, tx) : angle;
+
+    // ψ names an axis and not a direction, so fold the difference into
+    // [−π/2, π/2] before choosing.
+    float delta = psi - phi;
+    delta -= kPi * std::round(delta / kPi);
+    if (std::fabs(delta) > 0.25f * kPi) {
+        std::swap(s1, s2);
+        delta -= (delta > 0.0f ? 0.5f * kPi : -0.5f * kPi);
+    }
+    return {s1, s2, delta};
 }
 
 }  // namespace orion::pipe::mask
