@@ -132,6 +132,7 @@ void testLongBrushStroke();
 void testBrushErase();
 void testBrushPrefixPredicate();
 void testBrushPrefixWiring();
+void testBrushAccumulator();
 void testMaskRangeGpu();
 void testMaskColorGpu();
 void testMaskMatteGpu();

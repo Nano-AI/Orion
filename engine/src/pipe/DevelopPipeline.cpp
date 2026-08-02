@@ -2120,6 +2120,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                                           m.accumulate == 0;
                     m.accumUse = (accumOwner_ == i) ? 1 : 0;
                     m.firstDab = appended ? prev.count : 0;
+                    stat.firstDab = m.firstDab;
 
                     // The claim, not the fact. It becomes `brushPrev_` only
                     // once the pipeline reports having run this node — see
@@ -2782,7 +2783,16 @@ void DevelopPipeline::reconcileBrushAccum() {
         m.firstDab = 0;
         pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
         brushPrev_[std::size_t(i)] = {};
+        brushPrefix_[std::size_t(i)].firstDab = 0;
+        ++brushPrefix_[std::size_t(i)].refusals;
     }
+}
+
+std::size_t DevelopPipeline::brushAccumBytes() const {
+    if (auxBrushAccum_ < 0) return 0;
+    const std::uint32_t w = pipeline_.auxWidth(auxBrushAccum_);
+    if (w <= 1) return 0;
+    return std::size_t(w) * height_ * sizeof(float);
 }
 
 void DevelopPipeline::commitBrushAccum() {

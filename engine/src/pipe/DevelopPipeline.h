@@ -56,6 +56,21 @@ struct BrushPrefixStat {
     /// what is being uploaded now.
     int previousCount = 0;
     int count = 0;
+    /// **What the kernel was actually told**, which is not the same number as
+    /// `prefix` and must not be assumed to be. `prefix` is a statement about
+    /// the previous *upload*; this is a statement about the *texture*, and it
+    /// is zero unless the accumulator is known to hold exactly that many dabs
+    /// of this stroke. Decision #108.
+    ///
+    /// ⚠ Here so a check can assert the fast path was *taken*. An accumulator
+    /// that is never continued from is correct and buys nothing, and every
+    /// bit-identity test in this file passes on it.
+    int firstDab = 0;
+    /// How many times `reconcileBrushAccum` has refused the fast path because
+    /// the node was about to run on parameters `apply` did not push. Counted
+    /// rather than inferred: the refusal produces a *correct* frame, so nothing
+    /// about the picture can tell whether it happened.
+    int refusals = 0;
 };
 
 /// One component of the mask group, in the form a person manipulates — a center
@@ -455,6 +470,14 @@ public:
         if (component < 0 || component >= kMaxMaskComponents) return {};
         return brushPrefix_[std::size_t(component)];
     }
+
+    /// Which component the one brush accumulator currently belongs to, or -1.
+    [[nodiscard]] int brushAccumOwner() const noexcept { return accumOwner_; }
+
+    /// Bytes the accumulator is holding. Zero until a dab is laid — it is
+    /// registered at 1x1 and grown on first use, because it is ~97 MB at
+    /// 24 Mpx and most photographs are never painted on.
+    [[nodiscard]] std::size_t brushAccumBytes() const;
 
     /// Renders every dirty node. Returns GPU-side milliseconds.
     double render();
