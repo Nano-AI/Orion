@@ -3,13 +3,16 @@ import SwiftUI
 // The panel column: the switch that picks a panel, and the two builders every
 // panel is written in.
 //
-// The panels themselves are `DevelopPanels.swift`. The Crop panel is the one
-// exception and is inline below, where it has always been — it is the only tab
-// whose controls are the geometry rather than the develop state.
+// The panels themselves are one file per tab — `DevelopPanels+Light.swift`,
+// `+Color`, `+Detail`, `+Optics`, `+Mask`, `+Presets` (#122), with
+// `DevelopPanels.swift` left holding the furniture two tabs share. The Crop
+// panel is the one exception and is inline below, where it has always been —
+// it is the only tab whose controls are the geometry rather than the develop
+// state.
 //
 // `section` and `slider` live here rather than beside the panels because they
 // are what a panel is *made of*: adding a control means one `slider` line in
-// `DevelopPanels.swift`, and the reason that line is one line is here.
+// that tab's file, and the reason that line is one line is here.
 
 extension Editor {
     var tools: some View {
