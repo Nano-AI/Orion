@@ -892,12 +892,40 @@ final class Engine {
                                               Int32(dabs))
             }
         }
-        guard ok == ORION_OK else { return }
+        // ⚠ Reported rather than dropped. A refused stroke is paint that does
+        // not appear under a hand that is still moving, which reads as a dead
+        // trackpad rather than as an error — and the next dab tries again, so
+        // without a message there is nothing anywhere to say it happened.
+        guard ok == ORION_OK else {
+            noteBrushRefusal(ok)
+            return
+        }
         brushRevisions[liveIndex] &+= 1
 
         var adj = cAdjustments()
-        orion_engine_set_adjustments(handle, &adj)
+        let pushed = orion_engine_set_adjustments(handle, &adj)
+        guard pushed == ORION_OK else {
+            noteBrushRefusal(pushed)
+            return
+        }
         if interacting { renderPreview() } else { render() }
+    }
+
+    /// One place for the two brush pushes to complain from.
+    ///
+    /// ⚠ The stderr line is rate-limited to the *first* refusal of a run of
+    /// them. A pointer event fires dozens of times a second, so a line per dab
+    /// would be a megabyte of log for one bad stroke and would bury the first
+    /// one, which is the only one that carries information. `lastFailure` is
+    /// set every time — it is a single published value, and the footer showing
+    /// the newest reason is right.
+    private func noteBrushRefusal(_ status: OrionStatus) {
+        let why = errorText(status)
+        if lastFailure == nil {
+            FileHandle.standardError.write(
+                Data("orion: the brush stroke was refused — \(why)\n".utf8))
+        }
+        lastFailure = why
     }
 
     func setBrushStroke(_ points: [CGPoint], erasing: [Bool]? = nil) {
@@ -942,7 +970,10 @@ final class Engine {
                                                     Int32(dabs))
                   }
               }
-        guard status == ORION_OK else { return false }
+        guard status == ORION_OK else {
+            noteBrushRefusal(status)
+            return false
+        }
         brushRevisions[index] &+= 1
         return true
     }
@@ -1452,8 +1483,13 @@ final class Engine {
             throw Failure.open(errorText(status))
         }
 
+        // ⚠ Only assigned when the call answered. Discarding the status wrote
+        // the zeroed out-parameters over the size, and every consumer —
+        // `frameAspect`, the crop normalization, the export's longest edge —
+        // then worked against 0 × 0 on a photograph that had opened fine.
         var w: UInt32 = 0, h: UInt32 = 0
-        orion_engine_image_size(handle, &w, &h)
+        let sized = orion_engine_image_size(handle, &w, &h)
+        guard sized == ORION_OK else { throw Failure.open(errorText(sized)) }
         imageWidth = w
         imageHeight = h
         camera = String(cString: orion_engine_camera(handle))
@@ -1792,11 +1828,23 @@ final class Engine {
     /// "reset temperature" has to mean the camera's number, not 5500 K.
     private(set) var defaults = DevelopState()
 
+    /// ⚠ **The status is read, and the fallback is the struct's own defaults.**
+    /// It was discarded, and `OrionAdjustments()` is *zeroed* — so a refused
+    /// call did not leave white balance alone, it set the photograph to 0 K and
+    /// tint 0. The picture opens deep blue, "reset temperature" puts it back
+    /// there, and nothing anywhere says the camera was never asked.
     private func asShotState() -> DevelopState {
         var fresh = DevelopState()
         guard let handle else { return fresh }
         var asShot = OrionAdjustments()
-        orion_engine_as_shot(handle, &asShot)
+        let status = orion_engine_as_shot(handle, &asShot)
+        guard status == ORION_OK else {
+            let why = errorText(status)
+            lastFailure = "the camera's white balance could not be read — \(why)"
+            FileHandle.standardError.write(
+                Data("orion: as-shot white balance unavailable — \(why)\n".utf8))
+            return fresh
+        }
         fresh.temperatureK = asShot.temperature_k
         fresh.tint = asShot.tint
         return fresh
@@ -2134,7 +2182,22 @@ final class Engine {
         var adj = cAdjustments()
         // Both graphs, always — the engine fans this out. A preview left stale
         // is the graph read the instant the drag ends.
-        orion_engine_set_adjustments(handle, &adj)
+        //
+        // ⚠ **The status is read.** It was discarded, and the failure that
+        // produces is the worst-looking one in this file: the push is refused,
+        // the render below then succeeds *on the previous adjustments*, and the
+        // photographer gets a fast, correct-looking frame of the wrong picture.
+        // Every number on the bar is green. Swift imports C functions as
+        // implicitly discardable, so nothing warned.
+        let pushed = orion_engine_set_adjustments(handle, &adj)
+        guard pushed == ORION_OK else {
+            let why = errorText(pushed)
+            lastFailure = why
+            FileHandle.standardError.write(
+                Data("orion: the edit did not reach the engine — \(why)\n".utf8))
+            generation &+= 1
+            return
+        }
 
         if interacting {
             renderPreview()

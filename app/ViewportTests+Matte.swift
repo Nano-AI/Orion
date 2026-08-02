@@ -253,6 +253,79 @@ extension ViewportTests {
                    "an unreadable sidecar collects nothing",
                    "\(mattes(photo)) files left")
         }
+
+        // ── 4. The same three states, from the two facts a loader has ──────
+        //
+        // ⚠ Both loaders used to derive `parsed:` by hand, and both derived it
+        // from *"the sidecar carried a develop blob"* rather than *"and it
+        // decoded"* — `Engine.restore` returned `Void`, so the second question
+        // could not be asked. A blob that failed to decode therefore reached
+        // the `.parsed` branch carrying the engine's **default empty** list,
+        // and every matte beside the photograph was collected. Decision #115.
+        report(MatteStore.SidecarState.of(blob: nil, restored: false) == .noSidecar,
+               "no blob is the absent state")
+        report(MatteStore.SidecarState.of(blob: nil, restored: true) == .noSidecar,
+               "and stays absent whatever `restored` claims")
+        report(MatteStore.SidecarState.of(blob: Data([1]), restored: true) == .parsed,
+               "a blob that decoded is the parsed state")
+        report(MatteStore.SidecarState.of(blob: Data([1]), restored: false) == .unreadable,
+               "a blob that did not decode is the unreadable state")
+
+        do {
+            let (photo, dir) = fixture("classified")
+            defer { try? fm.removeItem(at: dir) }
+            fm.createFile(atPath: Sidecar.url(for: photo).path,
+                          contents: Data("this is not xml".utf8))
+            // ⚠ `components` is an autoclosure and must not even be evaluated
+            // on the unreadable path: after a failed decode it is the default
+            // list, which is the value that did the damage.
+            var touched = false
+            MatteStore.sweepAfterLoad(photo: photo, blob: Data([1]), restored: false,
+                                      components: { touched = true; return [] }())
+            report(mattes(photo) == 3,
+                   "the classifier collects nothing on an unreadable blob",
+                   "\(mattes(photo)) files left")
+            report(!touched, "and never asks the engine what it holds")
+
+            var component = MaskComponentState()
+            component.kind = 4
+            component.matteId = "keep"
+            MatteStore.sweepAfterLoad(photo: photo, blob: Data([1]), restored: true,
+                                      components: [component])
+            report(mattes(photo) == 1,
+                   "and collects normally once the blob decoded",
+                   "\(mattes(photo)) files left")
+        }
+
+        // ── 5. A folder reached through a symlink still sweeps ─────────────
+        //
+        // ⚠ **`contentsOfDirectory(at:)` fails with `ENOTDIR` when the
+        // directory URL is itself a symlink to a directory**, while the
+        // `atPath:` spelling of the same call succeeds on the same path. The
+        // sweep took the URL form under a `try?`, so an aliased card, a NAS
+        // mount or any symlinked folder swept **nothing, ever** — decision
+        // #87's leak with a different trigger, and completely silent. Measured
+        // before the fix: five orphans beside one sample frame and climbing.
+        do {
+            let (photo, dir) = fixture("symlinked")
+            defer { try? fm.removeItem(at: dir) }
+            let link = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("orion-sweep-link-\(UUID().uuidString)")
+            try? fm.createSymbolicLink(at: link, withDestinationURL: dir)
+            defer { try? fm.removeItem(at: link) }
+
+            // The photograph as the app would see it: reached *through* the link.
+            let viaLink = link.appendingPathComponent("_PIC0001.ARW")
+            var component = MaskComponentState()
+            component.kind = 4
+            component.matteId = "keep"
+            MatteStore.sweepAfterLoad(photo: viaLink, parsed: [component])
+            report(mattes(photo) == 1,
+                   "a folder reached through a symlink is swept",
+                   "\(mattes(photo)) files left")
+            report(fm.fileExists(atPath: MatteStore.url(photo: photo, id: "keep").path),
+                   "and the referenced matte is the survivor")
+        }
     }
 
     /// Sweeping a folder repeatedly must not grow the process.

@@ -1307,24 +1307,26 @@ struct Editor: View {
                 // but a reader who assumes the sweep depends on it should find
                 // the order it expects rather than one that happens to work.
                 snapshots.open(photo: url)
-                if saved != nil && !restored {
-                    // Present but unreadable — `MatteStore`'s third row. Collect
-                    // nothing, write nothing, and say so. Leaving the sidecar
-                    // alone is what makes this recoverable by hand.
+                // ⚠ The two facts, handed over as facts. The conclusion is
+                // `MatteStore`'s, so this loader and the scenario runner's
+                // cannot drift — see `MatteStore.SidecarState`.
+                MatteStore.sweepAfterLoad(photo: url, blob: saved,
+                                          restored: restored,
+                                          components: engine.maskComponents)
+                if MatteStore.SidecarState.of(blob: saved, restored: restored)
+                    == .unreadable {
+                    // Present but unreadable. Say so, and **do not arm
+                    // autosave**: its baseline would be the default state, and
+                    // the first slider tick would write that over edits that
+                    // had only failed to parse. Leaving the sidecar alone is
+                    // what keeps this recoverable by hand.
                     message = "Orion could not read the saved edits for "
                             + "\(url.lastPathComponent). They have been left on "
                             + "disk untouched; editing now would overwrite them."
                 } else {
-                    MatteStore.sweepAfterLoad(photo: url,
-                                              parsed: restored ? engine.maskComponents
-                                                               : nil)
                     // Arm only once the photo is settled, with what its sidecar
                     // already holds — so opening a file does not write straight
                     // back what it just read.
-                    //
-                    // ⚠ Not armed at all on an unreadable sidecar: autosave's
-                    // baseline would be the default state, and the first tick
-                    // would write that over edits that only failed to parse.
                     autosave.begin(url: url, saved: engine.state)
                 }
             } catch {
