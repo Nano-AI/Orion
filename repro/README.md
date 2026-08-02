@@ -33,6 +33,7 @@ miss the view-model layer, which is where these failures are.
 | `sky-mask.txt` | Passes — ⚠ its refusal half asserted nothing until 2026-07-31: it never called `select`, so it was green whatever the detector did |
 | `dehaze-reaches-the-picture.txt` | Passes — ⚠ closes the gap where dehaze could be **deleted** from the product and all three suites plus the bench stayed green |
 | `auto-applies-every-field.txt` | Passes — ⚠ Auto writes five fields and `undo-after-auto.txt` caught **none** of the five being dropped |
+| `perspective-carries-the-mask.txt` | Passes — the three fields through the whole loop, the zoom leaving no hole, and a mask still on its subject with the correction up. ⚠ Its mask half sits deliberately at the **edge** of the range the first-order extent is exact over (`UNSOURCED.md` §24) |
 | `export-depth-and-sharpening.txt` | Passes — the three export controls that fail invisibly. ⚠ Its metadata half is one-sided by necessity: the sample frames have no GPS, so location itself is asserted in `orion-tests` against a stand-in file |
 
 ## The surfaces a scenario can measure

@@ -792,3 +792,79 @@ to the digit: 67.5%, 4.6%, 14.6%. The term really does only break ties, and on
 this corpus the ties do not arise. Said plainly rather than dressed up — the
 value here is that an unsourced approximation and a false justification are gone,
 not that any photograph looks different.
+
+---
+
+## §24 — Perspective correction: the slider travel, and the extent of a mask under it
+
+**Where:** `pipe/Perspective.h` (`kCornerTravel`, the aspect factor),
+`pipe/MaskGeometry.h` (`unperspective`). Sourced companion:
+[`perspective.md`](perspective.md).
+
+**Sourced:** everything that decides *where a pixel comes from*. The homography
+is Hartley & Zisserman §2.3, the four-point solve is their DLT (§4.1) in its
+inhomogeneous form (§4.1.2), the coordinates it is posed in are their
+normalization (§4.4.4), and the inverse-mapped single-resample warp is Heckbert
+§3. None of that is invention.
+
+**Not sourced — two things, and they are different in kind.**
+
+### 1. The travel, which is a range and not a constant
+
+`kCornerTravel = 0.35`: at full slider a frame corner is asked to come from a
+point 35% of the half-width in or out. The aspect factor spans 2^±½.
+
+Neither is measured against anything. They are the same kind of decision as the
+lens sliders' |k₁| ≤ 0.35 — a ceiling on how far a control may go, not a claim
+about optics. What sets it is auto-scale: more correction is more zoom is more
+magnification of the source, so the ceiling is a picture-quality judgement about
+how much softening a photographer should be able to ask for by accident.
+
+**Cost:** "Vertical +50" will not mean numerically what it means in Lightroom.
+A tuning difference, and one a photographer sets by eye against the picture.
+
+**To fix:** nothing needs fixing. If it should be recalibrated, do it against
+the zoom it costs at full travel, and no test needs rewriting — nothing asserts
+a number derived from it.
+
+### 2. A mask's *extent* under the correction is first order, and it is measured
+
+A homography carries a point exactly and a line's direction exactly, so a mask's
+**centre**, every **brush dab**, every **spot** and a linear gradient's
+**direction** all go through `mask::toFrame` with no approximation at all. Its
+*size* does not: a projective map preserves cross-ratios along a line and not
+ratios, so a gradient's ramp comes out slightly non-uniform and an ellipse comes
+out as a conic that is not quite the ellipse whose semi-axes were sent.
+
+What is applied instead is √|det J| at the mask's own centre — the same
+geometric-mean compromise `mask::lengthToFrame` already makes for a non-square
+crop, and exact wherever the map is locally isotropic, which includes the whole
+frame at zero.
+
+**The cost is a number, not a hedge.** Measured on `_PIC8220` through
+`maskcheck`, which compares the render against the *overlay's* own transcription
+of the kernel and demands that every cell drawn clear come back bit-identical:
+
+| Vertical | Radial mask, as a fraction of the frame | Clear cells that leak |
+|---|---|---|
+| 0.45 | 0.10 | none |
+| 0.45 | 0.20 | none |
+| 0.45 | **0.28** | none |
+| 0.45 | 0.34 | 2 of 60, worst **0.0105** luma at −2 EV |
+| 1.00 | 0.34 | 2 of 60, worst **0.0617** luma |
+| 0.20 | 0.34 | none |
+
+So it holds exactly up to a mask about a quarter of the frame across at a
+moderate correction, and degrades at the rim — never at the centre — beyond
+that. `repro/perspective-carries-the-mask.txt` sits deliberately at 0.28, the
+edge of the exact range, so the approximation cannot quietly get worse.
+
+**To fix:** map the ellipse through the full Jacobian rather than through its
+determinant. An ellipse is {p : pᵀMp ≤ 1} and its image under J is
+{q : qᵀJ⁻ᵀMJ⁻¹q ≤ 1}, so the corrected semi-axes and angle are the eigen-
+decomposition of a symmetric 2×2 — closed form, about thirty lines. Costed in
+`ROADMAP.md`. It was **not** done in the same session as the geometry because it
+rewrites `radiusToFrame`, whose current derivation is load-bearing for every
+quarter turn (decision #83) and pinned by `repro/mask-alignment.txt`, and
+because the failure it would fix is at a mask's rim while the failure the
+geometry fixes is a mask in the wrong place.

@@ -771,11 +771,17 @@ std::pair<float, float> DevelopPipeline::displayedToFrame(float x, float y) cons
     const bool swaps = (turns_ % 2) != 0;
     const float rotW = float(swaps ? height_ : width_);
     const float rotH = float(swaps ? width_  : height_);
+    // ⚠ Through the same homography a mask goes through. A spot is stored in
+    // frame coordinates and converted once when it is placed, so a perspective
+    // correction that reached the picture and not this call would put every
+    // spot placed afterwards on the wrong piece of dust — silently, because a
+    // misplaced heal still looks like a heal.
     const auto p = mask::toFrame(
         {x, y, 0.0f}, crop, turns_,
         lastAdj_.straightenDeg * 3.14159265358979324f / 180.0f,
         lastAdj_.cropX + lastAdj_.cropW * 0.5f,
-        lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH);
+        lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH,
+        persp::isIdentity(perspective_) ? nullptr : &perspective_);
     return {p.centerX, p.centerY};
 }
 
@@ -789,7 +795,8 @@ std::pair<float, float> DevelopPipeline::frameToDisplayed(float x, float y) cons
         {x, y, 0.0f}, crop, turns_,
         lastAdj_.straightenDeg * 3.14159265358979324f / 180.0f,
         lastAdj_.cropX + lastAdj_.cropW * 0.5f,
-        lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH);
+        lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH,
+        persp::isIdentity(perspectiveInverse_) ? nullptr : &perspectiveInverse_);
     return {p.centerX, p.centerY};
 }
 
@@ -1043,6 +1050,38 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     // the curve also recompute exposure and AgX — three nodes of work for a
     // one-node change, and the difference between 4 ms and 12 ms.
     const bool first = !primed_;
+
+    // ── Perspective ─────────────────────────────────────────────────────
+    //
+    // Composed here, before anything reads it, because three things do: the
+    // geometry node's parameter block, every mask and brush dab on the way into
+    // frame coordinates, and `displayedToFrame` for a spot. One matrix, one
+    // derivation — a second "the same map but in the other space" is how a mask
+    // ends up a few percent off its subject on a corrected photograph.
+    //
+    // The keystone is a function of the three controls and the *rotated* frame's
+    // shape, so it is recomputed when either moves and at no other time. Solving
+    // an 8x8 system per slider tick would be nothing next to the graph, but the
+    // point of the latch is decision #92: an unchanged block still dirties the
+    // node it is pushed to.
+    if (first ||
+        adj.perspectiveVertical   != lastAdj_.perspectiveVertical ||
+        adj.perspectiveHorizontal != lastAdj_.perspectiveHorizontal ||
+        adj.perspectiveAspect     != lastAdj_.perspectiveAspect ||
+        adj.rotateQuarters        != lastAdj_.rotateQuarters) {
+        const int t = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
+        const bool swapsAxes = (t % 2) != 0;
+        perspective_ = persp::compose(
+            {adj.perspectiveVertical, adj.perspectiveHorizontal,
+             adj.perspectiveAspect},
+            float(swapsAxes ? height_ : width_),
+            float(swapsAxes ? width_  : height_));
+        perspectiveInverse_ = persp::inverse(perspective_);
+    }
+    // Null rather than an identity matrix, so the neutral case does no work at
+    // all rather than work that happens to come out neutral.
+    const persp::Matrix3* perspective =
+        persp::isIdentity(perspective_) ? nullptr : &perspective_;
 
     // White balance rewrites the linearize block, which sits at the head of the
     // graph — so moving temperature legitimately recomputes everything,
@@ -1541,7 +1580,14 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         adj.cropX != lastAdj_.cropX || adj.cropY != lastAdj_.cropY ||
         adj.cropW != lastAdj_.cropW || adj.cropH != lastAdj_.cropH ||
         adj.rotateQuarters != lastAdj_.rotateQuarters ||
-        adj.straightenDeg != lastAdj_.straightenDeg;
+        adj.straightenDeg != lastAdj_.straightenDeg ||
+        // ⚠ Perspective is in here for the same reason the crop is: every mask
+        // center and every brush dab goes through it, so moving it moves all of
+        // them. Leaving it out is a stroke that stops following the hand — the
+        // exact shape of the bug the crop entry was added for.
+        adj.perspectiveVertical   != lastAdj_.perspectiveVertical ||
+        adj.perspectiveHorizontal != lastAdj_.perspectiveHorizontal ||
+        adj.perspectiveAspect     != lastAdj_.perspectiveAspect;
 
     // The mask is placed on the picture the photographer is looking at, which is
     // cropped and rotated; it is applied before the geometry node, which sees
@@ -1620,7 +1666,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             {c.center[0], c.center[1], c.angle}, crop, turns,
             adj.straightenDeg * 3.14159265358979324f / 180.0f,
             adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
-            rotW, rotH);
+            rotW, rotH, perspective);
 
         m.rangeLo = c.rangeLo;
         m.rangeHi = c.rangeHi;
@@ -1645,12 +1691,18 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
         m.center[0] = placed.centerX; m.center[1] = placed.centerY;
         mask::radiusToFrame(c.radius[0], c.radius[1], crop, m.semi[0], m.semi[1]);
+        // ⚠ And the perspective's own scale at *this* mask's center, which the
+        // crop's cannot carry: a homography's magnification is different at
+        // every point, so it travels with the placement rather than living in
+        // `radiusToFrame`. Exactly 1 when the control is neutral.
+        m.semi[0] *= placed.scale;
+        m.semi[1] *= placed.scale;
         m.angle     = placed.angle;
 
         // A linear gradient's endpoints, from the *placed* center and angle.
         // Half the length either side, so rotating about the center does not
         // also move the ramp.
-        const float len = mask::lengthToFrame(c.length, crop);
+        const float len = mask::lengthToFrame(c.length, crop) * placed.scale;
         const float dx = std::cos(m.angle) * len * 0.5f;
         const float dy = std::sin(m.angle) * len * 0.5f;
         m.zero[0] = m.center[0] - dx; m.zero[1] = m.center[1] - dy;
@@ -1700,7 +1752,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                         crop, turns,
                         adj.straightenDeg * 3.14159265358979324f / 180.0f,
                         adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
-                        rotW, rotH);
+                        rotW, rotH, perspective);
                     const auto& signs = brushErase_[std::size_t(i)];
                     const float erasing =
                         (std::size_t(d) < signs.size() && signs[std::size_t(d)] != 0.0f)
@@ -1977,7 +2029,10 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         adj.straightenDeg  != lastAdj_.straightenDeg ||
         adj.cropX != lastAdj_.cropX || adj.cropY != lastAdj_.cropY ||
         adj.cropW != lastAdj_.cropW || adj.cropH != lastAdj_.cropH ||
-        adj.cropPreview != lastAdj_.cropPreview;
+        adj.cropPreview != lastAdj_.cropPreview ||
+        adj.perspectiveVertical   != lastAdj_.perspectiveVertical ||
+        adj.perspectiveHorizontal != lastAdj_.perspectiveHorizontal ||
+        adj.perspectiveAspect     != lastAdj_.perspectiveAspect;
 
     if (geometryMoved) {
         const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
@@ -2004,6 +2059,16 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         // image swims out from under the box.
         g.pivot[0] = 0.5f;
         g.pivot[1] = 0.5f;
+
+        // The composed homography, or the branch that says there is not one.
+        // ⚠ `perspectiveOn` is what makes a neutral control **bit-identical**
+        // to a build without perspective: the kernel takes the branch it took
+        // before, so no baseline in any suite rebases silently.
+        g.perspectiveOn = perspective != nullptr ? 1u : 0u;
+        for (int r = 0; r < 3; ++r) {
+            for (int c = 0; c < 3; ++c) g.perspective[r][c] = perspective_.m[r * 3 + c];
+            g.perspective[r][3] = 0.0f;   // padding, never read
+        }
 
         if (adj.cropPreview) {
             // The canvas the UI asked for. It has to cover the frame's rotated

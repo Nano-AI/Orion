@@ -146,6 +146,22 @@ typedef struct OrionAdjustments {
 
     int32_t rotate_quarters; /* extra quarter turns clockwise    */
     float   straighten_deg;  /* fine rotation after the turns    */
+
+    /* Perspective correction, each -1..1. research/perspective.md.
+     *
+     * A homography folded into the geometry node's existing sampling pass, so
+     * the picture is still resampled exactly once however many of these are
+     * up. Vertical pulls converging verticals apart — the building shot looking
+     * up; horizontal does the same for a wall shot from one side; aspect is the
+     * squeeze a strong correction leaves behind.
+     *
+     * The frame is zoomed automatically to stay full, exactly as the lens
+     * corrections are. Zero on all three is not a small correction: it is
+     * bit-identical to a build with no perspective in it. */
+    float   perspective_vertical;
+    float   perspective_horizontal;
+    float   perspective_aspect;
+
     float   crop_x, crop_y;  /* normalized, post-rotation        */
     float   crop_w, crop_h;
     int32_t crop_preview;    /* show the whole frame while cropping */

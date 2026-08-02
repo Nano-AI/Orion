@@ -152,6 +152,11 @@ struct Preset: Codable, Identifiable, Equatable {
         // as they were.
         out.rotateQuarters = base.rotateQuarters
         out.straightenDeg = base.straightenDeg
+        // Perspective is framing, and framing is per photograph. A keystone
+        // measured on one building corrects nothing on the next.
+        out.perspectiveVertical = base.perspectiveVertical
+        out.perspectiveHorizontal = base.perspectiveHorizontal
+        out.perspectiveAspect = base.perspectiveAspect
         out.cropX = base.cropX; out.cropY = base.cropY
         out.cropW = base.cropW; out.cropH = base.cropH
         out.spots = base.spots

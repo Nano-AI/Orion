@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include "pipe/Perspective.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -24,6 +26,13 @@ namespace orion::pipe::mask {
 struct Placement {
     float centerX = 0.5f, centerY = 0.5f;
     float angle   = 0.0f;      // radians, clockwise, as displayed
+    /// What a length near this point is multiplied by on the way through.
+    ///
+    /// Only the perspective correction ever sets it to anything but 1: the
+    /// crop's scale is the same everywhere and is handled by
+    /// `lengthToFrame`/`radiusToFrame`, but a homography's is not, so it has to
+    /// travel with the point it was measured at. research/perspective.md.
+    float scale   = 1.0f;
 };
 
 /// The crop rectangle, normalized against the rotated frame — the same
@@ -65,18 +74,70 @@ inline void unstraighten(float& x, float& y, float radians,
     y = pivotY + ry / h;
 }
 
+/// The perspective correction, exactly as `geometry.slang` applies it — the
+/// *same matrix bytes*, converted into the same texel convention.
+///
+/// ⚠ **One derivation, two consumers.** The homography is composed once in
+/// `persp::compose` and handed both to the shader and to this file. A second
+/// derivation here — "the same map, but in normalized coordinates" — is how a
+/// mask ends up a few percent off its subject on a corrected photograph, which
+/// is a plausible wrong answer and therefore the worst kind.
+///
+/// The shader works in texels: `r = u·W − 0.5` for a normalized u. So does
+/// this. `frameW` and `frameH` are the frame's dimensions after any quarter
+/// turns, the same two `unstraighten` takes.
+///
+/// Fills `outScale` with the local isotropic scale at the point, and rotates
+/// `angle` by the map's derivative there. The angle is **exact** — a homography
+/// takes lines to lines, and the image line's direction is the Jacobian applied
+/// to the original direction — while the scale is first order, which
+/// `research/perspective.md` states rather than implies.
+inline void unperspective(float& x, float& y, float& angle, float& outScale,
+                          const persp::Matrix3* h,
+                          float frameW, float frameH) noexcept {
+    if (h == nullptr || persp::isIdentity(*h)) return;
+
+    const float w = std::max(frameW, 2.0f);
+    const float t = std::max(frameH, 2.0f);
+
+    float px = x * w - 0.5f;
+    float py = y * t - 0.5f;
+
+    const persp::Jacobian j = persp::jacobian(*h, px, py);
+
+    // The mask's angle is measured in *normalized* frame coordinates, so the
+    // derivative has to be conjugated by the axis scales before it can turn
+    // one: a direction (cos, sin) is (cos·W, sin·H) in texels, and comes back
+    // divided by the same two.
+    const float dx = std::cos(angle) * w;
+    const float dy = std::sin(angle) * t;
+    const float tx = (j.a * dx + j.b * dy) / w;
+    const float ty = (j.c * dx + j.d * dy) / t;
+    if (tx != 0.0f || ty != 0.0f) angle = std::atan2(ty, tx);
+
+    outScale *= persp::areaScale(*h, px, py);
+
+    persp::apply(*h, px, py);
+    x = (px + 0.5f) / w;
+    y = (py + 0.5f) / t;
+}
+
 /// Displayed coordinates to the frame the develop stage sees.
 ///
-/// Two steps, in this order. The crop first, because the displayed picture *is*
+/// The steps, in this order. The crop first, because the displayed picture *is*
 /// the crop: a point halfway across the visible image is halfway across the
-/// crop rectangle, not halfway across the frame. Then the quarter turns, since
-/// the crop is expressed against the rotated frame.
+/// crop rectangle, not halfway across the frame. Then the straighten and the
+/// perspective, in the order `geometry.slang` applies them. Then the quarter
+/// turns, since the crop is expressed against the rotated frame.
 ///
 /// `turns` is clockwise quarter turns, matching `DevelopPipeline::quarterTurns`.
+/// `perspective` is null when the control is neutral, which is the common case
+/// and costs nothing.
 [[nodiscard]] inline Placement toFrame(Placement p, const Crop& c, int turns,
                                        float straightenRad = 0.0f,
                                        float pivotX = 0.5f, float pivotY = 0.5f,
-                                       float frameW = 1.0f, float frameH = 1.0f) noexcept {
+                                       float frameW = 1.0f, float frameH = 1.0f,
+                                       const persp::Matrix3* perspective = nullptr) noexcept {
     // Into the rotated frame.
     float x = c.x + p.centerX * c.w;
     float y = c.y + p.centerY * c.h;
@@ -84,6 +145,12 @@ inline void unstraighten(float& x, float& y, float radians,
     // Then the straighten, in the same place the shader applies it: after the
     // crop has put the point in the rotated frame, before the turns are undone.
     unstraighten(x, y, straightenRad, pivotX, pivotY, frameW, frameH);
+
+    // And the perspective, in the place the shader applies that: after the
+    // straighten, before the turns.
+    float angle = p.angle + straightenRad;
+    float scale = p.scale;
+    unperspective(x, y, angle, scale, perspective, frameW, frameH);
 
     // Out of the rotation. A quarter turn clockwise sends a frame point (x, y)
     // to (1 - y, x) on screen, so coming back is the inverse of that, applied
@@ -99,12 +166,14 @@ inline void unstraighten(float& x, float& y, float radians,
     Placement out{};
     out.centerX = x;
     out.centerY = y;
+    out.scale   = scale;
 
     // The angle turns with it. Anticlockwise here, because this undoes the
     // rotation the viewer sees — and the straighten is a rotation too, so it
-    // enters the angle directly whatever the aspect does to the position.
+    // enters the angle directly whatever the aspect does to the position. The
+    // perspective has already entered it, above, through its derivative.
     constexpr float kHalfPi = 1.57079632679489662f;
-    out.angle = p.angle + straightenRad - float(k) * kHalfPi;
+    out.angle = angle - float(k) * kHalfPi;
     return out;
 }
 
@@ -117,27 +186,37 @@ inline void unstraighten(float& x, float& y, float radians,
 /// the sensor put it and has to be carried back out to be shown.
 ///
 /// ⚠ **The order is the reverse of `toFrame`'s, not the same order with
-/// opposite signs.** `toFrame` goes crop, then straighten, then turns; this
-/// goes turns, then straighten, then crop. Applying the three in the forward
+/// opposite signs.** `toFrame` goes crop, straighten, perspective, turns; this
+/// goes turns, perspective, straighten, crop. Applying them in the forward
 /// order with negated angles is the mistake that looks right — it is only
 /// equivalent when at most one of them is doing anything, which is exactly the
 /// case anybody tests by hand.
+///
+/// `perspectiveInverse` is H⁻¹, not H: this direction undoes the correction.
+/// `persp::inverse` is the only place that inversion is written.
 [[nodiscard]] inline Placement fromFrame(Placement p, const Crop& c, int turns,
                                          float straightenRad = 0.0f,
                                          float pivotX = 0.5f, float pivotY = 0.5f,
-                                         float frameW = 1.0f, float frameH = 1.0f) noexcept {
+                                         float frameW = 1.0f, float frameH = 1.0f,
+                                         const persp::Matrix3* perspectiveInverse = nullptr) noexcept {
     float x = p.centerX;
     float y = p.centerY;
 
     // Back into the rotated frame. `toFrame` sends (x, y) to (y, 1 - x) once
     // per turn, so the inverse is (x, y) -> (1 - y, x), applied as many times.
     const int k = ((turns % 4) + 4) % 4;
+    constexpr float kHalfPi = 1.57079632679489662f;
     for (int i = 0; i < k; ++i) {
         const float nx = 1.0f - y;
         const float ny = x;
         x = nx;
         y = ny;
     }
+
+    // Then the perspective, undone, before the straighten is.
+    float angle = p.angle + float(k) * kHalfPi;
+    float scale = p.scale;
+    unperspective(x, y, angle, scale, perspectiveInverse, frameW, frameH);
 
     // Then the straighten, the other way about the same pivot.
     unstraighten(x, y, -straightenRad, pivotX, pivotY, frameW, frameH);
@@ -146,9 +225,8 @@ inline void unstraighten(float& x, float& y, float radians,
     Placement out{};
     out.centerX = (x - c.x) / std::max(c.w, 1e-6f);
     out.centerY = (y - c.y) / std::max(c.h, 1e-6f);
-
-    constexpr float kHalfPi = 1.57079632679489662f;
-    out.angle = p.angle - straightenRad + float(k) * kHalfPi;
+    out.scale   = scale;
+    out.angle   = angle - straightenRad;
     return out;
 }
 

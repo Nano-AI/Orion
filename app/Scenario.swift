@@ -1018,6 +1018,9 @@ enum Scenario {
         case "dehaze":         return e.dehaze
         case "grainAmount":    return e.grainAmount
         case "grainSize":      return e.grainSize
+        case "perspectiveVertical":   return e.perspectiveVertical
+        case "perspectiveHorizontal": return e.perspectiveHorizontal
+        case "perspectiveAspect":     return e.perspectiveAspect
         default:               return nil
         }
     }
@@ -1038,6 +1041,9 @@ enum Scenario {
         case "dehaze":      e.dehaze = value
         case "grainAmount": e.grainAmount = value
         case "grainSize":   e.grainSize = value
+        case "perspectiveVertical":   e.perspectiveVertical = value
+        case "perspectiveHorizontal": e.perspectiveHorizontal = value
+        case "perspectiveAspect":     e.perspectiveAspect = value
         case "fusion", "lift": e.fusion = value
         case "localExposure": e.localExposureEv = value
         case "localContrast": e.localContrast = value

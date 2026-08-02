@@ -1,0 +1,123 @@
+# Perspective correction, and the two ways it could be wired and look right.
+#
+# The maths is pinned in `orion-tests` — the homography, the composition, the
+# zoom, and `mask::toFrame` against the shader. What no test in that binary can
+# see is the *wiring*: `Scenario` drives `Engine`, which is where a new field
+# stops threading. `repro/grain-survives-a-reopen.txt` exists because
+# `Engine.state` builds `DevelopState` with the memberwise initializer over
+# eighty positional arguments, and a field added to the struct and not to that
+# call compiles without a word. Three fields landed here the same way.
+#
+# The second half is the one this project fears most. A mask is placed on the
+# picture the photographer is looking at and applied in `develop:linear`, which
+# runs *before* the geometry node and sees an uncorrected frame. If the
+# correction reaches the picture and not `mask::toFrame`, the mask lands
+# somewhere near its subject — plausible, wrong, and invisible in a screenshot.
+
+open samples/_PIC8220.ARW
+
+# ── 1. The control reaches the picture ────────────────────────────────────
+measure 0.10,0.10,0.25,0.25 plainTopLeft
+measure 0.10,0.65,0.25,0.25 plainBottomLeft
+
+set perspectiveVertical 0.6
+control perspectiveVertical == 0.6
+measure 0.10,0.10,0.25,0.25 keystonedTopLeft
+
+# A keystone is a *warp*: it moves what is under a fixed window. Both ends are
+# asserted, because a correction that changed nothing and a correction that
+# changed the whole frame uniformly are different bugs.
+expect keystonedTopLeft != plainTopLeft
+
+# ── 2. Auto-scale kept the frame full ─────────────────────────────────────
+#
+# The geometry kernel returns transparent black outside the frame, so an
+# uncorrected corner is not a soft artifact — it is a hole that goes into the
+# export. Four corners, at full travel, where the reach is worst.
+#
+# ⚠ A reading is luma and saturation; it cannot see alpha, so this asserts that
+# every corner is still *lit*. The exact version — no pixel anywhere in the
+# output has alpha below 0.99, on six combinations of the three controls, with
+# the un-zoomed control that shows the frame really is holed without it — is
+# `testPerspectiveAutoScaleFillsTheFrame` in `orion-tests`. This half is here
+# because that one drives the kernel directly and cannot see the product.
+set perspectiveVertical 1.0
+set perspectiveHorizontal 0.6
+measure 0.00,0.00,0.06,0.08 cornerTopLeft
+measure 0.94,0.00,0.06,0.08 cornerTopRight
+measure 0.00,0.92,0.06,0.08 cornerBottomLeft
+measure 0.94,0.92,0.06,0.08 cornerBottomRight
+# A hole reads exactly 0. The darkest of these four corners on this frame
+# measures 0.021, so the threshold sits between the two and is not a judgement
+# about the photograph.
+expect cornerTopLeft > 0.005
+expect cornerTopRight > 0.005
+expect cornerBottomLeft > 0.005
+expect cornerBottomRight > 0.005
+
+# ── 3. A mask stays on its subject ────────────────────────────────────────
+#
+# `maskcheck` grids the frame, classifies every cell with the *overlay's* own
+# transcription of the kernel, and demands the render agree: cells the interface
+# draws clear must come back bit-identical, cells it draws covered must move.
+# That two-sided shape is what a displaced mask cannot satisfy — it still
+# darkens roughly the right part of the picture, and it cannot leave the clear
+# cells alone.
+#
+# Negative local exposure, as `mask-alignment.txt` uses and for the same reason:
+# the dealership windows are clipped at this exposure, so a positive local
+# exposure over them would change nothing and read as a failure of the mask.
+#
+# ⚠ The mask is hard-edged (feather 0.06) and 0.28 of the frame wide **on
+# purpose, and that size is the largest one this can hold.** A mask's centre and
+# a gradient's direction go through the homography exactly; its *extent* is
+# carried by the local scale at its own centre, which is first order — so a very
+# large ellipse under a very strong keystone disagrees with the overlay at its
+# rim. Measured on this frame at vertical 0.45: radii of 0.10, 0.20 and 0.28 are
+# bit-identical over every clear cell, and 0.34 leaks 2 of 60 cells by 0.0105
+# luma. At vertical 1.0 the same 0.34 leaks by 0.0617; at vertical 0.2 it is
+# clean. The bound is written down in `research/perspective.md` and costed in
+# `ROADMAP.md`, and this line sits at the edge of it so the approximation cannot
+# quietly get worse.
+set perspectiveHorizontal 0
+set perspectiveVertical 0.45
+set exposure 2.6
+mask radial
+set maskCentreX 0.40
+set maskCentreY 0.45
+set maskRadiusX 0.28
+set maskRadiusY 0.22
+set maskFeather 0.06
+maskcheck 10 -2.0
+
+# And a turned frame, where a wrong composition order shows: the correction is
+# applied between the straighten and the quarter turns, so getting it the other
+# way round is invisible until one of the two is doing something.
+rotate 1
+maskcheck 10 -2.0
+rotate -1
+
+# ── 4. All three fields survive a reopen ──────────────────────────────────
+#
+# Setting a property and reading it back never leaves `Engine`. Only a round
+# trip through `state`, the sidecar and the decoder can tell whether the field
+# is carried — and `perspectiveAspect` is deliberately set to a value neither of
+# the other two has, so a transposed pair cannot pass.
+set perspectiveVertical 0.45
+set perspectiveHorizontal -0.30
+set perspectiveAspect 0.15
+save samples/_PIC8220.xmp
+reopen
+control perspectiveVertical == 0.45
+control perspectiveHorizontal == -0.30
+control perspectiveAspect == 0.15
+
+# Zero is zero, and it is the branch the kernel took before this feature
+# existed — so this also asserts the frame comes back to what it costs without
+# it.
+set perspectiveVertical 0
+set perspectiveHorizontal 0
+set perspectiveAspect 0
+control perspectiveVertical == 0
+control perspectiveHorizontal == 0
+control perspectiveAspect == 0

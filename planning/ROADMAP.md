@@ -163,7 +163,13 @@ Two things turned up while finishing it:
 - ✅ Batch export — 2026-07-30. One engine reused across the list (466 ms a
   photo, peak RSS flat); each photo'+chr(39)+'s own sidecar restored before it is
   exported; nothing overwritten and no two sources colliding
-- Snapshots/versions, perspective correction. ✅ **Film grain shipped 2026-08-01** (#81, #82)
+- ✅ **Perspective correction** — 2026-08-01, decision #96.
+  `research/perspective.md`; the 4-point DLT homography (Hartley & Zisserman,
+  2nd ed., 2004, §4.1) folded into the geometry node's **existing** sampling
+  pass, so the picture is still resampled once. Vertical, horizontal and
+  aspect; auto-scale to fill, as the lens corrections do. Masks, brush dabs and
+  spots go through the same matrix
+- Snapshots/versions. ✅ **Film grain shipped 2026-08-01** (#81, #82)
 
 ---
 
@@ -356,6 +362,21 @@ the edges that were deliberately left, each with a number rather than a shrug.
 | **Nothing watches a folder while it is open.** Rate a photograph in Lightroom with Orion showing the same folder and Orion keeps the rating it read | True before this change too; the index does not make it worse, because every stamp is re-taken on the next open. An `FSEventStream` on the open folder is the fix and it is a live-update story, not a cache story | ~1 session |
 | **A `SQLITE_BUSY` from a second Orion process is untested.** The code excludes `BUSY`/`LOCKED` from the corrupt path deliberately — those mean somebody else holds the file, and discarding it would be deleting a live database — but the mutation that widens that list to every error code passes every test | Simulating cross-process lock contention needs a second process and a held transaction; the honest note is that this one rule is reasoned rather than pinned | ~half a session for a two-process fixture |
 | **`Library.swift` is now 400 lines and holds both the view model and the loading policy** | Under the 1000-line rule with room, and splitting it now would move code that has just changed | — |
+
+## Perspective — what is not done, costed
+
+The geometry shipped whole (decision #96): the homography, the composition into
+the existing sampling pass, the auto-scale, and the centre of every mask, brush
+dab and spot going through the same matrix. One edge was deliberately left, with
+a number rather than a shrug.
+
+| Piece | Why it was left | Cost |
+|---|---|---|
+| **A mask's *extent* under the correction is first order.** A homography carries a point exactly and a line's direction exactly, so a mask's centre, every dab, every spot and a gradient's direction are exact. Its size is carried by √\|det J\| at the mask's own centre, which is exact only where the map is locally isotropic. Measured through `maskcheck` on `_PIC8220`: at vertical 0.45 a radial mask up to **0.28 of the frame** is bit-identical over every cell the overlay draws clear; at 0.34 it leaks 2 of 60 cells by 0.0105 luma, and at vertical 1.0 by 0.0617. Never at the centre — always at the rim | It is the *opposite* failure to the one the geometry fixes. A mask in the wrong place is the plausible-wrong-answer this project fears; a mask whose rim is a percent out on a frame-filling ellipse under a full-travel keystone is visible, correctable with the brush, and bounded. And the fix rewrites `mask::radiusToFrame`, whose current derivation is load-bearing for every quarter turn (decision #83) and pinned by `repro/mask-alignment.txt` — a bad session there breaks masks everywhere, on every photograph, corrected or not | ~half a session. An ellipse is {p : pᵀMp ≤ 1}; its image under J is {q : qᵀJ⁻ᵀMJ⁻¹q ≤ 1}, so the corrected semi-axes and angle are the eigen-decomposition of a symmetric 2×2 — closed form, ~30 lines, plus re-taking the three pinned numbers in `repro/mask-alignment.txt` |
+
+⚠ `repro/perspective-carries-the-mask.txt` deliberately sits at **0.28**, the
+edge of the range the approximation is exact over, so it cannot get worse
+without something going red.
 
 ## Incremental brush accumulation — costed, not started
 

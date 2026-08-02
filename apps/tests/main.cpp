@@ -27,6 +27,14 @@ int main() {
     testDisplayNeutrality();
     testCropGpu();
     testStraightenPivot();
+    testPerspectiveMath();
+    testPerspectiveShaderMatchesHost();
+    testPerspectiveIdentity();
+    testPerspectiveConvergingLines();
+    testPerspectiveOneResample();
+    testPerspectiveAutoScaleFillsTheFrame();
+    testPerspectiveMaskGeometry();
+    testPerspectiveWiring();
     testNoiseEstimator();
     testLinearizeClipsToWhite();
     testDenoiseGpu();

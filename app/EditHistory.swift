@@ -269,6 +269,10 @@ struct DevelopState: Equatable, Codable {
     var contrast: Float = 1.45
     var rotateQuarters: Int32 = 0
     var straightenDeg: Float = 0
+    /// Perspective correction, each -1..1. research/perspective.md.
+    var perspectiveVertical: Float = 0
+    var perspectiveHorizontal: Float = 0
+    var perspectiveAspect: Float = 0
     var cropX: Float = 0
     var cropY: Float = 0
     var cropW: Float = 1
@@ -339,6 +343,7 @@ extension DevelopState {
     private enum Key: String, CodingKey {
         case temperatureK, tint, exposureEv, highlights, shadows, whites, blacks
         case vibrance, saturation, contrast, rotateQuarters, straightenDeg
+        case perspectiveVertical, perspectiveHorizontal, perspectiveAspect
         case cropX, cropY, cropW, cropH
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue
         case highlightRecovery, denoiseLuma, denoiseColor
@@ -403,6 +408,9 @@ extension DevelopState {
             (try? c.decodeIfPresent(Int32.self, forKey: .rotateQuarters)).flatMap { $0 }
             ?? rotateQuarters
         straightenDeg = float(.straightenDeg) ?? straightenDeg
+        perspectiveVertical = float(.perspectiveVertical) ?? perspectiveVertical
+        perspectiveHorizontal = float(.perspectiveHorizontal) ?? perspectiveHorizontal
+        perspectiveAspect = float(.perspectiveAspect) ?? perspectiveAspect
         cropX = float(.cropX) ?? cropX
         cropY = float(.cropY) ?? cropY
         cropW = float(.cropW) ?? cropW

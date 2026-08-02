@@ -175,6 +175,9 @@ final class InteractionLog: @unchecked Sendable {
             out.append("rotate \(turns)")
         }
         f("straighten", a.straightenDeg, b.straightenDeg, 2)
+        f("perspectiveVertical", a.perspectiveVertical, b.perspectiveVertical)
+        f("perspectiveHorizontal", a.perspectiveHorizontal, b.perspectiveHorizontal)
+        f("perspectiveAspect", a.perspectiveAspect, b.perspectiveAspect)
         if abs(a.cropX - b.cropX) > 1e-6 || abs(a.cropY - b.cropY) > 1e-6
             || abs(a.cropW - b.cropW) > 1e-6 || abs(a.cropH - b.cropH) > 1e-6 {
             out.append(String(format: "crop %.4f %.4f %.4f %.4f",
