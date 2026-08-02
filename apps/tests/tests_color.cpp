@@ -269,6 +269,96 @@ void testCfa() {
     report(img.channelAt(0, 2) == img.channelAt(0, 0), "pattern repeats vertically");
 }
 
+// ── CFA decimation ─────────────────────────────────────────────────────────
+//
+// The same mosaic `testCfa` builds, decimated. Moved here from
+// tests_brush.cpp (decision #129): what it asserts is that `channelAt` still
+// answers for the *output*, so its fixture is the CFA pattern above and not
+// the brush's dab list.
+
+void testBayerDecimation() {
+    section("Bayer decimation");
+
+    // A mosaic whose value *is* its channel, so a phase error shows up as a
+    // wrong number rather than as a subtle color cast.
+    orion::raw::BayerImage src;
+    src.width = 32; src.height = 16;
+    src.filters = 0x94949494u;   // RGGB, LibRaw's usual
+    src.samples.resize(std::size_t(src.width) * src.height);
+    for (std::uint32_t y = 0; y < src.height; ++y) {
+        for (std::uint32_t x = 0; x < src.width; ++x) {
+            src.samples[std::size_t(y) * src.width + x] =
+                std::uint16_t(static_cast<int>(src.channelAt(x, y)) * 1000 + 100);
+        }
+    }
+
+    for (int scale : {2, 4}) {
+        const auto out = orion::raw::decimate(src, scale);
+
+        report(out.width == src.width / std::uint32_t(scale)
+               && out.height == src.height / std::uint32_t(scale),
+               "scale " + std::to_string(scale) + ": the mosaic shrinks by it",
+               std::to_string(out.width) + "x" + std::to_string(out.height));
+
+        report(out.filters == src.filters,
+               "scale " + std::to_string(scale) + ": the pattern is carried across");
+
+        // ⚠ The check that matters. Every output sample must carry the value of
+        // the channel the *output's own* `channelAt` reports — which is only
+        // true if the phase survived.
+        bool phaseHeld = true;
+        std::string firstBad;
+        for (std::uint32_t y = 0; y < out.height && phaseHeld; ++y) {
+            for (std::uint32_t x = 0; x < out.width; ++x) {
+                const auto want =
+                    std::uint16_t(static_cast<int>(out.channelAt(x, y)) * 1000 + 100);
+                const auto got = out.samples[std::size_t(y) * out.width + x];
+                if (got != want) {
+                    phaseHeld = false;
+                    firstBad = "at " + std::to_string(x) + "," + std::to_string(y)
+                             + " got " + std::to_string(got)
+                             + " want " + std::to_string(want);
+                    break;
+                }
+            }
+        }
+        report(phaseHeld,
+               "scale " + std::to_string(scale)
+               + ": every sample keeps its CFA channel", firstBad);
+    }
+
+    // Averaging, not point sampling: a ramp within one output cell's footprint
+    // comes back as its mean.
+    {
+        orion::raw::BayerImage ramp;
+        ramp.width = 8; ramp.height = 8;
+        ramp.filters = 0x94949494u;
+        ramp.samples.resize(64);
+        // Same value for every pixel of a given phase within the block, except
+        // one that is raised — the mean must move by exactly its share.
+        for (auto& v : ramp.samples) v = 100;
+        ramp.samples[0] = 500;     // (0,0), one of four same-phase samples at scale 4
+        const auto out = orion::raw::decimate(ramp, 4);
+        report(out.width == 2 && out.height == 2, "a 8x8 mosaic decimates to 2x2",
+               std::to_string(out.width) + "x" + std::to_string(out.height));
+        // One output cell covers 4x4 input cells at scale 4, so sixteen
+        // same-phase inputs: (100*15 + 500)/16 = 125.
+        report(out.samples[0] == 125,
+               "and an output sample is the mean of its same-phase inputs",
+               std::to_string(out.samples[0]));
+    }
+
+    // Odd or too-small scales are refused rather than guessed at.
+    {
+        report(orion::raw::decimate(src, 3).width == src.width,
+               "an odd scale returns the mosaic unchanged");
+        report(orion::raw::decimate(src, 1).width == src.width,
+               "and so does a scale of one");
+        report(orion::raw::decimate(src, 64).width == src.width,
+               "a scale larger than the mosaic returns it unchanged too");
+    }
+}
+
 // ── Orientation ────────────────────────────────────────────────────────────
 
 /// Mirrors quarterTurnsFor in DevelopPipeline.cpp. Kept in step by this test.
