@@ -81,6 +81,23 @@ final class Engine {
     /// `orion_last_error` had it and nobody read it.
     var lastFailure: String?
 
+    /// Set when the frame that was just rendered is a single flat colour.
+    ///
+    /// ⚠ **This exists because a photograph came back as one flat brown
+    /// rectangle on the photographer's screen, twice, and nothing in this
+    /// repository could see it.** The engine renders that file correctly from
+    /// the scenario runner, the export is right, the offscreen composite is
+    /// right, `--screenshot` of the real interface is right, and both suites
+    /// are green. The failure lives in the running app and only there, so the
+    /// only thing that can catch it is the running app.
+    ///
+    /// A constant is the one thing a real frame is never: sensor noise alone
+    /// makes five separated pixels differ, and every one of them agreeing to
+    /// four decimal places means the graph collapsed rather than that the
+    /// picture is smooth. Recorded in the session log and named in the footer,
+    /// so the next report carries the fact instead of a screenshot of it.
+    var flatFrame: String?
+
     var temperatureK: Float = 5500 { didSet { pushAndRender() } }
     var tint: Float = 0            { didSet { pushAndRender() } }
     var exposureEv: Float = 0      { didSet { pushAndRender() } }

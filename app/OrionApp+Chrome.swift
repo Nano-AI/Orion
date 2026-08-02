@@ -351,6 +351,15 @@ extension Editor {
                                    color: Palette.star, size: 9)
                         .lineLimit(2)
                         .textSelection(.enabled)
+                } else if let why = engine.flatFrame {
+                    // ⚠ Not a failure — the render *succeeded*, which is the
+                    // whole difficulty: it reports a plausible millisecond
+                    // count beside a rectangle of one colour. See
+                    // `Engine.flatFrame`.
+                    Engraved.Label(text: "Not a photograph — \(why)",
+                                   color: Palette.star, size: 9)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
                 } else {
                     Engraved.Label(text: hint, color: Palette.faint, size: 9)
                         .lineLimit(1)

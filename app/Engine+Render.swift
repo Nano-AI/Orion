@@ -269,6 +269,46 @@ extension Engine {
         refreshOriginal()
         generation &+= 1
         scheduleHistogram()
+        checkFlatFrame()
+    }
+
+    /// Five points, far apart, of the frame that was just rendered.
+    ///
+    /// Positions rather than a full readback because this runs after every
+    /// render: `sample` is one `getBytes` of one pixel, which is what the
+    /// eyedropper already pays per mouse-moved event. A histogram would say the
+    /// same thing and costs 96 MB off the GPU.
+    ///
+    /// Deliberately **not** the corners. A crop, a straighten and the geometry
+    /// node's square allocation all put something other than the photograph
+    /// near an edge, and a probe that reads the letterbox would call every
+    /// straightened frame flat.
+    private static let flatProbe: [(Float, Float)] =
+        [(0.2, 0.2), (0.8, 0.25), (0.5, 0.5), (0.25, 0.8), (0.8, 0.8)]
+
+    /// See `Engine.flatFrame` for why a constant frame is worth naming.
+    private func checkFlatFrame() {
+        guard isLoaded else { flatFrame = nil; return }
+
+        var first: (r: Double, g: Double, b: Double)?
+        for (u, v) in Engine.flatProbe {
+            guard let s = sample(u: u, v: v) else { flatFrame = nil; return }
+            guard let f = first else { first = s.display; continue }
+            if abs(f.r - s.display.r) > 1e-4 || abs(f.g - s.display.g) > 1e-4
+                || abs(f.b - s.display.b) > 1e-4 {
+                flatFrame = nil
+                return
+            }
+        }
+        guard let f = first else { flatFrame = nil; return }
+
+        let why = String(format: "the render is one flat colour, rgb(%.3f, %.3f, %.3f)",
+                         f.r, f.g, f.b)
+        // Once per onset, not once per render: a drag on a collapsed frame
+        // would otherwise write sixty identical lines over the sequence that
+        // caused it, which is the part of the log worth keeping.
+        if flatFrame == nil { log.note("⚠ \(why)") }
+        flatFrame = why
     }
 
     func showPlaceholder(_ image: NSImage?) {

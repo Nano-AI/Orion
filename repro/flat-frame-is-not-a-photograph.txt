@@ -1,0 +1,46 @@
+# Reported twice, with a screenshot both times: the photograph came back as one
+# flat brown rectangle, at 21% zoom, with the panel showing the right values,
+# the size reading 4024 × 6024 and the timer reading 147.4 ms — a *successful*
+# render, and no message anywhere.
+#
+# ⚠ What made it expensive is what could already see it: nothing.
+#
+#   ./build/Orion.app/Contents/MacOS/Orion --scenario   the engine renders it
+#   --screenshot --scene ... --photo <that file>        the real view, correct
+#   export                                              a correct PNG
+#   orion-tests, orion-viewport-tests, the bench        green
+#
+# All of those were run against the photographer's own file, with the
+# photographer's own sidecar restored, browsed in their own order. Every one of
+# them was right. So the failing surface is the running app and nothing else,
+# and the only instrument that can reach it has to live inside it.
+#
+# `Engine.flatFrame` is that instrument. Five separated points of every rendered
+# frame; if all five agree to four decimal places the frame is a constant, and a
+# constant is the one thing a photograph is never — sensor noise alone separates
+# five pixels. The footer names it and the session log records it, so the next
+# report carries the fact instead of a picture of it.
+#
+# ⚠ This file pins the instrument, not the bug. The bug is not reproduced yet.
+# What is asserted here is that the detector answers both ways, because a
+# detector that could only say "fine" is precisely the failure it was built to
+# end.
+
+open samples/_PIC8220.ARW
+
+# A photograph. Five points of it differ, so the probe is quiet — and the
+# failure branch is clear, which `nofailure` is the older half of.
+notflat
+nofailure
+
+# And now a frame that genuinely is one colour. Twenty stops down, everything
+# clips to black together, and the probe has to say so. Without this line
+# `notflat` above stays green on a deleted probe.
+set exposure -20
+flat
+
+# Back to a picture, so the flag clears rather than sticking — the same defect
+# `nofailure` was written for, in the other direction. A warning that never
+# goes away is a warning nobody reads.
+set exposure 0
+notflat

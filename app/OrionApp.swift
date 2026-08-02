@@ -217,7 +217,13 @@ struct Editor: View {
         // once the Metal canvas has taken first responder — which is what a
         // bare onKeyPress here could not do.
         .focusedSceneValue(\.cull, cullActions)
-        .onAppear { installKeyMonitor(); installAutosave() }
+        .onAppear {
+            installKeyMonitor()
+            installAutosave()
+            // `Orion --open <photo>`. See `Editor.wantedOpen` for why the real
+            // window needs a way in from the command line.
+            openFromCommandLine(Editor.wantedOpen(CommandLine.arguments))
+        }
         .onDisappear { teardown() }
         .sheet(isPresented: $showingExport) {
             ExportPanel(settings: exportSettings,

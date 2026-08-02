@@ -254,6 +254,29 @@ extension Scenario {
             }
             say("  no failure outstanding\n")
 
+        case "notflat", "flat":
+            // The other half of `nofailure`: a render that *succeeds* and
+            // produces one flat colour. See `Engine.flatFrame` — this is the
+            // shape of the failure a photographer screenshotted twice and no
+            // check in this repository was in a position to see.
+            //
+            // ⚠ Both spellings, because a probe that can only pass is the
+            // defect this project keeps finding. `flat` exists so the detector
+            // itself is pinned against a frame that really is one colour, and
+            // without it `notflat` would be green on a probe that had been
+            // deleted.
+            checks += 1
+            let want = (verb == "flat")
+            let isFlat = engine.flatFrame != nil
+            guard isFlat == want else {
+                failures += 1
+                say(want ? "  FAIL  expected a flat frame, the render has detail\n"
+                         : "  FAIL  \(engine.flatFrame ?? "")\n")
+                break
+            }
+            say(want ? "  ok    flat: \(engine.flatFrame ?? "")\n"
+                     : "  ok    the frame has detail\n")
+
         case "reopenrefused":
             // `reopen`, but the sidecar is expected NOT to decode — the
             // photograph is left openable and nothing is collected.

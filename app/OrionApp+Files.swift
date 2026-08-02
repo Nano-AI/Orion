@@ -123,6 +123,63 @@ extension Editor {
 
     /// Opening one photo still scans its folder, so the filmstrip is populated
     /// without a separate import step.
+    /// `Orion --open <photo-or-folder>` — the real window, on a named
+    /// photograph, without a panel.
+    ///
+    /// ⚠ **This exists because a reported bug lived in the one place nothing
+    /// could reach.** `--scenario` drives the engine, `--screenshot` draws the
+    /// real view hierarchy, and both were green on the file a photographer
+    /// screenshotted as a flat brown rectangle: neither runs the `MTKView`,
+    /// because AppKit cannot capture a Metal layer and a scenario has no
+    /// window. So a fault between the engine's texture and the drawable was
+    /// reproducible only by hand, by the one person who could see the screen.
+    ///
+    /// It takes the same two steps `openFile` does — scan the folder, load the
+    /// photograph — so what it exercises is the product's own path and not a
+    /// second one that happens to work.
+    /// ⚠ Takes **every** path after the flag, and steps through them the way
+    /// the arrow keys do. The report this was built for was not "this photo is
+    /// broken" but "I opened three and the third one was". A flag that could
+    /// only open one would have reproduced the wrong thing.
+    static func wantedOpen(_ arguments: [String]) -> [URL] {
+        guard let i = arguments.firstIndex(of: "--open") else { return [] }
+        return arguments.dropFirst(i + 1)
+            .prefix { !$0.hasPrefix("--") }
+            .map { URL(fileURLWithPath: $0) }
+    }
+
+    /// `--dwell <milliseconds>` between the photographs of an `--open` list.
+    static func wantedDwell(_ arguments: [String]) -> Int {
+        guard let i = arguments.firstIndex(of: "--dwell"), i + 1 < arguments.count,
+              let ms = Int(arguments[i + 1]), ms > 0 else { return 3000 }
+        return ms
+    }
+
+    func openFromCommandLine(_ urls: [URL]) {
+        guard let first = urls.first else { return }
+        var isFolder: ObjCBool = false
+        FileManager.default.fileExists(atPath: first.path, isDirectory: &isFolder)
+        Task {
+            if isFolder.boolValue {
+                await library.open(folder: first)
+                if let photo = library.visible.first?.url { load(photo) }
+                return
+            }
+            await library.open(folder: first.deletingLastPathComponent())
+            // `load` finishes its decode in a task of its own, so the dwell is
+            // the settling time a hand on the arrow key would give it. Three
+            // seconds is a browse; `--dwell 200` is a photographer holding the
+            // key down, which is a different test — a decode still in flight
+            // when the next one starts is exactly the shape of fault a
+            // reproduction has to be able to ask for.
+            let dwell = Editor.wantedDwell(CommandLine.arguments)
+            for url in urls {
+                load(url)
+                try? await Task.sleep(for: .milliseconds(dwell))
+            }
+        }
+    }
+
     func openFile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false

@@ -682,6 +682,45 @@ candidate fixes in order.
 
 ---
 
+## Session `2026-08-02b` — a flat frame is not a photograph, and now the app says so
+
+**Reported twice, with a screenshot both times.** The photograph came back as one
+flat brown rectangle: panel values correct, size reading `4024 × 6024`, timer
+reading **147.4 ms** — a *successful* render — and no message anywhere. The
+histogram agreed with the canvas: three narrow spikes, which is what a constant
+looks like, so the output texture really was one colour rather than the canvas
+mis-drawing a good one.
+
+⚠ **Everything in this repository said the file was fine, and all of it was
+right.** Against the photographer's own `_PIC8291.ARW`, with their own sidecar
+restored, browsed in their own order: the scenario runner rendered it (luma
+0.2473), the export was a correct PNG, `--screenshot` of the real view hierarchy
+was correct, and both suites and the bench were green. Ten opens through the real
+window — slow, fast, and through LaunchServices — did not reproduce it either.
+
+**So the instrument had to go inside the running app.** `Engine.flatFrame` probes
+five separated points of every rendered frame; five agreeing to four decimal
+places means the graph collapsed, because sensor noise alone separates five
+pixels of a real photograph. The footer names it — *"Not a photograph — the
+render is one flat colour, rgb(...)"* — and `InteractionLog` records it once per
+onset, so the next report carries the fact rather than a picture of it.
+
+⚠ **Two gaps this exposed, both fixed.**
+
+| Gap | Why it mattered |
+|---|---|
+| The app could not be told what to open | `--scenario` drives the engine and `--screenshot` draws the view hierarchy; **neither runs the `MTKView`**, because AppKit cannot capture a Metal layer and a scenario has no window. A fault between the engine's texture and the drawable was reachable only by hand. `--open <photos…>` and `--dwell <ms>` now drive the real window through `openFile`'s own two steps |
+| A scenario's `open` does not restore the sidecar | so replaying a photographer's session log never reproduced what they were looking at. `reopen` does, and is what the new work used |
+
+`repro/flat-frame-is-not-a-photograph.txt` pins the **instrument, not the bug**:
+`notflat` on a photograph, `flat` twenty stops down where everything clips
+together, `notflat` again so the flag clears rather than sticking. Deleting the
+probe fails it — mutation-checked, exit 1. **41 scenarios, 806 engine checks,
+3708 viewport checks, bench exit 0 on all three frames.**
+
+⚠ **The bug itself is not fixed and not reproduced.** What changed is that it can
+no longer happen silently.
+
 ## The session log
 
 The **six most recent sessions are above** — `#131`, `#130`, `#129`, `#128`,
