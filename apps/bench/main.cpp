@@ -1249,6 +1249,142 @@ int main(int argc, char** argv) {
                 develop.render();
             }
 
+            // 3d. Appending to a stroke must cost the appended dabs, not all of
+            //     them — and a stroke whose head moved must cost all of them.
+            //
+            //     ⚠ **By name and by count, never in milliseconds.** The M0
+            //     gate on this machine ranges 8.9 to 31.5 ms across eight runs
+            //     of one unchanged binary, so a speed claim asserted as a
+            //     threshold would be a coin toss. What is asserted here is
+            //     `firstDab`: the dab the kernel started its loop at, which is
+            //     a fact about the dispatch rather than about the GPU's clock.
+            //
+            //     ⚠ **And the refusal is asserted beside it.** An accumulator
+            //     that continues from *anything* is fast and wrong: undo three
+            //     dabs, paint three different ones, and the coverage the
+            //     photographer took back is still on the GPU. Decision #108,
+            //     research/brush-acceleration.md.
+            {
+                const auto brushAdj = [&](unsigned revision) {
+                    orion::pipe::Adjustments a;
+                    a.wb = develop.asShotWhiteBalance();
+                    auto& c = a.maskComponents[0];
+                    c.kind = 3;
+                    c.brushRadius = 0.02f;
+                    c.brushFlow = 1.0f;
+                    c.brushHardness = 0.7f;
+                    c.brushRevision = revision;
+                    a.maskCount = 1;
+                    a.layers[0].exposureEv = 2.0f;
+                    return a;
+                };
+                // The `paint` verb's own stroke: 49 dabs a line, each line
+                // spanning the frame, one line below the last. Identical
+                // geometry to `appendedStroke` further down this file, and it
+                // has to be.
+                //
+                // ⚠ **Decision #98, which this nearly repeated.** The first
+                // version of this probe drew lines 0.018 of the frame wide. Dab
+                // count and block count grew exactly as they do here, and the
+                // cost did not — because what the kernel pays is
+                // `Σ over blocks of (pixels in that block's box) × 64`, and a
+                // stroke of small extent has small boxes whatever its length.
+                // It reported an append at 294 dabs costing 0.5 ms more than a
+                // full re-lay, which is a number about the fixture. A dab is
+                // spaced by the nib, so a longer stroke is a longer *path*.
+                const auto strokeOf = [](int dabs) {
+                    std::vector<float> xy(std::size_t(dabs) * 2, 0.0f);
+                    for (int i = 0; i < dabs; ++i) {
+                        const float t = float(i % 49) / 48.0f;
+                        xy[std::size_t(i) * 2 + 0] = 0.02f + 0.96f * t;
+                        xy[std::size_t(i) * 2 + 1] = 0.05f + 0.10f * float(i / 49);
+                    }
+                    return xy;
+                };
+
+                unsigned rev = 400;
+                const auto lay = [&](orion::pipe::DevelopPipeline& d,
+                                     const std::vector<float>& xy) {
+                    const int n = int(xy.size() / 2);
+                    d.setBrushStroke(0, xy.data(), nullptr, n);
+                    d.apply(brushAdj(++rev));
+                    return d.render();
+                };
+
+                // `mask:0` alone, profiled, because the whole render carries
+                // ~14 ms of `develop:linear`, `develop:display` and `geometry`
+                // that are identical in both columns and swamp the difference.
+                // The cost being measured is one node's.
+                const auto maskMs = [&](orion::pipe::DevelopPipeline& d) {
+                    d.graph().setProfiling(true);
+                    d.render();
+                    d.graph().setProfiling(false);
+                    for (const auto& t : d.graph().lastRun()) {
+                        if (t.name == "mask:0" && t.executed) return t.ms;
+                    }
+                    return 0.0;
+                };
+
+                std::printf("\nBrush accumulation (#108)\n");
+                std::printf("  %-6s %-26s %-26s %s\n", "held",
+                            "mask:0, append 49 (ms)", "mask:0, head moved (ms)",
+                            "firstDab");
+
+                bool accumOk = true;
+                for (int held : {49, 294}) {
+                    constexpr int kReps = 8;
+                    std::vector<double> fast, slow;
+                    int sawFirstDab = -1, sawRefused = -1;
+                    // ⚠ Interleaved rep by rep, not two blocks. This machine's
+                    // GPU swings better than three to one on an identical
+                    // binary under load, so two blocks a minute apart compare
+                    // the load average.
+                    for (int rep = 0; rep < kReps; ++rep) {
+                        // A. Append. The head is untouched, so the accumulator
+                        //    holds it and the kernel starts at `held`.
+                        lay(develop, strokeOf(held));
+                        const auto grown = strokeOf(held + 49);
+                        develop.setBrushStroke(0, grown.data(), nullptr, held + 49);
+                        develop.apply(brushAdj(++rev));
+                        fast.push_back(maskMs(develop));
+                        sawFirstDab = develop.brushPrefixStat(0).firstDab;
+
+                        // B. The same append with one dab of the head moved —
+                        //    undo and repaint. Same dab count, same host work,
+                        //    same blocks, same boxes. The accumulator must be
+                        //    refused, and the kernel walks all of it.
+                        lay(develop, strokeOf(held));
+                        auto moved = strokeOf(held + 49);
+                        moved[std::size_t(held / 2) * 2 + 1] += 0.03f;
+                        develop.setBrushStroke(0, moved.data(), nullptr,
+                                               held + 49);
+                        develop.apply(brushAdj(++rev));
+                        slow.push_back(maskMs(develop));
+                        sawRefused = develop.brushPrefixStat(0).firstDab;
+                    }
+                    const Stats f = summarise(fast);
+                    const Stats s = summarise(slow);
+                    const bool ok = sawFirstDab == held && sawRefused == 0;
+                    if (!ok) { accumOk = false; invariantsPass = false; }
+                    std::printf("  %-6d %7.2f (p95 %6.2f)        %7.2f (p95 %6.2f)"
+                                "        %d then %d  %s\n",
+                                held, f.median, f.p95, s.median, s.p95,
+                                sawFirstDab, sawRefused,
+                                ok ? "ok" : "THE BRUSH RE-LAYS THE WHOLE STROKE");
+                }
+                if (accumOk) {
+                    std::printf("  both columns lay %d dabs and do the same host "
+                                "work; only the kernel's starting index differs\n",
+                                49);
+                }
+
+                orion::pipe::Adjustments clear;
+                clear.wb = develop.asShotWhiteBalance();
+                develop.setBrushStroke(0, nullptr, nullptr, 0);
+                develop.apply(clear);
+                develop.render();
+            }
+
             // 4. The screen path and the export path must agree.
             //
             //    They are different formats now — eight bits for the screen,
