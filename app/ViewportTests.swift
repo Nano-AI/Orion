@@ -132,6 +132,8 @@ enum ViewportTests {
         testADeletedSidecarClearsTheRating()
         testADeletedFileLeavesTheIndex()
         testACorruptDatabaseDegradesToARescan()
+        testALockedDatabaseIsNotDiscarded()
+        testALockAtOpenNeverDeletesTheDatabase()
         testAForeignSchemaIsRebuilt()
         testASidecarChangingUnderTheReadIsNotFiled()
         testTheThumbnailCacheEvictsTheLeastRecentlyUsed()

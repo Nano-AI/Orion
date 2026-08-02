@@ -8,6 +8,7 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import SQLite3
 import UniformTypeIdentifiers
 
 extension ViewportTests {
@@ -398,6 +399,105 @@ extension ViewportTests {
     /// **Mutation:** keep the `CREATE TABLE IF NOT EXISTS` and drop the version
     /// check — the bogus `photos` table survives, every insert fails against
     /// it, and the index is silently useless rather than rebuilt.
+    /// A locked database is a transient failure, not a broken one.
+    ///
+    /// ⚠ **The gap the table carried as "reasoned, not pinned".** `note(_:)`
+    /// condemns on `SQLITE_CORRUPT` and `SQLITE_NOTADB` alone; `SQLITE_BUSY` and
+    /// `SQLITE_LOCKED` deliberately do not, because those mean **a second Orion
+    /// holds the file**. The mutation that widens the list to every non-OK code
+    /// passed every check in this suite, because nothing here ever took a lock.
+    ///
+    /// The gap note said this needs a second *process*. It does not: SQLite's
+    /// locks are on the file, so a second **connection** contends identically.
+    ///
+    /// ⚠ **The first version of this test could not fail either**, and that is
+    /// worth recording. It asserted that the row survived into a *new*
+    /// `PhotoIndex`, on the assumption that condemning deletes the file. It does
+    /// not: `discardable` is consulted only in `init`, immediately after `open`
+    /// fails, so a busy *write* leaves the file alone and merely takes that
+    /// instance out of service. The mutation passed. What follows asserts the
+    /// consequence that actually exists.
+    ///
+    /// **Mutation:** `guard code == SQLITE_CORRUPT || code == SQLITE_NOTADB`
+    /// becomes `guard code != SQLITE_OK`.
+    static func testALockedDatabaseIsNotDiscarded() {
+        let (dir, photo, db) = indexFixture("busy")
+        defer { try? fm.removeItem(at: dir) }
+
+        let index = PhotoIndex(at: db)
+        index.record(info: indexInfo(), for: photo, stamp: .of(photo))
+        report(index.plan(folder: dir, contents: [photo]).first?.needsInfo == false,
+               "the row is in the index before anything locks it")
+
+        // A second connection holding an exclusive transaction. Every write on
+        // any other connection now returns SQLITE_BUSY.
+        var locker: OpaquePointer?
+        report(sqlite3_open(db.path, &locker) == SQLITE_OK,
+               "a second connection opens the same database file")
+        report(sqlite3_exec(locker, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK,
+               "and takes an exclusive transaction on it")
+
+        index.record(info: indexInfo(), for: photo, stamp: .of(photo))
+        index.refreshMarks(for: photo)
+
+        // ⚠ The load-bearing check, and the one the mutation fails: meeting a
+        // lock must not take the index out of service. `available` is `live`.
+        report(index.available,
+               "⚠ a busy write does not condemn the index — a lock is somebody else working, not damage")
+
+        sqlite3_exec(locker, "ROLLBACK", nil, nil, nil)
+        sqlite3_close(locker)
+
+        // And it is still useful once the lock is gone, on the same instance.
+        let after = index.plan(folder: dir, contents: [photo])
+        report(after.count == 1, "the folder still plans after the lock lifts",
+               "\(after.count) rows")
+        report(after.first?.needsInfo == false,
+               "⚠ and the row is still served — a condemned index would have gone cold for good")
+    }
+
+    /// ⚠ The disaster the rule exists to prevent: a lock met *at open* must
+    /// never delete a database another process is holding.
+    ///
+    /// This is the case `init` can actually act on — `discardable` is read there
+    /// and nowhere else — so it is where widening the rule stops being a
+    /// performance question and starts destroying a live file.
+    static func testALockAtOpenNeverDeletesTheDatabase() {
+        let (dir, photo, db) = indexFixture("busy-open")
+        defer { try? fm.removeItem(at: dir) }
+
+        do {
+            let seed = PhotoIndex(at: db)
+            seed.record(info: indexInfo(), for: photo, stamp: .of(photo))
+        }
+        let before = (try? Data(contentsOf: db))?.count ?? 0
+        report(before > 0, "a database with a row in it exists", "\(before) bytes")
+
+        var locker: OpaquePointer?
+        report(sqlite3_open(db.path, &locker) == SQLITE_OK, "another process opens it")
+        report(sqlite3_exec(locker, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK,
+               "and is midway through a transaction on it")
+
+        // A second Orion starts up against the same index while it is held.
+        let contender = PhotoIndex(at: db)
+        _ = contender.plan(folder: dir, contents: [photo])
+
+        report(fm.fileExists(atPath: db.path),
+               "⚠ the database another process is holding was not deleted")
+
+        sqlite3_exec(locker, "ROLLBACK", nil, nil, nil)
+        sqlite3_close(locker)
+
+        let after = (try? Data(contentsOf: db))?.count ?? 0
+        report(after >= before,
+               "⚠ and it was not truncated either — a lock is not a corruption",
+               "\(before) bytes became \(after)")
+
+        let reopened = PhotoIndex(at: db)
+        report(reopened.plan(folder: dir, contents: [photo]).first?.needsInfo == false,
+               "⚠ the row written before the lock is still there")
+    }
+
     static func testAForeignSchemaIsRebuilt() {
         let (dir, photo, db) = indexFixture("schema")
         defer { try? fm.removeItem(at: dir) }
