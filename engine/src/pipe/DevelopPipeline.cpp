@@ -679,6 +679,12 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         brushDabs_[std::size_t(i)].clear();
         brushErase_[std::size_t(i)].clear();
+        // ⚠ And the record of what was uploaded, for the same reason: a
+        // different photograph through the same graph shares nothing with the
+        // stroke that was on it, and the second file of a folder opening with
+        // "the prefix is unchanged" would keep the first one's coverage.
+        brushPrev_[std::size_t(i)] = {};
+        brushPrefix_[std::size_t(i)] = {};
         matteLive_[i][0] = 0;
         matteLive_[i][1] = 0;
         matteDirty_[i] = true;
@@ -1862,6 +1868,46 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                     texels[std::size_t(d) * 4 + 1] = p.centerY;
                     texels[std::size_t(d) * 4 + 2] = erasing;
                 }
+                // ⚠ **Before the upload, and before the boxes** — how much of
+                // this stroke is the stroke that is already on the GPU.
+                //
+                // Nothing reads the answer yet. `ROADMAP.md` splits the
+                // incremental accumulator in two on purpose: the predicate is
+                // the whole risk, because the way it fails is a stale coverage
+                // rendering a completely plausible brushstroke that no
+                // screenshot and no perceptual check can see is wrong. So it is
+                // built, measured and attacked here, a session before anything
+                // depends on being able to trust it.
+                //
+                // ⚠ The nib is computed further down, from the crop, so it is
+                // recomputed here rather than read from `m` — see the comment
+                // on `m.nibPx` below. The two expressions must stay identical;
+                // a predicate comparing a nib the kernel never sees would
+                // accept a stroke whose every dab changed size.
+                {
+                    const float shownW = float(width_)  * std::max(adj.cropW, 1e-6f);
+                    const float shownH = float(height_) * std::max(adj.cropH, 1e-6f);
+                    const params::BrushShape shape{
+                        c.kind, c.brushRadius * std::min(shownW, shownH),
+                        c.brushFlow, c.brushHardness};
+                    auto& prev = brushPrev_[std::size_t(i)];
+                    auto& stat = brushPrefix_[std::size_t(i)];
+                    stat.prefix = params::unchangedPrefix(prev, shape,
+                                                          texels.data(), m.count);
+                    stat.previousCount = prev.live ? prev.count : 0;
+                    stat.count = m.count;
+                    ++stat.evaluations;
+
+                    // Only the live prefix is kept, not the padded buffer: a
+                    // short stroke costs a few kilobytes and the 16,384-dab cap
+                    // costs 256 KB.
+                    prev.texels.assign(texels.data(),
+                                       texels.data() + std::size_t(m.count) * 4);
+                    prev.count = m.count;
+                    prev.shape = shape;
+                    prev.live  = true;
+                }
+
                 pipeline_.updateAux(auxDabs_[std::size_t(i)], texels.data(),
                                     std::size_t(params::kDabStride) * 4 * sizeof(float));
 
@@ -1901,6 +1947,13 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                              "(one component holds %d)\n",
                              m.count, have, params::kMaxDabs);
             }
+        } else {
+            // ⚠ A component that is not a brush has no stroke on the GPU, so
+            // the stored one stops being evidence of anything. Kind 3 → 2 → 3
+            // with the stroke untouched would otherwise report the whole thing
+            // as an unchanged prefix, and session two's accumulator will have
+            // been released and reallocated underneath that claim.
+            brushPrev_[std::size_t(i)] = {};
         }
         pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
     }

@@ -38,6 +38,25 @@ namespace orion::pipe {
 /// `orion.h`, and the cost is linear.
 inline constexpr int kMaxMaskComponents = 4;
 
+/// What the brush prefix predicate said the last time it ran for a component.
+///
+/// ⚠ **`evaluations` is here so a check on `prefix` cannot be vacuous.** A test
+/// that asserts "the prefix was the whole previous stroke" passes trivially if
+/// the predicate never ran at all — `apply` skips a component whose edit did not
+/// change, so a forgotten `brushRevision` bump would leave a stale `prefix`
+/// sitting there reading exactly like a fast path that was taken. Assert that
+/// this counter moved as well, and the check has something to fail on.
+struct BrushPrefixStat {
+    /// How many times `params::unchangedPrefix` has run for this component.
+    int evaluations = 0;
+    /// Its last answer — the stable prefix length. `-1` before the first run.
+    int prefix = -1;
+    /// The stroke lengths that answer was about: what was uploaded before, and
+    /// what is being uploaded now.
+    int previousCount = 0;
+    int count = 0;
+};
+
 /// One component of the mask group, in the form a person manipulates — a center
 /// and an angle rather than the two endpoints the linear gradient's maths wants.
 /// `DevelopPipeline::apply` derives the shader's form from this.
@@ -416,6 +435,16 @@ public:
         return int(brushDabs_[std::size_t(component)].size() / 2);
     }
 
+    /// What the incremental-brush predicate answered for one component the last
+    /// time `apply` pushed its stroke. Read-only, and nothing in the renderer
+    /// reads it yet — session one of `ROADMAP.md`'s incremental accumulator
+    /// ships the predicate alone, deliberately, because a stale accumulator's
+    /// failure mode is a picture that looks right.
+    [[nodiscard]] BrushPrefixStat brushPrefixStat(int component) const noexcept {
+        if (component < 0 || component >= kMaxMaskComponents) return {};
+        return brushPrefix_[std::size_t(component)];
+    }
+
     /// Renders every dirty node. Returns GPU-side milliseconds.
     double render();
 
@@ -688,6 +717,15 @@ private:
     /// read every stroke saved before erasing existed as garbage — silently,
     /// since a scrambled stroke is still a valid stroke.
     std::array<std::vector<float>, kMaxMaskComponents> brushErase_;
+    /// The texels last uploaded for each component, so `apply` can ask how much
+    /// of the stroke is unchanged. `research/brush-acceleration.md`; the
+    /// predicate itself is `params::unchangedPrefix`.
+    ///
+    /// ⚠ Beside `brushDabs_` and **not** a view of it: this is the
+    /// post-transform list, and the whole point is that the two disagree the
+    /// moment the geometry moves.
+    std::array<params::BrushPrefixState, kMaxMaskComponents> brushPrev_;
+    std::array<BrushPrefixStat, kMaxMaskComponents> brushPrefix_{};
     bool         primed_ = false;
     WhiteBalance         asShot_{};
     std::array<float, 3> asShotMul_{1.0f, 1.0f, 1.0f};

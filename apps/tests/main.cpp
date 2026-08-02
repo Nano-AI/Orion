@@ -60,6 +60,8 @@ int main() {
     testLongBrushStroke();
     testDabBlockRejection();
     testBrushErase();
+    testBrushPrefixPredicate();
+    testBrushPrefixWiring();
     testMaskGeometryInverse();
     testLocalAdjustments();
     testMaskRangeGpu();

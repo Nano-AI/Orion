@@ -763,6 +763,378 @@ void testBrushErase() {
 }
 
 
+// ── The incremental brush predicate ──────────────────────────────────────────
+//
+// `research/brush-acceleration.md` and ROADMAP's "Incremental brush
+// accumulation", session one. Painting appends dabs and every appended dab
+// re-runs the loop over every dab laid so far, so a stroke costs
+// `Σ over blocks of (pixels in that block's box) × 64` per pointer event and
+// **the block count is what grows**: 49 → 294 dabs is 2.65 → 34.88 ms on the
+// full graph. The fix is to keep the coverage and composite only the new dabs,
+// and the question that has to be answered before any of that is *how much of
+// this stroke did I already draw*.
+//
+// ⚠ **The predicate is shipped a session before the accumulator, deliberately.**
+// Its failure mode is not a crash or a smear: it is a stale coverage rendering a
+// completely plausible brushstroke. Every screenshot passes. Only a check that
+// returns the dab count to a value it has already had, with a different prefix
+// behind it, can see the difference.
+//
+// The unit half. `testBrushPrefixWiring` is the same predicate through the real
+// pipeline, where the texels come out of `mask::toFrame` rather than out of this
+// file.
+void testBrushPrefixPredicate() {
+    section("Brush prefix predicate");
+
+    namespace params = orion::pipe::params;
+
+    // The nib as `apply` computes it — one radius for the whole stroke.
+    const params::BrushShape shape{3, 4.8f, 1.0f, 0.7f};
+
+    // Texels in the layout the dab texture actually carries: four floats a dab,
+    // `(x, y, erasing, 0)`, post-transform.
+    const auto line = [](int count) {
+        std::vector<float> t(std::size_t(count) * 4, 0.0f);
+        for (int i = 0; i < count; ++i) {
+            t[std::size_t(i) * 4 + 0] = 0.06f + 0.005f * float(i);
+            t[std::size_t(i) * 4 + 1] = 0.06f + 0.004f * float(i);
+        }
+        return t;
+    };
+    const auto stored = [](const std::vector<float>& t,
+                           const params::BrushShape& s) {
+        params::BrushPrefixState p;
+        p.texels = t;
+        p.count  = int(t.size() / 4);
+        p.shape  = s;
+        p.live   = true;
+        return p;
+    };
+
+    // 1. Nothing has been uploaded, so nothing is unchanged. The safe answer,
+    //    and the one that makes a first stroke a full evaluation.
+    {
+        const params::BrushPrefixState cold;
+        const auto t = line(12);
+        report(params::unchangedPrefix(cold, shape, t.data(), 12) == 0,
+               "a component with nothing uploaded has no unchanged prefix");
+        report(params::unchangedPrefix(stored(line(80), shape), shape,
+                                       nullptr, 80) == 0,
+               "and neither does a null stroke");
+    }
+
+    // 2. **The append**, which is the only way a real stroke grows: dab spacing
+    //    is fixed by the nib, so a longer stroke is a longer path.
+    //
+    // ⚠ This is the check that a predicate returning 0 forever has to fail. A
+    // predicate that never fires is trivially correct and completely useless,
+    // and session two would then be a no-op that passes everything.
+    {
+        const auto prev = stored(line(80), shape);
+        const auto next = line(160);
+        const int p = params::unchangedPrefix(prev, shape, next.data(), 160);
+        report(p == 80,
+               "appending 80 dabs leaves the first 80 as an unchanged prefix",
+               std::to_string(p));
+    }
+
+    // 3. ⚠ **THE TRAP.** Undo three dabs, paint three different ones. The count
+    //    is exactly what it was, and the cheap predicate — "the stroke did not
+    //    shrink, so what came before it is still there" — hands back all 160 and
+    //    the accumulator keeps coverage belonging to dabs the photographer took
+    //    back. What renders is a brushstroke. It is just not theirs.
+    {
+        const auto prev = stored(line(160), shape);
+        auto next = line(160);
+        for (int i = 157; i < 160; ++i) next[std::size_t(i) * 4 + 1] += 0.02f;
+        const int p = params::unchangedPrefix(prev, shape, next.data(), 160);
+        report(p == 157,
+               "undo three dabs and paint three different ones: the prefix is 157",
+               std::to_string(p));
+        report(p != 160,
+               "and the count, which never moved, is evidence of nothing");
+    }
+
+    // 4. The same three centers, flipped from paint to erase. Source-over and
+    //    destination-out do not commute, so this is a different picture from the
+    //    same coordinates — and the flag rides in the texel's `z`, which is why
+    //    the comparison is over all four floats and not over the pair.
+    {
+        const auto prev = stored(line(160), shape);
+        auto next = line(160);
+        for (int i = 157; i < 160; ++i) next[std::size_t(i) * 4 + 2] = 1.0f;
+        const int p = params::unchangedPrefix(prev, shape, next.data(), 160);
+        report(p == 157,
+               "flipping three dabs to erase ends the prefix, every center held",
+               std::to_string(p));
+    }
+
+    // 5. An undo on its own. The survivors are still a prefix, and the answer is
+    //    capped by the shorter of the two strokes rather than by the stored one.
+    {
+        const auto prev = stored(line(160), shape);
+        const auto next = line(120);
+        const int p = params::unchangedPrefix(prev, shape, next.data(), 120);
+        report(p == 120, "undoing forty dabs leaves the surviving 120",
+               std::to_string(p));
+    }
+
+    // 6. Identical centers are not enough. One radius covers the whole stroke,
+    //    so widening the nib re-lays every dab that was already down.
+    {
+        const auto prev = stored(line(160), shape);
+        const auto next = line(160);
+        report(params::unchangedPrefix(prev, shape, next.data(), 160) == 160,
+               "an untouched stroke is unchanged all the way through");
+
+        params::BrushShape wider = shape;    wider.nibPx *= 2.0f;
+        params::BrushShape thinner = shape;  thinner.flow = 0.25f;
+        params::BrushShape harder = shape;   harder.hardness = 1.0f;
+        params::BrushShape gradient = shape; gradient.kind = 2;
+        report(params::unchangedPrefix(prev, wider, next.data(), 160) == 0,
+               "a wider nib re-lays all of it");
+        report(params::unchangedPrefix(prev, thinner, next.data(), 160) == 0,
+               "and so does the flow");
+        report(params::unchangedPrefix(prev, harder, next.data(), 160) == 0,
+               "and the hardness");
+        report(params::unchangedPrefix(prev, gradient, next.data(), 160) == 0,
+               "and a component that has stopped being a brush at all");
+    }
+
+    // 7. The finest change a float can carry, in the middle of the stroke. The
+    //    coverage it produces is invisible; the prefix is not allowed to be.
+    {
+        const auto prev = stored(line(160), shape);
+        auto next = line(160);
+        next[40 * 4] = std::nextafter(next[40 * 4], 1.0f);
+        const int p = params::unchangedPrefix(prev, shape, next.data(), 160);
+        report(p == 40, "one ulp on dab 40 ends the prefix at 40",
+               std::to_string(p));
+    }
+}
+
+/// The predicate through the real `DevelopPipeline`, where the texels are
+/// whatever `mask::toFrame` produced and the strokes arrive the way the app
+/// sends them.
+///
+/// ⚠ The unit test above cannot see the two things this one exists for: that
+/// the predicate is fed the **post-transform** texels, and that it is asked at
+/// all. `BrushPrefixStat::evaluations` is what makes the second checkable —
+/// `apply` skips a component whose edit did not change, so an answer left over
+/// from an earlier event reads exactly like a fast path that was taken.
+void testBrushPrefixWiring() {
+    section("Brush prefix wiring");
+
+    namespace pipe = orion::pipe;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    // A ramp in both axes: a flat patch would be bit-identical under a stroke
+    // that landed anywhere at all, which would make the pixel comparison at the
+    // end a formality.
+    orion::raw::BayerImage img;
+    img.width = 96;
+    img.height = 96;
+    img.samples.resize(std::size_t(96) * 96);
+    for (std::uint32_t y = 0; y < 96; ++y) {
+        for (std::uint32_t x = 0; x < 96; ++x) {
+            img.samples[std::size_t(y) * 96 + x] =
+                static_cast<std::uint16_t>(200 + x * 20 + y * 15);
+        }
+    }
+    img.filters = 0x94949494u;             // RGGB
+    img.white = 4095;
+    img.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
+    img.camToXyz = {0.4124f, 0.3576f, 0.1805f,
+                    0.2126f, 0.7152f, 0.0722f,
+                    0.0193f, 0.1192f, 0.9505f};
+
+    std::unique_ptr<pipe::DevelopPipeline> dev;
+    try {
+        dev = std::make_unique<pipe::DevelopPipeline>(
+            *device, std::string(ORION_SHADER_DIR), img);
+    } catch (const std::exception& e) {
+        report(false, "develop graph builds", e.what());
+        return;
+    }
+
+    const std::uint32_t w = dev->outputWidth(), h = dev->outputHeight();
+    const auto frame = [&] {
+        std::vector<std::uint8_t> px(std::size_t(w) * h * 4);
+        dev->output().download(px.data(), std::size_t(w) * 4, w, h);
+        return px;
+    };
+
+    // Dab centers in **displayed** coordinates, which is what the app sends and
+    // what `apply` runs through `mask::toFrame`. A diagonal, so the transform is
+    // exercised in both axes.
+    const auto line = [](int count) {
+        std::vector<float> xy(std::size_t(count) * 2, 0.0f);
+        for (int i = 0; i < count; ++i) {
+            xy[std::size_t(i) * 2 + 0] = 0.06f + 0.005f * float(i);
+            xy[std::size_t(i) * 2 + 1] = 0.06f + 0.004f * float(i);
+        }
+        return xy;
+    };
+
+    pipe::Adjustments adj{};
+    adj.wb = pipe::WhiteBalance{};
+    auto& c = adj.maskComponents[0];
+    c.kind = 3;
+    c.brushRadius = 0.05f;
+    c.brushFlow = 1.0f;
+    c.brushHardness = 0.7f;
+    adj.maskCount = 1;
+    adj.layers[0].exposureEv = 2.0f;
+
+    // ── The first pointer event ────────────────────────────────────────────
+    const auto first = line(80);
+    dev->setBrushStroke(0, first.data(), nullptr, 80);
+    c.brushRevision = 1;
+    dev->apply(adj);
+    dev->render();
+    {
+        const auto s = dev->brushPrefixStat(0);
+        report(s.evaluations == 1 && s.prefix == 0,
+               "the first upload has nothing to compare itself against",
+               std::to_string(s.evaluations) + " evals, prefix "
+               + std::to_string(s.prefix));
+    }
+
+    // ── The append, which is what painting does ────────────────────────────
+    //
+    // ⚠ **The fast path has to be taken, not merely available.** A predicate
+    // that answers 0 forever passes every correctness check in this file and
+    // makes session two a no-op, so this asserts the number and asserts that the
+    // predicate was the thing that produced it.
+    const auto appendedStroke = line(160);
+    dev->setBrushStroke(0, appendedStroke.data(), nullptr, 160);
+    c.brushRevision = 2;
+    dev->apply(adj);
+    dev->render();
+    const auto appended = frame();
+    {
+        const auto s = dev->brushPrefixStat(0);
+        report(s.evaluations == 2,
+               "the predicate ran on the append rather than leaving its last answer",
+               std::to_string(s.evaluations) + " evaluations");
+        report(s.prefix == 80 && s.previousCount == 80 && s.count == 160,
+               "and 80 of the 160 dabs are the stroke already on the GPU",
+               "prefix " + std::to_string(s.prefix) + " of "
+               + std::to_string(s.count) + ", was " + std::to_string(s.previousCount));
+    }
+
+    // ── ⚠ Undo three dabs, paint three different ones ──────────────────────
+    //
+    // The count returns to a value it has already had. Nothing about the size of
+    // the stroke has changed, and three dabs of it are somewhere else.
+    auto repaint = line(160);
+    for (int i = 157; i < 160; ++i) repaint[std::size_t(i) * 2 + 1] += 0.02f;
+    dev->setBrushStroke(0, repaint.data(), nullptr, 160);
+    c.brushRevision = 3;
+    dev->apply(adj);
+    dev->render();
+    const auto repainted = frame();
+    {
+        const auto s = dev->brushPrefixStat(0);
+        report(s.count == 160 && s.previousCount == 160,
+               "undo three and repaint three: the dab count is exactly where it was",
+               std::to_string(s.previousCount) + " -> " + std::to_string(s.count));
+        report(s.prefix == 157,
+               "and the prefix stops at 157, which is the only thing that can tell",
+               std::to_string(s.prefix));
+        // ⚠ Without this the case above is a fixture that could not have failed:
+        // three dabs moved somewhere the picture cannot see would be a stale
+        // accumulator nobody would mind.
+        report(repainted != appended,
+               "and the repaint is a different photograph, so the stale coverage "
+               "would have been wrong on screen");
+    }
+
+    // ── Paint, then erase over the same three centers ──────────────────────
+    std::vector<float> erase(160, 0.0f);
+    for (int i = 157; i < 160; ++i) erase[std::size_t(i)] = 1.0f;
+    dev->setBrushStroke(0, repaint.data(), erase.data(), 160);
+    c.brushRevision = 4;
+    dev->apply(adj);
+    dev->render();
+    {
+        const auto s = dev->brushPrefixStat(0);
+        report(s.prefix == 157,
+               "flipping three dabs from paint to erase ends the prefix at 157, "
+               "with every center exactly where it was",
+               std::to_string(s.prefix));
+        report(frame() != repainted,
+               "and destination-out is a different picture from source-over");
+    }
+
+    // ── ⚠ The geometry moves and the stroke does not ───────────────────────
+    //
+    // `setBrushStroke` is not called and `brushRevision` does not move. Every
+    // center still lands somewhere else, because `mask::toFrame` is between the
+    // stored list and the texture — which is why the predicate compares what was
+    // uploaded and never the displayed-coordinate dabs.
+    adj.straightenDeg = 3.0f;
+    dev->apply(adj);
+    dev->render();
+    {
+        const auto s = dev->brushPrefixStat(0);
+        report(s.evaluations == 5,
+               "a straighten re-uploads the stroke and asks again",
+               std::to_string(s.evaluations) + " evaluations");
+        report(s.prefix == 0,
+               "and every center has moved, so nothing is unchanged",
+               std::to_string(s.prefix));
+    }
+    adj.straightenDeg = 0.0f;
+
+    // ── ⚠ Session one moves no pixel ───────────────────────────────────────
+    //
+    // A reload throws the record away — a different photograph through the same
+    // graph shares nothing with the stroke that was on it — so the same 160 dabs
+    // go up as one upload with no prefix behind them. That render and the one
+    // built by appending have to be the same bytes.
+    dev->reload(img);
+    dev->setBrushStroke(0, appendedStroke.data(), nullptr, 160);
+    c.brushRevision = 1;
+    dev->apply(adj);
+    dev->render();
+    const auto whole = frame();
+    {
+        const auto s = dev->brushPrefixStat(0);
+        report(s.evaluations == 1 && s.prefix == 0,
+               "a reload forgets what was uploaded, stat and texels together",
+               std::to_string(s.evaluations) + " evals, prefix "
+               + std::to_string(s.prefix));
+        report(whole == appended,
+               "and a stroke built by appending is bit-identical to the same "
+               "stroke uploaded whole");
+    }
+
+    // And the same component ceasing to be a brush forgets it too, because the
+    // accumulator session two hangs on this will not have survived that.
+    c.kind = 2;
+    c.brushRevision = 2;
+    dev->apply(adj);
+    dev->render();
+    c.kind = 3;
+    dev->apply(adj);
+    dev->render();
+    {
+        const auto s = dev->brushPrefixStat(0);
+        report(s.prefix == 0,
+               "a component that stopped being a brush and came back has no prefix",
+               std::to_string(s.prefix));
+    }
+}
+
+
 // A luminance range mask — research/masking.md §4b.
 //
 // A band on what a pixel *is*. Three decisions to pin, and the shader's own
