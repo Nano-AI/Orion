@@ -65,16 +65,29 @@ one every Mac user already understands.
 | **Format** | JPEG · PNG · TIFF · HEIF. Changing it swaps the options below and updates the extension in the filename. |
 | **Quality** | JPEG and HEIF only. Slider with a live **estimated file size** beside it — the number is why the slider is legible. |
 | **Resolution** | Preset menu (Full · 4096 · 2048 · 1024 px long edge · Custom) plus explicit width/height fields that respect the aspect ratio. Shows the resulting pixel dimensions. |
-| **Color space** | sRGB · Display P3 · Adobe RGB. sRGB default, since it is what survives the web. |
-| **Bit depth** | 8-bit · 16-bit, TIFF and PNG only. ⚠️ Needs the pipeline to end in `rgba16f` rather than `rgba8`. |
-| **Metadata** | Keep all · Strip location · Strip everything. |
-| **Output sharpening** | None · Screen · Print. Resampling softens; this is the standard correction. |
+| **Color space** | ✅ sRGB · Display P3 · Adobe RGB. sRGB default, since it is what survives the web. |
+| **Bit depth** | ✅ 8-bit · 16-bit, TIFF and PNG only, greyed out for JPEG *(2026-08-01)* |
+| **Metadata** | ✅ Keep all · Strip location · Strip everything |
+| **Output sharpening** | ✅ None · Screen · Print *(Fraser & Schewe; the amounts are in `UNSOURCED.md` §2)* |
 
 **Live estimate** matters more than it sounds: quality sliders are meaningless
 without one, which is exactly why Preview shows it.
 
-**Blocked on:** 16-bit export needs the final node's format changed and the
-orientation node widened to match. Not hard, but it touches the pipeline tail.
+**All seven controls are built.** What is left on this panel is HEIF, which is a
+format question rather than a control — see below.
+
+Two things turned up while finishing it:
+
+- **Every export was sixteen bits, always.** The writer had no other mode, so
+  every PNG Orion wrote was about twice the size it needed to be and nothing
+  said so. The “blocked on the pipeline tail” note this section carried was
+  stale — the tail had been widened long ago and only the *wide* direction ever
+  existed. The work was adding the narrow one.
+- **An 8-bit export renders through the narrow graph on purpose**, because that
+  is the path that dithers (`ops/dither_ops.slang`). Rounding a smooth 16-bit
+  sky down to eight bits without one is exactly the banding the dither exists to
+  prevent, so the depth the file will hold decides which graph renders it.
+  DECISIONS #90.
 
 ### Extending format support
 

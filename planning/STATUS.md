@@ -6,6 +6,8 @@
 
 **Last updated:** 2026-08-01 (**the folder index and the thumbnail cache — M1's last real gap**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
+**Last updated:** 2026-08-01 (**the export panel's last three controls; every export had been 16-bit**)
+**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
@@ -45,6 +47,15 @@ four now also has something that fails when its *wiring* breaks — see sessions
 4. **Export panel**: bit depth, metadata policy, output sharpening. 16-bit
    already exists in the engine and is not offered. ~1 session.
 5. **Americanising the persisted keys**, if wanted — a schema migration with
+4. **M1's library gap** — no SQLite index, no thumbnail cache, so every folder
+   open rescans and re-reads every sidecar. Also a performance item. ~2 sessions.
+5. ~~**Export panel**: bit depth, metadata policy, output sharpening.~~ ✅ done
+   2026-08-01. ⚠ The premise was wrong in two ways: metadata policy had been
+   built and wired for some time, and 16-bit was not "not offered" — it was the
+   *only* mode, so every file Orion had written was 16-bit. The work was the
+   8-bit path, output sharpening, and a location strip that also removes the
+   IPTC place names. Decisions #90–#92.
+6. **Americanising the persisted keys**, if wanted — a schema migration with
    dual reads, not a rename. ~1 session, needs sign-off (#89).
 
 ✅ **M1's library gap is closed** — SQLite index and persistent thumbnail cache,
@@ -72,6 +83,10 @@ three sample frames: **149 nodes, 6971 MiB**, M0 gate **9.70–14.13 ms p95** �
 plus a preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth
 gate: it opens a folder cold, warm and indexless in one process and fails when
 the warm pass did not hit, or when any of the three disagree about a field.
+**Suites:** `orion-tests` **586 checks** · `orion-viewport-tests` **3474
+checks** · **34 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
+plus a preview graph at 1/16 that.
 
 ⚠ **That p95 is only meaningful next to one taken minutes away from it.** The
 same binary measured 8.97, 16.75, 44.53 and 40.69 ms on this machine within an
@@ -88,7 +103,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 1,977, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` 1,135, `Scenario.swift` 1,080. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 2,118, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` 1,135, `Scenario.swift` **1,250**. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
 | **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
 | **The tick is timed whole, not attributed.** `EditHistory.record` copies the entire `DevelopState`, `InteractionLog.committed` diffs every field and formats strings, and `setBrushStroke` re-flattens the whole stroke — all per event, all O(size of the edit). ⚠ Candidates only: armed, a 784-dab stroke is 1.8 ms an event | `ROADMAP.md` |
@@ -363,6 +378,117 @@ No bisect was needed and none was run.
 9.10 ms on the same binary minutes later. It gates the *exposure* path, which
 this change does not touch (3 nodes either way). Third session in a row this
 has cost time; see `2026-07-31l`.
+## Session 2026-08-01d — the export panel's last three controls
+
+**Brief: the panel has four of its seven controls, add the missing three.** Two
+of the three premises were wrong, and finding that out was most of the value.
+
+### ⚠ Metadata policy was already built, wired and tested
+
+Keep all / Strip location / Strip everything existed end to end — panel row,
+`OrionMetadata`, `ImageWriter`, and three assertions in `tests_io.cpp`. Nothing
+to build.
+
+**But it had a hole, and it was the kind that matters.** GPS was dropped and the
+IPTC dictionary was copied **whole** — so city, sub-location, province and
+country survived a control whose entire purpose is that they should not. The
+landing page advertises this feature by name ("Export with your location
+stripped by default"), so the claim was false for any photograph that had been
+catalogued.
+
+It survived because the sample frames have no GPS — the bodies have no receiver
+— so the one test aimed at this writes its own stand-in file, and that stand-in
+carried coordinates and nothing else. **A fixture is a claim about what the
+world looks like, and this one was narrower than the world.** The stand-in now
+carries a city and a sub-location too. Decision #92.
+
+### ⚠ 16-bit was not "in the engine and not offered" — it was the only mode
+
+`Engine::exportImage` called `setWideOutput(true)` unconditionally. Every file
+Orion had ever written was sixteen bits per component, so every PNG was about
+twice the size it needed to be with nothing in the interface saying so, and the
+ROADMAP's "blocked on the pipeline tail" note had been stale for a long time.
+
+**The work was the narrow direction**, and it is not "the same pixels, rounded":
+`ops/dither_ops.slang` puts a sub-LSB offset on whichever node writes the eight
+bits, and CoreGraphics quantising a smooth 16-bit sky afterwards has no
+equivalent. So the depth the file will hold now picks the graph, an 8-bit export
+is byte-for-byte what the screen shows, and the writer's quantisation is
+deliberately undithered because the graph already did it. Decision #90.
+
+Two traps inside that. `readOutput16` assumed half float and would have read a
+byte texture as noise. And the panel has to send `effectiveDepth`, not `depth` —
+leaving the control at 16 and switching to JPEG would render the *undithered*
+wide graph only for ImageIO to round it to eight anyway, which is banding in a
+smooth sky and looks fine in a thumbnail.
+
+### Output sharpening — the placement is sourced, the numbers are not, and it says so
+
+Fraser's multipass model (capture / creative / output; Fraser & Schewe, 2nd ed.,
+Peachpit, 2009) puts this pass **after** the resize, at final size, because
+resampling is what softened the image. The resize is CoreGraphics', inside
+`ImageWriter`, so the develop graph is the one place this pass cannot go — it is
+~60 lines beside the resize, luminance-only on Rec.709 so an edge cannot pick up
+a color fringe.
+
+**The two amounts are mine and are in `UNSOURCED.md` §2** rather than dressed up
+as derived. What is tested is the invariant a photographer would notice: None
+does nothing at all, Screen overshoots a step edge, Print overshoots more,
+brightness does not move, and all three channels move together. Replacing the
+constants with measured ones needs no test rewritten. Decision #91.
+
+### Every check was mutation-tested, and two did not bite
+
+Eleven mutations, each built and run:
+
+| Mutation | Caught by |
+|---|---|
+| `quantiseToEight` makes a 16bpc context | `orion-tests` — "a PNG asked for eight bits is that" (both plain and resized) |
+| `toBitDepth` always returns Sixteen | `repro` — `depth8 == 8` |
+| `effectiveDepth` returns `depth` | `orion-viewport-tests` — "JPEG is eight bits however the control is set" |
+| Screen and Print constants swapped | `orion-tests` — "Print overshoots more than Screen" |
+| `toSharpen` maps Screen to None | `repro` — `sharpNone < sharpScreen` |
+| None sharpens, guard forced on | `orion-tests` — "None leaves the edge exactly as it was" |
+| delta applied to green only | `orion-tests` — "moves all three channels together" |
+| delta replaced by a constant | `orion-tests` — "does not move the overall brightness" |
+| IPTC strip removed | `orion-tests` — "strip location removes the IPTC place name" |
+| metadata policy ignored | `repro` — `metaNoneExif == 0` |
+
+⚠ **Two mutations came back green, and both were my fault rather than the
+product's.** "None sharpens" was inert because two independent guards stop it,
+so it needed a two-part mutation to land. And "sharpen per channel" was green
+against a **vacuous assertion**: the test edge was neutral grey, and on grey a
+per-channel unsharp mask and a luminance-only one compute the identical answer.
+The fixture was rewritten so the edge exists in **green alone** — red and blue
+flat across the frame — which is the only shape that can tell the two apart.
+That check now fails when the delta goes to one channel.
+
+### What was built
+
+- `app/ExportSettings.swift` — the model moved out of `ExportPanel.swift`, which
+  imports SwiftUI. CLAUDE.md's rule that a view model has zero SwiftUI types in
+  it was a promise rather than a fact while the two shared a file; the split
+  makes the compiler hold it, and it is why the model is now testable in
+  `orion-viewport-tests` at all. `ExportPanel.swift` went 436 → 275 lines.
+- `app/ExportProbe.swift` — reads a written file back: depth, GPS, IPTC place,
+  camera EXIF, acutance. All five properties exist because the control they
+  serve fails invisibly.
+- `probe` and `export key=value` in the scenario grammar, and
+  `repro/export-depth-and-sharpening.txt` — 11 checks against files the real
+  view models wrote.
+
+### Not done, deliberately
+
+- **HEIF.** In the ROADMAP's format table, not in the control table; it is a
+  format question and a separate story.
+- **A dither for the writer's own 16→8 quantisation.** Not needed while the
+  graph picks the narrow path for 8-bit exports, and a second dither on top of
+  the graph's would add noise twice. It is a landmine only if someone hands
+  `writeImage` wide data and asks for eight bits, which is stated in the file.
+- **Batch export's dropped settings.** Fixed in passing — it was sending
+  neither the color space nor the new fields, so a batch wrote sRGB however the
+  panel was set. Worth a mention because it is the same bug class the new
+  controls would have walked into.
 
 ## Session 2026-08-01c — the stroke stopped rebuilding the panel
 
@@ -759,3 +885,53 @@ the discipline.
 
 **Still open**: `engine/shaders/grain.slang` is written but uncommitted and not
 in `engine/shaders/CMakeLists.txt`. Grain pieces 1, 3–7 unstarted.
+
+
+## Session 2026-07-31j — the grain plate, built and pinned
+
+⚠ **Forty-first arrival of the stale M3 prompt.** Verified and set aside.
+
+Piece 2 of `ROADMAP.md`'s film-grain decomposition: `GrainPlate.h`, the
+precomputed field of correlated noise everything else hangs off.
+
+⚠ **Scoped to the plate alone on purpose.** It is a self-contained unit with
+properties that can be asserted on the CPU, where the shader and the node wiring
+around it are not — and the last two sessions both recorded that starting a
+multi-part change and leaving it half-built is the move this file has already
+paid for twice.
+
+### ⚠ The aux-texture API has no mip levels
+
+The design needs a chain: a preview pixel covering sixteen frame pixels has to
+see the *average* of sixteen, or the 1/16 preview reads an order of magnitude
+grainier than the render it previews.
+
+Adding real mip support would be a change to the GPU layer for nothing — the
+shader has to filter **by hand** regardless, because a hardware sampler's
+precision is not specified across GPU families and export could then differ by
+device. So the chain is **stacked vertically into one 2048×4096 R32F**, 33 MB,
+with `levelOffset(l)` a closed form that both sides compute from the same
+expression. Two derivations of one offset is how a level gets read from the
+wrong rows.
+
+### What is pinned, and the check that matters
+
+14 checks. The load-bearing one is that **the standard deviation falls down the
+chain** — 1.0, then measurably less, then less again.
+
+⚠ That is the property, not a defect, and it is the one an obvious "fix" would
+destroy. Renormalising every level back to unit variance looks tidier and makes
+the 1/16 preview exactly as grainy as the full render — the precise failure the
+plate exists to prevent. The mutation that does it fails two checks.
+
+Also pinned: neighbouring texels are **correlated** (0.3+), because uncorrelated
+noise is a digital sensor rather than film — the mutation that skips the
+band-limiting blur fails it — and two builds from one seed are **bit-identical**,
+which is why PCG32 and Box–Muller are written out rather than taken from
+`<random>`, whose algorithms differ between standard libraries.
+
+### Still to do
+
+Pieces 1 and 3–7: the shader, moving the quantisation boundary (`develop:display`
+→ `RGBA16Float`, +194 MB), the adjustment through 20 files, two sliders, and the
+GPU test. The design is settled in #81; none of it is guesswork now.

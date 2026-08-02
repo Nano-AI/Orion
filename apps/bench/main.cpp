@@ -1420,20 +1420,53 @@ int main(int argc, char** argv) {
             // green on an export that carried no EXIF at all.
             using orion::util::ColorSpace;
             struct Case { const char* suffix; orion::util::ExportOptions opts; };
+            // ⚠ Designated initializers, not positional. This list was
+            // positional and broke the moment two fields were inserted into
+            // `ExportOptions` — silently assigning a path to a bit depth, which
+            // is the good outcome; the bad one is two fields of the same type
+            // swapping places and the bench measuring something else while
+            // still exiting 0.
             const Case cases[] = {
                 // Metadata::All here on purpose: the point of the probe is
                 // that a full block survives the encode, and the app's own
                 // default strips location.
-                {"-full.jpg", {orion::util::ImageFormat::Jpeg, 0.92f, 0,
-                               ColorSpace::Srgb, path, orion::util::Metadata::All, 4}},
-                {"-web.jpg",  {orion::util::ImageFormat::Jpeg, 0.85f, 2048,
-                               ColorSpace::DisplayP3, path,
-                               orion::util::Metadata::All, 4}},
-                // Named for the format, not the depth: the container decides
-                // how much of the sixteen bits survives, and JPEG keeps eight.
-                {"-full.tif", {orion::util::ImageFormat::Tiff, 1.0f, 0,
-                               ColorSpace::AdobeRgb, path,
-                               orion::util::Metadata::All, 4}},
+                {"-full.jpg", {.format = orion::util::ImageFormat::Jpeg,
+                               .quality = 0.92f,
+                               .space = ColorSpace::Srgb,
+                               .metadataFrom = path,
+                               .metadata = orion::util::Metadata::All,
+                               .rating = 4}},
+                {"-web.jpg",  {.format = orion::util::ImageFormat::Jpeg,
+                               .quality = 0.85f,
+                               .maxDimension = 2048,
+                               .space = ColorSpace::DisplayP3,
+                               // The web case is what the panel's defaults
+                               // produce: eight bits, and sharpened because it
+                               // has been resized.
+                               .depth = orion::util::BitDepth::Eight,
+                               .sharpen = orion::util::Sharpen::Screen,
+                               .metadataFrom = path,
+                               .metadata = orion::util::Metadata::All,
+                               .rating = 4}},
+                {"-full.tif", {.format = orion::util::ImageFormat::Tiff,
+                               .quality = 1.0f,
+                               .space = ColorSpace::AdobeRgb,
+                               .depth = orion::util::BitDepth::Sixteen,
+                               .metadataFrom = path,
+                               .metadata = orion::util::Metadata::All,
+                               .rating = 4}},
+                // The print case: resized, eight bits, the heavier sharpening
+                // pass. It is the most expensive combination the panel can ask
+                // for, so it is the one worth timing.
+                {"-print.tif", {.format = orion::util::ImageFormat::Tiff,
+                                .quality = 1.0f,
+                                .maxDimension = 3000,
+                                .space = ColorSpace::AdobeRgb,
+                                .depth = orion::util::BitDepth::Eight,
+                                .sharpen = orion::util::Sharpen::Print,
+                                .metadataFrom = path,
+                                .metadata = orion::util::Metadata::All,
+                                .rating = 4}},
             };
 
             for (const auto& c : cases) {

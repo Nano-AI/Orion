@@ -35,6 +35,8 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/ExportProbe.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CropOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MaskOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SpotOverlay.swift
@@ -121,6 +123,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
@@ -148,6 +151,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Catalogue.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sky.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Index.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Export.swift
             ${CMAKE_CURRENT_BINARY_DIR}/main.swift
             -o ${VIEWPORT_TESTS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
@@ -156,6 +160,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
@@ -183,6 +188,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Catalogue.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sky.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Index.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Export.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
     COMMENT "swiftc    orion-viewport-tests"
     VERBATIM

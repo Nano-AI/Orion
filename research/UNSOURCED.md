@@ -35,6 +35,44 @@ against reference renders of the same file.
 
 ---
 
+## 2. Output sharpening amounts
+
+**Where:** `util/ImageWriter.mm`, `unsharpFor`.
+
+**Sourced:** the *pass* and its placement — an unsharp mask applied after the
+resize, at final output size, stronger for print than for screen. Fraser and
+Schewe (2009); see [detail.md](detail.md#output-sharpening).
+
+**Not sourced:** the two numbers each preset carries.
+
+| Preset | Gaussian sigma | Amount |
+|---|---|---|
+| Screen | 0.6 px | 0.40 |
+| Print  | 1.0 px | 0.80 |
+
+**Said plainly: I chose these.** Fraser's book gives the workflow and the
+reasoning — ink spreads on paper, so a print takes more than a screen — but the
+figures a specific implementation should use are not in it, and PhotoKit
+Sharpener's are proprietary. Nothing was measured against a print.
+
+**What is held instead.** The invariant a photographer would actually notice is
+tested, even though the constants are not derived: None does nothing at all,
+Screen overshoots a step edge, Print overshoots more than Screen, none of them
+moves the frame's overall brightness, and all three channels move together so a
+neutral edge cannot pick up a color fringe. If someone replaces these numbers
+with measured ones, those assertions still hold and the tests do not need
+rewriting.
+
+**Cost:** low but real. "Print" is a plausible amount rather than a calibrated
+one, and a print at 240 ppi and one at 360 ppi are given the same treatment when
+Fraser's model says they should not be.
+
+**To fix:** derive the radius from the output resolution — the model is a
+function of the output process, and two presets are a two-point sample of it.
+That needs the panel to know the intended print size, which it does not today.
+
+---
+
 ## 3. Vibrance weighting
 
 **Where:** `ops/tone_ops.slang`, `applyColor`.

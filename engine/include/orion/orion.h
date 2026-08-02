@@ -490,6 +490,33 @@ typedef enum OrionMetadata {
     ORION_METADATA_NONE        = 2
 } OrionMetadata;
 
+/* Bits per component in the file. PNG and TIFF carry either; JPEG is an
+ * eight-bit container and ignores it.
+ *
+ * An eight-bit export renders through the narrow graph, which is the path that
+ * dithers — so it is byte-for-byte what the screen shows. Sixteen renders wide.
+ *
+ * The values are the depths themselves, and zero means unspecified, so a caller
+ * that zeroes the struct gets the engine's default rather than silently getting
+ * eight. Precision lost by omission is the bug this path has already shipped. */
+typedef enum OrionBitDepth {
+    ORION_DEPTH_DEFAULT = 0,  /* sixteen */
+    ORION_DEPTH_8       = 8,
+    ORION_DEPTH_16      = 16
+} OrionBitDepth;
+
+/* Output sharpening, applied after the resize.
+ *
+ * Resampling softens, and the correction belongs at the final size — before it,
+ * the resample throws the sharpening away. See research/detail.md: the
+ * placement is Fraser's multipass model, the amounts are ours and are listed in
+ * research/UNSOURCED.md. */
+typedef enum OrionSharpen {
+    ORION_SHARPEN_NONE   = 0,
+    ORION_SHARPEN_SCREEN = 1,
+    ORION_SHARPEN_PRINT  = 2
+} OrionSharpen;
+
 typedef struct OrionExportOptions {
     int32_t  format;         /* OrionImageFormat; -1 picks from the extension */
     float    quality;        /* JPEG only, 0..1                               */
@@ -498,6 +525,8 @@ typedef struct OrionExportOptions {
     int32_t  rating;         /* 0-5 written as the star rating; -1 writes none */
     int32_t  metadata;       /* OrionMetadata; 0 keeps GPS, and 0 is not the
                               * caller's default — see OrionMetadata          */
+    int32_t  bit_depth;      /* OrionBitDepth                                 */
+    int32_t  sharpen;        /* OrionSharpen                                  */
 } OrionExportOptions;
 
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,

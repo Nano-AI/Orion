@@ -178,6 +178,64 @@ Six, all product code: `DevelopPipeline.cpp` 2,192, `Engine.swift` 1,977,
 is no byte-identical-output check available for a library — and wants its own
 session.
 
+
+## Session 2026-07-31i — film grain, researched and costed rather than started
+
+⚠ **Fortieth arrival of the stale M3 prompt.** Verified and set aside.
+
+Nine sessions of tests, performance and maintainability, so this one went for a
+feature: **film grain**, the last unbuilt item in `ROADMAP.md`'s M4 and listed
+in `FEATURES.md` with no prior decision against it.
+
+`research/film-grain.md` is written and decision #81 is logged. The code is
+not, and the reason is the point of the session.
+
+### The method, settled
+
+Newson, Delon & Galerne (CGF 2017) model the emulsion as a Boolean process of
+Poisson discs — the right physics, and the source of the `√(Y(1−Y))` variance
+law. ⚠ Their exact renderer is **per-pixel Monte Carlo over the disc process**:
+orders of magnitude outside 16 ms at 24 Mpx, and several hundred lines against
+the 50–150 line ceiling. Both hard constraints, broken at once.
+
+So AV1's architecture instead (Norkin & Birkbeck, DCC 2018) — one precomputed
+correlated plate, applied per pixel with an intensity-dependent scale — carrying
+Newson's statistics. Monochrome, after the display transform, keyed to the frame
+rather than the output. #81 has the full reasoning, including why scene-linear
+is the wrong side and what a hash-of-pixel-coordinate would do to the preview.
+
+### ⚠ What costing it found, and why it stopped the session
+
+**`develop:display` outputs `RGBA8Unorm`.** A grain node reading its output
+would be adding noise to values that are **already 8-bit**. So this is not "add
+a node": the quantisation boundary has to move — display becomes `RGBA16Float`,
+the grain node inherits the Bayer dither and becomes the thing that quantises,
+and `setWideOutput` retargets.
+
+That is **+194 MB** of intermediates, a format change on two nodes, and an
+Amount-0 path that must be bit-exact or every `identical` baseline silently
+rebases. Plus a plate generator that cannot use `std::normal_distribution` or
+`generateMipmaps` without export differing by toolchain.
+
+Measured rather than guessed: a single new adjustment already touches **20
+files** in this tree, and grain adds two of them plus an aux texture, a mip
+chain, three GPU assertions and a probe that has to measure mean *absolute*
+difference because grain is zero-mean.
+
+⚠ That is two sessions of work, and starting it here would have left it
+half-built — which this file records as the wrong move twice already
+(`degrade-then-refine`, and the crop preview). The decomposition is in
+`ROADMAP.md`, in order, with the memory number and the four things that must not
+be done along the way.
+
+### Note on the "3-file change" promise
+
+`CLAUDE.md` says adding a feature should be a repeatable 3-file change. For a
+new *node* that is roughly true. For a new *adjustment* it is 20 files, because
+the value threads engine → `orion.h` → `CApi` → Swift → catalogue → sidecar →
+presets → sync → log → scenario. Not a defect, but worth having counted, and
+worth remembering the next time that sentence is used to size a story.
+
 ## Session 2026-07-31g — the recovery point could not be recovered from
 
 ⚠ **Thirty-sixth arrival of the stale M3 prompt.** Verified and set aside.

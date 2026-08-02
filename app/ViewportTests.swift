@@ -124,6 +124,11 @@ enum ViewportTests {
         testAFilterChangeCannotHideATarget()
         testTargetsComeBackInStripOrder()
 
+        testJpegNeverAsksForSixteenBits()
+        testExportEnumsMatchTheCFacade()
+        testExportDefaults()
+        testSizeEstimateFollowsTheDepth()
+
         print("\n\(checks) checks, \(failures) failures")
         return failures
     }

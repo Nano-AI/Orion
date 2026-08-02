@@ -384,7 +384,9 @@ struct Editor: View {
                                 maxDimension: exportSettings.longestEdge(
                                     sourceWidth: engine.imageWidth,
                                     sourceHeight: engine.imageHeight),
-                                space: exportSettings.space.code)
+                                space: exportSettings.space.code,
+                                depth: exportSettings.effectiveDepth.rawValue,
+                                sharpen: exportSettings.sharpening.rawValue)
                         },
                         onExport: { showingExport = false; exportFile() },
                         onCancel: { showingExport = false })
@@ -1433,7 +1435,9 @@ struct Editor: View {
                                   sourceHeight: engine.imageHeight),
                               space: exportSettings.space.code,
                               rating: Int32(library.photos.first { $0.url == current }?.rating ?? 0),
-                              metadata: exportSettings.metadata.rawValue)
+                              metadata: exportSettings.metadata.rawValue,
+                              depth: exportSettings.effectiveDepth.rawValue,
+                              sharpen: exportSettings.sharpening.rawValue)
         } catch {
             message = error.localizedDescription
         }

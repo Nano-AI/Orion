@@ -94,7 +94,14 @@ extension BatchExport {
                     quality: Float(settings.quality),
                     maxDimension: settings.longestEdge(sourceWidth: engine.imageWidth,
                                                        sourceHeight: engine.imageHeight),
-                    metadata: settings.metadata.rawValue)
+                    // ⚠ Every field the panel holds, not a subset. The color
+                    // space was already being dropped here, so a batch wrote
+                    // sRGB however the panel was set — the same bug the depth
+                    // and the sharpening would have walked straight into.
+                    space: settings.space.code,
+                    metadata: settings.metadata.rawValue,
+                    depth: settings.effectiveDepth.rawValue,
+                    sharpen: settings.sharpening.rawValue)
             },
             progress: progress,
             isCanceled: isCanceled)

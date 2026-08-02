@@ -1,214 +1,8 @@
+// The export sheet itself. The settings it edits are in ExportSettings.swift,
+// which deliberately has no SwiftUI in it.
+
 import SwiftUI
 import UniformTypeIdentifiers
-
-/// Export settings, modeled on macOS Preview's export sheet.
-///
-/// Preview is the right reference because every Mac user already knows it. The
-/// part that matters most is the **live size estimate**: a quality slider with
-/// no size beside it is unreadable, which is exactly why Preview shows one.
-@Observable
-final class ExportSettings {
-
-    enum Format: String, CaseIterable, Identifiable {
-        case jpeg, png, tiff
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .jpeg: "JPEG"
-            case .png:  "PNG"
-            case .tiff: "TIFF"
-            }
-        }
-
-        var ext: String { self == .jpeg ? "jpg" : rawValue }
-
-        /// Matches OrionImageFormat in orion.h.
-        var code: Int32 {
-            switch self {
-            case .png:  0
-            case .jpeg: 1
-            case .tiff: 2
-            }
-        }
-        var isLossy: Bool { self == .jpeg }
-
-        /// Rough bytes per pixel at a given quality, for the size estimate.
-        /// Empirical rather than derived — a real encode is the only exact
-        /// answer, and running one per slider tick would be absurd.
-        func bytesPerPixel(quality: Double) -> Double {
-            switch self {
-            case .jpeg: 0.08 + 0.72 * pow(quality, 2.4)
-            case .png:  2.1
-            case .tiff: 3.0
-            }
-        }
-    }
-
-    enum Size: String, CaseIterable, Identifiable {
-        case full, px4096, px2048, px1024, custom
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .full:   "Full size"
-            case .px4096: "4096 px"
-            case .px2048: "2048 px"
-            case .px1024: "1024 px"
-            case .custom: "Custom…"
-            }
-        }
-
-        var longestEdge: UInt32 {
-            switch self {
-            case .full, .custom: 0
-            case .px4096: 4096
-            case .px2048: 2048
-            case .px1024: 1024
-            }
-        }
-    }
-
-    /// What the file is tagged as, and converted to on the way out.
-    ///
-    /// ⚠️ The display transform ends in Rec.709 primaries and saturates there,
-    /// so nothing Orion renders today falls outside sRGB. A wider space is
-    /// converted and tagged correctly — which is what a print shop or a managed
-    /// workflow asks for — but it cannot add saturation the transform never
-    /// produced. The panel says so rather than implying otherwise.
-    enum Space: String, CaseIterable, Identifiable {
-        case srgb, displayP3, adobeRGB
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .srgb:      "sRGB"
-            case .displayP3: "Display P3"
-            case .adobeRGB:  "Adobe RGB"
-            }
-        }
-
-        /// Matches OrionColorSpace in orion.h.
-        var code: Int32 {
-            switch self {
-            case .srgb:      0
-            case .displayP3: 1
-            case .adobeRGB:  2
-            }
-        }
-
-        var note: String {
-            switch self {
-            case .srgb:      "The safe choice. What the web and most screens expect."
-            case .displayP3: "For Apple displays and print. Converted and tagged, "
-                           + "though nothing Orion renders yet reaches past sRGB."
-            case .adobeRGB:  "What some print shops ask for. Converted and tagged, "
-                           + "though nothing Orion renders yet reaches past sRGB."
-            }
-        }
-    }
-
-    /// What the file carries from the RAW.
-    ///
-    /// The default strips location. A photo taken at home carries the home
-    /// coordinates in its GPS block, and a file put on the web hands them to
-    /// everyone who downloads it — silently, because nothing in an image viewer
-    /// says so. Keeping them is a choice, and this is where it is made.
-    enum Metadata: Int32, CaseIterable, Identifiable {
-        case all = 0, noLocation = 1, none = 2
-        var id: Int32 { rawValue }
-
-        var title: String {
-            switch self {
-            case .all:        "Keep all"
-            case .noLocation: "Strip location"
-            case .none:       "Strip everything"
-            }
-        }
-
-        var note: String {
-            switch self {
-            case .all:        "Camera, lens, exposure, date — and where the photo "
-                            + "was taken. Anyone who downloads the file can read it."
-            case .noLocation: "Camera, lens, exposure and date. GPS coordinates are "
-                            + "removed."
-            case .none:       "Nothing but the star rating and that Orion developed it."
-            }
-        }
-    }
-
-    var format: Format = .jpeg
-    var quality: Double = 0.9
-    var size: Size = .full
-    var space: Space = .srgb
-    var metadata: Metadata = .noLocation
-
-    /// Typed dimensions, used when `size` is `.custom`. The aspect is held, so
-    /// entering either one sets the other — a free pair would let you squash
-    /// the picture by accident, and nobody exporting a photo wants that.
-    var customWidth: UInt32 = 0
-    var customHeight: UInt32 = 0
-
-    /// Measured by a real encode, not estimated. nil until the first one lands.
-    var measuredBytes: Int?
-
-    /// Pixel dimensions after resizing, given the source.
-    func dimensions(sourceWidth: UInt32, sourceHeight: UInt32) -> (UInt32, UInt32) {
-        if size == .custom {
-            let w = max(1, customWidth), h = max(1, customHeight)
-            return (w, h)
-        }
-
-        let longest = max(sourceWidth, sourceHeight)
-        let limit = size.longestEdge
-        guard limit > 0, longest > limit else { return (sourceWidth, sourceHeight) }
-
-        let scale = Double(limit) / Double(longest)
-        return (max(1, UInt32((Double(sourceWidth) * scale).rounded())),
-                max(1, UInt32((Double(sourceHeight) * scale).rounded())))
-    }
-
-    /// What the engine is asked to cap the longest edge at. Custom dimensions
-    /// are expressed the same way, because the export path resizes by longest
-    /// edge and holding the aspect means the two are equivalent.
-    func longestEdge(sourceWidth: UInt32, sourceHeight: UInt32) -> UInt32 {
-        let (w, h) = dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-        let longest = max(w, h)
-        return longest >= max(sourceWidth, sourceHeight) ? 0 : longest
-    }
-
-    /// Sets one dimension and derives the other from the source's aspect.
-    func setCustom(width: UInt32, sourceWidth: UInt32, sourceHeight: UInt32) {
-        guard sourceWidth > 0, sourceHeight > 0 else { return }
-        customWidth = max(1, width)
-        customHeight = max(1, UInt32((Double(customWidth)
-            * Double(sourceHeight) / Double(sourceWidth)).rounded()))
-    }
-
-    func setCustom(height: UInt32, sourceWidth: UInt32, sourceHeight: UInt32) {
-        guard sourceWidth > 0, sourceHeight > 0 else { return }
-        customHeight = max(1, height)
-        customWidth = max(1, UInt32((Double(customHeight)
-            * Double(sourceWidth) / Double(sourceHeight)).rounded()))
-    }
-
-    func estimatedBytes(sourceWidth: UInt32, sourceHeight: UInt32) -> Int {
-        let (w, h) = dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-        return Int(Double(w) * Double(h) * format.bytesPerPixel(quality: quality))
-    }
-
-    /// The measured size if one has come back, otherwise the estimate. The
-    /// estimate exists only to fill the moment before the first encode lands;
-    /// showing nothing there makes the panel look broken.
-    func sizeText(sourceWidth: UInt32, sourceHeight: UInt32) -> String {
-        let bytes = measuredBytes
-            ?? estimatedBytes(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-        let f = ByteCountFormatter()
-        f.countStyle = .file
-        f.allowedUnits = [.useMB, .useKB]
-        return f.string(fromByteCount: Int64(bytes))
-    }
-}
 
 struct ExportPanel: View {
     @Bindable var settings: ExportSettings
@@ -282,6 +76,27 @@ struct ExportPanel: View {
                 }
             }
 
+            row("Depth") {
+                VStack(alignment: .leading, spacing: 5) {
+                    Picker("", selection: $settings.depth) {
+                        ForEach(ExportSettings.Depth.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    // Greyed out rather than hidden: a control that vanishes
+                    // reads as a bug, and the reason it is unavailable is the
+                    // useful part.
+                    .disabled(!settings.format.carriesDepth)
+
+                    Text(settings.format.carriesDepth
+                         ? settings.depth.note
+                         : "JPEG holds eight bits. Choose PNG or TIFF for more.")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             row("Metadata") {
                 VStack(alignment: .leading, spacing: 5) {
                     Picker("", selection: $settings.metadata) {
@@ -323,6 +138,25 @@ struct ExportPanel: View {
                                 .foregroundStyle(Palette.faint)
                         }
                     }
+                }
+            }
+
+            // Directly under Size, because that is what it corrects: a resize
+            // resamples, resampling softens, and this is the standard answer.
+            row("Sharpening") {
+                VStack(alignment: .leading, spacing: 5) {
+                    Picker("", selection: $settings.sharpening) {
+                        ForEach(ExportSettings.Sharpening.allCases) {
+                            Text($0.title).tag($0)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    Text(settings.sharpening.note)
+                        .font(.system(size: 9))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -375,6 +209,11 @@ struct ExportPanel: View {
         .onChange(of: settings.size) { _, _ in syncFields(); remeasure() }
         .onChange(of: settings.customWidth) { _, _ in remeasure() }
         .onChange(of: settings.space) { _, _ in remeasure() }
+        // Both move the byte count — eight bits is about half the PNG, and
+        // sharpening gives the JPEG encoder more to encode. A size that did not
+        // follow them would be the measurement of a different file.
+        .onChange(of: settings.depth) { _, _ in remeasure() }
+        .onChange(of: settings.sharpening) { _, _ in remeasure() }
     }
 
     /// Re-encodes after a pause. A full JPEG encode of a 24 MP frame is about a
