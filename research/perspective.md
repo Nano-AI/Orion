@@ -270,6 +270,40 @@ sweep varied the other one. The numbers above are the ones a re-run produces.
 `repro/perspective-carries-the-mask.txt` sits at 0.34 now, and its aspect
 section is what fails when the ellipse is reverted.
 
+#### How large the curvature actually is
+
+⚠ **"About a fifth of a keystone's rim error" undersells it, and the number that
+matters is not a fifth of anything.** Measured directly rather than inferred from
+cell counts: the shipping ellipse against the exact answer — carry each frame
+point out to the displayed picture and evaluate the mask the photographer drew —
+over a 600 × 600 grid, feather 0.06, roundness 2:
+
+| Correction | Mask | max ΔCoverage | mean Δ | frame differing by >10⁻³ |
+|---|---|---|---|---|
+| aspect +1.0 | 0.20 round | **0.0000** | 0.00000 | 0.00% |
+| vertical 0.20 | 0.34 × 0.34 | 0.9448 | 0.01609 | 4.89% |
+| vertical 0.45 | 0.34 × 0.22 | 0.9996 | 0.01178 | 2.95% |
+| vertical 0.45 | 0.34 × 0.34 | 1.0000 | 0.02832 | 5.59% |
+| vertical 1.00 | 0.34 × 0.28 | 1.0000 | 0.02615 | 4.16% |
+| vertical 1.00 | 0.34 × 0.34 | **1.0000** | 0.03913 | 5.81% |
+| vertical 1.00 + horizontal 0.60 | 0.34 × 0.34 | 1.0000 | 0.02525 | 3.74% |
+| vertical 1.00 | 0.10 × 0.10 | 0.9947 | 0.00095 | 0.25% |
+
+**The first row is the harness checking itself.** An aspect squeeze is exactly
+linear, so it has no curvature, so an exact derivative must be exactly right —
+and the measurement returns 0.0000, not 10⁻⁶. That is what makes the rest of the
+column believable.
+
+The rim reaches **full coverage difference**: at a keystone of 1.00 there are
+pixels the render covers completely and the interface draws clear. It reads as
+"a fifth off" through `maskcheck` because that instrument counts *cells*, and a
+cell is 1% of the frame at 10 × 10 — most of the disagreement is inside cells the
+overlay already classifies as covered or falloff, where it is not counted.
+
+The last row is the useful consolation: a mask a tenth of the frame wide is
+wrong over **0.25%** of the picture. The error is quadratic in the mask's size,
+as second order requires.
+
 ### The ramp, which the ellipse did not touch
 
 The ellipse rescued the *radial* mask's extent and left the linear gradient's
@@ -285,21 +319,31 @@ The direction was never the problem. H takes lines to lines, so the ramp's
 through the isotropic number.
 
 ⚠ **The size of the error is the interesting part, and it is small.** Measured on
-`_PIC8220`, off-centre angled ramp at 0.6 rad, vertical 0.45 with horizontal
-0.30, on a patch straddling the ramp's edge:
+`_PIC8220`, off-centre angled ramp at 0.6 rad, length 0.20, feather 0.02, over a
+6 × 6 grid of patches across the whole frame, current build against the same
+build with `lengthAlong` reverted to `placed.scale`:
 
-| Correction | Isotropic √\|det J\| | \|J·u\| | Difference |
-|---|---|---|---|
-| aspect squeeze, any g | identical | identical | **none at all** |
-| keystone, V 0.45 + H 0.30 | 0.6753 | 0.6734 | 0.0019 luma |
+| Correction | Patches that move | Worst |
+|---|---|---|
+| aspect squeeze +1.0 | 7 of 36 | **0.0003** luma |
+| keystone, V 0.45 + H 0.30 | 10 of 36 | **0.0018** luma |
 
-The first row is the surprise, and it is the opposite way round from the radial
-case. An aspect squeeze is where √|det J| is *blindest* for an ellipse — det is
-exactly 1 while the picture stretches two to one — but `perspectiveAspect` on its
-own leaves `Placement::jac` the **identity**, so for the ramp both formulas
-multiply by 1 and the frames come out byte-identical. Only a real keystone makes
-the derivative anisotropic, and there the whole term is worth 0.002 luma against
-the **0.1461** the radial first-order error reached.
+The keystone row corroborates the 0.6753 → 0.6734 recorded against decision
+#134. The aspect row **corrects it**.
+
+⚠ **The first version of this section said the aspect squeeze changes "nothing at
+all", because `perspectiveAspect` leaves `Placement::jac` the identity. Both
+halves of that are false.** Printed directly, `Placement::jac` under
+`perspectiveAspect +1.0` is **diag(0.500050, 1.000100)** — constant across the
+frame, because a squeeze is exactly linear, but nowhere near 1 — and the frames
+are not byte-identical either. The claim was written to explain a real
+observation (a ramp fixture built around the squeeze passed with the fix
+reverted) and it explained it wrongly. The observation survives; its reason was
+invented. It had reached five documents before it was checked.
+
+The honest statement is duller: the term is worth **0.0003 to 0.0018 luma**
+wherever it is measured, against the **0.1461** the radial first-order error was
+worth, and that is why the call site is not pinned.
 
 ⚠ **So the call site is not pinned, and that is deliberate rather than
 overlooked.** `lengthAlong` itself has four checks in `tests_mask_geom.cpp` —
@@ -310,15 +354,69 @@ What no check covers is `DevelopMask.cpp` calling it: 0.002 luma flips no cell a
 other than the defect. `repro/perspective-carries-the-mask.txt` §4b carries the
 same warning in the file that would otherwise imply the coverage.
 
-⚠ **The first fixture written for this could not fail.** It was built around the
-aspect squeeze — the case that had rescued the radial mask — it passed, and it
-passed identically with the fix reverted, for the reason the first table row
-gives. That is recorded here because "the case that caught the last bug" is not
-the same as "the case that catches this one".
+⚠ **The first fixture written for this could not fail**, and it was built around
+the aspect squeeze — the case that had rescued the radial mask. It passed with
+the fix reverted. The reason recorded at the time was wrong, and the true reason
+is above: the term is small everywhere, not absent there.
 
-The **non**-uniformity along the ramp remains and cannot be removed the same way:
-a projective map preserves cross-ratios along a line, not ratios, so a linear
-gradient stays linear in the pre-image and not in the picture.
+### And the level sets, which are wrong today
+
+⚠ **Chasing the paragraph above turned up a first-order defect in the shipping
+build, in the same mask kind.** A gradient's *direction* is exact and its
+*length* now goes through |J·u| — and its **level sets are still wrong**, under
+any correction that is not conformal.
+
+`mask_component.slang` kind 1 parameterizes the ramp by two endpoints and
+projects onto the segment between them:
+
+    t = dot(q − zero, d) / dot(d, d),    d = full − zero
+
+so its level sets are the lines **perpendicular to d in frame coordinates**. The
+mask the photographer drew has level sets perpendicular to the ramp in *display*
+coordinates, and a linear map does not preserve perpendicularity. t is a linear
+**functional**, not a vector: it transforms by the inverse transpose, J⁻ᵀ, while
+the endpoints transform by J. For a conformal J — a rotation and a uniform scale
+— the two agree up to a factor, which is every case anybody checks by hand.
+
+Measured against the exact answer, worst coverage difference anywhere in the
+frame, ramp at (0.30, 0.25), 0.6 rad, length 0.20:
+
+| Correction | Shipping (endpoints) | Carried by J⁻ᵀ | Exact |
+|---|---|---|---|
+| aspect +1.0 | **1.0000** | 0.2656 | 0 |
+| aspect −1.0 | **1.0000** | 0.1721 | 0 |
+| keystone V 0.45 + H 0.30 | 0.5825 | 0.2188 | 0 |
+| keystone V 1.00 | 0.9548 | 0.3002 | 0 |
+| neutral | 0.0000 | 0.0000 | 0 |
+
+1.0000 is not a rim softness: it is a pixel the render covers completely and the
+interface draws clear, or the reverse. It is red in the instrument the repository
+already has — `maskcheck 20 -2.0` on the **shipping** build, that ramp under
+`perspectiveAspect 1.0`, reports **3 of 27 clear cells leaked, worst 0.1300
+luma**, and 2 of 287 covered cells that did nothing. `maskcheck 12 -2.0` is red
+too. No scenario in `repro/` runs a *linear* mask under an aspect squeeze, which
+is why it has never been seen.
+
+⚠ **J⁻ᵀ alone is not the fix** — it removes about three quarters and leaves 0.27,
+because the perspective divide makes t a **ratio** of linear forms rather than a
+linear form. That residual is the same non-uniformity noted above: a projective
+map preserves cross-ratios along a line, not ratios.
+
+**The exact answer is closed form and cheaper than the approximation deserves.**
+With M the whole frame → display map as one 3×3 — crop, straighten, quarter
+turns and the homography folded together — and the ramp drawn from z along u in
+display coordinates:
+
+    t(q) = ⟨n, (q, 1)⟩ / ( |u|² · ⟨M₃, (q, 1)⟩ ),    n = uₓ·M₁ + u_y·M₂ − ⟨z, u⟩·M₃
+
+where M₁, M₂, M₃ are M's rows. Six floats, two dot products and one divide,
+against the four floats and one dot product it replaces. Verified against the
+point-by-point exact answer on a 400 × 400 grid over four corrections: worst
+disagreement **2.2 × 10⁻⁶**, which is float rounding.
+
+⚠ It is exact for **every** homography, crop, straighten and quarter turn at
+once, because they compose into M — so it does not merely fix the squeeze, it
+removes the whole class. Costed in `ROADMAP.md`; not built here.
 
 ## The range is a control choice, not a measurement
 

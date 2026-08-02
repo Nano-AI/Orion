@@ -872,19 +872,31 @@ one second-order one:
    cannot go the same way: a projective map preserves cross-ratios along a line
    and not ratios, so the ramp is unevenly spaced however it is scaled.
 
-   ⚠ **Two things measured on the way, both worth more than the fix.**
-   *First*, `perspectiveAspect` on its own leaves `Placement::jac` the identity,
-   so the squeeze — the case where an isotropic scale is blind for a *radial*
-   mask — changes nothing at all here, and the frames come out byte-identical.
-   The first fixture was written around it, passed, and passed just as happily
-   with the fix reverted. *Second*, under a real keystone the fix is worth
-   **0.6753 against 0.6734 luma** on a patch straddling the ramp's edge, against
-   the **0.1461** the radial mask's first-order error was worth. So the call
-   site is **not pinned**: no cell classification can see 0.002 luma, and a
-   golden-value check with that margin would fail for reasons other than the
-   defect. `lengthAlong` itself has four checks in `tests_mask_geom.cpp`; the
-   line that calls it has none, and `repro/perspective-carries-the-mask.txt`
-   §4b says so in the file rather than leaving it to be discovered.
+   ⚠ **CORRECTED 2026-08-02.** What stood here said `perspectiveAspect` on its
+   own leaves `Placement::jac` the identity, so the squeeze changes nothing at
+   all for the ramp and the frames come out byte-identical. Printed directly,
+   that Jacobian is **diag(0.500050, 1.000100)**, and the frames differ: a 6 × 6
+   patch grid moves in **7 of 36** places under the squeeze (worst 0.0003 luma)
+   and **10 of 36** under a keystone (worst 0.0018, corroborating the 0.0019
+   below). The observation it was invented to explain is real — the first
+   fixture was built around the squeeze and passed with the fix reverted — but
+   the reason is duller: the term is small *everywhere*, not absent there.
+
+   Under a keystone the fix is worth **0.6753 against 0.6734 luma** on a patch
+   straddling the ramp's edge, against the **0.1461** the radial mask's
+   first-order error was worth. So the call site is **not pinned**: no cell
+   classification can see 0.002 luma, and a golden-value check with that margin
+   would fail for reasons other than the defect. `lengthAlong` itself has four
+   checks in `tests_mask_geom.cpp`; the line that calls it has none.
+
+   ⚠ **And measuring that paragraph turned up a first-order defect in the same
+   mask kind, in the shipping build.** A gradient's *level sets* go through J⁻ᵀ,
+   because t is a covector, while the kernel's two endpoints go through J — so
+   under any non-conformal correction the ramp is drawn across the wrong lines.
+   `maskcheck 20 -2.0` under `perspectiveAspect 1.0`: **3 of 27 clear cells
+   leaked, worst 0.1300 luma**. It is not in §24's list of leftovers because it
+   is not an unsourced constant; it is a wrong derivation, and
+   `research/perspective.md` now carries the exact closed form.
 2. **The map's curvature**, which no derivative at a point can see. This is
    what still leaks at the rim of a mask larger than about a third of the frame
    under a strong keystone, and it is now the *whole* remaining error there —

@@ -164,15 +164,22 @@ set perspectiveAspect 0
 # the ramp did not move **at all** while the picture stretched two to one under
 # it. `mask::lengthAlong` is the fix and this is what fails without it.
 #
-# ⚠ **Under a keystone, not under the squeeze, and that was measured rather
-# than assumed.** The section above says a squeeze is where an isotropic scale
-# is blind, and it is — for a *radial* mask. For the ramp it changes nothing at
-# all: `perspectiveAspect` on its own leaves `Placement::jac` the identity, so
-# both the old code and the new multiply by 1 and the frames come out
-# byte-identical. The first version of this block was written around the
-# squeeze, passed, and **passed just as happily with the fix reverted**. It is
-# recorded here because a scenario that cannot fail is the defect this file's
-# section 4 is already about.
+# ⚠ **CORRECTED 2026-08-02. The paragraph that stood here was wrong.** It said
+# `perspectiveAspect` on its own leaves `Placement::jac` the identity, so the
+# ramp changes nothing at all under a squeeze and the frames come out
+# byte-identical. Printed directly, that Jacobian is **diag(0.500050,
+# 1.000100)** — constant across the frame, because a squeeze is exactly linear,
+# but nowhere near 1 — and the frames are not byte-identical: a 6 x 6 grid of
+# patches moves in **7 of 36** places under the squeeze, worst 0.0003 luma, and
+# **10 of 36** under the keystone, worst 0.0018, which is the 0.0019 recorded
+# below arriving by a second route.
+#
+# The observation the claim was invented to explain is real — the first version
+# of this block was written around the squeeze and **passed just as happily with
+# the fix reverted**. The reason is duller than the one that was written down:
+# the term is small *everywhere*, not absent there. A wrong explanation attached
+# to a right observation reached five documents before anybody printed the
+# matrix.
 #
 # A keystone's derivative is genuinely anisotropic and varies across the frame,
 # so the ramp is placed off-centre and at an angle: on the axis, through the
@@ -213,6 +220,29 @@ set maskAngle 0
 set perspectiveVertical 0
 set perspectiveHorizontal 0
 set perspectiveAspect 0
+
+# ⚠⚠ **AND A LINEAR MASK UNDER AN ASPECT SQUEEZE IS BROKEN TODAY, WHICH NO
+# SECTION OF THIS FILE RUNS.** Found 2026-08-02 while measuring the paragraph
+# above. It is not the ramp's length and not the map's curvature: it is the
+# ramp's **level sets**. The kernel projects onto the segment between two
+# endpoints, so its level sets are perpendicular to that segment in *frame*
+# coordinates, while the mask the photographer drew has level sets perpendicular
+# to the ramp in *display* coordinates — and a linear map does not preserve
+# perpendicularity. t is a covector; it goes through J⁻ᵀ, and the endpoints go
+# through J. The two agree exactly when J is conformal, which is every case
+# anybody checks by hand.
+#
+# On the **shipping** build, this ramp at `perspectiveAspect 1.0`:
+#
+#   maskcheck 20 -2.0   3 of 27 clear cells leaked, worst 0.1300 luma
+#                       2 of 287 covered cells did nothing
+#   maskcheck 12 -2.0   1 of 100 covered cells did nothing
+#
+# ⚠ **Deliberately not added as a section here, because it would be red**, and a
+# repository whose gate is red teaches everyone to ignore the gate. The recipe
+# above reproduces it in four lines; `research/perspective.md` has the exact
+# closed form that fixes it and `ROADMAP.md` costs it. This comment is the
+# marker, and it comes out when the fix goes in and this becomes section 4c.
 
 # ── 5. All three fields survive a reopen ──────────────────────────────────
 #
