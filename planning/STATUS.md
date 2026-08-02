@@ -184,6 +184,23 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
+### ⚠ In flight — sixth wave, four agents, isolated worktrees, 2026-08-02
+
+The 1000-line rule finished in one pass, plus the checks that cannot fail.
+
+| Working on | Decision | Scope, and the trap named to it |
+|---|---|---|
+| Split `app/Scenario.swift`, 1,596 | #120 | ⚠ **Not ordinary code — an interface.** #89: renaming its verbs collapsed four alias pairs and **fourteen `repro/*.txt` failed at once**, and the app's session log is itself a runnable scenario. Add nothing, rename nothing. Told to diff the **full output** of all 40 scenarios, not the exit codes |
+| Split `app/OrionApp.swift`, 1,557 | #121 | ⚠ Holds four CLI modes that **nothing else exercises** — `orion-tests` and `orion-viewport-tests` never invoke them. Told to run all four and diff their output. Also: `init()`'s ordering is deliberate, a scenario writes its own stills so it precedes `--screenshot` |
+| Split `app/DevelopPanels.swift`, 1,366 | #122 | ⚠ Product UI, so a byte comparison of the canvas is **blind** to the failure mode — a panel that stops appearing, a slider that stops being bound. Told to use `--screenshot`, which renders the whole interface, and to open each tab it touched. And not to add an eighth tool tab (#99: the bar came back reading `PRESE… VERSI…`) |
+| The two remaining checks that cannot fail | #123 | The dither-magnitude check compares **means**, and an ordered dither is zero-mean, so it sees a *biased* dither and not a **40×** one. And `auto_enhance::refine` can be gutted with `converged` green on `_PIC8220` — the frame every brief names — while going red on `_PIC8095`. ⚠ **A check that depends on which photograph you passed is not a check** |
+
+⚠ **Every brief now carries three warnings earned today**: do not pipe a run into
+`tail` and read `$?` (I did that twice, and a caught mutation looked like a
+pass); the M0 gate is noisy and gave a **false positive within an hour** of being
+fixed; and self-check your oracle before trusting it — #117 rendered the same
+scene twice from the *pre-split* build to prove a difference would be real.
+
 ### ✅ 2026-08-02 — `Engine.swift` is eight files, and no pixel moved (#117)
 
 **2,331 lines against a ceiling of 1,000** — the largest violation left once
