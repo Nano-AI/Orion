@@ -656,7 +656,23 @@ void testHighlightFillWiring() {
 
     constexpr std::uint32_t kN = 256;
     constexpr double kCore = 48.0;      // fully blown out to here
-    constexpr double kRim  = 64.0;      // partially clipped out to here
+    constexpr double kRim  = 80.0;      // partially clipped out to here
+    // ⚠ **And then a ring that is bright and wholly unclipped**, which the
+    // fixture did not have before decision #109 and needed. Every ring here is
+    // neutral at the sensor, so the truth about this lamp's color is one number
+    // — the white balance gains, 2 : 1 : 1.5 — and only this ring reads it
+    // undistorted. The partial ring reads 1.00 : 0.61 : 0.92 because its red hit
+    // the ceiling, and piece 2 was handing *that* to the solver as its Dirichlet
+    // condition. A test whose target was the partial ring's own color could not
+    // see the error, because the error was in the target.
+    //
+    // ⚠ And the partial ring is **32 pixels wide**, not 16, so that it straddles
+    // the window fit's 12-pixel reach. Its outer part is close enough to the
+    // clean ring to be recovered from real evidence; its inner part is not, and
+    // is declined. Both halves have to exist in one fixture or two of the
+    // mutations below cannot be seen: a predicate that overwrites the window
+    // fit's own answer needs a pixel the window fit answered.
+    constexpr double kClean = 104.0;
 
     // With black 0, white 4095 and camMul (2.0, 1.0, 1.5), `whiteClipFor` is the
     // lowest of the three post-balance levels, which is green's 1.0. A channel
@@ -665,6 +681,7 @@ void testHighlightFillWiring() {
     //
     //   4095 -> (1.00, 1.00, 1.00)   every channel at the ceiling: Omega^inter
     //   2500 -> (1.00, 0.61, 0.92)   red clipped, green and blue still valid
+    //   1900 -> (0.93, 0.46, 0.70)   nothing clipped, bright: the only evidence
     //    300 -> (0.15, 0.07, 0.11)   dark, warm, and not evidence about a lamp
     orion::raw::BayerImage img;
     img.width = kN;
@@ -681,7 +698,10 @@ void testHighlightFillWiring() {
     for (std::uint32_t y = 0; y < kN; ++y) {
         for (std::uint32_t x = 0; x < kN; ++x) {
             const double d = std::hypot(double(x) - cx, double(y) - cy);
-            const std::uint16_t v = (d < kCore) ? 4095 : (d < kRim ? 2500 : 300);
+            const std::uint16_t v = (d < kCore)     ? 4095
+                                    : (d < kRim)    ? 2500
+                                    : (d < kClean)  ? 1900
+                                                    : 300;
             img.samples[std::size_t(y) * kN + x] = v;
         }
     }
@@ -731,6 +751,8 @@ void testHighlightFillWiring() {
     const std::size_t centre = std::size_t(kN / 2) * kN + kN / 2;
     const std::size_t corner = std::size_t(4) * kN + 4;
     const std::size_t onRim  = std::size_t(kN / 2) * kN + kN / 2 + 56;   // in the annulus
+    const std::size_t onFit  = std::size_t(kN / 2) * kN + kN / 2 + 76;   // annulus, within reach
+    const std::size_t onEvid = std::size_t(kN / 2) * kN + kN / 2 + 92;   // in the clean ring
 
     pipe::Adjustments adj{};
     adj.wb = dev->asShotWhiteBalance();
@@ -743,11 +765,19 @@ void testHighlightFillWiring() {
            std::to_string(fillRan()) + " ran");
 
     reference();
-    double coreOff[2], rimOff[2], cornerOff[2];
+    double coreOff[2], rimOff[2], cornerOff[2], truth[2];
     chroma(centre, coreOff);
     chroma(onRim,  rimOff);
     chroma(corner, cornerOff);
+    // ⚠ The target, and it is measured rather than assumed: the one ring in this
+    // fixture whose every channel is under the ceiling reads the lamp's real
+    // color. Both the core and the partial annulus should end up here.
+    chroma(onEvid, truth);
     const double cornerOffValue = double(ref[corner * 4 + 1]);
+    // The partial ring's green and blue never clipped, so no node in this chain
+    // is entitled to move them. Kept to compare against.
+    const double rimValidOff[2] = {double(ref[onRim * 4 + 1]),
+                                   double(ref[onRim * 4 + 2])};
 
     // ── 2. On is on ──────────────────────────────────────────────────────
     adj.highlightRecovery = 0.8f;
@@ -758,39 +788,138 @@ void testHighlightFillWiring() {
            std::to_string(ranOn) + " fill nodes");
 
     reference();
-    double coreOn[2], cornerOn[2];
+    double coreOn[2], cornerOn[2], rimOn[2];
     chroma(centre, coreOn);
     chroma(corner, cornerOn);
+    chroma(onRim,  rimOn);
 
-    const double offGap = distance(coreOff, rimOff);
-    const double onGap  = distance(coreOn,  rimOff);
+    const double offGap = distance(coreOff, truth);
+    const double onGap  = distance(coreOn,  truth);
+    const double rimOffGap = distance(rimOff, truth);
+    const double rimOnGap  = distance(rimOn,  truth);
 
     std::printf("  core chromaticity  off (%.4f, %.4f)  on (%.4f, %.4f)  "
-                "rim (%.4f, %.4f)\n",
-                coreOff[0], coreOff[1], coreOn[0], coreOn[1], rimOff[0], rimOff[1]);
-    std::printf("  distance from the rim's own color: off %.4f, on %.4f\n",
-                offGap, onGap);
+                "truth (%.4f, %.4f)\n",
+                coreOff[0], coreOff[1], coreOn[0], coreOn[1], truth[0], truth[1]);
+    std::printf("  distance from the lamp's own color — core: off %.4f, on %.4f;"
+                "  partial ring: off %.4f, on %.4f\n",
+                offGap, onGap, rimOffGap, rimOnGap);
 
     // ⚠ The check the feature exists for. The shipping recovery is *on* in the
     // second run too — one control drives both — so what this measures is the
     // fill, since the window fit's count == 3 branch cannot move this pixel and
     // `testHighlightFillGpu` asserts separately that it does not.
     report(offGap > 0.02,
-           "the blown core does not have the rim's color to begin with",
+           "the blown core does not have the lamp's color to begin with",
            "distance " + std::to_string(offGap));
     report(onGap < 0.25 * offGap,
-           "the fill carries the rim's color into the core, through the graph",
+           "the fill carries the lamp's own color into the core, through the graph",
            "off " + std::to_string(offGap) + " -> on " + std::to_string(onGap));
 
     // ⚠ And a tighter one, which exists to hold `hl_mask.slang`'s shoulder rule
-    // in place. Deleting it — `w = blown ? 0 : 1`, letting the dark background
-    // count as evidence about the lamp — leaves the check above passing at
-    // 0.0687 and fails this one, because the background is then averaged into
-    // every coarse texel of the rim and drags the fill 30% further off. That is
-    // the whole failure Masood et al.'s Omega exists to prevent, one node over.
-    report(onGap < 0.06 * offGap,
+    // in place. Deleting it — letting the dark background count as evidence
+    // about the lamp — leaves the check above passing and fails this one,
+    // because the background is then averaged into every coarse texel of the rim
+    // and drags the fill further off. That is the whole failure Masood et al.'s
+    // Omega exists to prevent, one node over.
+    report(onGap < 0.10 * offGap,
            "and the dark background is not treated as evidence about the lamp",
            "ratio " + std::to_string(onGap / offGap));
+
+    // ── 2b. §3.3, and it is a separate claim from the one above ──────────
+    //
+    // ⚠ **The partial ring is the pixel set piece 2 called evidence and
+    // decision #109 does not.** Its red hit the ceiling and nothing in this
+    // fixture can recover it — the window fit needs eight wholly-valid samples
+    // above the shoulder within twelve pixels, the clean ring is sixteen pixels
+    // away at the nearest, and the background is below the shoulder. So it is
+    // declined, it stays at 1.00 : 0.61 : 0.92, and before #109 the solver read
+    // it as the truth about the lamp.
+    //
+    // §3.3 puts it right by scaling this pixel's *own* valid green and blue to
+    // rho's hue rather than replacing them: f*_k = (rho_k/rho_j)*f_j. Two
+    // separate things must therefore hold, and they fail to different mutations
+    // — the core taking rho (above), and this ring taking the ratio.
+    report(rimOffGap > 0.02,
+           "the partial ring does not have the lamp's color either, to begin with",
+           "distance " + std::to_string(rimOffGap));
+    report(rimOnGap < 0.5 * rimOffGap,
+           "§3.3 carries the lamp's color into the partially clipped ring",
+           "off " + std::to_string(rimOffGap) + " -> on " + std::to_string(rimOnGap));
+
+    // ⚠ **And this is the check that says it is a *transfer* and not a
+    // replacement.** Getting the chromaticity right is satisfied just as well by
+    // writing rho straight into the partial ring, which is what the §3.2 branch
+    // does one line up — and that would throw away the green and blue this pixel
+    // actually measured, which are the only detail a blown region has left. The
+    // ratio model exists precisely so those two survive untouched. Bit for bit,
+    // because "close" is what a lerp toward rho would also be.
+    //
+    // ⚠ **Measured across the node itself, in camera RGB, not in the reference
+    // image.** This check was written on `referenceImage()` first and failed on
+    // correct code: that texture is downstream of the camera matrix, which mixes
+    // the channels, so moving red moves Rec.2020's green and blue with it. The
+    // claim "only the clipped channel moved" is a claim about `hl_apply`'s own
+    // space and has to be read there.
+    {
+        const auto st = dev->highlightStages();
+        std::vector<__fp16> before(std::size_t(kN) * kN * 4), after(before.size());
+        st.output->download(before.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, kN);
+        st.filled->download(after.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, kN);
+        report(after[onRim * 4 + 1] == before[onRim * 4 + 1] &&
+                   after[onRim * 4 + 2] == before[onRim * 4 + 2],
+               "and it moves only the clipped channel — green and blue are untouched",
+               "g " + std::to_string(double(before[onRim * 4 + 1])) + " -> " +
+                   std::to_string(double(after[onRim * 4 + 1])) + ", b " +
+                   std::to_string(double(before[onRim * 4 + 2])) + " -> " +
+                   std::to_string(double(after[onRim * 4 + 2])));
+        report(double(after[onRim * 4 + 0]) > double(before[onRim * 4 + 0]),
+               "while the clipped red is lifted off the ceiling",
+               std::to_string(double(before[onRim * 4 + 0])) + " -> " +
+                   std::to_string(double(after[onRim * 4 + 0])));
+
+        // ⚠ **Piece 2's rule, as a check rather than as a comment.** The outer
+        // part of the same ring is within the window fit's reach of the clean
+        // ring, so Masood et al.'s fit answered it from real evidence. This
+        // interpolant must not touch that answer — where both are available the
+        // measurement wins, and "recovered" is what the whole `rec > raw`
+        // predicate exists to detect. Bit for bit, all three channels.
+        //
+        // ⚠ Two mutations pass every other check in this file and fail here:
+        // spelling the predicate as a level test (`c >= limit`, which a lifted
+        // channel still satisfies) and letting the mask call the same pixel a
+        // hole. Both would have shipped against the 16-pixel fixture this test
+        // used before, where the fit recovered nothing at all.
+        // ⚠ Printed, because where the window fit's reach ends is the whole
+        // premise of this feature and it is easier to trust as a profile than
+        // as an argument. Red sits at the ceiling out to 72 px and lifts at 76,
+        // which is the 12-pixel reach measured against a ring starting at 80.
+        std::printf("  radial red after the window fit:");
+        for (int rr = 40; rr <= 100; rr += 4) {
+            std::printf(" %d:%.2f", rr,
+                        double(before[(std::size_t(kN / 2) * kN + kN / 2 + rr) * 4]));
+        }
+        std::printf("\n");
+        report(after[onFit * 4 + 0] == before[onFit * 4 + 0] &&
+                   after[onFit * 4 + 1] == before[onFit * 4 + 1] &&
+                   after[onFit * 4 + 2] == before[onFit * 4 + 2],
+               "a pixel the window fit recovered is left exactly as it left it",
+               std::to_string(double(before[onFit * 4 + 0])) + " -> " +
+                   std::to_string(double(after[onFit * 4 + 0])));
+        report(double(before[onFit * 4 + 0]) > double(st.clip),
+               "and that pixel really was recovered — its red is above the ceiling",
+               std::to_string(double(before[onFit * 4 + 0])) + " vs clip " +
+                   std::to_string(double(st.clip)));
+    }
+    (void)rimValidOff;
+
+    // ⚠ A `kMaxGain` check was written here and deleted rather than shipped.
+    // Its bound is 2x the ceiling and the ratio model in this fixture lands
+    // nowhere near it, so it was green for every value the constant could have
+    // taken, including one wired to nothing — the same defect two of piece 3's
+    // five mutations found. Whether the clamp binds on a real photograph is a
+    // measurement, and it is in `apps/bench` block 3e where a measurement
+    // belongs, not an assertion here where it cannot fail.
 
     // ── 3. And it touches nothing else ───────────────────────────────────
     //

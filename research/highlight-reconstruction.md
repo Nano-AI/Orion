@@ -351,10 +351,172 @@ promises.
 
 ---
 
+## 5c. What was built — piece 4, §3.3, at zero new nodes
+
+`hl_mask.slang` and `hl_apply.slang`, edited. **173 nodes and 7186 MiB, both
+unchanged.** Decision **#109**.
+
+### ⚠ ROADMAP's cost was wrong, and it was wrong in the word "reuse"
+
+The piece table read *"the pyramid can be reused: piece 3's is 30 MiB and its
+shape is a function of the frame, so a second solve is +23 nodes and +30 MiB,
+not another 215"*, and that is what made piece 4 look like the cheaper of the two
+remaining pieces. It does not survive being checked against the shipped code.
+
+**Piece 3's `ρ` carries no information anywhere §3.3 operates.** `hl_mask.slang`
+writes `Ω^∩` as the hole; every pixel outside it and above the shoulder is
+*known*, with `w = 1` and `rgb = f`. So over `Ω^∪ \ Ω^∩` — §3.3's entire domain —
+`ρ ≡ f` exactly. `hl_apply.slang`'s own comment says so in as many words: at a
+pixel the solver treated as known, "`rho == f` and the write is a no-op". §3.3's
+estimate `f*_k = (ρ_k/ρ_j)·f_j` therefore evaluates to `(f_k/f_j)·f_j = f_k`, the
+identity. There is nothing to reuse; §3.3 needs a `ρ` over a **different hole**,
+which is a different mask.
+
+**And pull-push cannot solve §3.3's equation at all.** §3.2 is Laplace with a
+Dirichlet condition, which is what a pull-push interpolant approximates —
+measured at 6.1% of rim span against Gauss-Seidel. §3.3 is **Poisson with a
+source**, `∇²f*_k = ∇·g*_k`. Pull-push has no residual and no relaxation, so
+there is nowhere to put `∇·g*_k`; a real V-cycle is a different chain with a
+relaxation kernel per level. Substituting `f* = r·f_j + u` for `r = ρ_k/ρ_j`
+gives
+
+```
+∇²u = f_j ∇²r + ∇r · ∇f_j
+```
+
+which vanishes only where `r` is constant — and the neglected `∇r·∇f_j` is of the
+size of the detail being transferred. So "reuse the pyramid" was never §3.3; it
+was §3.3's *model* with the integration dropped.
+
+### The measurement that came before the design
+
+Block **3e** of `apps/bench` counts the clip sets on the node's own two sides,
+against the ceiling the node itself was given. Three real frames:
+
+| | `_PIC8220` | `_PIC8095` | `_PIC8148` |
+|---|---|---|---|
+| `Ω^∩` | 112,618 (0.465%) | 54,704 (0.226%) | 17 |
+| `Ω^∪ \ Ω^∩` | 86,894 (0.359%) | 89,415 (0.369%) | 77 |
+| ...returned untouched by the window fit | 59,791 (69%) | 69,701 (78%) | 77 |
+| ...and beyond its 12 px reach | 5,608 | 16,578 | 0 |
+| what §3.3 would move those by, vs clip 1.0 | mean **0.221** | mean **0.141** | — |
+| deepest blown core | 86 px | 61 px | 1 px |
+
+⚠ **The set §3.3 newly serves is 0.023%–0.068% of the frame**, which on its own
+does not buy +23 nodes. The number that changed the answer is the next row:
+
+| | `_PIC8220` | `_PIC8095` |
+|---|---|---|
+| the ring that supplies `ρ` for **every** blown core | 11,901 px | 20,563 px |
+| ...beyond the window fit's reach | 5.6% | 22.7% |
+| ...returned untouched by it | **58%** | **69%** |
+
+The pixels bounding a blown core are the *innermost* ring of the partial-clip
+annulus, and piece 2 handed them to the solver as Dirichlet data while they were
+still clipped. **Every core in the frame was being solved from a rim that was
+itself wrong**, by a mean of 0.14–0.22 of the clip level. That is not a new
+feature, it is a correction, and it does not need any of the +23 nodes.
+
+### What was built
+
+⚠ **Two sets that piece 2 conflated, separated.** Which pixels the fill may
+**write** and which pixels are trustworthy **evidence** are different questions.
+Piece 2's rule about the first is right and is untouched — Masood et al.'s
+per-pixel fit is a measurement, this is an interpolant, and where both exist the
+measurement wins. Nothing about that argument says a *still-clipped* pixel is
+evidence.
+
+- **`hl_mask.slang`** — the hole is now the part of `Ω^∪` the window fit did not
+  recover. "Recovered" is read off the node rather than off a threshold: the
+  kernel takes both sides of `highlights` and a channel is a hole where it
+  arrived clipped and was not lifted, `raw_k ≥ limit ∧ ¬(rec_k > raw_k)`. A level
+  test would need a constant to separate a lifted channel from a blown one, and
+  demosaic ringing round a clipped edge puts pixels either side of any such
+  constant.
+- **`hl_apply.slang`** — where every channel is a hole, `ρ` is written, exactly as
+  piece 3 did. Where some channel never clipped, §3.3's model runs instead:
+  `f*_k = (ρ_k/ρ_j)·f_j`, averaged over every channel that never clipped, so the
+  pixel keeps its own measured green and blue and `ρ` only supplies the hue.
+  Clamped to `[f_k, kMaxGain·clip]`, both bounds `highlights.slang`'s and cited to
+  the same place.
+
+**Cost: no node, no texture, no pyramid level.** `nRgb_` already existed and was
+already live at that point in the graph, so asking for it costs a binding.
+
+### ⚠ It reopens decision #29 by a different route than #106, so it owes a
+### different argument
+
+#106 leans on the maximum principle: `ρ` cannot leave the range of the rim it
+read, so a neutral rim gives a neutral core. **That does not cover this branch.**
+`f*_k = (ρ_k/ρ_j)·f_j` multiplies a rim-derived ratio by the pixel's *own*
+measured channel and can exceed the rim's range in level — which is the point,
+since a recovered highlight should roll off through the display transform rather
+than sit flat.
+
+What is bounded is the **chromaticity**. `ρ` is a convex combination of known
+colors, so `ρ_k/ρ_j` is a ratio the rim actually exhibited; the level comes from
+evidence at that pixel and from nowhere else. A neutral rim gives `ρ_k = ρ_j` and
+hence `f*_k = f_j`, which is neutral — #29's outcome, reached again by evidence
+rather than by decree. And under #29's own clip the domain is *empty* at a
+neutral white balance, because equal gains put `Ω_R = Ω_G = Ω_B`. The clip itself
+is untouched: still pre-demosaic, still before RCD interpolates across it.
+
+### Measured, in the graph
+
+`testHighlightFillWiring`'s fixture gained a bright **wholly unclipped** ring, and
+its partial ring went from 16 px wide to 32 so that it straddles the window fit's
+reach. Both were necessary and neither was cosmetic:
+
+- ⚠ **Without the clean ring the test's target was itself clipped.** Every ring in
+  this fixture is neutral at the sensor, so the truth about the lamp is one
+  number — the white balance gains, 2 : 1 : 1.5 — and the partial ring reads
+  1.00 : 0.61 : 0.92 because its red hit the ceiling. The old test asked whether
+  the core took *the partial ring's* color, which is exactly the error piece 4
+  removes. The error was inside the target.
+- ⚠ **Without the wider ring the window fit recovered nothing at all**, so two
+  mutations that overwrite its answer were invisible.
+
+| Check | Result |
+|---|---|
+| Core distance from the lamp's own color, off → on | 0.5756 → **0.0442** |
+| Partial ring, off → on | 0.0836 → **0.0221** |
+| Green and blue at a §3.3 pixel, across `hl:fill` | **bit-identical** |
+| Red at the same pixel | 1.000 → 1.14, off the ceiling |
+| A pixel the window fit recovered | **bit-identical**, all three channels |
+| Radial red after the window fit | at the ceiling to 72 px, lifts at 76 |
+
+⚠ The "green and blue untouched" check was written against `referenceImage()`
+first and **failed on correct code**: that texture is downstream of the camera
+matrix, which mixes the channels, so moving red moves Rec.2020's green and blue
+with it. The claim is about `hl_apply`'s own space and had to be read there.
+
+### The mutations — and three of the seven found something about the tests
+
+| Mutation | Effect |
+|---|---|
+| `hl_mask`: hole reverts to `Ω^∩` | **3 failures** — §3.3 becomes the identity (0.0836 → 0.0836), and the core's own accuracy degrades because its rim is clipped again |
+| `hl_apply`: write `ρ` into the partial ring instead of the ratio | **2 failures** — green 0.610 → 0.505 and blue 0.916 → 0.757, the measured detail discarded. This is the mutation the chromaticity checks alone cannot see |
+| `hl_mask`: drop the shoulder rule | **1 failure** — the dark background is averaged into every coarse texel of the rim |
+| `hl_apply`: predicate is a level test (`c ≥ limit`) rather than `rec > raw` | ⚠ **750 engine checks green, and the bench red at 13,135 pixels, exit 1.** The fixture's recovered ring is uniform, so `ρ` equals the picture over it and the ratio is the identity whatever predicate is used. A photograph has texture and `ρ` is a quarter-resolution box average of it, so the identity stops holding. The invariant moved to `apps/bench` block 3e for that reason |
+| `hl_apply`: recovered channels count as reference (`!hole_k` for `raw_k < limit`) | ⚠ **Nothing red, and nothing can be.** The two spellings differ only at a pixel where one clipped channel was recovered and another was not, and `highlights.slang` declines *per pixel*: either every clipped channel is lifted, in which case `holes == 0` and §3.3 never runs, or none is. An equivalent mutation, recorded rather than papered over |
+| `hl_apply`: drop the "may only raise it" floor | ⚠ **Nothing red.** The guard is reachable and the fixture does not reach it — the census says it binds on **150** and **645** channels on the two real frames |
+| `hl_apply`: remove the `kMaxGain` ceiling | ⚠ **Nothing red**, and the census says it would cap **0** channels on either frame. Kept rather than deleted, and the difference from `hl_pull.slang`'s deleted weight cap is that that one was *provably* unreachable while this one is only unexercised: the ratio's denominator is `max(ρ_j, 1e-6)` and nothing bounds it below. `UNSOURCED.md` §28 |
+
+### What piece 4 does **not** do
+
+It is §3.3's model without §3.3's Poisson integration, so the recovered channel is
+continuous with the picture only to the extent that `ρ` is. There is no seam by
+construction the way `ρ|∂Ω = f|∂Ω` gives piece 3 one. Unmeasured, and named in
+`UNSOURCED.md` §28 rather than implied away.
+
+---
+
 ## 6. Honest limits
 
-- **§3.3 and §3.4 are not built.** The fill puts a measured hue into a blown
-  core and leaves it flat. Pieces 4 and 5 in `ROADMAP.md`.
+- **§3.4 is not built.** The fill puts a measured hue into a blown core and
+  leaves it flat. Piece 5 in `ROADMAP.md`, and it is now the only visible gap.
+- **§3.3 is built as its model, not as its solve.** The Poisson integration is
+  dropped and replaced by a per-pixel clamp; see §5c and `UNSOURCED.md` §28.
 - **Rouf et al.'s own stated failure case applies to Orion's sample frames.**
   Their assumption is that hue is independent of luminance over Ω<sup>∪</sup>, so
   the rim's hue describes the core. Their §4 shows it violated by sunsets, where
@@ -381,6 +543,15 @@ promises.
 
 ## History
 
+- **2026-08-01** — Piece 4, §3.3, at **zero new nodes and zero new memory**.
+  ⚠ ROADMAP's "+23 nodes and ~30 MiB, reusing the pyramid" was wrong in the word
+  *reuse*: piece 3's `rho` equals `f` over §3.3's entire domain, and pull-push
+  solves Laplace where §3.3 is Poisson. What the census found instead was that
+  the ring supplying `rho` for every blown core was itself still clipped over
+  58%/69% of its length, so this is a correction to piece 3 rather than a new
+  feature. Decision #109. Three of seven mutations found something about the
+  tests: one is red only on a photograph, one is provably equivalent, and two
+  are guards the fixture cannot reach.
 - **2026-08-01** — Pieces 2 and 3. `hl_mask.slang` and `hl_apply.slang`, 24 nodes
   wired between `highlights` and the denoise chain, off by default. Measured that
   the pyramid runs at a quarter resolution before spending ROADMAP's ~516 MB on

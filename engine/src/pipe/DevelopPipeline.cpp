@@ -167,7 +167,11 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
             hlH_[l] = std::max(1u, (hlH_[l - 1] + 1) / 2);
         }
 
-        nHlMask_ = pipeline_.add({"hl:mask", "hlMask", {nHighlights_},
+        // Both sides of `highlights`, because "did the window fit recover this
+        // channel" is `rec > raw` and cannot be read off either texture alone.
+        // Decision #109; no node and no texture is added by asking — `nRgb_`
+        // already exists and is already live at this point in the graph.
+        nHlMask_ = pipeline_.add({"hl:mask", "hlMask", {nHighlights_, nRgb_},
                                   PixelFormat::RGBA16Float, {}, {},
                                   true, hlW_[0], hlH_[0]});
         nHlPull_[0] = nHlMask_;
@@ -190,7 +194,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         // through and the chain at strength zero costs its textures and none of
         // its time.
         nHlFill_ = pipeline_.add({"hl:fill", "hlApply",
-                                  {nHighlights_, nHlPush_[0]},
+                                  {nHighlights_, nHlPush_[0], nRgb_},
                                   PixelFormat::RGBA16Float, {}});
     }
 
@@ -873,6 +877,16 @@ float DevelopPipeline::whiteClipFor(const float multipliers[3]) const noexcept {
     return std::max(clip, 1e-3f);
 }
 
+DevelopPipeline::HighlightStages DevelopPipeline::highlightStages() const {
+    HighlightStages s;
+    s.input  = &pipeline_.nodeOutput(nRgb_);
+    s.output = &pipeline_.nodeOutput(nHighlights_);
+    s.filled = &pipeline_.nodeOutput(nHlFill_);
+    s.clip   = lastWhiteClip_;
+    s.gamma  = hlfill::kClipGamma;
+    return s;
+}
+
 void DevelopPipeline::setBrushStroke(int component, const float* xy,
                                     const float* erase, int count) {
     // Ignored rather than clamped: a stroke written into the wrong component
@@ -1252,6 +1266,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         const float gains[3] = {lin.whiteBalance[0], lin.whiteBalance[1],
                                 lin.whiteBalance[2]};
         lin.whiteClip = whiteClipFor(gains);
+        lastWhiteClip_ = lin.whiteClip;
         pipeline_.setParams(nLinearize_, &lin, sizeof lin);
     }
 
