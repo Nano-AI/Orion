@@ -19,6 +19,7 @@ add_executable(orion-tests
     tests_mask_range.cpp
     tests_mask_matte.cpp
     tests_grain.cpp
+    tests_vignette.cpp
     tests_pipeline.cpp
 )
 

@@ -36,7 +36,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Tone curve (parametric + point, per-channel) | M2 | |
 | HSL / color mixer (8 hue bands) | M2 | |
 | Color grading wheels (ASC CDL slope/offset/power) | M3 | |
-| Split toning | M3 | |
+| Split toning | **cut** | ❌ **Refused 2026-08-01, decision #97.** It is the grading wheels with fewer controls, and Adobe retired the panel it copies in Oct 2020 in favour of exactly what Orion already ships. Its one real remainder — **Balance**, a signed EV offset on the three zone centres — is costed in `ROADMAP.md` and belongs on the grading panel |
 
 ## 4. Color Science
 | Feature | Status | Notes |
@@ -92,7 +92,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 ## 10. Effects
 | Feature | Status | Notes |
 |---|---|---|
-| Vignette | M3 | |
+| Vignette (creative, post-crop) | M3 | ✅ **Built 2026-08-01**, `research/vignette.md`, decision #96. cos⁴ natural falloff *(Reiss 1945; Kingslake 1992)* as an exposure change in scene-linear light, centred on the crop. ⚠ Not the lens vignette **correction** in §6 — that removes a measured falloff, this adds one, and a photograph can carry both |
 | Film grain | M4 | |
 
 ## 11. Presets & Batch

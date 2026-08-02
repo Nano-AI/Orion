@@ -247,6 +247,18 @@ final class Engine {
     var grainAmount: Float = 0     { didSet { pushAndRender() } }
     var grainSize: Float = 1.5     { didSet { pushAndRender() } }
 
+    /// The **creative** vignette. `research/vignette.md`, decision #96.
+    ///
+    /// ⚠ Not `lensVignette`, which removes a falloff the lens measured. This
+    /// one adds one, centred on the crop rather than on the frame, and a
+    /// photograph can carry both without either touching the other.
+    ///
+    /// Amount is the exposure change at the corner of the composition, in
+    /// stops; Field angle is the half-diagonal field angle of the lens whose
+    /// natural cos⁴ falloff it imitates.
+    var vignetteAmount: Float = 0        { didSet { pushAndRender() } }
+    var vignetteFieldAngle: Float = 45   { didSet { pushAndRender() } }
+
     // ── Local adjustments: the mask group (M4) ────────────────────────────
     //
     // A mask is a *list* of components folded left in listed order
@@ -1654,6 +1666,7 @@ final class Engine {
             layers: layers,
             fusion: fusion, dehaze: dehaze, clarity: clarity,
             grainAmount: grainAmount, grainSize: grainSize,
+            vignetteAmount: vignetteAmount, vignetteFieldAngle: vignetteFieldAngle,
             sharpenAmount: sharpenAmount, sharpenRadius: sharpenRadius,
             sharpenMasking: sharpenMasking, curve: curve,
             hueShift: hueShift, satShift: satShift, lumShift: lumShift)
@@ -1684,6 +1697,8 @@ final class Engine {
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         lutStrength = s.lutStrength
         grainAmount = s.grainAmount; grainSize = s.grainSize
+        vignetteAmount = s.vignetteAmount
+        vignetteFieldAngle = s.vignetteFieldAngle
         // The whole group at once, then every stroke re-sent — the engine keeps
         // strokes outside the adjustment block, so assigning the list alone
         // would restore the geometry and leave the previous photo's paint in the
@@ -1956,6 +1971,8 @@ final class Engine {
         a.denoise_luma = denoiseLuma; a.denoise_color = denoiseColor
         a.lut_strength = lutStrength
         a.grain_amount = grainAmount; a.grain_size = grainSize
+        a.vignette_amount = vignetteAmount
+        a.vignette_field_angle = vignetteFieldAngle
 
         // The mask group. An empty list is a count of zero — not one live
         // component that happens to cover nothing.

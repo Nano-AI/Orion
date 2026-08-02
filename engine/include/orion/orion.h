@@ -199,6 +199,24 @@ typedef struct OrionAdjustments {
     float grade_midtone[3];
     float grade_highlight[3];
 
+    /* The CREATIVE vignette -- research/vignette.md, decision #96.
+     *
+     * Not lens_vignette above. That one divides out a falloff a lens measured;
+     * this one puts one in on purpose, after the grade, centred on the CROP
+     * rather than on the frame. A photograph can carry both and they never read
+     * each other.
+     *
+     * vignette_amount is the exposure change at the corner of the composition
+     * in STOPS -- negative darkens, which is the usual direction. Zero is not
+     * merely a silent vignette: it skips the falloff and, with the grading
+     * wheels centred, disables the node.
+     *
+     * vignette_field_angle is the half-diagonal field angle in DEGREES of the
+     * lens whose natural cos^4 falloff is being imitated -- wide reaches well
+     * into the frame, narrow stays in the extreme corners. */
+    float vignette_amount;       /* -3..3, stops at the corner */
+    float vignette_field_angle;  /* 10..70 degrees             */
+
     /* Profiled wavelet denoise. Strengths are multiples of the measured noise
      * level, not arbitrary amounts, so one setting behaves the same way on a
      * clean frame and a very noisy one. Zero switches the chain off entirely. */

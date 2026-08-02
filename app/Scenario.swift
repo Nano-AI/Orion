@@ -1134,6 +1134,8 @@ enum Scenario {
         case "perspectiveVertical":   return e.perspectiveVertical
         case "perspectiveHorizontal": return e.perspectiveHorizontal
         case "perspectiveAspect":     return e.perspectiveAspect
+        case "vignetteAmount":     return e.vignetteAmount
+        case "vignetteFieldAngle": return e.vignetteFieldAngle
         default:               return nil
         }
     }
@@ -1157,6 +1159,8 @@ enum Scenario {
         case "perspectiveVertical":   e.perspectiveVertical = value
         case "perspectiveHorizontal": e.perspectiveHorizontal = value
         case "perspectiveAspect":     e.perspectiveAspect = value
+        case "vignetteAmount":     e.vignetteAmount = value
+        case "vignetteFieldAngle": e.vignetteFieldAngle = value
         case "fusion", "lift": e.fusion = value
         case "localExposure": e.localExposureEv = value
         case "localContrast": e.localContrast = value

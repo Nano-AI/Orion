@@ -6,6 +6,8 @@
 
 **Last updated:** 2026-08-01 (**M3's last item renamed and solved; the brush bench was measuring itself — #96, #97, #98**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
+**Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
+items are now closed, one built and one refused (#96, #97). **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
@@ -31,7 +33,8 @@ table is immediately below). A stale kickoff prompt naming those four has now
 arrived **36 times**; the answer each time is that they exist, and each of the
 four now also has something that fails when its *wiring* breaks.
 
-**Next story:** the queue, in order, each with a cost:
+**Next story:** the queue, in order, each with a cost. ⚠ This list had grown two
+overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
 
 1. ~~**Dehaze's drag cost**~~ — ✅ **done 2026-08-01, decision #92.** The cause
    was `DevelopPipeline.cpp:1325`: the dehaze chain's parameter blocks were
@@ -81,7 +84,22 @@ four now also has something that fails when its *wiring* breaks.
 4. **Snapshots / versions** — the last unbuilt line of M4 now that perspective
    has shipped. Unestimated.
 5. **Americanising the persisted keys**, if wanted — a schema migration with
+1. **Incremental brush accumulation.** ⚠ *Located*, not guessed: the host-side
+   O(N) is gone and the slope did not change, so the residual is the **GPU dab
+   loop**. Costed in `ROADMAP.md`. ~1-2 sessions.
+2. **The grading panel's Balance** — the one thing split toning has that the
+   wheels do not (#97). A signed EV offset on the three zone centres: ~5 lines
+   in `color_grade.slang` plus one float through the usual twenty files.
+   ~half a session.
+3. **Americanising the persisted keys**, if wanted — a schema migration with
    dual reads, not a rename. ~1 session, needs sign-off (#89).
+4. `DevelopPipeline.cpp` is **2,418 lines** against a stated ceiling of 1,000,
+   and it grew again this session. Splitting product code wants its own session.
+
+Closed since this list was last written, in the order they went:
+**dehaze's drag cost** (#92), the **`reopen` leak** (#90), **M1's library gap**
+(#91), the **export panel** (#93-#95), and now the **creative vignette** (#96)
+with **split toning refused** (#97).
 
 ✅ **M1's library gap is closed** — SQLite index and persistent thumbnail cache,
 2026-08-01, decision #91. 300 frames with the page cache warm: **454–688 ms cold
@@ -118,6 +136,10 @@ it wants sign-off rather than an agent.
 ⚠ **M5 is not in flight and will not be finished by iterating**: X-Trans
 (Markesteijn), a Windows port, Core ML denoise and user-loadable DCP profiles
 are multi-week epics each.
+the performance action item is in `ROADMAP.md`. `research/masking.md` is
+**finished**; its leftovers are the fill leaking through smooth ground and the
+per-layer decomposition beyond stage 2. The largest standing violation of a
+stated hard constraint is `DevelopPipeline.cpp`, now **2,418 lines**.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
@@ -125,6 +147,9 @@ below is either cosmetic, named-and-costed, or needs the developer.
 **Suites:** `orion-tests` **586 checks** · `orion-viewport-tests` **3561
 checks** · **34 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
 three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
+**Suites:** `orion-tests` **626 checks** · `orion-viewport-tests` **3561
+checks** · **35 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+three sample frames: **149 nodes, 6971 MiB**, M0 gate **8.70–9.22 ms p95** —
 plus a preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth
 gate: it opens a folder cold, warm and indexless in one process and fails when
 the warm pass did not hit, or when any of the three disagree about a field.
@@ -159,6 +184,8 @@ a regression, and every red it produced tonight was environmental.
 **Until that is fixed, treat the gate as advisory**: on a red, re-run and report
 the spread. The load-immune checks are the ones to trust — node counts, which
 `exposure drag, lens on` and `dehaze drag` both assert by name.
+⚠ This block had **three** copies of itself carrying three different numbers.
+One copy, measured this session.
 
 ⚠ **That p95 is only meaningful next to one taken minutes away from it.** The
 same binary measured 8.97, 16.75, 44.53 and 40.69 ms on this machine within an
@@ -177,6 +204,13 @@ wall-clock assertion in the bench.
 
 hour, tracking GUI load rather than anything in the graph. Compare paired runs or
 do not compare.
+⚠ It happened again on 2026-08-01e and the cause was named this time. Eleven
+runs of **one binary**: 8.83, 8.92, 8.97, 9.00, 9.00, 9.22, 11.06, 16.86, 20.91,
+21.47, **30.42** — a 3.4× spread with `CoreSpotlight` at 99% CPU indexing the
+sample folder. It settled to 8.7–9.2 once the indexer finished, and the gate
+measures the *exposure* path, which that session did not touch: 3 nodes and 149
+nodes / 6971 MiB either way. **Do not chase this number on a busy machine.**
+
 ### Known gaps, carried forward
 
 Small, named, and none of them blocking the next story:
@@ -190,6 +224,7 @@ Small, named, and none of them blocking the next story:
 | **The 1000-line rule is broken six ways**, all in product code. ⚠ Recounted 2026-08-01, every figure carried here was stale: `DevelopPipeline.cpp` **2,317**, `Engine.swift` 2,118, `OrionApp.swift` **1,445**, `bench/main.cpp` **1,623**, `DevelopPanels.swift` **1,152**, `Scenario.swift` **1,250**. The bench grew ~200 lines on 2026-08-01 profiling the brush on both graphs, which is the largest single jump on this list and is tooling rather than product. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 2,118, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` **1,336**, `Scenario.swift` **1,250**. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **The 1000-line rule is broken six ways**, all in product code. Recounted 2026-08-01: `DevelopPipeline.cpp` **2,382**, `Engine.swift` **2,163**, `bench/main.cpp` **1,506**, `OrionApp.swift` **1,461**, `Scenario.swift` **1,256**, `DevelopPanels.swift` **1,152** — every one of the six grew again, and four of the six figures carried here were stale. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code, recounted 2026-08-01: `DevelopPipeline.cpp` **2,418**, `Engine.swift` 2,135, `bench/main.cpp` **1,510**, `OrionApp.swift` 1,445, `Scenario.swift` 1,254, `DevelopPanels.swift` 1,168. ⚠ Every one of the six was stale in this table by 20–200 lines; `bench/main.cpp` had grown 197. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
 | **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
@@ -243,6 +278,13 @@ The six most recent sessions are below. **Everything older lives in
 [`HISTORY.md`](HISTORY.md)** — 61 sessions now, moved there verbatim on
 2026-07-31 in two passes and again on 2026-08-01, which is what keeps this file
 readable.
+[`HISTORY.md`](HISTORY.md)** — 61 sessions now, moved there verbatim.
+
+⚠ Pruned again on 2026-08-01: `2026-07-31k`, `2026-07-31l`, `2026-08-01a` and
+`2026-08-01b` moved to `HISTORY.md`, and a **duplicate copy of `2026-07-31j`**
+deleted — the previous prune had copied it across and left the original here.
+The header block and the "next story" queue had each grown two or three copies
+of themselves as well, carrying different numbers; they are one each again.
 
 ⚠ This file had grown to **4,643 lines across 56 sessions**, which broke the one
 job it has. `CLAUDE.md` calls it the recovery point and says to read it first on
@@ -259,7 +301,7 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
 
-## Session 2026-08-01j — M3's last item was misnamed, and the name was the blocker
+## Session 2026-08-01k — M3's last item was misnamed, and the name was the blocker
 
 **Story:** "segmentation-based highlight reconstruction", the last unbuilt M3
 line. Decisions **#96** and **#97**; `research/highlight-reconstruction.md`.
@@ -347,7 +389,7 @@ source you claim to have read. Decision #97.
 595 engine checks (+9), 3561 viewport, 34 `repro/` scenarios, bench exit 0,
 M0 gate 8.92 ms p95.
 
-## Session 2026-08-01i — the brush bench measured a stroke nobody makes
+## Session 2026-08-01j — the brush bench measured a stroke nobody makes
 
 **Reported: painting is linear in accumulated dabs (0.2 ms an event at 49, 1.5
 at 490) and two hypotheses had failed to explain it** — the host-side O(N) was
@@ -431,7 +473,7 @@ meaningful once there is a fast path to count.
 
 **Suites:** 586 · 3561 · 34 scenarios · bench exit 0.
 
-## Session 2026-08-01h — perspective correction, as a matrix and not a node
+## Session 2026-08-01i — perspective correction, as a matrix and not a node
 
 M4's last geometry item. Decision #100, `research/perspective.md`.
 
@@ -572,6 +614,138 @@ frames in every run.
 two overlapping queues both numbered 4/5, and three `Suites:` paragraphs, one two
 sessions stale. Four sessions had each edited the top without reading it. Removed,
 and five more sessions moved to `HISTORY.md`.
+
+## Session 2026-08-01h — the creative vignette, and a split-toning panel refused
+
+M3's roadmap line had two items beside the grading wheels that were never built.
+One is built. The other is refused, in writing, with the argument in
+`DECISIONS.md` where it can be argued back.
+
+### ⚠ Split toning is the wheels with fewer controls, and Adobe retired it
+
+Decision #97. Split toning is a hue and saturation for shadows, the same for
+highlights, and a Balance. Two of Orion's three wheels **are** those two tints,
+each already carrying a luminance track split toning never had, and the third
+grades the midtones, which split toning cannot reach at all.
+
+And this is checkable rather than an opinion: **Camera Raw 13.0 / Lightroom
+Classic 10.0, October 2020, deleted the Split Toning panel** and shipped Color
+Grading — three wheels, hue/saturation/luminance each — in its place, documenting
+the new Blending slider at 100 as giving "the same effect as the pre-existing
+Split Toning feature". Building it here would mean adding the control the
+reference implementation retired six years ago, beside the control they retired
+it in favour of, which Orion already ships.
+
+⚠ **One thing it has that the wheels do not, and it is named rather than waved
+away: Balance.** The zones are Gaussians fixed at −2.5 / 0 / +2.5 EV; nothing
+moves them. That is ~5 lines in `color_grade.slang` and one float through the
+usual twenty files, it belongs on the grading panel, and it is item 2 of the
+queue rather than smuggled into this session.
+
+### The vignette: cos⁴, in stops, in scene-linear light, on the crop
+
+Decision #96, `research/vignette.md`. `V(r) = 1/(1 + (r·T)²)²` — the cos⁴ law of
+illumination (Reiss, *JOSA* 35(4), 1945; Kingslake, *Optics in Photography*,
+1992) written through `cos² = 1/(1+tan²)` so the kernel has no trigonometry in
+it. Normalized so that **Amount is the exposure change at the corner in stops**
+and **Field angle is only the shape** — the half-diagonal angle of view of the
+lens being imitated.
+
+Both controls are physical quantities. Nothing here is a 0–100 strength.
+
+Refused, each with a reason: **Roundness** (a lens's iso-illuminance contours are
+circles about the optical axis, and a non-circular darkening is a radial mask,
+which Orion has), **Feather** (the curve is the feather; the field angle moves
+it), and Adobe's **three styles** (they exist to rescue highlights from a
+display-referred blend — this is a multiply in scene-linear light before AgX, so
+a bright corner rolls off instead of clipping).
+
+### ⚠ It is not the lens correction, and that is asserted in both directions
+
+`LensDatabase` already carries a vignetting *correction*, from lensfun's measured
+polynomial, applied before the demosaic. This is its opposite. `testCreativeVignetteGpu`
+asserts the creative control does not switch the `lens` node on **and** that the
+lens control does not switch this one on, because the mistake looks roughly right
+on screen and would run before the crop, before the demosaic, and would fight a
+profile the day one loaded.
+
+The mutation that wires the creative amount into `lens.vignetteA` fails that
+check and the crop-symmetry check.
+
+### ⚠ Post-crop, without the kernel ever learning about the crop
+
+`geometry` crops last, so everything upstream renders the whole frame.
+`DevelopPipeline::compositionCircle` hands the shader three numbers: the
+rectangle's centre normalized in the unrotated frame, and its half-diagonal in
+units of the frame's height.
+
+**Only a circle, and that is the whole trick.** A rotation cannot change a
+length, so the straighten and the quarter turns move the centre and leave the
+radius alone — no second copy of `geometry.slang`'s inverse map, which is what
+#70 is about. It also comes out resolution-independent, so the 1/16 preview
+places the vignette identically without knowing it is smaller.
+
+⚠ The half-pixel in `geometry.slang` — it rotates in *index* space against a
+pivot given in continuous coordinates — is **mirrored rather than corrected**,
+and the test asserts 0.751 rather than 0.750 because of it. A circle that agreed
+with hand arithmetic and disagreed with the kernel would be the worse of the two.
+
+### Fused, not a node
+
+Into `color_grade.slang`, which is pointwise, adjacent and wants the same light.
+Its own node would be a ~194 MB round trip at 24 MP for six lines of arithmetic —
+the trade the creative LUT already lost inside `develop_display.slang`. The node
+is renamed `grade + vignette` because it now does both.
+
+At Amount 0 it disables to nothing: **149 nodes, 6971 MiB, M0 gate 8.97 ms p95,
+exposure drag 3 nodes** — all exactly what they were before. The mutation that
+leaves it always on takes the drag to **4 nodes and 12.81 ms**, which is grain's
+#82 regression again, and fails 4 checks.
+
+### The checks, and the six mutations that were actually run
+
+**+40 engine checks** in `tests_vignette.cpp` (626 total), plus
+`repro/vignette-follows-the-crop.txt` and a bench probe.
+
+| Mutation | Fails |
+|---|---|
+| `compositionCircle` returns the frame's centre and full radius | **9** engine checks, and `cropMiddleOn == cropMiddleOff` in the scenario |
+| `vignetteFalloff` drops the `1 − cos⁴(θmax)` normalization | 1 — "the corner is worth the same at 20 degrees and at 65" |
+| `vignetteRadius` drops the aspect term | 2 — the edge-midpoint check and the same corner check |
+| the creative amount wired into `lens.vignetteA` | 2 — "does not switch the lens correction on", and crop symmetry |
+| the node never disables (`vignetting = true`) | 4, and the exposure drag goes 3 → 4 nodes |
+| the params pushed from `lastAdj_` instead of `adj` | 6 |
+| the quarter-turn `switch` cases transposed | 2 |
+
+⚠ **Two of those came back green on the first attempt and both were the test's
+fault.** Dropping the aspect term leaves the falloff an *ellipse* — still centred,
+still four equal corners, still monotone — so every symmetry check passed; it
+needed a check on the **edge midpoints**, which on a 4:3 frame sit at r = 0.8 and
+r = 0.6 and must therefore differ. And the lens-wiring mutation was invisible
+because §5 of the test re-applied the *same* amount from a fresh struct: `apply`
+compares field by field and only re-evaluates a node's enable when something in
+its own list moved (#92), so the graph never changed and the check could not see
+anything. Every state in that section is now reached by *changing* the field that
+owns it.
+
+### The probe's floor, and why its three frames disagree
+
+`vignette -2 EV`, on mean luma, floored at **0.35** — half the smallest of 0.79,
+1.05 and 0.70 measured against the exposure reference on the three sample frames.
+
+⚠ That spread is much wider than grain's, which agree to a percent, and the
+reason is written into the probe rather than averaged away: grain's amplitude is
+defined in *display* units, so it is the same wherever the scene sits; this one
+is in stops of *scene-linear* light, and what two stops down is worth on screen
+depends on where the corner started on AgX's curve.
+
+### Also done, because the file demanded it
+
+`STATUS.md` had **three** copies of its Suites block with three different
+numbers, two overlapping copies of the "next story" queue, two Last-updated
+headers, and a duplicate of session `2026-07-31j` that the previous prune had
+copied rather than moved. All six file sizes in the 1000-line gap row were stale
+by 20–200 lines. Recounted and de-duplicated.
 
 ## Session 2026-08-01g — the reopen leak was the folder, not the photograph
 
@@ -740,88 +914,3 @@ correct only as long as #79's immutability holds — a future in-place matte
 rewrite would have to revisit this), and there is no compare-two-versions view.
 
 ---
-
-## Session 2026-08-01e — the folder index, and the two stamps it needs
-
-M1's `Epic: Cull` has named a SQLite index since the first week and nothing had
-ever been built. Every folder open re-opened every raw through LibRaw,
-re-extracted every embedded preview and re-read every XMP sidecar. Decision #91.
-
-**Paired, 300 frames, page cache pulled through first so the two differ by what
-the index does and not by what the disk did:**
-
-| Pass | Time | |
-|---|---|---|
-| cold — a database that has never seen the folder | **454–688 ms** | five runs |
-| warm — the same database, seconds later | **28–54 ms** | **12.9–17.2×** |
-| indexless — no database at all | **428–719 ms** | lands on cold, so the win is the index |
-
-⚠ Absolute numbers on this machine are worthless alone; all three come from one
-process, back to back, and the indexless pass is the control.
-
-### ⚠ One stamp is the obvious design and it is wrong
-
-The danger was never a miss. It is a **hit that is wrong** — a rating nobody set,
-a thumbnail of a photograph that has since been replaced — because that looks
-perfectly correct on screen.
-
-**Rating a photograph does not touch the raw.** An index keyed on the raw's
-`(mtime, size)` would therefore report the first rating it ever read, forever. So
-each row carries **two** stamps and each half is validated against its own file:
-the raw's for the dimensions, the camera and the thumbnail, the sidecar's for the
-rating, the reject flag and the label. The mutation that collapses them to one
-fails four checks.
-
-And the mtime is whole **nanoseconds** from one `fstatat`, never a `Date`:
-pressing 4 on a photograph rated 3 rewrites the sidecar to **the same length in
-the same second**. The mutation that stores seconds fails two.
-
-The thumbnail hangs off the raw and deliberately *not* the sidecar — it is the
-camera's embedded preview, which no develop setting has ever affected. Keying it
-to the sidecar too would throw away a good thumbnail on every star press.
-
-### ⚠ Nothing is filed that was not read back off disk
-
-`refreshMarks` stats, reads, and stats again, and files nothing when the two
-disagree — so the contents of an old file can never be filed under the identity
-of a new one. `Library.persist` calls it *after* the write rather than filing
-what it holds in memory, because a merge onto a read-only card would otherwise
-leave a rating in the index that is in no sidecar at all.
-
-That race is unobservable from outside, so there is a seam — `marksReadWindow` —
-purely so the check exists. An unobservable guard is one nobody can tell has
-stopped working.
-
-### ⚠ The probe's first draft could not fail, and it was written to catch that
-
-Nothing in `orion-viewport-tests` can see whether `Library` calls the index at
-all; the suite would stay green on a product that never consulted it. So
-`Orion --library-open <folder>` drives the real `Library.open`.
-
-Its first draft asserted **`misses == 0`**. A `Library` that never touches the
-index satisfies that perfectly — zero attempts, zero misses, six green lines and
-a four-times-slower open. Confirmed by actually removing the wiring: it passed.
-It asserts **hits**, count for count, now, and the same mutation fails 2.
-
-The third pass is indexless, and asserts field-for-field agreement with cold.
-That is decision #9 as an executable check: delete the index and Orion behaves
-identically, only slower.
-
-### The tests, and what each one bites
-
-Ten cases in `ViewportTests+Index.swift`, **85 checks**. Twelve mutations were
-run against them; eleven fail, listed beside the test they fail. The surviving
-one is written down rather than left implied: widening the
-corrupt-code list from `SQLITE_CORRUPT`/`SQLITE_NOTADB` to every error code
-passes everything, because simulating a `SQLITE_BUSY` from a second Orion needs
-a second process. Costed in `ROADMAP.md`.
-
-The corrupt-database case checks the thing that would be unforgivable: after
-junk in the file, the photograph, its sidecar **and its matte** are all still
-there, and the sidecar still says what it said. The mutation that points the
-discard at the folder instead of the `.sqlite3` file fails 8.
-
-### Not a dependency
-
-`import SQLite3` from the macOS SDK. It is already on every Mac, it is public
-domain, and the alternative was a package for something the platform ships.

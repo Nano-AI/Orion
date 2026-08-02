@@ -133,6 +133,8 @@ struct Preset: Codable, Identifiable, Equatable {
             out.lutStrength = state.lutStrength
             out.grainAmount = state.grainAmount
             out.grainSize = state.grainSize
+            out.vignetteAmount = state.vignetteAmount
+            out.vignetteFieldAngle = state.vignetteFieldAngle
         }
 
         // ⚠ Never copied, under any group. See the note on PresetGroup: the

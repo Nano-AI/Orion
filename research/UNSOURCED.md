@@ -868,3 +868,54 @@ rewrites `radiusToFrame`, whose current derivation is load-bearing for every
 quarter turn (decision #83) and pinned by `repro/mask-alignment.txt`, and
 because the failure it would fix is at a mask's rim while the failure the
 geometry fixes is a mask in the wrong place.
+## §25 — The creative vignette's controls, though not its curve
+
+**Where:** `ops/vignette_ops.slang`, `DevelopPipeline::compositionCircle`,
+`AdjustmentCatalogue`. Full entry in [`vignette.md`](vignette.md).
+
+**Sourced:** the falloff itself. cos⁴ is Reiss, *JOSA* 35(4), 283–288 (1945),
+restated in Kingslake, *Optics in Photography* (SPIE 1992) p. 121, and the
+kernel evaluates its closed form. The post-crop *placement* is documented in
+Adobe's own description of the control it copies.
+
+**Not sourced**, four things, in order of how much they cost:
+
+1. **Normalizing the curve so that Amount is the value at the corner.** The
+   published law says how illuminance falls with field angle; it says nothing
+   about which point on the curve a photographer's slider should name. Dividing
+   by `1 − cos⁴(θmax)` is my choice, made so that Amount and Field angle are
+   independent — without it, changing the shape changes the strength and neither
+   control means anything alone. **Tested as an invariant rather than as a
+   constant**: `testCreativeVignetteGpu` asserts the corner is worth the same at
+   20° and at 65°, so a better parametrization can replace this without a test
+   being rewritten.
+
+2. **Reading the second control as a field angle at all.** cos⁴ is a law about a
+   lens, and this vignette is not attached to one. The frame's real half-diagonal
+   field angle is knowable from EXIF and is deliberately ignored — a creative
+   vignette that could only ever be as wide as the taking lens would be a
+   correction, not a look. So "field angle" here is a shape parameter wearing an
+   optical name, which is honest about the curve and slightly dishonest about the
+   lens. Said here rather than only in the panel.
+
+3. **The ranges and the default**: ±3 EV, 10–70°, 45° at rest. Nothing published
+   says a creative vignette should stop at three stops. ±3 is where a corner on
+   the sample frames stops carrying any texture; 45° is roughly a 21 mm lens,
+   chosen because it is the shape most photographs are given. All three are
+   taste and none of them changes what a control *means*.
+
+4. **The block sizes and tolerances in the tests** — 8-pixel corner blocks, a
+   2-step spread allowance, a 5-step separation between the two edge midpoints.
+   Calibrated on the fixture, not derived. The mutations they catch are listed
+   beside them, which is the argument that they are the right order of magnitude.
+
+**Cost:** low, and bounded. Amount is in stops of scene-linear light, which is a
+physical quantity a photographer can predict, and the *shape* between axis and
+corner is the published law. What is invented is which slider position maps to
+which point on a curve that is itself sourced.
+
+**To fix:** nothing here needs fixing so much as it needs someone to disagree
+with it. If a published creative-vignette parametrization turns up — Adobe
+publishes none, and neither does any of darktable's or RawTherapee's
+documentation — items 1 and 2 should be replaced by it and this entry struck
+through.

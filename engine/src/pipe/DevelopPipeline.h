@@ -218,6 +218,23 @@ struct Adjustments {
     float gradeMidtone[3]{};
     float gradeHighlight[3]{};
 
+    /// The **creative** vignette — research/vignette.md, decision #96.
+    ///
+    /// ⚠ Nothing to do with `lensVignette` above, which *removes* a falloff a
+    /// lens measured. This one puts one in, after the grade, on purpose. The
+    /// two never read each other and a photograph can carry both.
+    ///
+    /// `vignetteAmount` is the exposure change at the corner of the
+    /// **composition** in stops — negative darkens, which is the usual
+    /// direction — and zero costs the shader two instructions it skips.
+    ///
+    /// `vignetteFieldAngle` is the half-diagonal field angle in degrees of the
+    /// lens whose natural cos^4 falloff is being imitated: wide is a broad
+    /// vignette that reaches well into the frame, narrow is one that stays in
+    /// the extreme corners.
+    float vignetteAmount     = 0.0f;    // stops at the corner, -3..3
+    float vignetteFieldAngle = 45.0f;   // degrees, 10..70
+
     /// Profiled wavelet denoise. Strengths are multiples of the measured
     /// noise level, so 1.0 means "shrink coefficients smaller than one sigma"
     /// rather than an arbitrary amount — which is what makes the same setting
@@ -694,6 +711,34 @@ public:
     /// the whole reason the wheel is a color control rather than a brightness
     /// one. Testable without a device.
     static void gradeOffsets(float x, float y, float out[3]) noexcept;
+
+    /// Where the **composition** sits inside the frame, as a circle.
+    ///
+    /// The creative vignette runs upstream of `geometry`, which is the node
+    /// that crops, straightens and turns — so the kernel sees the whole frame
+    /// and has to be told where the picture the photographer is actually
+    /// composing lives inside it. This is that map, evaluated for exactly two
+    /// quantities:
+    ///
+    ///   * `centerX/centerY` — the crop rectangle's center, normalized in the
+    ///     *unrotated* frame, which is the grid every upstream node runs on.
+    ///   * `radius` — the crop rectangle's half-diagonal, in units of the
+    ///     frame's height, so a kernel can compare it against an isotropic
+    ///     distance without knowing the frame's pixel count.
+    ///
+    /// ⚠ Only a circle, and that is what makes this cheap and safe. Rotation —
+    /// the straighten and the quarter turns — moves the center and cannot
+    /// touch the radius, because a rotation preserves length. A second copy of
+    /// `geometry.slang`'s full inverse would be the mistake decision #70 is
+    /// about; two numbers that a rotation acts on trivially are not.
+    ///
+    /// Public and static so it can be checked against hand arithmetic with no
+    /// GPU, the same reason `gradeOffsets` is.
+    struct Circle { float centerX, centerY, radius; };
+    [[nodiscard]] static Circle compositionCircle(const Adjustments& adj,
+                                                  int exifQuarters,
+                                                  std::uint32_t width,
+                                                  std::uint32_t height) noexcept;
 
 private:
 };

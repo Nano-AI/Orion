@@ -168,6 +168,50 @@ colorist reading a vectorscope alongside these wheels would expect the targets
 at the SMPTE angles rather than at even 120° spacing. That is a real difference
 and it is not implemented; there is no vectorscope in Orion yet to disagree with.
 
+## Split toning — refused, and the argument for refusing it
+
+`ROADMAP.md` listed split toning beside these wheels as an M3 item. It is not
+built and it is not going to be. Decision #97.
+
+**Split toning is the wheels, with fewer controls.** It is a hue and a saturation
+for the shadows, a hue and a saturation for the highlights, and a Balance that
+moves the crossover between them. Every one of those except Balance is already
+here: two of the three wheels *are* the two tints, each already carries a
+luminance track that split toning never had, and the third grades the midtones,
+which split toning cannot reach at all.
+
+**Adobe reached the same conclusion and acted on it.** Camera Raw 13.0 and
+Lightroom Classic 10.0, October 2020, replaced the Split Toning panel with Color
+Grading — three wheels, shadows/midtones/highlights, hue and saturation and
+luminance each — and kept a Blending slider whose documented behaviour at 100 is
+"the same effect as the pre-existing Split Toning feature".
+
+- [Adobe: new and enhanced features, October 2020 release of Lightroom
+  Classic](https://helpx.adobe.com/lightroom-classic/help/whats-new/2021.html)
+- [Lightroom Classic 10.0 released, includes Color Grading and
+  more](https://www.dpreview.com/news/8793158963/adobe-lightroom-classic-10-0-released-includes-color-grading-and-more)
+
+So the request is not "build a feature Orion lacks". It is "build the control the
+vendor of the reference implementation retired six years ago, beside the control
+they retired it in favour of, which Orion already ships." A second panel would be
+two ways to do one thing, disagreeing at the edges, and the maintenance is
+permanent.
+
+### ⚠ What split toning has that these wheels do not, said plainly
+
+**Balance.** Orion's zones are Gaussians fixed at −2.5 / 0 / +2.5 EV with
+σ = 1.6; nothing moves them. Split toning's Balance, and Color Grading's, slides
+the crossover so a photographer can decide how much of the picture counts as
+shadow. That is a real gap and it is the only one.
+
+It is also **five lines in `color_grade.slang`** — the three centres shifted by a
+signed offset in EV — and one float through the twenty files any adjustment
+crosses. It belongs *on the grading panel*, beside the wheels whose bands it
+moves, and not in a second panel wearing an older name. Costed in `ROADMAP.md`
+rather than built in the same session as the vignette: one story per session, and
+a half-threaded adjustment is the failure mode this repository has already paid
+for twice.
+
 ## Position in the graph
 
 After the color matrix and the tone controls, before the guided filter and the

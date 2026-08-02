@@ -37,6 +37,7 @@ miss the view-model layer, which is where these failures are.
 | `export-depth-and-sharpening.txt` | Passes — the three export controls that fail invisibly. ⚠ Its metadata half is one-sided by necessity: the sample frames have no GPS, so location itself is asserted in `orion-tests` against a stand-in file |
 | `snapshot-survives-a-reopen.txt` | Passes — a saved version survives a reopen, restores every part of the edit including the crop and the dust, and is one ⌘Z away from the edit it replaced. ⚠ Its dust check has a *bare* reading taken before the spot exists, because an equality between two readings of a spot that never moved a pixel is green either way |
 | `snapshot-keeps-its-matte.txt` | Passes — fixed: the matte sweep deletes what the sidecar does not name, so a version saved with a Subject mask restored a mask **covering nothing**. ⚠ The check is `snapshot missing … 0` plus the three bands against a bare baseline; removing `.union(pinned)` from `MatteStore.sweepAfterLoad` prints seven failures and the exact silent picture-change |
+| `vignette-follows-the-crop.txt` | Passes — the creative vignette. ⚠ Its post-crop half is stated about **one patch of one photograph**: the frame's own centre, untouched while uncropped and dark once a crop makes it a corner. A frame-centred vignette cannot produce both readings, and no comparison between two different pieces of scene is involved |
 
 ## The surfaces a scenario can measure
 

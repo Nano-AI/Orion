@@ -125,3 +125,6 @@ void testMaskRefineGpu();
 void testGrainPlate();
 void testGrainGpu();
 void testGrainWiring();
+void testCompositionCircle();
+void testCreativeVignetteGpu();
+void testVignetteFollowsTheCrop();

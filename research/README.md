@@ -38,7 +38,8 @@ support what it is attached to.
 | [`luts.md`](luts.md) | `.cube` files and tetrahedral interpolation |
 | [`exposure-fusion.md`](exposure-fusion.md) | Shadow lift that keeps local contrast — Mertens; Hessel & Morel |
 | [`auto-enhance.md`](auto-enhance.md) | Percentile auto-levels, and what has no published target |
-| [`color-grading.md`](color-grading.md) | Three-way grading wheels, as ASC CDL per tonal zone |
+| [`color-grading.md`](color-grading.md) | Three-way grading wheels, as ASC CDL per tonal zone — and why split toning is not a second panel |
+| [`vignette.md`](vignette.md) | The **creative** vignette — cos⁴ natural falloff, post-crop. Not the lens correction |
 | [`detail.md`](detail.md) | Sharpening and denoising |
 | [`lens-corrections.md`](lens-corrections.md) | Distortion, TCA and vignetting; the vendored lensfun database |
 | [`perspective.md`](perspective.md) | Keystone correction — the 4-point homography, the zoom, and why it is not its own node |

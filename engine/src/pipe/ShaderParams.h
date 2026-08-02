@@ -213,7 +213,8 @@ struct alignas(16) Display {
 };
 static_assert(sizeof(Display) == 80);
 
-/// Three-way color grading. Mirrors GradeParams in color_grade.slang.
+/// Three-way color grading, and the creative vignette fused into the same pass.
+/// Mirrors GradeParams in color_grade.slang.
 /// Each row is an already zero-sum RGB offset with that zone's slope in w.
 struct alignas(16) Grade {
     std::uint32_t size[2];
@@ -221,8 +222,21 @@ struct alignas(16) Grade {
     float         shadow[4];
     float         midtone[4];
     float         highlight[4];
+    /// The creative vignette — research/vignette.md, decision #96. The circle
+    /// is the *composition's*, not the frame's: center normalized in this
+    /// frame, radius its half-diagonal in units of the frame's height, both
+    /// derived on the host from the crop rectangle by
+    /// `DevelopPipeline::compositionCircle`.
+    float         vignetteCenter[2];
+    float         vignetteRadius;
+    /// Stops at the corner. Zero is the identity and skips the falloff.
+    float         vignetteAmount;
+    /// tan of the half-diagonal field angle of the lens being imitated, so the
+    /// kernel evaluates cos^4 with no trigonometry.
+    float         vignetteTanTheta;
+    float         _pad2[3];
 };
-static_assert(sizeof(Grade) == 64);
+static_assert(sizeof(Grade) == 96);
 
 /// The camera profile's hue/saturation table. Mirrors HueSatParams in
 /// huesat.slang. The two matrices carry the working space in and out of linear
