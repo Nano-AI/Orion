@@ -364,8 +364,9 @@ estimate was 16× wrong in:
 | `f̂ = M†q̂` | 1 | 198 |
 | **Total** | **~13** | **~2,376** |
 
-Against option A's −445.6 that is a swing of **~2.8 GiB**, which at 40 MP is ~4.6
-GiB on top of 11.8. ⚠ **The chromas are complex-valued**, which is where the
+Against option A's −445.6 that is a swing of **~2.8 GiB**, and option B itself
+scales to **~3,645 MiB (3.6 GiB) at 40 MP**, on top of that resolution's ~11,800.
+⚠ **The chromas are complex-valued**, which is where the
 memory goes and which is not obvious from the paper — a fact worth having found
 before costing rather than after.
 
