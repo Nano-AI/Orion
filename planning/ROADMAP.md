@@ -804,8 +804,9 @@ measured before costing. Marked here so the same mistake is at least visible:
 - **Bundling weights whose training data's licence has not been read.** Decision
   #78 settled this for segmentation and it transfers unchanged: weights inherit
   their data's terms however permissive the architecture's code is. DND is
-  explicitly non-commercial; SIDD's MIT claim is single-source and unverified in
-  the distributed archive.
+  explicitly non-commercial; SIDD's MIT claim traces to one project page —
+  corroborated by a second search, but that is one source seen twice — and is
+  unverified in the distributed archive.
 - **Using DnCNN or FFDNet's original repositories.** Neither has a licence file
   at all, which is no grant rather than a permissive one. `cszn/KAIR` is MIT and
   re-implements both if either is ever wanted.

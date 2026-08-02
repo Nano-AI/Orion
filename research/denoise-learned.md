@@ -348,8 +348,9 @@ for Smartphone Cameras*, CVPR 2018. DND is Plötz & Roth, *Benchmarking Denoisin
 Algorithms with Real Photographs*, CVPR 2017.
 
 ⚠ **A caveat that must not be lost.** The SIDD MIT claim was read off the
-project page by an automated fetch and is a single-source claim about the one
-thing that decides whether weights can ship. **Read the licence file in the
+project page and then corroborated by a second search — but **both trace to the
+same page**, which is one source seen twice, not two sources. It is the one
+claim that decides whether weights can ship. **Read the licence file in the
 distributed archive before relying on it.** Decision #78 already established the
 principle that matters here: *weights inherit their training data's ambiguity,
 however permissive the architecture's code is.* NAFNet being MIT does not make
@@ -430,7 +431,8 @@ the only version that runs.**
 field, which for a four-level U-net with 3×3 convolutions is substantially more
 than 32 px. Getting it wrong produces **visible tile seams**, which is the
 classic failure of this approach and is exactly the kind of thing a five-line
-assertion catches and inspection does not. Session 3 measures it.
+assertion catches and inspection does not. **Session 4 measures it**, and
+session 4's bit-identical reassembly check exists for it.
 
 ### Latency — computed, not measured
 
@@ -472,7 +474,12 @@ node. Not a slider.**
 
 Sessions, in order, in the style of `research/highlight-reconstruction.md`'s
 piece table. **Node and memory costs are for what lands in the graph** —
-sessions 1–3 land nothing in it, which is the point.
+sessions 1–4 land nothing in it, which is the point.
+
+⚠ `ROADMAP.md` carries the same six rows and calls them **pieces**, because that
+is what every other decomposition in that file calls them. **Session *n* here is
+piece *n* there**, one to one. If the two ever disagree, `ROADMAP.md` is the
+schedule and this file is the argument.
 
 | # | Session | Cost | Guess? |
 |---|---|---|---|
