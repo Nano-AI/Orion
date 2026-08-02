@@ -43,6 +43,17 @@ extension ViewportTests {
 
         s.rotateQuarters = 1; s.straightenDeg = 4
         s.cropX = 0.1; s.cropY = 0.2; s.cropW = 0.7; s.cropH = 0.6
+        // ⚠ These eight were **absent for as long as they have existed**, and
+        // `testDevelopStateRoster` is what found them (decision #110). A field
+        // the fixture never moves round-trips its own default through the
+        // encoder and back, so `testEveryFieldSurvivesTheSidecar` was green for
+        // perspective, Balance, grain and the creative vignette without ever
+        // having carried one of them.
+        s.perspectiveVertical = 0.45; s.perspectiveHorizontal = -0.3
+        s.perspectiveAspect = 0.22
+        s.gradeBalance = -0.6
+        s.grainAmount = 0.018; s.grainSize = 2.4
+        s.vignetteAmount = -0.9; s.vignetteFieldAngle = 62
 
         var spot = SpotState()
         spot.destX = 0.31; spot.destY = 0.62

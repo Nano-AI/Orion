@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**a mask under a keystone is an ellipse and had been staying round, the highlight fill wired and off by default, grading Balance, the brush predicate — #102 to #107**)
+**Last updated:** 2026-08-01 (**three gaps in the Swift layer a test could not see — the memberwise trap made a build error, a three-component control drivable, and the gesture file made able to fail; #110**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#103 built, #101 refused). **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
@@ -198,30 +198,19 @@ each brief, all four landed 5, 5, 7 and 5 commits deep.
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** `orion-tests` **722 checks** · `orion-viewport-tests` **3620
-checks** · **39 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
-**Suites:** `orion-tests` **626 checks** · `orion-viewport-tests` **3561
-checks** · **35 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: **149 nodes, 6971 MiB**, M0 gate **8.70–9.22 ms p95** —
-plus a preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth
-gate: it opens a folder cold, warm and indexless in one process and fails when
-the warm pass did not hit, or when any of the three disagree about a field.
+**Suites:** `orion-tests` **744 checks** · `orion-viewport-tests` **3624
+checks** · **39 `repro/` scenarios** · all 0 failures. Bench exits 0 on
+`_PIC8220`: **173 nodes, 7186 MiB**, M0 gate PASS at **8.76 ms p95** — plus a
+preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth gate: it
+opens a folder cold, warm and indexless in one process and fails when the warm
+pass did not hit, or when any of the three disagree about a field.
 
-⚠ **The three blocks above were each duplicated by a merge** — two `Last
-updated:` lines, two numbered queues disagreeing about whether the export panel
-was done, and two suite counts differing by 83 viewport checks. Reconciled
-2026-08-01 against a run of all four gates rather than against either side.
-**Suites:** `orion-tests` **586 checks** · `orion-viewport-tests` **3620
-checks** · **36 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
-plus a preview graph at 1/16 that.
-**Suites:** `orion-tests` **641 checks** · `orion-viewport-tests` **3561
-checks** · **35 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: **149 nodes, 6971 MiB**, M0 gate **8.88–14.83 ms p95** on
-an idle machine — plus a preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth
-gate: it opens a folder cold, warm and indexless in one process and fails when
-the warm pass did not hit, or when any of the three disagree about a field.
+⚠ **This block had grown to *four* copies of itself** carrying 722/626/586/641
+engine checks, 3620/3561 viewport, 39/35/36 scenarios and 149 nodes — none of
+them current, all of them left behind by merges that added without deleting, and
+the file had already flagged the same thing happening twice before. **One copy
+now, measured 2026-08-01 against a run of all four gates**, and the node count is
+173 rather than 149 because the highlight fill landed (#105/#106).
 
 ⚠ **The M0 gate is not a reliable pass/fail on this machine, and it cost four
 sessions and three agents hours on 2026-08-01.** Twelve consecutive runs of one
@@ -276,12 +265,12 @@ Small, named, and none of them blocking the next story:
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
 | **The 1000-line rule is broken six ways**, all in product code. ⚠ **Recounted 2026-08-01 and this table had carried *four* copies of this row**, each with different numbers, each written by a different agent's merge and none of them deleted — a gap table that contradicts itself four ways is worse than one that is silent. One row now, counted with `grep -c ''` at the time of writing: `DevelopPipeline.cpp` **2,549**, `Engine.swift` **2,219**, `bench/main.cpp` **1,725**, `OrionApp.swift` **1,495**, `Scenario.swift` **1,387**, `DevelopPanels.swift` **1,359**. A sweep of every tracked `*.cpp`/`*.swift`/`*.h`/`*.mm` outside `apps/tests/` finds these six and no others, so the count is six and it is now measured rather than remembered. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31, but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session | whole tree |
-| **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
-| **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
+| **Nothing asserts that a gesture *arms*** — narrowed 2026-08-01, decision #110.3, and it is now the *first* link only. `repro/gesture-preview-agrees.txt` used to compare an armed run against an unarmed one and demand they agree, which is green when arming does nothing; it now also asserts arming has an effect (the preview surface goes 0.2323/0.2918 → 0.4814/0.2037 over the same eight ticks), so a no-op `beginInteraction` fails. What is still unreachable is a `DragGesture` closure calling it: **attempted** — `NSHostingView` off-screen lays the wheel out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s call is green across 744 / 3624 / 39, measured | `Scenario.swift` |
+| ~~**The grading wheel's arming is unmeasured.**~~ ✅ **closed 2026-08-01, decision #110.2.** `wheel` and `dragwheel` drive a three-component control, added beside the scalar spellings rather than replacing them (#89). **9.6 ms per tick unarmed against 1.2 armed, 8.0×**, settled picture identical at luma 0.2268 / sat 0.5136 | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
 | **The index's `SQLITE_BUSY` rule is reasoned, not pinned.** `SQLITE_CORRUPT`/`SQLITE_NOTADB` discard and rebuild the database; `BUSY` and `LOCKED` deliberately do not, because those mean a second Orion holds the file and discarding it would be deleting a live database. ⚠ The mutation that widens the list to every error code **passes every test** — reproducing lock contention needs a second process holding a transaction. Costed in `ROADMAP.md` | `PhotoIndex` |
 | **Index rows for a folder you never open again are never collected.** The prune runs inside `plan`, against the listing it was handed, so it only cleans a folder you are looking at. ~200 B a row, so 5,000 dead frames is ~1 MB — untidy rather than a leak with teeth | `PhotoIndex` |
-| **`Engine.state` uses the memberwise initializer**, positional over eighty arguments. `cAdjustments()` in the same file refuses it in a comment for exactly that reason; `state` does not. Adding a field to `DevelopState` and forgetting this call compiles silently — it happened on 2026-08-01 with film grain and every suite stayed green | `Engine.swift` |
+| ~~**`Engine.state` uses the memberwise initializer**, and adding a field to `DevelopState` and forgetting this call compiles silently.~~ ✅ **closed 2026-08-01, decision #110.1.** No stored property carries an inline default any more, so a field omitted from that call is `error: missing argument for parameter 'gradeBalance' in call` at both `Engine.swift:1669` and `DevelopState.init()`. ⚠ A field added *with* a default still compiles — that is what `testDevelopStateRoster` is for, and its second half found that `busyState()` had never moved eight of the fields it claimed to round-trip | `Engine.swift` |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
 frame, but it must not be used for any published render — the landing site's
@@ -351,6 +340,106 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01q — three gaps in the Swift layer that a test could not see
+
+**Story:** the gap table's three `app/` rows. Decision **#110** (.1, .2, .3).
+
+### Gap 1 — the memberwise initializer, closed by making the build refuse it
+
+`DevelopState`'s stored properties each carried an inline default. A default on
+the property is a default on the **memberwise initializer**, and `Engine.state`
+builds one with the memberwise initializer — so a field left out of that call
+compiled without a word. It shipped twice: film grain with Amount stuck at 0,
+and Grading Balance hours later.
+
+The defaults moved into an `init()` written **in an extension**, which is the
+load-bearing part: an initializer in the struct's own body suppresses the
+memberwise one, and then there is no argument list left for the compiler to
+check. Delegating rather than assigning is the other half — assigning field by
+field here would compile with a field missing.
+
+**The proof, with `var proofOfTheTrap: Float` added to the struct:**
+
+    app/EditHistory.swift:399:54: error: missing argument for parameter
+        'proofOfTheTrap' in call
+    app/Engine.swift:1681:71: error: missing argument for parameter
+        'proofOfTheTrap' in call
+
+and the historical defect, `gradeBalance:` deleted from `Engine.state`:
+
+    app/Engine.swift:1669:43: error: missing argument for parameter
+        'gradeBalance' in call
+
+⚠ **The hole this does not close, named rather than glossed.** A field added
+*with* an inline default gets a default in the memberwise initializer too, and
+`Engine.state` can go on omitting it. `testDevelopStateRoster` reflects over the
+struct and is red for that case, naming the field.
+
+⚠ **And its second half found a check that could not fail.** `busyState()` — the
+fixture behind "every field of a fully-set state survives the sidecar" — had
+never moved `perspectiveVertical`, `perspectiveHorizontal`, `perspectiveAspect`,
+`gradeBalance`, `grainAmount`, `grainSize`, `vignetteAmount` or
+`vignetteFieldAngle`. A field the fixture leaves alone round-trips its own
+default through the encoder and back and passes for free, so that test had been
+green for eight fields it had never carried. Fixed in the same commit.
+
+### Gap 3 — the wheel can be driven now, and here is the number
+
+`wheel <name> <x> <y> [luma]` and `dragwheel <name> <x,y> <x,y> <n>`. Both puck
+components move inside a **single** `edit`, because `ColorWheel.onChanged` does;
+two `set`s would be two ticks and two history entries. The path is clamped to
+the disc, not the square that bounds it. ⚠ **Added under #89, not renamed** —
+`gradeShadowX` / `gradeShadowY` still work and the new repro block uses them.
+
+**12 ticks on `_PIC8220`: 9.6 ms per tick unarmed, 1.2 armed — 8.0×**, and the
+settled picture is identical either way at luma 0.2268 / sat 0.5136.
+
+### Gap 2 — the honest half, with the attempt written down
+
+`repro/gesture-preview-agrees.txt` compared an armed run against an unarmed one
+and demanded they agree. **That is green when arming does nothing at all**: make
+`beginInteraction` a no-op and all six checks pass, because both halves are then
+the same unarmed run. A file of six checks that a gutted feature passes.
+
+The preview graph renders only while armed — `if interacting { renderPreview() }
+else { render() }` — so the preview *surface* is where arming is observable
+without a `View`. Eight ticks of a 2.5-stop drag now leave it at 0.2323/0.2918
+unarmed and put it at 0.4814/0.2037 armed, and the no-op mutation is red.
+
+⚠ **The first link is still unverified, and it was attempted rather than
+assumed.** `Screenshot.render` already hosts SwiftUI in an off-screen window, so
+a real `ColorWheel` was hosted, laid out and hit-tested — `hitTest` returns the
+hosting view — and driven with `NSEvent.mouseEvent` through
+`NSApplication.sendEvent` at every height down the control. **The puck never
+moved.** SwiftUI's macOS gestures want CGEvent-backed events, which want a real
+on-screen window and the real cursor; a suite that takes over the machine is not
+one that runs 39 scenarios in a loop. The probe was deleted rather than shipped
+half-working. **Deleting `ColorWheel`'s `beginInteraction` is green across 744
+engine, 3624 viewport and all 39 scenarios** — that is the size of the gap,
+measured.
+
+### The mutations
+
+| Mutation | What goes red |
+|---|---|
+| Drop `gradeBalance:` from `Engine.state` — the 2026-08-01 defect | **the build**, `Engine.swift:1669` |
+| Add `var proofOfTheTrap: Float` to `DevelopState` | **the build**, twice — `EditHistory.swift:399` and `Engine.swift:1681` |
+| Add `var mutationTrap: Float = 0` — *with* a default, so it compiles | `testDevelopStateRoster`, **2 checks**, both naming `mutationTrap` |
+| Revert `busyState()`'s eight new lines | `testDevelopStateRoster`, 1 check, naming all eight |
+| `dragwheel` writes x and leaves y | `gesture-preview-agrees`, `gradeShadowY == -0.55` holds 0 |
+| Drop the disc clamp from `clampToDisc` | `gesture-preview-agrees`, 2 checks — `gradeMidtoneX` holds 3, not 0.6 |
+| `beginInteraction` sets nothing | `gesture-preview-agrees`, `preview_armed != preview_unarmed`. ⚠ **The six agreement checks stay green**, which is exactly why the new block exists |
+| Delete `beginInteraction` from `ColorWheel.onChanged` | **nothing** — 744 / 3624 / 39 all green. The gap, measured |
+
+### Gates
+
+`orion-tests` **744 checks, 0 failures**. `orion-viewport-tests` **3624, 0** (was
+3620; 4 new). All **39** `repro/*.txt` exit 0. `orion-bench` on `_PIC8220` exit
+0, **173 nodes, 7186 MiB** unchanged, M0 gate PASS at 8.76 ms — advisory, and
+the node count is the number that means anything.
+
+---
 
 ## Session 2026-08-01p — Core ML denoise, researched and deliberately not built
 

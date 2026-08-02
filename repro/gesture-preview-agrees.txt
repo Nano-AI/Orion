@@ -20,10 +20,60 @@
 #
 # `expect a == b` compares mean luma AND mean saturation, because one number per
 # frame is too weak a signature to say two renders are the same picture.
+#
+# ⚠ WHAT THIS FILE STILL CANNOT SEE, stated rather than implied. The chain is
+#
+#     a SwiftUI gesture  ->  engine.beginInteraction()  ->  the preview graph
+#
+# and only the second link is reachable from here. `Scenario` drives `Engine`
+# and `CanvasLayout`; it never hosts a `View`, so the seven `beginInteraction`
+# calls in AdjustmentSlider, CurveEditor, ColorWheel, CropOverlay, MaskOverlay
+# (twice) and SpotOverlay are still verified by reading them. Deleting one is
+# green everywhere, and that was measured rather than assumed — decision #110.
+#
+# What changed is that the second link now has teeth: the block immediately
+# below fails if arming does nothing, which the six agreement checks could not.
 
 open samples/_PIC8220.ARW
 
+# ── ⚠ FIRST: that arming does anything at all ─────────────────────────────
+#
+# Every block below compares an armed run against an unarmed one and demands
+# they agree. That is the *safety* property and it is silent about whether
+# arming has any effect: make `beginInteraction` a no-op and all six stay green,
+# because both halves are then the same unarmed run. A file of six checks that a
+# gutted feature passes is worth saying out loud.
+#
+# The preview graph is rendered only while armed — `Engine.pushAndRender` is
+# `if interacting { renderPreview() } else { render() }` — so the preview
+# surface is where arming is observable from here. Unarmed, a drag leaves it
+# where it was; armed, every tick of the drag goes into it.
+open samples/_PIC8220.ARW
+interact on
+drag exposure 0.0 0.0 2
+interact off
+measure 0.25,0.25,0.5,0.5 preview_at_rest preview
+
+# Unarmed: eight ticks of a two-and-a-half-stop drag, and the preview graph must
+# not have seen one of them.
+drag exposure 0.0 2.5 8
+measure 0.25,0.25,0.5,0.5 preview_unarmed preview
+expect preview_unarmed == preview_at_rest
+
+# Armed: the same eight ticks, and now the preview graph is what renders them.
+open samples/_PIC8220.ARW
+interact on
+drag exposure 0.0 2.5 8
+measure 0.25,0.25,0.5,0.5 preview_armed preview
+interact off
+expect preview_armed != preview_unarmed
+
 # ── Crop, the riskiest one ────────────────────────────────────────────────
+# ⚠ Reopened. The block above leaves exposure at 2.5, and the crop block used to
+# inherit the file's opening `open` — an unarmed crop measured on a brightened
+# frame against an armed one measured on a clean reopen is a comparison of two
+# different photographs, and it fails.
+open samples/_PIC8220.ARW
 crop 0.15 0.2 0.6 0.55
 measure 0.25,0.25,0.5,0.5 crop_unarmed
 open samples/_PIC8220.ARW
@@ -45,13 +95,47 @@ interact off
 measure 0.25,0.25,0.5,0.5 curve_armed
 expect curve_armed == curve_unarmed
 
-# ── A grading wheel — ⚠ NOT COVERED, and said rather than skipped quietly ──
+# ── A grading wheel ───────────────────────────────────────────────────────
 #
-# `ColorWheel` arms too, and nothing here can drive it: the wheels write
-# `gradeShadow`/`gradeMidtone`/`gradeHighlight`, which are three-component
-# tuples, and `Scenario`'s control table is scalar. Adding a verb for them is
-# worth doing; until then the wheel's arming rests on the same argument as the
-# other four and on nothing measured.
+# ⚠ This block was the hole in this file, and it was written down rather than
+# skipped quietly: the wheels write `gradeShadow`/`gradeMidtone`/
+# `gradeHighlight`, three-component tuples, and `Scenario`'s control table takes
+# one number — so the one gesture with no measurement was the one nothing could
+# move. `dragwheel` is that verb (decision #110). Both puck components move in a
+# single `edit`, as `ColorWheel.onChanged` does, and the path is clamped to the
+# disc rather than the square.
+#
+# The scalar `gradeShadowX` / `gradeShadowY` spellings still work and are used
+# below — decision #89, both spellings of everything are kept.
+open samples/_PIC8220.ARW
+dragwheel gradeShadow 0.05,0.05 -0.65,-0.55 12
+measure 0.25,0.25,0.5,0.5 wheel_unarmed
+control gradeShadowX == -0.65
+control gradeShadowY == -0.55
+
+open samples/_PIC8220.ARW
+interact on
+dragwheel gradeShadow 0.05,0.05 -0.65,-0.55 12
+interact off
+measure 0.25,0.25,0.5,0.5 wheel_armed
+expect wheel_armed == wheel_unarmed
+
+# ⚠ And the drag has to have moved the picture, or the equality above is the
+# equality of two renders of the same photograph. This is the check that would
+# stay green if `dragwheel` wrote nothing at all.
+open samples/_PIC8220.ARW
+measure 0.25,0.25,0.5,0.5 wheel_neutral
+expect wheel_armed != wheel_neutral
+
+# The rim clamp, and that the verb moves the wheel it is named after. A puck
+# driven past the edge slides around it — 3,4 is at radius 5, so it lands on
+# 0.6,0.8 — and the other two wheels stay where they were.
+open samples/_PIC8220.ARW
+wheel gradeMidtone 3 4
+control gradeMidtoneX == 0.6
+control gradeMidtoneY == 0.8
+control gradeShadowX == 0
+control gradeHighlightX == 0
 
 # ── A spot ────────────────────────────────────────────────────────────────
 open samples/_PIC8220.ARW
