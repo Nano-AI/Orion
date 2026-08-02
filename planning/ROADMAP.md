@@ -30,18 +30,18 @@ Rule: every milestone ends with something you can actually shoot with. No milest
 
 **Definition of done:** you edit a real shoot in Orion start to finish and export JPEGs you're happy with. No other tool involved.
 
-- **Epic: Browse** — folder open, grid + filmstrip, async thumbnails, LRU cache
-- **Epic: Cull** — star ratings, reject flags, color labels; filter and sort; SQLite index
-- **Epic: Core develop** — exposure, contrast, highlights/shadows, whites/blacks, WB (temp/tint + eyedropper), vibrance/saturation
-- **Epic: Geometry** — crop, rotate, straighten
-- **Epic: Edit model** — op stack → XMP sidecar, undo/redo, history panel
-- **Epic: Export** — full-res tiled render path, JPEG/TIFF, resize, color space
+- ✅ **Epic: Browse** — folder open, grid + filmstrip, async thumbnails, LRU cache
+- **Epic: Cull** — ✅ star ratings, reject flags, color labels, filter and sort. ⚠ **The SQLite index was never built** — `Library.scan` rescans the folder and re-reads every sidecar on every open. It is also the last unbuilt piece of M1 and a performance item
+- ✅ **Epic: Core develop** — exposure, contrast, highlights/shadows, whites/blacks, WB (temp/tint + eyedropper), vibrance/saturation
+- ✅ **Epic: Geometry** — crop, rotate, straighten
+- ✅ **Epic: Edit model** — op stack → XMP sidecar, undo/redo, history panel
+- **Epic: Export** — ✅ full-res render path, JPEG/PNG/TIFF, resize, color space. ⚠ Three of the panel's seven specified controls are missing: bit depth, metadata policy, output sharpening
 - ✅ **Epic: Interaction** — per-node caching, and degrade-then-refine during
   drags (2026-07-30). A second graph over a quarter-linear mosaic renders while
   a control moves; the full one renders when the hand stops. Clarity 57.2 → 5.1
   ms a tick, dehaze 115.4 → 7.1. ⚠ Only the canvas reads the preview: export,
   the histogram and the eyedropper all take the full graph
-- **Epic: Look** — neutral-gray dark theme, panel layout
+- ✅ **Epic: Look** — neutral-gray dark theme, panel layout
 
 ### Export panel — modeled on macOS Preview's export sheet
 
@@ -101,7 +101,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 - ✅ Single-image exposure fusion *(Hessel & Morel; Mertens et al.)*
 - ✅ Dehaze (dark channel prior) *(He, Sun & Tang; guided-filter refinement)*
 - ✅ **Auto-enhance** — percentile auto-levels driving the above *(Simplest Color Balance; CIPA DC-004)*
-- Color grading wheels (ASC CDL), split toning, vignette
+- ✅ Color grading wheels (ASC CDL) — three `ColorWheel` controls, shadows/midtones/highlights. ⚠ **Split toning and a creative vignette are not built**; the wheels subsume most of what split toning was for
 - ✅ Creative LUTs (.cube, tetrahedral) *(Adobe Cube LUT Specification 1.0; Sakamoto & Itooka 1981)*
 - Segmentation-based highlight reconstruction
 
@@ -115,7 +115,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 - ✅ **Luminance** range mask — 2026-07-30, `research/masking.md` §4b. ⚠ The
   old note here said this was cheap given M1's bilateral grid; M1 never built
   one, and a range mask is pointwise so it would not have helped
-- Colour range mask — needs a colour distance and so a colour space
+- ✅ Color range mask — shipped in 0.4.0-alpha.3. Oklab chromaticity distance, mask kind 6
 - ✅ Mask combine operators (add/subtract/intersect) — 2026-07-29, decision #62
 - ✅ Guided feathering of the mask group — 2026-07-29, `research/masking.md`
   §4 *(He, Sun & Tang)*. The mask's edge is pulled onto the photograph's,
@@ -129,7 +129,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
   the zeroth-order term of Farbman et al.'+chr(39)+'s interpolant, with the bounded
   failure across a hard edge recorded in `UNSOURCED.md` §21 and stated in the
   panel
-- Brush masks — **reinstated 2026-07-29**, see DECISIONS #54 (was cut from v1)
+- ✅ Brush masks — reinstated 2026-07-29 (DECISIONS #54, was cut from v1) and shipped: dabs walked at fixed spacing, erase polarity per dab, run-of-64 bounding-box rejection (#80)
 - ✅ Presets — 2026-07-30. A **patch**, not a state: only the groups it carries
   are applied, and the crop, the dust and the masks are never among them
 - ✅ Copy/paste/sync — 2026-07-30. Sync edits sidecars **without opening the
@@ -139,7 +139,7 @@ orientation node widened to match. Not hard, but it touches the pipeline tail.
 - ✅ Batch export — 2026-07-30. One engine reused across the list (466 ms a
   photo, peak RSS flat); each photo'+chr(39)+'s own sidecar restored before it is
   exported; nothing overwritten and no two sources colliding
-- Snapshots/versions, perspective correction, film grain
+- Snapshots/versions, perspective correction. ✅ **Film grain shipped 2026-08-01** (#81, #82)
 
 ---
 
