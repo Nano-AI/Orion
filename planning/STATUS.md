@@ -184,6 +184,96 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
+### ✅ 2026-08-02 — `OrionApp.swift` is six files, and the four CLI modes are unchanged (#121)
+
+**1,557 lines against a ceiling of 1,000**, the last of the three the sixth wave
+was chartered against. Six files, largest **373**: `OrionApp.swift` 296 (the
+`@main` entry, the four command-line modes, and `Editor`'s stored properties),
+`OrionApp+Commands.swift` 323, `OrionApp+Chrome.swift` 373,
+`OrionApp+Canvas.swift` 244, `OrionApp+Tools.swift` 163, `OrionApp+Files.swift`
+262. The seam is #113's and #117's — **region of the problem** — and the brief's
+proposed cut (entry-and-CLI / menus / root-view-and-chrome) was checked against
+the file and **rejected**: it leaves the third file at about 1,350 and still over
+the ceiling. Full reasoning in decision #121.
+
+⚠ **Three of the four named gates cannot see this work at all, and that is
+structural rather than an accident of coverage.** `apps/tests/CMakeLists.txt` and
+`apps/bench/CMakeLists.txt` do not mention Swift; `orion-viewport-tests` compiles
+a Swift source list containing **zero** `OrionApp*` files. Only the 40-scenario
+sweep runs the app binary, and it only ever passes `--scenario`. So
+`--screenshot`, `--batch-export` and `--library-open` are checked by nothing in
+the repository, which the mutations below confirm one at a time.
+
+⚠ **The oracle was checked against itself first, and it is noisy on one scene.**
+Two full runs of the *pre-split* binary over 38 scenes agree 37/38;
+`versions.png` differs between two runs of the same binary, because
+`Screenshot.snapshots` builds its rows from `Date()` and the panel prints an
+absolute clock time. Pre-split against post-split is **the same 37/38
+byte-identical**, and the 38th was compared visually: the only difference is
+`6:24 AM` → `6:34 AM`, the ten minutes between the runs. Recorded rather than
+fixed — it is a defect in the harness, not the product, and a fix hidden inside
+a refactor is unreviewable.
+
+⚠ **All four command-line modes were exercised before and after and diffed.**
+`--scenario` over all 40 repro files (**954 lines of report, 40/40 exit 0**),
+`--batch-export` of three photographs, `--library-open` of `samples/`,
+`--screenshot` over 38 scenes. After normalising wall-clock and the probe
+database's UUID, **every one is identical**, and the three exported JPEGs match
+by SHA-256 without any normalisation at all.
+
+⚠ **Verbatim motion, checked rather than claimed.** Every body line is a
+line-range slice; a multiset diff of all 1,426 non-blank lines accounts for every
+difference: five `// MARK:` comments dropped because the filenames now carry
+them, seventeen declarations re-emitted with `private` removed, and the file
+headers. **No moved line was edited.** The cost is #117's exactly — Swift's
+`private` is file-scoped, so five stored properties, eleven views and methods and
+`PhotoCommands` widened to internal; nine members stayed `private`.
+
+⚠ **Eight mutations, and the three that stayed green everywhere are the finding.**
+
+| # | Mutation | What went red |
+|---|---|---|
+| M5 | a `@State` moved into `extension Editor` | **build** — `error: extensions must not contain stored properties`. The seam's constraint is a compile error, not a preference (#117's M1) |
+| M1 | `--library-open` dispatch deleted from `init()` | the library probe only. **All four repo gates green** |
+| M2 | `--scenario` dispatch deleted | the **scenario gate**, 3/3. The only CLI mode the repository itself checks |
+| M3 | `--batch-export` dispatch deleted | the batch probe only. **All four repo gates green** |
+| M4 | `--screenshot` dispatch deleted | the screenshot probe only, 3/3. **All four repo gates green** |
+| M6 | the **Reset Adjustments menu command deleted** | ⚠ **nothing.** Three scenarios, three byte-compared frames, both other modes, all four gates |
+| M7 | `--screenshot` moved ahead of `--scenario` in `init()` | ⚠ **nothing** |
+| M8 | the footer's `engine.lastFailure` branch deleted | ⚠ **nothing**, including `nofailure` |
+
+⚠ **M6: a menu item can be deleted from the product and nothing anywhere
+notices.** `Screenshot.swift:211` builds `Editor` directly and never builds
+`OrionApp`'s `Scene`, so `PhotoCommands` is in no captured hierarchy at all, and
+no scenario verb opens a menu. The whole Photo menu is unreachable from every
+check in the repository.
+
+⚠ **M7: the `init()` ordering comment is defensive, not load-bearing.** It says
+`--scenario` precedes `--screenshot` "because a scenario writes its own stills",
+but `Screenshot.options` returns nil unless `--screenshot` is in `argv` and no
+invocation passes both flags. The eight repro files that write stills use the
+`shot` *verb*, which calls `Screenshot.writeCanvas` directly and never the CLI
+mode. **The order is kept anyway** — it costs nothing and the next reader should
+find the comment beside what it describes.
+
+⚠ **M8: `nofailure` pins the engine's value, not the line that shows it.** The
+verb added in `9d9158d` asserts `Engine.lastFailure` clears on a successful
+render; deleting the footer branch that *displays* it leaves that green, and no
+scene renders a failed frame so the byte comparison is blind too. #117 recorded
+that `lastFailure` had no oracle anywhere; half of it now does, and the half
+that reaches the photographer still does not.
+
+⚠ **All three are written down and none is fixed**, because a behaviour change
+hidden inside a refactor is unreviewable.
+
+⚠ **The mutation harness itself was wrong twice and both were caught by
+self-testing it before trusting it.** `timeout` is GNU and absent on macOS, so
+the first run exited 127 everywhere and **every check went red under every
+mutation**; the replacement then clobbered the caller's loop variable, so three
+screenshot checks reported a scene called `180`. A check that cannot pass proves
+as little as one that cannot fail. The harness now smoke-tests both verdicts
+before it runs, and was confirmed all-green on the clean tree first.
+
 ### ✅ 2026-08-02 — the last two bench checks that could not fail (#123)
 
 #118's split of `apps/bench` ran twelve mutations and found **three checks that
@@ -797,7 +887,11 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken three ways**, all in `app/`: `Scenario.swift` **1,596**, `OrionApp.swift` **1,557**, `DevelopPanels.swift` **1,366**. ⚠ **Recounted live at the merge, 2026-08-02**, taking neither split agent's figure — both wrote their row before the other landed, and #117's recount showed the row it replaced had been stale *on the day it was written* (claimed `bench/main.cpp` 2,251 and `Engine.swift` 2,241; actual 2,289 and 2,331). ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself. Seven files were over the ceiling this morning; `DevelopPipeline.cpp` (#113, 2,896 → 451), `bench/main.cpp` (#118, 2,289 → 85) and `Engine.swift` (#117, 2,331 → 795) took four of them out, and the next file below the survivors is `ShaderParams.h` at 905 | whole tree |
+| ⚠ **The whole Photo menu is unreachable from every check.** Deleting the Reset Adjustments command is green on 800, 3702, all 40 scenarios, the bench and every byte-compared frame (#121, M6). `Screenshot.swift:211` builds `Editor` directly and never builds `OrionApp`'s `Scene`, so `PhotoCommands` is in no captured hierarchy; no scenario verb opens a menu. Every menu item, its title, its shortcut and its greyed-out state rest on reading the code | `OrionApp+Commands.swift` |
+| ⚠ **Three of the four command-line modes are checked by nothing in the repository.** `--screenshot`, `--batch-export` and `--library-open` each have their four-line dispatch in `OrionApp.init`, and deleting any one of them is green on all four gates (#121, M1/M3/M4). Only `--scenario` is exercised, because only it is what the 40-file sweep runs. ⚠ Structural, not a coverage oversight: `apps/tests` and `apps/bench` are pure C++ and name no Swift, and `orion-viewport-tests` compiles a Swift list with **zero** `OrionApp*` files | `OrionApp.swift` |
+| **`Engine.lastFailure` is pinned, the line that displays it is not.** `nofailure` (`9d9158d`) asserts the engine clears the failure on a successful render. Deleting the footer branch that renders "Render failed — …" is green on everything including that verb (#121, M8), and no screenshot scene produces a failed frame, so the byte comparison is blind as well. Half of what #117 reported is closed; the half a photographer actually sees is not | `OrionApp+Chrome.swift` |
+| **One screenshot scene is not byte-stable, so it cannot be an oracle.** `--scene versions` builds its rows in `Screenshot.snapshots` from `Date()` and the panel prints an absolute clock time, so **two runs of the same binary disagree** — 37/38 scenes byte-identical, `versions.png` differing by 2,380 bytes purely in the timestamp glyphs. Found by self-checking the oracle before trusting it (#121); every other scene is stable across runs and across the split. ⚠ Left alone rather than fixed, because a behaviour change hidden inside a refactor is unreviewable. The fix is a fixed `Date` in the harness, not in the product | `Screenshot.swift` |
+| **The 1000-line rule is broken six ways**, and ⚠ **the largest file in the tree was never in this row**: `apps/tests/tests_effects.cpp` **1,716**, `app/Scenario.swift` **1,615**, `app/DevelopPanels.swift` **1,366**, `apps/tests/tests_brush.cpp` **1,142**, `apps/tests/tests_perspective.cpp` **1,110**, `apps/tests/tests_grade.cpp` **1,029**. ⚠ Swept live across **every** tracked source at the 2026-08-02 merge, not just product code — the row had said *"three files, all in `app/`"* and *"the next file below the survivors is `ShaderParams.h` at 905"*, and both were wrong: four test files sit above it and the biggest of them is bigger than anything the splitting wave was chartered against. Scenario.swift was also listed at 1,596 when it is 1,615. ⚠ **Recount by sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself, and every figure written into it today was stale within hours because agents write it before the others land. Four splits landed 2026-08-02: `DevelopPipeline.cpp` 2,896→451, `Engine.swift` 2,331→795, `bench/main.cpp` 2,289→85, `OrionApp.swift` 1,557→299. Two more are in flight | whole tree |
 | **Nothing asserts that a gesture *arms*** — narrowed 2026-08-01, decision #110.3, and it is now the *first* link only. `repro/gesture-preview-agrees.txt` used to compare an armed run against an unarmed one and demand they agree, which is green when arming does nothing; it now also asserts arming has an effect (the preview surface goes 0.2323/0.2918 → 0.4814/0.2037 over the same eight ticks), so a no-op `beginInteraction` fails. What is still unreachable is a `DragGesture` closure calling it: **attempted** — `NSHostingView` off-screen lays the wheel out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s call is green across 744 / 3624 / 39, measured | `Scenario.swift` |
 | ~~**The grading wheel's arming is unmeasured.**~~ ✅ **closed 2026-08-01, decision #110.2.** `wheel` and `dragwheel` drive a three-component control, added beside the scalar spellings rather than replacing them (#89). **9.6 ms per tick unarmed against 1.2 armed, 8.0×**, settled picture identical at luma 0.2268 / sat 0.5136 | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
