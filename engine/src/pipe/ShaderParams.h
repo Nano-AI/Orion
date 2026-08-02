@@ -234,7 +234,12 @@ struct alignas(16) Grade {
     /// tan of the half-diagonal field angle of the lens being imitated, so the
     /// kernel evaluates cos^4 with no trigonometry.
     float         vignetteTanTheta;
-    float         _pad2[3];
+    /// Balance, -1..+1 — decision #101, research/UNSOURCED.md §26. Slides all
+    /// three zone centres along log2(Y/0.18); positive moves them down, so more
+    /// of the picture counts as highlight. Zero is bit-identical to no Balance,
+    /// and it takes one of the three pad words rather than growing the block.
+    float         balance;
+    float         _pad2[2];
 };
 static_assert(sizeof(Grade) == 96);
 

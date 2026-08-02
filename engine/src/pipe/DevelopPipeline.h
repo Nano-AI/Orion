@@ -218,6 +218,16 @@ struct Adjustments {
     float gradeMidtone[3]{};
     float gradeHighlight[3]{};
 
+    /// Balance, -1..+1 — decision #101. The zones the three wheels act on are
+    /// Gaussians fixed at -2.5 / 0 / +2.5 EV; this slides all three centres
+    /// together, so a photographer decides how much of the picture counts as
+    /// shadow. Positive is toward the highlights.
+    ///
+    /// ⚠ **Not a reason to run the node.** With the wheels centred it changes
+    /// weights that multiply zero, so it must never switch grading on by
+    /// itself — decisions #82 and #92 are both that failure.
+    float gradeBalance = 0.0f;
+
     /// The **creative** vignette — research/vignette.md, decision #96.
     ///
     /// ⚠ Nothing to do with `lensVignette` above, which *removes* a falloff a

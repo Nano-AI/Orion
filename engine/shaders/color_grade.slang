@@ -44,7 +44,11 @@ struct GradeParams
     float  vignetteRadius;
     float  vignetteAmount;
     float  vignetteTanTheta;   // tan of the half-diagonal field angle
-    float  _pad2, _pad3, _pad4;
+
+    /// Balance, -1..+1. Slides the three zone centres along the same log2 axis
+    /// they are defined on. Zero is the identity, exactly. See below.
+    float  balance;
+    float  _pad3, _pad4;
 };
 
 /// Rec.2020 luma. The working space is Rec.2020, so using Rec.709 coefficients
@@ -77,6 +81,38 @@ static const float kEvMidtone   =  0.0f;   // middle gray, where it belongs
 static const float kEvHighlight =  2.5f;
 static const float kZoneSigma   =  1.6f;
 
+// ── Balance: the one thing split toning had that the wheels did not ────────
+//
+// Decision #101 refused to build split toning — three wheels already are its
+// two tints plus a midtone it never reached — and named Balance as the single
+// genuine remainder. The centres above are fixed, so nothing decides how much
+// of a photograph counts as shadow.
+//
+// Reference behaviour: Adobe's Balance, on Split Toning (Camera Raw 4, 2007)
+// and carried into the Color Grading panel that replaced it (Camera Raw 13.0 /
+// Lightroom Classic 10.0, October 2020). Adobe's runs -100..+100 and, in their
+// words, balances "the effect between the Highlight and Shadow sliders";
+// positive favours the highlight tint. This is that control on Orion's axis.
+//
+// **A rigid shift of all three centres**, not a re-spacing. Sliding the whole
+// partition along log2 luminance is what moves a crossover, and it is the one
+// form that cannot go wrong: the zones keep their 2.5 EV spacing so they stay
+// ordered and none can pass another, and a partition of unity translated along
+// its own axis is still a partition of unity. Re-spacing the centres instead —
+// pulling shadow and highlight toward one end — can collide them, and two
+// Gaussians at the same centre are one zone with two wheels fighting over it.
+//
+// Sign: **positive is toward the highlights**, which moves the centres *down*
+// so that more of the picture falls inside the highlight band. Same direction
+// as Adobe's slider.
+//
+// kBalanceEv is chosen, not published — research/UNSOURCED.md §26. It is half
+// the zone spacing, which is the largest travel where every crossover stays
+// strictly between the two centres it separates: at full deflection the
+// shadow/midtone crossover lands exactly on a neighbouring centre and never
+// past it.
+static const float kBalanceEv   =  1.25f;
+
 float zoneWeight(float ev, float center)
 {
     const float d = (ev - center) / kZoneSigma;
@@ -98,9 +134,14 @@ void colorGrade(uint3 tid : SV_DispatchThreadID,
     const float y = max(luma2020(c), 1e-6f);
     const float ev = log2(y / 0.18f);
 
-    const float rawS = zoneWeight(ev, kEvShadow);
-    const float rawM = zoneWeight(ev, kEvMidtone);
-    const float rawH = zoneWeight(ev, kEvHighlight);
+    // ⚠ At balance 0 this is `-0.0f`, and `x + (-0.0f) == x` bit for bit for
+    // every finite x — so Balance centred leaves every existing render, bench
+    // pin and baseline exactly where it was rather than rebasing them by a ulp.
+    const float shift = -p.balance * kBalanceEv;
+
+    const float rawS = zoneWeight(ev, kEvShadow + shift);
+    const float rawM = zoneWeight(ev, kEvMidtone + shift);
+    const float rawH = zoneWeight(ev, kEvHighlight + shift);
     const float total = rawS + rawM + rawH + 1e-6f;
 
     const float ws = rawS / total;
