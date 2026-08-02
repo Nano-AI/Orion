@@ -151,7 +151,18 @@ are spoken for.
 | Brush accumulation, **session two — the accumulator** | #108 | The half behind #102's predicate, and the item that answers *"no brush stroke should take 155 ms"*. ⚠ The budget is part of the decision: ~97 MB a component at 24 Mpx against a graph already at 173 nodes / 7186 MiB, so six components would cost 580 MB and the number decides the design. ⚠ `unchangedPrefix` returning N means the texture is valid *up to* N — an accumulator out of sync with it renders a plausible stroke from stale pixels and nothing looks wrong |
 | Highlight fill, **piece 4** (§3.3 detail transfer) | #109 | Re-costed at **+23 nodes and +30 MiB** because it reuses piece 3's pyramid — told to verify that from the inside rather than trust it. ⚠ #106's maximum-principle argument covers the *fill* and may not cover a detail transfer, which can plausibly move a pixel outside the rim's range; if so it owes #29 a new argument |
 | Three Swift-layer gaps: the memberwise-init trap, gesture arming, the grading wheel's number | #110 | ⚠ The memberwise trap has now silently shipped **two** dead features (film grain, then Balance) and each cost a `repro/` scenario written afterwards. Told to fix the *shape* and prove it — add a field, show the compiler rejects it, quote the error. A fix that merely looks safer is the same trap with better formatting |
-| **Core ML denoise — research and decomposition only, no build** | #111 | ⚠ Told explicitly not to build. Raw-domain vs sRGB-domain is the load-bearing question (most published denoisers are trained on JPEG noise, which a Bayer sensor does not produce), and the license of any **weights** matters as much as the paper's. "Not worth building, here is the arithmetic" is a first-class outcome |
+| ✅ **Core ML denoise — research only, merged 2026-08-01** (session `2026-08-01p`) | #111 | ⚠ Told explicitly not to build. Raw-domain vs sRGB-domain is the load-bearing question (most published denoisers are trained on JPEG noise, which a Bayer sensor does not produce), and the license of any **weights** matters as much as the paper's. "Not worth building, here is the arithmetic" is a first-class outcome |
+
+⚠ **The denoise brief's premise was wrong and the agent corrected it.** I wrote
+that Orion's noise handling is pre-demosaic. The **fit** is — `estimateNoise` takes
+a `BayerImage`. The **filter** is not: `denoise:blur 0..3` sits at line 211 of
+`DevelopPipeline.cpp`, after `rcd:red/blue` (134) and before `camera->working`
+(260), in **linear camera RGB**, because `var = a·x + b` only holds there.
+Verified against the source at merge rather than taken on trust. That gives Orion
+a **third** noise domain — published denoisers are trained on sRGB or on Bayer,
+and neither is where Orion filters. An sRGB checkpoint dropped in at the current
+insertion point would look plausible, be wrong for an invisible reason, and no
+check in either suite would catch it. Same class as the purple cast.
 
 **Deliberately not deployed this wave, and why:**
 
