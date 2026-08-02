@@ -88,6 +88,7 @@ license truncating anything whose output nobody sees.
 | Night skies | the sky is grainy with high-ISO noise while silhouettes are flat black, so the calmest region joined to the top edge is the **foliage** — see below, it inverts rather than refusing |
 | Sky through foliage | the gaps are smaller than the fill's connectivity |
 | Smooth ground touching the sky | the fill can leak through a calm wall or road |
+| **Interiors** | the search floods from the **top edge**, and indoors the top edge is a ceiling. Added 2026-08-02 after the `--scene sky` still on an atrium frame came back with a wooden ceiling and a structural column selected — and **accepted** rather than refused, the same inversion the night-frame row describes, so it is not a night-exposure problem but a top-edge assumption. ⚠ Not pinned by a check: it was found on a photograph outside `samples/`, and a test that depends on a file which is not in the repository is a test that fails for everyone else |
 
 **This list is why the control says *estimated*.** And why the failure is
 acceptable at all: the purple cast was dangerous because it was **invisible**
