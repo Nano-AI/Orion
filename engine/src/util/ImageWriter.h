@@ -29,6 +29,20 @@ enum class Metadata {
     None,         ///< nothing but "developed in Orion" and the star rating
 };
 
+/// Bits per component in the written file.
+///
+/// PNG and TIFF carry either. JPEG is an eight-bit container, so the choice
+/// does not reach the file — the interface greys the control out rather than
+/// offering a setting that does nothing.
+enum class BitDepth { Eight, Sixteen };
+
+/// Output sharpening: the correction for the softening that resampling causes.
+///
+/// Applied **after** the resize, which is the whole point — sharpening before
+/// the resample is undone by it. See `research/detail.md`; the placement is
+/// Fraser's, the amounts are ours and are listed in `research/UNSOURCED.md`.
+enum class Sharpen { None, Screen, Print };
+
 struct ExportOptions {
     ImageFormat format = ImageFormat::Jpeg;
     /// JPEG only, 0..1. Ignored by PNG and TIFF, which are lossless.
@@ -36,6 +50,18 @@ struct ExportOptions {
     /// Longest edge in pixels; 0 keeps full resolution.
     std::uint32_t maxDimension = 0;
     ColorSpace space = ColorSpace::Srgb;
+
+    /// ⚠ Sixteen, not eight, when nothing says otherwise: an unspecified export
+    /// keeps what it was given. The opposite default would mean a caller that
+    /// forgot the field silently halved its precision, which is the bug this
+    /// path already shipped once — a resize context that was eight bits undid
+    /// the wide path for every export with a size limit.
+    ///
+    /// The export panel always states it, and states eight, because eight bits
+    /// is what a file handed to someone else should be.
+    BitDepth depth = BitDepth::Sixteen;
+
+    Sharpen sharpen = Sharpen::None;
 
     /// A file whose EXIF, TIFF and GPS blocks are copied onto the export.
     /// Empty writes no metadata.
@@ -51,7 +77,8 @@ struct ExportOptions {
     int rating = -1;
 };
 
-/// Writes 8-bit RGBA pixels. Throws std::runtime_error on failure.
+/// Writes 16-bit RGBA samples, whatever depth the file ends up at. Throws
+/// std::runtime_error on failure.
 ///
 /// Resampling, when requested, happens in CoreGraphics rather than on the GPU:
 /// export is not on the interaction path, and a correct downscale with proper

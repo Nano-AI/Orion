@@ -33,6 +33,7 @@ miss the view-model layer, which is where these failures are.
 | `sky-mask.txt` | Passes — ⚠ its refusal half asserted nothing until 2026-07-31: it never called `select`, so it was green whatever the detector did |
 | `dehaze-reaches-the-picture.txt` | Passes — ⚠ closes the gap where dehaze could be **deleted** from the product and all three suites plus the bench stayed green |
 | `auto-applies-every-field.txt` | Passes — ⚠ Auto writes five fields and `undo-after-auto.txt` caught **none** of the five being dropped |
+| `export-depth-and-sharpening.txt` | Passes — the three export controls that fail invisibly. ⚠ Its metadata half is one-sided by necessity: the sample frames have no GPS, so location itself is asserted in `orion-tests` against a stand-in file |
 
 ## The surfaces a scenario can measure
 
@@ -46,6 +47,7 @@ added because a bug was invisible to the ones before it.
 | The preview graph | `measure <region> <name> preview` | what the photographer sees *during* a drag, which the settled picture cannot show |
 | The analysis render | `measure <region> <name> analysis` | the picture handed to Vision — neutralised geometry, no overlay — which nothing on screen ever shows |
 | The interface's own model | `maskcheck <cells> <ev>` | the mask the overlay *draws* disagreeing with the coverage the engine *renders* |
+| The written file | `probe <path> <property> <name>` | depth, GPS, IPTC place, camera EXIF and acutance of a file that was actually exported — the only surface that can see a control which is wired to nothing, because every one of these failures still opens as the photograph |
 
 `measure ... canvas` renders through `CanvasBlit` — the real shader, the real
 transform — rather than reimplementing the split on the CPU. `maskcheck`

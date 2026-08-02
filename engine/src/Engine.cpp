@@ -299,20 +299,27 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
     }
 }
 
-/// Widens the graph's tail for the duration of a read, and puts it back.
+/// Retargets the graph's tail for the duration of a read, and puts it back.
 ///
 /// The display and geometry nodes write eight bits for the screen, because the
 /// drawable is `bgra8Unorm` and anything wider is bytes moved for precision
 /// nothing can show — worth 3.4 ms of a 16 ms budget. Export is the one
 /// consumer that can use sixteen, so it asks, and pays the reallocation.
+///
+/// ⚠️ **An eight-bit export must take the narrow graph, not the wide one.**
+/// The narrow tail is the path that dithers (`ops/dither_ops.slang`), and
+/// rounding a smooth sixteen-bit sky down to eight without one is the banding
+/// the dither exists to prevent. So the depth the file is going to have decides
+/// which graph renders it, and an eight-bit export is byte-for-byte what the
+/// screen shows.
 namespace {
 struct WideOutputFor {
     pipe::DevelopPipeline& pipeline;
     const bool was;
 
-    explicit WideOutputFor(pipe::DevelopPipeline& p)
+    WideOutputFor(pipe::DevelopPipeline& p, bool wide)
         : pipeline(p), was(p.wideOutput()) {
-        pipeline.setWideOutput(true);
+        pipeline.setWideOutput(wide);
     }
     ~WideOutputFor() {
         // Reallocates, so it can throw, and a throwing destructor during
@@ -331,8 +338,9 @@ struct WideOutputFor {
 void Engine::exportImage(const std::string& path, const util::ExportOptions& options) {
     if (!develop_) throw std::runtime_error("no image open");
 
-    // Sixteen bits end to end, and back to eight when this returns.
-    WideOutputFor wide(*develop_);
+    // Sixteen bits end to end when the file will hold sixteen, and the screen's
+    // own dithered eight when it will not. Restored either way.
+    WideOutputFor wide(*develop_, options.depth == util::BitDepth::Sixteen);
 
     // Make sure what we write matches what is on screen.
     develop_->render();
@@ -356,8 +364,9 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {
     if (!develop_) throw std::runtime_error("no image open");
 
-    // The estimate has to encode the same pixels the real write will.
-    WideOutputFor wide(*develop_);
+    // The estimate has to encode the same pixels the real write will — which
+    // includes the depth, since eight bits is roughly half the PNG.
+    WideOutputFor wide(*develop_, options.depth == util::BitDepth::Sixteen);
     develop_->render();
 
     const std::uint32_t w = develop_->outputWidth();
@@ -393,11 +402,27 @@ std::vector<float> Engine::readOutputFloat(std::uint32_t w, std::uint32_t h) con
 
 std::vector<std::uint16_t> Engine::readOutput16(std::uint32_t w, std::uint32_t h) const {
     const std::size_t count = static_cast<std::size_t>(w) * h * 4;
+    std::vector<std::uint16_t> out(count);
+
+    // ⚠️ The tail is not always half float. An eight-bit export renders through
+    // the narrow graph on purpose — that is the path that dithers — and reading
+    // `RGBA8Unorm` as half float would give noise, not a picture.
+    if (develop_->output().format() != gpu::PixelFormat::RGBA16Float) {
+        std::vector<std::uint8_t> bytes(count);
+        develop_->output().download(bytes.data(), static_cast<std::size_t>(w) * 4, w, h);
+        // 257, not 256: it maps 255 to 65535 exactly, so quantising back to
+        // eight bits in the writer returns the byte the graph produced. Any
+        // other scale would round some values to a neighbour and undo the
+        // dither this path exists for.
+        for (std::size_t i = 0; i < count; ++i) {
+            out[i] = static_cast<std::uint16_t>(bytes[i] * 257u);
+        }
+        return out;
+    }
+
     std::vector<__fp16> half(count);
     develop_->output().download(half.data(),
                                 static_cast<std::size_t>(w) * 4 * sizeof(__fp16), w, h);
-
-    std::vector<std::uint16_t> out(count);
     for (std::size_t i = 0; i < count; ++i) {
         const float v = std::clamp(float(half[i]), 0.0f, 1.0f);
         out[i] = static_cast<std::uint16_t>(v * 65535.0f + 0.5f);

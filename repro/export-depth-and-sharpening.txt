@@ -1,0 +1,108 @@
+# The three export controls that fail invisibly.
+#
+# Bit depth, metadata and output sharpening have one thing in common: when they
+# are broken, the exported file still looks like the photograph. A PNG that is
+# eight bits when sixteen was asked for opens correctly. A JPEG that still
+# carries the GPS block opens correctly, and publishes the address of whoever
+# took it. An "output sharpening" menu wired to nothing sharpens nothing, and
+# the only person who can tell is looking at a print.
+#
+# So this file asserts on the *written file*, read back with ImageIO, rather
+# than on the settings that produced it.
+#
+# ⚠ Every check here is paired with its opposite. A depth assertion that only
+# ever checks 16 passes on a writer hard-coded to 16, which is exactly what this
+# code was before the control existed.
+
+open samples/_PIC8220.ARW
+set exposure 0.4
+set contrast 1.15
+
+# ── Bit depth ──────────────────────────────────────────────────────────────
+#
+# Both directions. Before this control, every export was sixteen bits whatever
+# anyone wanted — so "16 means 16" was true of a writer that could not do
+# anything else, and only "8 means 8" can tell the two apart.
+
+export /tmp/orion-depth-16.png depth=16
+probe /tmp/orion-depth-16.png depth depth16
+expect depth16 == 16
+
+export /tmp/orion-depth-8.png depth=8
+probe /tmp/orion-depth-8.png depth depth8
+expect depth8 == 8
+
+# And the pixels are not merely relabeled: eight bits is a smaller file for the
+# same picture. A writer that tagged the depth without changing the samples
+# would pass the two checks above and fail this one.
+expect depth8 != depth16
+
+# JPEG is an eight-bit container. Asking it for sixteen must not produce a
+# sixteen-bit anything — and, less visibly, must not route the render through
+# the wide graph, which is the one that does not dither.
+export /tmp/orion-depth-jpeg.jpg depth=16
+probe /tmp/orion-depth-jpeg.jpg depth jpegDepth
+expect jpegDepth == 8
+
+# ── Metadata ───────────────────────────────────────────────────────────────
+#
+# The sample has no GPS — the camera has no receiver — so location itself is
+# asserted in orion-tests, against a stand-in file written with a GPS block and
+# an IPTC place name. What this file can check is that the policy reaches the
+# written file at all: the camera's own EXIF has to survive "Keep all" and has
+# to be gone under "Strip everything".
+#
+# ⚠ Both directions. A policy wired to nothing keeps the EXIF in every case and
+# would pass a one-sided check.
+
+export /tmp/orion-meta-all.jpg metadata=all
+probe /tmp/orion-meta-all.jpg exif metaAllExif
+expect metaAllExif == 1
+
+export /tmp/orion-meta-none.jpg metadata=none
+probe /tmp/orion-meta-none.jpg exif metaNoneExif
+expect metaNoneExif == 0
+
+# And the picture is the same in both, so what changed is metadata and not a
+# render that moved under us.
+probe /tmp/orion-meta-all.jpg acutance metaAllSharp
+probe /tmp/orion-meta-none.jpg acutance metaNoneSharp
+expect metaAllSharp == metaNoneSharp
+
+# ── Output sharpening ──────────────────────────────────────────────────────
+#
+# At a reduced size, which is the case the control exists for: resampling
+# softens, and this is the correction. Acutance is the mean absolute Laplacian
+# of luma — uncalibrated, and deliberately so. It is only ever compared between
+# two exports of the same frame at the same size.
+
+export /tmp/orion-sharp-none.png size=1200 sharpen=none
+probe /tmp/orion-sharp-none.png acutance sharpNone
+
+export /tmp/orion-sharp-screen.png size=1200 sharpen=screen
+probe /tmp/orion-sharp-screen.png acutance sharpScreen
+
+export /tmp/orion-sharp-print.png size=1200 sharpen=print
+probe /tmp/orion-sharp-print.png acutance sharpPrint
+
+# Ordered, not merely different. "Print" that sharpened less than "Screen"
+# would be a wiring mistake no picture would reveal.
+expect sharpNone < sharpScreen
+expect sharpScreen < sharpPrint
+
+# The default is None, byte for byte — an export that says nothing about
+# sharpening is the same file as one that asks for none. A default that quietly
+# sharpened would make every export that is going back into an editor lossy.
+#
+# ⚠ That None *does nothing at all* is not asserted here and cannot be: both
+# sides of this comparison are unsharpened, so it is a statement about the
+# default and about determinism. The no-op itself is asserted in orion-tests,
+# against a step edge, where a pass that did anything would show as overshoot.
+export /tmp/orion-sharp-none-again.png size=1200
+identical /tmp/orion-sharp-none.png /tmp/orion-sharp-none-again.png
+
+# And sharpening must not move the size or the depth — it is a filter, not a
+# resize.
+probe /tmp/orion-sharp-print.png depth printDepth
+probe /tmp/orion-sharp-none.png depth noneDepth
+expect printDepth == noneDepth

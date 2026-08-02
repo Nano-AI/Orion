@@ -571,6 +571,21 @@ orion::util::ColorSpace toColorSpace(int32_t v) {
         default: return orion::util::ColorSpace::Srgb;
     }
 }
+
+/// Only an explicit 8 narrows it. Zero — a struct the caller never filled in —
+/// keeps the precision, because the alternative is losing it by omission.
+orion::util::BitDepth toBitDepth(int32_t d) {
+    return d == ORION_DEPTH_8 ? orion::util::BitDepth::Eight
+                              : orion::util::BitDepth::Sixteen;
+}
+
+orion::util::Sharpen toSharpen(int32_t s) {
+    switch (s) {
+        case ORION_SHARPEN_SCREEN: return orion::util::Sharpen::Screen;
+        case ORION_SHARPEN_PRINT:  return orion::util::Sharpen::Print;
+        default:                   return orion::util::Sharpen::None;
+    }
+}
 }  // namespace
 
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
@@ -589,6 +604,8 @@ OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
             opts.maxDimension = options->max_dimension;
             opts.space        = toColorSpace(options->space);
             opts.rating       = options->rating;
+            opts.depth        = toBitDepth(options->bit_depth);
+            opts.sharpen      = toSharpen(options->sharpen);
             switch (options->metadata) {
                 case ORION_METADATA_ALL:  opts.metadata = orion::util::Metadata::All;  break;
                 case ORION_METADATA_NONE: opts.metadata = orion::util::Metadata::None; break;
@@ -615,6 +632,12 @@ OrionStatus orion_engine_export_size(OrionEngine* engine,
         o.quality = options->quality;
         o.maxDimension = options->max_dimension;
         o.space = toColorSpace(options->space);
+        // The depth and the sharpening both move the byte count — eight bits is
+        // about half the PNG, and sharpening gives the JPEG encoder more to
+        // encode. A measured size that ignored them would be a measurement of
+        // the wrong file.
+        o.depth = toBitDepth(options->bit_depth);
+        o.sharpen = toSharpen(options->sharpen);
         *out_bytes = static_cast<uint64_t>(engine->impl.exportedSize(o));
         return ORION_OK;
     });

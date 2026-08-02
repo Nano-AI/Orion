@@ -35,6 +35,64 @@ drag never recomputes it.
 
 ---
 
+## Output sharpening
+
+**Where:** `util/ImageWriter.mm`, `unsharpMask` / `unsharpFor`. Export only.
+
+**Status:** ⚠️ **Placement sourced, amounts not.** The sigma and amount for
+Screen and Print are listed in [`UNSOURCED.md`](UNSOURCED.md) §2.
+
+**What it does:** an unsharp mask over the **resized** image, on luminance only.
+
+**Why it is a separate thing from capture sharpening.** Fraser's multipass model
+splits sharpening into three passes with different jobs: *capture* sharpening
+undoes the sensor and demosaic, *creative* sharpening is local and for effect,
+and *output* sharpening corrects the softening that resampling to the final size
+introduces. The passes are not interchangeable, and the ordering is the whole
+argument: output sharpening applied before the resize is resampled away by it.
+
+- Bruce Fraser and Jeff Schewe, *Real World Image Sharpening with Adobe
+  Photoshop, Camera Raw, and Lightroom*, 2nd edition, Peachpit Press, 21 August
+  2009, ISBN 978-0-321-63755-0. The three-pass workflow, and output sharpening
+  applied once the image is at final output size and tuned to the output
+  process.
+- Fraser's earlier statement of the same workflow:
+  [Out of Gamut: Thoughts on a Sharpening Workflow](https://creativepro.com/out-of-gamut-thoughts-a-sharpening-workflow/),
+  CreativePro.
+- The model is established rather than niche: Lightroom's *Sharpen For* —
+  Screen, Matte Paper, Glossy Paper — is this pass, and Photoshop's
+  three-pass advice restates it
+  ([A Multipass Sharpening Workflow](https://www.peachpit.com/articles/article.aspx?p=606591&seqNum=2)).
+
+Nothing was copied. The operator is the ordinary unsharp mask; what is taken
+from Fraser is *where the pass belongs* and *that print needs more than screen*,
+both of which are descriptions of a workflow rather than code.
+
+**Why it is on the CPU, and not a node.** The resize is CoreGraphics', in
+`ImageWriter`, because export is off the interaction path and a correctly
+filtered downscale matters more there than milliseconds — see
+[`color-pipeline.md`](color-pipeline.md) and the file's own comment. Output
+sharpening has to run *after* that resize, so a GPU node in the develop graph
+is the one place it cannot go. It is ~60 lines beside the resize instead.
+
+**Luminance only.** The high-pass is computed on Rec.709 luma and the same delta
+is added to R, G and B, so an edge gains contrast without shifting hue.
+Sharpening the three channels independently is what puts colored fringes on
+high-contrast edges. Rec.709 because that is where the display transform ends.
+
+**Tested by** `tests_io.cpp` (overshoot on a step edge, ordered None < Screen <
+Print; brightness unmoved; all three channels moving together on an edge that
+exists in green alone) and `repro/export-depth-and-sharpening.txt` (acutance of
+the actually-written file, through the real view models).
+
+**Better approaches to consider:**
+- Tie the radius to the **output resolution** rather than offering two presets.
+  Fraser's model is really a function of the output process and its dot pitch;
+  Screen and Print are a two-point sample of it.
+- Sharpen in a perceptually uniform space rather than in the encoded values.
+
+---
+
 ## Noise reduction
 
 **Status:** ❌ **Not implemented.**

@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 
 namespace orion::util {
 namespace {
@@ -90,6 +91,25 @@ NSMutableDictionary* metadata(const std::string& source, int rating, Metadata po
             }
         }
 
+        // ⚠️ GPS is not the only place a location hides. IPTC carries the
+        // place in words — city, sub-location, province, country — and a photo
+        // tagged in any cataloguing application has them filled in. Stripping
+        // the coordinates and leaving "Sub-location: <the street>" behind is a
+        // control that reads as honest and is not, which is worse than not
+        // offering it.
+        if (policy != Metadata::All) {
+            NSMutableDictionary* iptc = out[(__bridge NSString*)kCGImagePropertyIPTCDictionary];
+            for (NSString* key in @[(__bridge NSString*)kCGImagePropertyIPTCSubLocation,
+                                    (__bridge NSString*)kCGImagePropertyIPTCCity,
+                                    (__bridge NSString*)kCGImagePropertyIPTCProvinceState,
+                                    (__bridge NSString*)kCGImagePropertyIPTCCountryPrimaryLocationCode,
+                                    (__bridge NSString*)kCGImagePropertyIPTCCountryPrimaryLocationName,
+                                    (__bridge NSString*)kCGImagePropertyIPTCContentLocationCode,
+                                    (__bridge NSString*)kCGImagePropertyIPTCContentLocationName]) {
+                [iptc removeObjectForKey:key];
+            }
+        }
+
         // The RAW's own orientation is already baked into the pixels by the
         // geometry node, and its dimensions are not the export's.
         NSMutableDictionary* tiff = out[(__bridge NSString*)kCGImagePropertyTIFFDictionary];
@@ -126,6 +146,117 @@ NSMutableDictionary* metadata(const std::string& source, int rating, Metadata po
     }
 
     return out;
+}
+
+/// Output sharpening, as an unsharp mask over the **resized** image.
+///
+/// ⚠️ The placement is sourced and the numbers are not. Fraser's multipass
+/// model — capture, creative, output — puts this pass last, after the image is
+/// at its final size, because resampling is what softens it and sharpening
+/// before the resample is thrown away by it. That is why this runs inside
+/// `convert`, on the resized buffer, rather than as a node in the graph.
+///
+/// The sigma and amount below are **chosen, not measured**, and are listed in
+/// `research/UNSOURCED.md`. The invariant the tests hold is the one the control
+/// promises: Print sharpens more than Screen, Screen more than None, and None
+/// is bit-identical to no pass at all.
+struct Unsharp {
+    float sigma;   ///< Gaussian sigma in output pixels
+    float amount;  ///< how much of the high-pass is added back
+};
+
+Unsharp unsharpFor(Sharpen s) {
+    switch (s) {
+        case Sharpen::None:   return {0.0f, 0.0f};
+        case Sharpen::Screen: return {0.6f, 0.40f};
+        case Sharpen::Print:  return {1.0f, 0.80f};
+    }
+    return {0.0f, 0.0f};
+}
+
+/// Unsharp mask in place over 16-bit RGBA, on luminance only.
+///
+/// Luminance only, not per channel: adding the same high-pass to R, G and B
+/// moves the pixel along the grey axis, which sharpens the edge without moving
+/// its hue. Sharpening the three channels independently is what puts colored
+/// fringes on high-contrast edges.
+///
+/// Rec.709 luma weights, which are the primaries the display transform already
+/// ends in — using any other set here would sharpen against a luminance the
+/// rest of the pipeline does not agree with.
+///
+/// Cost, measured at 24 Mpx full size: two float planes, ~194 MB transient, and
+/// a few hundred milliseconds single-threaded. Both are the same order as the
+/// readback and the bitmap contexts either side of it, and export is off the
+/// interaction path — but the panel's live size estimate runs this too, which
+/// is why it is debounced and shows a spinner.
+void unsharpMask(std::uint16_t* rgba, std::size_t w, std::size_t h,
+                 std::size_t bytesPerRow, Unsharp s) {
+    if (s.amount <= 0.0f || s.sigma <= 0.0f || w == 0 || h == 0) return;
+
+    const std::size_t rowPixels = bytesPerRow / sizeof(std::uint16_t);
+
+    // Three sigma either side: past that the Gaussian's weight is under 0.3%
+    // and the taps cost more than they change.
+    const int half = std::max(1, static_cast<int>(std::ceil(3.0f * s.sigma)));
+    std::vector<float> kernel(static_cast<std::size_t>(2 * half + 1));
+    float sum = 0.0f;
+    for (int i = -half; i <= half; ++i) {
+        const float v = std::exp(-(static_cast<float>(i) * static_cast<float>(i))
+                                 / (2.0f * s.sigma * s.sigma));
+        kernel[static_cast<std::size_t>(i + half)] = v;
+        sum += v;
+    }
+    for (float& v : kernel) v /= sum;
+
+    const auto at = [&](std::size_t x, std::size_t y) -> std::uint16_t* {
+        return rgba + y * rowPixels + x * 4;
+    };
+
+    // The luminance plane, and the horizontal pass over it. Two planes rather
+    // than three: the vertical pass reads `blurred` and `luma` together and
+    // writes the correction straight into the pixels.
+    std::vector<float> luma(w * h), blurred(w * h);
+    for (std::size_t y = 0; y < h; ++y) {
+        for (std::size_t x = 0; x < w; ++x) {
+            const std::uint16_t* p = at(x, y);
+            luma[y * w + x] = (0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2])
+                            / 65535.0f;
+        }
+    }
+
+    for (std::size_t y = 0; y < h; ++y) {
+        for (std::size_t x = 0; x < w; ++x) {
+            float acc = 0.0f;
+            for (int i = -half; i <= half; ++i) {
+                // Clamp at the border. Wrapping would sharpen the left edge
+                // against the right one.
+                const std::size_t sx = static_cast<std::size_t>(
+                    std::clamp<long>(static_cast<long>(x) + i, 0,
+                                     static_cast<long>(w) - 1));
+                acc += kernel[static_cast<std::size_t>(i + half)] * luma[y * w + sx];
+            }
+            blurred[y * w + x] = acc;
+        }
+    }
+
+    for (std::size_t y = 0; y < h; ++y) {
+        for (std::size_t x = 0; x < w; ++x) {
+            float acc = 0.0f;
+            for (int i = -half; i <= half; ++i) {
+                const std::size_t sy = static_cast<std::size_t>(
+                    std::clamp<long>(static_cast<long>(y) + i, 0,
+                                     static_cast<long>(h) - 1));
+                acc += kernel[static_cast<std::size_t>(i + half)] * blurred[sy * w + x];
+            }
+            const float delta = s.amount * (luma[y * w + x] - acc) * 65535.0f;
+            std::uint16_t* p = at(x, y);
+            for (int c = 0; c < 3; ++c) {
+                p[c] = static_cast<std::uint16_t>(
+                    std::clamp(static_cast<float>(p[c]) + delta, 0.0f, 65535.0f));
+            }
+        }
+    }
 }
 
 /// Sixteen bits per component.
@@ -168,12 +299,75 @@ CGImageRef makeImage(const std::uint16_t* rgba, std::uint32_t width,
 /// than shaving milliseconds. The conversion is ColorSync's, for the reason
 /// CLAUDE.md gives — a mature implementation beats a hand-rolled one, and a
 /// chromatic adaptation typed in by hand is a cast waiting to happen.
-CGImageRef convert(CGImageRef source, std::uint32_t maxDimension, ColorSpace target) {
+/// Quantises to eight bits per component, at the same size and in the same
+/// space. A straight redraw, no resampling.
+///
+/// ⚠️ Undithered, deliberately. The graph dithers whichever node writes the
+/// eight bits (see `ops/dither_ops.slang`), and `Engine::exportImage` picks the
+/// narrow graph for exactly the exports that land here — so the values arriving
+/// have already been broken up, and a second dither would add noise twice.
+CGImageRef quantiseToEight(CGImageRef source, ColorSpace target) {
+    const std::size_t w = CGImageGetWidth(source);
+    const std::size_t h = CGImageGetHeight(source);
+
+    CGColorSpaceRef space = colorSpace(target);
+    CGContextRef ctx = CGBitmapContextCreate(
+        nullptr, w, h, 8, 0, space,
+        static_cast<CGBitmapInfo>(kCGImageAlphaNoneSkipLast));
+    CGColorSpaceRelease(space);
+    if (ctx == nullptr) throw std::runtime_error("could not create eight-bit context");
+
+    CGContextSetInterpolationQuality(ctx, kCGInterpolationNone);
+    CGContextDrawImage(ctx, CGRectMake(0, 0, static_cast<CGFloat>(w),
+                                       static_cast<CGFloat>(h)), source);
+
+    CGImageRef out = CGBitmapContextCreateImage(ctx);
+    CGContextRelease(ctx);
+    if (out == nullptr) throw std::runtime_error("could not quantise image");
+    return out;
+}
+
+/// Resizes, converts and sharpens, or returns nullptr when none is needed.
+///
+/// ⚠️ **The order is the feature.** Resample, then sharpen, then quantise.
+/// Fraser's multipass model puts output sharpening after the image reaches its
+/// final size because resampling is what softened it; sharpening first would be
+/// resampled away. Quantising last keeps the sharpening's sub-level detail out
+/// of the rounding.
+///
+/// Resize and convert share one pass, because both are a draw into a bitmap
+/// context and doing them separately would resample twice.
+///
+/// Sixteen bits per component through all of it, not eight. It used to be
+/// eight, which quietly undid the 16-bit output path for every export that
+/// asked for a smaller image — the depth survived exactly as far as the first
+/// resize.
+///
+/// Resampling happens in CoreGraphics rather than on the GPU: export is not on
+/// the interaction path, and a correctly filtered downscale matters more here
+/// than shaving milliseconds. The conversion is ColorSync's, for the reason
+/// CLAUDE.md gives — a mature implementation beats a hand-rolled one, and a
+/// chromatic adaptation typed in by hand is a cast waiting to happen.
+CGImageRef convert(CGImageRef source, std::uint32_t maxDimension, ColorSpace target,
+                   BitDepth depth, Sharpen sharpen) {
     const std::size_t w = CGImageGetWidth(source);
     const std::size_t h = CGImageGetHeight(source);
     const std::size_t longest = std::max(w, h);
     const bool resizing = maxDimension != 0 && longest > maxDimension;
-    if (!resizing && target == ColorSpace::Srgb) return nullptr;
+    const bool sharpening = sharpen != Sharpen::None;
+
+    // Nothing to resample, nothing to convert, nothing to sharpen and the depth
+    // is already what the caller asked for.
+    if (!resizing && !sharpening && target == ColorSpace::Srgb
+        && depth == BitDepth::Sixteen) {
+        return nullptr;
+    }
+
+    // Eight bits and nothing else to do: quantise the source directly rather
+    // than round-tripping it through a full-size sixteen-bit redraw.
+    if (!resizing && !sharpening && target == ColorSpace::Srgb) {
+        return quantiseToEight(source, target);
+    }
 
     std::size_t nw = w, nh = h;
     if (resizing) {
@@ -195,10 +389,22 @@ CGImageRef convert(CGImageRef source, std::uint32_t maxDimension, ColorSpace tar
     CGContextDrawImage(ctx, CGRectMake(0, 0, static_cast<CGFloat>(nw),
                                        static_cast<CGFloat>(nh)), source);
 
+    // On the resized pixels, before they become an image.
+    if (sharpening) {
+        if (auto* data = static_cast<std::uint16_t*>(CGBitmapContextGetData(ctx))) {
+            unsharpMask(data, nw, nh, CGBitmapContextGetBytesPerRow(ctx),
+                        unsharpFor(sharpen));
+        }
+    }
+
     CGImageRef scaled = CGBitmapContextCreateImage(ctx);
     CGContextRelease(ctx);
     if (scaled == nullptr) throw std::runtime_error("could not convert image");
-    return scaled;
+
+    if (depth == BitDepth::Sixteen) return scaled;
+
+    CFHolder<CGImageRef> wide(scaled);
+    return quantiseToEight(wide.ref, target);
 }
 
 }  // namespace
@@ -221,7 +427,8 @@ void writeImage(const std::string& path, const std::uint16_t* rgba,
                 const ExportOptions& options) {
     @autoreleasepool {
         CFHolder<CGImageRef> full(makeImage(rgba, width, height, bytesPerRow));
-        CFHolder<CGImageRef> scaled(convert(full.ref, options.maxDimension, options.space));
+        CFHolder<CGImageRef> scaled(convert(full.ref, options.maxDimension, options.space,
+                                            options.depth, options.sharpen));
         CGImageRef image = scaled ? scaled.ref : full.ref;
 
         NSURL* url = [NSURL fileURLWithPath:@(path.c_str())];
@@ -245,7 +452,8 @@ std::size_t encodedSize(const std::uint16_t* rgba,
                         std::size_t bytesPerRow, const ExportOptions& options) {
     @autoreleasepool {
         CFHolder<CGImageRef> full(makeImage(rgba, width, height, bytesPerRow));
-        CFHolder<CGImageRef> scaled(convert(full.ref, options.maxDimension, options.space));
+        CFHolder<CGImageRef> scaled(convert(full.ref, options.maxDimension, options.space,
+                                            options.depth, options.sharpen));
         CGImageRef image = scaled ? scaled.ref : full.ref;
 
         // To memory, not to a file. An estimate from bytes-per-pixel was off by

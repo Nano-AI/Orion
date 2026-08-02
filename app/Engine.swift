@@ -1533,9 +1533,15 @@ final class Engine {
         return out
     }
 
+    /// `depth` is `OrionBitDepth` — 8 or 16, and 0 keeps the engine's default of
+    /// sixteen. ⚠ Pass what the *file* will hold, not what the control shows:
+    /// eight renders the narrow, dithered graph and sixteen renders the wide
+    /// one, so a JPEG asked for at sixteen would skip the dither and then be
+    /// rounded to eight anyway. `ExportSettings.effectiveDepth` is that value.
     func export(to path: String, quality: Float = 0.92,
                 maxDimension: UInt32 = 0, space: Int32 = 0,
-                rating: Int32 = -1, metadata: Int32 = 1) throws {
+                rating: Int32 = -1, metadata: Int32 = 1,
+                depth: Int32 = 0, sharpen: Int32 = 0) throws {
         guard let handle else { return }
 
         // The coverage overlay is a viewing aid. Exporting with it on would
@@ -1548,7 +1554,8 @@ final class Engine {
 
         var options = OrionExportOptions(format: -1, quality: quality,
                                          max_dimension: maxDimension, space: space,
-                                         rating: rating, metadata: metadata)
+                                         rating: rating, metadata: metadata,
+                                         bit_depth: depth, sharpen: sharpen)
         let status = orion_engine_export(handle, path, &options)
         guard status == ORION_OK else { throw Failure.export(errorText(status)) }
     }
@@ -1557,13 +1564,15 @@ final class Engine {
     /// Real work — a 24 MP JPEG is about a sixth of a second — so callers
     /// debounce it.
     func exportedSize(format: Int32, quality: Float, maxDimension: UInt32,
-                      space: Int32 = 0) -> Int? {
+                      space: Int32 = 0, depth: Int32 = 0, sharpen: Int32 = 0) -> Int? {
         guard let handle else { return nil }
         // No rating and no metadata source: the estimate measures the pixels,
-        // and a few hundred bytes of EXIF is below its resolution anyway.
+        // and a few hundred bytes of EXIF is below its resolution anyway. The
+        // depth and the sharpening are not below its resolution and are passed.
         var options = OrionExportOptions(format: format, quality: quality,
                                          max_dimension: maxDimension, space: space,
-                                         rating: -1, metadata: 1)
+                                         rating: -1, metadata: 1,
+                                         bit_depth: depth, sharpen: sharpen)
         var bytes: UInt64 = 0
         guard orion_engine_export_size(handle, &options, &bytes) == ORION_OK else {
             return nil

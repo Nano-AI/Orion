@@ -123,8 +123,14 @@ import SwiftUI
 ///                                       stroke in one call and so measures the
 ///                                       one thing a photographer never does
 ///     save <path>                       write the state to that photo's sidecar
-///     export <path>                     write a real export, through the same
-///                                       Engine.export the panel calls
+///     export <path> [key=value ...]     write a real export, through the same
+///                                       Engine.export the panel calls.
+///                                       depth=8|16, sharpen=none|screen|print,
+///                                       metadata=all|nolocation|none,
+///                                       size=<longest edge in px>
+///     probe <path> <property> <name>    read a written file back and record
+///                                       depth, gps, iptclocation or acutance
+///                                       under <name>, for `expect`
 ///     identical <path> <path>           two files, byte for byte
 ///     shot <path>                       write a PNG
 ///     print <text>
@@ -856,13 +862,77 @@ enum Scenario {
             // makes. ⚠ The point of driving the real one is the overlay guard
             // inside it: `export` forces the coverage overlay off around the
             // write and restores it after, and that guard has never had a test.
+            //
+            // The settings are given the way the panel gives them — as an
+            // `ExportSettings` — rather than as loose numbers, so a scenario
+            // exercises the same `effectiveDepth` the interface does. A depth
+            // written straight through would skip exactly the guard that stops
+            // a JPEG asking for the undithered graph.
             guard let path = args.first else { throw Bad(what: "export needs a path") }
-            do { try engine.export(to: path) }
+            let settings = ExportSettings()
+            var longestEdge: UInt32 = 0
+            settings.format = path.hasSuffix(".png") ? .png
+                            : (path.hasSuffix(".tif") || path.hasSuffix(".tiff")) ? .tiff
+                            : .jpeg
+            for option in args.dropFirst() {
+                let parts = option.split(separator: "=", maxSplits: 1).map(String.init)
+                guard parts.count == 2 else {
+                    throw Bad(what: "export options are key=value, got \(option)")
+                }
+                switch (parts[0], parts[1]) {
+                case ("depth", "8"):          settings.depth = .eight
+                case ("depth", "16"):         settings.depth = .sixteen
+                case ("sharpen", "none"):     settings.sharpening = .none
+                case ("sharpen", "screen"):   settings.sharpening = .screen
+                case ("sharpen", "print"):    settings.sharpening = .print
+                case ("metadata", "all"):     settings.metadata = .all
+                case ("metadata", "nolocation"): settings.metadata = .noLocation
+                case ("metadata", "none"):    settings.metadata = .none
+                case ("size", let v):
+                    guard let px = UInt32(v) else { throw Bad(what: "size takes pixels") }
+                    longestEdge = px
+                default: throw Bad(what: "unknown export option \(option)")
+                }
+            }
+            do {
+                try engine.export(
+                    to: path,
+                    maxDimension: longestEdge,
+                    metadata: settings.metadata.rawValue,
+                    depth: settings.effectiveDepth.rawValue,
+                    sharpen: settings.sharpening.rawValue)
+            }
             catch { throw Bad(what: "export failed — \(error.localizedDescription)") }
             let size = (try? FileManager.default
                 .attributesOfItem(atPath: path)[.size] as? Int) ?? nil
             say(String(format: "  wrote %@ (%d bytes)\n",
                        (path as NSString).lastPathComponent as NSString, size ?? -1))
+
+        case "probe":
+            // A property of a file that was written, recorded under a name so
+            // `expect` can assert on it exactly as it does on a measurement.
+            //
+            // ⚠ This reads the *file*, not the settings that produced it. The
+            // three controls it serves all fail invisibly: a file that is eight
+            // bits when sixteen was asked for looks the same in a thumbnail, and
+            // one that still carries GPS after "Strip location" looks the same
+            // to everyone except whoever receives it.
+            guard args.count >= 3 else {
+                throw Bad(what: "probe needs a path, a property and a name")
+            }
+            guard let property = ExportProbe.Property(rawValue: args[1]) else {
+                throw Bad(what: "probe takes "
+                    + ExportProbe.Property.allCases.map(\.rawValue).joined(separator: ", ")
+                    + ", got \(args[1])")
+            }
+            guard let value = ExportProbe.measure(args[0], property) else {
+                throw Bad(what: "could not read \(args[1]) from \(args[0])")
+            }
+            // Both fields, so `expect a == b` between two probes compares the
+            // one number rather than silently passing on the unused half.
+            readings[args[2]] = Reading(luma: value, saturation: value)
+            say(String(format: "  %-22@ %@ %.5f\n", args[2] as NSString,
+                       args[1] as NSString, value))
 
         case "identical":
             // Two files, byte for byte. A size comparison would pass on two
