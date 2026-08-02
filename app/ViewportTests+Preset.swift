@@ -230,6 +230,84 @@ extension ViewportTests {
                "and so is a preset that would change nothing")
     }
 
+    /// Decision #112: `presets.json` is the file where one bad string used to
+    /// cost the lot.
+    ///
+    /// ⚠ `PresetStore.load` was `try? JSONDecoder().decode([Preset].self)`,
+    /// which is all or nothing — the array throws on element one and the
+    /// photographer opens Orion to the four built-ins with every saved look
+    /// gone and nothing written anywhere to say why. That was a defect before
+    /// this story and independent of it; the group rename is only what would
+    /// finally have fired it, on every installation at once, on first launch.
+    ///
+    /// Three things are pinned here: the old `"colour"` still reads, an
+    /// unreadable preset costs that preset alone, and what the store writes back
+    /// is the new spelling.
+    static func testPresetFileSurvivesOneBadPreset() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orion-presets-mixed-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("presets.json")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Four presets: one written before the rename, one after, one whose
+        // group is a string no build has ever emitted, and one plain. The bad
+        // one sits in the *middle*, so "everything after it was skipped" is a
+        // different failure from "everything was lost".
+        let json = #"""
+        [
+         {"id":"C9DDB3F0-0000-0000-0000-000000000001","name":"Before",
+          "groups":["colour","light"],"state":{"contrast":1.71},"builtIn":false},
+         {"id":"C9DDB3F0-0000-0000-0000-000000000002","name":"After",
+          "groups":["color"],"state":{"contrast":1.42},"builtIn":false},
+         {"id":"C9DDB3F0-0000-0000-0000-000000000003","name":"Broken",
+          "groups":["chartreuse"],"state":{"contrast":1.11},"builtIn":false},
+         {"id":"C9DDB3F0-0000-0000-0000-000000000004","name":"Last",
+          "groups":["effects"],"state":{"contrast":1.05},"builtIn":false}
+        ]
+        """#
+        try? json.data(using: .utf8)?.write(to: file)
+
+        let store = PresetStore(url: file)
+        let user = store.presets.filter { !$0.builtIn }
+        let names = user.map(\.name)
+
+        report(names.contains("Before"),
+               "a preset saved with the old \"colour\" group still loads",
+               names.joined(separator: ", "))
+        report(user.first { $0.name == "Before" }?.groups == [.color, .light],
+               "and \"colour\" is the same group \"color\" is",
+               "\(String(describing: user.first { $0.name == "Before" }?.groups))")
+        report(names.contains("After"), "a preset saved after the rename loads")
+        report(names.contains("Last"),
+               "⚠ and a preset *after* the unreadable one still loads — "
+                   + "the decode is element by element, not all or nothing",
+               names.joined(separator: ", "))
+        report(!names.contains("Broken"),
+               "the one group nothing can interpret costs that preset and no other")
+        report(user.count == 3, "three of the four survive", "\(user.count)")
+
+        // ⚠ Only the preset is dropped, never a group inside one. Silently
+        // narrowing what a preset touches turns "this look changed nothing"
+        // into a mystery with no missing row to point at.
+        report(user.allSatisfy { !$0.groups.isEmpty },
+               "and no survivor came back with a group quietly removed")
+
+        // What goes back to disk is the American spelling, and re-reading it
+        // gives the same thing — the migration completes on the next save and
+        // no file is ever rewritten just to migrate it.
+        store.add(name: "Fresh", groups: [.color], state: DevelopState())
+        let raw = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        report(raw.contains("\"color\"") && !raw.contains("\"colour\""),
+               "the store writes the American spelling and stops writing the old one",
+               raw.contains("\"colour\"") ? "colour survives in the file" : "")
+        let reopened = PresetStore(url: file).presets.filter { !$0.builtIn }
+        report(reopened.count == 4, "and the rewritten file reads back whole",
+               "\(reopened.count)")
+        report(reopened.first { $0.name == "Before" }?.groups == [.color, .light],
+               "with the migrated preset's groups unchanged")
+    }
+
     // MARK: Copy, paste and sync
 
     /// ⚠ The check this pair of files exists to have.

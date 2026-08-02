@@ -51,6 +51,7 @@ enum ViewportTests {
         testDevelopStateRoster()
         testSidecarSurvivesAMissingField()
         testMaskGroupSidecar()
+        testAmericanKeyMigration()
         testSidecarEscapingDoesNotCompound()
         testEditsSurviveAQuit()
 
@@ -75,6 +76,7 @@ enum ViewportTests {
         testSyncPatchesOnlyItsGroups()
         testPresetNeverCarriesTheFrame()
         testPresetStoreRoundTrip()
+        testPresetFileSurvivesOneBadPreset()
 
         testSnapshotRoundTripsTheWholeState()
         testSnapshotDatesRoundTrip()

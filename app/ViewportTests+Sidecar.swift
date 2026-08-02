@@ -328,6 +328,159 @@ extension ViewportTests {
         }
     }
 
+    /// Decision #112: the seven component keys that changed spelling.
+    ///
+    /// ⚠ **This is the failure mode that cannot announce itself.** A component's
+    /// stored property names *are* its sidecar keys, so `centreX` becoming
+    /// `centerX` does not throw, does not warn and does not open the photograph
+    /// unedited. It opens it with the mask at its default 0.5, 0.5 — a valid
+    /// radial mask in the middle of the frame, brightening the wrong thing, on
+    /// every photograph anyone ever masked. Nothing in the application is in a
+    /// position to notice.
+    ///
+    /// So the last block asks the *shader's* question rather than the decoder's.
+    /// `CanvasLayout.maskAlpha` is a transcription of `mask_gradient.slang`; a
+    /// legacy component and an American one have to agree about the coverage at
+    /// every one of a grid of points, and both have to disagree with a default
+    /// component — because a test that only proves the two agree would pass just
+    /// as happily if both had quietly landed on the default.
+    static func testAmericanKeyMigration() {
+        func decode(_ json: String) -> DevelopState? {
+            guard let data = json.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode(DevelopState.self, from: data)
+        }
+
+        /// The seven renamed fields, off their defaults and distinct, so no two
+        /// can be swapped without a check going red.
+        let british = #"""
+        {"maskComponents":[{"kind":6,"centreX":0.23,"centreY":0.71,
+          "angle":0.62,"radiusX":0.17,"radiusY":0.41,"feather":0.29,
+          "roundness":3.5,
+          "colourR":0.44,"colourG":0.12,"colourB":0.83,
+          "colourTol":0.27,"colourSoft":0.16}]}
+        """#
+        let american = british
+            .replacingOccurrences(of: "centre", with: "center")
+            .replacingOccurrences(of: "colour", with: "color")
+
+        // ── 1. An old sidecar decodes field for field to what it always did ──
+        guard let old = decode(british), let m = old.maskComponents.first else {
+            report(false, "a sidecar with only the British keys decodes")
+            return
+        }
+        report(true, "a sidecar with only the British keys decodes")
+        near(CGFloat(m.centerX), 0.23, 1e-6, "centreX still lands on centerX")
+        near(CGFloat(m.centerY), 0.71, 1e-6, "centreY still lands on centerY")
+        near(CGFloat(m.colorR), 0.44, 1e-6, "colourR still lands on colorR")
+        near(CGFloat(m.colorG), 0.12, 1e-6, "colourG still lands on colorG")
+        near(CGFloat(m.colorB), 0.83, 1e-6, "colourB still lands on colorB")
+        near(CGFloat(m.colorTol), 0.27, 1e-6, "colourTol still lands on colorTol")
+        near(CGFloat(m.colorSoft), 0.16, 1e-6, "colourSoft still lands on colorSoft")
+
+        // ── 2. A new sidecar round-trips, and the encoder writes only the new ──
+        guard let fresh = decode(american), let n = fresh.maskComponents.first else {
+            report(false, "a sidecar with the American keys decodes")
+            return
+        }
+        report(true, "a sidecar with the American keys decodes")
+        report(n == m, "and to exactly the same component the British one gave")
+
+        if let data = try? JSONEncoder().encode(fresh),
+           let text = String(data: data, encoding: .utf8),
+           let back = try? JSONDecoder().decode(DevelopState.self, from: data) {
+            report(back == fresh, "a migrated state round-trips unchanged")
+            // ⚠ There is no rewrite pass, so this is the only thing that moves a
+            // file forward: the next save writes the American key and nothing
+            // writes the British one ever again.
+            report(!text.contains("centre") && !text.contains("colour"),
+                   "and nothing writes a British key back out",
+                   text.contains("centre") ? "centre survives" : "colour survives")
+            report(text.contains("\"centerX\"") && text.contains("\"colorTol\""),
+                   "the American keys are what reaches the file")
+        } else {
+            report(false, "a migrated state round-trips at all")
+        }
+
+        // ── 3. Both spellings present, and the rule is: the American one wins ──
+        //
+        // ⚠ This will happen — a hand-merged sidecar, or a file a third-party
+        // tool touched. It cannot happen from a new build then an old one: an
+        // old build's synthesised encoder drops every key it does not know, so
+        // that path leaves the British key alone rather than adding to it.
+        // Both together therefore means the American key is what this build
+        // wrote and the British one is the stale half.
+        let both = #"""
+        {"maskComponents":[{"kind":6,"centerX":0.23,"centreX":0.88,
+          "centerY":0.71,"centreY":0.02,
+          "colorR":0.44,"colourR":0.99,"colorTol":0.27,"colourTol":0.01}]}
+        """#
+        if let s = decode(both), let q = s.maskComponents.first {
+            near(CGFloat(q.centerX), 0.23, 1e-6, "both spellings present: centerX wins")
+            near(CGFloat(q.centerY), 0.71, 1e-6, "both spellings present: centerY wins")
+            near(CGFloat(q.colorR), 0.44, 1e-6, "both spellings present: colorR wins")
+            near(CGFloat(q.colorTol), 0.27, 1e-6, "both spellings present: colorTol wins")
+        } else {
+            report(false, "a sidecar carrying both spellings decodes")
+        }
+
+        // And the same rule at the top level, for the key #89 already migrated.
+        if let s = decode(#"{"denoiseColor":1.5,"denoiseColour":9.5}"#) {
+            near(CGFloat(s.denoiseColor), 1.5, 1e-6,
+                 "the same rule for denoiseColor — the American key wins")
+        } else {
+            report(false, "a sidecar carrying both denoise spellings decodes")
+        }
+
+        // ── 4. ⚠ The mask lands in the same place on the frame ───────────────
+        //
+        // Not "it parses". A renamed key yields a perfectly valid mask sitting
+        // at the default centre, and every check above this one would still
+        // pass if `maskAlpha` disagreed — the fields would be right and the
+        // *picture* wrong. This asks the falloff itself.
+        func placement(_ c: MaskComponentState) -> CanvasLayout.MaskPlacement {
+            CanvasLayout.MaskPlacement(
+                kind: 2,
+                center: CGPoint(x: CGFloat(c.centerX), y: CGFloat(c.centerY)),
+                angle: CGFloat(c.angle),
+                length: CGFloat(c.length),
+                radius: CGSize(width: CGFloat(c.radiusX), height: CGFloat(c.radiusY)),
+                feather: CGFloat(c.feather),
+                roundness: CGFloat(c.roundness),
+                invert: c.invert)
+        }
+        let fromBritish = placement(m)
+        let fromAmerican = placement(n)
+        let fromDefault = placement(MaskComponentState())
+
+        var worst: CGFloat = 0
+        var differsFromDefault = false
+        for i in 0...12 {
+            for j in 0...12 {
+                let p = CGPoint(x: CGFloat(i) / 12, y: CGFloat(j) / 12)
+                let legacyAlpha = CanvasLayout.maskAlpha(p, fromBritish)
+                worst = max(worst, abs(legacyAlpha - CanvasLayout.maskAlpha(p, fromAmerican)))
+                if abs(legacyAlpha - CanvasLayout.maskAlpha(p, fromDefault)) > 1e-3 {
+                    differsFromDefault = true
+                }
+            }
+        }
+        near(worst, 0, 1e-9,
+             "a legacy component covers exactly the pixels the American one does")
+        // ⚠ Without this the check above is unfalsifiable: two masks that both
+        // fell back to the default agree perfectly, which is the bug.
+        report(differsFromDefault,
+               "and it is not the default mask in the middle of the frame")
+
+        // The outline is where the falloff is, so the boundary is the strongest
+        // statement available about *where on the frame* this mask sits.
+        var boundary: CGFloat = 0
+        for p in CanvasLayout.maskOutline(fromBritish, at: 1, samples: 48) {
+            boundary = max(boundary, abs(CanvasLayout.maskAlpha(p, fromAmerican)))
+        }
+        near(boundary, 0, 1e-5,
+             "and the legacy mask's own boundary is the American mask's boundary")
+    }
+
     /// Edit, quit, reopen — the adjustments have to still be there.
     ///
     /// They were not. `saveDevelop` ran only when *switching* photos, so the
