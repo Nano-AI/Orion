@@ -12,7 +12,7 @@ per section.
 
 ## 1. Highlight reconstruction — ⬜ not yet implemented
 
-### Cross-channel correlation (Masood, Zhu & Tang, 2009)
+### Cross-channel correlation (Masood, Zhu & Tappen, 2009)
 
 Operates in **linear camera RGB**, before white balance scaling and color
 transforms.

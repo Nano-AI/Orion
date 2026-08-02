@@ -198,6 +198,374 @@ void testHighlightHaloGpu() {
                + std::to_string(worstAfter));
 }
 
+/// Harmonic fill of a clipped region — research/highlight-reconstruction.md.
+///
+/// Rouf, Lau & Heidrich (PROCAMS 2012) §3.2 solve grad^2 rho = 0 over the
+/// clipped region with its own rim as a Dirichlet condition. `hl_pull.slang`
+/// and `hl_push.slang` are that solver, as the pull-push interpolant of Gortler
+/// et al. (SIGGRAPH 1996) §3.5.1.
+///
+/// ⚠ The check that carries the argument for building this at all is the last
+/// one: a blown region wider than `highlights.slang`'s 12-pixel window, where
+/// the shipping recovery returns its input untouched — correctly, since it has
+/// no valid neighbour to fit against — and the fill reaches across it.
+void testHighlightFillGpu() {
+    section("Harmonic highlight fill (GPU)");
+
+    namespace hf = orion::pipe::hlfill;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto pullLib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/hlPull.metallib");
+    auto pullK = orion::gpu::Kernel::create(*device, *pullLib, "hlPull");
+    auto pushLib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/hlPush.metallib");
+    auto pushK = orion::gpu::Kernel::create(*device, *pushLib, "hlPush");
+
+    // Run the pyramid on the GPU exactly as a graph would unroll it, and hand
+    // back level zero. `cap` truncates the pyramid, which is the knob the reach
+    // checks below turn: a pyramid too short to reach across a hole leaves its
+    // middle with no information at all.
+    const auto runGpuCapped = [&](const hf::Level& in, int cap) {
+        const int levels = std::min(cap, hf::levelsFor(in.width, in.height));
+
+        std::vector<int> lw(levels), lh(levels);
+        lw[0] = in.width; lh[0] = in.height;
+        for (int l = 1; l < levels; ++l) {
+            lw[l] = std::max(1, (lw[l - 1] + 1) / 2);
+            lh[l] = std::max(1, (lh[l - 1] + 1) / 2);
+        }
+
+        std::vector<std::unique_ptr<orion::gpu::Texture>> pulled, pushed;
+        for (int l = 0; l < levels; ++l) {
+            pulled.push_back(orion::gpu::Texture::create(
+                *device, std::uint32_t(lw[l]), std::uint32_t(lh[l]),
+                orion::gpu::PixelFormat::RGBA32Float));
+            pushed.push_back(orion::gpu::Texture::create(
+                *device, std::uint32_t(lw[l]), std::uint32_t(lh[l]),
+                orion::gpu::PixelFormat::RGBA32Float));
+        }
+
+        // Level zero of the pull chain is the input itself.
+        std::vector<float> flat(std::size_t(in.width) * in.height * 4);
+        for (std::size_t i = 0; i < in.texels.size(); ++i) {
+            flat[i * 4 + 0] = in.texels[i].v[0];
+            flat[i * 4 + 1] = in.texels[i].v[1];
+            flat[i * 4 + 2] = in.texels[i].v[2];
+            flat[i * 4 + 3] = in.texels[i].w;
+        }
+        pulled[0]->upload(flat.data(), std::size_t(in.width) * 4 * sizeof(float));
+
+        orion::gpu::CommandBuffer cb(*device);
+        for (int l = 1; l < levels; ++l) {
+            orion::pipe::params::HlPull pp{};
+            pp.outSize[0] = std::uint32_t(lw[l]);
+            pp.outSize[1] = std::uint32_t(lh[l]);
+            pp.inSize[0]  = std::uint32_t(lw[l - 1]);
+            pp.inSize[1]  = std::uint32_t(lh[l - 1]);
+            cb.dispatch(*pullK, {pulled[l - 1].get(), pulled[l].get()}, &pp, sizeof pp,
+                        std::uint32_t(lw[l]), std::uint32_t(lh[l]));
+        }
+
+        // The coarsest level has nothing below it to blend in, so its push is
+        // its pull. Copying it through the push kernel against itself would be
+        // wrong; the graph would simply start the descent one level up.
+        for (int l = levels - 2; l >= 0; --l) {
+            const orion::gpu::Texture* below =
+                (l == levels - 2) ? pulled[l + 1].get() : pushed[l + 1].get();
+            orion::pipe::params::HlPush pp{};
+            pp.size[0]       = std::uint32_t(lw[l]);
+            pp.size[1]       = std::uint32_t(lh[l]);
+            pp.coarseSize[0] = std::uint32_t(lw[l + 1]);
+            pp.coarseSize[1] = std::uint32_t(lh[l + 1]);
+            cb.dispatch(*pushK, {pulled[l].get(), below, pushed[l].get()}, &pp,
+                        sizeof pp, std::uint32_t(lw[l]), std::uint32_t(lh[l]));
+        }
+        cb.commitAndWait();
+
+        std::vector<float> out(std::size_t(in.width) * in.height * 4);
+        pushed[0]->download(out.data(), std::size_t(in.width) * 4 * sizeof(float),
+                            std::uint32_t(in.width), std::uint32_t(in.height));
+
+        hf::Level res;
+        res.width = in.width; res.height = in.height;
+        res.texels.resize(in.texels.size());
+        for (std::size_t i = 0; i < res.texels.size(); ++i) {
+            res.texels[i].v[0] = out[i * 4 + 0];
+            res.texels[i].v[1] = out[i * 4 + 1];
+            res.texels[i].v[2] = out[i * 4 + 2];
+            res.texels[i].w    = out[i * 4 + 3];
+        }
+        return res;
+    };
+
+    const auto runGpu = [&](const hf::Level& in) {
+        return runGpuCapped(in, 1 << 20);
+    };
+
+    const auto colorAt = [](const hf::Level& l, int x, int y, int k) {
+        const hf::Sample& s = l.at(x, y);
+        return s.v[k] / std::max(s.w, 1e-8f);
+    };
+
+    // ── 1. A constant rim fills with that constant, exactly ──────────────
+    //
+    // The strongest single statement about a harmonic function: with constant
+    // Dirichlet data the solution is that constant. Any weighting error, any
+    // lost normalization, any half-texel drift in either kernel shows here.
+    {
+        constexpr int kN = 96, kHole = 60;
+        hf::Level in;
+        in.width = kN; in.height = kN;
+        in.texels.assign(std::size_t(kN) * kN, hf::Sample{});
+        const float c[3] = {0.62f, 0.41f, 0.17f};
+        const int lo = (kN - kHole) / 2, hi = lo + kHole;
+        for (int y = 0; y < kN; ++y) {
+            for (int x = 0; x < kN; ++x) {
+                if (x >= lo && x < hi && y >= lo && y < hi) continue;   // the hole
+                hf::Sample& s = in.at(x, y);
+                for (int k = 0; k < 3; ++k) s.v[k] = c[k];
+                s.w = 1.0f;
+            }
+        }
+
+        const hf::Level gpu = runGpu(in);
+
+        double worst = 0.0, minW = 1e9;
+        for (int y = 0; y < kN; ++y) {
+            for (int x = 0; x < kN; ++x) {
+                for (int k = 0; k < 3; ++k) {
+                    worst = std::max(worst, std::fabs(double(colorAt(gpu, x, y, k)) - c[k]));
+                }
+                minW = std::min(minW, double(gpu.at(x, y).w));
+            }
+        }
+        std::printf("  constant rim, %dx%d hole: worst color %.3e, min weight %.4f\n",
+                    kHole, kHole, worst, minW);
+        report(worst < 1e-5, "a constant rim fills with that constant",
+               "worst " + std::to_string(worst));
+
+        // ⚠ The weight after a push is a *confidence*, not a coverage flag, and
+        // it does not reach one — the pull caps it at one and then averages it
+        // down again over a neighbourhood that is part hole. What must hold is
+        // that it is never zero: a zero-weight pixel has no color at all, and
+        // v/w is not a number. Asserting w == 1 here was the first draft and it
+        // failed at 0.913, which is the interpolant behaving correctly.
+        report(minW > 0.0, "the fill reaches every pixel (no zero weight)",
+               "min weight " + std::to_string(minW));
+
+        // The same fixture with the pyramid cut off before it can span the
+        // hole. This is the mutation that turns the reach checks red, run as a
+        // check rather than left as a remark: 4 levels see 8 pixels of the 60
+        // the hole is wide, so its middle stays untouched and unresolved.
+        const hf::Level shortPyramid = runGpuCapped(in, 4);
+        const int mx = kN / 2, my = kN / 2;
+        std::printf("  truncated to 4 levels: centre weight %.4f\n",
+                    double(shortPyramid.at(mx, my).w));
+        report(shortPyramid.at(mx, my).w == 0.0f,
+               "a pyramid too short to span the hole leaves its middle unresolved",
+               "centre weight " + std::to_string(shortPyramid.at(mx, my).w));
+    }
+
+    // ── 2. The GPU agrees with the CPU twin, and the maximum principle ───
+    //
+    // An irregular rim carrying real variation, so the two implementations are
+    // compared on something that exercises the interpolation rather than a
+    // constant either could get right by accident.
+    {
+        constexpr int kN = 128;
+        hf::Level in;
+        in.width = kN; in.height = kN;
+        in.texels.assign(std::size_t(kN) * kN, hf::Sample{});
+
+        double loRim[3] = {1e9, 1e9, 1e9}, hiRim[3] = {-1e9, -1e9, -1e9};
+        const double cx = kN / 2.0, cy = kN / 2.0;
+        for (int y = 0; y < kN; ++y) {
+            for (int x = 0; x < kN; ++x) {
+                const double d = std::hypot(double(x) - cx, double(y) - cy);
+                if (d < 34.0) continue;   // a round hole, off-center rim variation
+                hf::Sample& s = in.at(x, y);
+                const double t = std::atan2(double(y) - cy, double(x) - cx);
+                const double f[3] = {0.50 + 0.30 * std::cos(t),
+                                     0.40 + 0.20 * std::sin(2.0 * t),
+                                     0.25 + 0.15 * std::cos(3.0 * t)};
+                for (int k = 0; k < 3; ++k) {
+                    s.v[k] = float(f[k]);
+                    loRim[k] = std::min(loRim[k], f[k]);
+                    hiRim[k] = std::max(hiRim[k], f[k]);
+                }
+                s.w = 1.0f;
+            }
+        }
+
+        const hf::Level gpu = runGpu(in);
+        const hf::Level cpu = hf::pullPush(in);
+
+        double worst = 0.0;
+        for (std::size_t i = 0; i < gpu.texels.size(); ++i) {
+            for (int k = 0; k < 3; ++k) {
+                worst = std::max(worst, std::fabs(double(gpu.texels[i].v[k]) -
+                                                  double(cpu.texels[i].v[k])));
+            }
+            worst = std::max(worst, std::fabs(double(gpu.texels[i].w) -
+                                              double(cpu.texels[i].w)));
+        }
+        std::printf("  GPU vs CPU twin: worst %.3e\n", worst);
+        report(worst < 2e-6, "the shader and its host twin agree",
+               "worst " + std::to_string(worst));
+
+        // Every value in the pyramid is a convex combination of known inputs,
+        // so nothing may leave the rim's own range. This is what says the fill
+        // cannot invent a color — the guard `highlights.slang` needs three
+        // explicit clamps to get.
+        bool inRange = true;
+        double overshoot = 0.0;
+        for (int y = 0; y < kN; ++y) {
+            for (int x = 0; x < kN; ++x) {
+                for (int k = 0; k < 3; ++k) {
+                    const double v = colorAt(gpu, x, y, k);
+                    overshoot = std::max(overshoot,
+                                         std::max(v - hiRim[k], loRim[k] - v));
+                    if (v < loRim[k] - 1e-5 || v > hiRim[k] + 1e-5) inRange = false;
+                }
+            }
+        }
+        std::printf("  maximum principle: worst excursion %.3e\n", overshoot);
+        report(inRange, "the fill stays inside the range of its own rim",
+               "excursion " + std::to_string(overshoot));
+
+        // And how far the shipping solver sits from the harmonic answer it
+        // approximates. Printed every run, because Rouf et al. use a multigrid
+        // solve and this does not — the deviation is the price of the pyramid
+        // and it should be a number, not a memory.
+        const hf::Level truth = hf::harmonic(in, 1e-6f, 40000);
+        double dev = 0.0, span = 0.0;
+        for (int k = 0; k < 3; ++k) span = std::max(span, hiRim[k] - loRim[k]);
+        for (int y = 0; y < kN; ++y) {
+            for (int x = 0; x < kN; ++x) {
+                if (in.at(x, y).w > 0.0f) continue;
+                for (int k = 0; k < 3; ++k) {
+                    dev = std::max(dev, std::fabs(double(colorAt(gpu, x, y, k)) -
+                                                  double(truth.at(x, y).v[k])));
+                }
+            }
+        }
+        std::printf("  vs Gauss-Seidel harmonic truth: worst %.4f (%.1f%% of rim span %.3f)\n",
+                    dev, 100.0 * dev / span, span);
+        report(dev < 0.10 * span,
+               "pull-push tracks the harmonic solution within 10% of rim span",
+               "deviation " + std::to_string(dev) + " of span " + std::to_string(span));
+    }
+
+    // ── 3. The reach the window fit does not have ────────────────────────
+    //
+    // ⚠ This is the check that justifies the feature, so it is built to be able
+    // to fail. A blown disc 140 pixels across on a warm background: every
+    // channel sits on the common clip inside it, which is what `linearize`
+    // guarantees (decision #29), so `highlightRecover` takes its count == 3
+    // branch and returns the input — a flat neutral plate with no shape and no
+    // hue. The fill carries the rim's color across the whole disc.
+    {
+        constexpr std::uint32_t kN = 256;
+        constexpr float kClip = 1.0f;
+        constexpr double kR = 70.0;          // 140 px across, vs a 12 px window
+        const double cx = kN / 2.0, cy = kN / 2.0;
+
+        // Warm rim, as a sodium lamp's surround is.
+        const double rim[3] = {0.90, 0.55, 0.22};
+
+        std::vector<__fp16> img(std::size_t(kN) * kN * 4);
+        hf::Level in;
+        in.width = int(kN); in.height = int(kN);
+        in.texels.assign(std::size_t(kN) * kN, hf::Sample{});
+
+        for (std::uint32_t y = 0; y < kN; ++y) {
+            for (std::uint32_t x = 0; x < kN; ++x) {
+                const std::size_t i = std::size_t(y) * kN + x;
+                const double d = std::hypot(double(x) - cx, double(y) - cy);
+                const bool blown = d < kR;
+
+                double c[3];
+                for (int k = 0; k < 3; ++k) c[k] = blown ? kClip : rim[k];
+
+                for (int k = 0; k < 3; ++k) img[i * 4 + k] = static_cast<__fp16>(c[k]);
+                img[i * 4 + 3] = 1;
+
+                hf::Sample& s = in.texels[i];
+                if (!blown) {
+                    for (int k = 0; k < 3; ++k) s.v[k] = float(rim[k]);
+                    s.w = 1.0f;
+                }
+            }
+        }
+
+        // What the shipping recovery does with it.
+        auto hlLib = orion::gpu::Library::createFromFile(
+            *device, std::string(ORION_SHADER_DIR) + "/highlightRecover.metallib");
+        auto hlK = orion::gpu::Kernel::create(*device, *hlLib, "highlightRecover");
+        auto src = orion::gpu::Texture::create(*device, kN, kN,
+                                               orion::gpu::PixelFormat::RGBA16Float);
+        auto dst = orion::gpu::Texture::create(*device, kN, kN,
+                                               orion::gpu::PixelFormat::RGBA16Float);
+        src->upload(img.data(), std::size_t(kN) * 4 * sizeof(__fp16));
+
+        orion::pipe::params::Highlights hl{};
+        hl.size[0] = kN; hl.size[1] = kN;
+        hl.clipR = hl.clipG = hl.clipB = kClip;
+        hl.gamma = 0.97f;
+        hl.strength = 1.0f;
+
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*hlK, {src.get(), dst.get()}, &hl, sizeof hl, kN, kN);
+        cb.commitAndWait();
+
+        std::vector<__fp16> rec(std::size_t(kN) * kN * 4);
+        dst->download(rec.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, kN);
+
+        // Chromaticity at the centre of the disc, as far from the rim as a
+        // pixel in this frame can be.
+        const std::size_t mid = std::size_t(kN / 2) * kN + kN / 2;
+        const double recR = double(rec[mid * 4 + 0]);
+        const double recG = double(rec[mid * 4 + 1]);
+        const double recB = double(rec[mid * 4 + 2]);
+        const double recRB = recR / std::max(recB, 1e-6);
+
+        const hf::Level filled = runGpu(in);
+        const double fr = colorAt(filled, int(kN) / 2, int(kN) / 2, 0);
+        const double fg = colorAt(filled, int(kN) / 2, int(kN) / 2, 1);
+        const double fb = colorAt(filled, int(kN) / 2, int(kN) / 2, 2);
+        const double fillRB = fr / std::max(fb, 1e-6);
+        const double rimRB  = rim[0] / rim[2];
+
+        std::printf("  core R/B — input %.3f, highlightRecover %.3f, fill %.3f, rim %.3f\n",
+                    1.0, recRB, fillRB, rimRB);
+
+        // The window fit declines: 70 px from the rim there is no valid pixel
+        // inside a 12 px window, so it returns its input unchanged. Stated as
+        // an assertion rather than a remark, because if the shipping node ever
+        // *does* reach this far, this whole feature needs re-arguing.
+        report(std::fabs(recRB - 1.0) < 1e-3 && std::fabs(recG - kClip) < 1e-3,
+               "the window fit leaves a 140 px blown core untouched",
+               "R/B " + std::to_string(recRB));
+
+        report(std::fabs(fillRB - rimRB) < 0.02,
+               "the fill carries the rim's color to the core of the same region",
+               "fill R/B " + std::to_string(fillRB) + " vs rim "
+                   + std::to_string(rimRB));
+
+        report(fr > fg && fg > fb,
+               "the filled core is warm, in the rim's own channel order",
+               std::to_string(fr) + " " + std::to_string(fg) + " " + std::to_string(fb));
+    }
+}
+
 /// Local Laplacian clarity, against Paris et al.'s own algorithm.
 ///
 /// The GPU runs Aubry et al.'s approximation: eight remapped pyramids and a

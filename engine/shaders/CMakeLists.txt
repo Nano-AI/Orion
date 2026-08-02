@@ -28,6 +28,8 @@ set(ORION_SHADERS
     rcd_green:rcdGreen
     rcd_rb:rcdRedBlue
     highlights:highlightRecover
+    hl_pull:hlPull
+    hl_push:hlPush
     denoise_blur:atrousBlur
     denoise_accum:atrousShrink
     lens:lensCorrect

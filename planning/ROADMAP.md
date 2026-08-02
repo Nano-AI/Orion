@@ -127,7 +127,8 @@ Two things turned up while finishing it:
 - ✅ **Auto-enhance** — percentile auto-levels driving the above *(Simplest Color Balance; CIPA DC-004)*
 - ✅ Color grading wheels (ASC CDL) — three `ColorWheel` controls, shadows/midtones/highlights. ⚠ **Split toning and a creative vignette are not built**; the wheels subsume most of what split toning was for
 - ✅ Creative LUTs (.cube, tetrahedral) *(Adobe Cube LUT Specification 1.0; Sakamoto & Itooka 1981)*
-- Segmentation-based highlight reconstruction
+- Highlight reconstruction beyond the window fit — **renamed from
+  "segmentation-based", solver built 2026-08-01, not wired.** Costed below
 
 ---
 
@@ -448,6 +449,74 @@ inherited**, or every existing `identical` baseline silently rebases.
   preview and export become different *realisations* rather than different
   resolutions of one — and the preview reads an order of magnitude grainier.
 - **Per-channel grain.** That is sensor noise, not film.
+
+## Highlight reconstruction beyond the window fit — costed, piece 1 done
+
+`research/highlight-reconstruction.md` settles the method: Rouf, Lau & Heidrich
+(PROCAMS 2012), gradient-domain restoration — Laplace-interpolate a smooth color
+over the clipped region from its own boundary, then transfer detail from the
+unclipped channels by a Poisson solve.
+
+**Renamed.** The item read "segmentation-based highlight reconstruction" for
+three milestones and that name is why it looked un-buildable. See below.
+
+### ⚠ The constraint that shapes it, found while costing
+
+**A Dirichlet solve is already region-scoped, so there is no segmentation pass.**
+Nothing in `∇²ρ = 0 over Ω^∪ with ρ|∂Ω^∪ = f|∂Ω^∪` crosses a pixel outside
+`Ω^∪`, so each connected blown region is solved on its own, from its own
+boundary, without being labelled. Labelling would give the same answer more
+slowly.
+
+That is the whole reason this was stuck. Connected components is the one shape
+that does not fit here: union-find is a CPU pass over 24 Mpx behind a readback
+stall, and the GPU alternatives are iterative label propagation whose **pass
+count depends on the picture**, against a static graph.
+
+### What the shipping node does not cover, measured
+
+| Region | Today |
+|---|---|
+| Some channels clipped, within 12 px of valid data | Recovered by `highlights.slang` |
+| Some channels clipped, beyond 12 px | Declined — `n < kMinSamples` |
+| **Every channel clipped, at any distance** | **Untouched.** Under #29 the `count == 3` branch is a literal identity |
+
+Measured on a 140 px blown disc: `highlightRecover` returns the core at
+R/B = 1.000, its input unchanged. A blown lamp or window on a 6024×4024 frame is
+hundreds of pixels across, so this is the common case, not the corner.
+
+### The pieces, in order
+
+| # | Piece | Cost |
+|---|---|---|
+| 1 | ✅ **Done 2026-08-01.** `hl_pull.slang` + `hl_push.slang` — the Dirichlet fill, as Gortler et al.'s (SIGGRAPH 1996 §3.5.1) pull-push. `pipe/HighlightFill.h` carries the host twin **and** a Gauss-Seidel reference run to convergence, so the approximation error is printed every run rather than assumed: **6.1% of rim span**. Not wired to the graph | 87 + 82 lines, 9 checks |
+| 2 | The clipping mask — `Ω_k`, `Ω^∪`, `Ω^∩` as a weight channel. One pointwise kernel. ⚠ It must read the **same** `whiteClipFor(m)` the linearize node used, or the mask disagrees with the clip that made it | ~50 lines |
+| 3 | The node chain, and it is the expensive piece. A 24 Mpx pyramid is **13 levels**, so 13 pull nodes + 12 push nodes = **+25 nodes** on 149, and the chain is `RGBA16Float` at full resolution: level 0 is 194 MB and the pyramid sums to ~1.33×, so **~258 MB pulled + ~258 MB pushed ≈ 516 MB**, about 7% on 7447 MiB. ⚠ Must disable to nothing at Amount 0 — decision #82 is the precedent and it cost 10.63 → 17.03 ms to learn | +25 nodes, ~516 MB |
+| 4 | §3.3's cross-channel detail transfer: a second solve, over `Ω_k` per channel, with Eq. 7's confidence weighting (Eq. 8, `m = 0.65`, `ε = 10⁻³`). ⚠ Costs a **second** pyramid unless piece 3's is reused across the two solves | +25 nodes or a reuse argument |
+| 5 | §3.4's log-space gradient fill-in for `Ω^∩`, which is what gives a blown core its falloff back instead of a plateau with a Mach band at the rim | 2 more solves |
+| 6 | One control through `Adjustments` → `orion.h` → `CApi.cpp` → `DevelopState` → `Engine` → catalogue → sidecar → presets → sync, plus a `repro/` scenario. ⚠ #81 piece 6 is the warning: `Engine.state`'s memberwise initializer took a new field silently and it reached the sidecar as 0 | 8–14 files |
+
+**Honest total: three or four sessions after this one.** Pieces 3 and 4 are each
+a session on their own, and piece 4's "reuse the pyramid" question should be
+answered before piece 3 is built, not after.
+
+### ⚠ What must not be done along the way
+
+- **A connected-component labelling pass.** It is not needed (above), and its
+  pass count is content-dependent, which a static graph cannot express.
+- **Zhang & Brainard's global prior.** A channel-correlation prior fitted over a
+  night frame is fitted on the dark warm background — the exact shape of the
+  purple halo `kShoulder` exists to prevent. Rouf et al.'s Figures 4 and 7 show
+  it failing on a neon sign for the same reason.
+- **Copying darktable or RawTherapee.** Both are GPL and both have this feature.
+  The published descriptions are fair game and the paper is the source used.
+- **Wiring a piece without its measurement.** The solver approximates a
+  multigrid solve; the number that says how well is a test, not a memory.
+- **Quietly reopening decision #29.** #29 clips every channel to one ceiling so
+  blown cores render neutral. Piece 3 puts hue back into them. That is defensible
+  — #29's magenta was the white-balance gains, evidence of nothing, while `ρ` is
+  measured from the region's own rim — but it is an argument that belongs in
+  DECISIONS on the day the node lands.
 
 ## M5 — Advanced
 

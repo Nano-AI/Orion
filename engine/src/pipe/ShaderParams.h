@@ -631,6 +631,20 @@ struct Highlights {
 };
 static_assert(sizeof(Highlights) == 32);
 
+/// Harmonic fill, pull half. Mirrors HlPullParams in hl_pull.slang.
+struct HlPull {
+    std::uint32_t outSize[2];
+    std::uint32_t inSize[2];
+};
+static_assert(sizeof(HlPull) == 16);
+
+/// Harmonic fill, push half. Mirrors HlPushParams in hl_push.slang.
+struct HlPush {
+    std::uint32_t size[2];
+    std::uint32_t coarseSize[2];
+};
+static_assert(sizeof(HlPush) == 16);
+
 /// À-trous blur, one scale. Mirrors AtrousParams in denoise_blur.slang.
 struct AtrousBlur {
     std::uint32_t size[2];

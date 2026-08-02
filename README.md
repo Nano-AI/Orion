@@ -67,7 +67,7 @@ for local highlight and shadow recovery, AgX (Sobotka) as the display transform,
 monotone cubic Hermite (Fritsch & Carlson, 1980) for tone curves, à-trous
 wavelet denoising (Starck et al., 2007) with a per-frame Poisson–Gaussian noise
 fit (Foi et al., 2008), cross-channel highlight reconstruction (Masood, Zhu &
-Tang, CGF 2009), ASC CDL v1.2 for the grading wheels, and lensfun's lens
+Tappen, CGF 2009), ASC CDL v1.2 for the grading wheels, and lensfun's lens
 correction models.
 
 No GPL code is copied. Implementing a *published algorithm* from its description

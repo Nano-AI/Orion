@@ -156,7 +156,7 @@ gradient.
 
 ## Highlight reconstruction — 2026-07-28
 
-Masood, Zhu & Tang (2009), *Automatic Correction of Saturated Regions in
+Masood, Zhu & Tappen (2009), *Automatic Correction of Saturated Regions in
 Photographs using Cross-Channel Correlation*, Computer Graphics Forum 28(7),
 1861–1869. Restated in `deep-research-2026-07-27.md` §1.
 
@@ -188,6 +188,11 @@ against a single level after white balance is itself a source of false color.
 - **The estimate can only raise a channel.** A clipped channel read *at least*
   its clipping level, so `max(clipped, estimate)` is sound — and it makes a poor
   fit harmless rather than actively wrong.
+
+⚠ **Where those two deviations stop, and what they cost, is measured in
+[`highlight-reconstruction.md`](highlight-reconstruction.md)** — which also
+corrects this entry's third author (Tappen, not Tang) and carries the plan for
+the region-scoped case this node declines.
 
 
 ## The four tone bands, measured — 2026-07-29
