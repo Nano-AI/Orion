@@ -8,6 +8,38 @@ import AppKit
 /// Note what is NOT here: no SwiftUI types, no view state. The model stays a
 /// plain observable object so any panel built on it can be re-hosted in AppKit
 /// without touching engine code (decision #26).
+///
+/// ── This file is one of eight. Decision #117. ────────────────────────────
+///
+/// `Engine` reached 2,331 lines against a stated ceiling of 1,000 and was split
+/// by *region of the problem*, so both halves of a change sit together and
+/// which file is answered by what the feature is:
+///
+///   `Engine+Geometry.swift`  crop, straighten, rotation
+///   `Engine+Spots.swift`     spot removal
+///   `Engine+Mask.swift`      the mask group and its local adjustments
+///   `Engine+Brush.swift`     mask kind 3, and its live-stroke path
+///   `Engine+Document.swift`  open, restore, presets, versions, LUT, export
+///   `Engine+Render.swift`    textures, the push, the render, the readbacks
+///   `Engine+Compare.swift`   the held original and what invalidates it
+///
+/// ⚠ **Every stored property stays here, and that is not a style choice.** The
+/// `@Observable` macro only sees declarations in the class body — a `var` moved
+/// to an `extension Engine` in another file stops being observable, silently,
+/// and the panel bound to it stops redrawing. Methods and *computed* properties
+/// move freely. So this file is the storage plus the three lists that enumerate
+/// it — `state`, `assign` and `cAdjustments` — which are exactly the edits a new
+/// adjustment needs, kept in one place on purpose.
+///
+/// ⚠ `@ObservationIgnored` members are deliberate, not oversights. The live
+/// brush buffers below carry it because decision #102's predicate depends on
+/// them *not* invalidating the develop panel. Do not tidy them.
+///
+/// ⚠ What the split cost: Swift's `private` is file-scoped, so members reached
+/// from an extension in another file had to widen to internal. Eighteen
+/// `private(set)` properties lost their compiler-enforced "only `Engine` writes
+/// this" and now rest on convention within the app target. That is the price of
+/// the ceiling and it is real; it is recorded rather than glossed.
 @Observable
 final class Engine {
 
@@ -25,24 +57,18 @@ final class Engine {
         }
     }
 
-    private(set) var camera = ""
-    private(set) var imageWidth: UInt32 = 0
-    private(set) var imageHeight: UInt32 = 0
+    var camera = ""
+    var imageWidth: UInt32 = 0
+    var imageHeight: UInt32 = 0
 
     /// The whole frame after rotation, before any crop. The crop rectangle is
     /// normalized against this, and the crop tool's canvas is sized from it —
     /// `imageWidth` cannot stand in, because it is the *cropped* result.
-    private(set) var frameWidth: UInt32 = 0
-    private(set) var frameHeight: UInt32 = 0
+    var frameWidth: UInt32 = 0
+    var frameHeight: UInt32 = 0
 
-    /// The frame's width over its height, which is what every rotated-bounds
-    /// calculation needs.
-    var frameAspect: CGFloat {
-        guard frameWidth > 0, frameHeight > 0 else { return 1 }
-        return CGFloat(frameWidth) / CGFloat(frameHeight)
-    }
-    private(set) var lastRenderMs: Double = 0
-    private(set) var isLoaded = false
+    var lastRenderMs: Double = 0
+    var isLoaded = false
 
     /// Why the last render failed, or `nil` if it did not.
     ///
@@ -53,7 +79,7 @@ final class Engine {
     /// rectangle, "0.0 ms", and no explanation, on a file the engine renders
     /// correctly from the scenario runner. The detail was there the whole time:
     /// `orion_last_error` had it and nobody read it.
-    private(set) var lastFailure: String?
+    var lastFailure: String?
 
     var temperatureK: Float = 5500 { didSet { pushAndRender() } }
     var tint: Float = 0            { didSet { pushAndRender() } }
@@ -102,97 +128,12 @@ final class Engine {
     /// True while the crop tool is open.
     var cropPreview = false        { didSet { pushAndRender() } }
 
-    /// The region the crop preview renders, in crop coordinates. The overlay
-    /// draws against the same numbers the engine renders from, which is the
-    /// only way the white rectangle can be trusted to sit on the pixels.
-    var previewCanvas: (origin: CGPoint, size: CGFloat) {
-        guard cropPreview else { return (.zero, 1) }
-        return CanvasLayout.previewCanvas(frameAspect: frameAspect,
-                                          angleDeg: CGFloat(straightenDeg))
-    }
+    var constraining = false
 
-    /// Sets the crop in one push, so a drag is a single render rather than four.
-    func setCrop(x: Float, y: Float, w: Float, h: Float) {
-        guard isLoaded else { return }
-        let r = CanvasLayout.constrainedCrop(
-            CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h)),
-            frameAspect: frameAspect, angleDeg: CGFloat(straightenDeg))
-
-        suspended = true
-        cropW = Float(r.width); cropH = Float(r.height)
-        cropX = Float(r.origin.x); cropY = Float(r.origin.y)
-        suspended = false
-        pushAndRender()
-    }
-
-    /// Pulls the crop back inside the frame after the angle or the rotation
-    /// changed under it. Silent — it runs on every angle tick.
-    private func constrainCrop() {
-        guard isLoaded, !constraining else { return }
-        constraining = true
-        defer { constraining = false }
-
-        let r = CanvasLayout.constrainedCrop(
-            CGRect(x: CGFloat(cropX), y: CGFloat(cropY),
-                   width: CGFloat(cropW), height: CGFloat(cropH)),
-            frameAspect: frameAspect, angleDeg: CGFloat(straightenDeg))
-
-        let was = suspended
-        suspended = true
-        cropW = Float(r.width); cropH = Float(r.height)
-        cropX = Float(r.origin.x); cropY = Float(r.origin.y)
-        suspended = was
-    }
-
-    private var constraining = false
-
-    /// Records one history entry when a crop drag finishes, rather than one per
-    /// frame of the drag.
-    func commitCropEdit() {
-        history.record(state, label: "Crop")
-        log.committed(state, label: "Crop")
-    }
-
-    /// Moves the crop without changing its size, clamped to the frame.
-    func moveCrop(dx: Float, dy: Float) {
-        guard isLoaded else { return }
-        suspended = true
-        cropX = min(max(cropX + dx, 0), 1 - cropW)
-        cropY = min(max(cropY + dy, 0), 1 - cropH)
-        suspended = false
-        pushAndRender()
-    }
     var cropX: Float = 0           { didSet { pushAndRender() } }
     var cropY: Float = 0           { didSet { pushAndRender() } }
     var cropW: Float = 1           { didSet { pushAndRender() } }
     var cropH: Float = 1           { didSet { pushAndRender() } }
-
-    /// Common crop ratios. nil is freeform.
-    func setAspect(_ ratio: Float?) {
-        guard isLoaded else { return }
-        guard let ratio else { return }
-
-        // Fit the largest rectangle of this ratio inside the current frame,
-        // centered, so choosing a ratio never crops information the user has
-        // not asked to lose beyond what the ratio requires.
-        let frame = Float(frameAspect)
-        var w: Float = 1, h: Float = 1
-        if ratio > frame { h = frame / ratio } else { w = ratio / frame }
-
-        suspended = true
-        cropW = w; cropH = h
-        cropX = (1 - w) / 2; cropY = (1 - h) / 2
-        suspended = false
-        pushAndRender()
-    }
-
-    func resetCrop() {
-        suspended = true
-        cropX = 0; cropY = 0; cropW = 1; cropH = 1; straightenDeg = 0
-        suspended = false
-        guard isLoaded else { return }
-        pushAndRender()
-    }
 
     /// Tone curve, applied after the display transform. The engine has had the
     /// spline and the LUT since M2; nothing reached them until now.
@@ -211,8 +152,8 @@ final class Engine {
 
     /// What the database knows about this photo's lens. Empty name means no
     /// match — which includes every manual lens, since those record no name.
-    private(set) var lensProfileName = ""
-    private(set) var lensProfileApproximate = false
+    var lensProfileName = ""
+    var lensProfileApproximate = false
     var hasLensProfile: Bool { !lensProfileName.isEmpty }
     var lensCaRed: Float = 0      { didSet { pushAndRender() } }
     var lensCaBlue: Float = 0     { didSet { pushAndRender() } }
@@ -291,7 +232,7 @@ final class Engine {
     /// facade rejects an index past it.
     static let maxMaskComponents = 4
 
-    private(set) var maskComponents: [MaskComponentState] = []
+    var maskComponents: [MaskComponentState] = []
 
     /// Rows whose saved matte file could not be read when the photograph opened.
     ///
@@ -326,7 +267,7 @@ final class Engine {
     /// The most spots one photo can carry. Matches the engine's own cap.
     static let maxSpots = 64
 
-    private(set) var spots: [SpotState] = []
+    var spots: [SpotState] = []
 
     /// True while the tool is armed and a click on the photo places a spot.
     ///
@@ -341,317 +282,12 @@ final class Engine {
     var spotFeather: Float = 0.5
     var spotHeal = true
 
-    /// Places a spot at a point on the displayed picture.
-    ///
-    /// ⚠ The source is chosen automatically, and the rule is Orion's own: the
-    /// same distance away as two and a half radii, along whichever axis has
-    /// room. Lightroom searches for a matching patch; that is a different and
-    /// much larger feature, and for sensor dust — which sits on smooth
-    /// backgrounds by definition — anywhere nearby is as good as anywhere else.
-    /// The photographer can see the result immediately and place it again if
-    /// the guess was poor.
-    @discardableResult
-    func addSpot(atFrame displayed: CGPoint) -> Bool {
-        guard isLoaded, let handle, spots.count < Self.maxSpots else { return false }
-
-        // ⚠ Converted here, once, rather than on every render. Dust is on the
-        // sensor, so a spot has to follow the subject through a later crop or
-        // quarter turn — the opposite of a mask, which stays where it was put on
-        // screen. Same transform, applied at a different moment, and that
-        // moment is the whole difference between the two behaviors.
-        var fx: Float = 0, fy: Float = 0
-        guard orion_engine_to_frame(handle, Float(displayed.x), Float(displayed.y),
-                                    &fx, &fy) == ORION_OK else { return false }
-        let p = CGPoint(x: CGFloat(fx), y: CGFloat(fy))
-
-        let step = spotRadius * 2.5
-        var sx = Float(p.x) + step
-        if sx > 1 - spotRadius { sx = Float(p.x) - step }
-        var sy = Float(p.y)
-        // Nowhere to go sideways on a very small frame; try the other axis.
-        if sx < spotRadius || sx > 1 - spotRadius {
-            sx = Float(p.x)
-            sy = Float(p.y) + step
-            if sy > 1 - spotRadius { sy = Float(p.y) - step }
-        }
-
-        var s = SpotState()
-        s.destX = Float(p.x); s.destY = Float(p.y)
-        s.srcX = min(max(sx, 0), 1); s.srcY = min(max(sy, 0), 1)
-        s.radius = spotRadius
-        s.feather = spotFeather
-        s.heal = spotHeal
-        spots.append(s)
-        selectedSpot = spots.count - 1
-        pushAndRender()
-        history.record(state, label: "Spot"); log.committed(state, label: "Spot")
-        return true
-    }
-
-    /// A point in frame coordinates, as a point on the displayed picture.
-    /// The inverse of the transform `addSpot` uses.
-    func displayedPoint(fromFrame p: CGPoint) -> CGPoint? {
-        guard isLoaded, let handle else { return nil }
-        var x: Float = 0, y: Float = 0
-        guard orion_engine_from_frame(handle, Float(p.x), Float(p.y),
-                                      &x, &y) == ORION_OK else { return nil }
-        return CGPoint(x: CGFloat(x), y: CGFloat(y))
-    }
-
     /// Which spot the canvas has selected, or -1. View state: which handle is
     /// lit is not part of the photograph.
     var selectedSpot: Int = -1
 
-    /// The spots as the canvas handles them, in displayed coordinates.
-    ///
-    /// ⚠ Converted here and nowhere else. `CanvasLayout` and the overlay work
-    /// entirely in displayed coordinates; giving either of them the frame
-    /// transform would be a second copy of it.
-    var spotPlacements: [CanvasLayout.SpotPlacement] {
-        spots.compactMap { s in
-            guard let d = displayedPoint(fromFrame: CGPoint(x: CGFloat(s.destX),
-                                                            y: CGFloat(s.destY))),
-                  let src = displayedPoint(fromFrame: CGPoint(x: CGFloat(s.srcX),
-                                                              y: CGFloat(s.srcY)))
-            else { return nil }
-            return CanvasLayout.SpotPlacement(destination: d, source: src,
-                                              radius: CGFloat(s.radius),
-                                              heal: s.heal)
-        }
-    }
-
-    /// Moves a spot's destination or its source, from a displayed point.
-    ///
-    /// Renders without recording, exactly as `setCrop` does — a drag is one
-    /// history entry, committed on release, not sixty.
-    func moveSpot(_ index: Int, destination: CGPoint?, source: CGPoint?) {
-        guard isLoaded, let handle, spots.indices.contains(index) else { return }
-        func toFrame(_ p: CGPoint) -> (Float, Float)? {
-            var fx: Float = 0, fy: Float = 0
-            guard orion_engine_to_frame(handle, Float(p.x), Float(p.y),
-                                        &fx, &fy) == ORION_OK else { return nil }
-            return (fx, fy)
-        }
-        if let d = destination, let (fx, fy) = toFrame(d) {
-            spots[index].destX = fx; spots[index].destY = fy
-        }
-        if let src = source, let (fx, fy) = toFrame(src) {
-            spots[index].srcX = fx; spots[index].srcY = fy
-        }
-        pushAndRender()
-    }
-
-    /// One history entry when a spot drag finishes.
-    ///
-    /// ⚠ **Labelled "Move spot", not "Spot".** `EditHistory` coalesces
-    /// consecutive entries carrying the same label — which is what makes a
-    /// slider drag one undo step instead of sixty — so a placement and a later
-    /// move both labeled "Spot" merged into one entry, and undoing the move
-    /// deleted the spot instead. Two different acts need two different names.
-    ///
-    /// The place-and-drag gesture is deliberately *not* two entries: `addSpot`
-    /// has already recorded, and the overlay skips this call while the spot it
-    /// is dragging the source of is the one it just created.
-    func commitSpotEdit() { history.record(state, label: "Move spot"); log.committed(state, label: "Move spot") }
-
-    /// Removes one spot by index, which is what a selected spot and a Delete
-    /// key mean. `removeLastSpot` stays for the panel's Undo spot button.
-    func removeSpot(_ index: Int) {
-        guard spots.indices.contains(index) else { return }
-        spots.remove(at: index)
-        selectedSpot = -1
-        pushAndRender()
-        history.record(state, label: "Spot"); log.committed(state, label: "Spot")
-    }
-
-    func removeLastSpot() {
-        guard !spots.isEmpty else { return }
-        spots.removeLast()
-        pushAndRender()
-        history.record(state, label: "Spot"); log.committed(state, label: "Spot")
-    }
-
-    func clearSpots() {
-        guard !spots.isEmpty else { return }
-        spots.removeAll()
-        pushAndRender()
-        history.record(state, label: "Clear spots")
-    }
-
     /// One local adjustment set per layer.
-    private(set) var layers: [LocalAdjustState] = [LocalAdjustState()]
-
-    /// ⚠ **Derived, not stored.** Which layer a component belongs to is how
-    /// many layer boundaries precede it, and that moves whenever a row is
-    /// added, removed or reordered. Storing it would be a second copy of the
-    /// grouping, and the two would disagree the first time a row moved.
-    var selectedLayer: Int {
-        guard !maskComponents.isEmpty else { return 0 }
-        let upTo = min(max(selectedMask, 0), maskComponents.count - 1)
-        // ⚠ `1...upTo` is an invalid range when `upTo` is zero, and Swift traps
-        // on it rather than producing an empty sequence — selecting the first
-        // row crashed the process. A half-open range over a prefix has no such
-        // edge, which is why it is written this way now.
-        var n = 0
-        for m in maskComponents[..<upTo].dropFirst() where m.startsLayer { n += 1 }
-        if upTo > 0 && maskComponents[upTo].startsLayer { n += 1 }
-        return min(n, Engine.maxMaskComponents - 1)
-    }
-
-    /// How many layers the stack has.
-    var layerCount: Int {
-        guard !maskComponents.isEmpty else { return 0 }
-        return maskComponents.dropFirst().reduce(1) { $1.startsLayer ? $0 + 1 : $0 }
-    }
-
-    private func editLayer(_ change: (inout LocalAdjustState) -> Void) {
-        let i = selectedLayer
-        while layers.count <= i { layers.append(LocalAdjustState()) }
-        change(&layers[i])
-        pushAndRender()
-    }
-    private var layer: LocalAdjustState {
-        let i = selectedLayer
-        return layers.indices.contains(i) ? layers[i] : LocalAdjustState()
-    }
-
-    /// The selected layer's adjustments, as the panel binds them.
-    var localExposureEv: Float {
-        get { layer.exposureEv }
-        set { editLayer { $0.exposureEv = newValue } }
-    }
-    var localContrast: Float {
-        get { layer.contrast }
-        set { editLayer { $0.contrast = newValue } }
-    }
-    var localSaturation: Float {
-        get { layer.saturation }
-        set { editLayer { $0.saturation = newValue } }
-    }
-    /// ⚠ A color **cast**, not a white balance. Temperature is applied in
-    /// `linearize`, before the demosaic, so a local one would mean demosaicing
-    /// the frame twice. Named Warmth and Tint so the two are not confused.
-    var localWarmth: Float {
-        get { layer.warmth }
-        set { editLayer { $0.warmth = newValue } }
-    }
-    var localTint: Float {
-        get { layer.tint }
-        set { editLayer { $0.tint = newValue } }
-    }
-
-    /// The selected component, or nil when the group is empty.
-    private var selected: MaskComponentState? {
-        guard selectedMask >= 0 && selectedMask < maskComponents.count else { return nil }
-        return maskComponents[selectedMask]
-    }
-
-    /// Edits the selected component in place and pushes once.
-    ///
-    /// Every `mask…` setter routes through here rather than mutating the array
-    /// directly, so there is one place that knows what "selected" means and one
-    /// place that renders.
-    private func editSelected(_ change: (inout MaskComponentState) -> Void) {
-        guard selectedMask >= 0 && selectedMask < maskComponents.count else { return }
-        change(&maskComponents[selectedMask])
-        pushAndRender()
-    }
-
-    /// The selected component's primitive. Zero means the group is empty.
-    ///
-    /// Setting it off zero on an empty group *adds* a component, and setting it
-    /// to zero removes the selected one — so the existing segmented picker keeps
-    /// meaning what it did before there were rows, and "No mask" on the only row
-    /// still clears the mask rather than leaving a live component covering
-    /// nothing.
-    var maskKind: Int32 {
-        get { selected?.kind ?? 0 }
-        set {
-            if newValue == 0 {
-                if !maskComponents.isEmpty { removeMaskComponent(at: selectedMask) }
-                return
-            }
-            if maskComponents.isEmpty {
-                addMaskComponent(kind: newValue)
-            } else {
-                editSelected { $0.kind = newValue }
-            }
-        }
-    }
-
-    var maskInvert: Bool {
-        get { selected?.invert ?? false }
-        set { editSelected { $0.invert = newValue } }
-    }
-    /// 0 add, 1 subtract, 2 intersect. Meaningless on the first row — the fold
-    /// starts from zero, so subtract or intersect there gives an empty group.
-    var maskCompose: Int32 {
-        get { selected?.compose ?? 0 }
-        set { editSelected { $0.compose = newValue } }
-    }
-    var maskCenterX: Float {
-        get { selected?.centerX ?? 0.5 }
-        set { editSelected { $0.centerX = newValue } }
-    }
-    var maskCenterY: Float {
-        get { selected?.centerY ?? 0.5 }
-        set { editSelected { $0.centerY = newValue } }
-    }
-    var maskAngle: Float {
-        get { selected?.angle ?? 0 }
-        set { editSelected { $0.angle = newValue } }
-    }
-    var maskLength: Float {
-        get { selected?.length ?? 0.5 }
-        set { editSelected { $0.length = newValue } }
-    }
-    var maskRadiusX: Float {
-        get { selected?.radiusX ?? 0.3 }
-        set { editSelected { $0.radiusX = newValue } }
-    }
-    var maskRadiusY: Float {
-        get { selected?.radiusY ?? 0.3 }
-        set { editSelected { $0.radiusY = newValue } }
-    }
-    var maskFeather: Float {
-        get { selected?.feather ?? 0.5 }
-        set { editSelected { $0.feather = newValue } }
-    }
-    var maskRoundness: Float {
-        get { selected?.roundness ?? 2 }
-        set { editSelected { $0.roundness = newValue } }
-    }
-
-    // ── The luminance range (mask kind 5) ─────────────────────────────────
-    var maskRangeLo: Float {
-        get { selected?.rangeLo ?? -2 }
-        set { editSelected { $0.rangeLo = newValue } }
-    }
-    var maskRangeHi: Float {
-        get { selected?.rangeHi ?? 2 }
-        set { editSelected { $0.rangeHi = newValue } }
-    }
-    var maskRangeSoft: Float {
-        get { selected?.rangeSoft ?? 1 }
-        set { editSelected { $0.rangeSoft = newValue } }
-    }
-
-    // ── The color range (mask kind 6) ────────────────────────────────────
-    var maskColorTol: Float {
-        get { selected?.colorTol ?? 0.10 }
-        set { editSelected { $0.colorTol = newValue } }
-    }
-    var maskColorSoft: Float {
-        get { selected?.colorSoft ?? 0.05 }
-        set { editSelected { $0.colorSoft = newValue } }
-    }
-
-    /// The picked shade, scene-linear Rec.2020 RGB. Read for the panel's
-    /// swatch; written only by `pickMaskColor`.
-    var maskColor: (r: Float, g: Float, b: Float) {
-        guard let m = selected else { return (0.18, 0.18, 0.18) }
-        return (m.colorR, m.colorG, m.colorB)
-    }
+    var layers: [LocalAdjustState] = [LocalAdjustState()]
 
     /// Armed by the panel's picker button. The canvas consumes the next click,
     /// exactly as it does for spot placement.
@@ -670,95 +306,7 @@ final class Engine {
     /// View state, not edit state, so it is deliberately not in `DevelopState`:
     /// it is a picture of a gesture, not part of the photograph. Reopening a
     /// photo leaves it nil and the panel falls back to the target's hue.
-    private(set) var maskColorSwatch: (r: Double, g: Double, b: Double)?
-
-    /// Takes the color under a click on the displayed picture into the
-    /// selected component. Returns false when there was nothing to sample.
-    ///
-    /// ⚠ The **scene** color, not what is on screen: reading the edited result
-    /// would mean shifting hue through the mask changes what the mask selects.
-    /// Same texture the color-mixer eyedropper reads, and the same reason.
-    ///
-    /// That value arrives normalized by its own peak, which does not matter
-    /// here and is the point of the metric: Oklab chromaticity is exactly
-    /// invariant under a multiply, so a normalized target and an unnormalized
-    /// pixel land in the same place. research/masking.md §4c.
-    @discardableResult
-    func pickMaskColor(at displayed: CGPoint) -> Bool {
-        guard isLoaded, selected != nil,
-              let s = sample(u: Float(displayed.x), v: Float(displayed.y))
-        else { return false }
-        edit("Mask color") {
-            editSelected {
-                $0.colorR = Float(s.scene.r)
-                $0.colorG = Float(s.scene.g)
-                $0.colorB = Float(s.scene.b)
-            }
-        }
-        maskColorSwatch = s.display
-        return true
-    }
-
-    // ── The brush (mask kind 3) ───────────────────────────────────────────
-    var brushRadius: Float {
-        get { selected?.brushRadius ?? 0.08 }
-        set { editSelected { $0.brushRadius = newValue } }
-    }
-    var brushFlow: Float {
-        get { selected?.brushFlow ?? 0.5 }
-        set { editSelected { $0.brushFlow = newValue } }
-    }
-    var brushHardness: Float {
-        get { selected?.brushHardness ?? 0.5 }
-        set { editSelected { $0.brushHardness = newValue } }
-    }
-
-    /// Appends a component and selects it. Returns false when the group is full.
-    ///
-    /// A new row composes with `add` — the only op that does anything on a first
-    /// row, and the one a photographer means by "and also this".
-    @discardableResult
-    func addMaskComponent(kind: Int32 = 1) -> Bool {
-        guard maskComponents.count < Self.maxMaskComponents else { return false }
-        var m = MaskComponentState()
-        m.kind = kind
-        m.compose = 0
-        maskComponents.append(m)
-        selectedMask = maskComponents.count - 1
-        pushAndRender()
-        return true
-    }
-
-    /// Removes a component, keeping the strokes of the ones after it with them.
-    ///
-    /// The engine indexes strokes by component, so removing row 1 of three has
-    /// to shift row 2's paint down with it — otherwise the surviving component
-    /// renders the removed one's stroke. `pushStrokes` re-sends every one.
-    func removeMaskComponent(at index: Int) {
-        guard index >= 0 && index < maskComponents.count else { return }
-        maskComponents.remove(at: index)
-        selectedMask = maskComponents.isEmpty ? 0 : min(index, maskComponents.count - 1)
-        pushStrokes()
-        pushAndRender()
-    }
-
-    /// The selected component's stroke, as normalized points on the displayed
-    /// picture.
-    var brushStroke: [CGPoint] {
-        guard let m = selected else { return [] }
-        return Self.points(m.brushStroke)
-    }
-
-    /// Pairs a flattened stroke back into points. An odd count is a truncated
-    /// sidecar; drop the stray rather than reading past the end.
-    private static func points(_ xy: [Float]) -> [CGPoint] {
-        var pts: [CGPoint] = []
-        pts.reserveCapacity(xy.count / 2)
-        for i in stride(from: 0, to: xy.count - 1, by: 2) {
-            pts.append(CGPoint(x: CGFloat(xy[i]), y: CGFloat(xy[i + 1])))
-        }
-        return pts
-    }
+    var maskColorSwatch: (r: Double, g: Double, b: Double)?
 
     /// Bumped per component whenever that component's stroke changes.
     ///
@@ -769,12 +317,7 @@ final class Engine {
     ///
     /// Not in `DevelopState`: it is a staleness token, not an edit, so it must
     /// not reach the sidecar or undo.
-    private var brushRevisions = [UInt32](repeating: 0, count: Engine.maxMaskComponents)
-
-    /// The selected component's per-dab polarity, as booleans.
-    var brushErasePolarity: [Bool] {
-        (selected?.brushErase ?? []).map { $0 != 0 }
-    }
+    var brushRevisions = [UInt32](repeating: 0, count: Engine.maxMaskComponents)
 
     /// Whether the brush is currently taking coverage away. Tool state, not
     /// part of the photograph — it belongs to the hand, like `spotPlacing`.
@@ -805,352 +348,10 @@ final class Engine {
     // facade. So the buffers below are `@ObservationIgnored`, they are appended
     // to rather than rebuilt, and `maskComponents` is written exactly **once**,
     // in `endBrushStroke`.
-    @ObservationIgnored private var liveStroke: [Float] = []
-    @ObservationIgnored private var liveErase: [Float] = []
+    @ObservationIgnored var liveStroke: [Float] = []
+    @ObservationIgnored var liveErase: [Float] = []
     /// Which component the live stroke belongs to; -1 when no stroke is down.
-    @ObservationIgnored private var liveIndex = -1
-
-    /// The press. Seeds the buffers from whatever paint is already on the
-    /// component, so a second pass builds on the first.
-    func beginBrushStroke() {
-        guard selectedMask >= 0 && selectedMask < maskComponents.count else { return }
-        liveIndex = selectedMask
-        liveStroke = maskComponents[liveIndex].brushStroke
-        liveErase = maskComponents[liveIndex].brushErase
-        // ⚠ Padded here rather than trusted, for the same reason `pushStroke`
-        // pads: the two arrays reach the sidecar separately and a file that
-        // predates erasing has a stroke and no polarity.
-        let dabs = liveStroke.count / 2
-        if liveErase.count < dabs {
-            liveErase += [Float](repeating: 0, count: dabs - liveErase.count)
-        }
-    }
-
-    /// One pointer event's worth of dabs. Appends; never rebuilds.
-    func appendBrushDabs(_ points: [CGPoint], erasing: Bool) {
-        guard liveIndex >= 0, !points.isEmpty else { return }
-        liveStroke.reserveCapacity(liveStroke.count + points.count * 2)
-        for p in points {
-            liveStroke.append(Float(p.x))
-            liveStroke.append(Float(p.y))
-        }
-        liveErase.append(contentsOf:
-            repeatElement(erasing ? 1 : 0, count: points.count))
-        pushLiveStroke()
-    }
-
-    /// The release. One observable write, and the record is correct again.
-    ///
-    /// ⚠ Returns whether anything was painted, so the caller can skip the
-    /// history entry for a press that laid nothing — recording that would put a
-    /// step in the history that undoes to itself.
-    @discardableResult
-    func endBrushStroke() -> Bool {
-        guard liveIndex >= 0 else { return false }
-        let index = liveIndex
-        liveIndex = -1
-        let changed = maskComponents[index].brushStroke != liveStroke
-        if changed {
-            maskComponents[index].brushStroke = liveStroke
-            maskComponents[index].brushErase = liveErase
-        }
-        liveStroke = []; liveErase = []
-        return changed
-    }
-
-    /// Sends the live buffers across the facade and renders. `pushAndRender`
-    /// minus `onEdit`, and the omission is the whole optimisation.
-    ///
-    /// ⚠ **The adjustment block still has to go, and the first draft of this
-    /// skipped it.** A stroke's dabs travel by their own call, so skipping the
-    /// block looked free — but `brush_revision` rides *in* the block, and it is
-    /// the only thing the engine compares to decide the mask node is stale (it
-    /// never walks a stroke to find out). Uploading dabs without it left the
-    /// node clean: the kernel never re-ran, `render()` returned in microseconds
-    /// having done nothing, and the paint simply did not appear. It measured
-    /// **0.0 ms an event at 45,000 fps**, which is what "did no work" looks
-    /// like when you are hoping for "fast".
-    ///
-    /// `repro/gesture-preview-agrees.txt` caught it, on the check that the
-    /// settled picture is the same armed or not — written the day before for a
-    /// different reason entirely.
-    ///
-    /// What *is* safe to skip is `onEdit?(state)`, and that is where the cost
-    /// was: it builds a whole `DevelopState` — copying the stroke it was just
-    /// handed — and gives it to `Autosave.note`, whose first act is
-    /// `state != saved`, a full structural compare of the same arrays. The
-    /// autosave's business is the finished stroke, and `endBrushStroke`
-    /// delivers one through the normal observable path.
-    private func pushLiveStroke() {
-        guard isLoaded, !suspended, let handle, liveIndex >= 0 else { return }
-        let dabs = liveStroke.count / 2
-        guard dabs > 0 else { return }
-        let ok: OrionStatus = liveStroke.withUnsafeBufferPointer { p in
-            liveErase.withUnsafeBufferPointer { e in
-                orion_engine_set_brush_stroke(handle, Int32(liveIndex),
-                                              p.baseAddress, e.baseAddress,
-                                              Int32(dabs))
-            }
-        }
-        // ⚠ Reported rather than dropped. A refused stroke is paint that does
-        // not appear under a hand that is still moving, which reads as a dead
-        // trackpad rather than as an error — and the next dab tries again, so
-        // without a message there is nothing anywhere to say it happened.
-        guard ok == ORION_OK else {
-            noteBrushRefusal(ok)
-            return
-        }
-        brushRevisions[liveIndex] &+= 1
-
-        var adj = cAdjustments()
-        let pushed = orion_engine_set_adjustments(handle, &adj)
-        guard pushed == ORION_OK else {
-            noteBrushRefusal(pushed)
-            return
-        }
-        if interacting { renderPreview() } else { render() }
-    }
-
-    /// One place for the two brush pushes to complain from.
-    ///
-    /// ⚠ The stderr line is rate-limited to the *first* refusal of a run of
-    /// them. A pointer event fires dozens of times a second, so a line per dab
-    /// would be a megabyte of log for one bad stroke and would bury the first
-    /// one, which is the only one that carries information. `lastFailure` is
-    /// set every time — it is a single published value, and the footer showing
-    /// the newest reason is right.
-    private func noteBrushRefusal(_ status: OrionStatus) {
-        let why = errorText(status)
-        if lastFailure == nil {
-            FileHandle.standardError.write(
-                Data("orion: the brush stroke was refused — \(why)\n".utf8))
-        }
-        lastFailure = why
-    }
-
-    func setBrushStroke(_ points: [CGPoint], erasing: [Bool]? = nil) {
-        guard selectedMask >= 0 && selectedMask < maskComponents.count else { return }
-        maskComponents[selectedMask].brushStroke =
-            points.flatMap { [Float($0.x), Float($0.y)] }
-        if let erasing {
-            maskComponents[selectedMask].brushErase = erasing.map { $0 ? 1 : 0 }
-        } else {
-            maskComponents[selectedMask].brushErase =
-                [Float](repeating: 0, count: points.count)
-        }
-        guard pushStroke(selectedMask) else { return }
-        pushAndRender()
-    }
-
-    /// Sends one component's stroke across the facade and bumps its revision.
-    @discardableResult
-    private func pushStroke(_ index: Int) -> Bool {
-        guard isLoaded, let handle,
-              index >= 0 && index < maskComponents.count else { return false }
-        let xy = maskComponents[index].brushStroke
-
-        // An empty stroke is a real state — it is what clearing the brush
-        // means — so pass the null the facade documents rather than a dangling
-        // pointer into an empty array.
-        // ⚠ Padded to the dab count rather than trusted. The two arrays are
-        // written to the sidecar separately, so a file edited by hand — or by a
-        // build between these two changes — can arrive with a stroke and no
-        // polarity for the tail of it. Short means "paints", which is the same
-        // thing an absent array means.
-        var erase = maskComponents[index].brushErase
-        let dabs = xy.count / 2
-        if erase.count < dabs { erase += [Float](repeating: 0, count: dabs - erase.count) }
-
-        let status: OrionStatus = xy.isEmpty
-            ? orion_engine_set_brush_stroke(handle, Int32(index), nil, nil, 0)
-            : xy.withUnsafeBufferPointer { p in
-                  erase.withUnsafeBufferPointer { e in
-                      orion_engine_set_brush_stroke(handle, Int32(index),
-                                                    p.baseAddress, e.baseAddress,
-                                                    Int32(dabs))
-                  }
-              }
-        guard status == ORION_OK else {
-            noteBrushRefusal(status)
-            return false
-        }
-        brushRevisions[index] &+= 1
-        return true
-    }
-
-    /// Re-sends every component's stroke. Needed whenever the *indexing*
-    /// changes rather than the paint — a restore, or a removal that shifts the
-    /// rows after it down.
-    private func pushStrokes() {
-        for i in 0..<Self.maxMaskComponents {
-            if i < maskComponents.count {
-                pushStroke(i)
-            } else if isLoaded, let handle {
-                // Clear the tail, or a component removed from a group of three
-                // leaves its paint in the engine for the next one added to
-                // inherit.
-                if orion_engine_set_brush_stroke(handle, Int32(i), nil, nil, 0) == ORION_OK {
-                    brushRevisions[i] &+= 1
-                }
-            }
-        }
-    }
-
-    /// Total clockwise quarter turns — the camera's own EXIF orientation plus
-    /// the user's rotation. A matte producer needs it; see `MatteGeometry`.
-    var quarterTurns: Int {
-        guard let handle, isLoaded else { return 0 }
-        var t: Int32 = 0
-        guard orion_engine_quarter_turns(handle, &t) == ORION_OK else { return 0 }
-        return Int(t)
-    }
-
-    /// The developed picture with its geometry neutralised, for something that
-    /// wants to *analyze* it rather than show it — today, segmentation.
-    ///
-    /// ⚠ The crop, the straighten and the user's rotation are reset around the
-    /// render, so the only difference between what comes back and the frame the
-    /// mask kernel works in is the EXIF quarter turn — which is an exact
-    /// permutation and needs no resample. Neutralising rather than correcting
-    /// is what stops a matte having no data outside the crop rectangle.
-    /// research/masking.md §5.
-    ///
-    /// Two renders and a readback, and it restores the caller's state exactly —
-    /// the same shape as `captureOriginal`, for the same reason.
-    func renderForAnalysis(longEdge: Int) -> CGImage? {
-        guard isLoaded else { return nil }
-
-        let held = state
-        var neutral = held
-        neutral.cropX = 0; neutral.cropY = 0
-        neutral.cropW = 1; neutral.cropH = 1
-        neutral.straightenDeg = 0
-        neutral.rotateQuarters = 0
-        // ⚠ And the perspective, for exactly the reason the other three are
-        // here: a raster matte is stored in FRAME coordinates, and a model
-        // handed a keystone-corrected picture would return a selection that
-        // fits the corrected picture and nothing else. The mask kernel does no
-        // correction of its own by design, so the correction has to be off on
-        // the way in.
-        neutral.perspectiveVertical = 0
-        neutral.perspectiveHorizontal = 0
-        neutral.perspectiveAspect = 0
-        let heldPreview = cropPreview
-
-        // ⚠ And the coverage overlay, for the same reason `export` turns it
-        // off: it tints the render red wherever the group covers, and this
-        // render is fed to a segmentation model. "Show mask" is on exactly when
-        // a photographer is working with masks, which is exactly when they
-        // press Subject — so the failure is the common case, not a corner, and
-        // it would look like the model being bad at this photograph.
-        let heldOverlay = maskOverlay
-
-        maskOverlay = false
-        cropPreview = false
-        apply(neutral)
-        defer {
-            apply(held)
-            cropPreview = heldPreview
-            maskOverlay = heldOverlay
-        }
-
-        let size = MatteGeometry.previewSize(frameWidth: Int(imageWidth),
-                                             frameHeight: Int(imageHeight),
-                                             longEdge: longEdge)
-        guard size.width > 0, size.height > 0 else { return nil }
-        return Screenshot.developedCGImage(self, fitting: size)
-    }
-
-    /// Uploads a raster matte for the selected component — kind 4,
-    /// research/masking.md §5.
-    ///
-    /// ⚠ `alpha` is in **frame** coordinates: the whole uncropped, unturned
-    /// frame, row-major from the top left. Not the displayed picture. A
-    /// producer that worked from what is on screen has to undo the geometry
-    /// first — the engine does no correction, which is exactly what lets a
-    /// matte stay on its subject through a crop and a quarter turn.
-    ///
-    /// Returns false if the matte is larger than the engine will take, which is
-    /// reported rather than silently downscaled.
-    /// `index` defaults to the selected row, which is what every gesture means.
-    /// Restoring a saved matte passes one explicitly: it walks the whole list on
-    /// open, and moving the selection to each row in turn would be a visible
-    /// side effect of loading a file.
-    @discardableResult
-    func setMaskMatte(_ alpha: [Float], width: Int, height: Int,
-                      at index: Int? = nil) -> Bool {
-        let which = index ?? selectedMask
-        guard let handle, isLoaded,
-              which >= 0, which < maskComponents.count else { return false }
-        let status = alpha.withUnsafeBufferPointer {
-            orion_engine_set_mask_matte(handle, Int32(which),
-                                        $0.baseAddress, Int32(width), Int32(height))
-        }
-        guard status == ORION_OK else { return false }
-        // The matte lives outside `Adjustments`, like a brush stroke, so
-        // nothing above has been dirtied yet.
-        pushAndRender()
-        return true
-    }
-
-    /// Records which saved file holds the selected row's matte, and which
-    /// producer made it. `MatteStore` writes the file first and calls this with
-    /// the id it got back, so the state never names a file that is not there.
-    func setMatteReference(id: String?, source: String?) {
-        editSelected { $0.matteId = id; $0.matteSource = source }
-        missingMattes.remove(selectedMask)
-    }
-
-    /// Uploads every saved matte the restored state names, and records the rows
-    /// whose file could not be read.
-    ///
-    /// ⚠ A missing file is **recorded, not swallowed**. Leaving the row with no
-    /// coverage would change how the picture looks with nothing on screen
-    /// saying why — the same shape as every silent-output defect this project
-    /// has paid for. The panel reads `missingMattes` and says so.
-    ///
-    /// Called after `restore`, because it walks the components that call put
-    /// there.
-    func restoreMattes(photo: URL) {
-        var missing: Set<Int> = []
-        for (i, c) in maskComponents.enumerated() {
-            guard c.kind == 4, let id = c.matteId else { continue }
-            guard let m = MatteStore.read(photo: photo, id: id) else {
-                missing.insert(i); continue
-            }
-            if !setMaskMatte(m.alpha, width: m.width, height: m.height, at: i) {
-                missing.insert(i)
-            }
-        }
-        missingMattes = missing
-    }
-
-    /// The label to describe the selected row's matte, if it has one.
-    var maskMatteSource: String? { selected?.matteSource }
-
-    /// Whether the selected row's matte is on disk beside the photograph.
-    ///
-    /// ⚠ Separate from `maskMatteSource` on purpose. A matte can exist in the
-    /// engine and not yet in a file — the screenshot harness makes one that
-    /// way, and so does any run with no photograph open — and a caption that
-    /// read the label and then promised the file would be claiming a save that
-    /// did not happen. That is the class of lie this panel's copy exists to
-    /// avoid, not to commit.
-    var maskMatteSaved: Bool { selected?.matteId != nil }
-
-    /// True when the selected row is a matte whose file could not be read.
-    var maskMatteMissing: Bool { missingMattes.contains(selectedMask) }
-
-    /// The largest matte this image will accept.
-    var maxMatteSize: (width: Int, height: Int) {
-        guard let handle, isLoaded else { return (0, 0) }
-        var w: UInt32 = 0, h: UInt32 = 0
-        guard orion_engine_max_matte_size(handle, &w, &h) == ORION_OK else { return (0, 0) }
-        return (Int(w), Int(h))
-    }
-
-    /// One history entry when a brush stroke finishes, rather than one per dab.
-    func commitBrushEdit() { history.record(state, label: "Brush"); log.committed(state, label: "Brush") }
+    @ObservationIgnored var liveIndex = -1
 
     /// Paint the mask's coverage over the picture, so it can be placed by eye.
     ///
@@ -1159,140 +360,6 @@ final class Engine {
     /// not enter undo history, and must not follow the photo to another
     /// machine. `export` forces it off around the write for the same reason.
     var maskOverlay = false { didSet { log.overlay(maskOverlay); pushAndRender() } }
-
-    /// Wipes the selected component's stroke. Undoable, because painting for a
-    /// minute and losing it to a misclick is not a thing a photographer should
-    /// have to fear.
-    func clearBrushStroke() {
-        guard !brushStroke.isEmpty else { return }
-        setBrushStroke([])
-        history.record(state, label: "Clear brush"); log.committed(state, label: "Clear brush")
-    }
-
-    /// The selected row's visibility, for the panel and the scenario runner.
-    var maskHidden: Bool {
-        get { selected?.hidden ?? false }
-        set { editSelected { $0.hidden = newValue } }
-    }
-
-    /// The eye button. View-ish but genuinely part of the edit: a hidden mask
-    /// is a decision about the photograph, so it round-trips through the
-    /// sidecar and undo like anything else.
-    func toggleMaskHidden(_ index: Int) {
-        guard maskComponents.indices.contains(index) else { return }
-        let label = maskComponents[index].hidden ? "Show mask row" : "Hide mask row"
-        edit(label) {
-            maskComponents[index].hidden.toggle()
-            // ⚠ **The render is not implied.** `edit` runs the change and
-            // records history; it does not push. Every other control gets its
-            // render from a `didSet` on the property it writes, and
-            // `maskComponents` has none — so mutating a row inside `edit` and
-            // stopping there changes the model, the sidecar and the undo stack
-            // and leaves the picture exactly as it was. The eye toggled, the
-            // list dimmed, and the photograph did not move.
-            //
-            // Decision #67 records the same shape from the other direction: a
-            // bare assignment that renders but records nothing. This is the
-            // mirror of it, and it is why `editSelected` calls this explicitly.
-            pushAndRender()
-        }
-    }
-
-    /// Starts or ends a layer at this row.
-    ///
-    /// ⚠ Row 1 always begins one — a stack has to start somewhere, and a first
-    /// row that could be "continue" would continue from nothing.
-    func toggleLayerBreak(at index: Int) {
-        guard maskComponents.indices.contains(index), index > 0 else { return }
-        let starting = maskComponents[index].startsLayer
-        edit(starting ? "Merge layer" : "Split layer") {
-            maskComponents[index].startsLayer.toggle()
-            // A new layer needs somewhere to keep its adjustments.
-            while layers.count < layerCount { layers.append(LocalAdjustState()) }
-            pushAndRender()
-        }
-    }
-
-    /// Moves a row up or down the fold.
-    ///
-    /// ⚠ **Every stroke has to be re-sent.** The engine indexes brush strokes
-    /// by component, so swapping two rows in this array leaves their paint
-    /// where it was — row 2's stroke would render under row 1's geometry. The
-    /// same hazard removal already documents.
-    func moveMaskComponent(from index: Int, by offset: Int) {
-        let to = index + offset
-        guard maskComponents.indices.contains(index),
-              maskComponents.indices.contains(to) else { return }
-        edit("Reorder mask") {
-            maskComponents.swapAt(index, to)
-            selectedMask = to
-            pushStrokes()
-            pushAndRender()
-        }
-    }
-
-    /// Changes the selected row's primitive, keeping everything else.
-    ///
-    /// ⚠ Not `maskKind`'s setter: that one adds a component when the group is
-    /// empty and removes it on `No mask`, which is what the old picker needed
-    /// and is wrong for "this row is a radial now".
-    func setMaskKind(_ kind: Int32, at index: Int) {
-        guard maskComponents.indices.contains(index) else { return }
-        edit("Mask kind") {
-            maskComponents[index].kind = kind
-            pushAndRender()
-        }
-    }
-
-    /// One history entry when a component is added or removed.
-    func commitMaskGroupEdit(_ label: String) {
-        history.record(state, label: label)
-        log.committed(state, label: label)
-    }
-
-    /// The mask as the canvas overlay handles it.
-    ///
-    /// The overlay works in one struct because a drag moves several of these at
-    /// once — an endpoint sets the angle and the length together — and writing
-    /// them one at a time would push a render per field and, worse, leave the
-    /// mask briefly in a state that is neither where it was nor where it is
-    /// going. Setting it is one suspended batch and one render, the same shape
-    /// as `setCrop`.
-    ///
-    /// These are *displayed* coordinates. The engine puts them where
-    /// `develop:linear` can use them; the overlay never sees that transform.
-    var maskPlacement: CanvasLayout.MaskPlacement {
-        get {
-            CanvasLayout.MaskPlacement(
-                kind: Int(maskKind),
-                center: CGPoint(x: CGFloat(maskCenterX), y: CGFloat(maskCenterY)),
-                angle: CGFloat(maskAngle),
-                length: CGFloat(maskLength),
-                radius: CGSize(width: CGFloat(maskRadiusX), height: CGFloat(maskRadiusY)),
-                feather: CGFloat(maskFeather),
-                roundness: CGFloat(maskRoundness),
-                invert: maskInvert)
-        }
-        set { setMask(newValue) }
-    }
-
-    /// Sets the mask's geometry in one push, so a drag is a single render
-    /// rather than five.
-    func setMask(_ m: CanvasLayout.MaskPlacement) {
-        guard isLoaded else { return }
-        suspended = true
-        maskCenterX  = Float(m.center.x)
-        maskCenterY  = Float(m.center.y)
-        maskAngle    = Float(m.angle)
-        maskLength   = Float(m.length)
-        maskRadiusX  = Float(m.radius.width)
-        maskRadiusY  = Float(m.radius.height)
-        suspended = false
-        pushAndRender()
-    }
-
-    /// One history entry when a mask drag finishes, rather than one per frame.
-    func commitMaskEdit() { history.record(state, label: "Mask") }
 
     /// Exposure fusion. A power on the emitted gain, so zero is exact.
     var fusion: Float = 0          { didSet { pushAndRender() } }
@@ -1325,13 +392,13 @@ final class Engine {
     /// write cannot pick up a *later* state than the one it was queued for.
     @ObservationIgnored var onEdit: ((DevelopState) -> Void)?
 
-    private var suspended = false
+    var suspended = false
 
     /// Bumped after every successful render so the view knows to redraw.
-    private(set) var generation: UInt64 = 0
+    var generation: UInt64 = 0
 
     /// 128 bins per channel, packed R then G then B.
-    private(set) var histogramBins: [UInt32] = []
+    var histogramBins: [UInt32] = []
 
     let history = EditHistory()
 
@@ -1339,7 +406,7 @@ final class Engine {
     /// otherwise stepping back would immediately record the step as a new edit.
     private var restoring = false
 
-    private var handle: OpaquePointer?
+    var handle: OpaquePointer?
 
     init() throws {
         var h: OpaquePointer?
@@ -1352,16 +419,6 @@ final class Engine {
 
     deinit {
         if let handle { orion_engine_destroy(handle) }
-    }
-
-    var metalDevice: MTLDevice? {
-        guard let handle, let raw = orion_engine_metal_device(handle) else { return nil }
-        return Unmanaged<AnyObject>.fromOpaque(raw).takeUnretainedValue() as? MTLDevice
-    }
-
-    var outputTexture: MTLTexture? {
-        guard let handle, let raw = orion_engine_output_texture(handle) else { return nil }
-        return Unmanaged<AnyObject>.fromOpaque(raw).takeUnretainedValue() as? MTLTexture
     }
 
     // ── Degrade-then-refine (ROADMAP M1, Interaction) ─────────────────────
@@ -1378,352 +435,15 @@ final class Engine {
     /// resolution — which is the expensive one, since it is the tick that
     /// dirties the graph — and picks the wrong answer for a slider nudged by
     /// the keyboard.
-    private(set) var interacting = false
-
-    /// The preview graph's output, or nil when there is none.
-    var previewTexture: MTLTexture? {
-        guard let handle, let raw = orion_engine_preview_texture(handle) else {
-            return nil
-        }
-        return Unmanaged<AnyObject>.fromOpaque(raw).takeUnretainedValue() as? MTLTexture
-    }
-
-    /// The texture the canvas should show right now.
-    ///
-    /// ⚠ Only the canvas asks. `outputTexture` is what export, the histogram,
-    /// the eyedropper and the screenshot harness read, and all of them must
-    /// keep reading it — a preview-resolution export is a mistake only the
-    /// person receiving the file would find.
-    var displayTexture: MTLTexture? {
-        (interacting ? previewTexture : nil) ?? outputTexture
-    }
-
-    var previewSize: (width: UInt32, height: UInt32) {
-        guard let handle else { return (0, 0) }
-        var w: UInt32 = 0, h: UInt32 = 0
-        guard orion_engine_preview_size(handle, &w, &h) == ORION_OK else {
-            return (0, 0)
-        }
-        return (w, h)
-    }
-
-    /// A drag started. Renders go to the preview graph until `endInteraction`.
-    func beginInteraction() {
-        // ⚠ **Not while comparing.** The preview graph renders at a quarter
-        // linear, and the split samples the held original and the edited render
-        // through *one* set of UVs taken from the edited one — so with a
-        // preview-sized edited texture the two no longer line up, and the
-        // canvas dealt with that by suspending the split for the length of the
-        // drag. Which means the Original side showed the edited picture while a
-        // slider moved: the exact thing compare exists to prevent, at the exact
-        // moment someone is using it to judge a change.
-        //
-        // Compare is a deliberate, short-lived viewing mode. Paying
-        // full-resolution latency inside it is the right trade against a split
-        // that lies.
-        guard !comparing else { return }
-        guard isLoaded, previewTexture != nil, !interacting else { return }
-        log.interacting(true)
-        interacting = true
-    }
-
-    /// The hand stopped. Renders the full graph once and goes back to it.
-    func endInteraction() {
-        guard interacting else { return }
-        log.interacting(false)
-        interacting = false
-        // ⚠ The full graph is *stale* at this point — every tick of the drag
-        // went to the preview. This render is not a refinement of what is on
-        // screen, it is the first time the full graph has seen these values,
-        // and skipping it would leave the photograph at whatever it looked like
-        // when the drag began.
-        pushAndRender()
-    }
+    var interacting = false
 
     /// The loaded creative LUT's title, or "" when none is loaded.
-    private(set) var lutName: String = ""
+    var lutName: String = ""
 
     /// Why the last load failed, for the panel to show. A LUT that will not
     /// load is the user's file being wrong, not the app misbehaving, so the
     /// reason has to reach them — the parser names the line.
-    private(set) var lutError: String?
-
-    func loadLut(path: String, displayName: String) {
-        guard let handle else { return }
-
-        let status = orion_engine_load_lut(handle, path)
-        guard status == ORION_OK else {
-            lutError = errorText(status)
-            return
-        }
-
-        lutError = nil
-        var buffer = [CChar](repeating: 0, count: 256)
-        orion_engine_lut_title(handle, &buffer, Int32(buffer.count))
-        let title = String(cString: buffer)
-        // A .cube is not obliged to carry a TITLE, and most do not. The file's
-        // own name is what the user picked and what they will look for.
-        lutName = title.isEmpty ? displayName : title
-        pushAndRender()
-    }
-
-    func clearLut() {
-        guard let handle else { return }
-        orion_engine_clear_lut(handle)
-        lutName = ""
-        lutError = nil
-        pushAndRender()
-    }
-
-    func open(path: String) throws {
-        guard let handle else { return }
-
-        let status = orion_engine_open_raw(handle, path)
-        guard status == ORION_OK else {
-            throw Failure.open(errorText(status))
-        }
-
-        // ⚠ Only assigned when the call answered. Discarding the status wrote
-        // the zeroed out-parameters over the size, and every consumer —
-        // `frameAspect`, the crop normalization, the export's longest edge —
-        // then worked against 0 × 0 on a photograph that had opened fine.
-        var w: UInt32 = 0, h: UInt32 = 0
-        let sized = orion_engine_image_size(handle, &w, &h)
-        guard sized == ORION_OK else { throw Failure.open(errorText(sized)) }
-        imageWidth = w
-        imageHeight = h
-        camera = String(cString: orion_engine_camera(handle))
-        // An answer about the photograph being left. `MatteStore.restore` fills
-        // it again for the one arriving.
-        missingMattes = []
-
-        var profile = OrionLensProfile()
-        if orion_engine_lens_profile(handle, &profile) == ORION_OK, profile.found != 0 {
-            let name = withUnsafeBytes(of: profile.lens) { raw in
-                String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
-            }
-            let maker = withUnsafeBytes(of: profile.maker) { raw in
-                String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
-            }
-            lensProfileName = name.hasPrefix(maker) || maker.isEmpty
-                ? name : "\(maker) \(name)"
-            lensProfileApproximate = profile.approximate != 0
-        } else {
-            lensProfileName = ""
-            lensProfileApproximate = false
-        }
-
-        // The held original is the *previous* photo's unedited render. Keeping
-        // it means compare shows one picture against another one entirely,
-        // which is worse than showing nothing. Compare itself stays on across a
-        // switch — that is the point of it while culling — so the render below
-        // captures this photo's own original through `refreshOriginal`.
-        originalTexture = nil
-        originalGeometry = nil
-        maskColorSwatch = nil
-
-        // Reset to the camera's own settings before marking loaded, so the
-        // didSet observers don't each trigger a render on a half-set model.
-        suspended = true
-        defaults = asShotState()
-        assign(defaults)
-        suspended = false
-
-        isLoaded = true
-        history.reset(to: state)
-        log.opened(path, state: state)
-        pushAndRender()
-    }
-
-    /// Restores a state saved to a sidecar. Returns false when the blob would
-    /// not decode, and the photograph is then left openable — a sidecar written
-    /// by a newer build must not make a file unopenable.
-    ///
-    /// ⚠ **The `false` is load bearing and used to be a bare `return`.** Two
-    /// things downstream read "the sidecar had a develop blob" and took it to
-    /// mean "and it is now in the engine":
-    ///
-    /// - `MatteStore.sweepAfterLoad` was handed `engine.maskComponents`, which
-    ///   after a failed decode is the *default* empty list. The sweep then
-    ///   deleted every matte PNG beside the photograph. That is #87's lesson
-    ///   reached by a second route, and it is not recoverable — the model has
-    ///   to be run again, and Vision's answer moves between OS releases.
-    /// - `Autosave.begin` was armed with the default state as its baseline, so
-    ///   the first slider tick wrote a blank develop blob over the sidecar that
-    ///   had only failed to *parse*. An hour's work, gone on a keystroke.
-    ///
-    /// Both callers now branch on the answer, and both say so out loud.
-    @discardableResult
-    func restore(encoded: Data) -> Bool {
-        guard let s = try? JSONDecoder().decode(DevelopState.self, from: encoded) else {
-            let why = "the saved edits could not be read"
-            lastFailure = why
-            FileHandle.standardError.write(Data("orion: restore failed — \(why)\n".utf8))
-            return false
-        }
-        suspended = true
-        assign(s)
-        suspended = false
-        history.reset(to: s)
-        pushAndRender()
-        return true
-    }
-
-    /// Rotates by a quarter turn, wrapping. Clockwise is positive.
-    /// A quarter turn swaps the frame's width and height, so a crop rectangle
-    /// expressed against the old one no longer means anything. Resetting it is
-    /// honest; carrying it over would silently reframe the picture.
-    func rotate(_ turns: Int32) {
-        suspended = true
-        cropX = 0; cropY = 0; cropW = 1; cropH = 1
-        // Predict the swap rather than waiting for the render to report it,
-        // so the constraint that runs on the next edit has the right aspect.
-        if turns % 2 != 0 { swap(&frameWidth, &frameHeight) }
-        suspended = false
-        // The render this triggers re-takes the held original: a quarter turn
-        // swaps the output's width and height, and the split samples both
-        // textures through one valid rectangle. `refreshOriginal` sees that.
-        rotateQuarters = ((rotateQuarters + turns) % 4 + 4) % 4
-    }
-
-    /// Applies a preset over the current state, as one history entry.
-    ///
-    /// One entry, not one per field: a preset is a single act from the
-    /// photographer's side, and undo should take it back in a single step the
-    /// way it takes back a brush stroke.
-    func apply(preset: Preset) {
-        guard isLoaded else { return }
-        let next = preset.applied(to: state)
-        suspended = true
-        assign(next)
-        suspended = false
-        pushAndRender()
-        history.record(state, label: preset.name)
-        log.record("preset \(preset.name)")
-        log.committed(state, label: preset.name)
-    }
-
-    /// Restores a saved version of this photograph's edit.
-    ///
-    /// ⚠ **`history.record`, not `history.reset`.** `restore(encoded:)` resets,
-    /// which is right when a photograph is *opening* — there is no earlier
-    /// state to walk back to. Resetting here would make a restore the one act
-    /// in the program that cannot be undone, and it would do it to the act most
-    /// likely to have been a mistake. One entry, like a preset: ⌘Z puts the
-    /// working edit back in a single step. `SnapshotStore.restore` covers the
-    /// other half — the session that ends before the mistake is noticed.
-    ///
-    /// ⚠ **And the mattes, which are not in `DevelopState`.** A version can
-    /// name a raster mask; assigning the state alone would restore the row and
-    /// leave the *previous* state's raster uploaded under the same index, so a
-    /// mask would come back covering the wrong thing rather than nothing.
-    /// `restoreMattes` records whatever it cannot read in `missingMattes`, and
-    /// the panel says so.
-    func restore(snapshot: Snapshot, photo: URL?) {
-        guard isLoaded else { return }
-        suspended = true
-        assign(snapshot.state)
-        suspended = false
-        pushAndRender()
-        if let photo { restoreMattes(photo: photo) }
-        history.record(state, label: "Version \(snapshot.name)")
-        log.record("snapshot restore \(snapshot.name)")
-        log.committed(state, label: "Version \(snapshot.name)")
-    }
-
-    /// Returns every adjustment to its default, with white balance back to
-    /// what the camera chose. One push, one render.
-    func resetEdits() {
-        guard isLoaded else { return }
-        suspended = true
-        assign(defaults)
-        suspended = false
-        pushAndRender()
-        history.record(state, label: "Reset"); log.committed(state, label: "Reset")
-    }
-
-    struct Sample {
-        /// What is on screen. This is what a swatch must show.
-        var display: (r: Double, g: Double, b: Double)
-        /// The color before any user adjustment. Hue bands derive from this,
-        /// so adjusting a band cannot change which band you pick next.
-        var scene: (r: Double, g: Double, b: Double)
-    }
-
-    func sample(u: Float, v: Float) -> Sample? {
-        guard let handle, isLoaded else { return nil }
-        var display = [Float](repeating: 0, count: 3)
-        var scene = [Float](repeating: 0, count: 3)
-        guard orion_engine_sample(handle, u, v, &display, &scene) == ORION_OK else {
-            return nil
-        }
-        return Sample(
-            display: (Double(display[0]), Double(display[1]), Double(display[2])),
-            scene: (Double(scene[0]), Double(scene[1]), Double(scene[2])))
-    }
-
-    /// Per-channel histogram of the rendered image.
-    func histogram(bins: Int = 128) -> [UInt32]? {
-        guard let handle, isLoaded else { return nil }
-        var out = [UInt32](repeating: 0, count: bins * 3)
-        guard orion_engine_histogram(handle, &out, UInt32(bins)) == ORION_OK else {
-            return nil
-        }
-        return out
-    }
-
-    /// `depth` is `OrionBitDepth` — 8 or 16, and 0 keeps the engine's default of
-    /// sixteen. ⚠ Pass what the *file* will hold, not what the control shows:
-    /// eight renders the narrow, dithered graph and sixteen renders the wide
-    /// one, so a JPEG asked for at sixteen would skip the dither and then be
-    /// rounded to eight anyway. `ExportSettings.effectiveDepth` is that value.
-    func export(to path: String, quality: Float = 0.92,
-                maxDimension: UInt32 = 0, space: Int32 = 0,
-                rating: Int32 = -1, metadata: Int32 = 1,
-                depth: Int32 = 0, sharpen: Int32 = 0) throws {
-        // ⚠ Throws rather than returning. A bare `return` here is an export
-        // that reports success and writes no file — and the person who finds
-        // that out is whoever was sent the photograph. `isLoaded` is checked
-        // for the same reason: the engine exists from launch, so exporting with
-        // nothing open used to hand the facade a graph with no source and the
-        // failure, if any, came back through a path nobody read.
-        guard let handle, isLoaded else { throw Failure.export("no photo is open") }
-
-        // The coverage overlay is a viewing aid. Exporting with it on would
-        // write a red-tinted photograph and nothing in the file would say why,
-        // so it is forced off around the write and restored after — including
-        // when the export throws.
-        let wasOverlay = maskOverlay
-        if wasOverlay { maskOverlay = false }
-        defer { if wasOverlay { maskOverlay = true } }
-
-        var options = OrionExportOptions(format: -1, quality: quality,
-                                         max_dimension: maxDimension, space: space,
-                                         rating: rating, metadata: metadata,
-                                         bit_depth: depth, sharpen: sharpen)
-        let status = orion_engine_export(handle, path, &options)
-        guard status == ORION_OK else { throw Failure.export(errorText(status)) }
-    }
-
-    /// Encodes with these options and reports the byte count without writing.
-    /// Real work — a 24 MP JPEG is about a sixth of a second — so callers
-    /// debounce it.
-    func exportedSize(format: Int32, quality: Float, maxDimension: UInt32,
-                      space: Int32 = 0, depth: Int32 = 0, sharpen: Int32 = 0) -> Int? {
-        guard let handle else { return nil }
-        // No rating and no metadata source: the estimate measures the pixels,
-        // and a few hundred bytes of EXIF is below its resolution anyway. The
-        // depth and the sharpening are not below its resolution and are passed.
-        var options = OrionExportOptions(format: format, quality: quality,
-                                         max_dimension: maxDimension, space: space,
-                                         rating: -1, metadata: 1,
-                                         bit_depth: depth, sharpen: sharpen)
-        var bytes: UInt64 = 0
-        guard orion_engine_export_size(handle, &options, &bytes) == ORION_OK else {
-            return nil
-        }
-        return Int(bytes)
-    }
+    var lutError: String?
 
     /// Captures every setting as a value, for undo.
     var state: DevelopState {
@@ -1761,7 +481,7 @@ final class Engine {
     /// their own list, and each was missing whatever had been added since —
     /// Reset left denoise, the lens corrections and the curve applied, which
     /// makes a Reset button that does not reset.
-    private func assign(_ s: DevelopState) {
+    func assign(_ s: DevelopState) {
         temperatureK = s.temperatureK; tint = s.tint; exposureEv = s.exposureEv
         highlights = s.highlights; shadows = s.shadows
         whites = s.whites; blacks = s.blacks
@@ -1809,7 +529,7 @@ final class Engine {
         hueShift = s.hueShift; satShift = s.satShift; lumShift = s.lumShift
     }
 
-    private func apply(_ s: DevelopState) {
+    func apply(_ s: DevelopState) {
         restoring = true
         suspended = true
         assign(s)
@@ -1826,14 +546,14 @@ final class Engine {
     /// A fresh `DevelopState` in all but white balance, which is the camera's
     /// own reading and so belongs to the photo rather than to the app —
     /// "reset temperature" has to mean the camera's number, not 5500 K.
-    private(set) var defaults = DevelopState()
+    var defaults = DevelopState()
 
     /// ⚠ **The status is read, and the fallback is the struct's own defaults.**
     /// It was discarded, and `OrionAdjustments()` is *zeroed* — so a refused
     /// call did not leave white balance alone, it set the photograph to 0 K and
     /// tint 0. The picture opens deep blue, "reset temperature" puts it back
     /// there, and nothing anywhere says the camera was never asked.
-    private func asShotState() -> DevelopState {
+    func asShotState() -> DevelopState {
         var fresh = DevelopState()
         guard let handle else { return fresh }
         var asShot = OrionAdjustments()
@@ -1857,161 +577,13 @@ final class Engine {
 
     /// The unedited render, held so the split can show both at once without
     /// re-rendering on every drag of the divider.
-    private(set) var originalTexture: MTLTexture?
+    var originalTexture: MTLTexture?
 
-    var comparing: Bool { compareSplit < 0.999 }
-
-    /// The geometry the held original was rendered at.
-    ///
-    /// ⚠️ The blit samples the edited texture and the held original through
-    /// **one** set of UVs, derived from the *edited* render's valid rectangle.
-    /// So the moment a crop, a straighten or a quarter turn changes that
-    /// rectangle, the held copy is read through the wrong window and the two
-    /// halves stop being the same photograph. Measured: a crop under a live
-    /// split put luma 0.7404 on the original side where 0.1432 belonged.
-    ///
-    /// Recorded and compared rather than re-captured at each call site, because
-    /// hand-listing the sites is exactly what failed — `rotate` carried its own
-    /// `captureOriginal()` call and `setCrop` carried nothing, so one of the two
-    /// geometry controls was right by accident of who remembered.
-    private struct OriginalGeometry: Equatable {
-        var rotateQuarters: Int32
-        var straightenDeg: Float
-        /// Perspective does not change the output *rectangle*, so it is not
-        /// here for the reason the other fields are. It is here because the
-        /// held original is rendered with the geometry copied across, and a
-        /// split showing a corrected edit beside an uncorrected original is two
-        /// different photographs.
-        var perspectiveVertical: Float
-        var perspectiveHorizontal: Float
-        var perspectiveAspect: Float
-        var cropX: Float, cropY: Float, cropW: Float, cropH: Float
-        /// The crop preview renders the whole frame with the crop as context,
-        /// which is a different output shape again.
-        var cropPreview: Bool
-    }
-
-    private var originalGeometry: OriginalGeometry?
-
-    private var currentGeometry: OriginalGeometry {
-        OriginalGeometry(rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
-                         perspectiveVertical: perspectiveVertical,
-                         perspectiveHorizontal: perspectiveHorizontal,
-                         perspectiveAspect: perspectiveAspect,
-                         cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
-                         cropPreview: cropPreview)
-    }
+    var originalGeometry: OriginalGeometry?
 
     /// `captureOriginal` renders twice, and every render asks whether the held
     /// original is still good. Without this it would ask itself, forever.
-    private var capturingOriginal = false
-
-    /// Renders the image as shot into a held texture, then restores the edit.
-    /// Two renders once, rather than two renders per frame of the divider.
-    func captureOriginal() {
-        guard isLoaded, !capturingOriginal else { return }
-        capturingOriginal = true
-        defer { capturingOriginal = false }
-        originalGeometry = currentGeometry
-
-        let current = state
-        var neutral = DevelopState()
-        neutral.temperatureK = temperatureK      // as shot is not an edit
-        neutral.tint = tint
-        neutral.rotateQuarters = rotateQuarters
-        neutral.straightenDeg = straightenDeg
-        neutral.perspectiveVertical = perspectiveVertical
-        neutral.perspectiveHorizontal = perspectiveHorizontal
-        neutral.perspectiveAspect = perspectiveAspect
-        neutral.cropX = cropX; neutral.cropY = cropY
-        neutral.cropW = cropW; neutral.cropH = cropH
-
-        apply(neutral)
-
-        // Copy out, because the next render overwrites the pipeline's output.
-        if let src = outputTexture, let device = metalDevice {
-            let desc = MTLTextureDescriptor.texture2DDescriptor(
-                pixelFormat: src.pixelFormat, width: src.width, height: src.height,
-                mipmapped: false)
-            desc.usage = [.shaderRead, .shaderWrite]
-            desc.storageMode = .shared
-
-            if let copy = device.makeTexture(descriptor: desc),
-               let queue = device.makeCommandQueue(),
-               let buffer = queue.makeCommandBuffer(),
-               let blit = buffer.makeBlitCommandEncoder() {
-                blit.copy(from: src, to: copy)
-                blit.endEncoding()
-                buffer.commit()
-                buffer.waitUntilCompleted()
-                originalTexture = copy
-            }
-        }
-
-        apply(current)
-    }
-
-    func setCompare(split: Double) {
-        // The split goes first. captureOriginal re-renders twice, and every
-        // render asks whether the held original is still good — which, while
-        // the split still reads 1.0, means dropping it. So the original was
-        // captured and thrown away in the same call, and compare showed the
-        // edit on both sides.
-        compareSplit = min(max(split, 0), 1)
-        log.compare(compareSplit)
-        refreshOriginal()
-        generation &+= 1
-    }
-
-    func generationBump() { generation &+= 1 }
-
-    /// Sixteen bits out of the tail of the graph instead of eight.
-    ///
-    /// The screen path is eight bits: the drawable is `bgra8Unorm`, so wider is
-    /// bytes moved for precision nothing can show, and it costs about 3.5 ms of
-    /// a 16 ms budget. Export widens the tail itself. This is here for the
-    /// screenshot harness, which reads the output texture directly and measures
-    /// to four decimal places — quantised to 8 bits, the differences this
-    /// codebase hunts (0.0001 chroma) round to nothing.
-    ///
-    /// Reallocates two full-resolution textures. Not for a slider.
-    func setWideOutput(_ wide: Bool) {
-        guard let handle, isLoaded else { return }
-        _ = orion_engine_set_wide_output(handle, wide ? 1 : 0)
-        pushAndRender()
-    }
-
-    func clearCompare() {
-        log.compare(1.0)
-        compareSplit = 1.0
-        originalTexture = nil
-        originalGeometry = nil
-        generation &+= 1
-    }
-
-    /// Brings the held original into line with what compare needs right now:
-    /// nothing when the split is off, and a render at the *current* geometry
-    /// when it is on.
-    ///
-    /// Called from `render`, so it covers every route into a geometry change —
-    /// the crop rectangle, the straighten slider, a quarter turn, the crop
-    /// preview, an undo that walks back through any of them — rather than the
-    /// handful of call sites someone remembered to annotate.
-    ///
-    /// It costs two full renders when it fires. That is affordable because the
-    /// only geometry control reachable while comparing is the rotate button,
-    /// which is a click: the crop tab clears compare on entry, so the sliders
-    /// that would trip this per tick cannot be moved with a split up.
-    private func refreshOriginal() {
-        guard !capturingOriginal else { return }
-        guard comparing else {
-            originalTexture = nil
-            originalGeometry = nil
-            return
-        }
-        guard originalTexture == nil || originalGeometry != currentGeometry else { return }
-        captureOriginal()
-    }
+    var capturingOriginal = false
 
     func undo() { log.undo(); if let s = history.undo() { apply(s) } }
     func redo() { log.redo(); if let s = history.redo() { apply(s) } }
@@ -2037,7 +609,7 @@ final class Engine {
     ///
     /// Factored out because auto-enhance has to send the engine the *whole*
     /// state to measure against, not just the fields it is going to change.
-    private func cAdjustments() -> OrionAdjustments {
+    func cAdjustments() -> OrionAdjustments {
         // Field assignment rather than the memberwise initializer, deliberately:
         // the memberwise form is positional over eighty arguments, so any change
         // to the C struct's shape breaks it wholesale — and a transposed pair of
@@ -2177,90 +749,6 @@ final class Engine {
         }
     }
 
-    private func pushAndRender() {
-        guard isLoaded, !suspended, let handle else { return }
-        var adj = cAdjustments()
-        // Both graphs, always — the engine fans this out. A preview left stale
-        // is the graph read the instant the drag ends.
-        //
-        // ⚠ **The status is read.** It was discarded, and the failure that
-        // produces is the worst-looking one in this file: the push is refused,
-        // the render below then succeeds *on the previous adjustments*, and the
-        // photographer gets a fast, correct-looking frame of the wrong picture.
-        // Every number on the bar is green. Swift imports C functions as
-        // implicitly discardable, so nothing warned.
-        let pushed = orion_engine_set_adjustments(handle, &adj)
-        guard pushed == ORION_OK else {
-            let why = errorText(pushed)
-            lastFailure = why
-            FileHandle.standardError.write(
-                Data("orion: the edit did not reach the engine — \(why)\n".utf8))
-            generation &+= 1
-            return
-        }
-
-        if interacting {
-            renderPreview()
-        } else {
-            render()
-        }
-        onEdit?(state)
-    }
-
-    /// Renders the quarter-linear graph and publishes a frame.
-    ///
-    /// Deliberately does *not* re-read `imageWidth`, recompute the histogram or
-    /// drop the compare original: those all describe the full render, and the
-    /// preview is a stand-in for looking at, not a new state of the document.
-    private func renderPreview() {
-        guard let handle else { return }
-        var ms: Double = 0
-        guard orion_engine_render_preview(handle, &ms) == ORION_OK else {
-            // No preview graph on this machine. Fall back rather than showing
-            // nothing — degrade-then-refine is a comfort, not a requirement.
-            render()
-            return
-        }
-        lastFailure = nil
-        lastRenderMs = ms
-        generation &+= 1
-    }
-
-    private func render() {
-        guard let handle else { return }
-        var ms: Double = 0
-        let status = orion_engine_render(handle, &ms)
-        guard status == ORION_OK else {
-            // ⚠ Say so. See `lastFailure`: this used to return silently and
-            // leave a black canvas reading 0.0 ms.
-            let why = errorText(status)
-            lastFailure = why
-            FileHandle.standardError.write(Data("orion: render failed — \(why)\n".utf8))
-            generation &+= 1
-            return
-        }
-        lastFailure = nil
-
-        // Re-read the size every frame. A quarter turn swaps width and height,
-        // and the canvas uses these to work out which part of the (square)
-        // orientation texture is valid — stale values there tear the image.
-        var w: UInt32 = 0, h: UInt32 = 0
-        if orion_engine_image_size(handle, &w, &h) == ORION_OK {
-            imageWidth = w
-            imageHeight = h
-        }
-        var fw: UInt32 = 0, fh: UInt32 = 0
-        if orion_engine_frame_size(handle, &fw, &fh) == ORION_OK {
-            frameWidth = fw
-            frameHeight = fh
-        }
-
-        lastRenderMs = ms
-        refreshOriginal()
-        generation &+= 1
-        scheduleHistogram()
-    }
-
     /// A still of the developed image, drawn in place of the Metal canvas.
     ///
     /// Only the screenshot harness sets this: AppKit cannot capture a Metal
@@ -2270,33 +758,9 @@ final class Engine {
     /// orientation, so opening a portrait frame drew it landscape and then
     /// snapped. Holding the previous frame for the 26 ms decode is calmer than
     /// showing a picture that turns.
-    private(set) var placeholder: NSImage?
+    var placeholder: NSImage?
 
-    func showPlaceholder(_ image: NSImage?) {
-        placeholder = image
-        generation &+= 1
-    }
-
-    func clearPlaceholder() {
-        guard placeholder != nil else { return }
-        placeholder = nil
-        generation &+= 1
-    }
-
-    private var histogramTask: Task<Void, Never>?
-
-    /// The histogram reads back the whole output texture — ~96 MB at 24 MP —
-    /// so recomputing it per render added tens of milliseconds to every slider
-    /// tick. It is a readout nobody watches mid-drag, so it updates once the
-    /// values settle instead.
-    private func scheduleHistogram() {
-        histogramTask?.cancel()
-        histogramTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(160))
-            guard !Task.isCancelled, let self else { return }
-            if let bins = self.histogram() { self.histogramBins = bins }
-        }
-    }
+    var histogramTask: Task<Void, Never>?
 
     /// Swift imports a C float[8] as a 8-tuple, and there is no nicer bridge.
     /// A curve channel into its C form. The engine treats anything malformed
@@ -2323,7 +787,7 @@ final class Engine {
         return (v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7])
     }
 
-    private func errorText(_ status: OrionStatus) -> String {
+    func errorText(_ status: OrionStatus) -> String {
         guard let handle else { return String(cString: orion_status_string(status)) }
         let detail = String(cString: orion_last_error(handle))
         return detail.isEmpty ? String(cString: orion_status_string(status)) : detail

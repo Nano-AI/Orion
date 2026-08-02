@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-02 (**the brush accumulates, the persisted keys migrated, and a failed render now says so instead of showing black — #102 to #112**)
+**Last updated:** 2026-08-02 (**the two biggest files in the tree are now eight and five, and neither moved a pixel — #113 and #117**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#103 built, #101 refused). **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
@@ -112,6 +112,17 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    constructor adds and the blocks `apply` pushes into them, which used to be
    twelve hundred lines apart. Pure refactor, proved rather than asserted: nine
    canvas renders byte-for-byte identical, 173 nodes and 7186 MiB unchanged.
+5. ~~`Engine.swift` against the same ceiling~~ — ✅ **done 2026-08-02, decision
+   #117.** **2,331** lines, now eight files, largest **795**. Same seam as
+   #113 — region of the problem — plus the constraint Swift adds: `Engine` is
+   `@Observable`, so every **stored property** had to stay in the class body and
+   only behaviour moved into `extension Engine`. 27 canvas renders byte-for-byte
+   identical against `ab6f9b2`. ⚠ Two of seven mutations were green everywhere
+   and were defects in the *checks*, both rewritten; and `lastFailure` turns out
+   to have no oracle anywhere, which is recorded rather than fixed.
+   **Four files are left over the ceiling** — `apps/bench/main.cpp` 2,289,
+   `Scenario.swift` 1,596, `OrionApp.swift` 1,557, `DevelopPanels.swift` 1,366 —
+   and they are the harder half, because two of them are what does the checking.
 
 Closed since this list was last written, in the order they went:
 **dehaze's drag cost** (#92), the **`reopen` leak** (#90), **M1's library gap**
@@ -172,6 +183,55 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — `Engine.swift` is eight files, and no pixel moved (#117)
+
+**2,331 lines against a ceiling of 1,000** — the largest violation left once
+#113 took `DevelopPipeline.cpp` out, and its sibling. Same seam, same protocol,
+one addition Swift forces.
+
+**The seam is region of the problem**, so both halves of a change sit together:
+`Engine+Geometry` (136) · `Engine+Spots` (146) · `Engine+Mask` (460) ·
+`Engine+Brush` (249) · `Engine+Document` (244) · `Engine+Render` (297) ·
+`Engine+Compare` (145), and `Engine.swift` falls to **795**.
+
+⚠ **`Engine` is `@Observable`, so every stored property had to stay in the class
+body** — mutation M1 confirms it is the compiler's rule, not folklore
+(`error: extensions must not contain stored properties`). What is left in
+`Engine.swift` is therefore *the values and the three lists that enumerate
+them*: the properties, `state`, `assign` and `cAdjustments`. Deliberate, not
+residue — those three are exactly the edits a new adjustment needs, so adding a
+slider is now one file. **This is the shape any `@Observable` split will take.**
+
+⚠ **It cost encapsulation and that is not glossed.** Swift's `private` is
+file-scoped, so fifteen members widened to internal and **eighteen
+`private(set)` properties lost their compiler-enforced "only `Engine` writes
+this"**. There is no way to split a Swift type across files without paying it.
+
+**Verbatim motion, asserted rather than trusted** — extracted by line range by a
+script that proves every one of the 2,331 lines is claimed by exactly one
+destination. **27 canvas renders byte-for-byte identical** by `cmp` against a
+baseline built from `ab6f9b2`, the commit before any of this; the oracle was
+first checked against itself (two runs of the pre-split binary, 27/27).
+800 / 3702 / 40 green, bench exits 0. #110.1's trap still bites in **both**
+halves, checked by adding a field and watching `DevelopState.init()` and then
+`Engine.state` refuse independently.
+
+⚠ **Two of seven mutations were green on everything, and both were defects in
+the checks.** M3 (delete `pushStrokes()` from `assign`) was invisible because no
+scenario painted and then reassigned state; M5 (`constrainCrop` a no-op) was
+invisible because the geometry scenario cropped *after* straightening, and
+`setCrop` runs the same clamp itself. Both scenarios rewritten, the baseline
+re-taken from the old code, both now red. **The 40 repro scenarios stayed green
+through both** — these were gaps in the repository, not just the session.
+
+⚠ **Two things nothing can see.** The byte check is blind to **compare** —
+`shot` reads the output texture and the split composite lives in `CanvasBlit` —
+so M2 is green on all 27 frames and red only on the two compare repro files.
+And **`lastFailure` has no oracle at all**: M7 deletes both success-path clears,
+so the footer would show a stale failure forever, and 27 frames / 40 scenarios /
+800 / 3702 / bench all stay green. It landed the same day. Written down, not
+fixed — a behaviour change hidden in a refactor is unreviewable.
 
 ### ✅ 2026-08-02 — `apps/bench/main.cpp` is nine files, and no check was lost (#118)
 
@@ -650,7 +710,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken four ways, and every one of them is now in `app/`.** ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place.** It once carried *four* contradictory copies of itself, each written by a different agent's merge and none deleted, and a gap table that disagrees with itself four ways is worse than one that is silent. Recounted 2026-08-02 (after #118) with `git ls-files '*.cpp' '*.h' '*.swift' '*.mm' \| grep -v ^apps/tests/` and `grep -c ''`: `Engine.swift` **2,331**, `Scenario.swift` **1,596**, `OrionApp.swift` **1,557**, `DevelopPanels.swift` **1,366**. Four and no others; the next file down is `ShaderParams.h` at **905**. ⚠ These are this worktree's numbers and `Engine.swift` was being split elsewhere in the same hour, so re-run the sweep after that merge rather than trusting the 2,331. ⚠ **Two entries have left this row in two days and both left a worked example.** `DevelopPipeline.cpp` (2,896 + a 917-line header → five files, largest 757, decision #113): the seam was the graph's four regions and each file holds both the nodes it builds *and* the parameters it pushes. `apps/bench/main.cpp` (**2,289 → 85**, decision #118): the seam was the report it prints, nine files, largest `bench_controls.cpp` at **669**. Both cuts answer the same question — *where does the next edit go* — and both were proved by mutation rather than by inspection. Splitting product code is riskier than splitting tooling and each one wants its own session | whole tree |
+| **The 1000-line rule is broken three ways**, all in `app/`: `Scenario.swift` **1,596**, `OrionApp.swift` **1,557**, `DevelopPanels.swift` **1,366**. ⚠ **Recounted live at the merge, 2026-08-02**, taking neither split agent's figure — both wrote their row before the other landed, and #117's recount showed the row it replaced had been stale *on the day it was written* (claimed `bench/main.cpp` 2,251 and `Engine.swift` 2,241; actual 2,289 and 2,331). ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself. Seven files were over the ceiling this morning; `DevelopPipeline.cpp` (#113, 2,896 → 451), `bench/main.cpp` (#118, 2,289 → 85) and `Engine.swift` (#117, 2,331 → 795) took four of them out, and the next file below the survivors is `ShaderParams.h` at 905 | whole tree |
 | **Nothing asserts that a gesture *arms*** — narrowed 2026-08-01, decision #110.3, and it is now the *first* link only. `repro/gesture-preview-agrees.txt` used to compare an armed run against an unarmed one and demand they agree, which is green when arming does nothing; it now also asserts arming has an effect (the preview surface goes 0.2323/0.2918 → 0.4814/0.2037 over the same eight ticks), so a no-op `beginInteraction` fails. What is still unreachable is a `DragGesture` closure calling it: **attempted** — `NSHostingView` off-screen lays the wheel out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s call is green across 744 / 3624 / 39, measured | `Scenario.swift` |
 | ~~**The grading wheel's arming is unmeasured.**~~ ✅ **closed 2026-08-01, decision #110.2.** `wheel` and `dragwheel` drive a three-component control, added beside the scalar spellings rather than replacing them (#89). **9.6 ms per tick unarmed against 1.2 armed, 8.0×**, settled picture identical at luma 0.2268 / sat 0.5136 | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |

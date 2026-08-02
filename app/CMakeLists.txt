@@ -15,6 +15,13 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Geometry.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Spots.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Mask.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Brush.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Document.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Render.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Compare.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ImageCanvas.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasBlit.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
