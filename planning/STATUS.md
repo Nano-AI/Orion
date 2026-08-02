@@ -4,8 +4,8 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**the stroke stopped rebuilding the panel; the codebase reads American**)
-**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
+**Last updated:** 2026-08-01 (**the folder index and the thumbnail cache — M1's last real gap**)
+**Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
@@ -36,12 +36,15 @@ four now also has something that fails when its *wiring* breaks — see sessions
    gone and the slope did not change, so the residual is the **GPU dab loop**.
    That retires the three host-side candidates this table used to carry.
    Costed in `ROADMAP.md`. ~1–2 sessions.
-4. **M1's library gap** — no SQLite index, no thumbnail cache, so every folder
-   open rescans and re-reads every sidecar. Also a performance item. ~2 sessions.
-5. **Export panel**: bit depth, metadata policy, output sharpening. 16-bit
+4. **Export panel**: bit depth, metadata policy, output sharpening. 16-bit
    already exists in the engine and is not offered. ~1 session.
-6. **Americanising the persisted keys**, if wanted — a schema migration with
+5. **Americanising the persisted keys**, if wanted — a schema migration with
    dual reads, not a rename. ~1 session, needs sign-off (#89).
+
+✅ **M1's library gap is closed** — SQLite index and persistent thumbnail cache,
+2026-08-01, decision #91. 300 frames with the page cache warm: **454–688 ms cold
+against 28–54 ms warm, 12.9–17.2×**. The leftovers are named and costed in
+`ROADMAP.md` under *Library index — what is not done*.
 
 ⚠ **M5 is months, not sessions**, and saying otherwise would be a lie: it holds
 an X-Trans demosaic (Markesteijn), a Windows port, Core ML denoise and
@@ -57,9 +60,12 @@ stated hard constraint is `DevelopPipeline.cpp`, now **2,295 lines**.
 below is either cosmetic, named-and-costed, or needs the developer.
 
 **Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3455
+**Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3538
 checks** · **33 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
-plus a preview graph at 1/16 that.
+three sample frames: **149 nodes, 6971 MiB**, M0 gate **9.70–14.13 ms p95** —
+plus a preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth
+gate: it opens a folder cold, warm and indexless in one process and fails when
+the warm pass did not hit, or when any of the three disagree about a field.
 
 ⚠ **That p95 is only meaningful next to one taken minutes away from it.** The
 same binary measured 8.97, 16.75, 44.53 and 40.69 ms on this machine within an
@@ -80,6 +86,8 @@ Small, named, and none of them blocking the next story:
 | **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
 | **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
 | **The tick is timed whole, not attributed.** `EditHistory.record` copies the entire `DevelopState`, `InteractionLog.committed` diffs every field and formats strings, and `setBrushStroke` re-flattens the whole stroke — all per event, all O(size of the edit). ⚠ Candidates only: armed, a 784-dab stroke is 1.8 ms an event | `ROADMAP.md` |
+| **The index's `SQLITE_BUSY` rule is reasoned, not pinned.** `SQLITE_CORRUPT`/`SQLITE_NOTADB` discard and rebuild the database; `BUSY` and `LOCKED` deliberately do not, because those mean a second Orion holds the file and discarding it would be deleting a live database. ⚠ The mutation that widens the list to every error code **passes every test** — reproducing lock contention needs a second process holding a transaction. Costed in `ROADMAP.md` | `PhotoIndex` |
+| **Index rows for a folder you never open again are never collected.** The prune runs inside `plan`, against the listing it was handed, so it only cleans a folder you are looking at. ~200 B a row, so 5,000 dead frames is ~1 MB — untidy rather than a leak with teeth | `PhotoIndex` |
 | **`Engine.state` uses the memberwise initializer**, positional over eighty arguments. `cAdjustments()` in the same file refuses it in a comment for exactly that reason; `state` does not. Adding a field to `DevelopState` and forgetting this call compiles silently — it happened on 2026-08-01 with film grain and every suite stayed green | `Engine.swift` |
 
 ⚠️ **`samples/_PIC8095.ARW` has people in the plaza at its base.** Fine as a test
@@ -192,6 +200,90 @@ again from the other end.
 
 Gates: 569 engine checks, 3,455 viewport checks (3,453 before), 33 `repro/`
 scenarios, bench exit 0 — all green with the fix in.
+## Session 2026-08-01d — the folder index, and the two stamps it needs
+
+M1's `Epic: Cull` has named a SQLite index since the first week and nothing had
+ever been built. Every folder open re-opened every raw through LibRaw,
+re-extracted every embedded preview and re-read every XMP sidecar. Decision #91.
+
+**Paired, 300 frames, page cache pulled through first so the two differ by what
+the index does and not by what the disk did:**
+
+| Pass | Time | |
+|---|---|---|
+| cold — a database that has never seen the folder | **454–688 ms** | five runs |
+| warm — the same database, seconds later | **28–54 ms** | **12.9–17.2×** |
+| indexless — no database at all | **428–719 ms** | lands on cold, so the win is the index |
+
+⚠ Absolute numbers on this machine are worthless alone; all three come from one
+process, back to back, and the indexless pass is the control.
+
+### ⚠ One stamp is the obvious design and it is wrong
+
+The danger was never a miss. It is a **hit that is wrong** — a rating nobody set,
+a thumbnail of a photograph that has since been replaced — because that looks
+perfectly correct on screen.
+
+**Rating a photograph does not touch the raw.** An index keyed on the raw's
+`(mtime, size)` would therefore report the first rating it ever read, forever. So
+each row carries **two** stamps and each half is validated against its own file:
+the raw's for the dimensions, the camera and the thumbnail, the sidecar's for the
+rating, the reject flag and the label. The mutation that collapses them to one
+fails four checks.
+
+And the mtime is whole **nanoseconds** from one `fstatat`, never a `Date`:
+pressing 4 on a photograph rated 3 rewrites the sidecar to **the same length in
+the same second**. The mutation that stores seconds fails two.
+
+The thumbnail hangs off the raw and deliberately *not* the sidecar — it is the
+camera's embedded preview, which no develop setting has ever affected. Keying it
+to the sidecar too would throw away a good thumbnail on every star press.
+
+### ⚠ Nothing is filed that was not read back off disk
+
+`refreshMarks` stats, reads, and stats again, and files nothing when the two
+disagree — so the contents of an old file can never be filed under the identity
+of a new one. `Library.persist` calls it *after* the write rather than filing
+what it holds in memory, because a merge onto a read-only card would otherwise
+leave a rating in the index that is in no sidecar at all.
+
+That race is unobservable from outside, so there is a seam — `marksReadWindow` —
+purely so the check exists. An unobservable guard is one nobody can tell has
+stopped working.
+
+### ⚠ The probe's first draft could not fail, and it was written to catch that
+
+Nothing in `orion-viewport-tests` can see whether `Library` calls the index at
+all; the suite would stay green on a product that never consulted it. So
+`Orion --library-open <folder>` drives the real `Library.open`.
+
+Its first draft asserted **`misses == 0`**. A `Library` that never touches the
+index satisfies that perfectly — zero attempts, zero misses, six green lines and
+a four-times-slower open. Confirmed by actually removing the wiring: it passed.
+It asserts **hits**, count for count, now, and the same mutation fails 2.
+
+The third pass is indexless, and asserts field-for-field agreement with cold.
+That is decision #9 as an executable check: delete the index and Orion behaves
+identically, only slower.
+
+### The tests, and what each one bites
+
+Ten cases in `ViewportTests+Index.swift`, **85 checks**. Twelve mutations were
+run against them; eleven fail, listed beside the test they fail. The surviving
+one is written down rather than left implied: widening the
+corrupt-code list from `SQLITE_CORRUPT`/`SQLITE_NOTADB` to every error code
+passes everything, because simulating a `SQLITE_BUSY` from a second Orion needs
+a second process. Costed in `ROADMAP.md`.
+
+The corrupt-database case checks the thing that would be unforgivable: after
+junk in the file, the photograph, its sidecar **and its matte** are all still
+there, and the sidecar still says what it said. The mutation that points the
+discard at the folder instead of the `.sqlite3` file fails 8.
+
+### Not a dependency
+
+`import SQLite3` from the macOS SDK. It is already on every Mac, it is public
+domain, and the alternative was a package for something the platform ships.
 
 ## Session 2026-08-01c — the stroke stopped rebuilding the panel
 
@@ -588,110 +680,3 @@ the discipline.
 
 **Still open**: `engine/shaders/grain.slang` is written but uncommitted and not
 in `engine/shaders/CMakeLists.txt`. Grain pieces 1, 3–7 unstarted.
-
-
-## Session 2026-07-31j — the grain plate, built and pinned
-
-⚠ **Forty-first arrival of the stale M3 prompt.** Verified and set aside.
-
-Piece 2 of `ROADMAP.md`'s film-grain decomposition: `GrainPlate.h`, the
-precomputed field of correlated noise everything else hangs off.
-
-⚠ **Scoped to the plate alone on purpose.** It is a self-contained unit with
-properties that can be asserted on the CPU, where the shader and the node wiring
-around it are not — and the last two sessions both recorded that starting a
-multi-part change and leaving it half-built is the move this file has already
-paid for twice.
-
-### ⚠ The aux-texture API has no mip levels
-
-The design needs a chain: a preview pixel covering sixteen frame pixels has to
-see the *average* of sixteen, or the 1/16 preview reads an order of magnitude
-grainier than the render it previews.
-
-Adding real mip support would be a change to the GPU layer for nothing — the
-shader has to filter **by hand** regardless, because a hardware sampler's
-precision is not specified across GPU families and export could then differ by
-device. So the chain is **stacked vertically into one 2048×4096 R32F**, 33 MB,
-with `levelOffset(l)` a closed form that both sides compute from the same
-expression. Two derivations of one offset is how a level gets read from the
-wrong rows.
-
-### What is pinned, and the check that matters
-
-14 checks. The load-bearing one is that **the standard deviation falls down the
-chain** — 1.0, then measurably less, then less again.
-
-⚠ That is the property, not a defect, and it is the one an obvious "fix" would
-destroy. Renormalising every level back to unit variance looks tidier and makes
-the 1/16 preview exactly as grainy as the full render — the precise failure the
-plate exists to prevent. The mutation that does it fails two checks.
-
-Also pinned: neighbouring texels are **correlated** (0.3+), because uncorrelated
-noise is a digital sensor rather than film — the mutation that skips the
-band-limiting blur fails it — and two builds from one seed are **bit-identical**,
-which is why PCG32 and Box–Muller are written out rather than taken from
-`<random>`, whose algorithms differ between standard libraries.
-
-### Still to do
-
-Pieces 1 and 3–7: the shader, moving the quantisation boundary (`develop:display`
-→ `RGBA16Float`, +194 MB), the adjustment through 20 files, two sliders, and the
-GPU test. The design is settled in #81; none of it is guesswork now.
-
-## Session 2026-07-31i — film grain, researched and costed rather than started
-
-⚠ **Fortieth arrival of the stale M3 prompt.** Verified and set aside.
-
-Nine sessions of tests, performance and maintainability, so this one went for a
-feature: **film grain**, the last unbuilt item in `ROADMAP.md`'s M4 and listed
-in `FEATURES.md` with no prior decision against it.
-
-`research/film-grain.md` is written and decision #81 is logged. The code is
-not, and the reason is the point of the session.
-
-### The method, settled
-
-Newson, Delon & Galerne (CGF 2017) model the emulsion as a Boolean process of
-Poisson discs — the right physics, and the source of the `√(Y(1−Y))` variance
-law. ⚠ Their exact renderer is **per-pixel Monte Carlo over the disc process**:
-orders of magnitude outside 16 ms at 24 Mpx, and several hundred lines against
-the 50–150 line ceiling. Both hard constraints, broken at once.
-
-So AV1's architecture instead (Norkin & Birkbeck, DCC 2018) — one precomputed
-correlated plate, applied per pixel with an intensity-dependent scale — carrying
-Newson's statistics. Monochrome, after the display transform, keyed to the frame
-rather than the output. #81 has the full reasoning, including why scene-linear
-is the wrong side and what a hash-of-pixel-coordinate would do to the preview.
-
-### ⚠ What costing it found, and why it stopped the session
-
-**`develop:display` outputs `RGBA8Unorm`.** A grain node reading its output
-would be adding noise to values that are **already 8-bit**. So this is not "add
-a node": the quantisation boundary has to move — display becomes `RGBA16Float`,
-the grain node inherits the Bayer dither and becomes the thing that quantises,
-and `setWideOutput` retargets.
-
-That is **+194 MB** of intermediates, a format change on two nodes, and an
-Amount-0 path that must be bit-exact or every `identical` baseline silently
-rebases. Plus a plate generator that cannot use `std::normal_distribution` or
-`generateMipmaps` without export differing by toolchain.
-
-Measured rather than guessed: a single new adjustment already touches **20
-files** in this tree, and grain adds two of them plus an aux texture, a mip
-chain, three GPU assertions and a probe that has to measure mean *absolute*
-difference because grain is zero-mean.
-
-⚠ That is two sessions of work, and starting it here would have left it
-half-built — which this file records as the wrong move twice already
-(`degrade-then-refine`, and the crop preview). The decomposition is in
-`ROADMAP.md`, in order, with the memory number and the four things that must not
-be done along the way.
-
-### Note on the "3-file change" promise
-
-`CLAUDE.md` says adding a feature should be a repeatable 3-file change. For a
-new *node* that is roughly true. For a new *adjustment* it is 20 files, because
-the value threads engine → `orion.h` → `CApi` → Swift → catalogue → sidecar →
-presets → sync → log → scenario. Not a defect, but worth having counted, and
-worth remembering the next time that sentence is used to size a story.

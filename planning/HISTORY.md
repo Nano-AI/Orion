@@ -19,7 +19,115 @@ point — but nothing in them should be taken as current.
 ---
 Sessions `2026-07-31a` through `2026-07-31f` were moved here on 2026-07-31,
 in the same breath as the STATUS update that pushed the count past six.
-They are newer than everything below them.## Session 2026-07-31h — both test files split
+They are newer than everything below them.Sessions `2026-07-31i` and `2026-07-31j` were moved here on 2026-08-01, when the folder-index session pushed the count past six. They are newer than everything below them.
+
+## Session 2026-07-31j — the grain plate, built and pinned
+
+⚠ **Forty-first arrival of the stale M3 prompt.** Verified and set aside.
+
+Piece 2 of `ROADMAP.md`'s film-grain decomposition: `GrainPlate.h`, the
+precomputed field of correlated noise everything else hangs off.
+
+⚠ **Scoped to the plate alone on purpose.** It is a self-contained unit with
+properties that can be asserted on the CPU, where the shader and the node wiring
+around it are not — and the last two sessions both recorded that starting a
+multi-part change and leaving it half-built is the move this file has already
+paid for twice.
+
+### ⚠ The aux-texture API has no mip levels
+
+The design needs a chain: a preview pixel covering sixteen frame pixels has to
+see the *average* of sixteen, or the 1/16 preview reads an order of magnitude
+grainier than the render it previews.
+
+Adding real mip support would be a change to the GPU layer for nothing — the
+shader has to filter **by hand** regardless, because a hardware sampler's
+precision is not specified across GPU families and export could then differ by
+device. So the chain is **stacked vertically into one 2048×4096 R32F**, 33 MB,
+with `levelOffset(l)` a closed form that both sides compute from the same
+expression. Two derivations of one offset is how a level gets read from the
+wrong rows.
+
+### What is pinned, and the check that matters
+
+14 checks. The load-bearing one is that **the standard deviation falls down the
+chain** — 1.0, then measurably less, then less again.
+
+⚠ That is the property, not a defect, and it is the one an obvious "fix" would
+destroy. Renormalising every level back to unit variance looks tidier and makes
+the 1/16 preview exactly as grainy as the full render — the precise failure the
+plate exists to prevent. The mutation that does it fails two checks.
+
+Also pinned: neighbouring texels are **correlated** (0.3+), because uncorrelated
+noise is a digital sensor rather than film — the mutation that skips the
+band-limiting blur fails it — and two builds from one seed are **bit-identical**,
+which is why PCG32 and Box–Muller are written out rather than taken from
+`<random>`, whose algorithms differ between standard libraries.
+
+### Still to do
+
+Pieces 1 and 3–7: the shader, moving the quantisation boundary (`develop:display`
+→ `RGBA16Float`, +194 MB), the adjustment through 20 files, two sliders, and the
+GPU test. The design is settled in #81; none of it is guesswork now.
+
+## Session 2026-07-31i — film grain, researched and costed rather than started
+
+⚠ **Fortieth arrival of the stale M3 prompt.** Verified and set aside.
+
+Nine sessions of tests, performance and maintainability, so this one went for a
+feature: **film grain**, the last unbuilt item in `ROADMAP.md`'s M4 and listed
+in `FEATURES.md` with no prior decision against it.
+
+`research/film-grain.md` is written and decision #81 is logged. The code is
+not, and the reason is the point of the session.
+
+### The method, settled
+
+Newson, Delon & Galerne (CGF 2017) model the emulsion as a Boolean process of
+Poisson discs — the right physics, and the source of the `√(Y(1−Y))` variance
+law. ⚠ Their exact renderer is **per-pixel Monte Carlo over the disc process**:
+orders of magnitude outside 16 ms at 24 Mpx, and several hundred lines against
+the 50–150 line ceiling. Both hard constraints, broken at once.
+
+So AV1's architecture instead (Norkin & Birkbeck, DCC 2018) — one precomputed
+correlated plate, applied per pixel with an intensity-dependent scale — carrying
+Newson's statistics. Monochrome, after the display transform, keyed to the frame
+rather than the output. #81 has the full reasoning, including why scene-linear
+is the wrong side and what a hash-of-pixel-coordinate would do to the preview.
+
+### ⚠ What costing it found, and why it stopped the session
+
+**`develop:display` outputs `RGBA8Unorm`.** A grain node reading its output
+would be adding noise to values that are **already 8-bit**. So this is not "add
+a node": the quantisation boundary has to move — display becomes `RGBA16Float`,
+the grain node inherits the Bayer dither and becomes the thing that quantises,
+and `setWideOutput` retargets.
+
+That is **+194 MB** of intermediates, a format change on two nodes, and an
+Amount-0 path that must be bit-exact or every `identical` baseline silently
+rebases. Plus a plate generator that cannot use `std::normal_distribution` or
+`generateMipmaps` without export differing by toolchain.
+
+Measured rather than guessed: a single new adjustment already touches **20
+files** in this tree, and grain adds two of them plus an aux texture, a mip
+chain, three GPU assertions and a probe that has to measure mean *absolute*
+difference because grain is zero-mean.
+
+⚠ That is two sessions of work, and starting it here would have left it
+half-built — which this file records as the wrong move twice already
+(`degrade-then-refine`, and the crop preview). The decomposition is in
+`ROADMAP.md`, in order, with the memory number and the four things that must not
+be done along the way.
+
+### Note on the "3-file change" promise
+
+`CLAUDE.md` says adding a feature should be a repeatable 3-file change. For a
+new *node* that is roughly true. For a new *adjustment* it is 20 files, because
+the value threads engine → `orion.h` → `CApi` → Swift → catalogue → sidecar →
+presets → sync → log → scenario. Not a defect, but worth having counted, and
+worth remembering the next time that sentence is used to size a story.
+
+## Session 2026-07-31h — both test files split
 
 ⚠ **Thirty-seventh through thirty-ninth arrivals of the stale M3 prompt.**
 Verified and set aside; the story was named at the end of session `g`.

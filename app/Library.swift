@@ -26,9 +26,21 @@ final class Library {
         var iso: Float = 0
         var shutter: Float = 0
         var aperture: Float = 0
+        /// When the shutter fired, as the file records it. Nil when it does not.
+        var captured: Date?
 
         /// Loaded lazily off the main thread.
         var thumbnail: NSImage?
+
+        mutating func apply(_ info: PhotoIndex.Info) {
+            width = info.width; height = info.height; camera = info.camera
+            iso = info.iso; shutter = info.shutter; aperture = info.aperture
+            captured = info.captured
+        }
+
+        mutating func apply(_ marks: PhotoIndex.Marks) {
+            rating = marks.rating; rejected = marks.rejected; colorLabel = marks.label
+        }
     }
 
     enum Filter: String, CaseIterable, Identifiable {
@@ -48,6 +60,20 @@ final class Library {
     private(set) var folder: URL?
     private(set) var photos: [Photo] = []
     private(set) var loading = false
+
+    /// The folder index — a cache of what a listing needs, and nothing more.
+    /// A database that will not open changes how long an open takes and
+    /// nothing else, which is the whole of decision #90.
+    @ObservationIgnored let index: PhotoIndex
+
+    /// The background pass that fills metadata and thumbnails in behind the
+    /// listing. Exposed because `loading` reports the *listing*, and a
+    /// measurement of a folder open has to wait for the folder to be whole.
+    @ObservationIgnored private(set) var loadTask: Task<Void, Never>?
+
+    init(index: PhotoIndex = PhotoIndex(at: PhotoIndex.defaultURL)) {
+        self.index = index
+    }
 
     var filter: Filter = .all {
         // ⚠ A filter change is the one moment a selection can come to contain
@@ -150,6 +176,12 @@ final class Library {
     /// waiting for every embedded JPEG in the folder to decode. The caller
     /// used to poll `loading` every 30 ms instead; this is the same wait,
     /// stated in the signature.
+    ///
+    /// The listing now carries whatever the index can vouch for, so a folder
+    /// opened before appears rated and captioned rather than filling in behind
+    /// itself. ⚠ The *listing itself* is still the filesystem's and only the
+    /// filesystem's: `PhotoIndex.plan` is handed the directory contents and can
+    /// only answer about files that are in it.
     func open(folder url: URL) async {
         folder = url
         photos = []
@@ -162,14 +194,15 @@ final class Library {
 
         // Directory listing off the main thread; the folder may be on a
         // slow volume and the window must stay responsive.
-        let found = await Task.detached(priority: .userInitiated) {
-            Self.scan(url)
+        let index = self.index
+        let (found, plans) = await Task.detached(priority: .userInitiated) {
+            Self.scan(url, index: index)
         }.value
 
         photos = found
         loading = false
 
-        Task {
+        loadTask = Task {
             // Metadata and thumbnails stream in afterwards, so a folder of 500
             // frames appears immediately rather than after every file is read.
             //
@@ -180,83 +213,114 @@ final class Library {
             // five hundred of those at once is a memory spike, not throughput.
             await withTaskGroup(of: (Int, Loaded).self) { group in
                 var next = 0
-                let width = min(6, found.count)
+                let width = min(6, plans.count)
 
-                func spawn(_ index: Int) {
-                    let url = found[index].url
-                    group.addTask(priority: .utility) {
-                        (index, Loaded(info: Self.readInfo(url),
-                                       thumb: Self.readThumbnail(url),
-                                       sidecar: Sidecar.read(for: url)))
-                    }
+                func spawn(_ i: Int) {
+                    let plan = plans[i]
+                    group.addTask(priority: .utility) { (i, Self.load(plan, index: index)) }
                 }
 
                 while next < width { spawn(next); next += 1 }
 
-                while let (index, loaded) = await group.next() {
-                    if next < found.count { spawn(next); next += 1 }
-                    apply(loaded, at: index, expecting: found[index].url)
+                while let (i, loaded) = await group.next() {
+                    if next < plans.count { spawn(next); next += 1 }
+                    apply(loaded, at: i, expecting: plans[i].url)
                 }
             }
         }
     }
 
-    /// What one file's background read produced.
+    /// What one file's background read produced. A nil half means the index
+    /// already answered for it and nothing was read.
     private struct Loaded {
-        let info: RawSummary?
+        let info: PhotoIndex.Info?
+        let marks: PhotoIndex.Marks?
         let thumb: NSImage?
-        let sidecar: Sidecar?
     }
 
     private func apply(_ loaded: Loaded, at index: Int, expecting url: URL) {
         // The folder may have changed under us while this was loading.
         guard photos.indices.contains(index), photos[index].url == url else { return }
 
-        if let info = loaded.info {
-            photos[index].width = info.width
-            photos[index].height = info.height
-            photos[index].camera = info.camera
-            photos[index].iso = info.iso
-            photos[index].shutter = info.shutter
-            photos[index].aperture = info.aperture
-        }
+        if let info = loaded.info { photos[index].apply(info) }
+        if let marks = loaded.marks { photos[index].apply(marks) }
         photos[index].thumbnail = loaded.thumb
-        if let sidecar = loaded.sidecar {
-            photos[index].rating = sidecar.rating
-            photos[index].rejected = sidecar.rejected
-            photos[index].colorLabel = sidecar.label
-        }
     }
 
-    private nonisolated static func scan(_ url: URL) -> [Photo] {
+    /// The listing, and the index's answer for it.
+    private nonisolated static func scan(_ url: URL, index: PhotoIndex)
+        -> (photos: [Photo], plans: [PhotoIndex.Plan]) {
         let keys: [URLResourceKey] = [.isRegularFileKey]
         guard let items = try? FileManager.default.contentsOfDirectory(
             at: url, includingPropertiesForKeys: keys,
             options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants])
-        else { return [] }
+        else { return ([], []) }
 
-        return items
+        let files = items
             .filter { rawExtensions.contains($0.pathExtension.lowercased()) }
             .sorted { $0.lastPathComponent.localizedStandardCompare(
                         $1.lastPathComponent) == .orderedAscending }
-            .map { Photo(url: $0) }
+
+        let plans = index.plan(folder: url, contents: files)
+        let photos = plans.map { plan -> Photo in
+            var photo = Photo(url: plan.url)
+            if let info = plan.info { photo.apply(info) }
+            if let marks = plan.marks { photo.apply(marks) }
+            return photo
+        }
+        return (photos, plans)
     }
 
-    typealias RawSummary = (width: UInt32, height: UInt32, camera: String,
-                            iso: Float, shutter: Float, aperture: Float)
+    /// Reads only the halves the index could not vouch for, and records what it
+    /// reads. ⚠ Everything recorded here is stamped with the identity taken by
+    /// `plan` **before** the read: a file that changes mid-read therefore keys
+    /// its row to a stamp that no longer matches, and the next open misses.
+    /// Stamping afterwards would pin the new file's identity to the old file's
+    /// contents, which is a row that is wrong and looks right.
+    private nonisolated static func load(_ plan: PhotoIndex.Plan,
+                                         index: PhotoIndex) -> Loaded {
+        var info: PhotoIndex.Info?
+        if plan.needsInfo, let read = readInfo(plan.url) {
+            info = read
+            index.record(info: read, for: plan.url, stamp: plan.photo)
+        }
+        let marks = plan.needsMarks ? index.refreshMarks(for: plan.url) : nil
+        return Loaded(info: info, marks: marks, thumb: thumbnail(plan, index: index))
+    }
 
-    private nonisolated static func readInfo(_ url: URL) -> RawSummary? {
+    /// ⚠ The cached thumbnail and the freshly read one are the **same picture**:
+    /// both go through `PhotoIndex.shrink`. A cache that hands back a different
+    /// image from the one it stands in for is not a cache, and the reduction is
+    /// wanted anyway — the strip used to hold five hundred full-size embedded
+    /// previews in memory to draw them a hundred points wide.
+    private nonisolated static func thumbnail(_ plan: PhotoIndex.Plan,
+                                              index: PhotoIndex) -> NSImage? {
+        if let cached = index.thumbnail(for: plan.url, stamp: plan.photo),
+           let image = NSImage(data: cached) {
+            return image
+        }
+        guard let embedded = readThumbnail(plan.url),
+              let small = PhotoIndex.shrink(embedded) else { return nil }
+        index.record(thumbnail: small, for: plan.url, stamp: plan.photo)
+        return NSImage(data: small)
+    }
+
+    private nonisolated static func readInfo(_ url: URL) -> PhotoIndex.Info? {
         var info = OrionRawInfo()
         guard orion_read_info(url.path, &info) == ORION_OK else { return nil }
         let camera = withUnsafeBytes(of: info.camera) { raw in
             String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
         }
-        return (info.width, info.height, camera, info.iso, info.shutter, info.aperture)
+        return PhotoIndex.Info(
+            width: info.width, height: info.height, camera: camera,
+            iso: info.iso, shutter: info.shutter, aperture: info.aperture,
+            captured: info.timestamp > 0
+                ? Date(timeIntervalSince1970: Double(info.timestamp)) : nil)
     }
 
     /// Uses the camera's embedded JPEG preview. Decoding the mosaic for a
     /// thumbnail would take ~50ms per frame; this takes about two.
-    private nonisolated static func readThumbnail(_ url: URL) -> NSImage? {
+    private nonisolated static func readThumbnail(_ url: URL) -> Data? {
         var size: UInt32 = 0
         guard orion_read_thumbnail(url.path, nil, 0, &size) == ORION_OK, size > 0 else {
             return nil
@@ -265,7 +329,7 @@ final class Library {
         guard orion_read_thumbnail(url.path, &buffer, size, &size) == ORION_OK else {
             return nil
         }
-        return NSImage(data: Data(buffer))
+        return Data(buffer)
     }
 
     // MARK: Ratings
@@ -312,6 +376,13 @@ final class Library {
             $0.rejected = photo.rejected
             $0.label = photo.colorLabel
         }
+        // ⚠ The index is refreshed by **reading the file back**, never from the
+        // values above. A merge that failed — a read-only card, a full disk —
+        // would otherwise leave the index holding a rating that is not in any
+        // sidecar, which is precisely the stale row that looks correct. Without
+        // this the row is merely stale and the next open re-reads it; with the
+        // in-memory shortcut it would be wrong for as long as the file lived.
+        index.refreshMarks(for: photo.url)
     }
 
     func index(of url: URL) -> Int? { visible.firstIndex { $0.url == url } }

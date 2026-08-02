@@ -19,6 +19,12 @@ struct OrionApp: App {
         if CommandLine.arguments.contains("--batch-export") {
             BatchExport.runCommandLine(CommandLine.arguments)
         }
+        // A folder open, cold then warm then indexless, through the product's
+        // own Library — the only thing that can see whether the index is wired
+        // in at all.
+        if let folder = LibraryProbe.wanted(CommandLine.arguments) {
+            LibraryProbe.run(folder)
+        }
     }
 
     var body: some Scene {
