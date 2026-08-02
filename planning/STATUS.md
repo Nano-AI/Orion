@@ -120,6 +120,24 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    identical against `ab6f9b2`. ⚠ Two of seven mutations were green everywhere
    and were defects in the *checks*, both rewritten; and `lastFailure` turns out
    to have no oracle anywhere, which is recorded rather than fixed.
+6. ~~`DevelopPanels.swift` against the same ceiling~~ — ✅ **done 2026-08-02,
+   decision #122.** **1,366** lines, now seven files, largest **580**. The seam
+   is the **tool tab**, because that is the unit a change arrives in: a slider
+   belongs to exactly one tab, so the file named after the tab is the file you
+   open. ⚠ **No SwiftUI state moved** — the file declared one property wrapper in
+   1,366 lines and it travelled inside its own type; the panels are extensions
+   on `Editor`, so they cannot hold storage. 41 of 42 interface renders
+   byte-for-byte identical (the 42nd stamps the wall clock and is compared by
+   eye), repro output identical, 800 / 3702 / bench 0. ⚠ **Its mutation found a
+   hole the frame comparison cannot see: the Detail panel scrolls, and five
+   whole sections below the fold — Grain, Vignette, Dehaze, Clarity, Sharpening
+   — can be deleted with every check in the repository green.** Recorded, not
+   fixed.
+
+   **The product's large files are down to `OrionApp.swift`**; the rest of the
+   ceiling's survivors are in `apps/tests/`, which is a different argument. See
+   the gap table, recounted by sweep.
+
 6. ~~`Scenario.swift` against the same ceiling~~ — ✅ **done 2026-08-02, decision
    #120.** **1,615** lines, **977 of them one `switch`**; now five files, largest
    **546**, and `Scenario.swift` itself **301**. Same seam again — region of the
@@ -192,6 +210,94 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — `DevelopPanels.swift` is seven files, and the interface did not move (#122)
+
+**1,366 lines against a ceiling of 1,000**, and the first of these splits that is
+**product UI**: nothing here changes a rendered pixel, so the risk is a panel
+that stops appearing or a control that stops being bound — invisible to
+`orion-tests` and to a byte comparison of the canvas.
+
+**The seam is the tool tab.** `CLAUDE.md`'s test is that adding a slider is a
+repeatable 3-file change, and a slider belongs to exactly one tab, so naming the
+file after the tab is what makes *which file* answerable without opening any of
+them.
+
+| File | Lines | Holds |
+|---|---|---|
+| `DevelopPanels+Light.swift` | 61 | white balance, tone, highlight recovery, curve |
+| `DevelopPanels+Color.swift` | 105 | presence, the three wheels, the mixer |
+| `DevelopPanels+Detail.swift` | 188 | noise, spots, LUT, and the finishing controls |
+| `DevelopPanels+Optics.swift` | 70 | the lens profile and its manual stand-ins |
+| `DevelopPanels+Mask.swift` | 580 | rows, Add menu, per-kind placement, matte helpers |
+| `DevelopPanels+Presets.swift` | 367 | presets, copy/paste/sync, batch, versions |
+| `DevelopPanels.swift` | **56** | `PanelButton` — the one control two tabs share |
+
+⚠ **The residual file is furniture, not a dispatch list.** #113 and #117 both
+left their enumerations behind; here the tab bar, its `switch` and the `section`
+and `slider` helpers are all in `OrionApp.swift`, so what was actually shared
+was one button.
+
+⚠ **No SwiftUI state moved, and it is checkable rather than claimed.** The file
+declared exactly **one** property wrapper in 1,366 lines — `FlowGroups`'
+`@Binding var selection` — and it travelled inside its own type. Every `@State`,
+`@FocusState` and `@Environment` the panels read is declared in `struct Editor`
+in `OrionApp.swift`, untouched. The panels are extensions, so they cannot carry
+storage even by accident: **this is why the SwiftUI split was safer than
+#117's**, where `Engine` is `@Observable` and had stored properties to strand.
+
+⚠ **One hand edit, the same price #117 paid.** `private` is file-scoped in
+Swift, so `PanelButton` — drawn by Light's Auto and Detail's Load LUT — widened
+to internal. The *only* widening; every other private member kept its callers
+inside its own file, which constrained where the cuts went.
+
+⚠ **The oracle was checked against itself first.** 42 scenes rendered twice from
+the pre-split binary agree on **41**; the 42nd is `versions`, whose rows stamp
+`Date()` at minute resolution, so it is compared by eye and is identical but for
+`6:27 AM` → `6:35 AM`. After the split those 41 are byte-for-byte identical by
+`cmp`. The 40 repro scenarios exit 0 with **full output identical** — 42
+differing lines, every one of them a wall-clock timing.
+
+⚠ **Three of the five gates cannot see these files at all**, and structurally so:
+`orion-tests` and `orion-bench` are C++ binaries, and `orion-viewport-tests`
+compiles 39 Swift files of which none is a panel.
+
+⚠⚠ **And the frame comparison has a hole under it, found by mutation and
+measured rather than argued.** The Detail panel scrolls. **M9 deletes five whole
+sections — Grain, Vignette, Dehaze, Clarity and Sharpening, 60 lines of shipped
+controls — and every check in the repository stays green**: 41 frames, 40
+scenarios, 800, 3702, bench 0. M10 deletes `Noise Reduction`, eleven lines higher
+in the same file, and six frames go red. The file is covered exactly as far as
+the panel is tall. Left unfixed and written down; the fix is a scene that scrolls
+Detail, the same shape as #117's fix for its two blind mutations.
+
+⚠ **`maskKindCell` is dead code** — 20 lines, one occurrence, stranded when the
+six-cell kind grid became the Add menu. Moved verbatim and left alone.
+
+**Eleven mutations.** Seven redden, and only ever on the build or the frame
+comparison — never on repro, which drives the engine and not the panel.
+
+| # | Mutation | What went red |
+|---|---|---|
+| M1 | delete `section("Vignette")` from Detail | ⚠ **nothing** — below the scroll fold |
+| M2 | delete `section("White Balance")` from Light | 20 frames |
+| M3 | unbind Exposure (`$engine.exposureEv` → `.constant(0)`) | 13 frames |
+| M4 | delete the mask row list | 6 frames |
+| M5 | drop `versionsPanel` from the Presets tab | 1 frame (`presets`) |
+| M6 | restore `private` on `PanelButton` | **build** — `'PanelButton' is inaccessible due to 'private' protection level` |
+| M7 | drop `+Optics.swift` from `SWIFT_SOURCES` | **build** — `cannot find 'opticsPanel' in scope` |
+| M8 | delete Optics' `Fringe R/C` slider | 1 frame (`optics`) |
+| M9 | delete **all five** below-fold Detail sections | ⚠⚠ **nothing, anywhere** |
+| M10 | delete `section("Noise Reduction")` from Detail | 6 frames |
+| M11 | delete `section("Presence")` from Color | 1 frame (`color`) |
+
+**Verbatim motion, proved:** every body is a line-range slice, and a coverage
+check asserts all 1,366 lines are claimed by exactly one destination or by the
+24-line scaffold each file re-emits for itself. Nothing was retyped.
+
+**Gates:** build clean · `orion-tests` **800 / 0** · `orion-viewport-tests`
+**3702 / 0** · **40 / 40** repro, full output identical · `orion-bench` exit 0 ·
+41 / 41 stable interface frames byte-identical.
 
 ### ✅ 2026-08-02 — `Scenario.swift` is five files, and the language did not move (#120)
 
@@ -995,6 +1101,8 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
+| ⚠ **The 1000-line rule now binds nothing in product code, and whether it binds tests is unsettled.** Swept live across every tracked source at the 2026-08-02 merge: the only files over are **`apps/tests/tests_effects.cpp` 1,716, `tests_brush.cpp` 1,142, `tests_perspective.cpp` 1,110, `tests_grade.cpp` 1,029** — all four in `apps/tests/`, none in `app/` or `engine/`. **Six splits landed in one day**: `DevelopPipeline.cpp` 2,896→451 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `OrionApp.swift` 1,557→299 (#121), `Scenario.swift` 1,615→301 (#120), `DevelopPanels.swift` 1,366→56 (#122). ⚠ **Settle the question before anyone splits `tests_effects.cpp` assuming the answer.** `CLAUDE.md` says *"No 1000-line anything"* and gives the reason — *"the developer must be able to hand-edit any file later"* — which applies to a test file as much as to a shader. But the two test files already split on 2026-07-31 were split for navigability, not because a rule demanded it, and a test file's cost of being long is different from a dispatcher's: nobody hunts for where to add a case. ⚠ Note also that **the tree moves under this row faster than the row is rewritten** — `tests_effects.cpp` went 969 → 1,716 in a single day, so it was *under* the ceiling on the morning of the sweep that missed it. **Recount by sweep before editing; do not adjust the numbers in place** | `apps/tests/` |
+
 | **The 1000-line rule is broken six ways, and it has moved out of `app/`**: `apps/tests/tests_effects.cpp` **1,716**, `app/OrionApp.swift` **1,557**, `app/DevelopPanels.swift` **1,366**, `apps/tests/tests_brush.cpp` **1,142**, `apps/tests/tests_perspective.cpp` **1,110**, `apps/tests/tests_grade.cpp` **1,029**; next below is `ShaderParams.h` at **905**. ⚠ **Recounted by sweep 2026-08-02 at `9d9158d` + #120**, over every `.swift/.cpp/.h/.hpp/.mm` under `app/ apps/ engine/ Sources/` — not by adjusting the previous numbers, which is what this row has always gone wrong by. ⚠ **The previous row was not stale; the tree moved under it.** It read "broken three ways, all in `app/`" and named `ShaderParams.h` at 905 as the next below — which is only consistent with `apps/tests` being *under* the ceiling, and it was: at `0b8061d` those files stood at **969 / 770 / 844** and `tests_perspective.cpp` did not exist. **Four test files crossed the ceiling in a single day**, three by growth and one on arrival. The violation is now mostly in the tests, and nobody sweeping only `app/` will see it. ⚠ **Recount the sweep before editing this row; do not adjust the numbers in place** — it once carried four contradictory copies of itself. Of the originals, `DevelopPipeline.cpp` (#113, 2,896 → 451), `bench/main.cpp` (#118, 2,289 → 85), `Engine.swift` (#117, 2,331 → 795) and `Scenario.swift` (#120, 1,615 → 301) are done | whole tree |
 
 | ⚠ **The whole Photo menu is unreachable from every check.** Deleting the Reset Adjustments command is green on 800, 3702, all 40 scenarios, the bench and every byte-compared frame (#121, M6). `Screenshot.swift:211` builds `Editor` directly and never builds `OrionApp`'s `Scene`, so `PhotoCommands` is in no captured hierarchy; no scenario verb opens a menu. Every menu item, its title, its shortcut and its greyed-out state rest on reading the code | `OrionApp+Commands.swift` |
