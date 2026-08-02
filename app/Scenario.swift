@@ -770,45 +770,63 @@ enum Scenario {
             }
             let a = try point(args[0]), b = try point(args[1])
 
-            var stroke = engine.brushStroke
-            var polarity = engine.brushErasePolarity
-            if polarity.count < stroke.count {
-                polarity += Array(repeating: false, count: stroke.count - polarity.count)
-            }
+            engine.beginBrushStroke()
+            var laid = 0
 
             var carry: CGFloat = 0
             var last = a
+            // ⚠ How many pointer events invalidate `maskComponents`.
+            //
+            // This is the number the ~155 ms report turned on. `Engine` is
+            // `@Observable` and Observation is property-granular, so a write to
+            // `maskComponents` invalidates every view whose body read it — and
+            // `DevelopPanels` reads it in eleven places, including a `ForEach`
+            // over the mask rows. One write per pointer event therefore rebuilt
+            // the whole develop panel sixty times a second, and **no headless
+            // instrument here could see it**, because `Scenario` never renders
+            // SwiftUI. Counting the invalidations is the part that *can* be
+            // measured from here; what each one costs still needs the app.
+            var invalidations = 0
             let began = DispatchTime.now().uptimeNanoseconds
             quiet = true
             for i in 0..<events {
                 let t = CGFloat(i) / CGFloat(events - 1)
                 let here = CGPoint(x: a.x + (b.x - a.x) * t,
                                    y: a.y + (b.y - a.y) * t)
+                var batch: [CGPoint] = []
                 if i == 0 {
-                    stroke.append(here)
-                    polarity.append(engine.brushErasing)
+                    batch = [here]
                 } else {
-                    let added = CanvasLayout.brushDabs(from: last, to: here,
-                                                       radius: CGFloat(engine.brushRadius),
-                                                       carry: &carry)
+                    batch = CanvasLayout.brushDabs(from: last, to: here,
+                                                   radius: CGFloat(engine.brushRadius),
+                                                   carry: &carry)
                     // ⚠ The gesture returns early on an event that laid no dab,
                     // so this one must too. Pushing anyway would measure a
                     // cheaper tick than the app ever issues.
-                    if added.isEmpty { last = here; continue }
-                    stroke += added
-                    polarity += Array(repeating: engine.brushErasing, count: added.count)
+                    if batch.isEmpty { last = here; continue }
                 }
                 last = here
-                engine.setBrushStroke(stroke, erasing: polarity)
+                var fired = false
+                withObservationTracking {
+                    _ = engine.maskComponents
+                } onChange: {
+                    fired = true
+                }
+                engine.appendBrushDabs(batch, erasing: engine.brushErasing)
+                laid += batch.count
+                if fired { invalidations += 1 }
             }
             let elapsed = DispatchTime.now().uptimeNanoseconds - began
             quiet = false
-            engine.commitBrushEdit()
+            // The one observable write, and the one history entry.
+            if engine.endBrushStroke() { engine.commitBrushEdit() }
 
             let perEvent = Double(elapsed) / 1_000_000.0 / Double(events)
-            say(String(format: "  paint %d events, %d dabs  %.1f ms per event  (%.0f fps)\n",
-                       events, stroke.count, perEvent,
-                       perEvent > 0 ? 1000.0 / perEvent : 0))
+            let dabs = engine.brushStroke.count
+            say(String(format: "  paint %d events, %d dabs (+%d)  %.1f ms per event  (%.0f fps)  %d/%d invalidate the panel\n",
+                       events, dabs, laid, perEvent,
+                       perEvent > 0 ? 1000.0 / perEvent : 0,
+                       invalidations, events))
 
         case "time":
             // Repeats another command and reports what one of them costs.

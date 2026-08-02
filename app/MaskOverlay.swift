@@ -27,11 +27,12 @@ struct MaskOverlay: View {
     // of restarting at each one.
     @State private var painting = false
     @State private var carry: CGFloat = 0
-    @State private var stroke: [CGPoint] = []
-    /// Polarity per dab, parallel to `stroke`. Carried through the gesture so a
-    /// pass that erases does not have to rewrite the polarity of every dab laid
-    /// before it.
-    @State private var erasing: [Bool] = []
+    /// How many dabs this gesture has laid. ⚠ A count, not the dabs: the
+    /// stroke itself lives in `Engine`'s unobserved buffers for the length of
+    /// the gesture. Two `@State` arrays here meant every pointer event
+    /// republished a growing SwiftUI value and re-flattened it on the way to
+    /// the engine.
+    @State private var dabs = 0
     @State private var last: CGPoint = .zero
     @State private var cursor: CGPoint?
 
@@ -235,63 +236,46 @@ struct MaskOverlay: View {
                 if !painting {
                     painting = true
                     carry = 0
+                    dabs = 0
                     // ⚠ **Painting is a drag and had never said so.** Every
                     // slider armed the preview graph through `AnalogTrack`;
                     // this gesture did not, so a stroke re-rendered the *full*
                     // graph at full resolution on every pointer event while a
-                    // slider tick paid a sixteenth of that. Measured with
-                    // `scenario paint`, which exists because nothing else
-                    // issued a stroke the way this gesture does:
-                    //
-                    //   dabs |  unarmed  |  armed
-                    //     41 |   7.6 ms  |  0.7 ms
-                    //    246 |  27.3 ms  |  1.9 ms
-                    //
-                    // and a real stroke is thousands of dabs, not hundreds.
-                    // `beginInteraction` refuses while comparing and with no
-                    // preview graph, so this falls back to the old path rather
-                    // than breaking on either.
+                    // slider tick paid a sixteenth of that.
                     engine.beginInteraction()
-                    // Start from the stroke already on the picture, so a second
-                    // pass adds to it rather than replacing it. The engine
-                    // accumulates source-over, which is what makes overlapping
-                    // passes build rather than double.
-                    stroke = engine.brushStroke
-                    erasing = engine.brushErasePolarity
-                    // ⚠ Padded before appending. The two arrays have to stay the
-                    // same length or a dab's polarity belongs to a different
-                    // dab, and the stroke on the picture is whatever the sidecar
-                    // held — which may predate erasing entirely.
-                    if erasing.count < stroke.count {
-                        erasing += Array(repeating: false,
-                                         count: stroke.count - erasing.count)
-                    }
-                    stroke.append(here)
-                    erasing.append(engine.brushErasing)
+                    // The stroke lives in the engine for the length of the
+                    // gesture, in buffers nothing observes — see
+                    // `Engine.beginBrushStroke`. It used to live here, in two
+                    // `@State` arrays that were re-flattened and re-published
+                    // on every pointer event, which invalidated the whole
+                    // develop panel sixty times a second.
+                    engine.beginBrushStroke()
+                    engine.appendBrushDabs([here], erasing: engine.brushErasing)
+                    dabs += 1
                     last = here
-                    engine.setBrushStroke(stroke, erasing: erasing)
                     return
                 }
                 let added = CanvasLayout.brushDabs(from: last, to: here,
                                                    radius: CGFloat(engine.brushRadius),
                                                    carry: &carry)
-                guard !added.isEmpty else { return }
-                stroke += added
-                erasing += Array(repeating: engine.brushErasing, count: added.count)
                 last = here
-                engine.setBrushStroke(stroke, erasing: erasing)
+                guard !added.isEmpty else { return }
+                engine.appendBrushDabs(added, erasing: engine.brushErasing)
+                dabs += added.count
             }
             .onEnded { _ in
                 painting = false
                 carry = 0
-                // One history entry for the whole stroke, not one per dab.
-                if !stroke.isEmpty { engine.commitBrushEdit() }
-                // ⚠ After the commit, and unconditionally. `endInteraction`
-                // renders the full graph once — every event of the stroke went
-                // to the preview, so this is the first time the full graph sees
-                // the paint, not a refinement of what is on screen. Skipping it
-                // on an empty stroke would strand the canvas on the preview
-                // texture after a press that laid nothing.
+                // One observable write and one history entry for the whole
+                // stroke, not one of each per dab.
+                let painted = engine.endBrushStroke()
+                if painted && dabs > 0 { engine.commitBrushEdit() }
+                dabs = 0
+                // ⚠ After the commit. `endInteraction` renders the full graph
+                // once — every event of the stroke went to the preview, so this
+                // is the first time the full graph sees the paint rather than a
+                // refinement of it. Unconditional, because a press that laid
+                // nothing still has to come off the preview texture.
                 engine.endInteraction()
             }
     }

@@ -735,6 +735,126 @@ final class Engine {
     /// part of the photograph — it belongs to the hand, like `spotPlacing`.
     var brushErasing = false
 
+    // ── A live stroke, which deliberately touches nothing observable ──────
+    //
+    // ⚠ **This exists because painting cost ~155 ms a pointer event in the app
+    // while the headless harness measured 0.9 ms.** The harness drives `Engine`
+    // and never renders SwiftUI, so it could not see the 170x. Everything in
+    // that gap was work this class did *per event* on behalf of a stroke that
+    // is not finished yet:
+    //
+    //   * `maskComponents[i].brushStroke = …` mutates an `@Observable`
+    //     property, and `DevelopPanels` reads `maskComponents` in eleven
+    //     places — so every dab invalidated the whole develop panel tree.
+    //   * `points.flatMap { [Float($0.x), Float($0.y)] }` rebuilt the entire
+    //     stroke and allocated a two-element array per dab, per event.
+    //   * `pushAndRender` then built `cAdjustments()` (eighty fields plus the
+    //     mask group and the spot list) and called `onEdit?(state)`, which
+    //     copies the whole `DevelopState` — brush stroke included — and hands
+    //     it to `Autosave.note`, whose first act is `state != saved`, a full
+    //     structural compare of the same arrays.
+    //
+    // All of that is for the *record* of the stroke, and the record only has to
+    // be right when the hand stops. During the drag the engine already holds
+    // the authoritative dabs, because they were pushed straight across the
+    // facade. So the buffers below are `@ObservationIgnored`, they are appended
+    // to rather than rebuilt, and `maskComponents` is written exactly **once**,
+    // in `endBrushStroke`.
+    @ObservationIgnored private var liveStroke: [Float] = []
+    @ObservationIgnored private var liveErase: [Float] = []
+    /// Which component the live stroke belongs to; -1 when no stroke is down.
+    @ObservationIgnored private var liveIndex = -1
+
+    /// The press. Seeds the buffers from whatever paint is already on the
+    /// component, so a second pass builds on the first.
+    func beginBrushStroke() {
+        guard selectedMask >= 0 && selectedMask < maskComponents.count else { return }
+        liveIndex = selectedMask
+        liveStroke = maskComponents[liveIndex].brushStroke
+        liveErase = maskComponents[liveIndex].brushErase
+        // ⚠ Padded here rather than trusted, for the same reason `pushStroke`
+        // pads: the two arrays reach the sidecar separately and a file that
+        // predates erasing has a stroke and no polarity.
+        let dabs = liveStroke.count / 2
+        if liveErase.count < dabs {
+            liveErase += [Float](repeating: 0, count: dabs - liveErase.count)
+        }
+    }
+
+    /// One pointer event's worth of dabs. Appends; never rebuilds.
+    func appendBrushDabs(_ points: [CGPoint], erasing: Bool) {
+        guard liveIndex >= 0, !points.isEmpty else { return }
+        liveStroke.reserveCapacity(liveStroke.count + points.count * 2)
+        for p in points {
+            liveStroke.append(Float(p.x))
+            liveStroke.append(Float(p.y))
+        }
+        liveErase.append(contentsOf:
+            repeatElement(erasing ? 1 : 0, count: points.count))
+        pushLiveStroke()
+    }
+
+    /// The release. One observable write, and the record is correct again.
+    ///
+    /// ⚠ Returns whether anything was painted, so the caller can skip the
+    /// history entry for a press that laid nothing — recording that would put a
+    /// step in the history that undoes to itself.
+    @discardableResult
+    func endBrushStroke() -> Bool {
+        guard liveIndex >= 0 else { return false }
+        let index = liveIndex
+        liveIndex = -1
+        let changed = maskComponents[index].brushStroke != liveStroke
+        if changed {
+            maskComponents[index].brushStroke = liveStroke
+            maskComponents[index].brushErase = liveErase
+        }
+        liveStroke = []; liveErase = []
+        return changed
+    }
+
+    /// Sends the live buffers across the facade and renders. `pushAndRender`
+    /// minus `onEdit`, and the omission is the whole optimisation.
+    ///
+    /// ⚠ **The adjustment block still has to go, and the first draft of this
+    /// skipped it.** A stroke's dabs travel by their own call, so skipping the
+    /// block looked free — but `brush_revision` rides *in* the block, and it is
+    /// the only thing the engine compares to decide the mask node is stale (it
+    /// never walks a stroke to find out). Uploading dabs without it left the
+    /// node clean: the kernel never re-ran, `render()` returned in microseconds
+    /// having done nothing, and the paint simply did not appear. It measured
+    /// **0.0 ms an event at 45,000 fps**, which is what "did no work" looks
+    /// like when you are hoping for "fast".
+    ///
+    /// `repro/gesture-preview-agrees.txt` caught it, on the check that the
+    /// settled picture is the same armed or not — written the day before for a
+    /// different reason entirely.
+    ///
+    /// What *is* safe to skip is `onEdit?(state)`, and that is where the cost
+    /// was: it builds a whole `DevelopState` — copying the stroke it was just
+    /// handed — and gives it to `Autosave.note`, whose first act is
+    /// `state != saved`, a full structural compare of the same arrays. The
+    /// autosave's business is the finished stroke, and `endBrushStroke`
+    /// delivers one through the normal observable path.
+    private func pushLiveStroke() {
+        guard isLoaded, !suspended, let handle, liveIndex >= 0 else { return }
+        let dabs = liveStroke.count / 2
+        guard dabs > 0 else { return }
+        let ok: OrionStatus = liveStroke.withUnsafeBufferPointer { p in
+            liveErase.withUnsafeBufferPointer { e in
+                orion_engine_set_brush_stroke(handle, Int32(liveIndex),
+                                              p.baseAddress, e.baseAddress,
+                                              Int32(dabs))
+            }
+        }
+        guard ok == ORION_OK else { return }
+        brushRevisions[liveIndex] &+= 1
+
+        var adj = cAdjustments()
+        orion_engine_set_adjustments(handle, &adj)
+        if interacting { renderPreview() } else { render() }
+    }
+
     func setBrushStroke(_ points: [CGPoint], erasing: [Bool]? = nil) {
         guard selectedMask >= 0 && selectedMask < maskComponents.count else { return }
         maskComponents[selectedMask].brushStroke =
