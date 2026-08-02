@@ -765,6 +765,185 @@ void testPerspectiveMaskGeometry() {
     }
 }
 
+/// A mask's **extent**: the ellipse the map's derivative makes of it.
+///
+/// The centre and a gradient's direction were exact from the day the
+/// correction shipped; the size was √|det J| — one isotropic number standing in
+/// for a general 2×2. That is right only where the homography happens to be
+/// conformal, and it leaked coverage past the rim of a large mask under a
+/// strong keystone while staying perfect at its centre.
+///
+/// ⚠ **Every check below fails on the isotropic version**, which is what makes
+/// them checks rather than descriptions. The mutation is one line: return
+/// `{ax·s, ay·s, 0}` for `s = √|det J|` instead of the eigen-decomposition.
+/// Named cases and what they do to it are on each block.
+void testPerspectiveMaskExtent() {
+    section("Perspective — a mask's extent");
+
+    namespace mask = orion::pipe::mask;
+
+    const mask::Crop none{};
+
+    // 1. **The aspect squeeze, where the old answer is not merely imprecise but
+    //    empty.** Aspect is diag(1/g, g): exactly linear, exactly
+    //    area-preserving, so √|det J| is exactly **1** and the isotropic version
+    //    moved no semi-axis at all while the picture under the mask was
+    //    stretched by g each way. Nothing about it is second order.
+    {
+        const float g = std::exp2(0.5f);          // full aspect travel
+        const orion::pipe::persp::Jacobian squeeze{1.0f / g, 0.0f, 0.0f, g};
+
+        const auto e = mask::radiusToFrame(0.20f, 0.20f, none, squeeze, 0.0f);
+        checkNear(double(e.semiX), 0.20 / double(g), 1e-6,
+                  "an axis-aligned mask stretches by the squeeze, not by its "
+                  "square root (x)");
+        checkNear(double(e.semiY), 0.20 * double(g), 1e-6,
+                  "and the other axis the other way (y)");
+        report(std::abs(e.angleDelta) < 1e-6f,
+               "an axis-aligned mask under an axis-aligned squeeze does not turn",
+               std::to_string(e.angleDelta));
+
+        // ⚠ And the determinant really is 1, so the isotropic version returns
+        // the mask untouched. Stated as a check so the mutation above cannot be
+        // waved away as "close enough".
+        const float det = squeeze.a * squeeze.d - squeeze.b * squeeze.c;
+        report(std::abs(det - 1.0f) < 1e-6f,
+               "the squeeze's determinant is 1, so √|det J| is blind to it",
+               std::to_string(det));
+    }
+
+    // 2. **A mask at an angle turns.** Under an anisotropic map the image of an
+    //    ellipse is an ellipse whose axes are *not* the images of the original
+    //    axes, so the returned angle has to move — and the isotropic version
+    //    returns a delta of exactly zero here, every time.
+    {
+        const float g = std::exp2(0.5f);
+        const orion::pipe::persp::Jacobian squeeze{1.0f / g, 0.0f, 0.0f, g};
+        const float angle = 0.6f;
+        const auto e = mask::radiusToFrame(0.24f, 0.14f, none, squeeze, angle);
+        report(std::abs(e.angleDelta) > 0.05f,
+               "a mask at an angle comes out turned by an anisotropic map",
+               "delta " + std::to_string(e.angleDelta));
+    }
+
+    // 3. **The invariant, and the one that would catch an algebra slip:** every
+    //    point of the source ellipse's boundary, carried through J, lies on the
+    //    boundary of the ellipse that comes back. That is the definition of the
+    //    image, checked against the answer rather than re-derived from it.
+    //
+    //    Run over a shear as well as a squeeze, because a symmetric J and a
+    //    diagonal one both hide a transposed term.
+    {
+        const orion::pipe::persp::Jacobian maps[] = {
+            {1.3f, 0.0f, 0.0f, 0.8f},        // a squeeze
+            {1.0f, 0.35f, 0.0f, 1.0f},       // a shear, one way
+            {1.0f, 0.0f, -0.4f, 1.0f},       // and the other — B·Bᵀ vs Bᵀ·B
+            {1.15f, 0.22f, -0.3f, 0.9f},     // and a general one
+        };
+        const mask::Crop cropped{0.1f, 0.2f, 0.55f, 0.7f};
+
+        double worst = 0.0;
+        for (const auto& j : maps) {
+            for (float angle : {0.0f, 0.4f, 1.1f, -0.9f}) {
+                for (auto rr : {std::pair{0.30f, 0.18f}, std::pair{0.12f, 0.12f},
+                                std::pair{0.05f, 0.31f}}) {
+                    const auto e = mask::radiusToFrame(rr.first, rr.second,
+                                                       cropped, j, angle);
+                    const float ax = rr.first * cropped.w;
+                    const float ay = rr.second * cropped.h;
+                    const float ca = std::cos(angle), sa = std::sin(angle);
+                    // ⚠ The delta is relative to `Placement::angle` — the
+                    // *image* of the mask's own direction — and not to the
+                    // angle that went in. That is what keeps the quarter turns
+                    // out of `radiusToFrame`, and it is the one thing about its
+                    // contract a caller can get wrong while still compiling.
+                    const float phi = std::atan2(j.c * ca + j.d * sa,
+                                                 j.a * ca + j.b * sa);
+                    const float cb = std::cos(phi + e.angleDelta);
+                    const float sb = std::sin(phi + e.angleDelta);
+
+                    for (int k = 0; k < 32; ++k) {
+                        const float t = 6.28318530717958648f * float(k) / 32.0f;
+                        // A point on the source ellipse's rim.
+                        const float px = ax * std::cos(t) * ca - ay * std::sin(t) * sa;
+                        const float py = ax * std::cos(t) * sa + ay * std::sin(t) * ca;
+                        // Through the map.
+                        const float qx = j.a * px + j.b * py;
+                        const float qy = j.c * px + j.d * py;
+                        // And into the returned ellipse's own frame, exactly as
+                        // `mask_component.slang` forms it.
+                        const double u = double( cb * qx + sb * qy) / double(e.semiX);
+                        const double v = double(-sb * qx + cb * qy) / double(e.semiY);
+                        worst = std::max(worst, std::abs(u * u + v * v - 1.0));
+                    }
+                }
+            }
+        }
+        report(worst < 1e-4,
+               "every point of the mask's rim, mapped, lands on the rim of the "
+               "ellipse that comes back",
+               "worst |u²+v²−1| " + std::to_string(worst));
+    }
+
+    // 4. **Area is preserved to |det J|**, which the isotropic version also gets
+    //    right — deliberately. It is here so a future rewrite that gets the
+    //    shape right and the size wrong is caught by something, and it is *not*
+    //    sufficient on its own: check 1 is the one with teeth.
+    {
+        const orion::pipe::persp::Jacobian j{1.15f, 0.22f, -0.3f, 0.9f};
+        const auto e = mask::radiusToFrame(0.30f, 0.18f, none, j, 0.7f);
+        const double det = std::abs(double(j.a) * j.d - double(j.b) * j.c);
+        checkNear(double(e.semiX) * e.semiY, 0.30 * 0.18 * det, 1e-6,
+                  "the ellipse's area is the mask's times |det J|");
+    }
+
+    // 5. **A neutral control is bit-identical**, not close. Every uncorrected
+    //    photograph in the library renders through this line.
+    {
+        const orion::pipe::persp::Jacobian flat{};
+        const mask::Crop cropped{0.1f, 0.2f, 0.55f, 0.7f};
+        bool exact = true;
+        for (float angle : {0.0f, 0.4f, 1.1f, -0.9f}) {
+            const auto e = mask::radiusToFrame(0.30f, 0.18f, cropped, flat, angle);
+            exact = exact && e.semiX == 0.30f * cropped.w &&
+                    e.semiY == 0.18f * cropped.h && e.angleDelta == 0.0f;
+        }
+        report(exact, "with no correction the crop's answer comes back to the bit");
+    }
+
+    // 6. **The whole path, through `toFrame`.** Checks 1–5 hand the derivative
+    //    in by hand; this one asks whether the pipeline's own `Placement`
+    //    carries it, in normalized coordinates and not in texels. Getting the
+    //    conjugation W⁻¹JW wrong on a 3:2 frame is a plausible wrong answer of
+    //    exactly the kind this file exists for: it is invisible on the square
+    //    fixtures and wrong on every photograph.
+    {
+        const float frameW = 600.0f, frameH = 400.0f;
+        const auto h = persp::compose({0.0f, 0.0f, 1.0f}, frameW, frameH);
+        report(!persp::isIdentity(h), "a pure aspect squeeze is not the identity");
+
+        const mask::Placement p{0.5f, 0.5f, 0.0f};
+        const auto placed = mask::toFrame(p, none, 0, 0.0f, 0.5f, 0.5f,
+                                          frameW, frameH, &h);
+
+        const auto e = mask::radiusToFrame(0.20f, 0.20f, none, placed.jac, 0.0f);
+        const double ratio = double(e.semiY) / double(e.semiX);
+        // Two full travels of g = 2^½ apart, one per axis. The isotropic
+        // version returns this ratio as exactly 1, whatever the frame.
+        checkNear(ratio, 2.0, 2e-2,
+                  "a round mask comes out of the pipeline's own placement "
+                  "stretched two to one under a full aspect squeeze");
+
+        // ⚠ And `Placement::scale` is not wrong so much as *blind*: it is the
+        // geometric mean of the two, so it carries the area exactly and the
+        // shape not at all. Written as a check because it is the reason the old
+        // code looked right — a mask under a pure squeeze covered the correct
+        // number of pixels, in the wrong ones.
+        checkNear(double(e.semiX) * e.semiY, 0.04 * double(placed.scale) * placed.scale,
+                  1e-6, "and the isotropic scale it replaced carries their area");
+    }
+}
+
 /// The correction through the *product*, not the kernel.
 ///
 /// `testPerspectiveShaderMatchesHost` dispatches the geometry kernel with
