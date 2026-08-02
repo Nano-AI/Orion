@@ -387,16 +387,23 @@ the edges that were deliberately left, each with a number rather than a shrug.
 
 The geometry shipped whole (decision #100): the homography, the composition into
 the existing sampling pass, the auto-scale, and the centre of every mask, brush
-dab and spot going through the same matrix. One edge was deliberately left, with
-a number rather than a shrug.
+dab and spot going through the same matrix. One edge was deliberately left with
+a number rather than a shrug — **and it was closed on 2026-08-01, decision
+#102.** A mask's extent is now the ellipse the map's derivative makes of it,
+read off a symmetric 2×2 in closed form (Golub & Van Loan §2.4.1, §8.5.2).
 
-| Piece | Why it was left | Cost |
-|---|---|---|
-| **A mask's *extent* under the correction is first order.** A homography carries a point exactly and a line's direction exactly, so a mask's centre, every dab, every spot and a gradient's direction are exact. Its size is carried by √\|det J\| at the mask's own centre, which is exact only where the map is locally isotropic. Measured through `maskcheck` on `_PIC8220`: at vertical 0.45 a radial mask up to **0.28 of the frame** is bit-identical over every cell the overlay draws clear; at 0.34 it leaks 2 of 60 cells by 0.0105 luma, and at vertical 1.0 by 0.0617. Never at the centre — always at the rim | It is the *opposite* failure to the one the geometry fixes. A mask in the wrong place is the plausible-wrong-answer this project fears; a mask whose rim is a percent out on a frame-filling ellipse under a full-travel keystone is visible, correctable with the brush, and bounded. And the fix rewrites `mask::radiusToFrame`, whose current derivation is load-bearing for every quarter turn (decision #83) and pinned by `repro/mask-alignment.txt` — a bad session there breaks masks everywhere, on every photograph, corrected or not | ~half a session. An ellipse is {p : pᵀMp ≤ 1}; its image under J is {q : qᵀJ⁻ᵀMJ⁻¹q ≤ 1}, so the corrected semi-axes and angle are the eigen-decomposition of a symmetric 2×2 — closed form, ~30 lines, plus re-taking the three pinned numbers in `repro/mask-alignment.txt` |
+What that bought, and what it did not:
 
-⚠ `repro/perspective-carries-the-mask.txt` deliberately sits at **0.28**, the
-edge of the range the approximation is exact over, so it cannot get worse
-without something going red.
+| Piece | State |
+|---|---|
+| A radial mask's **semi-axes and angle** under an anisotropic map | ✅ **exact under the derivative.** The whole first-order error is gone. Visible where it is the *only* error: an aspect squeeze is exactly linear and exactly area-preserving, so √\|det J\| was exactly 1 and a mask came out **round under a two-to-one squeeze** — 4 of 84 clear cells leaked at **0.1461** luma, and none do now |
+| The map's **curvature** across a large mask | ❌ **still there, and now the whole remaining error.** No derivative at a point can see it. A 0.34-of-the-frame mask under a full keystone leaked 0.1001 luma and leaks 0.0862 — about a fifth off, which is what removing only the first order predicts. Fixing it means splitting the ellipse or transcribing the conic, and neither is costed |
+| A linear gradient's **ramp length** | ❌ still isotropic √\|det J\|. The anisotropy could go the same way; the *non*-uniformity could not, since a projective map preserves cross-ratios along a line and not ratios. Unmeasured, and in `UNSOURCED.md` §24 for that reason |
+
+⚠ `repro/perspective-carries-the-mask.txt` sits at **0.34** now, and its
+keystone half passes there before and after the fix — the section that goes red
+when the ellipse is reverted is the **aspect** one. A scenario that cannot fail
+is not a scenario.
 
 ## Incremental brush accumulation — costed, not started
 

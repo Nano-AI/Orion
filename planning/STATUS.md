@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**M3's last item renamed and solved; the brush bench was measuring itself — #96, #97, #98**)
+**Last updated:** 2026-08-01 (**a mask's extent under the perspective correction is the ellipse J makes of it, not one isotropic scale — #102**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#96, #97). **`research/masking.md` is
@@ -333,6 +333,111 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
 
+## Session 2026-08-01l — a mask's extent stopped being one number
+
+**Story:** the open edge from decision #100 — `UNSOURCED.md` §24's second item.
+Decision **#102**; `research/perspective.md`.
+
+### The maths, and why it is not Smith's
+
+A radial mask's semi-axes went through **√|det J|** at the mask's centre: the
+geometric mean of the two axis scales, one isotropic number standing in for a
+general 2×2. It is exact where the homography is conformal and nowhere else.
+
+The image of an ellipse under a linear map is an ellipse. Semi-axes
+(aₓ, a_y) at φ make the unit disc under **A = R(φ)·diag(aₓ, a_y)**; the image is
+the unit disc under **B = J·A**; B's semi-axis lengths are its singular values
+along its left singular vectors — **Golub & Van Loan, *Matrix Computations*, 4th
+ed., JHU Press 2013, §2.4.1** — and both are read off the symmetric **S = B·Bᵀ**,
+whose 2×2 eigenproblem is closed form, their **§8.5.2**. Thirty lines.
+
+⚠ **The instruction was to reuse Smith's closed form (CACM 1961), and it was
+not followed.** The only Smith in this repository is
+`SkyDetector.Stats.largestVariance()`: Swift, the 3×3 case, returning the
+largest eigenvalue and no eigenvector. This needs both roots and an axis, in
+C++, on the engine side of the facade — and Smith's trigonometric construction
+*reduces* to the quadratic formula at n = 2, so using it would have meant
+padding a 2×2 to a 3×3 to reach a worse form of the same answer. Written down
+here rather than quietly done, because the reason is the interesting part.
+
+### ⚠ The keystone was the wrong place to look, and the recorded table was wrong
+
+The premise handed over was that a 0.34-of-the-frame mask leaks 2 of 60 cells at
+0.0105 luma under vertical 0.45, and would stop after the fix. Neither half held.
+
+- **The configuration does not leak.** `0.34 × 0.22`, run through the scenario
+  file itself: **64 clear cells, no leak** — on the build before the fix and the
+  build after. The recorded cell count (60) does not match either build.
+- **The axis was wrong.** A vertical keystone stretches *y*, so the error grows
+  with the mask's extent along **y**; the old sweep varied **x** and held y at
+  0.22. `0.30 × 0.34` leaks where `0.34 × 0.22` does not.
+- **And most of what does leak is not fixable this way.** Over a mask a third of
+  the frame across, the map's *curvature* dominates its anisotropy. The ellipse
+  takes vertical 1.0 from **0.1001 → 0.0862** luma: about a fifth, and the shape
+  that leaked still leaks.
+
+### Where the fix is unambiguous: the aspect squeeze
+
+Aspect is diag(1/g, g) — **exactly linear, so no curvature, and
+area-preserving, so √|det J| is exactly 1.** The old code therefore left a mask
+**round while the picture under it was squeezed two to one.** Not an
+approximation softening at the rim; the shape dropped.
+
+| Aspect | Mask | Isotropic | Ellipse |
+|---|---|---|---|
+| +1.0 | 0.20 round, centred | 4 of 84, worst **0.1461** | **none** |
+| −1.0 | 0.20 round, centred | 4 of 84, worst 0.1207 | **none** |
+| +0.5 | 0.20 round, centred | 4 of 84, worst 0.0567 | **none** |
+| +1.0 | 0.24 × 0.14 at 0.6 rad | 2 of 80, worst 0.0067 | **none** |
+
+0.1461 luma is an order more than any keystone reading ever recorded in
+`perspective.md`, and it sat in a control that has shipped since #100.
+
+### What kept `radiusToFrame` safe
+
+Its derivation is decision #83's and is pinned by `repro/mask-alignment.txt`,
+which caught a semi-axis swap leaking into 14 of 207 cells. Two things kept it:
+
+- **The angle comes back as a delta on `Placement::angle`**, so the quarter
+  turns stay outside this function exactly as #83 requires.
+- **Neutral is short-circuited rather than solved**, so an uncorrected
+  photograph is bit-identical and not merely close. `orion-tests` asserts `==`,
+  not a tolerance.
+
+`mask-alignment.txt` is green, and so are the other 37 scenarios.
+
+### The tests, and the mutation
+
+`testPerspectiveMaskExtent`, 12 checks. The one that matters is not a tolerance
+argument: under a full aspect squeeze an axis-aligned mask must come out
+stretched by **g and not by √g**. Also pinned — every point of the source rim,
+mapped, lands on the rim of the ellipse that comes back (over a squeeze, a shear
+each way, and a general 2×2, formed exactly as `mask_component.slang` forms it);
+a mask at an angle comes out **turned**; the area is |det J|; and neutral is
+bit-identical.
+
+**Mutation, run:** return `{ax·√|det J|, ay·√|det J|, 0}` from `radiusToFrame`.
+`orion-tests` **5 failures of the 6 new blocks**, and
+`repro/perspective-carries-the-mask.txt` **3 failures, exit 1**. The two blocks
+that survive it — area, and bit-identity at neutral — say so in their own
+comments; they are there for a *future* rewrite, not for this one.
+
+### Gates
+
+`orion-tests` **702 checks, 0 failures**. `orion-viewport-tests` **3,620, 0**.
+**All 38 `repro/*.txt` exit 0.** `orion-bench` on `_PIC8220` exit 0, M0 gate
+**PASS** at p95 **8.87** and **8.96 ms** over two runs (advisory; the spread
+here was 0.09 ms, which is unusually quiet), **149 nodes** unchanged, and the
+`perspective 0.6` probe still **1 node** at 2.01 / 2.10 ms.
+
+### What is still open, and it is named rather than implied
+
+- A **linear gradient's ramp length** is still isotropic √|det J|. The
+  anisotropy could go the same way; the non-uniformity could not, since a
+  projective map preserves cross-ratios along a line and not ratios. Unmeasured.
+- The map's **curvature** over a large mask. Now the whole remaining error at
+  the rim, and not costed.
+
 ## Session 2026-08-01k — M3's last item was misnamed, and the name was the blocker
 
 **Story:** "segmentation-based highlight reconstruction", the last unbuilt M3
@@ -587,17 +692,20 @@ mask ends up plausibly wrong.
 | a linear gradient's direction | **exact** — H takes lines to lines |
 | ramp length, radial semi-axes | **first order** — √\|det J\| at the centre |
 
-⚠ **The last row has a measured bound rather than a hedge.** Through
-`maskcheck`, which compares the render against the *overlay's* transcription and
-demands every clear cell come back bit-identical: at vertical 0.45 a hard-edged
-radial mask is exact at 0.10, 0.20 and **0.28** of the frame, and at 0.34 leaks 2
-of 60 cells by 0.0105 luma; at vertical 1.0 by 0.0617; at vertical 0.2 it is
-clean at 0.34. Never at the centre, always at the rim.
+⚠ **Superseded on 2026-08-01 by session `2026-08-01l` and decision #102.** The
+radial semi-axes are the ellipse the Jacobian makes of them now, and the bound
+this section quoted — "at 0.34 leaks 2 of 60 cells by 0.0105 luma at vertical
+0.45; at vertical 1.0 by 0.0617" — **could not be reproduced on either build**.
+That configuration gives 64 clear cells and no leak. The keystone's error grows
+with the mask's extent along the axis it *stretches*, and this sweep varied the
+other one. The reproducible table is in `research/perspective.md`; the reading
+that mattered turned out to be the **aspect** squeeze, at 0.1461 luma.
 
-The fix is ~30 lines (the image of an ellipse under J is the eigen-decomposition
-of a symmetric 2×2) and it is **costed in `ROADMAP.md` rather than bolted on**,
+The fix was ~30 lines (the image of an ellipse under J is the eigen-decomposition
+of a symmetric 2×2) and was **costed in `ROADMAP.md` rather than bolted on**,
 because it rewrites `mask::radiusToFrame`, whose derivation is load-bearing for
-every quarter turn (#83) and pinned by `repro/mask-alignment.txt`.
+every quarter turn (#83) and pinned by `repro/mask-alignment.txt`. Both survived
+it: the angle comes back as a *delta* so the turns stay outside the function.
 
 ### The tests, and the eight mutations
 

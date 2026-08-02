@@ -795,7 +795,7 @@ not that any photograph looks different.
 
 ---
 
-## §24 — Perspective correction: the slider travel, and the extent of a mask under it
+## §24 — Perspective correction: the slider travel (the extent of a mask is sourced as of 2026-08-01)
 
 **Where:** `pipe/Perspective.h` (`kCornerTravel`, the aspect factor),
 `pipe/MaskGeometry.h` (`unperspective`). Sourced companion:
@@ -807,7 +807,9 @@ inhomogeneous form (§4.1.2), the coordinates it is posed in are their
 normalization (§4.4.4), and the inverse-mapped single-resample warp is Heckbert
 §3. None of that is invention.
 
-**Not sourced — two things, and they are different in kind.**
+**Not sourced — one thing now.** This section named two; the second was closed
+on 2026-08-01 and is kept below struck through, because what it got wrong is
+worth as much as what it got right.
 
 ### 1. The travel, which is a range and not a constant
 
@@ -827,47 +829,60 @@ A tuning difference, and one a photographer sets by eye against the picture.
 the zoom it costs at full travel, and no test needs rewriting — nothing asserts
 a number derived from it.
 
-### 2. A mask's *extent* under the correction is first order, and it is measured
+### ~~2. A mask's *extent* under the correction is first order~~ — SOURCED 2026-08-01
 
-A homography carries a point exactly and a line's direction exactly, so a mask's
-**centre**, every **brush dab**, every **spot** and a linear gradient's
-**direction** all go through `mask::toFrame` with no approximation at all. Its
-*size* does not: a projective map preserves cross-ratios along a line and not
-ratios, so a gradient's ramp comes out slightly non-uniform and an ellipse comes
-out as a conic that is not quite the ellipse whose semi-axes were sent.
+The entry read: a homography carries a point and a line's direction exactly, so
+a mask's **centre**, every **brush dab**, every **spot** and a linear gradient's
+**direction** go through `mask::toFrame` with no approximation at all — while
+its *size* is carried by **√|det J| at the mask's own centre**, one isotropic
+number, exact only where the map happens to be conformal. The fix it named for
+itself was the eigen-decomposition of a symmetric 2×2.
 
-What is applied instead is √|det J| at the mask's own centre — the same
-geometric-mean compromise `mask::lengthToFrame` already makes for a non-square
-crop, and exact wherever the map is locally isotropic, which includes the whole
-frame at zero.
+That fix is built (decision #102), and the departure it recorded is closed:
 
-**The cost is a number, not a hedge.** Measured on `_PIC8220` through
-`maskcheck`, which compares the render against the *overlay's* own transcription
-of the kernel and demands that every cell drawn clear come back bit-identical:
+> **Golub, G. H. and Van Loan, C. F., *Matrix Computations*, 4th edition,
+> Johns Hopkins University Press, 2013.** ISBN 978-1-4214-0794-4.
+> §2.4.1 — the image of the unit sphere under a matrix is a hyperellipse whose
+> semiaxes are σᵢuᵢ. §8.5.2 — the 2×2 symmetric Schur decomposition in closed
+> form, which Jacobi's method is built on.
 
-| Vertical | Radial mask, as a fraction of the frame | Clear cells that leak |
-|---|---|---|
-| 0.45 | 0.10 | none |
-| 0.45 | 0.20 | none |
-| 0.45 | **0.28** | none |
-| 0.45 | 0.34 | 2 of 60, worst **0.0105** luma at −2 EV |
-| 1.00 | 0.34 | 2 of 60, worst **0.0617** luma |
-| 0.20 | 0.34 | none |
+An ellipse with semi-axes (aₓ, a_y) at φ is the image of the unit disc under
+A = R(φ)·diag(aₓ, a_y); its image under J is the unit disc under B = J·A; the
+semi-axes and axis of that are read off the symmetric S = B·Bᵀ. `radiusToFrame`
+is that, in thirty lines, with the quarter turns still outside it (#83) and a
+short-circuited neutral case so an uncorrected photograph is bit-identical.
 
-So it holds exactly up to a mask about a quarter of the frame across at a
-moderate correction, and degrades at the rim — never at the centre — beyond
-that. `repro/perspective-carries-the-mask.txt` sits deliberately at 0.28, the
-edge of the exact range, so the approximation cannot quietly get worse.
+⚠ **Smith's closed form (CACM 1961) is in this repository and was not reused.**
+`SkyDetector.Stats.largestVariance()` is Swift, is the 3×3 case, and returns the
+largest eigenvalue and no eigenvector. This needs both roots and an axis, in
+C++, on the other side of the facade. Smith's construction reduces to the
+quadratic formula at n = 2, so what is written is the reduction, not a rival
+derivation. Said here because "reuse what is already there" was the instruction
+and this is why it was not followed.
 
-**To fix:** map the ellipse through the full Jacobian rather than through its
-determinant. An ellipse is {p : pᵀMp ≤ 1} and its image under J is
-{q : qᵀJ⁻ᵀMJ⁻¹q ≤ 1}, so the corrected semi-axes and angle are the eigen-
-decomposition of a symmetric 2×2 — closed form, about thirty lines. Costed in
-`ROADMAP.md`. It was **not** done in the same session as the geometry because it
-rewrites `radiusToFrame`, whose current derivation is load-bearing for every
-quarter turn (decision #83) and pinned by `repro/mask-alignment.txt`, and
-because the failure it would fix is at a mask's rim while the failure the
-geometry fixes is a mask in the wrong place.
+**What is left, and it is a different kind of thing.** One first-order term and
+one second-order one:
+
+1. **A gradient's ramp length** is still √|det J|. A projective map preserves
+   cross-ratios along a line and not ratios, so the ramp is non-uniform however
+   it is scaled — the anisotropy could be removed the same way and the
+   non-uniformity could not. Not measured, and not fixed here for that reason.
+2. **The map's curvature**, which no derivative at a point can see. This is
+   what still leaks at the rim of a mask larger than about a third of the frame
+   under a strong keystone, and it is now the *whole* remaining error there —
+   `research/perspective.md` has the isotropic → ellipse table that shows the
+   ellipse buying about a fifth of a keystone's rim error and **all** of an
+   aspect squeeze's, which is exactly the split "first order removed, second
+   order left" predicts.
+
+⚠ **And the table this entry used to print was not reproducible.** It recorded
+`0.34 × 0.22` leaking 2 of 60 cells at 0.0105 luma under vertical 0.45. Re-run
+through the scenario file itself, on the build before the fix and the build
+after, that configuration gives **64 clear cells and no leak**. The keystone's
+error grows with the mask's extent along the axis it *stretches*; the old sweep
+varied the other one and read as exact where it should have read as clean.
+`repro/perspective-carries-the-mask.txt` sits at 0.34 now, and the section that
+fails when the ellipse is reverted is the **aspect** one, not the keystone one.
 ## §25 — The creative vignette's controls, though not its curve
 
 **Where:** `ops/vignette_ops.slang`, `DevelopPipeline::compositionCircle`,

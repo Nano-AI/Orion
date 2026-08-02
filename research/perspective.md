@@ -177,39 +177,94 @@ The **same matrix bytes** the shader is handed are what `mask::toFrame` applies;
 there is no second derivation. It converts normalized frame coordinates into the
 shader's texel convention (`x·W − 0.5`), applies H, and converts back.
 
-Three properties, each exact or explicitly not:
+Four properties, each exact or explicitly not:
 
 | Quantity | Under H |
 |---|---|
 | a mask's **center**, a brush dab, a spot | **exact** — it is a point, and H maps points |
 | a linear gradient's **direction** | **exact** — H takes lines to lines, and the image line's direction is the Jacobian applied to the original direction |
-| a gradient's **ramp length**, a radial mask's **semi-axes** | **first order** — √\|det J\| at the mask's own center |
+| a radial mask's **semi-axes** and **angle** | **exact under the derivative** — the ellipse J makes of the ellipse, in closed form. All of the anisotropy; none of the curvature |
+| a gradient's **ramp length** | **isotropic, first order** — √\|det J\| at the mask's own center |
 
-The last row is an approximation and is stated rather than implied. A projective
-map does not preserve ratios along a line (only cross-ratios), so a linear
-gradient's ramp comes out very slightly non-uniform, and an ellipse comes out as
-a conic that is not quite the ellipse whose axes we sent. √|det J| is the same
-compromise `mask::lengthToFrame` already makes for the crop — the geometric mean
-of the two axis scales — and it is exact wherever the map is locally isotropic,
-which includes the whole frame at k = 0.
+### The ellipse, and what it did and did not fix
 
-**And the cost of that is a measured number, not a hedge.** `maskcheck` compares
-the render against the *overlay's* own transcription of the kernel and demands
-that every cell drawn clear come back bit-identical. On `_PIC8220`, a hard-edged
-radial mask (feather 0.06):
+The third row shipped with decision #100 as √|det J| — **one isotropic number
+standing in for a general 2×2** — and was replaced on 2026-08-01. The
+replacement is thirty lines in `mask::radiusToFrame`:
 
-| Vertical | Mask width, as a fraction of the frame | Clear cells that leak |
-|---|---|---|
-| 0.45 | 0.10, 0.20, **0.28** | none |
-| 0.45 | 0.34 | 2 of 60, worst 0.0105 luma at −2 EV |
-| 1.00 | 0.34 | 2 of 60, worst 0.0617 luma |
-| 0.20 | 0.34 | none |
+- An ellipse with semi-axes (aₓ, a_y) at angle φ is the image of the unit disc
+  under **A = R(φ)·diag(aₓ, a_y)**; its image under J is the image of the unit
+  disc under **B = J·A**.
+- B's semi-axis lengths are its singular values, along its left singular
+  vectors — **Golub & Van Loan, *Matrix Computations*, 4th ed., JHU Press 2013,
+  ISBN 978-1-4214-0794-4, §2.4.1**: the image of the unit sphere under a matrix
+  is a hyperellipse with semiaxes σᵢuᵢ.
+- Both are read off **S = B·Bᵀ**, symmetric positive semi-definite, whose 2×2
+  eigenproblem is closed form — **§8.5.2**, the symmetric Schur decomposition
+  Jacobi's method is built on. λ± = (p+r)/2 ± √(((p−r)/2)² + q²), ψ = ½·atan2(2q, p−r).
 
-Exact up to a mask about a quarter of the frame across at a moderate
-correction, degrading at the **rim** and never at the centre beyond that.
-`repro/perspective-carries-the-mask.txt` sits at 0.28 — the edge of the exact
-range — so it cannot quietly get worse. The fix, and why it was not taken in the
-same session, is [`UNSOURCED.md`](UNSOURCED.md) §24 and `ROADMAP.md`.
+⚠ **Smith's closed form (CACM 1961) is in this repository and was not reused.**
+`SkyDetector.Stats.largestVariance()` is Swift, is the 3×3 case, and returns the
+largest eigenvalue and no eigenvector; this needs both roots and an axis, in
+C++, on the engine side of the facade. Smith's construction *reduces* to the
+quadratic above at n = 2, so what is written is that reduction and not a second
+derivation.
+
+⚠ **This is the image under the map's derivative, which is not the image under
+the map.** What it removes is the whole first-order error — all of the
+anisotropy. What remains is second order: the map's curvature across the mask,
+which no Jacobian at a point can see. The version it replaced was also called
+exact by somebody who had checked the middle of the frame.
+
+**Both halves are measured.** `maskcheck` compares the render against the
+*overlay's* own transcription of the kernel and demands that every cell drawn
+clear come back bit-identical. On `_PIC8220`, hard-edged radial masks (feather
+0.06), `maskcheck 10 -2.0`, measured 2026-08-01 — isotropic → ellipse:
+
+**Aspect, which is diag(1/g, g): exactly linear, so zero curvature.** This is
+where the anisotropy is the whole error.
+
+| Aspect | Mask | Isotropic | Ellipse |
+|---|---|---|---|
+| +1.0 | 0.20 round, centred | 4 of 84, worst **0.1461** | **none** |
+| −1.0 | 0.20 round, centred | 4 of 84, worst 0.1207 | **none** |
+| +0.5 | 0.20 round, centred | 4 of 84, worst 0.0567 | **none** |
+| +1.0 | 0.24 × 0.14 at 0.6 rad | 2 of 80, worst 0.0067 | **none** |
+
+√|det J| for a squeeze is exactly 1, so the old code left a mask **round while
+the picture under it was stretched two to one**. Not an approximation going soft
+at the rim; the shape dropped entirely.
+
+**Vertical keystone, where the curvature dominates at large sizes**, mask
+centred (0.40, 0.45):
+
+| Vertical | Mask | Isotropic | Ellipse |
+|---|---|---|---|
+| 0.45 | 0.34 × 0.22 | none | **none** |
+| 1.00 | 0.34 × 0.22 | none | **none** |
+| 1.00 | 0.34 × 0.28 | 1 of 56, 0.0044 | 1 of 56, 0.0041 |
+| 0.45 | 0.34 × 0.34 | 2 of 48, 0.0214 | 2 of 48, **0.0163** |
+| 1.00 | 0.34 × 0.34 | 4 of 48, 0.1001 | 4 of 48, **0.0862** |
+| 0.45 | 0.30 × 0.34 | 2 of 58, 0.0198 | 2 of 58, **0.0145** |
+| 1.00 | 0.30 × 0.34 | 4 of 58, 0.0989 | 4 of 58, **0.0836** |
+| 0.20 | any of the above | none | **none** |
+
+So the ellipse buys about a fifth of a keystone's rim error and all of a
+squeeze's, which is exactly what "removes the first order, leaves the second"
+predicts. A mask larger than about a third of the frame under a strong keystone
+still disagrees with the overlay at its rim, and that is now a statement about
+the map's curvature rather than about a shortcut.
+
+⚠ **The table printed here before 2026-08-01 was not reproducible.** It recorded
+`0.34 × 0.22` leaking 2 of 60 cells at 0.0105 luma under vertical 0.45; that
+configuration measures **64 clear cells and no leak at all**, on the build that
+fixed this *and on the one before it*, run through this very scenario file. The
+recorded cell count does not match either. The leak is
+driven by the mask's extent along the axis the keystone *stretches*, and the old
+sweep varied the other one. The numbers above are the ones a re-run produces.
+
+`repro/perspective-carries-the-mask.txt` sits at 0.34 now, and its aspect
+section is what fails when the ellipse is reverted.
 
 ## The range is a control choice, not a measurement
 
@@ -237,9 +292,16 @@ magnification of the source, so the ceiling is a picture-quality judgement.
   in the output
 - `mask::toFrame` and `mask::fromFrame` round-trip under a keystone, and a mask
   center follows the picture the geometry node produced
+- `testPerspectiveMaskExtent` — the ellipse. An axis-aligned mask under a full
+  aspect squeeze comes out stretched by g and not by √g; a mask at an angle
+  comes out **turned**; every point of the source rim, mapped, lands on the rim
+  of the ellipse that comes back, over a squeeze, a shear each way and a general
+  2×2; the area is |det J|; and a neutral control returns the crop's answer
+  **to the bit**
 
 `repro/`: `perspective-carries-the-mask.txt` — the control moves the picture, a
-mask stays on its subject with the control up, and both survive a reopen.
+mask stays on its subject with the control up, its extent survives an aspect
+squeeze, and all three fields survive a reopen.
 
 `orion-bench`: a `perspective` control probe with a magnitude floor, per
 decision #37.
