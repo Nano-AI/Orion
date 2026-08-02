@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**M3's last item renamed and solved; the brush bench was measuring itself — #96, #97, #98**)
+**Last updated:** 2026-08-01 (**the highlight fill is wired — 173 nodes, 7186 MiB, off by default; the pyramid runs at 1/4 and the ~516 MB estimate was 16× out — #102, #103**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#96, #97). **`research/masking.md` is
@@ -332,6 +332,106 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01m — the highlight fill wired, and the estimate that stopped it
+
+**Story:** pieces 2 and 3 of `research/highlight-reconstruction.md` — the
+clipping mask and the node chain. Decisions **#102** and **#103**.
+
+**149 → 173 nodes, 6971 → 7186 MiB.** Off at `highlightRecovery = 0`, the
+default. Piece 1's solver is now reachable from the product.
+
+### ⚠ The memory number was the decision, so it was measured before it was spent
+
+ROADMAP costed piece 3 at **+25 nodes and ~516 MB** at full resolution, and that
+number was why this was a three-session item. `ρ` solves `∇²ρ = 0` — it is
+harmonic, it has no detail to lose, and the only place it moves quickly is the
+rim, which the apply pass reads at full resolution anyway. So the factor was
+swept against the same Gauss-Seidel reference the solver is judged by, **before a
+node was written**:
+
+| Solved at | 1/1 | 1/2 | **1/4** | 1/8 | 1/16 |
+|---|---|---|---|---|---|
+| Deviation, % of rim span | 6.1 | 6.3 | **6.9** | 8.7 | 12.6 |
+
+A quarter costs 0.8 points on top of an approximation already worth 6.1, for a
+sixteenth of the memory. Both ends are pinned by a check, so the factor is a
+measured choice and not a free one.
+
+⚠ **Subsampling does not save nodes**, and the estimate's node number was right
+for the wrong reason. The level count is logarithmic in the frame: a quarter
+removes two levels and nothing else. 24 nodes where the estimate said 25.
+
+⚠ **And the pyramid was never the cost.** Of the +215 MiB, the pyramid is
+**30 MiB**; the other **185 MiB is the apply node** — one full-resolution
+`RGBA16Float` pass that no factor subsamples away. Decision #96 measured the same
+194 MB for the creative vignette and *fused it into the grade* rather than pay
+it. There is nothing to fuse into here: the fill must land after `highlights` and
+before the denoise.
+
+### What it does, and what it deliberately does not
+
+The mask is **`Ω^∩`**, not the `Ω^∪` §3.2 nominally solves over. The union's
+partial case already has a node — `highlights.slang` is Masood et al.'s
+cross-channel fit, recovering a clipped channel per pixel from real evidence —
+and replacing that with a smooth interpolant is strictly worse. `Ω^∩` is the set
+nothing addresses, and under #29 it is where `count == 3` is a literal identity.
+
+Reading `highlights`' output rather than the demosaic is what makes the two one
+feature: the window fit recovers the annulus, the fill carries *that* annulus
+across the core.
+
+It leaves a **plateau** — no Mach band, since `ρ|∂Ω = f|∂Ω` makes the join
+continuous, but a blown lamp comes back with its rim's color and none of its
+falloff. That is §3.4 and it is piece 5, now the visible gap.
+
+### The mutations, including the two that found a check that could not fail
+
+⚠ **`filling = true` — the chain never switching off — passed the bench.** The
+check was written on the exposure drag, and the fill is *upstream* of exposure:
+once it has run it stays cached, and a tick never touches it either way. A chain
+running on every photograph opened, forever, for nothing, printed `3 of 173
+nodes` and `ok`. Moved to the full render after the control goes to zero.
+
+⚠ **Dropping the mask's shoulder rule passed every check**, at 0.0687 against a
+bound of 0.25. A rule with a citation and no failing check is decoration; the
+wiring test gained the tighter one it fails (0.0528 clean, bound 0.06).
+
+| Mutation | Effect |
+|---|---|
+| Re-push the pyramid's params per tick | 23 fill nodes on an exposure tick — #92's shape exactly |
+| Apply the fill outside `Ω^∩` | "an unclipped pixel is returned untouched" fails, delta 0.082 |
+| Hand the apply the picture's size as the fill grid's | **No effect** — premultiplication makes even the out-of-bounds read harmless, since `rgb` and `a` attenuate together. Recorded, not patched |
+
+### The #29 argument, made on the day the node landed
+
+Decision **#103**. #29's magenta was the white-balance gains: the same magenta on
+every blown pixel of every frame, supported by nothing in the picture. `ρ` is the
+harmonic interpolant of the region's own rim and by the maximum principle cannot
+leave that rim's range, so **a neutral rim still gives a neutral core** — #29's
+outcome, reached by evidence rather than by decree. #29 itself is untouched: the
+clip still happens, still pre-demosaic, still before RCD interpolates across it.
+The headroom stays gone and is not recoverable, which is the trade #29's own row
+already named.
+
+### Gates
+
+`orion-tests` **700 checks, 0 failures** (was 692). `orion-viewport-tests`
+**3620, 0**. All **38** `repro/*.txt` exit 0. `orion-bench` exit 0, M0 gate PASS.
+
+⚠ **The M0 number is advisory and the spread says why**: five runs of the *same*
+binary, minutes apart on a quiet machine, gave p95 **8.88 / 8.97 / 9.13 / 9.16 /
+10.94 ms** — and the unchanged binary before this session's first line gave
+10.69. The chain is invisible in that noise either way, which is exactly why all
+four new invariants count **named nodes** and none of them counts milliseconds.
+
+### ⚠ Found in passing: there are two decisions numbered 96
+
+The highlight-reconstruction method and the creative vignette, landed the same
+day from different sessions. Twelve files cite "#96" and every one means the
+vignette. Noted at the top of `DECISIONS.md` and **not** renumbered — a renumber
+that misses one reference is worse than a duplicate everybody can see. It wants a
+session of its own.
 
 ## Session 2026-08-01k — M3's last item was misnamed, and the name was the blocker
 
