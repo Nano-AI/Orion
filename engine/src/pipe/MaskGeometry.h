@@ -283,6 +283,14 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
     return length * std::sqrt(std::max(c.w, 1e-6f) * std::max(c.h, 1e-6f));
 }
 
+/// What `radiusToFrame` answers with: an ellipse in the frame, and how far its
+/// axis has turned away from `Placement::angle`.
+struct Extent {
+    float semiX = 0.0f;       ///< the frame ellipse's semi-axis along its angle
+    float semiY = 0.0f;       ///< and the one across it
+    float angleDelta = 0.0f;  ///< add to `Placement::angle`
+};
+
 /// Radial semi-axes, scaled by the crop the same way a gradient's length is.
 ///
 /// ⚠️ **The quarter turns do not enter here, and getting that wrong is what put
@@ -360,12 +368,6 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
 /// function (they are already in `Placement::angle`, decision #83), and it is
 /// **exactly zero** at a neutral control, so a photograph with the perspective
 /// slider at rest renders bit-for-bit as it did before any of this existed.
-struct Extent {
-    float semiX = 0.0f;       ///< the frame ellipse's semi-axis along its angle
-    float semiY = 0.0f;       ///< and the one across it
-    float angleDelta = 0.0f;  ///< add to `Placement::angle`
-};
-
 [[nodiscard]] inline Extent radiusToFrame(float rx, float ry, const Crop& c,
                                           const persp::Jacobian& j,
                                           float angle) noexcept {

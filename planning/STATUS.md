@@ -426,9 +426,18 @@ comments; they are there for a *future* rewrite, not for this one.
 
 `orion-tests` **702 checks, 0 failures**. `orion-viewport-tests` **3,620, 0**.
 **All 38 `repro/*.txt` exit 0.** `orion-bench` on `_PIC8220` exit 0, M0 gate
-**PASS** at p95 **8.87** and **8.96 ms** over two runs (advisory; the spread
-here was 0.09 ms, which is unusually quiet), **149 nodes** unchanged, and the
-`perspective 0.6` probe still **1 node** at 2.01 / 2.10 ms.
+**PASS** at p95 8.87 ms, **149 nodes** unchanged, and the `perspective 0.6`
+probe still **1 node**.
+
+⚠ **The M0 gate is noise on this machine, and the number to trust is the node
+count.** Eight runs of the *same unchanged binary* gave p95 **8.87, 8.92, 8.96,
+8.97, 9.25, 9.95, 20.74, 21.76, 31.45 ms** — three of them failing a 16 ms gate
+and the rest passing it by half. An intended A/B against the pre-fix binary was
+attempted and its `git checkout` silently no-opped on a quoting bug, so all six
+of its runs were the same build; that accident is where the spread above comes
+from, and it is a better measurement than the A/B would have been. The change
+is host-side float arithmetic in mask parameter assembly — a few dozen flops per
+mask component per `apply`, none when no mask exists — and adds no node.
 
 ### What is still open, and it is named rather than implied
 
