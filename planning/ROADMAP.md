@@ -368,6 +368,42 @@ the count of passes is still quadratic in the stroke.
 the frame, no reject fires, and the cost returns to the old one. This is the fix
 for that case, and it is the only one.
 
+### ✅ Confirmed by measurement 2026-08-01 — and the two rule-outs were both wrong
+
+The paragraph above was the prediction. It is now the finding, and both standing
+rule-outs against it have been withdrawn.
+
+What the kernel pays is `Σ over blocks of (pixels in that block's box) × 64`.
+Appending grows the block count and leaves the box sizes alone, so it is linear.
+`orion-bench` grew the dab count by *subdividing a stroke of fixed extent*, which
+grows the block count and shrinks every box in exact proportion — a constant, for
+any block size, any nib, any frame. **The flat 29.00 → 21.96 ms that ruled out
+the mask kernel was the fixture, not the kernel.** The bench now runs both
+shapes; `research/brush-acceleration.md` carries the argument and the table.
+
+| Stroke shape | `mask:0`, full graph | `mask:0`, preview graph |
+|---|---|---|
+| refined, 60 → 960 dabs (the old fixture) | 24.16 → 19.35 ms | 1.54 → 1.31 ms |
+| appended, 49 → 294 dabs (what `paint` lays) | 2.65 → **34.88 ms** | 0.17 → **2.23 ms** |
+
+- **Not resolution.** Both graphs have the same slope; the preview is 1/16 the
+  pixels and 1/16 the milliseconds. The quarter-linear graph is not special.
+- **Not the host.** At either stroke length `setBrushStroke` ×2 costs 0.001 ms
+  and `apply` ×2 costs 0.057 ms — flat, and three orders below the render.
+  `orion_engine_set_brush_stroke` uploading the whole dab list per event is
+  measured and is not the cost.
+- **Not anything else going dirty.** Four nodes run per event at both lengths —
+  `mask:0`, `develop:linear`, `develop:display`, `geometry` — and only `mask:0`
+  moves. The other three are 0.60 ms of preview render at any stroke length.
+
+⚠ **And a second case defeats the boxes, not only the scribble.** 64 dabs is
+longer than most strokes, so a block straddles a pen-up and its box spans the
+gap between two strokes. Holding the dab count, the block count and the painted
+area identical and only moving six strokes apart: **0.4 / 0.6 / 0.8 / 0.9 ms** an
+event for gaps of 0 / 0.02 / 0.10 / 0.15 frame heights. Padding strokes out to a
+block boundary would recover that constant factor; it does not touch the slope,
+so it waits for this story rather than pre-empting it.
+
 ### The shape
 
 Keep a persistent accumulator per brush component. On an append, the kernel
@@ -399,6 +435,62 @@ a different prefix can see it.
 
 That is a session with its own tests, not an addition to one that has already
 landed.
+
+### The decomposition — two sessions, in this order
+
+Written 2026-08-01 alongside the measurement above, so that the next session
+starts from a plan rather than from the investigation again. **Session one ships
+nothing user-visible and that is deliberate:** the predicate is the whole risk,
+so it gets built and attacked before anything depends on being able to trust it.
+
+**Session one — the predicate, alone, with no accumulator behind it.**
+
+| Piece | Where | Note |
+|---|---|---|
+| Keep the previous upload's post-transform texels per component | `DevelopPipeline`, beside `brushDabs_` | 256 KB a component, already the size of the buffer `apply` builds and throws away every event |
+| `int unchangedPrefix(component, const float* texels, int count)` | new, next to `buildDabBounds` in `ShaderParams.h` | returns how many leading texels are bit-identical to the stored ones, `0` if the geometry, the nib or the kind moved |
+| Tests that a *plausible* stroke is caught | `orion-tests` | see the mutations below |
+
+⚠ The predicate compares the **post-transform** texels — the floats actually
+uploaded — not the displayed-coordinate dabs. A crop, a straighten or a quarter
+turn moves every centre through `mask::toFrame`, and a predicate reading the
+pre-transform list would call that prefix unchanged. `buildDabBounds` already
+takes the uploaded texels for exactly this reason.
+
+**Named mutations, because a predicate that always returns 0 is correct and
+useless, and one that always returns `count` is fast and wrong:**
+
+| Mutation | Must fail |
+|---|---|
+| `unchangedPrefix` returns `count` whenever `count` grew | *undo three dabs, paint three different ones* — same count, different prefix, stale coverage, plausible picture |
+| `unchangedPrefix` ignores `brushErase` | paint then erase over the same spot: source-over and destination-out do not commute |
+| `unchangedPrefix` compares pre-transform dabs | rotate the frame mid-stroke; every centre moves and the prefix must go to 0 |
+| `unchangedPrefix` returns 0 always | a *speed* check, not a correctness one — the accumulator must be measurably used, or session two is a no-op that passes everything |
+
+That last row is the one this repository keeps learning: the fast path has to be
+asserted to have been *taken*. `dehaze-reaches-the-picture.txt` and the bench's
+`dehaze drag` node-count invariant are the pattern — count named nodes, not
+milliseconds.
+
+**Session two — the accumulator, behind the predicate.**
+
+| Piece | Where |
+|---|---|
+| Persistent R32F texture per brush component, lazily allocated | `DevelopPipeline` ctor / `addAuxTexture` |
+| `firstDab` into `MaskComponent`'s spare `_pad3` slot | `ShaderParams.h`, no size change, static-assert the offset |
+| Kind 3 starts from the accumulator when `firstDab > 0`, writes it back | `mask_component.slang`, ~25 lines, one branch |
+| Fall back to a full evaluation when the predicate says the prefix moved | `DevelopPipeline::apply` |
+
+⚠ **The bit-identity invariant is the acceptance test, and it already exists.**
+A stroke rendered incrementally must equal the same stroke rendered whole, texel
+for texel — that is what #80's test asserts and what R32F is for. Add the
+incremental path to that comparison rather than writing a second one.
+
+⚠ **Budget check before starting session two:** ~97 MB a component at 24 Mpx, on
+top of 6878 MiB of intermediates, and the grain node's +194 MB has already
+landed. Four brush components is ~388 MB. Lazily allocated on first brush dab,
+released when a component stops being kind 3 — otherwise a group of four
+gradients pays for four accumulators nothing reads.
 
 ## Film grain — ✅ shipped 2026-08-01
 

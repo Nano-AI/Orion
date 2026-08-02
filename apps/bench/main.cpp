@@ -5,6 +5,7 @@
  *  can look at is only half the evidence.
  */
 
+#include "Engine.h"   // kPreviewScale — the brush section builds the preview graph
 #include "gpu/MetalDevice.h"
 #include "gpu/Resources.h"
 #include "pipe/AutoEnhance.h"
@@ -19,6 +20,7 @@
 #include <cstdio>
 #include <exception>
 #include <iterator>
+#include <memory>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -1320,21 +1322,72 @@ int main(int argc, char** argv) {
 
             // ── Where a brush stroke actually goes ────────────────────────
             //
-            // ⚠ This exists because the host side has been eliminated as the
+            // ⚠ This exists because the host side had been eliminated as the
             // cause and the slope did not move. Painting costs 0.2 ms an event
             // at 49 dabs and 1.5 at 490 — linear, forever — and on 2026-08-01
-            // every host-side O(N) in that path was removed (the per-event
-            // re-flatten, the `DevelopState` copy, the autosave compare) with
-            // **no change to the slope**. So it is the GPU, and this says which
-            // node.
+            // every host-side O(N) *in the Swift layer* was removed (the
+            // per-event re-flatten, the `DevelopState` copy, the autosave
+            // compare) with no change to the slope.
             //
             // Profiled at two stroke lengths on purpose: a single length gives
             // a ranking, and a ranking cannot tell a node that is merely
             // expensive from one that is expensive *in the number of dabs*.
-            // Only the second is worth attacking, and only the second is what
-            // ROADMAP's incremental accumulation would fix.
+            //
+            // ⚠ **Two stroke shapes, and the difference between them is the
+            // finding.** The first version of this section grew the dab count by
+            // *subdividing a stroke of fixed extent* — the same sine wave, more
+            // samples along it. Under that shape decision #80's boxes are
+            // perfect: sixteen times the dabs is sixteen times the blocks, each
+            // box a sixteenth the size, and the product — which is what the
+            // kernel actually pays — does not move. It measured flat, and flat
+            // was read as "the mask kernel is not the cost".
+            //
+            // No hand makes that stroke. Painting *appends*: the dab spacing is
+            // fixed by the nib, so more dabs is a longer path over more of the
+            // picture, and each new block of 64 arrives with a box the same size
+            // as the last one. The block count grows and the boxes do not
+            // shrink, so the product is linear — which is the slope.
+            //
+            // `refined` is the old shape, kept because it is the evidence that
+            // #80 works. `appended` is what repeated `paint` verbs lay into one
+            // component — 49 dabs a line, one line per stroke — which is the
+            // scenario that reports 0.2 ms an event at 49 dabs rising to 0.7 at
+            // 294. A component accumulates every stroke ever laid on it, so
+            // more than one stroke is the ordinary case and not a contrived one.
+            //
+            // ⚠ And on both graphs, with the host cost beside the GPU one. The
+            // paint the app measures runs on the *preview* graph, and a GPU node
+            // timer cannot see a host loop at all.
             {
-                const auto profileStroke = [&](const char* label, int dabs) {
+                // Fixed extent, more samples along it. Boxes shrink with the
+                // block count; this is the shape that measures flat.
+                const auto refinedStroke = [](int dabs) {
+                    std::vector<float> xy;
+                    xy.reserve(std::size_t(dabs) * 2);
+                    for (int i = 0; i < dabs; ++i) {
+                        const float t = float(i) / float(std::max(dabs - 1, 1));
+                        xy.push_back(0.05f + 0.90f * t);
+                        xy.push_back(0.50f + 0.25f * std::sin(t * 6.283f * 3.0f));
+                    }
+                    return xy;
+                };
+
+                /// `lines` strokes across the frame, 49 dabs each, one every
+                /// tenth of the height — what the `paint` verb lays.
+                constexpr int kDabsPerLine = 49;
+                const auto appendedStroke = [](int lines) {
+                    std::vector<float> xy;
+                    xy.reserve(std::size_t(lines) * kDabsPerLine * 2);
+                    for (int l = 0; l < lines; ++l) {
+                        for (int i = 0; i < kDabsPerLine; ++i) {
+                            const float t = float(i) / float(kDabsPerLine - 1);
+                            xy.push_back(0.02f + 0.96f * t);
+                            xy.push_back(0.05f + 0.10f * float(l));
+                        }
+                    }
+                    return xy;
+                };
+                const auto brushAdjustments = [&](int revision) {
                     orion::pipe::Adjustments base;
                     base.wb = develop.asShotWhiteBalance();
                     auto& c = base.maskComponents[0];
@@ -1342,38 +1395,48 @@ int main(int argc, char** argv) {
                     c.brushRadius = 0.02f;
                     c.brushFlow = 1.0f;
                     c.brushHardness = 0.7f;
-                    c.brushRevision = 1;
+                    c.brushRevision = revision;
                     base.maskCount = 1;
                     base.layers[0].exposureEv = 2.0f;
+                    return base;
+                };
 
-                    // A stroke that crosses the frame and doubles back, so the
-                    // bounding boxes of decision #80 overlap rather than tiling
-                    // neatly — the shape a hand actually makes.
-                    std::vector<float> xy;
-                    std::vector<float> erase(std::size_t(dabs), 0.0f);
-                    xy.reserve(std::size_t(dabs) * 2);
-                    for (int i = 0; i < dabs; ++i) {
-                        const float t = float(i) / float(std::max(dabs - 1, 1));
-                        xy.push_back(0.05f + 0.90f * t);
-                        xy.push_back(0.50f + 0.25f * std::sin(t * 6.283f * 3.0f));
-                    }
-                    develop.setBrushStroke(0, xy.data(), erase.data(), dabs);
-                    develop.apply(base);
-                    develop.render();
+                // The preview graph, built exactly as `Engine::openRaw` builds
+                // it — same decimation, same grid step. Allowed to fail for the
+                // same reason the engine's is: a machine short of room can still
+                // report the full graph's numbers.
+                std::unique_ptr<orion::pipe::DevelopPipeline> preview;
+                try {
+                    preview = std::make_unique<orion::pipe::DevelopPipeline>(
+                        *device, ORION_SHADER_DIR,
+                        orion::raw::decimate(img, orion::Engine::kPreviewScale));
+                    preview->setGridStep(float(orion::Engine::kPreviewScale));
+                } catch (const std::exception&) {
+                    preview.reset();
+                }
+
+                const auto profileStroke = [&](orion::pipe::DevelopPipeline& d,
+                                               const char* label,
+                                               const std::vector<float>& xy) {
+                    const int dabs = int(xy.size() / 2);
+                    const auto base = brushAdjustments(1);
+                    const std::vector<float> erase(std::size_t(dabs), 0.0f);
+
+                    d.setBrushStroke(0, xy.data(), erase.data(), dabs);
+                    d.apply(base);
+                    d.render();
 
                     // Move the revision so the component is re-evaluated, which
                     // is what a dab being appended does.
-                    auto moved = base;
-                    moved.maskComponents[0].brushRevision = 2;
-                    develop.apply(moved);
+                    d.apply(brushAdjustments(2));
 
-                    develop.graph().setProfiling(true);
-                    develop.render();
-                    develop.graph().setProfiling(false);
+                    d.graph().setProfiling(true);
+                    d.render();
+                    d.graph().setProfiling(false);
 
                     std::vector<std::pair<double, std::string>> ran;
                     double sum = 0.0;
-                    for (const auto& t : develop.graph().lastRun()) {
+                    for (const auto& t : d.graph().lastRun()) {
                         if (!t.executed) continue;
                         ran.emplace_back(t.ms, t.name);
                         sum += t.ms;
@@ -1388,8 +1451,83 @@ int main(int argc, char** argv) {
                                     ran[i].first, 100.0 * ran[i].first / std::max(sum, 1e-9));
                     }
                 };
-                profileStroke("Brush", 60);
-                profileStroke("Brush", 960);
+                // Refined: the boxes shrink with the block count, so this pair
+                // is flat — decision #80 doing its job.
+                profileStroke(develop,  "Brush refined, full graph",  refinedStroke(60));
+                profileStroke(develop,  "Brush refined, full graph",  refinedStroke(960));
+                // Appended: the boxes keep their size, so this pair is not.
+                profileStroke(develop,  "Brush appended, full graph", appendedStroke(1));
+                profileStroke(develop,  "Brush appended, full graph", appendedStroke(6));
+                if (preview) {
+                    profileStroke(*preview, "Brush refined, preview graph",
+                                  refinedStroke(60));
+                    profileStroke(*preview, "Brush refined, preview graph",
+                                  refinedStroke(960));
+                    profileStroke(*preview, "Brush appended, preview graph",
+                                  appendedStroke(1));
+                    profileStroke(*preview, "Brush appended, preview graph",
+                                  appendedStroke(6));
+                }
+
+                // ── One appended dab, host and GPU, side by side ───────────
+                //
+                // What `MaskOverlay` does on a pointer event: hand both
+                // pipelines the whole stroke again, `apply` both, render the
+                // preview. Timed as three columns so a slope can be attributed
+                // rather than guessed at.
+                //
+                // ⚠ Interleaved between the two stroke lengths, not run in two
+                // blocks. This machine's GPU swings better than three to one on
+                // an identical binary under load, so two blocks minutes apart
+                // compare the load average and not the code.
+                if (preview) {
+                    constexpr int kReps = 24;
+                    std::vector<double> setMs[2], applyMs[2], renderMs[2];
+                    std::vector<float> xy[2], erase[2];
+                    int lengths[2] = {0, 0};
+                    // The `paint` verb's own stroke lengths, one line and six,
+                    // so this table and the scenario report the same case.
+                    for (int k = 0; k < 2; ++k) {
+                        xy[k] = appendedStroke(k == 0 ? 1 : 6);
+                        lengths[k] = int(xy[k].size() / 2);
+                        erase[k].assign(std::size_t(lengths[k]), 0.0f);
+                    }
+
+                    int revision = 8;
+                    for (int rep = 0; rep < kReps; ++rep) {
+                        for (int k = 0; k < 2; ++k) {
+                            const auto adjs = brushAdjustments(++revision);
+
+                            const auto tSet = Clock::now();
+                            develop.setBrushStroke(0, xy[k].data(), erase[k].data(),
+                                                   lengths[k]);
+                            preview->setBrushStroke(0, xy[k].data(), erase[k].data(),
+                                                    lengths[k]);
+                            setMs[k].push_back(msSince(tSet));
+
+                            const auto tApply = Clock::now();
+                            develop.apply(adjs);
+                            preview->apply(adjs);
+                            applyMs[k].push_back(msSince(tApply));
+
+                            renderMs[k].push_back(preview->render());
+                        }
+                    }
+
+                    std::printf("\nOne pointer event of paint, host and GPU\n");
+                    std::printf("  %-6s %-22s %-22s %s\n", "dabs",
+                                "setBrushStroke x2", "apply x2 (host)",
+                                "preview render (GPU)");
+                    for (int k = 0; k < 2; ++k) {
+                        const Stats st = summarise(setMs[k]);
+                        const Stats ap = summarise(applyMs[k]);
+                        const Stats re = summarise(renderMs[k]);
+                        std::printf("  %-6d %6.3f ms (p95 %5.3f)  %6.3f ms (p95 %5.3f)  "
+                                    "%6.2f ms (p95 %5.2f)\n",
+                                    lengths[k], st.median, st.p95, ap.median, ap.p95,
+                                    re.median, re.p95);
+                    }
+                }
 
                 // Put the graph back: the sections after this expect no mask.
                 orion::pipe::Adjustments clear;

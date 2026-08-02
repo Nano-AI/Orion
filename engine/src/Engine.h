@@ -25,6 +25,19 @@ public:
         return device_->info();
     }
 
+    /// How much smaller the preview mosaic is, per axis.
+    ///
+    /// Four, because the target is a filter that costs 116 ms coming back
+    /// inside a 16 ms frame and four is the first power of two that manages it
+    /// — sixteen times fewer pixels. Two would only be four times, which leaves
+    /// dehaze at 29 ms. Its cost is one more set of intermediates at 1/16 the
+    /// size: about 400 MiB against the full graph's 6.4 GiB.
+    ///
+    /// ⚠ Public because `orion-bench` builds the preview graph itself to profile
+    /// it, and a second copy of this number in the bench would be a bench that
+    /// silently stopped measuring the graph the app runs.
+    static constexpr int kPreviewScale = 4;
+
     void openRaw(const std::string& path);
     void setAdjustments(const pipe::Adjustments&);
     double render();
@@ -129,15 +142,6 @@ public:
     [[nodiscard]] const char* lastError() const noexcept { return lastError_.c_str(); }
 
 private:
-    /// How much smaller the preview mosaic is, per axis.
-    ///
-    /// Four, because the target is a filter that costs 116 ms coming back
-    /// inside a 16 ms frame and four is the first power of two that manages it
-    /// — sixteen times fewer pixels. Two would only be four times, which leaves
-    /// dehaze at 29 ms. Its cost is one more set of intermediates at 1/16 the
-    /// size: about 400 MiB against the full graph's 6.4 GiB.
-    static constexpr int kPreviewScale = 4;
-
     std::unique_ptr<gpu::Device>           device_;
     std::unique_ptr<pipe::DevelopPipeline> develop_;
     std::unique_ptr<pipe::DevelopPipeline> preview_;

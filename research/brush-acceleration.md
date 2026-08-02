@@ -148,3 +148,69 @@ texture per brush component (~97 MB at 24 Mpx) and a host predicate deciding whe
 the prefix is unchanged. Its failure mode is a stale accumulator producing a
 completely plausible brushstroke, so it is costed in the roadmap rather than
 bolted on here.
+
+## ⚠ The cost is box *area*, not dab count — and one fixture hid that
+
+Added 2026-08-01, after a measurement that appeared to contradict this file.
+
+`orion-bench`'s brush probe reported `mask:0` at **29.00 ms for 60 dabs and
+21.96 ms for 960** and that was read as "sixteen times the dabs, no more
+expensive — the rejection works, so the mask kernel is not what makes painting
+linear". It is the wrong conclusion, and the fault is the fixture.
+
+What the kernel pays is not the dab count. It is
+
+    Σ over blocks of  (pixels inside that block's box) × 64 dab fetches
+
+and the probe grew the dab count by **subdividing a stroke of fixed extent** —
+the same sine wave, sampled sixteen times as finely. That multiplies the block
+count by sixteen and divides each box's area by sixteen. The product is
+invariant, so the probe measured a constant and would have measured one for any
+block size, any nib and any frame.
+
+No hand makes that stroke. Dab spacing is fixed by the nib, so **appending is the
+only way a stroke grows**: more dabs is a longer path over more of the picture,
+and each new block of 64 arrives with a box the same size as the last. The block
+count grows, the boxes do not shrink, and the product is linear.
+
+Measured on `_PIC8220.ARW` with both shapes in one process, interleaved
+(`apps/bench/main.cpp`, "Brush refined" against "Brush appended"):
+
+| Stroke shape | `mask:0`, full graph | `mask:0`, preview graph |
+|---|---|---|
+| refined, 60 → 960 dabs (fixed extent) | 24.16 → 19.35 ms | 1.54 → 1.31 ms |
+| appended, 49 → 294 dabs (49 a line, 6 lines) | 2.65 → **34.88 ms** | 0.17 → **2.23 ms** |
+
+Six times the dabs is thirteen times the cost, on **both** graphs. Resolution has
+nothing to do with it: the preview is 1/16 the pixels and 1/16 the milliseconds,
+with the same slope. The host side is flat and negligible beside it —
+`setBrushStroke` ×2 is 0.001 ms and `apply` ×2 is 0.057 ms at either length.
+
+### The third term the "why 64" trade did not have
+
+`64` was chosen against the bounds-walk floor and against a box going slack on a
+curving run. There is a third term, and it only appears once a component holds
+**more than one stroke**: 64 dabs is more than one stroke, so a block straddles a
+pen-up and its box spans the **empty gap between two strokes**.
+
+Six strokes across the frame, 49 dabs each, moved apart while the dab count, the
+block count and the painted area are all held identical — the block boxes are the
+only thing that changes:
+
+| Gap between strokes | ms per pointer event at 294 dabs |
+|---|---|
+| 0 (all six retraced on one line) | 0.4 |
+| 0.02 frame heights | 0.6 |
+| 0.10 | 0.8 |
+| 0.15 | 0.9 |
+
+Monotone in the gap, and the ratios track the box height `(gap·H + 2r) / 2r`
+within the resolution of the timer. So the frame-filling scribble above is not
+the only case that defeats the boxes: **two strokes far apart in one component do
+too, for 64 dabs either side of the boundary.**
+
+This is recorded rather than acted on. Padding each stroke out to a block
+boundary would tighten the boxes, but it spends up to 63 of the 16,384 dab slots
+per stroke, needs a third meaning for the dab's `z` channel, and buys a constant
+factor on a cost that is still linear. Not re-evaluating the stroke at all is the
+fix, and it is the roadmap's.

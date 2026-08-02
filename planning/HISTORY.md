@@ -21,6 +21,175 @@ Sessions `2026-07-31a` through `2026-07-31f` were moved here on 2026-07-31,
 in the same breath as the STATUS update that pushed the count past six.
 They are newer than everything below them.Sessions `2026-07-31i` and `2026-07-31j` were moved here on 2026-08-01, when the folder-index session pushed the count past six. They are newer than everything below them.
 
+## Session 2026-07-31l — the grain node ran when it was off, and the cursor was an oval
+
+Two things reported live, one afternoon apart: **"it starts to get slow when I
+adjust it"** and **"the circle is an OVAL"**. Both were real, both had a cause in
+the tree, and neither was a hard problem once measured. Grain pieces 1, 3, 4 and
+most of 7 landed along the way.
+
+### ⚠ The slowdown was the grain node, running at Amount 0
+
+`orion-bench` said so on the first run of the session — **exit 1**, M0 gate
+**17.03 ms** against a 16 ms limit, and the exposure drag up from 3 nodes to 4.
+
+The in-flight grain work had followed #81's costing literally: `develop:display`
+to `RGBA16Float` unconditionally, and a new node after it. So every frame of
+every drag paid a full-resolution pointwise pass *and* a doubled write on the
+node feeding it, to multiply noise by zero.
+
+Every other expensive thing in this graph disables to nothing when it is off.
+The only reason grain looked different is that it is also the node that
+**quantises** — so `retargetOutputChain` moves the two facts together, in one
+place, and #82 has the table. The +194 MB is paid only while the slider is up;
+the resting cost is the idle node's own **93 MB** (6878 → 6971 MiB).
+
+| Exposure drag, `_PIC8220` | nodes | p95 |
+|---|---|---|
+| before grain | 3 | 13.63 ms |
+| grain as first built | 4 | 17.03 ms — **gate FAIL** |
+| after `retargetOutputChain` | 3 | 13.68 ms |
+
+### ⚠ Then the fix looked like it had done nothing, and that was a second bug
+
+The gate passed and the bench immediately reported the grain control as
+**NO EFFECT**. `retargetOutputChain` pushed its parameters from `lastAdj_` —
+which inside `apply` still holds the *previous* frame's values — so it switched
+the node on and handed it Amount 0. The kernel ran and took its early exit.
+
+Every test was green. Only the bench's control probe saw it, and only because it
+measures the picture rather than the graph.
+
+⚠ **And the probe had a floor of `0.0`**, which is not a floor: `0.0` is exactly
+what it reads when the node was never dispatched. It is 0.06 of the exposure
+reference now — measured at 0.127, 0.123 and 0.125 on the three sample frames,
+which agree to a percent because grain's amplitude comes from the slider and not
+from the scene.
+
+### `testGrainWiring`, and one draft of it that was wrong
+
+`testGrainGpu` dispatches the kernel with parameters it sets itself, so it can
+never see the wiring — the same split that let dehaze be deleted with every
+instrument green. The new test drives `DevelopPipeline` on a 64×64 synthetic and
+asserts what actually broke: the node does not run at 0, it does run at 0.04 and
+moves most of the frame, 0 is bit-identical to never having touched it, and an
+exposure tick costs the same as before grain existed.
+
+⚠ **The first draft compared 2 nodes against 12** and failed, correctly: it put a
+warm render next to the cold first one. A drag is warm by definition.
+
+⚠ **The fixture is a ramp, not a flat patch**, and the reason is the dither
+check: on one flat value, whether a sub-LSB offset changes the rounded byte
+depends on where that value happens to sit between two levels, so "dithered" and
+"not dithered" can produce the same bytes. A ramp crosses every boundary.
+
+**Mutations:** the node left enabled → 3 failures. The `lastAdj_` push → 2. The
+dither flag dropped → 1.
+
+⚠ **Two mutations survive and are written down rather than left green.** Leaving
+`develop:display` on float with the node disabled passes everything — correctly,
+because the offset is added in the shader whatever that node's own format is. It
+costs 194 MB and a doubled write, which is a *latency* claim and the bench's job.
+And dithering in both nodes at once with the slider up doubles the offset; real,
+and not covered here.
+
+### The oval was the brush cursor, and it was 1.497× wide
+
+`CanvasLayout.brushCursor` built a circle in **normalized** coordinates and
+mapped it out, so on a 3:2 frame it drew exactly the frame's aspect wider than
+tall. The paint underneath is round: decision #62 folded `mask_brush.slang` into
+`mask_component.slang` and moved the dab into frame pixels so the Size slider
+would stop stretching it. The outline was left behind.
+
+⚠ **What kept it alive is the interesting part.** The only thing tying the cursor
+to the kernel was a *comment*, and the comment named `mask_brush.slang` — a file
+that no longer exists. Nothing compiled against it, nothing tested it, and it
+read as a considered decision rather than a leftover. Both copies of that comment
+are corrected and `testBrushCursorIsRound` pins the shape *and* the radius
+against `nibPx`; reverting it fails 8 checks.
+
+⚠ **The radial mask is still an ellipse in normalized coordinates**, deliberately
+and for now. Its semi-axes are per-axis and photographer-set, so unlike the nib
+its shape is something you choose — and changing the convention changes what
+`radius[1]` means in every sidecar already written. #83 records it as open rather
+than as settled.
+
+### ⚠ The M0 gate is not readable on a busy machine, and I nearly misattributed it
+
+The final bench run failed at **49.49 ms** with no engine change since a run that
+passed at 8.97. Three runs of the *same binary*: 16.75, 44.53, 40.69. Three runs
+of **HEAD**, stashed and rebuilt under the same load: 16.99, 44.75, 37.81.
+
+Identical distributions, so it is the machine — `WindowServer` was at 38% — and
+not the change. Recorded because the honest comparison is the paired one: HEAD
+and the fixed tree, back to back, which is 13.63 against 13.68. A single absolute
+p95 from this bench means nothing unless it is paired with one taken minutes
+either side of it.
+
+### Still to do
+
+Grain pieces 5 and 6 — the value through `orion.h`, `CApi`, Swift, the
+catalogue, two sliders and the sidecar, about 20 files — and a `repro/` scenario
+for the wiring.
+
+⚠ **`grain.slang` is in `engine/shaders/CMakeLists.txt` and builds, but the whole
+of this session is still uncommitted** at the time of writing. Session `31k` is
+the standing argument for why that matters: a binary and a shader that disagree
+produce nothing and say nothing.
+
+## Session 2026-07-31k — every mask covered zero, and no test could see it
+
+**Reported live**: "none of the masks are working" — brush, range, all of them.
+Fixed by quitting the app. The interesting part is why that was the fix.
+
+`perf: reject brush dabs a run of 64 at a time` (9546757) added a sixth texture
+to `mask_component.slang`, moving that kernel's output from slot 4 to slot 5,
+and changed `DevelopPipeline` to bind it. Both halves landed in one commit and
+the suite passed. But an Orion process from the previous evening was still
+running, and **`Pipeline::compile` loads metallibs from disk by path** — so
+opening a photograph made the July 30 binary compile the July 31 kernel. It
+bound five textures. The kernel wrote to the sixth.
+
+⚠ **Metal does not call that an error.** An unbound slot is nil: reads give
+zero, writes are discarded, no diagnostic unless the validation layer is on. The
+kernel dispatched, completed, and wrote nothing — for every mask kind at once,
+because they all run through that one kernel.
+
+### What found it
+
+The session log, in four lines. It dated the photo open at 12:38 against a
+process start of 22:53 the night before. That is what `InteractionLog` was built
+for and the first time it has paid.
+
+### The guard
+
+`Kernel::create` now takes Metal's reflection and records one past the highest
+texture index the compiled shader refers to. ⚠ Highest **used** index, not the
+declared argument count — an argument a shader never reads can be eliminated,
+and counting declarations would refuse bindings that are in fact complete.
+`Pipeline::compile` compares it against what it is about to bind and throws,
+naming the kernel and the node.
+
+`testBindingCount` runs first in `orion-tests`, because a shader and a binary
+that disagree make every other GPU result a guess. It asserts the refusal *and*
+that six bindings for six slots still compile — without that second half it
+would pass on a guard that refused everything — and that the develop graph
+itself satisfies the rule, which is the check that would have gone red the
+moment the shader changed without the bind. Mutation-checked: disabling the
+guard fails 3, an off-by-one in the slot count fails 4.
+
+### ⚠ The lesson, which is not "rebuild more often"
+
+This is the sixth instance of the class in `repro/README.md`: **a green suite
+that was never in a position to fail.** The tests ran the matching binary, so
+they could not observe the one thing that was wrong. What made it invisible was
+not the mistake — it was Metal's silence about it. The fix is the assertion, not
+the discipline.
+
+**Still open**: `engine/shaders/grain.slang` is written but uncommitted and not
+in `engine/shaders/CMakeLists.txt`. Grain pieces 1, 3–7 unstarted.
+
+
 ## Session 2026-07-31j — the grain plate, built and pinned
 
 ⚠ **Forty-first arrival of the stale M3 prompt.** Verified and set aside.
