@@ -889,20 +889,10 @@ enum Screenshot {
         return ctx.makeImage()
     }
 
-    /// Prints the mean and standard deviation of a region of the engine's
-    /// output.
+    /// Which picture a measurement is read from. `regionStats(through:)` names
+    /// one: the engine's own output by default, or the canvas composite, which
+    /// is the only place the compare split exists.
     ///
-    /// Whether a filter works is a question about pixels, and a screenshot
-    /// scaled to fit a review pane cannot answer it — noise that is obvious at
-    /// 100% disappears into the downsampling. This reads the numbers.
-    /// A region's mean luma and saturation, as numbers.
-    ///
-    /// Factored out of `measure` so a scenario can assert against the same
-    /// arithmetic the printed report uses. Two implementations of "what does this
-    /// patch measure" would let a scenario pass while the report it is supposed
-    /// to correspond to says something else.
-    /// `through` names the surface: the engine's own output by default, or the
-    /// canvas composite, which is the only place the compare split exists.
     /// ⚠ `preview` reads the quarter-linear graph directly, which nothing else
     /// in the program does — the canvas shows it, but through `displayTexture`,
     /// and every measurement, the histogram and the export read the full one.
@@ -918,6 +908,12 @@ enum Screenshot {
     /// covers, and that tinted frame went to a segmentation model.
     enum Surface { case output, canvas, preview, analysis }
 
+    /// A region's mean luma and saturation, as numbers.
+    ///
+    /// Factored out of `measure` so a scenario can assert against the same
+    /// arithmetic the printed report uses. Two implementations of "what does this
+    /// patch measure" would let a scenario pass while the report it is supposed
+    /// to correspond to says something else.
     static func regionStats(_ engine: Engine, region: CGRect,
                             through surface: Surface = .output)
         -> (luma: Double, saturation: Double)? {
@@ -1012,6 +1008,12 @@ enum Screenshot {
         try? png.write(to: URL(fileURLWithPath: path))
     }
 
+    /// Prints the mean and standard deviation of a region of the engine's
+    /// output.
+    ///
+    /// Whether a filter works is a question about pixels, and a screenshot
+    /// scaled to fit a review pane cannot answer it — noise that is obvious at
+    /// 100% disappears into the downsampling. This reads the numbers.
     private static func measure(_ engine: Engine, region: CGRect) {
         guard let src = engine.outputTexture else { return }
         let w = Int(engine.imageWidth), h = Int(engine.imageHeight)

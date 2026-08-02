@@ -548,9 +548,14 @@ extension Editor {
                 // in `research/masking.md` and `DECISIONS.md` #76, which is
                 // where it now lives alone. A panel is for controls.
                 //
-                // Both views are kept and still tested — `LocalRefusals` is the
-                // reason `AdjustmentSpec.localRefusal` cannot be silently
-                // dropped — so restoring either is one line.
+                // Both views are kept, in `AdjustmentGroup.swift`, so restoring
+                // either is one line — and nothing else draws them, so this
+                // comment is the only thing that says why they are there.
+                // ⚠ Neither view has a check of its own. What is pinned is the
+                // table underneath them: `ViewportTests+Catalogue` asserts that
+                // `AdjustmentCatalogue.refusedLocally` is non-empty, which is
+                // what stops `AdjustmentSpec.localRefusal` being silently
+                // dropped. The views generate from it and would follow.
             }
         }
     }
