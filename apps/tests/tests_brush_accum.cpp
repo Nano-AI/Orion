@@ -231,6 +231,31 @@ void testBrushAccumulator() {
            "and the frame is the stroke laid once, not the last 80 dabs laid twice");
     adj.wb = pipe::WhiteBalance{};
 
+    // ⚠ **And the refusal has to be narrow.** Refusing whenever a brush
+    // component has anything in the accumulator at all is also correct, and
+    // gives back the whole feature the first time the photographer touches an
+    // unrelated slider. What is actually dangerous is a node about to re-run
+    // with `firstDab > 0`, which is what the code keys on — so a disturbance
+    // arriving while the parameters say zero must leave the accumulator alone.
+    dev->reload(img);
+    paint(0, diagonal(120), 120);           // firstDab 0: nothing to continue yet
+    report(dev->brushPrefixStat(0).firstDab == 0, "a first stroke starts at zero");
+    const int narrowBefore = dev->brushPrefixStat(0).refusals;
+    adj.wb.temperatureK = 4200.0f;
+    dev->apply(adj);
+    dev->render();
+    adj.wb = pipe::WhiteBalance{};
+    dev->apply(adj);
+    dev->render();
+    report(dev->brushPrefixStat(0).refusals == narrowBefore,
+           "a disturbance with nothing to continue from refuses nothing",
+           std::to_string(dev->brushPrefixStat(0).refusals - narrowBefore)
+           + " refusals");
+    paint(0, diagonal(200), 200);
+    report(dev->brushPrefixStat(0).firstDab == 120,
+           "and the 120 dabs that were rendered are still there to continue from",
+           std::to_string(dev->brushPrefixStat(0).firstDab));
+
     // ── 5. One accumulator, one owner ──────────────────────────────────────
     //
     // Four of these would be ~388 MB at 24 Mpx for a feature only the component
@@ -279,6 +304,45 @@ void testBrushAccumulator() {
     report(dev->brushPrefixStat(0).firstDab == 0 &&
            dev->brushPrefixStat(1).firstDab == 0,
            "and that control is a full evaluation of both");
+
+    // ── 5b. ⚠ The hand-off in the direction the graph runs against ─────────
+    //
+    // This case was found by mutation, and the ordinary hand-off above cannot
+    // see it. The mask nodes run in component order, so when the accumulator
+    // moves from 0 to 1 the old owner writes *before* the new one and is
+    // harmlessly overwritten. Moving it from 1 to 0 reverses that: component 1
+    // runs last, and a stale `accumUse` on it lands its own coverage on top of
+    // the accumulator component 0 just filled. The next append on component 0
+    // then continues from a stroke belonging to a different component — the
+    // right shape, the wrong place, entirely plausible.
+    //
+    // Which is why taking the accumulator away patches the old owner's
+    // parameters rather than only recording that ownership moved.
+    dev->reload(img);
+    paint(1, diagonal(120, 0.30f, 0.10f), 120);
+    paint(1, diagonal(200, 0.30f, 0.10f), 200);
+    report(dev->brushAccumOwner() == 1 && dev->brushPrefixStat(1).firstDab == 120,
+           "component 1 has the accumulator and is continuing from it");
+
+    paint(0, diagonal(120), 120);
+    paint(0, diagonal(200), 200);
+    report(dev->brushAccumOwner() == 0 && dev->brushPrefixStat(0).firstDab == 120,
+           "the accumulator moves back down to component 0",
+           std::to_string(dev->brushAccumOwner()) + ", from dab "
+           + std::to_string(dev->brushPrefixStat(0).firstDab));
+    const auto handedBack = frame();
+
+    dev->reload(img);
+    dev->setBrushStroke(0, diagonal(200).data(), nullptr, 200);
+    dev->setBrushStroke(1, diagonal(200, 0.30f, 0.10f).data(), nullptr, 200);
+    adj.maskComponents[0].brushRevision = ++revision;
+    adj.maskComponents[1].brushRevision = ++revision;
+    dev->apply(adj);
+    dev->render();
+    report(handedBack == frame(),
+           "and the stroke component 0 continued is its own, not the one "
+           "component 1 left in the texture");
+
     adj.maskCount = 1;
     adj.maskComponents[1] = {};
 
@@ -343,4 +407,37 @@ void testBrushAccumulator() {
     const auto afterHidden = frame();
     report(afterHidden == laidWhole(diagonal(240), 240),
            "and the frame after it is the whole stroke");
+
+    // ── 8. The 97 MB comes back ────────────────────────────────────────────
+    //
+    // A row switched from a brush to a gradient, or deleted, must not leave the
+    // accumulator resident — that is the objection `ROADMAP.md` raised against
+    // one of these per component, and it applies to a stale one just as much.
+    dev->reload(img);
+    paint(0, diagonal(120), 120);
+    paint(0, diagonal(200), 200);
+    report(dev->brushAccumBytes() == std::size_t(w) * h * sizeof(float),
+           "the accumulator is resident while the brush is");
+    adj.maskComponents[0].kind = 2;
+    dev->apply(adj);
+    dev->render();
+    report(dev->brushAccumBytes() == 0,
+           "and is given back when the last brush component stops being one",
+           std::to_string(dev->brushAccumBytes()) + " bytes");
+    report(dev->brushAccumOwner() == -1, "with nobody still owning it");
+
+    // ⚠ And coming back has to start from nothing. A claim that survived the
+    // release would continue from a texture that has been reallocated
+    // underneath it — the shape of the stroke would be right and the coverage
+    // it started from would be whatever the new allocation happened to hold.
+    adj.maskComponents[0].kind = 3;
+    dev->setBrushStroke(0, diagonal(240).data(), nullptr, 240);
+    adj.maskComponents[0].brushRevision = ++revision;
+    dev->apply(adj);
+    dev->render();
+    report(dev->brushPrefixStat(0).firstDab == 0,
+           "a component that came back to being a brush continues from nothing",
+           std::to_string(dev->brushPrefixStat(0).firstDab));
+    report(frame() == laidWhole(diagonal(240), 240),
+           "and lays the whole stroke");
 }
