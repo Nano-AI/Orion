@@ -68,6 +68,13 @@ final class InteractionLog: @unchecked Sendable {
                  "#",
                  "# Paths are as they were opened. Comments and blank lines are",
                  "# ignored by the runner, so this whole header can stay.",
+                 "#",
+                 "# \u{26A0} A session log records what was done, not what should be true, so",
+                 "# it asserts nothing — and decision #124 makes a run that asserted",
+                 "# nothing fail. Without the next line, replaying the log a",
+                 "# photographer sent in would exit 1 on the one workflow the log",
+                 "# exists for.",
+                 "minchecks 0",
                  "#"]
         flush()
     }
