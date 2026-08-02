@@ -139,7 +139,51 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
-### ⚠ In flight — third wave, four agents, isolated worktrees, 2026-08-01
+### ⚠⚠ 2026-08-02 — the build is down, and the instruction that did it was mine
+
+**`third_party/slang` is destroyed and nothing can be compiled.** Every shader
+fails with `Too many levels of symbolic links`. Spotlight finds no `slangc` on
+the machine and there are no other volumes. `README.md:82` documents the
+install: a macOS release from `github.com/shader-slang/slang`, extracted into
+`third_party/slang/`. **Awaiting the developer's go-ahead to re-download it** —
+that is the only thing standing between here and a green tree.
+
+⚠ **Cause, stated plainly: a line in the agent brief.** Every worktree brief
+carried this scaffolding, because `samples` and `third_party` are gitignored and
+a worktree cannot build without them:
+
+    ln -s /Users/grootbeat/Documents/Orion/third_party . && ln -s .../samples .
+
+It is correct **inside a worktree** and destructive in the **main repo**, where
+the target and the destination are the same path — the entry becomes a symlink
+to itself. It was written into five briefs. One agent ran it with the main repo
+as its working directory and both entries were replaced by self-links.
+
+⚠ **The fix is not "tell agents to be careful."** The line goes out of every
+brief. A worktree that needs those paths gets them from a relative target, or
+from a setup script that refuses to run anywhere but a worktree.
+
+**What was lost, and what was not:**
+
+| | State |
+|---|---|
+| `third_party/slang` | **Gone.** Redownloadable, Apache-2.0, not source and not the developer's data |
+| `samples/` | Directory gone; **all three originals safe** in `~/Pictures/July 25`, `~/Pictures/Rejects`, `~/Pictures/Cars july 25th`. Rebuilt 2026-08-02 as symlinks to those three, so sidecars land in `samples/` and the photo folders stay clean |
+| Generated mattes and JPEGs in `samples/` | Gone; regenerable |
+| ⚠ Any `.xmp` that lived in `samples/` | Gone, and not recoverable. Test-frame edits only |
+| Source, planning, research, `repro/` | **Untouched.** All tracked |
+| `origin/main` | **Untouched and green at `8ac1d62`** |
+
+⚠ **`06543ed` (highlight piece 4) is committed locally and deliberately NOT
+pushed.** No gate has been run against it. It exists so the tree is not left
+mid-merge. Verify before pushing.
+
+⚠ **Two agents were stopped mid-flight** to stop the command repeating: the
+brush accumulator (#108, mid re-verification) and the persisted-key migration
+(#112, mid mutation table — it never reached a sidecar write). Both are intact
+on their `worktree-agent-*` branches and can be resumed.
+
+### The third wave — two merged and pushed, one merged unverified, one stopped
 
 ⚠ **Decision numbers are assigned in the brief this time, not chosen by the
 agent.** Five agents collided on numbers today — four of them all picked #96 —
@@ -148,9 +192,9 @@ are spoken for.
 
 | Working on | Decision | Scope, and the trap named to it |
 |---|---|---|
-| Brush accumulation, **session two — the accumulator** | #108 | The half behind #102's predicate, and the item that answers *"no brush stroke should take 155 ms"*. ⚠ The budget is part of the decision: ~97 MB a component at 24 Mpx against a graph already at 173 nodes / 7186 MiB, so six components would cost 580 MB and the number decides the design. ⚠ `unchangedPrefix` returning N means the texture is valid *up to* N — an accumulator out of sync with it renders a plausible stroke from stale pixels and nothing looks wrong |
-| Highlight fill, **piece 4** (§3.3 detail transfer) | #109 | Re-costed at **+23 nodes and +30 MiB** because it reuses piece 3's pyramid — told to verify that from the inside rather than trust it. ⚠ #106's maximum-principle argument covers the *fill* and may not cover a detail transfer, which can plausibly move a pixel outside the rim's range; if so it owes #29 a new argument |
-| Three Swift-layer gaps: the memberwise-init trap, gesture arming, the grading wheel's number | #110 | ⚠ The memberwise trap has now silently shipped **two** dead features (film grain, then Balance) and each cost a `repro/` scenario written afterwards. Told to fix the *shape* and prove it — add a field, show the compiler rejects it, quote the error. A fix that merely looks safer is the same trap with better formatting |
+| ⏸ **STOPPED mid-verification by the outage; branch intact** — brush accumulation, session two | #108 | The half behind #102's predicate, and the item that answers *"no brush stroke should take 155 ms"*. ⚠ The budget is part of the decision: ~97 MB a component at 24 Mpx against a graph already at 173 nodes / 7186 MiB, so six components would cost 580 MB and the number decides the design. ⚠ `unchangedPrefix` returning N means the texture is valid *up to* N — an accumulator out of sync with it renders a plausible stroke from stale pixels and nothing looks wrong |
+| ⚠ **Merged locally as `06543ed`, UNVERIFIED, deliberately not pushed** — highlight piece 4. Reported at 173 nodes / 7186 MiB, both unchanged, against an estimated +23/+30 | #109 | Re-costed at **+23 nodes and +30 MiB** because it reuses piece 3's pyramid — told to verify that from the inside rather than trust it. ⚠ #106's maximum-principle argument covers the *fill* and may not cover a detail transfer, which can plausibly move a pixel outside the rim's range; if so it owes #29 a new argument |
+| ✅ **Merged and pushed** — three Swift-layer gaps | #110.1–.3 | ⚠ The memberwise trap has now silently shipped **two** dead features (film grain, then Balance) and each cost a `repro/` scenario written afterwards. Told to fix the *shape* and prove it — add a field, show the compiler rejects it, quote the error. A fix that merely looks safer is the same trap with better formatting |
 | ✅ **Core ML denoise — research only, merged 2026-08-01** (session `2026-08-01p`) | #111 | ⚠ Told explicitly not to build. Raw-domain vs sRGB-domain is the load-bearing question (most published denoisers are trained on JPEG noise, which a Bayer sensor does not produce), and the license of any **weights** matters as much as the paper's. "Not worth building, here is the arithmetic" is a first-class outcome |
 
 ⚠ **The denoise brief's premise was wrong and the agent corrected it.** I wrote
