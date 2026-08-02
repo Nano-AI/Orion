@@ -115,60 +115,16 @@ user-loadable DCP profiles, each a multi-week epic on its own.
 
 Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
 the performance action item is in `ROADMAP.md`. The largest standing violation of
-a stated hard constraint is `DevelopPipeline.cpp`, now **2,382 lines**.
+a stated hard constraint is `DevelopPipeline.cpp`, now **2,549 lines**.
 
-### ⚠ In flight right now — five agents, isolated worktrees, 2026-08-01
+### ⚠ The first wave, and the wave that died — both in `HISTORY.md`
 
-Recorded here because a session that ends mid-flight otherwise looks like a
-session that stopped. Each verifies `orion-tests`, `orion-viewport-tests`, all
-33 `repro/` scenarios and `orion-bench` before it commits, in its own worktree.
-
-| Working on | Instruction that shapes it |
-|---|---|
-| Split toning + creative vignette | ⚠ May come back as a defended **"no"** on split toning — the grading wheels already do most of it, and a duplicated feature is worse than an argued refusal |
-| Snapshots / versions | The hard part is that a snapshot's mask **matte** is a separate PNG the sweep can delete (#87), so a restored snapshot could silently cover nothing |
-| Perspective correction | Must compose into the **existing** geometry matrix — a resample of a resample softens the picture — and masks/spots must follow it or they land plausibly wrong |
-| The brush's preview-path linearity | Host side and the full-res kernel are both **already ruled out by measurement**. This is an investigation; a correct explanation with no code is a complete result |
-| Segmentation highlight reconstruction | May also come back as a defended **"no"**, or as a costed decomposition with only its first piece built |
-
-⚠ **Not started, and it needs the developer**: Americanising the *persisted*
-sidecar keys (#89). It is a schema migration with dual reads and a
-both-keys-present test, not a rename, and it changes files already on disk — so
-it wants sign-off rather than an agent.
-
-⚠ **M5 is not in flight and will not be finished by iterating**: X-Trans
-(Markesteijn), a Windows port, Core ML denoise and user-loadable DCP profiles
-are multi-week epics each.
-the performance action item is in `ROADMAP.md`. `research/masking.md` is
-**finished**; its leftovers are the fill leaking through smooth ground and the
-per-layer decomposition beyond stage 2. The largest standing violation of a
-stated hard constraint is `DevelopPipeline.cpp`, now **2,418 lines**.
-
-### ⚠ The second wave died mid-edit — nothing landed, nothing committed
-
-All four agents below were terminated by an API session limit while working.
-**Zero commits on all four branches**; every worktree holds broken half-edits
-(`tests_mask_geom.cpp` calling a 4-argument function with 7, a `subsample.cpp`
-that does not compile). Nothing was merged and nothing should be — main is clean
-at the commit that recorded them.
-
-⚠ **What survives is the brief, not the work.** Each item below is still
-unstarted and each still carries the trap that was named to it. Re-running them
-is a fresh start, not a resume.
-
-✅ **Relaunched 2026-08-01 with the fix**, once the limit cleared: grading
-Balance, perspective's mask-extent term, brush accumulation session one, and
-highlight fill pieces 2–3. Every brief now opens with **commit early and often**
-as its loudest instruction, and names the exact point the previous attempt died
-at, so the agent knows what it is racing.
-
-⚠ The lesson is about **how long an agent may run before it banks something.**
-The five agents of the first wave each ran 40–75 minutes and committed once, at
-the end; four of five happened to finish. These four did not, and lost
-everything. An agent on a multi-hour task should commit a skeleton early and
-refine it, so a kill costs the last increment rather than the session.
-
-The original brief for each:
+Five agents landed on 2026-08-01 and a second wave of four was killed by an
+API session limit with nothing committed. Both accounts, and the one lesson
+worth keeping — **an agent on a multi-hour task commits a skeleton early and
+refines it, so a kill costs the last increment rather than the session** — are
+in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
+first wave is merged and the second was relaunched and is the table below.
 
 ### ⚠ In flight — two agents left of four, isolated worktrees, 2026-08-01 (second wave)
 
@@ -261,10 +217,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken six ways**, all in product code. ⚠ Recounted 2026-08-01, every figure carried here was stale: `DevelopPipeline.cpp` **2,317**, `Engine.swift` 2,118, `OrionApp.swift` **1,445**, `bench/main.cpp` **1,623**, `DevelopPanels.swift` **1,152**, `Scenario.swift` **1,250**. The bench grew ~200 lines on 2026-08-01 profiling the brush on both graphs, which is the largest single jump on this list and is tooling rather than product. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
-| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 2,118, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` **1,336**, `Scenario.swift` **1,250**. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
-| **The 1000-line rule is broken six ways**, all in product code. Recounted 2026-08-01: `DevelopPipeline.cpp` **2,382**, `Engine.swift` **2,163**, `bench/main.cpp` **1,506**, `OrionApp.swift` **1,461**, `Scenario.swift` **1,256**, `DevelopPanels.swift` **1,152** — every one of the six grew again, and four of the six figures carried here were stale. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
-| **The 1000-line rule is broken six ways**, all in product code, recounted 2026-08-01: `DevelopPipeline.cpp` **2,418**, `Engine.swift` 2,135, `bench/main.cpp` **1,510**, `OrionApp.swift` 1,445, `Scenario.swift` 1,254, `DevelopPanels.swift` 1,168. ⚠ Every one of the six was stale in this table by 20–200 lines; `bench/main.cpp` had grown 197. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code. ⚠ **Recounted 2026-08-01 and this table had carried *four* copies of this row**, each with different numbers, each written by a different agent's merge and none of them deleted — a gap table that contradicts itself four ways is worse than one that is silent. One row now, counted with `grep -c ''` at the time of writing: `DevelopPipeline.cpp` **2,549**, `Engine.swift` **2,219**, `bench/main.cpp` **1,725**, `OrionApp.swift` **1,495**, `Scenario.swift` **1,387**, `DevelopPanels.swift` **1,359**. A sweep of every tracked `*.cpp`/`*.swift`/`*.h`/`*.mm` outside `apps/tests/` finds these six and no others, so the count is six and it is now measured rather than remembered. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31, but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session | whole tree |
 | **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
 | **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
@@ -911,170 +864,4 @@ headers, and a duplicate of session `2026-07-31j` that the previous prune had
 copied rather than moved. All six file sizes in the 1000-line gap row were stale
 by 20–200 lines. Recounted and de-duplicated.
 
-## Session 2026-08-01g — the reopen leak was the folder, not the photograph
-
-**Reported: `open` × 300 is flat at +0.8 KB a cycle; `reopen` × 300 grows
-25–30 KB a cycle, monotonic, and resumes at the same slope after the allocator
-hands pages back.** So the leak is in the extra work `reopen` does: read the
-sidecar, restore, upload mattes, sweep orphans.
-
-### ⚠ It is `contentsOfDirectory`, and the rate is set by the folder
-
-`MatteStore.sweep` enumerates the whole folder to find orphan mattes.
-`contentsOfDirectory(at:)` returns **one autoreleased `NSURL` per entry**, each
-with an `NSPathStore2`, a CoreServices `_FileCache` and three `CFString`s
-behind it — **0.83 KB per file in the folder, per call** — and nothing released
-them. Decision #90; the same shape as #86 one layer up, in Swift instead of
-Metal.
-
-**Paired runs, 300 iterations each, RSS polled at 150 ms, robust slope (median
-of ten segment fits, so one allocator release cannot set the number):**
-
-| Loop | Folder | Before | After |
-|---|---|---|---|
-| `open` (control) | 200 files | +1.0 | +1.3 KB/cycle |
-| `reopen` | 2 files | +2.5 | +1.4 KB/cycle |
-| `reopen` | 200 files | **+165.4** | **+1.5** KB/cycle |
-| `reopen`, one radial mask | 200 files | **+162.0** | **+1.6** KB/cycle |
-
-The reopen slope is now the open loop's, at every folder size. **The mask made
-no difference either way** — the doubling in the report is the folder, not the
-component; the original loop ran beside a folder that was filling up with the
-measurement's own files while it ran.
-
-### ⚠ What found it, and what could not
-
-`leaks` reports **0 leaks for 0 bytes**, correctly and uselessly — the blocks
-are reachable from an undrained pool. `heap` twice over a long run named the
-classes (`NSURL`, `NSPathStore2`, `_FileCache`, `CFString`, growing 1:1:1:3),
-and `malloc_history` on one live instance named the line:
-`Scenario.step → MatteStore.sweepAfterLoad → sweep →
--[NSFileManager contentsOfDirectoryAtURL:...]`. Then the falsifiable step: the
-same loop beside 2 files and beside 200 — +2.5 against +165, linear in the file
-count, which is a directory enumeration and cannot be anything else.
-
-The app is shielded by the run loop, as it was for #86. A batch or a scripted
-loop is not, and neither is a folder with ten thousand photographs in it.
-
-### The check, and the mutation
-
-`testSweepDoesNotHoardTheDirectory` in `orion-viewport-tests`: 400 sweeps of a
-300-file folder in one pool, asserting the process footprint grows under 8 MB.
-It deliberately does not wrap the sweep in a pool of its own — that is the
-caller it is written for. **Mutation: replace `autoreleasepool { }` in
-`MatteStore.sweep` with an immediately-invoked closure — same scoping, no pool
-— and it fails at 97.8 MB, 250.5 KB a sweep,** which is the 0.83 KB per file
-again from the other end.
-
-Gates: 569 engine checks, 3,455 viewport checks (3,453 before), 33 `repro/`
-scenarios, bench exit 0 — all green with the fix in.
-
-## Session 2026-08-01f — snapshots, and the matte that would have vanished
-
-**M4's last unbuilt workflow item.** A photographer saves the edit under a name,
-keeps working, and comes back to it. Neither undo (`EditHistory`: fifty deep,
-coalescing, dies with the process) nor a preset (a **patch** carried *between*
-photographs, deliberately excluding the crop, the dust and the masks) — a
-snapshot is this photograph's whole `DevelopState` under a name. Decision #99.
-
-### Where they live, and the argument that is *not* #79's
-
-A sibling `PHOTO.orion-snapshots.json`. ⚠ #79's reason for refusing base64 in
-the XMP — megabytes of text per autosave settle — **does not transfer**: a state
-is a few kilobytes. Two reasons that do:
-
-- **Autosave rewrites the sidecar 900 ms after any slider moves**, through
-  `Sidecar.merge`, which is a read-modify-write over a hand-rolled string matcher
-  rather than an XML parser. Every version kept would be decoded, re-encoded,
-  re-escaped and rewritten on every settle, and a slider drag would get more
-  expensive the more versions the photograph had.
-- **Blast radius.** One bad merge takes the working edit *and* every version. A
-  snapshot's whole job is to be the copy that survives when the working state
-  does not.
-
-Application Support was rejected on #79's own grounds: a path-keyed cache dies
-when the photograph moves, and this is storage.
-
-### ⚠ The matte, which is the part that would have failed silently
-
-A `DevelopState` is not the whole edit. A raster mask is a sibling PNG named by
-id (#79), and `MatteStore.sweep` deletes every matte the **sidecar** does not
-reference. So the obvious version feature has a hole nothing on screen can show:
-save a version with a Subject mask → delete the row → reopen → the sweep
-collects the file → restore → the row is back, the raster is gone, **the mask
-covers nothing**, and the picture changes with no error anywhere.
-
-Fixed with a **pin, not a copy**, and it can be a pin only because matte files
-are already immutable (#79 mints a fresh id and a fresh file on every
-regeneration) — so an id inside a version always names the pixels it named when
-the version was taken. `MatteStore.sweepAfterLoad` now keeps the union of what
-the sidecar references and what every version does, computed in that one
-function because #87's lesson is that a delete policy written twice stops
-matching.
-
-⚠ **The version file has #87's three states too.** Absent is `[]`, unreadable is
-`nil`, and unreadable means both *collect no mattes at all* and *write nothing
-over it*. Both halves are pinned by tests that go red when either is conflated.
-
-What a pin cannot cover — a photograph copied without its siblings — is
-**reported before the version is pressed**: the row names the selections it can
-no longer find, in the amber the app uses for "look at this".
-
-### ⚠ Restoring does not trap anybody, in two different timescales
-
-`history.record`, not `history.reset` — a restore is one ⌘Z, like a preset.
-Resetting would make it the one act in the program that cannot be taken back,
-and it is the act most likely to have been a mistake. That covers the session.
-For the quit that undo does not survive, `SnapshotStore.restore` keeps the
-working edit as a single **automatic** version first, replaced rather than piled
-up, and renaming it promotes it to an ordinary one. The order lives in one
-function rather than at each call site, with the engine half handed in as a
-closure — the seam `Autosave` and `BatchExport` already use, and what lets it be
-pinned without an `Engine`.
-
-### ⚠ No eighth tool tab, and that was measured rather than argued
-
-Versions wanted a tab: they belong to one photograph where a preset belongs to
-none. Seven plates divide 364 points into 48 each; eight leaves 42, and VERSIONS
-needs about 51 at the bar's 9-point type. Rendered with the tab in place
-(`--scene versions`), the bar came back reading **PRESE… VERSI…** — the new tab
-cost the old one its name as well as its own. Versions sit at the top of the
-Presets tab instead, first because the tab's other four sections are all
-*between* photographs and this is the only one about the photograph in hand.
-
-### What was checked, and the mutation for each
-
-`orion-viewport-tests` **3561 → 3620** — 59 checks in twelve new functions in
-`ViewportTests+Snapshot.swift` — plus two scenarios. Every one was run against a
-mutant:
-
-| Check | Mutation | Result |
-|---|---|---|
-| a matte a saved version names survives the sweep | drop `.union(pinned)` | 1 red |
-| an unreadable version file collects nothing | `pinnedMattes` returns `[]` | 2 red |
-| the working edit is kept | drop `keepWorkingEdit` | 3 red |
-| unreadable is not overwritten | `read` returns `[]` on a decode failure | 6 red |
-| renaming the automatic version keeps it | leave `automatic` set | 3 red |
-| the ceiling refuses rather than evicts | evict the oldest | 2 red |
-| a missing matte is named | `missingMattes` returns `[]` | 2 red |
-| `snapshot-keeps-its-matte.txt` | drop `.union(pinned)` | **7 red**, and the failure printed is exactly the silent one: `leftAfter == leftBare` |
-| `snapshot-keeps-its-matte.txt` | `Engine.restore(snapshot:)` skips `restoreMattes` | 6 red |
-| `snapshot-survives-a-reopen.txt` | `history.reset` instead of `history.record` | 1 red |
-| `snapshot-survives-a-reopen.txt` | drop `keepWorkingEdit` | 2 red |
-
-⚠ **Two drafts of these checks could not fail, and both were caught before the
-commit.** The date round trip was first written through a pair of encoders the
-*test file* built, which pins ISO 8601 against ISO 8601 and stays green with the
-store's two ends disagreeing — the one failure worth checking. And
-`snapshot count 1` passed on the first run and failed on the second, because a
-version file outlives the run; `snapshot clear` is now the first line of both
-scenarios. Ninth and tenth instances of the class `repro/README.md` records.
-
-### Not done
-
-Nothing deferred from this story. Two things it deliberately does not do: a
-version does **not** copy the matte files it names (it pins them, which is
-correct only as long as #79's immutability holds — a future in-place matte
-rewrite would have to revisit this), and there is no compare-two-versions view.
-
----
+*Sessions `2026-08-01g` and earlier are in `HISTORY.md`.*
