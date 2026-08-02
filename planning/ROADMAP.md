@@ -491,7 +491,7 @@ so it gets built and attacked before anything depends on being able to trust it.
 |---|---|---|
 | ✅ Keep the previous upload's post-transform texels per component | `DevelopPipeline::brushPrev_`, beside `brushDabs_` | Only the live prefix is stored, so a short stroke is kilobytes and the 16,384-dab cap is the 256 KB the buffer `apply` throws away every event anyway. Invalidated on a reload and when a component stops being kind 3 — both are cases where session two's accumulator will not have survived |
 | ✅ `int unchangedPrefix(const BrushPrefixState&, const BrushShape&, const float* texels, int count)` | next to `buildDabBounds` in `ShaderParams.h` | `memcmp` per dab, capped at the shorter of the two strokes; `0` if the nib, the flow, the hardness or the kind moved. The geometry needs no case of its own — it moves every texel |
-| ✅ Tests that a *plausible* stroke is caught | `testBrushPrefixPredicate` and `testBrushPrefixWiring`, 25 checks | the unit half on hand-built texels, the wiring half through the real `DevelopPipeline` where the texels come out of `mask::toFrame` |
+| ✅ Tests that a *plausible* stroke is caught | `testBrushPrefixPredicate` and `testBrushPrefixWiring`, 13 checks each | the unit half on hand-built texels, the wiring half through the real `DevelopPipeline` where the texels come out of `mask::toFrame` |
 
 ⚠ **No pixel moved, and it is asserted rather than argued.** The wiring test
 renders a 160-dab stroke built by appending — the predicate answering 80 — then

@@ -394,7 +394,7 @@ the two frames are compared byte for byte.
 
 ### Gates
 
-`orion-tests` **716 checks, 0 failures** (25 new). `orion-viewport-tests` 3620,
+`orion-tests` **716 checks, 0 failures** (26 new, 13 either side). `orion-viewport-tests` 3620,
 0. All **38** `repro/*.txt` exit 0. `orion-bench` exits 0; **149 nodes**,
 6971 MiB, unchanged. M0 p95 **9.06** and **9.11 ms** over two runs — the gate is
 advisory and the distribution moves with GPU clock state, so the node count is
