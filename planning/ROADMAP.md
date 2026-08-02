@@ -356,7 +356,7 @@ sed.
 | ✅ **Orphan matte files** | Done 2026-08-01, decision #87. 26 orphans, 512 KB, beside one sample frame |
 | ✅ **Dehaze's drag cost — root-caused and fixed 2026-08-01, decision #92** | `DevelopPipeline.cpp:1325` re-pushed the whole dehaze parameter set on every tick, and `Pipeline::setParams` dirties the downstream subgraph **without comparing the bytes**. Only omega moves with the slider; the dark channel, the six rank passes and the candidate pooling are functions of the frame's size, the paper's constants and A — nine nodes, six of them full resolution over 24 MP, redone for a value none of them read. Latched behind `hazeShapeValid_`. **Paired, interleaved, two builds, two rounds: 147.3/146.4 → 102.7/100.6 ms and 127.1/120.6 → 87.0/87.7 ms (0.69–0.71×)**, with exposure and clarity unmoved in the same process, and all 33 bench control probes moving the picture by identical amounts. Pinned by the bench's `dehaze drag` invariant, which counts *named* nodes; restoring the old guard prints `DEHAZE REDOES THE DARK CHANNEL` and exits 1. ⚠ **Two claims here were wrong and both were about the fixture:** the "~50 ms outside node dispatch" compared a tick against the bench's dehaze section alone, when clarity's input *is* `nDehaze_` and a dehaze tick runs its 39 nodes too (55 measured, 73.6 + 65.5 ≈ 139); and `estimateAirlight` fires **once** in a 40-tick drag, exactly as its comment claims. The recorded 67.3 ms does not reproduce at `6fd4e59` either, so the doubling was a fixture artifact — the waste it pointed at was not. No bisect was needed |
 | ⚠ **`reopen` grows 25–49 KB per cycle; plain `open` is flat** | 300 iterations of each, monotonic, and it resumes at the same slope after the allocator releases. A mask component roughly doubles the rate. The difference between the two paths is `Sidecar.read` → `restore` → `restoreMattes` → `sweep`. `InteractionLog` is capped at 2000 lines and ruled out. ~240 MB over a 5,000-photo cull |
-| ⚠ **Brush cost is linear in accumulated dabs, forever** | Full resolution it crosses 16 ms at **~500 dabs** — 1.4 strokes across the frame. Armed it crosses at ~12,300, then steps to a 27 ms plateau at ~13,400 that nobody has explained. Arming bought 14× and moved the wall; it did not remove it. The fix is ROADMAP's incremental accumulation |
+| ~~⚠ **Brush cost is linear in accumulated dabs, forever**~~ | ✅ **Fixed 2026-08-01, #108.** It was linear because every appended dab re-laid the whole stroke. The marginal cost of a pointer event is now flat in what is already painted — `mask:0` 5.20 ms appending 49 dabs to 294 against 36.46 ms re-laying them. The **first** evaluation of a component is still linear, which is once after a reload or a geometry change rather than once an event |
 | **The tick, attributed** | `EditHistory.record` copies the whole `DevelopState`; `InteractionLog.committed` diffs every field and formats strings; `setBrushStroke` re-flattens the entire stroke per pointer event. All three are per-tick and O(size of the edit). ⚠ Candidates — the armed stroke is still linear (0.4 ms at 46 dabs, 1.8 at 784), which is 200 fps at the dab cap and may simply not be worth touching |
 | **Cold open** | decode 36 ms + full render 72–92 ms. What does the photographer see in between? |
 | ✅ **Library** | Done 2026-08-01, decision #91. Was: every open re-opened every raw through LibRaw, re-extracted every embedded preview and re-read every XMP. **300 frames: 454–688 ms cold → 28–54 ms warm, 12.9–17.2×.** ⚠ The listing is still the filesystem's — `plan` is *handed* the directory contents and can only answer about files in it, so a photograph deleted outside Orion cannot be resurrected by a cache. What is left is named and costed under **Library index — what is not done** below |
@@ -408,7 +408,7 @@ keystone half passes there before and after the fix — the section that goes re
 when the ellipse is reverted is the **aspect** one. A scenario that cannot fail
 is not a scenario.
 
-## Incremental brush accumulation — costed, not started
+## Incremental brush accumulation — ✅ shipped 2026-08-01, #102 and #108
 
 Decision #80 made each re-evaluation of a stroke ~30× cheaper. It did **not**
 make them fewer: painting appends dabs, and every appended dab still re-runs the
@@ -537,25 +537,72 @@ asserted to have been *taken*. `dehaze-reaches-the-picture.txt` and the bench's
 `dehaze drag` node-count invariant are the pattern — count named nodes, not
 milliseconds.
 
-**Session two — the accumulator, behind the predicate.**
+**Session two — the accumulator, behind the predicate. ✅ done 2026-08-01,
+decision #108.**
 
-| Piece | Where |
-|---|---|
-| Persistent R32F texture per brush component, lazily allocated | `DevelopPipeline` ctor / `addAuxTexture` |
-| `firstDab` into `MaskComponent`'s spare `_pad3` slot | `ShaderParams.h`, no size change, static-assert the offset |
-| Kind 3 starts from the accumulator when `firstDab > 0`, writes it back | `mask_component.slang`, ~25 lines, one branch |
-| Fall back to a full evaluation when the predicate says the prefix moved | `DevelopPipeline::apply` |
+| Piece | Where | ✅ |
+|---|---|---|
+| ✅ Persistent R32Float texture, **one**, lazily allocated | `auxBrushAccum_`, registered at 1×1 and grown by `ensureBrushAccum` | Not one per component — see the budget below, which is where the plan changed |
+| ✅ `firstDab` and `accumUse` into `MaskComponent`'s spare `_pad3` slots | `ShaderParams.h`, no size change, offsets 108 and 112 static-asserted | |
+| ✅ Kind 3 starts from the accumulator when `firstDab > 0`, writes it back | `mask_component.slang`, ~20 lines, one branch | The block walk starts at the block *holding* `firstDab` and clamps to it inside — rounding down to the boundary composites up to 63 dabs twice, and does |
+| ✅ Fall back to a full evaluation when the prefix moved | `DevelopPipeline::apply`, plus `reconcileBrushAccum` immediately before the render | The second one is the piece this plan did not have. See below |
 
-⚠ **The bit-identity invariant is the acceptance test, and it already exists.**
-A stroke rendered incrementally must equal the same stroke rendered whole, texel
-for texel — that is what #80's test asserts and what R32F is for. Add the
-incremental path to that comparison rather than writing a second one.
+**Measured** — `mask:0` alone, appending 49 dabs against re-laying the same
+stroke because one dab of its head moved. Same dab count, same host work, same
+blocks and boxes, interleaved rep by rep in one process, two runs
+(`orion-bench` block **3d**):
 
-⚠ **Budget check before starting session two:** ~97 MB a component at 24 Mpx, on
-top of 6878 MiB of intermediates, and the grain node's +194 MB has already
-landed. Four brush components is ~388 MB. Lazily allocated on first brush dab,
-released when a component stops being kind 3 — otherwise a group of four
-gradients pays for four accumulators nothing reads.
+| Dabs already down | Append 49 | Head moved: re-lay all |
+|---|---|---|
+| 49 | 4.66 / 9.19 ms | 7.65 / 14.53 ms |
+| 294 | 5.20 / 5.80 ms | **36.46 / 46.87 ms** |
+
+Flat in what is already painted, against linear. The right column is also the
+cost before the change, which is what says the fixture did not move.
+
+### ⚠ The budget check changed the plan, which is what it was for
+
+| | Full graph | Preview | Both | On 7186 MiB |
+|---|---|---|---|---|
+| **One accumulator, for the live component** | 92.47 MiB | 5.78 MiB | **98.25 MiB** | **+1.37%** |
+| One per component, as costed above | 370 MiB | 23 MiB | 393 MiB | +5.5% |
+
+Painting is a single-component gesture, so a per-component accumulator's only
+purchase over a shared one is the **first event after the photographer moves to
+a different row** — one out of a gesture's hundreds. Its price is 393 MiB paid
+by every photograph with four brush rows whether or not any is being painted.
+One texture, and the loser of the swap re-lays once.
+
+Half-resolution accumulation was the other candidate and is **not available**:
+the acceptance test is bit-identity with a full evaluation, and a
+half-resolution accumulator is a different computation, so the comparison the
+design rests on could not be made at all. R16Float fails for the same reason and
+it is measured — switching the format turns the ten-event comparison red.
+
+⚠ **The bench's 7186 MiB does not include any of this.**
+`Pipeline::intermediateBytes()` sums node outputs only, so every aux texture is
+outside it — the dab textures, the bounds, the mattes, both LUTs, the grain
+plate, and now the accumulator. Pre-existing, stated so that "173 nodes,
+7186 MiB, unchanged" is not read as "nothing was allocated".
+
+### ⚠ Two things this plan did not know, both found in the building
+
+1. **Session one's `brushPrev_` answers a different question.** It advanced
+   when a stroke was *uploaded*. An accumulator is a texture and a texture
+   changes when the graph is **rendered** — and `Engine::setAdjustments` applies
+   to both graphs on every pointer event while only the preview renders, so
+   during a gesture the full graph is handed a hundred strokes and renders once.
+   The claim is now advanced from `Pipeline::lastRun()`, from what the graph
+   reports having executed.
+2. **A kernel that accumulates is not idempotent and nothing else here is.**
+   Run it twice on one parameter block and the new dabs go down twice. `apply`
+   cannot see that coming — white balance moves and the reference behind every
+   mask component changes. `reconcileBrushAccum` runs immediately before the
+   render, where nothing can intervene afterwards, and refuses the fast path to
+   any node about to run on parameters this `apply` did not push.
+
+Ten mutations, six red on the first pass and **three that passed everything and
+were defects in the checks**; the table is in `research/brush-acceleration.md`.
 
 ## Film grain — ✅ shipped 2026-08-01
 

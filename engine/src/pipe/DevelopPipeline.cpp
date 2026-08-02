@@ -580,11 +580,26 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         auxDabBounds_[i] = pipeline_.addAuxTexture(params::kMaxDabBlocks, 1,
                                                    PixelFormat::RGBA32Float);
     }
+    // The incremental brush accumulator — one texture, for whichever component
+    // is being painted on. research/brush-acceleration.md, decision #108.
+    //
+    // ⚠ **R32Float, and one rather than one per component.** R32 because the
+    // claim is bit-identity with a full evaluation and only float32 round-trips
+    // float32 exactly. One because at 24 Mpx it is ~97 MB: four would be
+    // ~388 MB of intermediates for a feature that is only ever used by the
+    // component under the cursor.
+    //
+    // ⚠ Registered at 1x1 and grown by `ensureBrushAccum` on the first dab. A
+    // photograph that is never painted on pays two bytes, which is the whole
+    // reason `Pipeline::resizeAux` exists.
+    auxBrushAccum_ = pipeline_.addAuxTexture(1, 1, PixelFormat::R32Float);
+
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         nMaskComponent_[i] =
             pipeline_.add({"mask:" + std::to_string(i), "maskComponent",
                            {prevMask, nHueSat_}, PixelFormat::R16Float, {},
-                           {auxMatte_[i], auxDabs_[i], auxDabBounds_[i]}});
+                           {auxMatte_[i], auxDabs_[i], auxDabBounds_[i],
+                            auxBrushAccum_}});
         prevMask = nMaskComponent_[i];
     }
 
@@ -739,11 +754,19 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
         // stroke that was on it, and the second file of a folder opening with
         // "the prefix is unchanged" would keep the first one's coverage.
         brushPrev_[std::size_t(i)] = {};
+        brushPending_[std::size_t(i)] = {};
         brushPrefix_[std::size_t(i)] = {};
+        // ⚠ And the accumulator's ownership. The texture keeps the previous
+        // photograph's coverage until something overwrites it, so a component
+        // that stayed a brush across the reload would otherwise continue a
+        // stroke laid on a different picture.
+        maskParams_[std::size_t(i)].firstDab = 0;
+        maskParams_[std::size_t(i)].accumUse = 0;
         matteLive_[i][0] = 0;
         matteLive_[i][1] = 0;
         matteDirty_[i] = true;
     }
+    accumOwner_ = -1;
 
     applyImageParams(image);
 
@@ -2066,6 +2089,30 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                     const params::BrushShape shape{
                         c.kind, c.brushRadius * std::min(shownW, shownH),
                         c.brushFlow, c.brushHardness};
+
+                    // ⚠ **One accumulator, one owner.** Taking it away from
+                    // another component patches that component's parameters
+                    // back to a full evaluation *before* anything else, or two
+                    // kernels write one texture and what renders is a stroke
+                    // nobody drew.
+                    if (accumOwner_ != i && m.count > 0) {
+                        if (accumOwner_ >= 0) {
+                            auto& old = maskParams_[std::size_t(accumOwner_)];
+                            if (old.accumUse != 0 || old.firstDab != 0) {
+                                old.accumUse = 0;
+                                old.firstDab = 0;
+                                pipeline_.setParams(nMaskComponent_[accumOwner_],
+                                                    &old, sizeof old);
+                            }
+                            brushPrev_[std::size_t(accumOwner_)]    = {};
+                            brushPending_[std::size_t(accumOwner_)] = {};
+                        }
+                        accumOwner_ = i;
+                        brushPrev_[std::size_t(i)]    = {};
+                        brushPending_[std::size_t(i)] = {};
+                        ensureBrushAccum();
+                    }
+
                     auto& prev = brushPrev_[std::size_t(i)];
                     auto& stat = brushPrefix_[std::size_t(i)];
                     stat.prefix = params::unchangedPrefix(prev, shape,
@@ -2074,14 +2121,34 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                     stat.count = m.count;
                     ++stat.evaluations;
 
-                    // Only the live prefix is kept, not the padded buffer: a
-                    // short stroke costs a few kilobytes and the 16,384-dab cap
-                    // costs 256 KB.
-                    prev.texels.assign(texels.data(),
-                                       texels.data() + std::size_t(m.count) * 4);
-                    prev.count = m.count;
-                    prev.shape = shape;
-                    prev.live  = true;
+                    // ⚠ **The accumulator holds a whole stroke or it holds
+                    // nothing usable.** `prefix` is the length of the stable
+                    // head; the texture holds the coverage of `prev.count`
+                    // dabs. Continuing is only sound when those are the same
+                    // number — *undo three dabs and paint three different ones*
+                    // gives a prefix shorter than what is on the GPU, and the
+                    // three dabs the photographer took back are still in it.
+                    const bool appended = accumOwner_ == i && prev.live &&
+                                          stat.prefix == prev.count &&
+                                          prev.count > 0 &&
+                                          m.count >= prev.count &&
+                                          m.accumulate == 0;
+                    m.accumUse = (accumOwner_ == i) ? 1 : 0;
+                    m.firstDab = appended ? prev.count : 0;
+                    stat.firstDab = m.firstDab;
+
+                    // The claim, not the fact. It becomes `brushPrev_` only
+                    // once the pipeline reports having run this node — see
+                    // `commitBrushAccum`. Only the live prefix is kept, not the
+                    // padded buffer: a short stroke costs a few kilobytes and
+                    // the 16,384-dab cap costs 256 KB.
+                    auto& pending = brushPending_[std::size_t(i)];
+                    pending.state.texels.assign(
+                        texels.data(), texels.data() + std::size_t(m.count) * 4);
+                    pending.state.count = m.count;
+                    pending.state.shape = shape;
+                    pending.state.live  = m.count > 0;
+                    pending.valid = m.accumUse != 0;
                 }
 
                 pipeline_.updateAux(auxDabs_[std::size_t(i)], texels.data(),
@@ -2129,9 +2196,24 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             // with the stroke untouched would otherwise report the whole thing
             // as an unchanged prefix, and session two's accumulator will have
             // been released and reallocated underneath that claim.
-            brushPrev_[std::size_t(i)] = {};
+            brushPrev_[std::size_t(i)]    = {};
+            brushPending_[std::size_t(i)] = {};
+            if (accumOwner_ == i) accumOwner_ = -1;
         }
+        maskParams_[std::size_t(i)] = m;
         pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
+    }
+
+    // ⚠ **Given back when the last brush goes away.** ~97 MB at 24 Mpx is not
+    // something to keep for a row that was deleted or switched to a gradient;
+    // a group of four gradients would otherwise be paying for an accumulator
+    // nothing reads, which is the objection `ROADMAP.md` raised against having
+    // one of these per component in the first place.
+    {
+        bool anyBrush = false;
+        for (int i = 0; i < adj.maskCount && !anyBrush; ++i)
+            anyBrush = adj.maskComponents[std::size_t(i)].kind == 3;
+        if (!anyBrush) releaseBrushAccum();
     }
 
     const bool linearMoved =
@@ -2688,6 +2770,108 @@ void DevelopPipeline::estimateAirlight() {
     pushAirlight();
 }
 
+void DevelopPipeline::ensureBrushAccum() {
+    if (auxBrushAccum_ < 0) return;
+    if (pipeline_.auxWidth(auxBrushAccum_) == width_) return;
+    pipeline_.resizeAux(auxBrushAccum_, width_, height_);
+    // Whatever any component believed was in there went with the old texture.
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        brushPrev_[std::size_t(i)]    = {};
+        brushPending_[std::size_t(i)] = {};
+    }
+}
+
+void DevelopPipeline::releaseBrushAccum() {
+    if (auxBrushAccum_ < 0) return;
+    if (pipeline_.auxWidth(auxBrushAccum_) <= 1) return;
+    pipeline_.resizeAux(auxBrushAccum_, 1, 1);
+    accumOwner_ = -1;
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        brushPrev_[std::size_t(i)]    = {};
+        brushPending_[std::size_t(i)] = {};
+        // ⚠ And the parameters, not only the record. The texture is 1x1 now:
+        // a kernel still carrying `accumUse` would read zero everywhere past
+        // the first texel, which is a stroke that quietly vanished rather than
+        // anything that looks like a fault.
+        auto& m = maskParams_[std::size_t(i)];
+        if (m.accumUse == 0 && m.firstDab == 0) continue;
+        m.accumUse = 0;
+        m.firstDab = 0;
+        pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
+    }
+}
+
+void DevelopPipeline::reconcileBrushAccum() {
+    // ⚠ **The last thing before the GPU runs, and that placement is the whole
+    // argument.** Every other node here is a pure function of its inputs, so
+    // running one twice is a waste and never a wrong answer. A node that
+    // accumulates into a persistent texture is not: run it twice with one set
+    // of parameters and the dabs in `[firstDab, count)` are composited twice —
+    // a heavier stroke, in the right place, in the right shape, which is to say
+    // a picture that looks entirely plausible and is not the photographer's.
+    //
+    // A node can be dirtied by things `apply` never sees: white balance moves
+    // and the reference image behind every mask component changes, a matte is
+    // uploaded, `setEnabled` brings a hidden component back. In each of those
+    // the node runs again with whatever parameters it was last given. So the
+    // rule is not "prove nothing else dirties it" — that is a claim about a
+    // 2,500-line file that the next edit quietly breaks — but *ask*, here,
+    // where nothing can intervene afterwards.
+    //
+    // `brushPending_[i].valid` says these parameters were computed by this
+    // `apply` against the accumulator's current contents. Anything else that is
+    // about to re-run with `firstDab > 0` is refused the fast path and lays the
+    // whole stroke, which is exactly what it did before this feature existed.
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        auto& m = maskParams_[std::size_t(i)];
+        if (m.firstDab <= 0) continue;
+        if (brushPending_[std::size_t(i)].valid) continue;
+        if (!pipeline_.nodeDirty(nMaskComponent_[i])) continue;
+        m.firstDab = 0;
+        pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
+        brushPrev_[std::size_t(i)] = {};
+        brushPrefix_[std::size_t(i)].firstDab = 0;
+        ++brushPrefix_[std::size_t(i)].refusals;
+    }
+}
+
+std::size_t DevelopPipeline::brushAccumBytes() const {
+    if (auxBrushAccum_ < 0) return 0;
+    const std::uint32_t w = pipeline_.auxWidth(auxBrushAccum_);
+    if (w <= 1) return 0;
+    return std::size_t(w) * height_ * sizeof(float);
+}
+
+void DevelopPipeline::commitBrushAccum() {
+    // ⚠ **Advanced from what ran, never from what was asked for.** The full
+    // graph is given parameters on every pointer event and rendered once, when
+    // the gesture ends; a hidden component is given parameters and never runs
+    // at all. Recording the claim at push time would leave the host believing
+    // the accumulator holds a stroke it was merely told about — the exact
+    // out-of-step this whole design is guarding, arriving through the front
+    // door.
+    const auto& run = pipeline_.lastRun();
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        auto& pending = brushPending_[std::size_t(i)];
+        if (!pending.valid) continue;
+        const std::string want = "mask:" + std::to_string(i);
+        bool executed = false;
+        for (const auto& n : run) {
+            if (n.name == want) { executed = n.executed; break; }
+        }
+        if (executed) brushPrev_[std::size_t(i)] = std::move(pending.state);
+        else          brushPrev_[std::size_t(i)] = {};
+        pending = {};
+    }
+}
+
+double DevelopPipeline::renderOnce() {
+    reconcileBrushAccum();
+    const double ms = pipeline_.render();
+    commitBrushAccum();
+    return ms;
+}
+
 double DevelopPipeline::render() {
     // A is a reduction over the whole frame, so it cannot be a node, and every
     // node downstream of it needs it before it runs. When it is stale the graph
@@ -2701,12 +2885,12 @@ double DevelopPipeline::render() {
     const bool needsPlan     = fusing_ && !fusePlanValid_;
 
     if (needsAirlight || needsPlan) {
-        const double first = pipeline_.render();
+        const double first = renderOnce();
         if (needsAirlight) estimateAirlight();
         if (needsPlan)     estimateFusionPlan();
-        return first + pipeline_.render();
+        return first + renderOnce();
     }
-    return pipeline_.render();
+    return renderOnce();
 }
 
 }  // namespace orion::pipe

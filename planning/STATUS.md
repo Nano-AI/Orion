@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**three gaps in the Swift layer a test could not see — the memberwise trap made a build error, a three-component control drivable, and the gesture file made able to fail; #110**)
+**Last updated:** 2026-08-02 (**the brush accumulates, the persisted keys migrated, and a failed render now says so instead of showing black — #102 to #112**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#103 built, #101 refused). **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
@@ -51,7 +51,16 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    below.
 2. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
    iterations. ~240 MB across a 5,000-photo cull. ~1 session.
-3. **Incremental brush accumulation.** ✅ **Cause proved 2026-08-01** — it is
+3. ~~**Incremental brush accumulation.**~~ ✅ **done 2026-08-01, #102 and
+   #108.** Both sessions shipped. A pointer event's cost is now flat in what
+   is already painted — `mask:0` **5.20 ms appending 49 dabs to 294 against
+   36.46 ms re-laying them**, same dab count and same host work, interleaved.
+   One R32Float accumulator for the live component, **98.25 MiB** rather than
+   the 393 a per-component one would have cost, decided from the arithmetic
+   rather than assumed. Ten mutations; three passed and were defects in the
+   checks. The first evaluation of a component is still linear, which is once
+   after a reload rather than once an event. Original note follows.
+   **Cause proved 2026-08-01** — it is
    `mask:0`, on **both** graphs, and the cost is `Σ blocks × box area`, not the
    dab count. Appending grows the block count and leaves the boxes their size,
    so it is linear. Host side is flat and three orders down (0.057 ms an event
@@ -229,7 +238,7 @@ check in either suite would catch it. Same class as the purple cast.
 |---|---|
 | Grading **Balance** | ✅ #104. Rigid shift of the three zone centres. Bit-identity at centre **measured against a rebuilt pre-change shader**, not asserted. Seven mutations red; one of its own checks could not fail and it rewrote it |
 | Perspective's **mask-extent** term | ✅ #107. ⚠ **The brief's premise was wrong** — #100's leak table does not reproduce, and the bug it did find (aspect, 0.1461 luma, a mask staying round over a picture squeezed 2:1) is an order worse than the one it was sent for |
-| Incremental brush accumulation, **session one only** | ✅ #102. The predicate alone, no accumulator. Fails correctly on **undo three, paint three different**; six mutations red; no rendered pixel moved, compared byte for byte rather than argued |
+| Incremental brush accumulation, **both sessions** | ✅ #102 then **#108**. The predicate, then the accumulator behind it. A pointer event costs the dabs appended rather than all of them: `mask:0` 5.20 ms adding 49 to 294 against 36.46 ms re-laying them. One R32Float texture for the live component — 98.25 MiB, not the 393 four would cost. Ten mutations, three of which passed and were defects in the checks |
 | Highlight fill, **pieces 2–3** | ✅ #105, #106. ⚠ It **measured** the subsampling question before spending the estimate: a quarter costs 0.8 points on a 6.1-point approximation, so 1/4 it is. ROADMAP's memory number was wrong by 16×. Real cost 149 → 173 nodes, 6971 → 7186 MiB, off by default |
 
 ⚠ **Two of the four found a check of their own that could not fail**, and said so
@@ -967,6 +976,125 @@ five invariants held in place of the constant.
 `_PIC8220.ARW`. ⚠ The **first** bench run reported p95 **18.52 ms** and failed
 the M0 gate; the two runs after it, on a quiet machine, gave **8.83** and
 **8.89 ms**. The binary did not change between them. Trust the node counts.
+
+## Session 2026-08-01m — the accumulator, and three checks that could not fail
+
+**Story:** incremental brush accumulation, **session two of two**. Decision
+**#108**; `research/brush-acceleration.md` and `ROADMAP.md`'s decomposition.
+
+**Shipped: the half that reads session one's predicate.** `mask_component.slang`
+kind 3 continues from a persistent R32Float coverage texture when the host knows
+the accumulator already holds dabs `[0, firstDab)`, instead of re-laying the
+whole stroke. The marginal cost of a pointer event stops depending on how much
+is already painted.
+
+### What it is worth
+
+`mask:0` alone, appending 49 dabs against re-laying the same stroke because one
+dab of its head moved. Same dab count, same host work, same blocks and boxes —
+only the kernel's starting index differs. Interleaved rep by rep in one process,
+two runs (`orion-bench` block **3d**):
+
+| Dabs already down | Append 49 | Head moved: re-lay all |
+|---|---|---|
+| 49 | 4.66 / 9.19 ms | 7.65 / 14.53 ms |
+| 294 | 5.20 / 5.80 ms | **36.46 / 46.87 ms** |
+
+**Flat in what is already painted, against linear in it.** The right column is
+also the cost before this change, which is what says the fixture did not move.
+The **first** evaluation of a component is still linear — after a reload, a
+geometry change or a nib move — which is once rather than once an event.
+
+### ⚠ The memory decided the shape, which is what the budget check was for
+
+| | Full | Preview | Both | On 7186 MiB |
+|---|---|---|---|---|
+| **One accumulator, for the live component** | 92.47 MiB | 5.78 MiB | **98.25 MiB** | **+1.37%** |
+| One per component, as ROADMAP costed it | 370 MiB | 23 MiB | 393 MiB | +5.5% |
+
+Painting is a single-component gesture. A per-component accumulator's only
+purchase over one shared texture is the *first* event after the photographer
+moves to another row — one out of a gesture's hundreds — and its price is paid
+by every photograph with four brush rows whether any is painted or not.
+Registered at 1×1, grown on the first dab, given back when no component is a
+brush. **Half-resolution accumulation is not available**: the acceptance test is
+bit-identity with a full evaluation, and a half-resolution accumulator is a
+different computation. R16Float fails the same way, and that one is measured.
+
+⚠ **The bench's 7186 MiB does not include any of it.**
+`Pipeline::intermediateBytes()` sums node *outputs*, so every aux texture — dabs,
+bounds, mattes, both LUTs, the grain plate, now the accumulator — sits outside
+the number the bench prints. Pre-existing; said out loud so "173 nodes,
+7186 MiB, unchanged" is not read as "nothing was allocated".
+
+### ⚠ Two things the plan did not know
+
+1. **Session one's `brushPrev_` answers a different question.** It advanced when
+   a stroke was *uploaded* — right for a predicate nobody reads. An accumulator
+   is a texture and a texture changes when the graph is **rendered**, and
+   `Engine::setAdjustments` applies to both graphs on every pointer event while
+   only the preview renders. During a gesture the full graph is handed a hundred
+   strokes and renders once. A claim recorded at push time would start the
+   catch-up render 180 dabs into a texture holding none of them. It is now
+   advanced from `Pipeline::lastRun()` — from what the graph reports having run.
+2. **A kernel that accumulates is not idempotent, and nothing else in this graph
+   is.** Run it twice on one parameter block and the new dabs go down twice — a
+   heavier stroke, in the right place, in the right shape. `apply` cannot see it
+   coming: white balance moves and the reference behind every mask component
+   changes. `reconcileBrushAccum` runs **immediately before the render**, where
+   nothing can intervene afterwards, and refuses the fast path to any node about
+   to run on parameters this `apply` did not push. The alternative is proving
+   nothing in a 2,500-line file dirties that node, which the next edit breaks
+   silently.
+
+### The mutations — ten, and three of them found real gaps
+
+| Mutation | Red |
+|---|---|
+| `firstDab` from the predicate's `prefix` rather than what the accumulator holds | **2** |
+| the claim recorded at push time instead of from `lastRun()` | **2** |
+| `reconcileBrushAccum` removed | **2** |
+| the block walk restarts at the block boundary, not at `firstDab` | **3** |
+| the accumulator is R16Float | **1** |
+| `firstDab` always 0 — the vacuity check | **15** |
+| ⚠ the old owner keeps `accumUse` when the accumulator changes hands | **0 → 1** |
+| ⚠ the refusal keyed on the host's record, not the node's `firstDab` | **0 → 2** |
+| ⚠ `ensureBrushAccum` does not clear claims on a reallocation | **0 → 1** |
+| `saturate(own)` stored instead of the raw value | **0, and it stands** |
+
+The three marked ⚠ passed everything, so the checks were the defect:
+
+- **The hand-off has a direction.** Mask nodes run in component order, so 0 → 1
+  has the stale writer running *before* the new owner and being overwritten. 1 →
+  0 reverses it and lands component 1's coverage on top of the accumulator
+  component 0 just filled. The test only had the harmless direction.
+- **The refusal was too wide** — correct, and it gives the whole feature back
+  the first time an unrelated slider moves. The new check asserts the refusal
+  count *did not* move.
+- **A safety net that could not fire.** Making the accumulator actually return
+  to 1×1 when the last brush stops being one — which ROADMAP promised and
+  nothing had built — is what made it reachable.
+
+The survivor is recorded rather than hidden: `saturate(own)` is the same number,
+because both composites are closed on [0,1] and correct rounding cannot carry a
+result past a bound the exact value respects. The raw store is kept because that
+argument is about the operations *currently* in the loop.
+
+### ⚠ And a fixture that nearly repeated #98
+
+The first version of bench probe 3d drew lines 0.018 of the frame wide and
+reported the append *slower* than the full re-lay. Dab count and block count grew
+exactly as intended; box area did not, so the product was constant — #98's trap
+reached from the other side. The probe now uses `appendedStroke`'s own geometry.
+
+### Gates
+
+`orion-tests` **794 checks, 0 failures** (50 new). `orion-viewport-tests` 3620,
+0. All **39** `repro/*.txt` exit 0, including
+`gesture-preview-agrees.txt`. `orion-bench` exits 0; **173 nodes, 7186 MiB**,
+both unchanged. The M0 p95 is advisory and moved 28.23/24.68 ms across two runs
+of this build — the load-bearing numbers are the node count and probe 3d's
+`firstDab`, and both are asserted.
 
 ## Session 2026-08-01l — the brush predicate, alone, and six mutations at it
 

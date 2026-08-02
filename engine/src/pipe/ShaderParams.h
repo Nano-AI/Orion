@@ -687,7 +687,24 @@ struct alignas(8) MaskComponent {
     /// been read from the wrong place. That is precisely what the asserts below
     /// exist to catch, and they did.
     std::int32_t  dabStride;
-    std::int32_t  _pad3[3];
+    /// **Where the dab loop starts.** Zero lays the whole stroke; anything
+    /// larger says the persistent accumulator already holds the coverage of
+    /// dabs `[0, firstDab)` and the kernel should continue from it.
+    ///
+    /// ⚠ Only ever set for the component that owns the accumulator — see
+    /// `accumUse` — and only when the host has *observed* that the accumulator
+    /// holds exactly that prefix. `params::unchangedPrefix` answering N is a
+    /// statement about the previous upload, not about the texture.
+    /// research/brush-acceleration.md; decision #108.
+    std::int32_t  firstDab;
+    /// Non-zero when this component owns the accumulator: it reads it when
+    /// `firstDab > 0` and writes its coverage back either way.
+    ///
+    /// ⚠ **At most one component may have this set.** Two writers would
+    /// interleave two strokes into one texture, and what renders is a
+    /// brushstroke — just not one anybody drew.
+    std::int32_t  accumUse;
+    std::int32_t  _pad3;
     /// Matte (kind 4): the live rectangle of the aux texture, which is
     /// allocated for the largest matte a producer might hand over. Zero
     /// disables the branch. research/masking.md §5.
@@ -714,6 +731,12 @@ static_assert(offsetof(MaskComponent, center) == 72);
 static_assert(offsetof(MaskComponent, semi)      == 80);
 static_assert(offsetof(MaskComponent, rangeLo)   == 88);
 static_assert(offsetof(MaskComponent, dabStride) == 104);
+// ⚠ These two took over two of `_pad3`'s three slots, so the struct did not
+// change size and every offset after them is where it was. Asserted rather
+// than trusted: the shader reads them by offset, and a disagreement here is a
+// dab loop starting in the wrong place, which draws a plausible stroke.
+static_assert(offsetof(MaskComponent, firstDab)  == 108);
+static_assert(offsetof(MaskComponent, accumUse)  == 112);
 static_assert(offsetof(MaskComponent, matteSize) == 120);
 static_assert(offsetof(MaskComponent, colorR)    == 128);
 static_assert(offsetof(MaskComponent, colorTol)  == 140);

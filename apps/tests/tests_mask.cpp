@@ -84,7 +84,7 @@ void testMaskGpu() {
     const auto run = [&](const orion::pipe::params::MaskComponent& m) {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kMask.second, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kMask.second, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -319,7 +319,7 @@ void testMaskBrushGpu() {
 
     const auto run = [&](const orion::pipe::params::MaskComponent& b) {
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), dst.get()}, &b, sizeof b, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()}, &b, sizeof b, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -593,7 +593,7 @@ void testMaskCompositeGpu() {
         for (const auto& p : parts) {
             src->upload(alpha.data(), std::size_t(kW) * sizeof(__fp16));
             orion::gpu::CommandBuffer cb(*device);
-            cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), dst.get()}, &p, sizeof p, kW, kH);
+            cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()}, &p, sizeof p, kW, kH);
             cb.commitAndWait();
             dst->download(alpha.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
         }

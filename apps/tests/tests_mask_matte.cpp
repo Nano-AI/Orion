@@ -90,7 +90,7 @@ void testMaskMatteGpu() {
     const auto run = [&](const params::MaskComponent& m) {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
@@ -220,7 +220,7 @@ void testMaskMatteGpu() {
 
         src->upload(ones.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
-        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), dst.get()}, &m, sizeof m, kW, kH);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(), dabBoundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> got(std::size_t(kW) * kH);
         dst->download(got.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);

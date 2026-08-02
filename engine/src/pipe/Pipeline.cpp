@@ -221,6 +221,33 @@ void Pipeline::updateAux(int auxId, const void* data, std::size_t bytesPerRow) {
     }
 }
 
+void Pipeline::resizeAux(int auxId, std::uint32_t width, std::uint32_t height) {
+    if (auxId < 0 || auxId >= static_cast<int>(aux_.size())) {
+        throw std::runtime_error("resizeAux: bad aux id");
+    }
+    auto& spec = auxSpecs_[static_cast<std::size_t>(auxId)];
+    if (spec.width == width && spec.height == height) return;
+    spec.width  = width;
+    spec.height = height;
+    aux_[static_cast<std::size_t>(auxId)] =
+        gpu::Texture::create(device_, width, height, spec.format);
+}
+
+std::uint32_t Pipeline::auxWidth(int auxId) const {
+    if (auxId < 0 || auxId >= static_cast<int>(auxSpecs_.size())) {
+        throw std::runtime_error("auxWidth: bad aux id");
+    }
+    return auxSpecs_[static_cast<std::size_t>(auxId)].width;
+}
+
+bool Pipeline::nodeDirty(int nodeId) const {
+    if (nodeId < 0 || nodeId >= static_cast<int>(dirty_.size())) {
+        throw std::runtime_error("nodeDirty: bad node id");
+    }
+    return dirty_[static_cast<std::size_t>(nodeId)] &&
+           nodes_[static_cast<std::size_t>(nodeId)].enabled;
+}
+
 void Pipeline::setSource(const void* samples, std::size_t bytesPerRow) {
     if (!compiled_) throw std::runtime_error("setSource before compile()");
     source_->upload(samples, bytesPerRow);
