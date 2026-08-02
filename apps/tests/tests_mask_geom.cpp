@@ -470,10 +470,19 @@ void testPerspectiveMaskGeometry() {
 /// conformal, and it leaked coverage past the rim of a large mask under a
 /// strong keystone while staying perfect at its centre.
 ///
-/// ⚠ **Every check below fails on the isotropic version**, which is what makes
-/// them checks rather than descriptions. The mutation is one line: return
-/// `{ax·s, ay·s, 0}` for `s = √|det J|` instead of the eigen-decomposition.
-/// Named cases and what they do to it are on each block.
+/// ⚠ **Five of the checks below fail on the isotropic version**, which is what
+/// makes them checks rather than descriptions: both axes of check 1, the turn in
+/// check 2, the rim invariant in check 3, and the two-to-one ratio in check 6.
+/// The mutation is one line: return `{ax·s, ay·s, 0}` for `s = √|det J|` instead
+/// of the eigen-decomposition. Named cases and what they do to it are on each
+/// block.
+///
+/// ⚠ **The rest are deliberately blind to it and say so where they sit** —
+/// check 4 preserves area, check 5 is the neutral control, and 6b is aimed at a
+/// different mutation entirely (the conjugation, which lives in `unperspective`
+/// and not here). This paragraph used to read "every check below", which was
+/// wrong about four of them before 6b existed and is the same over-claim #130
+/// went looking for: measured, not asserted.
 void testPerspectiveMaskExtent() {
     section("Perspective — a mask's extent");
 
