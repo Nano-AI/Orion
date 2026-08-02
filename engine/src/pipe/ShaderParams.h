@@ -10,8 +10,11 @@
 
 #include "pipe/GrainPlate.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <vector>
 
 namespace orion::pipe::params {
 
@@ -543,6 +546,91 @@ inline void buildDabBounds(const float* texels, int count, float* bounds)
         bounds[std::size_t(b) * 4 + 2] = maxX;
         bounds[std::size_t(b) * 4 + 3] = maxY;
     }
+}
+
+/// Everything besides the dab centers that changes what a laid dab covers.
+///
+/// The predicate below has to reject on these as well as on the texels: two
+/// uploads can carry identical centers and still paint differently, because the
+/// nib is one radius for the whole stroke rather than one per dab. Widening the
+/// brush and painting on re-lays every dab that came before it.
+///
+/// ⚠ `nibPx` is in **frame pixels** and is derived from the crop, so a tighter
+/// crop moves it with the geometry. That is deliberate — it is the number the
+/// kernel reads.
+struct BrushShape {
+    std::int32_t kind = 0;      // 3 is a brush; anything else has no stroke
+    float        nibPx = 0.0f;
+    float        flow = 0.0f;
+    float        hardness = 0.0f;
+    bool operator==(const BrushShape&) const = default;
+};
+
+/// One component's last uploaded stroke, kept so the next upload can be
+/// compared against it. `research/brush-acceleration.md` — this is the host
+/// half of the incremental accumulator, and it is deliberately built and
+/// attacked a session before anything reads it.
+///
+/// `texels` holds only the live prefix — four floats a dab, exactly the values
+/// handed to `updateAux` — so a short stroke costs a few kilobytes and the cap
+/// costs 256 KB, the same size as the buffer `apply` builds and throws away on
+/// every pointer event anyway.
+struct BrushPrefixState {
+    std::vector<float> texels;   ///< 4 floats a dab, post-transform, as uploaded
+    int                count = 0;
+    BrushShape         shape{};
+    /// False until a stroke has actually been uploaded for this component, and
+    /// reset whenever the accumulator behind it would be invalid — a reload, or
+    /// the component ceasing to be a brush.
+    bool               live = false;
+};
+
+/// **How many leading dabs of this stroke are unchanged since the last upload.**
+///
+/// Returns the length of the stable prefix: the number of dabs at the head of
+/// `texels` that are bit-identical to the ones stored in `prev`, capped at
+/// whichever of the two strokes is shorter. `0` if nothing was stored, or if
+/// the nib, the flow, the hardness or the kind moved.
+///
+/// ⚠ **It compares the post-transform texels — the floats actually uploaded —
+/// never the displayed-coordinate dab list.** A crop, a straighten or a quarter
+/// turn moves every center through `mask::toFrame` while leaving the stored
+/// stroke untouched, and a predicate reading the pre-transform list would call
+/// that prefix unchanged and keep coverage belonging to the old geometry. This
+/// is the same reason `buildDabBounds` above takes the texels.
+///
+/// ⚠ **The comparison is `memcmp`, not `==`.** The claim being made is that the
+/// kernel would compute the same coverage from the same inputs, and that
+/// follows from identical bits with no argument about float semantics attached.
+/// `==` would additionally have to defend `-0.0f == 0.0f` and `NaN != NaN`.
+///
+/// ⚠ The erase flag rides in the texel's `z`, so it is inside the comparison
+/// for free — which it must be: paint is source-over, erase is destination-out,
+/// and **the two do not commute**, so a dab that changed from one to the other
+/// invalidates every dab after it.
+///
+/// ⚠ **A grown count is not evidence of an unchanged prefix.** The tempting
+/// cheap version — "the stroke got longer, so what came before it is still
+/// there" — fails on *undo three dabs and paint three different ones*: the same
+/// count, a different prefix, and the coverage that survives renders a
+/// completely plausible brushstroke that nothing perceptual can see is wrong.
+/// The loop below is the whole reason this function exists.
+inline int unchangedPrefix(const BrushPrefixState& prev, const BrushShape& shape,
+                           const float* texels, int count)
+{
+    if (!prev.live || texels == nullptr) return 0;
+    if (!(shape == prev.shape)) return 0;
+    const int stored = std::min(prev.count,
+                                int(prev.texels.size() / 4));
+    const int n = std::min(count, stored);
+    for (int d = 0; d < n; ++d) {
+        if (std::memcmp(&texels[std::size_t(d) * 4],
+                        &prev.texels[std::size_t(d) * 4],
+                        4 * sizeof(float)) != 0) {
+            return d;
+        }
+    }
+    return n;
 }
 
 /// How a component folds into the coverage before it. research/masking.md §6,
