@@ -8,6 +8,38 @@ import AppKit
 /// Note what is NOT here: no SwiftUI types, no view state. The model stays a
 /// plain observable object so any panel built on it can be re-hosted in AppKit
 /// without touching engine code (decision #26).
+///
+/// ── This file is one of eight. Decision #117. ────────────────────────────
+///
+/// `Engine` reached 2,331 lines against a stated ceiling of 1,000 and was split
+/// by *region of the problem*, so both halves of a change sit together and
+/// which file is answered by what the feature is:
+///
+///   `Engine+Geometry.swift`  crop, straighten, rotation
+///   `Engine+Spots.swift`     spot removal
+///   `Engine+Mask.swift`      the mask group and its local adjustments
+///   `Engine+Brush.swift`     mask kind 3, and its live-stroke path
+///   `Engine+Document.swift`  open, restore, presets, versions, LUT, export
+///   `Engine+Render.swift`    textures, the push, the render, the readbacks
+///   `Engine+Compare.swift`   the held original and what invalidates it
+///
+/// ⚠ **Every stored property stays here, and that is not a style choice.** The
+/// `@Observable` macro only sees declarations in the class body — a `var` moved
+/// to an `extension Engine` in another file stops being observable, silently,
+/// and the panel bound to it stops redrawing. Methods and *computed* properties
+/// move freely. So this file is the storage plus the three lists that enumerate
+/// it — `state`, `assign` and `cAdjustments` — which are exactly the edits a new
+/// adjustment needs, kept in one place on purpose.
+///
+/// ⚠ `@ObservationIgnored` members are deliberate, not oversights. The live
+/// brush buffers below carry it because decision #102's predicate depends on
+/// them *not* invalidating the develop panel. Do not tidy them.
+///
+/// ⚠ What the split cost: Swift's `private` is file-scoped, so members reached
+/// from an extension in another file had to widen to internal. Eighteen
+/// `private(set)` properties lost their compiler-enforced "only `Engine` writes
+/// this" and now rest on convention within the app target. That is the price of
+/// the ceiling and it is real; it is recorded rather than glossed.
 @Observable
 final class Engine {
 
@@ -25,18 +57,18 @@ final class Engine {
         }
     }
 
-    internal(set) var camera = ""
-    internal(set) var imageWidth: UInt32 = 0
-    internal(set) var imageHeight: UInt32 = 0
+    var camera = ""
+    var imageWidth: UInt32 = 0
+    var imageHeight: UInt32 = 0
 
     /// The whole frame after rotation, before any crop. The crop rectangle is
     /// normalized against this, and the crop tool's canvas is sized from it —
     /// `imageWidth` cannot stand in, because it is the *cropped* result.
-    internal(set) var frameWidth: UInt32 = 0
-    internal(set) var frameHeight: UInt32 = 0
+    var frameWidth: UInt32 = 0
+    var frameHeight: UInt32 = 0
 
-    internal(set) var lastRenderMs: Double = 0
-    internal(set) var isLoaded = false
+    var lastRenderMs: Double = 0
+    var isLoaded = false
 
     /// Why the last render failed, or `nil` if it did not.
     ///
@@ -47,7 +79,7 @@ final class Engine {
     /// rectangle, "0.0 ms", and no explanation, on a file the engine renders
     /// correctly from the scenario runner. The detail was there the whole time:
     /// `orion_last_error` had it and nobody read it.
-    internal(set) var lastFailure: String?
+    var lastFailure: String?
 
     var temperatureK: Float = 5500 { didSet { pushAndRender() } }
     var tint: Float = 0            { didSet { pushAndRender() } }
@@ -120,8 +152,8 @@ final class Engine {
 
     /// What the database knows about this photo's lens. Empty name means no
     /// match — which includes every manual lens, since those record no name.
-    internal(set) var lensProfileName = ""
-    internal(set) var lensProfileApproximate = false
+    var lensProfileName = ""
+    var lensProfileApproximate = false
     var hasLensProfile: Bool { !lensProfileName.isEmpty }
     var lensCaRed: Float = 0      { didSet { pushAndRender() } }
     var lensCaBlue: Float = 0     { didSet { pushAndRender() } }
@@ -200,7 +232,7 @@ final class Engine {
     /// facade rejects an index past it.
     static let maxMaskComponents = 4
 
-    internal(set) var maskComponents: [MaskComponentState] = []
+    var maskComponents: [MaskComponentState] = []
 
     /// Rows whose saved matte file could not be read when the photograph opened.
     ///
@@ -235,7 +267,7 @@ final class Engine {
     /// The most spots one photo can carry. Matches the engine's own cap.
     static let maxSpots = 64
 
-    internal(set) var spots: [SpotState] = []
+    var spots: [SpotState] = []
 
     /// True while the tool is armed and a click on the photo places a spot.
     ///
@@ -255,7 +287,7 @@ final class Engine {
     var selectedSpot: Int = -1
 
     /// One local adjustment set per layer.
-    internal(set) var layers: [LocalAdjustState] = [LocalAdjustState()]
+    var layers: [LocalAdjustState] = [LocalAdjustState()]
 
     /// Armed by the panel's picker button. The canvas consumes the next click,
     /// exactly as it does for spot placement.
@@ -274,7 +306,7 @@ final class Engine {
     /// View state, not edit state, so it is deliberately not in `DevelopState`:
     /// it is a picture of a gesture, not part of the photograph. Reopening a
     /// photo leaves it nil and the panel falls back to the target's hue.
-    internal(set) var maskColorSwatch: (r: Double, g: Double, b: Double)?
+    var maskColorSwatch: (r: Double, g: Double, b: Double)?
 
     /// Bumped per component whenever that component's stroke changes.
     ///
@@ -363,10 +395,10 @@ final class Engine {
     var suspended = false
 
     /// Bumped after every successful render so the view knows to redraw.
-    internal(set) var generation: UInt64 = 0
+    var generation: UInt64 = 0
 
     /// 128 bins per channel, packed R then G then B.
-    internal(set) var histogramBins: [UInt32] = []
+    var histogramBins: [UInt32] = []
 
     let history = EditHistory()
 
@@ -403,15 +435,15 @@ final class Engine {
     /// resolution — which is the expensive one, since it is the tick that
     /// dirties the graph — and picks the wrong answer for a slider nudged by
     /// the keyboard.
-    internal(set) var interacting = false
+    var interacting = false
 
     /// The loaded creative LUT's title, or "" when none is loaded.
-    internal(set) var lutName: String = ""
+    var lutName: String = ""
 
     /// Why the last load failed, for the panel to show. A LUT that will not
     /// load is the user's file being wrong, not the app misbehaving, so the
     /// reason has to reach them — the parser names the line.
-    internal(set) var lutError: String?
+    var lutError: String?
 
     /// Captures every setting as a value, for undo.
     var state: DevelopState {
@@ -514,7 +546,7 @@ final class Engine {
     /// A fresh `DevelopState` in all but white balance, which is the camera's
     /// own reading and so belongs to the photo rather than to the app —
     /// "reset temperature" has to mean the camera's number, not 5500 K.
-    internal(set) var defaults = DevelopState()
+    var defaults = DevelopState()
 
     /// ⚠ **The status is read, and the fallback is the struct's own defaults.**
     /// It was discarded, and `OrionAdjustments()` is *zeroed* — so a refused
@@ -545,7 +577,7 @@ final class Engine {
 
     /// The unedited render, held so the split can show both at once without
     /// re-rendering on every drag of the divider.
-    internal(set) var originalTexture: MTLTexture?
+    var originalTexture: MTLTexture?
 
     var originalGeometry: OriginalGeometry?
 
@@ -726,7 +758,7 @@ final class Engine {
     /// orientation, so opening a portrait frame drew it landscape and then
     /// snapped. Holding the previous frame for the 26 ms decode is calmer than
     /// showing a picture that turns.
-    internal(set) var placeholder: NSImage?
+    var placeholder: NSImage?
 
     var histogramTask: Task<Void, Never>?
 
