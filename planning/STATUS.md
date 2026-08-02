@@ -141,6 +141,26 @@ the performance action item is in `ROADMAP.md`. `research/masking.md` is
 per-layer decomposition beyond stage 2. The largest standing violation of a
 stated hard constraint is `DevelopPipeline.cpp`, now **2,418 lines**.
 
+### ⚠ The second wave died mid-edit — nothing landed, nothing committed
+
+All four agents below were terminated by an API session limit while working.
+**Zero commits on all four branches**; every worktree holds broken half-edits
+(`tests_mask_geom.cpp` calling a 4-argument function with 7, a `subsample.cpp`
+that does not compile). Nothing was merged and nothing should be — main is clean
+at the commit that recorded them.
+
+⚠ **What survives is the brief, not the work.** Each item below is still
+unstarted and each still carries the trap that was named to it. Re-running them
+is a fresh start, not a resume.
+
+⚠ The lesson is about **how long an agent may run before it banks something.**
+The five agents of the first wave each ran 40–75 minutes and committed once, at
+the end; four of five happened to finish. These four did not, and lost
+everything. An agent on a multi-hour task should commit a skeleton early and
+refine it, so a kill costs the last increment rather than the session.
+
+The original brief for each:
+
 ### ⚠ In flight — four agents, isolated worktrees, 2026-08-01 (second wave)
 
 | Working on | Scope, and the trap named to it |
