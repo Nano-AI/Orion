@@ -1038,9 +1038,16 @@ extension Editor {
                 }
                 .frame(maxWidth: .infinity)
 
+                // Under the three wheels, because it is the axis they sit on
+                // and not a fourth wheel. Decision #101.
+                slider("Balance", $engine.gradeBalance, -1...1, "", 2,
+                       resetsTo: engine.defaults.gradeBalance)
+
                 Text("Angle picks the hue, distance picks how far. The wheels "
                      + "only change color — the slider under each one is what "
-                     + "changes that zone's brightness.")
+                     + "changes that zone's brightness. Balance slides where "
+                     + "the three zones sit: right hands more of the picture "
+                     + "to the highlight wheel, left to the shadow wheel.")
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.faint)
                     .fixedSize(horizontal: false, vertical: true)

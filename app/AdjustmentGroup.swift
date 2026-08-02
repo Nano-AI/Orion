@@ -59,6 +59,7 @@ struct AdjustmentGroup: View {
         case (.lutStrength, _):       $engine.lutStrength
         case (.grainAmount, _):       $engine.grainAmount
         case (.grainSize, _):         $engine.grainSize
+        case (.gradeBalance, _):      $engine.gradeBalance
         case (.vignetteAmount, _):    $engine.vignetteAmount
         case (.vignetteFieldAngle, _): $engine.vignetteFieldAngle
         }
@@ -95,6 +96,7 @@ struct AdjustmentGroup: View {
         case (.lutStrength, _):       return d.lutStrength
         case (.grainAmount, _):       return d.grainAmount
         case (.grainSize, _):         return d.grainSize
+        case (.gradeBalance, _):      return d.gradeBalance
         case (.vignetteAmount, _):    return d.vignetteAmount
         case (.vignetteFieldAngle, _): return d.vignetteFieldAngle
         }

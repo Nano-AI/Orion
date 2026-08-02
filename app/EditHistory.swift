@@ -287,6 +287,10 @@ struct DevelopState: Equatable, Codable {
     var gradeShadow: [Float] = [0, 0, 0]
     var gradeMidtone: [Float] = [0, 0, 0]
     var gradeHighlight: [Float] = [0, 0, 0]
+    /// Where the split between those three zones sits, -1..+1, positive toward
+    /// the highlights. Decision #101. Zero is the fixed -2.5 / 0 / +2.5 EV
+    /// centres every photograph edited before this existed was graded with.
+    var gradeBalance: Float = 0
     var denoiseLuma: Float = 0
     var denoiseColor: Float = 0
     var lutStrength: Float = 1
@@ -355,7 +359,7 @@ extension DevelopState {
         case cropX, cropY, cropW, cropH
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue
         case highlightRecovery, denoiseLuma, denoiseColor
-        case gradeShadow, gradeMidtone, gradeHighlight
+        case gradeShadow, gradeMidtone, gradeHighlight, gradeBalance
         case maskComponents, localExposureEv, maskRefine, spots
         case localContrast, localSaturation, localWarmth, localTint
         case layers
@@ -527,6 +531,10 @@ extension DevelopState {
         gradeShadow = triple(.gradeShadow) ?? gradeShadow
         gradeMidtone = triple(.gradeMidtone) ?? gradeMidtone
         gradeHighlight = triple(.gradeHighlight) ?? gradeHighlight
+        // A scalar, not a triple. `?? gradeBalance` keeps the zero, so a
+        // sidecar written before Balance existed reopens on the centres it was
+        // graded with rather than on a decoded absence.
+        gradeBalance = float(.gradeBalance) ?? gradeBalance
 
         hueShift = band(.hueShift) ?? hueShift
         satShift = band(.satShift) ?? satShift

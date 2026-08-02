@@ -150,6 +150,7 @@ final class InteractionLog: @unchecked Sendable {
         f("tint", a.tint, b.tint)
         f("clarity", a.clarity, b.clarity)
         f("dehaze", a.dehaze, b.dehaze)
+        f("gradeBalance", a.gradeBalance, b.gradeBalance)
         f("grainAmount", a.grainAmount, b.grainAmount)
         f("grainSize", a.grainSize, b.grainSize)
         f("vignetteAmount", a.vignetteAmount, b.vignetteAmount)
