@@ -766,6 +766,10 @@ void testHighlightFillWiring() {
     // color. Both the core and the partial annulus should end up here.
     chroma(onEvid, truth);
     const double cornerOffValue = double(ref[corner * 4 + 1]);
+    // The partial ring's green and blue never clipped, so no node in this chain
+    // is entitled to move them. Kept to compare against.
+    const double rimValidOff[2] = {double(ref[onRim * 4 + 1]),
+                                   double(ref[onRim * 4 + 2])};
 
     // ── 2. On is on ──────────────────────────────────────────────────────
     adj.highlightRecovery = 0.8f;
@@ -834,6 +838,47 @@ void testHighlightFillWiring() {
     report(rimOnGap < 0.5 * rimOffGap,
            "§3.3 carries the lamp's color into the partially clipped ring",
            "off " + std::to_string(rimOffGap) + " -> on " + std::to_string(rimOnGap));
+
+    // ⚠ **And this is the check that says it is a *transfer* and not a
+    // replacement.** Getting the chromaticity right is satisfied just as well by
+    // writing rho straight into the partial ring, which is what the §3.2 branch
+    // does one line up — and that would throw away the green and blue this pixel
+    // actually measured, which are the only detail a blown region has left. The
+    // ratio model exists precisely so those two survive untouched. Bit for bit,
+    // because "close" is what a lerp toward rho would also be.
+    //
+    // ⚠ **Measured across the node itself, in camera RGB, not in the reference
+    // image.** This check was written on `referenceImage()` first and failed on
+    // correct code: that texture is downstream of the camera matrix, which mixes
+    // the channels, so moving red moves Rec.2020's green and blue with it. The
+    // claim "only the clipped channel moved" is a claim about `hl_apply`'s own
+    // space and has to be read there.
+    {
+        const auto st = dev->highlightStages();
+        std::vector<__fp16> before(std::size_t(kN) * kN * 4), after(before.size());
+        st.output->download(before.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, kN);
+        st.filled->download(after.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, kN);
+        report(after[onRim * 4 + 1] == before[onRim * 4 + 1] &&
+                   after[onRim * 4 + 2] == before[onRim * 4 + 2],
+               "and it moves only the clipped channel — green and blue are untouched",
+               "g " + std::to_string(double(before[onRim * 4 + 1])) + " -> " +
+                   std::to_string(double(after[onRim * 4 + 1])) + ", b " +
+                   std::to_string(double(before[onRim * 4 + 2])) + " -> " +
+                   std::to_string(double(after[onRim * 4 + 2])));
+        report(double(after[onRim * 4 + 0]) > double(before[onRim * 4 + 0]),
+               "while the clipped red is lifted off the ceiling",
+               std::to_string(double(before[onRim * 4 + 0])) + " -> " +
+                   std::to_string(double(after[onRim * 4 + 0])));
+    }
+    (void)rimValidOff;
+
+    // ⚠ A `kMaxGain` check was written here and deleted rather than shipped.
+    // Its bound is 2x the ceiling and the ratio model in this fixture lands
+    // nowhere near it, so it was green for every value the constant could have
+    // taken, including one wired to nothing — the same defect two of piece 3's
+    // five mutations found. Whether the clamp binds on a real photograph is a
+    // measurement, and it is in `apps/bench` block 3e where a measurement
+    // belongs, not an assertion here where it cannot fail.
 
     // ── 3. And it touches nothing else ───────────────────────────────────
     //

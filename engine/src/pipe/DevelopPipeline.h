@@ -531,6 +531,10 @@ public:
     struct HighlightStages {
         const gpu::Texture* input  = nullptr;   ///< linear camera RGB, pre-recovery
         const gpu::Texture* output = nullptr;   ///< after `highlightRecover`
+        /// After `hlApply`. ⚠ Stale unless the fill ran on the last render —
+        /// the node is disabled at `highlightRecovery` 0 and holds whatever it
+        /// last wrote. Only meaningful with the control up.
+        const gpu::Texture* filled = nullptr;
         float clip  = 0.0f;                     ///< the common ceiling linearize clipped to
         float gamma = 0.0f;                     ///< fraction of it that counts as clipped
     };

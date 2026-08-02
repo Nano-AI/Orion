@@ -1413,7 +1413,7 @@ int main(int argc, char** argv) {
                 // evidence pixel as rho: f*_k = (rho_k/rho_j)*f_j over the
                 // clipped channels, with j the pixel's own valid channels.
                 double sumMove = 0.0, worstProposed = 0.0;
-                std::size_t moved = 0;
+                std::size_t moved = 0, capped = 0;
                 for (std::size_t i = 0; i < n; ++i) {
                     if (cls[i] == 2) {
                         deepest = std::max<std::size_t>(deepest, dist[i]);
@@ -1450,8 +1450,13 @@ int main(int argc, char** argv) {
                     double worstHere = 0.0;
                     for (int k = 0; k < 3; ++k) {
                         if (c0[k] < limit) continue;
+                        const double proposed = scale * double(rho[k]);
+                        // Does `hl_apply.slang`'s kMaxGain ceiling ever bind?
+                        // An unreachable clamp reads as a guard somebody is
+                        // relying on — `hl_pull.slang` lost one for that.
+                        if (proposed > 2.0 * double(st.clip)) ++capped;
                         worstHere = std::max(worstHere,
-                                             std::abs(scale * double(rho[k]) - double(c0[k])));
+                                             std::abs(proposed - double(c0[k])));
                     }
                     sumMove += worstHere;
                     worstProposed = std::max(worstProposed, worstHere);
@@ -1514,6 +1519,7 @@ int main(int argc, char** argv) {
                             "against clip %.4f: mean %.5f, worst %.5f (%zu px)\n",
                             st.clip, moved ? sumMove / double(moved) : 0.0,
                             worstProposed, moved);
+                std::printf("  ...of which kMaxGain would cap: %zu channel(s)\n", capped);
                 std::printf("  the ring that sets rho for every core: %zu px, "
                             "%zu beyond 12 px (%.1f%%), %zu untouched (%.1f%%)\n",
                             rimAll, rimBeyond,

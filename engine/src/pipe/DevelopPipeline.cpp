@@ -881,6 +881,7 @@ DevelopPipeline::HighlightStages DevelopPipeline::highlightStages() const {
     HighlightStages s;
     s.input  = &pipeline_.nodeOutput(nRgb_);
     s.output = &pipeline_.nodeOutput(nHighlights_);
+    s.filled = &pipeline_.nodeOutput(nHlFill_);
     s.clip   = lastWhiteClip_;
     s.gamma  = hlfill::kClipGamma;
     return s;
