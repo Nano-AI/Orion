@@ -237,8 +237,28 @@ void testHighlightFillGpu() {
     // ── 1. A constant rim fills with that constant, exactly ──────────────
     //
     // The strongest single statement about a harmonic function: with constant
-    // Dirichlet data the solution is that constant. Any weighting error, any
-    // lost normalization, any half-texel drift in either kernel shows here.
+    // Dirichlet data the solution is that constant.
+    //
+    // ⚠ **What that does and does not reach, measured rather than claimed.**
+    // This block used to say "any weighting error, any lost normalization, any
+    // half-texel drift in either kernel shows here", and it does not. With
+    // constant data every value in the pyramid is c·w for the same c, so any
+    // blend that carries colour and weight through the *same* arithmetic returns
+    // c/1 whatever its weights are — wrong taps, drifted taps, no taps. What the
+    // colour check below therefore asserts is the **pairing**: that the fill
+    // divides by the weight it actually accumulated, on both paths, in both
+    // kernels. Replacing the push with the naive un-premultiplied
+    // `lerp(up, f, f.a)` — the mistake `hl_push.slang`'s own header warns
+    // about — leaves it green at 3e-7 and reddens only "the shader and its host
+    // twin agree", which is the check that carries drift and tap coverage for
+    // this file (#130).
+    //
+    // The weight bound below is the part of the old claim that *can* be made
+    // true here, and it costs nothing: both kernels promise w stays in [0, 1] —
+    // `hl_pull.slang` calls Gortler et al.'s min(1, sum) cap unreachable because
+    // its taps are a partition of unity, and the push's w + (1−w)·w_up cannot
+    // leave [0, 1] either — and until now nothing tested it. Dropping the
+    // premultiplied guard, `f + up`, carries the weight to **1.61** here.
     {
         constexpr int kN = 96, kHole = 60;
         hf::Level in;
@@ -257,19 +277,31 @@ void testHighlightFillGpu() {
 
         const hf::Level gpu = runGpu(in);
 
-        double worst = 0.0, minW = 1e9;
+        double worst = 0.0, minW = 1e9, maxW = -1e9;
         for (int y = 0; y < kN; ++y) {
             for (int x = 0; x < kN; ++x) {
                 for (int k = 0; k < 3; ++k) {
                     worst = std::max(worst, std::fabs(double(colorAt(gpu, x, y, k)) - c[k]));
                 }
                 minW = std::min(minW, double(gpu.at(x, y).w));
+                maxW = std::max(maxW, double(gpu.at(x, y).w));
             }
         }
-        std::printf("  constant rim, %dx%d hole: worst color %.3e, min weight %.4f\n",
-                    kHole, kHole, worst, minW);
-        report(worst < 1e-5, "a constant rim fills with that constant",
+        std::printf("  constant rim, %dx%d hole: worst color %.3e, weight %.4f..%.4f\n",
+                    kHole, kHole, worst, minW, maxW);
+        report(worst < 1e-5,
+               "a constant rim fills with that constant — the fill divides by "
+               "the weight it accumulated",
                "worst " + std::to_string(worst));
+
+        // ⚠ The other half of the pairing, and the one that catches a weight
+        // going wrong on its own: a weight is a confidence and cannot exceed
+        // one. Both kernels say so in prose — the pull's taps are a partition of
+        // unity over weights already in [0, 1], and the push's w + (1−w)·w_up is
+        // a convex combination of two of them — and neither said so in a test.
+        report(maxW <= 1.0 + 1e-6,
+               "no weight anywhere in the pyramid exceeds one",
+               "max weight " + std::to_string(maxW));
 
         // ⚠ The weight after a push is a *confidence*, not a coverage flag, and
         // it does not reach one — the pull caps it at one and then averages it
