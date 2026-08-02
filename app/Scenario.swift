@@ -881,6 +881,25 @@ enum Scenario {
                 throw Bad(what: "the sidecar refused the write")
             }
 
+        case "nofailure":
+            // ⚠ A successful render must CLEAR the failure, and until 2026-08-02
+            // nothing anywhere checked that it did.
+            //
+            // `reopenrefused` asserts the failure is *set*, and decision #115's
+            // whole point was that a silent failure is worse than a loud one.
+            // But the other half was unpinned: #117's split deleted both
+            // `lastFailure = nil` on the success paths — so the status line
+            // would have shown a stale "Render failed" forever, on a photograph
+            // that renders perfectly — and 27 byte-compared frames, 40
+            // scenarios, 800 engine checks, 3702 viewport checks and the bench
+            // all stayed green. A stuck error message is how a working editor
+            // convinces a photographer it is broken.
+            guard engine.lastFailure == nil else {
+                throw Bad(what: "a successful render left the failure set: "
+                                + (engine.lastFailure ?? ""))
+            }
+            say("  no failure outstanding\n")
+
         case "reopenrefused":
             // `reopen`, but the sidecar is expected NOT to decode — the
             // photograph is left openable and nothing is collected.

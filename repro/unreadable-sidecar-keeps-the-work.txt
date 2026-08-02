@@ -80,3 +80,13 @@ expect rightFinal == rightBefore
 expect leftFinal != leftBare
 expect midFinal != midBare
 expect rightFinal != rightBare
+
+# ── ⚠ And the failure clears once something works ────────────────────────
+#
+# The other half of decision #115, unpinned until now. `reopenrefused` above
+# asserts the refusal is *reported*; this asserts it stops being reported the
+# moment a render succeeds. #117's split deleted both success-path clears and
+# nothing in the repository noticed — the status line would have read
+# "Render failed" forever on a photograph that renders perfectly.
+set exposure 0.5
+nofailure
