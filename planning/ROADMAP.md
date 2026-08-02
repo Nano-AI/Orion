@@ -400,34 +400,41 @@ What that bought, and what it did not:
 | Piece | State |
 |---|---|
 | A radial mask's **semi-axes and angle** under an anisotropic map | ✅ **exact under the derivative.** The whole first-order error is gone. Visible where it is the *only* error: an aspect squeeze is exactly linear and exactly area-preserving, so √\|det J\| was exactly 1 and a mask came out **round under a two-to-one squeeze** — 4 of 84 clear cells leaked at **0.1461** luma, and none do now |
-| The map's **curvature** across a large mask | ❌ **still there, now costed — 2026-08-02, decision #136.** No derivative at a point can see it. ⚠ **It is larger than "about a fifth off" made it sound**: measured against the exact answer over a 600 × 600 grid, a 0.34 mask under vertical 1.00 differs by **1.0000 coverage at worst** — pixels the render covers completely and the interface draws clear — mean 0.039, over **5.8%** of the frame. It reads as a fifth through `maskcheck` because that counts *cells*, and most of the disagreement is inside cells the overlay already calls covered. The error is quadratic in mask size: at 0.10 it is 0.25% of the frame. An aspect squeeze measures **exactly 0.0000**, which is the harness checking itself against a map that has no curvature |
+| The map's **curvature** across a large mask | ✅ **gone 2026-08-02, decision #138** — not reduced, removed: the mask is no longer transported at all. The kernel carries each pixel back through `mask::displayMatrix` and evaluates the ellipse as drawn, so there is no derivative left to be first order about. ⚠ **The size of what it removed**, measured against that same exact answer over a 600 × 600 grid before the fix: a 0.34 mask under vertical 1.00 differed by **1.0000 coverage at worst** — pixels the render covers completely and the interface draws clear — mean 0.039, over **5.8%** of the frame. It read as "about a fifth off" through `maskcheck` because that counts *cells*, and most of the disagreement sat inside cells the overlay already called covered. Quadratic in mask size: 0.25% of the frame at 0.10. An aspect squeeze measured **exactly 0.0000**, the harness checking itself against a map with no curvature. ⚠ **The performance question is answered**: 1.02 ms with the arithmetic against 1.07 without, on 24 MP — and `orion-bench` had to grow a radial probe first, because all four of its `mask:0` timings were brushes |
 | A linear gradient's **ramp length** | ✅ **anisotropy removed 2026-08-02, decision #134** — `mask::lengthAlong` gives \|J·u\| along the ramp's own pre-image direction. ⚠ Worth **0.0018 luma** at worst under a keystone and **0.0003** under an aspect squeeze, over a 6 × 6 patch grid — too small for any cell check, so the call site ships knowingly unpinned. ⚠ **The row here previously said "nothing at all" under a squeeze, because `Placement::jac` is the identity there. Both halves were false** (#136): that Jacobian is diag(0.500050, 1.000100) and the frames do differ. The claim had reached five documents |
 | A linear gradient's **level sets** | ✅ **fixed 2026-08-02, decision #137** — pulled back through the whole frame → display matrix as a ratio of two linear forms, which is exact rather than closer, and **cheaper than what it replaced** (six floats, two dots, one divide against four floats and one dot). `maskcheck 20 -2.0` under an aspect squeeze went from 3 of 27 clear cells leaked at 0.1300 luma to clean; §4c pins it. ⚠ One mutation — dropping the projective divide — was green on all 32 scenario checks and all 821 engine checks, because `maskcheck` says nothing about the falloff band; `testRampIsTheExactPullBack` closes that. The defect as found: | The kernel projects onto the segment between two endpoints, so its level sets are perpendicular to that segment in *frame* coordinates; the drawn mask's are perpendicular in *display* coordinates. t is a covector — it goes through **J⁻ᵀ** while the endpoints go through J, and the two agree only when J is conformal. Worst coverage difference **1.0000** under an aspect squeeze, 0.9548 under vertical 1.00. Red in the existing instrument: `maskcheck 20 -2.0` on the shipping build reports **3 of 27 clear cells leaked, worst 0.1300 luma**. No `repro/` section runs a *linear* mask under a squeeze, which is why it survived |
 
-⚠ `repro/perspective-carries-the-mask.txt` sits at **0.34** now, and its
-keystone half passes there before and after the fix — the section that goes red
-when the ellipse is reverted is the **aspect** one. A scenario that cannot fail
-is not a scenario.
+⚠ `repro/perspective-carries-the-mask.txt` sits at **0.34** now. Until #138 its
+keystone half passed before and after the ellipse fix — the only section that
+went red on a revert was the **aspect** one, because a squeeze is where the
+*first-order* error lives. §4d is the keystone's own section and it fails on a
+revert in four places at once (worst **0.1219** luma), which is what the
+curvature had needed all along. A scenario that cannot fail is not a scenario.
 
-### Both remaining terms, costed — 2026-08-02, decision #136
+### All three terms, costed and then built — #136 costed, #137 and #138 built
 
-The curvature row and the level-set row have **the same first piece**, which is
-why they are costed together rather than separately. Everything below is a
-consequence of one observation: the host transforms a mask's *parameters* once,
-and the exact answer is to transform the *point* — crop, straighten, quarter
-turns and the homography all compose into a single 3 × 3.
+The curvature row and the level-set row had **the same first piece**, which is
+why they were costed together rather than separately — and it is why the second
+of them took an hour rather than a session. Everything below is a consequence of
+one observation: the host transformed a mask's *parameters* once, and the exact
+answer is to transform the *point* — crop, straighten, quarter turns and the
+homography all compose into a single 3 × 3.
+
+✅ **All three pieces are built.** The estimate was ~2 sessions for the set and it
+came in at that, across #137 and #138.
 
 | Piece | What it is | Cost |
 |---|---|---|
 | ~~**1. `mask::displayMatrix`**~~ ✅ **done 2026-08-02, #137** | Fold crop, straighten, quarter turns and the perspective into one frame → display 3 × 3, in normalized coordinates. Pinned against `fromFrame` pointwise, which is the existing step-by-step path — they must agree or one of them is wrong. **Pure addition; no pixel moves**, so it is provable by byte comparison | ~half a session |
 | ~~**2. The linear gradient, exactly**~~ ✅ **done 2026-08-02, #137**, together with piece 1 | t(q) = ⟨n, (q,1)⟩ / (\|u\|··⟨M₃, (q,1)⟩), n = uₓ·M₁ + uᵧ·M₂ − ⟨z,u⟩·M₃. **Six floats, two dots, one divide** against the four floats and one dot it replaces — the exact form is *cheaper to justify* than the approximation. Verified to 2.2 × 10⁻⁶ on a 400 × 400 grid. ⚠ A red fixture already exists (`maskcheck 20 -2.0` under an aspect squeeze), so this one starts with a test that fails | ~half a session |
-| **3. The radial mask, exactly** | Two options, and the choice is a measurement rather than a preference. **(a) The conic**: r²(q) = ⟨q̃, C q̃⟩/⟨M₃, q̃⟩² with C = Mᵀ·Cₑ·M — exact, six floats, but **only for roundness = 2**, since a superellipse's level sets are not conics. **(b) The point map**: carry q through M per pixel and evaluate the mask exactly as drawn — exact for *every* kind, every roundness, every feather, and it deletes `radiusToFrame`, `lengthAlong` and `Placement::scale` outright. Costs one 3 × 3 and one divide **per pixel per component** on 24 MP, which is the open question | ~1 session, and it is the one with a performance answer attached |
+| ~~**3. The radial mask, exactly**~~ ✅ **done 2026-08-02, #138** — **(b)**, the point map | Carry q through M per pixel and evaluate the mask exactly as drawn: exact for every kind, every roundness, every feather, and it takes `radiusToFrame` and `lengthAlong` off the render path outright. **(a), the conic**, was not built — it is six floats but **only for roundness = 2**, and a superellipse's level sets are not conics. ⚠ The open performance question is closed by measurement, not by argument: **1.02 ms with the arithmetic, 1.07 ms with it removed**, on 24 MP; the pass is bound by writing R16Float over the frame, not by anything per pixel. Building the instrument was most of the work — `mask:0` was in this bench four times and was a *brush* every time | ~1 session, and it took one |
 
-⚠ **(b) is the honest end state and (a) is the cheap one.** (b) makes the shader
+⚠ **(b) was the honest end state and it is what shipped.** It makes the shader
 agree with the overlay *by construction* rather than by two derivations kept in
-step — which is the failure class this whole area exists to prevent — but it
-moves per-pixel work into a kernel that already runs full-resolution over every
-component. Nobody has measured that, so nobody should promise it.
+step — which is the failure class this whole area exists to prevent. The reason
+to hesitate was that it moves per-pixel work into a kernel that already runs
+full-resolution over every component, and the rule held: nobody had measured it,
+so nobody promised it. It was measured before it was believed, and it is free.
 
 ⚠ **What none of this removes:** the mask is still *applied* in `develop:linear`,
 which sees the uncorrected frame. Every piece here changes where the coverage is

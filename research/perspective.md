@@ -183,12 +183,24 @@ Four properties, each exact or explicitly not:
 |---|---|
 | a mask's **center**, a brush dab, a spot | **exact** — it is a point, and H maps points |
 | a linear gradient's **direction** | **exact** — H takes lines to lines, and the image line's direction is the Jacobian applied to the original direction |
-| a radial mask's **semi-axes** and **angle** | **exact under the derivative** — the ellipse J makes of the ellipse, in closed form. All of the anisotropy; none of the curvature |
-| a gradient's **ramp length** | **exact under the derivative** — \|J·u\| along the ramp's own pre-image direction. All of the anisotropy; none of the curvature, and none of the non-uniformity along the ramp |
+| a radial mask's **coverage** | **exact** — the pixel is carried back through the whole map and measured against the ellipse that was drawn. Nothing is approximated, at any mask size |
+| a gradient's **coverage** | **exact** — the pull-back of an affine ramp through a projectivity is a ratio of two linear forms |
 
-⚠ The fourth row read **isotropic, first order — √\|det J\| at the mask's own
-center** until 2026-08-02; see *The ramp*, below, for what replaced it and for
-how little it was worth.
+⚠ **Both rows read "exact under the derivative" until 2026-08-02, and the whole
+first half of this document is the story of getting there and then discovering
+that "there" was not the destination.** The derivative rows were:
+
+| Quantity | Under H, before |
+|---|---|
+| a radial mask's **semi-axes** and **angle** | exact under the derivative — the ellipse J makes of the ellipse, in closed form. All of the anisotropy; none of the curvature |
+| a gradient's **ramp length** | exact under the derivative — \|J·u\| along the ramp's own pre-image direction |
+
+The move that retired both was the same one, and it is smaller than either thing
+it replaced: **stop transporting the mask and start transporting the pixel.** A
+mask is a formula on the displayed picture; the kernel runs on the frame; the map
+between them is one invertible 3×3. Carrying the mask forward needs a derivative
+and is therefore first order forever. Carrying the pixel back needs a matrix
+multiply and is exact. Decisions #137 (the gradient) and #138 (the radial).
 
 ### The ellipse, and what it did and did not fix
 
@@ -304,6 +316,60 @@ The last row is the useful consolation: a mask a tenth of the frame wide is
 wrong over **0.25%** of the picture. The error is quadratic in the mask's size,
 as second order requires.
 
+#### And then it was simply deleted — decision #138, 2026-08-02
+
+⚠ **The table above measures a defect that no longer exists, and it is kept
+because the size of it is the argument for the fix.**
+
+Every number in it was produced by comparing the shipping answer against *the
+exact answer computed the obvious way* — carry each frame point out to the
+displayed picture with `mask::fromFrame`, and evaluate the mask the photographer
+drew. Writing that comparison is what made the fix obvious: the reference
+implementation **was** the fix. It had been sitting in the measurement harness
+for a session, being used to grade an approximation it could have replaced.
+
+The kernel now does exactly what the reference did:
+
+    d = M·(q, 1),  in homogeneous coordinates, then divide
+    r = |R(−θ)·(d − c) / semi|,  the superellipse the interface draws
+
+where M is `mask::displayMatrix` — crop, straighten, quarter turns and the
+correction, composed once on the host, the same matrix §4c's ramp already used.
+The centre, the semi-axes and the angle reach the shader **untransformed**: they
+are the numbers in the sidecar.
+
+What that deletes, besides the error:
+
+- `mask::toFrame` for the mask centre, and `mask::radiusToFrame` for its extent —
+  the SVD, the closed-form 2×2 eigenproblem, the crop scaling, all of it
+- the angle-as-a-*delta* bookkeeping of decision #83, which existed because
+  `toFrame` had already applied the quarter turns and `radiusToFrame` must not
+  apply them again
+- the straighten being added to the ellipse's angle while the quarter turns are
+  kept out of it — also #83, also gone
+- `MaskComponent::rampDen`, which was field for field the bottom row of the
+  matrix now being sent anyway
+
+The cost is one 3×3 and a divide per pixel, in a kernel that runs
+full-resolution once per component. **That was the open performance question and
+the answer is that there is no cost**: `orion-bench` now times a radial mask
+node — it did not before, all four of its `mask:0` probes were brushes — and it
+reads **1.02 ms** with the arithmetic and **1.07 ms** with it removed, on 24 MP.
+The spread within either condition is larger than the difference between them.
+The pass is bound by writing R16Float over the frame, not by anything computed
+per pixel. A keystone on top costs nothing further (1.02 against 1.03), because
+the matrix is applied whether or not it is the identity — deliberately, so there
+is no second code path and no branch only the uncommon case takes.
+
+⚠ **`radiusToFrame` and `lengthAlong` are still in the tree and still tested, and
+must not be wired back in.** They are the first-order answer, kept so the exact
+one can be *measured against* something —
+`testRadialIsTheExactPullBack`'s last three checks assert the gap is 0.0000 under
+a squeeze (which is linear, so there is nothing to buy) and between 0.50 and 1.00
+under a keystone at 1.00. Without that comparison the rest of the test passes on
+the code it replaced, since the matrix and `fromFrame` were both always correct;
+what was wrong was using a derivative instead of either.
+
 ### The ramp, which the ellipse did not touch
 
 The ellipse rescued the *radial* mask's extent and left the linear gradient's
@@ -359,7 +425,13 @@ the aspect squeeze — the case that had rescued the radial mask. It passed with
 the fix reverted. The reason recorded at the time was wrong, and the true reason
 is above: the term is small everywhere, not absent there.
 
-### And the level sets, which are wrong today
+### And the level sets, which were wrong until 2026-08-02
+
+✅ **Fixed the day it was found, decision #137** — the ✅ note further down has
+the numbers. Written in the present tense below because that is how it was found,
+and the sequence is the useful part: this defect is what produced
+`mask::displayMatrix`, and `displayMatrix` is what made #138 a small change the
+following hour.
 
 ⚠ **Chasing the paragraph above turned up a first-order defect in the shipping
 build, in the same mask kind.** A gradient's *direction* is exact and its
@@ -469,6 +541,18 @@ magnification of the source, so the ceiling is a picture-quality judgement.
   returns exactly 1.0f; `diag(2, ½)` returns 2 along x and ½ along y, where
   √|det J| would answer 1 for both; and a shear `{1, ½, 0, 1}` along y returns
   √1.25, which no single matrix entry gives
+- `testRadialIsTheExactPullBack` — the kernel's arithmetic for a radial mask
+  (one 3×3, one divide) against walking `mask::fromFrame`'s four steps, over a
+  21 × 21 grid, on nine configurations from neutral to *crop + two turns +
+  straighten + keystone + squeeze at once*; then **what it bought**, as three
+  bounded numbers rather than an assertion that it is better
+- `testRampDenominatorIsTheMatrix` — a check on a *deletion*: the ramp's
+  denominator and the matrix's bottom row must be bit-identical, because the
+  kernel now reads one where the host derives the other
+- **on the GPU**, a radial mask rendered under a keystone with a crop, a turn and
+  a straighten under it, against the same `fromFrame` reference — and, beside it,
+  a check that the render **disagrees** with the first-order ellipse it replaced,
+  so the case cannot go slack without saying so
 
 `repro/`: `perspective-carries-the-mask.txt` — the control moves the picture, a
 mask stays on its subject with the control up, its extent survives an aspect
@@ -482,4 +566,10 @@ discovered, and the number is there for whoever decides a 0.002-margin golden
 check is worth its flakiness after all.
 
 `orion-bench`: a `perspective` control probe with a magnitude floor, per
-decision #37.
+decision #37, and — since 2026-08-02 — a **radial mask node profile**, with and
+without a correction under it. ⚠ Before that, `mask:0` appeared in this bench
+four times and was a *brush* every time; the parametric kinds that every local
+adjustment starts as had no timing at all. It was found by trying to answer a
+performance question with the instrument that was supposed to already cover it,
+and getting pure noise back because the measured kernel was untouched by the
+change.

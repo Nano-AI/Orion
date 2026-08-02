@@ -99,6 +99,8 @@ void testPerspectiveMaskGeometry();
 void testPerspectiveMaskExtent();
 void testDisplayMatrixMatchesFromFrame();
 void testRampIsTheExactPullBack();
+void testRampDenominatorIsTheMatrix();
+void testRadialIsTheExactPullBack();
 void testPerspectiveWiring();
 void testNoiseEstimator();
 void testDenoiseGpu();

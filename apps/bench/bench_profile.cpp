@@ -64,6 +64,44 @@ void nodeProfiles(Bench& b) {
 
     profileDrag("Clarity", [](orion::pipe::Adjustments& a) { a.clarity = 1.0f; });
     profileDrag("Dehaze",  [](orion::pipe::Adjustments& a) { a.dehaze  = 1.0f; });
+
+    // ── What a radial mask costs, with and without a correction under it ─────
+    //
+    // ⚠ **`mask:0` was in this bench four times before 2026-08-02 and was a
+    // *brush* every time.** The parametric kinds — the radial that every local
+    // adjustment starts as — had no timing at all, which was discovered by
+    // trying to answer a performance question with the instrument that was
+    // supposed to already cover it. The A/B came back as pure noise because it
+    // was measuring an untouched kernel.
+    //
+    // The question it exists to answer: decision #138 made a radial mask exact
+    // by multiplying every pixel by a 3×3 and dividing, in a kernel that runs
+    // full-resolution once per component. Both rows below run that arithmetic —
+    // the matrix is applied whether or not it is the identity, deliberately, so
+    // there is no branch to mispredict and no second code path to keep honest.
+    // The pair is here to show that a correction on top costs nothing further.
+    profileDrag("A radial mask", [](orion::pipe::Adjustments& a) {
+        auto& c = a.maskComponents[0];
+        c.kind = 2;
+        c.center[0] = 0.42f; c.center[1] = 0.48f;
+        c.radius[0] = 0.34f; c.radius[1] = 0.26f;
+        c.feather = 0.30f;
+        c.roundness = 2.0f;
+        a.maskCount = 1;
+        a.layers[0].exposureEv = -2.0f;
+    });
+    profileDrag("A radial mask under a keystone", [](orion::pipe::Adjustments& a) {
+        auto& c = a.maskComponents[0];
+        c.kind = 2;
+        c.center[0] = 0.42f; c.center[1] = 0.48f;
+        c.radius[0] = 0.34f; c.radius[1] = 0.26f;
+        c.feather = 0.30f;
+        c.roundness = 2.0f;
+        a.maskCount = 1;
+        a.layers[0].exposureEv = -2.0f;
+        a.perspectiveVertical = 1.0f;
+        a.perspectiveHorizontal = 0.60f;
+    });
 }
 
 void exportTiming(Bench& b) {

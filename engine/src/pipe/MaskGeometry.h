@@ -434,6 +434,17 @@ struct Extent {
 
 /// Radial semi-axes, scaled by the crop the same way a gradient's length is.
 ///
+/// ⚠ **No longer on the render path, as of decision #138.** A radial mask is no
+/// longer pushed forward into frame coordinates at all: the kernel carries each
+/// pixel back through `displayMatrix` and asks the ellipse the photographer
+/// drew, which is exact rather than exact-to-first-order. This is kept, and
+/// still tested, as *the first-order answer* — `testRadialIsTheExactPullBack`
+/// measures the exact result against it to say what the change bought, and that
+/// comparison is the only thing able to fail if the exact path silently becomes
+/// approximate again. Do not wire it back into `DevelopMask`.
+///
+/// The same is true of `lengthAlong` above, since decision #137.
+///
 /// ⚠️ **The quarter turns do not enter here, and getting that wrong is what put
 /// every radial mask in the wrong place on a turned frame.** The reasoning that
 /// they should was: a semi-axis has an axis of its own, unlike a length, so it

@@ -281,6 +281,83 @@ set perspectiveVertical 0
 set perspectiveHorizontal 0
 set maskAngle 0
 
+# ── 4d. The map's curvature across a large mask ───────────────────────────
+#
+# ⚠ **This is the section sections 3 and 4 could not reach, and it was red on
+# every build until 2026-08-02.** Decision #138.
+#
+# A radial mask travelled to the kernel as an ellipse pushed *forward* into
+# frame coordinates: the centre through `mask::toFrame`, the semi-axes and the
+# angle through the map's derivative at that centre. First √|det J| — one
+# isotropic number for a general 2×2, decision #100 — and then the exact
+# singular values of J·R·diag, decision #128. The second removed the whole
+# first-order error, which is what it claimed and all it claimed.
+#
+# What is left is the second order, and the record undersold it badly. A
+# homography's derivative differs at *every point*, so one 2×2 at the centre
+# describes a large mask's rim only as well as the map is close to linear
+# across it. Measured against the exact answer over a 600 × 600 grid, a
+# 0.34 mask under a vertical keystone of 1.00 differed by a **full 1.0000 of
+# coverage** at its rim, mean 0.039, over 5.81% of the frame. It read as "about
+# a fifth off" through `maskcheck` only because that instrument counts *cells*.
+#
+# What this block measured on the shipping build, this geometry, this frame:
+#
+#   maskcheck 12 -2.0   4 of 48 clear cells leaked, worst 0.0862 luma
+#
+# The fix carries no approximation and no special case. The kernel multiplies
+# each pixel by the whole frame → display matrix, divides, and asks the ellipse
+# the photographer drew — the same `mask::displayMatrix` §4c's ramp already
+# uses, and the same matrix for all four transforms at once. The centre, the
+# semi-axes and the angle now reach the shader untransformed.
+#
+# ⚠ **Large, and on the axis the keystone stretches.** Both matter. The error
+# is quadratic in the mask's size — a tenth of the frame is wrong over 0.25% of
+# the picture, which no cell grid resolves — and the pre-2026-08-01 version of
+# this file varied the axis the keystone *squeezes* and concluded there was
+# nothing here.
+mask radial
+set maskCentreX 0.40
+set maskCentreY 0.45
+set maskRadiusX 0.34
+set maskRadiusY 0.34
+set maskFeather 0.06
+set maskAngle 0
+set perspectiveVertical 1.0
+set perspectiveHorizontal 0
+maskcheck 12 -2.0
+
+# The other way, so a sign error cannot pass both.
+set perspectiveVertical -1.0
+maskcheck 12 -2.0
+
+# Off-centre, at an angle, and with the horizontal keystone in as well — so the
+# mask's own axes line up with neither the frame's nor the correction's, and a
+# fix that happened to work on an axis-aligned ellipse does not pass here.
+set maskCentreX 0.34
+set maskCentreY 0.38
+set maskRadiusX 0.34
+set maskRadiusY 0.24
+set maskAngle 0.7
+set perspectiveVertical 1.0
+set perspectiveHorizontal 0.60
+maskcheck 12 -2.0
+
+# And composed with a squeeze, which is where §4c found the level sets wrong:
+# the derivative is then anisotropic, varying, *and* non-conformal at once.
+set perspectiveAspect 0.6
+maskcheck 12 -2.0
+
+set perspectiveAspect 0
+set perspectiveVertical 0
+set perspectiveHorizontal 0
+set maskAngle 0
+set maskCentreX 0.5
+set maskCentreY 0.5
+set maskRadiusX 0.3
+set maskRadiusY 0.3
+set maskFeather 0.5
+
 # ── 5. All three fields survive a reopen ──────────────────────────────────
 #
 # Setting a property and reading it back never leaves `Engine`. Only a round

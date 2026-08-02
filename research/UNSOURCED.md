@@ -860,8 +860,15 @@ quadratic formula at n = 2, so what is written is the reduction, not a rival
 derivation. Said here because "reuse what is already there" was the instruction
 and this is why it was not followed.
 
-**What is left, and it is a different kind of thing.** One first-order term and
-one second-order one:
+**What is left: nothing.** ✅ **Both remaining terms are gone as of 2026-08-02,
+decisions #137 and #138** — and both went the same way, which is the part worth
+carrying: **the mask stopped being transported and the pixel started.** A mask is
+a formula on the displayed picture, the kernel runs on the frame, and the map
+between them is one invertible 3 × 3 (`mask::displayMatrix`). Carrying the mask
+forward needs a derivative and is therefore first order forever; carrying the
+pixel back is a matrix multiply and is exact. `radiusToFrame`, `lengthAlong` and
+`Placement::scale` are off the render path. The two entries below are kept as
+the record of what they were:
 
 1. ~~**A gradient's ramp length** is still √|det J|~~ — **the anisotropy is
    removed as of 2026-08-02, decision #134.** `mask::lengthAlong` returns |J·u|
@@ -897,13 +904,26 @@ one second-order one:
    leaked, worst 0.1300 luma**. It is not in §24's list of leftovers because it
    is not an unsourced constant; it is a wrong derivation, and
    `research/perspective.md` now carries the exact closed form.
-2. **The map's curvature**, which no derivative at a point can see. This is
-   what still leaks at the rim of a mask larger than about a third of the frame
-   under a strong keystone, and it is now the *whole* remaining error there —
-   `research/perspective.md` has the isotropic → ellipse table that shows the
-   ellipse buying about a fifth of a keystone's rim error and **all** of an
-   aspect squeeze's, which is exactly the split "first order removed, second
-   order left" predicts.
+2. ~~**The map's curvature**, which no derivative at a point can see~~ — ✅
+   **gone 2026-08-02, decision #138.** It was what leaked at the rim of a mask
+   larger than about a third of the frame under a strong keystone, and after the
+   ellipse it was the *whole* remaining error there.
+
+   ⚠ **"About a fifth of a keystone's rim error" undersold it badly, and the
+   correction is the useful part.** That figure came from counting *cells*, and a
+   cell is 1% of the frame at 10 × 10, so most of the disagreement sat inside
+   cells the overlay already classified as covered. Measured directly against the
+   exact answer over a 600 × 600 grid: a 0.34 mask under vertical 1.00 differed
+   by **1.0000 of coverage at worst** — pixels the render covers completely and
+   the interface draws clear — mean 0.039, over 5.8% of the frame. Quadratic in
+   mask size, so 0.25% of the frame at 0.10. An aspect squeeze measured
+   **exactly 0.0000**, which is the harness checking itself against a map that
+   has no curvature to find.
+
+   The kernel now carries each pixel back through the matrix and evaluates the
+   ellipse as drawn, so there is no derivative left to be first order about, at
+   any mask size. It cost nothing measurable: **1.02 ms against 1.07 ms** on
+   24 MP, the pass being bound by writing R16Float over the frame.
 
 ⚠ **And the table this entry used to print was not reproducible.** It recorded
 `0.34 × 0.22` leaking 2 of 60 cells at 0.0105 luma under vertical 0.45. Re-run
@@ -911,8 +931,12 @@ through the scenario file itself, on the build before the fix and the build
 after, that configuration gives **64 clear cells and no leak**. The keystone's
 error grows with the mask's extent along the axis it *stretches*; the old sweep
 varied the other one and read as exact where it should have read as clean.
-`repro/perspective-carries-the-mask.txt` sits at 0.34 now, and the section that
-fails when the ellipse is reverted is the **aspect** one, not the keystone one.
+`repro/perspective-carries-the-mask.txt` sits at 0.34 now. Until #138 the only
+section that failed when the ellipse was reverted was the **aspect** one, not the
+keystone one — because a squeeze is exactly linear, so it is where the
+*first-order* error lives and the whole of it shows. §4d is the keystone's own
+section, and it fails in **four places at once** on a revert of #138, worst
+0.1219 luma.
 ## §25 — The creative vignette's controls, though not its curve
 
 **Where:** `ops/vignette_ops.slang`, `DevelopPipeline::compositionCircle`,

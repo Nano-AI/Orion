@@ -306,12 +306,6 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
         // first row of a group, which has always had this property.
         if (m.startsLayer != 0) m.compose = int(params::MaskCompose::Add);
 
-        const auto placed = mask::toFrame(
-            {c.center[0], c.center[1], c.angle}, crop, turns,
-            adj.straightenDeg * 3.14159265358979324f / 180.0f,
-            adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
-            rotW, rotH, perspective);
-
         m.rangeLo = c.rangeLo;
         m.rangeHi = c.rangeHi;
         m.rangeSoft = c.rangeSoft;
@@ -333,23 +327,30 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
         m.matteSize[0] = matteLive_[std::size_t(i)][0];
         m.matteSize[1] = matteLive_[std::size_t(i)][1];
 
-        m.center[0] = placed.centerX; m.center[1] = placed.centerY;
-
-        // ⚠ And the perspective's own derivative at *this* mask's centre, which
-        // the crop's scale cannot carry: a homography's magnification differs at
-        // every point and in every direction, so the whole 2×2 travels with the
-        // placement. It is exactly the identity when the control is neutral, and
-        // `radiusToFrame` then returns the crop's answer untouched.
+        // ⚠ **A radial mask now travels as the numbers the photographer set**,
+        // and the kernel carries each pixel back to meet them. Nothing here is
+        // transformed at all.
         //
-        // The angle it hands back is a *delta*, because `placed.angle` has
-        // already been through the quarter turns and this must not turn them
-        // again (decision #83).
-        const auto ext = mask::radiusToFrame(
-            c.radius[0], c.radius[1], crop, placed.jac,
-            c.angle + adj.straightenDeg * 3.14159265358979324f / 180.0f);
-        m.semi[0] = ext.semiX;
-        m.semi[1] = ext.semiY;
-        m.angle   = placed.angle + ext.angleDelta;
+        // What stood here pushed the mask *forward* into frame coordinates:
+        // `toFrame` for the centre and the angle, `radiusToFrame` for the
+        // semi-axes through the map's derivative at that centre. Every step of
+        // that was exact to first order and none of it could be exact, because
+        // one 2×2 cannot describe a map whose derivative differs at every point.
+        // The rim of a large mask under a strong keystone was off by a full unit
+        // of coverage. Decision #138.
+        //
+        // It also deletes a whole class of bookkeeping: the angle no longer has
+        // to be a *delta* against an already-turned placement (decision #83), the
+        // straighten no longer has to be added to the ellipse's angle while the
+        // quarter turns are kept out of it (#83 again), and the crop no longer
+        // scales the semi-axes by hand. All four live in the matrix.
+        m.center[0] = c.center[0]; m.center[1] = c.center[1];
+        m.semi[0]   = c.radius[0]; m.semi[1]   = c.radius[1];
+        m.angle     = c.angle;
+
+        // The one map, for both geometric kinds — the ramp's denominator is its
+        // bottom row. `display` is computed once per apply, above the loop.
+        for (int r = 0; r < 9; ++r) m.display[r] = display.m[r];
 
         // A linear gradient's ramp, pulled back from the picture the
         // photographer is looking at instead of pushed forward into this one.
@@ -373,11 +374,14 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
         // t(q) = ⟨n, (q,1)⟩ / ⟨M₃, (q,1)⟩, where M is the whole frame → display
         // map. Exact for the homography, the crop, the straighten and the
         // quarter turns at once, because all four are in M.
+        //
+        // ⚠ Only the numerator is copied. `ramp.den` *is* `display`'s bottom
+        // row — the kernel reads it there, and `testRampDenominatorIsTheMatrix`
+        // is what keeps that true rather than merely currently so.
         const auto ramp = mask::ramp(c.center[0], c.center[1], c.angle,
                                      c.length, display);
         for (int r = 0; r < 3; ++r) {
             m.rampNum[r] = ramp.num[r];
-            m.rampDen[r] = ramp.den[r];
         }
         m.feather   = c.feather;
         m.roundness = c.roundness;

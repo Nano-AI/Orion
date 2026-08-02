@@ -4,8 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-02 (**the last first-order term in a mask's extent is
-gone, #134** — and no file in the tree is over the 1000-line ceiling, #131)
+**Last updated:** 2026-08-02 (**a mask's geometry is exact, #138** — no term of
+any order is left between what the interface draws and what the kernel renders,
+and no file in the tree is over the 1000-line ceiling, #131)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -57,25 +58,31 @@ shortening and not a deletion.
    keystone. Both prerequisite pieces landed with it — `mask::displayMatrix`
    folds crop, straighten, turns and the correction into one 3 × 3, and
    `mask::ramp` builds the two rows the kernel evaluates.
-2. **The perspective map's curvature across a large mask.** ✅ **Costed
-   2026-08-02 (#136)** — it was the only uncosted item, and it is no longer.
-   ⚠ **It is larger than the record implied**: against the exact answer over a
-   600 × 600 grid, a 0.34 mask under vertical 1.00 differs by **1.0000 coverage
-   at worst**, mean 0.039, over 5.8% of the frame — not the "about a fifth off"
-   that `maskcheck`'s cell counting suggested. Quadratic in mask size: 0.25% of
-   the frame at 0.10. **~1 session**, and it carries the one open performance
-   question in this area — the exact answer for *every* mask kind is a per-pixel
-   3 × 3 and a divide, in a kernel that already runs full-resolution per
-   component, and nobody has measured that.
+2. ~~**The perspective map's curvature across a large mask.**~~ ✅ **done
+   2026-08-02, decision #138.** Not reduced — removed. A radial mask is no
+   longer transported into frame coordinates at all; the kernel carries each
+   pixel back through `mask::displayMatrix` and evaluates the ellipse as drawn,
+   so there is no derivative left to be first order about. §4d of
+   `repro/perspective-carries-the-mask.txt` is the two-sided proof and fails in
+   **four places at once** on a revert, worst 0.1219 luma. ⚠ **The performance
+   question that came with it is answered by measurement**: 1.02 ms with the
+   per-pixel 3 × 3 and divide, 1.07 ms with it removed, on 24 MP — and the
+   instrument had to be built first, because all four of `orion-bench`'s
+   `mask:0` timings were brushes.
 3. **Americanising the persisted keys**, if wanted — a schema migration with
    dual reads, not a rename, because a persisted key is an interface and not a
    private name (#89). ~1 session. ⚠ **Needs sign-off before it starts**: it
    rewrites sidecars already on disk.
 
-⚠ **That is the whole open list, and it is two items long.** The merged copies
-offered four, and **two of the four had already shipped** — see the last two
-entries of the closed list. Both were checked against the tree and not against
-this file, which is the only way a queue this old can be trusted.
+⚠ **That is the whole open list, and it is one item long — which needs your
+sign-off before it can start.** The merged copies offered four, and **two of the
+four had already shipped**. Everything was checked against the tree and not
+against this file, which is the only way a queue this old can be trusted.
+
+⚠ **So the next session has nothing queued that it can start alone.** The
+honest options are the three blocked items below (all of which need you), or
+picking up something from `ROADMAP.md`'s unstarted work — X-Trans, Core ML
+denoise, DCP profiles — none of which has been costed.
 
 **Blocked on the developer, not on work** — these cannot move from this side:
 
@@ -227,339 +234,18 @@ through six, and their write-ups, moved to `HISTORY.md` at the 2026-08-02 prune
 (#132)** — this line used to end "and is the table below", and the table is
 there now.
 
-### ✅ 2026-08-02 — `Screenshot.swift` is five files, and the oracle did not move (#131)
-
-**1,196 lines against a ceiling of 1,000 — the last file in the tree over it.**
-It was **809** that morning; #125's three interface checks took it over the same
-day, so the tool that closed three coverage holes became the only remaining
-violation. **After this sweep, nothing in the tree is over 1,000.**
-
-**The seam is the check/picture line, and #125's own header had already drawn
-it.** Three scenes — `detail-tail`, `menu`, `render-failed` — assert rather than
-pose, and a scene that asserts is a different kind of thing. So:
-
-| File | Lines | What a change to it is |
-|---|---|---|
-| `Screenshot.swift` | 315 | the command line and the driver, in run order |
-| `Screenshot+Scenes.swift` | 353 | **add a scene** — `apply(scene:to:)`, `tab`, `snapshots` |
-| `Screenshot+Checks.swift` | 189 | **add a check-scene** — `checkMenu`, `requiredCommands`, `scrolls`, `minimumHeight` |
-| `Screenshot+Measure.swift` | 315 | pixels out, as pictures and as numbers |
-| `Screenshot+Render.swift` | 109 | a SwiftUI hierarchy to a PNG, offscreen |
-
-Verbatim motion, extracted by line range with a script that proves **every one
-of the 1,196 lines is claimed by exactly one destination**. The one non-blank
-line not carried is `// MARK: Scenes`, replaced by the per-file headers.
-⚠ #117's Swift tax again: `private` is file-scoped, so **eleven members widened
-to internal** because `run` calls across every seam; four stayed private. In the
-header of `Screenshot.swift` so nobody reads it as carelessness.
-
-#### ⚠ The oracle was checked against itself before it was believed
-
-This file **is** the interface oracle, so breaking it silently would blind the
-checks that guard the UI. 45 scenes plus `menu`, rendered **twice from the
-pre-split binary**: **44 of 45 agree with themselves, and `versions` does not** —
-exactly #125's warning, its rows stamp `Date()` at minute resolution. So
-`versions` is reported, not asserted around.
-
-| Comparison | Result |
-|---|---|
-| pre-split vs pre-split (self-check) | 44/45 identical; `versions` differs |
-| pre-split vs post-split | **44/45 identical; `versions` the only difference** |
-| exit codes, 46 runs | identical |
-| stderr, 46 runs (path normalised) | identical |
-| 40 repro scenarios, full output | 36/40 byte-identical, **40/40 exit 0** |
-
-`detail-tail` reproduces #125's measurement to the tenth — 570.0 points
-scrolled, 1,701.0 of content past a 1,131.0-point window — and `menu` reports
-the same 75-item bar with 26 of 26 present. The four repro logs that differ
-differ **only in milliseconds and frames per second**: `slider-drag-cost`,
-`gesture-preview-agrees`, `eyedropper-latency`, `dehaze-reaches-the-picture`,
-every one a scenario that prints a latency.
-
-#### The mutation table — all three of #125's, all three red
-
-| # | Mutation | Check | Result |
-|---|---|---|---|
-| M1 | delete Detail's five below-fold sections (`DevelopPanels+Detail.swift` 126–185, exactly the 60 lines #125 counted) | `detail-tail` | **exit 1**, "nothing overflows the panel column", no frame written |
-| M2 | delete the Reset Adjustments command | `menu` | **exit 1**, bar 75 → 74, 25 of 26, names the item and prints the whole bar |
-| M3 | delete the footer's `else if let why = engine.lastFailure` branch | `render-failed` | exit 0, frame **differs at char 11,672,187** — the same offset #125 recorded — **8,671 pixels**, band x 2632–3359 / y 1790–1846 |
-
-M3 confirmed by eye: the amber *Render failed — the compute pipeline could not
-be built* is gone, replaced by the ordinary grey hint. Each mutation reverted
-with `git checkout`, tree confirmed clean.
-
-⚠ **M2 could not be written the way #125 wrote it.** Deleting only the
-`Button("Reset Adjustments")` line does not compile — the `.keyboardShortcut`
-and `.disabled` modifiers below it dangle onto `View` (`error: instance member
-'keyboardShortcut' cannot be used on type 'View'`). The mutation is the
-three-line item. Worth knowing before anyone re-runs it.
-
-#### Gates
-
-800 / 3708 / 40 of 40 / bench exits 0. ⚠ **The bench's first run said FAIL at
-p95 32.13 ms and it was contention, not the build** — spread 5.65 ms across
-rounds, run while this split's own rebuilds were still finishing. Rerun on a
-quiet machine: **9.68 ms, spread 0.24**. The bench links no Swift at all, so
-this split cannot reach it; #116's point about the M0 gate stands.
-
-### ✅ 2026-08-02 — the two checks that claimed more than they checked (#130)
-
-**Decision #130.** The two holes #127 and #129 found by mutation and left alone
-are closed, and **a third of the same kind turned up while proving the first**.
-Both fixes are in `apps/tests/`; no engine line changed.
-
-⚠ **`testPerspectiveMaskExtent` check 6 named the `W⁻¹JW` conjugation and drove
-a pure aspect squeeze, whose Jacobian is diagonal — so the conjugation
-multiplied two zeros.** The squeeze block stays and now *asserts* that its
-derivative is diagonal, so the blindness is on the record rather than implied.
-Beside it, **6b drives a two-way keystone** (`{0.8, 0.6, 0}` on 600×400) at four
-off-axis spots, whose least |off-diagonal| is **0.0674**, and checks the carried
-derivative against **a central difference of `toFrame`'s own neighbouring
-centres** — an independent answer, because a *position* never passes through the
-conjugated matrix. Deleting the conjugation now prints **`worst 0.072389`**
-(tolerance 1e-3) and **`1.483727 rad`** (tolerance 5e-3) and exits 1.
-
-⚠ **The third hole was the file's own header**: *"every check below fails on the
-isotropic version"*. Running that mutation reddens **five**, and four checks are
-deliberately blind to it — check 4 preserves area on purpose, check 5 is the
-neutral control. Counted from the run, not from the sentence.
-
-⚠ **The highlight-fill comment was rewritten *and* the check strengthened.** *"A
-constant rim fills with that constant"* claimed *"any weighting error, any lost
-normalization, any half-texel drift … shows here"* and reached none of them:
-with constant data every value in the pyramid is c·w for one c, so any blend
-carrying colour and weight through the same arithmetic returns c whatever its
-weights are. The naive un-premultiplied `lerp(up, f, f.a)` — the mistake
-`hl_push.slang`'s own header warns about — leaves it green at **3e-7** and
-reddens only the CPU-twin check. The comment now says what it does assert (the
-*pairing*: the fill divides by the weight it accumulated). The one piece of the
-old claim that could be made true here is now **a check**: both kernels promise
-w stays in [0, 1] — the pull's taps are a partition of unity, the push's
-w + (1−w)·w_up is convex — and neither said so in a test. Dropping the
-premultiplied guard carries the weight to **7.12** and it now goes red at the
-block itself instead of two files away.
-
-Gates: **806** checks (800 + 6 new), **3708**, **40 of 40**, bench exit 0, M0
-p95 **9.21 ms** against 16.
-
-### ✅ 2026-08-02 — the last three oversize test files, split at the fixture (#129)
-
-**Decision #129.** `tests_brush.cpp` **1,142 → 824**, `tests_perspective.cpp`
-**1,110 → 837**, `tests_grade.cpp` **1,029 → 653**. Two new files
-(`tests_spot.cpp` 246, `tests_linear.cpp` 390) and two existing ones grown into
-(`tests_color.cpp` 324 → 414, `tests_mask_geom.cpp` 350 → 642). **`apps/tests/`
-is now entirely under the ceiling**, and by sweep at `49c8a83` the only file
-over it anywhere in 235 tracked sources is `app/Screenshot.swift` at 1,194,
-which is another story.
-
-⚠ **All three were the case #126 warned about — only just over the line — and
-all three had the same shape underneath.** In each file the *subjects*
-outnumbered the *fixtures*, and what came out was a whole test that shared
-nothing at all with the rest of its file: no device, no kernel, no helper, no
-frame. `testBayerDecimation` is a CPU Bayer mosaic in a GPU brush file, and it
-went to `tests_color.cpp` because its assertion is `channelAt` on **the fixture
-`testCfa` builds twelve lines above where it now sits**. `testSpotRemovalGpu`
-dispatches two kernels nothing else in the tree touches. The two host-side
-perspective mask checks read no GPU and none of their file's anonymous
-namespace — they are `mask::toFrame` on the host, which **is** what
-`tests_mask_geom.cpp` already is.
-
-⚠ **Two pairs were deliberately kept together, on #127's grounds.** The brush
-prefix predicate and its wiring test each name the other in their headers
-(*"the unit test above cannot see the two things this one exists for"*), and
-mutation M10 reddens checks in both at once. The tone bands and the local
-adjustments share one `developLinear` dispatch, and the first has to explain a
-mask binding it never samples while the second is the test that samples it —
-so they are one new file rather than two.
-
-⚠ **`testLensAutoScale` was left where it is**, and that is a decision: moving
-90 lines to sit beside `testLensGpu` would take `tests_tone.cpp` to 948 to save
-90 here. A split that does not clearly help is worse than no split.
-
-⚠ **Verbatim, proved by index**: 276 + 377 + 82 + 238 lines sliced out by line
-number and sliced back out of their destinations to compare with `HEAD` line
-for line. `orion-tests` output **byte-identical**, `diff` clean, 800 checks.
-
-⚠⚠ **Fifteen mutations, and the one that stayed green is the finding**:
-deleting the W⁻¹JW conjugation from `mask::unperspective` — *the exact mistake
-the check beside it names* — is invisible to every gate, because that check
-drives a pure aspect squeeze and a diagonal Jacobian makes the conjugation a
-no-op. Left unfixed and in the gap table. Two dangling doc comments (in
-`tests_brush.cpp` and `tests_grade.cpp`, both strays from the 2026-07-31 split)
-were also left alone, matching the one #127 recorded.
-
-Gates: **800 / 3708 / 40 of 40 / bench exits 0**, p95 **9.37, 9.15, 9.27 ms**
-over three runs against a 16 ms gate.
-
-### ✅ 2026-08-02 — the dead function and the comments that lost their subject (#128)
-
-The other half of what the splitting wave wrote down and did not fix. #122 named
-two defects in `DevelopPanels`; both are fixed, and the sweep they invited found
-**four more of the second kind and one comment that was simply wrong**.
-
-| What | Verdict |
-|---|---|
-| `maskKindCell` | **Deleted.** One occurrence in the whole tree — its own declaration. `grep -rn maskKindCell` over everything but `.git`, `build` and `third_party` returns the decl plus two mentions in `STATUS.md`/`DECISIONS.md` |
-| The doc above it | **Moved and rewritten.** It opens *"Masks — 'local' adjustments, on a tab of their own"*, so it is `maskPanel`'s; it sat where `maskPanel` used to be. Its last paragraph claimed *"the picker is a grid now"*, which stopped being true when the grid became `addMenu` — rewritten rather than relocated intact |
-| `DevelopPanels.swift` → `OrionApp.swift` | **Rewritten.** Sent readers to `OrionApp.swift` for `section`, `slider` and the tab bar; they are in `OrionApp+Tools.swift` and `OrionApp+Chrome.swift` (#121) |
-| `OrionApp+Tools.swift`, `OrionApp.swift` ×2 | **Rewritten.** All three still called `DevelopPanels.swift` the home of the panels. It holds one button (#122) |
-| `Engine.swift` | **Moved.** *"Names the control being changed"* documents `edit(_:_:)` and sat on `log`, which had a doc of its own directly beneath it |
-| `PhotoIndex.swift` | **Moved.** `refreshMarks`'s whole doc — stat, read, stat again — sat on the `marksReadWindow` test hook |
-| `Screenshot.swift` | **Split three ways.** `measure`'s doc, `regionStats`'s doc and `Surface`'s own were one block on `enum Surface` |
-| `MatteStore.swift` | **Split three ways.** `referenced`'s one-liner and the forty-line sweep policy both sat on `SidecarState`, which `a76ebfb` inserted above them. `git show` of the parent commit confirms the original attachment of each |
-| `LocalRefusals` / `PipelineOrder` "kept and still tested" | **Corrected, not deleted.** Both views are unreferenced and deliberately so — an in-code note says restoring either is one line. Nothing tests them; what is tested is `AdjustmentCatalogue.refusedLocally`, the table they generate from |
-
-⚠ **Five more unreferenced declarations found and left, on purpose.**
-`removeSpot(_:)`, `jumpHistory(to:)`, `clearPlaceholder()`, `moveCrop(dx:dy:)`
-and `allSyncableKeys` each have exactly one occurrence in the tree. All five are
-the *named half of a pair whose other half ships* — `removeLastSpot`,
-`undo`/`redo`, `showPlaceholder`, `setAspect`, `keys(for:)` — so each reads as a
-feature that was never wired rather than a leftover, and `removeSpot`'s own doc
-says which one: *"what a selected spot and a Delete key mean"*, and no spot
-Delete handler exists. Deleting something that turns out to be used is worse
-than leaving something dead, so they are listed here and left.
-
-⚠ **How they were found, so the next sweep is cheaper.** Two scripts, both in
-the session scratchpad rather than the repo. Dead declarations: extract every
-`func`/`var`/`struct`/`enum` name in `app/`, strip comments from every code file
-in the tree, count whole-word hits — one hit means the declaration only. Lost
-comments: inside a `///` block, a **short** line ending in `.` followed
-immediately by another `///` line means a paragraph ended early, which is what a
-second doc pasted onto the first looks like. Fifteen candidates, nine of them
-one subject written in two headlines and fine, six real.
-
-Gates 800 / 3708 / 40 of 40 / bench 0. ⚠ Three of those are blind to Swift, so
-`--scene detail` and `--scene detail-tail` were rendered from the pre-change
-binary **twice first** — byte-identical, so the oracle is an oracle — and both
-are byte-identical after the change by `cmp`. Which is the point: the only
-executable line deleted was one nothing could reach.
-
-### ✅ 2026-08-02 — `tests_effects.cpp` is three files, and every check kept its fixture (#127)
-
-**1,716 lines, the largest file in the tree**, and the first split cut at the
-**fixture** rather than the region — #126's seam, applied to the file it was
-raised about.
-
-| File | Lines | The fixture it is named for |
-|---|---|---|
-| `tests_display.cpp` | **331** | One row of scene-linear ramp through `developDisplay`, with a curve LUT and a cube bound. `testOutputDepth` + `testCreativeLut` |
-| `tests_highlights.cpp` | **865** | A blown lamp in a warm surround, in three forms. `testHighlightHaloGpu` + `testHighlightFillGpu` + `testHighlightFillWiring` |
-| `tests_effects.cpp` | **555** | Two operators that each build their own frame and read nobody else's. `testLocalLaplacianGpu` + `testDehazeGpu` |
-
-⚠ **Seven test functions, four fixture families — fewer fixtures than subjects,
-which is the whole reason the seam is not the subject.** Output depth and
-creative LUTs are different subjects on the *same dispatch*, and the depth test's
-own comment already has to explain the cube it never samples (*"or every texture
-after it shifts by one, which is silent and total"*); a subject split puts that
-comment in one file and its texture in another. The three highlight tests are one
-scene, and the wiring test's checks are **written against the solver test's** —
-*"`testHighlightFillGpu` asserts separately that it does not"* — so separating
-them leaves each half asserting a premise it no longer establishes.
-
-⚠ **Proved a pure move rather than asserted one.** 1,708 body lines were sliced
-out of the original **by index** and compared back against `HEAD` line for line,
-and `orion-tests` output is **byte-identical** before and after — `diff` clean,
-**800 checks, 0 failures**, same names, same order, because the running order
-lives in `main.cpp` and a translation unit has none.
-
-| # | Mutation | Check it reddened |
-|---|---|---|
-| M1 | `develop_display.slang` quantised to eight bits | *the output resolves far finer than eight bits could* — 2 distinct values |
-| M2 | red and blue swapped in `cubeCorner` | *an identity LUT leaves every pixel where it was* — worst 28/255 |
-| M3 | premultiplied guard dropped in `hl_push.slang` | *the shader and its host twin agree* — worst 6.55 |
-| M4 | `hl_apply.slang` §3.3 made a replacement | *it moves only the clipped channel* |
-| M5 | Burt downsample shifted one texel | 9 red, led by *alpha = 1 collapses back to the input* |
-| M6 | dark-channel stage skipped in `airlightFrom` | *the atmospheric light is the haze, not the brightest pixel* — A.r 3.0 |
-
-⚠ **One finding, written down and left alone.** *"a constant rim fills with that
-constant"* claims in its comment that *"any weighting error … shows here"*, and
-it does not: M3 scales colour and weight together, so `v/w` is unchanged and that
-check stays green while three of its neighbours go red. It is not unfailable — it
-is narrower than its comment says. Also left: a doc comment for
-`testExposureFusionMath` has been dangling at the end of this file since the
-2026-07-31 split, describing a test that lives in `tests_fusion.cpp`.
-
-Gates: 800 / 3,708 / 40 scenarios / bench exit 0.
-
-### ✅ 2026-08-02 — three holes in the interface's coverage, and they were one hole (#125)
-
-Two splits found, by mutation, that shipped UI could be deleted with every check
-green, and left them: a fix inside a refactor is unreviewable. All three are now
-closed, and **they had one cause** — `Screenshot.swift` builds `Editor` directly
-and drives only what is on screen at rest. So the panel was covered as far as it
-was tall, the menu was not covered at all because a `Commands` is not in
-`Editor`, and the status line's warning branch was never in a state that draws
-it.
-
-| Hole | The check now | Shape |
-|---|---|---|
-| **The Detail panel scrolls, and coverage stopped at the fold** (#122 M9) | `--scene detail-tail` | scrolls the real `NSScrollView` to its end and **refuses to write a frame when nothing overflows** |
-| **The Photo menu is unreachable from every check** (#121 M6) | `--scene menu` | clears the harness's hook, calls `OrionApp.main()`, reads `NSApp.mainMenu` — 26 commands by title, exit 1 naming any that is missing |
-| **The footer's `lastFailure` branch has no oracle** (#121 M8) | `--scene render-failed` | plants the failure **and suspends the engine**, so the warning is in a frame |
-
-**The mutations, each the exact deletion the two splits described.** Every check
-in the repository was green on all three before this session.
-
-| # | Mutation | Before | After |
-|---|---|---|---|
-| **M1** | delete Grain, Vignette, Dehaze, Clarity, Sharpening from `DevelopPanels+Detail.swift` — 60 lines | `detail-tail` exit 0 | ⚠ **exit 1**, *"nothing overflows the panel column"*. `--scene detail` byte-identical, 40 scenarios green, `menu` green — the old coverage is still blind, which is the point |
-| **M2** | delete the `Reset Adjustments` command from `PhotoCommands` | `menu` exit 0, 26/26 | ⚠ **exit 1**, *"MISSING from the menu bar — "Reset Adjustments""*, 25 of 26, bar 75 → 74 items. All three frames byte-identical, 40 scenarios green |
-| **M3** | delete the footer's `else if let why = engine.lastFailure` branch — 5 lines | `render-failed.png` | ⚠ **frame differs** (`cmp`, char 11,672,187). Looked at: the amber line is gone, the ordinary hint is back and only the 9-point `failed` readout remains — the reported bug exactly. `detail`, `detail-tail` and `menu` green, 40 scenarios green **including `nofailure`**, which pins the value and not the line |
-
-⚠ **The scroll landed past the section it was written for, and looking at the
-PNG is what caught it.** The Detail panel's content is **1,701 points** and the
-default window gives its scroll view **681**, so at 1680×1050 the scene at rest
-accounts for 0–681 and a frame scrolled to the *end* accounts for 1,020–1,701 —
-and **Grain sits in the 339-point band between them**, seen by neither. The
-scene asks for a 1,500-tall window (a resizable window on a taller display),
-which holds 1,131, leaves the end 570 points down, and makes the two frames
-overlap by 111 points with nothing between them. Confirmed by reading the
-capture, not by trusting the offset.
-
-⚠ **The planted failure was wiped by the layout, and the first capture
-photographed the bug while claiming to photograph the fix.** `render()` clears
-`lastFailure` on success and *laying the interface out renders*: the canvas's
-`onAppear` assigns `engine.cropPreview`, whose `didSet` is `pushAndRender()`.
-The frame came back showing the ordinary hint and `0.0 ms`. Suspending the
-engine is what a failed one looks like from the panel's side — no successful
-frame arrives to take the warning down.
-
-⚠ **A defect nobody was looking for, found on the menu check's first run.** The
-menu bar ships **`Compare Original  ()`**: `OrionApp+Commands.swift` writes
-`"Compare Original  (\\)"`, but a `Button`'s string is a `LocalizedStringKey`
-and a backslash is that grammar's escape character, so **the one item whose key
-is spelled only in its title has lost the key**. Nothing in the repository could
-see it until something read the real menu bar. Pinned as it ships and left
-alone: the fix is a line in a file this story does not own, and a check that is
-red the day it lands is not a check.
-
-⚠ **Reaching `PhotoCommands` honestly cost a re-launch, and the alternative was
-worse.** `CullActions` is reachable from a test and driving it would have been
-easy — and **green on M2**, which deletes the *button* and leaves the action it
-called sitting there. What was unchecked was whether the command is in a menu at
-all, so the check reads the menu. The price is that a window really does open
-for about a second, and that the check asserts presence rather than firing:
-the items are disabled at launch and firing one needs a photograph, a key window
-and focus. That is #110.3's shape — reach for the real thing, and say plainly
-which link is still unpinned.
-
-**Gates:** 800 / 3708 / 40 of 40 / bench exit 0, before and after. The three new
-checks are **byte-stable across two runs of one binary** (self-checked before
-being trusted — `versions.png` is not, and that is why).
-
 ### Where the counts stand, and the one gate that flakes
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** re-measured 2026-08-02 at the prune (#132), all four gates run
-end to end on a clean worktree. `orion-tests` **806 checks** ·
-`orion-viewport-tests` **3708 checks** · **40 `repro/` scenarios** · all 0
-failures. Bench exits 0: **173 nodes, 7186 MiB**, M0 gate PASS at **9.02 ms
-p95** — plus a preview graph at 1/16 that. ⚠ The previous copy of this block
-said **800** and **3702**, which were the counts before #125 and #129 added
-checks; the suites only ever grow, so a stale number here reads as a
-regression. The bench prints **54 named checks** on `_PIC8220`
+**Suites:** re-measured 2026-08-02 at #138, all four gates run end to end.
+`orion-tests` **844 checks** · `orion-viewport-tests` **3708 checks** ·
+**41 `repro/` scenarios** · all 0 failures. Bench exits 0 on all three frames.
+⚠ Earlier copies of this block said **806/3708/40**, and before that **800** and
+**3702** — the counts before #125 and #129 added checks; the suites only ever
+grow, so a stale number here reads as a regression. The bench prints **54 named
+checks** on `_PIC8220`
 and `_PIC8095` and 55 on `_PIC8148`, the extra one being that frame's waiver
 banner. `Orion --library-open <folder>` is a fourth gate: it
 opens a folder cold, warm and indexless in one process and fails when the warm
@@ -672,6 +358,92 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-02h` — the mask stopped travelling, and the pixel started
+
+**The queue's last geometric item, and it turned into a deletion.** A radial mask
+reached the kernel as an ellipse pushed *forward* into frame coordinates: centre
+through `mask::toFrame`, semi-axes and angle through the map's derivative at that
+centre — √|det J| first (#100), then the exact singular values of J·R·diag
+(#128). The second removed the whole first-order error, which is all it claimed.
+What was left is second order, and #136 had measured it the day before at a
+**full 1.0000 of coverage** at the rim of a 0.34 mask under a vertical keystone
+of 1.00, over 5.8% of the frame.
+
+⚠ **The fix was already written, and it was being used as the ruler.** Every
+number in that table came from comparing the shipping answer against the exact
+one — carry each frame point out with `mask::fromFrame`, evaluate the mask as
+drawn. The reference implementation *was* the answer. It had sat in the
+measurement harness for a session grading an approximation it could have
+replaced, and nobody noticed because it was filed under "how do I measure this"
+rather than under "what should this be".
+
+The kernel now multiplies each pixel by `mask::displayMatrix` — crop, straighten,
+quarter turns and the correction as one 3 × 3, the same matrix #137's ramp
+already used — divides, and evaluates the superellipse. **The centre, the
+semi-axes and the angle reach the shader untransformed.** They are the numbers in
+the sidecar.
+
+### It is a net deletion, and that is the strongest thing about it
+
+Gone from the render path: `toFrame` and `radiusToFrame` for the radial; the
+angle-as-a-*delta* bookkeeping of #83, which existed only because `toFrame` had
+already applied the quarter turns and `radiusToFrame` must not apply them again;
+the straighten added to the ellipse's angle while the turns are kept out of it —
+#83 again; and `MaskComponent::rampDen`, which was field for field the bottom row
+of the matrix now being sent anyway. `testRampDenominatorIsTheMatrix` is a check
+on that last deletion: the two must be bit-identical, because the kernel now
+reads one where the host derives the other.
+
+`radiusToFrame` and `lengthAlong` stay in the tree, still tested, marked in their
+own headers as **not on the render path**. They are the first-order answer, kept
+so the exact one can be measured against something.
+
+### ⚠ The performance question, and the instrument that could not answer it
+
+The item carried the one open performance question in the area: the exact answer
+is a per-pixel 3 × 3 and a divide, in a kernel that already runs full-resolution
+once per component, and nobody had measured it.
+
+The first attempt to measure it came back as **pure noise** — the A/B differed by
+less than the spread within either arm. The reason is worth more than the answer:
+**`mask:0` appeared in `orion-bench` four times and was a *brush* every time.**
+The parametric kinds that every local adjustment starts as had no timing at all,
+so the A/B was measuring a kernel the change could not reach.
+
+With a radial node profile added — permanently, so this cannot happen again —
+the answer is **1.02 ms with the arithmetic and 1.07 ms with it removed**, on
+24 MP. The same number twice. The pass is bound by writing R16Float over the
+frame, not by anything computed per pixel. A keystone on top costs nothing
+further, because the matrix is applied whether or not it is the identity —
+deliberately, so there is no second code path and no branch that only the
+uncommon case exercises.
+
+### ⚠ Almost the whole new test passes on the code it replaced
+
+`mask::displayMatrix` and `mask::fromFrame` were **both always correct**; what was
+wrong was using a derivative instead of either. So a test that checks the kernel's
+arithmetic against `fromFrame` — nine configurations, up to crop + two turns +
+straighten + keystone + squeeze at once — is a real check of the plumbing and
+says nothing at all about the defect.
+
+What says something is the block after it: build the first-order ellipse the old
+host built, and **bound the gap**. 0.0000 under an aspect squeeze — exactly
+linear, so there is nothing to buy, and that row is the measurement checking
+itself — and between 0.50 and 1.00 under a keystone at 1.00. The GPU case carries
+the same pairing: the render matches `fromFrame`, *and* disagrees with the
+first-order ellipse by more than 0.5, so the case cannot go slack without saying
+so.
+
+### Gates and mutations
+
+**Five mutations tried, five caught**: skipping the pull-back (GPU, worst
+1.0000), dropping the projective divide (0.9693), transposing the matrix
+(1.0000), kind 1 reading the wrong matrix row (two checks), and the full host
+revert to the push-forward construction (four scenario checks, worst 0.1219
+luma). `repro/perspective-carries-the-mask.txt` went 32 → 40 checks.
+
+**844 / 3708 / 41 of 41 / bench exit 0 on `_PIC8220`, `_PIC8095`, `_PIC8148`.**
 
 ## Session `2026-08-02g` — a gradient is a covector, and the endpoints were not
 
@@ -958,51 +730,21 @@ found: `testSweepDoesNotHoardTheDirectory`, 400 sweeps of a 300-file folder unde
 an 8 MB ceiling. The residual is a measurement in this file, not a test, and that
 is stated rather than implied.
 
-## Session `2026-08-02b` — a flat frame is not a photograph, and now the app says so
-
-**Reported twice, with a screenshot both times.** The photograph came back as one
-flat brown rectangle: panel values correct, size reading `4024 × 6024`, timer
-reading **147.4 ms** — a *successful* render — and no message anywhere. The
-histogram agreed with the canvas: three narrow spikes, which is what a constant
-looks like, so the output texture really was one colour rather than the canvas
-mis-drawing a good one.
-
-⚠ **Everything in this repository said the file was fine, and all of it was
-right.** Against the photographer's own `_PIC8291.ARW`, with their own sidecar
-restored, browsed in their own order: the scenario runner rendered it (luma
-0.2473), the export was a correct PNG, `--screenshot` of the real view hierarchy
-was correct, and both suites and the bench were green. Ten opens through the real
-window — slow, fast, and through LaunchServices — did not reproduce it either.
-
-**So the instrument had to go inside the running app.** `Engine.flatFrame` probes
-five separated points of every rendered frame; five agreeing to four decimal
-places means the graph collapsed, because sensor noise alone separates five
-pixels of a real photograph. The footer names it — *"Not a photograph — the
-render is one flat colour, rgb(...)"* — and `InteractionLog` records it once per
-onset, so the next report carries the fact rather than a picture of it.
-
-⚠ **Two gaps this exposed, both fixed.**
-
-| Gap | Why it mattered |
-|---|---|
-| The app could not be told what to open | `--scenario` drives the engine and `--screenshot` draws the view hierarchy; **neither runs the `MTKView`**, because AppKit cannot capture a Metal layer and a scenario has no window. A fault between the engine's texture and the drawable was reachable only by hand. `--open <photos…>` and `--dwell <ms>` now drive the real window through `openFile`'s own two steps |
-| A scenario's `open` does not restore the sidecar | so replaying a photographer's session log never reproduced what they were looking at. `reopen` does, and is what the new work used |
-
-`repro/flat-frame-is-not-a-photograph.txt` pins the **instrument, not the bug**:
-`notflat` on a photograph, `flat` twenty stops down where everything clips
-together, `notflat` again so the flag clears rather than sticking. Deleting the
-probe fails it — mutation-checked, exit 1. **41 scenarios, 806 engine checks,
-3708 viewport checks, bench exit 0 on all three frames.**
-
-⚠ **The bug itself is not fixed and not reproduced.** What changed is that it can
-no longer happen silently.
-
 ## The session log
 
-The **six most recent sessions are above** — `#131`, `#130`, `#129`, `#128`,
-`#127` and `#125`, all of them 2026-08-02. **Everything older lives in
+The **six most recent sessions are above** — `2026-08-02h` (#138), `g` (#137),
+`f` (#136), `e` (#135), `d` (#134) and `c` (#133). **Everything older lives in
 [`HISTORY.md`](HISTORY.md)**, which is the archive and is deliberately *not* part
 of the read order in `CLAUDE.md`.
+
+⚠ **Pruned again 2026-08-02 at #138, and a prune moves rather than copies.**
+Adding `h` took the count to twelve blocks, so seven moved: the six wave
+write-ups `#131`, `#130`, `#129`, `#128`, `#127` and `#125`, plus session
+`2026-08-02b`. **1,061 → 702 lines**, and all seven headings were checked by
+exact match to be *absent here and present there* before the write was made —
+7 of 7. The rule this enforces is #132's: 2026-08-01 left `2026-07-31j` in both
+files byte for byte, and a duplicate is worse than a long file, because the two
+copies drift and each looks complete from either end.
 
 ⚠ **Pruned 2026-08-02, decision #132.** Twelve agents merged that day and every
 one of them appended an entry, taking this file to **2,221 lines across 28

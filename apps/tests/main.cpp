@@ -37,6 +37,8 @@ int main() {
     testPerspectiveMaskExtent();
     testDisplayMatrixMatchesFromFrame();
     testRampIsTheExactPullBack();
+    testRampDenominatorIsTheMatrix();
+    testRadialIsTheExactPullBack();
     testPerspectiveWiring();
     testNoiseEstimator();
     testLinearizeClipsToWhite();

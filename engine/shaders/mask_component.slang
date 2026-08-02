@@ -55,22 +55,30 @@ struct MaskComponentParams
     float  angle;       // radial rotation, radians
     float  _pad;
 
-    /// A linear gradient's ramp, as the exact pull-back of the ramp the
-    /// photographer drew:  t(q) = <num, (q,1)> / <den, (q,1)>.
+    /// A linear gradient's ramp numerator:  t(q) = <num, (q,1)> / <dispW, (q,1)>.
+    /// The denominator is the matrix's bottom row, below, rather than a second
+    /// copy of it.
     ///
-    /// ⚠ Six scalars and not two float3s, deliberately: a float3 aligns to
-    /// sixteen bytes and offset 56 is not a multiple of sixteen, so Metal would
-    /// pad and every field after this would move. The C++ side asserts the
-    /// offsets either way, but a struct that only agrees by luck is a struct
-    /// that stops agreeing when somebody inserts an int.
+    /// ⚠ Scalars and not float3s or a float3x3, deliberately: a float3 aligns
+    /// to sixteen bytes — and so does every column of a float3x3 — and offset 56
+    /// is not a multiple of sixteen, so Metal would pad and every field after
+    /// this would move. The C++ side asserts the offsets either way, but a
+    /// struct that only agrees by luck is a struct that stops agreeing when
+    /// somebody inserts an int.
     float  rampNumX;
     float  rampNumY;
     float  rampNumW;
-    float  rampDenX;
-    float  rampDenY;
-    float  rampDenW;
-    float2 center;      // radial
-    float2 semi;        // radial semi-axes, normalized
+
+    /// **The whole frame → display map**, row-major: crop, straighten, quarter
+    /// turns and the perspective correction, composed once by
+    /// `mask::displayMatrix`. Row W is the projective denominator, which is
+    /// (0, 0, 1) whenever no correction is in play.
+    float  dispXX; float dispXY; float dispXW;
+    float  dispYX; float dispYY; float dispYW;
+    float  dispWX; float dispWY; float dispWW;
+
+    float2 center;      // radial centre, as drawn — display coordinates
+    float2 semi;        // radial semi-axes, as drawn — display coordinates
 
     /// Luminance range (kind 5), in **stops** — log2 of Rec.2020 luminance on
     /// the reference image. `rangeLo` and `rangeHi` are the band's edges and
@@ -288,17 +296,48 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         // since they compose into the one matrix these six numbers come from.
         // research/perspective.md; decision #137.
         const float num = p.rampNumX * q.x + p.rampNumY * q.y + p.rampNumW;
-        const float den = p.rampDenX * q.x + p.rampDenY * q.y + p.rampDenW;
         // The denominator is the bottom row of that matrix, so it is 1 without
         // a perspective and can only vanish on the line the correction sends to
         // infinity — which is outside any frame the auto-scale will show.
+        const float den = p.dispWX * q.x + p.dispWY * q.y + p.dispWW;
         const float t = (abs(den) > 1e-9f) ? num / den : 1.0f;
         own = maskFalloff(t);
     }
     else if (p.kind == 2)
     {
+        // ⚠ **Carry the pixel back to the picture, then ask the ellipse the
+        // photographer actually drew.** Exact, for the same reason kind 1 is:
+        // the crop, the straighten, the quarter turns and the correction are
+        // one projectivity, and a projectivity is invertible.
+        //
+        // What stood here was an ellipse whose centre, semi-axes and angle had
+        // been pushed *forward* into these coordinates using the map's
+        // derivative at the mask's own centre — √|det J| first (decision #100),
+        // then the exact singular values of J·R·diag (#128). Both remove the
+        // whole first-order error and neither can see the second: a homography's
+        // derivative differs at every point, so one 2×2 describes a large mask's
+        // rim only as well as the map is close to linear across it. It is not —
+        // a 0.34 mask under a vertical keystone of 1.00 reached a **full 1.0000
+        // coverage difference** at its rim, over 5.8% of the frame.
+        //
+        // The cost is one 3×3 and a divide per pixel, in a kernel that runs
+        // full-resolution once per component. That was the open performance
+        // question, and it is **measured, not argued**: `orion-bench` now times
+        // this node, and it is 1.02 ms with the arithmetic and 1.07 ms with it
+        // removed — the same number twice, on a pass that is bound by writing
+        // R16Float over 24 MP rather than by anything computed per pixel.
+        //
+        // ⚠ Applied whether or not the matrix is the identity, deliberately: a
+        // neutral photograph takes the same path as a corrected one, so there is
+        // no second code path to keep honest and no branch that only the
+        // uncommon case exercises. research/perspective.md, decision #138.
+        const float dw = p.dispWX * q.x + p.dispWY * q.y + p.dispWW;
+        const float2 d = float2(p.dispXX * q.x + p.dispXY * q.y + p.dispXW,
+                                p.dispYX * q.x + p.dispYY * q.y + p.dispYW)
+                       / ((abs(dw) > 1e-9f) ? dw : 1e-9f);
+
         const float c = cos(p.angle), s = sin(p.angle);
-        const float2 e = q - p.center;
+        const float2 e = d - p.center;
         const float u = ( c * e.x + s * e.y) / max(p.semi.x, 1e-6f);
         const float v = (-s * e.x + c * e.y) / max(p.semi.y, 1e-6f);
 
