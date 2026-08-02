@@ -823,6 +823,9 @@ private:
 
     /// Grows the accumulator to the frame's size the first time it is wanted.
     void ensureBrushAccum();
+    /// Gives it back when no component is a brush any more. ~97 MB at 24 Mpx is
+    /// not something to hold for a row the photographer deleted.
+    void releaseBrushAccum();
     /// ⚠ Immediately before a render: refuse the fast path on any node that is
     /// about to run with parameters this `apply` did not push. Compositing the
     /// same dabs twice is the failure this exists to make impossible.

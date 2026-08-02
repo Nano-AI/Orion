@@ -2189,6 +2189,18 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
     }
 
+    // ⚠ **Given back when the last brush goes away.** ~97 MB at 24 Mpx is not
+    // something to keep for a row that was deleted or switched to a gradient;
+    // a group of four gradients would otherwise be paying for an accumulator
+    // nothing reads, which is the objection `ROADMAP.md` raised against having
+    // one of these per component in the first place.
+    {
+        bool anyBrush = false;
+        for (int i = 0; i < adj.maskCount && !anyBrush; ++i)
+            anyBrush = adj.maskComponents[std::size_t(i)].kind == 3;
+        if (!anyBrush) releaseBrushAccum();
+    }
+
     const bool linearMoved =
         first || visibilityMoved ||
         adj.layers != lastAdj_.layers ||
@@ -2751,6 +2763,26 @@ void DevelopPipeline::ensureBrushAccum() {
     for (int i = 0; i < kMaxMaskComponents; ++i) {
         brushPrev_[std::size_t(i)]    = {};
         brushPending_[std::size_t(i)] = {};
+    }
+}
+
+void DevelopPipeline::releaseBrushAccum() {
+    if (auxBrushAccum_ < 0) return;
+    if (pipeline_.auxWidth(auxBrushAccum_) <= 1) return;
+    pipeline_.resizeAux(auxBrushAccum_, 1, 1);
+    accumOwner_ = -1;
+    for (int i = 0; i < kMaxMaskComponents; ++i) {
+        brushPrev_[std::size_t(i)]    = {};
+        brushPending_[std::size_t(i)] = {};
+        // ⚠ And the parameters, not only the record. The texture is 1x1 now:
+        // a kernel still carrying `accumUse` would read zero everywhere past
+        // the first texel, which is a stroke that quietly vanished rather than
+        // anything that looks like a fault.
+        auto& m = maskParams_[std::size_t(i)];
+        if (m.accumUse == 0 && m.firstDab == 0) continue;
+        m.accumUse = 0;
+        m.firstDab = 0;
+        pipeline_.setParams(nMaskComponent_[i], &m, sizeof m);
     }
 }
 
