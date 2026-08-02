@@ -656,7 +656,7 @@ void testHighlightFillWiring() {
 
     constexpr std::uint32_t kN = 256;
     constexpr double kCore = 48.0;      // fully blown out to here
-    constexpr double kRim  = 64.0;      // partially clipped out to here
+    constexpr double kRim  = 80.0;      // partially clipped out to here
     // ⚠ **And then a ring that is bright and wholly unclipped**, which the
     // fixture did not have before decision #109 and needed. Every ring here is
     // neutral at the sensor, so the truth about this lamp's color is one number
@@ -665,7 +665,14 @@ void testHighlightFillWiring() {
     // the ceiling, and piece 2 was handing *that* to the solver as its Dirichlet
     // condition. A test whose target was the partial ring's own color could not
     // see the error, because the error was in the target.
-    constexpr double kShoulder = 88.0;
+    //
+    // ⚠ And the partial ring is **32 pixels wide**, not 16, so that it straddles
+    // the window fit's 12-pixel reach. Its outer part is close enough to the
+    // clean ring to be recovered from real evidence; its inner part is not, and
+    // is declined. Both halves have to exist in one fixture or two of the
+    // mutations below cannot be seen: a predicate that overwrites the window
+    // fit's own answer needs a pixel the window fit answered.
+    constexpr double kClean = 104.0;
 
     // With black 0, white 4095 and camMul (2.0, 1.0, 1.5), `whiteClipFor` is the
     // lowest of the three post-balance levels, which is green's 1.0. A channel
@@ -674,7 +681,7 @@ void testHighlightFillWiring() {
     //
     //   4095 -> (1.00, 1.00, 1.00)   every channel at the ceiling: Omega^inter
     //   2500 -> (1.00, 0.61, 0.92)   red clipped, green and blue still valid
-    //   1500 -> (0.73, 0.37, 0.55)   nothing clipped, bright: the only evidence
+    //   1900 -> (0.93, 0.46, 0.70)   nothing clipped, bright: the only evidence
     //    300 -> (0.15, 0.07, 0.11)   dark, warm, and not evidence about a lamp
     orion::raw::BayerImage img;
     img.width = kN;
@@ -693,8 +700,8 @@ void testHighlightFillWiring() {
             const double d = std::hypot(double(x) - cx, double(y) - cy);
             const std::uint16_t v = (d < kCore)     ? 4095
                                     : (d < kRim)    ? 2500
-                                    : (d < kShoulder) ? 1500
-                                                      : 300;
+                                    : (d < kClean)  ? 1900
+                                                    : 300;
             img.samples[std::size_t(y) * kN + x] = v;
         }
     }
@@ -744,7 +751,8 @@ void testHighlightFillWiring() {
     const std::size_t centre = std::size_t(kN / 2) * kN + kN / 2;
     const std::size_t corner = std::size_t(4) * kN + 4;
     const std::size_t onRim  = std::size_t(kN / 2) * kN + kN / 2 + 56;   // in the annulus
-    const std::size_t onEvid = std::size_t(kN / 2) * kN + kN / 2 + 76;   // in the clean ring
+    const std::size_t onFit  = std::size_t(kN / 2) * kN + kN / 2 + 76;   // annulus, within reach
+    const std::size_t onEvid = std::size_t(kN / 2) * kN + kN / 2 + 92;   // in the clean ring
 
     pipe::Adjustments adj{};
     adj.wb = dev->asShotWhiteBalance();
@@ -869,6 +877,39 @@ void testHighlightFillWiring() {
                "while the clipped red is lifted off the ceiling",
                std::to_string(double(before[onRim * 4 + 0])) + " -> " +
                    std::to_string(double(after[onRim * 4 + 0])));
+
+        // ⚠ **Piece 2's rule, as a check rather than as a comment.** The outer
+        // part of the same ring is within the window fit's reach of the clean
+        // ring, so Masood et al.'s fit answered it from real evidence. This
+        // interpolant must not touch that answer — where both are available the
+        // measurement wins, and "recovered" is what the whole `rec > raw`
+        // predicate exists to detect. Bit for bit, all three channels.
+        //
+        // ⚠ Two mutations pass every other check in this file and fail here:
+        // spelling the predicate as a level test (`c >= limit`, which a lifted
+        // channel still satisfies) and letting the mask call the same pixel a
+        // hole. Both would have shipped against the 16-pixel fixture this test
+        // used before, where the fit recovered nothing at all.
+        // ⚠ Printed, because where the window fit's reach ends is the whole
+        // premise of this feature and it is easier to trust as a profile than
+        // as an argument. Red sits at the ceiling out to 72 px and lifts at 76,
+        // which is the 12-pixel reach measured against a ring starting at 80.
+        std::printf("  radial red after the window fit:");
+        for (int rr = 40; rr <= 100; rr += 4) {
+            std::printf(" %d:%.2f", rr,
+                        double(before[(std::size_t(kN / 2) * kN + kN / 2 + rr) * 4]));
+        }
+        std::printf("\n");
+        report(after[onFit * 4 + 0] == before[onFit * 4 + 0] &&
+                   after[onFit * 4 + 1] == before[onFit * 4 + 1] &&
+                   after[onFit * 4 + 2] == before[onFit * 4 + 2],
+               "a pixel the window fit recovered is left exactly as it left it",
+               std::to_string(double(before[onFit * 4 + 0])) + " -> " +
+                   std::to_string(double(after[onFit * 4 + 0])));
+        report(double(before[onFit * 4 + 0]) > double(st.clip),
+               "and that pixel really was recovered — its red is above the ceiling",
+               std::to_string(double(before[onFit * 4 + 0])) + " vs clip " +
+                   std::to_string(double(st.clip)));
     }
     (void)rimValidOff;
 
