@@ -147,6 +147,9 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.contrast        = adj->contrast;
     a.rotateQuarters  = adj->rotate_quarters;
     a.straightenDeg   = adj->straighten_deg;
+    a.perspectiveVertical   = adj->perspective_vertical;
+    a.perspectiveHorizontal = adj->perspective_horizontal;
+    a.perspectiveAspect     = adj->perspective_aspect;
     a.cropX = adj->crop_x; a.cropY = adj->crop_y;
     a.cropW = adj->crop_w; a.cropH = adj->crop_h;
     a.cropPreview = adj->crop_preview != 0;

@@ -1,8 +1,9 @@
-// Geometry — orientation, straightening, and crop, in one sampling pass.
+// Geometry — orientation, straightening, perspective and crop, in one sampling
+// pass.
 //
-// These three belong together because they are one coordinate transform. Doing
-// them as separate nodes would resample the image three times and soften it
-// three times over; composing the transform first and sampling once does not.
+// These belong together because they are one coordinate transform. Doing them
+// as separate nodes would resample the image once each and soften it once each;
+// composing the transform first and sampling once does not.
 //
 // Runs last in the graph, and is the only node whose output dimensions differ
 // from its input.
@@ -22,6 +23,19 @@ struct GeometryParams
     float2 cropOrigin;    // normalized, in post-rotation space
     float2 cropSize;      // normalized
     float2 pivot;         // straighten center, normalized in post-rotation space
+
+    // Nonzero when `perspective` is anything but the identity. A flag rather
+    // than a comparison, so a control at zero takes exactly the branch this
+    // kernel took before perspective existed and every baseline holds.
+    uint  perspectiveOn;
+    float _pad0, _pad1, _pad2;
+
+    // Destination-to-source homography in this frame's texel coordinates, one
+    // row per float4 so the padding is written down rather than assumed. The
+    // ninth entry is perspective[2].z — not .w, which is padding. Mirrored by
+    // `params::Geometry` in pipe/ShaderParams.h, which static_asserts that this
+    // array begins at byte 64.
+    float4 perspective[3];
 };
 
 /// Bilinear fetch. Outside the frame returns transparent black rather than
@@ -85,6 +99,24 @@ void geometry(uint3 tid : SV_DispatchThreadID,
         const float c = cos(p.straightenRad);
         const float2 d = r - pivot;
         r = pivot + float2(d.x * c - d.y * s, d.x * s + d.y * c);
+    }
+
+    // Perspective, between the straighten and the turns: the photographer fixes
+    // the keystone on the picture the camera's orientation already produced,
+    // and levels the horizon on the picture the correction produced.
+    //
+    // One homogeneous multiply on a coordinate that is already in hand — no
+    // second fetch, so the picture is still sampled exactly once. The whole
+    // correction (keystone, aspect, the auto-scale zoom and both coordinate
+    // conversions) was multiplied into this one matrix on the host.
+    // research/perspective.md.
+    if (p.perspectiveOn != 0u)
+    {
+        const float3 v = float3(r, 1.0f);
+        const float3 q = float3(dot(p.perspective[0].xyz, v),
+                                dot(p.perspective[1].xyz, v),
+                                dot(p.perspective[2].xyz, v));
+        r = q.xy / q.z;
     }
 
     // Undo the quarter turns to reach the source pixel.

@@ -75,6 +75,19 @@ final class Engine {
     /// wedges in the corners of the export.
     var straightenDeg: Float = 0   { didSet { constrainCrop(); pushAndRender() } }
 
+    /// Perspective correction — converging verticals, converging horizontals,
+    /// and the squeeze a strong correction leaves behind. research/perspective.md.
+    ///
+    /// ⚠ These deliberately do **not** call `constrainCrop`. The straighten has
+    /// to, because turning the frame leaves the crop rectangle reaching past
+    /// it; perspective does not, because `persp::autoScale` has already zoomed
+    /// the whole frame back to full, so anything already inside the frame is
+    /// still inside it. Shrinking the crop here would take away picture the
+    /// correction had just given back.
+    var perspectiveVertical: Float = 0   { didSet { pushAndRender() } }
+    var perspectiveHorizontal: Float = 0 { didSet { pushAndRender() } }
+    var perspectiveAspect: Float = 0     { didSet { pushAndRender() } }
+
     /// True while the crop tool is open.
     var cropPreview = false        { didSet { pushAndRender() } }
 
@@ -950,6 +963,15 @@ final class Engine {
         neutral.cropW = 1; neutral.cropH = 1
         neutral.straightenDeg = 0
         neutral.rotateQuarters = 0
+        // ⚠ And the perspective, for exactly the reason the other three are
+        // here: a raster matte is stored in FRAME coordinates, and a model
+        // handed a keystone-corrected picture would return a selection that
+        // fits the corrected picture and nothing else. The mask kernel does no
+        // correction of its own by design, so the correction has to be off on
+        // the way in.
+        neutral.perspectiveVertical = 0
+        neutral.perspectiveHorizontal = 0
+        neutral.perspectiveAspect = 0
         let heldPreview = cropPreview
 
         // ⚠ And the coverage overlay, for the same reason `export` turns it
@@ -1615,6 +1637,9 @@ final class Engine {
             highlights: highlights, shadows: shadows, whites: whites, blacks: blacks,
             vibrance: vibrance, saturation: saturation, contrast: contrast,
             rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
+            perspectiveVertical: perspectiveVertical,
+            perspectiveHorizontal: perspectiveHorizontal,
+            perspectiveAspect: perspectiveAspect,
             cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
             lensDistortion: lensDistortion, lensVignette: lensVignette,
             lensCaRed: lensCaRed, lensCaBlue: lensCaBlue,
@@ -1646,6 +1671,9 @@ final class Engine {
         whites = s.whites; blacks = s.blacks
         vibrance = s.vibrance; saturation = s.saturation; contrast = s.contrast
         rotateQuarters = s.rotateQuarters; straightenDeg = s.straightenDeg
+        perspectiveVertical = s.perspectiveVertical
+        perspectiveHorizontal = s.perspectiveHorizontal
+        perspectiveAspect = s.perspectiveAspect
         cropX = s.cropX; cropY = s.cropY; cropW = s.cropW; cropH = s.cropH
         lensDistortion = s.lensDistortion; lensVignette = s.lensVignette
         lensCaRed = s.lensCaRed; lensCaBlue = s.lensCaBlue
@@ -1738,6 +1766,14 @@ final class Engine {
     private struct OriginalGeometry: Equatable {
         var rotateQuarters: Int32
         var straightenDeg: Float
+        /// Perspective does not change the output *rectangle*, so it is not
+        /// here for the reason the other fields are. It is here because the
+        /// held original is rendered with the geometry copied across, and a
+        /// split showing a corrected edit beside an uncorrected original is two
+        /// different photographs.
+        var perspectiveVertical: Float
+        var perspectiveHorizontal: Float
+        var perspectiveAspect: Float
         var cropX: Float, cropY: Float, cropW: Float, cropH: Float
         /// The crop preview renders the whole frame with the crop as context,
         /// which is a different output shape again.
@@ -1748,6 +1784,9 @@ final class Engine {
 
     private var currentGeometry: OriginalGeometry {
         OriginalGeometry(rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
+                         perspectiveVertical: perspectiveVertical,
+                         perspectiveHorizontal: perspectiveHorizontal,
+                         perspectiveAspect: perspectiveAspect,
                          cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
                          cropPreview: cropPreview)
     }
@@ -1770,6 +1809,9 @@ final class Engine {
         neutral.tint = tint
         neutral.rotateQuarters = rotateQuarters
         neutral.straightenDeg = straightenDeg
+        neutral.perspectiveVertical = perspectiveVertical
+        neutral.perspectiveHorizontal = perspectiveHorizontal
+        neutral.perspectiveAspect = perspectiveAspect
         neutral.cropX = cropX; neutral.cropY = cropY
         neutral.cropW = cropW; neutral.cropH = cropH
 
@@ -1896,6 +1938,9 @@ final class Engine {
         a.whites = whites; a.blacks = blacks
         a.vibrance = vibrance; a.saturation = saturation; a.contrast = contrast
         a.rotate_quarters = rotateQuarters; a.straighten_deg = straightenDeg
+        a.perspective_vertical = perspectiveVertical
+        a.perspective_horizontal = perspectiveHorizontal
+        a.perspective_aspect = perspectiveAspect
         a.crop_x = cropX; a.crop_y = cropY; a.crop_w = cropW; a.crop_h = cropH
         a.crop_preview = cropPreview ? 1 : 0
         a.preview_x = Float(previewCanvas.origin.x)

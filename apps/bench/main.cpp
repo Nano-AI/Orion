@@ -799,6 +799,26 @@ int main(int argc, char** argv) {
                 // Lens. Distortion only resamples, so mean luma barely moves —
                 // vignetting is the readable one.
                 {"lens vignette",  flat, [](auto& a) { a.lensVignette = 1.0f; }, Metric::Luma, 0.1},
+                // Perspective, for the same reason and with the same shape: a
+                // homography only *moves* pixels, so mean luma is close to
+                // silent and `moved` is the whole signal. research/perspective.md.
+                //
+                // ⚠ The floor is high because a geometry change is among the
+                // loudest things in this table, and it is calibrated across
+                // three frames per decision #47: 1.84, 0.98 and 1.43 times the
+                // exposure reference on `_PIC8220`, `_PIC8095` and `_PIC8148`.
+                // Half the smallest. The spread is nearly two to one and it is
+                // the frame's own texture, not the correction — a warp of a
+                // smooth night sky moves fewer values than a warp of a detailed
+                // forecourt, and a floor set from `_PIC8220` alone would have
+                // been red on the other two.
+                //
+                // ⚠ It is also the only probe here that runs **one node**: the
+                // homography lives inside the geometry pass that was already
+                // there, so the graph does not grow. A day when this line reads
+                // 2 nodes is the day somebody chained a second resample.
+                {"perspective 0.6", flat, [](auto& a) { a.perspectiveVertical = 0.6f; },
+                 Metric::Luma, 0.48},
 
                 // ── Three-way grading ────────────────────────────────────
                 // The newest node in the graph, and it had neither a probe

@@ -160,6 +160,16 @@ struct Adjustments {
     /// rotates the image clockwise, which is what a "straighten" control means.
     float straightenDeg = 0.0f;
 
+    /// Perspective correction, each -1..1, all three folded into the geometry
+    /// node's single sampling pass. research/perspective.md.
+    ///
+    /// Zero on all three is not merely a small correction: it takes the branch
+    /// the kernel took before this existed, so the render is bit-identical to
+    /// one with no perspective in the build at all.
+    float perspectiveVertical   = 0.0f;
+    float perspectiveHorizontal = 0.0f;
+    float perspectiveAspect     = 0.0f;
+
     /// Crop rectangle in normalized post-rotation coordinates. The full frame
     /// is origin (0,0) size (1,1).
     float cropX = 0.0f, cropY = 0.0f;
@@ -619,6 +629,13 @@ private:
     int nGuideAb_ = -1, nGuideH2_ = -1, nGuideV2_ = -1;
     int exifQuarters_ = 0;
     int turns_ = 0;
+
+    /// The perspective correction as one matrix, in texel coordinates of the
+    /// rotated frame, and its inverse. Composed once per change in `apply` and
+    /// read by three places — the geometry parameter block, `mask::toFrame`,
+    /// and `displayedToFrame`. research/perspective.md.
+    persp::Matrix3 perspective_{};
+    persp::Matrix3 perspectiveInverse_{};
 
     /// Sixteen-bit tail. Matches the node declarations at construction.
     /// Narrow by default: the screen is the common case, and anything that

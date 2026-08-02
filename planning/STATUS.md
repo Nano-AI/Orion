@@ -11,14 +11,25 @@ component, Vision filling it, and now a band on brightness. Six mask kinds. A ma
 folded per §6 (add/subtract/intersect), optionally feathered onto the
 photograph's own edges, through the graph, the POD facade, the panel rows, the
 sidecar, undo and the bench.
+**Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
+**`research/masking.md` is finished** — primitives, groups, guided refinement, a
+raster component, Vision filling it, and a band on brightness. Six mask kinds. A
+mask is a *list* of components folded per §6 (add/subtract/intersect), optionally
+feathered onto the photograph's own edges, through the graph, the POD facade, the
+panel rows, the sidecar, undo and the bench.
+
+⚠ **Three duplicated blocks were removed from this header on 2026-08-01** — two
+`Last updated` lines, two overlapping queues numbered 4/5 twice, and three
+`Suites:` paragraphs, one of them two sessions stale. Four sessions had each
+edited the top of this file without reading what was already there, which is the
+same failure mode the 4,643-line prune was for.
 
 ⚠️ **M3 is done — do not rebuild it.** Dehaze, creative LUTs, exposure fusion
 and auto-enhance all shipped with research files, GPU tests and bench probes
 (sessions `2026-07-28e` through `2026-07-29d`, now in `HISTORY.md`; the cost
 table is immediately below). A stale kickoff prompt naming those four has now
 arrived **36 times**; the answer each time is that they exist, and each of the
-four now also has something that fails when its *wiring* breaks — see sessions
-`31e` and `31f`.
+four now also has something that fails when its *wiring* breaks.
 
 **Next story:** the queue, in order, each with a cost:
 
@@ -56,6 +67,20 @@ four now also has something that fails when its *wiring* breaks — see sessions
    8-bit path, output sharpening, and a location strip that also removes the
    IPTC place names. Decisions #90–#92.
 6. **Americanising the persisted keys**, if wanted — a schema migration with
+1. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
+   iterations. ⚠ Partly answered — `MatteStore.sweep`'s directory enumeration
+   was the bulk of it (decision #90) and the slope is now the `open` loop's at
+   every folder size. Re-measure before spending a session on it.
+2. **Incremental brush accumulation.** ⚠ Now *located*: the host-side O(N) is
+   gone and the slope did not change, so the residual is the **GPU dab loop**.
+   Costed in `ROADMAP.md`. ~1–2 sessions.
+3. **A mask's extent under a perspective correction is first order.** Bounded
+   and measured — exact up to a mask 0.28 of the frame across at vertical 0.45,
+   degrading at the rim beyond that. Costed in `ROADMAP.md` under *Perspective —
+   what is not done*. ~half a session.
+4. **Snapshots / versions** — the last unbuilt line of M4 now that perspective
+   has shipped. Unestimated.
+5. **Americanising the persisted keys**, if wanted — a schema migration with
    dual reads, not a rename. ~1 session, needs sign-off (#89).
 
 ✅ **M1's library gap is closed** — SQLite index and persistent thumbnail cache,
@@ -68,10 +93,8 @@ an X-Trans demosaic (Markesteijn), a Windows port, Core ML denoise and
 user-loadable DCP profiles, each a multi-week epic on its own.
 
 Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
-the performance action item is in `ROADMAP.md`. `research/masking.md` is
-**finished**; its leftovers are the fill leaking through smooth ground and the
-per-layer decomposition beyond stage 2. The largest standing violation of a
-stated hard constraint is `DevelopPipeline.cpp`, now **2,295 lines**.
+the performance action item is in `ROADMAP.md`. The largest standing violation of
+a stated hard constraint is `DevelopPipeline.cpp`, now **2,382 lines**.
 
 ### ⚠ In flight right now — five agents, isolated worktrees, 2026-08-01
 
@@ -114,6 +137,12 @@ was done, and two suite counts differing by 83 viewport checks. Reconciled
 checks** · **36 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
 three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
 plus a preview graph at 1/16 that.
+**Suites:** `orion-tests` **641 checks** · `orion-viewport-tests` **3561
+checks** · **35 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+three sample frames: **149 nodes, 6971 MiB**, M0 gate **8.88–14.83 ms p95** on
+an idle machine — plus a preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth
+gate: it opens a folder cold, warm and indexless in one process and fails when
+the warm pass did not hit, or when any of the three disagree about a field.
 
 ⚠ **The M0 gate is not a reliable pass/fail on this machine, and it cost four
 sessions and three agents hours on 2026-08-01.** Twelve consecutive runs of one
@@ -146,6 +175,8 @@ change regressed". This is the shape decision #92 already ruled against for
 node-level probes; the top-level gate has not been converted yet and is the last
 wall-clock assertion in the bench.
 
+hour, tracking GUI load rather than anything in the graph. Compare paired runs or
+do not compare.
 ### Known gaps, carried forward
 
 Small, named, and none of them blocking the next story:
@@ -158,6 +189,7 @@ Small, named, and none of them blocking the next story:
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
 | **The 1000-line rule is broken six ways**, all in product code. ⚠ Recounted 2026-08-01, every figure carried here was stale: `DevelopPipeline.cpp` **2,317**, `Engine.swift` 2,118, `OrionApp.swift` **1,445**, `bench/main.cpp` **1,623**, `DevelopPanels.swift` **1,152**, `Scenario.swift` **1,250**. The bench grew ~200 lines on 2026-08-01 profiling the brush on both graphs, which is the largest single jump on this list and is tooling rather than product. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 2,118, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` **1,336**, `Scenario.swift` **1,250**. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code. Recounted 2026-08-01: `DevelopPipeline.cpp` **2,382**, `Engine.swift` **2,163**, `bench/main.cpp` **1,506**, `OrionApp.swift` **1,461**, `Scenario.swift` **1,256**, `DevelopPanels.swift` **1,152** — every one of the six grew again, and four of the six figures carried here were stale. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
 | **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
@@ -207,6 +239,10 @@ there verbatim on 2026-07-31 in two passes and again on 2026-08-01.
 byte: an earlier move copied it without removing it. The `STATUS.md` copy was
 dropped rather than moved again. Worth checking on the next prune, because a
 duplicated entry is invisible from either end.
+The six most recent sessions are below. **Everything older lives in
+[`HISTORY.md`](HISTORY.md)** — 61 sessions now, moved there verbatim on
+2026-07-31 in two passes and again on 2026-08-01, which is what keeps this file
+readable.
 
 ⚠ This file had grown to **4,643 lines across 56 sessions**, which broke the one
 job it has. `CLAUDE.md` calls it the recovery point and says to read it first on
@@ -223,7 +259,7 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
 
-## Session 2026-08-01i — M3's last item was misnamed, and the name was the blocker
+## Session 2026-08-01j — M3's last item was misnamed, and the name was the blocker
 
 **Story:** "segmentation-based highlight reconstruction", the last unbuilt M3
 line. Decisions **#96** and **#97**; `research/highlight-reconstruction.md`.
@@ -311,7 +347,7 @@ source you claim to have read. Decision #97.
 595 engine checks (+9), 3561 viewport, 34 `repro/` scenarios, bench exit 0,
 M0 gate 8.92 ms p95.
 
-## Session 2026-08-01h — the brush bench measured a stroke nobody makes
+## Session 2026-08-01i — the brush bench measured a stroke nobody makes
 
 **Reported: painting is linear in accumulated dabs (0.2 ms an event at 49, 1.5
 at 490) and two hypotheses had failed to explain it** — the host-side O(N) was
@@ -394,6 +430,148 @@ this machine swings 3:1 on would be a flake, and a node-count invariant is only
 meaningful once there is a fast path to count.
 
 **Suites:** 586 · 3561 · 34 scenarios · bench exit 0.
+
+## Session 2026-08-01h — perspective correction, as a matrix and not a node
+
+M4's last geometry item. Decision #100, `research/perspective.md`.
+
+### The maths, and the citation
+
+A keystone correction is a plane projectivity. **Hartley & Zisserman,
+*Multiple View Geometry in Computer Vision*, 2nd ed., CUP 2004** — §2.3 for the
+eight degrees of freedom, §4.1 for the Direct Linear Transformation, §4.1.2 for
+the inhomogeneous solve with h₃₃ = 1, §4.4.4 for normalization. Implemented from
+the description; **no GPL source consulted**, and neither darktable's `ashift`
+nor RawTherapee's tool was opened.
+
+Three controls — vertical, horizontal, aspect — reduce to four point
+correspondences on the frame's corners, and the DLT through them is one 8×8
+solve per geometry change. Vertical fills the destination's top row from a
+*narrower* strip of the source than its bottom row, which is the whole
+mechanism.
+
+⚠ **§4.4.4 costs nothing here, and the reason is worth stating.** H&Z want the
+correspondence centroid at the origin and the mean distance from it √2. The four
+points are the corners of the centered unit square, so they already are — the
+coordinates the problem is posed in *are* the normalizing transformation.
+
+### ⚠ It goes inside the pass that was already resampling
+
+`geometry.slang` composes orientation, quarter turns, straighten and crop into
+one coordinate transform for exactly this reason (decision #40). A perspective
+*node* is the obvious build and it samples the picture twice — a triangle filter
+convolved with itself, and high frequencies nothing gets back.
+
+So the shader gained **one homogeneous multiply** on a coordinate it already
+had, between the straighten and the turns, and the five host-side pieces
+(keystone, aspect, the auto-scale zoom, both coordinate conversions) are
+multiplied into one 3×3 before the kernel sees anything.
+
+Measured rather than argued: `testPerspectiveOneResample` runs the same
+transform composed and split across two passes and compares acutance, and
+`testPerspectiveWiring` asserts a perspective tick runs **one node**. The bench
+agrees — `perspective 0.6  moved 0.1417 … 1 nodes` — and the graph is unmoved at
+**149 nodes, 6971 MiB**.
+
+### ⚠ Auto-scale knows nothing about the crop, and that is what makes it compose
+
+`constrainedCrop` already keeps the crop inside the turned frame. If H maps the
+frame into the frame, it maps anything already inside the frame into the frame.
+Neither guarantee has to know about the other and the zoom never needs
+recomputing when the rectangle moves.
+
+Cheaper and more certain than `lens::autoScale`, which walks 64 points an edge:
+a homography takes lines to lines, so **four corners bound the rectangle**, and
+`fits` is an *interval* in the zoom (the image of a segment is a segment, and a
+segment leaves a convex region once), so bisection is exact rather than
+approximate. The one way that argument fails is w changing sign inside the
+frame — w is affine, so w > 0 at the corners settles it, and the corners are
+checked.
+
+### ⚠ Three neutral guards, and only one of them is load-bearing
+
+A zeroed control has to be **bit-identical** to a build without the feature, or
+every baseline in every suite silently rebases. A flag in the parameter block
+buys it in the shader. On the host there are three short-circuits, and removing
+all three left **635 checks green** — because the DLT on ±1 correspondences
+comes out bit-exact, and T·I·T⁻¹ came out exact at the fixtures' 96×64.
+
+It does **not** at a real frame. `inTexels(identity, 6024, 4024)` is not the
+identity in float; 4023×6021 is. The check names a real frame size now, and it
+is the one that goes red when the guard is removed. A guard whose necessity no
+test can demonstrate is a guard somebody deletes.
+
+### The mask half: exact where it matters, first order where it does not
+
+The same matrix bytes go to `mask::toFrame`, so masks, brush dabs and spots
+follow the picture. A second derivation "in normalized coordinates" is how a
+mask ends up plausibly wrong.
+
+| Quantity | Under H |
+|---|---|
+| centre, brush dab, spot | **exact** |
+| a linear gradient's direction | **exact** — H takes lines to lines |
+| ramp length, radial semi-axes | **first order** — √\|det J\| at the centre |
+
+⚠ **The last row has a measured bound rather than a hedge.** Through
+`maskcheck`, which compares the render against the *overlay's* transcription and
+demands every clear cell come back bit-identical: at vertical 0.45 a hard-edged
+radial mask is exact at 0.10, 0.20 and **0.28** of the frame, and at 0.34 leaks 2
+of 60 cells by 0.0105 luma; at vertical 1.0 by 0.0617; at vertical 0.2 it is
+clean at 0.34. Never at the centre, always at the rim.
+
+The fix is ~30 lines (the image of an ellipse under J is the eigen-decomposition
+of a symmetric 2×2) and it is **costed in `ROADMAP.md` rather than bolted on**,
+because it rewrites `mask::radiusToFrame`, whose derivation is load-bearing for
+every quarter turn (#83) and pinned by `repro/mask-alignment.txt`.
+
+### The tests, and the eight mutations
+
+**55 new engine checks** in `tests_perspective.cpp` and **16 more** in
+`repro/perspective-carries-the-mask.txt`. Eight mutations, each built and run:
+
+| Mutation | Caught by |
+|---|---|
+| two rows of the homography swapped in the shader | 9 checks |
+| the perspective divide dropped (`r = q.xy`) | 5 |
+| row 2 read from `.w` — the padding word — instead of `.z` | 9 |
+| `autoScale` always returns 1.0f | 8 |
+| the vertical keystone's sign flipped | 4 |
+| `mask::toFrame` handed nullptr instead of the matrix | `repro` — 2, and `orion-tests` stays **green**, which is the split that repro exists for |
+| `displayedToFrame` handed nullptr — the spot path | 3 |
+| all three neutral short-circuits removed | 1 — and only at a real frame's dimensions |
+
+⚠ **The seventh and eighth are the interesting ones.** Dropping the homography
+from the mask transform leaves all 641 engine checks green and fails only the
+scenario, because `Scenario` drives `Engine` and `orion-tests` drives the
+kernel. And the spot path is a *second* call site with its own argument list —
+it was missing a check until the mutation found it, not the other way round.
+
+### Gates
+
+641 engine checks, 3561 viewport checks, **35** repro scenarios, all 0 failures.
+Bench exit 0 on all three frames — 149 nodes and 6971 MiB, unchanged, M0 gate
+**14.83 / 8.88 / 9.07 ms p95**.
+
+⚠ **Then the gate went unreadable again, and it is reported rather than chased.**
+Seven runs of *the same binary* on `_PIC8220` within twenty minutes:
+**14.83, 8.88, 40.00, 29.24, 8.88, 34.98, 10.26 ms** — a four-fold spread with
+`mds_stores` indexing in the background, and load average 3.0. This is the
+fourth session in a row it has cost time (`2026-07-31l` has three runs of HEAD
+under the same load: 16.99, 44.75, 37.81).
+
+What is *not* load-dependent is what this change could actually have moved, and
+it did not move: the gate times the **exposure** path, which the bench's own
+named-node invariant reports as **3 nodes, clean 3 nodes** before and after, and
+perspective adds **zero** nodes to it. The perspective probe passed on all three
+frames in every run.
+
+### Also done
+
+`STATUS.md`'s header had **three duplicated blocks** — two `Last updated` lines,
+two overlapping queues both numbered 4/5, and three `Suites:` paragraphs, one two
+sessions stale. Four sessions had each edited the top without reading it. Removed,
+and five more sessions moved to `HISTORY.md`.
 
 ## Session 2026-08-01g — the reopen leak was the folder, not the photograph
 
@@ -647,77 +825,3 @@ discard at the folder instead of the `.sqlite3` file fails 8.
 
 `import SQLite3` from the macOS SDK. It is already on every Mac, it is public
 domain, and the alternative was a package for something the platform ships.
-
-## Session 2026-08-01d — dehaze redid the dark channel on every tick
-
-**Queue item 1, root-caused and fixed.** `DevelopPipeline.cpp:1325` pushed the
-whole dehaze parameter set whenever the slider moved. `Pipeline::setParams`
-memcpys and calls `markDownstreamDirty` unconditionally — **it never compares
-the bytes** — so pushing an unchanged block is indistinguishable from changing
-it. Only `dehaze:moments` reads the slider (omega); the dark channel, the six
-rank passes and the candidate pooling read the frame's size, the paper's
-constants and A. Nine nodes, six of them full resolution over 24 MP, redone
-per tick for a value none of them read.
-
-The fix is a `hazeShapeValid_` latch: the size-derived blocks are pushed once
-(and again on `first`, which is what a reload sets), omega is pushed on every
-tick, and `pushAirlight` already had its own trigger.
-
-**Paired, interleaved, two binaries, two rounds** — `Orion-before.app` and
-`Orion-fixed.app` run back to back in the same machine state:
-
-| round | before | after | ratio | exposure b/a | clarity b/a |
-|---|---|---|---|---|---|
-| loadavg ~3.5 | 127.1, 120.6 ms | 87.0, 87.7 ms | **0.71×** | 9.4/9.4 → 9.4/10.8 | 62.8/61.5 → 64.3/62.2 |
-| loadavg ~1.85 | 147.3, 146.4 ms | 102.7, 100.6 ms | **0.69×** | 9.5/12.8 → 12.6/12.5 | 56.3/73.8 → 73.9/72.2 |
-
-The two controls that were *not* touched move with the machine and not with the
-build, which is what makes the dehaze column a result rather than a reading.
-Normalised in-process, dehaze/clarity went **1.96–2.62× → 1.35–1.41×** and
-dehaze/exposure **12.8–15.5× → 8.0–9.3×** (7.2× is what the file recorded).
-All 33 control probes in `orion-bench` move the picture by *exactly* the same
-amounts before and after: this is a cost change and nothing else.
-
-### The test, and the mutation that proves it bites
-
-`orion-bench`'s new `dehaze drag` invariant, beside `exposure drag, lens on` —
-the same bug in the lens chain, found the same way. It drags dehaze twelve
-times and asserts that **no node in a named list** ran, taking the *worst* tick
-rather than the last one. Names, not a count: any nine nodes would satisfy a
-count, and the point is which nine. Not milliseconds: this machine measured the
-same binary at 8.97 and 44.53 ms p95 within an hour.
-
-**Mutation:** restore the old guard —
-`if (dehazing_ && (hazeMoved || !hazeShapeValid_))`. The bench prints
-`dehaze drag  19 nodes, 9 of them slider-independent (dehaze:channel min ...)
-DEHAZE REDOES THE DARK CHANNEL` and **exits 1**.
-
-### ⚠ Two claims in this file were wrong, and both were about the fixture
-
-1. **"~50 ms of the tick happens outside node dispatch."** It does not. That
-   compared a 125 ms tick against the bench's *dehaze section alone* (73.6 ms,
-   19 nodes). Clarity's input is `nDehaze_`
-   (`DevelopPipeline.cpp:308`), so with clarity left at 0.9 by the line above
-   it, **a dehaze tick runs the clarity chain too** — instrumented at **55
-   nodes**: 16 dehaze plus the 39 that a clarity tick runs. 73.6 + 65.5 ≈ 139.
-   The tick was always fully explained by dispatch.
-2. **`estimateAirlight` was not the suspect.** Instrumented across a 40-tick
-   drag it fires **once**, exactly as `render()`'s comment claims. The comment
-   is right and stays.
-
-### ⚠ What is still not explained, said plainly
-
-The recorded baseline of **67.3 ms** does not reproduce at `6fd4e59`, the
-commit that wrote it — built and measured there, dehaze/clarity is ~2.0, not
-the 1.11 the header implies, and the bench's dehaze section is 19 nodes at both
-ends of the window. So the header's three numbers were most likely taken
-one control per run (dehaze with clarity still at zero costs about what the
-header says), and the file that reports them drags all three in one process.
-**The doubling was a fixture artifact; the waste it pointed at was real.**
-No bisect was needed and none was run.
-
-⚠ `orion-bench`'s **M0 gate is still unreadable under load** — it failed at
-18.63 and 51.89 ms p95 with a stray `swift-frontend` at 99% CPU and passed at
-9.10 ms on the same binary minutes later. It gates the *exposure* path, which
-this change does not touch (3 nodes either way). Third session in a row this
-has cost time; see `2026-07-31l`.

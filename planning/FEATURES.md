@@ -70,7 +70,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | Crop / rotate / straighten | M1 | |
 | Lens corrections (distortion, vignette, CA) | M2 | lensfun DB |
-| Perspective / keystone | M4 | |
+| Perspective / keystone | M4 | ✅ 2026-08-01, decision #100. Vertical, horizontal and aspect, folded into the geometry node's one sampling pass. `research/perspective.md` |
 
 ## 8. Local Edits
 | Feature | Status | Notes |

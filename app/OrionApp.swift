@@ -1055,6 +1055,22 @@ struct Editor: View {
                                 .foregroundStyle(Palette.faint)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        section("Perspective") {
+                            slider("Vertical", $engine.perspectiveVertical, -1...1, "", 2,
+                                   resetsTo: engine.defaults.perspectiveVertical)
+                            slider("Horizontal", $engine.perspectiveHorizontal, -1...1, "", 2,
+                                   resetsTo: engine.defaults.perspectiveHorizontal)
+                            slider("Aspect", $engine.perspectiveAspect, -1...1, "", 2,
+                                   resetsTo: engine.defaults.perspectiveAspect)
+                            Text("Straightens converging lines — a building "
+                                 + "shot looking up, a wall shot from one side. "
+                                 + "The frame zooms to stay full, as the lens "
+                                 + "corrections do. Aspect undoes the squeeze a "
+                                 + "strong correction leaves behind.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Palette.faint)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         Button("Reset crop") { engine.edit("Crop") { engine.resetCrop() } }
                             .buttonStyle(.bordered)
                             .controlSize(.small)

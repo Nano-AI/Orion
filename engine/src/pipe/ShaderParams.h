@@ -724,7 +724,29 @@ struct Geometry {
     /// center of the user's crop rectangle, whether or not the crop tool's
     /// enlarged preview canvas is in play.
     float         pivot[2];
+
+    /// Nonzero when `perspective` below is anything but the identity.
+    ///
+    /// ⚠ A flag rather than a comparison in the shader, and it is what makes a
+    /// zeroed control **bit-identical** to a build with no perspective in it:
+    /// the kernel takes exactly the branch it took before, so every baseline in
+    /// every suite stays where it was rather than silently rebasing.
+    std::uint32_t perspectiveOn;
+    float         _pad[3];
+
+    /// The destination-to-source homography in texel coordinates of the rotated
+    /// frame, one row per float4. research/perspective.md.
+    ///
+    /// ⚠ Rows are padded to sixteen bytes because a constant buffer pads a
+    /// three-vector to sixteen anyway, and a struct that disagrees with its
+    /// Slang mirror about that is silent: the kernel reads the wrong words and
+    /// resamples a plausible wrong picture. `.w` is unused and is zero.
+    /// The matrix begins at offset 64, which is where the alignment wants it.
+    float         perspective[3][4];
 };
-static_assert(sizeof(Geometry) == 48);
+static_assert(sizeof(Geometry) == 112);
+static_assert(offsetof(Geometry, perspective) == 64,
+              "the homography must start on a sixteen-byte boundary; "
+              "geometry.slang's mirror assumes it");
 
 }  // namespace orion::pipe::params

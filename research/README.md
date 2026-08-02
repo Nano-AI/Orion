@@ -41,6 +41,7 @@ support what it is attached to.
 | [`color-grading.md`](color-grading.md) | Three-way grading wheels, as ASC CDL per tonal zone |
 | [`detail.md`](detail.md) | Sharpening and denoising |
 | [`lens-corrections.md`](lens-corrections.md) | Distortion, TCA and vignetting; the vendored lensfun database |
+| [`perspective.md`](perspective.md) | Keystone correction — the 4-point homography, the zoom, and why it is not its own node |
 | [`masking.md`](masking.md) | Plan of record for M4's local edits — not built |
 | [`deep-research-2026-07-27.md`](deep-research-2026-07-27.md) | A research run's raw findings, referenced by several entries above |
 | [`UNSOURCED.md`](UNSOURCED.md) | **Honest register of what is still invention** |

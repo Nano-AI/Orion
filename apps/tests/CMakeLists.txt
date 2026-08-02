@@ -8,6 +8,7 @@ add_executable(orion-tests
     tests_color.cpp
     tests_io.cpp
     tests_geometry.cpp
+    tests_perspective.cpp
     tests_tone.cpp
     tests_grade.cpp
     tests_effects.cpp

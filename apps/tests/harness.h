@@ -35,6 +35,7 @@
 #include <set>
 
 #include "pipe/MaskGeometry.h"
+#include "pipe/Perspective.h"
 #include "util/ImageWriter.h"
 
 #include <CoreGraphics/CoreGraphics.h>
@@ -48,6 +49,7 @@
 #include <cmath>
 #include <random>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 // The counters. Defined in harness.cpp, so every translation unit adds to the
@@ -77,6 +79,14 @@ void testOrientGpu();
 void testDisplayNeutrality();
 void testCropGpu();
 void testStraightenPivot();
+void testPerspectiveMath();
+void testPerspectiveShaderMatchesHost();
+void testPerspectiveIdentity();
+void testPerspectiveConvergingLines();
+void testPerspectiveOneResample();
+void testPerspectiveAutoScaleFillsTheFrame();
+void testPerspectiveMaskGeometry();
+void testPerspectiveWiring();
 void testNoiseEstimator();
 void testDenoiseGpu();
 void testHighlightRecoveryGpu();
