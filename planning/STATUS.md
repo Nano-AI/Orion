@@ -22,9 +22,14 @@ four now also has something that fails when its *wiring* breaks — see sessions
 
 **Next story:** the queue, in order, each with a cost:
 
-1. **Dehaze's drag cost has roughly doubled** — 7.2× → 11.8–13.5× against
-   exposure *in the same process*, so load cannot explain it. Needs a **bisect
-   on a quiet machine**, not a theory. ~1 session.
+1. **Dehaze's drag cost has roughly doubled** — ✅ *confirmed* 2026-08-01 by a
+   paired re-measurement on a quiet machine, twice: exposure and clarity both
+   within noise of their recorded figures, **dehaze 125 ms against 67.3**. ⚠
+   Narrowed, not explained: the bench's per-node profile totals **73.6 ms over
+   19 nodes**, so ~50 ms of the tick is *outside node dispatch*. `render()`'s
+   own comment says the airlight readback cannot fire on the interaction path —
+   either that is wrong or the time is elsewhere. **Bisect next**, one rebuild
+   per step. ~1 session.
 2. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
    iterations. ~240 MB across a 5,000-photo cull. ~1 session.
 3. **Incremental brush accumulation.** ⚠ Now *located*: the host-side O(N) is
