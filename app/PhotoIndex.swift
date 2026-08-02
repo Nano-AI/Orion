@@ -210,7 +210,7 @@ final class PhotoIndex: @unchecked Sendable {
         guard let url else { return }
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if open(url) { return }
+        if open(url) { collectMissingFolders(); return }
         // One rebuild, and only for the two codes that mean "this is not a
         // usable database" rather than "somebody else is using it".
         guard discardable, url.pathExtension == "sqlite3" else { return }
@@ -601,6 +601,57 @@ final class PhotoIndex: @unchecked Sendable {
     /// reached two ways is still one row.
     static func folderKey(_ url: URL) -> String {
         key(url.deletingLastPathComponent())
+    }
+
+    /// Collects every row whose **folder** no longer exists, once per launch.
+    ///
+    /// ⚠ `plan` prunes only what it was handed. It runs against the listing for
+    /// the folder being opened, so it can only ever clean a folder you are
+    /// looking at — and a folder you never open again is never cleaned at all.
+    /// The rows are small (~200 B), so this is untidiness rather than a leak
+    /// with teeth, but a cache that only grows is a cache that eventually has
+    /// to be explained.
+    ///
+    /// Keyed on the folder, not the file. Checking every *path* would stat
+    /// thousands of files at launch to save a kilobyte; checking each distinct
+    /// `dir` is one stat per folder the photographer has ever opened.
+    ///
+    /// ⚠ **An unplugged drive looks exactly like a deleted folder, and this
+    /// deliberately does not care.** Nothing lives only here — this is a cache
+    /// beside the photographs, and the sidecars are the source of truth (#79).
+    /// The cost of collecting a folder that comes back is one re-scan; the cost
+    /// of keeping every folder forever is a database that never stops growing.
+    /// A photographer with an archive drive pays a cold open the first time
+    /// after each reconnect, which is what they paid before the index existed.
+    private func collectMissingFolders() {
+        guard live else { return }
+        var dirs: [String] = []
+        if let stmt = prepare("SELECT DISTINCT dir FROM photos") {
+            while step(stmt) == SQLITE_ROW {
+                if let c = sqlite3_column_text(stmt, 0) {
+                    dirs.append(String(cString: c))
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+
+        var isDir: ObjCBool = false
+        let gone = dirs.filter {
+            !(FileManager.default.fileExists(atPath: $0, isDirectory: &isDir)
+              && isDir.boolValue)
+        }
+        guard !gone.isEmpty else { return }
+
+        _ = run("BEGIN")
+        for dir in gone {
+            for table in ["photos", "thumbnails"] {
+                if let stmt = prepare("DELETE FROM \(table) WHERE dir = ?") {
+                    bind(stmt, 1, dir); _ = step(stmt); sqlite3_finalize(stmt)
+                }
+            }
+        }
+        _ = run("COMMIT")
+        bytesHeld = scalar("SELECT COALESCE(SUM(LENGTH(bytes)), 0) FROM thumbnails") ?? bytesHeld
     }
 
     /// Takes the index out of service on the two codes that mean the file is

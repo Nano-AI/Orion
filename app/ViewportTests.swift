@@ -134,6 +134,7 @@ enum ViewportTests {
         testACorruptDatabaseDegradesToARescan()
         testALockedDatabaseIsNotDiscarded()
         testALockAtOpenNeverDeletesTheDatabase()
+        testAVanishedFolderIsCollected()
         testAForeignSchemaIsRebuilt()
         testASidecarChangingUnderTheReadIsNotFiled()
         testTheThumbnailCacheEvictsTheLeastRecentlyUsed()

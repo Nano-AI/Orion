@@ -498,6 +498,72 @@ extension ViewportTests {
                "⚠ the row written before the lock is still there")
     }
 
+    /// Rows for a folder that no longer exists are collected at the next open.
+    ///
+    /// ⚠ The gap this closes: `plan` prunes only the listing it was handed, so
+    /// it can clean a folder you are *looking at* and never one you have
+    /// stopped opening. The index grew forever.
+    ///
+    /// **Mutation:** drop the `collectMissingFolders()` call in `init` — the
+    /// vanished folder's row survives and this goes red.
+    static func testAVanishedFolderIsCollected() {
+        let (dirA, photoA, db) = indexFixture("collect-live")
+        defer { try? fm.removeItem(at: dirA) }
+
+        // A second folder, indexed into the same database, then deleted whole —
+        // as a card or an external drive would be.
+        let dirB = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("orion-index-collect-gone-\(UUID().uuidString)")
+        try? fm.createDirectory(at: dirB, withIntermediateDirectories: true)
+        let photoB = dirB.appendingPathComponent("_PIC0002.ARW")
+        fm.createFile(atPath: photoB.path, contents: Data(repeating: 9, count: 2048))
+
+        do {
+            let index = PhotoIndex(at: db)
+            index.record(info: indexInfo(), for: photoA, stamp: .of(photoA))
+            index.record(info: indexInfo(), for: photoB, stamp: .of(photoB))
+            report(index.plan(folder: dirA, contents: [photoA]).first?.needsInfo == false,
+                   "folder A is warm before the collection")
+            report(index.plan(folder: dirB, contents: [photoB]).first?.needsInfo == false,
+                   "folder B is warm before the collection")
+        }
+
+        // ⚠ Capture the exact stamp before deleting, and restore it byte for
+        // byte and nanosecond for nanosecond afterwards.
+        //
+        // The first version of this test re-created the file fresh and asserted
+        // it came back cold. That passes whether the row was collected or not,
+        // because a new mtime invalidates the row on its own — the assertion
+        // was measuring staleness, not collection, and the mutation sailed
+        // through it. Holding the stamp identical is what makes a surviving row
+        // a *hit* and a collected row a *miss*, so the two outcomes differ.
+        let stampB = PhotoIndex.Stamp.of(photoB)
+        let bytesB = (try? Data(contentsOf: photoB)) ?? Data()
+
+        try? fm.removeItem(at: dirB)
+        report(!fm.fileExists(atPath: dirB.path), "folder B is gone from disk")
+
+        // A fresh open collects it.
+        let after = PhotoIndex(at: db)
+
+        // ⚠ The half that matters: the folder that still exists keeps its row.
+        // A collector that emptied the table would satisfy any "B is gone"
+        // check and destroy the cache it is tidying.
+        report(after.plan(folder: dirA, contents: [photoA]).first?.needsInfo == false,
+               "⚠ folder A still has its row — the collector took the vanished folder, not the table")
+
+        // B restored to exactly what it was. Same bytes, same mtime, so the
+        // stamp matches and only the row's absence can make this cold.
+        try? fm.createDirectory(at: dirB, withIntermediateDirectories: true)
+        fm.createFile(atPath: photoB.path, contents: bytesB)
+        setMtime(photoB, stampB.mtime)
+        defer { try? fm.removeItem(at: dirB) }
+        report(PhotoIndex.Stamp.of(photoB) == stampB,
+               "the restored file has the identical stamp, so a surviving row would hit")
+        report(after.plan(folder: dirB, contents: [photoB]).first?.needsInfo == true,
+               "⚠ folder B was collected, so it comes back cold rather than vouched for")
+    }
+
     static func testAForeignSchemaIsRebuilt() {
         let (dir, photo, db) = indexFixture("schema")
         defer { try? fm.removeItem(at: dir) }
