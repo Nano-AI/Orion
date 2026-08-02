@@ -124,6 +124,7 @@ enum ViewportTests {
         testSpotHandleHasAMinimumSize()
         testSpotDragStaysOnThePicture()
 
+        testARowIsFiledUnderTheFolderItWasListedIn()
         testIndexIsColdBeforeItIsWarm()
         testARewrittenRawInvalidatesByMtime()
         testARewrittenRawInvalidatesBySizeAlone()

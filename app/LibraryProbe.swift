@@ -75,6 +75,53 @@ enum LibraryProbe {
             check(s.thumbMisses == 0, "a warm open decodes no preview", "\(s.thumbMisses) missed")
             agree(cold.photos, warm.photos, "warm")
             agree(cold.photos, none.photos, "indexless")
+
+            // ── A fourth pass: the same folder reached through a symlink ────
+            //
+            // ⚠ **This is a bug that shipped and was invisible.**
+            // `FileManager.contentsOfDirectory(at:)` fails with POSIX 20
+            // `ENOTDIR` when the URL is a *symlink to a directory* — an aliased
+            // card, a NAS mount, a `ln -s`'d shoot folder — while the `atPath:`
+            // spelling of the same call succeeds on the same path. `Library.scan`
+            // took the URL form under a `try?` and returned an empty listing, so
+            // Open Folder on such a folder showed nothing and said nothing.
+            // `MatteStore.sweep` carried the identical call and therefore swept
+            // nothing, ever, on the same folders. Decision #115.
+            //
+            // It is here rather than in `orion-viewport-tests` because `Library`
+            // needs AppKit and the facade, which that binary deliberately has
+            // neither of — and because the point is the product's own
+            // `Library.open`, not a re-derivation of it.
+            let link = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("orion-probe-link-\(UUID().uuidString)")
+            try? FileManager.default.createSymbolicLink(at: link,
+                                                        withDestinationURL: folder)
+            defer { try? FileManager.default.removeItem(at: link) }
+            let linked = await measure(Library(index: PhotoIndex(at: nil)), link)
+            check(linked.photos.count == cold.photos.count,
+                  "a folder reached through a symlink lists the same photographs",
+                  "\(linked.photos.count) against \(cold.photos.count)")
+
+            // ⚠ And a listing that genuinely cannot run must not pass for an
+            // empty folder. Both give zero photographs; only one is an error,
+            // and until now nothing could tell them apart.
+            let gone = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("orion-probe-gone-\(UUID().uuidString)")
+            let refused = Library(index: PhotoIndex(at: nil))
+            await refused.open(folder: gone)
+            check(refused.photos.isEmpty, "a folder that is not there finds nothing")
+            check(refused.lastFailure != nil,
+                  "and says so rather than passing for an empty folder",
+                  refused.lastFailure ?? "nil")
+
+            // The other half, or the check above passes on a `lastFailure` that
+            // is never nil.
+            let fine = Library(index: PhotoIndex(at: nil))
+            await fine.open(folder: folder)
+            check(fine.lastFailure == nil,
+                  "a folder that opened is never complained about",
+                  fine.lastFailure ?? "nil")
+
             finished = true
         }
 

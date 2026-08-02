@@ -1163,14 +1163,39 @@ struct Editor: View {
     /// photograph. Two lines rather than one: the hint changes with what you are
     /// doing and the frame's numbers do not, and putting them on one row makes
     /// the stable numbers jump every time the hint's length changes.
+    /// What the status line has to say, worst first.
+    ///
+    /// ⚠ **Ordered by what it costs, not by what is newest.** An autosave that
+    /// cannot write is the one line a photographer must see *before* they quit,
+    /// because quitting is the moment it costs them the session; a folder that
+    /// could not be listed costs them the folder; a failed render costs a
+    /// redraw. `nil` when there is nothing to say, so the ordinary hint keeps
+    /// the line it has always had — a warning that is always on is not one.
+    private var complaint: String? {
+        autosave.lastFailure ?? library.lastFailure
+    }
+
     private var footer: some View {
         VStack(alignment: .leading, spacing: 5) {
+            // ⚠ Outside `isLoaded`. A folder that could not be listed leaves
+            // nothing open, and the footer used to render nothing at all in
+            // that state — so the one message explaining an empty window had
+            // nowhere to appear.
+            if !engine.isLoaded, let why = complaint {
+                Engraved.Label(text: why, color: Palette.star, size: 9)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
             if engine.isLoaded {
                 // ⚠ A failed render reads as a *fast* one if all you show is
                 // the millisecond count: it stays at 0.0, which is the best
                 // number on the bar, beside a black canvas. So the failure
                 // takes the whole line and takes it in the warning colour.
-                if let why = engine.lastFailure {
+                if let why = complaint {
+                    Engraved.Label(text: why, color: Palette.star, size: 9)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                } else if let why = engine.lastFailure {
                     Engraved.Label(text: "Render failed — \(why)",
                                    color: Palette.star, size: 9)
                         .lineLimit(2)

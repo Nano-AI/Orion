@@ -28,6 +28,12 @@ import Foundation
 /// No SwiftUI and no AppKit here on purpose — the lifecycle notifications are
 /// the shell's job (`Editor`), which keeps this compilable into the viewport
 /// test binary where the invariant is actually checked.
+/// ⚠ `@Observable` only so `lastFailure` reaches the status line. Nothing here
+/// imports SwiftUI and nothing may — this file compiles into
+/// `orion-viewport-tests`, which is what lets the retry invariant below be
+/// pinned without a window. `Observation` is a standard-library module, not a
+/// SwiftUI one, so the seam holds.
+@Observable
 final class Autosave {
 
     /// How a queued write gets deferred. The app hands in a real timer; the
