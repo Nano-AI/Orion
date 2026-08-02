@@ -148,6 +148,22 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
+### ⚠ In flight — fourth wave, three agents, isolated worktrees, 2026-08-02
+
+⚠ **Briefs now say `sh tools/worktree-setup.sh`, never a hand-rolled `ln -s`.**
+That is the whole point of the script: it exits on the main repo before it can
+touch anything, and it refuses to replace an entry that is not already a symlink.
+
+| Working on | Decision | Scope, and the trap named to it |
+|---|---|---|
+| Split `DevelopPipeline.cpp` — **2,549 lines**, the largest standing violation of a hard constraint | #113 | Alone in `engine/` this hour, which is why it waited. ⚠ **Pure refactor; not one pixel may move**, and it is told to prove that by rendering a frame before and after and comparing **byte for byte** rather than asserting it. ⚠ Node construction order is load-bearing: a reorder that compiles can still change which node feeds which |
+| **X-Trans — research and decomposition only, no build** | #114 | ⚠ The licensing question *is* the story: Markesteijn's implementations are darktable's and RawTherapee's, both **GPL**. The real question is whether a description exists **outside** GPL source, and **"it does not" is a valuable answer**. Told to check what LibRaw already gives us, since that may reshape the whole item |
+| **Every other place the app fails silently** | #115 | Generalises the black-canvas bug fixed this session. ⚠ Told **not** to fix them reflexively — a dialog on every recoverable hiccup is its own bug — and to rank by blast radius, since a swallowed sidecar or export error costs work the photographer cannot get back |
+
+⚠ **The three touch disjoint trees** — `engine/`, `research/`+`planning/`, and
+`app/` — so the merges should not collide beyond the usual `DECISIONS.md` and
+`STATUS.md` rows.
+
 ### ⚠⚠ 2026-08-02 — the build is down, and the instruction that did it was mine
 
 **`third_party/slang` is destroyed and nothing can be compiled.** Every shader
