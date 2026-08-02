@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**M3's last item renamed and solved; the brush bench was measuring itself — #96, #97, #98**)
+**Last updated:** 2026-08-01 (**the incremental brush's predicate ships alone, six mutations at it — #102**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#96, #97). **`research/masking.md` is
@@ -60,7 +60,11 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    **fixture artifact** and is withdrawn — it subdivided a stroke of fixed
    extent, which shrinks every box in exact proportion to the block count.
    Decomposed into two sessions in `ROADMAP.md`; **the predicate ships first,
-   alone.** ~2 sessions.
+   alone.** ✅ **Session one done 2026-08-01, decision #102** —
+   `params::unchangedPrefix`, six mutations, no pixel moved and nothing reading
+   its answer yet. **Session two is the accumulator behind it**, and its budget
+   check (~97 MB a component at 24 Mpx, lazily allocated) comes before the
+   code. ~1 session left.
 4. ~~**M1's library gap**~~ — ✅ done 2026-08-01, decision #91. SQLite index and
    a persistent thumbnail cache; see the note below for the numbers.
 5. ~~**Export panel**: bit depth, metadata policy, output sharpening.~~ ✅ done
@@ -332,6 +336,72 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01l — the brush predicate, alone, and six mutations at it
+
+**Story:** incremental brush accumulation, **session one of two**. Decision
+**#102**; `research/brush-acceleration.md` and `ROADMAP.md`'s decomposition.
+
+**Shipped: a host predicate and nothing that reads it.** `params::unchangedPrefix`
+answers *how many leading dabs of this stroke are the ones already on the GPU*,
+`DevelopPipeline` keeps the previous upload's texels to answer it with, and
+`brushPrefixStat` carries the answer out for the tests. No accumulator, no shader
+change, **no rendered pixel moved** — which is asserted, not argued.
+
+### Why the split, and why this half first
+
+The measurement stands and was re-run this session: `mask:0` goes **2.64 → 34.87
+ms** for 49 → 294 appended dabs on the full graph, 0.17 → 2.23 on the preview.
+Dab spacing is fixed by the nib, so appending is the only way a real stroke grows
+and the block count is what rises.
+
+⚠ **The predicate has one wrong answer that is worse than being slow.** "The
+count did not shrink, so the prefix held" fails on *undo three dabs, paint three
+different ones*: the count returns to a value it has already had, the accumulator
+keeps coverage the photographer took back, and what renders is a completely
+plausible brushstroke that is not theirs. Every screenshot passes. That is why
+`ROADMAP.md` gives the predicate its own session.
+
+### What it compares, and what it refuses to
+
+| | |
+|---|---|
+| **Post-transform texels** | a straighten moves every centre through `mask::toFrame` while the stroke and its revision sit untouched — the wiring test does exactly that and the prefix must go to 0 |
+| **`memcmp`, all four floats** | identical bits give identical coverage with no argument about `-0.0f` or `NaN` attached; the erase flag rides in `z`, and source-over and destination-out do not commute |
+| **Nib, flow, hardness, kind** | one radius covers the whole stroke, so a wider nib re-lays every dab already down without moving a single centre |
+| **Forgets on a reload, and on kind ≠ 3** | both are cases where session two's accumulator will not have survived the claim |
+
+### The mutations — six, all red
+
+| Mutation | Checks turned red |
+|---|---|
+| returns `prev.count` whenever the count did not shrink | **7** |
+| compares only x and y | **2** |
+| compares the pre-transform dabs | **1** — and only one, which is why the wiring test exists |
+| returns 0 always | **9**, one being "80 of the 160 dabs are the stroke already on the GPU" |
+| drops the nib/flow/hardness/kind guard | **4** |
+| asks the predicate only when the count grew | **5** |
+
+⚠ **The last row is the vacuity guard on the vacuity guard.** `apply` skips a
+component whose edit did not change, so an answer left over from an earlier event
+reads exactly like a fast path that was taken. `BrushPrefixStat::evaluations`
+counts the calls, and four of those five failures come through it.
+
+⚠ **"No pixel moved" is a comparison, not a claim.** A 160-dab stroke built by
+appending (the predicate answering 80) is rendered, then a reload throws the
+stored texels away and the same stroke goes up whole (the predicate answering 0);
+the two frames are compared byte for byte.
+
+### Gates
+
+`orion-tests` **716 checks, 0 failures** (25 new). `orion-viewport-tests` 3620,
+0. All **38** `repro/*.txt` exit 0. `orion-bench` exits 0; **149 nodes**,
+6971 MiB, unchanged. M0 p95 **9.06** and **9.11 ms** over two runs — the gate is
+advisory and the distribution moves with GPU clock state, so the node count is
+the load-bearing number and it did not move.
+
+**Session two is the accumulator**, behind this predicate, and its budget check
+(~97 MB a component at 24 Mpx) is written up in `ROADMAP.md` rather than assumed.
 
 ## Session 2026-08-01k — M3's last item was misnamed, and the name was the blocker
 

@@ -138,6 +138,33 @@ the bounds walk. That is the honest worst case and it is not fixable by a tighte
 volume — it is fixable by not re-evaluating the whole stroke, which is the
 separate change costed in `planning/ROADMAP.md`.
 
+## The predicate, built 2026-08-01 — `params::unchangedPrefix`
+
+Session one of the incremental accumulator. **Nothing reads its answer yet**, and
+that is the design: its failure mode is a stale coverage rendering a completely
+plausible brushstroke, so it is built and attacked while nothing depends on
+trusting it. Decision #102; `planning/ROADMAP.md` carries the two-session split.
+
+It answers one question — *how many leading dabs of this stroke are the ones
+already on the GPU* — by keeping the texels of the previous upload and comparing
+them dab for dab.
+
+| Property | Why it is that and not the cheaper thing |
+|---|---|
+| Walks the dabs | "the count did not shrink, so the prefix held" is wrong on **undo three, paint three different**: same count, different prefix, and the picture that renders is a brushstroke, just not the photographer's |
+| Compares the **post-transform** texels | a crop, a straighten or a quarter turn moves every centre through `mask::toFrame` while the stored stroke and its revision sit untouched. Same reason `buildDabBounds` takes the texels |
+| `memcmp`, not `==` | the claim is that identical bits give identical coverage, which needs no argument about `-0.0f == 0.0f` or `NaN != NaN` |
+| All four floats a dab | the erase flag rides in `z`, and source-over and destination-out **do not commute** — a dab that changed from one to the other invalidates every dab after it |
+| Rejects on nib, flow, hardness, kind | one radius covers the whole stroke, so widening the nib re-lays every dab already down while every centre stays where it was |
+
+⚠ **The check that the fast path was *taken*.** A predicate that answers 0 forever
+is correct and useless, and would make session two a no-op that passes
+everything. `testBrushPrefixWiring` asserts 80 of 160 dabs are already on the GPU
+after an append — and asserts, through a counter, that the predicate is what
+produced that number rather than an answer left over from an earlier event.
+`apply` skips a component whose edit did not change, so a forgotten
+`brushRevision` bump would leave a stale prefix reading exactly like a fast path.
+
 ## ⚠ What this does *not* fix
 
 Painting appends dabs, and every appended dab re-runs the loop over all dabs laid

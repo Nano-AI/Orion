@@ -484,13 +484,25 @@ starts from a plan rather than from the investigation again. **Session one ships
 nothing user-visible and that is deliberate:** the predicate is the whole risk,
 so it gets built and attacked before anything depends on being able to trust it.
 
-**Session one — the predicate, alone, with no accumulator behind it.**
+**Session one — the predicate, alone, with no accumulator behind it. ✅ done
+2026-08-01, decision #102.**
 
 | Piece | Where | Note |
 |---|---|---|
-| Keep the previous upload's post-transform texels per component | `DevelopPipeline`, beside `brushDabs_` | 256 KB a component, already the size of the buffer `apply` builds and throws away every event |
-| `int unchangedPrefix(component, const float* texels, int count)` | new, next to `buildDabBounds` in `ShaderParams.h` | returns how many leading texels are bit-identical to the stored ones, `0` if the geometry, the nib or the kind moved |
-| Tests that a *plausible* stroke is caught | `orion-tests` | see the mutations below |
+| ✅ Keep the previous upload's post-transform texels per component | `DevelopPipeline::brushPrev_`, beside `brushDabs_` | Only the live prefix is stored, so a short stroke is kilobytes and the 16,384-dab cap is the 256 KB the buffer `apply` throws away every event anyway. Invalidated on a reload and when a component stops being kind 3 — both are cases where session two's accumulator will not have survived |
+| ✅ `int unchangedPrefix(const BrushPrefixState&, const BrushShape&, const float* texels, int count)` | next to `buildDabBounds` in `ShaderParams.h` | `memcmp` per dab, capped at the shorter of the two strokes; `0` if the nib, the flow, the hardness or the kind moved. The geometry needs no case of its own — it moves every texel |
+| ✅ Tests that a *plausible* stroke is caught | `testBrushPrefixPredicate` and `testBrushPrefixWiring`, 25 checks | the unit half on hand-built texels, the wiring half through the real `DevelopPipeline` where the texels come out of `mask::toFrame` |
+
+⚠ **No pixel moved, and it is asserted rather than argued.** The wiring test
+renders a 160-dab stroke built by appending — the predicate answering 80 — then
+reloads, which throws the stored texels away, uploads the same stroke whole with
+the predicate answering 0, and compares the two frames byte for byte.
+
+⚠ **`BrushPrefixStat::evaluations` is why the fast-path check is not vacuous.**
+`apply` skips a component whose edit did not change, so an answer left behind by
+an earlier event reads exactly like a fast path that was taken. Making the
+predicate run only when the count grew — a mutation nothing else in the file
+notices — turns five checks red through that counter.
 
 ⚠ The predicate compares the **post-transform** texels — the floats actually
 uploaded — not the displayed-coordinate dabs. A crop, a straighten or a quarter
@@ -501,12 +513,14 @@ takes the uploaded texels for exactly this reason.
 **Named mutations, because a predicate that always returns 0 is correct and
 useless, and one that always returns `count` is fast and wrong:**
 
-| Mutation | Must fail |
-|---|---|
-| `unchangedPrefix` returns `count` whenever `count` grew | *undo three dabs, paint three different ones* — same count, different prefix, stale coverage, plausible picture |
-| `unchangedPrefix` ignores `brushErase` | paint then erase over the same spot: source-over and destination-out do not commute |
-| `unchangedPrefix` compares pre-transform dabs | rotate the frame mid-stroke; every centre moves and the prefix must go to 0 |
-| `unchangedPrefix` returns 0 always | a *speed* check, not a correctness one — the accumulator must be measurably used, or session two is a no-op that passes everything |
+| Mutation | Must fail | ✅ measured 2026-08-01 |
+|---|---|---|
+| `unchangedPrefix` returns `count` whenever `count` grew | *undo three dabs, paint three different ones* — same count, different prefix, stale coverage, plausible picture | **7 red**, including the undo-and-repaint case in both halves |
+| `unchangedPrefix` ignores `brushErase` | paint then erase over the same spot: source-over and destination-out do not commute | **2 red** — comparing 2 floats a dab instead of 4 |
+| `unchangedPrefix` compares pre-transform dabs | rotate the frame mid-stroke; every centre moves and the prefix must go to 0 | **1 red** — and only one, which is the argument for the wiring test existing at all: the unit half cannot see this |
+| `unchangedPrefix` returns 0 always | a *speed* check, not a correctness one — the accumulator must be measurably used, or session two is a no-op that passes everything | **9 red**, one of them "80 of the 160 dabs are the stroke already on the GPU" |
+| *(added)* the shape guard dropped — nib, flow, hardness, kind stop counting | one radius covers the whole stroke, so a wider nib re-lays every dab already down | **4 red** |
+| *(added)* the predicate is only *asked* when the count grew | the vacuity guard on the guard: a stale answer reads exactly like a fast path | **5 red**, four of them through `evaluations` |
 
 That last row is the one this repository keeps learning: the fast path has to be
 asserted to have been *taken*. `dehaze-reaches-the-picture.txt` and the bench's
