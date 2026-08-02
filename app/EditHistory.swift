@@ -255,84 +255,175 @@ struct LocalAdjustState: Equatable, Codable {
     var tint: Float = 0
 }
 
+/// Every setting that belongs to a photograph, as one value.
+///
+/// ⚠ **No stored property here carries an inline default, and that is the whole
+/// point.** Decision #110. A default on the property becomes a default on the
+/// *memberwise initializer*, and `Engine.state` builds one of these with the
+/// memberwise initializer — so a defaulted field could be left out of that call
+/// and the build would say nothing. It shipped twice: film grain with Amount
+/// stuck at 0, and Grading Balance, both of which reached the screen, did
+/// nothing to the sidecar, and left every suite green.
+///
+/// With the defaults moved into `init()` (in an extension, so the memberwise
+/// initializer survives), adding a field breaks the build in two places at once
+/// — `DevelopState.init()` and `Engine.state` — and both errors name the field.
+///
+/// ⚠ The one hole left is a field added *with* an inline default anyway, which
+/// re-arms the original trap for that field alone. `testDevelopStateRoster` in
+/// the viewport suite is the backstop: it reflects over the struct and fails
+/// naming any field the roster does not know about.
 struct DevelopState: Equatable, Codable {
-    var temperatureK: Float = 5500
-    var tint: Float = 0
-    var exposureEv: Float = 0
-    var highlights: Float = 0
-    var shadows: Float = 0
-    var whites: Float = 0
-    var blacks: Float = 0
-    var vibrance: Float = 0
-    var saturation: Float = 0
+    var temperatureK: Float
+    var tint: Float
+    var exposureEv: Float
+    var highlights: Float
+    var shadows: Float
+    var whites: Float
+    var blacks: Float
+    var vibrance: Float
+    var saturation: Float
     /// Orion's base rendering, not neutral. See Engine.contrast.
-    var contrast: Float = 1.45
-    var rotateQuarters: Int32 = 0
-    var straightenDeg: Float = 0
+    var contrast: Float
+    var rotateQuarters: Int32
+    var straightenDeg: Float
     /// Perspective correction, each -1..1. research/perspective.md.
-    var perspectiveVertical: Float = 0
-    var perspectiveHorizontal: Float = 0
-    var perspectiveAspect: Float = 0
-    var cropX: Float = 0
-    var cropY: Float = 0
-    var cropW: Float = 1
-    var cropH: Float = 1
-    var lensDistortion: Float = 0
-    var lensVignette: Float = 0
-    var lensCaRed: Float = 0
-    var lensCaBlue: Float = 0
+    var perspectiveVertical: Float
+    var perspectiveHorizontal: Float
+    var perspectiveAspect: Float
+    var cropX: Float
+    var cropY: Float
+    var cropW: Float
+    var cropH: Float
+    var lensDistortion: Float
+    var lensVignette: Float
+    var lensCaRed: Float
+    var lensCaBlue: Float
     /// Off by default. See Engine.highlightRecovery.
-    var highlightRecovery: Float = 0
+    var highlightRecovery: Float
     /// Three-way colour grading, each [x, y, luminance].
-    var gradeShadow: [Float] = [0, 0, 0]
-    var gradeMidtone: [Float] = [0, 0, 0]
-    var gradeHighlight: [Float] = [0, 0, 0]
+    var gradeShadow: [Float]
+    var gradeMidtone: [Float]
+    var gradeHighlight: [Float]
     /// Where the split between those three zones sits, -1..+1, positive toward
     /// the highlights. Decision #101. Zero is the fixed -2.5 / 0 / +2.5 EV
     /// centres every photograph edited before this existed was graded with.
-    var gradeBalance: Float = 0
-    var denoiseLuma: Float = 0
-    var denoiseColor: Float = 0
-    var lutStrength: Float = 1
+    var gradeBalance: Float
+    var denoiseLuma: Float
+    var denoiseColor: Float
+    var lutStrength: Float
     /// The mask group, folded left in listed order. Empty means no mask.
     /// research/masking.md §6.
-    var maskComponents: [MaskComponentState] = []
+    var maskComponents: [MaskComponentState]
     /// Guided feathering of the folded group, 0..1. research/masking.md §4.
-    var maskRefine: Float = 0
+    var maskRefine: Float
     /// Dust and blemishes. research/spot-removal.md.
-    var spots: [SpotState] = []
+    var spots: [SpotState]
     /// ⚠ **One set per layer.** A layer is a run of mask components with its
     /// own coverage, so the subject can be graded one way and the sky another.
     ///
     /// The legacy scalar keys are still read into layer 1 — every sidecar
     /// written before layers existed carries exactly one set, and that set is
     /// what layer 1 means.
-    var layers: [LocalAdjustState] = [LocalAdjustState()]
+    var layers: [LocalAdjustState]
 
-    var fusion: Float = 0
-    var dehaze: Float = 0
-    var clarity: Float = 0
+    var fusion: Float
+    var dehaze: Float
+    var clarity: Float
     /// Film grain — research/film-grain.md, decisions #81 and #82. `grainAmount`
     /// is the peak standard deviation in display units; `grainSize` the grain
     /// radius in *frame* pixels, so a crop enlarges the grain rather than
     /// resampling it.
-    var grainAmount: Float = 0
-    var grainSize: Float = 1.5
+    var grainAmount: Float
+    var grainSize: Float
     /// The creative vignette — research/vignette.md, decision #103. Amount is
     /// the exposure change at the corner of the *composition* in stops, so it
     /// follows a crop; `vignetteFieldAngle` is the half-diagonal field angle of
     /// the lens whose cos⁴ falloff it imitates.
     ///
     /// ⚠ Nothing to do with `lensVignette` above, which is the correction.
-    var vignetteAmount: Float = 0
-    var vignetteFieldAngle: Float = 45
-    var sharpenAmount: Float = 0
-    var sharpenRadius: Float = 1
-    var sharpenMasking: Float = 0
-    var curve = ToneCurve()
-    var hueShift = [Float](repeating: 0, count: 8)
-    var satShift = [Float](repeating: 0, count: 8)
-    var lumShift = [Float](repeating: 0, count: 8)
+    var vignetteAmount: Float
+    var vignetteFieldAngle: Float
+    var sharpenAmount: Float
+    var sharpenRadius: Float
+    var sharpenMasking: Float
+    var curve: ToneCurve
+    var hueShift: [Float]
+    var satShift: [Float]
+    var lumShift: [Float]
+}
+
+extension DevelopState {
+
+    /// A neutral state — every control at the value it returns to on Reset.
+    ///
+    /// ⚠ **Written in an extension on purpose.** An initializer declared in the
+    /// struct's own body suppresses the memberwise initializer; declared out
+    /// here, both survive, which is what lets this one delegate to the other and
+    /// so lets *one* added field break *both*.
+    ///
+    /// ⚠ And it delegates rather than assigning field by field, so the compiler
+    /// checks the argument list against the stored properties. Assigning here
+    /// would compile happily with a field left out — the property would simply
+    /// keep whatever the memberwise call gave it — which is the trap again.
+    init() {
+        self.init(
+            temperatureK: 5500, tint: 0, exposureEv: 0,
+            highlights: 0, shadows: 0, whites: 0, blacks: 0,
+            vibrance: 0, saturation: 0,
+            // Orion's base rendering, not neutral. See Engine.contrast.
+            contrast: 1.45,
+            rotateQuarters: 0, straightenDeg: 0,
+            perspectiveVertical: 0, perspectiveHorizontal: 0, perspectiveAspect: 0,
+            cropX: 0, cropY: 0, cropW: 1, cropH: 1,
+            lensDistortion: 0, lensVignette: 0, lensCaRed: 0, lensCaBlue: 0,
+            highlightRecovery: 0,
+            gradeShadow: [0, 0, 0], gradeMidtone: [0, 0, 0],
+            gradeHighlight: [0, 0, 0], gradeBalance: 0,
+            denoiseLuma: 0, denoiseColor: 0,
+            lutStrength: 1,
+            maskComponents: [],
+            maskRefine: 0,
+            spots: [],
+            layers: [LocalAdjustState()],
+            fusion: 0, dehaze: 0, clarity: 0,
+            grainAmount: 0, grainSize: 1.5,
+            // 45° half-diagonal field angle, not 0 — a 0° lens has a flat cos⁴
+            // falloff and the vignette would do nothing at any amount.
+            vignetteAmount: 0, vignetteFieldAngle: 45,
+            sharpenAmount: 0, sharpenRadius: 1, sharpenMasking: 0,
+            curve: ToneCurve(),
+            hueShift: [Float](repeating: 0, count: 8),
+            satShift: [Float](repeating: 0, count: 8),
+            lumShift: [Float](repeating: 0, count: 8))
+    }
+
+    /// Every stored property's name, checked against reflection by
+    /// `testDevelopStateRoster`. Decision #110.
+    ///
+    /// The compiler catches a field added the ordinary way. It cannot catch a
+    /// field added *with* an inline default, because that field then has a
+    /// default in the memberwise initializer too and `Engine.state` can go on
+    /// omitting it. This roster catches that one: `Mirror` reports stored
+    /// properties whatever their defaults, so the test goes red naming the field
+    /// and pointing at the four places it has to be listed.
+    static let fieldRoster: Set<String> = [
+        "temperatureK", "tint", "exposureEv", "highlights", "shadows",
+        "whites", "blacks", "vibrance", "saturation", "contrast",
+        "rotateQuarters", "straightenDeg",
+        "perspectiveVertical", "perspectiveHorizontal", "perspectiveAspect",
+        "cropX", "cropY", "cropW", "cropH",
+        "lensDistortion", "lensVignette", "lensCaRed", "lensCaBlue",
+        "highlightRecovery",
+        "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance",
+        "denoiseLuma", "denoiseColor", "lutStrength",
+        "maskComponents", "maskRefine", "spots", "layers",
+        "fusion", "dehaze", "clarity",
+        "grainAmount", "grainSize",
+        "vignetteAmount", "vignetteFieldAngle",
+        "sharpenAmount", "sharpenRadius", "sharpenMasking",
+        "curve", "hueShift", "satShift", "lumShift",
+    ]
 }
 
 /// Decoding takes what the sidecar has and leaves the rest at its default.

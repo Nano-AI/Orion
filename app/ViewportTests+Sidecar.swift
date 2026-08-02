@@ -7,6 +7,69 @@ import Foundation
 
 extension ViewportTests {
 
+    /// ⚠ The backstop under decision #110, and the one thing the compiler cannot
+    /// do for `DevelopState`.
+    ///
+    /// No stored property on `DevelopState` carries an inline default any more,
+    /// so a field added the ordinary way breaks the build in two places at once
+    /// — `DevelopState.init()` and `Engine.state` — and both errors name it. The
+    /// hole that leaves is a field added *with* a default anyway: it gets a
+    /// default in the memberwise initializer too, and `Engine.state` can go on
+    /// omitting it exactly as it silently omitted `grainAmount` and
+    /// `gradeBalance`.
+    ///
+    /// `Mirror` reports stored properties whatever their defaults, so this is
+    /// the check that sees that case. Two halves:
+    ///
+    ///   1. the roster names every field and no others — a new field is red here
+    ///      by name, with the four places it has to be listed;
+    ///   2. **every field of `busyState()` is off its default** — which is what
+    ///      makes `testEveryFieldSurvivesTheSidecar` mean what it says. A field
+    ///      the fixture never sets round-trips its own default through the
+    ///      encoder and back and passes for free.
+    ///
+    /// ⚠ Half 2 found four such fields the day it was written: `perspective*`,
+    /// `gradeBalance`, `grain*` and `vignette*` were all at their defaults in
+    /// the fixture, so the sidecar round trip had never actually carried one.
+    static func testDevelopStateRoster() {
+        let mirror = Mirror(reflecting: DevelopState())
+        let seen = Set(mirror.children.compactMap(\.label))
+
+        report(seen.count == mirror.children.count,
+               "every stored property of DevelopState is labelled",
+               "\(seen.count) of \(mirror.children.count)")
+
+        let added = seen.subtracting(DevelopState.fieldRoster).sorted()
+        report(added.isEmpty,
+               "DevelopState has no field the roster does not know about — "
+                   + "a new one goes in Engine.state, Engine.assign, "
+                   + "DevelopState.init(), the Codable Key enum and busyState()",
+               added.joined(separator: ", "))
+
+        let dropped = DevelopState.fieldRoster.subtracting(seen).sorted()
+        report(dropped.isEmpty,
+               "the roster names no field that has been removed",
+               dropped.joined(separator: ", "))
+
+        // ⚠ `String(describing:)` rather than `==`: `Mirror` hands back `Any`,
+        // and the fields are Float, Int32, ToneCurve and four different array
+        // element types. The description is the one comparison that spans all of
+        // them, and it is being used to answer "did the fixture move this at
+        // all", which does not need more precision than that.
+        let fresh = Mirror(reflecting: DevelopState()).children.map {
+            ($0.label ?? "?", String(describing: $0.value))
+        }
+        let busy = Mirror(reflecting: busyState()).children.map {
+            ($0.label ?? "?", String(describing: $0.value))
+        }
+        var untouched: [String] = []
+        for (a, b) in zip(fresh, busy) where a.1 == b.1 { untouched.append(a.0) }
+        report(untouched.isEmpty,
+               "busyState() moves every field off its default, so the sidecar "
+                   + "round trip can actually see each one",
+               untouched.joined(separator: ", "))
+    }
+
     /// A sidecar missing keys still restores the ones it has.
     ///
     /// Swift's synthesized decoder throws on a missing key rather than falling
