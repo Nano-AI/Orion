@@ -694,13 +694,21 @@ session and wave blocks** — the same failure the 4,643-line prune was for.
 the concurrent-sidecar note, two stale *In flight* tables, and the second, third,
 fourth and fifth wave write-ups) and the six `## Session` entries that were the
 tail of this log — `2026-08-02a`, `2026-08-01r`, `q`, `p`, `o` and `n`. Nothing
-was edited on the way across.
+was edited on the way across, and **742 lines are left here**.
 
 ⚠ **A prune moves; it never copies.** The 2026-08-01 prune left `2026-07-31j` in
 both files byte for byte, and a duplicated entry is invisible from either end
-because each copy looks complete. Every one of the twenty-two headings moved this
-time was checked afterwards by grep — **present in `HISTORY.md`, absent here** —
-and that check is worth repeating on the next prune.
+because each copy looks complete. So all **63** headings that moved — the
+twenty-two blocks plus every sub-heading inside them — were checked afterwards by
+exact-match grep: **present in `HISTORY.md`, absent here**, 63 of 63. That check
+is cheap and is worth repeating on the next prune.
+
+⚠ **Four claims in the gap table and the counts above were stale, and were
+re-derived from the tree rather than trusted** — the ceiling row's largest test
+file, a gap that the tree had already closed, the trailer count, and the suite
+totals. All four are corrected in place with the measurement beside them. The
+lesson is that a number written into this file goes stale in *hours* on a day
+like 2026-08-02, so a prune re-derives; it does not proof-read.
 
 ⚠ **`HISTORY.md` itself carries duplicates, and they predate this prune.**
 `2026-08-01b` appears three times; `2026-08-01a`, `2026-07-31l`, `2026-07-31k`
