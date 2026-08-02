@@ -118,6 +118,8 @@ void testSpotRemovalGpu();
 void testDabBlockRejection();
 void testLongBrushStroke();
 void testBrushErase();
+void testBrushPrefixPredicate();
+void testBrushPrefixWiring();
 void testMaskRangeGpu();
 void testMaskColorGpu();
 void testMaskMatteGpu();
