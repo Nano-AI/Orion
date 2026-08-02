@@ -145,17 +145,50 @@ void autoEnhance(Bench& b) {
         a.fusion = look.fusion;
         a.clarity = look.clarity;
 
+        // ⚠ **The solve starts two stops the wrong way on purpose, and
+        //    that is the whole of this check.**
+        //
+        //    Started from rest, the solver may never be consulted: the
+        //    look's fusion and clarity are set from the *first*
+        //    measurement, and on a frame they happen to carry across, the
+        //    median is already inside `kSettled` when the loop first looks
+        //    and it breaks before calling `refine` once. `_PIC8220` is such
+        //    a frame — it lands at 0.4570 against a 0.4610 anchor with
+        //    exposure, blacks and whites all at zero — so mutation M11
+        //    (#118) could make `refine` return its argument unchanged and
+        //    this line still printed `yes`. It went red on `_PIC8095`. A
+        //    check that depends on which photograph was passed is not a
+        //    check, and "run it on the other file" is not a fix.
+        //
+        //    So displace the start away from the anchor, in whichever
+        //    direction that is for this frame. Two stops is far outside
+        //    `kSettled` under any transfer function, the response is
+        //    monotonic, so the first measurement is off-anchor on *every*
+        //    frame and the loop cannot reach the exit without `refine`
+        //    having moved something. It is also the stronger claim: the
+        //    solver is a fixed-point iteration, so where it lands must not
+        //    depend on where it was started.
         ae::Controls c{};
+        {
+            const ae::Stats rest = measure(a);
+            c.exposureEv = rest.median < ae::kMidGray ? -2.0f : 2.0f;
+        }
+        const float startEv = c.exposureEv;
+
         // Mirrors Engine::autoEnhance: stop when the median arrives rather
         // than after a fixed count, or this probe measures a different
         // solver from the one the product runs.
+        int refines = 0;
+        float startMedian = 0.0f;
         for (int pass = 0; pass < ae::kMaxPasses; ++pass) {
             a.exposureEv = c.exposureEv;
             a.blacks     = c.blacks;
             a.whites     = c.whites;
             const auto st = measure(a);
+            if (pass == 0) startMedian = st.median;
             if (std::abs(st.median - ae::kMidGray) < ae::kSettled) break;
             c = ae::refine(c, st);
+            ++refines;
         }
         a.exposureEv = c.exposureEv;
         a.blacks = c.blacks; a.whites = c.whites;
@@ -164,6 +197,8 @@ void autoEnhance(Bench& b) {
         const double err = std::abs(double(after.median) - double(ae::kMidGray));
         std::printf("  median %.4f -> %.4f  (anchor %.4f, off by %.4f)\n",
                     before.median, after.median, ae::kMidGray, err);
+        std::printf("  solved from %+.2f EV: median %.4f -> %.4f in %d passes\n",
+                    startEv, startMedian, after.median, refines);
         std::printf("  set: exposure %+.2f EV, blacks %+.2f, whites %+.2f, "
                     "lift %.2f, clarity %.2f\n",
                     a.exposureEv, a.blacks, a.whites, a.fusion, a.clarity);
@@ -173,9 +208,14 @@ void autoEnhance(Bench& b) {
         // as far as it is permitted to.
         const bool clamped = std::abs(std::abs(a.exposureEv) - ae::kMaxExposureEv) < 1e-3f;
         const bool landed = err < 0.05 || clamped;
-        std::printf("  converged: %s%s\n", landed ? "yes" : "NO",
-                    clamped ? " (at the exposure clamp)" : "");
-        if (!landed) controlsPass = false;
+        // And it must have got there by solving. Displaced two stops, a
+        // solver that does nothing cannot arrive, and one that arrives
+        // without iterating did not exist.
+        const bool iterated = refines >= 1;
+        std::printf("  converged: %s%s%s\n", landed && iterated ? "yes" : "NO",
+                    clamped ? " (at the exposure clamp)" : "",
+                    iterated ? "" : " (SOLVER NEVER RAN)");
+        if (!landed || !iterated) controlsPass = false;
 
         // Put the graph back where the sections after this expect it.
         orion::pipe::Adjustments restore;

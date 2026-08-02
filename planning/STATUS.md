@@ -184,6 +184,72 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
+### ✅ 2026-08-02 — the last two bench checks that could not fail (#123)
+
+#118's split of `apps/bench` ran twelve mutations and found **three checks that
+pass no matter what the code does**. One was fixed in #119. **These are the
+other two**, and both are now demonstrated failing.
+
+| check | the blind spot | the fix | mutation, before → after |
+|---|---|---|---|
+| `screen vs export path` | compared two frame **means**, and an ordered dither is **zero-mean** | mean **per-pixel** deviation between the two buffers | M9a (dither × 40): `ok` exit 0 → `DITHER MAGNITUDE` exit 1 |
+| `converged` | the look landed the median inside `kSettled` before `refine` ran once, on `_PIC8220` | start the solve **two stops off the anchor** | M11 (`refine` returns its input): `yes` exit 0 → `NO` exit 1 |
+
+**A zero-mean error needs a spread to see it.** M9a made the dither eighty times
+too wide and the old line printed `ok` at -0.00313 luma against its 0.00392
+bound — the gap only there at all because `saturate` clipped the ends off. The
+new gate is `meanAbsDiff` between the screen and export buffers, against the
+**same one-eight-bit-step bound stated per pixel** rather than per frame. Not a
+new claim: the narrow path is `round(v + d)` with `|d| <= 0.5/255`, a resample,
+then a second round, so the honest deviation is a fraction of a code and scales
+**linearly** with the dither's amplitude.
+
+| frame | honest | M9a | bound |
+|---|---|---|---|
+| `_PIC8220` | **0.00116** | 0.01398 | 0.00392 |
+| `_PIC8148` | **0.00115** | — | 0.00392 |
+| `_PIC8095` | **0.00119** | 0.01424 | 0.00392 |
+
+3.3x of headroom, and near-identical on three very different photographs
+because it measures the quantiser rather than the picture. An ordered dither is
+a fixed table, so the number is the same on every run — nothing here is a wall
+clock and nothing is sampled noise. The worst pixel (0.00604 honest, 0.08075
+under M9a) is **printed beside it and deliberately not gated**: a max over
+24 MP is a good thing to read and a poor thing to assert.
+
+**A check that depends on which photograph you passed is not a check.** M11
+gutted `auto_enhance::refine` and `converged` stayed green on `_PIC8220` — the
+frame every brief names — because `look()` is set from the *first* measurement
+and on that frame its fusion and clarity land the median at 0.4570 against a
+0.4610 anchor, inside `kSettled`. The loop broke before the solver was consulted
+once, and the reported set was `+0.00 EV, +0.00 blacks, +0.00 whites`. It was
+red on `_PIC8095`, so the suite caught it by luck of the file name.
+
+The fix is not "use the other frame". Measure at rest, then **displace the start
+two stops away from the anchor** — `-2 EV` if the median is below mid-gray,
+`+2 EV` if above. Two stops is far outside `kSettled` under any transfer
+function and the response is monotonic, so the first measurement is off-anchor
+on *every* frame and the loop cannot exit without `refine` having moved
+something. It is also the stronger claim, because a fixed-point iteration must
+not care where it started:
+
+| frame | start | passes | lands | set |
+|---|---|---|---|---|
+| `_PIC8220` | -2.00 EV | 8 | 0.4570 | `+0.01 EV` |
+| `_PIC8148` | -2.00 EV | 7 | 0.4570 | `+0.24 EV` |
+| `_PIC8095` | **+2.00 EV** | 11 | 0.4648 | `-1.22 EV` |
+
+`refines >= 1` is asserted alongside and prints `SOLVER NEVER RAN`, so deleting
+the displacement later fails loudly rather than quietly restoring the blind
+spot. M11 now exits 1 on **all three** frames, not one of them.
+
+⚠ **The M0 wall-clock gate is still the noisy one.** On a machine with three
+other agents building, `_PIC8220` measured p95 20.64, 18.32, 16.36 and 9.78 ms
+from the same binary within the hour — the report prints the spread itself and
+calls it machine noise. Every check added here is a pixel statistic or a count.
+Attribution was taken from the named line and the run's exit code together,
+never from a `grep` pipeline's status.
+
 ### ⚠ In flight — sixth wave, four agents, isolated worktrees, 2026-08-02
 
 The 1000-line rule finished in one pass, plus the checks that cannot fail.
@@ -193,7 +259,7 @@ The 1000-line rule finished in one pass, plus the checks that cannot fail.
 | Split `app/Scenario.swift`, 1,596 | #120 | ⚠ **Not ordinary code — an interface.** #89: renaming its verbs collapsed four alias pairs and **fourteen `repro/*.txt` failed at once**, and the app's session log is itself a runnable scenario. Add nothing, rename nothing. Told to diff the **full output** of all 40 scenarios, not the exit codes |
 | Split `app/OrionApp.swift`, 1,557 | #121 | ⚠ Holds four CLI modes that **nothing else exercises** — `orion-tests` and `orion-viewport-tests` never invoke them. Told to run all four and diff their output. Also: `init()`'s ordering is deliberate, a scenario writes its own stills so it precedes `--screenshot` |
 | Split `app/DevelopPanels.swift`, 1,366 | #122 | ⚠ Product UI, so a byte comparison of the canvas is **blind** to the failure mode — a panel that stops appearing, a slider that stops being bound. Told to use `--screenshot`, which renders the whole interface, and to open each tab it touched. And not to add an eighth tool tab (#99: the bar came back reading `PRESE… VERSI…`) |
-| The two remaining checks that cannot fail | #123 | The dither-magnitude check compares **means**, and an ordered dither is zero-mean, so it sees a *biased* dither and not a **40×** one. And `auto_enhance::refine` can be gutted with `converged` green on `_PIC8220` — the frame every brief names — while going red on `_PIC8095`. ⚠ **A check that depends on which photograph you passed is not a check** |
+| ✅ **Merged 2026-08-02** — the two remaining checks that cannot fail | #123 | The dither-magnitude check compares **means**, and an ordered dither is zero-mean, so it sees a *biased* dither and not a **40×** one. And `auto_enhance::refine` can be gutted with `converged` green on `_PIC8220` — the frame every brief names — while going red on `_PIC8095`. ⚠ **A check that depends on which photograph you passed is not a check** |
 
 ⚠ **Every brief now carries three warnings earned today**: do not pipe a run into
 `tail` and read `$?` (I did that twice, and a caught mutation looked like a
@@ -308,9 +374,13 @@ includes that moved, and the return statement.
 | M8 | the curve LUT built once and never rebuilt | `curve changed the image` **yes → NO — BUG** | 1 |
 | M9b | the dither loses its zero-mean recentering | `screen vs export path` **PATHS DISAGREE**, +0.00738 | 1 |
 | M12 | `hl_apply`'s hole predicate becomes a plain level test | census, **0 → 13,135 px the fill must not touch** | 1 |
-| M9a | the dither made **40× too large** | ⚠ **nothing.** 0.00010 → 0.00313, inside the 1/255 bound | 0 |
-| M10 | `needsGuide` hardwired false | ⚠ **nothing** — see below | 0 |
-| M11 | `auto_enhance::refine` returns its input | ⚠ **nothing on `_PIC8220`**; red on `_PIC8095` | 0 / 1 |
+| M9a | the dither made **40× too large** | ⚠ **nothing.** 0.00010 → 0.00313, inside the 1/255 bound — **fixed in #123** | 0 |
+| M10 | `needsGuide` hardwired false | ⚠ **nothing** — see below; **fixed in #119** | 0 |
+| M11 | `auto_enhance::refine` returns its input | ⚠ **nothing on `_PIC8220`**; red on `_PIC8095` — **fixed in #123** | 0 / 1 |
+
+⚠ **All three of the bottom rows now go red**, in #119 and #123. The three
+paragraphs below are the diagnosis as it was written on the day and are left
+standing; the fixes and their re-run verdicts are in those two entries.
 
 ⚠ **M10 confirms #113's finding, unchanged and still unfixed.** With
 `needsGuide` false the whole six-node guided-filter chain is dead, and both

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -236,11 +237,30 @@ void pathAgreement(Bench& b) {
     // 4. The screen path and the export path must agree.
     //
     //    They are different formats now — eight bits for the screen,
-    //    sixteen around an export — and a wrong dither magnitude, a
-    //    stale parameter push after the mode switch, or a format that
-    //    did not actually change would all show up here and nowhere
-    //    else. The bound is one eight-bit step: that is the whole
-    //    difference the narrow path is allowed to make.
+    //    sixteen around an export — and a stale parameter push after the
+    //    mode switch, a format that did not actually change, or a wrong
+    //    dither would all show up here and nowhere else. The bound is one
+    //    eight-bit step: that is the whole difference the narrow path is
+    //    allowed to make.
+    //
+    //    ⚠ **Two statistics, because one of them cannot see the dither.**
+    //    The frame means below catch a *biased* narrow path — a dither
+    //    with a DC term, a missing push, the wrong node quantising. They
+    //    are nearly blind to a wrong dither *magnitude*, because an
+    //    ordered dither is zero-mean by construction: mutation M9a (#118)
+    //    multiplied `bayerOffset` by forty and this line stayed green at
+    //    0.00313 against its 0.00392 bound, the gap coming only from
+    //    `saturate` clipping the ends off a dither eighty times too wide.
+    //    A magnitude error is not a shift, it is a *spread*, so the gate
+    //    is the mean per-pixel deviation between the two buffers.
+    //
+    //    That bound is the same claim as the one beside it, made per
+    //    pixel. By construction the narrow path is `round(v + d)` with
+    //    |d| <= 0.5/255, then a resample and a second round — so the
+    //    honest deviation is a fraction of a code and scales linearly
+    //    with the dither's amplitude. Nothing here is a wall clock and
+    //    nothing is a sampled threshold: an ordered dither is a fixed
+    //    table, so this number is the same on every run of a given frame.
     auto look = base;
     look.exposureEv = 1.4f;
     look.blacks = -0.5f;
@@ -249,24 +269,48 @@ void pathAgreement(Bench& b) {
     develop.setWideOutput(false);
     develop.apply(look);
     develop.render();
+    const std::uint32_t w = develop.outputWidth();
+    const std::uint32_t h = develop.outputHeight();
+    const auto screenPixels = output16(develop, w, h);
     const double screenLuma = meanOf(develop, Metric::Luma);
     const double screenChroma = meanOf(develop, Metric::Chroma);
 
     develop.setWideOutput(true);
     develop.apply(look);
     develop.render();
+    const auto exportPixels = output16(develop, w, h);
     const double exportLuma = meanOf(develop, Metric::Luma);
     const double exportChroma = meanOf(develop, Metric::Chroma);
     develop.setWideOutput(false);
 
     const double lumaGap = std::abs(screenLuma - exportLuma);
     const double chromaGap = std::abs(screenChroma - exportChroma);
-    const bool agree = lumaGap < 1.0 / 255.0 && chromaGap < 1.0 / 255.0;
+
+    // The spread. `meanAbsDiff` is the one instrument here that cannot
+    // cancel, which is exactly the property the means lack.
+    const double spread = meanAbsDiff(screenPixels, exportPixels);
+    // And the worst pixel, printed rather than asserted: it is the number
+    // that says *how* the spread went wrong, and a max over 24 MP is a
+    // reasonable thing to read and a poor thing to gate on.
+    double worst = 0.0;
+    for (std::size_t i = 0; i + 3 < screenPixels.size(); i += 4) {
+        for (int c = 0; c < 3; ++c) {
+            worst = std::max(worst, std::abs(double(screenPixels[i + c]) -
+                                             double(exportPixels[i + c])));
+        }
+    }
+    worst /= 65535.0;
+
+    const double kStep = 1.0 / 255.0;
+    const bool agree = lumaGap < kStep && chromaGap < kStep && spread < kStep;
     if (!agree) invariantsPass = false;
     std::printf("  %-24s screen %.5f  export %.5f  (%+.5f luma, %+.5f chroma)  %s\n",
                 "screen vs export path", screenLuma, exportLuma,
                 screenLuma - exportLuma, screenChroma - exportChroma,
                 agree ? "ok" : "PATHS DISAGREE");
+    std::printf("  %-24s %.5f mean per pixel, %.5f worst  [< %.5f]  %s\n",
+                "  dither spread", spread, worst, kStep,
+                spread < kStep ? "ok" : "DITHER MAGNITUDE");
 
     develop.apply(base);
     develop.render();
