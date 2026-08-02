@@ -273,6 +273,31 @@ unchanged, and ten renders byte-identical. Sixteen non-inlined member calls per
 `apply` against a ~10 ms GPU frame is not a measurable cost and is not claimed
 to be one either way.
 
+### ✅ 2026-08-02 — the silent-failure inventory, finished by hand
+
+The killed agent (#115) landed four fixes and never reached the sweep. Completed
+inline, since it needs a grep and a judgement rather than an agent. **The finding
+is mostly a negative one, and that is worth recording**: after this session's
+fixes the `app/` write paths are in good shape, and manufacturing more fixes to
+look busy would have been the wrong answer.
+
+| Site | Verdict |
+|---|---|
+| `Engine.restore` on an undecodable blob | ✅ fixed by #115 — the data-loss one |
+| `Autosave.flush` / `toSidecar` | ✅ already correct: the job is dropped and the baseline moves **only once the write has landed**, so a sidecar that will not write is retried rather than believed |
+| `Snapshots.commit` on restore | **Left, and argued in place**: best effort by design, logged, and the *guard* is what is best effort rather than the restore — refusing to restore over an unwritable version list would punish the photographer for a disk problem |
+| `MatteStore.sweep` delete | **Left**: `do`/`catch` that writes the failure to stderr and keeps going. Collecting is housekeeping; a file it cannot remove costs nothing |
+| `MatteStore.write`, `Snapshots.save` | **Left**: both `throws`, so nothing is swallowed |
+| `orion_engine_set_brush_stroke` ×3 | ✅ already reported — `noteBrushRefusal`, and the live path says a refused stroke reads as a dead hand |
+| `Engine.setMaskMatte` | ✅ returns `Bool`; every caller guards it **except one**, below |
+| `Screenshot.swift` sky matte | ⚠ **fixed here.** It was `_ =`. That harness renders the stills the landing page publishes under *"the interface as it runs today, not a mockup"*, so a matte that silently failed to upload would put a picture of a feature not working underneath a claim that it does. It now exits 1 rather than shipping a quietly wrong photograph of the product |
+| `renderPreview` falling back to `render` | **Left, deliberately**: documented, and the fallback is the right behaviour on a machine with no preview graph |
+
+⚠ **The rule this session settled**: a failure may be silent when the fallback is
+genuinely correct and the photographer loses nothing. It may not be silent when
+the result *looks* right and is not — that is the class that produced the black
+canvas, the deleted mattes and the film grain that shipped at zero.
+
 ### The fourth wave — all three merged, one of them cut short
 
 ⚠ **The silent-failure sweep (#115) was killed by a session limit mid-run**, before

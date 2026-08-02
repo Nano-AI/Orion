@@ -355,7 +355,17 @@ enum Screenshot {
             engine.exposureEv = 1.0
             if let m = MainActor.assumeIsolated({ try? SubjectMatte.generateBlocking(engine: engine, kind: .sky) }) {
                 engine.maskKind = 4
-                _ = engine.setMaskMatte(m.alpha, width: m.width, height: m.height)
+                // ⚠ Not `_ =`. This harness renders the stills the landing page
+                // publishes under the words "the interface as it runs today, not
+                // a mockup" — so a sky mask that silently failed to upload would
+                // put a picture of a feature not working underneath a claim that
+                // it does. A refused matte fails the run rather than shipping a
+                // quietly wrong photograph of the product.
+                guard engine.setMaskMatte(m.alpha, width: m.width, height: m.height) else {
+                    FileHandle.standardError.write(Data(
+                        "orion: the sky matte was refused — refusing to render a still without it\n".utf8))
+                    exit(1)
+                }
                 // The label, and deliberately no file id: this harness renders a
                 // picture, it does not write mattes beside somebody's raws. The
                 // caption reads the two separately and says so.
