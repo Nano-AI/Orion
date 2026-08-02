@@ -1086,6 +1086,63 @@ int main(int argc, char** argv) {
             develop.apply(base);
             develop.render();
 
+            // 3b. A Balance drag on an ungraded photograph must run nothing.
+            //
+            //     Balance slides the three zone centres, and with every wheel
+            //     centred those weights multiply an all-zero offset and a slope
+            //     of one — the kernel would be an exact identity over the whole
+            //     frame. Decision #82 is a node run at zero strength and #92 is
+            //     a block re-pushed for a value nothing reads; this control is
+            //     both of them at once if it is wired the obvious way.
+            //
+            //     By name, like 3. `grade + vignette` is the node, and it is
+            //     full-resolution.
+            auto bal = base;
+            int balRuns = 0, balNodes = 0;
+            for (int i = 0; i < 8; ++i) {
+                bal.gradeBalance = -1.0f + 2.0f * static_cast<float>(i) / 7.0f;
+                develop.apply(bal);
+                develop.render();
+                int ranHere = 0;
+                for (const auto& n : develop.graph().lastRun()) {
+                    if (!n.executed) continue;
+                    ++ranHere;
+                    if (n.name == "grade + vignette") ++balRuns;
+                }
+                balNodes = std::max(balNodes, ranHere);
+            }
+            const bool balOk = balRuns == 0;
+            if (!balOk) invariantsPass = false;
+            std::printf("  %-24s %d nodes, grade ran %d times  %s\n",
+                        "balance with no grade", balNodes, balRuns,
+                        balOk ? "ok" : "BALANCE RUNS THE GRADE FOR NOTHING");
+
+            // And the mirror of it: with a wheel off centre, Balance is a real
+            // control and the node *must* re-run. A guard that switched the
+            // grade off for Balance entirely would satisfy the line above and
+            // silently break the feature, so the two are asserted together.
+            auto balOn = base;
+            balOn.gradeShadow[0] = -0.6f;
+            balOn.gradeShadow[1] = -0.6f;
+            develop.apply(balOn);
+            develop.render();
+            int balOnRuns = 0;
+            for (int i = 0; i < 4; ++i) {
+                balOn.gradeBalance = -0.8f + 0.5f * static_cast<float>(i);
+                develop.apply(balOn);
+                develop.render();
+                for (const auto& n : develop.graph().lastRun())
+                    if (n.executed && n.name == "grade + vignette") ++balOnRuns;
+            }
+            const bool balOnOk = balOnRuns == 4;
+            if (!balOnOk) invariantsPass = false;
+            std::printf("  %-24s grade ran %d of 4 ticks  %s\n",
+                        "balance with a grade", balOnRuns,
+                        balOnOk ? "ok" : "BALANCE DOES NOT REACH THE GRADE");
+
+            develop.apply(base);
+            develop.render();
+
             // 4. The screen path and the export path must agree.
             //
             //    They are different formats now — eight bits for the screen,
