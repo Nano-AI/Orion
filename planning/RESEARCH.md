@@ -8,6 +8,8 @@ Condensed findings. Quality ▲ high / ■ mid / ▽ low · Speed F fast / M med
 
 **What the references ship:** darktable defaults to **RCD** (Bayer) + Markesteijn 1-pass (X-Trans). RawTherapee/ART default to **AMaZE**. vkdt runs everything as Vulkan compute, incl. a joint denoise+demosaic U-Net.
 
+⚠ **Markesteijn has never been published** — checked 2026-08-02, decision #114. Both projects' copies are GPL-3 and the only description of the algorithm is the code itself, so it cannot be reimplemented from a paper. LibRaw's core carries the same code under **LGPL-2.1/CDDL-1.0**, which is the route. `research/demosaic-xtrans.md`.
+
 ### Demosaic
 | Algorithm | Quality | Speed | GPU fit | Notes |
 |---|---|---|---|---|

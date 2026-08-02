@@ -20,7 +20,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Sony ARW | M0 | Only priority format for v1 |
 | Other Bayer cameras via LibRaw | M2 | Mostly free once ARW works |
 | DNG | M2 | |
-| X-Trans (Fuji) | M5 | Needs separate Markesteijn demosaic path |
+| X-Trans (Fuji) | M5 | ⚠ **Corrected 2026-08-02, #114.** Not "a Markesteijn port" — that algorithm has **no published description** and the accessible copies are GPL-3. LibRaw already ships it as `xtrans_interpolate` under **LGPL-2.1/CDDL-1.0**. The cost is decision #29's ordering (a CPU demosaic takes the temperature slider off the live path), not the licence. `research/demosaic-xtrans.md`; seven pieces in `ROADMAP.md`, two of which may say stop |
 | Demosaic: RCD | M0 | MIT impl, ▲ quality, excellent GPU fit |
 | Demosaic: bilinear for thumbs/zoomed-out | M0 | |
 | Demosaic: dual (RCD+VNG4) quality option | M4 | |
