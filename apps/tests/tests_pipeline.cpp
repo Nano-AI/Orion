@@ -25,13 +25,14 @@ void testBindingCount() {
     const std::string shaders = std::string(ORION_SHADER_DIR);
 
     // `maskComponent` is the kernel this went wrong on, and it is the widest in
-    // the graph: src, reference, matte, dabs, dabBounds, dst. Reflection has to
-    // see all six, or the check below cannot fail for the right reason.
+    // the graph: src, reference, matte, dabs, dabBounds, accum, dst. Reflection
+    // has to see all seven, or the check below cannot fail for the right
+    // reason. (`accum` is the brush accumulator, decision #108.)
     {
         auto lib = orion::gpu::Library::createFromFile(
             *device, shaders + "/maskComponent.metallib");
         auto k = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
-        report(k->textureSlotsUsed() == 6,
+        report(k->textureSlotsUsed() == 7,
                "reflection sees every texture slot maskComponent uses",
                "saw " + std::to_string(k->textureSlotsUsed()));
     }
@@ -73,17 +74,18 @@ void testBindingCount() {
     // ── The positive control ───────────────────────────────────────────────
     //
     // Without this the check above passes on a guard that refuses *everything*,
-    // which is the same test with none of the value. Six bindings for six slots
-    // must compile.
+    // which is the same test with none of the value. Seven bindings for seven
+    // slots must compile.
     {
         pipe::Pipeline p(*device, shaders);
         const int a0 = p.addAuxTexture(4, 4, PixelFormat::RGBA16Float);
         const int a1 = p.addAuxTexture(4, 4, PixelFormat::R16Float);
         const int a2 = p.addAuxTexture(4, 4, PixelFormat::RGBA16Float);
         const int a3 = p.addAuxTexture(4, 4, PixelFormat::RGBA16Float);
+        const int a4 = p.addAuxTexture(4, 4, PixelFormat::R32Float);
         p.add({.name = "fed", .kernel = "maskComponent",
                .inputs = {pipe::kSource}, .format = PixelFormat::R16Float,
-               .params = {}, .aux = {a0, a1, a2, a3}});
+               .params = {}, .aux = {a0, a1, a2, a3, a4}});
 
         bool ok = true;
         std::string why;

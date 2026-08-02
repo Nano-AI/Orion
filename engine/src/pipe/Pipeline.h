@@ -100,6 +100,27 @@ public:
     /// reads it.
     void updateAux(int auxId, const void* data, std::size_t bytesPerRow);
 
+    /// Reallocates an auxiliary texture at a new size, discarding its contents.
+    ///
+    /// Exists so a texture that is expensive and usually unwanted can be
+    /// registered at 1x1 and grown on first use — the brush accumulator is
+    /// ~97 MB at 24 Mpx and most photographs are never painted on. Does **not**
+    /// dirty anything: the contents are gone, so whoever grows it is also
+    /// responsible for saying that what it held is no longer there.
+    void resizeAux(int auxId, std::uint32_t width, std::uint32_t height);
+
+    [[nodiscard]] std::uint32_t auxWidth(int auxId) const;
+
+    /// Whether a node will run at the next render.
+    ///
+    /// ⚠ Exists for one caller and one reason: a kernel that *accumulates into
+    /// a persistent texture* is not idempotent, so running it twice with one
+    /// set of parameters composites the same dabs twice. Every other node in
+    /// this graph is a pure function of its inputs and can be re-run freely,
+    /// which is why nothing needed to ask this before. See
+    /// `DevelopPipeline::render`.
+    [[nodiscard]] bool nodeDirty(int nodeId) const;
+
     /// Times every node separately instead of batching them.
     ///
     /// One command buffer per node, so `lastRun()` carries real per-node

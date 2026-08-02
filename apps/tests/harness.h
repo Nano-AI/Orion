@@ -63,6 +63,16 @@ void section(const char* name);
 
 #define CHECK(cond) report((cond), #cond)
 
+/// A scratch brush accumulator, for the tests that dispatch `maskComponent`
+/// directly. Decision #108 gave that kernel a seventh binding — the persistent
+/// coverage it continues a stroke from — and an unbound slot in Metal is nil
+/// rather than an error, so every one of these dispatches has to hand it
+/// something real even when `accumUse` is zero and the kernel never touches it.
+///
+/// Cached per size, because several of the call sites are inside loops.
+orion::gpu::Texture& scratchAccum(orion::gpu::Device&, std::uint32_t w,
+                                  std::uint32_t h);
+
 // Every test, in one list. ⚠ A test defined and not declared here is a test that
 // does not link; a test declared and not called is one that never runs, which is
 // why `main.cpp` is now short enough to read its call list at a glance.

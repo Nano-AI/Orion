@@ -427,7 +427,7 @@ void testDabBlockRejection() {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(),
-                              dabTex.get(), boundsTex.get(), dst.get()},
+                              dabTex.get(), boundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()},
                     &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
@@ -550,7 +550,7 @@ void testLongBrushStroke() {
     src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
     orion::gpu::CommandBuffer cb(*device);
     cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(), dabTex.get(),
-                          dabBoundsTex.get(), dst.get()}, &b, sizeof b, kW, kH);
+                          dabBoundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()}, &b, sizeof b, kW, kH);
     cb.commitAndWait();
 
     std::vector<__fp16> out(std::size_t(kW) * kH);
@@ -588,7 +588,7 @@ void testLongBrushStroke() {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb2(*device);
         cb2.dispatch(*kernel, {src.get(), reference.get(), matte.get(),
-                               dabTex.get(), dabBoundsTex.get(), dst.get()}, &c, sizeof c, kW, kH);
+                               dabTex.get(), dabBoundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()}, &c, sizeof c, kW, kH);
         cb2.commitAndWait();
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
 
@@ -679,7 +679,7 @@ void testBrushErase() {
         src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(),
-                              dabTex.get(), dabBoundsTex.get(), dst.get()}, &m, sizeof m, kW, kH);
+                              dabTex.get(), dabBoundsTex.get(), &scratchAccum(*device, kW, kH), dst.get()}, &m, sizeof m, kW, kH);
         cb.commitAndWait();
         std::vector<__fp16> out(std::size_t(kW) * kH);
         dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);

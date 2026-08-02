@@ -764,6 +764,51 @@ private:
     /// moment the geometry moves.
     std::array<params::BrushPrefixState, kMaxMaskComponents> brushPrev_;
     std::array<BrushPrefixStat, kMaxMaskComponents> brushPrefix_{};
+
+    // ── The incremental brush accumulator (decision #108) ──────────────────
+    //
+    // ⚠ **`brushPrev_` above answers a different question than this half
+    // needs, and session one could not have known it.** It is updated when a
+    // stroke is *uploaded*, which is right for a predicate nobody reads; the
+    // accumulator is a texture, and a texture only changes when the graph is
+    // *rendered*. Those are not the same moment: the full graph is given
+    // parameters on every pointer event and rendered once when the gesture
+    // ends. So `brushPrev_` is now advanced from what the pipeline reports
+    // having executed, and `brushPending_` holds the claim in between.
+
+    /// Which component owns the accumulator, or -1. **One at a time**, because
+    /// there is one texture: four of them would be ~388 MB at 24 Mpx and a
+    /// photograph with four brush components would pay it whether or not any of
+    /// them was being painted. The cost of the choice is one full re-lay when
+    /// the photographer moves to a different component — one event out of a
+    /// gesture's hundreds. research/brush-acceleration.md.
+    int accumOwner_ = -1;
+    /// The accumulator itself. Registered at 1x1 and grown on the first dab,
+    /// so a photograph that is never painted on pays two bytes.
+    int auxBrushAccum_ = -1;
+
+    /// A stroke the host has *pushed* but not yet seen rendered.
+    struct BrushClaim {
+        params::BrushPrefixState state{};
+        bool valid = false;
+    };
+    std::array<BrushClaim, kMaxMaskComponents> brushPending_{};
+    /// A faithful copy of the parameters currently sitting in each mask node,
+    /// so `render` can patch `firstDab` back to zero without rebuilding the
+    /// whole block. Kept in step by `apply`, which is the only writer.
+    std::array<params::MaskComponent, kMaxMaskComponents> maskParams_{};
+
+    /// Grows the accumulator to the frame's size the first time it is wanted.
+    void ensureBrushAccum();
+    /// ⚠ Immediately before a render: refuse the fast path on any node that is
+    /// about to run with parameters this `apply` did not push. Compositing the
+    /// same dabs twice is the failure this exists to make impossible.
+    void reconcileBrushAccum();
+    /// Immediately after a render: advance the claim only for nodes the
+    /// pipeline says actually ran.
+    void commitBrushAccum();
+    /// One render, with the two above wrapped around it.
+    double renderOnce();
     bool         primed_ = false;
     WhiteBalance         asShot_{};
     std::array<float, 3> asShotMul_{1.0f, 1.0f, 1.0f};

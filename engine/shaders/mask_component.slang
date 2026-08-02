@@ -76,7 +76,19 @@ struct MaskComponentParams
     /// the stroke is a 2D texture read as a 1D list, because a stroke long
     /// enough to matter does not fit in a constant block at all.
     int    dabStride;
-    int    _pad3[3];
+
+    /// Where the dab loop starts. Zero lays the whole stroke; anything larger
+    /// says `accum` already holds the coverage of dabs `[0, firstDab)`.
+    ///
+    /// Painting appends dabs, and re-laying the whole stroke on every appended
+    /// dab is what made a 294-dab stroke cost 34.9 ms a render against 2.6 ms
+    /// at 49. research/brush-acceleration.md; decision #108.
+    int    firstDab;
+    /// Non-zero when this component owns the accumulator. **At most one
+    /// component ever has it**, because two writers would interleave two
+    /// strokes into one texture.
+    int    accumUse;
+    int    _pad3;
 
     /// Matte (kind 4): the live rectangle of the aux texture. A matte is
     /// uploaded at whatever size its producer had, into a texture allocated for
@@ -219,6 +231,18 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float>   matte, // kind 4, frame coordinates
                    uniform Texture2D<float4>  dabs,  // kind 3: xy center, z erases when set
                    uniform Texture2D<float4>  dabBounds, // kind 3: per-block box
+                   /// The persistent brush accumulator — the coverage of the
+                   /// dabs already laid, kept between renders so appending to a
+                   /// stroke costs the new dabs instead of all of them.
+                   ///
+                   /// ⚠ **R32Float, and read *and* written by this kernel.**
+                   /// One texel per thread, its own, so there is no cross-thread
+                   /// dependency; and float32 round-trips a float32 exactly, so
+                   /// continuing from it executes the same operations in the
+                   /// same order the full loop would. That exactness is the
+                   /// whole reason it is not R16Float — the invariant is
+                   /// bit-identity with a full evaluation, not similarity.
+                   uniform RWTexture2D<float> accum,
                    uniform RWTexture2D<float> dst,
                    uniform ConstantBuffer<MaskComponentParams> p)
 {
@@ -263,6 +287,19 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         // stroke starts from nothing.
         if (p.accumulate != 0) own = src[tid.xy];
 
+        // ⚠ **Where the loop starts, and why the answer is a texture read.**
+        //
+        // `firstDab` is the host's statement that `accum` holds the coverage of
+        // dabs `[0, firstDab)` of *this* stroke. It is only ever non-zero when
+        // the host has observed the accumulator being written with that exact
+        // prefix — the predicate saying "the first N dabs did not change" is a
+        // claim about the previous *upload*, and the two are different things
+        // whenever a graph is given parameters more often than it is rendered,
+        // which is exactly what happens during a gesture.
+        // research/brush-acceleration.md; decision #108.
+        const int firstDab = (p.accumUse != 0) ? clamp(p.firstDab, 0, p.count) : 0;
+        if (firstDab > 0) own = accum[tid.xy];
+
         // In pixels, not in normalized coordinates. One normalized unit of x and
         // one of y are different numbers of pixels on any frame that is not
         // square, so measuring the dab in normalized space drew an ellipse — 3:2
@@ -297,8 +334,12 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         // a pixel must be applied in the order they were laid. An index range
         // preserves that with no bookkeeping — which is the reason this is not a
         // per-tile bin, where order has to be rebuilt.
+        // ⚠ The walk starts at the block holding `firstDab`, not at block zero,
+        // and the inner loop clamps to `firstDab` inside it — a prefix does not
+        // have to end on a block boundary and rounding it down to one would
+        // composite up to 63 dabs a second time.
         const int blocks = (p.count + DAB_BLOCK - 1) / DAB_BLOCK;
-        for (int b = 0; b < blocks; ++b)
+        for (int b = firstDab / DAB_BLOCK; b < blocks; ++b)
         {
             // ⚠ The bounds are of the dab **centers**, unexpanded, and the test
             // below is written in the same expression shape as the per-dab one
@@ -318,8 +359,8 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
             if ((box.x - q.x) * toPx.x > r || (q.x - box.z) * toPx.x > r ||
                 (box.y - q.y) * toPx.y > r || (q.y - box.w) * toPx.y > r) continue;
 
-            const int lo = b * DAB_BLOCK;
-            const int hi = min(lo + DAB_BLOCK, p.count);
+            const int lo = max(b * DAB_BLOCK, firstDab);
+            const int hi = min(b * DAB_BLOCK + DAB_BLOCK, p.count);
             for (int i = lo; i < hi; ++i)
         {
             const float4 dab = dabs[int2(i % stride, i / stride)];
@@ -358,6 +399,15 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
             else              own += cov * (1.0f - own);
         }
         }
+
+        // ⚠ **Stored raw, before the saturate.** The invariant this whole
+        // scheme has to hold is that a stroke laid incrementally is *bit-
+        // identical* to the same stroke laid whole, and the full loop keeps
+        // `own` unclamped right up to this line. Storing the clamped value
+        // would make the continuation start from a different number on any
+        // pixel where the sum overshot, which is a difference no screenshot
+        // shows and the byte-for-byte test does.
+        if (p.accumUse != 0) accum[tid.xy] = own;
 
         own = saturate(own);
     }

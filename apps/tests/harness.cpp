@@ -1,7 +1,28 @@
 #include "harness.h"
 
+#include <map>
+#include <utility>
+
 int failures = 0;
 int checks = 0;
+
+orion::gpu::Texture& scratchAccum(orion::gpu::Device& device, std::uint32_t w,
+                                  std::uint32_t h) {
+    // Keyed by size and never freed. The binary lives for seconds, and the
+    // alternative — a fresh texture per dispatch — allocates inside loops that
+    // run a few hundred times.
+    static std::map<std::pair<std::uint32_t, std::uint32_t>,
+                    std::unique_ptr<orion::gpu::Texture>> cache;
+    const auto key = std::make_pair(w, h);
+    auto it = cache.find(key);
+    if (it == cache.end()) {
+        it = cache.emplace(key,
+                           orion::gpu::Texture::create(
+                               device, w, h, orion::gpu::PixelFormat::R32Float))
+                 .first;
+    }
+    return *it->second;
+}
 
 void report(bool ok, const std::string& what, const std::string& detail) {
     ++checks;
