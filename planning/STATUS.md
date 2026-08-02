@@ -226,6 +226,85 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
+### ✅ 2026-08-02 — a scenario that measures nothing no longer passes (#124)
+
+**The hole.** `Scenario` exited 0 on `orion: 0 checks, 0 failures`. #120's
+mutation **M4** — one verb family claiming every verb, so three quarters of the
+vocabulary silently does nothing — left **39 of 40 `repro/*.txt` exiting 0**, and
+**38 of those asserted nothing at all**. This is the gate `CLAUDE.md`, the
+working agreement and every agent brief lean on. Only two things saw M4: a byte
+comparison of 51 rendered frames, and a diff of the runner's whole output.
+Neither is what the gate runs.
+
+**The rule.** A run fails if it asserted less than its file's floor. The floor
+**defaults to 1**; a file declares its own with **`minchecks <n>`**.
+
+**How many of the 40 assert nothing today: exactly 2**, measured by running them,
+not by grepping. `eyedropper-latency.txt` and `slider-drag-cost.txt` — both
+instruments, both of which already said so in prose nothing could read. Demos,
+not gaps. The other 38 run 1 to 24 checks.
+
+**Why this shape, over the two alternatives:**
+
+| Shape | Why not |
+|---|---|
+| `--min-checks N` from the caller | One number for 40 files spanning 1–24 checks, held in the gate loop where it drifts out of sight of what it describes. The brief's own worry, and it is right |
+| Blanket "at least one check" | No bookkeeping, but cannot express the two instruments at all — it would either fail them forever or be switched off |
+| **Default 1, per-file override** | No bookkeeping for 38 files; the 2 exceptions are *stated* rather than tolerated, next to the paragraph explaining them |
+
+⚠ **Default-deny is the load-bearing half, and that is not a style preference.**
+Mutation **M-C** leaves the guard standing and sets the default to 0 — an opt-in
+floor — and M4 returns to **39/40 exit 0**. The declaration is a line of the file,
+so a dispatcher that eats every verb eats that one too: an opt-in guard disarms
+itself with the very defect it exists to catch. Defaulting to 1 means a broken
+dispatcher can only lower a file's checks *into* the floor, never lift the floor
+out of the way.
+
+⚠ **`minchecks` is a declaration, not a step.** Parsed in `run` before the first
+verb executes — the one word in the grammar that does not live in a family
+switch, for the same reason: a floor dispatched like an ordinary verb can be
+*taken* by a broken family and lost. #89 honoured — added, nothing renamed,
+nothing removed.
+
+**The deliverable — M4 re-run, before and after:**
+
+| | exit 0 | nonzero | ran zero checks |
+|---|---|---|---|
+| M4, before the floor | **39 / 40** | 1 (a throw, exit 2) | 38 |
+| M4, after the floor | **3 / 40** | 37 | 38 (now all red) |
+
+The three survivors are the two declared instruments and
+`snapshot-keeps-its-matte.txt`, whose 3 surviving checks are `snapshot missing` —
+implemented by the very family M4 makes claim everything. ⚠ **That last one is a
+real residual**: a floor says a file measured something, never that it measured
+the right thing. Carried as a gap, not papered over.
+
+**The guard's own mutations.** ⚠ Same blind-spot note as #120: `orion-tests` is
+C++, `orion-viewport-tests` does not compile this file and `orion-bench` links no
+Swift, so all three are structurally blind to every row below.
+
+| # | Mutation | Result | Reads |
+|---|---|---|---|
+| M-A | `frameStep` claims every verb (= #120's M4) | **3/40 exit 0** | the deliverable |
+| M-B | guard disabled, M-A left on | **39/40 exit 0** | the guard is what catches M-A |
+| M-C | default floor 1 → 0 (opt-in), M-A left on | **39/40 exit 0** | default-deny is load-bearing, not the guard's mere presence |
+| M-D | declaration recorded nowhere, honest build | **both instruments red**, an asserting file untouched | the per-file override is load-bearing |
+| M-E | delete the one `expect` in `eyedropper-color-mixer` | **red**, "this run asserted nothing" | fires on an ordinary regression, not only under M-A |
+| M-F | `minchecks 5` on a 2-check file | **red**, "2 checks, but this file declares `minchecks 5`" | the second branch of the guard fires too |
+| M-G | `minchecks banana` | **exit 2**, named error | a malformed floor is refused, not ignored |
+| M-H | `# minchecks 0` | **red** — default 1 applies | commenting a declaration out means what it means |
+
+**Owed, and deliberately not taken here:** `InteractionLog`'s session log is a
+runnable scenario with no checks, so replaying one now exits 1 with a message
+naming the fix. Nothing automated runs it and nobody reads a replay's exit code,
+but a `minchecks 0` in that header is owed — left to whoever owns that file
+rather than reached into from another agent's worktree.
+
+**Gates.** `cmake --build` clean · `orion-tests` **800 / 0** ·
+`orion-viewport-tests` **3708 / 0** · **40/40** scenarios exit 0 ·
+`orion-bench` exits **0**. The 40 scenarios' per-file check counts and exit codes
+are **identical to the pre-change baseline**, diffed rather than eyeballed.
+
 ### ✅ 2026-08-02 — `DevelopPanels.swift` is seven files, and the interface did not move (#122)
 
 **1,366 lines against a ceiling of 1,000**, and the first of these splits that is
@@ -380,7 +459,8 @@ The byte comparison caught it completely (**0 of 51** frames identical) and the
 repro *output* diff caught it (1,013 lines). The exit codes did not. This is
 exactly why "diff the full output, not the exit codes" is the rule, and a
 `--min-checks` floor belongs on the runner. **Not fixed here** — a behaviour
-change hidden inside a refactor is unreviewable.
+change hidden inside a refactor is unreviewable. ✅ **Fixed on its own, same day:
+#124 above.** M4 now leaves 3 of 40 exiting 0 instead of 39.
 
 ### The mutation table
 
@@ -1112,6 +1192,8 @@ Small, named, and none of them blocking the next story:
 
 | Gap | Where |
 |---|---|
+| ⚠ **The check floor says a file measured something, never that it measured the right thing.** #124 takes M4 (one verb family claiming every verb) from 39/40 exiting 0 to 3/40. Two survivors are the declared instruments. The third, `snapshot-keeps-its-matte.txt`, keeps 3 real checks under the mutation because `snapshot missing` is implemented by the very family that claims everything — a floor cannot see that. The oracles that *can* are the byte comparison of rendered frames and the full-output diff, and neither is what the gate runs. Raising the floor would not help; the residual is a coverage shape, not a threshold | `repro/` |
+| **The session log replay now exits 1.** `InteractionLog` writes a runnable scenario with no checks, so #124's floor fails it, loudly and with the fix named. Nothing automated runs it and nobody reads a replay's exit code, but the header owes a `minchecks 0`. One line, left to whoever owns that file rather than reached into from another agent's worktree | `InteractionLog.swift` |
 | **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand — and #79 now adds a second reason it must stay on demand: a model that has changed between OS releases would give a *different* selection, silently, on a finished edit | `SubjectMatte` |
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
