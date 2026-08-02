@@ -873,6 +873,15 @@ float DevelopPipeline::whiteClipFor(const float multipliers[3]) const noexcept {
     return std::max(clip, 1e-3f);
 }
 
+DevelopPipeline::HighlightStages DevelopPipeline::highlightStages() const {
+    HighlightStages s;
+    s.input  = &pipeline_.nodeOutput(nRgb_);
+    s.output = &pipeline_.nodeOutput(nHighlights_);
+    s.clip   = lastWhiteClip_;
+    s.gamma  = hlfill::kClipGamma;
+    return s;
+}
+
 void DevelopPipeline::setBrushStroke(int component, const float* xy,
                                     const float* erase, int count) {
     // Ignored rather than clamped: a stroke written into the wrong component
@@ -1252,6 +1261,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         const float gains[3] = {lin.whiteBalance[0], lin.whiteBalance[1],
                                 lin.whiteBalance[2]};
         lin.whiteClip = whiteClipFor(gains);
+        lastWhiteClip_ = lin.whiteClip;
         pipeline_.setParams(nLinearize_, &lin, sizeof lin);
     }
 

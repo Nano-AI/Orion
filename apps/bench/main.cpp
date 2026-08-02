@@ -1286,6 +1286,162 @@ int main(int argc, char** argv) {
 
             develop.apply(base);
             develop.render();
+
+            // 3e. The clip-set census — how much of this frame is the region
+            //     Rouf et al.'s §3.3 would newly serve.
+            //
+            //     ⚠ Placed after block 4 rather than beside 3c on purpose:
+            //     another block (3d) lands at 3c's anchor in the same hour, and
+            //     adjacent patches merge where interleaved ones do not.
+            //
+            //     ⚠ **This is a measurement, not an invariant.** It gates
+            //     nothing. It exists because ROADMAP costed piece 4 at +23
+            //     nodes and ~30 MiB without anyone asking how many pixels it
+            //     would reach, and piece 3's own note that "a blown lamp's
+            //     partial-clip annulus can be a pixel or two wide" was written
+            //     from a synthetic fixture rather than from a photograph.
+            //
+            //     §3.3 transfers detail into a clipped channel from an
+            //     unclipped one. Its domain is therefore Omega^union minus
+            //     Omega^intersection — a pixel with at least one channel
+            //     clipped and at least one still valid. `highlights.slang`
+            //     already serves that set by Masood et al.'s per-pixel
+            //     cross-channel fit, so what §3.3 would *add* is the part of it
+            //     the window fit hands back untouched: no valid samples within
+            //     `kRadius`, or a fit it refuses to extrapolate.
+            //
+            //     So this counts three things on the node's own two sides,
+            //     against the ceiling the node itself was given:
+            //       - how big Omega^union \ Omega^intersection is,
+            //       - how much of it comes back bit-identical, and
+            //       - how far its pixels sit from evidence, in Chebyshev
+            //         pixels, which is the metric `kRadius`'s square window
+            //         bounds.
+            {
+                auto full = base;
+                full.highlightRecovery = 1.0f;
+                develop.apply(full);
+                develop.render();
+
+                const auto st = develop.highlightStages();
+                const std::uint32_t w = develop.width(), h = develop.height();
+                const std::size_t n = std::size_t(w) * h;
+
+                std::vector<__fp16> in(n * 4), out(n * 4);
+                st.input->download(in.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+                st.output->download(out.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+
+                const float limit    = st.clip * st.gamma;
+                const float shoulder = st.clip * 0.35f;   // highlights.slang's kShoulder
+
+                // 0 = evidence (wholly valid and bright enough to inform a
+                // fit), 1 = partial clip, 2 = Omega^intersection, 3 = dark and
+                // valid, which is neither.
+                std::vector<std::uint8_t> cls(n);
+                std::size_t nInter = 0, nPartial = 0, nUntouched = 0;
+                double worstMove = 0.0;
+
+                for (std::size_t i = 0; i < n; ++i) {
+                    const float r = float(in[i * 4 + 0]);
+                    const float g = float(in[i * 4 + 1]);
+                    const float b = float(in[i * 4 + 2]);
+                    const int count = (r >= limit) + (g >= limit) + (b >= limit);
+                    if (count == 3) { cls[i] = 2; ++nInter; continue; }
+                    if (count == 0) {
+                        cls[i] = (std::max(r, std::max(g, b)) >= shoulder) ? 0 : 3;
+                        continue;
+                    }
+                    cls[i] = 1;
+                    ++nPartial;
+                    const bool same = float(out[i * 4 + 0]) == r &&
+                                      float(out[i * 4 + 1]) == g &&
+                                      float(out[i * 4 + 2]) == b;
+                    if (same) ++nUntouched;
+                    else {
+                        for (int c = 0; c < 3; ++c) {
+                            worstMove = std::max(worstMove,
+                                                 std::abs(double(out[i * 4 + c]) -
+                                                          double(in[i * 4 + c])));
+                        }
+                    }
+                }
+
+                // Chebyshev distance to the nearest pixel that could inform a
+                // fit, by the two-pass 8-neighbour chamfer with unit weights.
+                constexpr std::uint16_t kFar = 4000;
+                std::vector<std::uint16_t> dist(n, kFar);
+                for (std::size_t i = 0; i < n; ++i) if (cls[i] == 0) dist[i] = 0;
+                const auto at = [&](std::int64_t x, std::int64_t y) -> std::uint16_t {
+                    if (x < 0 || y < 0 || x >= std::int64_t(w) || y >= std::int64_t(h)) {
+                        return kFar;
+                    }
+                    return dist[std::size_t(y) * w + std::size_t(x)];
+                };
+                for (std::int64_t y = 0; y < std::int64_t(h); ++y) {
+                    for (std::int64_t x = 0; x < std::int64_t(w); ++x) {
+                        std::uint16_t d = at(x, y);
+                        for (std::int64_t k = -1; k <= 1; ++k) {
+                            d = std::min<std::uint16_t>(
+                                d, std::uint16_t(std::min<int>(kFar, at(x + k, y - 1) + 1)));
+                        }
+                        d = std::min<std::uint16_t>(
+                            d, std::uint16_t(std::min<int>(kFar, at(x - 1, y) + 1)));
+                        dist[std::size_t(y) * w + std::size_t(x)] = d;
+                    }
+                }
+                for (std::int64_t y = std::int64_t(h) - 1; y >= 0; --y) {
+                    for (std::int64_t x = std::int64_t(w) - 1; x >= 0; --x) {
+                        std::uint16_t d = at(x, y);
+                        for (std::int64_t k = -1; k <= 1; ++k) {
+                            d = std::min<std::uint16_t>(
+                                d, std::uint16_t(std::min<int>(kFar, at(x + k, y + 1) + 1)));
+                        }
+                        d = std::min<std::uint16_t>(
+                            d, std::uint16_t(std::min<int>(kFar, at(x + 1, y) + 1)));
+                        dist[std::size_t(y) * w + std::size_t(x)] = d;
+                    }
+                }
+
+                std::size_t beyond = 0, beyondUntouched = 0, deepest = 0;
+                std::size_t interBeyond = 0;
+                for (std::size_t i = 0; i < n; ++i) {
+                    if (cls[i] == 2) {
+                        deepest = std::max<std::size_t>(deepest, dist[i]);
+                        if (dist[i] > 12) ++interBeyond;
+                        continue;
+                    }
+                    if (cls[i] != 1) continue;
+                    if (dist[i] > 12) {
+                        ++beyond;
+                        const float r = float(in[i * 4 + 0]);
+                        const bool same = float(out[i * 4 + 0]) == r &&
+                                          float(out[i * 4 + 1]) == float(in[i * 4 + 1]) &&
+                                          float(out[i * 4 + 2]) == float(in[i * 4 + 2]);
+                        if (same) ++beyondUntouched;
+                    }
+                }
+
+                const double pct = 100.0 / double(n);
+                std::printf("\nHighlight clip-set census (block 3e)  clip %.4f, "
+                            "limit %.4f, %ux%u\n", st.clip, limit, w, h);
+                std::printf("  %-34s %10zu  %7.4f%%\n",
+                            "Omega^inter (every channel)", nInter, double(nInter) * pct);
+                std::printf("  %-34s %10zu  %7.4f%%\n",
+                            "Omega^union \\ Omega^inter", nPartial, double(nPartial) * pct);
+                std::printf("  %-34s %10zu  %7.4f%% of the frame\n",
+                            "  ...returned untouched", nUntouched, double(nUntouched) * pct);
+                std::printf("  %-34s %10zu  %7.4f%% of the frame\n",
+                            "  ...and beyond 12 px of evidence", beyond, double(beyond) * pct);
+                std::printf("  %-34s %10zu\n",
+                            "     of those, untouched", beyondUntouched);
+                std::printf("  %-34s %10zu  (deepest blown core %zu px)\n",
+                            "Omega^inter beyond 12 px", interBeyond, deepest);
+                std::printf("  worst move the window fit made in the annulus: %.5f\n",
+                            worstMove);
+
+                develop.apply(base);
+                develop.render();
+            }
         }
 
         // ── Tone curve ────────────────────────────────────────────────────

@@ -519,6 +519,23 @@ public:
     [[nodiscard]] Pipeline&           graph()        { return pipeline_; }
     [[nodiscard]] const Pipeline&     graph() const  { return pipeline_; }
 
+    /// What `highlights` was handed, what it returned, and the ceiling both
+    /// were judged against.
+    ///
+    /// Exists for the clip-set census in `apps/bench` (block 3e) and
+    /// `research/highlight-reconstruction.md` §7: the question "how much of the
+    /// partial-clip region does the shipping window fit decline" is answerable
+    /// only by comparing this node's two sides against the *same* clip level
+    /// the node itself used. A second derivation of that ceiling in the bench
+    /// would be measuring a different set from the one the shader classified.
+    struct HighlightStages {
+        const gpu::Texture* input  = nullptr;   ///< linear camera RGB, pre-recovery
+        const gpu::Texture* output = nullptr;   ///< after `highlightRecover`
+        float clip  = 0.0f;                     ///< the common ceiling linearize clipped to
+        float gamma = 0.0f;                     ///< fraction of it that counts as clipped
+    };
+    [[nodiscard]] HighlightStages highlightStages() const;
+
     [[nodiscard]] std::uint32_t width()  const noexcept { return width_; }
     [[nodiscard]] std::uint32_t height() const noexcept { return height_; }
 
@@ -529,6 +546,9 @@ private:
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
     int nGeometry_ = -1, nGrain_ = -1;
     int nHighlights_ = -1;
+    /// The ceiling the last `apply` clipped to, cached where linearize computed
+    /// it so `highlightStages()` cannot derive a second one.
+    float lastWhiteClip_ = 0.0f;
 
     // ── Harmonic highlight fill (Rouf, Lau & Heidrich §3.2) ───────────────
     //
