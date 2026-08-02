@@ -336,11 +336,20 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
         //
         // ⚠ `placed.angle`, not `m.angle`: the ramp's direction is the image of
         // the mask's own direction, which a homography carries exactly, while
-        // `m.angle` now names the *ellipse's* principal axis — a different line
-        // whenever the map is anisotropic. Its length is still the isotropic
-        // √|det J|, and is the one first-order term left in a mask's extent;
-        // `research/UNSOURCED.md` §24 says so.
-        const float len = mask::lengthToFrame(c.length, crop) * placed.scale;
+        // `m.angle` names the *ellipse's* principal axis — a different line
+        // whenever the map is anisotropic.
+        //
+        // ⚠ And its length goes through `lengthAlong`, not `placed.scale`. The
+        // isotropic √|det J| was the last first-order term left in a mask's
+        // extent: a ramp has one direction, and the geometric mean of the two
+        // axis scales is not the scale along it. `mask::lengthAlong` says what
+        // the difference costs; the pre-image angle is the argument, since J
+        // carries pre-image directions to image ones and `placed.angle` is
+        // already the image.
+        const float preAngle =
+            c.angle + adj.straightenDeg * 3.14159265358979324f / 180.0f;
+        const float len = mask::lengthToFrame(c.length, crop)
+                        * mask::lengthAlong(placed.jac, preAngle);
         const float dx = std::cos(placed.angle) * len * 0.5f;
         const float dy = std::sin(placed.angle) * len * 0.5f;
         m.zero[0] = m.center[0] - dx; m.zero[1] = m.center[1] - dy;

@@ -93,10 +93,10 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
 2. **Incremental brush accumulation.** ⚠ Now *located*: the host-side O(N) is
    gone and the slope did not change, so the residual is the **GPU dab loop**.
    Costed in `ROADMAP.md`. ~1–2 sessions.
-3. **A mask's extent under a perspective correction is first order.** Bounded
-   and measured — exact up to a mask 0.28 of the frame across at vertical 0.45,
-   degrading at the rim beyond that. Costed in `ROADMAP.md` under *Perspective —
-   what is not done*. ~half a session.
+3. ~~**A mask's extent under a perspective correction is first order.**~~ — the
+   radial half closed 2026-08-01 (#102), **the gradient's ramp length closed
+   2026-08-02 (#134)**. What is left is the map's *curvature*, which no
+   derivative at a point can see, and which `ROADMAP.md` records as uncosted.
 4. **Snapshots / versions** — the last unbuilt line of M4 now that perspective
    has shipped. Unestimated.
 5. **Americanising the persisted keys**, if wanted — a schema migration with
@@ -683,6 +683,53 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-02d` — the ramp length, and a fixture that passed either way
+
+The queue's next item was **a mask's extent under a perspective correction is
+first order**. The radial half went on 2026-08-01 (#102); this closes the other,
+the linear gradient's **ramp length**, which was still the isotropic √|det J|.
+Decision #134.
+
+A ramp has exactly one direction, and the geometric mean of two axis scales is
+not the scale along it. `mask::lengthAlong` returns **|J·u|** for the ramp's
+*pre-image* direction — `Placement::angle` is already the image and would be the
+wrong argument — and is exactly 1 at the identity. Four checks in
+`tests_mask_geom.cpp`, the shear among them so no answer can come from reading
+one matrix entry.
+
+### ⚠ Both measurements were worth more than the change
+
+**The first fixture could not fail, and it took a mutation to find out.** It was
+written around the aspect squeeze, because that is the case that rescued the
+radial mask: exactly linear, exactly area-preserving, so √|det J| is 1 and the
+mask came out round under a two-to-one stretch. It passed. **It passed just as
+happily with the fix reverted** — `perspectiveAspect` on its own leaves
+`Placement::jac` the identity, so both codes multiply by 1 and the frames are
+*byte-identical*. The case that made the radial error unmissable makes this one
+invisible.
+
+Rewritten around a real keystone with an off-centre angled ramp, the fix does
+move pixels: **0.6753 → 0.6734 luma** on a patch straddling the ramp's edge.
+Against **0.1461** for the radial first-order error. And the mutation **still**
+passes, because a cell flips or it does not, and 0.002 luma flips nothing at 12
+cells or at 20.
+
+### What ships, and what is knowingly unpinned
+
+`lengthAlong` is pinned. **The line that calls it is not**, and both
+`repro/perspective-carries-the-mask.txt` §4b and `UNSOURCED.md` §24 say so with
+the number beside it, rather than leaving it to be discovered. A golden-value
+check with a 0.002 margin fails for reasons other than the defect; a block that
+implies coverage it lacks is the failure this repository keeps cataloguing. §4b
+does pin something new — a **linear** mask's placement under a keystone, which
+sections 3 and 4 only ever asserted for a radial one.
+
+The ramp's **non-uniformity** stays and cannot go the same way: a projective map
+preserves cross-ratios along a line and not ratios.
+
+**810 engine checks** (four new), 3708 viewport, 41 of 41 scenarios, bench exit 0
+on all three frames.
 
 ## Session `2026-08-02c` — the reopen leak is gone, and the fit that said otherwise
 

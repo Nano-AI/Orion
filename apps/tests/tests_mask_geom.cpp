@@ -161,6 +161,37 @@ void testMaskGeometry() {
                "and is untouched without one", "");
     }
 
+    // A gradient's ramp is a length with a *direction*, so the map's isotropic
+    // scale is the wrong number for it.
+    //
+    // ⚠ The aspect case is here because it is the one where the old answer was
+    // not merely imprecise but blind. A two-to-one squeeze is exactly linear
+    // and exactly area-preserving, so √|det J| is 1: the ramp did not move at
+    // all while the picture stretched underneath it. Same shape as the radial
+    // mask that came out round under the same squeeze, decision #102.
+    {
+        const persp::Jacobian identity{1.0f, 0.0f, 0.0f, 1.0f};
+        report(mg::lengthAlong(identity, 0.7f) == 1.0f,
+               "a length along any direction is untouched by the identity", "");
+
+        // diag(2, 0.5): area-preserving, so the isotropic scale sees nothing.
+        const persp::Jacobian squeeze{2.0f, 0.0f, 0.0f, 0.5f};
+        const float alongX = mg::lengthAlong(squeeze, 0.0f);
+        const float alongY = mg::lengthAlong(squeeze, 1.57079632679f);
+        report(std::abs(alongX - 2.0f) < 1e-5f,
+               "a ramp along x doubles under a two-to-one squeeze",
+               std::to_string(alongX));
+        report(std::abs(alongY - 0.5f) < 1e-5f,
+               "and one across it halves, where √|det J| would say both are 1",
+               std::to_string(alongY));
+
+        // Off-diagonal, so the answer cannot come from reading one entry.
+        const persp::Jacobian shear{1.0f, 0.5f, 0.0f, 1.0f};
+        const float diag = mg::lengthAlong(shear, 1.57079632679f);
+        report(std::abs(diag - std::sqrt(1.25f)) < 1e-5f,
+               "and a shear stretches the direction it shears", std::to_string(diag));
+    }
+
     // ── Straighten ────────────────────────────────────────────────────────
     {
         constexpr float kDeg = 0.10471975512f;   // six degrees

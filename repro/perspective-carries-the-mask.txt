@@ -151,6 +151,69 @@ maskcheck 10 -2.0
 set maskAngle 0
 set perspectiveAspect 0
 
+# ── 4b. A gradient's ramp, the last first-order term ──────────────────────
+#
+# ⚠ **The ellipse fixed a radial mask's extent and left a linear one's alone.**
+# The ramp's *direction* was already exact — a homography takes lines to lines —
+# but its *length* went through the same isotropic √|det J| the radial mask was
+# rescued from, and a ramp has exactly one direction, so the geometric mean of
+# the two axis scales is not the scale along it.
+#
+# The squeeze is where that is not an approximation but a blindness, for the
+# reason section 4 gives: diag(1/g, g) is area-preserving, so √|det J| is 1 and
+# the ramp did not move **at all** while the picture stretched two to one under
+# it. `mask::lengthAlong` is the fix and this is what fails without it.
+#
+# ⚠ **Under a keystone, not under the squeeze, and that was measured rather
+# than assumed.** The section above says a squeeze is where an isotropic scale
+# is blind, and it is — for a *radial* mask. For the ramp it changes nothing at
+# all: `perspectiveAspect` on its own leaves `Placement::jac` the identity, so
+# both the old code and the new multiply by 1 and the frames come out
+# byte-identical. The first version of this block was written around the
+# squeeze, passed, and **passed just as happily with the fix reverted**. It is
+# recorded here because a scenario that cannot fail is the defect this file's
+# section 4 is already about.
+#
+# A keystone's derivative is genuinely anisotropic and varies across the frame,
+# so the ramp is placed off-centre and at an angle: on the axis, through the
+# fixed point, or in a frame whose only correction is the aspect, the two
+# answers agree and nothing is under test.
+#
+# ⚠⚠ **AND THIS BLOCK DOES NOT FAIL WHEN THE RAMP LENGTH IS REVERTED EITHER.**
+# Stated here rather than left for someone to discover. Reverting
+# `mask::lengthAlong` to the isotropic scale moves the frame — measured, at this
+# very geometry, **0.6753 against 0.6734 luma** on a patch straddling the ramp's
+# edge — and that is a fifth of a hundredth, where the radial mask's first-order
+# error was **0.1461**. No cell classification can see it: a cell flips or it
+# does not, and 0.002 luma flips nothing at 12 cells or at 20.
+#
+# So what this block pins is a linear mask's **placement** under a keystone,
+# which sections 3 and 4 only ever asserted for a radial one. The ramp's
+# *length* is pinned by `tests_mask_geom.cpp`'s four checks on `lengthAlong`
+# itself, and the call site that reaches it is **not pinned at all**. That is
+# the honest state of it, and the number above is here so the next person can
+# judge whether a golden-value check with a 0.002 margin is worth its
+# flakiness. It was judged not to be.
+mask linear
+set maskCentreX 0.30
+set maskCentreY 0.25
+set maskAngle 0.6
+set maskLength 0.20
+set maskFeather 0.02
+set perspectiveVertical 0.45
+set perspectiveHorizontal 0.30
+maskcheck 12 -2.0
+
+# The other way, so a sign error cannot pass both.
+set perspectiveVertical -0.45
+set perspectiveHorizontal -0.30
+maskcheck 12 -2.0
+
+set maskAngle 0
+set perspectiveVertical 0
+set perspectiveHorizontal 0
+set perspectiveAspect 0
+
 # ── 5. All three fields survive a reopen ──────────────────────────────────
 #
 # Setting a property and reading it back never leaves `Engine`. Only a round

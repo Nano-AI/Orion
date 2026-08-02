@@ -283,6 +283,33 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
     return length * std::sqrt(std::max(c.w, 1e-6f) * std::max(c.h, 1e-6f));
 }
 
+/// How much the map stretches a length pointing along `angle`, which is |J·u|
+/// for the unit direction u = (cos, sin).
+///
+/// ⚠ **This is what a gradient's ramp wants, and `Placement::scale` is not.**
+/// √|det J| is the geometric mean of the two axis scales, so it is right only
+/// when the direction is not being tracked. A ramp has exactly one direction,
+/// and the difference shows worst where the mean hides everything: an aspect
+/// correction is exactly linear and exactly area-preserving, so √|det J| is
+/// **1** and the ramp did not move at all while the picture stretched two to
+/// one underneath it. Same argument, and the same fixture, as the radial mask
+/// that came out round under a squeeze (decision #102).
+///
+/// `angle` is the direction in the mask's own space — the *pre-image* — because
+/// J maps pre-image directions to image ones. `Placement::angle` is already the
+/// image direction and would be the wrong argument.
+///
+/// Exactly 1 at the identity, short-circuited for the reason `radiusToFrame`
+/// gives: the algebra returns 1 in exact arithmetic and not in float.
+[[nodiscard]] inline float lengthAlong(const persp::Jacobian& j,
+                                       float angle) noexcept {
+    if (j.a == 1.0f && j.b == 0.0f && j.c == 0.0f && j.d == 1.0f) return 1.0f;
+    const float cs = std::cos(angle), sn = std::sin(angle);
+    const float tx = j.a * cs + j.b * sn;
+    const float ty = j.c * cs + j.d * sn;
+    return std::sqrt(tx * tx + ty * ty);
+}
+
 /// What `radiusToFrame` answers with: an ellipse in the frame, and how far its
 /// axis has turned away from `Placement::angle`.
 struct Extent {

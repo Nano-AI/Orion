@@ -863,10 +863,28 @@ and this is why it was not followed.
 **What is left, and it is a different kind of thing.** One first-order term and
 one second-order one:
 
-1. **A gradient's ramp length** is still √|det J|. A projective map preserves
-   cross-ratios along a line and not ratios, so the ramp is non-uniform however
-   it is scaled — the anisotropy could be removed the same way and the
-   non-uniformity could not. Not measured, and not fixed here for that reason.
+1. ~~**A gradient's ramp length** is still √|det J|~~ — **the anisotropy is
+   removed as of 2026-08-02, decision #134.** `mask::lengthAlong` returns |J·u|
+   for the ramp's own pre-image direction, which is the scale a length with one
+   direction actually has; √|det J| is the geometric mean of two and was right
+   only for a length whose direction is not tracked. Exactly 1 at the identity,
+   so nothing moves without a correction. The **non-uniformity** stays and
+   cannot go the same way: a projective map preserves cross-ratios along a line
+   and not ratios, so the ramp is unevenly spaced however it is scaled.
+
+   ⚠ **Two things measured on the way, both worth more than the fix.**
+   *First*, `perspectiveAspect` on its own leaves `Placement::jac` the identity,
+   so the squeeze — the case where an isotropic scale is blind for a *radial*
+   mask — changes nothing at all here, and the frames come out byte-identical.
+   The first fixture was written around it, passed, and passed just as happily
+   with the fix reverted. *Second*, under a real keystone the fix is worth
+   **0.6753 against 0.6734 luma** on a patch straddling the ramp's edge, against
+   the **0.1461** the radial mask's first-order error was worth. So the call
+   site is **not pinned**: no cell classification can see 0.002 luma, and a
+   golden-value check with that margin would fail for reasons other than the
+   defect. `lengthAlong` itself has four checks in `tests_mask_geom.cpp`; the
+   line that calls it has none, and `repro/perspective-carries-the-mask.txt`
+   §4b says so in the file rather than leaving it to be discovered.
 2. **The map's curvature**, which no derivative at a point can see. This is
    what still leaks at the rim of a mask larger than about a third of the frame
    under a strong keystone, and it is now the *whole* remaining error there —
