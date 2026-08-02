@@ -4,6 +4,7 @@
 
 ---
 
+**Last updated:** 2026-08-01 (**snapshots / versions — M4's last workflow item, and the matte pin that keeps a restored mask from covering nothing**)
 **Last updated:** 2026-08-01 (**the folder index and the thumbnail cache — M1's last real gap**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
 **Last updated:** 2026-08-01 (**the export panel's last three controls; every export had been 16-bit**)
@@ -83,8 +84,8 @@ three sample frames: **149 nodes, 6971 MiB**, M0 gate **9.70–14.13 ms p95** �
 plus a preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth
 gate: it opens a folder cold, warm and indexless in one process and fails when
 the warm pass did not hit, or when any of the three disagree about a field.
-**Suites:** `orion-tests` **586 checks** · `orion-viewport-tests` **3474
-checks** · **34 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+**Suites:** `orion-tests` **586 checks** · `orion-viewport-tests` **3620
+checks** · **36 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
 three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
 plus a preview graph at 1/16 that.
 
@@ -103,7 +104,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 2,118, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` 1,135, `Scenario.swift` **1,250**. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 2,118, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` **1,336**, `Scenario.swift` **1,250**. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
 | **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
 | **The tick is timed whole, not attributed.** `EditHistory.record` copies the entire `DevelopState`, `InteractionLog.committed` diffs every field and formats strings, and `setBrushStroke` re-flattens the whole stroke — all per event, all O(size of the edit). ⚠ Candidates only: armed, a 784-dab stroke is 1.8 ms an event | `ROADMAP.md` |
@@ -163,6 +164,116 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01e — snapshots, and the matte that would have vanished
+
+**M4's last unbuilt workflow item.** A photographer saves the edit under a name,
+keeps working, and comes back to it. Neither undo (`EditHistory`: fifty deep,
+coalescing, dies with the process) nor a preset (a **patch** carried *between*
+photographs, deliberately excluding the crop, the dust and the masks) — a
+snapshot is this photograph's whole `DevelopState` under a name. Decision #96.
+
+### Where they live, and the argument that is *not* #79's
+
+A sibling `PHOTO.orion-snapshots.json`. ⚠ #79's reason for refusing base64 in
+the XMP — megabytes of text per autosave settle — **does not transfer**: a state
+is a few kilobytes. Two reasons that do:
+
+- **Autosave rewrites the sidecar 900 ms after any slider moves**, through
+  `Sidecar.merge`, which is a read-modify-write over a hand-rolled string matcher
+  rather than an XML parser. Every version kept would be decoded, re-encoded,
+  re-escaped and rewritten on every settle, and a slider drag would get more
+  expensive the more versions the photograph had.
+- **Blast radius.** One bad merge takes the working edit *and* every version. A
+  snapshot's whole job is to be the copy that survives when the working state
+  does not.
+
+Application Support was rejected on #79's own grounds: a path-keyed cache dies
+when the photograph moves, and this is storage.
+
+### ⚠ The matte, which is the part that would have failed silently
+
+A `DevelopState` is not the whole edit. A raster mask is a sibling PNG named by
+id (#79), and `MatteStore.sweep` deletes every matte the **sidecar** does not
+reference. So the obvious version feature has a hole nothing on screen can show:
+save a version with a Subject mask → delete the row → reopen → the sweep
+collects the file → restore → the row is back, the raster is gone, **the mask
+covers nothing**, and the picture changes with no error anywhere.
+
+Fixed with a **pin, not a copy**, and it can be a pin only because matte files
+are already immutable (#79 mints a fresh id and a fresh file on every
+regeneration) — so an id inside a version always names the pixels it named when
+the version was taken. `MatteStore.sweepAfterLoad` now keeps the union of what
+the sidecar references and what every version does, computed in that one
+function because #87's lesson is that a delete policy written twice stops
+matching.
+
+⚠ **The version file has #87's three states too.** Absent is `[]`, unreadable is
+`nil`, and unreadable means both *collect no mattes at all* and *write nothing
+over it*. Both halves are pinned by tests that go red when either is conflated.
+
+What a pin cannot cover — a photograph copied without its siblings — is
+**reported before the version is pressed**: the row names the selections it can
+no longer find, in the amber the app uses for "look at this".
+
+### ⚠ Restoring does not trap anybody, in two different timescales
+
+`history.record`, not `history.reset` — a restore is one ⌘Z, like a preset.
+Resetting would make it the one act in the program that cannot be taken back,
+and it is the act most likely to have been a mistake. That covers the session.
+For the quit that undo does not survive, `SnapshotStore.restore` keeps the
+working edit as a single **automatic** version first, replaced rather than piled
+up, and renaming it promotes it to an ordinary one. The order lives in one
+function rather than at each call site, with the engine half handed in as a
+closure — the seam `Autosave` and `BatchExport` already use, and what lets it be
+pinned without an `Engine`.
+
+### ⚠ No eighth tool tab, and that was measured rather than argued
+
+Versions wanted a tab: they belong to one photograph where a preset belongs to
+none. Seven plates divide 364 points into 48 each; eight leaves 42, and VERSIONS
+needs about 51 at the bar's 9-point type. Rendered with the tab in place
+(`--scene versions`), the bar came back reading **PRESE… VERSI…** — the new tab
+cost the old one its name as well as its own. Versions sit at the top of the
+Presets tab instead, first because the tab's other four sections are all
+*between* photographs and this is the only one about the photograph in hand.
+
+### What was checked, and the mutation for each
+
+`orion-viewport-tests` **3561 → 3620** — 59 checks in twelve new functions in
+`ViewportTests+Snapshot.swift` — plus two scenarios. Every one was run against a
+mutant:
+
+| Check | Mutation | Result |
+|---|---|---|
+| a matte a saved version names survives the sweep | drop `.union(pinned)` | 1 red |
+| an unreadable version file collects nothing | `pinnedMattes` returns `[]` | 2 red |
+| the working edit is kept | drop `keepWorkingEdit` | 3 red |
+| unreadable is not overwritten | `read` returns `[]` on a decode failure | 6 red |
+| renaming the automatic version keeps it | leave `automatic` set | 3 red |
+| the ceiling refuses rather than evicts | evict the oldest | 2 red |
+| a missing matte is named | `missingMattes` returns `[]` | 2 red |
+| `snapshot-keeps-its-matte.txt` | drop `.union(pinned)` | **7 red**, and the failure printed is exactly the silent one: `leftAfter == leftBare` |
+| `snapshot-keeps-its-matte.txt` | `Engine.restore(snapshot:)` skips `restoreMattes` | 6 red |
+| `snapshot-survives-a-reopen.txt` | `history.reset` instead of `history.record` | 1 red |
+| `snapshot-survives-a-reopen.txt` | drop `keepWorkingEdit` | 2 red |
+
+⚠ **Two drafts of these checks could not fail, and both were caught before the
+commit.** The date round trip was first written through a pair of encoders the
+*test file* built, which pins ISO 8601 against ISO 8601 and stays green with the
+store's two ends disagreeing — the one failure worth checking. And
+`snapshot count 1` passed on the first run and failed on the second, because a
+version file outlives the run; `snapshot clear` is now the first line of both
+scenarios. Ninth and tenth instances of the class `repro/README.md` records.
+
+### Not done
+
+Nothing deferred from this story. Two things it deliberately does not do: a
+version does **not** copy the matte files it names (it pins them, which is
+correct only as long as #79's immutability holds — a future in-place matte
+rewrite would have to revisit this), and there is no compare-two-versions view.
+
+---
 
 ## Session 2026-08-01d — the reopen leak was the folder, not the photograph
 

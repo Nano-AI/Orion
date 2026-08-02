@@ -1492,6 +1492,34 @@ final class Engine {
         log.committed(state, label: preset.name)
     }
 
+    /// Restores a saved version of this photograph's edit.
+    ///
+    /// ⚠ **`history.record`, not `history.reset`.** `restore(encoded:)` resets,
+    /// which is right when a photograph is *opening* — there is no earlier
+    /// state to walk back to. Resetting here would make a restore the one act
+    /// in the program that cannot be undone, and it would do it to the act most
+    /// likely to have been a mistake. One entry, like a preset: ⌘Z puts the
+    /// working edit back in a single step. `SnapshotStore.restore` covers the
+    /// other half — the session that ends before the mistake is noticed.
+    ///
+    /// ⚠ **And the mattes, which are not in `DevelopState`.** A version can
+    /// name a raster mask; assigning the state alone would restore the row and
+    /// leave the *previous* state's raster uploaded under the same index, so a
+    /// mask would come back covering the wrong thing rather than nothing.
+    /// `restoreMattes` records whatever it cannot read in `missingMattes`, and
+    /// the panel says so.
+    func restore(snapshot: Snapshot, photo: URL?) {
+        guard isLoaded else { return }
+        suspended = true
+        assign(snapshot.state)
+        suspended = false
+        pushAndRender()
+        if let photo { restoreMattes(photo: photo) }
+        history.record(state, label: "Version \(snapshot.name)")
+        log.record("snapshot restore \(snapshot.name)")
+        log.committed(state, label: "Version \(snapshot.name)")
+    }
+
     /// Returns every adjustment to its default, with white balance back to
     /// what the camera chose. One push, one render.
     func resetEdits() {

@@ -234,6 +234,15 @@ extension Orion.Palette {
 /// four tabs were a bare SF Symbol until someone pointed out that a magnifying
 /// glass only means Detail to a person who already knows. Naming the thing is
 /// the fix both times.
+/// ⚠ **There is no eighth tab, and it was tried.** Versions wanted one — they
+/// belong to one photograph and a preset belongs to none — and the bar cannot
+/// hold it. Seven plates divide 364 points into 48 each; eight leaves 42, and
+/// VERSIONS is about 51 points at the 9-point type this bar sets. Rendered
+/// rather than argued about (`--scene versions`): the bar came back reading
+/// **PRESE… VERSI…**, so the eighth tab cost the seventh its name as well as
+/// its own. Setting the whole bar two points smaller to fit one word is the
+/// same trade PRESETS already extracted once, and it is not worth making twice.
+/// Versions live at the top of the Presets tab instead — see `versionsPanel`.
 enum ToolTab: String, CaseIterable, Identifiable {
     case light, color, detail, optics, mask, crop, presets
     var id: String { rawValue }
@@ -299,10 +308,15 @@ struct Editor: View {
     /// one photo and never scans a folder — so the strip appeared in no
     /// screenshot at all and was checked by reading the code. Handing in a
     /// pre-scanned library is the smallest seam that fixes that.
-    init(engine: Engine, startTab: ToolTab = .light, startLibrary: Library? = nil) {
+    init(engine: Engine, startTab: ToolTab = .light, startLibrary: Library? = nil,
+         startSnapshots: SnapshotStore? = nil) {
         self.engine = engine
         _tab = State(initialValue: startTab)
         _library = State(initialValue: startLibrary ?? Library())
+        // Same seam and same reason as `startLibrary`: the harness never calls
+        // `load`, so a per-photograph list would be empty in every capture and
+        // the rows would be reviewed by reading them.
+        _snapshots = State(initialValue: startSnapshots ?? SnapshotStore())
     }
 
     @State var band: HueBand = .blue
@@ -311,6 +325,15 @@ struct Editor: View {
     @State var presets = PresetStore()
     @State var presetName = ""
     @State var presetGroups: Set<PresetGroup> = PresetGroup.defaultSelection
+
+    /// Saved versions of *this* photograph's edit — see Snapshots.swift. Held
+    /// beside `presets` and retargeted in `load`, because a version list
+    /// belongs to one photograph the way a look belongs to none.
+    @State var snapshots: SnapshotStore
+    @State var snapshotName = ""
+    /// The version being renamed in place, and the text being typed into it.
+    @State var renamingSnapshot: UUID?
+    @State var renameText = ""
 
     /// The settings on the clipboard, if any. In memory only — a copied look is
     /// not worth persisting across a launch, and pretending otherwise would
@@ -1203,6 +1226,11 @@ struct Editor: View {
         // times while a file opens, and until the sidecar has been restored
         // those renders still describe the photo being left.
         autosave.stop()
+        // ⚠ Closed before the new photograph opens, not after. The list is per
+        // photograph, and a panel still showing the previous one's versions is
+        // one click from restoring that photograph's crop onto this one.
+        snapshots.open(photo: nil)
+        renamingSnapshot = nil
 
         current = url
         // ⚠ Every route to a new photograph goes through here — the filmstrip,
@@ -1235,6 +1263,12 @@ struct Editor: View {
                 // ⚠ Outside it, and that is the fix. The sweep's policy has
                 // three cases, not two, and it lives in `MatteStore` so the
                 // scenario runner cannot drift from it.
+                // ⚠ Before the sweep. `sweepAfterLoad` reads the version file
+                // itself — the keep-set is the union of the sidecar's mattes
+                // and every version's — so this is only the panel catching up,
+                // but a reader who assumes the sweep depends on it should find
+                // the order it expects rather than one that happens to work.
+                snapshots.open(photo: url)
                 MatteStore.sweepAfterLoad(photo: url,
                                           parsed: saved == nil ? nil
                                                                : engine.maskComponents)

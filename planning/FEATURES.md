@@ -108,7 +108,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | Non-destructive op stack → sidecar | M0 | Foundational |
 | Undo/redo + history panel | M1 | |
-| Snapshots / versions | M4 | |
+| Snapshots / versions | M4 | ✅ **Built 2026-08-01**, decision #96. The whole `DevelopState` under a name, in a sibling `PHOTO.orion-snapshots.json` — not the sidecar, which autosave rewrites 900 ms after any slider moves. Restoring keeps the working edit first, as one automatic version, because undo dies with the process. ⚠ Mattes a version names are **pinned against the sweep**; one it can no longer find is named on the row before it is pressed |
 
 ## 13. Export
 | Feature | Status | Notes |

@@ -209,7 +209,8 @@ enum Screenshot {
         }
 
         let view = Editor(engine: engine, startTab: tab(for: o.scene),
-                          startLibrary: library)
+                          startLibrary: library,
+                          startSnapshots: snapshots(for: o.scene, photo: o.photo))
             .frame(width: o.size.width, height: o.size.height)
             .preferredColorScheme(.dark)
 
@@ -241,12 +242,52 @@ enum Screenshot {
             return .crop
         case "presets":
             return .presets
+        // Versions are a section of the Presets tab — see the note on `ToolTab`.
+        case "versions":
+            return .presets
         case "mask", "local", "mask-linear", "mask-linear-feathered",
              "mask-radial", "mask-off", "brush", "range", "color", "layers", "sky":
             return .mask
         default:
             return .light
         }
+    }
+
+    /// The version list a scene shows.
+    ///
+    /// ⚠ Handed in rather than read off a disk, and it writes nothing. A
+    /// harness that saved real versions would leave `.orion-snapshots.json`
+    /// beside whichever photograph was captured, and a capture that edits the
+    /// developer's own folder is a capture nobody runs twice.
+    ///
+    /// ⚠ **One row of each kind**, because those are the three the panel draws
+    /// differently: an ordinary version, the automatic one Orion keeps on the
+    /// way into a restore, and one whose raster mask is no longer on disk. The
+    /// third is the row that exists to stop a mask silently coming back empty,
+    /// and it is the one most likely to be reviewed by reading it rather than
+    /// by looking at it. Its matte id is deliberately a name no file has.
+    private static func snapshots(for scene: String, photo: String?) -> SnapshotStore? {
+        guard scene == "versions", let photo else { return nil }
+
+        var lost = DevelopState()
+        var c = MaskComponentState()
+        c.kind = 4
+        c.matteId = "no-such-matte"
+        c.matteSource = "Subject"
+        lost.maskComponents = [c]
+
+        var warm = DevelopState()
+        warm.temperatureK = 7200
+        warm.exposureEv = 0.6
+
+        return SnapshotStore(photo: URL(fileURLWithPath: photo), showing: [
+            Snapshot(name: "Before restoring warmer", created: Date(),
+                     state: DevelopState(), automatic: true),
+            Snapshot(name: "warmer", created: Date().addingTimeInterval(-3600),
+                     state: warm),
+            Snapshot(name: "with the sky darkened",
+                     created: Date().addingTimeInterval(-86_400), state: lost),
+        ])
     }
 
     /// Each scene is a state the interface can actually be in. Kept here rather

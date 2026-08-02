@@ -200,10 +200,13 @@ enum MatteStore {
     ///
     /// | The sidecar | What may be collected |
     /// |---|---|
-    /// | parsed | everything it does not reference |
-    /// | **absent** | everything — a matte id lives only in a sidecar, so with no
-    ///   sidecar nothing on disk can reference one |
+    /// | parsed | everything neither it nor a saved version references |
+    /// | **absent** | everything no saved version references — with no sidecar
+    ///   the version file is the only thing on disk that can name a matte |
     /// | present but unreadable | **nothing** |
+    ///
+    /// ⚠ The version file has the same three states and its unreadable row wins
+    /// outright: nothing is collected, whatever the sidecar says.
     ///
     /// ⚠ That middle row is the fix. The load path used to sweep only inside
     /// the successful-parse branch, with a comment defending it against the
@@ -218,12 +221,29 @@ enum MatteStore {
     /// runner's `reopen`, which claims in its own comment to take "the same
     /// steps `Editor.load` takes". Two copies of a delete policy is how one of
     /// them quietly stops matching.
+    ///
+    /// ⚠ **A saved version names mattes too, and they are pinned here.** A
+    /// snapshot holds a whole `DevelopState`, so it can name a matte the
+    /// working edit has since dropped — and this function is what stands
+    /// between that and a version that restores a mask row covering nothing.
+    /// The keep-set is the union of the two, and it is computed here rather
+    /// than by the callers for the same reason the three-state rule is:
+    /// a delete policy written twice is a delete policy that stops matching.
+    /// Decision #96.
+    ///
+    /// The version file has the same three states as the sidecar. Unreadable
+    /// means **collect nothing at all**, whatever the sidecar says — an empty
+    /// set there would take every version's mattes on a file Orion only failed
+    /// to parse.
     static func sweepAfterLoad(photo: URL, parsed: [MaskComponentState]?) {
+        guard let pinned = SnapshotStore.pinnedMattes(photo: photo) else { return }
         if let parsed {
-            sweep(photo: photo, keeping: referenced(parsed))
+            sweep(photo: photo, keeping: referenced(parsed).union(pinned))
         } else if !FileManager.default.fileExists(
                     atPath: Sidecar.url(for: photo).path) {
-            sweep(photo: photo, keeping: [])
+            // No sidecar means nothing on disk names a matte — except a version
+            // file, which is on disk and does.
+            sweep(photo: photo, keeping: pinned)
         }
     }
 

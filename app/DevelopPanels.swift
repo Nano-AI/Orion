@@ -182,6 +182,8 @@ extension Editor {
     /// every frame.
     var presetsPanel: some View {
         Group {
+            versionsPanel
+
             section("Presets") {
                 if presets.presets.isEmpty {
                     Text("No presets yet.")
@@ -305,6 +307,188 @@ extension Editor {
                     .foregroundStyle(Palette.faint)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// Versions — this photograph's saved edits. See `Snapshots.swift`.
+    ///
+    /// ⚠ **First in the Presets tab rather than a tab of its own, and that is a
+    /// measurement rather than a preference.** A version wants its own tab: it
+    /// belongs to exactly one photograph where a preset belongs to none, and
+    /// sharing a tab invites the reading that a version is a look you could drop
+    /// on the next frame — it is the opposite, since a version carries the crop,
+    /// the dust and the masks a preset refuses to. But the tab bar divides 364
+    /// points between its plates, and an eighth leaves 42 points for a word that
+    /// needs 51. Rendered with the eighth tab in place, the bar read
+    /// **PRESE… VERSI…** — the new tab cost the old one its name too. See the
+    /// note on `ToolTab`.
+    ///
+    /// First rather than last, because the tab's other four sections are all
+    /// *between* photographs — a look, a paste, a sync, a batch — and this is
+    /// the only one about the photograph in front of you.
+    ///
+    /// ⚠ **What a version cannot promise is said before it is pressed, not
+    /// after.** A raster mask is a file beside the photograph; Orion's sweep is
+    /// pinned against taking one a version names, but a photograph copied
+    /// without its siblings arrives with the PNGs gone. Restoring then gives a
+    /// mask row that covers nothing, which changes the picture with nothing on
+    /// screen saying why. The row carries the count and the button says it.
+    @ViewBuilder
+    var versionsPanel: some View {
+        Group {
+            section("Versions") {
+                if snapshots.unreadable {
+                    Text(SnapshotStore.Refusal
+                            .fileUnreadable(snapshots.photo.map {
+                                SnapshotStore.url(photo: $0).lastPathComponent
+                            } ?? "The versions file").errorDescription ?? "")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.star)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if snapshots.snapshots.isEmpty {
+                    Text(engine.isLoaded
+                         ? "No versions of this photo yet."
+                         : "Open a photo to save a version of it.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                }
+
+                VStack(spacing: 2) {
+                    ForEach(snapshots.snapshots) { s in
+                        versionRow(s)
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    TextField("New version", text: $snapshotName)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11))
+                    Button("Save") { saveVersion() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(!engine.isLoaded || snapshots.unreadable
+                                  || snapshotName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+
+                Text("A version is this photo's whole edit under a name — the "
+                   + "crop, the dust and the masks included. Restoring one "
+                   + "keeps what you had first, as “Before restoring…”, and "
+                   + "⌘Z takes it back in one step.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.faint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// One saved version: restore, rename in place, delete.
+    @ViewBuilder
+    private func versionRow(_ s: Snapshot) -> some View {
+        // ⚠ The *store's* photograph, not the editor's `current`. They are the
+        // same file in the app, and only one of them is the file these mattes
+        // sit beside — a caption derived from the other would be right by
+        // coincidence, and silently absent anywhere the two are not both set.
+        let missing = snapshots.photo.map { SnapshotStore.missingMattes(s, photo: $0) } ?? []
+
+        HStack(spacing: 6) {
+            if renamingSnapshot == s.id {
+                TextField("Name", text: $renameText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 11))
+                    .onSubmit { commitRename(s) }
+                Button("Done") { commitRename(s) }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            } else {
+                Button { restoreVersion(s) } label: {
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(s.name).lineLimit(1).truncationMode(.middle)
+                            Spacer(minLength: 0)
+                            Text(Self.stamp.string(from: s.created))
+                                .foregroundStyle(Palette.faint)
+                        }
+                        .font(.system(size: 11))
+
+                        if !missing.isEmpty {
+                            // ⚠ Named, and in the color the app uses for
+                            // "look at this". A version that quietly restores
+                            // an empty mask is the defect this line exists to
+                            // refuse.
+                            Text("\(missing.count) selection\(missing.count == 1 ? "" : "s") "
+                               + "missing — \(missing.joined(separator: ", "))")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Palette.star)
+                        } else if s.automatic {
+                            Text("kept automatically · rename to keep it")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Palette.faint)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .frame(maxWidth: .infinity)
+                    .background(Palette.raised)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .contentShape(RoundedRectangle(cornerRadius: 3))
+                }
+                .buttonStyle(.plain)
+                .disabled(!engine.isLoaded)
+
+                Button {
+                    renamingSnapshot = s.id
+                    renameText = s.name
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    do { try snapshots.remove(s.id) }
+                    catch { message = error.localizedDescription }
+                } label: {
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Short and unambiguous. A version list is read by date more often than by
+    /// name — "the one from before lunch" — so the stamp is not decoration.
+    private static let stamp: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .short
+        f.timeStyle = .short
+        return f
+    }()
+
+    private func saveVersion() {
+        do {
+            try snapshots.save(name: snapshotName, state: engine.state)
+            snapshotName = ""
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func commitRename(_ s: Snapshot) {
+        do { try snapshots.rename(s.id, to: renameText) }
+        catch { message = error.localizedDescription }
+        renamingSnapshot = nil
+    }
+
+    /// ⚠ Through `SnapshotStore.restore`, which keeps the working edit before
+    /// it is overwritten. The two steps are one call for exactly the reason the
+    /// matte sweep is one function: an order written out at each call site is
+    /// an order one of them stops following.
+    private func restoreVersion(_ s: Snapshot) {
+        snapshots.restore(s, working: engine.state) { snapshot in
+            engine.restore(snapshot: snapshot, photo: current)
         }
     }
 
