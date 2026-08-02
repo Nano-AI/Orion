@@ -267,6 +267,120 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
     return out;
 }
 
+/// The whole of `fromFrame`'s point map — crop, straighten, quarter turns and
+/// the perspective — as **one 3×3**, in normalized coordinates.
+///
+/// Every step `fromFrame` takes is a projectivity of the plane, so their
+/// composition is one matrix and there is nothing lost by writing it as one.
+/// What that buys is not speed: it is that a *function* of the displayed
+/// coordinates can be pulled back into the frame exactly, instead of having its
+/// parameters pushed forward approximately. A mask's centre goes through the map
+/// exactly today, and its shape goes through the map's derivative — which is the
+/// whole reason `research/perspective.md` has a table of what is exact and what
+/// is first order. With the map itself in hand, the question stops being asked.
+///
+/// ⚠ **The step order is `fromFrame`'s, and the two must agree.**
+/// `testDisplayMatrixMatchesFromFrame` asserts exactly that, pointwise, over
+/// crops, turns, straightens and keystones — because two derivations of one map
+/// is the arrangement this file already carries a warning about, and adding a
+/// second way to compute it is only safe if something compares them.
+///
+/// Composed right to left: turns first, then the perspective, then the
+/// straighten, then out of the crop.
+[[nodiscard]] inline persp::Matrix3 displayMatrix(
+        const Crop& c, int turns, float straightenRad = 0.0f,
+        float pivotX = 0.5f, float pivotY = 0.5f,
+        float frameW = 1.0f, float frameH = 1.0f,
+        const persp::Matrix3* perspectiveInverse = nullptr) noexcept {
+    // The quarter turns. `fromFrame` sends (x, y) to (1 - y, x) once per turn.
+    persp::Matrix3 m{};
+    const int k = ((turns % 4) + 4) % 4;
+    const persp::Matrix3 turn{{0.0f, -1.0f, 1.0f,
+                               1.0f,  0.0f, 0.0f,
+                               0.0f,  0.0f, 1.0f}};
+    for (int i = 0; i < k; ++i) m = persp::multiply(turn, m);
+
+    // The perspective, conjugated out of the shader's texel convention into
+    // normalized coordinates — the same `x·W − 0.5` `unperspective` uses, and
+    // the same floors on the two dimensions.
+    if (perspectiveInverse != nullptr && !persp::isIdentity(*perspectiveInverse)) {
+        const float w = std::max(frameW, 2.0f);
+        const float t = std::max(frameH, 2.0f);
+        const persp::Matrix3 toTexels{{w, 0.0f, -0.5f,
+                                       0.0f, t, -0.5f,
+                                       0.0f, 0.0f, 1.0f}};
+        const persp::Matrix3 toNorm{{1.0f / w, 0.0f, 0.5f / w,
+                                     0.0f, 1.0f / t, 0.5f / t,
+                                     0.0f, 0.0f, 1.0f}};
+        m = persp::multiply(
+                persp::multiply(toNorm, persp::multiply(*perspectiveInverse, toTexels)),
+                m);
+    }
+
+    // The straighten, the other way about the pivot. `unstraighten` rotates in
+    // the *pixel* coordinates of the rotated frame, so the aspect is part of it:
+    // the linear part is [[c, −s·H/W], [s·W/H, c]] and not a rotation.
+    if (std::fabs(straightenRad) > 1e-6f) {
+        const float w = std::max(frameW, 1e-6f);
+        const float t = std::max(frameH, 1e-6f);
+        const float cs = std::cos(-straightenRad), sn = std::sin(-straightenRad);
+        const float a = cs, b = -sn * t / w, cc = sn * w / t, d = cs;
+        const persp::Matrix3 s{{a, b, pivotX - a * pivotX - b * pivotY,
+                                cc, d, pivotY - cc * pivotX - d * pivotY,
+                                0.0f, 0.0f, 1.0f}};
+        m = persp::multiply(s, m);
+    }
+
+    // And out of the crop, which is what the displayed picture is.
+    const float cw = std::max(c.w, 1e-6f), ch = std::max(c.h, 1e-6f);
+    const persp::Matrix3 crop{{1.0f / cw, 0.0f, -c.x / cw,
+                               0.0f, 1.0f / ch, -c.y / ch,
+                               0.0f, 0.0f, 1.0f}};
+    return persp::multiply(crop, m);
+}
+
+/// A linear gradient's ramp, as the two rows the kernel evaluates:
+///
+///     t(q) = <num, (q, 1)> / <den, (q, 1)>
+///
+/// `centerX`, `centerY`, `angle` and `length` are the photographer's own numbers
+/// — normalized to the crop, exactly as `CanvasLayout.MaskPlacement` holds them
+/// — and they go through **no transform at all**. The transform is applied to
+/// the point, by `display`, which is why this is exact where pushing the
+/// endpoints forward was not.
+///
+/// ⚠ **One derivation, two consumers**, the same rule `unperspective` states: the
+/// pipeline and the GPU tests both come here, so a test cannot pass against a
+/// second copy of the algebra that the shipping path does not use.
+struct Ramp {
+    float num[3] = {0.0f, 0.0f, 1.0f};
+    float den[3] = {0.0f, 0.0f, 1.0f};
+};
+
+[[nodiscard]] inline Ramp ramp(float centerX, float centerY, float angle,
+                               float length,
+                               const persp::Matrix3& display) noexcept {
+    const float ux = std::cos(angle) * length;
+    const float uy = std::sin(angle) * length;
+    const float uu = ux * ux + uy * uy;
+
+    // A ramp of no length covers everything, which is what the endpoint form's
+    // `denom > 1e-9` guard returned and what the interface draws for it.
+    if (uu <= 1e-12f) return Ramp{};
+
+    const float zx = centerX - ux * 0.5f;
+    const float zy = centerY - uy * 0.5f;
+    const float zu = zx * ux + zy * uy;
+
+    Ramp out{};
+    for (int r = 0; r < 3; ++r) {
+        out.num[r] = (ux * display.m[r] + uy * display.m[3 + r]
+                      - zu * display.m[6 + r]) / uu;
+        out.den[r] = display.m[6 + r];
+    }
+    return out;
+}
+
 /// A length on screen, as a length in the frame.
 ///
 /// A crop magnifies: a gradient spanning half the visible width spans half of

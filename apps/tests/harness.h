@@ -97,6 +97,8 @@ void testPerspectiveOneResample();
 void testPerspectiveAutoScaleFillsTheFrame();
 void testPerspectiveMaskGeometry();
 void testPerspectiveMaskExtent();
+void testDisplayMatrixMatchesFromFrame();
+void testRampIsTheExactPullBack();
 void testPerspectiveWiring();
 void testNoiseEstimator();
 void testDenoiseGpu();

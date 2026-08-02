@@ -416,7 +416,22 @@ disagreement **2.2 × 10⁻⁶**, which is float rounding.
 
 ⚠ It is exact for **every** homography, crop, straighten and quarter turn at
 once, because they compose into M — so it does not merely fix the squeeze, it
-removes the whole class. Costed in `ROADMAP.md`; not built here.
+removes the whole class.
+
+✅ **Built 2026-08-02, decision #137.** `mask::displayMatrix` is M and
+`mask::ramp` is the two rows; the kernel's kind-1 branch is now two dots and a
+divide. `maskcheck 20 -2.0` under `perspectiveAspect 1.0` went from 3 of 27
+clear cells leaked at 0.1300 luma to clean, and `repro/…` §4c pins it at both
+signs and against a squeeze composed with a keystone.
+
+⚠ **The denominator is what nothing could see.** Replacing the exact ratio by
+its affine part — keeping n, forcing the denominator to 1 — was green on all 32
+scenario checks and all 821 engine checks. `maskcheck` asserts that cells the
+overlay draws *clear* come back bit-identical and cells it draws *covered*
+moved; the affine error lives almost entirely in the falloff band between them,
+which it does not assert on at all. `testRampIsTheExactPullBack` checks the
+algebra against `fromFrame` directly and reddens 5 checks on that mutation. A
+two-sided end-to-end oracle is not the same as a complete one.
 
 ## The range is a control choice, not a measurement
 

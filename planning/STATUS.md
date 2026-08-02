@@ -50,18 +50,13 @@ shortening and not a deletion.
 
 **Open, in order:**
 
-1. **A linear gradient's level sets under a non-conformal correction.** ⚠ **A
-   first-order defect in the shipping build**, found 2026-08-02 while costing
-   item 2 (#136). The kernel projects onto the segment between two endpoints, so
-   its level sets are perpendicular to it in *frame* coordinates; the drawn
-   mask's are perpendicular in *display* coordinates. t is a covector — it goes
-   through J⁻ᵀ, the endpoints go through J, and they agree only when J is
-   conformal. `maskcheck 20 -2.0` on the shipping build, a ramp under
-   `perspectiveAspect 1.0`: **3 of 27 clear cells leaked, worst 0.1300 luma**.
-   The exact fix is closed form and *cheaper* than what it replaces — six floats,
-   two dots, one divide, verified to 2.2 × 10⁻⁶. **~1 session** for it and its
-   prerequisite (`mask::displayMatrix`), both costed in `ROADMAP.md`. It goes
-   first because it is broken now, item 2 is merely imprecise.
+1. ~~**A linear gradient's level sets under a non-conformal correction.**~~ ✅
+   **done 2026-08-02, decision #137.** `maskcheck 20 -2.0` under
+   `perspectiveAspect 1.0` went from **3 of 27 clear cells leaked, worst 0.1300
+   luma** to clean; §4c pins it both signs and against a squeeze composed with a
+   keystone. Both prerequisite pieces landed with it — `mask::displayMatrix`
+   folds crop, straighten, turns and the correction into one 3 × 3, and
+   `mask::ramp` builds the two rows the kernel evaluates.
 2. **The perspective map's curvature across a large mask.** ✅ **Costed
    2026-08-02 (#136)** — it was the only uncosted item, and it is no longer.
    ⚠ **It is larger than the record implied**: against the exact answer over a
@@ -77,7 +72,7 @@ shortening and not a deletion.
    private name (#89). ~1 session. ⚠ **Needs sign-off before it starts**: it
    rewrites sidecars already on disk.
 
-⚠ **That is the whole open list, and it is three items long.** The merged copies
+⚠ **That is the whole open list, and it is two items long.** The merged copies
 offered four, and **two of the four had already shipped** — see the last two
 entries of the closed list. Both were checked against the tree and not against
 this file, which is the only way a queue this old can be trusted.
@@ -677,6 +672,64 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-02g` — a gradient is a covector, and the endpoints were not
+
+The defect #136 turned up, fixed. A linear gradient's **level sets** were wrong
+under any correction that is not conformal — not its direction, which a
+homography carries exactly, and not its length, which #134 made exact. Both
+endpoints were right, and that is what hid it: everything anybody had thought to
+check about the ramp was correct.
+
+`mask_component.slang` kind 1 projected onto the segment between them, so its
+level sets were the lines perpendicular to that segment **in frame
+coordinates**. The drawn mask's are perpendicular in *display* coordinates. t is
+a linear **functional** — it transforms by **J⁻ᵀ** while a pair of endpoints
+transforms by J, and the two agree only where J is conformal: a rotation, a
+uniform scale, a crop. Every case anybody checks by hand.
+
+**The exact answer is cheaper than the approximation.** Pulling an affine ramp
+back through a projectivity gives a ratio of two linear forms:
+
+    t(q) = ⟨n, (q,1)⟩ / ⟨M₃, (q,1)⟩,   n = (uₓ·M₁ + u_y·M₂ − ⟨z,u⟩·M₃) / |u|²
+
+Six floats, two dots and one divide, against four floats and one dot. M is the
+whole frame → display map, so this is exact for the homography, the crop, the
+straighten and the quarter turns **at once** — the mask's own numbers now go
+through no transform at all, and the transform is applied to the *point*.
+
+| | Before | After |
+|---|---|---|
+| `maskcheck 20 -2.0`, ramp under `perspectiveAspect 1.0` | 3 of 27 clear cells leaked, worst **0.1300** luma | clean |
+| `maskcheck 12 -2.0`, same | 1 of 100 covered cells did nothing | clean |
+
+⚠ **The squeeze, not the keystone — the opposite of §4b's instinct.** A
+keystone's derivative is anisotropic but mildly so over a short ramp;
+diag(1/g, g) at g = √2 is as far from conformal as this control goes. §4b spent
+a session concluding the squeeze was where nothing happened.
+
+⚠ **One mutation was green on everything.** Replacing the exact ratio with its
+affine part — dropping the projective divide — passed all 32 scenario checks and
+all 821 engine checks. `maskcheck` asserts that cells drawn *clear* are
+bit-identical and cells drawn *covered* moved, and says nothing about the falloff
+band between them, which is exactly where that error lives.
+`testRampIsTheExactPullBack` closes it by checking the algebra directly against
+`fromFrame` over seven configurations, and reddens 5 checks on that mutation.
+**Six mutations tried, six caught** — the other five were on `displayMatrix`
+(straighten aspect weighting, turn direction, composition order, straighten sign,
+crop translation), all red.
+
+Two pieces landed with it, both of which `ROADMAP.md` had costed separately:
+`mask::displayMatrix` and `mask::ramp`, in `MaskGeometry.h` beside the map they
+belong to. The GPU tests call `mask::ramp` rather than keeping a second copy of
+the algebra, which is the rule that file already states.
+
+⚠ The params struct grew 8 bytes and every offset from `center` on moved; the
+`static_assert`s were updated with it, and six scalars were used rather than two
+`float3`s because a `float3` aligns to sixteen and offset 56 does not.
+
+Decision #137. Gates: **829** engine checks (+8), 3708 viewport, 41 of 41 repro,
+bench exit 0 on three frames.
 
 ## Session `2026-08-02f` — the curvature is costed, and measuring it found a live defect
 

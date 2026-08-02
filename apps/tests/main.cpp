@@ -35,6 +35,8 @@ int main() {
     testPerspectiveAutoScaleFillsTheFrame();
     testPerspectiveMaskGeometry();
     testPerspectiveMaskExtent();
+    testDisplayMatrixMatchesFromFrame();
+    testRampIsTheExactPullBack();
     testPerspectiveWiring();
     testNoiseEstimator();
     testLinearizeClipsToWhite();

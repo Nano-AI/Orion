@@ -666,8 +666,22 @@ struct alignas(8) MaskComponent {
     float         roundness;   // radial superellipse exponent
     float         angle;       // radial rotation, radians
     float         _pad;
-    float         zero[2];     // linear
-    float         full[2];     // linear
+    /// A linear gradient's ramp, as the **exact** pull-back of the ramp the
+    /// photographer drew: t(q) = <rampNum, (q,1)> / <rampDen, (q,1)>.
+    ///
+    /// ⚠ Two endpoints stood here until 2026-08-02, and the kernel projected
+    /// onto the segment between them — which puts the level sets perpendicular
+    /// to that segment **in frame coordinates**, while the drawn mask's are
+    /// perpendicular in *display* coordinates. t is a linear functional, so it
+    /// transforms by J^-T while a pair of endpoints transforms by J; the two
+    /// agree only where J is conformal, which is every case anybody checks by
+    /// hand. Decision #137, research/perspective.md.
+    ///
+    /// `rampDen` is the bottom row of the frame-to-display matrix, so it is
+    /// exactly (0, 0, 1) with no perspective and the whole thing collapses to
+    /// the affine ramp it replaces.
+    float         rampNum[3];  // linear
+    float         rampDen[3];  // linear
     float         center[2];   // radial
     float         semi[2];     // radial semi-axes, normalized
     /// Luminance range (kind 5), in stops — log2 Rec.2020 luminance on the
@@ -722,25 +736,25 @@ struct alignas(8) MaskComponent {
     /// Non-zero when this component begins a layer — the fold restarts here.
     std::int32_t  startsLayer;
 };
-static_assert(sizeof(MaskComponent) == 152);
+static_assert(sizeof(MaskComponent) == 160);
 // Every float2 in the shader's struct must land on an eight-byte boundary, or
 // Metal pads and every field after the first pair shifts.
-static_assert(offsetof(MaskComponent, zero)   == 56);
-static_assert(offsetof(MaskComponent, full)   == 64);
-static_assert(offsetof(MaskComponent, center) == 72);
-static_assert(offsetof(MaskComponent, semi)      == 80);
-static_assert(offsetof(MaskComponent, rangeLo)   == 88);
-static_assert(offsetof(MaskComponent, dabStride) == 104);
+static_assert(offsetof(MaskComponent, rampNum) == 56);
+static_assert(offsetof(MaskComponent, rampDen) == 68);
+static_assert(offsetof(MaskComponent, center) == 80);
+static_assert(offsetof(MaskComponent, semi)      == 88);
+static_assert(offsetof(MaskComponent, rangeLo)   == 96);
+static_assert(offsetof(MaskComponent, dabStride) == 112);
 // ⚠ These two took over two of `_pad3`'s three slots, so the struct did not
 // change size and every offset after them is where it was. Asserted rather
 // than trusted: the shader reads them by offset, and a disagreement here is a
 // dab loop starting in the wrong place, which draws a plausible stroke.
-static_assert(offsetof(MaskComponent, firstDab)  == 108);
-static_assert(offsetof(MaskComponent, accumUse)  == 112);
-static_assert(offsetof(MaskComponent, matteSize) == 120);
-static_assert(offsetof(MaskComponent, colorR)    == 128);
-static_assert(offsetof(MaskComponent, colorTol)  == 140);
-static_assert(offsetof(MaskComponent, colorSoft) == 144);
+static_assert(offsetof(MaskComponent, firstDab)  == 116);
+static_assert(offsetof(MaskComponent, accumUse)  == 120);
+static_assert(offsetof(MaskComponent, matteSize) == 128);
+static_assert(offsetof(MaskComponent, colorR)    == 136);
+static_assert(offsetof(MaskComponent, colorTol)  == 148);
+static_assert(offsetof(MaskComponent, colorSoft) == 152);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {

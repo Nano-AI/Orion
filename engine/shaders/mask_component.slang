@@ -55,8 +55,20 @@ struct MaskComponentParams
     float  angle;       // radial rotation, radians
     float  _pad;
 
-    float2 zero;        // linear: where the effect is zero
-    float2 full;        // linear: where it is full
+    /// A linear gradient's ramp, as the exact pull-back of the ramp the
+    /// photographer drew:  t(q) = <num, (q,1)> / <den, (q,1)>.
+    ///
+    /// ⚠ Six scalars and not two float3s, deliberately: a float3 aligns to
+    /// sixteen bytes and offset 56 is not a multiple of sixteen, so Metal would
+    /// pad and every field after this would move. The C++ side asserts the
+    /// offsets either way, but a struct that only agrees by luck is a struct
+    /// that stops agreeing when somebody inserts an int.
+    float  rampNumX;
+    float  rampNumY;
+    float  rampNumW;
+    float  rampDenX;
+    float  rampDenY;
+    float  rampDenW;
     float2 center;      // radial
     float2 semi;        // radial semi-axes, normalized
 
@@ -259,11 +271,28 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
 
     if (p.kind == 1)
     {
-        // Two points carry position and angle together, so there is no separate
-        // angle field to keep consistent with them.
-        const float2 d = p.full - p.zero;
-        const float denom = dot(d, d);
-        const float t = (denom > 1e-9f) ? dot(q - p.zero, d) / denom : 1.0f;
+        // The ramp the photographer drew, pulled back exactly.
+        //
+        // ⚠ **This used to project onto the segment between two endpoints**, so
+        // its level sets were the lines perpendicular to that segment *in this
+        // kernel's own frame coordinates* — and the drawn mask's level sets are
+        // perpendicular in *display* coordinates. A homography does not preserve
+        // perpendicularity, and t is a linear functional rather than a vector:
+        // it transforms by the inverse transpose while a pair of endpoints
+        // transforms by the derivative. Where the correction is conformal the
+        // two agree, which is why it survived so long.
+        //
+        // The pull-back of an affine ramp through a projectivity is a ratio of
+        // two linear forms, so this is exact rather than closer — for the
+        // homography, the crop, the straighten and the quarter turns together,
+        // since they compose into the one matrix these six numbers come from.
+        // research/perspective.md; decision #137.
+        const float num = p.rampNumX * q.x + p.rampNumY * q.y + p.rampNumW;
+        const float den = p.rampDenX * q.x + p.rampDenY * q.y + p.rampDenW;
+        // The denominator is the bottom row of that matrix, so it is 1 without
+        // a perspective and can only vanish on the line the correction sends to
+        // infinity — which is outside any frame the auto-scale will show.
+        const float t = (abs(den) > 1e-9f) ? num / den : 1.0f;
         own = maskFalloff(t);
     }
     else if (p.kind == 2)

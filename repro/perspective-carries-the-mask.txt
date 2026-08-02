@@ -221,28 +221,65 @@ set perspectiveVertical 0
 set perspectiveHorizontal 0
 set perspectiveAspect 0
 
-# ⚠⚠ **AND A LINEAR MASK UNDER AN ASPECT SQUEEZE IS BROKEN TODAY, WHICH NO
-# SECTION OF THIS FILE RUNS.** Found 2026-08-02 while measuring the paragraph
-# above. It is not the ramp's length and not the map's curvature: it is the
-# ramp's **level sets**. The kernel projects onto the segment between two
-# endpoints, so its level sets are perpendicular to that segment in *frame*
-# coordinates, while the mask the photographer drew has level sets perpendicular
-# to the ramp in *display* coordinates — and a linear map does not preserve
-# perpendicularity. t is a covector; it goes through J⁻ᵀ, and the endpoints go
-# through J. The two agree exactly when J is conformal, which is every case
-# anybody checks by hand.
+# ── 4c. A gradient's level sets, which were wrong until 2026-08-02 ────────
 #
-# On the **shipping** build, this ramp at `perspectiveAspect 1.0`:
+# ⚠ **This section was red on the shipping build for as long as the linear mask
+# has existed**, and no scenario ran it. Found while measuring the paragraph
+# above; fixed by decision #137.
+#
+# It is not the ramp's length and not the map's curvature. It is the ramp's
+# **level sets**. The kernel projected onto the segment between two endpoints,
+# so its level sets were the lines perpendicular to that segment in *frame*
+# coordinates, while the mask the photographer drew has level sets perpendicular
+# to the ramp in *display* coordinates. A linear map does not preserve
+# perpendicularity — and t is a **covector**, so it transforms by J⁻ᵀ while a
+# pair of endpoints transforms by J. The two agree exactly when J is conformal,
+# which is every case anybody checks by hand: a rotation, a uniform scale, a
+# crop. That is why it survived four sessions of work on this very file.
+#
+# What it measured before the fix, this geometry, this frame:
 #
 #   maskcheck 20 -2.0   3 of 27 clear cells leaked, worst 0.1300 luma
 #                       2 of 287 covered cells did nothing
 #   maskcheck 12 -2.0   1 of 100 covered cells did nothing
 #
-# ⚠ **Deliberately not added as a section here, because it would be red**, and a
-# repository whose gate is red teaches everyone to ignore the gate. The recipe
-# above reproduces it in four lines; `research/perspective.md` has the exact
-# closed form that fixes it and `ROADMAP.md` costs it. This comment is the
-# marker, and it comes out when the fix goes in and this becomes section 4c.
+# ⚠ **The squeeze, not the keystone, and that is the opposite of section 4b's
+# instinct.** A keystone's derivative is anisotropic but only mildly so over a
+# short ramp; `perspectiveAspect 1.0` is diag(1/g, g) with g = √2, which is as
+# far from conformal as this control goes. Section 4b spent a session concluding
+# the squeeze was where nothing happened. It was where everything did.
+#
+# The fix carries no approximation: t is pulled back through the whole frame →
+# display matrix as a ratio of two linear forms, which is what an affine ramp
+# becomes under a projectivity. `mask::ramp` builds the two rows,
+# `mask::displayMatrix` builds the matrix, and `research/perspective.md` has the
+# derivation.
+mask linear
+set maskCentreX 0.30
+set maskCentreY 0.25
+set maskAngle 0.6
+set maskLength 0.20
+set maskFeather 0.02
+set perspectiveVertical 0
+set perspectiveHorizontal 0
+set perspectiveAspect 1.0
+maskcheck 20 -2.0
+
+# The other way, so a sign error cannot pass both.
+set perspectiveAspect -1.0
+maskcheck 20 -2.0
+
+# And with the squeeze composed against a keystone, where the derivative is
+# anisotropic *and* varies across the frame — neither alone reaches this.
+set perspectiveAspect 0.6
+set perspectiveVertical 0.45
+set perspectiveHorizontal 0.30
+maskcheck 20 -2.0
+
+set perspectiveAspect 0
+set perspectiveVertical 0
+set perspectiveHorizontal 0
+set maskAngle 0
 
 # ── 5. All three fields survive a reopen ──────────────────────────────────
 #

@@ -235,6 +235,27 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
     const bool frameMoved = ctx.frameMoved;
     const bool visibilityMoved = ctx.visibilityMoved;
 
+    // The whole frame → display map as one matrix — crop, straighten, quarter
+    // turns and the correction — so a mask defined on the displayed picture can
+    // be pulled back into this one exactly rather than having its parameters
+    // pushed forward approximately. `ctx.perspective` is the display → frame
+    // direction the placements take, so this wants its inverse, which is the
+    // same argument `mask::fromFrame` takes.
+    //
+    // Computed once for the whole list: it depends on the geometry and not on
+    // any component, and `persp::inverse` is an adjugate nobody should pay for
+    // per row.
+    persp::Matrix3 perspInverse{};
+    const persp::Matrix3* perspInversePtr = nullptr;
+    if (perspective != nullptr && !persp::isIdentity(*perspective)) {
+        perspInverse = persp::inverse(*perspective);
+        perspInversePtr = &perspInverse;
+    }
+    const persp::Matrix3 display = mask::displayMatrix(
+        crop, turns, adj.straightenDeg * 3.14159265358979324f / 180.0f,
+        adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
+        rotW, rotH, perspInversePtr);
+
     // ⚠ Hidden components are *disabled*, not zeroed. A disabled node resolves
     // to its first input, and this node's first input is the fold so far — so a
     // hidden component is skipped exactly, for free, and keeps every setting it
@@ -330,30 +351,34 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
         m.semi[1] = ext.semiY;
         m.angle   = placed.angle + ext.angleDelta;
 
-        // A linear gradient's endpoints, from the *placed* center and angle.
-        // Half the length either side, so rotating about the center does not
-        // also move the ramp.
+        // A linear gradient's ramp, pulled back from the picture the
+        // photographer is looking at instead of pushed forward into this one.
         //
-        // ⚠ `placed.angle`, not `m.angle`: the ramp's direction is the image of
-        // the mask's own direction, which a homography carries exactly, while
-        // `m.angle` names the *ellipse's* principal axis — a different line
-        // whenever the map is anisotropic.
+        // ⚠ **The endpoints that stood here were wrong in a way no amount of
+        // care about their position could fix.** They were built from
+        // `placed.angle` and `lengthAlong` — the ramp's image direction and its
+        // image length, both exact — and the kernel then projected onto the
+        // segment between them, which puts the level sets perpendicular to that
+        // segment *in frame coordinates*. The drawn mask's level sets are
+        // perpendicular in *display* coordinates, and a homography preserves
+        // neither perpendicularity nor the spacing along the ramp. t is a linear
+        // **functional**: it goes through J⁻ᵀ where a pair of endpoints goes
+        // through J, and the two agree only where J is conformal — which is
+        // every case anybody checks by hand. Decision #137.
         //
-        // ⚠ And its length goes through `lengthAlong`, not `placed.scale`. The
-        // isotropic √|det J| was the last first-order term left in a mask's
-        // extent: a ramp has one direction, and the geometric mean of the two
-        // axis scales is not the scale along it. `mask::lengthAlong` says what
-        // the difference costs; the pre-image angle is the argument, since J
-        // carries pre-image directions to image ones and `placed.angle` is
-        // already the image.
-        const float preAngle =
-            c.angle + adj.straightenDeg * 3.14159265358979324f / 180.0f;
-        const float len = mask::lengthToFrame(c.length, crop)
-                        * mask::lengthAlong(placed.jac, preAngle);
-        const float dx = std::cos(placed.angle) * len * 0.5f;
-        const float dy = std::sin(placed.angle) * len * 0.5f;
-        m.zero[0] = m.center[0] - dx; m.zero[1] = m.center[1] - dy;
-        m.full[0] = m.center[0] + dx; m.full[1] = m.center[1] + dy;
+        // In display coordinates the ramp runs from z along u, exactly as
+        // `CanvasLayout.MaskPlacement` derives its two handles, so these three
+        // numbers are the photographer's own and go through no transform at all.
+        // The transform is applied to the *point*, by the matrix.
+        // t(q) = ⟨n, (q,1)⟩ / ⟨M₃, (q,1)⟩, where M is the whole frame → display
+        // map. Exact for the homography, the crop, the straighten and the
+        // quarter turns at once, because all four are in M.
+        const auto ramp = mask::ramp(c.center[0], c.center[1], c.angle,
+                                     c.length, display);
+        for (int r = 0; r < 3; ++r) {
+            m.rampNum[r] = ramp.num[r];
+            m.rampDen[r] = ramp.den[r];
+        }
         m.feather   = c.feather;
         m.roundness = c.roundness;
 

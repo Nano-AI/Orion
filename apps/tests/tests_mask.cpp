@@ -99,8 +99,13 @@ void testMaskGpu() {
         orion::pipe::params::MaskComponent m{};
         m.size[0] = kW; m.size[1] = kH;
         m.kind = 1;
-        m.zero[0] = 0.0f; m.zero[1] = 0.0f;   // left edge
-        m.full[0] = 1.0f; m.full[1] = 0.0f;   // right edge
+        // Left edge to right edge, through the shipping derivation rather
+        // than a second copy of it: centre 0.5, angle 0, length 1.
+        {
+            const auto r = orion::pipe::mask::ramp(0.5f, 0.5f, 0.0f, 1.0f,
+                                                   orion::pipe::persp::identity());
+            for (int k = 0; k < 3; ++k) { m.rampNum[k] = r.num[k]; m.rampDen[k] = r.den[k]; }
+        }
         const auto a = run(m);
 
         report(at(a, 0, 32) < 0.01f && at(a, kW - 1, 32) > 0.99f,
@@ -721,8 +726,11 @@ void testMaskCompositeGpu() {
         orion::pipe::params::MaskComponent g{};
         g.size[0] = kW; g.size[1] = kH;
         g.kind = 1;
-        g.zero[0] = 0.0f; g.zero[1] = 0.0f;
-        g.full[0] = 1.0f; g.full[1] = 0.0f;
+        {
+            const auto r = orion::pipe::mask::ramp(0.5f, 0.5f, 0.0f, 1.0f,
+                                                   orion::pipe::persp::identity());
+            for (int k = 0; k < 3; ++k) { g.rampNum[k] = r.num[k]; g.rampDen[k] = r.den[k]; }
+        }
 
         orion::pipe::params::MaskComponent s{};
         s.size[0] = kW; s.size[1] = kH;

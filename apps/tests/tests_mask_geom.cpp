@@ -793,3 +793,177 @@ void testPerspectiveMaskExtent() {
                "worst " + std::to_string(worstAxis) + " rad");
     }
 }
+
+void testDisplayMatrixMatchesFromFrame() {
+    section("The frame-to-display map as one matrix");
+
+    namespace mg = orion::pipe::mask;
+
+    // ⚠ Two derivations of one map is the arrangement this file already warns
+    // about — `mask::toFrame` exists precisely so the shader and the interface
+    // cannot drift apart. `displayMatrix` is a second way to compute what
+    // `fromFrame` computes step by step, and it is only safe because of this.
+    //
+    // Every case below turns on something a single-feature fixture would miss:
+    // a crop that is off-centre AND not square, so a translation error and a
+    // scale error cannot cancel; a straighten on a non-square frame, where the
+    // rotation is not a rotation in normalized coordinates; and a keystone,
+    // which is the only step that is not affine.
+    struct Case {
+        const char* name;
+        mg::Crop crop;
+        int turns;
+        float straightenDeg;
+        float vertical, horizontal, aspect;
+    };
+    const Case cases[] = {
+        {"neutral",            {0.0f, 0.0f, 1.0f, 1.0f}, 0,  0.0f, 0,     0,     0},
+        {"crop only",          {0.13f, 0.07f, 0.61f, 0.44f}, 0, 0.0f, 0,  0,     0},
+        {"one turn",           {0.0f, 0.0f, 1.0f, 1.0f}, 1,  0.0f, 0,     0,     0},
+        {"three turns",        {0.0f, 0.0f, 1.0f, 1.0f}, 3,  0.0f, 0,     0,     0},
+        {"straighten",         {0.0f, 0.0f, 1.0f, 1.0f}, 0,  4.5f, 0,     0,     0},
+        {"keystone",           {0.0f, 0.0f, 1.0f, 1.0f}, 0,  0.0f, 0.45f, 0.30f, 0},
+        {"aspect",             {0.0f, 0.0f, 1.0f, 1.0f}, 0,  0.0f, 0,     0,     1.0f},
+        {"crop + turn + keystone",
+                               {0.13f, 0.07f, 0.61f, 0.44f}, 1, 0.0f, 0.45f, 0.30f, 0},
+        {"all four at once",   {0.21f, 0.11f, 0.55f, 0.66f}, 2, -3.5f, 1.0f, -0.4f, 0.6f},
+    };
+
+    const float W = 6000.0f, H = 4000.0f;
+    constexpr float kPi = 3.14159265358979324f;
+
+    double worst = 0.0;
+    for (const Case& k : cases) {
+        const persp::Params pp{k.vertical, k.horizontal, k.aspect};
+        const persp::Matrix3 h = persp::compose(pp, W, H);
+        const persp::Matrix3 hInv = persp::inverse(h);
+        const persp::Matrix3* hp = persp::isIdentity(h) ? nullptr : &hInv;
+
+        const float rad = k.straightenDeg * kPi / 180.0f;
+        const float pivotX = k.crop.x + k.crop.w * 0.5f;
+        const float pivotY = k.crop.y + k.crop.h * 0.5f;
+
+        const persp::Matrix3 m = mg::displayMatrix(k.crop, k.turns, rad,
+                                                   pivotX, pivotY, W, H, hp);
+
+        double caseWorst = 0.0;
+        for (int iy = 0; iy <= 8; ++iy) {
+            for (int ix = 0; ix <= 8; ++ix) {
+                const float qx = 0.02f + 0.96f * float(ix) / 8.0f;
+                const float qy = 0.02f + 0.96f * float(iy) / 8.0f;
+
+                const auto step = mg::fromFrame({qx, qy, 0.0f}, k.crop, k.turns,
+                                                rad, pivotX, pivotY, W, H, hp);
+
+                const float wgt = m.m[6] * qx + m.m[7] * qy + m.m[8];
+                const float mx = (m.m[0] * qx + m.m[1] * qy + m.m[2]) / wgt;
+                const float my = (m.m[3] * qx + m.m[4] * qy + m.m[5]) / wgt;
+
+                caseWorst = std::max(caseWorst,
+                    double(std::max(std::fabs(mx - step.centerX),
+                                    std::fabs(my - step.centerY))));
+            }
+        }
+        report(caseWorst < 2e-5,
+               std::string("the one matrix is the step-by-step map — ") + k.name,
+               "worst " + std::to_string(caseWorst));
+        worst = std::max(worst, caseWorst);
+    }
+
+    // ⚠ The neutral case must be *exactly* the identity, not merely close: a
+    // photograph with no crop, no turn, no straighten and no correction has to
+    // render bit-for-bit as it did before this function existed, and a matrix
+    // that is the identity to six places is not the identity.
+    const mg::Crop none{0.0f, 0.0f, 1.0f, 1.0f};
+    const persp::Matrix3 id = mg::displayMatrix(none, 0, 0.0f, 0.5f, 0.5f, W, H, nullptr);
+    report(persp::isIdentity(id),
+           "and it is exactly the identity when nothing is set",
+           "m0 " + std::to_string(id.m[0]) + " m8 " + std::to_string(id.m[8]));
+
+    report(worst < 2e-5, "over every case together",
+           "worst " + std::to_string(worst));
+}
+
+void testRampIsTheExactPullBack() {
+    section("A gradient's ramp, pulled back exactly");
+
+    namespace mg = orion::pipe::mask;
+
+    // ⚠ **This exists because `repro/perspective-carries-the-mask.txt` §4c
+    // cannot see the denominator.** `maskcheck` asserts two things: cells the
+    // overlay draws *clear* come back bit-identical, and cells it draws
+    // *covered* moved. Neither says anything about the falloff band in between,
+    // and dropping the projective divide — replacing the exact ratio with its
+    // affine part — moves values almost entirely inside that band. That
+    // mutation was green on all 32 scenario checks and all 821 in this binary
+    // until this check existed.
+    //
+    // So this asserts the algebra directly: the two rows the kernel evaluates
+    // must agree with carrying the point out to the displayed picture and
+    // measuring the ramp there, which is the definition of what they mean.
+    constexpr float kPi = 3.14159265358979324f;
+    const float W = 6000.0f, H = 4000.0f;
+
+    struct Case { const char* name; mg::Crop crop; int turns;
+                  float straightenDeg, vertical, horizontal, aspect; };
+    const Case cases[] = {
+        {"neutral",        {0,0,1,1}, 0,  0.0f, 0,     0,     0},
+        {"aspect",         {0,0,1,1}, 0,  0.0f, 0,     0,     1.0f},
+        {"keystone",       {0,0,1,1}, 0,  0.0f, 0.45f, 0.30f, 0},
+        {"keystone strong",{0,0,1,1}, 0,  0.0f, 1.0f,  0,     0},
+        {"squeeze + keystone", {0,0,1,1}, 0, 0.0f, 0.45f, 0.30f, 0.6f},
+        {"crop + turn + keystone", {0.13f,0.07f,0.61f,0.44f}, 1, 0.0f, 0.45f, 0.30f, 0},
+        {"all four",       {0.21f,0.11f,0.55f,0.66f}, 2, -3.5f, 1.0f, -0.4f, 0.6f},
+    };
+
+    const float cx = 0.30f, cy = 0.25f, ang = 0.6f, len = 0.20f;
+
+    for (const Case& k : cases) {
+        const persp::Params pp{k.vertical, k.horizontal, k.aspect};
+        const persp::Matrix3 h = persp::compose(pp, W, H);
+        const persp::Matrix3 hInv = persp::inverse(h);
+        const persp::Matrix3* hp = persp::isIdentity(h) ? nullptr : &hInv;
+
+        const float rad = k.straightenDeg * kPi / 180.0f;
+        const float pivotX = k.crop.x + k.crop.w * 0.5f;
+        const float pivotY = k.crop.y + k.crop.h * 0.5f;
+
+        const persp::Matrix3 m = mg::displayMatrix(k.crop, k.turns, rad,
+                                                   pivotX, pivotY, W, H, hp);
+        const auto r = mg::ramp(cx, cy, ang, len, m);
+
+        const float ux = std::cos(ang) * len, uy = std::sin(ang) * len;
+        const float zx = cx - ux * 0.5f, zy = cy - uy * 0.5f;
+        const float uu = ux * ux + uy * uy;
+
+        double worst = 0.0;
+        for (int iy = 0; iy <= 12; ++iy) {
+            for (int ix = 0; ix <= 12; ++ix) {
+                const float qx = 0.02f + 0.96f * float(ix) / 12.0f;
+                const float qy = 0.02f + 0.96f * float(iy) / 12.0f;
+
+                const auto d = mg::fromFrame({qx, qy, 0.0f}, k.crop, k.turns,
+                                             rad, pivotX, pivotY, W, H, hp);
+                const double tExact =
+                    ((d.centerX - zx) * ux + (d.centerY - zy) * uy) / uu;
+
+                const double num = r.num[0] * qx + r.num[1] * qy + r.num[2];
+                const double den = r.den[0] * qx + r.den[1] * qy + r.den[2];
+                worst = std::max(worst, std::fabs(tExact - num / den));
+            }
+        }
+        report(worst < 1e-4,
+               std::string("the two rows are the ramp the photographer drew — ")
+                   + k.name,
+               "worst |dt| " + std::to_string(worst));
+    }
+
+    // ⚠ And the neutral case exactly, not merely closely: with no correction the
+    // denominator has to be (0, 0, 1) so the ratio collapses to the affine ramp
+    // it replaced, and a photograph with the sliders at rest renders as it did.
+    const auto flat = mg::ramp(cx, cy, ang, len, persp::identity());
+    report(flat.den[0] == 0.0f && flat.den[1] == 0.0f && flat.den[2] == 1.0f,
+           "and its denominator is exactly 1 with no correction",
+           std::to_string(flat.den[0]) + ", " + std::to_string(flat.den[1])
+               + ", " + std::to_string(flat.den[2]));
+}
