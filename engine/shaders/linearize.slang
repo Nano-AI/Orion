@@ -24,7 +24,7 @@
 // convention LibRaw inherits. Restated in research/color-pipeline.md.
 //
 // It has to happen here, before demosaic, for the same reason dcraw does it
-// here: RCD interpolates the mosaic, so an unclipped neighbour at 2.2 would
+// here: RCD interpolates the mosaic, so an unclipped neighbor at 2.2 would
 // drag the estimate at every pixel around it, and the cast would spread past
 // the highlight as a fringe instead of stopping at its edge.
 

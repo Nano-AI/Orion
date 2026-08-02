@@ -64,6 +64,6 @@ void dehazeRecover(uint3 tid : SV_DispatchThreadID,
 
     // The model cannot produce negative radiance; arithmetic on a frame whose
     // A was mis-estimated can. Clamping here keeps that a local error rather
-    // than one that propagates as a colour cast through everything downstream.
+    // than one that propagates as a color cast through everything downstream.
     dst[tid.xy] = float4(max(j, float3(0.0f, 0.0f, 0.0f)), c.a);
 }

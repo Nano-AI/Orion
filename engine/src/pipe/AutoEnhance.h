@@ -25,13 +25,13 @@ namespace orion::pipe::auto_enhance {
 /// research/UNSOURCED.md §15.
 inline constexpr double kClipPerSide = 0.005;
 
-/// Where middle grey lands through the sRGB transfer function — CIPA
+/// Where middle gray lands through the sRGB transfer function — CIPA
 /// DC-004:2004 §2.3(3), `MAX × 0.461`.
 ///
 /// ⚠️ The standard defines this for a uniform 18% reflectance card under
 /// controlled lighting. Aiming a *photograph's median* at it is a step the
 /// standard does not take, and the standard calls its own value conventional.
-inline constexpr float kMidGrey = 0.461f;
+inline constexpr float kMidGray = 0.461f;
 
 /// A ceiling on how much contrast an automatic stretch may add — Lisani, Petro
 /// & Sbert, IPOL 2012: `smax = 2` "provides a good compromise between contrast
@@ -95,8 +95,8 @@ struct Stats {
 
 /// The value below which `fraction` of the weight lies.
 ///
-/// Reads the bin's lower edge rather than its centre, which matters at the ends:
-/// with a coarse histogram, taking the centre of bin 0 reports a black point
+/// Reads the bin's lower edge rather than its center, which matters at the ends:
+/// with a coarse histogram, taking the center of bin 0 reports a black point
 /// above zero on an image that genuinely contains black, and the correction then
 /// lifts a picture that needed nothing.
 [[nodiscard]] inline float percentileOf(const std::uint32_t* bins, std::uint32_t count,
@@ -120,9 +120,9 @@ struct Stats {
 ///
 /// **Deliberately not per channel.** Stretching each channel to its own
 /// endpoints performs a white balance as a side effect — it is the same
-/// operation as a grey-world correction — and this editor already has a white
+/// operation as a gray-world correction — and this editor already has a white
 /// balance the photographer set, often from the camera's own reading. An auto
-/// contrast that silently re-balanced colour would be overriding a decision the
+/// contrast that silently re-balanced color would be overriding a decision the
 /// user made on purpose, and it would do so invisibly.
 ///
 /// The channel histograms are summed rather than luminance-weighted because the
@@ -173,10 +173,10 @@ struct Controls {
 [[nodiscard]] inline Controls refine(const Controls& current, const Stats& s) noexcept {
     Controls next = current;
 
-    // Exposure, toward the mid-grey anchor. In stops, because that is what the
+    // Exposure, toward the mid-gray anchor. In stops, because that is what the
     // slider is; damped, because the display transform compresses the move.
     if (s.median > 1e-4f) {
-        const float stops = std::log2(kMidGrey / s.median);
+        const float stops = std::log2(kMidGray / s.median);
         next.exposureEv = std::clamp(current.exposureEv + kDamping * stops, -kMaxExposureEv, kMaxExposureEv);
     }
 
@@ -219,7 +219,7 @@ struct Controls {
     // A dark picture gets shadow lift, in proportion to how dark. Measured
     // before any exposure correction, so it responds to the photograph rather
     // than to what the solver has already done about it.
-    c.fusion  = std::clamp(1.6f * (kMidGrey - s.median) / kMidGrey, 0.0f, 1.0f);
+    c.fusion  = std::clamp(1.6f * (kMidGray - s.median) / kMidGray, 0.0f, 1.0f);
     c.clarity = 0.25f;
     return c;
 }

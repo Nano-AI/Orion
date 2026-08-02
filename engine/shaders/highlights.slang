@@ -7,7 +7,7 @@
 // A sensor clips per channel, not per pixel. Point a camera at a bright sky and
 // the red channel saturates first while green and blue still hold detail — so
 // the pixel's *ratio* between channels changes, and a white cloud comes out
-// magenta. The correction is to notice that within a small neighbourhood the
+// magenta. The correction is to notice that within a small neighborhood the
 // channels are close to linearly related, fit that relation on the pixels that
 // are still valid, and use it to say what the clipped channel would have read:
 //
@@ -49,7 +49,7 @@ static const float kMaxGain = 2.0f;
 /// count toward the fit.
 ///
 /// This is Masood et al.'s Ω: the *boundary* of the saturated region, not the
-/// general neighbourhood. Around a small light at night the neighbourhood is
+/// general neighborhood. Around a small light at night the neighborhood is
 /// almost all dark background, and a relation fitted on background pixels
 /// describes the background — extrapolating it out to highlight brightness
 /// produced a colored halo round every light in the frame.
@@ -179,7 +179,7 @@ void highlightRecover(uint3 tid : SV_DispatchThreadID,
     const float3 beta = (sc - alpha * su) / n;
     const float3 estimate = alpha * reference + beta;
 
-    // No channel may end up in a ratio to the reference that the neighbourhood
+    // No channel may end up in a ratio to the reference that the neighborhood
     // never showed. This is the guard that actually kills the halo: a fit can
     // be well conditioned and still imply a color nothing nearby exhibits.
     const float3 ceiling = min(float3(clip.r, clip.g, clip.b) * kMaxGain,

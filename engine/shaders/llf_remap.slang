@@ -12,7 +12,7 @@
 // four of them instead of four times.
 //
 // The 5x5 tap footprint at half resolution reads each source pixel about six
-// times, but those reads are neighbours: they hit cache, not DRAM.
+// times, but those reads are neighbors: they hit cache, not DRAM.
 
 #include "ops/llf_ops.slang"
 

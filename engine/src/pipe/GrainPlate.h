@@ -87,7 +87,7 @@ struct Pcg32 {
 /// Level 0 is unit-variance correlated noise; each level below is the box
 /// average of the one above.
 ///
-/// ⚠ **The lower levels are deliberately not renormalised.** Their standard
+/// ⚠ **The lower levels are deliberately not renormalized.** Their standard
 /// deviation falls as the field is averaged, and that fall *is* the physics the
 /// preview needs: a preview pixel covering sixteen frame pixels should show the
 /// variance sixteen frame pixels average to, not the variance of one. Scaling
@@ -99,7 +99,7 @@ inline std::vector<float> buildPlate(std::uint64_t seed = 0x9e3779b97f4a7c15ULL)
     // ── Level 0: white Gaussian, then band-limited so the grain has a size ──
     //
     // Uncorrelated per-pixel noise reads as a digital sensor. Grain's identity
-    // is that it clumps, so the white field is blurred and renormalised; the
+    // is that it clumps, so the white field is blurred and renormalized; the
     // blur radius is what "one grain" means, and the Size slider scales the
     // plate's sampling rather than regenerating it.
     std::vector<float> white(static_cast<std::size_t>(kPlateSize) * kPlateSize);
@@ -145,7 +145,7 @@ inline std::vector<float> buildPlate(std::uint64_t seed = 0x9e3779b97f4a7c15ULL)
         }
     }
 
-    // Renormalise level 0 to zero mean and unit standard deviation, so `amount`
+    // Renormalize level 0 to zero mean and unit standard deviation, so `amount`
     // means the same thing whatever the blur above happens to do to the
     // variance.
     double mean = 0.0;

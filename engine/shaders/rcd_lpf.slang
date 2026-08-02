@@ -2,7 +2,7 @@
 //
 // Reference: Luis Sanz Rodríguez, https://github.com/LuisSR/RCD-Demosaicing (MIT).
 //
-//     lpf = 0.25·c + 0.125·(4-neighbours) + 0.0625·(diagonals)
+//     lpf = 0.25·c + 0.125·(4-neighbors) + 0.0625·(diagonals)
 //
 // A 3x3 binomial kernel over the mosaic, mixing all three colors. That is the
 // point: it estimates local *luminance* regardless of which CFA channel each

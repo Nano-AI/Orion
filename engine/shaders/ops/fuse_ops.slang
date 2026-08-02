@@ -39,23 +39,23 @@ float fuseSimulate(float t, int k, FusePlan p)
 }
 
 /// [H279] Eq. (5). Identity inside the restrained range, 1/x^2 decay outside.
-float fuseClip(float t, float centre, FusePlan p)
+float fuseClip(float t, float center, FusePlan p)
 {
-    const float d = t - centre;
+    const float d = t - center;
     const float m = abs(d);
     if (m <= p.beta * 0.5f) return t;
 
     const float a = p.beta * 0.5f + p.lambda;
     const float b = p.beta * 0.5f - p.lambda;
-    return sign(d) * (a - p.lambda * p.lambda / (m - b)) + centre;
+    return sign(d) * (a - p.lambda * p.lambda / (m - b)) + center;
 }
 
 /// [H279] Eq. (10) — the derivative of fuseClip, which *is* the contrast
 /// measure. Hessel & Morel replace Mertens' Laplacian filter with it, so there
 /// is no filtering pass per simulated image at all.
-float fuseClipSlope(float t, float centre, FusePlan p)
+float fuseClipSlope(float t, float center, FusePlan p)
 {
-    const float m = abs(t - centre);
+    const float m = abs(t - center);
     if (m <= p.beta * 0.5f) return 1.0f;
 
     const float b = p.beta * 0.5f - p.lambda;
@@ -83,7 +83,7 @@ float fuseWellExposed(float t, FusePlan p)
     return exp(-(d * d) / (2.0f * p.sigma * p.sigma));
 }
 
-/// The unnormalised weight of image k.
+/// The unnormalized weight of image k.
 float fuseWeight(float t, int k, FusePlan p)
 {
     return fuseWellExposed(fuseRemap(t, k, p), p) * fuseContrast(t, k, p);

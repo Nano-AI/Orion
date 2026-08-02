@@ -59,7 +59,7 @@ struct BayerImage {
     /// the CFA cell by cell — so each channel gets its own value rather than the
     /// mean of four. Larger patterns (X-Trans is 6x6) are averaged, and X-Trans
     /// is rejected at decode anyway. Averaging a 2x2 pattern with real spread
-    /// leaves a colour cast in the deep shadows that no control can remove.
+    /// leaves a color cast in the deep shadows that no control can remove.
     ///
     /// `cblack` is LibRaw's `imgdata.color.cblack`: [0..3] per channel,
     /// [4] pattern rows, [5] pattern columns, [6...] the pattern itself in
@@ -110,7 +110,7 @@ BayerImage decodeBayer(const std::string& path);
 /// ⚠ **The CFA phase must survive.** A Bayer mosaic is only meaningful with its
 /// pattern: sample it on any stride that is not a multiple of the 2x2 cell and
 /// the red pixels land where the demosaic expects green. The result does not
-/// look soft, it looks like a colour-swapped nightmare — and `filters` would
+/// look soft, it looks like a color-swapped nightmare — and `filters` would
 /// still say the pattern was intact, so nothing downstream would notice.
 ///
 /// So the output is built cell by cell: output cell (I, J) averages the input

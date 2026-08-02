@@ -1,4 +1,4 @@
-// Hue/sat maps, colour grading, tone bands, local adjustments, lens auto-scale.
+// Hue/sat maps, color grading, tone bands, local adjustments, lens auto-scale.
 //
 // Split out of main.cpp 2026-07-31; see harness.h.
 
@@ -56,7 +56,7 @@ void testHueSatMapGpu() {
         checkNear(red[1], 1.0, 1e-6, "red's saturation is untouched");
         const auto blue = entry(252, huesat::kSatDivisions - 1);
         checkNear(blue[0], huesat::blueSky().hueShiftDeg, 0.35,
-                  "the blue centre carries the fitted rotation");
+                  "the blue center carries the fitted rotation");
     }
 
     constexpr std::uint32_t kW = 64, kH = 4;
@@ -96,9 +96,9 @@ void testHueSatMapGpu() {
     }
 
     // Row 0 a neutral ramp, row 1 sky blue, row 2 foliage green, row 3 skin.
-    // The three colours are ordinary linear Rec.2020 values; what matters is
+    // The three colors are ordinary linear Rec.2020 values; what matters is
     // that only one of them is in the corrected hue region.
-    const double colours[4][3] = {
+    const double colors[4][3] = {
         {0.0, 0.0, 0.0},                 // filled per column below
         {0.09, 0.13, 0.30},              // saturated blue, the sky's shape
         {0.06, 0.11, 0.03},              // foliage
@@ -111,7 +111,7 @@ void testHueSatMapGpu() {
         for (std::uint32_t y = 0; y < kH; ++y) {
             const std::size_t i = (std::size_t(y) * kW + x) * 4;
             for (int c = 0; c < 3; ++c) {
-                const double v = (y == 0) ? level : colours[y][c] * level * 3.0;
+                const double v = (y == 0) ? level : colors[y][c] * level * 3.0;
                 input[i + c] = static_cast<__fp16>(v);
             }
             input[i + 3] = 1;
@@ -161,7 +161,7 @@ void testHueSatMapGpu() {
             for (int c = 0; c < 3; ++c)
                 worstTint = std::max(worstTint, std::abs(p[c] - mean) / std::max(1e-4, mean));
         }
-        checkNear(worstTint, 0.0, 6e-3, "a grey ramp comes through grey at every level");
+        checkNear(worstTint, 0.0, 6e-3, "a gray ramp comes through gray at every level");
 
         // 3. Blue moves, and the other hues do not.
         const std::uint32_t mid = kW / 2;
@@ -186,7 +186,7 @@ void testHueSatMapGpu() {
 }
 
 void testColorGradeGpu() {
-    section("Colour grading (GPU)");
+    section("Color grading (GPU)");
 
     constexpr std::uint32_t kW = 64, kH = 8;
 
@@ -244,7 +244,7 @@ void testColorGradeGpu() {
         return (std::abs(r - mean) + std::abs(gg - mean) + std::abs(b - mean)) / 3.0 / mean;
     };
 
-    // Every wheel centred is the identity, exactly. The node is disabled in
+    // Every wheel centerd is the identity, exactly. The node is disabled in
     // that state, but a disabled node passes its input through — so if this
     // were not an identity, enabling grading would visibly jump.
     run();
@@ -253,11 +253,11 @@ void testColorGradeGpu() {
         worstIdentity = std::max(worstIdentity,
                                  std::abs(double(out[i]) - double(input[i])));
     }
-    report(worstIdentity < 1e-3, "every wheel centred is the identity",
+    report(worstIdentity < 1e-3, "every wheel centerd is the identity",
            "worst " + std::to_string(worstIdentity));
 
-    // Columns at the zone centres, in EV relative to middle gray. The zones
-    // are Gaussian bands on log2(Y/0.18) centred at -2.5 / 0 / +2.5, the same
+    // Columns at the zone centers, in EV relative to middle gray. The zones
+    // are Gaussian bands on log2(Y/0.18) centerd at -2.5 / 0 / +2.5, the same
     // partition-of-unity construction the tone controls use.
     const auto columnAtEv = [&](double ev) {
         const double want = 0.18 * std::pow(2.0, ev);
@@ -316,7 +316,7 @@ void testColorGradeGpu() {
 
     // ── Zero-sum survives, including in deep shadow ──────────────────────
     //
-    // A wheel is a colour control, not a brightness one, so the mean of the
+    // A wheel is a color control, not a brightness one, so the mean of the
     // three channels must not move. It used to, below about a fiftieth of
     // middle gray: the offset was a constant larger than the pixel, the
     // negative channels stuck at the shader's zero clamp, the sum stopped
@@ -590,7 +590,7 @@ void testLocalAdjustments() {
     auto dst  = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
     auto mask = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
 
-    // A tinted mid-grey everywhere, so saturation and a colour cast both have
+    // A tinted mid-gray everywhere, so saturation and a color cast both have
     // something to act on. Constant, because what is being measured is the
     // coverage ramp rather than a response to the picture.
     constexpr double kR = 0.22, kG = 0.18, kB = 0.14;
@@ -662,7 +662,7 @@ void testLocalAdjustments() {
     // ── Contrast pivots where the display transform pivots ────────────────
     //
     // A gain on the pixel's distance from -2.5 in log2, so the answer at full
-    // coverage is exactly 2^((ev + 2.5) * k) times the input. The tinted grey
+    // coverage is exactly 2^((ev + 2.5) * k) times the input. The tinted gray
     // sits above the pivot, so a positive contrast brightens it.
     {
         la.layerContrast[0] = 0.5f;
@@ -693,17 +693,17 @@ void testLocalAdjustments() {
         report(spread < 2e-3, "full negative saturation reaches neutral",
                std::to_string(spread));
         report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
-               "and does it at the pixel's own luminance, not at grey",
+               "and does it at the pixel's own luminance, not at gray",
                std::to_string(luma(x)) + " against " + std::to_string(baseLuma));
         la.layerSaturation[0] = 0.0f;
     }
 
-    // ── ⚠ The colour cast moves colour and not exposure ───────────────────
+    // ── ⚠ The color cast moves color and not exposure ───────────────────
     //
-    // The channels are renormalised on luminance afterwards, or Warmth would
+    // The channels are renormalized on luminance afterwards, or Warmth would
     // double as a brightness slider and the two controls would fight over the
     // same pixels. The first version of the shader read the luminance on both
-    // sides of the cast from the same already-cast colour, so the ratio was one
+    // sides of the cast from the same already-cast color, so the ratio was one
     // and the line did nothing — this is the check that would have caught it.
     {
         la.layerWarmth[0] = 1.0f;

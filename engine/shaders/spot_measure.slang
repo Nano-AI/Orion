@@ -22,7 +22,7 @@ struct SpotMeasureParams
     int   count;       // live spots
     int   samples;     // rim samples per spot
 
-    // Destination centre, then source centre, both normalized. Radius is in
+    // Destination center, then source center, both normalized. Radius is in
     // normalized *x*, converted to pixels against the frame's width so a spot
     // is round rather than an ellipse on a non-square frame — the same trap the
     // brush nib fell into.

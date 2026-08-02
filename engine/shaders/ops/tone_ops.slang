@@ -40,7 +40,7 @@ float3 applyExposure(float3 c, float ev)
 // before, double-counts wherever two bands overlap and produces a brightness
 // spike there. Summing exponents under normalized weights cannot.
 //
-// Highlights and shadows read the guided-filter estimate of the neighbourhood;
+// Highlights and shadows read the guided-filter estimate of the neighborhood;
 // whites and blacks read the pixel. That split is confirmed correct by the
 // research: the first pair adjusts the base layer so detail survives, the
 // second sets the display endpoints and must stay global, or extreme contrast
@@ -72,7 +72,7 @@ float3 applyTone(float3 c, float guideEv,
     const float ev      = log2(y / 0.18f);
     const float evLocal = guideEv - log2(0.18f);
 
-    // Local bands read the neighbourhood; endpoint bands read the pixel.
+    // Local bands read the neighborhood; endpoint bands read the pixel.
     const float wShadows    = bandWeight(evLocal, kEvShadows);
     const float wHighlights = bandWeight(evLocal, kEvHighlights);
     const float wBlacks     = bandWeight(ev, kEvBlacks);

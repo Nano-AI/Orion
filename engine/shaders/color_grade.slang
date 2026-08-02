@@ -12,7 +12,7 @@
 // contrast.
 //
 // This runs in scene-linear light, before the display transform. Grading after
-// a filmic shoulder — which is where a colour balance control sits in a
+// a filmic shoulder — which is where a color balance control sits in a
 // display-referred editor — means the same offset does something different to a
 // highlight than to a midtone for reasons unrelated to the zone the user chose.
 
@@ -22,7 +22,7 @@ struct GradeParams
     float _pad0, _pad1;
 
     // Offsets are already zero-sum, computed on the host from each wheel's
-    // angle and radius. Zero-sum is what makes a wheel a colour control and not
+    // angle and radius. Zero-sum is what makes a wheel a color control and not
     // a brightness one; the .w of each carries that zone's slope.
     float4 shadow;      // rgb offset, w = slope
     float4 midtone;
@@ -47,11 +47,11 @@ float luma2020(float3 c)
 // a stop and a half above middle gray. Measured on two frames lifted 5.5 EV,
 // the highlight wheel moved mean chroma by -0.0000 and +0.0001. Inert.
 //
-// Gaussian bands normalised to a partition of unity, which is the same
+// Gaussian bands normalized to a partition of unity, which is the same
 // construction the tone controls use for exactly the same reason
 // (ops/tone_ops.slang, deep-research-2026-07-27.md §3): summed weights of one
 // everywhere are what make an untouched image come back unchanged, and a
-// Gaussian has no corner where two zones meet. Centres one stop either side of
+// Gaussian has no corner where two zones meet. Centers one stop either side of
 // the tone controls' own inner pair, and the same sigma, so the two sets of
 // bands describe the same picture.
 static const float kEvShadow    = -2.5f;
@@ -59,9 +59,9 @@ static const float kEvMidtone   =  0.0f;   // middle gray, where it belongs
 static const float kEvHighlight =  2.5f;
 static const float kZoneSigma   =  1.6f;
 
-float zoneWeight(float ev, float centre)
+float zoneWeight(float ev, float center)
 {
-    const float d = (ev - centre) / kZoneSigma;
+    const float d = (ev - center) / kZoneSigma;
     return exp(-0.5f * d * d);
 }
 

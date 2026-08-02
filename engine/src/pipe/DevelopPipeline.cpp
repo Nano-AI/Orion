@@ -371,7 +371,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::R16Float, {}});
 
     // Back onto the picture as one scale factor per pixel, which is Paris et
-    // al.'s colour ratios and is what keeps hue and saturation still.
+    // al.'s color ratios and is what keeps hue and saturation still.
     //
     // First input is the profile output on purpose: a disabled node resolves
     // to its first input, so clarity at zero costs exactly nothing.
@@ -514,7 +514,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         // one-way stamp.
         auxDabs_[i] = pipeline_.addAuxTexture(params::kDabStride, params::kDabRows,
                                               PixelFormat::RGBA32Float);
-        // One box per run of 64 dabs: (minX, minY, maxX, maxY) of the centres.
+        // One box per run of 64 dabs: (minX, minY, maxX, maxY) of the centers.
         // 256 texels, 4 KB. research/brush-acceleration.md.
         //
         // ⚠ A texture rather than the parameter block, and not the dab's spare
@@ -588,7 +588,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
-    // in scene-linear light. After the transform — where a colour balance
+    // in scene-linear light. After the transform — where a color balance
     // control usually lives in a display-referred editor — the same offset
     // would do something different to a highlight than to a midtone for
     // reasons unrelated to the zone the user picked.
@@ -621,7 +621,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     // The grain plate: a stacked mip chain in one texture, uploaded once and
     // never touched again. See GrainPlate.h for why the chain is stacked by
-    // hand rather than mipmapped, and why the levels are not renormalised.
+    // hand rather than mipmapped, and why the levels are not renormalized.
     auxGrainPlate_ = pipeline_.addAuxTexture(grain::kPlateSize, grain::kPlateHeight,
                                              PixelFormat::R32Float);
     nGrain_ = pipeline_.add({"develop:grain", "grain", {nDisplay_},
@@ -692,9 +692,9 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
 }
 
 void DevelopPipeline::gradeOffsets(float x, float y, float out[3]) noexcept {
-    // The puck's angle picks a hue; its distance from the centre picks how far.
+    // The puck's angle picks a hue; its distance from the center picks how far.
     // Each primary contributes by the cosine of its angular distance, which is
-    // the standard three-phase decomposition a colour wheel implies.
+    // the standard three-phase decomposition a color wheel implies.
     const float radius = std::min(std::sqrt(x * x + y * y), 1.0f);
     if (radius < 1e-6f) {
         out[0] = out[1] = out[2] = 0.0f;
@@ -710,9 +710,9 @@ void DevelopPipeline::gradeOffsets(float x, float y, float out[3]) noexcept {
         v[c] = std::cos(theta - float(c) * kTwoPiOverThree);
     }
 
-    // Subtracting the mean is what makes this a colour control. Without it,
+    // Subtracting the mean is what makes this a color control. Without it,
     // pushing toward yellow also lifts the zone, so every wheel fights the
-    // exposure slider and a neutral grey no longer keeps its luminance.
+    // exposure slider and a neutral gray no longer keeps its luminance.
     //
     // It also means some component of every offset is negative, which is why
     // kStrength is 0.03 and not the 0.15 it started at. This is scene-linear
@@ -776,7 +776,7 @@ std::pair<float, float> DevelopPipeline::displayedToFrame(float x, float y) cons
         lastAdj_.straightenDeg * 3.14159265358979324f / 180.0f,
         lastAdj_.cropX + lastAdj_.cropW * 0.5f,
         lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH);
-    return {p.centreX, p.centreY};
+    return {p.centerX, p.centerY};
 }
 
 std::pair<float, float> DevelopPipeline::frameToDisplayed(float x, float y) const {
@@ -790,7 +790,7 @@ std::pair<float, float> DevelopPipeline::frameToDisplayed(float x, float y) cons
         lastAdj_.straightenDeg * 3.14159265358979324f / 180.0f,
         lastAdj_.cropX + lastAdj_.cropW * 0.5f,
         lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH);
-    return {p.centreX, p.centreY};
+    return {p.centerX, p.centerY};
 }
 
 bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
@@ -1002,7 +1002,7 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
         // 0.01 is the compromise, and it is a tenth of a stop of spread. A step
         // of height h across half a window has variance h^2/4, so the filter
         // follows a half-stop edge at a = 0.86 and ignores a tenth-stop one at
-        // a = 0.2 — which is the behaviour wanted, since a mask boundary is
+        // a = 0.2 — which is the behavior wanted, since a mask boundary is
         // placed against a subject and not against texture. A quarter of the
         // recovery chain's 0.04, because feathering should follow weaker edges
         // than tone recovery should. Orion's own number: UNSOURCED.md §19.
@@ -1117,7 +1117,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         }
     }
 
-    // ── Colour grading ───────────────────────────────────────────────────
+    // ── Color grading ───────────────────────────────────────────────────
     const auto zoneMoved = [](const float a[3], const float b[3]) {
         return a[0] != b[0] || a[1] != b[1] || a[2] != b[2];
     };
@@ -1595,7 +1595,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         if (m.startsLayer != 0) m.compose = int(params::MaskCompose::Add);
 
         const auto placed = mask::toFrame(
-            {c.centre[0], c.centre[1], c.angle}, crop, turns,
+            {c.center[0], c.center[1], c.angle}, crop, turns,
             adj.straightenDeg * 3.14159265358979324f / 180.0f,
             adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
             rotW, rotH);
@@ -1604,35 +1604,35 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         m.rangeHi = c.rangeHi;
         m.rangeSoft = c.rangeSoft;
 
-        // ⚠ No exposure bias on the colour band, unlike the luminance one. The
+        // ⚠ No exposure bias on the color band, unlike the luminance one. The
         // metric is Oklab chromaticity, which is exactly invariant under a
         // multiply — so the exposure slider cannot move it, and the number set
         // against the picture is the number the kernel wants. That is also why
         // `adj.exposureEv` being in the staleness comparison above is harmless
-        // here: it re-pushes a block whose colour fields did not change.
-        m.colourR = c.colour[0];
-        m.colourG = c.colour[1];
-        m.colourB = c.colour[2];
-        m.colourTol  = c.colourTol;
-        m.colourSoft = c.colourSoft;
+        // here: it re-pushes a block whose color fields did not change.
+        m.colorR = c.color[0];
+        m.colorG = c.color[1];
+        m.colorB = c.color[2];
+        m.colorTol  = c.colorTol;
+        m.colorSoft = c.colorSoft;
         // Stops as displayed rather than as captured — see the kind-5 branch.
         m.rangeBias = adj.exposureEv + kBaselineExposureEv;
 
         m.matteSize[0] = matteLive_[std::size_t(i)][0];
         m.matteSize[1] = matteLive_[std::size_t(i)][1];
 
-        m.centre[0] = placed.centreX; m.centre[1] = placed.centreY;
+        m.center[0] = placed.centerX; m.center[1] = placed.centerY;
         mask::radiusToFrame(c.radius[0], c.radius[1], crop, m.semi[0], m.semi[1]);
         m.angle     = placed.angle;
 
-        // A linear gradient's endpoints, from the *placed* centre and angle.
-        // Half the length either side, so rotating about the centre does not
+        // A linear gradient's endpoints, from the *placed* center and angle.
+        // Half the length either side, so rotating about the center does not
         // also move the ramp.
         const float len = mask::lengthToFrame(c.length, crop);
         const float dx = std::cos(m.angle) * len * 0.5f;
         const float dy = std::sin(m.angle) * len * 0.5f;
-        m.zero[0] = m.centre[0] - dx; m.zero[1] = m.centre[1] - dy;
-        m.full[0] = m.centre[0] + dx; m.full[1] = m.centre[1] + dy;
+        m.zero[0] = m.center[0] - dx; m.zero[1] = m.center[1] - dy;
+        m.full[0] = m.center[0] + dx; m.full[1] = m.center[1] + dy;
         m.feather   = c.feather;
         m.roundness = c.roundness;
 
@@ -1650,7 +1650,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             // it on every tick would dirty the mask node on every tick, which
             // is the cost this graph exists to avoid.
             //
-            // The geometry counts as a change: every centre goes through
+            // The geometry counts as a change: every center goes through
             // `mask::toFrame`, so a crop or a quarter turn moves all of them.
             const bool dabsStale =
                 first || frameMoved ||
@@ -1664,7 +1664,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                     std::size_t(params::kDabStride) * params::kDabRows * 4, 0.0f);
                 for (int d = 0; d < m.count; ++d) {
                     // Every dab goes through the *same* transform the gradient's
-                    // centre does, and it did not before: the centres were
+                    // center does, and it did not before: the centers were
                     // copied straight from displayed coordinates into the
                     // shader, so a stroke ignored the crop and the rotation.
                     //
@@ -1683,8 +1683,8 @@ void DevelopPipeline::apply(const Adjustments& adj) {
                     const float erasing =
                         (std::size_t(d) < signs.size() && signs[std::size_t(d)] != 0.0f)
                             ? 1.0f : 0.0f;
-                    texels[std::size_t(d) * 4 + 0] = p.centreX;
-                    texels[std::size_t(d) * 4 + 1] = p.centreY;
+                    texels[std::size_t(d) * 4 + 0] = p.centerX;
+                    texels[std::size_t(d) * 4 + 1] = p.centerY;
                     texels[std::size_t(d) * 4 + 2] = erasing;
                 }
                 pipeline_.updateAux(auxDabs_[std::size_t(i)], texels.data(),
@@ -1797,7 +1797,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             // converted once by `displayedToFrame` when it was placed — because
             // dust is on the sensor and has to follow the subject through a
             // later crop or turn. Converting on every render would give a mask's
-            // behaviour instead, which is to stay put on screen.
+            // behavior instead, which is to stay put on screen.
             //
             // It also keeps the geometry out of the staleness comparison below,
             // which is a trap this file has fallen into twice already.
@@ -1827,7 +1827,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     // The failure this avoids is silent and ugly: a disabled node resolves to
     // its producer, so with highlights and shadows at zero the refine chain
     // would have been handed `huesat`'s RGBA16F output through a
-    // `Texture2D<float2>` binding and read colour components as a luminance and
+    // `Texture2D<float2>` binding and read color components as a luminance and
     // its square. Not a crash — a plausible-looking wrong mask.
     if (first || (needsGuide || refining) !=
                  ((lastAdj_.highlights != 0.0f || lastAdj_.shadows != 0.0f) ||
@@ -2077,7 +2077,7 @@ void DevelopPipeline::setCreativeLut(const CubeLut& lut) {
                 // width — `b * n + g` is what the shader recomputes, and the
                 // texture is merely wide enough to hold the largest one. Using
                 // the width here instead puts every blue slice in the wrong
-                // place, which reads as a plausible colour cast rather than as
+                // place, which reads as a plausible color cast rather than as
                 // an obvious break.
                 const std::size_t src =
                     ((static_cast<std::size_t>(b) * n + g) * n + r) * 3;
@@ -2173,7 +2173,7 @@ void DevelopPipeline::pushGrainParams(const Adjustments& adj) {
     g.amount    = std::max(adj.grainAmount, 0.0f);
     // ⚠ Clamped, not just guarded against zero. `kGrainSizeMin` is above 1.0
     // because a rate of exactly one plate texel per frame pixel interpolates
-    // nothing and comes back 14% louder than its neighbours on the slider.
+    // nothing and comes back 14% louder than its neighbors on the slider.
     g.grainSize = std::clamp(adj.grainSize, params::kGrainSizeMin, params::kGrainSizeMax);
     g.gridStep  = gridStep_;
     pipeline_.setParams(nGrain_, &g, sizeof(g));

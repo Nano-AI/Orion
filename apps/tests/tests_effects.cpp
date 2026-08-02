@@ -100,7 +100,7 @@ void testOutputDepth() {
 /// The case that produced a purple halo around every light in a night shot.
 /// The fit that recovers a clipped channel has to be anchored on pixels near
 /// the saturation boundary — Masood et al.'s Ω. Anchored on the general
-/// neighbourhood instead, which around a small light at night is nearly all
+/// neighborhood instead, which around a small light at night is nearly all
 /// dark background, it learns the background's channel balance and then
 /// extrapolates it out to highlight brightness, which is a long way past any
 /// data it saw.
@@ -378,7 +378,7 @@ void testLocalLaplacianGpu() {
     // ── alpha = 1 is the identity, and proves the pyramid round-trips ──────
     //
     // With fd(D) = D the remapping is exactly r(i) = i, so the whole chain
-    // reduces to "analyse into a Laplacian pyramid, collapse it again". That
+    // reduces to "analyze into a Laplacian pyramid, collapse it again". That
     // has to return the input to the precision of the storage — and if the
     // downsample and the expand disagree even slightly, this is where it shows.
     // Every other check in this function would still pass with a subtly wrong

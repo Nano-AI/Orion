@@ -145,15 +145,15 @@ BayerImage decodeBayer(const std::string& path) {
     // ── What this decoder can and cannot take ──────────────────────────────
     //
     // Each of these produces a *specific* message rather than a wrong picture.
-    // The demosaic assumes a 2x2 mosaic of three colours; every case below
+    // The demosaic assumes a 2x2 mosaic of three colors; every case below
     // breaks that assumption in a different way, and two of them would render
-    // silently — a scrambled X-Trans frame and a four-colour sensor's cast both
+    // silently — a scrambled X-Trans frame and a four-color sensor's cast both
     // look like a bug in the pipeline rather than an unsupported file.
     if (proc.imgdata.rawdata.raw_image == nullptr) {
-        const bool threeColour = proc.imgdata.rawdata.color3_image != nullptr;
-        const bool fourColour  = proc.imgdata.rawdata.color4_image != nullptr;
+        const bool threeColor = proc.imgdata.rawdata.color3_image != nullptr;
+        const bool fourColor  = proc.imgdata.rawdata.color4_image != nullptr;
         proc.recycle();
-        if (threeColour || fourColour) {
+        if (threeColor || fourColor) {
             throw std::runtime_error(
                 "this file is already demosaiced (a linear DNG or a Foveon "
                 "frame). Orion develops mosaic data — open the camera's "
@@ -171,7 +171,7 @@ BayerImage decodeBayer(const std::string& path) {
     }
     if (idata.filters == 0) {
         proc.recycle();
-        throw std::runtime_error("this file has no colour filter array");
+        throw std::runtime_error("this file has no color filter array");
     }
     // cdesc names the four mosaic positions. Anything but RGB-with-two-greens
     // (RGBE on some early bodies, CMYG on older camcorder sensors) needs a
@@ -182,7 +182,7 @@ BayerImage decodeBayer(const std::string& path) {
         proc.recycle();
         throw std::runtime_error(
             "this sensor's filter array is " + desc +
-            ", not RGB. Orion supports three-colour Bayer sensors");
+            ", not RGB. Orion supports three-color Bayer sensors");
     }
 
     BayerImage out;

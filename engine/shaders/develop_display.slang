@@ -31,7 +31,7 @@ struct DisplayParams
 ///
 /// Kasson, Nin, Plouffe & Hafner compared the ways a cube can be subdivided for
 /// three-dimensional interpolation; tetrahedral is the one that wins, and it is
-/// what colour management has used since. research/luts.md.
+/// what color management has used since. research/luts.md.
 ///
 /// Why not the hardware's trilinear filtering, which is free: trilinear is a
 /// different function, not a cheaper implementation of the same one. It reads

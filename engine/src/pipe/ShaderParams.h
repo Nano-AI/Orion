@@ -78,7 +78,7 @@ struct LinearAdjust {
     float         layerExposureEv[4];
     float         layerContrast[4];
     float         layerSaturation[4];
-    /// A colour cast, not a white balance: temperature and tint are applied
+    /// A color cast, not a white balance: temperature and tint are applied
     /// before the demosaic and cannot be local.
     float         layerWarmth[4];
     float         layerTint[4];
@@ -213,7 +213,7 @@ struct alignas(16) Display {
 };
 static_assert(sizeof(Display) == 80);
 
-/// Three-way colour grading. Mirrors GradeParams in color_grade.slang.
+/// Three-way color grading. Mirrors GradeParams in color_grade.slang.
 /// Each row is an already zero-sum RGB offset with that zone's slope in w.
 struct alignas(16) Grade {
     std::uint32_t size[2];
@@ -493,10 +493,10 @@ static_assert(kDabBlock == 64, "mask_component.slang DAB_BLOCK must match");
 ///
 /// `texels` is the RGBA32F dab texture's contents, four floats a dab, and
 /// `bounds` receives `kMaxDabBlocks` × 4 floats: `(minX, minY, maxX, maxY)` of
-/// the centres in each run of `kDabBlock`.
+/// the centers in each run of `kDabBlock`.
 ///
 /// ⚠ **It takes the texels, deliberately, rather than the positions they came
-/// from.** The kernel's rejection is bit-identical only because every centre in
+/// from.** The kernel's rejection is bit-identical only because every center in
 /// a block is ≥ that block's stored minimum; a box computed from
 /// higher-precision values before the write can round tighter than the float32
 /// that actually lands in the texture, and the kernel would then skip a dab the
@@ -543,7 +543,7 @@ enum class MaskCompose : std::int32_t { Add = 0, Subtract = 1, Intersect = 2 };
 /// obviously broken.
 ///
 /// **One radius for the whole brush, not one per dab** — that is the research's
-/// own shape, and it is what makes a stroke a few kilobytes of centres rather
+/// own shape, and it is what makes a stroke a few kilobytes of centers rather
 /// than a raster. research/masking.md §1 and §3.
 struct alignas(8) MaskComponent {
     std::uint32_t size[2];
@@ -561,7 +561,7 @@ struct alignas(8) MaskComponent {
     float         _pad;
     float         zero[2];     // linear
     float         full[2];     // linear
-    float         centre[2];   // radial
+    float         center[2];   // radial
     float         semi[2];     // radial semi-axes, normalized
     /// Luminance range (kind 5), in stops — log2 Rec.2020 luminance on the
     /// reference image. Two independent smootherstep edges `rangeSoft` stops
@@ -585,16 +585,16 @@ struct alignas(8) MaskComponent {
     /// allocated for the largest matte a producer might hand over. Zero
     /// disables the branch. research/masking.md §5.
     std::uint32_t matteSize[2];
-    /// Colour range (kind 6): the picked shade, as scene-linear Rec.2020 RGB,
+    /// Color range (kind 6): the picked shade, as scene-linear Rec.2020 RGB,
     /// converted to Oklab chromaticity by the kernel rather than by the host —
     /// one implementation of the transform, so the target and the pixel cannot
-    /// disagree. `colourTol` is a Euclidean radius in (a/L, b/L) and
-    /// `colourSoft` is how far the edge ramps. research/masking.md §4c.
-    float         colourR;
-    float         colourG;
-    float         colourB;
-    float         colourTol;
-    float         colourSoft;
+    /// disagree. `colorTol` is a Euclidean radius in (a/L, b/L) and
+    /// `colorSoft` is how far the edge ramps. research/masking.md §4c.
+    float         colorR;
+    float         colorG;
+    float         colorB;
+    float         colorTol;
+    float         colorSoft;
     /// Non-zero when this component begins a layer — the fold restarts here.
     std::int32_t  startsLayer;
 };
@@ -603,14 +603,14 @@ static_assert(sizeof(MaskComponent) == 152);
 // Metal pads and every field after the first pair shifts.
 static_assert(offsetof(MaskComponent, zero)   == 56);
 static_assert(offsetof(MaskComponent, full)   == 64);
-static_assert(offsetof(MaskComponent, centre) == 72);
+static_assert(offsetof(MaskComponent, center) == 72);
 static_assert(offsetof(MaskComponent, semi)      == 80);
 static_assert(offsetof(MaskComponent, rangeLo)   == 88);
 static_assert(offsetof(MaskComponent, dabStride) == 104);
 static_assert(offsetof(MaskComponent, matteSize) == 120);
-static_assert(offsetof(MaskComponent, colourR)    == 128);
-static_assert(offsetof(MaskComponent, colourTol)  == 140);
-static_assert(offsetof(MaskComponent, colourSoft) == 144);
+static_assert(offsetof(MaskComponent, colorR)    == 128);
+static_assert(offsetof(MaskComponent, colorTol)  == 140);
+static_assert(offsetof(MaskComponent, colorSoft) == 144);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {
@@ -661,7 +661,7 @@ static_assert(sizeof(AtrousShrink) == 32);
 /// changes how big the grain is, not how strong.
 ///
 /// ⚠ The one rate where it does *not* hold is exactly 1.0 frame pixels per
-/// plate texel, where every sample lands on a texel centre, no interpolation
+/// plate texel, where every sample lands on a texel center, no interpolation
 /// happens, and the field comes back at its full 1.0. That is a knife edge —
 /// 1.02 already measures 0.888 — so `kGrainSizeMin` puts it out of reach rather
 /// than leaving a 14% step in the middle of a slider.

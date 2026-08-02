@@ -45,7 +45,7 @@ bool readBack(const std::string& path, int& bitsPerComponent, double rgb[3]) {
 /// the stand-in source below puts in.
 ///
 /// The *field* rather than the EXIF dictionary, because ImageIO writes a small
-/// EXIF block of its own — colour space, pixel dimensions — into every JPEG
+/// EXIF block of its own — color space, pixel dimensions — into every JPEG
 /// whatever it is handed. What matters is whether the camera's data came
 /// across, not whether the container has an EXIF section at all.
 bool metadataBlocks(const std::string& path, bool& gps, bool& exif) {
@@ -139,7 +139,7 @@ bool writeJpegWithGps(const std::string& path, const std::uint16_t* rgba,
 ///
 /// The 2x2 pattern used to be averaged into one number and added to all four
 /// channels. That is wrong whenever the pattern has real spread — it leaves the
-/// spread in the shadows as a colour cast, on every frame, with no control that
+/// spread in the shadows as a color cast, on every frame, with no control that
 /// can remove it. The pattern lines up with the CFA cell for cell, so each
 /// channel can have its own.
 /// The vendored lensfun database, and the name matching that has to survive
@@ -180,7 +180,7 @@ void testLensDatabase() {
     // Nearest-stop is invisible by inspection and obvious here: a lens
     // calibrated at two stops renders every aperture between them identically,
     // then jumps. This asks whether an intermediate aperture lands strictly
-    // between its neighbours.
+    // between its neighbors.
     {
         // A prime with vignetting calibrated at many stops. The Sony zoom
         // above has distortion data but no vignetting, which is common — the
@@ -203,7 +203,7 @@ void testLensDatabase() {
                    std::to_string(a) + " / " + std::to_string(b) + " / " + std::to_string(c));
 
             const bool ordered = (a < b && b < c) || (a > b && b > c);
-            report(ordered, "and lands between its neighbours rather than outside them",
+            report(ordered, "and lands between its neighbors rather than outside them",
                    std::to_string(a) + " / " + std::to_string(b) + " / " + std::to_string(c));
         } else {
             report(false, "the calibrated prime is found at three apertures",
@@ -380,7 +380,7 @@ void testExportFormats() {
 
     // sRGB's full red is inside the gamut of both wider spaces, so expressing
     // it there needs *less* than full red — around 0.92 in P3. A number that
-    // stayed at 1.0 would mean the file had been relabelled rather than
+    // stayed at 1.0 would mean the file had been relabeled rather than
     // converted, which is the failure worth catching: it opens oversaturated
     // in every application that honours the profile.
     report(red[0] > 0.99, "sRGB keeps a saturated red at full",

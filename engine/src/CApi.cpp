@@ -192,8 +192,8 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.invert        = s.invert != 0;
         d.hidden        = s.hidden != 0;
         d.startsLayer   = s.starts_layer != 0;
-        d.centre[0]     = s.centre_x;
-        d.centre[1]     = s.centre_y;
+        d.center[0]     = s.center_x;
+        d.center[1]     = s.center_y;
         d.angle         = s.angle;
         d.length        = s.length;
         d.radius[0]     = s.radius_x;
@@ -203,14 +203,14 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         d.rangeLo       = s.range_lo;
         d.rangeHi       = s.range_hi;
         d.rangeSoft     = s.range_soft;
-        d.colour[0]     = s.colour_r;
-        d.colour[1]     = s.colour_g;
-        d.colour[2]     = s.colour_b;
+        d.color[0]     = s.color_r;
+        d.color[1]     = s.color_g;
+        d.color[2]     = s.color_b;
         // Clamped rather than trusted. A negative tolerance would make the
         // falloff run backwards and select everything *except* the picked
-        // colour, which is a plausible-looking mask and not an obvious break.
-        d.colourTol     = std::clamp(s.colour_tol, 0.0f, 4.0f);
-        d.colourSoft    = std::clamp(s.colour_soft, 1e-4f, 4.0f);
+        // color, which is a plausible-looking mask and not an obvious break.
+        d.colorTol     = std::clamp(s.color_tol, 0.0f, 4.0f);
+        d.colorSoft    = std::clamp(s.color_soft, 1e-4f, 4.0f);
         d.brushRadius   = s.brush_radius;
         d.brushFlow     = s.brush_flow;
         d.brushHardness = s.brush_hardness;
@@ -561,8 +561,8 @@ OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
 }
 
 namespace {
-/// An unknown value falls back to sRGB rather than throwing. A colour space the
-/// facade does not recognise is a caller from a newer build, and refusing the
+/// An unknown value falls back to sRGB rather than throwing. A color space the
+/// facade does not recognize is a caller from a newer build, and refusing the
 /// whole export over it would be worse than writing the safe one.
 orion::util::ColorSpace toColorSpace(int32_t v) {
     switch (v) {

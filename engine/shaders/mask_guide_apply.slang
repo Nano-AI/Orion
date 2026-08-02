@@ -20,7 +20,7 @@
 //     bright or dark rim exactly where the filter was supposed to help.
 //
 //   - `strength` blends between the mask as placed and the refined one, so the
-//     control degrades continuously to the old behaviour at zero rather than
+//     control degrades continuously to the old behavior at zero rather than
 //     switching between two masks. At zero the node is disabled outright and
 //     costs nothing but its texture.
 

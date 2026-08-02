@@ -6,7 +6,7 @@
  *  research/exposure-fusion.md carries the quotations these came from.
  *
  *  Everything here works on an intensity `t` in [0, 1]. That is the domain the
- *  method is defined in — the restrained-range centre, the well-exposedness
+ *  method is defined in — the restrained-range center, the well-exposedness
  *  Gaussian at 0.5 and the median-derived split all assume it — so the mapping
  *  from Orion's scene-linear light into this domain is a separate decision made
  *  at the call site, not smuggled in here.
@@ -29,7 +29,7 @@ inline constexpr float kAlphaDefault = 8.0f;
 
 /// The restrained dynamic range. beta = 1 makes `g` the identity and the method
 /// degenerates to plain exposure fusion ([H278] Fig. 5), which is exactly the
-/// behaviour with the halo and out-of-range artefacts this paper exists to fix.
+/// behavior with the halo and out-of-range artifacts this paper exists to fix.
 inline constexpr float kBeta = 0.5f;
 
 /// Decay speed of the smooth clip. Fixed by the authors and not exposed.
@@ -42,7 +42,7 @@ inline constexpr float kSigma = 0.2f;
 inline constexpr float kRobustClip = 0.01f;
 
 /// The proxy curve's half-width, in stops. `t = 0.5 + 0.5·tanh(log2(Y/0.18)/s)`
-/// puts middle grey at 0.5 and reaches 0.88 at four stops over, 0.98 at eight —
+/// puts middle gray at 0.5 and reaches 0.88 at four stops over, 0.98 at eight —
 /// so a photographic range lands inside the interval the method was validated
 /// on, without the shoulder being so hard that highlight detail collapses into
 /// one value. ⚠️ Ours; see research/UNSOURCED.md.
@@ -68,7 +68,7 @@ struct Plan {
     [[nodiscard]] bool valid() const noexcept { return images >= 2; }
 };
 
-/// [H279] Eq. (4). The centre of image k's valid range, walking from near the
+/// [H279] Eq. (4). The center of image k's valid range, walking from near the
 /// top of the range down to near the bottom as k increases.
 [[nodiscard]] inline float rho(int k, const Plan& p, float beta) noexcept {
     const int total = p.bright + p.dark;          // M - 1, at least 1
@@ -97,21 +97,21 @@ struct Plan {
 /// C¹ at the join by construction: at |t - rho| = beta/2 the tail evaluates
 /// lambda²/lambda = lambda, so a - lambda = beta/2, and both branches have
 /// slope one there.
-[[nodiscard]] inline float clip(float t, float centre, float beta, float lambda) noexcept {
-    const float d = t - centre;
+[[nodiscard]] inline float clip(float t, float center, float beta, float lambda) noexcept {
+    const float d = t - center;
     const float m = std::fabs(d);
     if (m <= beta * 0.5f) return t;
 
     const float a = beta * 0.5f + lambda;
     const float b = beta * 0.5f - lambda;
-    return (d < 0.0f ? -1.0f : 1.0f) * (a - lambda * lambda / (m - b)) + centre;
+    return (d < 0.0f ? -1.0f : 1.0f) * (a - lambda * lambda / (m - b)) + center;
 }
 
 /// [H279] Eq. (10). The derivative of `clip`, which is the whole contrast
 /// measure — Hessel & Morel replace Mertens' Laplacian filter with it, so there
 /// is no filtering pass per simulated image at all.
-[[nodiscard]] inline float clipSlope(float t, float centre, float beta, float lambda) noexcept {
-    const float m = std::fabs(t - centre);
+[[nodiscard]] inline float clipSlope(float t, float center, float beta, float lambda) noexcept {
+    const float m = std::fabs(t - center);
     if (m <= beta * 0.5f) return 1.0f;
 
     const float b = beta * 0.5f - lambda;
@@ -184,11 +184,11 @@ struct Plan {
         const float slope  = (beta - 1.0f) / float(images - 1);
 
         const float upperOfBrighter = (1.0f + slope * float(dark + 1)) / lambda;
-        const float upperOfCentre   =  1.0f + slope * float(dark);
-        const float lowerOfCentre   =  1.0f - beta + slope * float(dark);
+        const float upperOfCenter   =  1.0f + slope * float(dark);
+        const float lowerOfCenter   =  1.0f - beta + slope * float(dark);
         const float lowerOfDarker   = (-beta + slope * float(dark - 1)) / lambda + 1.0f;
 
-        if (upperOfBrighter > lowerOfCentre && upperOfCentre > lowerOfDarker) return p;
+        if (upperOfBrighter > lowerOfCenter && upperOfCenter > lowerOfDarker) return p;
     }
     // Every simulated image is a pyramid, so the search is bounded; the largest
     // set is the closest to satisfying the condition.
@@ -198,7 +198,7 @@ struct Plan {
 // ── The reference ─────────────────────────────────────────────────────────
 //
 // Mertens' blend, on one channel: a Laplacian pyramid per simulated image,
-// weighted by the Gaussian pyramid of that image's normalised weight, summed
+// weighted by the Gaussian pyramid of that image's normalized weight, summed
 // per level and collapsed. Slow and literal; it exists to be the thing the GPU
 // is measured against.
 
@@ -212,7 +212,7 @@ inline constexpr float kWeightEpsilon = 1e-6f;
                                               float sigma, int levels) {
     const std::size_t n = v.v.size();
 
-    // Weights first, so they can be normalised across the set before anything
+    // Weights first, so they can be normalized across the set before anything
     // is decomposed.
     std::vector<std::vector<float>> weight;
     std::vector<float> total(n, 0.0f);
@@ -275,7 +275,7 @@ inline constexpr float kWeightEpsilon = 1e-6f;
 /// [HM20] section 4 — stretch to [0, 1] allowing `clip` at each end. Not
 /// optional: this method stretches rather than compresses, so the fused result
 /// leaves the range by construction.
-inline void robustNormalise(pyr::Plane& v, float clipFraction) {
+inline void robustNormalize(pyr::Plane& v, float clipFraction) {
     if (v.v.empty()) return;
     std::vector<float> sorted = v.v;
     std::sort(sorted.begin(), sorted.end());

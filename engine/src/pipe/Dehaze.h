@@ -51,7 +51,7 @@ inline constexpr float kEpsilon = 1e-3f;
 /// Filter"). Same reasoning, and the same value, as the tone chain's.
 inline constexpr int kGuideScale = 4;
 
-/// One pooled candidate: the block's largest dark-channel value, and the colour
+/// One pooled candidate: the block's largest dark-channel value, and the color
 /// of the pixel that produced it.
 struct Candidate {
     float dark = 0.0f;

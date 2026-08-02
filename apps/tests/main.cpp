@@ -55,7 +55,7 @@ int main() {
     testMaskGeometryInverse();
     testLocalAdjustments();
     testMaskRangeGpu();
-    testMaskColourGpu();
+    testMaskColorGpu();
     testBayerDecimation();
     testSpotRemovalGpu();
     testBrushDabsFollowTheFrame();

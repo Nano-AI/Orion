@@ -151,8 +151,8 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
     // returns nonsense, including NaN, which is the same trap already recorded
     // in the bench's `output16`.
     //
-    // The consequence was not a wrong colour, it was a *silent* one: the
-    // colour-mixer eyedropper asks for this pixel's hue, `TargetedAdjust.hue`
+    // The consequence was not a wrong color, it was a *silent* one: the
+    // color-mixer eyedropper asks for this pixel's hue, `TargetedAdjust.hue`
     // correctly refuses a pixel with no hue to speak of, and NaN reads as no
     // hue. So the eyedropper picked nothing, said nothing, and looked broken.
     if (outDisplay) {
@@ -180,7 +180,7 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
     // through, and not a hand-rolled inverse.** This undid the quarter turn and
     // nothing else, so on a cropped photograph it read whatever sat at that
     // fraction of the *uncropped* frame: click the yellow car, get the hue of
-    // the tarmac above it. Silent, because the colour-mixer band it picks is
+    // the tarmac above it. Silent, because the color-mixer band it picks is
     // plausible either way, and invisible to `repro/eyedropper-color-mixer.txt`
     // because that scenario never crops. A straighten was wrong the same way.
     if (outScene) {
@@ -260,7 +260,7 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
         adj.whites     = c.whites;
 
         const ae::Stats s = measureNow();
-        if (std::abs(s.median - ae::kMidGrey) < ae::kSettled) break;
+        if (std::abs(s.median - ae::kMidGray) < ae::kSettled) break;
         c = ae::refine(c, s);
     }
 

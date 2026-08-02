@@ -66,7 +66,7 @@ void spotApply(uint3 tid : SV_DispatchThreadID,
         if (coverage <= 0.0f) continue;
 
         // The source pixel for this destination pixel: the same offset from the
-        // source centre as this pixel is from the destination centre.
+        // source center as this pixel is from the destination center.
         const float2 sq = source + (q - dest);
         if (sq.x < 0.0f || sq.x > 1.0f || sq.y < 0.0f || sq.y > 1.0f) continue;
         const int2 sp = int2(clamp(sq * toPx, float2(0.0f, 0.0f), toPx - 1.0f));

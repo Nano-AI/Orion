@@ -76,8 +76,8 @@ typedef struct OrionCurveChannel {
 
 /* One spot: a disc taken from elsewhere in the frame.
  *
- * Both centres are normalized against the frame masks live in, so the same
- * transform that carries a mask's centre from the displayed picture carries a
+ * Both centers are normalized against the frame masks live in, so the same
+ * transform that carries a mask's center from the displayed picture carries a
  * spot. `radius` is in normalized x and is converted against the frame's width,
  * so a spot is a disc rather than an ellipse on a non-square frame. */
 typedef struct OrionSpot {
@@ -97,7 +97,7 @@ typedef struct OrionMaskComponent {
     int   hidden;           /* the eye button: keeps its settings, contributes nothing */
     int   starts_layer;     /* begins a new layer — the fold restarts here */
 
-    float centre_x, centre_y;
+    float center_x, center_y;
     float angle;            /* radians */
     float length;           /* linear: zero-to-full distance */
     float radius_x, radius_y; /* radial semi-axes */
@@ -111,16 +111,16 @@ typedef struct OrionMaskComponent {
     float range_lo, range_hi;
     float range_soft;       /* stops each edge takes to ramp */
 
-    /* Colour range, when kind is 6. The picked shade as scene-linear Rec.2020
+    /* Color range, when kind is 6. The picked shade as scene-linear Rec.2020
      * RGB, plus a Euclidean tolerance in Oklab chromaticity (a/L, b/L) and how
      * far its edge ramps. The kernel does the conversion, so the target and the
      * pixel cannot disagree about what Oklab is. research/masking.md §4c. */
-    float colour_r, colour_g, colour_b;
-    float colour_tol;
-    float colour_soft;
+    float color_r, color_g, color_b;
+    float color_tol;
+    float color_soft;
 
     /* The brush, when kind is 3. One radius for the whole stroke. The dab
-     * centres are not here — they are variable-length, and this struct is
+     * centers are not here — they are variable-length, and this struct is
      * compared field by field on every slider tick. Set them with
      * orion_engine_set_brush_stroke for this component's index and bump
      * brush_revision, which is what tells the engine the stroke is stale.
@@ -176,7 +176,7 @@ typedef struct OrionAdjustments {
      * linear extrapolation, and one asked to reach past its data invents. */
     float highlight_recovery;
 
-    /* Three-way colour grading, ASC CDL per tonal zone. Each triple is a
+    /* Three-way color grading, ASC CDL per tonal zone. Each triple is a
      * wheel's puck position (x, y) in the unit disc, then that zone's
      * luminance slope. research/color-grading.md. */
     float grade_shadow[3];
@@ -220,7 +220,7 @@ typedef struct OrionAdjustments {
     int   mask_count;
     /* One layer's local adjustments, one entry per layer. A layer is a run of
      * mask components with its own coverage, so the subject can be graded one
-     * way and the sky another. All pointwise: warmth and tint are a colour
+     * way and the sky another. All pointwise: warmth and tint are a color
      * cast, NOT a white balance — temperature is applied before the demosaic
      * and cannot be local. research/masking.md §2b. */
     float local_exposure_ev[ORION_MAX_MASK_COMPONENTS];
@@ -330,7 +330,7 @@ OrionStatus orion_engine_quarter_turns(const OrionEngine* engine, int* out_turns
 /* Carries a point on the displayed picture into the frame the mask and spot
  * kernels work in, using the geometry currently set.
  *
- * The same transform mask centres go through. Exposed because a *spot* has to
+ * The same transform mask centers go through. Exposed because a *spot* has to
  * be converted once when it is placed rather than on every render: dust sits on
  * the sensor, so a spot must follow the subject through a later crop or turn,
  * which is the opposite of what a mask does. research/spot-removal.md §4. */

@@ -1,7 +1,7 @@
 // Local Laplacian, step 1 — the channel the filter actually runs on.
 //
-// Paris et al. §5.3 offers two ways to handle colour: remap the RGB vector,
-// which also boosts colour contrast, or "treat only the luminance channel and
+// Paris et al. §5.3 offers two ways to handle color: remap the RGB vector,
+// which also boosts color contrast, or "treat only the luminance channel and
 // reintroduce chrominance after". Their Figure 9 is the side by side, and the
 // second is what their own implementation does. Orion takes it too: a clarity
 // slider that moves hue is a clarity slider that fights the grading wheels.

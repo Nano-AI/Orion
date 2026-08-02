@@ -34,7 +34,7 @@ static const int DAB_BLOCK = 64;
 struct MaskComponentParams
 {
     uint2  size;
-    int    kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 colour
+    int    kind;        // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 color
     int    invert;      // inverts *this component's* coverage, before the fold
 
     int    compose;     // kMaskAdd | kMaskSubtract | kMaskIntersect
@@ -57,7 +57,7 @@ struct MaskComponentParams
 
     float2 zero;        // linear: where the effect is zero
     float2 full;        // linear: where it is full
-    float2 centre;      // radial
+    float2 center;      // radial
     float2 semi;        // radial semi-axes, normalized
 
     /// Luminance range (kind 5), in **stops** — log2 of Rec.2020 luminance on
@@ -84,22 +84,22 @@ struct MaskComponentParams
     /// Zero disables the branch rather than sampling an empty texture.
     uint2  matteSize;
 
-    /// Colour range (kind 6): the picked shade, as scene-linear Rec.2020 RGB.
+    /// Color range (kind 6): the picked shade, as scene-linear Rec.2020 RGB.
     ///
     /// ⚠ Stored as RGB and converted *here*, not converted once on the host.
     /// A host-side conversion would be a second implementation of the Oklab
-    /// transform, and two copies of a colour transform is a thing this codebase
+    /// transform, and two copies of a color transform is a thing this codebase
     /// has been bitten by twice. Twenty flops against a 24 MP pass buys the
     /// guarantee that the target and the pixel cannot disagree.
     /// research/masking.md §4c.
-    float  colourR;
-    float  colourG;
-    float  colourB;
-    /// Euclidean radius in (a/L, b/L). Ordinary photographic colours sit
+    float  colorR;
+    float  colorG;
+    float  colorB;
+    /// Euclidean radius in (a/L, b/L). Ordinary photographic colors sit
     /// 0.12–0.60 apart, so the interesting travel is the first third.
-    float  colourTol;
+    float  colorTol;
     /// How wide the edge ramps, in the same units.
-    float  colourSoft;
+    float  colorSoft;
     /// ⚠ Non-zero when this component **begins a layer**. The fold then starts
     /// from nothing rather than from `src`, so a stack of components becomes
     /// several independent coverages rather than one. A layer is a run of
@@ -107,11 +107,11 @@ struct MaskComponentParams
     int    startsLayer;
 };
 
-/// One dab's coverage at normalized distance `d` from its centre, where 1 is
+/// One dab's coverage at normalized distance `d` from its center, where 1 is
 /// the rim.
 ///
 /// `hardness` moves where the falloff starts, exactly as the radial gradient's
-/// feather does — hardness 0 ramps from the centre, hardness 1 is a disc with
+/// feather does — hardness 0 ramps from the center, hardness 1 is a disc with
 /// only the last sliver softened. The sliver is deliberate: a truly hard circle
 /// aliases into a visible staircase at any radius, and the mask is multiplied
 /// into a parameter where that staircase becomes a banded edit.
@@ -131,8 +131,8 @@ float dabCoverage(float d, float hardness)
 /// scaling the input by k scales L, a and b uniformly by k^(1/3) — which makes
 /// a/L and b/L *exactly* invariant under exposure. That identity is what lets
 /// this metric work on a scene-linear input that is unbounded above 1.0, where
-/// there is no honest reference white to normalise against. It also means a
-/// shade in shadow and the same shade in sun are one colour, and that every
+/// there is no honest reference white to normalize against. It also means a
+/// shade in shadow and the same shade in sun are one color, and that every
 /// neutral collapses to the origin.
 ///
 /// Lightness is deliberately not in the distance: kind 5 is that axis already,
@@ -145,7 +145,7 @@ float2 oklabChroma(float3 rgb)
 {
     // ⚠ Negatives are possible: the working space is wider than the camera's
     // gamut and a saturated stimulus lands outside it. cbrt is odd, so this is
-    // clamped rather than signed — a negative primary is not a colour anybody
+    // clamped rather than signed — a negative primary is not a color anybody
     // picked, and letting it through puts the chromaticity somewhere no real
     // pixel is.
     const float3 c = max(rgb, 0.0f);
@@ -165,8 +165,8 @@ float2 oklabChroma(float3 rgb)
     // ⚠ A floor on L, or the ratio explodes on near-black pixels and the mask
     // fills with sensor noise. For a neutral, L is exactly Y^(1/3), so L = 0.1
     // is a linear luminance of 1e-3 — about seven and a half stops below middle
-    // grey, which on a fourteen-stop raw is the floor of the noise rather than
-    // a colour. research/UNSOURCED.md.
+    // gray, which on a fourteen-stop raw is the floor of the noise rather than
+    // a color. research/UNSOURCED.md.
     return float2(a, b) / max(L, 0.1f);
 }
 
@@ -217,14 +217,14 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float>   src,   // coverage so far, 0..1
                    uniform Texture2D<float4>  reference,  // kind 5, see below
                    uniform Texture2D<float>   matte, // kind 4, frame coordinates
-                   uniform Texture2D<float4>  dabs,  // kind 3: xy centre, z erases when set
+                   uniform Texture2D<float4>  dabs,  // kind 3: xy center, z erases when set
                    uniform Texture2D<float4>  dabBounds, // kind 3: per-block box
                    uniform RWTexture2D<float> dst,
                    uniform ConstantBuffer<MaskComponentParams> p)
 {
     if (tid.x >= p.size.x || tid.y >= p.size.y) return;
 
-    // Pixel centres, in the normalized coordinates the mask is stored in — so a
+    // Pixel centers, in the normalized coordinates the mask is stored in — so a
     // mask survives a resize, and an export matches the preview it was made on.
     const float2 q = (float2(tid.xy) + 0.5f) / float2(p.size);
 
@@ -245,7 +245,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
     else if (p.kind == 2)
     {
         const float c = cos(p.angle), s = sin(p.angle);
-        const float2 e = q - p.centre;
+        const float2 e = q - p.center;
         const float u = ( c * e.x + s * e.y) / max(p.semi.x, 1e-6f);
         const float v = (-s * e.x + c * e.y) / max(p.semi.y, 1e-6f);
 
@@ -300,7 +300,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         const int blocks = (p.count + DAB_BLOCK - 1) / DAB_BLOCK;
         for (int b = 0; b < blocks; ++b)
         {
-            // ⚠ The bounds are of the dab **centres**, unexpanded, and the test
+            // ⚠ The bounds are of the dab **centers**, unexpanded, and the test
             // below is written in the same expression shape as the per-dab one
             // rather than as a containment test against a box grown by `r`.
             //
@@ -323,8 +323,8 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
             for (int i = lo; i < hi; ++i)
         {
             const float4 dab = dabs[int2(i % stride, i / stride)];
-            const float2 centre = dab.xy;
-            const float2 e = (q - centre) * toPx;
+            const float2 center = dab.xy;
+            const float2 e = (q - center) * toPx;
 
             // Reject on the square first. A dab covers a disc, so most pixels
             // miss most dabs, and this turns the common case into two compares
@@ -380,7 +380,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         // camera matrix, before any user adjustment. Reading the edited result
         // instead would mean raising exposure through a highlight band grows
         // the band, which raises the exposure further: a feedback loop, not a
-        // tool. Same reason the colour picker samples this texture.
+        // tool. Same reason the color picker samples this texture.
         //
         // ⚠ And measured in **stops**. Scene-linear luminance is unbounded and
         // its interesting range is logarithmic, so a band of fixed linear width
@@ -413,7 +413,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
     }
     else if (p.kind == 6)
     {
-        // A band on what colour the pixel is. research/masking.md §4c.
+        // A band on what color the pixel is. research/masking.md §4c.
         //
         // Same reference image as kind 5, and for the same reason: read the
         // edited result and shifting hue through the mask would move what the
@@ -424,14 +424,14 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
         // this metric is *exactly* invariant to exposure, so the number the
         // photographer set against the picture is the number the kernel wants.
         const float2 here = oklabChroma(reference[tid.xy].rgb);
-        const float2 want = oklabChroma(float3(p.colourR, p.colourG, p.colourB));
+        const float2 want = oklabChroma(float3(p.colorR, p.colorG, p.colorB));
         const float d = length(here - want);
 
-        // One edge, not two: a colour band is a disc around the target rather
+        // One edge, not two: a color band is a disc around the target rather
         // than an interval, so there is no far side to open. Full inside
-        // `colourTol`, ramping to nothing `colourSoft` further out.
-        const float soft = max(p.colourSoft, 1e-4f);
-        own = 1.0f - maskFalloff((d - p.colourTol) / soft);
+        // `colorTol`, ramping to nothing `colorSoft` further out.
+        const float soft = max(p.colorSoft, 1e-4f);
+        own = 1.0f - maskFalloff((d - p.colorTol) / soft);
     }
 
     // Invert applies to every kind, which it did not before: the old pair of

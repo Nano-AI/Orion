@@ -63,7 +63,7 @@ void testGrainPlate() {
 
     // ⚠ **The falling standard deviation down the chain is the point, not a
     // defect.** A preview pixel covering sixteen frame pixels must show the
-    // variance sixteen average to. If every level were renormalised to 1.0 the
+    // variance sixteen average to. If every level were renormalized to 1.0 the
     // 1/16 preview would look exactly as grainy as the full render — which is
     // the failure the plate exists to prevent, and it would pass any check that
     // only asserted "the levels are noise".
@@ -74,15 +74,15 @@ void testGrainPlate() {
     report(l2.sd < l1.sd * 0.95, "and level 2 calmer than level 1",
            std::to_string(l2.sd) + " against " + std::to_string(l1.sd));
 
-    // Each level is still centred, or averaging would introduce a brightness
+    // Each level is still centerd, or averaging would introduce a brightness
     // shift that varies with zoom — grain that lightens the preview.
     checkNear(l1.mean, 0.0, 1e-5, "level 1 is still zero mean");
     checkNear(l2.mean, 0.0, 1e-5, "level 2 is still zero mean");
 
     // ⚠ Correlated, not white. This is what separates film grain from sensor
     // noise, and it is the reason the plate is blurred at all. A white field
-    // has ~zero correlation between neighbours; a grain field does not.
-    // Measured on level 0 against its own horizontal neighbour.
+    // has ~zero correlation between neighbors; a grain field does not.
+    // Measured on level 0 against its own horizontal neighbor.
     {
         double num = 0.0, den = 0.0;
         const int n = grain::kPlateSize;
@@ -95,7 +95,7 @@ void testGrainPlate() {
             }
         }
         const double corr = den > 0 ? num / den : 0.0;
-        report(corr > 0.3, "neighbouring texels are correlated — grain has a size",
+        report(corr > 0.3, "neighboring texels are correlated — grain has a size",
                "correlation " + std::to_string(corr));
     }
 
@@ -298,7 +298,7 @@ void testGrainGpu() {
     //
     // Newson, Delon & Galerne (CGF 36(8), 2017): a Boolean model of mean
     // coverage u has Bernoulli variance u(1-u), so sigma = amount*sqrt(Y(1-Y)) —
-    // loudest at mid-grey, silent at both ends.
+    // loudest at mid-gray, silent at both ends.
     //
     // ⚠ Measured **across the whole ramp against the closed form**, not as
     // "the middle is grainier than the ends". The weaker phrasing was what this
@@ -380,7 +380,7 @@ void testGrainGpu() {
         // the plate and uses it only to pick a mip level — a mutation that does
         // exactly that survived them both. Such a preview shows grain of the
         // right *size* in the wrong *place*: settle the drag and the grain
-        // jumps, which is the artefact `degrade-then-refine` exists to prevent
+        // jumps, which is the artifact `degrade-then-refine` exists to prevent
         // and which no measure of loudness can see.
         //
         // So render a real preview: a quarter-size grid at gridStep 4, against
@@ -460,7 +460,7 @@ void testGrainGpu() {
     // rate. So the naive kernel has a Size control that silently changes
     // strength, which is the kind of coupling a photographer reads as "the
     // grain slider is unpredictable" and never reports as a bug.
-    // ⚠ Measured on a **flat mid-grey field, not the ramp**. A 16-column band
+    // ⚠ Measured on a **flat mid-gray field, not the ramp**. A 16-column band
     // of the ramp spans only two plate texels at Size 8, so the estimator's own
     // spread there is ~6% — enough to invent a coupling that is not real, or
     // hide one that is. The flat field gives every Size the same few thousand
@@ -496,7 +496,7 @@ void testGrainGpu() {
             return std::sqrt(var / double(out.size() / 4));
         };
 
-        // Peak sigma would be `amount * sqrt(0.25)` = amount/2 at mid-grey if
+        // Peak sigma would be `amount * sqrt(0.25)` = amount/2 at mid-gray if
         // the plate were read at its own resolution. It is not: the field is
         // resampled bilinearly at a rate the Size slider sets, and interpolating
         // a correlated random field *reduces its variance*. Measured at
@@ -527,7 +527,7 @@ void testGrainGpu() {
     }
 
     // Size scales the field rather than regenerating it, so a larger grain is
-    // spatially smoother. Measured as the difference between neighbours, which
+    // spatially smoother. Measured as the difference between neighbors, which
     // is what "clumpy" means and what a per-pixel hash would fail.
     {
         const auto fine   = run(kAmount, 1.0f, 1.0f, 0u);

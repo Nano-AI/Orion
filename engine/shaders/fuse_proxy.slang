@@ -3,17 +3,17 @@
 //
 // Simulated Exposure Fusion (Hessel & Morel, WACV 2020) works on an intensity
 // in [0,1] taken from an ordinary photograph. Everything in it assumes that
-// range: the restrained-range centres walk across it, well-exposedness is a
+// range: the restrained-range centers walk across it, well-exposedness is a
 // Gaussian at 0.5, and the count of darkened images comes from the median.
 // Orion carries unbounded scene-linear light, so something has to map one to
 // the other.
 //
 // A logistic in log2 is that mapping, and the choice is not free — see
-// research/exposure-fusion.md. Raw normalised log stretches the shadow axis, so
+// research/exposure-fusion.md. Raw normalized log stretches the shadow axis, so
 // the median falls, so the plan allocates nearly every simulated image to the
 // brightened side, and the weights end up reading the sensor's own noise floor
 // as underexposed content that wants lifting. A sigmoid compresses the shadows
-// back and puts middle grey at 0.5, which is where the paper's constants were
+// back and puts middle gray at 0.5, which is where the paper's constants were
 // validated. AgX is itself a sigmoid in log2, so this is a cheap stand-in for
 // the display transform rather than an unrelated curve.
 //
@@ -27,7 +27,7 @@ struct FuseProxyParams
     uint2 outSize;
     uint2 inSize;
     int   scale;
-    float slope;      // stops per unit of t, at middle grey
+    float slope;      // stops per unit of t, at middle gray
     float _pad[2];
 };
 
@@ -36,7 +36,7 @@ float fuseLuma(float3 c)
     return max(dot(c, float3(0.2627f, 0.6780f, 0.0593f)), 1e-8f);
 }
 
-/// Middle grey to 0.5, monotone, bounded, and symmetric in stops.
+/// Middle gray to 0.5, monotone, bounded, and symmetric in stops.
 float fuseForward(float y, float slope)
 {
     const float ev = log2(y / 0.18f) / max(slope, 1e-4f);

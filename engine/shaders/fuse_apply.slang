@@ -9,7 +9,7 @@
 // The strength control raises that gain to its own power. That is a lerp in
 // log-gain, so strength zero is gain^0 = 1 exactly, bit for bit. No published
 // parameter of this method degenerates to the identity: alpha -> 1 collapses the
-// exposure factors, but the restrained-range centres contain no alpha, so the
+// exposure factors, but the restrained-range centers contain no alpha, so the
 // simulated images stay differently-clipped copies and their blend is not the
 // input. See research/exposure-fusion.md.
 
@@ -29,7 +29,7 @@ float fuseApplyLuma(float3 c)
 }
 
 /// The inverse of fuse_proxy.slang's forward curve, in stops relative to middle
-/// grey. Written as a log rather than atanh so there is no doubt what it is.
+/// gray. Written as a log rather than atanh so there is no doubt what it is.
 float fuseInverseEv(float t, float slope)
 {
     const float x = clamp(2.0f * t - 1.0f, -0.9999f, 0.9999f);

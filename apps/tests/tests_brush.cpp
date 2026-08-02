@@ -8,7 +8,7 @@ void testBayerDecimation() {
     section("Bayer decimation");
 
     // A mosaic whose value *is* its channel, so a phase error shows up as a
-    // wrong number rather than as a subtle colour cast.
+    // wrong number rather than as a subtle color cast.
     orion::raw::BayerImage src;
     src.width = 32; src.height = 16;
     src.filters = 0x94949494u;   // RGGB, LibRaw's usual
@@ -128,7 +128,7 @@ void testSpotRemovalGpu() {
         for (std::uint32_t y = 0; y < kH; ++y) {
             for (std::uint32_t x = 0; x < kW; ++x) {
                 float v = (x < kW / 2) ? kLeft : kRight;
-                // The blemish, centred at (0.25, 0.5) with radius 0.06 in x.
+                // The blemish, centerd at (0.25, 0.5) with radius 0.06 in x.
                 const double dx = (x + 0.5) / kW - 0.25;
                 const double dy = ((y + 0.5) / kH - 0.5) * double(kH) / double(kW);
                 if (dx * dx + dy * dy < 0.06 * 0.06) v = kBlemish;
@@ -230,10 +230,10 @@ void testSpotRemovalGpu() {
     // ── The patch carries the source's DETAIL, not just its level ─────────
     //
     // ⚠ Added because a mutation survived. Every case above uses flat fields,
-    // so sampling the source once at its centre gives the same answer as
+    // so sampling the source once at its center gives the same answer as
     // sampling it per pixel — and replacing the per-pixel lookup with the
-    // centre's passed the whole suite. Copying detail is the entire reason
-    // clone and heal exist rather than "fill with a colour".
+    // center's passed the whole suite. Copying detail is the entire reason
+    // clone and heal exist rather than "fill with a color".
     {
         // Fine stripes in the source half, flat in the destination half.
         std::vector<__fp16> px(std::size_t(kW) * kH * 4);
@@ -251,7 +251,7 @@ void testSpotRemovalGpu() {
         const auto got = run(0.25f, 0.75f, 0.10f, /*heal=*/false);
 
         // Walk down the middle of the patch. A per-pixel source reproduces the
-        // stripes; a single centre sample gives one flat value.
+        // stripes; a single center sample gives one flat value.
         double lo = 1.0, hi = 0.0;
         for (std::uint32_t y = kH / 2 - 8; y <= kH / 2 + 8; ++y) {
             const double v = double(got[(std::size_t(y) * kW + kW / 4) * 4]);
@@ -402,7 +402,7 @@ void testDabBlockRejection() {
         // rubs out, which puts erases inside runs rather than only between them.
         texels[std::size_t(i) * 4 + 2] = (i % 7 == 0) ? 1.0f : 0.0f;
     }
-    // ⚠ A few centres off the frame on purpose. Their boxes stick out past the
+    // ⚠ A few centers off the frame on purpose. Their boxes stick out past the
     // edge, and a rejection written as containment in the picture rather than as
     // the per-dab test's own comparison would trim them.
     for (int i = 0; i < 8; ++i) {

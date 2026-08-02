@@ -145,17 +145,17 @@ void testMaskGpu() {
         orion::pipe::params::MaskComponent m{};
         m.size[0] = kW; m.size[1] = kH;
         m.kind = 2;
-        // On a pixel centre, not on 0.5. With 64 pixels, 0.5 falls *between*
+        // On a pixel center, not on 0.5. With 64 pixels, 0.5 falls *between*
         // 31 and 32, so "twelve pixels either side" is not equidistant — and on
         // the steepest part of the feather that half-pixel is worth a quarter
         // of the alpha range. The asymmetry was in the test, not the shader.
-        m.centre[0] = 32.5f / 64.0f; m.centre[1] = 32.5f / 64.0f;
+        m.center[0] = 32.5f / 64.0f; m.center[1] = 32.5f / 64.0f;
         m.semi[0] = 0.25f; m.semi[1] = 0.25f;
         m.feather = 0.4f;
         m.roundness = 2.0f;
         const auto a = run(m);
 
-        report(at(a, 32, 32) > 0.99f, "a radial gradient is full at its centre",
+        report(at(a, 32, 32) > 0.99f, "a radial gradient is full at its center",
                std::to_string(at(a, 32, 32)));
         report(at(a, 0, 0) < 0.01f, "and zero well outside its boundary",
                std::to_string(at(a, 0, 0)));
@@ -244,7 +244,7 @@ void testMaskGpu() {
     }
 }
 
-/// Brush dabs — a stroke as a list of centres. research/masking.md §1.
+/// Brush dabs — a stroke as a list of centers. research/masking.md §1.
 void testMaskBrushGpu() {
     section("Brush masks (GPU)");
 
@@ -331,7 +331,7 @@ void testMaskBrushGpu() {
 
     orion::pipe::params::MaskComponent base{};
     base.size[0] = kW; base.size[1] = kH;
-    // ⚠ Set explicitly. A zero-initialised `MaskComponent` leaves `dabStride`
+    // ⚠ Set explicitly. A zero-initialized `MaskComponent` leaves `dabStride`
     // at zero, and the kernel's `max(stride, 1)` then puts dab 1 on row 1 of
     // the texture, where nothing was written — so a two-dab check silently
     // measured one dab. The pipeline always sets it; a test that forgets is
@@ -347,7 +347,7 @@ void testMaskBrushGpu() {
 
     // ── One dab, against the falloff computed here ────────────────────────
     //
-    // Not "the centre is bright and the outside is dark" — that passes on any
+    // Not "the center is bright and the outside is dark" — that passes on any
     // blob. The dab has to be the *stated* function, so it is checked against
     // smootherstep evaluated independently, at radii either side of where the
     // ramp starts.
@@ -368,7 +368,7 @@ void testMaskBrushGpu() {
 
         double worst = 0;
         for (int px = 64; px < 64 + 25; ++px) {
-            // Distance from the centre in units of the radius.
+            // Distance from the center in units of the radius.
             const double d = ((px + 0.5) / double(kW) - 0.5) / 0.2;
             if (d >= 1.0) break;
             worst = std::max(worst, std::abs(at(a, px, 64) - want(d)));
@@ -377,7 +377,7 @@ void testMaskBrushGpu() {
                "worst " + std::to_string(worst));
 
         report(std::abs(at(a, 64, 64) - 1.0) < 1e-3,
-               "full flow reaches full coverage at the centre");
+               "full flow reaches full coverage at the center");
         report(at(a, 4, 4) == 0.0,
                "and lays down exactly nothing outside its radius",
                std::to_string(at(a, 4, 4)));
@@ -439,7 +439,7 @@ void testMaskBrushGpu() {
         // nose to tail, each continuing the alpha it is handed — so a
         // continuation pass that lays nothing must be exactly the identity, or
         // every chained dispatch would erode the stroke before it. Checking the
-        // centre pixel alone would not notice: the centre is where a brush
+        // center pixel alone would not notice: the center is where a brush
         // writes most confidently and an edge is where an off-by-one shows up.
         std::size_t differing = 0;
         double worst = 0;
@@ -606,16 +606,16 @@ void testMaskCompositeGpu() {
     // Two radials, deliberately overlapping and deliberately *partial* in the
     // overlap — the ops differ measurably only at fractional coverage, so full
     // coverage would pass on the wrong algebra. Wide feather keeps the region
-    // between the centres in both falloffs.
+    // between the centers in both falloffs.
     orion::pipe::params::MaskComponent A{};
     A.size[0] = kW; A.size[1] = kH;
     A.kind = 2;
-    A.centre[0] = 0.375f; A.centre[1] = 0.5f;
+    A.center[0] = 0.375f; A.center[1] = 0.5f;
     A.semi[0] = 0.35f; A.semi[1] = 0.35f;
     A.feather = 0.9f; A.roundness = 2.0f;
 
     auto B = A;
-    B.centre[0] = 0.625f;
+    B.center[0] = 0.625f;
 
     // Each alone, for reference — the algebra below is checked against what the
     // kernel actually produces for the parts, not against a reimplementation of
@@ -623,7 +623,7 @@ void testMaskCompositeGpu() {
     const auto a = fold({A});
     const auto b = fold({B});
 
-    // A probe row through both centres, all in partial coverage.
+    // A probe row through both centers, all in partial coverage.
     const int y = 32;
 
     {
@@ -749,16 +749,16 @@ void testMaskCompositeGpu() {
 }
 
 /// A mask has to stay on its subject when the picture is turned or cropped.
-/// A brush stroke has to go through the same transform a gradient's centre does.
+/// A brush stroke has to go through the same transform a gradient's center does.
 ///
-/// It did not. `DevelopPipeline` ran the gradient centre through
-/// `mask::toFrame` and copied the dab centres straight from displayed
+/// It did not. `DevelopPipeline` ran the gradient center through
+/// `mask::toFrame` and copied the dab centers straight from displayed
 /// coordinates into the shader, so a stroke ignored the crop and the rotation —
 /// and because a portrait file carries an EXIF quarter turn, a stroke on one
 /// landed mirrored and ninety degrees off with the rotate control untouched.
 ///
 /// The gradients being right is what hid it, so the check is written as the
 /// gradients' own invariant applied to a *stroke*: transform the points, and
-/// they must sit where the same transform puts a gradient centre placed at each
+/// they must sit where the same transform puts a gradient center placed at each
 /// of them. If the two ever disagree again, a mask's shapes have stopped
 /// agreeing about where the picture is.

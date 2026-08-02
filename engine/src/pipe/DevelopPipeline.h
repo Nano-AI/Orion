@@ -38,13 +38,13 @@ namespace orion::pipe {
 /// `orion.h`, and the cost is linear.
 inline constexpr int kMaxMaskComponents = 4;
 
-/// One component of the mask group, in the form a person manipulates — a centre
+/// One component of the mask group, in the form a person manipulates — a center
 /// and an angle rather than the two endpoints the linear gradient's maths wants.
 /// `DevelopPipeline::apply` derives the shader's form from this.
 ///
 /// research/masking.md §6.
 struct MaskComponentEdit {
-    int   kind = 0;                    // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 colour
+    int   kind = 0;                    // 0 off, 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 color
     /// params::MaskCompose. The group folds from zero, the additive identity,
     /// so the first component's op has no effect when it is Add and zeroes the
     /// group when it is Subtract or Intersect — subtracting from nothing is
@@ -61,7 +61,7 @@ struct MaskComponentEdit {
     /// one. research/masking.md §6 and ROADMAP's per-layer decomposition.
     bool  startsLayer = false;
 
-    float centre[2]{0.5f, 0.5f};
+    float center[2]{0.5f, 0.5f};
     float angle = 0.0f;                // radians, both gradient kinds
     float length = 0.5f;               // linear: zero-to-full distance
     float radius[2]{0.3f, 0.3f};       // radial semi-axes
@@ -70,25 +70,25 @@ struct MaskComponentEdit {
 
     /// Luminance range (kind 5), in stops of log2 Rec.2020 luminance on the
     /// reference image. research/masking.md §4b. The defaults are a band around
-    /// middle grey, which is where a photographer reaching for one starts.
+    /// middle gray, which is where a photographer reaching for one starts.
     float rangeLo = -2.0f;
     float rangeHi = 2.0f;
     float rangeSoft = 1.0f;
 
-    /// Colour range (kind 6): the picked shade in scene-linear Rec.2020 RGB,
+    /// Color range (kind 6): the picked shade in scene-linear Rec.2020 RGB,
     /// plus a Euclidean tolerance in Oklab chromaticity (a/L, b/L) and how far
     /// its edge ramps. research/masking.md §4c.
     ///
-    /// The default target is a mid grey, which selects every neutral in the
+    /// The default target is a mid gray, which selects every neutral in the
     /// frame at any brightness — a visible, explicable starting state rather
     /// than an empty mask that looks like the feature not working. The
     /// tolerance's default is a little under the closest pair of ordinary
-    /// photographic colours the research measured (tarmac and skin, 0.126).
-    float colour[3]{0.18f, 0.18f, 0.18f};
-    float colourTol = 0.10f;
-    float colourSoft = 0.05f;
+    /// photographic colors the research measured (tarmac and skin, 0.126).
+    float color[3]{0.18f, 0.18f, 0.18f};
+    float colorTol = 0.10f;
+    float colorSoft = 0.05f;
 
-    /// The brush, when `kind` is 3. The dab centres are *not* here: they are a
+    /// The brush, when `kind` is 3. The dab centers are *not* here: they are a
     /// variable-length list and this struct is compared on every slider tick, so
     /// carrying them would make every tick walk every stroke.
     /// `setBrushStroke` owns them per component; this is only the revision.
@@ -106,16 +106,16 @@ struct MaskComponentEdit {
 
 /// One spot: a disc taken from elsewhere in the frame. research/spot-removal.md.
 ///
-/// ⚠ **Both centres are in FRAME coordinates, and a spot is the one thing here
+/// ⚠ **Both centers are in FRAME coordinates, and a spot is the one thing here
 /// that wants them.** A mask is placed *against* a subject and stays where the
 /// photographer put it on screen; dust is *on the sensor* and is part of the
 /// picture, so a spot has to follow the subject through a later crop or quarter
-/// turn. Those are opposite behaviours and they need opposite storage.
+/// turn. Those are opposite behaviors and they need opposite storage.
 ///
 /// The click is therefore converted once, when the spot is placed, by
-/// `displayedToFrame` — the same `mask::toFrame` a mask's centre goes through,
+/// `displayedToFrame` — the same `mask::toFrame` a mask's center goes through,
 /// applied at placement rather than at render. Converting on every render would
-/// give the mask's behaviour, and would also need the geometry in the
+/// give the mask's behavior, and would also need the geometry in the
 /// staleness comparison, which is a trap this file has already fallen into
 /// twice.
 struct SpotEdit {
@@ -201,7 +201,7 @@ struct Adjustments {
     /// Engine.highlightRecovery in the app.
     float highlightRecovery = 0.0f;
 
-    /// Three-way colour grading, as ASC CDL per tonal zone. Each entry is a
+    /// Three-way color grading, as ASC CDL per tonal zone. Each entry is a
     /// wheel's puck position (x, y) in the unit disc plus that zone's slope.
     /// research/color-grading.md.
     float gradeShadow[3]{};      // x, y, luminance
@@ -281,7 +281,7 @@ struct Adjustments {
         float exposureEv = 0.0f;
         float contrast = 0.0f;
         float saturation = 0.0f;
-        /// A colour cast where the mask covers, **not** a white balance.
+        /// A color cast where the mask covers, **not** a white balance.
         float warmth = 0.0f;
         float tint = 0.0f;
         bool operator==(const LocalEdit&) const = default;
@@ -336,12 +336,12 @@ public:
     /// affect. Cheap — call it freely on every slider tick.
     void apply(const Adjustments&);
 
-    /// Replaces one component's brush stroke: dab centres in normalized
+    /// Replaces one component's brush stroke: dab centers in normalized
     /// coordinates of the displayed picture, the same space the gradient masks
     /// are placed in.
     ///
     /// Kept out of `Adjustments` because it is variable-length and that struct
-    /// is compared field by field on every tick. Bump a centre and
+    /// is compared field by field on every tick. Bump a center and
     /// `MaskComponentEdit::brushRevision` is what tells `apply` the mask is
     /// stale — so a caller that changes the stroke must change the revision too,
     /// or the picture will not follow the hand.
@@ -665,7 +665,7 @@ public:
     ///
     /// Public and static because it is pure arithmetic with one property that
     /// has to hold — the three components sum to zero — and that property is
-    /// the whole reason the wheel is a colour control rather than a brightness
+    /// the whole reason the wheel is a color control rather than a brightness
     /// one. Testable without a device.
     static void gradeOffsets(float x, float y, float out[3]) noexcept;
 

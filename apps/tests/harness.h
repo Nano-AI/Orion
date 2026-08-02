@@ -107,7 +107,7 @@ void testDabBlockRejection();
 void testLongBrushStroke();
 void testBrushErase();
 void testMaskRangeGpu();
-void testMaskColourGpu();
+void testMaskColorGpu();
 void testMaskMatteGpu();
 void testMaskRefineGpu();
 void testGrainPlate();

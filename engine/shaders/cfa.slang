@@ -27,7 +27,7 @@ uint cfaChannelRGB(uint2 p, uint filters)
     return (c == 3) ? 1 : c;
 }
 
-// Clamp a coordinate into the image, so kernels can read neighbours near the
+// Clamp a coordinate into the image, so kernels can read neighbors near the
 // border without branching on every tap.
 int2 clampToImage(int2 p, uint2 size)
 {
@@ -35,7 +35,7 @@ int2 clampToImage(int2 p, uint2 size)
                 clamp(p.y, 0, int(size.y) - 1));
 }
 
-// Border-clamped read. Slang has no nested functions, so neighbourhood kernels
+// Border-clamped read. Slang has no nested functions, so neighborhood kernels
 // share this rather than each defining a local tap helper.
 float tapClamped(Texture2D<float> tex, int2 p, uint2 size)
 {

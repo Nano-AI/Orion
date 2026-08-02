@@ -13,7 +13,7 @@
 // step is looking for the most haze-opaque extremes, and an average of a block
 // is not in the block.
 //
-// Each output carries the winning pixel's own colour alongside its dark value,
+// Each output carries the winning pixel's own color alongside its dark value,
 // so the host never has to go back to the full-resolution image to find it.
 
 struct DehazePeakParams
@@ -38,7 +38,7 @@ void dehazePeak(uint3 tid : SV_DispatchThreadID,
     const int2 origin = int2(tid.xy) * s;
 
     float best = -1.0f;
-    float3 colour = float3(0.0f, 0.0f, 0.0f);
+    float3 color = float3(0.0f, 0.0f, 0.0f);
 
     for (int dy = 0; dy < s; ++dy)
     {
@@ -53,10 +53,10 @@ void dehazePeak(uint3 tid : SV_DispatchThreadID,
             if (d > best)
             {
                 best = d;
-                colour = image[int2(x, y)].rgb;
+                color = image[int2(x, y)].rgb;
             }
         }
     }
 
-    dst[tid.xy] = float4(max(best, 0.0f), colour);
+    dst[tid.xy] = float4(max(best, 0.0f), color);
 }

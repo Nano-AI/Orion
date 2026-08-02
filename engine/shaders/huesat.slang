@@ -9,7 +9,7 @@
 // research/camera-profiles.md. Adobe, DNG Specification 1.6.0.0, chapter 6
 // (ProfileHueSatMapDims / Data1 / Encoding).
 //
-// The colour space is not a detail. ProfileHueSatMapEncoding = 0 says the
+// The color space is not a detail. ProfileHueSatMapEncoding = 0 says the
 // table applies in *linear ProPhoto* HSV, so the node converts in and out.
 // Indexing HSV built from Rec.2020 components would put every cell at a
 // different hue angle than a real profile expects — invisible against a
@@ -104,7 +104,7 @@ void hueSatMap(uint3 tid : SV_DispatchThreadID,
                         dot(p.toProPhoto1.rgb, c),
                         dot(p.toProPhoto2.rgb, c));
 
-    // HSV is undefined on negatives, and a colour outside ProPhoto is rare
+    // HSV is undefined on negatives, and a color outside ProPhoto is rare
     // enough that clamping it here costs nothing a later stage can see. The
     // DNG SDK does the same before its own table lookup.
     pro = max(pro, 0.0f);

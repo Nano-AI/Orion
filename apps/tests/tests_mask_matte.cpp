@@ -108,8 +108,8 @@ void testMaskMatteGpu() {
     // ── The half-texel convention, which is the whole risk ────────────────
     //
     // A 2 x 1 matte of [0, 1] is a ramp whose answer is analytic under the
-    // stated convention — samples at pixel *centres*, clamped at the edge
-    // texels. The texel centres sit at normalized x = 0.25 and 0.75, so the
+    // stated convention — samples at pixel *centers*, clamped at the edge
+    // texels. The texel centers sit at normalized x = 0.25 and 0.75, so the
     // output is flat 0 left of 0.25, flat 1 right of 0.75, and linear between,
     // passing through exactly 0.5 at the middle.
     //
@@ -124,19 +124,19 @@ void testMaskMatteGpu() {
         // Mid-frame, by symmetry, exactly half.
         const double mid = 0.5 * (at(got, 31, 32) + at(got, 32, 32));
         report(std::abs(mid - 0.5) < 2e-3,
-               "a matte is lifted about its texel centres, so a two-texel ramp "
+               "a matte is lifted about its texel centers, so a two-texel ramp "
                "is exactly half way across",
                std::to_string(mid));
 
-        // Flat outside the texel centres, at both ends.
+        // Flat outside the texel centers, at both ends.
         report(at(got, 0, 32) < 2e-3 && at(got, 15, 32) < 2e-3,
-               "flat at the value of the first texel left of its centre",
+               "flat at the value of the first texel left of its center",
                std::to_string(at(got, 0, 32)) + ", " + std::to_string(at(got, 15, 32)));
         report(at(got, 48, 32) > 1.0 - 2e-3 && at(got, 63, 32) > 1.0 - 2e-3,
-               "and flat at the last texel's value right of its centre",
+               "and flat at the last texel's value right of its center",
                std::to_string(at(got, 48, 32)) + ", " + std::to_string(at(got, 63, 32)));
 
-        // A quarter of the way from one centre to the other is a quarter up.
+        // A quarter of the way from one center to the other is a quarter up.
         const double q = at(got, 24, 32);
         report(std::abs(q - 0.25) < 0.02, "and linear between them",
                std::to_string(q));
@@ -420,7 +420,7 @@ void testMaskRefineGpu() {
     //
     // cov(I, p) is zero for constant p whatever the guide does, so a = 0 and
     // b = mean(p): the output is the constant back. It holds at the frame's
-    // corners only if both box passes normalise by the window they actually
+    // corners only if both box passes normalize by the window they actually
     // read, which is the one thing a separable blur most often gets wrong.
     {
         uploadGuide(stepGuide);
@@ -503,7 +503,7 @@ void testMaskRefineGpu() {
     //
     // ⚠ The case that separates guided feathering from a blur. A flat guide has
     // var(I) = 0 and cov(I, p) = 0, so a = 0 and q collapses to the local mean
-    // of the mask — blurred, but still centred where it was placed, and with no
+    // of the mask — blurred, but still centerd where it was placed, and with no
     // discontinuity anywhere. Without this, every assertion above is also
     // satisfied by a box blur of the mask.
     {
@@ -556,7 +556,7 @@ void testMaskRefineGpu() {
     // ── Epsilon decides which edges count, and both wrong answers are here ─
     //
     // The constant is Orion's own (UNSOURCED.md §20), so what is pinned is the
-    // behaviour it was chosen for, measured as the height of the jump at the
+    // behavior it was chosen for, measured as the height of the jump at the
     // edge. Reference values from the model above:
     //
     //     half-stop edge, eps = 0.01 (Orion)          jump 0.233

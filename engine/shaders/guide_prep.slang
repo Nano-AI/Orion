@@ -2,7 +2,7 @@
 //
 // Implements the guided filter of He, Sun and Tang (ECCV 2010 / PAMI 2013),
 // self-guided on luminance. It is what makes highlight and shadow recovery
-// *local*: the gain a pixel receives depends on its neighbourhood, not on its
+// *local*: the gain a pixel receives depends on its neighborhood, not on its
 // own value alone. That is the actual difference between these controls and
 // mine before — Lightroom's and darktable's are local, a pointwise curve can
 // never behave the same way no matter how it is tuned.

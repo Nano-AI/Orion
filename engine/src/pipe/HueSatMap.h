@@ -97,7 +97,7 @@ inline Mat3 proPhotoToRec2020() noexcept { return invert(rec2020ToProPhoto()); }
 // (Luther-Ives). Everything else the matrix handles.
 
 struct Correction {
-    float centreDeg   = 0.0f;   ///< hue the correction is centred on
+    float centerDeg   = 0.0f;   ///< hue the correction is centerd on
     float widthDeg    = 0.0f;   ///< half-width of the raised-cosine window
     float hueShiftDeg = 0.0f;   ///< positive rotates toward the next hue
     float satScale    = 1.0f;   ///< multiplies saturation at full weight
@@ -105,7 +105,7 @@ struct Correction {
     float satFull     = 1.0f;   ///< saturation where it reaches full weight
 };
 
-/// The fit. Overridable through `ORION_HUESAT="centre,width,shift,satScale"` —
+/// The fit. Overridable through `ORION_HUESAT="center,width,shift,satScale"` —
 /// that hook is the instrument the constants were measured with, and leaving it
 /// in is what makes them re-measurable when a second body arrives.
 ///
@@ -120,7 +120,7 @@ struct Correction {
 ///     -12      0.0556     0.0270     0.0311
 ///     -14      0.0557     0.0300     0.0464
 ///
-/// Centre and width were checked the same way at the chosen shift: 250 degrees
+/// Center and width were checked the same way at the chosen shift: 250 degrees
 /// beats 235 (0.0072) and 265 (0.0181), and a 60-degree half-width beats 40
 /// (0.0057). The surface is shallow toward 235 and steep past 265, which is
 /// what a real hue region looks like — the fit is not balanced on a spike.
@@ -131,7 +131,7 @@ struct Correction {
 /// saturation rather than applied flat across the hue.
 inline Correction blueSky() noexcept {
     Correction c{};
-    c.centreDeg   = 250.0f;
+    c.centerDeg   = 250.0f;
     c.widthDeg    =  60.0f;
     c.hueShiftDeg =  -8.0f;
     c.satScale    =   1.05f;
@@ -139,9 +139,9 @@ inline Correction blueSky() noexcept {
     c.satFull     =   0.35f;
 
     if (const char* v = std::getenv("ORION_HUESAT"); v != nullptr && *v != '\0') {
-        float a = c.centreDeg, b = c.widthDeg, d = c.hueShiftDeg, e = c.satScale;
+        float a = c.centerDeg, b = c.widthDeg, d = c.hueShiftDeg, e = c.satScale;
         if (std::sscanf(v, "%f,%f,%f,%f", &a, &b, &d, &e) == 4) {
-            c.centreDeg = a; c.widthDeg = b; c.hueShiftDeg = d; c.satScale = e;
+            c.centerDeg = a; c.widthDeg = b; c.hueShiftDeg = d; c.satScale = e;
         }
     }
     return c;
@@ -160,7 +160,7 @@ inline float smoothStep(float edge0, float edge1, float x) noexcept {
 ///
 /// The spec requires every zero-saturation entry to carry a value scale of 1.0.
 /// This table keeps the *whole* neutral column at (0, 1, 1), which is stronger
-/// and is what makes a grey ramp provably survive the node untouched.
+/// and is what makes a gray ramp provably survive the node untouched.
 inline std::vector<float> buildTable(const Correction& c) {
     std::vector<float> table(static_cast<std::size_t>(kHueDivisions) * kSatDivisions * 4);
 
@@ -168,9 +168,9 @@ inline std::vector<float> buildTable(const Correction& c) {
         const float hue = 360.0f * static_cast<float>(h) / static_cast<float>(kHueDivisions);
 
         // Angular distance the short way round, so a window straddling 0 works.
-        float delta = std::fmod(hue - c.centreDeg + 540.0f, 360.0f) - 180.0f;
+        float delta = std::fmod(hue - c.centerDeg + 540.0f, 360.0f) - 180.0f;
         const float t = (c.widthDeg > 0.0f) ? std::fabs(delta) / c.widthDeg : 2.0f;
-        // Raised cosine: one at the centre, zero and flat at the edges, so a
+        // Raised cosine: one at the center, zero and flat at the edges, so a
         // gradient crossing out of the window does not show a seam.
         const float hueWeight =
             (t >= 1.0f) ? 0.0f : 0.5f * (1.0f + std::cos(3.14159265f * t));

@@ -1,7 +1,7 @@
 /*  orion-rawstat — what the sensor actually recorded, per CFA channel.
  *
  *  Exists because a hue error in the finished picture has at least four
- *  possible homes — the sensor clipping, the white balance, the colour matrix,
+ *  possible homes — the sensor clipping, the white balance, the color matrix,
  *  or the display transform — and only one of them can be settled by looking at
  *  the raw numbers. The purple sky on _PIC8095.ARW was diagnosed as a profile
  *  limitation; this is the tool that rules out the cheaper explanation first.
@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
     }
 
     // And the same means white balanced, which is what the demosaic and the
-    // colour matrix actually see. If the hue is already wrong here, nothing
+    // color matrix actually see. If the hue is already wrong here, nothing
     // downstream is to blame.
     std::printf("\n  white balanced, black subtracted, normalized to green:\n");
     double lin[3] = {0, 0, 0};

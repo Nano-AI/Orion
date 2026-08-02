@@ -8,7 +8,7 @@
  *  a crop.
  *
  *  This is the transform between the two, and it is the reason a *parametric*
- *  mask is worth the trouble: there is nothing to resample, only a centre and
+ *  mask is worth the trouble: there is nothing to resample, only a center and
  *  an angle to move. research/masking.md §3.
  */
 
@@ -22,7 +22,7 @@ namespace orion::pipe::mask {
 /// Where the mask lives as far as the interface is concerned: normalized
 /// against the cropped, rotated picture on screen.
 struct Placement {
-    float centreX = 0.5f, centreY = 0.5f;
+    float centerX = 0.5f, centerY = 0.5f;
     float angle   = 0.0f;      // radians, clockwise, as displayed
 };
 
@@ -40,10 +40,10 @@ struct Crop {
 /// `frameW` and `frameH` are that frame's dimensions after any quarter turns —
 /// only their ratio matters.
 ///
-/// The pivot is the crop's centre, in the same normalized rotated space, and it
+/// The pivot is the crop's center, in the same normalized rotated space, and it
 /// is *passed* rather than derived. Deriving it from the crop origin and size is
-/// what once made the preview turn about the frame centre and the committed
-/// render about the crop centre, so an off-centre crop delivered a different
+/// what once made the preview turn about the frame center and the committed
+/// render about the crop center, so an off-center crop delivered a different
 /// picture than the box had shown.
 inline void unstraighten(float& x, float& y, float radians,
                          float pivotX, float pivotY,
@@ -78,8 +78,8 @@ inline void unstraighten(float& x, float& y, float radians,
                                        float pivotX = 0.5f, float pivotY = 0.5f,
                                        float frameW = 1.0f, float frameH = 1.0f) noexcept {
     // Into the rotated frame.
-    float x = c.x + p.centreX * c.w;
-    float y = c.y + p.centreY * c.h;
+    float x = c.x + p.centerX * c.w;
+    float y = c.y + p.centerY * c.h;
 
     // Then the straighten, in the same place the shader applies it: after the
     // crop has put the point in the rotated frame, before the turns are undone.
@@ -97,8 +97,8 @@ inline void unstraighten(float& x, float& y, float radians,
     }
 
     Placement out{};
-    out.centreX = x;
-    out.centreY = y;
+    out.centerX = x;
+    out.centerY = y;
 
     // The angle turns with it. Anticlockwise here, because this undoes the
     // rotation the viewer sees — and the straighten is a rotation too, so it
@@ -126,8 +126,8 @@ inline void unstraighten(float& x, float& y, float radians,
                                          float straightenRad = 0.0f,
                                          float pivotX = 0.5f, float pivotY = 0.5f,
                                          float frameW = 1.0f, float frameH = 1.0f) noexcept {
-    float x = p.centreX;
-    float y = p.centreY;
+    float x = p.centerX;
+    float y = p.centerY;
 
     // Back into the rotated frame. `toFrame` sends (x, y) to (y, 1 - x) once
     // per turn, so the inverse is (x, y) -> (1 - y, x), applied as many times.
@@ -144,8 +144,8 @@ inline void unstraighten(float& x, float& y, float radians,
 
     // And out of the crop, which is what the displayed picture *is*.
     Placement out{};
-    out.centreX = (x - c.x) / std::max(c.w, 1e-6f);
-    out.centreY = (y - c.y) / std::max(c.h, 1e-6f);
+    out.centerX = (x - c.x) / std::max(c.w, 1e-6f);
+    out.centerY = (y - c.y) / std::max(c.h, 1e-6f);
 
     constexpr float kHalfPi = 1.57079632679489662f;
     out.angle = p.angle - straightenRad + float(k) * kHalfPi;

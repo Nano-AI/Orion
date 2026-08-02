@@ -96,7 +96,7 @@ void lensCorrect(uint3 tid : SV_DispatchThreadID,
     // between two texels — a half-pixel shift and a bilinear blur applied to
     // the whole frame the moment any lens slider left zero. It survived the
     // identity test because that test reads a linear ramp, where the average of
-    // two neighbours is the value in between.
+    // two neighbors is the value in between.
     const float2 origin = center - 0.5f;
     float3 c;
     c.r = sampleClamped(src, origin + d * scale.r, p.size).r;

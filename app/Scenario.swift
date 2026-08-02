@@ -977,8 +977,8 @@ enum Scenario {
         case "maskRefine": e.maskRefine = value
         case "brushRadius": e.brushRadius = value
         case "brushFlow":   e.brushFlow = value
-        case "maskCentreX": e.maskCentreX = value
-        case "maskCentreY": e.maskCentreY = value
+        case "maskCentreX", "maskCenterX": e.maskCentreX = value
+        case "maskCentreY", "maskCenterY": e.maskCentreY = value
         case "maskAngle":   e.maskAngle = value
         case "maskLength":  e.maskLength = value
         case "maskRadiusX": e.maskRadiusX = value

@@ -12,7 +12,7 @@
 #include "ops/hsl_ops.slang"
 
 /// The log2 pivot a contrast bends about. `develop_display` uses the same one
-/// for its base contrast, and middle grey (0.18) is -2.47. Two pivots in one
+/// for its base contrast, and middle gray (0.18) is -2.47. Two pivots in one
 /// program would make a local contrast of zero visibly different from no local
 /// contrast at all near the crossover.
 static const float kContrastPivot = -2.5f;
@@ -67,7 +67,7 @@ struct LinearAdjustParams
     float layerExposureEv[4];
     float layerContrast[4];
     float layerSaturation[4];
-    /// A colour **cast**, not a white balance. See the note at the call site.
+    /// A color **cast**, not a white balance. See the note at the call site.
     float layerWarmth[4];
     float layerTint[4];
     /// Which of the four coverage textures carries each layer. ⚠ The graph is
@@ -126,7 +126,7 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
 
     c = applyExposure(c, p.exposureEv);
 
-    // The neighbourhood's EV, which is what the highlight and shadow bands are
+    // The neighborhood's EV, which is what the highlight and shadow bands are
     // weighted by.
     //
     // The guide chain is seven nodes and only these two bands use it, so it is
@@ -143,7 +143,7 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     // edit was quietly weaker than it asked to be, everywhere, and the bench
     // printed ok because it only ever asserted that *something* changed.
     //
-    // With no neighbourhood estimate the honest answer is the pixel itself,
+    // With no neighborhood estimate the honest answer is the pixel itself,
     // which is also what makes the fallback exact: the bands then read the same
     // EV whites and blacks do.
     float guideEv;
@@ -192,10 +192,10 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
 
         // Contrast, as a gain on the pixel's distance from the pivot measured
         // in stops — so it is a multiply like the exposure above and keeps the
-        // colour's ratios, rather than bending each channel separately and
+        // color's ratios, rather than bending each channel separately and
         // pulling the hue toward whichever primary is largest.
         //
-        // ⚠ The pivot is `develop_display`'s, not a new one. Middle grey is
+        // ⚠ The pivot is `develop_display`'s, not a new one. Middle gray is
         // -2.47 in log2 and the display transform pivots at -2.5; a second
         // pivot here would make a local contrast of zero visibly different
         // from no local contrast at all near the crossover.
@@ -206,21 +206,21 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
         }
 
         // Saturation, toward the pixel's own luminance. Same construction the
-        // global one uses, so the two agree about what grey means.
+        // global one uses, so the two agree about what gray means.
         if (p.layerSaturation[L] != 0.0f)
         {
             const float y = luminance2020(c);
             c = lerp(float3(y), c, 1.0f + a * p.layerSaturation[L]);
         }
 
-        // ⚠ A colour **cast**, not a white balance. Temperature and tint are
+        // ⚠ A color **cast**, not a white balance. Temperature and tint are
         // applied in `linearize`, before the demosaic, and cannot be local —
         // research/masking.md §2b. This is a per-channel multiply.
         if (p.layerWarmth[L] != 0.0f || p.layerTint[L] != 0.0f)
         {
             // ⚠ Taken *before* the multiply. The first version read the
             // luminance on both sides of the cast from the same already-cast
-            // colour, so the ratio was one and the renormalisation did nothing.
+            // color, so the ratio was one and the renormalisation did nothing.
             const float before = luminance2020(c);
 
             const float w = a * p.layerWarmth[L];
@@ -229,7 +229,7 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
                         1.0f + t * 0.30f,
                         1.0f - w * 0.30f);
 
-            // Renormalised on luminance so a cast moves colour without also
+            // Renormalized on luminance so a cast moves color without also
             // moving exposure — otherwise Warmth doubles as a brightness
             // slider and the two controls fight over the same pixels.
             const float after = luminance2020(c);

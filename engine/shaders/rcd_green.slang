@@ -3,7 +3,7 @@
 // Reference: Luis Sanz Rodríguez, https://github.com/LuisSR/RCD-Demosaicing (MIT).
 //
 // This is the step that gives the algorithm its name and the one that was
-// missing before. Rather than adding a gradient correction to the neighbouring
+// missing before. Rather than adding a gradient correction to the neighboring
 // green (Hamilton–Adams), each cardinal estimate is *scaled* by a ratio of the
 // local low-pass values:
 //
@@ -11,7 +11,7 @@
 //
 // A ratio tracks a luminance step correctly where an additive correction
 // overshoots it, which is why RCD holds fine texture that Hamilton–Adams
-// smears and does not need an artefact-suppressing clamp to stay clean.
+// smears and does not need an artifact-suppressing clamp to stay clean.
 //
 // The four estimates are then combined by *opposing* gradient weights: an
 // estimate from a direction with a small gradient is trusted more, so the

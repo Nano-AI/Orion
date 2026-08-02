@@ -7,7 +7,7 @@
 // energy of a high-pass filter applied along that direction, so a large value
 // means the signal changes fast along it — and interpolation should therefore
 // run the *other* way, along the smooth direction. Guessing that wrong is what
-// produces zippers and maze artefacts.
+// produces zippers and maze artifacts.
 //
 // The same statistic serves the cardinal axes in step 1 and the diagonals in
 // step 4; only the sampling offsets change.

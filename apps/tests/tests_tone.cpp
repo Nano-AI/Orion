@@ -546,11 +546,11 @@ void testLinearizeClipsToWhite() {
     report(mid[0] > mid[1], "the midtone is still white-balanced, not flattened");
 }
 
-/// A grading wheel changes colour and not brightness.
+/// A grading wheel changes color and not brightness.
 ///
 /// That property is the whole reason the wheels are usable: without it, pushing
 /// toward yellow also lifts the zone, so every wheel fights the exposure slider
-/// and a neutral grey stops keeping its luminance. It is one subtraction in
+/// and a neutral gray stops keeping its luminance. It is one subtraction in
 /// gradeOffsets and nothing in the picture would announce its absence — the
 /// image would just drift brighter as you graded.
 void testGradeOffsets() {
@@ -560,9 +560,9 @@ void testGradeOffsets() {
 
     float o[3];
     DevelopPipeline::gradeOffsets(0.0f, 0.0f, o);
-    checkNear(o[0], 0.0, 1e-6, "the centre is exactly no correction (r)");
-    checkNear(o[1], 0.0, 1e-6, "the centre is exactly no correction (g)");
-    checkNear(o[2], 0.0, 1e-6, "the centre is exactly no correction (b)");
+    checkNear(o[0], 0.0, 1e-6, "the center is exactly no correction (r)");
+    checkNear(o[1], 0.0, 1e-6, "the center is exactly no correction (g)");
+    checkNear(o[2], 0.0, 1e-6, "the center is exactly no correction (b)");
 
     // Every angle around the rim, and a few radii on each.
     for (int deg = 0; deg < 360; deg += 15) {
@@ -583,7 +583,7 @@ void testGradeOffsets() {
     DevelopPipeline::gradeOffsets(1.0f, 0.0f, full);
     checkNear(double(full[0]), 2.0 * double(half[0]), 1e-5,
               "twice the radius is twice the offset");
-    // 0.02 in scene-linear terms, against a middle grey of 0.18. Small
+    // 0.02 in scene-linear terms, against a middle gray of 0.18. Small
     // sounding and not small: an additive offset is measured against the
     // *scene*, not against a display value, and the calibration in
     // research/color-grading.md is what settled the constant.
@@ -843,7 +843,7 @@ void testLensGpu() {
            "delta " + std::to_string(redAt(kW - 1) - redAt(kW - 2)));
 }
 
-/// Three-way colour grading, on a real GPU.
+/// Three-way color grading, on a real GPU.
 ///
 /// The newest node in the graph and the least checked one: `color-grading.md`
 /// admitted its effect "is a check somebody ran once", there was no GPU test,
@@ -854,5 +854,5 @@ void testLensGpu() {
 /// ship looking right: does an identity table leave the image alone (the space
 /// conversion is a full round trip through linear ProPhoto and HSV, and any
 /// error in it tints *everything*), and does a neutral stay neutral (the DNG
-/// spec requires it, and a purple cast on greys is exactly the bug this whole
+/// spec requires it, and a purple cast on grays is exactly the bug this whole
 /// node exists to undo). Only then: does blue actually move.

@@ -9,8 +9,8 @@ void testBrushDabsFollowTheFrame() {
 
     namespace mg = orion::pipe::mask;
 
-    // An off-centre asymmetric stroke: a symmetric one survives a flip, and a
-    // centred one survives a rotation, so neither would catch a mirrored axis.
+    // An off-center asymmetric stroke: a symmetric one survives a flip, and a
+    // centerd one survives a rotation, so neither would catch a mirrored axis.
     const float stroke[][2] = {{0.20f, 0.30f}, {0.35f, 0.32f}, {0.55f, 0.41f}};
 
     struct Case { const char* name; mg::Crop crop; int turns; float straighten; };
@@ -34,15 +34,15 @@ void testBrushDabsFollowTheFrame() {
         for (const auto& dab : stroke) {
             const auto asDab = mg::toFrame({dab[0], dab[1], 0.0f}, c.crop, c.turns,
                                            c.straighten, pivotX, pivotY, rotW, rotH);
-            // The same point, placed as a gradient centre. One transform or two.
-            const auto asCentre = mg::toFrame({dab[0], dab[1], 0.7f}, c.crop, c.turns,
+            // The same point, placed as a gradient center. One transform or two.
+            const auto asCenter = mg::toFrame({dab[0], dab[1], 0.7f}, c.crop, c.turns,
                                               c.straighten, pivotX, pivotY, rotW, rotH);
             worst = std::max(worst,
-                             std::max(std::abs(double(asDab.centreX - asCentre.centreX)),
-                                      std::abs(double(asDab.centreY - asCentre.centreY))));
+                             std::max(std::abs(double(asDab.centerX - asCenter.centerX)),
+                                      std::abs(double(asDab.centerY - asCenter.centerY))));
         }
         report(worst < 1e-6,
-               std::string("a dab lands where a gradient centre does — ") + c.name,
+               std::string("a dab lands where a gradient center does — ") + c.name,
                "worst " + std::to_string(worst));
     }
 
@@ -58,7 +58,7 @@ void testBrushDabsFollowTheFrame() {
             const auto f = mg::toFrame({dab[0], dab[1], 0.0f}, mg::Crop{}, turns,
                                        0.0f, 0.5f, 0.5f, rotW, rotH);
             // Undo it by turning the other way the same number of times.
-            float x = f.centreX, y = f.centreY;
+            float x = f.centerX, y = f.centerY;
             for (int i = 0; i < ((4 - turns) % 4); ++i) {
                 const float nx = y, ny = 1.0f - x;
                 x = nx; y = ny;
@@ -82,7 +82,7 @@ void testMaskGeometry() {
     // Nothing applied is nothing changed.
     {
         const auto p = mg::toFrame({0.3f, 0.7f, 0.5f}, none, 0);
-        report(std::abs(p.centreX - 0.3f) < 1e-6f && std::abs(p.centreY - 0.7f) < 1e-6f &&
+        report(std::abs(p.centerX - 0.3f) < 1e-6f && std::abs(p.centerY - 0.7f) < 1e-6f &&
                std::abs(p.angle - 0.5f) < 1e-6f,
                "an unturned, uncropped frame leaves the placement alone", "");
     }
@@ -103,7 +103,7 @@ void testMaskGeometry() {
             for (const auto& pt : {std::pair{0.25f, 0.50f}, std::pair{0.10f, 0.90f},
                                    std::pair{0.75f, 0.30f}}) {
                 const auto placed = mg::toFrame({pt.first, pt.second, 0.0f}, none, turns);
-                float x = placed.centreX, y = placed.centreY;
+                float x = placed.centerX, y = placed.centerY;
                 for (int i = 0; i < turns; ++i) forward(x, y);
                 worst = std::max(worst, std::max(std::abs(double(x) - pt.first),
                                                  std::abs(double(y) - pt.second)));
@@ -116,7 +116,7 @@ void testMaskGeometry() {
     // Four turns is no turn.
     {
         const auto p = mg::toFrame({0.2f, 0.8f, 0.0f}, none, 4);
-        report(std::abs(p.centreX - 0.2f) < 1e-6f && std::abs(p.centreY - 0.8f) < 1e-6f,
+        report(std::abs(p.centerX - 0.2f) < 1e-6f && std::abs(p.centerY - 0.8f) < 1e-6f,
                "four quarter turns is the identity", "");
     }
 
@@ -130,16 +130,16 @@ void testMaskGeometry() {
                std::to_string(p.angle));
     }
 
-    // A crop magnifies. The centre of a centred crop is the centre of the
+    // A crop magnifies. The center of a centerd crop is the center of the
     // frame, and its corner is the crop's corner — not the frame's.
     {
         const mg::Crop c{0.25f, 0.25f, 0.5f, 0.5f};
         const auto mid = mg::toFrame({0.5f, 0.5f, 0.0f}, c, 0);
         const auto corner = mg::toFrame({0.0f, 0.0f, 0.0f}, c, 0);
-        report(std::abs(mid.centreX - 0.5f) < 1e-6f && std::abs(mid.centreY - 0.5f) < 1e-6f,
-               "the middle of a centred crop is the middle of the frame", "");
-        report(std::abs(corner.centreX - 0.25f) < 1e-6f &&
-               std::abs(corner.centreY - 0.25f) < 1e-6f,
+        report(std::abs(mid.centerX - 0.5f) < 1e-6f && std::abs(mid.centerY - 0.5f) < 1e-6f,
+               "the middle of a centerd crop is the middle of the frame", "");
+        report(std::abs(corner.centerX - 0.25f) < 1e-6f &&
+               std::abs(corner.centerY - 0.25f) < 1e-6f,
                "and its corner is the crop's corner, not the frame's", "");
     }
 
@@ -294,8 +294,8 @@ void testMaskGeometryInverse() {
                                               px, py, k.frameW, k.frameH);
             const auto back = mask::fromFrame(framed, k.crop, k.turns, rad,
                                               px, py, k.frameW, k.frameH);
-            worst = std::max(worst, double(std::abs(back.centreX - start.centreX)));
-            worst = std::max(worst, double(std::abs(back.centreY - start.centreY)));
+            worst = std::max(worst, double(std::abs(back.centerX - start.centerX)));
+            worst = std::max(worst, double(std::abs(back.centerY - start.centerY)));
             worstAngle = std::max(worstAngle,
                                   double(std::abs(back.angle - start.angle)));
         }
@@ -318,11 +318,11 @@ void testMaskGeometryInverse() {
     {
         const auto out = mask::fromFrame({0.25f, 0.90f, 0.0f},
                                          {0.0f, 0.0f, 1.0f, 1.0f}, 1);
-        report(std::abs(out.centreX - 0.10f) < 1e-5 &&
-               std::abs(out.centreY - 0.25f) < 1e-5,
+        report(std::abs(out.centerX - 0.10f) < 1e-5 &&
+               std::abs(out.centerY - 0.25f) < 1e-5,
                "and one turn lands where the algebra says, not merely somewhere "
                "the forward transform agrees with",
-               std::to_string(out.centreX) + ", " + std::to_string(out.centreY));
+               std::to_string(out.centerX) + ", " + std::to_string(out.centerY));
     }
 }
 
@@ -333,4 +333,4 @@ void testMaskGeometryInverse() {
 // mosaic on a stride that is not a multiple of the 2x2 cell and the red samples
 // land where the demosaic expects green. `filters` still says the pattern is
 // intact, so nothing downstream complains — the picture simply comes out with
-// its colours wrong, and it would be very easy to blame the demosaic.
+// its colors wrong, and it would be very easy to blame the demosaic.

@@ -1,10 +1,10 @@
 // Local Laplacian, last step — put the filtered luminance back on the picture.
 //
-// Paris et al. §5.3: an intensity image and colour ratios rho = I / I_i, filter
+// Paris et al. §5.3: an intensity image and color ratios rho = I / I_i, filter
 // the intensity, multiply the ratios back. Scaling all three channels by one
 // factor is exactly that, and it is what keeps the hue and saturation of every
 // pixel where the camera profile put them — Figure 9 in the paper is the same
-// frame filtered both ways, and the per-channel version visibly moves colour.
+// frame filtered both ways, and the per-channel version visibly moves color.
 //
 // The window normalization cancels here: only the *difference* between the
 // filtered and original log luminance survives into the ratio, so the choice of

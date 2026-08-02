@@ -1892,14 +1892,14 @@ final class Engine {
             c.invert = m.invert ? 1 : 0
             c.hidden = m.hidden ? 1 : 0
             c.starts_layer = m.startsLayer ? 1 : 0
-            c.centre_x = m.centreX; c.centre_y = m.centreY
+            c.center_x = m.centreX; c.center_y = m.centreY
             c.angle = m.angle; c.length = m.length
             c.radius_x = m.radiusX; c.radius_y = m.radiusY
             c.feather = m.feather; c.roundness = m.roundness
             c.range_lo = m.rangeLo; c.range_hi = m.rangeHi
             c.range_soft = m.rangeSoft
-            c.colour_r = m.colourR; c.colour_g = m.colourG; c.colour_b = m.colourB
-            c.colour_tol = m.colourTol; c.colour_soft = m.colourSoft
+            c.color_r = m.colourR; c.color_g = m.colourG; c.color_b = m.colourB
+            c.color_tol = m.colourTol; c.color_soft = m.colourSoft
             c.brush_radius = m.brushRadius; c.brush_flow = m.brushFlow
             c.brush_hardness = m.brushHardness
             c.brush_revision = brushRevisions[i]

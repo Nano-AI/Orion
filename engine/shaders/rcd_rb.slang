@@ -12,7 +12,7 @@
 //       averaged a 3x3 with no directionality at all, which is why edges showed
 //       color fringing.
 //
-//   4.2 At a green site, both red and blue sit on the cardinal neighbours, and
+//   4.2 At a green site, both red and blue sit on the cardinal neighbors, and
 //       the step-1 discrimination already computed is reused.
 
 #include "cfa.slang"
@@ -52,7 +52,7 @@ void rcdRedBlue(uint3 tid : SV_DispatchThreadID,
 
     if (here == 1)
     {
-        // ── 4.2 Green site: red and blue are both cardinal neighbours. ──
+        // ── 4.2 Green site: red and blue are both cardinal neighbors. ──
         const float vh = dirs[tid.xy];
 
         const float nR = diffAt(cfa, green, c, int2(0, -1), sz);

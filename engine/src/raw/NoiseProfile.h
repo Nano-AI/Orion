@@ -40,7 +40,7 @@ struct NoiseProfile {
 
 /// Fits the model to a mosaic.
 ///
-/// Same-color neighbours two pixels apart are *second*-differenced, which
+/// Same-color neighbors two pixels apart are *second*-differenced, which
 /// cancels the scene and leaves noise. Second rather than first because a first
 /// difference measures the local gradient as though it were noise — on a frame
 /// with a sky in it that is most of what it measures. A second difference

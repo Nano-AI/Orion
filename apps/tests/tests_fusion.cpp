@@ -43,7 +43,7 @@ void testExposureFusionMath() {
                 const float g = sef::clip(t, c, beta, sef::kLambda);
                 if (g < previous - 1e-6f) monotone = false;
                 previous = g;
-                // The tail asymptote: |g - centre| < beta/2 + lambda.
+                // The tail asymptote: |g - center| < beta/2 + lambda.
                 if (std::abs(g - c) > half + sef::kLambda + 1e-5f) bounded = false;
             }
         }
@@ -182,7 +182,7 @@ void testExposureFusionMath() {
         // Exposure fusion does not *guarantee* monotonicity — it blends
         // Laplacian coefficients with spatially varying weights, and Mertens
         // et al. section 4.1 names a "spurious low frequency brightness change"
-        // as a known artefact of exactly this. So the question is not whether
+        // as a known artifact of exactly this. So the question is not whether
         // reversals exist but how large they are, and whether they grow with
         // the amplification — which is what says they come from the method
         // rather than from a mistake in the blend.
@@ -215,7 +215,7 @@ void testExposureFusionMath() {
     {
         orion::pipe::pyr::Plane v{101, 1, std::vector<float>(101)};
         for (int i = 0; i <= 100; ++i) v.v[std::size_t(i)] = 0.2f + 0.006f * float(i);
-        sef::robustNormalise(v, sef::kRobustClip);
+        sef::robustNormalize(v, sef::kRobustClip);
 
         const auto mm = std::minmax_element(v.v.begin(), v.v.end());
         report(*mm.first <= 1e-5f && *mm.second >= 1.0f - 1e-5f,
@@ -226,7 +226,7 @@ void testExposureFusionMath() {
         orion::pipe::pyr::Plane spike = v;
         for (float& t : spike.v) t = 0.5f;
         spike.v[0] = 100.0f;
-        sef::robustNormalise(spike, sef::kRobustClip);
+        sef::robustNormalize(spike, sef::kRobustClip);
         report(spike.v[1] > 0.0f && spike.v[1] <= 1.0f,
                "and a single wild outlier does not flatten everything else",
                std::to_string(spike.v[1]));
@@ -335,13 +335,13 @@ void testExposureFusionGpu() {
         report(worstImage < 3e-3, "the shader simulates the same exposures as the reference",
                "worst " + std::to_string(worstImage));
         // Looser than the image comparison on purpose: the weights are
-        // normalised to sum to one across the whole set, so the more images the
+        // normalized to sum to one across the whole set, so the more images the
         // plan asks for the smaller each one is, and RGBA16Float's absolute
         // quantum does not shrink with them. The invariant that actually
         // matters — that they still sum to one — is checked below and is tight.
         report(worstWeight < 5e-3, "and computes the same weights",
                "worst " + std::to_string(worstWeight));
-        // Mertens et al. section 3.2 normalises so the weights sum to one at
+        // Mertens et al. section 3.2 normalizes so the weights sum to one at
         // every pixel. If they do not, the blend is a gain as well as a blend.
         report(worstSum < 5e-3, "the weights sum to one at every pixel",
                "worst " + std::to_string(worstSum));
@@ -409,7 +409,7 @@ void testExposureFusionGpu() {
         // The clamp replaces the paper's global renormalisation, so it has to
         // hold even when the proxy asks for something absurd.
         report(lift <= double(sef::kMaxGain) + 1e-3,
-               "the gain is clamped where the paper would have renormalised",
+               "the gain is clamped where the paper would have renormalized",
                "max gain " + std::to_string(lift));
     }
 }
@@ -442,7 +442,7 @@ void testAutoEnhanceStats() {
                "a single-valued image reports that value at every percentile", "");
     }
 
-    // The bin's lower edge, not its centre. With a coarse histogram the centre
+    // The bin's lower edge, not its center. With a coarse histogram the center
     // reports a black point above zero on an image that genuinely contains
     // black, and the correction then lifts a picture that needed nothing.
     {
@@ -476,7 +476,7 @@ void testAutoEnhanceStats() {
     // ── The solver ────────────────────────────────────────────────────────
     //
     // Driven against a stand-in for the pipeline rather than the real one, so
-    // the controller's behaviour is testable without a GPU or a photograph.
+    // the controller's behavior is testable without a GPU or a photograph.
     // The stand-in compresses like a display transform does, which is the
     // property that makes a full correction overshoot and the damping
     // necessary.
@@ -499,12 +499,12 @@ void testAutoEnhanceStats() {
                 c = ae::refine(c, st);
             }
             const float finalMedian = renderStub(scene, c.exposureEv);
-            const double err = std::abs(double(finalMedian) - double(ae::kMidGrey));
+            const double err = std::abs(double(finalMedian) - double(ae::kMidGray));
             worst = std::max(worst, err);
             if (err > 0.05) allConverged = false;
         }
         report(allConverged,
-               "the exposure solver converges on the mid-grey anchor across four stops of scene",
+               "the exposure solver converges on the mid-gray anchor across four stops of scene",
                "worst " + std::to_string(worst));
 
         // Past its clamp it must saturate, not oscillate. A frame this dark
@@ -533,7 +533,7 @@ void testAutoEnhanceStats() {
     {
         ae::Controls c{};
         ae::Stats st{};
-        st.median = ae::kMidGrey;
+        st.median = ae::kMidGray;
         st.shadow = 0.1f; st.high = 0.9f;
         st.atFloor = 0.10f; st.atCeiling = 0.10f;    // already clipping hard
         const auto next = ae::refine(c, st);
@@ -547,7 +547,7 @@ void testAutoEnhanceStats() {
     {
         ae::Controls c{};
         ae::Stats st{};
-        st.median = ae::kMidGrey;
+        st.median = ae::kMidGray;
         st.shadow = 0.45f; st.high = 0.55f;          // span 0.1 -> slope 10
         const auto next = ae::refine(c, st);
         report(next.blacks == 0.0f && next.whites == 0.0f,
@@ -563,7 +563,7 @@ void testAutoEnhanceStats() {
                "a dark frame is given more shadow lift than a bright one",
                std::to_string(darkLook.fusion) + " vs " + std::to_string(brightLook.fusion));
         report(brightLook.fusion == 0.0f,
-               "and a frame already above mid grey is given none", "");
+               "and a frame already above mid gray is given none", "");
         report(darkLook.fusion <= 1.0f && darkLook.clarity <= 1.0f,
                "the look controls stay inside the range the sliders have", "");
     }

@@ -1,10 +1,10 @@
-// Exposure fusion, step 2 — the simulated images, and their normalised weights.
+// Exposure fusion, step 2 — the simulated images, and their normalized weights.
 //
 // One kernel, two modes, because the two outputs are point-wise functions of the
 // same input and differ only in what they emit. Four of the eight slots per
 // dispatch, so a five-image plan costs two dispatches per output.
 //
-// The weights are normalised here rather than later: the normalisation is a sum
+// The weights are normalized here rather than later: the normalisation is a sum
 // over *all* the simulated images, so it has to happen where all of them are in
 // hand, and after this point each stack can be blurred independently.
 

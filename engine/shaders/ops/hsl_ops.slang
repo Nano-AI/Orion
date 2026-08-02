@@ -107,7 +107,7 @@ float3 applyColorMixer(float3 c,
     [unroll]
     for (uint i = 0; i < 8; ++i)
     {
-        // 60 degrees of falloff gives neighbouring bands real overlap, which is
+        // 60 degrees of falloff gives neighboring bands real overlap, which is
         // what keeps a sky gradient from banding as it crosses aqua into blue.
         const float d = hueDistance(hsl.x, kBandCenters[i]);
         const float w = max(0.0f, 1.0f - d / 60.0f);

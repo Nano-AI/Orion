@@ -77,7 +77,7 @@ std::vector<std::uint16_t> output16(const orion::pipe::DevelopPipeline& d,
 
 /// Mean absolute per-channel change between two renders, in 0..1 display units.
 ///
-/// The summary metrics below answer *what* changed — brightness, colourfulness,
+/// The summary metrics below answer *what* changed — brightness, colorfulness,
 /// detail. This answers *how much*, and it is the one that cannot cancel. A
 /// grading wheel rotates hue at constant saturation, so it moves every pixel
 /// and changes the frame's mean luma, mean chroma and mean saturation by very
@@ -112,7 +112,7 @@ void writeOut(const orion::pipe::DevelopPipeline& d, const std::string& path) {
 /// y + (c - y)*a weighted by the luminance weights is exactly y — so measuring
 /// mean luma reported them as doing nothing, every run. A benchmark that cries
 /// wolf trains you to ignore it, which is worse than not having one.
-/// Detail is neighbour-to-neighbour luma difference. Sharpening adds as much
+/// Detail is neighbor-to-neighbor luma difference. Sharpening adds as much
 /// as it subtracts around an edge, so it barely moves a mean by construction —
 /// on `_PIC8220.ARW` a full-strength unsharp mask moved mean luma by -0.0005,
 /// under the noise floor of every other probe. Measuring an edge filter by the
@@ -162,14 +162,14 @@ double meanOf(const orion::pipe::DevelopPipeline& d, Metric metric) {
                 const double b = pixels[i * 4 + 2] / 257.0;
                 const double mx = std::max(r, std::max(g, b));
                 const double mn = std::min(r, std::min(g, b));
-                // Below a quarter of an 8-bit step there is no colour to speak
+                // Below a quarter of an 8-bit step there is no color to speak
                 // of, only quantisation, and dividing by it manufactures
                 // saturation out of noise.
                 sum += mx > 0.25 ? (mx - mn) / mx * 255.0 : 0.0;
                 break;
             }
             case Metric::Detail:
-                // The horizontal neighbour. The stride steps within a row for
+                // The horizontal neighbor. The stride steps within a row for
                 // all but one sample in 163, so wrapping is noise.
                 sum += std::abs(y - lumaAt(i + 1));
                 break;
@@ -364,7 +364,7 @@ int main(int argc, char** argv) {
                 /// Out-of-band state, set on the pipeline before either render.
                 ///
                 /// Not everything a mask can be is expressible in `Adjustments`.
-                /// A brush stroke is a variable-length list of centres and a
+                /// A brush stroke is a variable-length list of centers and a
                 /// matte is a raster, so both are uploaded through their own
                 /// calls — which is precisely why neither had a probe: the two
                 /// hooks above take an `Adjustments&` and cannot reach them.
@@ -466,7 +466,7 @@ int main(int argc, char** argv) {
                 {"local +2 EV",    flat, [](auto& a) {
                      auto& c = a.maskComponents[0];
                      c.kind = 1;
-                     c.centre[0] = 0.5f; c.centre[1] = 0.5f;
+                     c.center[0] = 0.5f; c.center[1] = 0.5f;
                      c.angle = 0.0f;
                      c.length = 0.8f;
                      a.maskCount = 1;
@@ -485,13 +485,13 @@ int main(int argc, char** argv) {
                 {"local +2 EV, hole", flat, [](auto& a) {
                      auto& c = a.maskComponents[0];
                      c.kind = 1;
-                     c.centre[0] = 0.5f; c.centre[1] = 0.5f;
+                     c.center[0] = 0.5f; c.center[1] = 0.5f;
                      c.angle = 0.0f;
                      c.length = 0.8f;
                      auto& s = a.maskComponents[1];
                      s.kind = 2;
                      s.compose = 1;      // subtract
-                     s.centre[0] = 0.75f; s.centre[1] = 0.5f;
+                     s.center[0] = 0.75f; s.center[1] = 0.5f;
                      s.radius[0] = 0.3f; s.radius[1] = 0.55f;
                      s.feather = 0.5f;
                      a.maskCount = 2;
@@ -505,7 +505,7 @@ int main(int argc, char** argv) {
                 // few thousand pixels of twenty-four million and moves a
                 // whole-frame mean by nothing measurable — the same dilution
                 // the mask-refine probe hit. What this asks is that the graph
-                // still delivers the node on a photograph; the *behaviour*
+                // still delivers the node on a photograph; the *behavior*
                 // (heal keeps the destination's tone, clone does not) is pinned
                 // exactly by testSpotRemovalGpu on a synthetic frame where the
                 // right answer is a number rather than a tolerance.
@@ -536,14 +536,14 @@ int main(int argc, char** argv) {
                 // on the reference image, biased by the global exposure so its
                 // numbers mean what is on screen.
                 //
-                // Everything from half a stop above middle grey up, darkened.
+                // Everything from half a stop above middle gray up, darkened.
                 // On all three frames that is a real part of the picture and
                 // not the whole of it, which is the property the floor is
                 // calibrated against.
                 {"range +2 EV shadows", [](orion::pipe::Adjustments& a) {
                      // ⚠ Judged on a normally exposed frame, not on the raw at
                      // zero. These are night and dusk captures: at exposure 0
-                     // almost every pixel sits below middle grey, so a genuine
+                     // almost every pixel sits below middle gray, so a genuine
                      // highlight band selects nothing and the probe reported NO
                      // EFFECT on one of the three. Widening the band until it
                      // moved would have "fixed" it by selecting the whole
@@ -554,7 +554,7 @@ int main(int argc, char** argv) {
                      c.kind = 5;
                      // ⚠ A *shadow* band, not a highlight one. A highlight
                      // band measured NO EFFECT on the night frame, and
-                     // correctly so — it has almost nothing above middle grey,
+                     // correctly so — it has almost nothing above middle gray,
                      // the same shape as dehaze finding no haze in a clear
                      // sky. Every photograph has shadows, so this is the end
                      // that exercises the band on all three.
@@ -563,16 +563,16 @@ int main(int argc, char** argv) {
                      a.layers[0].exposureEv = 2.0f;
                  // Half the smallest ratio over the three frames: 2.15, 3.08,
                  // 0.34 of the reference. The spread is the band doing its job —
-                 // the two dark frames have far more below middle grey than the
+                 // the two dark frames have far more below middle gray than the
                  // daylight one, so the same band moves six times as much in
                  // them.
                  }, Metric::Luma, 0.16},
                 // Local adjustments beyond exposure — research/masking.md §2b.
                 //
                 // ⚠ Measured on **chroma**, not luma, and that is the point of
-                // the probe rather than a detail: a colour cast that also moved
+                // the probe rather than a detail: a color cast that also moved
                 // the exposure would be caught by a luma floor and a correct
-                // one would not. The shader renormalises the cast on luminance
+                // one would not. The shader renormalizes the cast on luminance
                 // precisely so it does not move brightness, so a luma probe
                 // here would measure zero on a working control.
                 {"local grade on a mask", [](orion::pipe::Adjustments& a) {
@@ -580,7 +580,7 @@ int main(int argc, char** argv) {
                  }, [](auto& a) {
                      auto& c = a.maskComponents[0];
                      c.kind = 2;                       // a radial over the middle
-                     c.centre[0] = 0.5f; c.centre[1] = 0.5f;
+                     c.center[0] = 0.5f; c.center[1] = 0.5f;
                      c.radius[0] = 0.35f; c.radius[1] = 0.35f;
                      c.feather = 0.4f;
                      a.maskCount = 1;
@@ -598,31 +598,31 @@ int main(int argc, char** argv) {
                  // on it — which is the mistake `DECISIONS.md` #47 records
                  // paying for twice already.
                  }, Metric::Chroma, 0.024},
-                // A colour range mask — research/masking.md §4c.
+                // A color range mask — research/masking.md §4c.
                 //
                 // ⚠ The target is a **neutral**, and deliberately so. A probe
                 // that picked a saturated shade would be measuring whether
                 // these three particular photographs happen to contain it —
                 // and the sample set is a night sky, a lit forecourt and a
-                // daylight cityscape, which share almost no saturated colour.
+                // daylight cityscape, which share almost no saturated color.
                 // Every photograph contains near-neutrals: tarmac, concrete,
                 // cloud, shadow. That is the same argument the band above makes
                 // for choosing shadows over highlights.
                 //
                 // ⚠ And the metric ignores lightness, which is what makes a
                 // neutral target a *large* selection rather than a token one:
-                // it takes every grey in the frame at every brightness. The
+                // it takes every gray in the frame at every brightness. The
                 // tolerance is tight — 0.06 against the 0.126 that separates
                 // the closest pair the research measured — so this is still a
                 // selection and not the whole picture.
-                {"colour range, neutrals", [](orion::pipe::Adjustments& a) {
+                {"color range, neutrals", [](orion::pipe::Adjustments& a) {
                      a.exposureEv = 2.6f;
                  }, [](auto& a) {
                      auto& c = a.maskComponents[0];
                      c.kind = 6;
-                     c.colour[0] = c.colour[1] = c.colour[2] = 0.18f;
-                     c.colourTol = 0.06f;
-                     c.colourSoft = 0.02f;
+                     c.color[0] = c.color[1] = c.color[2] = 0.18f;
+                     c.colorTol = 0.06f;
+                     c.colorSoft = 0.02f;
                      a.maskCount = 1;
                      a.layers[0].exposureEv = 2.0f;
                  // Measured 0.826, 0.226 and 0.221 of reference on the three
@@ -630,9 +630,9 @@ int main(int argc, char** argv) {
                  // probe here. ⚠ The spread is the probe working rather than
                  // noise: the forecourt is concrete, tarmac and a white
                  // building, so a neutral target takes most of it, while the
-                 // night sky and the daylight cityscape are mostly coloured.
+                 // night sky and the daylight cityscape are mostly colored.
                  // A probe that measured the same on all three would be
-                 // selecting something that is not about colour.
+                 // selecting something that is not about color.
                  }, Metric::Luma, 0.11},
                 // A raster mask component — research/masking.md §5, the
                 // shape a segmentation matte arrives in.
@@ -643,7 +643,7 @@ int main(int argc, char** argv) {
                 // which is exactly why the brush has gone unprobed since it was
                 // built. Both are reachable now.
                 //
-                // A centred disc of radius 0.25 covers about a fifth of the
+                // A centerd disc of radius 0.25 covers about a fifth of the
                 // frame, so a two-stop local exposure through it moves roughly a
                 // fifth of what an unmasked one would. That ratio is the point:
                 // a matte that silently covered everything, or nothing, would
@@ -760,7 +760,7 @@ int main(int argc, char** argv) {
                 {"mask refine 1.0", [](orion::pipe::Adjustments& a) {
                      auto& c = a.maskComponents[0];
                      c.kind = 2;
-                     c.centre[0] = 0.42f; c.centre[1] = 0.55f;
+                     c.center[0] = 0.42f; c.center[1] = 0.55f;
                      c.radius[0] = 0.18f; c.radius[1] = 0.18f;
                      c.feather = 0.02f;
                      a.maskCount = 1;
@@ -777,7 +777,7 @@ int main(int argc, char** argv) {
                 // shifting exposure — so a probe on mean brightness reads
                 // exactly zero for a working grain node and exactly zero for
                 // one that was never dispatched. `Metric::Detail` is the mean
-                // *absolute* difference between neighbours, which is the one
+                // *absolute* difference between neighbors, which is the one
                 // thing grain unambiguously raises.
                 // ⚠ A real floor, not a 0.0 that only looks like one. It sat at
                 // 0.0 for an afternoon, and 0.0 is what this probe reads when
@@ -1061,7 +1061,7 @@ int main(int argc, char** argv) {
         // Each M3 feature is verified alone. Nothing verified them *composed*,
         // and they are exactly the kind that interact: dehaze divides by a
         // transmission, exposure fusion divides one proxy luminance by another,
-        // clarity raises a normalised amplitude to a fractional power, and the
+        // clarity raises a normalized amplitude to a fractional power, and the
         // creative LUT indexes a grid with whatever comes out. A NaN from any
         // one of them is invisible on screen — it renders as a black or white
         // pixel — and propagates through everything downstream of it.
@@ -1183,16 +1183,16 @@ int main(int argc, char** argv) {
                 a.blacks     = c.blacks;
                 a.whites     = c.whites;
                 const auto st = measure(a);
-                if (std::abs(st.median - ae::kMidGrey) < ae::kSettled) break;
+                if (std::abs(st.median - ae::kMidGray) < ae::kSettled) break;
                 c = ae::refine(c, st);
             }
             a.exposureEv = c.exposureEv;
             a.blacks = c.blacks; a.whites = c.whites;
             const ae::Stats after = measure(a);
 
-            const double err = std::abs(double(after.median) - double(ae::kMidGrey));
+            const double err = std::abs(double(after.median) - double(ae::kMidGray));
             std::printf("  median %.4f -> %.4f  (anchor %.4f, off by %.4f)\n",
-                        before.median, after.median, ae::kMidGrey, err);
+                        before.median, after.median, ae::kMidGray, err);
             std::printf("  set: exposure %+.2f EV, blacks %+.2f, whites %+.2f, "
                         "lift %.2f, clarity %.2f\n",
                         a.exposureEv, a.blacks, a.whites, a.fusion, a.clarity);
@@ -1274,7 +1274,7 @@ int main(int argc, char** argv) {
                 static_cast<std::size_t>(ew) * 4 * sizeof(std::uint16_t);
             const auto pixels = output16(develop, ew, eh);
 
-            // The same options the app builds, metadata and colour space
+            // The same options the app builds, metadata and color space
             // included. The bench used to pass a bare struct, so it measured a
             // write the product never performs — and it would have reported
             // green on an export that carried no EXIF at all.
