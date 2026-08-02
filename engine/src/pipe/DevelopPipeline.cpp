@@ -382,11 +382,20 @@ DevelopPipeline::contextFor(const Adjustments& adj) {
 /// Pushes the current adjustments into the graph, dirtying only what they
 /// affect.
 ///
-/// ⚠ **The order below is the order the blocks were pushed in before the split
-/// and must not be sorted.** The stages write to distinct nodes, so it very
-/// probably does not matter — but "very probably" is a claim about thirteen
-/// hundred lines, and decision #113 was a refactor rather than the place to
-/// start making claims. `lastAdj_` stays last, because every stage reads it.
+/// ⚠ **The order below is the order the blocks were pushed in before the split,
+/// it must not be sorted, and that is measured rather than assumed.** The split
+/// preserved it on the argument that "the stages push to distinct nodes so it
+/// probably does not matter" is a claim about thirteen hundred lines. Then
+/// mutation M8 moved `applyTone` two places later, past `applyOutput`, and
+/// **the rendered bytes changed**, on the geometry and crop-preview frames.
+/// `orion-tests` and the whole bench stayed green; only the byte comparison saw
+/// it. ⚠ **Why those two frames and not the other eight is not diagnosed** —
+/// `applyOutput` is the one stage that can reallocate a texture, through
+/// `retargetOutputChain`, which makes it the place to start looking, but that
+/// is a guess and is written here as one. The measurement stands on its own:
+/// reordering this list is a picture change, not a tidy-up.
+///
+/// `lastAdj_` stays last, because every stage reads it.
 void DevelopPipeline::apply(const Adjustments& adj) {
     const ApplyContext ctx = contextFor(adj);
 

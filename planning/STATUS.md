@@ -207,6 +207,55 @@ real GPU renders instead. Stated rather than papered over; adding four names to
 `Scenario.swift` would close it and is a small job for whoever is next in that
 file.
 
+#### The mutations — nine, and three of them are only visible to one check
+
+Each breaks a seam the split created. ⚠ **The byte-check baseline is built from
+`a15c7eb`**, the commit before any of #113 — comparing the split against its own
+output would prove nothing.
+
+| # | mutation | byte-check, 10 renders | `orion-tests` | `orion-bench` |
+|---|---|---|---|---|
+| M1 | `ctx.perspective` never reaches a stage | RED ×2 | RED, 3 | RED exit 1 |
+| M2 | `ctx.frameMoved` stuck false | RED ×2 | RED, 2 | green |
+| M3 | `ctx.visibilityMoved` stuck false | ⚠ **green → RED ×3 after the fix** | RED, 5 | green |
+| M4 | `ctx.needsGuide` stuck false | RED ×8 | **green** | **green** |
+| M5 | `ctx.refining` stuck false | RED ×3 | green | RED exit 1 |
+| M6 | mask nodes built after output nodes | RED ×3 | RED, 3 | RED exit 1 |
+| M7 | the grain plate is never uploaded | RED ×4 | RED, 2 | RED exit 1 |
+| M8 | `applyTone` pushed after `applyOutput` | RED ×2 | **green** | **green** |
+| M9 | the output chain never retargets | RED ×9 | **green** | **green**, 7186 → **7279 MiB** |
+
+⚠ **M3 was a defect in this session's own check and is the row worth reading.**
+The mask render added four rows and hid none, so every component was live —
+which is exactly what `apply` does with the enable loop deleted. The one
+predicate governing mask enablement could be hardwired false and all nine
+renders stayed byte-identical. One `maskhide 1` line fixes it, and M3 now turns
+three renders red.
+
+⚠ **M4 exposes an existing check that cannot fail, and it is in the bench.**
+`endpointPair` turns the guided filter on by setting `shadows = 1e-6` and
+asserts the two runs agree — so with `needsGuide` hardwired false the "on" run
+*is* the "off" run, and `blacks -1, guide off/on` passes trivially under the
+one mutation it looks built to catch. The whole six-node chain can be switched
+off across the product with 800 engine checks and every bench invariant green.
+**Not fixed here** — a behaviour change hidden inside a refactor is
+unreviewable — but it is the next thing anyone in `apps/bench` should do.
+
+⚠ **M8 changed the answer to a design question.** The split preserved `apply`'s
+push order on the cautious argument that "the stages write to distinct nodes so
+it probably does not matter" is a claim about 1,300 lines. M8 moved `applyTone`
+past `applyOutput` and **the rendered bytes changed** — so the order is
+load-bearing, not merely unproven, and the comment on `apply` now says so. Why
+those two frames and not the other eight is **not diagnosed**; the guess written
+beside it is labelled as a guess.
+
+⚠ **No timing claim is made.** Wall-clock on this machine spans 8.87–31.45 ms
+across runs of one unchanged binary, so the comparison is node counts and
+pixels: 173 nodes, 7186 MiB, every per-control node count in the bench sweep
+unchanged, and ten renders byte-identical. Sixteen non-inlined member calls per
+`apply` against a ~10 ms GPU frame is not a measurable cost and is not claimed
+to be one either way.
+
 ### ⚠⚠ 2026-08-02 — the build is down, and the instruction that did it was mine
 
 **`third_party/slang` is destroyed and nothing can be compiled.** Every shader
