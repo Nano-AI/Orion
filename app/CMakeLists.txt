@@ -13,6 +13,11 @@ set(APP_BINARY   ${APP_CONTENTS}/MacOS/Orion)
 set(SWIFT_SOURCES
     ${CMAKE_SOURCE_DIR}/Sources/OrionUI/DesignTokens.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Commands.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Chrome.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Canvas.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Tools.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Files.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Geometry.swift
