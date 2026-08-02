@@ -143,6 +143,57 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     nHighlights_ = pipeline_.add({"highlights", "highlightRecover", {nRgb_},
                                   PixelFormat::RGBA16Float, {}});
 
+    // ── The harmonic fill, over what the window fit cannot reach ──────────
+    //
+    // Rouf, Lau & Heidrich (PROCAMS 2012) §3.2 as Gortler et al.'s (SIGGRAPH
+    // 1996 §3.5.1) pull-push. research/highlight-reconstruction.md.
+    //
+    // Immediately after the window fit and reading its output, which is the
+    // ordering that makes the two one feature rather than two: `highlights`
+    // recovers the partial-clip annulus round a blown light from real
+    // cross-channel evidence, and this carries *that* — the recovered annulus,
+    // not the raw one — across the fully blown core it declines to touch.
+    //
+    // The whole chain runs on a grid `kSolveScale` times coarser. See the note
+    // on the members.
+    {
+        const int scale = hlfill::kSolveScale;
+        hlW_[0] = std::max(1u, (width_  + scale - 1) / scale);
+        hlH_[0] = std::max(1u, (height_ + scale - 1) / scale);
+        hlLevels_ = std::min(kHlMaxLevels,
+                             hlfill::levelsFor(int(hlW_[0]), int(hlH_[0])));
+        for (int l = 1; l < hlLevels_; ++l) {
+            hlW_[l] = std::max(1u, (hlW_[l - 1] + 1) / 2);
+            hlH_[l] = std::max(1u, (hlH_[l - 1] + 1) / 2);
+        }
+
+        nHlMask_ = pipeline_.add({"hl:mask", "hlMask", {nHighlights_},
+                                  PixelFormat::RGBA16Float, {}, {},
+                                  true, hlW_[0], hlH_[0]});
+        nHlPull_[0] = nHlMask_;
+        for (int l = 1; l < hlLevels_; ++l) {
+            nHlPull_[l] = pipeline_.add({"hl:pull " + std::to_string(l), "hlPull",
+                                         {nHlPull_[l - 1]},
+                                         PixelFormat::RGBA16Float, {}, {},
+                                         true, hlW_[l], hlH_[l]});
+        }
+
+        nHlPush_[hlLevels_ - 1] = nHlPull_[hlLevels_ - 1];
+        for (int l = hlLevels_ - 2; l >= 0; --l) {
+            nHlPush_[l] = pipeline_.add({"hl:push " + std::to_string(l), "hlPush",
+                                         {nHlPull_[l], nHlPush_[l + 1]},
+                                         PixelFormat::RGBA16Float, {}, {},
+                                         true, hlW_[l], hlH_[l]});
+        }
+
+        // First input is the picture, so a disabled node resolves straight
+        // through and the chain at strength zero costs its textures and none of
+        // its time.
+        nHlFill_ = pipeline_.add({"hl:fill", "hlApply",
+                                  {nHighlights_, nHlPush_[0]},
+                                  PixelFormat::RGBA16Float, {}});
+    }
+
     // ── Profiled wavelet denoise (Starck et al., starlet) ─────────────────
     //
     // Before the color matrix and before sharpening, because the noise model
@@ -156,13 +207,13 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     //
     //     I = c_J + Σ_j w_j,   w_j = c_j − c_{j+1}
     for (int j = 0; j < kDenoiseScales; ++j) {
-        const int input = (j == 0) ? nHighlights_ : nAtrousBlur_[j - 1];
+        const int input = (j == 0) ? nHlFill_ : nAtrousBlur_[j - 1];
         nAtrousBlur_[j] = pipeline_.add({"denoise:blur " + std::to_string(j),
                                          "atrousBlur", {input},
                                          PixelFormat::RGBA16Float, {}});
     }
     for (int j = kDenoiseScales - 1; j >= 0; --j) {
-        const int fine   = (j == 0) ? nHighlights_ : nAtrousBlur_[j - 1];
+        const int fine   = (j == 0) ? nHlFill_ : nAtrousBlur_[j - 1];
         const int coarse = nAtrousBlur_[j];
         // The coarsest scale accumulates onto the residual itself; every finer
         // one accumulates onto the scale below it.
@@ -945,6 +996,28 @@ void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     pipeline_.setParams(nGreen_, &green, sizeof green);
     pipeline_.setParams(nRgb_,   &green, sizeof green);
 
+    // The fill's pyramid is a function of the frame's size and nothing else, so
+    // it is pushed here — with the black levels and the CFA pattern — and never
+    // on a slider tick. ⚠ Decision #92 is the precedent: a parameter block
+    // re-pushed for a value nothing reads still dirties everything downstream of
+    // it, and `apps/bench`'s highlight-fill invariant is what keeps this honest.
+    for (int l = 1; l < hlLevels_; ++l) {
+        params::HlPull pull{};
+        pull.outSize[0] = hlW_[l];
+        pull.outSize[1] = hlH_[l];
+        pull.inSize[0]  = hlW_[l - 1];
+        pull.inSize[1]  = hlH_[l - 1];
+        pipeline_.setParams(nHlPull_[l], &pull, sizeof pull);
+    }
+    for (int l = hlLevels_ - 2; l >= 0; --l) {
+        params::HlPush push{};
+        push.size[0]       = hlW_[l];
+        push.size[1]       = hlH_[l];
+        push.coarseSize[0] = hlW_[l + 1];
+        push.coarseSize[1] = hlH_[l + 1];
+        pipeline_.setParams(nHlPush_[l], &push, sizeof push);
+    }
+
     float xyzToCam[9], camToXyz[9], camToWorking[9];
     std::copy_n(image.camToXyz.begin(), 9, xyzToCam);
     if (!invert3x3(xyzToCam, camToXyz)) {
@@ -1217,9 +1290,69 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             // 0.97, in the middle of the 0.95-0.99 the research gives. Lower
             // treats sound highlights as clipped; higher misses the shoulder
             // where a channel is already non-linear before it reaches its stop.
-            hl.gamma = 0.97f;
+            hl.gamma = hlfill::kClipGamma;
             hl.strength = adj.highlightRecovery;
             pipeline_.setParams(nHighlights_, &hl, sizeof hl);
+        }
+
+        // ── The harmonic fill, on the same control ────────────────────────
+        //
+        // ⚠ **It disables to nothing, and that is the whole of decisions #82 and
+        // #92 restated.** Twenty-four nodes hang off this one float. At zero
+        // every one of them is switched off rather than run at no strength, the
+        // apply node's first input is the picture so the graph resolves straight
+        // past it, and no parameter block is pushed for a value nothing reads.
+        // `apps/bench`'s "highlight fill" invariant asserts both by node *name*,
+        // because a count alone would be satisfied by any twenty-four nodes.
+        //
+        // One control for two nodes on purpose: the window fit and the fill are
+        // the two halves of one coverage — Masood et al.'s over the partial
+        // clip, Rouf et al.'s over the total one — and a photograph that wants
+        // its highlights left alone wants both left alone.
+        const bool filling = adj.highlightRecovery > 0.0f;
+        pipeline_.setEnabled(nHlMask_, filling);
+        pipeline_.setEnabled(nHlFill_, filling);
+        for (int l = 1; l < hlLevels_; ++l) {
+            pipeline_.setEnabled(nHlPull_[l], filling);
+        }
+        for (int l = 0; l < hlLevels_ - 1; ++l) {
+            pipeline_.setEnabled(nHlPush_[l], filling);
+        }
+
+        if (filling) {
+            const auto wanted = multipliersFor(adj.wb, xyzToCam_);
+            const float m[3] = {
+                asShotMul_[0] * wanted[0] / std::max(asShotRef_[0], 1e-6f),
+                1.0f,
+                asShotMul_[2] * wanted[2] / std::max(asShotRef_[2], 1e-6f),
+            };
+            // ⚠ The same `whiteClipFor` the linearize node clipped to. Two
+            // derivations of one ceiling is how a mask ends up disagreeing with
+            // the clip that made it, and the disagreement would be invisible:
+            // the fill would simply decline on pixels it should have filled.
+            const float clip = whiteClipFor(m);
+
+            params::HlMask mask{};
+            mask.outSize[0] = hlW_[0];
+            mask.outSize[1] = hlH_[0];
+            mask.inSize[0]  = width_;
+            mask.inSize[1]  = height_;
+            mask.scale      = std::uint32_t(hlfill::kSolveScale);
+            mask.clip       = clip;
+            mask.gamma      = hlfill::kClipGamma;
+            mask.shoulder   = hlfill::kShoulder;
+            pipeline_.setParams(nHlMask_, &mask, sizeof mask);
+
+            params::HlApply fill{};
+            fill.size[0]     = width_;
+            fill.size[1]     = height_;
+            fill.fillSize[0] = hlW_[0];
+            fill.fillSize[1] = hlH_[0];
+            fill.scale       = std::uint32_t(hlfill::kSolveScale);
+            fill.clip        = clip;
+            fill.gamma       = hlfill::kClipGamma;
+            fill.strength    = adj.highlightRecovery;
+            pipeline_.setParams(nHlFill_, &fill, sizeof fill);
         }
     }
 

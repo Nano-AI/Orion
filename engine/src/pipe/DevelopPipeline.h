@@ -12,6 +12,7 @@
 #include "pipe/CubeLut.h"
 #include "pipe/Dehaze.h"
 #include "pipe/ExposureFusion.h"
+#include "pipe/HighlightFill.h"
 #include "pipe/LocalLaplacian.h"
 #include "pipe/MaskGeometry.h"
 #include "pipe/ShaderParams.h"
@@ -489,6 +490,33 @@ private:
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
     int nGeometry_ = -1, nGrain_ = -1;
     int nHighlights_ = -1;
+
+    // ── Harmonic highlight fill (Rouf, Lau & Heidrich §3.2) ───────────────
+    //
+    // A pull-push pyramid over the fully clipped region, solved on a grid
+    // `hlfill::kSolveScale` times coarser than the picture and lifted back by
+    // the apply node. research/highlight-reconstruction.md.
+    //
+    // ⚠ **The subsampling is the whole cost story and it was measured first.**
+    // ROADMAP costed this chain at full resolution: 13 levels, 194 MB at level
+    // zero, ~516 MB for the two chains. rho is harmonic, so it has no detail to
+    // lose, and `testHighlightFillGpu` sweeps the factor against a Gauss-Seidel
+    // reference every run — 6.1% of rim span at full resolution against 6.9% at
+    // a quarter, for a sixteenth of the memory. The node count barely moves
+    // either way, because the level count is logarithmic in the frame.
+    static constexpr int kHlMaxLevels = 20;
+    int nHlMask_ = -1;
+    int nHlFill_ = -1;
+    /// `[0]` aliases `nHlMask_`: the mask node writes level zero of the pull
+    /// chain directly, restriction and classification in one pass.
+    int nHlPull_[kHlMaxLevels]{};
+    /// `[hlLevels_ - 1]` aliases the pull chain's top — the coarsest level has
+    /// nothing below it to blend in, so its push is its pull and the descent
+    /// simply starts one level down.
+    int nHlPush_[kHlMaxLevels]{};
+    int hlLevels_ = 0;
+    std::uint32_t hlW_[kHlMaxLevels]{}, hlH_[kHlMaxLevels]{};
+
     int nLens_ = -1;
     int nGrade_ = -1;
     int nHueSat_ = -1, auxHueSat_ = -1;
