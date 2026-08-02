@@ -273,7 +273,25 @@ unchanged, and ten renders byte-identical. Sixteen non-inlined member calls per
 `apply` against a ~10 ms GPU frame is not a measurable cost and is not claimed
 to be one either way.
 
-### The fourth wave — two merged, one still running
+### The fourth wave — all three merged, one of them cut short
+
+⚠ **The silent-failure sweep (#115) was killed by a session limit mid-run**, before
+it reached its mutation table. It had committed four fixes by then, which is the
+whole reason commit-early is the first line of every brief. **Its inventory was
+never finished** — the four landed, the sweep of every remaining swallowed error
+in `app/` did not, and that is the open half.
+
+⚠ **The worst of the four was a data-loss bug and is worth stating in full.**
+`Engine.restore` returned silently on a develop blob that would not decode, and
+two callers read *"the sidecar had a blob"* as *"and it is now in the engine"*:
+`MatteStore.sweepAfterLoad` got the default empty component list and **deleted
+every matte PNG beside the photograph** (not recoverable — the model has to run
+again, and Vision's answer moves between OS releases), and `Autosave.begin` armed
+with the default state, so **the first slider tick wrote a blank blob over a
+sidecar that had only failed to parse**. The mutation was run at merge rather
+than inherited: making `restore` report success on an undecodable blob takes
+`repro/unreadable-sidecar-keeps-the-work.txt` to exit 2; restored, exit 0.
+
 
 ⚠ **Briefs now say `sh tools/worktree-setup.sh`, never a hand-rolled `ln -s`.**
 That is the whole point of the script: it exits on the main repo before it can
