@@ -202,6 +202,21 @@ largest standing violation of a stated hard constraint and **is not any more**
 more** either (#118, same day, **2,289 → 85**). Every remaining violation is
 in `app/`, and the gap row below has been **recounted** rather than edited.
 
+### ⚠ In flight — seventh wave, two agents, 2026-08-02
+
+Both stories are **holes the splitting wave found by mutation and correctly left
+alone**, because a fix inside a refactor is unreviewable. Neither is a feature;
+both are coverage the project believed it had.
+
+| Working on | Decision | The hole |
+|---|---|---|
+| A floor so a scenario that measures nothing cannot pass | #124 | ⚠ Make one verb family claim every verb and **39 of 40 scenarios still exit 0** — 38 of them run *zero* checks, print `orion: 0 checks, 0 failures`, and exit 0. This is the gate named in `CLAUDE.md`, in the working agreement and in every brief. Told to check how many of the 40 legitimately assert little before choosing a rule, and to mutation-test the guard itself |
+| Three UI coverage holes with one root cause | #125 | `Screenshot.swift` builds `Editor` directly and drives only what is on screen at rest. So: the **Detail panel scrolls and coverage stops at the fold** (Grain, Vignette, Dehaze, Clarity, Sharpening — 60 lines of shipped controls — delete with everything green); the **Photo menu is in no capture** (`PhotoCommands` never reached, deleting Reset Adjustments reddens nothing); and the **footer's `lastFailure` display has no oracle** — today's `nofailure` verb pins the engine's *state*, not the line that shows it |
+
+⚠ **#125 is told that "unreachable, and here is the consequence pinned instead"
+is an acceptable answer** for the menu, because that is what #110.3 concluded
+about gesture arming after genuinely trying, and it was right.
+
 ### ⚠ The first wave, and the wave that died — both in `HISTORY.md`
 
 Five agents landed on 2026-08-01 and a second wave of four was killed by an
