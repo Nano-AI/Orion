@@ -1117,3 +1117,56 @@ ratio's denominator is `max(ρ_j, 1e-6)` and nothing bounds it below.
 the same two kernels with a residual pass and a relaxation between them, which
 piece 1's entry already names as the upgrade path — or find a frame that reaches
 `kMaxGain` and pin it, or delete the ceiling and say so.
+
+---
+
+## §29 — X-Trans: nothing is in the codebase, and three of the proposals would need this page
+
+Nothing here is implemented. `research/demosaic-xtrans.md` and `ROADMAP.md`'s
+piece table are research only; `engine/src/raw/RawImage.cpp:165` still refuses
+X-Trans and no line of the graph knows the pattern exists. This entry is here so
+that if any of it is ever built, the parts that would *not* be sourced are
+already named — rather than discovered afterwards, which is how §17 and §24
+happened.
+
+**What is sourced, and comfortably.** Markesteijn's algorithm as LibRaw ships it
+is not an Orion formulation at all — it is a dependency call, and calling a
+library is not the same as inventing a coefficient. Rafinazari & Dubois's
+frequency-domain method (ICIP 2014; Rafi Nazari, Ph.D. thesis, University of
+Ottawa, 2017, ch. 3) is published, dated and open access, with its filter
+constants stated: `σ = 2.32`, three modulated Gaussians, a 5×5 moving average on
+the energy index, luma `(2R + 5G + 2B)/9`.
+
+**What would not be sourced, if it is ever built:**
+
+**1. ⚠ Re-applying white balance as a ratio after a CPU demosaic.** This is
+option (d) of `demosaic-xtrans.md` §4.2 and it is the one somebody will reach
+for, because it makes the temperature slider live again for the price of a
+multiply. It is not sound. Markesteijn's *interpolation* is linear in the
+samples, but its direction and homogeneity decisions are not, so demosaicing at
+as-shot gains and rescaling to the slider's gains is an approximation whose error
+is a function of the picture's content. **Nobody has published a bound on it, and
+nothing in either suite would see it** — the result is a perfectly plausible
+photograph. Same shape as the purple cast. If it is built, it is invention and it
+belongs in this file with a measured error, not a plausibility argument.
+
+**2. The synthetic-mosaic test's own fidelity.** `demosaic-xtrans.md` §5
+proposes sampling a known RGB image through the `xtrans[6][6]` table and scoring
+the reconstruction against it. That is exactly Rafi Nazari's Kodak experiment and
+it is the only quantitative check available without a second implementation to
+compare against — but ⚠ **a synthetic mosaic from an sRGB source is not a
+sensor.** It carries no black level, no compression, no read noise and no
+Poisson component, and its source is gamma-encoded where Orion's domain is
+linear. Any dB figure it produces is about the interpolator and about nothing
+else, and quoting it as "X-Trans quality" would be the domain error §27 found in
+the learned denoiser, one milestone later.
+
+**3. Any node count or memory figure for a GPU LSLCD path.** The table in
+`demosaic-xtrans.md` §4.3 option B — ~13 nodes, ~2,376 MiB — is a **guess**,
+built from a reading of the paper rather than from a design. It is labelled as
+one in both files. It is here as well because a guess that survives two document
+revisions starts being quoted as a number.
+
+**To fix.** Nothing, until a piece is actually built. If piece 3 chooses option
+(d), measure its error against a full re-decode on a real frame before shipping
+it, and replace item 1 with that measurement or with the decision not to.

@@ -70,7 +70,14 @@ color fringing on hard edges.
 
 **Confidence:** high. Ported from the reference with its own coefficients.
 
-**Remaining gap:** X-Trans sensors need Markesteijn instead; Bayer only for now.
+**Remaining gap:** X-Trans sensors need a 6×6 path; Bayer only for now.
+**Researched and costed 2026-08-02 — see [`demosaic-xtrans.md`](demosaic-xtrans.md),
+decision #114.** ⚠ Two corrections to the sentence this line used to carry. It is
+not "port Markesteijn": **no published description of that algorithm exists**, so
+a Slang port could only come from darktable's or RawTherapee's GPL-3 source, and
+that is closed. And it does not need to be ported — **LibRaw already ships it as
+`xtrans_interpolate` under LGPL-2.1 / CDDL-1.0** (`libraw.h:451`), which Orion
+already links. The price is decision #29's ordering, not the licence.
 
 ---
 
