@@ -73,6 +73,29 @@ the performance action item is in `ROADMAP.md`. `research/masking.md` is
 per-layer decomposition beyond stage 2. The largest standing violation of a
 stated hard constraint is `DevelopPipeline.cpp`, now **2,295 lines**.
 
+### ⚠ In flight right now — five agents, isolated worktrees, 2026-08-01
+
+Recorded here because a session that ends mid-flight otherwise looks like a
+session that stopped. Each verifies `orion-tests`, `orion-viewport-tests`, all
+33 `repro/` scenarios and `orion-bench` before it commits, in its own worktree.
+
+| Working on | Instruction that shapes it |
+|---|---|
+| Split toning + creative vignette | ⚠ May come back as a defended **"no"** on split toning — the grading wheels already do most of it, and a duplicated feature is worse than an argued refusal |
+| Snapshots / versions | The hard part is that a snapshot's mask **matte** is a separate PNG the sweep can delete (#87), so a restored snapshot could silently cover nothing |
+| Perspective correction | Must compose into the **existing** geometry matrix — a resample of a resample softens the picture — and masks/spots must follow it or they land plausibly wrong |
+| The brush's preview-path linearity | Host side and the full-res kernel are both **already ruled out by measurement**. This is an investigation; a correct explanation with no code is a complete result |
+| Segmentation highlight reconstruction | May also come back as a defended **"no"**, or as a costed decomposition with only its first piece built |
+
+⚠ **Not started, and it needs the developer**: Americanising the *persisted*
+sidecar keys (#89). It is a schema migration with dual reads and a
+both-keys-present test, not a rename, and it changes files already on disk — so
+it wants sign-off rather than an agent.
+
+⚠ **M5 is not in flight and will not be finished by iterating**: X-Trans
+(Markesteijn), a Windows port, Core ML denoise and user-loadable DCP profiles
+are multi-week epics each.
+
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
