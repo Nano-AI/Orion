@@ -122,7 +122,24 @@ against 28–54 ms warm, 12.9–17.2×**. The leftovers are named and costed in
 an X-Trans demosaic (Markesteijn), a Windows port, Core ML denoise and
 user-loadable DCP profiles, each a multi-week epic on its own.
 
-✅ **One of those four is now researched — Core ML denoise, 2026-08-01, decision
+✅ **Two of those four are now researched, and neither was built.** Core ML
+denoise (2026-08-01, #111) and **X-Trans (2026-08-02, #114)**. Both deliverables
+were the write-up and a costed piece table; both tables have a **guess** column,
+because `highlight-reconstruction.md`'s estimate was 16× out for want of one.
+
+✅ **X-Trans — `research/demosaic-xtrans.md`, seven pieces in `ROADMAP.md`,
+`UNSOURCED.md` §29, decision #114.** ⚠ **The line's own name is wrong.** It is
+not "port Markesteijn": **that algorithm has never been published**, so the only
+description is source code and the accessible copies (darktable, RawTherapee) are
+GPL-3 — closed. And no port is needed, because **LibRaw already ships the same
+code as `xtrans_interpolate` under LGPL-2.1 / CDDL-1.0** (`libraw.h:451`, read
+off this machine), which Orion already links. ⚠ **The price is decision #29, not
+the licence:** #29 clips between white balance and demosaic, so a demosaic that
+leaves the GPU takes the temperature slider with it. Two surprises — the GPU
+graph gets **smaller** (−5 nodes, −446 MiB, so 168 against 173), and a **40 MP**
+X-Trans body puts the *existing* graph at **~11.8 GiB** before any of this.
+
+✅ **Core ML denoise, 2026-08-01, decision
 #111.** `research/denoise-learned.md` plus a six-piece table in `ROADMAP.md`.
 **Nothing was built and that was the deliverable.** The line above is confirmed
 rather than contradicted: it is **not a graph node** (one fp16 32-channel
@@ -397,6 +414,93 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-02a — X-Trans, and the licence that turned out not to be the problem
+
+**Story:** M5's "X-Trans support (Markesteijn)", on the roadmap since the first
+milestone list and never once investigated. **Research and decomposition only.
+Nothing was built, no `throw` was lifted, no build was run and neither suite was
+run — there was nothing to test.** That was the brief and it is the outcome. ⚠ The
+tree could not have been built in any case: `third_party/slang` is destroyed.
+
+**Shipped:** `research/demosaic-xtrans.md`, a seven-piece table in `ROADMAP.md`,
+`UNSOURCED.md` §29, decision **#114**, and corrections to `demosaic.md`,
+`research/README.md`, `FEATURES.md`, `RESEARCH.md` and this file.
+
+### ⚠ The licensing question was the story, and the answer is in two halves
+
+**Half one, and it is the honest "no":** there is **no published description of
+Markesteijn's algorithm anywhere.** Checked dcraw (code with an attribution and
+no derivation), darktable's `xtrans.c` and RawTherapee's `xtransdemosaic.cc`
+(**GPL-3**), both manuals (they say which *variant* to pick, not how either
+works), Fujifilm's patents (they cover the 6×6 **array**, not the interpolation,
+and Markesteijn is not Fujifilm), and `xtransdemosaicking.blogspot.com` (the
+Markesteijn+FDC work in darktable 2.4.0, which calls Markesteijn as a black box).
+The only description is the source, and the accessible copies are GPL. **Re-typing
+one in Slang is copying, not implementing from a description. That route is
+closed.**
+
+**Half two, and it makes half one stop mattering:** the same code ships under
+**LGPL-2.1 / CDDL-1.0**, inside LibRaw. `xtrans_interpolate(int)` at
+`libraw.h:451` in 0.22.2 — read out of this machine's installed headers, not
+remembered — dual-licensed by the distributed `COPYRIGHT`, credited to *"Frank
+Markesteijn's algorithm"* in its own source header. ⚠ **The GPL interpolators are
+in a different repository**, which is why "LibRaw's demosaics are GPL" gets said:
+AMaZE, LMMSE and AFD are in the separate, abandoned
+`LibRaw-demosaic-pack-GPL2/GPL3` that Homebrew does not build. The X-Trans one is
+in the LGPL/CDDL core. **Orion already links `libraw_r` dynamically, so nothing
+about the licence model changes**, and `dcraw_process()` is public with
+`user_qual > 2` selecting 3-pass.
+
+### ⚠ What actually makes it expensive is decision #29
+
+`DevelopPipeline.cpp:1269`, in a comment written for Bayer: *"White balance
+rewrites the linearize block, which sits at the head of the graph — so moving
+temperature legitimately recomputes everything, including the demosaic. That is
+inherent."* It is inherent because #29 clips all three channels after white
+balance and before demosaic. **So a demosaic that leaves the GPU takes the
+temperature slider with it**, and all four ways out cost something — clipping
+post-demosaic reopens #29 and loses, a cheap GPU preview demosaic is circular
+(that is the thing which does not exist licence-clean), and rescaling gains by a
+ratio is unsound because the direction decisions are not linear (§29).
+
+### Two findings nobody was looking for
+
+| | |
+|---|---|
+| **The GPU graph gets smaller** | Removing `linearize` and the four `rcd:*` and uploading a demosaiced `RGBA16Float` source is **−5 nodes and −445.6 MiB** at 26 MP. **168 nodes on an X-Trans frame against 173 on a Bayer one** — load-immune, and assertable by name the way `dehaze drag` is |
+| **40 MP is a problem already** | Every full-res node scales with pixel count, so the *existing* 173-node graph is **~7,700 MiB at 26 MP and ~11,800 MiB at 40 MP** (X-H2 / X-T5) before one X-Trans node exists |
+
+### The published alternative is real, and is not a substitute
+
+Rafinazari & Dubois, ICIP 2014 pp. 660–663, and Rafi Nazari's **open-access**
+uOttawa Ph.D. thesis (2017, ch. 3) — **downloaded and read**, per the rule that
+came out of the Tang/Tappen correction. Frequency-domain luma–chroma
+demultiplexing over the 6×6: 18 components, 13 non-zero, three modulated
+Gaussians at σ = 2.32, luma `(2R+5G+2B)/9`. **36.50 dB against Bayer LSLCD's
+39.8** — ⚠ on **simulated, gamma-corrected, white-balanced** Kodak mosaics, which
+is not Orion's linear domain (the same class of error #111 found one milestone
+earlier). ⚠ **And it has never been compared to Markesteijn by anyone** — the
+thesis opens the chapter by naming that literature gap itself.
+
+### The test problem, and it is mostly solved by a licence
+
+All three sample frames are Sony Bayer. **`raw.pixls.us` publishes community raw
+samples under CC0** — *"I hereby release it under the cc0 license into the public
+domain"* — and solicits Fujifilm RAF in both uncompressed and compressed forms.
+Piece 0 is five files, including ⚠ **one Bayer Fujifilm as the control**: without
+it, a branch that takes the X-Trans path on every Fuji file passes every X-Trans
+test. What still cannot be tested here is whether it *looks* right; a PSNR
+against a synthetic mosaic is the honest ceiling and §29 says why.
+
+### Gates
+
+⚠ **None run, and this says so plainly.** No build, no `orion-tests`, no
+`orion-viewport-tests`, no bench. Nothing under `engine/`, `app/` or `apps/` was
+touched — the diff is `research/` and four planning files. Two other agents were
+editing the engine in the same hour, and the shader compiler is missing.
+
+---
 
 ## Session 2026-08-01r — §3.3, and the estimate that was wrong in one word
 
