@@ -409,6 +409,12 @@ final class PhotoIndex: @unchecked Sendable {
         _ = step(stmt); sqlite3_finalize(stmt)
     }
 
+    /// Fires between the read and the second stat. ⚠ It exists so the window
+    /// in `refreshMarks` can be tested at all: the race is otherwise
+    /// unobservable, and an unobservable guard is one nobody can tell has
+    /// stopped working. Nothing in the product sets it.
+    nonisolated(unsafe) static var marksReadWindow: (@Sendable () -> Void)?
+
     /// Reads a photograph's sidecar and records what **the file** says.
     ///
     /// The one route by which marks enter the index, so the invariant holds in
@@ -419,12 +425,6 @@ final class PhotoIndex: @unchecked Sendable {
     /// that reports a rating nobody set and passes every check. When the two
     /// stamps disagree the read is returned to the caller and recorded nowhere,
     /// so the next open misses and reads again.
-    /// Fires between the read and the second stat. ⚠ It exists so the window
-    /// below can be tested at all: the race is otherwise unobservable, and an
-    /// unobservable guard is one nobody can tell has stopped working. Nothing
-    /// in the product sets it.
-    nonisolated(unsafe) static var marksReadWindow: (@Sendable () -> Void)?
-
     @discardableResult
     func refreshMarks(for url: URL) -> Marks {
         let sidecarURL = Sidecar.url(for: url)

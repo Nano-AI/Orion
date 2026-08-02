@@ -22,8 +22,9 @@ import SwiftUI
 // in its own file. `DECISIONS.md` #122, and #117 which paid the same price.
 //
 // The crop panel stays with the editor: it is the only one that reads the
-// canvas geometry. The tab bar, the panel it dispatches to, and the `section`
-// and `slider` helpers every panel here calls are all in `OrionApp.swift`.
+// canvas geometry. The switch that picks a panel and the `section` and
+// `slider` helpers every panel is written in are in `OrionApp+Tools.swift`,
+// and the tab bar that sets `tab` is in `OrionApp+Chrome.swift`.
 
 /// A panel button that looks like one.
 ///

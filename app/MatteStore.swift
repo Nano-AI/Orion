@@ -228,47 +228,6 @@ enum MatteStore {
         }
     }
 
-    /// Every matte id the state names. The set `sweep` must keep.
-    /// The sweep's whole policy, in one place, because there are **three**
-    /// states of a sidecar and conflating two of them leaked files forever.
-    ///
-    /// | The sidecar | What may be collected |
-    /// |---|---|
-    /// | parsed | everything neither it nor a saved version references |
-    /// | **absent** | everything no saved version references — with no sidecar
-    ///   the version file is the only thing on disk that can name a matte |
-    /// | present but unreadable | **nothing** |
-    ///
-    /// ⚠ The version file has the same three states and its unreadable row wins
-    /// outright: nothing is collected, whatever the sidecar says.
-    ///
-    /// ⚠ That middle row is the fix. The load path used to sweep only inside
-    /// the successful-parse branch, with a comment defending it against the
-    /// third row — correctly. But a photograph that had simply never been saved
-    /// fell into the same `else`, so its mattes could never be collected at
-    /// all. Measured on `samples/_PIC8095.ARW`: **26 orphans, 512 KB, the
-    /// oldest three days old**, because pressing Subject mints a fresh UUID
-    /// every time and writes a new file.
-    ///
-    /// ⚠ And it is one function rather than a rule repeated at each call site.
-    /// It was already written twice — the app's loader and the scenario
-    /// runner's `reopen`, which claims in its own comment to take "the same
-    /// steps `Editor.load` takes". Two copies of a delete policy is how one of
-    /// them quietly stops matching.
-    ///
-    /// ⚠ **A saved version names mattes too, and they are pinned here.** A
-    /// snapshot holds a whole `DevelopState`, so it can name a matte the
-    /// working edit has since dropped — and this function is what stands
-    /// between that and a version that restores a mask row covering nothing.
-    /// The keep-set is the union of the two, and it is computed here rather
-    /// than by the callers for the same reason the three-state rule is:
-    /// a delete policy written twice is a delete policy that stops matching.
-    /// Decision #99.
-    ///
-    /// The version file has the same three states as the sidecar. Unreadable
-    /// means **collect nothing at all**, whatever the sidecar says — an empty
-    /// set there would take every version's mattes on a file Orion only failed
-    /// to parse.
     /// Which of the three sidecar states the loader is in.
     ///
     /// ⚠ **This exists because the third row was derived by hand at two call
@@ -312,6 +271,43 @@ enum MatteStore {
         }
     }
 
+    /// The sweep's whole policy, in one place, because there are **three**
+    /// states of a sidecar and conflating two of them leaked files forever.
+    ///
+    /// | The sidecar | What may be collected |
+    /// |---|---|
+    /// | parsed | everything neither it nor a saved version references |
+    /// | **absent** | everything no saved version references — with no sidecar
+    ///   the version file is the only thing on disk that can name a matte |
+    /// | present but unreadable | **nothing** |
+    ///
+    /// ⚠ The version file has the same three states and its unreadable row wins
+    /// outright: nothing is collected, whatever the sidecar says — an empty set
+    /// there would take every version's mattes on a file Orion only failed to
+    /// parse.
+    ///
+    /// ⚠ That middle row is the fix. The load path used to sweep only inside
+    /// the successful-parse branch, with a comment defending it against the
+    /// third row — correctly. But a photograph that had simply never been saved
+    /// fell into the same `else`, so its mattes could never be collected at
+    /// all. Measured on `samples/_PIC8095.ARW`: **26 orphans, 512 KB, the
+    /// oldest three days old**, because pressing Subject mints a fresh UUID
+    /// every time and writes a new file.
+    ///
+    /// ⚠ And it is one function rather than a rule repeated at each call site.
+    /// It was already written twice — the app's loader and the scenario
+    /// runner's `reopen`, which claims in its own comment to take "the same
+    /// steps `Editor.load` takes". Two copies of a delete policy is how one of
+    /// them quietly stops matching.
+    ///
+    /// ⚠ **A saved version names mattes too, and they are pinned here.** A
+    /// snapshot holds a whole `DevelopState`, so it can name a matte the
+    /// working edit has since dropped — and this function is what stands
+    /// between that and a version that restores a mask row covering nothing.
+    /// The keep-set is the union of the two, and it is computed here rather
+    /// than by the callers for the same reason the three-state rule is:
+    /// a delete policy written twice is a delete policy that stops matching.
+    /// Decision #99.
     static func sweepAfterLoad(photo: URL, parsed: [MaskComponentState]?) {
         guard let pinned = SnapshotStore.pinnedMattes(photo: photo) else { return }
         if let parsed {
@@ -324,6 +320,7 @@ enum MatteStore {
         }
     }
 
+    /// Every matte id the state names. The set `sweep` must keep.
     static func referenced(_ components: [MaskComponentState]) -> Set<String> {
         Set(components.compactMap { $0.matteId })
     }

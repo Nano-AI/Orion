@@ -20,7 +20,7 @@
 //   OrionApp+Canvas.swift     the picture and the overlays on it
 //   OrionApp+Tools.swift      the panel column
 //   OrionApp+Files.swift      everything that touches a file on disk
-//   DevelopPanels.swift       the seven tool panels themselves
+//   DevelopPanels+<Tab>.swift the tool panels themselves, one file per tab
 //
 // ⚠ The cost is the same one `Engine.swift` paid in #117 — Swift's `private` is
 // file-scoped, so seventeen declarations that only this file had any business
@@ -177,7 +177,7 @@ struct Editor: View {
     @State var exportSettings = ExportSettings()
     @State var showingExport = false
     @State var library = Library()
-    /// Not `private`: `findMatte` in `DevelopPanels.swift` needs it, because a
+    /// Not `private`: `findMatte` in `DevelopPanels+Mask.swift` needs it, because a
     /// matte is saved beside the photograph and so cannot be written without
     /// knowing which photograph is open.
     @State var current: URL?

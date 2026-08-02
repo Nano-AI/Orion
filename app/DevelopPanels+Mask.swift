@@ -106,43 +106,6 @@ extension Editor {
         }
     }
 
-    /// Masks — "local" adjustments, on a tab of their own.
-    ///
-    /// ⚠ It was a section inside Light, and it was 264 lines of one: a row
-    /// list, a six-way kind picker, two model buttons, the placement sliders,
-    /// refinement and a local exposure. Light is the panel a photographer opens
-    /// on every photograph, and it opened on a mask editor.
-    ///
-    /// It also broke the window. The kind picker is a segmented control and a
-    /// sixth kind pushed its intrinsic width past the panel, so a segmented
-    /// control that cannot fit does not clip — it forces its parent wider, and
-    /// the whole layout went with it. The picker is a grid now, for the same
-    /// reason: six named things do not fit on one line at this width and never
-    /// will.
-
-    /// One cell of the mask-kind grid. Selecting a kind on an empty group adds
-    /// a component; the picker's old meaning is unchanged.
-    @ViewBuilder
-    private func maskKindCell(_ name: String, _ kind: Int32) -> some View {
-        let on = engine.maskKind == kind
-        Button { engine.maskKind = kind } label: {
-            Text(name)
-                .font(.system(size: 11))
-                .foregroundStyle(on ? Palette.text : Palette.dim)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-                .background(on ? Palette.raised : Palette.panel)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(on ? Palette.accent : Palette.line, lineWidth: on ? 1.5 : 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 3))
-                .contentShape(RoundedRectangle(cornerRadius: 3))
-        }
-        .buttonStyle(.plain)
-    }
-
-
     /// One way in, grouped by **how the mask decides what it covers**.
     ///
     /// It was three separate controls: an Add button that made a linear
@@ -210,6 +173,20 @@ extension Editor {
         findMatte(kind)
     }
 
+    /// Masks — "local" adjustments, on a tab of their own.
+    ///
+    /// ⚠ It was a section inside Light, and it was 264 lines of one: a row
+    /// list, a six-way kind picker, two model buttons, the placement sliders,
+    /// refinement and a local exposure. Light is the panel a photographer opens
+    /// on every photograph, and it opened on a mask editor.
+    ///
+    /// It also broke the window. The kind picker was a segmented control, and a
+    /// sixth kind pushed its intrinsic width past the panel — a segmented
+    /// control that cannot fit does not clip, it forces its parent wider, and
+    /// the whole layout went with it. That is why the kinds have never gone
+    /// back on one row: six named things do not fit at this width and never
+    /// will. The grid that replaced the segments is itself gone now — the kinds
+    /// are chosen from `addMenu`, which is the one way in.
     var maskPanel: some View {
         Group {
             section("Local") {
@@ -571,9 +548,14 @@ extension Editor {
                 // in `research/masking.md` and `DECISIONS.md` #76, which is
                 // where it now lives alone. A panel is for controls.
                 //
-                // Both views are kept and still tested — `LocalRefusals` is the
-                // reason `AdjustmentSpec.localRefusal` cannot be silently
-                // dropped — so restoring either is one line.
+                // Both views are kept, in `AdjustmentGroup.swift`, so restoring
+                // either is one line — and nothing else draws them, so this
+                // comment is the only thing that says why they are there.
+                // ⚠ Neither view has a check of its own. What is pinned is the
+                // table underneath them: `ViewportTests+Catalogue` asserts that
+                // `AdjustmentCatalogue.refusedLocally` is non-empty, which is
+                // what stops `AdjustmentSpec.localRefusal` being silently
+                // dropped. The views generate from it and would follow.
             }
         }
     }

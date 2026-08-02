@@ -589,14 +589,14 @@ final class Engine {
     func redo() { log.redo(); if let s = history.redo() { apply(s) } }
     func jumpHistory(to index: Int) { if let s = history.jump(to: index) { apply(s) } }
 
-    /// Names the control being changed, so history entries read like edits
-    /// rather than like state dumps, and consecutive drags of one slider
-    /// collapse into a single step.
     /// What the photographer did, as a runnable scenario. See
     /// `InteractionLog` — a report that names a *sequence* is the only kind
     /// this project has struggled to reproduce.
     let log = InteractionLog()
 
+    /// Names the control being changed, so history entries read like edits
+    /// rather than like state dumps, and consecutive drags of one slider
+    /// collapse into a single step.
     func edit(_ label: String, _ change: () -> Void) {
         change()
         if !restoring {
