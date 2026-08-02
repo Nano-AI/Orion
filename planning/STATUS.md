@@ -153,6 +153,12 @@ at the commit that recorded them.
 unstarted and each still carries the trap that was named to it. Re-running them
 is a fresh start, not a resume.
 
+✅ **Relaunched 2026-08-01 with the fix**, once the limit cleared: grading
+Balance, perspective's mask-extent term, brush accumulation session one, and
+highlight fill pieces 2–3. Every brief now opens with **commit early and often**
+as its loudest instruction, and names the exact point the previous attempt died
+at, so the agent knows what it is racing.
+
 ⚠ The lesson is about **how long an agent may run before it banks something.**
 The five agents of the first wave each ran 40–75 minutes and committed once, at
 the end; four of five happened to finish. These four did not, and lost
