@@ -981,7 +981,66 @@ int main(int argc, char** argv) {
                         lensDrag[lensDrag.size() / 2], ran,
                         lensOk ? "ok" : "LENS DIRTIES THE GRAPH");
 
-            // 3. The screen path and the export path must agree.
+            // 3. The dehaze slider must not re-run the dark-channel chain.
+            //
+            //    Same shape as 2, and it cost twice as much. Only omega moves
+            //    with the slider; the dark channel, the six rank passes and the
+            //    candidate pooling are functions of the frame's size, the
+            //    paper's constants and A. They were re-pushed on every tick,
+            //    and `setParams` dirties the whole downstream subgraph whether
+            //    or not the bytes changed — so a drag paid for nine extra
+            //    nodes, six of them full-resolution rank passes over 24 MP.
+            //
+            //    Asserted by *name*, not by a total. A count alone would be
+            //    satisfied by any nine nodes, and the whole point is which ones.
+            //    A wall-clock threshold would be worse still: this machine has
+            //    measured the same binary at 8.97 and 44.53 ms p95 within an
+            //    hour, and node identity does not care.
+            static const char* const sliderIndependent[] = {
+                "dehaze:channel min", "dehaze:channel min/A",
+                "dehaze:dark h", "dehaze:dark v", "dehaze:candidates",
+                "dehaze:min h", "dehaze:min v", "dehaze:max h", "dehaze:max v",
+            };
+
+            auto haze = base;
+            haze.dehaze = 0.3f;
+            develop.apply(haze);
+            develop.render();   // pays for the chain, and settles A
+
+            // ⚠ The **worst** tick, not the last one. Reporting the last would
+            // pass a chain that redid itself eleven times out of twelve, which
+            // is the whole cost back for a green line.
+            int hazeNodes = 0, hazeStale = 0;
+            std::string firstStale;
+            for (int i = 0; i < 12; ++i) {
+                haze.dehaze = 0.3f + 0.6f * static_cast<float>(i) / 11.0f;
+                develop.apply(haze);
+                develop.render();
+                int ranHere = 0, staleHere = 0;
+                for (const auto& n : develop.graph().lastRun()) {
+                    if (!n.executed) continue;
+                    ++ranHere;
+                    for (const char* s : sliderIndependent) {
+                        if (n.name != s) continue;
+                        ++staleHere;
+                        if (firstStale.empty()) firstStale = n.name;
+                    }
+                }
+                hazeNodes = std::max(hazeNodes, ranHere);
+                hazeStale = std::max(hazeStale, staleHere);
+            }
+            const bool hazeOk = hazeStale == 0;
+            if (!hazeOk) invariantsPass = false;
+            const std::string staleDetail =
+                firstStale.empty() ? std::string{} : " (" + firstStale + " ...)";
+            std::printf("  %-24s %d nodes, %d of them slider-independent%s  %s\n",
+                        "dehaze drag", hazeNodes, hazeStale, staleDetail.c_str(),
+                        hazeOk ? "ok" : "DEHAZE REDOES THE DARK CHANNEL");
+
+            develop.apply(base);
+            develop.render();
+
+            // 4. The screen path and the export path must agree.
             //
             //    They are different formats now — eight bits for the screen,
             //    sixteen around an export — and a wrong dither magnitude, a

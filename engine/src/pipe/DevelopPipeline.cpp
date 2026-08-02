@@ -1309,6 +1309,11 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         airlightValid_ = false;
     }
 
+    // A different photograph through the same graph. The size-derived blocks
+    // below happen to still be right, but `first` is the one signal that says
+    // "nothing that was pushed can be assumed", so it says it here too.
+    if (first) hazeShapeValid_ = false;
+
     if (hazeMoved) {
         for (int n : {nDehazeChan_, nDarkH_, nDarkV_, nPeak_, nDehazeChanA_,
                       nMinH_, nMinV_, nMaxH_, nMaxV_, nHazePrep_, nHazeBlurH_,
@@ -1317,7 +1322,19 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         }
     }
 
-    if (dehazing_ && (hazeMoved || !airlightValid_)) {
+    // ⚠ **Only omega moves with the slider.** Everything else in this chain is
+    // a function of the frame's size, the paper's constants and A — so it is
+    // pushed once and then left alone.
+    //
+    // It used to be pushed on every tick, and `setParams` dirties the whole
+    // downstream subgraph whether or not the bytes changed. That put the
+    // *entire* dark-channel and rank chain — nine nodes, six of them
+    // full-resolution rank passes over 24 MP — back on the queue for a value
+    // none of them read. Measured on _PIC8220: a dehaze tick dispatched 55
+    // nodes where 46 was the honest number, and the nine were the expensive
+    // ones. Same shape as the lens-vignette bug the `exposure drag, lens on`
+    // invariant exists for; `dehaze drag` is now the invariant for this one.
+    if (dehazing_ && !hazeShapeValid_) {
         // The dark channel of the image itself: A = (1,1,1).
         params::DehazeChan plain{};
         plain.size[0] = width_; plain.size[1] = height_;
@@ -1345,16 +1362,6 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         peak.scale = dehaze::kPeakScale;
         pipeline_.setParams(nPeak_, &peak, sizeof peak);
 
-        params::DehazePrep prep{};
-        prep.outSize[0] = hazeW_; prep.outSize[1] = hazeH_;
-        prep.inSize[0]  = width_; prep.inSize[1]  = height_;
-        prep.scale = dehaze::kGuideScale;
-        // The slider *is* omega. Zero gives t = 1 and Eq. (16) is the identity.
-        prep.omega = dehaze::kOmega * std::clamp(adj.dehaze, 0.0f, 1.0f);
-        prep.lo = llf::kWindowLoEv;
-        prep.invRange = 1.0f / llf::kWindowEv;
-        pipeline_.setParams(nHazePrep_, &prep, sizeof prep);
-
         // The paper's radius is a fraction of the frame, not a pixel count.
         const int fullRadius =
             std::max(1, int(std::max(width_, height_)) / dehaze::kGuideRadiusDivisor);
@@ -1374,6 +1381,21 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         pipeline_.setParams(nHazeBlurV2_, &b2v, sizeof b2v);
 
         pushAirlight();
+        hazeShapeValid_ = true;
+    }
+
+    // The slider itself. One node, at a quarter of the frame's resolution, and
+    // everything below it in the chain follows from there.
+    if (dehazing_ && hazeMoved) {
+        params::DehazePrep prep{};
+        prep.outSize[0] = hazeW_; prep.outSize[1] = hazeH_;
+        prep.inSize[0]  = width_; prep.inSize[1]  = height_;
+        prep.scale = dehaze::kGuideScale;
+        // The slider *is* omega. Zero gives t = 1 and Eq. (16) is the identity.
+        prep.omega = dehaze::kOmega * std::clamp(adj.dehaze, 0.0f, 1.0f);
+        prep.lo = llf::kWindowLoEv;
+        prep.invRange = 1.0f / llf::kWindowEv;
+        pipeline_.setParams(nHazePrep_, &prep, sizeof prep);
     }
 
     // ── Exposure fusion ──────────────────────────────────────────────────
