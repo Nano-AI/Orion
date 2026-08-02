@@ -6,22 +6,34 @@
 // channel is. This kernel writes **Omega^intersection** as the hole of the
 // pull-push solver, and the picture's own color as the Dirichlet data around it.
 //
-// ⚠ **Why the intersection and not the union, which is what §3.2 solves over.**
-// Orion already ships the union's partial case: `highlights.slang` is Masood,
-// Zhu & Tappen's cross-channel fit, and over Omega^union \ Omega^intersection it
-// recovers a clipped channel from the two that are still valid — per pixel, from
-// real evidence. Filling that annulus with a smooth interpolant instead would
-// replace measurement with interpolation, which is strictly worse. The set that
-// nothing addresses is the intersection: under decision #29 `linearize` clips
-// every channel to one ceiling before demosaic, so a fully blown pixel arrives
-// as (clip, clip, clip) and `highlights.slang`'s count == 3 branch is a literal
-// identity on it. That is the hole this fills, and it is the one measured gap.
+// ⚠ **The hole is the part of Omega^union the window fit did not recover, and
+// that is a correction to piece 2 rather than a restatement of it.** Decision
+// #109; piece 2 shipped the hole as Omega^intersection, on the argument that the
+// annulus is `highlights.slang`'s and replacing its per-pixel cross-channel fit
+// with a smooth interpolant would be strictly worse. That argument is right and
+// is unchanged — but it is about what the fill may **write**, and this kernel
+// decides something different: which pixels are trustworthy **evidence**.
 //
-// Rouf et al.'s §3.3 does transfer detail across Omega_k, and when that lands
-// it wants the union — a different mask, from a different kernel, because the
-// two sets differ per channel. Writing this one with a switch for the other
-// would leave a branch nothing takes, which this project has already removed
-// once from `hl_pull.slang` for exactly that reason.
+// Those are not the same set, and conflating them cost accuracy where it is
+// least affordable. The pixels bounding a blown core are the innermost ring of
+// the annulus, and measured on `_PIC8220`/`_PIC8095` that ring is 11,901 and
+// 20,563 pixels of which the window fit hands back 58% and 69% untouched — it
+// declines beyond its 12-pixel reach, and 5.6%/22.7% of the ring is beyond it.
+// Piece 2 fed those still-clipped pixels to the solver as Dirichlet data, so
+// every core in the frame was solved from a rim that was itself clipped.
+//
+// Excluding them costs nothing — no node, no texture, no level — and moves the
+// boundary condition out to pixels that are either unclipped or were recovered
+// from real evidence. `hl_apply.slang` still writes only where every channel is
+// clipped, plus §3.3's ratio transfer where some are, so piece 2's guarantee
+// stands: nothing overwrites a pixel the window fit recovered.
+//
+// ⚠ **"Recovered" is read off the node, not inferred from a threshold.** The
+// second input is `highlights`' own input, so a channel counts as recovered when
+// the node actually raised it — `rec_k > raw_k` — and as still clipped when it
+// did not. A level test would need a constant to separate a lifted channel from
+// a blown one, and demosaic ringing around a clipped edge puts pixels on both
+// sides of any such constant.
 //
 // ⚠ **Storage is premultiplied**, matching `hl_pull.slang`: rgb holds w*f and a
 // holds w. That is what makes the box average below correct rather than merely
@@ -44,7 +56,8 @@ struct HlMaskParams
 [shader("compute")]
 [numthreads(16, 16, 1)]
 void hlMask(uint3 tid : SV_DispatchThreadID,
-            uniform Texture2D<float4>   src,
+            uniform Texture2D<float4>   src,   // after highlightRecover
+            uniform Texture2D<float4>   raw,   // what highlightRecover was handed
             uniform RWTexture2D<float4> dst,
             uniform ConstantBuffer<HlMaskParams> p)
 {
@@ -66,9 +79,15 @@ void hlMask(uint3 tid : SV_DispatchThreadID,
         {
             const int sx = min(int(tid.x * p.scale + dx), hi.x);
             const float3 c = src[int2(sx, sy)].rgb;
+            const float3 r0 = raw[int2(sx, sy)].rgb;
 
-            // Omega^intersection: every channel at its ceiling.
-            const bool blown = c.r >= limit && c.g >= limit && c.b >= limit;
+            // A channel is a hole where it arrived clipped and the window fit
+            // did not lift it. Omega^intersection is the case where all three
+            // are, and it is no longer the only one — see the head of the file.
+            const bool3 hole = bool3(r0.r >= limit && !(c.r > r0.r),
+                                     r0.g >= limit && !(c.g > r0.g),
+                                     r0.b >= limit && !(c.b > r0.b));
+            const bool blown = hole.x || hole.y || hole.z;
 
             // ⚠ And the rest is not automatically evidence. This is Masood et
             // al.'s Omega — the shoulder of the saturated region, not the

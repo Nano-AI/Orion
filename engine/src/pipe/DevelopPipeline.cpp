@@ -167,7 +167,11 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
             hlH_[l] = std::max(1u, (hlH_[l - 1] + 1) / 2);
         }
 
-        nHlMask_ = pipeline_.add({"hl:mask", "hlMask", {nHighlights_},
+        // Both sides of `highlights`, because "did the window fit recover this
+        // channel" is `rec > raw` and cannot be read off either texture alone.
+        // Decision #109; no node and no texture is added by asking — `nRgb_`
+        // already exists and is already live at this point in the graph.
+        nHlMask_ = pipeline_.add({"hl:mask", "hlMask", {nHighlights_, nRgb_},
                                   PixelFormat::RGBA16Float, {}, {},
                                   true, hlW_[0], hlH_[0]});
         nHlPull_[0] = nHlMask_;
@@ -190,7 +194,7 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         // through and the chain at strength zero costs its textures and none of
         // its time.
         nHlFill_ = pipeline_.add({"hl:fill", "hlApply",
-                                  {nHighlights_, nHlPush_[0]},
+                                  {nHighlights_, nHlPush_[0], nRgb_},
                                   PixelFormat::RGBA16Float, {}});
     }
 
