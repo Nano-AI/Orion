@@ -782,6 +782,16 @@ void testHighlightFillWiring() {
            "the fill carries the rim's color into the core, through the graph",
            "off " + std::to_string(offGap) + " -> on " + std::to_string(onGap));
 
+    // ⚠ And a tighter one, which exists to hold `hl_mask.slang`'s shoulder rule
+    // in place. Deleting it — `w = blown ? 0 : 1`, letting the dark background
+    // count as evidence about the lamp — leaves the check above passing at
+    // 0.0687 and fails this one, because the background is then averaged into
+    // every coarse texel of the rim and drags the fill 30% further off. That is
+    // the whole failure Masood et al.'s Omega exists to prevent, one node over.
+    report(onGap < 0.06 * offGap,
+           "and the dark background is not treated as evidence about the lamp",
+           "ratio " + std::to_string(onGap / offGap));
+
     // ── 3. And it touches nothing else ───────────────────────────────────
     //
     // A corner pixel has no clipped channel and is below the shoulder, so it is

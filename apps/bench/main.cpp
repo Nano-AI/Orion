@@ -1124,10 +1124,44 @@ int main(int argc, char** argv) {
                     }
                 };
 
+                const auto fillNodesLastRun = [&] {
+                    int n = 0;
+                    for (const auto& t : develop.graph().lastRun()) {
+                        if (t.executed && t.name.rfind("hl:", 0) == 0) ++n;
+                    }
+                    return n;
+                };
+
+                // Turning it on must actually cost the chain, once.
+                auto on = base;
+                on.highlightRecovery = 0.8f;
+                develop.apply(on);
+                develop.render();
+                const int builtFill = fillNodesLastRun();
+                const bool builtOk = builtFill >= 20;
+                if (!builtOk) invariantsPass = false;
+                std::printf("  %-24s %d fill nodes ran  %s\n",
+                            "highlights on, once", builtFill,
+                            builtOk ? "ok" : "THE CHAIN NEVER RAN");
+
+                // ⚠ **The full render, not the drag, and that distinction is not
+                // cosmetic.** This check was written on the drag first, and the
+                // mutation that leaves `filling` permanently true passed it: the
+                // fill sits upstream of exposure, so once it has run it stays
+                // cached and an exposure tick never touches it either way. A
+                // chain running on every photograph opened, forever, for nothing.
+                // Switching the control off dirties the subgraph, so the render
+                // below is where a node that ignores the control shows up.
                 auto off = base;
                 off.highlightRecovery = 0.0f;
                 develop.apply(off);
                 develop.render();
+                const int offFullFill = fillNodesLastRun();
+                const bool offFullOk = offFullFill == 0;
+                if (!offFullOk) invariantsPass = false;
+                std::printf("  %-24s %d fill nodes ran on a full render  %s\n",
+                            "highlights off", offFullFill,
+                            offFullOk ? "ok" : "THE FILL RUNS WHEN IT IS OFF");
 
                 int offRan = 0, offFill = 0;
                 std::string offName;
@@ -1136,24 +1170,12 @@ int main(int argc, char** argv) {
                 const bool offOk = offFill == 0 && offRan == ran;
                 if (!offOk) invariantsPass = false;
                 std::printf("  %-24s %d nodes, %d of them the fill%s  (clean: %d)  %s\n",
-                            "highlights off", offRan, offFill,
+                            "exposure drag, fill off", offRan, offFill,
                             offName.empty() ? "" : (" (" + offName + " ...)").c_str(),
                             ran, offOk ? "ok" : "THE FILL RUNS WHEN IT IS OFF");
 
-                // Turning it on must actually cost the chain, once.
-                auto on = base;
-                on.highlightRecovery = 0.8f;
                 develop.apply(on);
                 develop.render();
-                int builtFill = 0;
-                for (const auto& n : develop.graph().lastRun()) {
-                    if (n.executed && n.name.rfind("hl:", 0) == 0) ++builtFill;
-                }
-                const bool builtOk = builtFill >= 20;
-                if (!builtOk) invariantsPass = false;
-                std::printf("  %-24s %d fill nodes ran  %s\n",
-                            "highlights on, once", builtFill,
-                            builtOk ? "ok" : "THE CHAIN NEVER RAN");
 
                 int onRan = 0, onFill = 0;
                 std::string onName;
