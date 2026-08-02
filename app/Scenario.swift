@@ -34,6 +34,20 @@ import SwiftUI
 ///     crop <x> <y> <w> <h>              normalized
 ///     preview on | off                  the crop tool's context render
 ///     set <control> <value>             any slider by name
+///     wheel <name> <x> <y> [luma]       a whole grading wheel at once —
+///                                       `gradeShadow`, `gradeMidtone` or
+///                                       `gradeHighlight`. ⚠ **Added, not a
+///                                       rename**: the scalar `gradeShadowX` /
+///                                       `gradeShadowY` spellings keep working
+///                                       (decision #89). Clamped to the disc, as
+///                                       the puck is
+///     dragwheel <name> <x,y> <x,y> <n>  sweep a wheel's puck and report the cost
+///                                       of one tick. ⚠ Both components move in
+///                                       **one** `edit`, because that is what
+///                                       `ColorWheel`'s drag does — writing them
+///                                       through two `set`s would be two ticks
+///                                       and two history entries, and would
+///                                       measure a gesture nobody makes
 ///     mask <kind>                       none | linear | radial | brush |
 ///                                       matte | range. `matte` selects the
 ///                                       raster kind without uploading one,
@@ -322,6 +336,63 @@ enum Scenario {
                 catch { thrown = error }
             }
             if let thrown { throw thrown }
+
+        case "wheel":
+            // A whole three-component grading wheel, in one edit.
+            //
+            // ⚠ The control table below it is scalar, and stays scalar: decision
+            // #89 keeps every existing spelling forever, so `gradeShadowX` and
+            // `gradeShadowY` are untouched and this is an addition beside them.
+            guard args.count >= 3 else {
+                throw Bad(what: "wheel needs a name, x and y")
+            }
+            let luma = args.count >= 4 ? Float(try number(3)) : 0
+            let placed = clampToDisc(Float(try number(1)), Float(try number(2)))
+            var wheelThrew: Error?
+            engine.edit(args[0]) {
+                do { try setWheel(args[0], placed.0, placed.1, luma, engine) }
+                catch { wheelThrew = error }
+            }
+            if let wheelThrew { throw wheelThrew }
+
+        case "dragwheel":
+            // A wheel drag, and what one tick of it costs.
+            //
+            // ⚠ **This is the verb `gesture-preview-agrees.txt` was missing.**
+            // Five of the six gestures that arm the preview graph could be
+            // driven from here and the wheel could not, because the wheels write
+            // `[Float]` and `apply(control:value:)` takes one number — so the
+            // one control whose arming was never measured was the one nothing
+            // could move.
+            //
+            // It mirrors `ColorWheel`'s drag rather than approximating it: both
+            // components inside a **single** `engine.edit`, and the puck clamped
+            // to the disc instead of the square that bounds it.
+            guard args.count >= 4, let ticks = Int(args[3]), ticks > 1 else {
+                throw Bad(what: "dragwheel needs a name, a start x,y, an end x,y "
+                              + "and a tick count")
+            }
+            let wheelName = args[0]
+            let from = try point(args[1]), to = try point(args[2])
+            quiet = true
+            let wheelBegan = DispatchTime.now().uptimeNanoseconds
+            for i in 0..<ticks {
+                let t = Double(i) / Double(ticks - 1)
+                let p = clampToDisc(Float(from.x + (to.x - from.x) * t),
+                                    Float(from.y + (to.y - from.y) * t))
+                var thrown: Error?
+                engine.edit(wheelName) {
+                    do { try setWheel(wheelName, p.0, p.1, nil, engine) }
+                    catch { thrown = error }
+                }
+                if let thrown { quiet = false; throw thrown }
+            }
+            let wheelElapsed = DispatchTime.now().uptimeNanoseconds - wheelBegan
+            quiet = false
+            let wheelTick = Double(wheelElapsed) / 1_000_000.0 / Double(ticks)
+            say(String(format: "  dragwheel %-8@ %.1f ms per tick  (%.0f fps, %d ticks)\n",
+                       wheelName as NSString, wheelTick,
+                       wheelTick > 0 ? 1000.0 / wheelTick : 0, ticks))
 
         case "mask":
             // `matte` selects the raster kind *without* uploading one, which is
@@ -1139,12 +1210,56 @@ enum Scenario {
         // be able to push a wheel first.
         case "gradeShadowX":   return e.gradeShadow[0]
         case "gradeShadowY":   return e.gradeShadow[1]
+        // The other two wheels' pucks, so a scenario driving `wheel` or
+        // `dragwheel` can assert *which* wheel it moved. Added when the
+        // three-component verbs were (decision #110); the scalar setters above
+        // are untouched.
+        case "gradeMidtoneX":   return e.gradeMidtone[0]
+        case "gradeMidtoneY":   return e.gradeMidtone[1]
+        case "gradeHighlightX": return e.gradeHighlight[0]
+        case "gradeHighlightY": return e.gradeHighlight[1]
         case "perspectiveVertical":   return e.perspectiveVertical
         case "perspectiveHorizontal": return e.perspectiveHorizontal
         case "perspectiveAspect":     return e.perspectiveAspect
         case "vignetteAmount":     return e.vignetteAmount
         case "vignetteFieldAngle": return e.vignetteFieldAngle
         default:               return nil
+        }
+    }
+
+    /// The rim clamp `ColorWheel`'s drag applies, on the disc rather than on the
+    /// square that bounds it.
+    ///
+    /// ⚠ Transcribed here rather than shared, for the reason `CanvasLayout`
+    /// carries its own `maskAlpha`: a verb that called the view's code could not
+    /// tell whether the view still did it. Past the rim the angle is meaningful
+    /// and the radius is not, so the puck slides around the edge.
+    private static func clampToDisc(_ x: Float, _ y: Float) -> (Float, Float) {
+        let d = (x * x + y * y).squareRoot()
+        return d > 1 ? (x / d, y / d) : (x, y)
+    }
+
+    /// A three-component control, written whole.
+    ///
+    /// ⚠ Whole-array assignment for the same reason the scalar
+    /// `gradeShadowX` case gives: `gradeShadow` is `[Float]` with a `didSet`,
+    /// and spelling the write out keeps the push explicit.
+    ///
+    /// `luma` of `nil` leaves the third component where it is, which is what a
+    /// puck drag does — the wheel's drag gesture writes `[0]` and `[1]` and
+    /// never touches `[2]`.
+    private static func setWheel(_ name: String, _ x: Float, _ y: Float,
+                                 _ luma: Float?, _ e: Engine) throws {
+        switch name {
+        case "gradeShadow":
+            e.gradeShadow = [x, y, luma ?? e.gradeShadow[2]]
+        case "gradeMidtone":
+            e.gradeMidtone = [x, y, luma ?? e.gradeMidtone[2]]
+        case "gradeHighlight":
+            e.gradeHighlight = [x, y, luma ?? e.gradeHighlight[2]]
+        default:
+            throw Bad(what: "no three-component control named \(name) — "
+                          + "gradeShadow, gradeMidtone or gradeHighlight")
         }
     }
 

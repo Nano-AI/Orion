@@ -45,13 +45,47 @@ interact off
 measure 0.25,0.25,0.5,0.5 curve_armed
 expect curve_armed == curve_unarmed
 
-# ── A grading wheel — ⚠ NOT COVERED, and said rather than skipped quietly ──
+# ── A grading wheel ───────────────────────────────────────────────────────
 #
-# `ColorWheel` arms too, and nothing here can drive it: the wheels write
-# `gradeShadow`/`gradeMidtone`/`gradeHighlight`, which are three-component
-# tuples, and `Scenario`'s control table is scalar. Adding a verb for them is
-# worth doing; until then the wheel's arming rests on the same argument as the
-# other four and on nothing measured.
+# ⚠ This block was the hole in this file, and it was written down rather than
+# skipped quietly: the wheels write `gradeShadow`/`gradeMidtone`/
+# `gradeHighlight`, three-component tuples, and `Scenario`'s control table takes
+# one number — so the one gesture with no measurement was the one nothing could
+# move. `dragwheel` is that verb (decision #110). Both puck components move in a
+# single `edit`, as `ColorWheel.onChanged` does, and the path is clamped to the
+# disc rather than the square.
+#
+# The scalar `gradeShadowX` / `gradeShadowY` spellings still work and are used
+# below — decision #89, both spellings of everything are kept.
+open samples/_PIC8220.ARW
+dragwheel gradeShadow 0.05,0.05 -0.65,-0.55 12
+measure 0.25,0.25,0.5,0.5 wheel_unarmed
+control gradeShadowX == -0.65
+control gradeShadowY == -0.55
+
+open samples/_PIC8220.ARW
+interact on
+dragwheel gradeShadow 0.05,0.05 -0.65,-0.55 12
+interact off
+measure 0.25,0.25,0.5,0.5 wheel_armed
+expect wheel_armed == wheel_unarmed
+
+# ⚠ And the drag has to have moved the picture, or the equality above is the
+# equality of two renders of the same photograph. This is the check that would
+# stay green if `dragwheel` wrote nothing at all.
+open samples/_PIC8220.ARW
+measure 0.25,0.25,0.5,0.5 wheel_neutral
+expect wheel_armed != wheel_neutral
+
+# The rim clamp, and that the verb moves the wheel it is named after. A puck
+# driven past the edge slides around it — 3,4 is at radius 5, so it lands on
+# 0.6,0.8 — and the other two wheels stay where they were.
+open samples/_PIC8220.ARW
+wheel gradeMidtone 3 4
+control gradeMidtoneX == 0.6
+control gradeMidtoneY == 0.8
+control gradeShadowX == 0
+control gradeHighlightX == 0
 
 # ── A spot ────────────────────────────────────────────────────────────────
 open samples/_PIC8220.ARW
