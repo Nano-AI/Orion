@@ -170,14 +170,13 @@ refine it, so a kill costs the last increment rather than the session.
 
 The original brief for each:
 
-### ⚠ In flight — four agents, isolated worktrees, 2026-08-01 (second wave)
+### ⚠ In flight — two agents left of four, isolated worktrees, 2026-08-01 (second wave)
 
 | Working on | Scope, and the trap named to it |
 |---|---|
-| Grading **Balance** ✅ **landed 2026-08-01, decision #104** (session `2026-08-01m` below) + perspective's **mask-extent** term | Both small and both already specified — #101 named Balance as split toning's one real remainder; #100 measured the extent term's leak at 2 of 60 cells past 0.28 frame-width |
-| Incremental brush accumulation, **session one only** | The predicate alone, no accumulator. ⚠ The cheap version ("the count grew") must fail on **undo three dabs, paint three different ones** — same count, different prefix, and it renders a plausible stroke from stale pixels |
+| Grading **Balance** ✅ **landed, merged 2026-08-01, decision #104** (session `2026-08-01m` below) + perspective's **mask-extent** term, still running | Both small and both already specified — #101 named Balance as split toning's one real remainder; #100 measured the extent term's leak at 2 of 60 cells past 0.28 frame-width |
+| Incremental brush accumulation, **session one only** ✅ **landed, merged 2026-08-01, decision #102** (session `2026-08-01l` below) | The predicate alone, no accumulator. ⚠ The cheap version ("the count grew") must fail on **undo three dabs, paint three different ones** — same count, different prefix, and it renders a plausible stroke from stale pixels |
 | Highlight fill, **pieces 2–3** | ⚠ The memory number *is* the decision: +25 nodes and ~516 MB on a graph at 149 / 6971 MiB. Told to establish whether the pyramid can subsample first — the guided filter and fusion both already do. Wiring it reopens **#29** |
-| X-Trans — research, decomposition, and piece 1 only | ⚠ Explicitly **not** expected to finish; it is multi-week. Markesteijn is implemented by darktable and RawTherapee, both GPL, so the real question is whether a description exists **outside** GPL source. An honest "it does not" is the valuable answer |
 
 ⚠ Two of these are instructed to stop at a costed decomposition rather than
 half-build. That is the recorded preference, three times over.
@@ -185,8 +184,8 @@ half-build. That is the recorded preference, three times over.
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** `orion-tests` **586 checks** · `orion-viewport-tests` **3561
-checks** · **34 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+**Suites:** `orion-tests` **722 checks** · `orion-viewport-tests` **3620
+checks** · **39 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
 three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
 **Suites:** `orion-tests` **626 checks** · `orion-viewport-tests` **3561
 checks** · **35 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
