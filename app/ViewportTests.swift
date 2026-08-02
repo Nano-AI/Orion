@@ -59,6 +59,7 @@ enum ViewportTests {
         testMatteReferenceSurvivesTheSidecar()
         testMatteFileSitsBesideTheSidecar()
         testSweepDistinguishesAbsentFromUnreadable()
+        testSweepDoesNotHoardTheDirectory()
 
         testPictureMapMatchesTheFitRectangle()
         testPictureMapRoundTrips()

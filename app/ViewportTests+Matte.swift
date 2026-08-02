@@ -254,4 +254,83 @@ extension ViewportTests {
                    "\(mattes(photo)) files left")
         }
     }
+
+    /// Sweeping a folder repeatedly must not grow the process.
+    ///
+    /// ⚠ **This is a memory test, so it is written to be able to fail.** The
+    /// sweep enumerates the whole folder, and `contentsOfDirectory` hands back
+    /// autoreleased `NSURL`s — one per file, each about 0.8 KB once its path
+    /// store, its CoreServices `_FileCache` and its strings are counted.
+    /// Nothing in the sweep releases them, so without a pool of its own they
+    /// accumulate in the caller's pool for as long as that pool lives.
+    ///
+    /// The reported defect: `reopen` in the scenario runner grew 25–30 KB per
+    /// cycle where `open` was flat at under 1 KB, and the growth scaled with
+    /// the number of files beside the photograph — +2.5 KB per reopen in a
+    /// folder of 2, +165 KB in a folder of 200. The app hides it, because
+    /// returning to the run loop drains the pool; a batch or a scripted loop
+    /// does not.
+    ///
+    /// The loop below deliberately does **not** wrap the sweep in a pool of its
+    /// own — that is the caller this is written for. With the pool inside
+    /// `sweep` the footprint is flat; delete it and 400 sweeps of a 300-file
+    /// folder retain about 100 MB, which is twelve times the budget here.
+    /// Nothing is deleted during the loop — the one matte file present is the
+    /// one the component names — so every pass enumerates the same folder.
+    static func testSweepDoesNotHoardTheDirectory() {
+        let fm = FileManager.default
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("orion-sweep-hoard-\(UUID().uuidString)")
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        let photo = dir.appendingPathComponent("_PIC0001.ARW")
+        fm.createFile(atPath: photo.path, contents: Data([0]))
+        fm.createFile(atPath: MatteStore.url(photo: photo, id: "keep").path,
+                      contents: Data([0]))
+        let files = 300
+        for i in 0..<files {
+            fm.createFile(atPath: dir.appendingPathComponent("filler-\(i).txt").path,
+                          contents: Data([0]))
+        }
+
+        var component = MaskComponentState()
+        component.kind = 4
+        component.matteId = "keep"
+
+        func sweepOnce() { MatteStore.sweepAfterLoad(photo: photo, parsed: [component]) }
+
+        // Warm up first: the first calls fault in CoreServices' own caches and
+        // that one-off cost is not what is being measured.
+        for _ in 0..<20 { sweepOnce() }
+
+        let sweeps = 400
+        let before = footprintBytes()
+        for _ in 0..<sweeps { sweepOnce() }
+        let grew = Int64(footprintBytes()) - Int64(before)
+
+        report(fm.fileExists(atPath: MatteStore.url(photo: photo, id: "keep").path),
+               "the sweep loop left the referenced matte alone")
+        // 8 MB, against ~100 MB when the pool is gone and ~0 when it is there.
+        report(grew < 8 << 20,
+               "sweeping a folder \(sweeps) times does not hoard its entries",
+               String(format: "grew %.1f MB (%.2f KB per sweep, %d files)",
+                      Double(grew) / 1_048_576, Double(grew) / 1024 / Double(sweeps),
+                      files))
+    }
+
+    /// This process's physical footprint, the number Activity Monitor shows.
+    /// Zero if the kernel declines, which reads as "no growth" — a memory test
+    /// that fails because a `task_info` call did is a memory test nobody keeps.
+    static func footprintBytes() -> UInt64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let kr = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return kr == KERN_SUCCESS ? info.phys_footprint : 0
+    }
 }
