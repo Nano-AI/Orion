@@ -69,6 +69,7 @@ int main() {
     testBrushDabsFollowTheFrame();
     testHighlightHaloGpu();
     testHighlightFillGpu();
+    testHighlightFillWiring();
     testOutputDepth();
     testLensDatabase();
     testBlackLevels();

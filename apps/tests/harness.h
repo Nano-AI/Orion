@@ -101,6 +101,7 @@ void testLensAutoScale();
 void testOutputDepth();
 void testHighlightHaloGpu();
 void testHighlightFillGpu();
+void testHighlightFillWiring();
 void testLocalLaplacianGpu();
 void testDehazeGpu();
 void testCreativeLut();
