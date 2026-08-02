@@ -1368,42 +1368,52 @@ int main(int argc, char** argv) {
 
                 // Chebyshev distance to the nearest pixel that could inform a
                 // fit, by the two-pass 8-neighbour chamfer with unit weights.
+                //
+                //     ⚠ It carries the *identity* of that pixel as well, not
+                //     only the distance. The distance says whether the window
+                //     fit could see evidence; the identity says what the
+                //     evidence would have told it, which is what decides
+                //     whether the pixels it declines are visibly wrong or
+                //     already nearly right. Rouf et al.'s §3.3 estimate is
+                //     f*_k = (rho_k/rho_j)*f_j, so a nearest-evidence rho makes
+                //     that arithmetic available without building any of it.
                 constexpr std::uint16_t kFar = 4000;
                 std::vector<std::uint16_t> dist(n, kFar);
-                for (std::size_t i = 0; i < n; ++i) if (cls[i] == 0) dist[i] = 0;
-                const auto at = [&](std::int64_t x, std::int64_t y) -> std::uint16_t {
-                    if (x < 0 || y < 0 || x >= std::int64_t(w) || y >= std::int64_t(h)) {
-                        return kFar;
+                std::vector<std::uint32_t> feat(n, 0xFFFFFFFFu);
+                for (std::size_t i = 0; i < n; ++i) {
+                    if (cls[i] == 0) { dist[i] = 0; feat[i] = std::uint32_t(i); }
+                }
+                const auto relax = [&](std::size_t here, std::int64_t x, std::int64_t y) {
+                    if (x < 0 || y < 0 || x >= std::int64_t(w) || y >= std::int64_t(h)) return;
+                    const std::size_t there = std::size_t(y) * w + std::size_t(x);
+                    const int d = std::min<int>(kFar, dist[there] + 1);
+                    if (d < dist[here]) {
+                        dist[here] = std::uint16_t(d);
+                        feat[here] = feat[there];
                     }
-                    return dist[std::size_t(y) * w + std::size_t(x)];
                 };
                 for (std::int64_t y = 0; y < std::int64_t(h); ++y) {
                     for (std::int64_t x = 0; x < std::int64_t(w); ++x) {
-                        std::uint16_t d = at(x, y);
-                        for (std::int64_t k = -1; k <= 1; ++k) {
-                            d = std::min<std::uint16_t>(
-                                d, std::uint16_t(std::min<int>(kFar, at(x + k, y - 1) + 1)));
-                        }
-                        d = std::min<std::uint16_t>(
-                            d, std::uint16_t(std::min<int>(kFar, at(x - 1, y) + 1)));
-                        dist[std::size_t(y) * w + std::size_t(x)] = d;
+                        const std::size_t i = std::size_t(y) * w + std::size_t(x);
+                        for (std::int64_t k = -1; k <= 1; ++k) relax(i, x + k, y - 1);
+                        relax(i, x - 1, y);
                     }
                 }
                 for (std::int64_t y = std::int64_t(h) - 1; y >= 0; --y) {
                     for (std::int64_t x = std::int64_t(w) - 1; x >= 0; --x) {
-                        std::uint16_t d = at(x, y);
-                        for (std::int64_t k = -1; k <= 1; ++k) {
-                            d = std::min<std::uint16_t>(
-                                d, std::uint16_t(std::min<int>(kFar, at(x + k, y + 1) + 1)));
-                        }
-                        d = std::min<std::uint16_t>(
-                            d, std::uint16_t(std::min<int>(kFar, at(x + 1, y) + 1)));
-                        dist[std::size_t(y) * w + std::size_t(x)] = d;
+                        const std::size_t i = std::size_t(y) * w + std::size_t(x);
+                        for (std::int64_t k = -1; k <= 1; ++k) relax(i, x + k, y + 1);
+                        relax(i, x + 1, y);
                     }
                 }
 
                 std::size_t beyond = 0, beyondUntouched = 0, deepest = 0;
                 std::size_t interBeyond = 0;
+                // What §3.3 would move those pixels by, using the nearest
+                // evidence pixel as rho: f*_k = (rho_k/rho_j)*f_j over the
+                // clipped channels, with j the pixel's own valid channels.
+                double sumMove = 0.0, worstProposed = 0.0;
+                std::size_t moved = 0;
                 for (std::size_t i = 0; i < n; ++i) {
                     if (cls[i] == 2) {
                         deepest = std::max<std::size_t>(deepest, dist[i]);
@@ -1411,13 +1421,75 @@ int main(int argc, char** argv) {
                         continue;
                     }
                     if (cls[i] != 1) continue;
-                    if (dist[i] > 12) {
-                        ++beyond;
-                        const float r = float(in[i * 4 + 0]);
-                        const bool same = float(out[i * 4 + 0]) == r &&
+                    if (dist[i] <= 12) continue;
+                    ++beyond;
+                    const bool same = float(out[i * 4 + 0]) == float(in[i * 4 + 0]) &&
+                                      float(out[i * 4 + 1]) == float(in[i * 4 + 1]) &&
+                                      float(out[i * 4 + 2]) == float(in[i * 4 + 2]);
+                    if (same) ++beyondUntouched;
+
+                    const std::uint32_t f = feat[i];
+                    if (f == 0xFFFFFFFFu) continue;
+                    float c0[3], rho[3];
+                    for (int k = 0; k < 3; ++k) {
+                        c0[k]  = float(in[i * 4 + k]);
+                        rho[k] = float(in[std::size_t(f) * 4 + k]);
+                    }
+                    // The unclipped reference: the valid channels' own ratio to
+                    // rho, averaged, exactly as `highlights.slang` averages its
+                    // reference rather than picking one channel.
+                    double scale = 0.0;
+                    int refs = 0;
+                    for (int k = 0; k < 3; ++k) {
+                        if (c0[k] >= limit) continue;
+                        scale += double(c0[k]) / std::max(double(rho[k]), 1e-6);
+                        ++refs;
+                    }
+                    if (refs == 0) continue;
+                    scale /= refs;
+                    double worstHere = 0.0;
+                    for (int k = 0; k < 3; ++k) {
+                        if (c0[k] < limit) continue;
+                        worstHere = std::max(worstHere,
+                                             std::abs(scale * double(rho[k]) - double(c0[k])));
+                    }
+                    sumMove += worstHere;
+                    worstProposed = std::max(worstProposed, worstHere);
+                    ++moved;
+                }
+
+                // ⚠ And the question that decides whether §3.3 is decoration or
+                //   a correction to piece 3: the pixels that set rho for a
+                //   blown core are the *innermost* ring of known ones, which is
+                //   the annulus. If that ring is mostly beyond the window fit's
+                //   reach then piece 3 is solving from a boundary condition
+                //   that is itself un-recovered, and every core in the frame
+                //   inherits the error measured above.
+                std::size_t rimAll = 0, rimBeyond = 0;
+                double rimSumMove = 0.0;
+                for (std::int64_t y = 0; y < std::int64_t(h); ++y) {
+                    for (std::int64_t x = 0; x < std::int64_t(w); ++x) {
+                        const std::size_t i = std::size_t(y) * w + std::size_t(x);
+                        if (cls[i] != 1) continue;
+                        bool touchesCore = false;
+                        for (std::int64_t dy = -1; dy <= 1 && !touchesCore; ++dy) {
+                            for (std::int64_t dx = -1; dx <= 1; ++dx) {
+                                const std::int64_t qx = x + dx, qy = y + dy;
+                                if (qx < 0 || qy < 0 || qx >= std::int64_t(w) ||
+                                    qy >= std::int64_t(h)) continue;
+                                if (cls[std::size_t(qy) * w + std::size_t(qx)] == 2) {
+                                    touchesCore = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!touchesCore) continue;
+                        ++rimAll;
+                        if (dist[i] > 12) ++rimBeyond;
+                        const bool same = float(out[i * 4 + 0]) == float(in[i * 4 + 0]) &&
                                           float(out[i * 4 + 1]) == float(in[i * 4 + 1]) &&
                                           float(out[i * 4 + 2]) == float(in[i * 4 + 2]);
-                        if (same) ++beyondUntouched;
+                        if (same) rimSumMove += 1.0;
                     }
                 }
 
@@ -1438,6 +1510,16 @@ int main(int argc, char** argv) {
                             "Omega^inter beyond 12 px", interBeyond, deepest);
                 std::printf("  worst move the window fit made in the annulus: %.5f\n",
                             worstMove);
+                std::printf("  what §3.3 would move the beyond-12px set by, "
+                            "against clip %.4f: mean %.5f, worst %.5f (%zu px)\n",
+                            st.clip, moved ? sumMove / double(moved) : 0.0,
+                            worstProposed, moved);
+                std::printf("  the ring that sets rho for every core: %zu px, "
+                            "%zu beyond 12 px (%.1f%%), %zu untouched (%.1f%%)\n",
+                            rimAll, rimBeyond,
+                            rimAll ? 100.0 * double(rimBeyond) / double(rimAll) : 0.0,
+                            std::size_t(rimSumMove),
+                            rimAll ? 100.0 * rimSumMove / double(rimAll) : 0.0);
 
                 develop.apply(base);
                 develop.render();
