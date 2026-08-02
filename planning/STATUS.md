@@ -51,8 +51,11 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    milliseconds; reverting the guard prints `DEHAZE REDOES THE DARK CHANNEL`
    and exits 1. ⚠ Two claims in this file were **wrong** and are corrected
    below.
-2. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
-   iterations. ~240 MB across a 5,000-photo cull. ~1 session.
+2. ~~**`reopen` grows 25–49 KB a cycle**~~ — ✅ **closed 2026-08-02 by
+   measurement, decision #133.** It does not, any more. **240 reopens: one
+   556 MB step on the first cycle, then +0.9 KB a cycle over the remaining
+   ~230** — the `open` control's own slope. Decision #90's fix held. Numbers and
+   the methodology trap in the session entry below.
 3. ~~**Incremental brush accumulation.**~~ ✅ **done 2026-08-01, #102 and
    #108.** Both sessions shipped. A pointer event's cost is now flat in what
    is already painted — `mask:0` **5.20 ms appending 49 dabs to 294 against
@@ -84,10 +87,9 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    8-bit path, output sharpening, and a location strip that also removes the
    IPTC place names. Decisions #90–#92.
 6. **Americanising the persisted keys**, if wanted — a schema migration with
-1. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
-   iterations. ⚠ Partly answered — `MatteStore.sweep`'s directory enumeration
-   was the bulk of it (decision #90) and the slope is now the `open` loop's at
-   every folder size. Re-measure before spending a session on it.
+1. ~~**`reopen` grows 25–49 KB a cycle**~~ — ✅ **re-measured 2026-08-02 and
+   closed, decision #133.** This entry said "re-measure before spending a
+   session on it", and that was the right instruction: the slope is gone.
 2. **Incremental brush accumulation.** ⚠ Now *located*: the host-side O(N) is
    gone and the slope did not change, so the residual is the **GPU dab loop**.
    Costed in `ROADMAP.md`. ~1–2 sessions.
@@ -681,6 +683,63 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-02c` — the reopen leak is gone, and the fit that said otherwise
+
+The queue's next item was **`reopen` grows 25–49 KB a cycle**, carrying its own
+instruction: *re-measure before spending a session on it*. Re-measured. **There
+is no slope.** Decision #133; the session went on the measurement and nothing was
+built, which is the right outcome when the premise has expired.
+
+**Paired loops, RSS polled at 300 ms, one photograph, one process each:**
+
+| Loop | Folder | Result |
+|---|---|---|
+| `open` × 120 (control) | 202 files | 330.2 → 330.4 MB — **+1.8 KB/cycle** |
+| `reopen` × 120, one range mask | 202 files | one **556 MB** step, then flat |
+| `reopen` × 120, one range mask | 2 files | identical — **not** the folder |
+| `reopen` × 120, no mask component | 1 file | 886.3 → 886.6 MB — **+3.7 KB/cycle**, no step |
+| `reopen` × **240**, one range mask | 2 files | step on the **first** cycle, then **886.6 → 886.8 MB over the last 40** — **+0.9 KB/cycle** across ~230 |
+
+Decision #90's fix — `MatteStore.sweep`'s undrained directory enumeration — held.
+The 200-file and 2-file folders now measure the same, which is what "it is no
+longer the folder" looks like.
+
+### ⚠ The trap, which this session walked into first
+
+The first analysis fit a straight line to the RSS series and reported
+**5,932 KB/cycle** — a hundred times worse than the entry being checked. Then it
+printed the series: `330 330 330 330 886 886 886 … 886 887 887`. **A step, not a
+slope.** A least-squares fit across one discontinuity returns a large slope with
+no warning, and it errs *alarming*, which is the direction that gets a session
+spent on nothing.
+
+Two things fell out of it, and both are cheap rules:
+
+- **Print the series before fitting it.** A regression over data nobody looked at
+  is the numeric form of a check that cannot fail.
+- **Falsify the shape, not only the size.** 240 cycles rather than 120 is what
+  turned "one step" from a reading into a result — a staircase with a long period
+  would have shown a second one, and there is none in 230 cycles.
+
+### What the 556 MB step is, and what it is not
+
+It is the mask chain allocating on its first use — bounded, paid once, and the
+same whether the folder holds 2 files or 202. It is **not** a leak: it does not
+repeat, and the loop with no mask component never pays it.
+
+⚠ It is worth someone's attention as a *budget* question rather than a bug: one
+range mask holds **556 MB** resident. Not costed here, not chased here, and
+written down so it is a number rather than a surprise.
+
+### Unpinned, deliberately, and why
+
+No check was added. Detecting a 25 KB/cycle slope needs tens of real decodes —
+~0.27 s each — so a gate that could see it would add minutes to every run, and a
+gate that runs in seconds could not see it. What *is* pinned is the cause #90
+found: `testSweepDoesNotHoardTheDirectory`, 400 sweeps of a 300-file folder under
+an 8 MB ceiling. The residual is a measurement in this file, not a test, and that
+is stated rather than implied.
 
 ## Session `2026-08-02b` — a flat frame is not a photograph, and now the app says so
 
