@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-02 (**the two biggest files in the tree are now eight and five, and neither moved a pixel — #113 and #117**)
+**Last updated:** 2026-08-02 (**`apps/tests/` is entirely under the 1000-line ceiling; one file in the tree is over it — #129**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#103 built, #101 refused). **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
@@ -135,9 +135,11 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
    fixed — and ✅ **closed 2026-08-02 by #125**, along with the Photo menu and
    the footer's failure line, which had the same cause.
 
-   **The product's large files are down to `OrionApp.swift`**; the rest of the
-   ceiling's survivors are in `apps/tests/`, which is a different argument. See
-   the gap table, recounted by sweep.
+   **The product's large files are down to `OrionApp.swift`**; the ceiling's
+   survivors were then all in `apps/tests/`, which is a different argument —
+   and #127 and #129 have since taken all four of those, so the only file over
+   the ceiling anywhere is `app/Screenshot.swift`. See the gap table, recounted
+   by sweep.
 
 6. ~~`Scenario.swift` against the same ceiling~~ — ✅ **done 2026-08-02, decision
    #120.** **1,615** lines, **977 of them one `switch`**; now five files, largest
@@ -228,6 +230,55 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — the last three oversize test files, split at the fixture (#129)
+
+**Decision #129.** `tests_brush.cpp` **1,142 → 824**, `tests_perspective.cpp`
+**1,110 → 837**, `tests_grade.cpp` **1,029 → 653**. Two new files
+(`tests_spot.cpp` 246, `tests_linear.cpp` 390) and two existing ones grown into
+(`tests_color.cpp` 324 → 414, `tests_mask_geom.cpp` 350 → 642). **`apps/tests/`
+is now entirely under the ceiling**, and by sweep at `49c8a83` the only file
+over it anywhere in 235 tracked sources is `app/Screenshot.swift` at 1,194,
+which is another story.
+
+⚠ **All three were the case #126 warned about — only just over the line — and
+all three had the same shape underneath.** In each file the *subjects*
+outnumbered the *fixtures*, and what came out was a whole test that shared
+nothing at all with the rest of its file: no device, no kernel, no helper, no
+frame. `testBayerDecimation` is a CPU Bayer mosaic in a GPU brush file, and it
+went to `tests_color.cpp` because its assertion is `channelAt` on **the fixture
+`testCfa` builds twelve lines above where it now sits**. `testSpotRemovalGpu`
+dispatches two kernels nothing else in the tree touches. The two host-side
+perspective mask checks read no GPU and none of their file's anonymous
+namespace — they are `mask::toFrame` on the host, which **is** what
+`tests_mask_geom.cpp` already is.
+
+⚠ **Two pairs were deliberately kept together, on #127's grounds.** The brush
+prefix predicate and its wiring test each name the other in their headers
+(*"the unit test above cannot see the two things this one exists for"*), and
+mutation M10 reddens checks in both at once. The tone bands and the local
+adjustments share one `developLinear` dispatch, and the first has to explain a
+mask binding it never samples while the second is the test that samples it —
+so they are one new file rather than two.
+
+⚠ **`testLensAutoScale` was left where it is**, and that is a decision: moving
+90 lines to sit beside `testLensGpu` would take `tests_tone.cpp` to 948 to save
+90 here. A split that does not clearly help is worse than no split.
+
+⚠ **Verbatim, proved by index**: 276 + 377 + 82 + 238 lines sliced out by line
+number and sliced back out of their destinations to compare with `HEAD` line
+for line. `orion-tests` output **byte-identical**, `diff` clean, 800 checks.
+
+⚠⚠ **Fifteen mutations, and the one that stayed green is the finding**:
+deleting the W⁻¹JW conjugation from `mask::unperspective` — *the exact mistake
+the check beside it names* — is invisible to every gate, because that check
+drives a pure aspect squeeze and a diagonal Jacobian makes the conjugation a
+no-op. Left unfixed and in the gap table. Two dangling doc comments (in
+`tests_brush.cpp` and `tests_grade.cpp`, both strays from the 2026-07-31 split)
+were also left alone, matching the one #127 recorded.
+
+Gates: **800 / 3708 / 40 of 40 / bench exits 0**, p95 **9.37, 9.15, 9.27 ms**
+over three runs against a 16 ms gate.
 
 ### ✅ 2026-08-02 — the dead function and the comments that lost their subject (#128)
 
@@ -1357,7 +1408,8 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken four ways, and one of them is `app/Screenshot.swift` at 1,194, which no previous copy of this row has ever named.** ⚠ **Recounted by sweep 2026-08-02 at `0b8061d` + #127**, over all **233** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files — `git ls-files`, not a directory list, so nothing is out of scope by being somewhere nobody thought to look. Over: **`app/Screenshot.swift` 1,194**, **`apps/tests/tests_brush.cpp` 1,142**, **`apps/tests/tests_perspective.cpp` 1,110**, **`apps/tests/tests_grade.cpp` 1,029**. Next below: `ShaderParams.h` **905**, then `tests_highlights.cpp` **865** and `tests_tone.cpp` **858**. ⚠ **`Screenshot.swift` is the lesson, again**: it was 809 lines this morning and #125's three interface checks took it past the ceiling on the same day the row was rewritten twice, by agents who were counting the files they had been chartered against. ⚠ This sweep is of **one worktree at `0b8061d`** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling. Seven splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `tests_effects.cpp` 1,716→555 + 865 + 331 (#127, the first cut at the **fixture** rather than the region, per #126). ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into this one on 2026-08-02 | whole tree |
+| **A check names the mutation it exists to catch and does not catch it, for the second time in two days.** `testPerspectiveMaskExtent` check 6 (now in `tests_mask_geom.cpp`) says *"getting the conjugation W⁻¹JW wrong on a 3:2 frame"* is what it is for — and **deleting that conjugation from `mask::unperspective` outright leaves 800 / 3708 / 40 / bench 0 all green** (#129, mutation M6). The fault is the fixture: the check drives a **pure aspect squeeze**, whose Jacobian is diagonal, and a diagonal `J` has `b = c = 0` — so the conjugation multiplies two zeros. It needs a keystone, which has an off-diagonal derivative. **Recorded rather than fixed**, per the brief. Its neighbour in the same session, #127's *"a constant rim fills with that constant"*, is the same shape | `MaskGeometry.h` |
+| **The 1000-line rule is broken one way, and it is `app/Screenshot.swift` at 1,194.** ⚠ **Recounted by sweep 2026-08-02 at `49c8a83` + #129**, over all **235** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files — `git ls-files`, not a directory list, so nothing is out of scope by being somewhere nobody thought to look. Over: **`app/Screenshot.swift` 1,194**, and nothing else. Next below: `ShaderParams.h` **905**, `tests_highlights.cpp` **865**, `tests_tone.cpp` **858**, `tests_perspective.cpp` **837**, `tests_brush.cpp` **824**. ⚠ **`apps/tests/` is entirely under the ceiling for the first time** — #129 took the last three, each at a fixture boundary, with `orion-tests` byte-identical on both sides. ⚠ **`Screenshot.swift` is the lesson**: it was 809 lines on the morning of 2026-08-02 and #125's three interface checks took it past the ceiling the same day, while the row was being rewritten twice by agents counting only the files they had been chartered against. ⚠ This sweep is of **one worktree at `49c8a83`** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling. Ten splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `tests_effects.cpp` 1,716→555 (#127, the first cut at the **fixture** rather than the region, per #126), and #129's three: `tests_brush.cpp` 1,142→824, `tests_perspective.cpp` 1,110→837, `tests_grade.cpp` 1,029→653. ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into one on 2026-08-02 | whole tree |
 
 | ~~⚠ **The whole Photo menu is unreachable from every check.**~~ ✅ **closed 2026-08-02, decision #125.** `--screenshot --scene menu` hands the process back to `OrionApp.main()` and reads `NSApp.mainMenu` — the shipping `Scene` building the shipping `PhotoCommands` — and asserts **26 commands by title**, exiting 1 and printing the whole 75-item bar when one is missing. Deleting Reset Adjustments now prints `MISSING from the menu bar — "Reset Adjustments"` and exits 1, with every frame and all 40 scenarios still green. ⚠ It asserts **presence, not firing**: the items are disabled at launch and firing one needs a photograph, a key window and focus (#110.3's shape). ⚠ It is not driven through `CullActions`, deliberately — that would be green on the mutation, which deletes the button and leaves the action | `Screenshot.swift` |
 | ⚠ **The Compare Original menu item ships without its key.** The bar reads **`Compare Original  ()`**: the source writes `"Compare Original  (\\)"`, and a `Button`'s string is a `LocalizedStringKey` whose escape character is the backslash, so the one item that spells its key only in its title has lost it. Found by the menu check's first run, 2026-08-02; **pinned as it ships** so the check is green on the tree as it stands, and it will go red — printing the whole bar — the moment somebody fixes it, which is the right way round. The fix is `Text(verbatim:)` or a different spelling | `OrionApp+Commands.swift` |

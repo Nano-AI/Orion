@@ -14,6 +14,7 @@ add_executable(orion-tests
     tests_perspective.cpp
     tests_tone.cpp
     tests_grade.cpp
+    tests_linear.cpp
     tests_effects.cpp
     tests_display.cpp
     tests_highlights.cpp
@@ -22,6 +23,7 @@ add_executable(orion-tests
     tests_mask_geom.cpp
     tests_brush.cpp
     tests_brush_accum.cpp
+    tests_spot.cpp
     tests_mask_range.cpp
     tests_mask_matte.cpp
     tests_grain.cpp
