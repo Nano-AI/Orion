@@ -86,6 +86,7 @@ void testPerspectiveConvergingLines();
 void testPerspectiveOneResample();
 void testPerspectiveAutoScaleFillsTheFrame();
 void testPerspectiveMaskGeometry();
+void testPerspectiveMaskExtent();
 void testPerspectiveWiring();
 void testNoiseEstimator();
 void testDenoiseGpu();

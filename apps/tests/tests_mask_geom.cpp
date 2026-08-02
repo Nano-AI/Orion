@@ -219,20 +219,34 @@ void testMaskGeometry() {
     // belief that produced it, never against the render. `repro/mask-alignment.txt`
     // checks it against the render, which is why it caught this.
     {
-        float x = 0.0f, y = 0.0f;
-        mg::radiusToFrame(0.4f, 0.1f, none, x, y);
-        report(std::abs(x - 0.4f) < 1e-6f && std::abs(y - 0.1f) < 1e-6f,
+        // No perspective, so the derivative is the identity and the answer is
+        // the crop's alone.
+        const orion::pipe::persp::Jacobian flat{};
+        auto e = mg::radiusToFrame(0.4f, 0.1f, none, flat, 0.0f);
+        report(std::abs(e.semiX - 0.4f) < 1e-6f && std::abs(e.semiY - 0.1f) < 1e-6f,
                "radial semi-axes do not swap on a quarter turn — the angle "
                "already carries it",
-               std::to_string(x) + ", " + std::to_string(y));
+               std::to_string(e.semiX) + ", " + std::to_string(e.semiY));
 
         // The crop does scale them, and per axis, because a crop is the one
         // part of the transform that is not rigid.
         mg::Crop tight{0.25f, 0.25f, 0.5f, 0.25f};
-        mg::radiusToFrame(0.4f, 0.1f, tight, x, y);
-        report(std::abs(x - 0.2f) < 1e-6f && std::abs(y - 0.025f) < 1e-6f,
+        e = mg::radiusToFrame(0.4f, 0.1f, tight, flat, 0.0f);
+        report(std::abs(e.semiX - 0.2f) < 1e-6f && std::abs(e.semiY - 0.025f) < 1e-6f,
                "and the crop scales each along its own axis",
-               std::to_string(x) + ", " + std::to_string(y));
+               std::to_string(e.semiX) + ", " + std::to_string(e.semiY));
+
+        // ⚠ And it is *bit*-identical without a perspective, at an angle that
+        // would put a rounding error into every term of the eigen-decomposition
+        // if the neutral case were solved rather than short-circuited. A radial
+        // mask on an uncorrected photograph must render as it did before the
+        // ellipse existed, and "within 1e-6" is not that claim.
+        e = mg::radiusToFrame(0.4f, 0.1f, tight, flat, 0.7f);
+        report(e.semiX == 0.4f * 0.5f && e.semiY == 0.1f * 0.25f &&
+               e.angleDelta == 0.0f,
+               "a neutral perspective moves neither semi-axis by one bit",
+               std::to_string(e.semiX) + ", " + std::to_string(e.semiY) + ", " +
+               std::to_string(e.angleDelta));
     }
 }
 

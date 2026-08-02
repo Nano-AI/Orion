@@ -34,6 +34,7 @@ int main() {
     testPerspectiveOneResample();
     testPerspectiveAutoScaleFillsTheFrame();
     testPerspectiveMaskGeometry();
+    testPerspectiveMaskExtent();
     testPerspectiveWiring();
     testNoiseEstimator();
     testLinearizeClipsToWhite();

@@ -68,24 +68,37 @@ expect cornerBottomRight > 0.005
 # the dealership windows are clipped at this exposure, so a positive local
 # exposure over them would change nothing and read as a failure of the mask.
 #
-# ⚠ The mask is hard-edged (feather 0.06) and 0.28 of the frame wide **on
-# purpose, and that size is the largest one this can hold.** A mask's centre and
-# a gradient's direction go through the homography exactly; its *extent* is
-# carried by the local scale at its own centre, which is first order — so a very
-# large ellipse under a very strong keystone disagrees with the overlay at its
-# rim. Measured on this frame at vertical 0.45: radii of 0.10, 0.20 and 0.28 are
-# bit-identical over every clear cell, and 0.34 leaks 2 of 60 cells by 0.0105
-# luma. At vertical 1.0 the same 0.34 leaks by 0.0617; at vertical 0.2 it is
-# clean. The bound is written down in `research/perspective.md` and costed in
-# `ROADMAP.md`, and this line sits at the edge of it so the approximation cannot
-# quietly get worse.
+# ⚠ The mask is hard-edged (feather 0.06) and **0.34 of the frame wide**, moved
+# there 2026-08-01 from the 0.28 it sat at while a mask's extent was carried by
+# one isotropic number. It is a *bound* and not a preference: a mask's centre and
+# a gradient's direction go through the homography exactly, and its extent goes
+# through the map's **derivative**, which is exact in every direction but is
+# still a linear map standing in for a projective one. So a large enough ellipse
+# under a strong enough keystone disagrees with the overlay at its rim, and this
+# line sits where it can see that happen.
+#
+# Measured on this frame, 2026-08-01, at `maskcheck 10 -2.0` (the numbers on the
+# left of the arrow are with the isotropic scale, on the right with the ellipse):
+#
+#   0.34 x 0.22, vertical 0.45   clean -> clean
+#   0.34 x 0.22, vertical 1.00   clean -> clean
+#   0.34 x 0.28, vertical 1.00   1 of 56 at 0.0044 -> 1 of 56 at 0.0041
+#   0.34 x 0.34, vertical 0.45   2 of 48 at 0.0214 -> 2 of 48 at 0.0163
+#   0.34 x 0.34, vertical 1.00   4 of 48 at 0.1001 -> 4 of 48 at 0.0862
+#
+# ⚠ **Read the right-hand column before believing the fix.** A keystone's error
+# over a mask this big is mostly the map's *curvature* — second order, which no
+# Jacobian removes — so the ellipse buys about a fifth of it here and the shape
+# that still leaks still leaks. What it removes completely is the anisotropy,
+# and section 4 below is where that is visible, because the aspect squeeze has
+# no curvature for it to hide behind. `research/perspective.md` has both tables.
 set perspectiveHorizontal 0
 set perspectiveVertical 0.45
 set exposure 2.6
 mask radial
 set maskCentreX 0.40
 set maskCentreY 0.45
-set maskRadiusX 0.28
+set maskRadiusX 0.34
 set maskRadiusY 0.22
 set maskFeather 0.06
 maskcheck 10 -2.0
@@ -97,7 +110,48 @@ rotate 1
 maskcheck 10 -2.0
 rotate -1
 
-# ── 4. All three fields survive a reopen ──────────────────────────────────
+# ── 4. The squeeze, where a mask's extent has nowhere to hide ─────────────
+#
+# ⚠ **This is the half that fails without the ellipse**, and section 3 is not.
+#
+# Aspect is not a keystone. It is diag(1/g, g) premultiplied into the same
+# matrix — exactly linear, so there is no curvature, and area-preserving, so
+# `sqrt|det J|` is exactly 1 up to the auto-scale zoom. A mask's extent carried
+# by that one number therefore came out **round under a squeeze that made the
+# picture underneath it two to one**, which is not an approximation going soft
+# at the rim; it is the shape being dropped.
+#
+# Measured 2026-08-01 with the isotropic scale: 4 of 84 clear cells leaked, worst
+# **0.1461** luma — an order more than any keystone reading above. With the
+# ellipse, every one of the 84 is bit-identical.
+#
+# The mask is centred, because a squeeze about the frame's centre moves nothing
+# there: this asserts the *shape* alone, with the placement held still.
+set perspectiveVertical 0
+set maskCentreX 0.50
+set maskCentreY 0.50
+set maskRadiusX 0.20
+set maskRadiusY 0.20
+set perspectiveAspect 1.0
+maskcheck 10 -2.0
+
+# The other way, so a sign error cannot pass both.
+set perspectiveAspect -1.0
+maskcheck 10 -2.0
+
+# And a mask at an angle, whose squeezed ellipse has axes that are neither the
+# frame's nor its own — the case no per-axis scale can reach at all, and the
+# only one that asserts the returned *angle*. It leaked 2 of 80 cells before.
+set maskAngle 0.6
+set maskRadiusX 0.24
+set maskRadiusY 0.14
+set perspectiveAspect 1.0
+maskcheck 10 -2.0
+
+set maskAngle 0
+set perspectiveAspect 0
+
+# ── 5. All three fields survive a reopen ──────────────────────────────────
 #
 # Setting a property and reading it back never leaves `Engine`. Only a round
 # trip through `state`, the sidecar and the decoder can tell whether the field
