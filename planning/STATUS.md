@@ -22,14 +22,20 @@ four now also has something that fails when its *wiring* breaks — see sessions
 
 **Next story:** the queue, in order, each with a cost:
 
-1. **Dehaze's drag cost has roughly doubled** — ✅ *confirmed* 2026-08-01 by a
-   paired re-measurement on a quiet machine, twice: exposure and clarity both
-   within noise of their recorded figures, **dehaze 125 ms against 67.3**. ⚠
-   Narrowed, not explained: the bench's per-node profile totals **73.6 ms over
-   19 nodes**, so ~50 ms of the tick is *outside node dispatch*. `render()`'s
-   own comment says the airlight readback cannot fire on the interaction path —
-   either that is wrong or the time is elsewhere. **Bisect next**, one rebuild
-   per step. ~1 session.
+1. ~~**Dehaze's drag cost**~~ — ✅ **done 2026-08-01, decision #90.** The cause
+   was `DevelopPipeline.cpp:1325`: the dehaze chain's parameter blocks were
+   re-pushed on every tick, and `setParams` dirties the whole downstream
+   subgraph whether or not the bytes changed. **Only omega moves with the
+   slider**; the dark channel, the six rank passes and the candidate pooling
+   are functions of the frame's size, the paper's constants and A — nine nodes,
+   six of them full-resolution over 24 MP, redone for a value none of them
+   read. Paired A/B, two rounds, interleaved binaries: **147.3/146.4 → 102.7/
+   100.6 ms** and **127.1/120.6 → 87.0/87.7 ms** — 0.69–0.71×, ~30% off the
+   tick, with exposure and clarity unmoved in the same process. Pinned by the
+   bench's `dehaze drag` invariant, which counts *named* nodes rather than
+   milliseconds; reverting the guard prints `DEHAZE REDOES THE DARK CHANNEL`
+   and exits 1. ⚠ Two claims in this file were **wrong** and are corrected
+   below.
 2. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
    iterations. ~240 MB across a 5,000-photo cull. ~1 session.
 3. **Incremental brush accumulation.** ⚠ Now *located*: the host-side O(N) is
@@ -134,6 +140,80 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01d — dehaze redid the dark channel on every tick
+
+**Queue item 1, root-caused and fixed.** `DevelopPipeline.cpp:1325` pushed the
+whole dehaze parameter set whenever the slider moved. `Pipeline::setParams`
+memcpys and calls `markDownstreamDirty` unconditionally — **it never compares
+the bytes** — so pushing an unchanged block is indistinguishable from changing
+it. Only `dehaze:moments` reads the slider (omega); the dark channel, the six
+rank passes and the candidate pooling read the frame's size, the paper's
+constants and A. Nine nodes, six of them full resolution over 24 MP, redone
+per tick for a value none of them read.
+
+The fix is a `hazeShapeValid_` latch: the size-derived blocks are pushed once
+(and again on `first`, which is what a reload sets), omega is pushed on every
+tick, and `pushAirlight` already had its own trigger.
+
+**Paired, interleaved, two binaries, two rounds** — `Orion-before.app` and
+`Orion-fixed.app` run back to back in the same machine state:
+
+| round | before | after | ratio | exposure b/a | clarity b/a |
+|---|---|---|---|---|---|
+| loadavg ~3.5 | 127.1, 120.6 ms | 87.0, 87.7 ms | **0.71×** | 9.4/9.4 → 9.4/10.8 | 62.8/61.5 → 64.3/62.2 |
+| loadavg ~1.85 | 147.3, 146.4 ms | 102.7, 100.6 ms | **0.69×** | 9.5/12.8 → 12.6/12.5 | 56.3/73.8 → 73.9/72.2 |
+
+The two controls that were *not* touched move with the machine and not with the
+build, which is what makes the dehaze column a result rather than a reading.
+Normalised in-process, dehaze/clarity went **1.96–2.62× → 1.35–1.41×** and
+dehaze/exposure **12.8–15.5× → 8.0–9.3×** (7.2× is what the file recorded).
+All 33 control probes in `orion-bench` move the picture by *exactly* the same
+amounts before and after: this is a cost change and nothing else.
+
+### The test, and the mutation that proves it bites
+
+`orion-bench`'s new `dehaze drag` invariant, beside `exposure drag, lens on` —
+the same bug in the lens chain, found the same way. It drags dehaze twelve
+times and asserts that **no node in a named list** ran, taking the *worst* tick
+rather than the last one. Names, not a count: any nine nodes would satisfy a
+count, and the point is which nine. Not milliseconds: this machine measured the
+same binary at 8.97 and 44.53 ms p95 within an hour.
+
+**Mutation:** restore the old guard —
+`if (dehazing_ && (hazeMoved || !hazeShapeValid_))`. The bench prints
+`dehaze drag  19 nodes, 9 of them slider-independent (dehaze:channel min ...)
+DEHAZE REDOES THE DARK CHANNEL` and **exits 1**.
+
+### ⚠ Two claims in this file were wrong, and both were about the fixture
+
+1. **"~50 ms of the tick happens outside node dispatch."** It does not. That
+   compared a 125 ms tick against the bench's *dehaze section alone* (73.6 ms,
+   19 nodes). Clarity's input is `nDehaze_`
+   (`DevelopPipeline.cpp:308`), so with clarity left at 0.9 by the line above
+   it, **a dehaze tick runs the clarity chain too** — instrumented at **55
+   nodes**: 16 dehaze plus the 39 that a clarity tick runs. 73.6 + 65.5 ≈ 139.
+   The tick was always fully explained by dispatch.
+2. **`estimateAirlight` was not the suspect.** Instrumented across a 40-tick
+   drag it fires **once**, exactly as `render()`'s comment claims. The comment
+   is right and stays.
+
+### ⚠ What is still not explained, said plainly
+
+The recorded baseline of **67.3 ms** does not reproduce at `6fd4e59`, the
+commit that wrote it — built and measured there, dehaze/clarity is ~2.0, not
+the 1.11 the header implies, and the bench's dehaze section is 19 nodes at both
+ends of the window. So the header's three numbers were most likely taken
+one control per run (dehaze with clarity still at zero costs about what the
+header says), and the file that reports them drags all three in one process.
+**The doubling was a fixture artifact; the waste it pointed at was real.**
+No bisect was needed and none was run.
+
+⚠ `orion-bench`'s **M0 gate is still unreadable under load** — it failed at
+18.63 and 51.89 ms p95 with a stray `swift-frontend` at 99% CPU and passed at
+9.10 ms on the same binary minutes later. It gates the *exposure* path, which
+this change does not touch (3 nodes either way). Third session in a row this
+has cost time; see `2026-07-31l`.
 
 ## Session 2026-08-01c — the stroke stopped rebuilding the panel
 

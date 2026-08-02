@@ -499,6 +499,15 @@ private:
     bool airlightValid_ = false;
     bool dehazing_ = false;
 
+    /// Whether the chain's size-derived parameter blocks have been pushed.
+    ///
+    /// ⚠ Everything in the dehaze chain except omega is a function of the
+    /// frame's size, the paper's constants and A — so re-pushing it per tick
+    /// dirties nine nodes, six of them full-resolution rank passes, for a value
+    /// none of them read. `apps/bench`'s `dehaze drag` invariant is what keeps
+    /// this true.
+    bool hazeShapeValid_ = false;
+
     /// Reads the pooled candidates back and picks A. Costs one small download.
     void estimateAirlight();
     void pushAirlight();

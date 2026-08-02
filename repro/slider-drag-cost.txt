@@ -22,6 +22,28 @@
 # Kept as a measurement rather than a threshold. A wall-clock `expect` fails on
 # a busy machine and teaches everyone to ignore it; this prints the cost so the
 # story that fixes it has a before to point at.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️ 2026-08-01. **The three numbers above are not a matched set, and chasing
+# the dehaze one as a regression cost most of a session.** They were almost
+# certainly taken one control per run. This file drags all three in one process,
+# in this order, and `clarity` is left at 0.9 when `dehaze` starts — so a dehaze
+# tick runs the clarity chain as well, because `clarity:luma`'s input *is*
+# `nDehaze_`. Instrumented: exposure 3 nodes, clarity 39, **dehaze 55** (its own
+# 16 plus clarity's 39). 67.3 is about what dehaze costs with clarity still at
+# zero; it is not what this file measures and never was.
+#
+# The hunt did find a real defect, now fixed (decision #90): the dehaze chain's
+# parameter blocks were re-pushed every tick, and `setParams` dirties the
+# downstream subgraph without comparing the bytes, so nine slider-independent
+# nodes — six of them full-resolution rank passes — were redone for a value none
+# of them read. Paired and interleaved, two rounds: **147.3/146.4 → 102.7/100.6
+# ms** and **127.1/120.6 → 87.0/87.7 ms**, with exposure and clarity unmoved in
+# the same process. `orion-bench`'s `dehaze drag` invariant is what holds it.
+#
+# So read a *ratio between the controls in one run*, never a lone figure against
+# the header. On this machine one binary has measured 8.97 and 44.53 ms p95
+# within an hour.
 open samples/_PIC8220.ARW
 set exposure 2.6
 
