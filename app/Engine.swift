@@ -1645,7 +1645,13 @@ final class Engine {
                 maxDimension: UInt32 = 0, space: Int32 = 0,
                 rating: Int32 = -1, metadata: Int32 = 1,
                 depth: Int32 = 0, sharpen: Int32 = 0) throws {
-        guard let handle else { return }
+        // ⚠ Throws rather than returning. A bare `return` here is an export
+        // that reports success and writes no file — and the person who finds
+        // that out is whoever was sent the photograph. `isLoaded` is checked
+        // for the same reason: the engine exists from launch, so exporting with
+        // nothing open used to hand the facade a graph with no source and the
+        // failure, if any, came back through a path nobody read.
+        guard let handle, isLoaded else { throw Failure.export("no photo is open") }
 
         // The coverage overlay is a viewing aid. Exporting with it on would
         // write a red-tinted photograph and nothing in the file would say why,

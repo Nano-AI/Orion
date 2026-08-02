@@ -92,13 +92,21 @@ struct Sidecar: Sendable {
     /// the flag, editing writes the develop state — and each used to rebuild
     /// the whole file from its own half. Rating a photo therefore erased its
     /// edits, silently, on a keystroke.
-    static func merge(into photo: URL, _ change: (inout Sidecar) -> Void) {
+    @discardableResult
+    static func merge(into photo: URL, _ change: (inout Sidecar) -> Void) -> Bool {
         var sidecar = Sidecar.read(for: photo) ?? Sidecar()
         change(&sidecar)
-        sidecar.write(for: photo)
+        return sidecar.write(for: photo)
     }
 
-    func write(for photo: URL) {
+    /// ⚠ **Returns false rather than only logging.** This used to swallow the
+    /// error into `NSLog` and return, which reads as success to every caller —
+    /// and the caller that mattered was `Autosave.flush`, which then moved its
+    /// baseline forward and never tried again. A read-only volume, a full disk
+    /// or a folder the sandbox lost access to therefore cost the whole session's
+    /// edits, with the only trace in a log nobody has open.
+    @discardableResult
+    func write(for photo: URL) -> Bool {
         let effectiveRating = rejected ? -1 : rating
 
         var attributes = ["xmp:Rating=\"\(effectiveRating)\""]
@@ -127,8 +135,13 @@ struct Sidecar: Sendable {
             // Atomic: a half-written sidecar during a crash would lose ratings
             // for a file that is otherwise fine.
             try xml.write(to: path, atomically: true, encoding: .utf8)
+            return true
         } catch {
-            NSLog("Orion: could not write sidecar for \(photo.lastPathComponent) — \(error)")
+            let why = "could not write the sidecar for "
+                    + "\(photo.lastPathComponent) — \(error.localizedDescription)"
+            NSLog("Orion: \(why)")
+            FileHandle.standardError.write(Data("orion: \(why)\n".utf8))
+            return false
         }
     }
 

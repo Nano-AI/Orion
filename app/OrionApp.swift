@@ -526,15 +526,20 @@ struct Editor: View {
         // filter and selection alike ignored, under a warning that said "every
         // photo in view".
         let others = library.targets.filter { $0 != current }
-        let n = SyncSettings.sync(source: copied, groups: presetGroups, to: others)
+        let outcome = SyncSettings.sync(source: copied, groups: presetGroups,
+                                        to: others)
 
         if engine.isLoaded {
             engine.apply(preset: Preset(name: "Sync", groups: presetGroups,
                                         state: copied))
         }
+        let n = outcome.written
         syncedCount = n
-        message = n == 1 ? "Synced 1 other photo."
-                         : "Synced \(n) other photos."
+        let done = n == 1 ? "Synced 1 other photo."
+                          : "Synced \(n) other photos."
+        // ⚠ One sentence, not one dialog per photograph. The count used to be
+        // the *attempt* count, so a locked card reported a full success.
+        message = outcome.complaint.map { "\(done) \($0)" } ?? done
     }
 
     // MARK: Toolbar

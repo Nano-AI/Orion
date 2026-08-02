@@ -54,6 +54,8 @@ enum ViewportTests {
         testAmericanKeyMigration()
         testSidecarEscapingDoesNotCompound()
         testEditsSurviveAQuit()
+        testSidecarWriteReportsRefusal()
+        testAFailedAutosaveIsNotForgotten()
 
         testMattePngRoundTripsItsMidTones()
         testMatteKeepsItsOrientation()

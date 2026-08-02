@@ -117,21 +117,47 @@ enum SyncSettings {
     /// Returns how many were written. The currently open photo is the caller's
     /// problem — it has unsaved state in memory, so writing its sidecar behind
     /// its back would be overwritten by the next autosave.
+    ///
+    /// ⚠ **`written` counts writes that landed.** It used to increment beside a
+    /// `Void` write, so "Synced to 40 photos" was printed for forty sidecars
+    /// that were never created — a read-only card or a full disk gave exactly
+    /// the same sentence as a success. `failed` carries the ones that did not,
+    /// so the caller can name them rather than only counting them.
     @discardableResult
     static func sync(source: DevelopState, groups: Set<PresetGroup>,
                      to photos: [URL],
                      read: (URL) -> Data? = { Sidecar.read(for: $0)?.develop },
-                     write: (URL, Data) -> Void = { url, data in
+                     write: (URL, Data) -> Bool = { url, data in
                          Sidecar.merge(into: url) { $0.develop = data }
-                     }) -> Int {
-        guard !groups.isEmpty else { return 0 }
-        var written = 0
+                     }) -> Outcome {
+        guard !groups.isEmpty else { return Outcome() }
+        var outcome = Outcome()
         for photo in photos {
             guard let data = patched(stored: read(photo), source: source,
                                      groups: groups) else { continue }
-            write(photo, data)
-            written += 1
+            if write(photo, data) {
+                outcome.written += 1
+            } else {
+                outcome.failed.append(photo)
+            }
         }
-        return written
+        return outcome
+    }
+
+    /// What a sync actually did. Two numbers rather than one, because the
+    /// difference between them is the whole thing a photographer needs told.
+    struct Outcome: Equatable {
+        var written = 0
+        var failed: [URL] = []
+
+        /// The sentence for the status line. `nil` when there is nothing to
+        /// apologise for — a sync that worked says so where it always did.
+        var complaint: String? {
+            guard let first = failed.first else { return nil }
+            return failed.count == 1
+                ? "\(first.lastPathComponent) could not be written."
+                : "\(failed.count) photos could not be written, starting with "
+                  + "\(first.lastPathComponent)."
+        }
     }
 }

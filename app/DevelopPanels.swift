@@ -233,10 +233,17 @@ extension Editor {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                     Button("Save") {
-                        presets.add(name: presetName,
-                                    groups: presetGroups,
-                                    state: engine.state)
-                        presetName = ""
+                        // ⚠ A preset that did not reach the file is in the list
+                        // and gone at the next launch. The name is kept in the
+                        // field on a failure so the gesture can be retried.
+                        if presets.add(name: presetName,
+                                       groups: presetGroups,
+                                       state: engine.state) {
+                            presetName = ""
+                        } else {
+                            message = presets.lastFailure
+                                   ?? "That preset could not be saved."
+                        }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
