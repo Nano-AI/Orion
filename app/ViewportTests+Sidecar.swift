@@ -169,8 +169,8 @@ extension ViewportTests {
                    "\(s.maskComponents.count) components")
             if let m = s.maskComponents.first {
                 report(m.kind == 1, "and keeps its kind")
-                near(CGFloat(m.centreX), 0.46, 1e-6, "and its centre x")
-                near(CGFloat(m.centreY), 0.44, 1e-6, "and its centre y")
+                near(CGFloat(m.centerX), 0.46, 1e-6, "and its centre x")
+                near(CGFloat(m.centerY), 0.44, 1e-6, "and its centre y")
                 near(CGFloat(m.angle), 1.05, 1e-6, "and its angle")
                 near(CGFloat(m.length), 0.55, 1e-6, "and its length")
                 report(m.invert, "and its invert")
@@ -280,7 +280,7 @@ extension ViewportTests {
                        "in the order it was written")
                 report(s.maskComponents[1].compose == 1,
                        "with the second row's subtract intact")
-                near(CGFloat(s.maskComponents[0].centreX), 0.25, 1e-6,
+                near(CGFloat(s.maskComponents[0].centerX), 0.25, 1e-6,
                      "and the list's geometry, not the legacy key's")
             }
         } else {
@@ -311,7 +311,7 @@ extension ViewportTests {
         // ── Round trip, with a full group ───────────────────────────────────
         var full = DevelopState()
         var a = MaskComponentState()
-        a.kind = 1; a.centreX = 0.3; a.angle = 0.8; a.length = 0.7
+        a.kind = 1; a.centerX = 0.3; a.angle = 0.8; a.length = 0.7
         var b = MaskComponentState()
         b.kind = 3; b.compose = 1; b.brushStroke = [0.1, 0.2, 0.3, 0.4]
         var c = MaskComponentState()

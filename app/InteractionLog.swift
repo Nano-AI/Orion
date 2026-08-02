@@ -210,8 +210,8 @@ final class InteractionLog: @unchecked Sendable {
             out.append("mask \(kindName(toKind))")
         }
         if let y = bc {
-            f("maskCentreX", x.centreX, y.centreX)
-            f("maskCentreY", x.centreY, y.centreY)
+            f("maskCentreX", x.centerX, y.centerX)
+            f("maskCentreY", x.centerY, y.centerY)
             f("maskAngle", x.angle, y.angle)
             f("maskLength", x.length, y.length)
             f("maskRadiusX", x.radiusX, y.radiusX)
@@ -221,8 +221,8 @@ final class InteractionLog: @unchecked Sendable {
             f("maskRangeLo", x.rangeLo, y.rangeLo)
             f("maskRangeHi", x.rangeHi, y.rangeHi)
             f("maskRangeSoft", x.rangeSoft, y.rangeSoft)
-            f("maskColorTol", x.colourTol, y.colourTol)
-            f("maskColorSoft", x.colourSoft, y.colourSoft)
+            f("maskColorTol", x.colorTol, y.colorTol)
+            f("maskColorSoft", x.colorSoft, y.colorSoft)
             if x.brushStroke.count != y.brushStroke.count {
                 out.append("# brush stroke: \(y.brushStroke.count / 2) dabs")
             }

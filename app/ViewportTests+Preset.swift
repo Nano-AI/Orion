@@ -67,7 +67,7 @@ extension ViewportTests {
         var m = MaskComponentState()
         m.kind = 1; m.compose = 2; m.invert = true; m.hidden = true
         m.startsLayer = true
-        m.centreX = 0.4; m.centreY = 0.7; m.angle = 0.9; m.length = 0.33
+        m.centerX = 0.4; m.centerY = 0.7; m.angle = 0.9; m.length = 0.33
         m.radiusX = 0.21; m.radiusY = 0.44; m.feather = 0.66; m.roundness = 3.5
         m.brushRadius = 0.05; m.brushFlow = 0.8; m.brushHardness = 0.15
         m.brushStroke = [0.1, 0.2, 0.3, 0.4]; m.brushErase = [0, 1]
@@ -77,8 +77,8 @@ extension ViewportTests {
         // was made exhaustive in 2026-07-30e; the *nested* component's was not,
         // so the guard could not see the fields it was guarding.
         m.rangeLo = -3.25; m.rangeHi = 1.75; m.rangeSoft = 0.8
-        m.colourR = 0.42; m.colourG = 0.11; m.colourB = 0.27
-        m.colourTol = 0.19; m.colourSoft = 0.07
+        m.colorR = 0.42; m.colorG = 0.11; m.colorB = 0.27
+        m.colorTol = 0.19; m.colorSoft = 0.07
         s.maskComponents = [m]
         s.maskRefine = 0.72
         // ⚠ Two layers, not one: a fixture with a single layer cannot see a
@@ -111,7 +111,7 @@ extension ViewportTests {
                 report(out.exposureEv == base.exposureEv,
                        "\(group.rawValue) leaves Light alone", "\(out.exposureEv)")
             }
-            if group != .colour {
+            if group != .color {
                 report(out.vibrance == base.vibrance && out.hueShift == base.hueShift,
                        "\(group.rawValue) leaves Color alone", "\(out.vibrance)")
             }

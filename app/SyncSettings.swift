@@ -46,7 +46,7 @@ enum SyncSettings {
         case .light:
             return ["exposureEv", "contrast", "highlights", "shadows",
                     "whites", "blacks", "highlightRecovery"]
-        case .colour:
+        case .color:
             return ["vibrance", "saturation", "hueShift", "satShift", "lumShift",
                     "gradeShadow", "gradeMidtone", "gradeHighlight",
                     "gradeBalance"]

@@ -853,9 +853,9 @@ extension Editor {
                         }
 
                         slider("Tolerance", $engine.maskColorTol, 0.01...0.8, "", 3,
-                               resetsTo: maskDefaults.colourTol)
+                               resetsTo: maskDefaults.colorTol)
                         slider("Softness", $engine.maskColorSoft, 0.002...0.4, "", 3,
-                               resetsTo: maskDefaults.colourSoft)
+                               resetsTo: maskDefaults.colorSoft)
                     }
 
                     if engine.maskKind == 3 {
@@ -903,9 +903,9 @@ extension Editor {
 
                     if engine.maskKind == 1 || engine.maskKind == 2 {
                         slider("Center X", $engine.maskCenterX, 0...1, "", 2,
-                               resetsTo: maskDefaults.centreX)
+                               resetsTo: maskDefaults.centerX)
                         slider("Center Y", $engine.maskCenterY, 0...1, "", 2,
-                               resetsTo: maskDefaults.centreY)
+                               resetsTo: maskDefaults.centerY)
                         slider("Angle", $engine.maskAngle, -3.15...3.15, " rad", 2,
                                resetsTo: maskDefaults.angle)
                     }
