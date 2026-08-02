@@ -310,6 +310,14 @@ struct DevelopState: Equatable, Codable {
     /// resampling it.
     var grainAmount: Float = 0
     var grainSize: Float = 1.5
+    /// The creative vignette — research/vignette.md, decision #96. Amount is
+    /// the exposure change at the corner of the *composition* in stops, so it
+    /// follows a crop; `vignetteFieldAngle` is the half-diagonal field angle of
+    /// the lens whose cos⁴ falloff it imitates.
+    ///
+    /// ⚠ Nothing to do with `lensVignette` above, which is the correction.
+    var vignetteAmount: Float = 0
+    var vignetteFieldAngle: Float = 45
     var sharpenAmount: Float = 0
     var sharpenRadius: Float = 1
     var sharpenMasking: Float = 0
@@ -348,6 +356,7 @@ extension DevelopState {
         case layers
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case grainAmount, grainSize
+        case vignetteAmount, vignetteFieldAngle
         case curve, hueShift, satShift, lumShift
 
         /// What `denoiseColor` was called before the interface moved to
@@ -483,6 +492,11 @@ extension DevelopState {
         // an out-of-range 0 the shader would clamp silently.
         grainAmount = float(.grainAmount) ?? grainAmount
         grainSize = float(.grainSize) ?? grainSize
+        // Same shape, same reason: a sidecar written before the creative
+        // vignette existed must reopen with no vignette and a 45° field angle,
+        // not with a 0° one that would make the falloff flat.
+        vignetteAmount = float(.vignetteAmount) ?? vignetteAmount
+        vignetteFieldAngle = float(.vignetteFieldAngle) ?? vignetteFieldAngle
         sharpenAmount = float(.sharpenAmount) ?? sharpenAmount
         sharpenRadius = float(.sharpenRadius) ?? sharpenRadius
         sharpenMasking = float(.sharpenMasking) ?? sharpenMasking

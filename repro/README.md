@@ -34,6 +34,7 @@ miss the view-model layer, which is where these failures are.
 | `dehaze-reaches-the-picture.txt` | Passes — ⚠ closes the gap where dehaze could be **deleted** from the product and all three suites plus the bench stayed green |
 | `auto-applies-every-field.txt` | Passes — ⚠ Auto writes five fields and `undo-after-auto.txt` caught **none** of the five being dropped |
 | `export-depth-and-sharpening.txt` | Passes — the three export controls that fail invisibly. ⚠ Its metadata half is one-sided by necessity: the sample frames have no GPS, so location itself is asserted in `orion-tests` against a stand-in file |
+| `vignette-follows-the-crop.txt` | Passes — the creative vignette. ⚠ Its post-crop half is stated about **one patch of one photograph**: the frame's own centre, untouched while uncropped and dark once a crop makes it a corner. A frame-centred vignette cannot produce both readings, and no comparison between two different pieces of scene is involved |
 
 ## The surfaces a scenario can measure
 

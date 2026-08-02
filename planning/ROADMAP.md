@@ -125,7 +125,18 @@ Two things turned up while finishing it:
 - ✅ Single-image exposure fusion *(Hessel & Morel; Mertens et al.)*
 - ✅ Dehaze (dark channel prior) *(He, Sun & Tang; guided-filter refinement)*
 - ✅ **Auto-enhance** — percentile auto-levels driving the above *(Simplest Color Balance; CIPA DC-004)*
-- ✅ Color grading wheels (ASC CDL) — three `ColorWheel` controls, shadows/midtones/highlights. ⚠ **Split toning and a creative vignette are not built**; the wheels subsume most of what split toning was for
+- ✅ Color grading wheels (ASC CDL) — three `ColorWheel` controls, shadows/midtones/highlights
+- ✅ **Creative vignette** — 2026-08-01, `research/vignette.md`, decision #96.
+  cos⁴ natural falloff *(Reiss 1945; Kingslake 1992)*, an exposure change in
+  scene-linear light, centred on the crop. ⚠ Not the lens vignette
+  **correction**, which is a different control in a different node — asserted in
+  both directions
+- ❌ **Split toning — refused, decision #97.** It is the wheels with fewer
+  controls, and Adobe retired the panel it copies in October 2020 in favour of
+  exactly what Orion already ships. **Its one real remainder is Balance**, a
+  signed EV offset on the three zone centres — ~5 lines of shader plus one float
+  through the usual twenty files, and it belongs on the grading panel beside the
+  bands it moves. ~half a session, unstarted
 - ✅ Creative LUTs (.cube, tetrahedral) *(Adobe Cube LUT Specification 1.0; Sakamoto & Itooka 1981)*
 - Segmentation-based highlight reconstruction
 

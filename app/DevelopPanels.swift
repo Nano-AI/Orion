@@ -1055,6 +1055,22 @@ extension Editor {
                 .foregroundStyle(Palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        section("Vignette") {
+            slider("Amount", $engine.vignetteAmount, -3...3, " EV", 2,
+                   resetsTo: engine.defaults.vignetteAmount)
+            slider("Field angle", $engine.vignetteFieldAngle, 10...70, "°", 0,
+                   resetsTo: engine.defaults.vignetteFieldAngle)
+            Text("A deliberate falloff toward the corners of the crop, not a "
+               + "lens correction — the Lens panel's Vignetting takes one out, "
+               + "this puts one in, and a photograph can carry both. Amount is "
+               + "the exposure change at the corner in stops. Field angle is "
+               + "the half-diagonal angle of view of the lens whose natural "
+               + "cos⁴ falloff is being imitated: wide reaches into the frame, "
+               + "narrow stays in the corners.")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         section("Dehaze") {
             slider("Dehaze", $engine.dehaze, 0...1, "", 2,
                    resetsTo: engine.defaults.dehaze)

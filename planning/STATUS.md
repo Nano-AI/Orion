@@ -4,10 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**the folder index and the thumbnail cache — M1's last real gap**)
-**Phase:** M0 done. **M1 complete.** M2 and **M3 complete**. **`research/masking.md` is
-**Last updated:** 2026-08-01 (**the export panel's last three controls; every export had been 16-bit**)
-**Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
+**Last updated:** 2026-08-01 (**the creative vignette built; split toning refused with an argument**)
+**Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
+items are now closed, one built and one refused (#96, #97). **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
 folded per §6 (add/subtract/intersect), optionally feathered onto the
@@ -22,41 +21,25 @@ arrived **36 times**; the answer each time is that they exist, and each of the
 four now also has something that fails when its *wiring* breaks — see sessions
 `31e` and `31f`.
 
-**Next story:** the queue, in order, each with a cost:
+**Next story:** the queue, in order, each with a cost. ⚠ This list had grown two
+overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
 
-1. ~~**Dehaze's drag cost**~~ — ✅ **done 2026-08-01, decision #92.** The cause
-   was `DevelopPipeline.cpp:1325`: the dehaze chain's parameter blocks were
-   re-pushed on every tick, and `setParams` dirties the whole downstream
-   subgraph whether or not the bytes changed. **Only omega moves with the
-   slider**; the dark channel, the six rank passes and the candidate pooling
-   are functions of the frame's size, the paper's constants and A — nine nodes,
-   six of them full-resolution over 24 MP, redone for a value none of them
-   read. Paired A/B, two rounds, interleaved binaries: **147.3/146.4 → 102.7/
-   100.6 ms** and **127.1/120.6 → 87.0/87.7 ms** — 0.69–0.71×, ~30% off the
-   tick, with exposure and clarity unmoved in the same process. Pinned by the
-   bench's `dehaze drag` invariant, which counts *named* nodes rather than
-   milliseconds; reverting the guard prints `DEHAZE REDOES THE DARK CHANNEL`
-   and exits 1. ⚠ Two claims in this file were **wrong** and are corrected
-   below.
-2. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
-   iterations. ~240 MB across a 5,000-photo cull. ~1 session.
-3. **Incremental brush accumulation.** ⚠ Now *located*: the host-side O(N) is
-   gone and the slope did not change, so the residual is the **GPU dab loop**.
-   That retires the three host-side candidates this table used to carry.
-   Costed in `ROADMAP.md`. ~1–2 sessions.
-4. **Export panel**: bit depth, metadata policy, output sharpening. 16-bit
-   already exists in the engine and is not offered. ~1 session.
-5. **Americanising the persisted keys**, if wanted — a schema migration with
-4. **M1's library gap** — no SQLite index, no thumbnail cache, so every folder
-   open rescans and re-reads every sidecar. Also a performance item. ~2 sessions.
-5. ~~**Export panel**: bit depth, metadata policy, output sharpening.~~ ✅ done
-   2026-08-01. ⚠ The premise was wrong in two ways: metadata policy had been
-   built and wired for some time, and 16-bit was not "not offered" — it was the
-   *only* mode, so every file Orion had written was 16-bit. The work was the
-   8-bit path, output sharpening, and a location strip that also removes the
-   IPTC place names. Decisions #90–#92.
-6. **Americanising the persisted keys**, if wanted — a schema migration with
+1. **Incremental brush accumulation.** ⚠ *Located*, not guessed: the host-side
+   O(N) is gone and the slope did not change, so the residual is the **GPU dab
+   loop**. Costed in `ROADMAP.md`. ~1-2 sessions.
+2. **The grading panel's Balance** — the one thing split toning has that the
+   wheels do not (#97). A signed EV offset on the three zone centres: ~5 lines
+   in `color_grade.slang` plus one float through the usual twenty files.
+   ~half a session.
+3. **Americanising the persisted keys**, if wanted — a schema migration with
    dual reads, not a rename. ~1 session, needs sign-off (#89).
+4. `DevelopPipeline.cpp` is **2,418 lines** against a stated ceiling of 1,000,
+   and it grew again this session. Splitting product code wants its own session.
+
+Closed since this list was last written, in the order they went:
+**dehaze's drag cost** (#92), the **`reopen` leak** (#90), **M1's library gap**
+(#91), the **export panel** (#93-#95), and now the **creative vignette** (#96)
+with **split toning refused** (#97).
 
 ✅ **M1's library gap is closed** — SQLite index and persistent thumbnail cache,
 2026-08-01, decision #91. 300 frames with the page cache warm: **454–688 ms cold
@@ -71,27 +54,32 @@ Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
 the performance action item is in `ROADMAP.md`. `research/masking.md` is
 **finished**; its leftovers are the fill leaking through smooth ground and the
 per-layer decomposition beyond stage 2. The largest standing violation of a
-stated hard constraint is `DevelopPipeline.cpp`, now **2,295 lines**.
+stated hard constraint is `DevelopPipeline.cpp`, now **2,418 lines**.
 
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3455
-**Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3538
-checks** · **33 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: **149 nodes, 6971 MiB**, M0 gate **9.70–14.13 ms p95** —
+**Suites:** `orion-tests` **626 checks** · `orion-viewport-tests` **3561
+checks** · **35 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+three sample frames: **149 nodes, 6971 MiB**, M0 gate **8.70–9.22 ms p95** —
 plus a preview graph at 1/16 that. `Orion --library-open <folder>` is a fourth
 gate: it opens a folder cold, warm and indexless in one process and fails when
 the warm pass did not hit, or when any of the three disagree about a field.
-**Suites:** `orion-tests` **586 checks** · `orion-viewport-tests` **3474
-checks** · **34 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
-three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
-plus a preview graph at 1/16 that.
+
+⚠ This block had **three** copies of itself carrying three different numbers.
+One copy, measured this session.
 
 ⚠ **That p95 is only meaningful next to one taken minutes away from it.** The
 same binary measured 8.97, 16.75, 44.53 and 40.69 ms on this machine within an
 hour, tracking GUI load rather than anything in the graph. HEAD measured
 16.99/44.75/37.81 in the same window. Compare paired runs or do not compare.
+
+⚠ It happened again on 2026-08-01e and the cause was named this time. Eleven
+runs of **one binary**: 8.83, 8.92, 8.97, 9.00, 9.00, 9.22, 11.06, 16.86, 20.91,
+21.47, **30.42** — a 3.4× spread with `CoreSpotlight` at 99% CPU indexing the
+sample folder. It settled to 8.7–9.2 once the indexer finished, and the gate
+measures the *exposure* path, which that session did not touch: 3 nodes and 149
+nodes / 6971 MiB either way. **Do not chase this number on a busy machine.**
 
 ### Known gaps, carried forward
 
@@ -103,7 +91,7 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
-| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 2,118, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` 1,135, `Scenario.swift` **1,250**. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code, recounted 2026-08-01: `DevelopPipeline.cpp` **2,418**, `Engine.swift` 2,135, `bench/main.cpp` **1,510**, `OrionApp.swift` 1,445, `Scenario.swift` 1,254, `DevelopPanels.swift` 1,168. ⚠ Every one of the six was stale in this table by 20–200 lines; `bench/main.cpp` had grown 197. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
 | **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
 | **The tick is timed whole, not attributed.** `EditHistory.record` copies the entire `DevelopState`, `InteractionLog.committed` diffs every field and formats strings, and `setBrushStroke` re-flattens the whole stroke — all per event, all O(size of the edit). ⚠ Candidates only: armed, a 784-dab stroke is 1.8 ms an event | `ROADMAP.md` |
@@ -146,8 +134,13 @@ candidate fixes in order.
 ## The session log
 
 The six most recent sessions are below. **Everything older lives in
-[`HISTORY.md`](HISTORY.md)** — 56 sessions, moved there verbatim on 2026-07-31
-in two passes, the second in the same breath as this update.
+[`HISTORY.md`](HISTORY.md)** — 61 sessions now, moved there verbatim.
+
+⚠ Pruned again on 2026-08-01: `2026-07-31k`, `2026-07-31l`, `2026-08-01a` and
+`2026-08-01b` moved to `HISTORY.md`, and a **duplicate copy of `2026-07-31j`**
+deleted — the previous prune had copied it across and left the original here.
+The header block and the "next story" queue had each grown two or three copies
+of themselves as well, carrying different numbers; they are one each again.
 
 ⚠ This file had grown to **4,643 lines across 56 sessions**, which broke the one
 job it has. `CLAUDE.md` calls it the recovery point and says to read it first on
@@ -163,6 +156,138 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01e — the creative vignette, and a split-toning panel refused
+
+M3's roadmap line had two items beside the grading wheels that were never built.
+One is built. The other is refused, in writing, with the argument in
+`DECISIONS.md` where it can be argued back.
+
+### ⚠ Split toning is the wheels with fewer controls, and Adobe retired it
+
+Decision #97. Split toning is a hue and saturation for shadows, the same for
+highlights, and a Balance. Two of Orion's three wheels **are** those two tints,
+each already carrying a luminance track split toning never had, and the third
+grades the midtones, which split toning cannot reach at all.
+
+And this is checkable rather than an opinion: **Camera Raw 13.0 / Lightroom
+Classic 10.0, October 2020, deleted the Split Toning panel** and shipped Color
+Grading — three wheels, hue/saturation/luminance each — in its place, documenting
+the new Blending slider at 100 as giving "the same effect as the pre-existing
+Split Toning feature". Building it here would mean adding the control the
+reference implementation retired six years ago, beside the control they retired
+it in favour of, which Orion already ships.
+
+⚠ **One thing it has that the wheels do not, and it is named rather than waved
+away: Balance.** The zones are Gaussians fixed at −2.5 / 0 / +2.5 EV; nothing
+moves them. That is ~5 lines in `color_grade.slang` and one float through the
+usual twenty files, it belongs on the grading panel, and it is item 2 of the
+queue rather than smuggled into this session.
+
+### The vignette: cos⁴, in stops, in scene-linear light, on the crop
+
+Decision #96, `research/vignette.md`. `V(r) = 1/(1 + (r·T)²)²` — the cos⁴ law of
+illumination (Reiss, *JOSA* 35(4), 1945; Kingslake, *Optics in Photography*,
+1992) written through `cos² = 1/(1+tan²)` so the kernel has no trigonometry in
+it. Normalized so that **Amount is the exposure change at the corner in stops**
+and **Field angle is only the shape** — the half-diagonal angle of view of the
+lens being imitated.
+
+Both controls are physical quantities. Nothing here is a 0–100 strength.
+
+Refused, each with a reason: **Roundness** (a lens's iso-illuminance contours are
+circles about the optical axis, and a non-circular darkening is a radial mask,
+which Orion has), **Feather** (the curve is the feather; the field angle moves
+it), and Adobe's **three styles** (they exist to rescue highlights from a
+display-referred blend — this is a multiply in scene-linear light before AgX, so
+a bright corner rolls off instead of clipping).
+
+### ⚠ It is not the lens correction, and that is asserted in both directions
+
+`LensDatabase` already carries a vignetting *correction*, from lensfun's measured
+polynomial, applied before the demosaic. This is its opposite. `testCreativeVignetteGpu`
+asserts the creative control does not switch the `lens` node on **and** that the
+lens control does not switch this one on, because the mistake looks roughly right
+on screen and would run before the crop, before the demosaic, and would fight a
+profile the day one loaded.
+
+The mutation that wires the creative amount into `lens.vignetteA` fails that
+check and the crop-symmetry check.
+
+### ⚠ Post-crop, without the kernel ever learning about the crop
+
+`geometry` crops last, so everything upstream renders the whole frame.
+`DevelopPipeline::compositionCircle` hands the shader three numbers: the
+rectangle's centre normalized in the unrotated frame, and its half-diagonal in
+units of the frame's height.
+
+**Only a circle, and that is the whole trick.** A rotation cannot change a
+length, so the straighten and the quarter turns move the centre and leave the
+radius alone — no second copy of `geometry.slang`'s inverse map, which is what
+#70 is about. It also comes out resolution-independent, so the 1/16 preview
+places the vignette identically without knowing it is smaller.
+
+⚠ The half-pixel in `geometry.slang` — it rotates in *index* space against a
+pivot given in continuous coordinates — is **mirrored rather than corrected**,
+and the test asserts 0.751 rather than 0.750 because of it. A circle that agreed
+with hand arithmetic and disagreed with the kernel would be the worse of the two.
+
+### Fused, not a node
+
+Into `color_grade.slang`, which is pointwise, adjacent and wants the same light.
+Its own node would be a ~194 MB round trip at 24 MP for six lines of arithmetic —
+the trade the creative LUT already lost inside `develop_display.slang`. The node
+is renamed `grade + vignette` because it now does both.
+
+At Amount 0 it disables to nothing: **149 nodes, 6971 MiB, M0 gate 8.97 ms p95,
+exposure drag 3 nodes** — all exactly what they were before. The mutation that
+leaves it always on takes the drag to **4 nodes and 12.81 ms**, which is grain's
+#82 regression again, and fails 4 checks.
+
+### The checks, and the six mutations that were actually run
+
+**+40 engine checks** in `tests_vignette.cpp` (626 total), plus
+`repro/vignette-follows-the-crop.txt` and a bench probe.
+
+| Mutation | Fails |
+|---|---|
+| `compositionCircle` returns the frame's centre and full radius | **9** engine checks, and `cropMiddleOn == cropMiddleOff` in the scenario |
+| `vignetteFalloff` drops the `1 − cos⁴(θmax)` normalization | 1 — "the corner is worth the same at 20 degrees and at 65" |
+| `vignetteRadius` drops the aspect term | 2 — the edge-midpoint check and the same corner check |
+| the creative amount wired into `lens.vignetteA` | 2 — "does not switch the lens correction on", and crop symmetry |
+| the node never disables (`vignetting = true`) | 4, and the exposure drag goes 3 → 4 nodes |
+| the params pushed from `lastAdj_` instead of `adj` | 6 |
+| the quarter-turn `switch` cases transposed | 2 |
+
+⚠ **Two of those came back green on the first attempt and both were the test's
+fault.** Dropping the aspect term leaves the falloff an *ellipse* — still centred,
+still four equal corners, still monotone — so every symmetry check passed; it
+needed a check on the **edge midpoints**, which on a 4:3 frame sit at r = 0.8 and
+r = 0.6 and must therefore differ. And the lens-wiring mutation was invisible
+because §5 of the test re-applied the *same* amount from a fresh struct: `apply`
+compares field by field and only re-evaluates a node's enable when something in
+its own list moved (#92), so the graph never changed and the check could not see
+anything. Every state in that section is now reached by *changing* the field that
+owns it.
+
+### The probe's floor, and why its three frames disagree
+
+`vignette -2 EV`, on mean luma, floored at **0.35** — half the smallest of 0.79,
+1.05 and 0.70 measured against the exposure reference on the three sample frames.
+
+⚠ That spread is much wider than grain's, which agree to a percent, and the
+reason is written into the probe rather than averaged away: grain's amplitude is
+defined in *display* units, so it is the same wherever the scene sits; this one
+is in stops of *scene-linear* light, and what two stops down is worth on screen
+depends on where the corner started on AgX's curve.
+
+### Also done, because the file demanded it
+
+`STATUS.md` had **three** copies of its Suites block with three different
+numbers, two overlapping copies of the "next story" queue, two Last-updated
+headers, and a duplicate of session `2026-07-31j` that the previous prune had
+copied rather than moved. All six file sizes in the 1000-line gap row were stale
+by 20–200 lines. Recounted and de-duplicated.
 
 ## Session 2026-08-01d — the reopen leak was the folder, not the photograph
 
@@ -554,384 +679,3 @@ A Fable instance was asked for scope judgement and gave three things worth
 keeping: check the report is not a stale binary before theorising; prove the
 invalidation *fires* before claiming it *costs*; and freeze the persisted keys
 rather than migrate them mid-investigation.
-
-## Session 2026-08-01b — a leak the leak checker could not see
-
-Asked for: leaks, a performance pass, and finishing what was unfinished. Two
-agents ran read-only while the edits happened here.
-
-### ⚠ The leak: ARC does not drain pools, and nothing here turns a run loop
-
-**No `@autoreleasepool` anywhere in the engine's Metal layer.** Every autoreleased
-temporary accumulated for the life of the process — 393 B a texture descriptor,
-1.6 KB a library load, 2.3 KB a kernel — which is **~0.64 MB per graph built**
-and ~1.3 MB per photograph opened, since a photograph builds two.
-
-⚠ **`leaks --atExit` reports zero for this, on both binaries, and is right to.**
-The blocks are still *reachable* from an undrained pool, so they are not leaks by
-its definition. Only a footprint measurement finds it. LSan is unavailable on
-macOS/arm64, so the tool that would have found it does not exist here.
-
-⚠ **The app was shielded by accident**: `pushAndRender` runs on the main thread,
-whose run loop drains each cycle. The bench, the tests and the scenario runner
-are not — and moving a photo open to a background queue would have exposed it.
-
-Six pools inside `Resources.mm`, decision #86. Verified on the harness that
-found it: the same 15-iteration loop went **+8.92 MB, linear → +0.58 MB, flat
-from iteration 13**.
-
-Also: `Pipeline::compile` loaded a `MTLLibrary` **per node** — 149 nodes over 48
-distinct metallibs, so ~101 redundant libraries per graph, doubled per photo.
-Memoized by kernel name.
-
-### ⚠ Orphan mattes accumulated forever on any photo that had never been saved
-
-`MatteStore.sweep` ran only inside the successful-parse branch. That guard is
-right about a sidecar which *exists and did not parse*. It is wrong about one
-that is **absent** — a matte id lives only in a sidecar, so nothing can reference
-those files. Measured: **26 orphans, 512 KB, beside one sample frame, oldest
-three days old.**
-
-Three cases now, in one function, because the policy had already been written
-twice — the loader and the scenario runner's `reopen`, which claims in its own
-comment to take the same steps. Decision #87. Mutations: the old two-case form
-fails the absent check, an always-sweep form fails the unreadable check.
-
-### Film grain finished — and it nearly shipped dead
-
-Pieces 5 and 6: through `orion.h`, `CApi`, `DevelopState`, `Engine`, the
-catalogue, two sliders, the sidecar, presets, sync, the log and the scenario.
-
-⚠ **`Engine.state` builds `DevelopState` with the memberwise initializer**, which
-is positional over eighty arguments. Adding the two fields to the struct and not
-to that call compiled without a word: Swift filled them with the struct's
-defaults, grain rendered on screen and reached the sidecar as **0**. 569 engine
-checks, 3449 viewport checks and 31 scenarios all stayed green.
-
-`cAdjustments()` in the same file already refuses the memberwise form, in a
-comment, for exactly this reason. `state` uses it anyway.
-`repro/grain-survives-a-reopen.txt` is the check that stands in for the compiler;
-the mutation fails 2.
-
-### What the stress pass found and I did **not** fix
-
-Named in `ROADMAP.md`'s action item rather than guessed at:
-
-- **Dehaze's drag cost has roughly doubled.** Normalised against exposure in the
-  same process, so load cannot explain it: **7.2× → 11.8–13.5×**. The next step
-  is a bisect, not a theory.
-- **`reopen` grows 25–49 KB a cycle**; plain `open` is flat over 300 iterations.
-  `InteractionLog` is capped at 2000 lines and ruled out.
-- **Brush cost is linear in accumulated dabs, forever** — 16 ms at ~500 dabs
-  unarmed, ~12,300 armed, then an unexplained 27 ms plateau at ~13,400.
-
-### Held flat
-
-Repeated opens (300×, +0.8 KB), export loops, 300 interact cycles, 2000 history
-pushes, the spot cap at 64 and the mask cap at 4 — all measured, all flat, all
-listed in the report rather than left implied.
-
-**Suites:** 569 · **3453** · **33 scenarios** · bench exit 0 on all three frames,
-M0 gate 11.39–14.13 ms p95.
-
-## Session 2026-08-01a — the canvas never told the engine a gesture was happening
-
-**Reported live: "I feel like there are forced updates per stroke, but this makes
-things a lot slower."** Exactly right, and it named the mechanism.
-
-### ⚠ The cause, which is not slowness anywhere
-
-`AdjustmentSlider` arms degrade-then-refine through `AnalogTrack`. **No gesture
-on the picture ever did.** So a slider tick rendered a quarter-linear preview and
-a brush stroke rendered the **full graph at full resolution**, once per pointer
-event, on a photograph that gets more expensive with every dab already laid.
-
-Nothing was written badly. The preview graph has existed since 2026-07-30 and
-the canvas simply never opted in.
-
-### The instrument came first, and it had to
-
-`scenario brush` hands the engine one finished stroke in a single
-`setBrushStroke`. `MaskOverlay.paint` calls it again on **every pointer event**,
-appending. Nothing in the repository issued a stroke the second way, so nothing
-could see the cost — which is ROADMAP piece 1, now built as `paint <x,y> <x,y>
-<n>`.
-
-| Stroke, in dabs | Unarmed | Armed |
-|---|---|---|
-| 41 | 7.6 ms/event | **0.7 ms** |
-| 123 | 15.2 | 1.1 |
-| 246 | 27.3 — **37 fps** | **1.9 ms** |
-| 784 | — | 1.8 |
-
-And placing a radial mask that carries a local exposure, `drag maskCentreX`:
-**13.0 ms a tick → 1.3 ms**.
-
-⚠ **The verb deliberately does not arm the preview graph itself.** One that did
-would report the same number whether `MaskOverlay` still called
-`beginInteraction` or not — a measurement that cannot see the thing it exists to
-measure, which is the defect this file has recorded three times.
-
-### Fixed: two lines, in two gestures
-
-Paint arms on the press and disarms in `onEnded`, after the history commit —
-`endInteraction` renders the full graph once, and that is the first time the
-full graph sees the paint rather than a refinement of it.
-
-⚠ **The placement drag arms after the hit test, not before it.** A press that
-grabs no handle falls through to the picture and pans it; arming first would
-swap the canvas to the preview texture for a gesture that is not an edit.
-`endInteraction` is called unconditionally, because it returns immediately when
-nothing was armed and a grab that never moved still has to come off the preview.
-
-### ⚠ Four more gestures do the same thing, and were left alone on purpose
-
-`grep beginInteraction` finds them: `CropOverlay`, `SpotOverlay`, `CurveEditor`,
-`ColorWheel`. All four still render the full graph per event.
-
-They are **not** a sed. Each swaps the canvas to a differently-sized texture
-mid-gesture with an overlay drawn over it, and this repository has already
-shipped precisely that bug once — the compare split sampling two textures
-through one set of UVs. The crop overlay is the worst of them, because its
-rectangle *is* the geometry being changed. Each wants a before/after and a look
-at the screen.
-
-That, plus cold open, the library scan, memory on a lesser GPU, and the
-measuring protocol itself, is the new **⚠ ACTION ITEM — a full performance audit
-of the application** in `ROADMAP.md`, asked for in the same message.
-
-### ⚠ What is still not covered
-
-**Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and
-`CanvasLayout`, never a SwiftUI view, so the two lines added today are reachable
-only by reading them — and the four above were found by grepping, not by a red
-test. In the gap table rather than implied to be handled.
-
-### Deliberately not optimised
-
-Armed, painting is **still linear** in stroke length: 0.4 ms an event at 46 dabs,
-1.8 at 784. The host-side reasons are known and named — `setBrushStroke`
-re-flattens the whole stroke per event, `EditHistory.record` copies the whole
-`DevelopState`, `InteractionLog.committed` diffs every field. At that slope the
-dab cap lands around 5 ms an event, which is 200 fps.
-
-⚠ Yesterday's own ROADMAP entry says not to optimise any of those rows before it
-has a number. They have one now and the number says leave them alone.
-
-## Session 2026-07-31l — the grain node ran when it was off, and the cursor was an oval
-
-Two things reported live, one afternoon apart: **"it starts to get slow when I
-adjust it"** and **"the circle is an OVAL"**. Both were real, both had a cause in
-the tree, and neither was a hard problem once measured. Grain pieces 1, 3, 4 and
-most of 7 landed along the way.
-
-### ⚠ The slowdown was the grain node, running at Amount 0
-
-`orion-bench` said so on the first run of the session — **exit 1**, M0 gate
-**17.03 ms** against a 16 ms limit, and the exposure drag up from 3 nodes to 4.
-
-The in-flight grain work had followed #81's costing literally: `develop:display`
-to `RGBA16Float` unconditionally, and a new node after it. So every frame of
-every drag paid a full-resolution pointwise pass *and* a doubled write on the
-node feeding it, to multiply noise by zero.
-
-Every other expensive thing in this graph disables to nothing when it is off.
-The only reason grain looked different is that it is also the node that
-**quantises** — so `retargetOutputChain` moves the two facts together, in one
-place, and #82 has the table. The +194 MB is paid only while the slider is up;
-the resting cost is the idle node's own **93 MB** (6878 → 6971 MiB).
-
-| Exposure drag, `_PIC8220` | nodes | p95 |
-|---|---|---|
-| before grain | 3 | 13.63 ms |
-| grain as first built | 4 | 17.03 ms — **gate FAIL** |
-| after `retargetOutputChain` | 3 | 13.68 ms |
-
-### ⚠ Then the fix looked like it had done nothing, and that was a second bug
-
-The gate passed and the bench immediately reported the grain control as
-**NO EFFECT**. `retargetOutputChain` pushed its parameters from `lastAdj_` —
-which inside `apply` still holds the *previous* frame's values — so it switched
-the node on and handed it Amount 0. The kernel ran and took its early exit.
-
-Every test was green. Only the bench's control probe saw it, and only because it
-measures the picture rather than the graph.
-
-⚠ **And the probe had a floor of `0.0`**, which is not a floor: `0.0` is exactly
-what it reads when the node was never dispatched. It is 0.06 of the exposure
-reference now — measured at 0.127, 0.123 and 0.125 on the three sample frames,
-which agree to a percent because grain's amplitude comes from the slider and not
-from the scene.
-
-### `testGrainWiring`, and one draft of it that was wrong
-
-`testGrainGpu` dispatches the kernel with parameters it sets itself, so it can
-never see the wiring — the same split that let dehaze be deleted with every
-instrument green. The new test drives `DevelopPipeline` on a 64×64 synthetic and
-asserts what actually broke: the node does not run at 0, it does run at 0.04 and
-moves most of the frame, 0 is bit-identical to never having touched it, and an
-exposure tick costs the same as before grain existed.
-
-⚠ **The first draft compared 2 nodes against 12** and failed, correctly: it put a
-warm render next to the cold first one. A drag is warm by definition.
-
-⚠ **The fixture is a ramp, not a flat patch**, and the reason is the dither
-check: on one flat value, whether a sub-LSB offset changes the rounded byte
-depends on where that value happens to sit between two levels, so "dithered" and
-"not dithered" can produce the same bytes. A ramp crosses every boundary.
-
-**Mutations:** the node left enabled → 3 failures. The `lastAdj_` push → 2. The
-dither flag dropped → 1.
-
-⚠ **Two mutations survive and are written down rather than left green.** Leaving
-`develop:display` on float with the node disabled passes everything — correctly,
-because the offset is added in the shader whatever that node's own format is. It
-costs 194 MB and a doubled write, which is a *latency* claim and the bench's job.
-And dithering in both nodes at once with the slider up doubles the offset; real,
-and not covered here.
-
-### The oval was the brush cursor, and it was 1.497× wide
-
-`CanvasLayout.brushCursor` built a circle in **normalized** coordinates and
-mapped it out, so on a 3:2 frame it drew exactly the frame's aspect wider than
-tall. The paint underneath is round: decision #62 folded `mask_brush.slang` into
-`mask_component.slang` and moved the dab into frame pixels so the Size slider
-would stop stretching it. The outline was left behind.
-
-⚠ **What kept it alive is the interesting part.** The only thing tying the cursor
-to the kernel was a *comment*, and the comment named `mask_brush.slang` — a file
-that no longer exists. Nothing compiled against it, nothing tested it, and it
-read as a considered decision rather than a leftover. Both copies of that comment
-are corrected and `testBrushCursorIsRound` pins the shape *and* the radius
-against `nibPx`; reverting it fails 8 checks.
-
-⚠ **The radial mask is still an ellipse in normalized coordinates**, deliberately
-and for now. Its semi-axes are per-axis and photographer-set, so unlike the nib
-its shape is something you choose — and changing the convention changes what
-`radius[1]` means in every sidecar already written. #83 records it as open rather
-than as settled.
-
-### ⚠ The M0 gate is not readable on a busy machine, and I nearly misattributed it
-
-The final bench run failed at **49.49 ms** with no engine change since a run that
-passed at 8.97. Three runs of the *same binary*: 16.75, 44.53, 40.69. Three runs
-of **HEAD**, stashed and rebuilt under the same load: 16.99, 44.75, 37.81.
-
-Identical distributions, so it is the machine — `WindowServer` was at 38% — and
-not the change. Recorded because the honest comparison is the paired one: HEAD
-and the fixed tree, back to back, which is 13.63 against 13.68. A single absolute
-p95 from this bench means nothing unless it is paired with one taken minutes
-either side of it.
-
-### Still to do
-
-Grain pieces 5 and 6 — the value through `orion.h`, `CApi`, Swift, the
-catalogue, two sliders and the sidecar, about 20 files — and a `repro/` scenario
-for the wiring.
-
-⚠ **`grain.slang` is in `engine/shaders/CMakeLists.txt` and builds, but the whole
-of this session is still uncommitted** at the time of writing. Session `31k` is
-the standing argument for why that matters: a binary and a shader that disagree
-produce nothing and say nothing.
-
-## Session 2026-07-31k — every mask covered zero, and no test could see it
-
-**Reported live**: "none of the masks are working" — brush, range, all of them.
-Fixed by quitting the app. The interesting part is why that was the fix.
-
-`perf: reject brush dabs a run of 64 at a time` (9546757) added a sixth texture
-to `mask_component.slang`, moving that kernel's output from slot 4 to slot 5,
-and changed `DevelopPipeline` to bind it. Both halves landed in one commit and
-the suite passed. But an Orion process from the previous evening was still
-running, and **`Pipeline::compile` loads metallibs from disk by path** — so
-opening a photograph made the July 30 binary compile the July 31 kernel. It
-bound five textures. The kernel wrote to the sixth.
-
-⚠ **Metal does not call that an error.** An unbound slot is nil: reads give
-zero, writes are discarded, no diagnostic unless the validation layer is on. The
-kernel dispatched, completed, and wrote nothing — for every mask kind at once,
-because they all run through that one kernel.
-
-### What found it
-
-The session log, in four lines. It dated the photo open at 12:38 against a
-process start of 22:53 the night before. That is what `InteractionLog` was built
-for and the first time it has paid.
-
-### The guard
-
-`Kernel::create` now takes Metal's reflection and records one past the highest
-texture index the compiled shader refers to. ⚠ Highest **used** index, not the
-declared argument count — an argument a shader never reads can be eliminated,
-and counting declarations would refuse bindings that are in fact complete.
-`Pipeline::compile` compares it against what it is about to bind and throws,
-naming the kernel and the node.
-
-`testBindingCount` runs first in `orion-tests`, because a shader and a binary
-that disagree make every other GPU result a guess. It asserts the refusal *and*
-that six bindings for six slots still compile — without that second half it
-would pass on a guard that refused everything — and that the develop graph
-itself satisfies the rule, which is the check that would have gone red the
-moment the shader changed without the bind. Mutation-checked: disabling the
-guard fails 3, an off-by-one in the slot count fails 4.
-
-### ⚠ The lesson, which is not "rebuild more often"
-
-This is the sixth instance of the class in `repro/README.md`: **a green suite
-that was never in a position to fail.** The tests ran the matching binary, so
-they could not observe the one thing that was wrong. What made it invisible was
-not the mistake — it was Metal's silence about it. The fix is the assertion, not
-the discipline.
-
-**Still open**: `engine/shaders/grain.slang` is written but uncommitted and not
-in `engine/shaders/CMakeLists.txt`. Grain pieces 1, 3–7 unstarted.
-
-
-## Session 2026-07-31j — the grain plate, built and pinned
-
-⚠ **Forty-first arrival of the stale M3 prompt.** Verified and set aside.
-
-Piece 2 of `ROADMAP.md`'s film-grain decomposition: `GrainPlate.h`, the
-precomputed field of correlated noise everything else hangs off.
-
-⚠ **Scoped to the plate alone on purpose.** It is a self-contained unit with
-properties that can be asserted on the CPU, where the shader and the node wiring
-around it are not — and the last two sessions both recorded that starting a
-multi-part change and leaving it half-built is the move this file has already
-paid for twice.
-
-### ⚠ The aux-texture API has no mip levels
-
-The design needs a chain: a preview pixel covering sixteen frame pixels has to
-see the *average* of sixteen, or the 1/16 preview reads an order of magnitude
-grainier than the render it previews.
-
-Adding real mip support would be a change to the GPU layer for nothing — the
-shader has to filter **by hand** regardless, because a hardware sampler's
-precision is not specified across GPU families and export could then differ by
-device. So the chain is **stacked vertically into one 2048×4096 R32F**, 33 MB,
-with `levelOffset(l)` a closed form that both sides compute from the same
-expression. Two derivations of one offset is how a level gets read from the
-wrong rows.
-
-### What is pinned, and the check that matters
-
-14 checks. The load-bearing one is that **the standard deviation falls down the
-chain** — 1.0, then measurably less, then less again.
-
-⚠ That is the property, not a defect, and it is the one an obvious "fix" would
-destroy. Renormalising every level back to unit variance looks tidier and makes
-the 1/16 preview exactly as grainy as the full render — the precise failure the
-plate exists to prevent. The mutation that does it fails two checks.
-
-Also pinned: neighbouring texels are **correlated** (0.3+), because uncorrelated
-noise is a digital sensor rather than film — the mutation that skips the
-band-limiting blur fails it — and two builds from one seed are **bit-identical**,
-which is why PCG32 and Box–Muller are written out rather than taken from
-`<random>`, whose algorithms differ between standard libraries.
-
-### Still to do
-
-Pieces 1 and 3–7: the shader, moving the quantisation boundary (`develop:display`
-→ `RGBA16Float`, +194 MB), the adjustment through 20 files, two sliders, and the
-GPU test. The design is settled in #81; none of it is guesswork now.

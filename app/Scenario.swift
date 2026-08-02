@@ -1018,6 +1018,8 @@ enum Scenario {
         case "dehaze":         return e.dehaze
         case "grainAmount":    return e.grainAmount
         case "grainSize":      return e.grainSize
+        case "vignetteAmount":     return e.vignetteAmount
+        case "vignetteFieldAngle": return e.vignetteFieldAngle
         default:               return nil
         }
     }
@@ -1038,6 +1040,8 @@ enum Scenario {
         case "dehaze":      e.dehaze = value
         case "grainAmount": e.grainAmount = value
         case "grainSize":   e.grainSize = value
+        case "vignetteAmount":     e.vignetteAmount = value
+        case "vignetteFieldAngle": e.vignetteFieldAngle = value
         case "fusion", "lift": e.fusion = value
         case "localExposure": e.localExposureEv = value
         case "localContrast": e.localContrast = value

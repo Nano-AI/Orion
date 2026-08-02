@@ -592,7 +592,13 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // control usually lives in a display-referred editor — the same offset
     // would do something different to a highlight than to a midtone for
     // reasons unrelated to the zone the user picked.
-    nGrade_     = pipeline_.add({"color grade", "colorGrade", {nLinear_},
+    //
+    // The creative vignette is in the same kernel and the node is named for
+    // both. It is pointwise and wants the same light, and a node of its own
+    // would be a second full-resolution round trip for six lines of arithmetic
+    // — the trade the creative LUT already lost inside `develop:display`.
+    // research/vignette.md, decision #96.
+    nGrade_     = pipeline_.add({"grade + vignette", "colorGrade", {nLinear_},
                                  PixelFormat::RGBA16Float, {}});
 
     auxCurveLut_ = pipeline_.addAuxTexture(kCurveResolution, kCurveRows,
@@ -725,6 +731,67 @@ void DevelopPipeline::gradeOffsets(float x, float y, float out[3]) noexcept {
     for (int c = 0; c < 3; ++c) {
         out[c] = kStrength * radius * (v[c] - mean);
     }
+}
+
+DevelopPipeline::Circle DevelopPipeline::compositionCircle(
+        const Adjustments& adj, int exifQuarters,
+        std::uint32_t width, std::uint32_t height) noexcept {
+    // The same clamps `geometry.slang`'s parameters get, because a rectangle
+    // this disagreed with would put the vignette somewhere the crop is not.
+    const float cw = std::clamp(adj.cropW, 0.01f, 1.0f);
+    const float ch = std::clamp(adj.cropH, 0.01f, 1.0f);
+    const float cx = std::clamp(adj.cropX, 0.0f, 1.0f - cw);
+    const float cy = std::clamp(adj.cropY, 0.0f, 1.0f - ch);
+
+    const int turns = ((exifQuarters + adj.rotateQuarters) % 4 + 4) % 4;
+    const bool swap = (turns % 2) != 0;
+
+    const float w = static_cast<float>(std::max(width, 1u));
+    const float h = static_cast<float>(std::max(height, 1u));
+    const float rotW = swap ? h : w;
+    const float rotH = swap ? w : h;
+
+    // The crop's center, in rotated-frame pixels. `geometry` walks an output
+    // pixel to `(cropOrigin + t*cropSize) * rotated - 0.5`; this is that at the
+    // middle of the output, which is the middle of the rectangle.
+    float px = (cx + cw * 0.5f) * rotW - 0.5f;
+    float py = (cy + ch * 0.5f) * rotH - 0.5f;
+
+    // Straighten, about the frame's center — the same pivot `apply` passes.
+    // ⚠ Forward, not inverted: `geometry` maps output to source, so the
+    // rectangle's center in *source* space is the output center taken through
+    // that same map, not through its inverse.
+    if (std::abs(adj.straightenDeg) > 1e-6f) {
+        const float rad = adj.straightenDeg * 3.14159265358979f / 180.0f;
+        const float s = std::sin(rad), c = std::cos(rad);
+        const float dx = px - rotW * 0.5f;
+        const float dy = py - rotH * 0.5f;
+        px = rotW * 0.5f + (dx * c - dy * s);
+        py = rotH * 0.5f + (dx * s + dy * c);
+    }
+
+    // Undo the quarter turns, exactly as the kernel does, to land on the grid
+    // every upstream node runs on.
+    const float inMaxX = w - 1.0f, inMaxY = h - 1.0f;
+    float sx = px, sy = py;
+    switch (turns) {
+        case 1:  sx = py;          sy = inMaxY - px; break;
+        case 2:  sx = inMaxX - px; sy = inMaxY - py; break;
+        case 3:  sx = inMaxX - py; sy = px;          break;
+        default: break;
+    }
+
+    Circle out{};
+    // Pixel index back to a continuous coordinate, then normalized: index i is
+    // the center of the interval [i, i+1).
+    out.centerX = (sx + 0.5f) / w;
+    out.centerY = (sy + 0.5f) / h;
+
+    // Half the rectangle's diagonal, in units of the frame's height. Rotation
+    // cannot change a length, so this needs none of the arithmetic above.
+    const float dw = cw * rotW, dh = ch * rotH;
+    out.radius = 0.5f * std::sqrt(dw * dw + dh * dh) / h;
+    return out;
 }
 
 float DevelopPipeline::whiteClipFor(const float multipliers[3]) const noexcept {
@@ -1117,13 +1184,33 @@ void DevelopPipeline::apply(const Adjustments& adj) {
         }
     }
 
-    // ── Color grading ───────────────────────────────────────────────────
+    // ── Color grading, and the creative vignette in the same pass ────────
     const auto zoneMoved = [](const float a[3], const float b[3]) {
         return a[0] != b[0] || a[1] != b[1] || a[2] != b[2];
     };
+    // ⚠ The vignette's circle is the *crop's*, so the geometry has to be in
+    // this comparison as well as the two sliders. Straightening a photograph
+    // with a vignette on and not re-pushing here would leave the darkening
+    // centred on where the composition used to be — and it would look like a
+    // slightly off-centre vignette rather than like a bug.
+    const bool cropMoved =
+        adj.rotateQuarters != lastAdj_.rotateQuarters ||
+        adj.straightenDeg  != lastAdj_.straightenDeg ||
+        adj.cropX != lastAdj_.cropX || adj.cropY != lastAdj_.cropY ||
+        adj.cropW != lastAdj_.cropW || adj.cropH != lastAdj_.cropH;
+    const bool vignetteMoved =
+        adj.vignetteAmount     != lastAdj_.vignetteAmount ||
+        adj.vignetteFieldAngle != lastAdj_.vignetteFieldAngle;
+
+    // Decision #92: only re-push when something this block reads has moved. A
+    // geometry change matters here **only** while the vignette is on, so a
+    // straighten drag on a photograph without one does not dirty the grade.
+    const bool vignetting = adj.vignetteAmount != 0.0f;
     if (first || zoneMoved(adj.gradeShadow, lastAdj_.gradeShadow)
               || zoneMoved(adj.gradeMidtone, lastAdj_.gradeMidtone)
-              || zoneMoved(adj.gradeHighlight, lastAdj_.gradeHighlight)) {
+              || zoneMoved(adj.gradeHighlight, lastAdj_.gradeHighlight)
+              || vignetteMoved
+              || (vignetting && cropMoved)) {
 
         const auto zoneIsFlat = [](const float z[3]) {
             return z[0] == 0.0f && z[1] == 0.0f && z[2] == 0.0f;
@@ -1134,9 +1221,9 @@ void DevelopPipeline::apply(const Adjustments& adj) {
 
         // A whole pass over the frame, so it is switched off rather than run
         // as an identity. A disabled node passes its first input through.
-        pipeline_.setEnabled(nGrade_, grading);
+        pipeline_.setEnabled(nGrade_, grading || vignetting);
 
-        if (grading) {
+        if (grading || vignetting) {
             params::Grade g{};
             g.size[0] = width_;
             g.size[1] = height_;
@@ -1148,6 +1235,20 @@ void DevelopPipeline::apply(const Adjustments& adj) {
             fill(adj.gradeShadow,    g.shadow);
             fill(adj.gradeMidtone,   g.midtone);
             fill(adj.gradeHighlight, g.highlight);
+
+            // ⚠ Read from `adj`, never from `lastAdj_`. That mistake shipped
+            // once already — the grain retarget switched its node on and handed
+            // it the previous frame's Amount, so the kernel ran and took its
+            // early exit, and every test stayed green (#82).
+            const Circle comp = compositionCircle(adj, exifQuarters_,
+                                                  width_, height_);
+            g.vignetteCenter[0] = comp.centerX;
+            g.vignetteCenter[1] = comp.centerY;
+            g.vignetteRadius    = comp.radius;
+            g.vignetteAmount    = std::clamp(adj.vignetteAmount, -3.0f, 3.0f);
+            g.vignetteTanTheta  = std::tan(
+                std::clamp(adj.vignetteFieldAngle, 1.0f, 85.0f)
+                * 3.14159265358979f / 180.0f);
 
             pipeline_.setParams(nGrade_, &g, sizeof g);
         }

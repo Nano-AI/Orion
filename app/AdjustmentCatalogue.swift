@@ -67,6 +67,7 @@ enum AdjustmentID: String, CaseIterable, Sendable {
     case warmth, localTint
     case clarity, dehaze, fusion
     case grainAmount, grainSize
+    case vignetteAmount, vignetteFieldAngle
     case lutStrength
 }
 
@@ -183,6 +184,23 @@ enum AdjustmentCatalogue {
         .init(id: .grainSize, title: "Grain size",
               global: .init(lower: 1.2, upper: 8, stage: .display), local: nil,
               localRefusal: "a property of the negative, not of a region of it"),
+
+        // The creative vignette — research/vignette.md, decision #96. Fused
+        // into the grading pass, which is after the mask node, so it is
+        // `.display` for the same reason the LUT is.
+        //
+        // ⚠ Amount reads in **stops at the corner**, not in a 0–100 strength,
+        // because it is an exposure change and calling it one is what makes the
+        // number checkable. Negative darkens, which is the usual direction.
+        .init(id: .vignetteAmount, title: "Vignette",
+              global: .init(lower: -3, upper: 3, unit: " EV", decimals: 2,
+                            stage: .display), local: nil,
+              localRefusal: "a property of the whole composition, and it is "
+                          + "already positioned by the crop"),
+        .init(id: .vignetteFieldAngle, title: "Vignette field",
+              global: .init(lower: 10, upper: 70, unit: "°", decimals: 0,
+                            stage: .display), local: nil,
+              localRefusal: "the shape of the falloff, not a region of it"),
     ]
 
     static func spec(_ id: AdjustmentID) -> AdjustmentSpec {

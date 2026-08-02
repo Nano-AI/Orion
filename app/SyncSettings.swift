@@ -57,7 +57,8 @@ enum SyncSettings {
                     "lensDistortion", "lensVignette", "lensCaRed", "lensCaBlue"]
         case .effects:
             return ["clarity", "dehaze", "fusion", "lutStrength",
-                    "grainAmount", "grainSize"]
+                    "grainAmount", "grainSize",
+                    "vignetteAmount", "vignetteFieldAngle"]
         }
     }
 

@@ -1,0 +1,75 @@
+# The creative vignette — research/vignette.md, decision #96.
+#
+# Two halves, and neither is reachable from `orion-tests`.
+#
+# 1. The round trip. `Engine.state` builds `DevelopState` with the **memberwise
+#    initializer**, positional over eighty arguments, so two new floats added to
+#    the struct and not to that call compile without a word and reach the
+#    sidecar as zero. That happened to film grain on 2026-08-01 with every suite
+#    green; `grain-survives-a-reopen.txt` is the same check for the same reason.
+#
+# 2. The post-crop claim, stated about one patch of one photograph so that no
+#    scene content is being compared against any other scene content: the frame's
+#    own centre is **untouched** while the picture is uncropped, and the *same
+#    pixels* go dark once a crop makes them a corner. A vignette centred on the
+#    frame — which is what this control was before Adobe renamed it in 2008, and
+#    what a naive implementation is — cannot produce both readings.
+
+open samples/_PIC8220.ARW
+
+# ── The frame's centre, with and without the falloff ────────────────────────
+#
+# Small box, and deliberately: the gain at the centre is exactly 1, and the
+# tolerance an `expect ==` allows is one 8-bit code. A wide box would be
+# asserting that the falloff is flat over a tenth of the frame, which it is not.
+measure 0.47,0.47,0.06,0.06 centreOff
+
+set vignetteAmount -1.5
+set vignetteFieldAngle 55
+control vignetteAmount == -1.5
+control vignetteFieldAngle == 55
+
+measure 0.47,0.47,0.06,0.06 centreOn
+expect centreOn == centreOff
+
+# The corners of the uncropped frame do move, or the control is doing nothing
+# and the line above would pass on a dead node.
+measure 0.02,0.02,0.08,0.08 frameCornerOn
+set vignetteAmount 0
+measure 0.02,0.02,0.08,0.08 frameCornerOff
+expect frameCornerOn < frameCornerOff
+
+# ── Now crop, so the frame's centre becomes a corner ────────────────────────
+#
+# The top-right quadrant. The frame's centre (0.5, 0.5) lands exactly on the
+# bottom-left corner of what comes out, so `0.00,0.94,0.06,0.06` below is the
+# quarter of the `centreOff` patch that survives the crop — the same pixels of
+# the same photograph, now in a corner instead of in the middle.
+crop 0.5 0 0.5 0.5
+
+measure 0.00,0.94,0.06,0.06 cropCornerOff
+measure 0.48,0.48,0.04,0.04 cropMiddleOff
+
+set vignetteAmount -1.5
+measure 0.00,0.94,0.06,0.06 cropCornerOn
+measure 0.48,0.48,0.04,0.04 cropMiddleOn
+
+# ⚠ The pair that carries the whole feature. Same pixels, same slider: dark now
+# that they are in a corner, untouched a moment ago when they were the middle.
+expect cropCornerOn < cropCornerOff
+expect cropMiddleOn == cropMiddleOff
+
+# ── And it survives the sidecar ─────────────────────────────────────────────
+save samples/_PIC8220.xmp
+reopen
+control vignetteAmount == -1.5
+control vignetteFieldAngle == 55
+
+set vignetteAmount 0
+control vignetteAmount == 0
+
+# ⚠ Put the sidecar back before leaving. This file is the only scenario that
+# writes a *crop*, and a crop left in `_PIC8220.xmp` is not like a slider left
+# up — it changes the frame every other scenario measures its regions against.
+crop 0 0 1 1
+save samples/_PIC8220.xmp

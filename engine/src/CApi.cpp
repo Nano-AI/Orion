@@ -172,6 +172,14 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         a.gradeMidtone[i]   = adj->grade_midtone[i];
         a.gradeHighlight[i] = adj->grade_highlight[i];
     }
+    a.vignetteAmount     = adj->vignette_amount;
+    // ⚠ A zeroed options struct must not mean a zero-degree lens: the field
+    // angle divides nothing, but tan(0) is 0 and the falloff would be flat, so
+    // a caller that set only the amount would get a vignette that does nothing
+    // anywhere. Zero is read as the default, the same shape as
+    // `ORION_DEPTH_DEFAULT` (#93).
+    a.vignetteFieldAngle = adj->vignette_field_angle > 0.0f
+                         ? adj->vignette_field_angle : 45.0f;
     a.denoiseLuma   = adj->denoise_luma;
     a.denoiseColor = adj->denoise_color;
 

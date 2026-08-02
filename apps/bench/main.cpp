@@ -797,6 +797,30 @@ int main(int argc, char** argv) {
                 // Lens. Distortion only resamples, so mean luma barely moves —
                 // vignetting is the readable one.
                 {"lens vignette",  flat, [](auto& a) { a.lensVignette = 1.0f; }, Metric::Luma, 0.1},
+                // ⚠ The line above **removes** a falloff and this one puts one
+                // in. They are different controls in different nodes and the
+                // two probes sit together so nobody has to take that on trust:
+                // if the creative one were ever wired into the lens correction,
+                // this would still pass and `testCreativeVignetteGpu` would go
+                // red. Keeping the pair adjacent is the reminder.
+                //
+                // Luma, and it is unambiguous: a vignette is an exposure change
+                // over most of the frame, so unlike the wheels there is no
+                // question of a mean cancelling it.
+                //
+                // Measured against the exposure reference on the three sample
+                // frames: **0.79, 1.05 and 0.70**. Half the smallest, on the
+                // rule every probe here follows.
+                //
+                // ⚠ Those three do *not* agree the way grain's do, and the
+                // reason is worth writing down rather than averaging away.
+                // Grain's amplitude is defined in display units, so it is the
+                // same wherever the scene sits; a vignette is defined in stops
+                // of scene-linear light, and what two stops down is worth on
+                // screen depends on where the corner started on AgX's curve.
+                // The night frame's corners are already low on the toe, where
+                // the curve is shallow and a stop buys less.
+                {"vignette -2 EV", flat, [](auto& a) { a.vignetteAmount = -2.0f; }, Metric::Luma, 0.35},
 
                 // ── Three-way grading ────────────────────────────────────
                 // The newest node in the graph, and it had neither a probe

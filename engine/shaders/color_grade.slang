@@ -1,4 +1,5 @@
-// Three-way color grading — shadows, midtones, highlights.
+// Three-way color grading — shadows, midtones, highlights — and the creative
+// vignette, which rides along in the same pass.
 //
 // Reference: ASC CDL v1.2 (2009), the slope/offset/power transfer function,
 // applied once per tonal zone and blended by a smooth partition of luminance.
@@ -15,6 +16,13 @@
 // a filmic shoulder — which is where a color balance control sits in a
 // display-referred editor — means the same offset does something different to a
 // highlight than to a midtone for reasons unrelated to the zone the user chose.
+//
+// The creative vignette is here rather than in a node of its own because it is
+// pointwise and wants the same light, and another full-resolution round trip is
+// ~194 MB at 24 MP for six lines of arithmetic — the trade the creative LUT lost
+// inside develop_display.slang. research/vignette.md, decision #96.
+
+#include "ops/vignette_ops.slang"
 
 struct GradeParams
 {
@@ -27,6 +35,16 @@ struct GradeParams
     float4 shadow;      // rgb offset, w = slope
     float4 midtone;
     float4 highlight;
+
+    // The creative vignette. Centre normalized in this frame and radius the
+    // composition's half-diagonal in units of the frame's height — both from
+    // the crop rectangle, on the host, so this kernel never learns a crop
+    // happened. Amount is the exposure change at the corner **in stops**.
+    float2 vignetteCenter;
+    float  vignetteRadius;
+    float  vignetteAmount;
+    float  vignetteTanTheta;   // tan of the half-diagonal field angle
+    float  _pad2, _pad3, _pad4;
 };
 
 /// Rec.2020 luma. The working space is Rec.2020, so using Rec.709 coefficients
@@ -116,5 +134,19 @@ void colorGrade(uint3 tid : SV_DispatchThreadID,
     //
     // Clamped at zero only. The pipeline is unbounded above this point, so a
     // ceiling here would clip highlights the display transform rolls off.
-    dst[tid.xy] = float4(max(c * slope + offset * y, 0.0f), source.a);
+    float3 result = max(c * slope + offset * y, 0.0f);
+
+    // ⚠ **The vignette goes after the grade, not before it.** Physically a
+    // lens's falloff comes first, but the zones are Gaussians on luminance — so
+    // a vignette applied first would slide every corner pixel into the shadow
+    // band and silently change what all three wheels do, which is the
+    // interaction #41 took out of the wheels themselves.
+    if (p.vignetteAmount != 0.0f)
+    {
+        const float r = vignetteRadius(tid.xy, p.size, p.vignetteCenter,
+                                       p.vignetteRadius);
+        result *= vignetteGain(r, p.vignetteTanTheta, p.vignetteAmount);
+    }
+
+    dst[tid.xy] = float4(result, source.a);
 }
