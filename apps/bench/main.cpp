@@ -1258,6 +1258,87 @@ int main(int argc, char** argv) {
 
             profileDrag("Clarity", [](orion::pipe::Adjustments& a) { a.clarity = 1.0f; });
             profileDrag("Dehaze",  [](orion::pipe::Adjustments& a) { a.dehaze  = 1.0f; });
+
+            // ── Where a brush stroke actually goes ────────────────────────
+            //
+            // ⚠ This exists because the host side has been eliminated as the
+            // cause and the slope did not move. Painting costs 0.2 ms an event
+            // at 49 dabs and 1.5 at 490 — linear, forever — and on 2026-08-01
+            // every host-side O(N) in that path was removed (the per-event
+            // re-flatten, the `DevelopState` copy, the autosave compare) with
+            // **no change to the slope**. So it is the GPU, and this says which
+            // node.
+            //
+            // Profiled at two stroke lengths on purpose: a single length gives
+            // a ranking, and a ranking cannot tell a node that is merely
+            // expensive from one that is expensive *in the number of dabs*.
+            // Only the second is worth attacking, and only the second is what
+            // ROADMAP's incremental accumulation would fix.
+            {
+                const auto profileStroke = [&](const char* label, int dabs) {
+                    orion::pipe::Adjustments base;
+                    base.wb = develop.asShotWhiteBalance();
+                    auto& c = base.maskComponents[0];
+                    c.kind = 3;
+                    c.brushRadius = 0.02f;
+                    c.brushFlow = 1.0f;
+                    c.brushHardness = 0.7f;
+                    c.brushRevision = 1;
+                    base.maskCount = 1;
+                    base.layers[0].exposureEv = 2.0f;
+
+                    // A stroke that crosses the frame and doubles back, so the
+                    // bounding boxes of decision #80 overlap rather than tiling
+                    // neatly — the shape a hand actually makes.
+                    std::vector<float> xy;
+                    std::vector<float> erase(std::size_t(dabs), 0.0f);
+                    xy.reserve(std::size_t(dabs) * 2);
+                    for (int i = 0; i < dabs; ++i) {
+                        const float t = float(i) / float(std::max(dabs - 1, 1));
+                        xy.push_back(0.05f + 0.90f * t);
+                        xy.push_back(0.50f + 0.25f * std::sin(t * 6.283f * 3.0f));
+                    }
+                    develop.setBrushStroke(0, xy.data(), erase.data(), dabs);
+                    develop.apply(base);
+                    develop.render();
+
+                    // Move the revision so the component is re-evaluated, which
+                    // is what a dab being appended does.
+                    auto moved = base;
+                    moved.maskComponents[0].brushRevision = 2;
+                    develop.apply(moved);
+
+                    develop.graph().setProfiling(true);
+                    develop.render();
+                    develop.graph().setProfiling(false);
+
+                    std::vector<std::pair<double, std::string>> ran;
+                    double sum = 0.0;
+                    for (const auto& t : develop.graph().lastRun()) {
+                        if (!t.executed) continue;
+                        ran.emplace_back(t.ms, t.name);
+                        sum += t.ms;
+                    }
+                    std::sort(ran.begin(), ran.end(),
+                              [](const auto& a, const auto& b) { return a.first > b.first; });
+
+                    std::printf("\n%s (%d dabs), node by node\n", label, dabs);
+                    std::printf("  %zu nodes ran, %.2f ms serialized\n", ran.size(), sum);
+                    for (std::size_t i = 0; i < ran.size() && i < 5; ++i) {
+                        std::printf("    %-22s %6.2f ms  %4.1f%%\n", ran[i].second.c_str(),
+                                    ran[i].first, 100.0 * ran[i].first / std::max(sum, 1e-9));
+                    }
+                };
+                profileStroke("Brush", 60);
+                profileStroke("Brush", 960);
+
+                // Put the graph back: the sections after this expect no mask.
+                orion::pipe::Adjustments clear;
+                clear.wb = develop.asShotWhiteBalance();
+                develop.setBrushStroke(0, nullptr, nullptr, 0);
+                develop.apply(clear);
+                develop.render();
+            }
         }
 
         // ── Export ────────────────────────────────────────────────────────
