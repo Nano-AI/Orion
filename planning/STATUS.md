@@ -4,6 +4,8 @@
 
 ---
 
+**Last updated:** 2026-08-02 (**no file in the tree is over the 1000-line ceiling — `Screenshot.swift` was the last, #131**)
+
 **Last updated:** 2026-08-02 (**both checks that named their own mutation and missed it now fail on it — #130**)
 **Phase:** M0 done. **M1 complete.** M2 and **M3 complete** — its last two open
 items are now closed, one built and one refused (#103 built, #101 refused). **`research/masking.md` is
@@ -137,9 +139,9 @@ overlapping copies of itself, numbered 1-5 and then 4-6; it is one list again.
 
    **The product's large files are down to `OrionApp.swift`**; the ceiling's
    survivors were then all in `apps/tests/`, which is a different argument —
-   and #127 and #129 have since taken all four of those, so the only file over
-   the ceiling anywhere is `app/Screenshot.swift`. See the gap table, recounted
-   by sweep.
+   and #127 and #129 have since taken all four of those. The last file over the
+   ceiling anywhere was `app/Screenshot.swift`, and **#131 took it — nothing in
+   the tree is over 1,000 now**. See the gap table, recounted by sweep.
 
 6. ~~`Scenario.swift` against the same ceiling~~ — ✅ **done 2026-08-02, decision
    #120.** **1,615** lines, **977 of them one `switch`**; now five files, largest
@@ -230,6 +232,81 @@ worth keeping — **an agent on a multi-hour task commits a skeleton early and
 refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
+
+### ✅ 2026-08-02 — `Screenshot.swift` is five files, and the oracle did not move (#131)
+
+**1,196 lines against a ceiling of 1,000 — the last file in the tree over it.**
+It was **809** that morning; #125's three interface checks took it over the same
+day, so the tool that closed three coverage holes became the only remaining
+violation. **After this sweep, nothing in the tree is over 1,000.**
+
+**The seam is the check/picture line, and #125's own header had already drawn
+it.** Three scenes — `detail-tail`, `menu`, `render-failed` — assert rather than
+pose, and a scene that asserts is a different kind of thing. So:
+
+| File | Lines | What a change to it is |
+|---|---|---|
+| `Screenshot.swift` | 315 | the command line and the driver, in run order |
+| `Screenshot+Scenes.swift` | 353 | **add a scene** — `apply(scene:to:)`, `tab`, `snapshots` |
+| `Screenshot+Checks.swift` | 189 | **add a check-scene** — `checkMenu`, `requiredCommands`, `scrolls`, `minimumHeight` |
+| `Screenshot+Measure.swift` | 315 | pixels out, as pictures and as numbers |
+| `Screenshot+Render.swift` | 109 | a SwiftUI hierarchy to a PNG, offscreen |
+
+Verbatim motion, extracted by line range with a script that proves **every one
+of the 1,196 lines is claimed by exactly one destination**. The one non-blank
+line not carried is `// MARK: Scenes`, replaced by the per-file headers.
+⚠ #117's Swift tax again: `private` is file-scoped, so **eleven members widened
+to internal** because `run` calls across every seam; four stayed private. In the
+header of `Screenshot.swift` so nobody reads it as carelessness.
+
+#### ⚠ The oracle was checked against itself before it was believed
+
+This file **is** the interface oracle, so breaking it silently would blind the
+checks that guard the UI. 45 scenes plus `menu`, rendered **twice from the
+pre-split binary**: **44 of 45 agree with themselves, and `versions` does not** —
+exactly #125's warning, its rows stamp `Date()` at minute resolution. So
+`versions` is reported, not asserted around.
+
+| Comparison | Result |
+|---|---|
+| pre-split vs pre-split (self-check) | 44/45 identical; `versions` differs |
+| pre-split vs post-split | **44/45 identical; `versions` the only difference** |
+| exit codes, 46 runs | identical |
+| stderr, 46 runs (path normalised) | identical |
+| 40 repro scenarios, full output | 36/40 byte-identical, **40/40 exit 0** |
+
+`detail-tail` reproduces #125's measurement to the tenth — 570.0 points
+scrolled, 1,701.0 of content past a 1,131.0-point window — and `menu` reports
+the same 75-item bar with 26 of 26 present. The four repro logs that differ
+differ **only in milliseconds and frames per second**: `slider-drag-cost`,
+`gesture-preview-agrees`, `eyedropper-latency`, `dehaze-reaches-the-picture`,
+every one a scenario that prints a latency.
+
+#### The mutation table — all three of #125's, all three red
+
+| # | Mutation | Check | Result |
+|---|---|---|---|
+| M1 | delete Detail's five below-fold sections (`DevelopPanels+Detail.swift` 126–185, exactly the 60 lines #125 counted) | `detail-tail` | **exit 1**, "nothing overflows the panel column", no frame written |
+| M2 | delete the Reset Adjustments command | `menu` | **exit 1**, bar 75 → 74, 25 of 26, names the item and prints the whole bar |
+| M3 | delete the footer's `else if let why = engine.lastFailure` branch | `render-failed` | exit 0, frame **differs at char 11,672,187** — the same offset #125 recorded — **8,671 pixels**, band x 2632–3359 / y 1790–1846 |
+
+M3 confirmed by eye: the amber *Render failed — the compute pipeline could not
+be built* is gone, replaced by the ordinary grey hint. Each mutation reverted
+with `git checkout`, tree confirmed clean.
+
+⚠ **M2 could not be written the way #125 wrote it.** Deleting only the
+`Button("Reset Adjustments")` line does not compile — the `.keyboardShortcut`
+and `.disabled` modifiers below it dangle onto `View` (`error: instance member
+'keyboardShortcut' cannot be used on type 'View'`). The mutation is the
+three-line item. Worth knowing before anyone re-runs it.
+
+#### Gates
+
+800 / 3708 / 40 of 40 / bench exits 0. ⚠ **The bench's first run said FAIL at
+p95 32.13 ms and it was contention, not the build** — spread 5.65 ms across
+rounds, run while this split's own rebuilds were still finishing. Rerun on a
+quiet machine: **9.68 ms, spread 0.24**. The bench links no Swift at all, so
+this split cannot reach it; #116's point about the M0 gate stands.
 
 ### ✅ 2026-08-02 — the two checks that claimed more than they checked (#130)
 
@@ -1449,7 +1526,7 @@ Small, named, and none of them blocking the next story:
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
 | **A check names the mutation it exists to catch and does not catch it, for the second time in two days.** `testPerspectiveMaskExtent` check 6 (now in `tests_mask_geom.cpp`) says *"getting the conjugation W⁻¹JW wrong on a 3:2 frame"* is what it is for — and **deleting that conjugation from `mask::unperspective` outright leaves 800 / 3708 / 40 / bench 0 all green** (#129, mutation M6). The fault is the fixture: the check drives a **pure aspect squeeze**, whose Jacobian is diagonal, and a diagonal `J` has `b = c = 0` — so the conjugation multiplies two zeros. It needs a keystone, which has an off-diagonal derivative. **Recorded rather than fixed**, per the brief. Its neighbour in the same session, #127's *"a constant rim fills with that constant"*, is the same shape | `MaskGeometry.h` |
-| **The 1000-line rule is broken one way, and it is `app/Screenshot.swift` at 1,194.** ⚠ **Recounted by sweep 2026-08-02 at `49c8a83` + #129**, over all **235** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files — `git ls-files`, not a directory list, so nothing is out of scope by being somewhere nobody thought to look. Over: **`app/Screenshot.swift` 1,194**, and nothing else. Next below: `ShaderParams.h` **905**, `tests_highlights.cpp` **865**, `tests_tone.cpp` **858**, `tests_perspective.cpp` **837**, `tests_brush.cpp` **824**. ⚠ **`apps/tests/` is entirely under the ceiling for the first time** — #129 took the last three, each at a fixture boundary, with `orion-tests` byte-identical on both sides. ⚠ **`Screenshot.swift` is the lesson**: it was 809 lines on the morning of 2026-08-02 and #125's three interface checks took it past the ceiling the same day, while the row was being rewritten twice by agents counting only the files they had been chartered against. ⚠ This sweep is of **one worktree at `49c8a83`** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling. Ten splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `tests_effects.cpp` 1,716→555 (#127, the first cut at the **fixture** rather than the region, per #126), and #129's three: `tests_brush.cpp` 1,142→824, `tests_perspective.cpp` 1,110→837, `tests_grade.cpp` 1,029→653. ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into one on 2026-08-02 | whole tree |
+| **The 1000-line rule is not broken anywhere, for the first time.** ⚠ **Recounted by sweep 2026-08-02 at `6767716` + #131**, over all **239** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files — `git ls-files`, not a directory list, so nothing is out of scope by being somewhere nobody thought to look. **Over 1,000: none.** Largest anywhere: `ShaderParams.h` **905**, `tests_highlights.cpp` **865**, `tests_tone.cpp` **858**, `tests_perspective.cpp` **837**, `tests_brush.cpp` **824**, `ViewportTests+Index.swift` **809**, `Engine.swift` **795**. ⚠ **`app/Screenshot.swift` was the last one**, at **1,196** — 809 lines on the morning of 2026-08-02, taken over the line the same day by #125's three interface checks, and split five ways by #131 at the seam between a scene that *asserts* and a scene that *poses*. ⚠ This sweep is of **one worktree at `6767716`** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling, and another agent was in `apps/tests/` while it ran. Eleven splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `tests_effects.cpp` 1,716→555 (#127), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `Screenshot.swift` 1,196→315 (#131), and #129's three: `tests_brush.cpp` 1,142→824, `tests_perspective.cpp` 1,110→837, `tests_grade.cpp` 1,029→653. ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into one on 2026-08-02 | whole tree |
 
 | ~~⚠ **The whole Photo menu is unreachable from every check.**~~ ✅ **closed 2026-08-02, decision #125.** `--screenshot --scene menu` hands the process back to `OrionApp.main()` and reads `NSApp.mainMenu` — the shipping `Scene` building the shipping `PhotoCommands` — and asserts **26 commands by title**, exiting 1 and printing the whole 75-item bar when one is missing. Deleting Reset Adjustments now prints `MISSING from the menu bar — "Reset Adjustments"` and exits 1, with every frame and all 40 scenarios still green. ⚠ It asserts **presence, not firing**: the items are disabled at launch and firing one needs a photograph, a key window and focus (#110.3's shape). ⚠ It is not driven through `CullActions`, deliberately — that would be green on the mutation, which deletes the button and leaves the action | `Screenshot.swift` |
 | ⚠ **The Compare Original menu item ships without its key.** The bar reads **`Compare Original  ()`**: the source writes `"Compare Original  (\\)"`, and a `Button`'s string is a `LocalizedStringKey` whose escape character is the backslash, so the one item that spells its key only in its title has lost it. Found by the menu check's first run, 2026-08-02; **pinned as it ships** so the check is green on the tree as it stands, and it will go red — printing the whole bar — the moment somebody fixes it, which is the right way round. The fix is `Text(verbatim:)` or a different spelling | `OrionApp+Commands.swift` |
