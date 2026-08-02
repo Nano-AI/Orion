@@ -184,6 +184,51 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
+### ✅ 2026-08-02 — `OrionApp.swift` is six files, and the four CLI modes are unchanged (#121)
+
+**1,557 lines against a ceiling of 1,000**, the last of the three the sixth wave
+was chartered against. Six files, largest **373**: `OrionApp.swift` 296 (the
+`@main` entry, the four command-line modes, and `Editor`'s stored properties),
+`OrionApp+Commands.swift` 323, `OrionApp+Chrome.swift` 373,
+`OrionApp+Canvas.swift` 244, `OrionApp+Tools.swift` 163, `OrionApp+Files.swift`
+262. The seam is #113's and #117's — **region of the problem** — and the brief's
+proposed cut (entry-and-CLI / menus / root-view-and-chrome) was checked against
+the file and **rejected**: it leaves the third file at about 1,350 and still over
+the ceiling. Full reasoning in decision #121.
+
+⚠ **Three of the four named gates cannot see this work at all, and that is
+structural rather than an accident of coverage.** `apps/tests/CMakeLists.txt` and
+`apps/bench/CMakeLists.txt` do not mention Swift; `orion-viewport-tests` compiles
+a Swift source list containing **zero** `OrionApp*` files. Only the 40-scenario
+sweep runs the app binary, and it only ever passes `--scenario`. So
+`--screenshot`, `--batch-export` and `--library-open` are checked by nothing in
+the repository, which the mutations below confirm one at a time.
+
+⚠ **The oracle was checked against itself first, and it is noisy on one scene.**
+Two full runs of the *pre-split* binary over 38 scenes agree 37/38;
+`versions.png` differs between two runs of the same binary, because
+`Screenshot.snapshots` builds its rows from `Date()` and the panel prints an
+absolute clock time. Pre-split against post-split is **the same 37/38
+byte-identical**, and the 38th was compared visually: the only difference is
+`6:24 AM` → `6:34 AM`, the ten minutes between the runs. Recorded rather than
+fixed — it is a defect in the harness, not the product, and a fix hidden inside
+a refactor is unreviewable.
+
+⚠ **All four command-line modes were exercised before and after and diffed.**
+`--scenario` over all 40 repro files (**954 lines of report, 40/40 exit 0**),
+`--batch-export` of three photographs, `--library-open` of `samples/`,
+`--screenshot` over 38 scenes. After normalising wall-clock and the probe
+database's UUID, **every one is identical**, and the three exported JPEGs match
+by SHA-256 without any normalisation at all.
+
+⚠ **Verbatim motion, checked rather than claimed.** Every body line is a
+line-range slice; a multiset diff of all 1,426 non-blank lines accounts for every
+difference: five `// MARK:` comments dropped because the filenames now carry
+them, seventeen declarations re-emitted with `private` removed, and the file
+headers. **No moved line was edited.** The cost is #117's exactly — Swift's
+`private` is file-scoped, so five stored properties, eleven views and methods and
+`PhotoCommands` widened to internal; nine members stayed `private`.
+
 ### ✅ 2026-08-02 — `Engine.swift` is eight files, and no pixel moved (#117)
 
 **2,331 lines against a ceiling of 1,000** — the largest violation left once
