@@ -99,7 +99,7 @@ final class EditHistory {
 /// into — keeping them in parallel arrays is how a reorder puts someone's paint
 /// on the wrong component.
 struct MaskComponentState: Equatable, Codable {
-    var kind: Int32 = 0            // 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 colour
+    var kind: Int32 = 0            // 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 color
     /// 0 add, 1 subtract, 2 intersect. The group folds from zero, so the first
     /// component's op has no effect when it is add and zeroes the group when it
     /// is not — the panel does not offer one on the first row.
@@ -110,8 +110,8 @@ struct MaskComponentState: Equatable, Codable {
     /// Begins a new layer. A layer is a run of consecutive components with its
     /// own coverage and its own adjustments; row 1 always starts one.
     var startsLayer = false
-    var centreX: Float = 0.5
-    var centreY: Float = 0.5
+    var centerX: Float = 0.5
+    var centerY: Float = 0.5
     var angle: Float = 0
     var length: Float = 0.5
     var radiusX: Float = 0.3
@@ -124,14 +124,14 @@ struct MaskComponentState: Equatable, Codable {
     var rangeHi: Float = 2
     var rangeSoft: Float = 1
 
-    /// Colour range (kind 6): the picked shade in scene-linear Rec.2020 RGB,
+    /// Color range (kind 6): the picked shade in scene-linear Rec.2020 RGB,
     /// with a tolerance and a softness in Oklab chromaticity.
     /// research/masking.md §4c.
-    var colourR: Float = 0.18
-    var colourG: Float = 0.18
-    var colourB: Float = 0.18
-    var colourTol: Float = 0.10
-    var colourSoft: Float = 0.05
+    var colorR: Float = 0.18
+    var colorG: Float = 0.18
+    var colorB: Float = 0.18
+    var colorTol: Float = 0.10
+    var colorSoft: Float = 0.05
 
     var brushRadius: Float = 0.08
     var brushFlow: Float = 0.5
@@ -184,12 +184,38 @@ struct MaskComponentState: Equatable, Codable {
     /// component's range fields, so the guard could not see them. A round trip
     /// is only as good as the state it round-trips.
     private enum Key: String, CodingKey {
-        case kind, compose, invert, hidden, startsLayer, centreX, centreY, angle, length
+        case kind, compose, invert, hidden, startsLayer, centerX, centerY, angle, length
         case radiusX, radiusY, feather, roundness
         case rangeLo, rangeHi, rangeSoft
-        case colourR, colourG, colourB, colourTol, colourSoft
+        case colorR, colorG, colorB, colorTol, colorSoft
         case brushRadius, brushFlow, brushHardness, brushStroke, brushErase
         case matteId, matteSource
+
+        // ── The British spellings these seven were written under ────────────
+        //
+        // Decision #112. Read, never written; there is no rewrite pass and no
+        // version stamp, so a sidecar adopts the American key the next time the
+        // photograph is edited and saved, and never otherwise.
+        //
+        // ⚠ **This is the migration #89 refused to do without sign-off, and the
+        // reason it is dangerous is that it cannot fail.** A component's stored
+        // property names *are* its sidecar keys — the encoder is synthesised
+        // from them — so renaming `centreX` without these seven lines would not
+        // throw, would not log, and would not open the photograph unedited. It
+        // would open it with the mask sitting at its default 0.5, 0.5: a
+        // perfectly valid radial mask in the middle of the frame, brightening
+        // the wrong thing on every photograph ever masked.
+        //
+        // ⚠ The case names are deliberately apart from their raw values, so a
+        // future `Centre`→`Center` sweep over identifiers cannot quietly turn
+        // `"centreX"` into `"centerX"` and collapse the pair.
+        case legacyCentreX = "centreX"
+        case legacyCentreY = "centreY"
+        case legacyColourR = "colourR"
+        case legacyColourG = "colourG"
+        case legacyColourB = "colourB"
+        case legacyColourTol = "colourTol"
+        case legacyColourSoft = "colourSoft"
     }
 
     init() {}
@@ -205,8 +231,18 @@ struct MaskComponentState: Equatable, Codable {
         invert = (try? c.decodeIfPresent(Bool.self, forKey: .invert)).flatMap { $0 } ?? invert
         hidden = (try? c.decodeIfPresent(Bool.self, forKey: .hidden)).flatMap { $0 } ?? hidden
         startsLayer = (try? c.decodeIfPresent(Bool.self, forKey: .startsLayer)).flatMap { $0 } ?? startsLayer
-        centreX = float(.centreX) ?? centreX
-        centreY = float(.centreY) ?? centreY
+        // ⚠ **The American key wins whenever it is present**, and the British
+        // one is consulted only in its absence. Decision #112 states the rule
+        // once for the whole sidecar, because a per-field rule is a per-field
+        // argument. A file carrying both was not produced by editing in a new
+        // build and then an old one — an old build's synthesised encoder drops
+        // every key it does not know, so that path leaves the British key
+        // alone. Both together means a hand edit or a merge, where the American
+        // key is the one this build wrote and the British one is the stale
+        // half. It is the same rule `layers` already beats `localExposureEv`
+        // with, and `maskComponents` already beats `maskKind` with.
+        centerX = float(.centerX) ?? float(.legacyCentreX) ?? centerX
+        centerY = float(.centerY) ?? float(.legacyCentreY) ?? centerY
         angle = float(.angle) ?? angle
         length = float(.length) ?? length
         radiusX = float(.radiusX) ?? radiusX
@@ -216,11 +252,11 @@ struct MaskComponentState: Equatable, Codable {
         rangeLo = float(.rangeLo) ?? rangeLo
         rangeHi = float(.rangeHi) ?? rangeHi
         rangeSoft = float(.rangeSoft) ?? rangeSoft
-        colourR = float(.colourR) ?? colourR
-        colourG = float(.colourG) ?? colourG
-        colourB = float(.colourB) ?? colourB
-        colourTol = float(.colourTol) ?? colourTol
-        colourSoft = float(.colourSoft) ?? colourSoft
+        colorR = float(.colorR) ?? float(.legacyColourR) ?? colorR
+        colorG = float(.colorG) ?? float(.legacyColourG) ?? colorG
+        colorB = float(.colorB) ?? float(.legacyColourB) ?? colorB
+        colorTol = float(.colorTol) ?? float(.legacyColourTol) ?? colorTol
+        colorSoft = float(.colorSoft) ?? float(.legacyColourSoft) ?? colorSoft
         brushRadius = float(.brushRadius) ?? brushRadius
         brushFlow = float(.brushFlow) ?? brushFlow
         brushHardness = float(.brushHardness) ?? brushHardness
@@ -571,8 +607,8 @@ extension DevelopState {
             m.compose = 0          // the only op a single mask can have meant
             m.invert = (try? c.decodeIfPresent(Bool.self, forKey: .legacyMaskInvert))
                 .flatMap { $0 } ?? m.invert
-            m.centreX = float(.legacyMaskCentreX) ?? m.centreX
-            m.centreY = float(.legacyMaskCentreY) ?? m.centreY
+            m.centerX = float(.legacyMaskCentreX) ?? m.centerX
+            m.centerY = float(.legacyMaskCentreY) ?? m.centerY
             m.angle = float(.legacyMaskAngle) ?? m.angle
             m.length = float(.legacyMaskLength) ?? m.length
             m.radiusX = float(.legacyMaskRadiusX) ?? m.radiusX

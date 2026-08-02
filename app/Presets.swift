@@ -13,7 +13,7 @@ import Foundation
 /// fields are *in* the state whether the preset meant anything by them or not.
 ///
 /// Lightroom's presets behave the same way and for the same reason. A look is
-/// "make the colour like this", not "make the photograph like this".
+/// "make the color like this", not "make the photograph like this".
 ///
 /// ## What a preset can never carry
 ///
@@ -31,10 +31,38 @@ import Foundation
 enum PresetGroup: String, Codable, CaseIterable, Identifiable {
     case whiteBalance
     case light
-    case colour
+    case color
     case curve
     case detail
     case effects
+
+    /// What `.color` was spelled before decision #112, as it still sits in
+    /// every `presets.json` written before it. Not a case: a seventh case would
+    /// join `allCases`, put a duplicate "Color" row in the save sheet, and let
+    /// two groups that mean the same thing disagree inside one `Set`.
+    private static let legacyColourRawValue = "colour"
+
+    /// ⚠ Reading a group is the one place in this file where a single unknown
+    /// string used to cost every saved preset at once. `PresetStore.load`
+    /// decoded the whole array or nothing, so a `presets.json` carrying the old
+    /// `"colour"` would have thrown on element one and left the photographer
+    /// with the four built-ins and no explanation. Both spellings are accepted
+    /// here, and `PresetStore.load` now survives an element it cannot read at
+    /// all — decision #112.
+    ///
+    /// Encoding stays synthesised, so only `"color"` is ever written.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        if raw == PresetGroup.legacyColourRawValue {
+            self = .color
+        } else if let v = PresetGroup(rawValue: raw) {
+            self = v
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: try decoder.singleValueContainer(),
+                debugDescription: "unknown preset group \"\(raw)\"")
+        }
+    }
 
     var id: String { rawValue }
 
@@ -42,7 +70,7 @@ enum PresetGroup: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .whiteBalance: "White Balance"
         case .light:        "Light"
-        case .colour:       "Color"
+        case .color:        "Color"
         case .curve:        "Curve"
         case .detail:       "Detail"
         case .effects:      "Effects"
@@ -55,7 +83,7 @@ enum PresetGroup: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .whiteBalance: "temperature, tint"
         case .light:        "exposure, contrast, highlights, shadows, whites, blacks"
-        case .colour:       "vibrance, saturation, the mixer, colour grading"
+        case .color:        "vibrance, saturation, the mixer, color grading"
         case .curve:        "the tone curve"
         case .detail:       "sharpening, noise reduction, lens corrections"
         case .effects:      "clarity, dehaze, shadow lift, LUT strength"
@@ -65,7 +93,7 @@ enum PresetGroup: String, Codable, CaseIterable, Identifiable {
     /// The groups a new preset offers by default: a look, without the
     /// photograph's own white balance and without touching sharpening or noise,
     /// which are properties of the camera and the ISO rather than of a look.
-    static let defaultSelection: Set<PresetGroup> = [.light, .colour, .curve, .effects]
+    static let defaultSelection: Set<PresetGroup> = [.light, .color, .curve, .effects]
 }
 
 struct Preset: Codable, Identifiable, Equatable {
@@ -102,7 +130,7 @@ struct Preset: Codable, Identifiable, Equatable {
             out.blacks = state.blacks
             out.highlightRecovery = state.highlightRecovery
         }
-        if groups.contains(.colour) {
+        if groups.contains(.color) {
             out.vibrance = state.vibrance
             out.saturation = state.saturation
             out.hueShift = state.hueShift
@@ -209,9 +237,39 @@ final class PresetStore {
     private func load() {
         var user: [Preset] = []
         if let url, let data = try? Data(contentsOf: url) {
-            user = (try? JSONDecoder().decode([Preset].self, from: data)) ?? []
+            user = PresetStore.decode(data)
         }
         presets = user.filter { !$0.builtIn } + PresetStore.builtIns
+    }
+
+    /// A preset that cannot be read costs that preset, and no other.
+    ///
+    /// ⚠ **This was `try? JSONDecoder().decode([Preset].self)`, which is all or
+    /// nothing** — one unreadable element and the photographer opens Orion to
+    /// the four built-ins and every saved look gone, with nothing written
+    /// anywhere to say why. That is a defect on its own terms and decision #112
+    /// is where it became visible: the group rename is exactly the change that
+    /// would have triggered it, on every installation at once, on first launch.
+    ///
+    /// `Failable` decodes each element inside its own `init(from:)` and never
+    /// throws, so the array always decodes and the unreadable slots come back
+    /// `nil`. Element-wise `try? container.decode(...)` is the obvious
+    /// alternative and is wrong: `UnkeyedDecodingContainer` does not promise to
+    /// advance `currentIndex` on a throw, so the loop either spins forever or
+    /// eats the element after the bad one, depending on the Foundation build.
+    ///
+    /// ⚠ Skipping is right for a *preset* and would be wrong for a **group**.
+    /// Dropping an unreadable group silently narrows what the preset touches,
+    /// which turns "this look changed nothing" into a mystery; dropping the
+    /// preset loses one named row the photographer can see is missing.
+    static func decode(_ data: Data) -> [Preset] {
+        struct Failable: Decodable {
+            let value: Preset?
+            init(from decoder: Decoder) throws { value = try? Preset(from: decoder) }
+        }
+        guard let rows = try? JSONDecoder().decode([Failable].self, from: data)
+        else { return [] }
+        return rows.compactMap(\.value)
     }
 
     private func save() {
@@ -262,7 +320,7 @@ final class PresetStore {
             var s = DevelopState()
             build(&s)
             return Preset(name: name,
-                          groups: [.light, .colour, .curve, .effects],
+                          groups: [.light, .color, .curve, .effects],
                           state: s, builtIn: true)
         }
 

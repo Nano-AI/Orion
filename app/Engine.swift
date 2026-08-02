@@ -590,12 +590,12 @@ final class Engine {
         set { editSelected { $0.compose = newValue } }
     }
     var maskCenterX: Float {
-        get { selected?.centreX ?? 0.5 }
-        set { editSelected { $0.centreX = newValue } }
+        get { selected?.centerX ?? 0.5 }
+        set { editSelected { $0.centerX = newValue } }
     }
     var maskCenterY: Float {
-        get { selected?.centreY ?? 0.5 }
-        set { editSelected { $0.centreY = newValue } }
+        get { selected?.centerY ?? 0.5 }
+        set { editSelected { $0.centerY = newValue } }
     }
     var maskAngle: Float {
         get { selected?.angle ?? 0 }
@@ -638,19 +638,19 @@ final class Engine {
 
     // ── The color range (mask kind 6) ────────────────────────────────────
     var maskColorTol: Float {
-        get { selected?.colourTol ?? 0.10 }
-        set { editSelected { $0.colourTol = newValue } }
+        get { selected?.colorTol ?? 0.10 }
+        set { editSelected { $0.colorTol = newValue } }
     }
     var maskColorSoft: Float {
-        get { selected?.colourSoft ?? 0.05 }
-        set { editSelected { $0.colourSoft = newValue } }
+        get { selected?.colorSoft ?? 0.05 }
+        set { editSelected { $0.colorSoft = newValue } }
     }
 
     /// The picked shade, scene-linear Rec.2020 RGB. Read for the panel's
     /// swatch; written only by `pickMaskColor`.
     var maskColor: (r: Float, g: Float, b: Float) {
         guard let m = selected else { return (0.18, 0.18, 0.18) }
-        return (m.colourR, m.colourG, m.colourB)
+        return (m.colorR, m.colorG, m.colorB)
     }
 
     /// Armed by the panel's picker button. The canvas consumes the next click,
@@ -690,9 +690,9 @@ final class Engine {
         else { return false }
         edit("Mask color") {
             editSelected {
-                $0.colourR = Float(s.scene.r)
-                $0.colourG = Float(s.scene.g)
-                $0.colourB = Float(s.scene.b)
+                $0.colorR = Float(s.scene.r)
+                $0.colorG = Float(s.scene.g)
+                $0.colorB = Float(s.scene.b)
             }
         }
         maskColorSwatch = s.display
@@ -2013,14 +2013,14 @@ final class Engine {
             c.invert = m.invert ? 1 : 0
             c.hidden = m.hidden ? 1 : 0
             c.starts_layer = m.startsLayer ? 1 : 0
-            c.center_x = m.centreX; c.center_y = m.centreY
+            c.center_x = m.centerX; c.center_y = m.centerY
             c.angle = m.angle; c.length = m.length
             c.radius_x = m.radiusX; c.radius_y = m.radiusY
             c.feather = m.feather; c.roundness = m.roundness
             c.range_lo = m.rangeLo; c.range_hi = m.rangeHi
             c.range_soft = m.rangeSoft
-            c.color_r = m.colourR; c.color_g = m.colourG; c.color_b = m.colourB
-            c.color_tol = m.colourTol; c.color_soft = m.colourSoft
+            c.color_r = m.colorR; c.color_g = m.colorG; c.color_b = m.colorB
+            c.color_tol = m.colorTol; c.color_soft = m.colorSoft
             c.brush_radius = m.brushRadius; c.brush_flow = m.brushFlow
             c.brush_hardness = m.brushHardness
             c.brush_revision = brushRevisions[i]
