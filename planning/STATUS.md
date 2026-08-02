@@ -4,7 +4,7 @@
 
 ---
 
-**Last updated:** 2026-08-01 (**a leak `leaks` could not see, and film grain finished**)
+**Last updated:** 2026-08-01 (**the stroke stopped rebuilding the panel; the codebase reads American**)
 **Phase:** M0 done. M1 ~98%. M2 and **M3 complete**. **`research/masking.md` is
 finished** — primitives, groups, guided refinement, a raster
 component, Vision filling it, and now a band on brightness. Six mask kinds. A mask is a *list* of components
@@ -20,17 +20,27 @@ arrived **36 times**; the answer each time is that they exist, and each of the
 four now also has something that fails when its *wiring* breaks — see sessions
 `31e` and `31f`.
 
-**Next story:** ⚠ **Three findings from the 2026-08-01 stress pass are measured
-and unfixed**, and they are the shortlist:
+**Next story:** the queue, in order, each with a cost:
 
-1. **Dehaze's drag cost has roughly doubled** and nobody noticed. Normalised
-   against exposure *in the same process*, so machine load cannot explain it:
-   **7.2× → 11.8–13.5×**. Needs a bisect, not a theory.
+1. **Dehaze's drag cost has roughly doubled** — 7.2× → 11.8–13.5× against
+   exposure *in the same process*, so load cannot explain it. Needs a **bisect
+   on a quiet machine**, not a theory. ~1 session.
 2. **`reopen` grows 25–49 KB a cycle** where plain `open` is flat over 300
-   iterations. ~240 MB across a 5,000-photo cull.
-3. **Brush cost is linear in accumulated dabs, forever** — 16 ms at ~500 dabs
-   unarmed, ~12,300 armed, then an unexplained plateau. `ROADMAP.md`'s
-   incremental accumulation is the fix.
+   iterations. ~240 MB across a 5,000-photo cull. ~1 session.
+3. **Incremental brush accumulation.** ⚠ Now *located*: the host-side O(N) is
+   gone and the slope did not change, so the residual is the **GPU dab loop**.
+   That retires the three host-side candidates this table used to carry.
+   Costed in `ROADMAP.md`. ~1–2 sessions.
+4. **M1's library gap** — no SQLite index, no thumbnail cache, so every folder
+   open rescans and re-reads every sidecar. Also a performance item. ~2 sessions.
+5. **Export panel**: bit depth, metadata policy, output sharpening. 16-bit
+   already exists in the engine and is not offered. ~1 session.
+6. **Americanising the persisted keys**, if wanted — a schema migration with
+   dual reads, not a rename. ~1 session, needs sign-off (#89).
+
+⚠ **M5 is months, not sessions**, and saying otherwise would be a lie: it holds
+an X-Trans demosaic (Markesteijn), a Windows port, Core ML denoise and
+user-loadable DCP profiles, each a multi-week epic on its own.
 
 Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
 the performance action item is in `ROADMAP.md`. `research/masking.md` is
@@ -119,6 +129,71 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01c — the stroke stopped rebuilding the panel
+
+**Reported: painting takes ~155 ms a pointer event.** The harness said 0.9 ms.
+That 170x was the whole problem, and nothing here could see it — `Scenario`
+drives `Engine` and never renders SwiftUI.
+
+### ⚠ It was `@Observable` invalidation, and it is now measured rather than argued
+
+`Engine` is `@Observable`; Observation is property-granular. Every pointer event
+wrote `maskComponents[i].brushStroke`, and `DevelopPanels` reads
+`maskComponents` in **eleven places** including a `ForEach` over the mask rows —
+so each dab rebuilt the whole develop panel, sixty times a second.
+
+The `paint` verb counts invalidations with `withObservationTracking` now, which
+is a check that can fail:
+
+| | before | after |
+|---|---|---|
+| events invalidating the panel | **41/80** | **0/80** |
+
+The stroke lives in `@ObservationIgnored` buffers for the length of the gesture,
+appended to rather than rebuilt, and reaches `maskComponents` exactly once in
+`endBrushStroke`. Decision #88.
+
+### ⚠ The first draft skipped the adjustment block, and that broke the paint
+
+Dabs travel by their own facade call, so skipping `orion_engine_set_adjustments`
+looked free. But **`brush_revision` rides in that block** and is the only thing
+the engine compares to decide the mask node is stale — it never walks a stroke
+to find out. The dabs uploaded, the kernel never re-ran, the paint did not
+appear, and it measured **0.0 ms an event at 45,000 fps**, which is what "did no
+work" looks like when you are hoping for "fast".
+
+`repro/gesture-preview-agrees.txt` caught it — written the day before, for a
+different reason.
+
+### ✅ Three gap-table candidates retired by measurement
+
+A stroke is still linear (0.2 ms an event at 49 dabs, 1.5 at 490) and **the
+slope did not change** when all the host-side O(N) work was removed. So it is
+the GPU dab loop, not `EditHistory.record`, not `InteractionLog.committed`, not
+the re-flatten. Incremental accumulation is the only fix, and the gap table
+stops carrying three guesses.
+
+### The codebase reads American
+
+Two compile-checked stages: C++/Slang/C-header (58 files), then Swift (28).
+Decision #89. Two bugs fell out of it — `maskKindName` had no case for kind 6,
+so every **Color range row was labelled "Off"**, and a blanket rename hit
+`Task.isCancelled`, which is Swift's, not ours.
+
+⚠ **Persisted keys are frozen and that is the judgement in the change.** A
+renamed sidecar key does not fail to parse; it yields a valid mask in the middle
+of the frame. One unknown `PresetGroup` raw value loses every saved preset at
+once. And the scenario grammar keeps **both** spellings permanently — renaming
+collapsed four existing alias pairs into duplicate cases and fourteen repro
+files failed at once.
+
+### What was consulted
+
+A Fable instance was asked for scope judgement and gave three things worth
+keeping: check the report is not a stale binary before theorising; prove the
+invalidation *fires* before claiming it *costs*; and freeze the persisted keys
+rather than migrate them mid-investigation.
 
 ## Session 2026-08-01b — a leak the leak checker could not see
 
