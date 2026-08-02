@@ -989,3 +989,79 @@ axis and the neutral all match, and the neutral is the part that matters.
 **To fix:** calibrate the travel against reference renders of the same file at
 matched Balance settings, and replace the number with a measured one. The tests
 above are invariants and would survive it.
+
+---
+
+## §27 — The learned denoiser's proposals, none of which is in the codebase
+
+**Where:** nowhere. ⚠ **This section is unusual and the difference matters:**
+every other entry in this file is about a constant that is *shipping*. These are
+proposals in [`denoise-learned.md`](denoise-learned.md) and
+`planning/ROADMAP.md`'s piece table, and **not one line of it has been built.**
+
+It is written down anyway, because the working agreement's rule is that an
+uncited proposal is registered *before* someone builds it on the strength of it
+having appeared in a planning document. That is how a plausible number gets into
+a shader.
+
+### 1. "Unprocess to linear camera RGB, not to raw" — option C
+
+**Sourced:** the idea. Brooks, Mildenhall, Xue, Chen, Sharlet & Barron,
+*Unprocessing Images for Learned Raw Denoising*
+([arXiv:1811.11127](https://arxiv.org/abs/1811.11127), CVPR 2019) invert a
+camera pipeline to synthesise realistic raw from ordinary photographs, and
+evaluate the loss through a forward model of the same pipeline. Published,
+dated, and heavily built on.
+
+**Not sourced:** stopping the inversion **one stage earlier**, at
+post-demosaic linear camera RGB, because that is where Orion's denoise node
+actually sits (`denoise:blur 0..3`, between `hl:fill` and `lens`).
+
+**Said plainly: nobody published that, and I am proposing it.** The argument is
+that Brooks et al.'s reason for going all the way to raw is that a raw denoiser
+runs on raw; Orion's runs on demosaiced linear camera RGB, so the matching
+target is the intermediate. The *technique* transfers unchanged — it is the same
+inversion with two fewer steps undone.
+
+⚠ **The argument against it, which is real.** A network trained on demosaiced
+data has to learn the correlations RCD introduced between neighbouring pixels,
+and those correlations are the demosaic's, not the sensor's. That is why the
+published order is denoise-then-demosaic, and it is a genuine reason to prefer
+option A — move the model upstream — over this. **It is not settled**, and piece
+3 of the decomposition is the session where it gets settled.
+
+### 2. The tile size and the halo
+
+**Not sourced:** 512×512, 32 px of halo, 126 tiles.
+
+Tiling a convolutional network over a large image with an overlap is ordinary
+practice and needs no citation. **The numbers do.** The correct halo is the
+network's receptive field, which for a four-level U-net with 3×3 convolutions is
+substantially more than 32 px — so **the 32 is written down as wrong-on-purpose,
+a placeholder that makes the arithmetic concrete**, and piece 4 of the
+decomposition measures the real one before any pixels depend on it.
+
+Getting it wrong produces **visible tile seams**. That is the classic failure of
+this approach, it is invisible to code inspection, and it is exactly the shape of
+the two bugs `CLAUDE.md` names — a torn frame and a purple cast — that a
+five-line assertion caught and reading did not. Piece 4's bit-identical
+reassembly check exists for it.
+
+### 3. The memory estimate past the arithmetic
+
+**Sourced by arithmetic:** 185 MiB a full-resolution `RGBA16Float` node, 1,480
+MiB for one fp16 32-channel activation at 24 Mpx, 2,868 MiB for one activation
+per level of a four-level width-32 U-net. These follow from the frame size and
+the tensor shapes and are as solid as the shapes are.
+
+**Not sourced: the 4–8 GiB "in practice" and the ~100 MiB tile working set.**
+Both are multipliers on the above for the tensors a block keeps live and the
+skips the U keeps alive across it, and both are **guesses by a factor of two or
+three either way**. They are load-bearing only for the conclusion "it does not
+fit at full resolution", which survives any multiplier ≥ 1.
+
+**Cost:** low, while nothing is built. It becomes real the moment a session
+plans an allocation against them.
+
+**To fix:** all three by measurement — pieces 1, 2 and 4 exist to do exactly
+that, and the piece table says so.
