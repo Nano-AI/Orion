@@ -15,6 +15,12 @@
 # There is no `expect` here on purpose. A wall-clock threshold in a test fails
 # on a busy machine and teaches everyone to ignore it; this run prints the cost
 # so a regression is visible in the number.
+#
+# ⚠️ Which is why it declares its floor. The runner fails any run that asserted
+# nothing, because a scenario that measured nothing is indistinguishable from one
+# that passed — decision #124. This file is an instrument, not a test, and this
+# line is what says so to something other than a reader.
+minchecks 0
 open samples/_PIC8220.ARW
 set exposure 2.6
 

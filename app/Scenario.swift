@@ -137,6 +137,12 @@ import SwiftUI
 ///                                       luma and mean saturation — one number
 ///                                       per patch is too weak a signature to
 ///                                       say two renders are the same picture
+///     minchecks <n>                     this file's floor on how much it must
+///                                       assert. ⚠ **A declaration, not a step**
+///                                       — see `minChecks`. The default is 1, so
+///                                       a file that measures nothing fails
+///                                       unless it says `minchecks 0` and means
+///                                       it
 ///     time <n> <command...>             repeat a command and report what one
 ///                                       of them costs. "Slow" is not a report
 ///                                       anyone can act on; a number is
@@ -164,7 +170,8 @@ import SwiftUI
 ///     shot <path>                       write a PNG
 ///     print <text>
 ///
-/// Exits nonzero if any `expect` fails, so it is usable as a test.
+/// Exits nonzero if any `expect` fails — **and if the run asserted less than
+/// this file's floor**, which defaults to one check. See `minChecks`.
 @MainActor
 enum Scenario {
 
@@ -182,6 +189,42 @@ enum Scenario {
     static var readings: [String: Reading] = [:]
     static var failures = 0
     static var checks = 0
+
+    /// How much this file must assert before its run may exit 0.
+    ///
+    /// ⚠ **A scenario that measured nothing is indistinguishable from one that
+    /// passed, and that is the hole this closes.** Decision #120 made one verb
+    /// family claim every verb — silently disabling three quarters of the
+    /// vocabulary — and **39 of the 40 `repro/*.txt` still exited 0**, because 38
+    /// of them then ran zero checks and `orion: 0 checks, 0 failures` is a
+    /// success. Only a byte comparison of rendered frames and a diff of the
+    /// runner's whole output saw it; the exit codes, which are what the gate
+    /// actually reads, saw nothing.
+    ///
+    /// ⚠ **The default is 1, and the direction matters more than the number.**
+    /// A floor that files opt *into* would have been swallowed by the very
+    /// mutation it exists to catch — the declaration is a line of the file, so a
+    /// dispatcher that eats every verb eats that one too, and an opt-in guard
+    /// would have silently disarmed itself. Defaulting to 1 means every failure
+    /// of the dispatcher can only ever *lower* a file's measured checks into the
+    /// floor, never lift the floor out of the way.
+    ///
+    /// ⚠ **The number lives in the file, not in the caller.** A `--min-checks N`
+    /// on the command line puts it in the gate loop, where it is one number for
+    /// forty files that range from 1 check to 24, and where it drifts out of
+    /// sight of the thing it describes. A file that legitimately asserts nothing
+    /// says so in itself, next to the paragraph explaining why — and there are
+    /// exactly two of those, `eyedropper-latency.txt` and `slider-drag-cost.txt`,
+    /// both of which are instruments rather than tests and both of which already
+    /// said so in prose that nothing could read.
+    ///
+    /// ⚠ **Read before the run, not during it** — `minchecks` is a declaration
+    /// about the file rather than a step that does something to the app, which is
+    /// why it is parsed in `run` and is the one word in the grammar that does not
+    /// live in a family switch. That is not tidiness: a floor dispatched like an
+    /// ordinary verb can be *taken* by a broken family and lost, and a guard that
+    /// the defect can switch off is the defect.
+    static var minChecks = 1
 
     /// Set while `time` is running its repeats. Every informational write goes
     /// through `say`, so a timed loop reports its own number instead of the
@@ -204,19 +247,49 @@ enum Scenario {
         // The same view models the editor builds. Held here so a scenario's
         // steps share them exactly as the interface's do.
         let targeted = TargetedAdjust()
+        let lines = text.components(separatedBy: .newlines)
 
-        for (n, raw) in text.components(separatedBy: .newlines).enumerated() {
+        // The floor, read before a single step runs. A `#` comment cannot
+        // declare one — a commented-out `minchecks` is inert, which is what
+        // commenting a line out is supposed to mean.
+        for (n, raw) in lines.enumerated() {
+            let parts = raw.trimmingCharacters(in: .whitespaces)
+                           .split(separator: " ").map(String.init)
+            guard parts.first == "minchecks" else { continue }
+            guard parts.count == 2, let want = Int(parts[1]), want >= 0 else {
+                fail("line \(n + 1): minchecks takes one count, zero or more")
+            }
+            minChecks = want
+        }
+
+        for (n, raw) in lines.enumerated() {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix("#") { continue }
             let parts = line.split(separator: " ").map(String.init)
             let verb = parts[0]
             let args = Array(parts.dropFirst())
+            if verb == "minchecks" { continue }   // read above, before the run
 
             do {
                 try step(verb, args, engine: engine, targeted: targeted)
             } catch {
                 fail("line \(n + 1): \(line)\n  \(error.localizedDescription)")
             }
+        }
+
+        // ⚠ The floor. Written straight to stderr rather than through `say`,
+        // because `say` can be silenced by a `time` that did not finish and this
+        // line is the one a silent run most needs to print.
+        if checks < minChecks {
+            failures += 1
+            let why = checks == 0
+                ? "  FAIL  this run asserted nothing. A scenario that measured "
+                + "nothing is\n        indistinguishable from one that passed. Add "
+                + "a check, or say\n        `minchecks 0` in the file if measuring "
+                + "is the whole point.\n"
+                : "  FAIL  \(checks) checks, but this file declares "
+                + "`minchecks \(minChecks)`\n"
+            FileHandle.standardError.write(Data(why.utf8))
         }
 
         let summary = "orion: \(checks) checks, \(failures) failures\n"

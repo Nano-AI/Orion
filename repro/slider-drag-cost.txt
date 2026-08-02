@@ -44,6 +44,12 @@
 # So read a *ratio between the controls in one run*, never a lone figure against
 # the header. On this machine one binary has measured 8.97 and 44.53 ms p95
 # within an hour.
+#
+# ⚠️ Which is why it declares its floor. The runner fails any run that asserted
+# nothing, because a scenario that measured nothing is indistinguishable from one
+# that passed — decision #124. This file is an instrument, not a test, and this
+# line is what says so to something other than a reader.
+minchecks 0
 open samples/_PIC8220.ARW
 set exposure 2.6
 
