@@ -312,9 +312,9 @@ were opened at the URL given.
 | Model | Citation | Opened | Verdict for Orion |
 |---|---|---|---|
 | **DnCNN** | Zhang, Zuo, Chen, Meng & Zhang, *Beyond a Gaussian Denoiser: Residual Learning of Deep CNN for Image Denoising*, IEEE TIP 26(7), 2017. [arXiv:1608.03981](https://arxiv.org/abs/1608.03981), submitted 13 August 2016 | ✅ abstract | **Historically important, superseded.** Trained for additive white Gaussian noise at a fixed σ — the one noise model a sensor definitively does not have. Orion already fits Poisson–Gaussian per frame, which is strictly better information than DnCNN can use |
-| **FFDNet** | Zhang, Zuo & Zhang, *FFDNet: Toward a Fast and Flexible Solution for CNN based Image Denoising*, IEEE TIP 27(9), 2018 | ⚠ **not opened** — see the note below | Adds a tunable noise-level map, which maps well onto Orion's per-frame `a`, `b`. Still AWGN-derived |
+| **FFDNet** | Zhang, Zuo & Zhang, *FFDNet: Toward a Fast and Flexible Solution for CNN based Image Denoising*, IEEE TIP 27(9), 2018. [arXiv:1710.04026](https://arxiv.org/abs/1710.04026), submitted 11 October 2017 | ✅ abstract | **The most interesting of the pre-2020 four for Orion**, and not for its quality. It "accepts a tunable noise level map as the input", handles σ 0–75 with one network, and removes **spatially variant** noise. A per-pixel noise-level map is precisely what `estimateNoise`'s `var = a·x + b` already produces, so the two compose: Orion's fitted model *is* the conditioning input. ⚠ Still AWGN-derived, and still sRGB |
 | **Noise2Noise** | Lehtinen, Munkberg, Hasselgren, Laine, Karras, Aittala & Aila, *Noise2Noise: Learning Image Restoration without Clean Data*, [arXiv:1803.04189](https://arxiv.org/abs/1803.04189), submitted 12 March 2018, ICML 2018 | ✅ abstract | **A training technique, not a model.** Relevant only if Orion trains its own — and then it is very relevant, because it removes the need for clean ground truth |
-| **Noise2Void** | Krull, Buchholz & Jug, CVPR 2019 | ⚠ **not opened** | Same category as Noise2Noise, weaker, needs no paired data at all |
+| **Noise2Void** | Krull, Buchholz & Jug, *Noise2Void — Learning Denoising from Single Noisy Images*, CVPR 2019. [arXiv:1811.10980](https://arxiv.org/abs/1811.10980), submitted 27 November 2018 | ✅ abstract | Same category as Noise2Noise and weaker by the authors' own account — it "does not require noisy image pairs, nor clean target images" and in exchange "compares favorably to **training-free** denoising methods", which is a lower bar than Noise2Noise's. Its motivating case is biomedical imaging where pairs are infeasible. **Orion can synthesise pairs** (§4 option C), so it is giving up information it has |
 | **Restormer** | Zamir, Arora, Khan, Hayat, Khan & Yang, *Restormer: Efficient Transformer for High-Resolution Image Restoration*, CVPR 2022 | ⚠ abstract not opened; **licence verified** | 40.02 dB on SIDD at **140 GMACs**. Strictly dominated by NAFNet on both axes |
 | **NAFNet** | Chen, Chu, Zhang & Sun, *Simple Baselines for Image Restoration*, ECCV 2022. [arXiv:2204.04676](https://arxiv.org/abs/2204.04676), submitted 10 April 2022 | ✅ abstract + Table 6 | **40.30 dB on SIDD at 65 GMACs**, MACs "estimated by an input with the spatial size of 256×256". Best quality-per-compute of the six |
 
@@ -518,14 +518,16 @@ was wrong was wrong because the measurement came after the cost.
 - **Nothing was built and nothing was benchmarked.** No `orion-tests` run, no
   `orion-viewport-tests` run, no build. This file was written from the source,
   the SDK headers, the papers and the licence APIs.
-- **Two papers were not opened**: FFDNet (Zhang, Zuo & Zhang, IEEE TIP 27(9),
-  2018) and Noise2Void (Krull, Buchholz & Jug, CVPR 2019). Neither is
-  load-bearing for any conclusion here — both are named in the brief and both
-  are ruled out on grounds established elsewhere — but per `README.md`'s bar,
-  **they are cited from their bibliographic record and not from having read
-  them, and this line says so.** Restormer's abstract was likewise not opened;
-  its *licence* was verified and its numbers come from NAFNet's Table 6, not
-  from its own paper.
+- **One paper's abstract was not opened: Restormer's.** Its *licence* was
+  verified through the GitHub API and its numbers are quoted from **NAFNet's**
+  Table 6 rather than from its own paper — which is the honest attribution and
+  is why the row above says so. Nothing here rests on it: it is dominated by
+  NAFNet on both axes in the table that lists them together.
+- **The five others were opened at the arXiv URLs given** and their titles,
+  author lists and dates are taken from those pages, not from memory. This
+  matters because a citation in this repository was found wrong in five files
+  the same week — an author named Tang who was Tappen — and nothing in either
+  test suite can catch that class.
 - **The SIDD licence is a single automated read of a project page**, and it is
   the claim that decides whether weights can ship.
 - **The DxO throughput figure could not be re-verified** (HTTP 403).

@@ -706,12 +706,111 @@ now the cheaper of the two.
 
 ## M5 — Advanced
 
-- ML denoise (NAFNet-class via Core ML) as a **background pass**, not a live slider
+- ML denoise (NAFNet-class via Core ML) as an **on-demand pass**, not a graph
+  node and not a live slider — **researched and costed 2026-08-01, not built.**
+  `research/denoise-learned.md`, decision #111, the piece table below
 - Edge-aware brush refinement beyond M4's guided-filter pass
 - User-loadable DCP profiles
 - X-Trans support (Markesteijn)
 - Customizable tool panels / saved workspaces
 - Windows port (engine already portable; UI is the work)
+
+---
+
+## Core ML denoise — costed, nothing built
+
+`research/denoise-learned.md` settles what this line can and cannot be. **It was
+research only, by design.** No node was written, no model was converted, no
+build was run and no gate was claimed.
+
+**Renamed from "background pass" to "on-demand pass"**, because "background"
+suggests it runs on its own and it must not: it runs when the photographer asks,
+and its result is cached against the frame.
+
+### ⚠ The three constraints that shape it, found while costing
+
+**1. Orion's insertion point is a third domain, and no published checkpoint is
+trained for it.** The premise this line was written under — that Orion's noise
+handling is pre-demosaic — is half wrong, and the wrong half decides everything.
+The *fit* (`raw/NoiseProfile.cpp`, `estimateNoise(const BayerImage&)`) runs on
+the mosaic. The *filter* (`denoise:blur 0..3`, `denoise:shrink 3..0`) runs
+**after RCD and before `camera->working`**, in linear camera RGB, because
+`var = a·x + b` only holds there and the matrix would mix the variances with the
+channels.
+
+Published denoisers are trained either on sRGB (gamma-encoded, tone-mapped,
+8-bit — this is what SIDD's leaderboard measures) or on the Bayer mosaic (Brooks
+et al., CVPR 2019). Orion's point is neither. **An sRGB checkpoint applied there
+would look plausible and be wrong for a reason invisible to inspection**, which
+is the purple cast's exact shape.
+
+**2. It cannot be a graph node, and the arithmetic is one line.** At 24 Mpx one
+fp16 32-channel activation is **1,480 MiB — precisely what the whole existing
+8-node denoise chain costs**, since 32 channels × 2 bytes and 8 nodes × 8 bytes
+are both 64 B/px. A four-level U-net at width 32 is ~2,868 MiB for one
+activation per level and a guessed 4–8 GiB in practice, on top of the graph's
+7,186 MiB. **It tiles or it does not run**, and a tiled network is not one node.
+
+**3. The blocker is not the facade.** Core ML is **Objective-C** — verified in
+the SDK headers, `MLModel.h`, `MLFeatureValue.h:60`, `MLMultiArray.h:178` — so
+it is callable from the engine's existing `.mm` files without Swift and without
+crossing the POD facade at all. ⚠ It fails by `NSError`, so the wrapper returns
+a status code; an exception crossing the facade terminates the process.
+
+### The latency, computed rather than measured
+
+NAFNet's own Table 6 gives 65 GMAC at 256×256 = 0.992 MMAC/px → **48.1 TFLOP**
+for a 24 Mpx frame, or **65.5 TFLOP** tiled at 512 with a 32 px halo (126 tiles,
+1.36× the pixels). ⚠ No sustained fp16 throughput was measured on this machine,
+so it stops there: at 5 TFLOP/s that is 13.1 s, at 40 TFLOP/s it is 1.6 s.
+
+**The conclusion does not depend on which.** M0's target is a sub-16 ms drag and
+the optimistic row is 1.6 s — **100× the whole frame budget.**
+
+### The pieces, in order
+
+| # | Piece | Cost |
+|---|---|---|
+| 1 | **Measure the gap.** A paired fixture: a clean synthetic frame, `estimateNoise`'s own Poisson–Gaussian model applied *forward* to make its noisy twin, both through a real `DevelopPipeline`. PSNR/SSIM **and** a detail metric, denoiser off / luma 2.0 / luma 4.0. ⚠ **This session decides whether the rest happens.** Orion has no clean reference and no full-reference metric today, so the size of the gap is currently unknown and no dB figure for the shipped denoiser exists | **+0 nodes, +0 MiB.** ~1 session |
+| 2 | **Measure the round trip with no model in it.** ObjC++ in the engine: `MTLTexture` → IOSurface-backed `CVPixelBuffer` → a trivial **identity** `.mlpackage` → back. Time at 24 Mpx, assert bit-identical. ⚠ **This is where "zero-copy" is proved or disproved** — `MLMultiArray initWithPixelBuffer:` exists (macOS 12) but whether Core ML honours it without an internal copy is the largest unknown in the write-up. If it copies, the answer switches to `MPSGraph`, whose `MPSGraphTensorData initWithMTLBuffer:` takes the buffer directly — at the cost of hand-building the network in ObjC, which is a thousand-line file and against the maintainability constraint | **+0 nodes, +0 MiB.** ~1 session |
+| 3 | ⚠ **DECISION POINT — the domain. A written argument, not code.** Move the model upstream to the mosaic (matches the literature, reopens decision #29 and the demosaic order), downstream past the display transform (cheap, **violates decision #6**), or train for Orion's own domain (correct, weeks). **"None of the three, stop here" is a real outcome** and must be allowed to win | **0 files.** ~half a session |
+| 4 | **The tiler, with no network in it.** Split → identity → reassemble at 512 with a parameterised halo. ⚠ **Assert the reassembly is bit-identical** — a tile seam is invisible to inspection and obvious to a five-line assertion, which is this repo's own lesson twice over. ⚠ **Set the halo from the chosen model's receptive field, measured.** 32 px is a guess and is almost certainly too small for a four-level U-net | **+0 nodes** in the develop graph. ~100 MiB working set *(guess)*. ~1 session |
+| 5 | **The model, whichever piece 3 chose.** Convert or train, bundle the `.mlpackage`, run it through piece 4's tiler, composite the result in as an **uploaded texture** — the structural position `mask:0`'s raster already occupies (decision #79) | **+1 node, +185 MiB**, plus the tiler. ⚠ **Session count unknown by construction:** downstream ~1, upstream 2–3, **train-our-own weeks** |
+| 6 | **The control and the cache rule.** A button, not a slider. Cached against the frame and the model version; **no** parameter change re-runs it. ⚠ `unchangedPrefix` (decision #102) is about parameters not changing, not about a pass being too expensive to run — this wants its own concept | ~1 session, ~10 files |
+
+**Total: 4.5 sessions to a decision point that may say stop, plus an unbounded
+tail.** ⚠ **Do not start at piece 5.** Pieces 1–4 are worth doing whether or not
+a model ever ships — piece 1 gives Orion the paired fixture and the
+full-reference metric it does not have, and piece 4's tiler is what a
+full-resolution export path wants anyway.
+
+### ⚠ Which of these numbers are guesses
+
+`research/highlight-reconstruction.md`'s estimate was **16× out** because nobody
+measured before costing. Marked here so the same mistake is at least visible:
+
+| Number | Status |
+|---|---|
+| 185 MiB a full-res `RGBA16Float` node; 1,480 MiB the denoise chain; 173 nodes / 7,186 MiB | **Measured / read out of the source.** Solid |
+| 65 GMAC at 256×256; 40.30 dB SIDD; DND non-commercial; NAFNet and Restormer MIT; DnCNN and FFDNet **unlicensed** | **Verified against the papers and the GitHub licence API** |
+| 2,868 MiB for one activation per level; 48.1 / 65.5 TFLOP; 126 tiles | **Arithmetic** from the verified figures. Solid given the architecture assumption |
+| 4–8 GiB in practice; ~100 MiB tile working set; the 32 px halo; every session count in the table | ⚠ **Guesses.** Pieces 1, 2 and 4 exist to replace them |
+| Orion's own denoiser's dB gap; sustained fp16 throughput on this machine; whether Core ML's pixel-buffer path is genuinely zero-copy | ⚠ **Unknown.** No measurement exists |
+
+### ⚠ What must not be done along the way
+
+- **Shipping an sRGB-domain checkpoint at the current insertion point.** The
+  domain error above. Plausible, wrong, invisible.
+- **Bundling weights whose training data's licence has not been read.** Decision
+  #78 settled this for segmentation and it transfers unchanged: weights inherit
+  their data's terms however permissive the architecture's code is. DND is
+  explicitly non-commercial; SIDD's MIT claim is single-source and unverified in
+  the distributed archive.
+- **Using DnCNN or FFDNet's original repositories.** Neither has a licence file
+  at all, which is no grant rather than a permissive one. `cszn/KAIR` is MIT and
+  re-implements both if either is ever wanted.
+- **Hand-building the network in `MPSGraph` calls** unless piece 2 forces it.
+- **Making it a slider, or making it a node.** The two arithmetic findings above.
 
 ---
 
