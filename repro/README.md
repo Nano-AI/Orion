@@ -47,6 +47,18 @@ added because a bug was invisible to the ones before it.
 | The analysis render | `measure <region> <name> analysis` | the picture handed to Vision — neutralised geometry, no overlay — which nothing on screen ever shows |
 | The interface's own model | `maskcheck <cells> <ev>` | the mask the overlay *draws* disagreeing with the coverage the engine *renders* |
 
+**The library has no surface here at all**, because a scenario drives `Engine`
+and `Library` is not on that path. Its equivalent is a mode of its own:
+
+    ./build/Orion.app/Contents/MacOS/Orion --library-open <folder>
+
+It opens the folder three times in one process — cold, warm, and with no index
+at all — and fails when the warm pass did not *hit*, or when the three disagree
+about any field a listing shows. ⚠ Its first draft asserted `misses == 0`, which
+a `Library` that never consults the index satisfies perfectly: zero attempts,
+zero misses, and a four-times-slower open reported as a pass. The seventh
+instance of the class this file exists to record.
+
 `measure ... canvas` renders through `CanvasBlit` — the real shader, the real
 transform — rather than reimplementing the split on the CPU. `maskcheck`
 classifies with `CanvasLayout.maskAlpha`, the overlay's own transcription of the

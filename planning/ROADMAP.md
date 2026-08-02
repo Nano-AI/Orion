@@ -31,7 +31,12 @@ Rule: every milestone ends with something you can actually shoot with. No milest
 **Definition of done:** you edit a real shoot in Orion start to finish and export JPEGs you're happy with. No other tool involved.
 
 - **Epic: Browse** — folder open, grid + filmstrip, async thumbnails, LRU cache
-- **Epic: Cull** — star ratings, reject flags, color labels; filter and sort; SQLite index
+- ✅ **Epic: Cull** — star ratings, reject flags, color labels; filter and sort;
+  **SQLite index + persistent thumbnail cache landed 2026-08-01**, decision #90.
+  300 frames, page cache warm: **454–688 ms cold against 28–54 ms warm, 12.9–17.2×**,
+  and an indexless open lands on the cold number, so the win is the index rather
+  than the disk. `Orion --library-open <folder>` is the paired measurement and
+  the wiring check
 - **Epic: Core develop** — exposure, contrast, highlights/shadows, whites/blacks, WB (temp/tint + eyedropper), vibrance/saturation
 - **Epic: Geometry** — crop, rotate, straighten
 - **Epic: Edit model** — op stack → XMP sidecar, undo/redo, history panel
@@ -306,7 +311,7 @@ sed.
 | ⚠ **Brush cost is linear in accumulated dabs, forever** | Full resolution it crosses 16 ms at **~500 dabs** — 1.4 strokes across the frame. Armed it crosses at ~12,300, then steps to a 27 ms plateau at ~13,400 that nobody has explained. Arming bought 14× and moved the wall; it did not remove it. The fix is ROADMAP's incremental accumulation |
 | **The tick, attributed** | `EditHistory.record` copies the whole `DevelopState`; `InteractionLog.committed` diffs every field and formats strings; `setBrushStroke` re-flattens the entire stroke per pointer event. All three are per-tick and O(size of the edit). ⚠ Candidates — the armed stroke is still linear (0.4 ms at 46 dabs, 1.8 at 784), which is 200 fps at the dab cap and may simply not be worth touching |
 | **Cold open** | decode 36 ms + full render 72–92 ms. What does the photographer see in between? |
-| **Library** | no SQLite index and no persistent thumbnail cache. Every open rescans the folder and re-reads every sidecar |
+| ✅ **Library** | Done 2026-08-01, decision #90. Was: every open re-opened every raw through LibRaw, re-extracted every embedded preview and re-read every XMP. **300 frames: 454–688 ms cold → 28–54 ms warm, 12.9–17.2×.** ⚠ The listing is still the filesystem's — `plan` is *handed* the directory contents and can only answer about files in it, so a photograph deleted outside Orion cannot be resurrected by a cache. What is left is named and costed under **Library index — what is not done** below |
 | **Scroll, zoom, pan, filmstrip** | never measured at all |
 | **Memory** | 6971 MiB of intermediates on a 24 MP frame. What happens on 8 GB, or on a GPU that is not an M4? |
 | **Export** | 345 ms JPEG, 571 ms TIFF. Fine, but unwatched |
@@ -319,6 +324,19 @@ claim in this repository turned out to be about the fixture rather than the
 product, and once — the 120-dab stroke — it was off by fifteen times. **Measure,
 then fix, then measure again.** Nothing in the table above gets touched on the
 strength of looking wrong.
+
+## Library index — what is not done, costed
+
+The index and the thumbnail cache both shipped whole (decision #90). These are
+the edges that were deliberately left, each with a number rather than a shrug.
+
+| Piece | Why it was left | Cost |
+|---|---|---|
+| **Rows for a folder you never open again are never collected.** The prune runs inside `plan`, against the listing it was given, so it only ever cleans a folder you are looking at. Delete a shoot from disk and its rows sit in the database forever | The database is bounded in *bytes* by the thumbnail budget, and a metadata row is ~200 B — 5,000 dead frames is ~1 MB. It is untidy, not a leak with teeth, and a sweep that walks every indexed folder statting for existence is a background job with its own failure modes | ~half a session: one `SELECT DISTINCT dir`, one existence check per folder, run on launch |
+| **The thumbnail budget is a constant with no way to see it or clear it.** 512 MB, no readout, no button | Nothing in the app yet has a preferences surface to put it on, and inventing one for a single number is worse than the number | ~half a session, and it wants the settings panel that does not exist |
+| **Nothing watches a folder while it is open.** Rate a photograph in Lightroom with Orion showing the same folder and Orion keeps the rating it read | True before this change too; the index does not make it worse, because every stamp is re-taken on the next open. An `FSEventStream` on the open folder is the fix and it is a live-update story, not a cache story | ~1 session |
+| **A `SQLITE_BUSY` from a second Orion process is untested.** The code excludes `BUSY`/`LOCKED` from the corrupt path deliberately — those mean somebody else holds the file, and discarding it would be deleting a live database — but the mutation that widens that list to every error code passes every test | Simulating cross-process lock contention needs a second process and a held transaction; the honest note is that this one rule is reasoned rather than pinned | ~half a session for a two-process fixture |
+| **`Library.swift` is now 400 lines and holds both the view model and the loading policy** | Under the 1000-line rule with room, and splitting it now would move code that has just changed | — |
 
 ## Incremental brush accumulation — costed, not started
 

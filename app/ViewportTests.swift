@@ -104,6 +104,18 @@ enum ViewportTests {
         testSpotHandleHasAMinimumSize()
         testSpotDragStaysOnThePicture()
 
+        testIndexIsColdBeforeItIsWarm()
+        testARewrittenRawInvalidatesByMtime()
+        testARewrittenRawInvalidatesBySizeAlone()
+        testARatingChangeInvalidatesTheMarksAndNothingElse()
+        testADeletedSidecarClearsTheRating()
+        testADeletedFileLeavesTheIndex()
+        testACorruptDatabaseDegradesToARescan()
+        testAForeignSchemaIsRebuilt()
+        testASidecarChangingUnderTheReadIsNotFiled()
+        testTheThumbnailCacheEvictsTheLeastRecentlyUsed()
+        testAThumbnailKeepsItsShapeAndItsWayUp()
+
         testOnePhotoIsNotASelection()
         testModifiedClicksBuildASelection()
         testShiftClickIsARangeFromTheAnchor()
