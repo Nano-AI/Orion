@@ -56,7 +56,7 @@ stated hard constraint is `DevelopPipeline.cpp`, now **2,295 lines**.
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3453
+**Suites:** `orion-tests` **569 checks** · `orion-viewport-tests` **3455
 checks** · **33 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
 three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
 plus a preview graph at 1/16 that.
@@ -134,6 +134,64 @@ pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
 
 The M3 cost table above was 3,392 lines down. It is the standing answer to the
 kickoff prompt that keeps arriving, so it is now next to the thing it answers.
+
+## Session 2026-08-01d — the reopen leak was the folder, not the photograph
+
+**Reported: `open` × 300 is flat at +0.8 KB a cycle; `reopen` × 300 grows
+25–30 KB a cycle, monotonic, and resumes at the same slope after the allocator
+hands pages back.** So the leak is in the extra work `reopen` does: read the
+sidecar, restore, upload mattes, sweep orphans.
+
+### ⚠ It is `contentsOfDirectory`, and the rate is set by the folder
+
+`MatteStore.sweep` enumerates the whole folder to find orphan mattes.
+`contentsOfDirectory(at:)` returns **one autoreleased `NSURL` per entry**, each
+with an `NSPathStore2`, a CoreServices `_FileCache` and three `CFString`s
+behind it — **0.83 KB per file in the folder, per call** — and nothing released
+them. Decision #90; the same shape as #86 one layer up, in Swift instead of
+Metal.
+
+**Paired runs, 300 iterations each, RSS polled at 150 ms, robust slope (median
+of ten segment fits, so one allocator release cannot set the number):**
+
+| Loop | Folder | Before | After |
+|---|---|---|---|
+| `open` (control) | 200 files | +1.0 | +1.3 KB/cycle |
+| `reopen` | 2 files | +2.5 | +1.4 KB/cycle |
+| `reopen` | 200 files | **+165.4** | **+1.5** KB/cycle |
+| `reopen`, one radial mask | 200 files | **+162.0** | **+1.6** KB/cycle |
+
+The reopen slope is now the open loop's, at every folder size. **The mask made
+no difference either way** — the doubling in the report is the folder, not the
+component; the original loop ran beside a folder that was filling up with the
+measurement's own files while it ran.
+
+### ⚠ What found it, and what could not
+
+`leaks` reports **0 leaks for 0 bytes**, correctly and uselessly — the blocks
+are reachable from an undrained pool. `heap` twice over a long run named the
+classes (`NSURL`, `NSPathStore2`, `_FileCache`, `CFString`, growing 1:1:1:3),
+and `malloc_history` on one live instance named the line:
+`Scenario.step → MatteStore.sweepAfterLoad → sweep →
+-[NSFileManager contentsOfDirectoryAtURL:...]`. Then the falsifiable step: the
+same loop beside 2 files and beside 200 — +2.5 against +165, linear in the file
+count, which is a directory enumeration and cannot be anything else.
+
+The app is shielded by the run loop, as it was for #86. A batch or a scripted
+loop is not, and neither is a folder with ten thousand photographs in it.
+
+### The check, and the mutation
+
+`testSweepDoesNotHoardTheDirectory` in `orion-viewport-tests`: 400 sweeps of a
+300-file folder in one pool, asserting the process footprint grows under 8 MB.
+It deliberately does not wrap the sweep in a pool of its own — that is the
+caller it is written for. **Mutation: replace `autoreleasepool { }` in
+`MatteStore.sweep` with an immediately-invoked closure — same scoping, no pool
+— and it fails at 97.8 MB, 250.5 KB a sweep,** which is the 0.83 KB per file
+again from the other end.
+
+Gates: 569 engine checks, 3,455 viewport checks (3,453 before), 33 `repro/`
+scenarios, bench exit 0 — all green with the fix in.
 
 ## Session 2026-08-01c — the stroke stopped rebuilding the panel
 
