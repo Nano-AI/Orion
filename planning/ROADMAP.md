@@ -892,6 +892,132 @@ measured before costing. Marked here so the same mistake is at least visible:
 
 ---
 
+## X-Trans — costed, nothing built
+
+`research/demosaic-xtrans.md` settles what this line can and cannot be. **It was
+research only, by design.** No node was written, no `throw` was lifted, no build
+was run and no gate was claimed — and the tree could not have been built anyway,
+since `third_party/slang` was destroyed the same day.
+
+### ⚠ The premise the line was written under is half wrong
+
+The roadmap says "X-Trans support (**Markesteijn**)", and everyone reads that as
+"port Markesteijn to Slang". Two findings kill that reading and replace it.
+
+**1. There is no published description of Markesteijn's algorithm.** Searched:
+dcraw carries the code with an attribution and no derivation; darktable's
+`xtrans.c` and RawTherapee's `xtransdemosaic.cc` are **GPL-3**; the manuals
+describe which variant to pick, not how either works; Fujifilm's patents cover
+the **array**, not the interpolation, and Markesteijn is not Fujifilm; the
+`xtransdemosaicking.blogspot.com` write-up (darktable's Markesteijn+FDC) is an
+*addition to* Markesteijn that calls it as a black box. **The only extant
+description is source code, and the accessible copies are GPL.** Reading one and
+re-typing it in Slang is copying, not implementing from a description, and
+`CLAUDE.md` forbids it. That route is closed and stays closed.
+
+**2. ⚠ The same code also ships under LGPL-2.1 / CDDL-1.0, inside LibRaw.**
+Read out of this machine's installed headers rather than remembered:
+`xtrans_interpolate(int)` at `libraw.h:451` in LibRaw 0.22.2, dual-licensed by
+the COPYRIGHT file, credited to *"Frank Markesteijn's algorithm"* in its own
+source header. The **GPL** interpolators — AMaZE, LMMSE, AFD — live in the
+separate, abandoned `LibRaw-demosaic-pack-GPL2/GPL3` repositories, which
+Homebrew does not build; `xtrans_interpolate` is in the LGPL/CDDL core because
+it came through dcraw's non-RESTRICTED code. **Orion already links `libraw_r`
+dynamically** (`engine/CMakeLists.txt:49-61`), so nothing about the licence
+model changes. `dcraw_process()` is public (`libraw.h:274`) and `user_qual > 2`
+selects Markesteijn 3-pass.
+
+### ⚠ What actually makes it expensive, and it is decision #29
+
+`DevelopPipeline.cpp:1269` states it in a comment written for Bayer: *"White
+balance rewrites the linearize block, which sits at the head of the graph — so
+moving temperature legitimately recomputes everything, including the demosaic.
+That is inherent."* It is inherent because **#29 clips all three channels to a
+common ceiling after white balance and before demosaic**, so RCD never
+interpolates across an unclipped 2.2× red neighbour.
+
+**So a demosaic that leaves the GPU takes the temperature slider with it.**
+That, not the licence and not the memory, is this feature's price.
+
+### The counter-intuitive part: the GPU graph gets *smaller*
+
+Arithmetic from the measured 185 MiB full-resolution `RGBA16Float` node, at a
+26 MP X-Trans frame. Removing `linearize` and the four `rcd:*` nodes and
+uploading a demosaiced `RGBA16Float` source in their place:
+
+| | Nodes | GPU MiB |
+|---|---|---|
+| Remove `linearize` + 4 `rcd:*` | **−5** | −594.1 |
+| Remove the `R16Uint` mosaic source | — | −49.5 |
+| Add the uploaded `RGBA16Float` source | 0 | +198.1 |
+| **Net** | **−5** | **−445.6** |
+
+**168 nodes on an X-Trans frame against 173 on a Bayer one** — a load-immune
+number a bench probe can assert by name, the way `dehaze drag` does.
+
+⚠ **And a constraint that has nothing to do with the demosaic:** every
+full-resolution node scales with pixel count, so the existing 173-node graph at
+7,186 MiB is **~7,700 MiB at 26 MP and ~11,800 MiB at 40 MP** (X-H2 / X-T5)
+before any of this. That is a 40 MP problem, and it arrives with the first Fuji
+file whatever the demosaic is.
+
+### The pieces, in order — and the order is the decision
+
+| # | Piece | Cost |
+|---|---|---|
+| 0 | **The frames, and they are free.** `raw.pixls.us` publishes community raw samples under **CC0** — its own upload wording is *"I hereby release it under the cc0 license into the public domain"* — and actively solicits Fujifilm RAF in **both** uncompressed and compressed forms. Five files: uncompressed and compressed RAF from one body, an X-Trans I (X-Pro1) and an X-Trans IV/V (X-H2, 40 MP), and ⚠ **one Bayer Fujifilm** (X-A or GFX) as the control — without it, `filters == 9` selection is untested and a branch that takes the X-Trans path on every Fuji file passes every X-Trans test | **0 code, 0 nodes.** ~half a session |
+| 1 | **Decode only, and nothing renders.** Lift `RawImage.cpp:165`'s `throw`, carry `imgdata.idata.xtrans[6][6]` / `xtrans_abs[6][6]` and the 6×6 `cblack` through the image struct, and assert the pattern, dimensions and black levels against a real `.RAF`. ⚠ **The session ends with the frame decoded and the pipeline still refusing it** — a decode that half-feeds a Bayer graph is the failure mode this repo has recorded by name | **+0 nodes, +0 MiB.** ~1 session |
+| 2 | ⚠ **DECISION POINT — measure Markesteijn's wall clock.** `dcraw_process` with `user_qual = 1` and `= 3` on a 26 MP and a 40 MP RAF, timed. **This is the number the feature turns on and nobody in this repository has it.** If 3-pass is seconds, X-Trans is an open-time cost and not a slider, and piece 3's answer is forced. **"Too slow, stop here" is a real outcome** | **0 nodes.** ~half a session |
+| 3 | ⚠ **DECISION POINT — white balance. A written argument, not code.** Four options, all in `research/demosaic-xtrans.md` §4.2: (a) demosaic neutral and clip afterwards — **reopens #29 and loses**, and highlight pieces 2–4 all assume the clip happened; (b) temperature re-decodes on X-Trans, honestly and visibly; (c) a cheap GPU demosaic for the preview — **circular**, that is the thing which does not exist licence-clean; (d) re-apply gains as a ratio — **do not**, Markesteijn's direction decisions are not linear and the error would look right. ⚠ **"None of the four" must be allowed to win** | **0 files.** ~half a session |
+| 4 | **The graph branches at its head.** Source becomes `RGBA16Float` on X-Trans; `linearize` and the four `rcd:*` nodes are skipped. ⚠ **Verify the −5 / −445.6 from the inside** rather than trusting the row above, and ⚠ **assert every Bayer number is bit-identical** — 173 nodes, 7,186 MiB, and the M0 gate's exposure path must not move by a texel. ⚠ Also verify what `dcraw_process` with `output_color = 0`, `no_auto_bright = 1`, `gamm = {1,1}` actually leaves in `imgdata.image`; "linear camera RGB" is an assumption here, not a reading | **−5 nodes, −446 MiB** *(arithmetic; piece 4 measures it)*. ~1–2 sessions |
+| 5 | **The two CPU paths that fail silently.** `estimateNoise` samples `row[x]`, `row[x+2]`, `row[x+4]` under a comment that says *"all three are the same color in any 2x2 CFA"* — a stride of 2 crosses colours in a 6×6, so the second difference measures the scene's own R–G–B steps as noise, returns a plausible inflated `a` and `b`, sets `measured = true`, and the denoiser over-smooths. `decimate` builds the preview mosaic in 2×2 units under a comment warning that an off-cell stride "looks like a color-swapped nightmare". ⚠ **Both are tested against a synthetic field with a known answer**, because both are invisible on a real frame | **+0 nodes.** ~1 session |
+| 6 | **The preview graph and the cache rule.** The 1/16 preview decimates the mosaic today, which piece 5 removes on X-Trans; it decimates the demosaiced RGB instead. Markesteijn's output is cached against the frame **and the white-balance state piece 3 chose** — structurally the same concept Core ML denoise piece 6 needs and neither has. ⚠ `unchangedPrefix` (#102) is about parameters not changing, not about a pass being too expensive to re-run | ~1 session |
+
+**Total: ~5–6 sessions, through two decision points either of which may say
+stop.** ⚠ **Do not start at piece 4.** Pieces 0, 1 and 5 are worth doing whether
+or not X-Trans ever ships — piece 0 gives the repository its first non-Sony,
+non-Bayer fixtures, and piece 5 fixes two CPU bugs that are latent on Bayer
+today only because the assumption happens to hold.
+
+⚠ **And do not start any of it before `DevelopPipeline.cpp` is split.** It is
+2,549 lines against a stated ceiling of 1,000, it is the largest standing
+violation of a hard constraint, and this feature branches the **head** of that
+graph.
+
+### ⚠ Which of these numbers are guesses
+
+| Number | Status |
+|---|---|
+| `xtrans_interpolate` in LibRaw 0.22.2 under LGPL-2.1/CDDL-1.0; `LIBRAW_XTRANS == 9`; `dcraw_process` public; `user_qual > 2` → 3-pass; the CC0 wording at raw.pixls.us | ✅ **Read out of the installed headers, the COPYRIGHT file, LibRaw's source and the site itself** |
+| Every breakage in piece 1/4/5's description | ✅ **Read out of Orion's own source**, with file and line |
+| 185 MiB a full-res `RGBA16Float`; 173 nodes / 7,186 MiB | ✅ **Measured**, already in `STATUS.md` |
+| −5 nodes / −445.6 MiB; ~7,700 and ~11,800 MiB at 26 and 40 MP | ⚠ **Arithmetic** from the row above, assuming proportionality. Piece 4 verifies |
+| 26 MP and 40 MP sensor dimensions | ⚠ **Manufacturer spec.** There is no X-Trans file in this repository to read them off |
+| **Markesteijn's wall clock at any resolution** | ⚠⚠ **UNKNOWN, and it decides the feature.** Piece 2 exists for it |
+| Every session count in the table; the LSLCD node/memory table in the research file | ⚠ **Guesses** |
+| Whether Markesteijn is actually better than the published alternative | ⚠ **Nobody has measured it.** Rafinazari & Dubois (ICIP 2014; uOttawa thesis 2017, opened and read) is the only peer-reviewed X-Trans method, and its own chapter opens by naming the literature gap. It reports 36.50 dB against Bayer LSLCD's 39.8 on simulated Kodak mosaics — ⚠ which are gamma-corrected and white-balanced, i.e. **not Orion's domain**, the same class of error decision #111 found one milestone earlier |
+
+### ⚠ What must not be done along the way
+
+- **Porting `xtrans.c` from darktable or RawTherapee.** GPL-3, and there is no
+  published description to legitimise a reimplementation. This is the one thing
+  this whole write-up exists to rule out.
+- **Assuming LibRaw's demosaics are GPL.** The GPL ones are in the separate
+  demosaic packs. The X-Trans one is not, and the difference is the feature.
+- **Re-applying white balance as a ratio after the demosaic** (option d). The
+  error would be invisible and unbounded.
+- **Deleting `RawImage.cpp:165`'s `throw` before piece 4.** It is a *good* error
+  message — it names the sensor, the reason and where the work is tracked — and
+  every CPU path behind it fails silently rather than loudly.
+- **Costing this from the node table above without running piece 2.**
+  `research/highlight-reconstruction.md`'s estimate was 16× out for exactly that,
+  and it was wrong in one word.
+- **Building it at all, if piece 2 or 3 says stop.** Declining X-Trans with the
+  reason written down is a first-class outcome and is cheaper than a
+  half-threaded one.
+
+---
+
 ## Where things actually stand
 
 **`planning/STATUS.md`.** There is no second copy here on purpose: this file
