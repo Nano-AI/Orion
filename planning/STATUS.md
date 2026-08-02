@@ -227,6 +227,49 @@ refines it, so a kill costs the last increment rather than the session** — are
 in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
 first wave is merged and the second was relaunched and is the table below.
 
+### ✅ 2026-08-02 — the dead function and the comments that lost their subject (#128)
+
+The other half of what the splitting wave wrote down and did not fix. #122 named
+two defects in `DevelopPanels`; both are fixed, and the sweep they invited found
+**four more of the second kind and one comment that was simply wrong**.
+
+| What | Verdict |
+|---|---|
+| `maskKindCell` | **Deleted.** One occurrence in the whole tree — its own declaration. `grep -rn maskKindCell` over everything but `.git`, `build` and `third_party` returns the decl plus two mentions in `STATUS.md`/`DECISIONS.md` |
+| The doc above it | **Moved and rewritten.** It opens *"Masks — 'local' adjustments, on a tab of their own"*, so it is `maskPanel`'s; it sat where `maskPanel` used to be. Its last paragraph claimed *"the picker is a grid now"*, which stopped being true when the grid became `addMenu` — rewritten rather than relocated intact |
+| `DevelopPanels.swift` → `OrionApp.swift` | **Rewritten.** Sent readers to `OrionApp.swift` for `section`, `slider` and the tab bar; they are in `OrionApp+Tools.swift` and `OrionApp+Chrome.swift` (#121) |
+| `OrionApp+Tools.swift`, `OrionApp.swift` ×2 | **Rewritten.** All three still called `DevelopPanels.swift` the home of the panels. It holds one button (#122) |
+| `Engine.swift` | **Moved.** *"Names the control being changed"* documents `edit(_:_:)` and sat on `log`, which had a doc of its own directly beneath it |
+| `PhotoIndex.swift` | **Moved.** `refreshMarks`'s whole doc — stat, read, stat again — sat on the `marksReadWindow` test hook |
+| `Screenshot.swift` | **Split three ways.** `measure`'s doc, `regionStats`'s doc and `Surface`'s own were one block on `enum Surface` |
+| `MatteStore.swift` | **Split three ways.** `referenced`'s one-liner and the forty-line sweep policy both sat on `SidecarState`, which `a76ebfb` inserted above them. `git show` of the parent commit confirms the original attachment of each |
+| `LocalRefusals` / `PipelineOrder` "kept and still tested" | **Corrected, not deleted.** Both views are unreferenced and deliberately so — an in-code note says restoring either is one line. Nothing tests them; what is tested is `AdjustmentCatalogue.refusedLocally`, the table they generate from |
+
+⚠ **Five more unreferenced declarations found and left, on purpose.**
+`removeSpot(_:)`, `jumpHistory(to:)`, `clearPlaceholder()`, `moveCrop(dx:dy:)`
+and `allSyncableKeys` each have exactly one occurrence in the tree. All five are
+the *named half of a pair whose other half ships* — `removeLastSpot`,
+`undo`/`redo`, `showPlaceholder`, `setAspect`, `keys(for:)` — so each reads as a
+feature that was never wired rather than a leftover, and `removeSpot`'s own doc
+says which one: *"what a selected spot and a Delete key mean"*, and no spot
+Delete handler exists. Deleting something that turns out to be used is worse
+than leaving something dead, so they are listed here and left.
+
+⚠ **How they were found, so the next sweep is cheaper.** Two scripts, both in
+the session scratchpad rather than the repo. Dead declarations: extract every
+`func`/`var`/`struct`/`enum` name in `app/`, strip comments from every code file
+in the tree, count whole-word hits — one hit means the declaration only. Lost
+comments: inside a `///` block, a **short** line ending in `.` followed
+immediately by another `///` line means a paragraph ended early, which is what a
+second doc pasted onto the first looks like. Fifteen candidates, nine of them
+one subject written in two headlines and fine, six real.
+
+Gates 800 / 3708 / 40 of 40 / bench 0. ⚠ Three of those are blind to Swift, so
+`--scene detail` and `--scene detail-tail` were rendered from the pre-change
+binary **twice first** — byte-identical, so the oracle is an oracle — and both
+are byte-identical after the change by `cmp`. Which is the point: the only
+executable line deleted was one nothing could reach.
+
 ### ✅ 2026-08-02 — three holes in the interface's coverage, and they were one hole (#125)
 
 Two splits found, by mutation, that shipped UI could be deleted with every check
