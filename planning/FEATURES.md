@@ -25,7 +25,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Demosaic: bilinear for thumbs/zoomed-out | M0 | |
 | Demosaic: dual (RCD+VNG4) quality option | M4 | |
 | Highlight recon: clip + inpaint-opposed | M1 | Cheap, stable default |
-| Highlight recon: region-scoped (Dirichlet fill) | M3 | Quality option for blown skies. ⚠ Renamed from "segmentation-based" — decision #96: a Dirichlet solve is already region-scoped, so there is no component pass. Solver built 2026-08-01, **not wired**; +25 nodes and ~516 MB costed in ROADMAP |
+| Highlight recon: region-scoped (Dirichlet fill) | M3 | Quality option for blown skies. ⚠ Renamed from "segmentation-based" — decision #99: a Dirichlet solve is already region-scoped, so there is no component pass. Solver built 2026-08-01, **not wired**; +25 nodes and ~516 MB costed in ROADMAP |
 
 ## 3. Global Adjustments
 | Feature | Status | Notes |
@@ -108,7 +108,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | Non-destructive op stack → sidecar | M0 | Foundational |
 | Undo/redo + history panel | M1 | |
-| Snapshots / versions | M4 | |
+| Snapshots / versions | M4 | ✅ **Built 2026-08-01**, decision #99. The whole `DevelopState` under a name, in a sibling `PHOTO.orion-snapshots.json` — not the sidecar, which autosave rewrites 900 ms after any slider moves. Restoring keeps the working edit first, as one automatic version, because undo dies with the process. ⚠ Mattes a version names are **pinned against the sweep**; one it can no longer find is named on the row before it is pressed |
 
 ## 13. Export
 | Feature | Status | Notes |

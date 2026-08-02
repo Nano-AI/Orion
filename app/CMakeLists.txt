@@ -21,6 +21,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExportDriver.swift
@@ -121,6 +122,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
@@ -146,6 +148,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MatteGeom.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Snapshot.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Selection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Spot.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Catalogue.swift
@@ -158,6 +161,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
@@ -183,6 +187,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MatteGeom.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Snapshot.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Selection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Spot.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Catalogue.swift

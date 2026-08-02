@@ -110,6 +110,26 @@ the warm pass did not hit, or when any of the three disagree about a field.
 updated:` lines, two numbered queues disagreeing about whether the export panel
 was done, and two suite counts differing by 83 viewport checks. Reconciled
 2026-08-01 against a run of all four gates rather than against either side.
+**Suites:** `orion-tests` **586 checks** · `orion-viewport-tests` **3620
+checks** · **36 `repro/` scenarios** · all 0 failures. Bench exits 0 on all
+three sample frames: **149 nodes, 6971 MiB**, M0 gate **11.39–14.13 ms p95** —
+plus a preview graph at 1/16 that.
+
+⚠ **The M0 gate is not a reliable pass/fail on this machine, and it cost four
+sessions and three agents hours on 2026-08-01.** Twelve consecutive runs of one
+unchanged binary, nothing else on the machine (loadavg 2.9, `orion-bench` the
+only process above 6% CPU):
+
+    min 8.54 … 16.94   median 8.65 … 19.95   p95 9.70 … 31.30
+
+⚠ **The whole distribution shifts, not the tail.** `min` alone varies two-fold,
+so this is not a few stalled frames inside a run — the GPU is in a different
+clock state from one run to the next. A p95 threshold cannot separate that from
+a regression, and every red it produced tonight was environmental.
+
+**Until that is fixed, treat the gate as advisory**: on a red, re-run and report
+the spread. The load-immune checks are the ones to trust — node counts, which
+`exposure drag, lens on` and `dehaze drag` both assert by name.
 
 ⚠ **That p95 is only meaningful next to one taken minutes away from it.** The
 same binary measured 8.97, 16.75, 44.53 and 40.69 ms on this machine within an
@@ -137,6 +157,7 @@ Small, named, and none of them blocking the next story:
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **101 commits carry `Co-Authored-By` / `Claude-Session` trailers.** Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history | whole history |
 | **The 1000-line rule is broken six ways**, all in product code. ⚠ Recounted 2026-08-01, every figure carried here was stale: `DevelopPipeline.cpp` **2,317**, `Engine.swift` 2,118, `OrionApp.swift` **1,445**, `bench/main.cpp` **1,623**, `DevelopPanels.swift` **1,152**, `Scenario.swift` **1,250**. The bench grew ~200 lines on 2026-08-01 profiling the brush on both graphs, which is the largest single jump on this list and is tooling rather than product. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
+| **The 1000-line rule is broken six ways**, all in product code: `DevelopPipeline.cpp` **2,295**, `Engine.swift` 2,118, `OrionApp.swift` 1,433, `bench/main.cpp` 1,313, `DevelopPanels.swift` **1,336**, `Scenario.swift` **1,250**. ⚠ The two test files (7,656 and 3,297) were split on 2026-07-31 — but `Scenario.swift` crossed the line in the same run of sessions, so the count went from seven to six rather than to five. Splitting product code is riskier than splitting tests and wants its own session. ⚠ Recounted 2026-07-31: `DevelopPipeline.cpp` and `bench/main.cpp` each grew again this session, and the `DevelopPanels.swift` figure carried here had been 30 lines stale | whole tree |
 | **Nothing asserts that a gesture arms.** `Scenario` drives `Engine` and `CanvasLayout`, never a SwiftUI view, so the six `beginInteraction` calls are reachable only by reading them. They were found by `grep`, not by a red test. `repro/gesture-preview-agrees.txt` pins the *consequence* — the settled picture is identical armed or not — which is the strongest thing reachable from here | `Scenario.swift` |
 | **The grading wheel's arming is unmeasured.** The wheels write three-component tuples and `Scenario`'s control table is scalar, so nothing can drive one. The only control of the six with no number against it | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
@@ -289,6 +310,7 @@ source you claim to have read. Decision #97.
 
 595 engine checks (+9), 3561 viewport, 34 `repro/` scenarios, bench exit 0,
 M0 gate 8.92 ms p95.
+
 ## Session 2026-08-01h — the brush bench measured a stroke nobody makes
 
 **Reported: painting is linear in accumulated dabs (0.2 ms an event at 49, 1.5
@@ -430,7 +452,118 @@ again from the other end.
 
 Gates: 569 engine checks, 3,455 viewport checks (3,453 before), 33 `repro/`
 scenarios, bench exit 0 — all green with the fix in.
-## Session 2026-08-01f — the folder index, and the two stamps it needs
+
+## Session 2026-08-01f — snapshots, and the matte that would have vanished
+
+**M4's last unbuilt workflow item.** A photographer saves the edit under a name,
+keeps working, and comes back to it. Neither undo (`EditHistory`: fifty deep,
+coalescing, dies with the process) nor a preset (a **patch** carried *between*
+photographs, deliberately excluding the crop, the dust and the masks) — a
+snapshot is this photograph's whole `DevelopState` under a name. Decision #99.
+
+### Where they live, and the argument that is *not* #79's
+
+A sibling `PHOTO.orion-snapshots.json`. ⚠ #79's reason for refusing base64 in
+the XMP — megabytes of text per autosave settle — **does not transfer**: a state
+is a few kilobytes. Two reasons that do:
+
+- **Autosave rewrites the sidecar 900 ms after any slider moves**, through
+  `Sidecar.merge`, which is a read-modify-write over a hand-rolled string matcher
+  rather than an XML parser. Every version kept would be decoded, re-encoded,
+  re-escaped and rewritten on every settle, and a slider drag would get more
+  expensive the more versions the photograph had.
+- **Blast radius.** One bad merge takes the working edit *and* every version. A
+  snapshot's whole job is to be the copy that survives when the working state
+  does not.
+
+Application Support was rejected on #79's own grounds: a path-keyed cache dies
+when the photograph moves, and this is storage.
+
+### ⚠ The matte, which is the part that would have failed silently
+
+A `DevelopState` is not the whole edit. A raster mask is a sibling PNG named by
+id (#79), and `MatteStore.sweep` deletes every matte the **sidecar** does not
+reference. So the obvious version feature has a hole nothing on screen can show:
+save a version with a Subject mask → delete the row → reopen → the sweep
+collects the file → restore → the row is back, the raster is gone, **the mask
+covers nothing**, and the picture changes with no error anywhere.
+
+Fixed with a **pin, not a copy**, and it can be a pin only because matte files
+are already immutable (#79 mints a fresh id and a fresh file on every
+regeneration) — so an id inside a version always names the pixels it named when
+the version was taken. `MatteStore.sweepAfterLoad` now keeps the union of what
+the sidecar references and what every version does, computed in that one
+function because #87's lesson is that a delete policy written twice stops
+matching.
+
+⚠ **The version file has #87's three states too.** Absent is `[]`, unreadable is
+`nil`, and unreadable means both *collect no mattes at all* and *write nothing
+over it*. Both halves are pinned by tests that go red when either is conflated.
+
+What a pin cannot cover — a photograph copied without its siblings — is
+**reported before the version is pressed**: the row names the selections it can
+no longer find, in the amber the app uses for "look at this".
+
+### ⚠ Restoring does not trap anybody, in two different timescales
+
+`history.record`, not `history.reset` — a restore is one ⌘Z, like a preset.
+Resetting would make it the one act in the program that cannot be taken back,
+and it is the act most likely to have been a mistake. That covers the session.
+For the quit that undo does not survive, `SnapshotStore.restore` keeps the
+working edit as a single **automatic** version first, replaced rather than piled
+up, and renaming it promotes it to an ordinary one. The order lives in one
+function rather than at each call site, with the engine half handed in as a
+closure — the seam `Autosave` and `BatchExport` already use, and what lets it be
+pinned without an `Engine`.
+
+### ⚠ No eighth tool tab, and that was measured rather than argued
+
+Versions wanted a tab: they belong to one photograph where a preset belongs to
+none. Seven plates divide 364 points into 48 each; eight leaves 42, and VERSIONS
+needs about 51 at the bar's 9-point type. Rendered with the tab in place
+(`--scene versions`), the bar came back reading **PRESE… VERSI…** — the new tab
+cost the old one its name as well as its own. Versions sit at the top of the
+Presets tab instead, first because the tab's other four sections are all
+*between* photographs and this is the only one about the photograph in hand.
+
+### What was checked, and the mutation for each
+
+`orion-viewport-tests` **3561 → 3620** — 59 checks in twelve new functions in
+`ViewportTests+Snapshot.swift` — plus two scenarios. Every one was run against a
+mutant:
+
+| Check | Mutation | Result |
+|---|---|---|
+| a matte a saved version names survives the sweep | drop `.union(pinned)` | 1 red |
+| an unreadable version file collects nothing | `pinnedMattes` returns `[]` | 2 red |
+| the working edit is kept | drop `keepWorkingEdit` | 3 red |
+| unreadable is not overwritten | `read` returns `[]` on a decode failure | 6 red |
+| renaming the automatic version keeps it | leave `automatic` set | 3 red |
+| the ceiling refuses rather than evicts | evict the oldest | 2 red |
+| a missing matte is named | `missingMattes` returns `[]` | 2 red |
+| `snapshot-keeps-its-matte.txt` | drop `.union(pinned)` | **7 red**, and the failure printed is exactly the silent one: `leftAfter == leftBare` |
+| `snapshot-keeps-its-matte.txt` | `Engine.restore(snapshot:)` skips `restoreMattes` | 6 red |
+| `snapshot-survives-a-reopen.txt` | `history.reset` instead of `history.record` | 1 red |
+| `snapshot-survives-a-reopen.txt` | drop `keepWorkingEdit` | 2 red |
+
+⚠ **Two drafts of these checks could not fail, and both were caught before the
+commit.** The date round trip was first written through a pair of encoders the
+*test file* built, which pins ISO 8601 against ISO 8601 and stays green with the
+store's two ends disagreeing — the one failure worth checking. And
+`snapshot count 1` passed on the first run and failed on the second, because a
+version file outlives the run; `snapshot clear` is now the first line of both
+scenarios. Ninth and tenth instances of the class `repro/README.md` records.
+
+### Not done
+
+Nothing deferred from this story. Two things it deliberately does not do: a
+version does **not** copy the matte files it names (it pins them, which is
+correct only as long as #79's immutability holds — a future in-place matte
+rewrite would have to revisit this), and there is no compare-two-versions view.
+
+---
+
+## Session 2026-08-01e — the folder index, and the two stamps it needs
 
 M1's `Epic: Cull` has named a SQLite index since the first week and nothing had
 ever been built. Every folder open re-opened every raw through LibRaw,
@@ -514,7 +647,8 @@ discard at the folder instead of the `.sqlite3` file fails 8.
 
 `import SQLite3` from the macOS SDK. It is already on every Mac, it is public
 domain, and the alternative was a package for something the platform ships.
-## Session 2026-08-01e — dehaze redid the dark channel on every tick
+
+## Session 2026-08-01d — dehaze redid the dark channel on every tick
 
 **Queue item 1, root-caused and fixed.** `DevelopPipeline.cpp:1325` pushed the
 whole dehaze parameter set whenever the slider moved. `Pipeline::setParams`
@@ -587,114 +721,3 @@ No bisect was needed and none was run.
 9.10 ms on the same binary minutes later. It gates the *exposure* path, which
 this change does not touch (3 nodes either way). Third session in a row this
 has cost time; see `2026-07-31l`.
-## Session 2026-08-01d — the export panel's last three controls
-
-**Brief: the panel has four of its seven controls, add the missing three.** Two
-of the three premises were wrong, and finding that out was most of the value.
-
-### ⚠ Metadata policy was already built, wired and tested
-
-Keep all / Strip location / Strip everything existed end to end — panel row,
-`OrionMetadata`, `ImageWriter`, and three assertions in `tests_io.cpp`. Nothing
-to build.
-
-**But it had a hole, and it was the kind that matters.** GPS was dropped and the
-IPTC dictionary was copied **whole** — so city, sub-location, province and
-country survived a control whose entire purpose is that they should not. The
-landing page advertises this feature by name ("Export with your location
-stripped by default"), so the claim was false for any photograph that had been
-catalogued.
-
-It survived because the sample frames have no GPS — the bodies have no receiver
-— so the one test aimed at this writes its own stand-in file, and that stand-in
-carried coordinates and nothing else. **A fixture is a claim about what the
-world looks like, and this one was narrower than the world.** The stand-in now
-carries a city and a sub-location too. Decision #92.
-
-### ⚠ 16-bit was not "in the engine and not offered" — it was the only mode
-
-`Engine::exportImage` called `setWideOutput(true)` unconditionally. Every file
-Orion had ever written was sixteen bits per component, so every PNG was about
-twice the size it needed to be with nothing in the interface saying so, and the
-ROADMAP's "blocked on the pipeline tail" note had been stale for a long time.
-
-**The work was the narrow direction**, and it is not "the same pixels, rounded":
-`ops/dither_ops.slang` puts a sub-LSB offset on whichever node writes the eight
-bits, and CoreGraphics quantising a smooth 16-bit sky afterwards has no
-equivalent. So the depth the file will hold now picks the graph, an 8-bit export
-is byte-for-byte what the screen shows, and the writer's quantisation is
-deliberately undithered because the graph already did it. Decision #90.
-
-Two traps inside that. `readOutput16` assumed half float and would have read a
-byte texture as noise. And the panel has to send `effectiveDepth`, not `depth` —
-leaving the control at 16 and switching to JPEG would render the *undithered*
-wide graph only for ImageIO to round it to eight anyway, which is banding in a
-smooth sky and looks fine in a thumbnail.
-
-### Output sharpening — the placement is sourced, the numbers are not, and it says so
-
-Fraser's multipass model (capture / creative / output; Fraser & Schewe, 2nd ed.,
-Peachpit, 2009) puts this pass **after** the resize, at final size, because
-resampling is what softened the image. The resize is CoreGraphics', inside
-`ImageWriter`, so the develop graph is the one place this pass cannot go — it is
-~60 lines beside the resize, luminance-only on Rec.709 so an edge cannot pick up
-a color fringe.
-
-**The two amounts are mine and are in `UNSOURCED.md` §2** rather than dressed up
-as derived. What is tested is the invariant a photographer would notice: None
-does nothing at all, Screen overshoots a step edge, Print overshoots more,
-brightness does not move, and all three channels move together. Replacing the
-constants with measured ones needs no test rewritten. Decision #91.
-
-### Every check was mutation-tested, and two did not bite
-
-Eleven mutations, each built and run:
-
-| Mutation | Caught by |
-|---|---|
-| `quantiseToEight` makes a 16bpc context | `orion-tests` — "a PNG asked for eight bits is that" (both plain and resized) |
-| `toBitDepth` always returns Sixteen | `repro` — `depth8 == 8` |
-| `effectiveDepth` returns `depth` | `orion-viewport-tests` — "JPEG is eight bits however the control is set" |
-| Screen and Print constants swapped | `orion-tests` — "Print overshoots more than Screen" |
-| `toSharpen` maps Screen to None | `repro` — `sharpNone < sharpScreen` |
-| None sharpens, guard forced on | `orion-tests` — "None leaves the edge exactly as it was" |
-| delta applied to green only | `orion-tests` — "moves all three channels together" |
-| delta replaced by a constant | `orion-tests` — "does not move the overall brightness" |
-| IPTC strip removed | `orion-tests` — "strip location removes the IPTC place name" |
-| metadata policy ignored | `repro` — `metaNoneExif == 0` |
-
-⚠ **Two mutations came back green, and both were my fault rather than the
-product's.** "None sharpens" was inert because two independent guards stop it,
-so it needed a two-part mutation to land. And "sharpen per channel" was green
-against a **vacuous assertion**: the test edge was neutral grey, and on grey a
-per-channel unsharp mask and a luminance-only one compute the identical answer.
-The fixture was rewritten so the edge exists in **green alone** — red and blue
-flat across the frame — which is the only shape that can tell the two apart.
-That check now fails when the delta goes to one channel.
-
-### What was built
-
-- `app/ExportSettings.swift` — the model moved out of `ExportPanel.swift`, which
-  imports SwiftUI. CLAUDE.md's rule that a view model has zero SwiftUI types in
-  it was a promise rather than a fact while the two shared a file; the split
-  makes the compiler hold it, and it is why the model is now testable in
-  `orion-viewport-tests` at all. `ExportPanel.swift` went 436 → 275 lines.
-- `app/ExportProbe.swift` — reads a written file back: depth, GPS, IPTC place,
-  camera EXIF, acutance. All five properties exist because the control they
-  serve fails invisibly.
-- `probe` and `export key=value` in the scenario grammar, and
-  `repro/export-depth-and-sharpening.txt` — 11 checks against files the real
-  view models wrote.
-
-### Not done, deliberately
-
-- **HEIF.** In the ROADMAP's format table, not in the control table; it is a
-  format question and a separate story.
-- **A dither for the writer's own 16→8 quantisation.** Not needed while the
-  graph picks the narrow path for 8-bit exports, and a second dither on top of
-  the graph's would add noise twice. It is a landmine only if someone hands
-  `writeImage` wide data and asks for eight bits, which is stated in the file.
-- **Batch export's dropped settings.** Fixed in passing — it was sending
-  neither the color space nor the new fields, so a batch wrote sRGB however the
-  panel was set. Worth a mention because it is the same bug class the new
-  controls would have walked into.

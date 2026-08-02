@@ -164,7 +164,14 @@ Two things turned up while finishing it:
 - ✅ Batch export — 2026-07-30. One engine reused across the list (466 ms a
   photo, peak RSS flat); each photo'+chr(39)+'s own sidecar restored before it is
   exported; nothing overwritten and no two sources colliding
-- Snapshots/versions, perspective correction. ✅ **Film grain shipped 2026-08-01** (#81, #82)
+- ✅ **Snapshots / versions** — 2026-08-01, decision #99. This photograph's whole
+  state under a name, in a sibling `PHOTO.orion-snapshots.json` rather than in
+  the sidecar autosave rewrites every 900 ms. ⚠ The hard half was the mattes: a
+  raster mask is a file the sweep deletes when the *sidecar* stops naming it, so
+  a version could restore a mask covering nothing. Pinned rather than copied,
+  because matte files are already immutable (#79), and what a pin cannot cover
+  is reported on the row before it is pressed
+- Perspective correction. ✅ **Film grain shipped 2026-08-01** (#81, #82)
 
 ---
 

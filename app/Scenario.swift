@@ -85,6 +85,21 @@ import SwiftUI
 ///     targeted <x,y> <delta>            pick, then drag, which is what applies it
 ///     auto                              the Auto button
 ///     preset <name>                     apply a built-in look by name
+///     snapshot save <name>              save this photo's edit as a version
+///     snapshot restore <name>           put a version back, through the same
+///                                       `SnapshotStore.restore` the panel
+///                                       calls — so the working edit is kept
+///                                       first, as the panel's is
+///     snapshot rename <name> <new>      rename one; renaming the automatic
+///                                       version is what keeps it
+///     snapshot delete <name>
+///     snapshot count <n>                assert how many versions exist, which
+///                                       is how the automatic slot is pinned
+///     snapshot clear                    delete this photo's version file, so a
+///                                       scenario that counts starts from a
+///                                       known state on every run
+///     snapshot missing <name> <n>       assert how many of a version's mattes
+///                                       are no longer beside the photograph
 ///     compare <split>                   1 = off, lower reveals the original
 ///     undo / redo
 ///     measure <x,y,w,h> <name> [where]  record a value under a name.
@@ -204,6 +219,12 @@ enum Scenario {
     /// photograph, so the verbs that make one need to know which.
     private static var photo: URL?
 
+    /// This photograph's saved versions, held across steps exactly as the
+    /// editor holds one across a session — a fresh store per verb would read
+    /// the file back each time and so could never show a stale panel, which is
+    /// one of the things a scenario is here to be able to see.
+    private static let snapshots = SnapshotStore()
+
     /// Writes the matte down and records the reference on the selected row —
     /// exactly what `findMatte` does when the panel runs a model.
     ///
@@ -238,6 +259,7 @@ enum Scenario {
             guard let p = args.first else { throw Bad(what: "open needs a path") }
             photo = URL(fileURLWithPath: p)
             try engine.open(path: p)
+            snapshots.open(photo: photo)
 
         case "reopen":
             // Closes and opens the photograph again, through the same steps
@@ -256,6 +278,7 @@ enum Scenario {
             }
             engine.restore(encoded: saved)
             engine.restoreMattes(photo: p)
+            snapshots.open(photo: p)
             MatteStore.sweepAfterLoad(photo: p, parsed: engine.maskComponents)
 
         case "rotate":
@@ -623,6 +646,96 @@ enum Scenario {
             }
             engine.apply(preset: p)
             say("  applied preset \(p.name) (\(p.groups.count) groups)\n")
+
+        case "snapshot":
+            // Saved versions, through the same `SnapshotStore` the panel holds.
+            //
+            // ⚠ `restore` goes through `SnapshotStore.restore` rather than
+            // calling `Engine.restore(snapshot:)` directly, because the working
+            // edit being kept first is part of what a restore *is* — a runner
+            // that skipped it would be exercising the half that cannot lose
+            // anybody's work, which is the same gap the `crop` verb had when it
+            // skipped `commitCropEdit`.
+            guard let sub = args.first else {
+                throw Bad(what: "snapshot takes save, restore, rename, delete, "
+                              + "count or missing")
+            }
+            guard let p = photo else { throw Bad(what: "snapshot needs an open photo") }
+
+            // By prefix, as the `preset` verb matches: a scenario splits on
+            // spaces and the automatic version's name has two of them.
+            func named(_ i: Int) throws -> Snapshot {
+                guard i < args.count else { throw Bad(what: "snapshot \(sub) needs a name") }
+                guard let s = snapshots.snapshots.first(where: {
+                    $0.name.lowercased().hasPrefix(args[i].lowercased())
+                }) else {
+                    throw Bad(what: "no version named \(args[i])")
+                }
+                return s
+            }
+
+            switch sub {
+            case "save":
+                guard args.count >= 2 else { throw Bad(what: "snapshot save needs a name") }
+                let s = try snapshots.save(name: args[1], state: engine.state)
+                say("  saved version \(s.name)\n")
+
+            case "restore":
+                let s = try named(1)
+                snapshots.restore(s, working: engine.state) {
+                    engine.restore(snapshot: $0, photo: p)
+                }
+                let gone = SnapshotStore.missingMattes(s, photo: p)
+                say("  restored version \(s.name)"
+                  + (gone.isEmpty ? "\n" : " — \(gone.count) missing: "
+                                          + gone.joined(separator: ", ") + "\n"))
+
+            case "rename":
+                let s = try named(1)
+                guard args.count >= 3 else { throw Bad(what: "snapshot rename needs a new name") }
+                try snapshots.rename(s.id, to: args[2])
+
+            case "delete":
+                try snapshots.remove(try named(1).id)
+
+            case "clear":
+                // ⚠ Scenario hygiene, and it is not optional. A version file
+                // lives beside the photograph and outlives the run, so a
+                // scenario that asserts a *count* without this passes once and
+                // fails on the second run — a check whose answer depends on
+                // what was run before it is not a check.
+                try? FileManager.default.removeItem(at: SnapshotStore.url(photo: p))
+                snapshots.open(photo: p)
+
+            case "count":
+                let want = Int(try number(1))
+                let got = snapshots.snapshots.count
+                checks += 1
+                if got == want {
+                    say("  ok    \(got) versions\n")
+                } else {
+                    failures += 1
+                    say("  FAIL  \(got) versions, wanted \(want) — "
+                      + snapshots.snapshots.map(\.name).joined(separator: ", ") + "\n")
+                }
+
+            case "missing":
+                let s = try named(1)
+                let want = Int(try number(2))
+                let got = SnapshotStore.missingMattes(s, photo: p).count
+                checks += 1
+                if got == want {
+                    say("  ok    version \(s.name) is missing \(got) selections\n")
+                } else {
+                    failures += 1
+                    say("  FAIL  version \(s.name) is missing \(got) selections, "
+                      + "wanted \(want)\n")
+                }
+
+            default:
+                throw Bad(what: "snapshot takes save, restore, rename, delete, "
+                              + "count or missing, got \(sub)")
+            }
 
         case "save":
             // Writes the current state to the photo's sidecar, which is what

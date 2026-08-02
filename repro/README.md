@@ -34,6 +34,8 @@ miss the view-model layer, which is where these failures are.
 | `dehaze-reaches-the-picture.txt` | Passes — ⚠ closes the gap where dehaze could be **deleted** from the product and all three suites plus the bench stayed green |
 | `auto-applies-every-field.txt` | Passes — ⚠ Auto writes five fields and `undo-after-auto.txt` caught **none** of the five being dropped |
 | `export-depth-and-sharpening.txt` | Passes — the three export controls that fail invisibly. ⚠ Its metadata half is one-sided by necessity: the sample frames have no GPS, so location itself is asserted in `orion-tests` against a stand-in file |
+| `snapshot-survives-a-reopen.txt` | Passes — a saved version survives a reopen, restores every part of the edit including the crop and the dust, and is one ⌘Z away from the edit it replaced. ⚠ Its dust check has a *bare* reading taken before the spot exists, because an equality between two readings of a spot that never moved a pixel is green either way |
+| `snapshot-keeps-its-matte.txt` | Passes — fixed: the matte sweep deletes what the sidecar does not name, so a version saved with a Subject mask restored a mask **covering nothing**. ⚠ The check is `snapshot missing … 0` plus the three bands against a bare baseline; removing `.union(pinned)` from `MatteStore.sweepAfterLoad` prints seven failures and the exact silent picture-change |
 
 ## The surfaces a scenario can measure
 
@@ -131,6 +133,13 @@ was the session log, which dated the photo open against the process start; what
 prevents it now is `testBindingCount`, which asks Metal what the *compiled*
 kernel needs. When a class of bug is invisible to a suite by construction, the
 fix is an assertion at the boundary, not more coverage inside it.
+
+⚠️ **A scenario that counts must start from a known state.** A version file lives
+beside the photograph and outlives the run, so `snapshot count 1` passed on the
+first run of `snapshot-survives-a-reopen.txt` and failed on the second — and it
+failed *loudly*, which is the only reason it was not shipped. `snapshot clear` is
+the first line of both version scenarios for that reason. A check whose answer
+depends on what was run before it is not a check.
 
 ## What a scenario still cannot see
 

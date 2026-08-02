@@ -1,0 +1,84 @@
+# A saved version keeps the raster mask it was saved with — decision #96.
+#
+# ⚠ **This is the failure that made snapshots more than a struct and a file.**
+# A `DevelopState` is not the whole edit: a raster mask is a sibling PNG named
+# by id (#79), and `MatteStore.sweep` deletes every matte the *sidecar* does not
+# reference. So the obvious version feature has a hole in it that nothing on
+# screen can show:
+#
+#   save a version with a Subject mask → take the mask off → reopen the
+#   photograph → the sweep collects a matte nothing references any more →
+#   restore the version → the mask row is back, the raster is gone, the mask
+#   covers nothing, and the picture changes with no error anywhere.
+#
+# The fix is a pin, not a copy, and the reason it can be a pin is that matte
+# files are already immutable: regenerating mints a fresh id and a fresh file
+# (#79), so an id held in a version always names the pixels it named when the
+# version was taken. `MatteStore.sweepAfterLoad` keeps the union of what the
+# sidecar references and what every version references.
+#
+# ⚠ The fixture is the **ramp**, for the reason `matte-survives-a-reopen.txt`
+# gives: a matte of nothing but 0 and 1 survives a wrong color space, a wrong
+# bit depth and a wrong byte order, because black and white land on black and
+# white however the curve between them is mangled. Only the mid-values can tell
+# whether it is the same matte or merely a matte.
+
+open samples/_PIC8220.ARW
+
+# Start from a known state: a version file outlives the run, and a check whose
+# answer depends on what was run before it is not a check.
+snapshot clear
+
+set exposure 2.6
+
+# ⚠ The unmasked baseline, taken first. The three bands differ from each other
+# on the bare photograph too, because the picture varies across the frame — so
+# "the bands still differ" is green on a matte that came back empty. Against the
+# baseline there is nowhere for an empty matte to hide.
+measure 0.12,0.45,0.08,0.08 leftBare
+measure 0.46,0.45,0.08,0.08 midBare
+measure 0.80,0.45,0.08,0.08 rightBare
+
+matte ramp
+set localExposure 2.5
+measure 0.12,0.45,0.08,0.08 leftBefore
+measure 0.46,0.45,0.08,0.08 midBefore
+measure 0.80,0.45,0.08,0.08 rightBefore
+
+expect leftBefore != leftBare
+expect midBefore != midBare
+expect rightBefore != rightBare
+
+snapshot save with-the-subject
+snapshot missing with-the-subject 0
+
+print then the mask row is taken off the working edit entirely
+mask none
+save samples/_PIC8220.ARW
+
+print and the photograph is reopened, which is when the sweep runs
+reopen
+
+# ⚠ **The assertion the whole file is about.** After the reopen the sidecar
+# names no matte at all — the row is gone — so the sweep would collect the file
+# if the version did not pin it. `missing 0` says the PNG is still on the disk.
+# Deleting `.union(pinned)` from `MatteStore.sweepAfterLoad` prints `1` here.
+snapshot count 1
+snapshot missing with-the-subject 0
+
+print and restoring the version brings the matte back, shape and all
+snapshot restore with-the-subject
+measure 0.12,0.45,0.08,0.08 leftAfter
+measure 0.46,0.45,0.08,0.08 midAfter
+measure 0.80,0.45,0.08,0.08 rightAfter
+
+# Identical to what was saved: the same raster, not a re-run of anything.
+expect leftAfter == leftBefore
+expect midAfter == midBefore
+expect rightAfter == rightBefore
+
+# And against the bare photograph, so an empty matte cannot pass by leaving the
+# three bands merely different from one another.
+expect leftAfter != leftBare
+expect midAfter != midBare
+expect rightAfter != rightBare

@@ -1,0 +1,113 @@
+# Saved versions — `app/Snapshots.swift`, decision #96.
+#
+# The story M4 was missing: save the edit under a name, keep working, come back
+# to it. Not undo (fifty deep, coalescing, dies with the process) and not a
+# preset (a *patch* carried between photographs, which never touches the crop,
+# the dust or the masks). A version is this photograph's whole state, named.
+#
+# `orion-viewport-tests` pins the file, the sweep and the store without a GPU.
+# What this file adds is the round trip measured through the *engine* on a real
+# photograph and across a real reopen — where a field that reaches the shader
+# but not the version, or the reverse, is what shows.
+#
+# ⚠ It goes through `reopen`, which re-runs the whole loading path: decode, read
+# the sidecar, restore the state, upload the mattes, sweep the orphans. A
+# version that lived only in memory would satisfy a check that called restore
+# alone, and a correct mechanism nobody triggers reads exactly like a working
+# feature — this project has shipped that twice.
+
+open samples/_PIC8220.ARW
+
+# Start from a known state: a version file outlives the run, and a check whose
+# answer depends on what was run before it is not a check.
+snapshot clear
+
+set exposure 2.6
+set clarity 0.45
+set vibrance 0.5
+
+# The crop and the dust are the two things a preset refuses to carry, and they
+# are why a version is not one. Both go in before the version is taken.
+crop 0.15 0.15 0.7 0.7
+
+# ⚠ The bare reading at the spot, taken *before* the spot exists and after every
+# slider is set. Without it, "the spot came back" is satisfied by a spot that
+# never did anything: a clone whose source patch happens to match its
+# destination changes no pixels, and an equality between two such readings is
+# green whether the dust list survived or not. `preset-is-a-patch.txt` paid for
+# this lesson in the other direction.
+measure 0.47,0.47,0.05,0.05 bareSpot
+spot 0.5,0.5 0.04 clone
+measure 0.47,0.47,0.05,0.05 keptSpot
+expect keptSpot != bareSpot
+
+measure 0.3,0.3,0.2,0.2 kept
+
+snapshot save the-good-one
+snapshot count 1
+
+print then the edit is carried on with, hard
+set exposure 0.4
+set clarity -0.5
+set vibrance -0.9
+measure 0.3,0.3,0.2,0.2 wandered
+expect wandered != kept
+
+print and the photograph is closed and opened again
+save samples/_PIC8220.ARW
+reopen
+
+# Still there after a reopen, which is the whole feature. Fails if the file was
+# never written, or was written somewhere the loader does not look.
+snapshot count 1
+
+# ⚠ The reopened *working* edit is the wandered one. Without this, everything
+# below could be green because a restore had already silently happened.
+measure 0.3,0.3,0.2,0.2 reopened
+expect reopened == wandered
+
+print restoring brings back every part of the edit, including the dust
+snapshot restore the-good-one
+measure 0.3,0.3,0.2,0.2 restored
+measure 0.47,0.47,0.05,0.05 restoredSpot
+expect restored == kept
+expect restoredSpot == keptSpot
+expect restoredSpot != bareSpot
+
+# ⚠ **The undo half, and it is not a nicety.** Restoring overwrites the working
+# edit, and autosave writes that over the sidecar 900 ms later. A restore that
+# reset the history the way *opening* a photograph does would be the one act in
+# the program that cannot be taken back — and it would be the act most likely to
+# have been a mistake. One entry, like a preset: one ⌘Z and the wandered edit is
+# back.
+undo
+measure 0.3,0.3,0.2,0.2 undone
+expect undone == wandered
+
+redo
+measure 0.3,0.3,0.2,0.2 redone
+expect redone == kept
+
+# The other half of not trapping anybody: the working edit that was about to be
+# overwritten was kept as a version of its own, on disk, before the restore
+# landed. That one survives the quit that undo does not.
+snapshot count 2
+
+print a second restore replaces that one slot rather than adding to it
+set exposure 1.9
+measure 0.3,0.3,0.2,0.2 drifted
+expect drifted != kept
+snapshot restore the-good-one
+snapshot count 2
+
+# And it is a real version, not a label: restoring it gives back the edit that
+# was overwritten, out of the file rather than out of a history a quit would
+# have taken with it.
+snapshot restore Before
+measure 0.3,0.3,0.2,0.2 fromTheGuard
+expect fromTheGuard == drifted
+
+print and a deleted version is gone from the file, not only from the panel
+snapshot delete the-good-one
+reopen
+snapshot count 1
