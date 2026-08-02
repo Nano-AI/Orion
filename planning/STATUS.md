@@ -298,6 +298,23 @@ genuinely correct and the photographer loses nothing. It may not be silent when
 the result *looks* right and is not — that is the class that produced the black
 canvas, the deleted mattes and the film grain that shipped at zero.
 
+### ⚠ In flight — fifth wave, two splits, isolated worktrees, 2026-08-02
+
+The session limit reset, so the 1000-line rule gets its next two files. **Five
+were over the ceiling** after #113 took `DevelopPipeline.cpp` from 2,896 to 451:
+`Engine.swift` **2,331**, `bench/main.cpp` **2,289**, `Scenario.swift` 1,596,
+`OrionApp.swift` 1,557, `DevelopPanels.swift` 1,366. These are the top two.
+
+| Working on | Decision | Scope, and the trap named to it |
+|---|---|---|
+| Split `app/Engine.swift`, 2,331 lines | #117 | ⚠ **The Swift constraint decides the seam and has no C++ equivalent**: `Engine` is `@Observable`, so **stored properties must stay in the main declaration** — the macro only sees the class body. Behaviour moves to extensions. Told to copy #113's proof exactly: baseline rendered from `ab6f9b2`, byte-compared after, and the blind spots named |
+| Split `apps/bench/main.cpp`, 2,289 lines | #118 | ⚠ **Tooling, so breaking a render is impossible and silently weakening a gate is the whole risk** — and the gates are what everything else here is verified against. Told to diff the **named check set** before against after, and to prove at least six can still fail by breaking what they assert |
+
+⚠ **Neither may fix anything while it is in there.** #118 in particular is told
+about `endpointPair` — the guided-filter check #113 found that cannot fail — and
+told explicitly **not** to fix it, because a refactor with a fix hidden in it is
+unreviewable.
+
 ### The fourth wave — all three merged, one of them cut short
 
 ⚠ **The silent-failure sweep (#115) was killed by a session limit mid-run**, before
