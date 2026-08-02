@@ -73,6 +73,10 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Scenario+Mask.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Scenario+Report.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Scenes.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Checks.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Measure.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Render.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveEditor.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
