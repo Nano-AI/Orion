@@ -58,6 +58,15 @@ final class Engine {
     }
 
     var camera = ""
+
+    /// The lens name the open file records, before any database lookup — empty
+    /// when the file records none, which is what every manual lens does.
+    ///
+    /// ⚠ Not `lensProfileName`, which names the database entry that *matched*.
+    /// The Optics panel needs both to explain a miss, and until 2026-08-03 it
+    /// had neither: the no-profile case had no `else` at all, so a photograph
+    /// whose lens was not found showed bare sliders and no reason.
+    var photoLensName = ""
     var imageWidth: UInt32 = 0
     var imageHeight: UInt32 = 0
 

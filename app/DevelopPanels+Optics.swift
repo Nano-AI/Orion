@@ -49,6 +49,27 @@ extension Editor {
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.faint)
                     .fixedSize(horizontal: false, vertical: true)
+            } else {
+                // ⚠ **There was no `else` here at all until 2026-08-03.** A
+                // photograph whose lens the database does not carry showed two
+                // bare sliders and no reason — and the developer's own first
+                // question on seeing it was "how come it can't find my lens?",
+                // which is the interface failing to answer something it knows.
+                //
+                // The two cases want different sentences because they have
+                // different fixes: a lens the file names and the database lacks
+                // is a data gap, and a file naming no lens at all is every
+                // manual lens ever made and can never be matched by name.
+                Text(engine.photoLensName.isEmpty
+                     ? "This file records no lens name, which is what an adapted "
+                       + "or fully manual lens does — there is nothing to match "
+                       + "against. Correct it by hand below."
+                     : "No profile for “\(engine.photoLensName)” in the bundled "
+                       + "lensfun database, so distortion and vignetting are "
+                       + "manual below.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.faint)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             let profiled = engine.hasLensProfile && engine.lensProfileEnabled

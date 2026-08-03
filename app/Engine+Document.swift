@@ -57,6 +57,7 @@ extension Engine {
         imageWidth = w
         imageHeight = h
         camera = String(cString: orion_engine_camera(handle))
+        photoLensName = String(cString: orion_engine_lens(handle))
         // An answer about the photograph being left. `MatteStore.restore` fills
         // it again for the one arriving.
         missingMattes = []

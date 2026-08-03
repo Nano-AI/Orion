@@ -674,6 +674,10 @@ const char* orion_engine_camera(const OrionEngine* engine) {
     return engine ? engine->impl.camera().c_str() : "";
 }
 
+const char* orion_engine_lens(const OrionEngine* engine) {
+    return engine ? engine->impl.photoLens().c_str() : "";
+}
+
 const char* orion_status_string(OrionStatus status) {
     switch (status) {
         case ORION_OK:           return "ok";

@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the ⓘ works and opens exactly one window, #143**
-— it took four rounds and three of them were spent on stale-binary readings.
-**v0.4.0-alpha.6 carries it.** The queue is empty and the ledger is checked)
+**Last updated:** 2026-08-03 (**the Optics panel says why a lens was not
+matched, #144** — and the answer is that the bundled database has no `Art 023`
+entry at all. The ⓘ works and opens one window, #143, in v0.4.0-alpha.6)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -118,15 +118,21 @@ items below need you and cannot move from this side.
 
 **Asked for, not yet built** — raised 2026-08-03, uncosted:
 
-- ⚠ **A lens cannot be chosen by hand.** `LensDatabase::lookup` matches on the
-  EXIF lens name, with a `normalize` pass for the spellings that differ, and
-  when that fails there is **no fallback at all** — `hasLensProfile` is false,
-  the Optics panel offers manual sliders and nothing else. The developer's own
-  lens is not being found. Two things are wanted and they are separable: a
-  **search-and-pick** control listing what the 58 bundled lensfun files
-  actually contain, and a **diagnosis** of why this lens misses, which needs the
-  EXIF name the file carries — `exiftool` is not installed here, so that reading
-  has to come from the app or from the developer.
+- ⚠ **A lens cannot be chosen by hand.** ✅ **Diagnosed 2026-08-03 (#144); the
+  picker itself is still unbuilt.** The panel now *explains* the miss — that
+  half shipped — but a photographer still cannot do anything about it.
+  ⚠ **The cause is a data gap, not a spelling one, and that closes off the
+  cheap fix.** The developer's file records its lens correctly; it ends
+  `DG DN | Art 023`, and the bundled lensfun database contains **no `Art 023`
+  entry at all** — a 2023 Sigma Art that is simply absent. No `normalize` rule
+  can match a lens that is not in the data.
+  **So the two real options are:** refresh the bundled lensfun database (cheap,
+  but only ever as current as the day it was copied), or a **search-and-pick
+  control** over what is actually bundled, so a photographer can choose a near
+  equivalent knowingly. ⚠ The second must not become an *automatic* near-miss:
+  `lookup` refuses one deliberately, and `tests_io.cpp` pins that a DG DN lens
+  never matches a DG HSM entry — applying one optical design's distortion to
+  another's picture is worse than applying none. Uncosted.
 
 **Closed, each with the decision that closed it** — the full write-ups are in
 `DECISIONS.md` and the session log below:

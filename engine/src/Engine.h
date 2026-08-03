@@ -130,6 +130,16 @@ public:
     [[nodiscard]] pipe::DevelopPipeline& developMutable();
     [[nodiscard]] const std::string& camera() const noexcept { return camera_; }
 
+    /// The lens name **as the file records it**, before any database lookup —
+    /// empty when the file records none.
+    ///
+    /// ⚠ Separate from `lensProfile().lens`, which is the name of the *matched*
+    /// database entry and is empty whenever nothing matched. The interface needs
+    /// both to say anything useful: "no profile for the 24-70 your file names"
+    /// and "your file names no lens at all, which every manual lens does" are
+    /// different problems with different answers, and the panel said neither.
+    [[nodiscard]] const std::string& photoLens() const noexcept { return photoLens_; }
+
     /// The lens profile for the open photo, looked up when it was opened.
     /// `found` is false when the lens is unknown, which includes every manual
     /// lens — those report no name in EXIF at all.
@@ -146,6 +156,7 @@ private:
     std::unique_ptr<pipe::DevelopPipeline> develop_;
     std::unique_ptr<pipe::DevelopPipeline> preview_;
     std::string                            camera_;
+    std::string                            photoLens_;
     /// The RAW this was opened from. Export lifts its EXIF, so the file
     /// written carries the exposure, lens and date the picture was taken with.
     std::string                            sourcePath_;

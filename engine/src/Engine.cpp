@@ -28,6 +28,7 @@ void Engine::openRaw(const std::string& path) {
     // The lens name lives in the metadata rather than the mosaic, so it takes a
     // second read of the file — cheap next to the decode that just happened.
     const auto info = raw::readInfo(path);
+    photoLens_ = info.lens;
     lensProfile_ = lensDatabase().lookup(info.lens, info.focalLength, info.aperture);
 
     // Reuse the compiled graph whenever the new frame has the same shape.

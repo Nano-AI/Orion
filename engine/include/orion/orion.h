@@ -602,6 +602,14 @@ OrionStatus orion_engine_lens_profile(const OrionEngine* engine,
 /* Camera make and model of the open image, or "" when none. */
 const char* orion_engine_camera(const OrionEngine* engine);
 
+/* The lens name the open file records, or "" when it records none.
+ *
+ * Not the same as OrionLensProfile.lens, which names the database entry that
+ * matched and is "" whenever nothing did. Both are needed to explain a miss:
+ * a file naming a lens the database does not carry and a file naming no lens
+ * at all — which is every manual lens — are different problems. */
+const char* orion_engine_lens(const OrionEngine* engine);
+
 /* Fills *out with the bound device's properties. */
 OrionStatus orion_engine_device_info(const OrionEngine* engine,
                                      OrionDeviceInfo*   out);
