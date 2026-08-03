@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the 8 GB defect is a pooling problem, #153** —
-peak live memory is **1,202 MiB** against 7,186 allocated, so 83% is held for
-nothing and neither tiling nor lower precision is warranted)
+**Last updated:** 2026-08-03 (**the performance audit is complete, #154** — six
+areas, one real defect (the 8 GB ceiling), one design question settled by
+measurement, five stale figures corrected. **Next story: build the pool.**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -156,8 +156,18 @@ neither expensive rewrite is warranted. ⚠ The figure is deliberately optimisti
 even a poor pool lands far under 6,144, which is what settles it.
 **Next story: build the pool.** Free each output at its last read, and keep the
 early refusal as the backstop for whatever still will not fit.
-⚠ **One area remains unmeasured**: scroll, zoom, pan and the filmstrip — never
-measured at all.
+✅ **Scroll, zoom, pan and the filmstrip are answered (#154) — by reading, and
+recorded as a reading rather than dressed up as a measurement.** Zoom and pan
+transform the *already-rendered* texture in the canvas blit; neither re-runs the
+graph. The filmstrip is a `LazyHStack`. ⚠ No number is quoted because driving a
+scroll or a magnify needs a gesture, and #110.3 established this harness cannot
+drive one. Closing it properly wants a verb driving `Viewport.zoomBy` and the
+filmstrip offset directly — its own small story.
+
+✅ **THE PERFORMANCE AUDIT ASKED FOR ON 2026-08-01 IS COMPLETE.** Six areas.
+**One real defect** (#152, the 8 GB ceiling), **one design question settled by
+measurement rather than argument** (#153, pooling beats tiling and precision),
+and **five stale figures corrected** (#144, #148, #149, #150, #151).
 
 **Asked for, not yet built** — raised 2026-08-03, uncosted:
 
