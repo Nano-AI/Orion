@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the bench is immune to CPU load and wrecked by a
-busy GPU, #150** — and it now says so rather than captioning an 11 ms spread as
-noise. "Sliders slow" answered at #149)
+**Last updated:** 2026-08-03 (**a cold open is 210.9 ms and shows the previous
+photograph the whole time, #151** — there is no busy state anywhere in the app.
+The bench's own protocol was settled at #150)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -132,9 +132,15 @@ binary spread **0.14 ms**; a saturated CPU changes nothing (**8.98, spread
 The rule is *CPU load is harmless, anything else on the GPU is fatal*, and the
 bench now warns above a 2 ms spread instead of captioning it as noise. **Every
 other number in this audit was taken on a quiet machine and is comparable.**
-⚠ **Three areas remain unmeasured**: cold open (what does the photographer see
-between a 36 ms decode and a 72–92 ms render?), scroll/zoom/pan/filmstrip (never
-measured at all), and memory on 8 GB or a non-M4 GPU.
+✅ **Cold open is measured (#151): 210.9 ms**, and for all of it the canvas holds
+the *previous* photograph — `isLoaded` is set once and never cleared, and there
+is **no busy state anywhere in the application**. ⚠ **A design question is open
+because of it**, deliberately unsettled: holding the last frame avoids a flash
+of black, but for a fifth of a second the window asserts a picture that is not
+the one being opened — worst in the flat-frame case, where a correct photograph
+lingers over a wrong one. A busy state is its own story, with a screenshot check.
+⚠ **Two areas remain unmeasured**: scroll/zoom/pan/filmstrip (never measured at
+all), and memory on 8 GB or a non-M4 GPU.
 
 **Asked for, not yet built** — raised 2026-08-03, uncosted:
 
