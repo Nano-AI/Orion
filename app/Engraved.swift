@@ -113,22 +113,22 @@ enum Engraved {
                 // delay has elapsed.
                 .contentShape(Rectangle())
                 .onHover { inside = $0 }
-                // ⚠ Kept, and it is **not** what shows the text. Measured on
-                // the developer's machine: with hit testing fixed the glyph
-                // highlights on hover and `.help` still renders nothing at all.
-                // It costs one line and may work on someone else's setup, so it
-                // stays — but nothing depends on it.
-                .help(text)
-                .accessibilityLabel(Text(text))
-                // ⚠ **A popover, because the nameplate lives inside a scroll
-                // view.** An overlay wide enough to be readable is clipped by
-                // the column it sits in, and the clipped part is the end of the
-                // sentence. A popover is its own window and cannot be clipped.
+                // ⚠ **No `.help` here, and that is the choice rather than an
+                // omission.** Both were present for one build and opened **two
+                // windows** — this bubble instantly, the system tooltip after
+                // its own delay. The system one loses: a hint that arrives a
+                // second after the pointer does is a hint nobody waits for, and
+                // the whole reason the prose left the panel was to be readable
+                // on demand rather than always. What the system owned and this
+                // now owes: placement, dismissal and screen-edge flipping — the
+                // popover gets the first two for free from AppKit.
                 //
-                // Driven by the hover state, and `arrowEdge: .leading` puts it
-                // to the *left* of the icon — the icon sits at the panel's right
-                // edge, so the bubble opens across the panel rather than under
-                // the pointer, which would bounce the hover on and off.
+                // A popover and not an overlay, because the nameplate lives
+                // inside a scroll view: an overlay wide enough to read is
+                // clipped by the column it sits in, and the clipped part is the
+                // end of the sentence. `arrowEdge: .leading` opens it across the
+                // panel rather than under the pointer, which would bounce the
+                // hover on and off.
                 .popover(isPresented: .constant(inside), arrowEdge: .leading) {
                     Text(text)
                         .font(.system(size: 11))
@@ -136,6 +136,7 @@ enum Engraved {
                         .frame(width: 250, alignment: .leading)
                         .padding(12)
                 }
+                .accessibilityLabel(Text(text))
         }
     }
 

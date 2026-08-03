@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the ⓘ works — confirmed by hand, #141**, after
-shipping broken in the public v0.4.0-alpha.4; **v0.4.0-alpha.5 is the release
-that carries the fix**. The queue is empty and the ledger is checked, #139)
+**Last updated:** 2026-08-03 (**the ⓘ works and opens exactly one window, #143**
+— it took four rounds and three of them were spent on stale-binary readings.
+**v0.4.0-alpha.6 carries it.** The queue is empty and the ledger is checked)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -115,6 +115,18 @@ items below need you and cannot move from this side.
   with a stylus in hand.
 - **Approval to download CC0 X-Trans frames** for piece 0. Without them the
   X-Trans path has no real sensor to test against.
+
+**Asked for, not yet built** — raised 2026-08-03, uncosted:
+
+- ⚠ **A lens cannot be chosen by hand.** `LensDatabase::lookup` matches on the
+  EXIF lens name, with a `normalize` pass for the spellings that differ, and
+  when that fails there is **no fallback at all** — `hasLensProfile` is false,
+  the Optics panel offers manual sliders and nothing else. The developer's own
+  lens is not being found. Two things are wanted and they are separable: a
+  **search-and-pick** control listing what the 58 bundled lensfun files
+  actually contain, and a **diagnosis** of why this lens misses, which needs the
+  EXIF name the file carries — `exiftool` is not installed here, so that reading
+  has to come from the app or from the developer.
 
 **Closed, each with the decision that closed it** — the full write-ups are in
 `DECISIONS.md` and the session log below:
