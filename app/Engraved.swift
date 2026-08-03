@@ -73,22 +73,47 @@ enum Engraved {
     /// a popover would need all four built and kept working. The cost is that a
     /// tooltip is plain text with a system-set delay, so this is not the place
     /// for anything a photographer needs *while* dragging.
+    /// What a control does, shown on hover.
+    ///
+    /// ⚠ **This shipped broken in v0.4.0-alpha.4 and the way it broke is the
+    /// lesson.** It was a bare `Image` with `.help(…)` on it. The ⓘ drew
+    /// perfectly and explained nothing — SwiftUI's `.help` needs a view that
+    /// takes part in hit testing, and an `Image` does not. Every other `.help`
+    /// in this app happens to sit on a `Button`, so the pattern had never been
+    /// tried anywhere else and looked obviously fine.
+    ///
+    /// ⚠ **A screenshot cannot catch this and the suite still cannot.** A
+    /// capture of a working ⓘ and a dead one are the same pixels, and walking
+    /// AppKit offscreen finds nothing to inspect: SwiftUI collapses this panel
+    /// into **134 views with 2 `NSButton`s in them**, and `NSView.toolTip` is
+    /// empty whether or not `.help` works. The verification for this control is
+    /// a person putting a pointer on it. Said plainly so the next person does
+    /// not spend the afternoon proving it a different way.
     struct Info: View {
         let text: String
 
+        @State private var inside = false
+
         var body: some View {
             Image(systemName: "info.circle")
-                // Matched to `Label`'s own size rather than the readout's: it
-                // sits on the nameplate row, and an icon larger than the name
-                // beside it reads as a button to press rather than a mark to
-                // hover.
+                // Matched to `Label`'s own size: it sits on the nameplate row,
+                // and an icon larger than the name beside it reads as a button
+                // to press rather than a mark to hover.
                 .font(.system(size: 9.5))
-                .foregroundStyle(Palette.faint)
-                .help(text)
-                // Without this the hover target is the glyph's own bounds,
-                // which for a 9.5-point circle is a few points across and
-                // genuinely hard to hit.
+                .foregroundStyle(inside ? Palette.text : Palette.faint)
+                // A 9.5-point circle is a few points across and genuinely hard
+                // to hit, so the target is padded to a comfortable square
+                // without the glyph growing.
+                .frame(width: 14, height: 14)
+                // ⚠ These two lines are the fix. `contentShape` makes the
+                // padded square the hit region rather than the glyph, and
+                // `onHover` is what installs the tracking area `.help` needs.
+                // The highlight it drives is deliberate as well: it is the only
+                // feedback that says the icon is live before the tooltip's
+                // delay has elapsed.
                 .contentShape(Rectangle())
+                .onHover { inside = $0 }
+                .help(text)
                 .accessibilityLabel(Text(text))
         }
     }
