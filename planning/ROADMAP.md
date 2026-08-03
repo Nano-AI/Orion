@@ -327,25 +327,42 @@ everything a photographer touches, with a number against each.
 ### Why it is its own item rather than more of the section above
 
 Two gestures were fixed on 2026-08-01 by adding one line each. Both were found by
-`grep beginInteraction`, and **four more came back in the same grep**:
+`grep beginInteraction`, and four more came back in the same grep.
 
-| Gesture | Arms the preview graph? |
-|---|---|
-| Every slider, via `AnalogTrack` | ✅ |
-| `MaskOverlay` paint | ✅ 2026-08-01 |
-| `MaskOverlay` placement drag | ✅ 2026-08-01 |
-| `CropOverlay` | ❌ |
-| `SpotOverlay` | ❌ |
-| `CurveEditor` | ❌ |
-| `ColorWheel` | ❌ |
+⚠ **All four have since been fixed, and this table said otherwise until
+2026-08-03.** It was the stated premise of this whole audit item, and it was
+wrong in every one of its ❌ rows — re-derived against the tree, with the line
+each call sits on:
 
-⚠ **They were not fixed in the same breath, on purpose.** Each swaps the canvas
-to a differently-sized texture mid-gesture while an overlay is drawn over it,
-and this codebase has already shipped exactly that bug once — the compare split
-sampling two textures through one set of UVs. The crop overlay is the riskiest
-of the four, because its rectangle *is* the geometry being changed. Each needs
-its own before/after and its own look at the screen. That is the audit, not a
-sed.
+| Gesture | Arms | Where |
+|---|---|---|
+| Every slider | ✅ | `AdjustmentSlider.swift:80` — via the slider, not `AnalogTrack`, which the old row named and which contains no such call |
+| `MaskOverlay` paint and placement | ✅ 2026-08-01 | `MaskOverlay.swift` |
+| `CropOverlay` | ✅ | `CropOverlay.swift:179` / `:219` |
+| `SpotOverlay` | ✅ | `SpotOverlay.swift:142` / `:168` |
+| `CurveEditor` | ✅ | `CurveEditor.swift:282` |
+| `ColorWheel` | ✅ | `ColorWheel.swift:128` / `:148` |
+
+⚠ **The caution the old table carried still stands for anyone touching these**:
+each swaps the canvas to a differently-sized texture mid-gesture while an
+overlay is drawn over it, and this codebase has shipped exactly that bug once —
+the compare split sampling two textures through one set of UVs. `CropOverlay` is
+the riskiest, because its rectangle *is* the geometry being changed.
+
+⚠ **And none of it is pinned by a test, which is why the table could rot.**
+Decision #110.3 established that a SwiftUI `DragGesture` closure cannot be
+driven from this suite at all: an off-screen `NSHostingView` lays the control
+out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent`
+never reaches the recognizer, and CGEvent-backed events need a real on-screen
+window and the real cursor. Deleting `ColorWheel`'s call measured **green across
+the whole suite**.
+
+`tools/check-gestures.py` is the answer to that, and it is deliberately a grep
+rather than a test: it proves the call has not been *deleted*, which is the
+regression that actually happens, and claims nothing about whether the gesture
+arms on the right branch or ever disarms. It ignores comments, because
+`ColorWheel` and `CropOverlay` both mention these functions in prose above the
+call and a naive count reports two where there is one.
 
 ### What the audit must cover
 

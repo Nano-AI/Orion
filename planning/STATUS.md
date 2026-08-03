@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**a lens can be chosen by hand, #147** — engine,
-facade and interface, pinned by a scenario that shows the correction reaching
-the picture. The queue is empty again)
+**Last updated:** 2026-08-03 (**the performance audit's premise table was stale
+in every row, #148** — all four gestures already armed, and nothing could have
+told us. A lens can be chosen by hand, #147)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -115,6 +115,15 @@ items below need you and cannot move from this side.
   with a stylus in hand.
 - **Approval to download CC0 X-Trans frames** for piece 0. Without them the
   X-Trans path has no real sensor to test against.
+
+⚠ **The performance audit (`ROADMAP.md`) has started, and its first finding was
+about itself, #148.** The table it opens with — four gestures that do not arm
+the preview graph — was **wrong in all four rows**; every one had been fixed and
+nobody updated it. `tools/check-gestures.py` is now a gate so it cannot rot
+again, and it is a grep rather than a test on purpose: a `DragGesture` closure
+cannot be driven from either suite (#110.3), so deleting one of these calls is
+green everywhere. **The rest of the audit — the table of areas and the number
+against each — is still to do.**
 
 **Asked for, not yet built** — raised 2026-08-03, uncosted:
 

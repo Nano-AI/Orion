@@ -52,9 +52,10 @@ C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · L
 ./build/apps/tests/orion-tests     engine maths + real GPU renders
 ./build/orion-viewport-tests       canvas geometry
 ./tools/check-decisions.py         the decision ledger indexes the tree
+./tools/check-gestures.py          every gesture still arms the preview graph
 ```
 
-Run all three before claiming anything works. The GPU tests matter most: pure
+Run all four before claiming anything works. The GPU tests matter most: pure
 maths tests pass happily on code that renders garbage, because they never touch
 a texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
 inspection and obvious to a five-line assertion.
@@ -66,6 +67,13 @@ decision that closed the queue item had never been written down at all, so a
 session that trusted the queue would have re-run a schema migration over the
 photographer's sidecars. It fails on a duplicate number, on a `#N` the tree
 cites that has no row, and on a gap nobody declared.
+
+`check-gestures.py` is a grep and says so: a SwiftUI `DragGesture` closure
+cannot be driven from either suite (#110.3), so deleting a `beginInteraction`
+call is green everywhere. It catches the deletion and claims nothing more. It
+exists because a `ROADMAP.md` table asserting four gestures did *not* arm was
+the premise of a performance audit, and all four had been fixed without it
+being updated.
 
 ## Working agreement
 - One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable. **Prune it in the same breath:** it reached 4,643 lines over 56 sessions before anyone noticed that a recovery point nobody can read is not one. Six or so recent sessions is plenty; the rest belongs in `HISTORY.md`.
