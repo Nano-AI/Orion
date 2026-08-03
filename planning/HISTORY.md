@@ -8036,3 +8036,61 @@ probe fails it — mutation-checked, exit 1. **41 scenarios, 806 engine checks,
 
 ⚠ **The bug itself is not fixed and not reproduced.** What changed is that it can
 no longer happen silently.
+
+
+## Session `2026-08-02c` — the reopen leak is gone, and the fit that said otherwise
+
+The queue's next item was **`reopen` grows 25–49 KB a cycle**, carrying its own
+instruction: *re-measure before spending a session on it*. Re-measured. **There
+is no slope.** Decision #133; the session went on the measurement and nothing was
+built, which is the right outcome when the premise has expired.
+
+**Paired loops, RSS polled at 300 ms, one photograph, one process each:**
+
+| Loop | Folder | Result |
+|---|---|---|
+| `open` × 120 (control) | 202 files | 330.2 → 330.4 MB — **+1.8 KB/cycle** |
+| `reopen` × 120, one range mask | 202 files | one **556 MB** step, then flat |
+| `reopen` × 120, one range mask | 2 files | identical — **not** the folder |
+| `reopen` × 120, no mask component | 1 file | 886.3 → 886.6 MB — **+3.7 KB/cycle**, no step |
+| `reopen` × **240**, one range mask | 2 files | step on the **first** cycle, then **886.6 → 886.8 MB over the last 40** — **+0.9 KB/cycle** across ~230 |
+
+Decision #90's fix — `MatteStore.sweep`'s undrained directory enumeration — held.
+The 200-file and 2-file folders now measure the same, which is what "it is no
+longer the folder" looks like.
+
+### ⚠ The trap, which this session walked into first
+
+The first analysis fit a straight line to the RSS series and reported
+**5,932 KB/cycle** — a hundred times worse than the entry being checked. Then it
+printed the series: `330 330 330 330 886 886 886 … 886 887 887`. **A step, not a
+slope.** A least-squares fit across one discontinuity returns a large slope with
+no warning, and it errs *alarming*, which is the direction that gets a session
+spent on nothing.
+
+Two things fell out of it, and both are cheap rules:
+
+- **Print the series before fitting it.** A regression over data nobody looked at
+  is the numeric form of a check that cannot fail.
+- **Falsify the shape, not only the size.** 240 cycles rather than 120 is what
+  turned "one step" from a reading into a result — a staircase with a long period
+  would have shown a second one, and there is none in 230 cycles.
+
+### What the 556 MB step is, and what it is not
+
+It is the mask chain allocating on its first use — bounded, paid once, and the
+same whether the folder holds 2 files or 202. It is **not** a leak: it does not
+repeat, and the loop with no mask component never pays it.
+
+⚠ It is worth someone's attention as a *budget* question rather than a bug: one
+range mask holds **556 MB** resident. Not costed here, not chased here, and
+written down so it is a number rather than a surprise.
+
+### Unpinned, deliberately, and why
+
+No check was added. Detecting a 25 KB/cycle slope needs tens of real decodes —
+~0.27 s each — so a gate that could see it would add minutes to every run, and a
+gate that runs in seconds could not see it. What *is* pinned is the cause #90
+found: `testSweepDoesNotHoardTheDirectory`, 400 sweeps of a 300-file folder under
+an 8 MB ceiling. The residual is a measurement in this file, not a test, and that
+is stated rather than implied.

@@ -51,12 +51,21 @@ C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · L
 ```
 ./build/apps/tests/orion-tests     engine maths + real GPU renders
 ./build/orion-viewport-tests       canvas geometry
+./tools/check-decisions.py         the decision ledger indexes the tree
 ```
 
-Run both before claiming anything works. The GPU tests matter most: pure maths
-tests pass happily on code that renders garbage, because they never touch a
-texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
+Run all three before claiming anything works. The GPU tests matter most: pure
+maths tests pass happily on code that renders garbage, because they never touch
+a texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
 inspection and obvious to a five-line assertion.
+
+`check-decisions.py` is the odd one out and is here because the planning docs
+have their own failure mode: **the queue in `STATUS.md` has offered
+already-shipped work as the next story three times.** The third time, the
+decision that closed the queue item had never been written down at all, so a
+session that trusted the queue would have re-run a schema migration over the
+photographer's sidecars. It fails on a duplicate number, on a `#N` the tree
+cites that has no row, and on a gap nobody declared.
 
 ## Working agreement
 - One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable. **Prune it in the same breath:** it reached 4,643 lines over 56 sessions before anyone noticed that a recovery point nobody can read is not one. Six or so recent sessions is plenty; the rest belongs in `HISTORY.md`.
