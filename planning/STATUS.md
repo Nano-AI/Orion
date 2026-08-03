@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**a cold open is 210.9 ms and shows the previous
-photograph the whole time, #151** — there is no busy state anywhere in the app.
-The bench's own protocol was settled at #150)
+**Last updated:** 2026-08-03 (⚠ **a 24 MP frame will not open on an 8 GB Mac,
+#152** — 7,186 MiB of intermediates against about 6,144 available, and nothing
+checks. Cold open measured at #151)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -139,8 +139,18 @@ because of it**, deliberately unsettled: holding the last frame avoids a flash
 of black, but for a fifth of a second the window asserts a picture that is not
 the one being opened — worst in the flat-frame case, where a correct photograph
 lingers over a wrong one. A busy state is its own story, with a screenshot check.
-⚠ **Two areas remain unmeasured**: scroll/zoom/pan/filmstrip (never measured at
-all), and memory on 8 GB or a non-M4 GPU.
+⚠⚠ **Memory is measured and it is the audit's one real defect (#152): a 24 MP
+frame wants 7,186 MiB of intermediates and an 8 GB Mac has about 6,144.** It
+cannot open there, the `CLAUDE.md` floor of macOS 14 admits those machines, and
+**the alpha is publicly downloadable**. Nothing in the engine checks —
+`recommendedMaxWorkingSetSize` is read, carried and exposed, and never compared
+against what the graph allocates. The bench prints the ratio and warns now.
+⚠ **Deliberately not fixed**, because the fix is a choice between three stories:
+tile the graph, drop intermediate precision, or refuse early with a sentence a
+photographer can act on instead of an opaque "out of memory". **Costing those is
+the obvious next story.**
+⚠ **One area remains unmeasured**: scroll, zoom, pan and the filmstrip — never
+measured at all.
 
 **Asked for, not yet built** — raised 2026-08-03, uncosted:
 

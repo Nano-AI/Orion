@@ -48,9 +48,34 @@ int main(int argc, char** argv) {
         orion::pipe::DevelopPipeline develop(*device, ORION_SHADER_DIR, img);
         orion::pipe::Adjustments adj;
 
+        const double intermediatesMiB =
+            static_cast<double>(develop.graph().intermediateBytes()) / (1024.0 * 1024.0);
         std::printf("Pipeline  %zu nodes, %.0f MiB of intermediates\n",
-                    develop.graph().nodeCount(),
-                    static_cast<double>(develop.graph().intermediateBytes()) / (1024.0 * 1024.0));
+                    develop.graph().nodeCount(), intermediatesMiB);
+
+        // ⚠ **Both of these numbers were printed already and never compared**,
+        // which is how a 7.2 GiB pipeline shipped without anybody saying what it
+        // needs. Metal reports what it is willing to hold resident; the graph
+        // reports what it wants. A ratio is the whole finding.
+        //
+        // The 8 GB line is not hypothetical: `CLAUDE.md` sets a macOS 14 floor,
+        // and the base M1 and M2 Air are 8 GB machines that run it. Metal
+        // recommends roughly three quarters of unified memory, so ~6 GiB — and
+        // a 24 MP frame wants more than that here.
+        const double workingSetMiB =
+            static_cast<double>(device->info().recommendedWorkingSet) / (1024.0 * 1024.0);
+        if (workingSetMiB > 0.0) {
+            const double share = 100.0 * intermediatesMiB / workingSetMiB;
+            std::printf("          %.0f MiB working set on this GPU — the graph wants %.0f%% of it\n",
+                        workingSetMiB, share);
+            // Three quarters of 8 GiB, the smallest machine the floor admits.
+            constexpr double kSmallestMachineMiB = 8192.0 * 0.75;
+            if (intermediatesMiB > kSmallestMachineMiB) {
+                std::printf("          ⚠ MORE THAN AN 8 GB MAC WILL HOLD (~%.0f MiB)."
+                            " A frame this size cannot open there, and nothing in"
+                            " the engine checks before trying.\n", kSmallestMachineMiB);
+            }
+        }
 
         develop.apply(adj);
         std::printf("  full render    %.2f ms   (all nodes)\n", develop.render());
