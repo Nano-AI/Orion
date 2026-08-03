@@ -62,6 +62,16 @@ int main(int argc, char** argv) {
         // and the base M1 and M2 Air are 8 GB machines that run it. Metal
         // recommends roughly three quarters of unified memory, so ~6 GiB — and
         // a 24 MP frame wants more than that here.
+        // ⚠ **What a pooled allocator could reach**, walked over the execution
+        // order rather than guessed. The gap between this and the figure above
+        // is the size of the prize, and it decides whether #152 wants tiling,
+        // lower precision, or simply not holding dead textures.
+        const double peakMiB =
+            static_cast<double>(develop.graph().peakLiveBytes()) / (1024.0 * 1024.0);
+        std::printf("          %.0f MiB if a texture were freed at its last read"
+                    " (%.0f MiB held for nothing)\n",
+                    peakMiB, intermediatesMiB - peakMiB);
+
         const double workingSetMiB =
             static_cast<double>(device->info().recommendedWorkingSet) / (1024.0 * 1024.0);
         if (workingSetMiB > 0.0) {

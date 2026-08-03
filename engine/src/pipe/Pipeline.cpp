@@ -332,4 +332,48 @@ std::size_t Pipeline::intermediateBytes() const noexcept {
     return total;
 }
 
+std::size_t Pipeline::peakLiveBytes() const noexcept {
+    // Last reader of each node's output, in execution order. A node nobody
+    // reads is still written, so it is live for exactly its own step.
+    std::vector<std::size_t> lastUse(nodes_.size(), 0);
+    for (std::size_t step = 0; step < order_.size(); ++step) {
+        const int id = order_[step];
+        if (id < 0 || static_cast<std::size_t>(id) >= nodes_.size()) continue;
+        lastUse[static_cast<std::size_t>(id)] =
+            std::max(lastUse[static_cast<std::size_t>(id)], step);
+        for (int in : nodes_[static_cast<std::size_t>(id)].inputs) {
+            if (in >= 0 && static_cast<std::size_t>(in) < nodes_.size()) {
+                lastUse[static_cast<std::size_t>(in)] = step;
+            }
+        }
+    }
+
+    std::size_t live = source_ ? source_->sizeBytes() : 0;
+    std::size_t peak = live;
+    // ⚠ **Only what has actually been written can be freed**, which is not the
+    // pedantry it looks like: a node absent from `order_` — every disabled one
+    // — has `lastUse` 0, so an unguarded subtraction runs at step 0 against a
+    // texture that was never added and wraps `size_t` to something enormous.
+    // The first version of this did exactly that.
+    std::vector<bool> written(nodes_.size(), false);
+    for (std::size_t step = 0; step < order_.size(); ++step) {
+        const int id = order_[step];
+        if (id < 0 || static_cast<std::size_t>(id) >= outputs_.size()) continue;
+        if (outputs_[static_cast<std::size_t>(id)]) {
+            live += outputs_[static_cast<std::size_t>(id)]->sizeBytes();
+            written[static_cast<std::size_t>(id)] = true;
+        }
+        peak = std::max(peak, live);
+        // Everything whose last reader was this step can go back to the pool.
+        for (std::size_t n = 0; n < nodes_.size(); ++n) {
+            if (written[n] && lastUse[n] == step && n < outputs_.size() &&
+                outputs_[n] && static_cast<int>(n) != id) {
+                live -= outputs_[n]->sizeBytes();
+                written[n] = false;
+            }
+        }
+    }
+    return peak;
+}
+
 }  // namespace orion::pipe

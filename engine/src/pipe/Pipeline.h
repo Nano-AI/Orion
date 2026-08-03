@@ -150,6 +150,25 @@ public:
     [[nodiscard]] std::size_t nodeCount() const noexcept { return nodes_.size(); }
     [[nodiscard]] std::size_t intermediateBytes() const noexcept;
 
+    /// The bytes a graph would need if a texture were reused the moment its
+    /// last consumer had run, rather than held for the graph's lifetime.
+    ///
+    /// ⚠ **This is a costing number, not a promise.** `intermediateBytes` is
+    /// what is allocated today: one texture per node, alive from construction
+    /// to destruction. This walks the execution order, keeps a texture live
+    /// only between the node that writes it and the last node that reads it,
+    /// and reports the high-water mark — which is what a pooled allocator
+    /// could reach. The gap between the two is the size of the prize, and it
+    /// is worth knowing before choosing between tiling, dropping precision and
+    /// refusing to open (#152).
+    ///
+    /// It assumes textures of differing sizes can share an allocation, which a
+    /// real pool cannot always do, so the true figure sits between this and
+    /// `intermediateBytes`. Deliberately optimistic: the point is an upper
+    /// bound on the saving, and a disappointing upper bound settles the
+    /// question immediately.
+    [[nodiscard]] std::size_t peakLiveBytes() const noexcept;
+
 private:
     void markDownstreamDirty(int nodeId);
 

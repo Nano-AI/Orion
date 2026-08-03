@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (⚠ **a 24 MP frame will not open on an 8 GB Mac,
-#152** — 7,186 MiB of intermediates against about 6,144 available, and nothing
-checks. Cold open measured at #151)
+**Last updated:** 2026-08-03 (**the 8 GB defect is a pooling problem, #153** —
+peak live memory is **1,202 MiB** against 7,186 allocated, so 83% is held for
+nothing and neither tiling nor lower precision is warranted)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -145,10 +145,17 @@ cannot open there, the `CLAUDE.md` floor of macOS 14 admits those machines, and
 **the alpha is publicly downloadable**. Nothing in the engine checks —
 `recommendedMaxWorkingSetSize` is read, carried and exposed, and never compared
 against what the graph allocates. The bench prints the ratio and warns now.
-⚠ **Deliberately not fixed**, because the fix is a choice between three stories:
-tile the graph, drop intermediate precision, or refuse early with a sentence a
-photographer can act on instead of an opaque "out of memory". **Costing those is
-the obvious next story.**
+✅ **Costed 2026-08-03 (#153), and the answer eliminates two of the three.**
+`Pipeline::peakLiveBytes` reports **1,202 MiB** of peak live memory against the
+**7,186 MiB** actually allocated — **83% held for nothing**. Tiling and lower
+precision both shrink the *working set*, and the working set already fits an
+8 GB Mac with room; what does not fit is the **lifetime**, one texture per node
+held from construction to destruction. **The fix is a pooled allocator**, and
+neither expensive rewrite is warranted. ⚠ The figure is deliberately optimistic
+(it lets differing sizes share), so the truth is between 1,202 and 7,186 — but
+even a poor pool lands far under 6,144, which is what settles it.
+**Next story: build the pool.** Free each output at its last read, and keep the
+early refusal as the backstop for whatever still will not fit.
 ⚠ **One area remains unmeasured**: scroll, zoom, pan and the filmstrip — never
 measured at all.
 
