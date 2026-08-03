@@ -678,6 +678,42 @@ const char* orion_engine_lens(const OrionEngine* engine) {
     return engine ? engine->impl.photoLens().c_str() : "";
 }
 
+namespace {
+/// The name list, built once. `names()` sorts and de-duplicates ~1,450 entries
+/// every call, and a picker filtering as somebody types would pay for that on
+/// every keystroke.
+const std::vector<std::string>& lensNames() {
+    static const std::vector<std::string> names =
+        orion::Engine::lensDatabaseNames();
+    return names;
+}
+}  // namespace
+
+int32_t orion_lens_name_count(void) {
+    return static_cast<int32_t>(lensNames().size());
+}
+
+const char* orion_lens_name_at(int32_t index) {
+    const auto& n = lensNames();
+    if (index < 0 || static_cast<std::size_t>(index) >= n.size()) return "";
+    return n[static_cast<std::size_t>(index)].c_str();
+}
+
+OrionStatus orion_engine_set_lens_choice(OrionEngine* engine, const char* name) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    // ⚠ No exception may cross this boundary — it would terminate the process.
+    try {
+        return engine->impl.setLensChoice(name ? name : "")
+            ? ORION_OK : ORION_ERR_BAD_ARG;
+    } catch (...) {
+        return ORION_ERR_BAD_ARG;
+    }
+}
+
+const char* orion_engine_lens_choice(const OrionEngine* engine) {
+    return engine ? engine->impl.lensChoice().c_str() : "";
+}
+
 const char* orion_status_string(OrionStatus status) {
     switch (status) {
         case ORION_OK:           return "ok";

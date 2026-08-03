@@ -140,6 +140,29 @@ public:
     /// different problems with different answers, and the panel said neither.
     [[nodiscard]] const std::string& photoLens() const noexcept { return photoLens_; }
 
+    /// Choose a lens profile **by hand**, from a name `LensDatabase::names()`
+    /// offered. Empty restores the EXIF match, which may itself be nothing.
+    ///
+    /// ⚠ **Not part of `Adjustments`, deliberately.** A lens choice is not a
+    /// per-frame render parameter — it *selects* a profile, and that profile's
+    /// coefficients already reach the shader through `Adjustments::lensPoly`
+    /// and `lensVignettePa`. Putting a string in the POD block would push it
+    /// across the facade on every slider tick to say a thing that changes once
+    /// a photograph. It belongs beside the profile it picks.
+    ///
+    /// Returns false when the name is not in the database, leaving the previous
+    /// profile alone — a picker can seat a stale choice from a sidecar written
+    /// against a database that has since changed, and dropping the correction
+    /// silently would be worse than keeping it.
+    bool setLensChoice(const std::string& makerModel);
+
+    /// The hand-chosen lens, or empty when the profile came from EXIF.
+    [[nodiscard]] const std::string& lensChoice() const noexcept { return lensChoice_; }
+
+    /// Every lens the database carries, for a picker. Static because the
+    /// database is, and a caller listing lenses has no photograph open yet.
+    [[nodiscard]] static std::vector<std::string> lensDatabaseNames();
+
     /// The lens profile for the open photo, looked up when it was opened.
     /// `found` is false when the lens is unknown, which includes every manual
     /// lens — those report no name in EXIF at all.
@@ -157,6 +180,9 @@ private:
     std::unique_ptr<pipe::DevelopPipeline> preview_;
     std::string                            camera_;
     std::string                            photoLens_;
+    std::string                            lensChoice_;
+    float                                  photoFocal_ = 0.0f;
+    float                                  photoAperture_ = 0.0f;
     /// The RAW this was opened from. Export lifts its EXIF, so the file
     /// written carries the exposure, lens and date the picture was taken with.
     std::string                            sourcePath_;

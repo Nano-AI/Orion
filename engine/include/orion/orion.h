@@ -610,6 +610,30 @@ const char* orion_engine_camera(const OrionEngine* engine);
  * at all — which is every manual lens — are different problems. */
 const char* orion_engine_lens(const OrionEngine* engine);
 
+/* The lens database, for a picker.
+ *
+ * Indices are stable for the life of the process: the database is parsed once
+ * at startup and never reloaded. Returns "" for an out-of-range index rather
+ * than failing, so a caller iterating a stale count reads empties instead of
+ * garbage.
+ *
+ * ⚠ Two calls rather than one array, because the list is ~1,450 strings and a
+ * caller wants to filter it, not own a copy of it. */
+int32_t     orion_lens_name_count(void);
+const char* orion_lens_name_at(int32_t index);
+
+/* Choose a lens profile by hand, from a name orion_lens_name_at returned.
+ * Passing "" restores the match from the file's own EXIF, which may be nothing.
+ *
+ * Returns ORION_ERR_BAD_ARG when the name is not in the database, leaving the
+ * previous profile alone: a sidecar can seat a choice written against a
+ * database that has since changed, and silently dropping the correction would
+ * be worse than keeping it. */
+OrionStatus orion_engine_set_lens_choice(OrionEngine* engine, const char* name);
+
+/* The hand-chosen lens, or "" when the profile came from EXIF. */
+const char* orion_engine_lens_choice(const OrionEngine* engine);
+
 /* Fills *out with the bound device's properties. */
 OrionStatus orion_engine_device_info(const OrionEngine* engine,
                                      OrionDeviceInfo*   out);

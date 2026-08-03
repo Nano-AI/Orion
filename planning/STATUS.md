@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the lens database can be listed and chosen from,
-#145** — engine half only, 1,452 names, nothing in the interface reaches it yet.
-Why a lens misses is now on screen, #144)
+**Last updated:** 2026-08-03 (**a lens can be chosen through the facade, #146** —
+engine and C API done, interface still not wired. 1,452 names listed, #145; why
+a lens misses is on screen, #144)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -133,14 +133,21 @@ items below need you and cannot move from this side.
   `lookup` refuses one deliberately, and `tests_io.cpp` pins that a DG DN lens
   never matches a DG HSM entry — applying one optical design's distortion to
   another's picture is worse than applying none.
-  ⚠ **The engine half is built and tested (#145); the interface half is not.**
-  `LensDatabase::names()` lists 1,452 lenses sorted and de-duplicated, and
-  `lookupExact` resolves any one of them — every name it offers round-trips.
-  **Nothing in the interface can reach either yet.** What remains: a chosen lens
-  has to persist per photograph, which means a string field through
-  `Adjustments` → the POD facade → the sidecar, and a searchable control in the
-  Optics panel beside the message #144 added. ~1 session, and the sidecar field
-  is the part to get right first.
+  ⚠ **The engine and the facade are built (#145, #146); the interface is not.**
+  `LensDatabase::names()` lists 1,452 lenses sorted and de-duplicated and
+  `lookupExact` resolves any one of them; `Engine::setLensChoice` seats a choice
+  at the photograph's own focal length and aperture, and
+  `orion_lens_name_count` / `orion_lens_name_at` / `orion_engine_set_lens_choice`
+  carry it across. **Nothing in the interface reaches any of it yet.**
+  ⚠ **The design question is already settled and should not be relitigated**: the
+  choice is *not* a field in `Adjustments` — it selects a profile whose
+  coefficients already flow through — so it lives beside `lensProfile_`.
+  **What remains, ~half a session:** a `lensChoice` string on `DevelopState`
+  (its decoder is tolerant, so old sidecars default rather than fail — the #112
+  hazard is already cleared), pushed through `Engine.swift` on load and on
+  change, and a searchable control in the Optics panel beside #144's message.
+  ⚠ **`setLensChoice` has no test of its own** — the primitives under it are
+  covered, the glue is not. Worth one before the control lands on top of it.
 
 **Closed, each with the decision that closed it** — the full write-ups are in
 `DECISIONS.md` and the session log below:

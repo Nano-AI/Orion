@@ -29,6 +29,13 @@ void Engine::openRaw(const std::string& path) {
     // second read of the file — cheap next to the decode that just happened.
     const auto info = raw::readInfo(path);
     photoLens_ = info.lens;
+    // ⚠ Kept so a hand-chosen lens can be re-interpolated at this shot's own
+    // focal length and aperture. Re-reading the file to pick a lens would be a
+    // second decode for two numbers already in hand.
+    photoFocal_ = info.focalLength;
+    photoAperture_ = info.aperture;
+    // A choice belongs to the photograph that was open, not to the next one.
+    lensChoice_.clear();
     lensProfile_ = lensDatabase().lookup(info.lens, info.focalLength, info.aperture);
 
     // Reuse the compiled graph whenever the new frame has the same shape.
@@ -72,6 +79,26 @@ void Engine::openRaw(const std::string& path) {
     develop_ = std::move(next);
     preview_ = std::move(smallNext);
     camera_  = image.camera;
+}
+
+std::vector<std::string> Engine::lensDatabaseNames() {
+    return lensDatabase().names();
+}
+
+bool Engine::setLensChoice(const std::string& makerModel) {
+    if (makerModel.empty()) {
+        // Back to what the file says, which may be nothing at all.
+        lensChoice_.clear();
+        lensProfile_ = lensDatabase().lookup(photoLens_, photoFocal_, photoAperture_);
+        return true;
+    }
+
+    const auto picked = lensDatabase().lookupExact(makerModel, photoFocal_, photoAperture_);
+    if (!picked.found) return false;
+
+    lensChoice_ = makerModel;
+    lensProfile_ = picked;
+    return true;
 }
 
 void Engine::setAdjustments(const pipe::Adjustments& adj) {
