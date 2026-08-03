@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (⚠ **the ⓘ #140 added shipped broken in the public
-v0.4.0-alpha.4 and the fix is not yet confirmed, #141** — see the top of the
-blocked list. The queue itself is empty and the ledger is checked, #139)
+**Last updated:** 2026-08-03 (**the ⓘ works — confirmed by hand, #141**, after
+shipping broken in the public v0.4.0-alpha.4; **v0.4.0-alpha.5 is the release
+that carries the fix**. The queue is empty and the ledger is checked, #139)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -102,21 +102,6 @@ items below need you and cannot move from this side.
 
 **Blocked on the developer, not on work** — these cannot move from this side:
 
-- ⚠⚠ **Does hovering the ⓘ show its text?** **This is the first thing to settle
-  and it is not a nicety: v0.4.0-alpha.4 is public, and its release notes
-  describe this feature working.** #140 shipped it as a bare `Image` with
-  `.help(…)`, which draws a perfect icon and explains nothing — `.help` needs a
-  hit-testable view. #141 fixed the hit testing, and the developer confirmed the
-  glyph now **highlights** on hover while **still showing no text**, which
-  proves events reach the icon and `.help` itself produces nothing on that
-  machine. The current build therefore **draws the text in a popover** driven by
-  the hover state, and that is the version awaiting a verdict.
-  ⚠ **Two wrong fixes have already been reported as done here.** Do not call it
-  fixed from a screenshot: a capture of a working ⓘ and a dead one are the same
-  pixels, and the suite cannot see the difference — `Engraved.Info`'s header
-  explains why an `NSView.toolTip` walk returns 0 on the *fixed* build too.
-  **When it is confirmed working, cut v0.4.0-alpha.5**, because the shipped
-  notes currently promise a feature that did not work.
 - ⚠ **The flat frame.** A photograph came back as one flat brown rectangle on
   the developer's screen, twice, and nothing in this repository could reproduce
   it: the engine renders that file correctly with the developer's own sidecar
@@ -424,8 +409,13 @@ a popover and not an overlay, because the nameplate is inside a scroll view and
 an overlay wide enough to read is clipped exactly where the sentence ends.
 `.help` is kept beside it at a cost of one line; nothing depends on it.
 
-⚠ **Still unconfirmed at the end of this session**, and recorded as such rather
-than closed. `Engraved.Info`'s header says in as many words that the
+✅ **Confirmed working by hand, 2026-08-03**, on the third attempt — the drawn
+popover appears on hover where `.help` never did. **v0.4.0-alpha.5 carries it**;
+alpha.4 remains public with the broken icon and its notes describe the feature
+working, which is why a release followed the fix rather than waiting.
+
+⚠ **It stays unverifiable by the suite**, and is recorded as such rather than
+quietly closed. `Engraved.Info`'s header says in as many words that the
 verification for this control is a person putting a pointer on it — a control
 whose correctness is invisible to the suite should say so where it lives instead
 of implying coverage it does not have.
