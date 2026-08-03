@@ -1,0 +1,49 @@
+# A lens the database does not carry can be chosen by hand.
+#
+# ⚠ **This exists because matching cannot be made to work here.** The developer's
+# own file names its lens correctly — it ends `DG DN | Art 023` — and the bundled
+# lensfun database contains **no `Art 023` entry at all** (decision #144). It is
+# absent from the data, not misspelled, so no normalisation rule reaches it and
+# `LensDatabase::lookup` is right to report nothing.
+#
+# ⚠ And it must keep reporting nothing. `lookup` refuses a near-miss on purpose:
+# applying one optical design's distortion to another's picture is worse than
+# applying none, and `tests_io.cpp` pins that a DG DN lens never matches a DG HSM
+# entry. The answer is therefore not a cleverer match — it is letting the person
+# holding the camera say what is on it.
+#
+# What this asserts, which no unit test can: that a name out of the *shipping*
+# catalogue, seated through the *shipping* property, reaches a real profile on a
+# real photograph, and that clearing it goes back to what the file names.
+open samples/_PIC8220.ARW
+
+# Nothing chosen: this frame's own lens decides, and for this file that is
+# nothing at all — which is the case the picker exists for.
+lens
+
+# A lens that is in the database, chosen deliberately. Sony's own 24-70 GM is
+# carried, is nothing like the lens on this file, and is therefore a change the
+# render has to show.
+lens Sony FE 24-70mm f/2.8 GM
+measure 0.15,0.15,0.2,0.2 profiled
+
+# ⚠ The correction has to actually reach the picture, not merely the panel.
+# A chosen profile that seats and renders identically is a control that does
+# nothing — the class of defect this repository has shipped four times.
+lens
+measure 0.15,0.15,0.2,0.2 plain
+expect profiled != plain
+
+# Back and forth, so a stuck value cannot pass: choosing again must reproduce
+# the first reading exactly.
+lens Sony FE 24-70mm f/2.8 GM
+measure 0.15,0.15,0.2,0.2 again
+expect again == profiled
+
+# ⚠ A name the database does not carry changes nothing and says so. This is the
+# stale-sidecar case: a choice written against a database that has since been
+# refreshed must leave the previous correction standing rather than silently
+# dropping it.
+lens
+measure 0.15,0.15,0.2,0.2 cleared
+expect cleared == plain

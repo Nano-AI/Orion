@@ -335,6 +335,16 @@ struct DevelopState: Equatable, Codable {
     var lensVignette: Float
     var lensCaRed: Float
     var lensCaBlue: Float
+    /// A lens profile chosen by hand, as `LensDatabase::names()` spells it, or
+    /// empty when the profile came from the file's own EXIF.
+    ///
+    /// ⚠ **A name and not an index.** The database is bundled data that will be
+    /// refreshed, and an index into it is a number whose meaning changes the day
+    /// somebody updates the XML — a sidecar written today would then seat a
+    /// different lens, silently, with the correction still applied. A name that
+    /// no longer resolves leaves the previous profile alone instead.
+    var lensChoice: String = ""
+
     /// Off by default. See Engine.highlightRecovery.
     var highlightRecovery: Float
     /// Three-way colour grading, each [x, y, luminance].
@@ -413,6 +423,7 @@ extension DevelopState {
             perspectiveVertical: 0, perspectiveHorizontal: 0, perspectiveAspect: 0,
             cropX: 0, cropY: 0, cropW: 1, cropH: 1,
             lensDistortion: 0, lensVignette: 0, lensCaRed: 0, lensCaBlue: 0,
+            lensChoice: "",
             highlightRecovery: 0,
             gradeShadow: [0, 0, 0], gradeMidtone: [0, 0, 0],
             gradeHighlight: [0, 0, 0], gradeBalance: 0,
@@ -450,6 +461,7 @@ extension DevelopState {
         "perspectiveVertical", "perspectiveHorizontal", "perspectiveAspect",
         "cropX", "cropY", "cropW", "cropH",
         "lensDistortion", "lensVignette", "lensCaRed", "lensCaBlue",
+        "lensChoice",
         "highlightRecovery",
         "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance",
         "denoiseLuma", "denoiseColor", "lutStrength",
@@ -484,7 +496,7 @@ extension DevelopState {
         case vibrance, saturation, contrast, rotateQuarters, straightenDeg
         case perspectiveVertical, perspectiveHorizontal, perspectiveAspect
         case cropX, cropY, cropW, cropH
-        case lensDistortion, lensVignette, lensCaRed, lensCaBlue
+        case lensDistortion, lensVignette, lensCaRed, lensCaBlue, lensChoice
         case highlightRecovery, denoiseLuma, denoiseColor
         case gradeShadow, gradeMidtone, gradeHighlight, gradeBalance
         case maskComponents, localExposureEv, maskRefine, spots
@@ -559,6 +571,12 @@ extension DevelopState {
         lensVignette = float(.lensVignette) ?? lensVignette
         lensCaRed = float(.lensCaRed) ?? lensCaRed
         lensCaBlue = float(.lensCaBlue) ?? lensCaBlue
+        // ⚠ Absent from every sidecar written before 2026-08-03, and that is
+        // handled by the same rule as every other field here: decode if
+        // present, keep the default otherwise. The default is "", meaning the
+        // lens the file names.
+        lensChoice = (try? c.decodeIfPresent(String.self, forKey: .lensChoice))
+            .flatMap { $0 } ?? lensChoice
         highlightRecovery = float(.highlightRecovery) ?? highlightRecovery
         denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
         denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor

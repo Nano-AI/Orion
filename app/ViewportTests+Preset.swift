@@ -31,6 +31,9 @@ extension ViewportTests {
         s.denoiseLuma = 2.0; s.denoiseColor = 1.4
         s.lensDistortion = 0.4; s.lensVignette = -0.35
         s.lensCaRed = 0.22; s.lensCaBlue = -0.18
+        // A real name from the bundled database, so the round trip carries a
+        // string the engine would actually accept rather than a placeholder.
+        s.lensChoice = "Sony FE 24-70mm F2.8 GM"
         s.clarity = 0.6; s.dehaze = 0.3; s.fusion = 0.7; s.lutStrength = 0.5
 
         var curve = ToneCurve()

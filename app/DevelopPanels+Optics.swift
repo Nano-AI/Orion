@@ -72,6 +72,15 @@ extension Editor {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            // ⚠ **The picker, and it is deliberately not a fallback.**
+            // `lookup` refuses a near-miss on purpose — applying one optical
+            // design's distortion to another's picture is worse than applying
+            // none — so nothing here guesses. What it does is let the person
+            // holding the camera say what is on it, which the file sometimes
+            // cannot: the developer's own lens is named correctly in EXIF and
+            // simply absent from the bundled database (#144).
+            LensPicker(engine: engine)
+
             let profiled = engine.hasLensProfile && engine.lensProfileEnabled
             slider("Distortion", $engine.lensDistortion, -1...1, "", 2, resetsTo: engine.defaults.lensDistortion)
                 .disabled(profiled)
@@ -82,6 +91,81 @@ extension Editor {
             slider("Fringe R/C", $engine.lensCaRed, -1...1, "", 2, resetsTo: engine.defaults.lensCaRed)
             slider("Fringe B/Y", $engine.lensCaBlue, -1...1, "", 2, resetsTo: engine.defaults.lensCaBlue)
         }
+        }
+    }
+}
+
+/// Choose a lens profile by hand, by typing part of its name.
+///
+/// ⚠ **A filter over a list, not a `Picker`.** The database carries about 1,450
+/// lenses; a menu of that many rows is unusable and SwiftUI builds every one of
+/// them. This shows nothing until somebody types, then at most a dozen matches.
+///
+/// ⚠ The catalogue is fetched **once** — `Engine.lensCatalogue()` crosses the
+/// facade 1,450 times to build it, and doing that per keystroke is the kind of
+/// cost that does not show up until somebody types quickly.
+private struct LensPicker: View {
+    let engine: Engine
+
+    @State private var query = ""
+    @State private var catalogue: [String] = []
+
+    private var matches: [String] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard q.count >= 2 else { return [] }
+        // Every typed word must appear, in any order — "sigma 24 art" finds
+        // "Sigma 24mm F1.4 DG DN | Art 023" without demanding the exact
+        // spacing, which nobody remembers.
+        let words = q.split(separator: " ")
+        return catalogue.filter { name in
+            let lower = name.lowercased()
+            return words.allSatisfy { lower.contains($0) }
+        }
+        .prefix(12)
+        .map { $0 }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !engine.lensChoice.isEmpty {
+                HStack(spacing: 6) {
+                    Engraved.Label(text: "Chosen by hand", color: Palette.dim)
+                    Spacer(minLength: 0)
+                    Button("Clear") { engine.lensChoice = "" }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.accent)
+                }
+            }
+
+            TextField("Find a lens…", text: $query)
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .font(.system(size: 11))
+
+            ForEach(matches, id: \.self) { name in
+                Button {
+                    engine.lensChoice = name
+                    query = ""
+                } label: {
+                    Text(name)
+                        .font(.system(size: 10))
+                        .foregroundStyle(name == engine.lensChoice
+                                         ? Palette.accent : Palette.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            if query.trimmingCharacters(in: .whitespaces).count >= 2 && matches.isEmpty {
+                Text("Nothing in the bundled database matches that.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.faint)
+            }
+        }
+        .task {
+            if catalogue.isEmpty { catalogue = Engine.lensCatalogue() }
         }
     }
 }

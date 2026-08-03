@@ -62,21 +62,10 @@ extension Engine {
         // it again for the one arriving.
         missingMattes = []
 
-        var profile = OrionLensProfile()
-        if orion_engine_lens_profile(handle, &profile) == ORION_OK, profile.found != 0 {
-            let name = withUnsafeBytes(of: profile.lens) { raw in
-                String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
-            }
-            let maker = withUnsafeBytes(of: profile.maker) { raw in
-                String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
-            }
-            lensProfileName = name.hasPrefix(maker) || maker.isEmpty
-                ? name : "\(maker) \(name)"
-            lensProfileApproximate = profile.approximate != 0
-        } else {
-            lensProfileName = ""
-            lensProfileApproximate = false
-        }
+        // A choice belongs to the photograph it was made on; the engine clears
+        // its own on open, and this keeps the two in step.
+        lensChoice = ""
+        refreshLensProfile()
 
         // The held original is the *previous* photo's unedited render. Keeping
         // it means compare shows one picture against another one entirely,
@@ -241,5 +230,60 @@ extension Engine {
             return nil
         }
         return Int(bytes)
+    }
+}
+
+extension Engine {
+
+    /// Re-read whatever profile the engine currently holds.
+    ///
+    /// ⚠ **Read back rather than assumed**, and that is the point of it being
+    /// one function called from two places. A hand-chosen name that no longer
+    /// resolves leaves the previous profile standing (`Engine::setLensChoice`
+    /// reports false and changes nothing), so the interface has to show what is
+    /// *applied* rather than what was asked for. Building the display name in
+    /// two places is also how the picker's list and the panel's label would
+    /// quietly start disagreeing about the same lens.
+    func refreshLensProfile() {
+        guard let handle else {
+            lensProfileName = ""
+            lensProfileApproximate = false
+            return
+        }
+        var profile = OrionLensProfile()
+        if orion_engine_lens_profile(handle, &profile) == ORION_OK, profile.found != 0 {
+            let name = withUnsafeBytes(of: profile.lens) { raw in
+                String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
+            }
+            let maker = withUnsafeBytes(of: profile.maker) { raw in
+                String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
+            }
+            lensProfileName = name.hasPrefix(maker) || maker.isEmpty
+                ? name : "\(maker) \(name)"
+            lensProfileApproximate = profile.approximate != 0
+        } else {
+            lensProfileName = ""
+            lensProfileApproximate = false
+        }
+    }
+
+    /// Seat the hand-chosen lens, then read back what the engine settled on.
+    func applyLensChoice() {
+        guard let handle else { return }
+        _ = orion_engine_set_lens_choice(handle, lensChoice)
+        refreshLensProfile()
+        // ⚠ A refused name leaves the engine's own choice where it was, so the
+        // property is corrected to match rather than left claiming a lens that
+        // is not applied.
+        lensChoice = String(cString: orion_engine_lens_choice(handle))
+    }
+
+    /// Every lens the bundled database carries, sorted, for a picker.
+    static func lensCatalogue() -> [String] {
+        let n = Int(orion_lens_name_count())
+        var out: [String] = []
+        out.reserveCapacity(n)
+        for i in 0..<n { out.append(String(cString: orion_lens_name_at(Int32(i)))) }
+        return out
     }
 }

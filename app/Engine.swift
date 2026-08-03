@@ -171,6 +171,24 @@ final class Engine {
     var lensDistortion: Float = 0 { didSet { pushAndRender() } }
     var lensVignette: Float = 0   { didSet { pushAndRender() } }
 
+    /// A lens profile chosen by hand, as the database spells it, or empty for
+    /// the one the file's own EXIF names.
+    ///
+    /// ⚠ **Setting this re-runs the lookup rather than pushing a parameter.**
+    /// The choice is not a render value — it selects a profile, and the
+    /// profile's coefficients are what reach the shader. `didSet` therefore
+    /// asks the engine to seat it and then re-reads what the engine ended up
+    /// with, because a name that no longer resolves leaves the previous profile
+    /// standing and the interface must show what is actually applied rather
+    /// than what was asked for.
+    var lensChoice: String = "" {
+        didSet {
+            guard lensChoice != oldValue else { return }
+            applyLensChoice()
+            pushAndRender()
+        }
+    }
+
     /// Whether to apply the measured profile. On by default when one is found:
     /// a correction the lens is known to need is not a creative decision, and
     /// every other converter applies it without being asked.
@@ -484,6 +502,7 @@ final class Engine {
             cropX: cropX, cropY: cropY, cropW: cropW, cropH: cropH,
             lensDistortion: lensDistortion, lensVignette: lensVignette,
             lensCaRed: lensCaRed, lensCaBlue: lensCaBlue,
+            lensChoice: lensChoice,
             highlightRecovery: highlightRecovery,
             gradeShadow: gradeShadow, gradeMidtone: gradeMidtone,
             gradeHighlight: gradeHighlight, gradeBalance: gradeBalance,
@@ -519,6 +538,10 @@ final class Engine {
         cropX = s.cropX; cropY = s.cropY; cropW = s.cropW; cropH = s.cropH
         lensDistortion = s.lensDistortion; lensVignette = s.lensVignette
         lensCaRed = s.lensCaRed; lensCaBlue = s.lensCaBlue
+        // ⚠ Seated through the property, so a name the database no longer
+        // carries is corrected to what the engine actually applied rather than
+        // restored as a claim nothing backs.
+        lensChoice = s.lensChoice
         highlightRecovery = s.highlightRecovery
         gradeShadow = s.gradeShadow
         gradeMidtone = s.gradeMidtone

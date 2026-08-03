@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**a lens can be chosen through the facade, #146** —
-engine and C API done, interface still not wired. 1,452 names listed, #145; why
-a lens misses is on screen, #144)
+**Last updated:** 2026-08-03 (**a lens can be chosen by hand, #147** — engine,
+facade and interface, pinned by a scenario that shows the correction reaching
+the picture. The queue is empty again)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -118,36 +118,20 @@ items below need you and cannot move from this side.
 
 **Asked for, not yet built** — raised 2026-08-03, uncosted:
 
-- ⚠ **A lens cannot be chosen by hand.** ✅ **Diagnosed 2026-08-03 (#144); the
-  picker itself is still unbuilt.** The panel now *explains* the miss — that
-  half shipped — but a photographer still cannot do anything about it.
-  ⚠ **The cause is a data gap, not a spelling one, and that closes off the
-  cheap fix.** The developer's file records its lens correctly; it ends
-  `DG DN | Art 023`, and the bundled lensfun database contains **no `Art 023`
-  entry at all** — a 2023 Sigma Art that is simply absent. No `normalize` rule
-  can match a lens that is not in the data.
-  **So the two real options are:** refresh the bundled lensfun database (cheap,
-  but only ever as current as the day it was copied), or a **search-and-pick
-  control** over what is actually bundled, so a photographer can choose a near
-  equivalent knowingly. ⚠ The second must not become an *automatic* near-miss:
-  `lookup` refuses one deliberately, and `tests_io.cpp` pins that a DG DN lens
-  never matches a DG HSM entry — applying one optical design's distortion to
-  another's picture is worse than applying none.
-  ⚠ **The engine and the facade are built (#145, #146); the interface is not.**
-  `LensDatabase::names()` lists 1,452 lenses sorted and de-duplicated and
-  `lookupExact` resolves any one of them; `Engine::setLensChoice` seats a choice
-  at the photograph's own focal length and aperture, and
-  `orion_lens_name_count` / `orion_lens_name_at` / `orion_engine_set_lens_choice`
-  carry it across. **Nothing in the interface reaches any of it yet.**
-  ⚠ **The design question is already settled and should not be relitigated**: the
-  choice is *not* a field in `Adjustments` — it selects a profile whose
-  coefficients already flow through — so it lives beside `lensProfile_`.
-  **What remains, ~half a session:** a `lensChoice` string on `DevelopState`
-  (its decoder is tolerant, so old sidecars default rather than fail — the #112
-  hazard is already cleared), pushed through `Engine.swift` on load and on
-  change, and a searchable control in the Optics panel beside #144's message.
-  ⚠ **`setLensChoice` has no test of its own** — the primitives under it are
-  covered, the glue is not. Worth one before the control lands on top of it.
+- ~~⚠ **A lens cannot be chosen by hand.**~~ ✅ **done 2026-08-03, #147** —
+  engine (#145), facade (#146) and interface all landed. Type two characters in
+  Optics and pick from the 1,452 the bundled database carries; the choice
+  persists per photograph as a **name**, never an index, because the data will
+  be refreshed and an index would silently mean a different lens afterwards.
+  ⚠ **Why it had to exist:** the developer's file names its lens correctly and
+  the bundled database has **no `Art 023` entry at all** (#144) — absent from
+  the data, not misspelled, so no matching rule could ever reach it. `lookup`
+  still refuses near-misses and must keep doing so; `tests_io.cpp` pins that a
+  DG DN lens never matches a DG HSM entry.
+  ⚠ **Not done:** the bundled lensfun data is still whatever was copied on the
+  day, so a lens newer than it stays absent and a photographer has to pick a
+  near equivalent knowingly. Refreshing that data is its own item, uncosted, and
+  wants a licence check before anything is downloaded.
 
 **Closed, each with the decision that closed it** — the full write-ups are in
 `DECISIONS.md` and the session log below:

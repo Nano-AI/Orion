@@ -54,6 +54,44 @@ extension Scenario {
         case "straighten":
             engine.straightenDeg = Float(try number(args, 0))
 
+        case "lens":
+            // ⚠ **An asserting verb, not a setter.** `expect` compares
+            // recordings, which are numbers, and the thing worth pinning here
+            // is a *string* resolving: that a name out of the bundled database
+            // seats a real profile. A `set` that silently did nothing would be
+            // green forever.
+            //
+            // `lens` with no argument clears the choice and asserts the profile
+            // went back to whatever the file's own EXIF gives, which for a lens
+            // the database does not carry is nothing at all.
+            do {
+                let want = args.joined(separator: " ")
+                engine.lensChoice = want
+                checks += 1
+                // Read back rather than trust: a name the database does not
+                // carry leaves the previous profile standing on purpose, and
+                // `Engine.lensChoice` corrects itself to what was applied.
+                let got = engine.lensChoice
+                guard got == want else {
+                    failures += 1
+                    say("  FAIL  lens \(want.isEmpty ? "(cleared)" : want) "
+                        + "did not seat — engine holds "
+                        + "\(got.isEmpty ? "(none)" : got)")
+                    break
+                }
+                if want.isEmpty {
+                    say("  ok    lens choice cleared, back to what the file names")
+                } else {
+                    checks += 1
+                    guard engine.hasLensProfile else {
+                        failures += 1
+                        say("  FAIL  lens \(want) seated but no profile is applied")
+                        break
+                    }
+                    say("  ok    lens \(want) — profile \(engine.lensProfileName)")
+                }
+            }
+
         case "crop":
             engine.setCrop(x: Float(try number(args, 0)), y: Float(try number(args, 1)),
                            w: Float(try number(args, 2)), h: Float(try number(args, 3)))
