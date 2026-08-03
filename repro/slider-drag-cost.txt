@@ -14,10 +14,34 @@
 # ⚠️ This is not a defect in any one filter. Clarity and dehaze are already the
 # subject of `research/local-laplacian.md` and session 2026-07-29f, which found
 # dehaze's six rank passes within 2% of each other — there is nothing to fix in
-# *one* of them. What is missing is the preview path: M1's Interaction epic
-# named degrade-then-refine and it was never built, so every tick pays full
-# resolution for a picture the hand is still moving. Only the crop tool has a
-# reduced-resolution path.
+# *one* of them.
+#
+# ⚠⚠ **THE PARAGRAPH THAT STOOD HERE IS OBSOLETE, AND SO ARE THE NUMBERS ABOVE
+# AS A DESCRIPTION OF WHAT A PHOTOGRAPHER FEELS.** It read: *"What is missing is
+# the preview path: M1's Interaction epic named degrade-then-refine and it was
+# never built, so every tick pays full resolution for a picture the hand is
+# still moving. Only the crop tool has a reduced-resolution path."*
+#
+# It was built. Every canvas gesture arms it (decision #148 re-derived all six
+# against the tree), so a real drag has not paid full resolution for some time —
+# but this file only ever drove `drag`, which does not arm, so it kept measuring
+# and reporting the path nobody is on. Measured 2026-08-03, same frame, same 40
+# ticks, both ways in one run:
+#
+#     control    unarmed              armed               gain
+#     exposure    9.4 ms  107 fps      4.5 ms  224 fps     2.1x
+#     clarity    56.4 ms   18 fps      4.2 ms  235 fps    13.4x
+#     dehaze     79.0 ms   13 fps      6.5 ms  155 fps    12.2x
+#
+# So the report this file was opened for — *"sliders slow"* — is answered, and
+# the answer is not "clarity is expensive". It is that **clarity costs 4.2 ms to
+# drag and 56.4 ms to release**, and both numbers matter: the first is the
+# gesture, the second is what the photographer waits for at the end of it.
+#
+# ⚠ **Both are measured below and both must stay.** Reporting only the armed
+# number would hide a regression in the full-resolution path that every commit,
+# every export and every keyboard nudge still takes; reporting only the unarmed
+# number is what made this file describe a problem that had been fixed.
 #
 # Kept as a measurement rather than a threshold. A wall-clock `expect` fails on
 # a busy machine and teaches everyone to ignore it; this prints the cost so the
@@ -54,6 +78,15 @@ open samples/_PIC8220.ARW
 set exposure 2.6
 
 print one tick of a drag, at full resolution, on a 24 MP frame:
+# Unarmed: the full-resolution path, which a commit, an export and a keyboard
+# nudge all still take.
 drag exposure 2.0 2.6 40
 drag clarity 0.3 0.9 40
 drag dehaze 0.3 0.9 40
+
+# Armed: what a hand on a slider actually gets, since every gesture arms.
+interact on
+drag exposure 2.0 2.6 40
+drag clarity 0.3 0.9 40
+drag dehaze 0.3 0.9 40
+interact off

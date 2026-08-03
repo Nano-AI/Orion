@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the performance audit's premise table was stale
-in every row, #148** — all four gestures already armed, and nothing could have
-told us. A lens can be chosen by hand, #147)
+**Last updated:** 2026-08-03 (**"sliders slow" is answered, #149** — clarity
+drags at 4.2 ms and releases at 56.4; the instrument had been measuring the path
+nobody is on. The audit's premise table was also stale, #148)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -122,8 +122,15 @@ the preview graph — was **wrong in all four rows**; every one had been fixed a
 nobody updated it. `tools/check-gestures.py` is now a gate so it cannot rot
 again, and it is a grep rather than a test on purpose: a `DragGesture` closure
 cannot be driven from either suite (#110.3), so deleting one of these calls is
-green everywhere. **The rest of the audit — the table of areas and the number
-against each — is still to do.**
+green everywhere. **The tick is now measured too (#149)**: clarity drags at **4.2 ms** and releases
+at **56.4** — the instrument had recorded only the unarmed path since it was
+written, so it reported 17 fps for a gesture that runs at 235, and its own text
+called the preview path unbuilt long after it was built.
+⚠ **Four areas of the audit remain unmeasured**: cold open (what does the
+photographer see between a 36 ms decode and a 72–92 ms render?), scroll/zoom/
+pan/filmstrip (never measured at all), memory on 8 GB or a non-M4 GPU, and the
+measuring protocol itself — 2026-07-31 recorded the M0 gate swinging **8.97 →
+44.53 ms on an identical binary**.
 
 **Asked for, not yet built** — raised 2026-08-03, uncosted:
 
