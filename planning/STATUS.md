@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**"sliders slow" is answered, #149** — clarity
-drags at 4.2 ms and releases at 56.4; the instrument had been measuring the path
-nobody is on. The audit's premise table was also stale, #148)
+**Last updated:** 2026-08-03 (**the bench is immune to CPU load and wrecked by a
+busy GPU, #150** — and it now says so rather than captioning an 11 ms spread as
+noise. "Sliders slow" answered at #149)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -126,11 +126,15 @@ green everywhere. **The tick is now measured too (#149)**: clarity drags at **4.
 at **56.4** — the instrument had recorded only the unarmed path since it was
 written, so it reported 17 fps for a gesture that runs at 235, and its own text
 called the preview path unbuilt long after it was built.
-⚠ **Four areas of the audit remain unmeasured**: cold open (what does the
-photographer see between a 36 ms decode and a 72–92 ms render?), scroll/zoom/
-pan/filmstrip (never measured at all), memory on 8 GB or a non-M4 GPU, and the
-measuring protocol itself — 2026-07-31 recorded the M0 gate swinging **8.97 →
-44.53 ms on an identical binary**.
+✅ **The measuring protocol is settled and measured (#150)** — five runs of one
+binary spread **0.14 ms**; a saturated CPU changes nothing (**8.98, spread
+0.06**); a second Orion on the GPU gives **10.09 / 21.23 / 11.23, spread 11.14**.
+The rule is *CPU load is harmless, anything else on the GPU is fatal*, and the
+bench now warns above a 2 ms spread instead of captioning it as noise. **Every
+other number in this audit was taken on a quiet machine and is comparable.**
+⚠ **Three areas remain unmeasured**: cold open (what does the photographer see
+between a 36 ms decode and a 72–92 ms render?), scroll/zoom/pan/filmstrip (never
+measured at all), and memory on 8 GB or a non-M4 GPU.
 
 **Asked for, not yet built** — raised 2026-08-03, uncosted:
 

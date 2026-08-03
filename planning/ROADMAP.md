@@ -380,7 +380,7 @@ call and a naive count reports two where there is one.
 | **Scroll, zoom, pan, filmstrip** | never measured at all |
 | **Memory** | 6971 MiB of intermediates on a 24 MP frame. What happens on 8 GB, or on a GPU that is not an M4? |
 | **Export** | 345 ms JPEG, 571 ms TIFF. Fine, but unwatched |
-| **The measuring protocol itself** | ⚠ 2026-07-31 recorded the M0 gate swinging **8.97 → 44.53 ms on an identical binary** with GUI load. Any number this audit produces is worthless unpaired. Decide the protocol first |
+| ✅ **The measuring protocol itself** | **Done 2026-08-03, decision #150.** The protocol was already decided (#116: best of three rounds, every round printed), so *"decide it first"* was stale. **Five runs of one binary: 8.97 / 9.09 / 8.95 / 9.09 / 9.08, spread 0.14 ms** — it holds. ⚠ **And the threat is not what this row said.** Every core in a busy loop: **8.98 ms, spread 0.06 — immune.** A second Orion rendering alongside it: **10.09 / 21.23 / 11.23, spread 11.14 ms.** So the rule is not "a quiet machine" but **CPU load is harmless, anything else on the GPU is fatal**, which matches the original outlier having been taken under *GUI* load. ⚠ Best-of-three rescued the verdict — it printed **PASS at 10.09** with an 11 ms spread under the old caption *"machine noise, not the build"* — so the bench now warns outright above 2 ms |
 
 ### ⚠ The rule that governs it
 

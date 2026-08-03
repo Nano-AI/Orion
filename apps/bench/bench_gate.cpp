@@ -77,8 +77,28 @@ void exposureGate(Bench& b) {
                 s.min, s.median, s.p95, s.mean);
     std::printf("  p95 by round:");
     for (const Stats& c : rounds) std::printf("  %.2f", c.p95);
-    std::printf("   (spread %.2f ms — machine noise, not the build)\n",
-                spreadHi - spreadLo);
+    // ⚠ **The caption used to read "machine noise, not the build" and stopped
+    // there, at any spread.** That is true and reassuring in the same breath,
+    // which is the wrong combination: measured 2026-08-03, this bench is
+    // *immune* to a saturated CPU (8.98 ms, spread 0.06 with every core in a
+    // busy loop) and wrecked by anything else touching the **GPU** — a second
+    // Orion rendering alongside it gave rounds of 10.09 / 21.23 / 11.23, a
+    // spread of 11.14 ms. Best-of-three rescued the verdict, and a reader who
+    // trusted the headline number would never have known the machine was not
+    // quiet. So a wide spread now says so.
+    //
+    // 2 ms is a fifth of the measurement and roughly fifteen times the idle
+    // spread (0.14 ms over five runs of one binary), which makes it far enough
+    // outside normal to be worth a sentence and not so tight that an ordinary
+    // run trips it.
+    const double spread = spreadHi - spreadLo;
+    if (spread > 2.0) {
+        std::printf("   (spread %.2f ms — ⚠ SOMETHING ELSE IS USING THE GPU."
+                    " This machine is not quiet and this number is not"
+                    " comparable to one taken on a quiet one.)\n", spread);
+    } else {
+        std::printf("   (spread %.2f ms — machine noise, not the build)\n", spread);
+    }
 
     const bool pass = s.p95 < 16.0;
     std::printf("\n  M0 gate (<16 ms at p95, best of %d rounds): %s  [%.2f ms]\n\n",
