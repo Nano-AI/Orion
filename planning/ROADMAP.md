@@ -504,7 +504,18 @@ the struct does not change size.
 result stops being bit-identical to a full evaluation, which is the invariant
 #80's test asserts.
 
-### ⚠ Why it is not started
+### ⚠ Why it was not started sooner — written before #102, kept as the record
+
+⚠ **This heading read "Why it is not started" until 2026-08-02, inside a section
+whose own title says ✅ shipped.** A session skimming for open work would have
+found a live-sounding "not started" under a done item, which is the exact trap
+that has now cost this repository three sessions: `STATUS.md`'s queue offered
+already-shipped work as the next story three times (#135, twice; #139, once).
+The paragraph below is the *original* argument for why the predicate deserved a
+session of its own — it got one, **#102**, and the accumulator behind it got
+**#108**. Kept because the argument is what made the plan right, and it is a good
+argument; retitled because a plan and a plan that has been executed must not read
+the same.
 
 The predicate is the danger. It must compare the **post-transform** texels of the
 new stroke against the previous upload, prefix for prefix, and fall back to a

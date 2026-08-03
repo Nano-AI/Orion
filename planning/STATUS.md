@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-02 (**the queue is empty and the ledger is now
-checked, #139** — its last item had shipped as #112, which had never been
-written down. A mask's geometry is exact as of #138)
+**Last updated:** 2026-08-02 (**the panels explain themselves on hover now,
+#140** — fourteen sections' prose moved to an ⓘ, and the Detail column is 554
+points shorter. The queue is empty and the ledger is checked, #139)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -374,6 +374,59 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-02j` — the panel stopped explaining itself in prose
+
+**Asked for directly:** *"add an i info icon and move all the text into the info
+hover — I feel like it's kind of bad to stuff text there."*
+
+It is. Thirty-odd helper paragraphs sat under the sliders they explained, three
+lines of 10-point gray each. The panel paid for them on every draw; the
+photographer read each one once.
+
+**Fourteen sections** now carry the text on an `Engraved.Info` ⓘ at the far end
+of the nameplate — **after** the hairline, so every icon lands in one column at
+the panel's right edge. Before it, each would sit at the end of its own name and
+the column would ripple down the panel.
+
+⚠ **`.help` and not a popover**, and that is a narrowing rather than a shortcut:
+already the idiom in ten places here, no `@State` per row, cannot get stuck open,
+and **VoiceOver reads it for free**. The cost is a system hover delay and plain
+text — so nothing needed *while dragging* belongs there.
+
+### ⚠ The transform was mechanical, and two attempts were wrong
+
+Matching the enclosing `section("…") {` by counting braces forward picks the
+wrong section on nested content, and produced files that would not parse. The
+correct walk is backwards from the paragraph: depth 0 on `}`, and the first `{`
+at depth 0 is the enclosing brace.
+
+What saved it was that the script **refuses and exits rather than dropping a
+paragraph it cannot re-home** — the first run hit a block with no enclosing
+section and stopped with the tree untouched, instead of quietly deleting prose.
+
+Six blocks are deliberately left: interpolated status strings — `"Exporting
+\(p.done) of \(p.total)…"`, a lens-profile name, a refusal — not explanations.
+An ⓘ that explains nothing teaches the photographer the icon is not worth
+hovering.
+
+### ⚠ And a gate that nearly started failing for the wrong reason
+
+`detail-tail` asserts the Detail panel **overflows** its column, and exits
+nonzero when nothing does. It ran under a **1,500-point window override** chosen
+when the panel's content was 1,701 points.
+
+This change took the content to **1,147**, and the fold with it to **16 points**
+— one row of margin from going red and blaming whatever touched the panel next.
+The override is **deleted rather than retuned**: at the default window the fold
+is **466 points**, the two frames overlap by **215**, and nothing sits unseen
+between them. Better than the override ever bought.
+
+The number that matters there is the **overlap**, not the overflow, and the
+comment now says so for whoever moves panel content next.
+
+**844 / 3708 / 41 of 41 / bench exit 0 on three frames / check-decisions exit 0**,
+and all three check-scenes render.
 
 ## Session `2026-08-02i` — the queue's last item was done, and the ledger never heard
 

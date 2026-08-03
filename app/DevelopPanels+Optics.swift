@@ -14,7 +14,15 @@ extension Editor {
     /// switch off, which is a different kind of control from a slider you set.
     var opticsPanel: some View {
         Group {
-        section("Lens") {
+        section("Lens", info: engine.hasLensProfile
+                 ? "The fringe controls stay manual: the database's chromatic "
+                   + "aberration figures are per-copy, and a wrong one adds "
+                   + "colored edges rather than removing them."
+                 : "No profile for this lens — every setting here is by eye. "
+                   + "Negative distortion pulls the barrel out of a wide lens; "
+                   + "negative vignetting lifts the corners. The fringe controls "
+                   + "rescale red and blue against green, which is what removes "
+                   + "the colored edges at the frame's corners.") {
             if engine.hasLensProfile {
                 Toggle(isOn: $engine.lensProfileEnabled) {
                     VStack(alignment: .leading, spacing: 1) {
@@ -52,18 +60,6 @@ extension Editor {
                 .opacity(profiled ? 0.4 : 1)
             slider("Fringe R/C", $engine.lensCaRed, -1...1, "", 2, resetsTo: engine.defaults.lensCaRed)
             slider("Fringe B/Y", $engine.lensCaBlue, -1...1, "", 2, resetsTo: engine.defaults.lensCaBlue)
-            Text(engine.hasLensProfile
-                 ? "The fringe controls stay manual: the database's chromatic "
-                   + "aberration figures are per-copy, and a wrong one adds "
-                   + "colored edges rather than removing them."
-                 : "No profile for this lens — every setting here is by eye. "
-                   + "Negative distortion pulls the barrel out of a wide lens; "
-                   + "negative vignetting lifts the corners. The fringe controls "
-                   + "rescale red and blue against green, which is what removes "
-                   + "the colored edges at the frame's corners.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
         }
         }
     }

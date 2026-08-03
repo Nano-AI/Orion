@@ -86,7 +86,8 @@ extension Editor {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        section("Rotate") {
+                        section("Rotate", info: "The camera's own orientation is applied automatically; "
+                                 + "this rotates on top of it.") {
                             HStack(spacing: 8) {
                                 Button {
                                     engine.rotate(-1); viewport.reset()
@@ -104,27 +105,18 @@ extension Editor {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
 
-                            Text("The camera's own orientation is applied automatically; "
-                                 + "this rotates on top of it.")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Palette.faint)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        section("Perspective") {
+                        section("Perspective", info: "Straightens converging lines — a building "
+                                 + "shot looking up, a wall shot from one side. "
+                                 + "The frame zooms to stay full, as the lens "
+                                 + "corrections do. Aspect undoes the squeeze a "
+                                 + "strong correction leaves behind.") {
                             slider("Vertical", $engine.perspectiveVertical, -1...1, "", 2,
                                    resetsTo: engine.defaults.perspectiveVertical)
                             slider("Horizontal", $engine.perspectiveHorizontal, -1...1, "", 2,
                                    resetsTo: engine.defaults.perspectiveHorizontal)
                             slider("Aspect", $engine.perspectiveAspect, -1...1, "", 2,
                                    resetsTo: engine.defaults.perspectiveAspect)
-                            Text("Straightens converging lines — a building "
-                                 + "shot looking up, a wall shot from one side. "
-                                 + "The frame zooms to stay full, as the lens "
-                                 + "corrections do. Aspect undoes the squeeze a "
-                                 + "strong correction leaves behind.")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Palette.faint)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
                         Button("Reset crop") { engine.edit("Crop") { engine.resetCrop() } }
                             .buttonStyle(.bordered)
@@ -147,9 +139,12 @@ extension Editor {
                 set: { engine[keyPath: key][band.rawValue] = $0 })
     }
 
-    func section<Content: View>(_ title: String,
+    /// `info` is what the section does, carried to the nameplate's ⓘ and shown
+    /// on hover. It replaced the paragraph that used to sit under the controls
+    /// — see `Engraved.Info` for why that was worth changing.
+    func section<Content: View>(_ title: String, info: String? = nil,
                                         @ViewBuilder content: @escaping () -> Content) -> some View {
-        SectionPlate(title: title, content: content)
+        SectionPlate(title: title, info: info, content: content)
     }
 
     /// `resetsTo` is the value the control returns to for *this* photo, which

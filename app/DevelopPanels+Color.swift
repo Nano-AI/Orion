@@ -11,7 +11,11 @@ extension Editor {
                 slider("Vibrance", $engine.vibrance, -1...1, "", 2, resetsTo: engine.defaults.vibrance)
                 slider("Saturation", $engine.saturation, -1...1, "", 2, resetsTo: engine.defaults.saturation)
             }
-            section("Color Grading") {
+            section("Color Grading", info: "Angle picks the hue, distance picks how far. The wheels "
+                     + "only change color — the slider under each one is what "
+                     + "changes that zone's brightness. Balance slides where "
+                     + "the three zones sit: right hands more of the picture "
+                     + "to the highlight wheel, left to the shadow wheel.") {
                 // Three wheels across the panel. Side by side rather than
                 // stacked, because grading is a comparison — you push the
                 // shadows cool by looking at what it does against the
@@ -31,14 +35,6 @@ extension Editor {
                 slider("Balance", $engine.gradeBalance, -1...1, "", 2,
                        resetsTo: engine.defaults.gradeBalance)
 
-                Text("Angle picks the hue, distance picks how far. The wheels "
-                     + "only change color — the slider under each one is what "
-                     + "changes that zone's brightness. Balance slides where "
-                     + "the three zones sit: right hands more of the picture "
-                     + "to the highlight wheel, left to the shadow wheel.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Palette.faint)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             section("Color Mixer") {

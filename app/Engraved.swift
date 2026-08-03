@@ -57,8 +57,45 @@ enum Engraved {
         }
     }
 
+    /// What a control does, on hover, instead of as a paragraph under it.
+    ///
+    /// ⚠ **The text it carries used to be set in the panel**, three lines of
+    /// 10-point gray under the slider it explained. Thirty-seven of them, and
+    /// the developer's objection was that stuffing prose into a control column
+    /// is bad — which it is: the explanation is read once and the slider is used
+    /// forever, so the panel paid for the first every time it drew the second.
+    /// The Detail panel alone gave up about a third of its height to text
+    /// nobody was reading any more.
+    ///
+    /// `.help` rather than a popover, and that is a deliberate narrowing: it is
+    /// the idiom this codebase already uses in ten places, it needs no `@State`
+    /// per row, it cannot get stuck open, and **VoiceOver reads it for free** —
+    /// a popover would need all four built and kept working. The cost is that a
+    /// tooltip is plain text with a system-set delay, so this is not the place
+    /// for anything a photographer needs *while* dragging.
+    struct Info: View {
+        let text: String
+
+        var body: some View {
+            Image(systemName: "info.circle")
+                // Matched to `Label`'s own size rather than the readout's: it
+                // sits on the nameplate row, and an icon larger than the name
+                // beside it reads as a button to press rather than a mark to
+                // hover.
+                .font(.system(size: 9.5))
+                .foregroundStyle(Palette.faint)
+                .help(text)
+                // Without this the hover target is the glyph's own bounds,
+                // which for a 9.5-point circle is a few points across and
+                // genuinely hard to hit.
+                .contentShape(Rectangle())
+                .accessibilityLabel(Text(text))
+        }
+    }
+
     /// A section's engraved nameplate: the name, a hairline running out to the
-    /// panel edge, and a mark when anything inside has been moved.
+    /// panel edge, a mark when anything inside has been moved, and — when the
+    /// section has something to explain — an ⓘ at the far end.
     ///
     /// The hairline is the hierarchy. Section names and control names were both
     /// small gray text before, so a panel of forty rows had no level to it and
@@ -66,6 +103,10 @@ enum Engraved {
     struct Plate: View {
         let title: String
         let modified: Bool
+        /// Nil when the section has nothing to say, so no icon is drawn at all
+        /// — an ⓘ that explains nothing is worse than no ⓘ, because it teaches
+        /// the photographer the icon is not worth hovering.
+        var info: String? = nil
 
         var body: some View {
             HStack(spacing: 8) {
@@ -81,6 +122,11 @@ enum Engraved {
                 Rectangle()
                     .fill(Palette.line)
                     .frame(height: 1)
+                // ⚠ After the hairline, so it lands at the panel's right edge
+                // and every section's icon is in the same column. Before it,
+                // each icon would sit at the end of its own name and the
+                // column would ripple down the panel.
+                if let info { Info(text: info) }
             }
         }
     }
@@ -93,13 +139,16 @@ enum Engraved {
 /// themselves — which needs somewhere to hold state.
 struct SectionPlate<Content: View>: View {
     let title: String
+    /// What the section does, shown on hover from the nameplate's ⓘ rather than
+    /// set as a paragraph under the controls. See `Engraved.Info`.
+    var info: String? = nil
     @ViewBuilder let content: () -> Content
 
     @State private var modified = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
-            Engraved.Plate(title: title, modified: modified)
+            Engraved.Plate(title: title, modified: modified, info: info)
             content()
         }
         .onPreferenceChange(SectionModifiedKey.self) { modified = $0 }

@@ -8,17 +8,20 @@ extension Editor {
 
     var detailPanel: some View {
         Group {
-        section("Noise Reduction") {
+        section("Noise Reduction", info: "Measured from this frame, so 1.00 means \"remove what is "
+                 + "smaller than one standard deviation of its own noise\" "
+                 + "rather than a fixed amount.") {
             slider("Luminance", $engine.denoiseLuma, 0...4, "", 2, resetsTo: engine.defaults.denoiseLuma)
             slider("Color", $engine.denoiseColor, 0...4, "", 2, resetsTo: engine.defaults.denoiseColor)
-            Text("Measured from this frame, so 1.00 means \"remove what is "
-                 + "smaller than one standard deviation of its own noise\" "
-                 + "rather than a fixed amount.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        section("Spots") {
+        section("Spots", info: "Turn on Place spots, then drag on the photo: press where the "
+               + "dust is and pull to choose what covers it. Drag either circle "
+               + "afterwards to move it — solid is the spot, dashed is where the "
+               + "replacement comes from. Heal takes the brightness from around "
+               + "the spot and the detail from the source, which is what makes "
+               + "it invisible on a sky. ⚠ It has one known limit: placed across "
+               + "a hard edge the correction is wrong on both sides, because it "
+               + "is a single number for the whole disc.") {
             HStack(spacing: 8) {
                 Picker("", selection: $engine.spotHeal) {
                     Text("Heal").tag(true)
@@ -60,19 +63,10 @@ extension Editor {
             .buttonStyle(.bordered)
             .controlSize(.small)
 
-            Text("Turn on Place spots, then drag on the photo: press where the "
-               + "dust is and pull to choose what covers it. Drag either circle "
-               + "afterwards to move it — solid is the spot, dashed is where the "
-               + "replacement comes from. Heal takes the brightness from around "
-               + "the spot and the detail from the source, which is what makes "
-               + "it invisible on a sky. ⚠ It has one known limit: placed across "
-               + "a hard edge the correction is wrong on both sides, because it "
-               + "is a single number for the whole disc.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        section("Look") {
+        section("Look", info: "A .cube look, applied last — after the tone curve, to a "
+               + "finished picture. Tetrahedral interpolation, so a LUT with a "
+               + "hard edge in it keeps the edge.") {
             HStack(spacing: 6) {
                 PanelButton(title: engine.lutName.isEmpty ? "Load LUT…" : engine.lutName) {
                     let panel = NSOpenPanel()
@@ -106,82 +100,52 @@ extension Editor {
                        resetsTo: engine.defaults.lutStrength)
             }
 
-            Text("A .cube look, applied last — after the tone curve, to a "
-               + "finished picture. Tetrahedral interpolation, so a LUT with a "
-               + "hard edge in it keeps the edge.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        section("Shadow lift") {
+        section("Shadow lift", info: "Opens the shadows without flattening them: the picture is "
+               + "blended with brighter versions of itself, feature by feature "
+               + "rather than tone by tone, so local contrast survives.") {
             slider("Lift", $engine.fusion, 0...1, "", 2,
                    resetsTo: engine.defaults.fusion)
-            Text("Opens the shadows without flattening them: the picture is "
-               + "blended with brighter versions of itself, feature by feature "
-               + "rather than tone by tone, so local contrast survives.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        section("Grain") {
+        section("Grain", info: "Film grain, added to the finished picture rather than to the "
+               + "scene — it belongs to the print, not to the light. Loudest in "
+               + "the midtones and silent at both ends, which is how a real "
+               + "emulsion behaves. Size is in pixels of the *negative*, so "
+               + "cropping enlarges the grain instead of resampling it.") {
             slider("Amount", $engine.grainAmount, 0...0.06, "", 3,
                    resetsTo: engine.defaults.grainAmount)
             slider("Size", $engine.grainSize, 1.2...8, " px", 1,
                    resetsTo: engine.defaults.grainSize)
-            Text("Film grain, added to the finished picture rather than to the "
-               + "scene — it belongs to the print, not to the light. Loudest in "
-               + "the midtones and silent at both ends, which is how a real "
-               + "emulsion behaves. Size is in pixels of the *negative*, so "
-               + "cropping enlarges the grain instead of resampling it.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        section("Vignette") {
-            slider("Amount", $engine.vignetteAmount, -3...3, " EV", 2,
-                   resetsTo: engine.defaults.vignetteAmount)
-            slider("Field angle", $engine.vignetteFieldAngle, 10...70, "°", 0,
-                   resetsTo: engine.defaults.vignetteFieldAngle)
-            Text("A deliberate falloff toward the corners of the crop, not a "
+        section("Vignette", info: "A deliberate falloff toward the corners of the crop, not a "
                + "lens correction — the Lens panel's Vignetting takes one out, "
                + "this puts one in, and a photograph can carry both. Amount is "
                + "the exposure change at the corner in stops. Field angle is "
                + "the half-diagonal angle of view of the lens whose natural "
                + "cos⁴ falloff is being imitated: wide reaches into the frame, "
-               + "narrow stays in the corners.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
+               + "narrow stays in the corners.") {
+            slider("Amount", $engine.vignetteAmount, -3...3, " EV", 2,
+                   resetsTo: engine.defaults.vignetteAmount)
+            slider("Field angle", $engine.vignetteFieldAngle, 10...70, "°", 0,
+                   resetsTo: engine.defaults.vignetteFieldAngle)
         }
-        section("Dehaze") {
-            slider("Dehaze", $engine.dehaze, 0...1, "", 2,
-                   resetsTo: engine.defaults.dehaze)
-            Text("Estimates how much of each part of the picture is haze rather "
+        section("Dehaze", info: "Estimates how much of each part of the picture is haze rather "
                + "than subject, and subtracts it. It has a known blind spot: a "
                + "large pale surface with no shadow on it \u{2014} white stone, a "
-               + "white car \u{2014} reads as haze, and will darken.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
+               + "white car \u{2014} reads as haze, and will darken.") {
+            slider("Dehaze", $engine.dehaze, 0...1, "", 2,
+                   resetsTo: engine.defaults.dehaze)
         }
-        section("Clarity") {
+        section("Clarity", info: "Local contrast, edge by edge rather than everywhere at once — "
+               + "a large edge keeps its shape while the texture inside it "
+               + "gains or loses contrast. Negative smooths.") {
             slider("Clarity", $engine.clarity, -1...1, "", 2,
                    resetsTo: engine.defaults.clarity)
-            Text("Local contrast, edge by edge rather than everywhere at once — "
-               + "a large edge keeps its shape while the texture inside it "
-               + "gains or loses contrast. Negative smooths.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        section("Sharpening") {
+        section("Sharpening", info: "Masking protects flat areas, where noise lives and detail does not.") {
             slider("Amount", $engine.sharpenAmount, 0...2, "", 2, resetsTo: engine.defaults.sharpenAmount)
             slider("Radius", $engine.sharpenRadius, 0.5...3, " px", 1, resetsTo: engine.defaults.sharpenRadius)
             slider("Masking", $engine.sharpenMasking, 0...1, "", 2, resetsTo: engine.defaults.sharpenMasking)
-            Text("Masking protects flat areas, where noise lives and detail does not.")
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
         }
         }
     }

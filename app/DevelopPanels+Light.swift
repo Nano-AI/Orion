@@ -37,18 +37,14 @@ extension Editor {
                 slider("Whites", $engine.whites, -1...1, "", 2, resetsTo: engine.defaults.whites)
                 slider("Blacks", $engine.blacks, -1...1, "", 2, resetsTo: engine.defaults.blacks)
             }
-            section("Highlight Recovery") {
-                slider("Amount", $engine.highlightRecovery, 0...1, "", 2, resetsTo: engine.defaults.highlightRecovery)
-                Text("Where one channel clips before the others, it stops "
+            section("Highlight Recovery", info: "Where one channel clips before the others, it stops "
                      + "carrying detail while the rest still do — a bright sky "
                      + "goes flat where blue ran out. This rebuilds that "
                      + "channel from the ones still reading. A fully blown "
                      + "highlight is already rendered white, so this only "
                      + "changes the places where a single channel ran out on "
-                     + "its own.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Palette.faint)
-                    .fixedSize(horizontal: false, vertical: true)
+                     + "its own.") {
+                slider("Amount", $engine.highlightRecovery, 0...1, "", 2, resetsTo: engine.defaults.highlightRecovery)
             }
             // Below the sliders, because it is the control you reach for when
             // a slider was not specific enough. The engine has evaluated this

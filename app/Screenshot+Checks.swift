@@ -171,19 +171,29 @@ extension Screenshot {
     /// The window a scene needs when the default one cannot hold what the scene
     /// exists to show.
     ///
-    /// ⚠ **Measured, not guessed, and the measurement is why the number is
-    /// here rather than 1050.** The Detail panel's content is **1,701 points**
-    /// and the default window gives its scroll view **681** — so the scene at
-    /// rest accounts for 0–681 and a frame scrolled to the end accounts for
-    /// 1,020–1,701, and *Grain sits in the 339-point band between them*, seen
-    /// by neither. Confirmed by looking at the first capture, which reached
-    /// Vignette and stopped: a scroll that lands past the section it was
-    /// written for is the same hole one flick lower down. At 1,500 the window
-    /// holds 1,131, the end of the panel is 570 points down, and the two frames
-    /// overlap by 111 points with nothing between them. A taller window is a
-    /// state the interface is really in — it is a resizable window on a taller
-    /// display — and the scroll is still real and still asserted.
+    /// ⚠ **Nil again as of 2026-08-02, and the history is the reason to keep
+    /// this comment.** It returned **1500** for `detail-tail`, measured: the
+    /// Detail panel's content was **1,701 points** and the default window gives
+    /// its scroll view **681**, so the scene at rest accounted for 0–681 and a
+    /// frame scrolled to the end for 1,020–1,701 — and *Grain sat in the
+    /// 339-point band between them, seen by neither*. At 1,500 the window held
+    /// 1,131, the fold was 570 points down, and the two frames overlapped by
+    /// 111 points with nothing between them.
+    ///
+    /// Moving the panels' helper prose into `Engraved.Info` took **554 points**
+    /// out of that content — 1,701 → **1,147** — which took the fold at 1,500
+    /// down to **16 points**. A gate one row of margin from breaking for a
+    /// reason unrelated to what it tests is not a gate, and this one fails
+    /// *loudly* when nothing overflows, so it would have gone red on the next
+    /// panel edit and blamed the wrong change.
+    ///
+    /// At the default window the same measurement now reads: content 1,147,
+    /// scroll view **681**, fold **466 points down**, the two frames
+    /// overlapping by **215** with nothing between them. That is a better fold
+    /// than the override ever bought, so the override is gone rather than
+    /// retuned. ⚠ **Re-measure this the next time panel content moves** — the
+    /// number that matters is the overlap, not the overflow.
     static func minimumHeight(_ scene: String) -> CGFloat? {
-        scene == "detail-tail" ? 1500 : nil
+        nil   // see above: the panel no longer needs a taller window
     }
 }
