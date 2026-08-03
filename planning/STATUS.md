@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the Optics panel says why a lens was not
-matched, #144** — and the answer is that the bundled database has no `Art 023`
-entry at all. The ⓘ works and opens one window, #143, in v0.4.0-alpha.6)
+**Last updated:** 2026-08-03 (**the lens database can be listed and chosen from,
+#145** — engine half only, 1,452 names, nothing in the interface reaches it yet.
+Why a lens misses is now on screen, #144)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -132,7 +132,15 @@ items below need you and cannot move from this side.
   equivalent knowingly. ⚠ The second must not become an *automatic* near-miss:
   `lookup` refuses one deliberately, and `tests_io.cpp` pins that a DG DN lens
   never matches a DG HSM entry — applying one optical design's distortion to
-  another's picture is worse than applying none. Uncosted.
+  another's picture is worse than applying none.
+  ⚠ **The engine half is built and tested (#145); the interface half is not.**
+  `LensDatabase::names()` lists 1,452 lenses sorted and de-duplicated, and
+  `lookupExact` resolves any one of them — every name it offers round-trips.
+  **Nothing in the interface can reach either yet.** What remains: a chosen lens
+  has to persist per photograph, which means a string field through
+  `Adjustments` → the POD facade → the sidecar, and a searchable control in the
+  Optics panel beside the message #144 added. ~1 session, and the sidecar field
+  is the part to get right first.
 
 **Closed, each with the decision that closed it** — the full write-ups are in
 `DECISIONS.md` and the session log below:

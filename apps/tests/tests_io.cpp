@@ -315,6 +315,95 @@ void testLensDatabase() {
     // database. The DSLR "24mm f/1.4 DG HSM" is a different optical design, and
     // matching it would apply one lens's distortion to another's picture.
     {
+        // ── Choosing a lens by hand ──────────────────────────────────────
+        //
+        // ⚠ **This exists because a lens can be absent from the data entirely
+        // and no amount of matching will help.** The developer's own file names
+        // its lens correctly and the bundled database has no `Art 023` entry at
+        // all (#144), so the only honest answer is a list to choose from —
+        // `lookup` must keep refusing near-misses, and does.
+        {
+            const auto names = db.names();
+            report(names.size() > 500, "the database can be listed",
+                   std::to_string(names.size()) + " names");
+
+            report(std::is_sorted(names.begin(), names.end()),
+                   "the list is sorted, so a picker can bisect it");
+            report(std::adjacent_find(names.begin(), names.end()) == names.end(),
+                   "and carries no duplicate, though the data does — one lens "
+                   "listed four times for four mounts is a list nobody trusts");
+
+            // ⚠ Round-trip: every name it offers must resolve, or the picker
+            // can seat a choice the engine then refuses.
+            std::size_t misses = 0;
+            for (const auto& n : names) {
+                if (!db.lookupExact(n, 50.0f, 5.6f).found) ++misses;
+            }
+            report(misses == 0, "every name it offers resolves back to a profile",
+                   std::to_string(misses) + " that did not");
+
+            // ⚠ **The two paths must agree**, and this is what pins the shared
+            // `vignetteAt`: it was inline in `lookup` until `lookupExact`
+            // needed it, and a second copy of an interpolation is how two paths
+            // quietly start giving one lens two answers.
+            // ⚠ **This block was conditional and therefore blind.** Written as
+            // `if (viaExif.found)`, it skipped silently when the fixture lens
+            // stopped being found — and a mutation deleting `lookupExact`'s
+            // vignetting call passed all 852 checks because of it. The fixture's
+            // own premise is asserted now, so a skip is a failure.
+            const auto viaExif = db.lookup("FE 24-70mm F2.8 GM", 50.0f, 5.6f);
+            report(viaExif.found,
+                   "the fixture lens is in the database, so the comparison below "
+                   "really runs", viaExif.lens);
+            if (viaExif.found) {
+                const std::string picked =
+                    viaExif.lens.rfind(viaExif.maker, 0) == 0 || viaExif.maker.empty()
+                        ? viaExif.lens : viaExif.maker + " " + viaExif.lens;
+                const auto viaPick = db.lookupExact(picked, 50.0f, 5.6f);
+                bool same = viaPick.found;
+                for (int i = 0; i < 3 && same; ++i) {
+                    same = viaPick.poly[i] == viaExif.poly[i] &&
+                           viaPick.vignette[i] == viaExif.vignette[i];
+                }
+                report(same, "matching and choosing give the same lens the same "
+                             "numbers, to the bit", picked);
+            }
+
+            // ⚠ **And the coefficients must actually arrive**, which the
+            // agreement check alone does not prove — two paths that both return
+            // zero agree perfectly. Deleting `lookupExact`'s vignetting call
+            // was green until this existed.
+            std::size_t withVignette = 0, withPoly = 0;
+            for (const auto& n : names) {
+                const auto q = db.lookupExact(n, 50.0f, 5.6f);
+                if (q.vignette[0] != 0.0f || q.vignette[1] != 0.0f ||
+                    q.vignette[2] != 0.0f) ++withVignette;
+                if (q.poly[0] != 0.0f || q.poly[1] != 0.0f ||
+                    q.poly[2] != 0.0f) ++withPoly;
+            }
+            report(withVignette > 100, "a chosen lens carries its vignetting",
+                   std::to_string(withVignette) + " of "
+                       + std::to_string(names.size()) + " with data at 50mm f/5.6");
+            report(withPoly > 100, "and its distortion",
+                   std::to_string(withPoly) + " of " + std::to_string(names.size()));
+
+            // A name is taken exactly. Containment is what `lookup` does to
+            // survive EXIF spellings nobody controls; a picked string came out
+            // of `names()`, so anything but an exact hit is a bug.
+            report(!db.lookupExact("24-70", 50.0f, 5.6f).found,
+                   "a fragment picks nothing — choosing is exact, not fuzzy");
+            report(!db.lookupExact("", 50.0f, 5.6f).found,
+                   "and an empty choice picks nothing");
+
+            // ⚠ A chosen lens is never called approximate: the photographer
+            // picked it, so telling them it is a near match for their own
+            // decision is wrong.
+            if (!names.empty()) {
+                report(!db.lookupExact(names.front(), 50.0f, 5.6f).approximate,
+                       "a chosen lens is never reported as approximate");
+            }
+        }
+
         const auto p = db.lookup("24mm F1.4 DG DN | Art 022", 24.0f, 4.0f);
         if (p.found) {
             report(p.lens.find("DG DN") != std::string::npos,

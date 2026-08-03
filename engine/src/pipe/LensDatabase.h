@@ -59,6 +59,34 @@ public:
     [[nodiscard]] LensProfile lookup(const std::string& lensName,
                                      float focalLength, float aperture) const;
 
+    /// Every lens the database carries, as "Maker Model", sorted and unique.
+    ///
+    /// ⚠ **This exists so a photographer can choose one, and choosing is the
+    /// whole point.** `lookup` deliberately refuses a near-miss — a DG DN lens
+    /// must never match a DG HSM entry, because applying one optical design's
+    /// distortion to another's picture is worse than applying none — so when a
+    /// lens is genuinely absent from the data there is nothing automatic left
+    /// to try. The developer's own lens is one: the file names it correctly and
+    /// the bundled database has no `Art 023` entry at all (#144). A list the
+    /// interface can search is the only honest answer to that, because the
+    /// person holding the camera knows what is on it and the file does not.
+    [[nodiscard]] std::vector<std::string> names() const;
+
+    /// The profile for a lens chosen **by name, exactly**, rather than matched
+    /// from EXIF.
+    ///
+    /// ⚠ **Exact, and never a containment test.** `lookup`'s longest-containment
+    /// search exists to survive EXIF spellings nobody controls; this takes a
+    /// string that came *out* of `names()`, so anything but an exact hit is a
+    /// bug rather than a spelling. Reports `found = false` rather than guessing.
+    ///
+    /// `approximate` is always false here: the photographer picked it, so the
+    /// interface must not tell them it is a near match for something they chose
+    /// deliberately.
+    [[nodiscard]] LensProfile lookupExact(const std::string& makerModel,
+                                          float focalLength,
+                                          float aperture) const;
+
     [[nodiscard]] std::size_t lensCount() const noexcept { return lenses_.size(); }
     [[nodiscard]] bool loaded() const noexcept { return !lenses_.empty(); }
 
@@ -71,8 +99,9 @@ public:
         float coeff[3]{};
     };
 
-private:
-
+    /// ⚠ Public only so `vignetteAt` can be a free function shared by both
+    /// lookup paths rather than a member each duplicates. Nothing outside this
+    /// file constructs one.
     struct Lens {
         std::string maker;
         std::string model;
@@ -80,6 +109,8 @@ private:
         std::vector<Calibration> distortion;
         std::vector<Calibration> vignetting;
     };
+
+private:
 
     std::vector<Lens> lenses_;
 

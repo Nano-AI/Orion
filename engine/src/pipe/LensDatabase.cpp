@@ -200,6 +200,118 @@ void LensDatabase::parse(const std::string& xml) {
     }
 }
 
+namespace {
+
+/// "Maker Model", with the maker dropped when the model already carries it —
+/// the same rule the interface uses for a matched profile, so a name reads the
+/// same whether it was chosen or found.
+std::string display(const std::string& maker, const std::string& model) {
+    if (maker.empty() || model.rfind(maker, 0) == 0) return model;
+    return maker + " " + model;
+}
+
+/// Vignetting for a lens at a focal length and aperture.
+///
+/// ⚠ **One derivation, two consumers** — `lookup` matches from EXIF and
+/// `lookupExact` takes a name the photographer picked, and both need this. It
+/// was inline in `lookup` until `lookupExact` existed; a second copy of an
+/// interpolation is how two paths quietly start disagreeing about the same
+/// lens.
+///
+/// Interpolated in focal length within each calibrated aperture, then between
+/// apertures **in the reciprocal**. This used to take the nearest calibrated
+/// aperture, on the reasoning that falloff changes fast between wide open and a
+/// stop down. lensfun disagrees and is the authority: `lfLens::
+/// InterpolateVignetting` interpolates rather than selects, against **1/N** —
+/// the right variable, because vignetting tracks the entrance pupil and the
+/// f-number is a ratio, so equal steps in 1/N are equal steps in what the lens
+/// is doing. Nearest-stop also renders f/4 and f/5.5 identically on a lens
+/// calibrated at f/2.8 and f/5.6, and then jumps.
+void vignetteAt(const LensDatabase::Lens& lens, float focalLength,
+                float aperture, float out[3]) {
+    if (lens.vignetting.empty()) return;
+
+    
+    std::vector<float> stops;
+    for (const auto& c : lens.vignetting) {
+        if (std::find(stops.begin(), stops.end(), c.aperture) == stops.end()) {
+            stops.push_back(c.aperture);
+        }
+    }
+    std::sort(stops.begin(), stops.end());
+
+    const auto atStop = [&](float stop, float out[3]) {
+        std::vector<LensDatabase::Calibration> points;
+        for (const auto& c : lens.vignetting) {
+            if (c.aperture == stop) points.push_back(c);
+        }
+        interpolate(points, focalLength, out);
+    };
+
+    if (stops.size() == 1 || aperture <= stops.front()) {
+        atStop(stops.front(), out);
+    } else if (aperture >= stops.back()) {
+        atStop(stops.back(), out);
+    } else {
+        std::size_t hi = 1;
+        while (hi < stops.size() && stops[hi] < aperture) ++hi;
+
+        float below[3]{}, above[3]{};
+        atStop(stops[hi - 1], below);
+        atStop(stops[hi],     above);
+
+        // Linear in 1/N, not in N.
+        const float ra = 1.0f / std::max(aperture, 1e-3f);
+        const float r0 = 1.0f / std::max(stops[hi - 1], 1e-3f);
+        const float r1 = 1.0f / std::max(stops[hi],     1e-3f);
+        const float t  = (std::abs(r1 - r0) < 1e-9f) ? 0.0f : (ra - r0) / (r1 - r0);
+
+        for (int i = 0; i < 3; ++i) {
+            out[i] = below[i] + (above[i] - below[i]) * t;
+        }
+    }
+}
+
+}  // namespace
+
+std::vector<std::string> LensDatabase::names() const {
+    std::vector<std::string> out;
+    out.reserve(lenses_.size());
+    for (const auto& lens : lenses_) out.push_back(display(lens.maker, lens.model));
+    std::sort(out.begin(), out.end());
+    // ⚠ The database carries the same lens under several mounts, so duplicates
+    // are ordinary rather than a parse fault. A list offering one lens four
+    // times is a list nobody trusts.
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+LensProfile LensDatabase::lookupExact(const std::string& makerModel,
+                                      float focalLength, float aperture) const {
+    LensProfile profile;
+    if (makerModel.empty()) return profile;
+
+    // ⚠ First exact hit wins, and duplicates across mounts are why that is
+    // stated rather than assumed: the same optical design calibrated for two
+    // bodies carries the same coefficients, so either entry is the right
+    // answer. Silently taking one of two *different* lenses would not be, and
+    // cannot happen — the string came out of `names()`, which is unique.
+    const Lens* found = nullptr;
+    for (const auto& lens : lenses_) {
+        if (display(lens.maker, lens.model) == makerModel) { found = &lens; break; }
+    }
+    if (found == nullptr) return profile;
+
+    profile.found = true;
+    profile.maker = found->maker;
+    profile.lens = found->model;
+    profile.approximate = false;
+
+    interpolate(found->distortion, focalLength, profile.poly);
+    vignetteAt(*found, focalLength, aperture, profile.vignette);
+    return profile;
+}
+
 LensProfile LensDatabase::lookup(const std::string& lensName,
                                  float focalLength, float aperture) const {
     LensProfile profile;
@@ -254,46 +366,7 @@ LensProfile LensDatabase::lookup(const std::string& lensName,
     // lensfun weights by inverse distance over three axes; this interpolates
     // linearly between the two bracketing apertures, which is the same thing in
     // one dimension. Focus distance stays at infinity — see the note above.
-    if (!best->vignetting.empty()) {
-        std::vector<float> stops;
-        for (const auto& c : best->vignetting) {
-            if (std::find(stops.begin(), stops.end(), c.aperture) == stops.end()) {
-                stops.push_back(c.aperture);
-            }
-        }
-        std::sort(stops.begin(), stops.end());
-
-        const auto atStop = [&](float stop, float out[3]) {
-            std::vector<Calibration> points;
-            for (const auto& c : best->vignetting) {
-                if (c.aperture == stop) points.push_back(c);
-            }
-            interpolate(points, focalLength, out);
-        };
-
-        if (stops.size() == 1 || aperture <= stops.front()) {
-            atStop(stops.front(), profile.vignette);
-        } else if (aperture >= stops.back()) {
-            atStop(stops.back(), profile.vignette);
-        } else {
-            std::size_t hi = 1;
-            while (hi < stops.size() && stops[hi] < aperture) ++hi;
-
-            float below[3]{}, above[3]{};
-            atStop(stops[hi - 1], below);
-            atStop(stops[hi],     above);
-
-            // Linear in 1/N, not in N.
-            const float ra = 1.0f / std::max(aperture, 1e-3f);
-            const float r0 = 1.0f / std::max(stops[hi - 1], 1e-3f);
-            const float r1 = 1.0f / std::max(stops[hi],     1e-3f);
-            const float t  = (std::abs(r1 - r0) < 1e-9f) ? 0.0f : (ra - r0) / (r1 - r0);
-
-            for (int i = 0; i < 3; ++i) {
-                profile.vignette[i] = below[i] + (above[i] - below[i]) * t;
-            }
-        }
-    }
+    vignetteAt(*best, focalLength, aperture, profile.vignette);
 
     return profile;
 }
