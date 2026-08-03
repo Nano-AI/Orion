@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-02 (**the panels explain themselves on hover now,
-#140** — fourteen sections' prose moved to an ⓘ, and the Detail column is 554
-points shorter. The queue is empty and the ledger is checked, #139)
+**Last updated:** 2026-08-03 (⚠ **the ⓘ #140 added shipped broken in the public
+v0.4.0-alpha.4 and the fix is not yet confirmed, #141** — see the top of the
+blocked list. The queue itself is empty and the ledger is checked, #139)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -102,6 +102,21 @@ items below need you and cannot move from this side.
 
 **Blocked on the developer, not on work** — these cannot move from this side:
 
+- ⚠⚠ **Does hovering the ⓘ show its text?** **This is the first thing to settle
+  and it is not a nicety: v0.4.0-alpha.4 is public, and its release notes
+  describe this feature working.** #140 shipped it as a bare `Image` with
+  `.help(…)`, which draws a perfect icon and explains nothing — `.help` needs a
+  hit-testable view. #141 fixed the hit testing, and the developer confirmed the
+  glyph now **highlights** on hover while **still showing no text**, which
+  proves events reach the icon and `.help` itself produces nothing on that
+  machine. The current build therefore **draws the text in a popover** driven by
+  the hover state, and that is the version awaiting a verdict.
+  ⚠ **Two wrong fixes have already been reported as done here.** Do not call it
+  fixed from a screenshot: a capture of a working ⓘ and a dead one are the same
+  pixels, and the suite cannot see the difference — `Engraved.Info`'s header
+  explains why an `NSView.toolTip` walk returns 0 on the *fixed* build too.
+  **When it is confirmed working, cut v0.4.0-alpha.5**, because the shipped
+  notes currently promise a feature that did not work.
 - ⚠ **The flat frame.** A photograph came back as one flat brown rectangle on
   the developer's screen, twice, and nothing in this repository could reproduce
   it: the engine renders that file correctly with the developer's own sidecar
@@ -374,6 +389,50 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-03a` — the ⓘ drew perfectly and explained nothing
+
+**Reported against a public release.** #140's icon did nothing on hover. It was
+a bare `Image` carrying `.help(…)`; SwiftUI needs a hit-testable view for that,
+and every other `.help` in this app — all ten — happens to sit on a `Button`, so
+the pattern had never been tried anywhere else and looked obviously right.
+
+⚠ **The defect is not the missing modifier, it is how it was signed off.** The
+session that shipped it looked at a screenshot, saw the icon, and called it
+done — in a repository whose stated rule is that a picture is not a test. **A
+capture of a working ⓘ and a dead one are the same pixels.**
+
+### Two gates were attempted for it, and both were deleted rather than shipped
+
+⚠ **Walking AppKit for `NSView.toolTip`** reports **0 tooltips in a panel with
+seven icons** — and **0 on the fixed build too**, so it proves nothing. SwiftUI
+collapses that panel into **134 views containing 2 `NSButton`s**, and `.help`
+never reaches `NSView.toolTip` at all. Written, run, shown to be worthless,
+deleted. A false gate is worse than an admitted gap.
+
+⚠ **Drawing the bubble as a `.popover` so a forced-open capture could photograph
+it** fails differently: a popover is its own window and does not appear in a
+capture of the hosting view. No verification bought, one more failure mode
+added. Also reverted.
+
+### What the developer's own observation settled
+
+With hit testing fixed the glyph **highlights** on hover and **still shows no
+text**. That splits it cleanly: events reach the icon, and `.help` produces
+nothing here. So the text is now **drawn** in a popover rather than delegated —
+a popover and not an overlay, because the nameplate is inside a scroll view and
+an overlay wide enough to read is clipped exactly where the sentence ends.
+`.help` is kept beside it at a cost of one line; nothing depends on it.
+
+⚠ **Still unconfirmed at the end of this session**, and recorded as such rather
+than closed. `Engraved.Info`'s header says in as many words that the
+verification for this control is a person putting a pointer on it — a control
+whose correctness is invisible to the suite should say so where it lives instead
+of implying coverage it does not have.
+
+**844 / 3708 / 41 of 41 / bench exit 0 on three frames / check-decisions exit 0.**
+The site's interface shot was also regenerated: it was captured 30 July under a
+caption reading *"the interface as it runs today"*.
 
 ## Session `2026-08-02j` — the panel stopped explaining itself in prose
 
