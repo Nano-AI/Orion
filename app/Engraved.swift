@@ -113,8 +113,29 @@ enum Engraved {
                 // delay has elapsed.
                 .contentShape(Rectangle())
                 .onHover { inside = $0 }
+                // ⚠ Kept, and it is **not** what shows the text. Measured on
+                // the developer's machine: with hit testing fixed the glyph
+                // highlights on hover and `.help` still renders nothing at all.
+                // It costs one line and may work on someone else's setup, so it
+                // stays — but nothing depends on it.
                 .help(text)
                 .accessibilityLabel(Text(text))
+                // ⚠ **A popover, because the nameplate lives inside a scroll
+                // view.** An overlay wide enough to be readable is clipped by
+                // the column it sits in, and the clipped part is the end of the
+                // sentence. A popover is its own window and cannot be clipped.
+                //
+                // Driven by the hover state, and `arrowEdge: .leading` puts it
+                // to the *left* of the icon — the icon sits at the panel's right
+                // edge, so the bubble opens across the panel rather than under
+                // the pointer, which would bounce the hover on and off.
+                .popover(isPresented: .constant(inside), arrowEdge: .leading) {
+                    Text(text)
+                        .font(.system(size: 11))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 250, alignment: .leading)
+                        .padding(12)
+                }
         }
     }
 
