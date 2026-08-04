@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**`outputs_` stops owning and the render is
-bit-identical, #160** — first of the pool's two commits. **Next: enable reuse**,
-which is the half a byte comparison has to judge)
+**Last updated:** 2026-08-03 (⚠ **pooling would break the interactive path,
+#161** — a skipped node reads pixels the pool would recycle, taking a 9.33 ms
+drag to 67. Found by reading `render()`, before writing it)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -173,8 +173,24 @@ has to change first.
    changed, and the A/B reports **bit-identical, 0 of 96,962,304**. ⚠ A pointer
    in `outputs_` dies with its owner, and `reallocateOutput` is the only place
    that happens; it replaces the owner *before* re-pointing.
-2. **Reuse.** Enable it, revertible on its own, and compare the pool's own peak
-   against **1,202 MiB**. Keep the early refusal as backstop.
+2. ⚠⚠ **Reuse — BLOCKED, and the plan was wrong (#161).** `Pipeline::render`
+   skips nodes that are not dirty, and a skipped node contributes **the pixels
+   still in its output texture from last render**. A pool recycles exactly
+   those, so every render becomes a full one: an exposure drag is **9.33 ms with
+   3 of 173 nodes** against **67.25 ms** for all — about **7×**, against an M0
+   gate of **<16 ms at p95**. It would turn a passing gate into a failing one.
+
+   ⚠ **The way out is that they only conflict *while editing*.** Opening a
+   photograph is a cold render — every node runs, nothing is cached, and the
+   7,186 MiB is held for a reuse that has not happened yet. That is also the
+   only moment #152's ceiling bites: the frame **fails to open**, not to be
+   edited. **So cost these two:** a pool used for the cold render and released
+   before the interactive one begins, or a pool restricted to nodes the dirty
+   walk always recomputes.
+
+   ⚠ **#153 still stands** — the *lifetime* is the problem, not tiling or
+   precision. What changed is that the lifetime worth shortening is the one
+   inside a single cold render, which the liveness walk already models.
 
 ✅ **The A/B oracle is built (#159)**, in `orion-bench` — the one place that
 already constructs the shipping graph against a real photograph. Today it
