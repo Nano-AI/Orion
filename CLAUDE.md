@@ -33,6 +33,24 @@ Do not copy GPL code (darktable, RawTherapee). Implementing a *published
 algorithm* from its description is fine — mathematics is not copyrightable — but
 say so in the entry.
 
+⚠ **That sentence is about copyright, and it is silent about patents.** "Cited"
+does not mean "safe to ship": a method can be published, dated, established in
+practice, correctly attributed, and still be covered by a live patent. **Freedom
+to operate has never been assessed in this project** — the rule above was
+written about provenance and correctness after the purple cast, and nothing
+here has ever asked the other question. Decision #173, which found the
+alternatives to one unbuilt filter are largely US patents, is where it surfaced.
+
+So: **cite as before, and do not read a citation as clearance.** If a filter's
+only sources are patents, that is a question for the developer before any code
+is written, not a technical decision to be settled by measurement.
+
+⚠ And a related trap, same decision: **a module inside a GPL program is not
+automatically a published algorithm.** Where the only description of a method is
+its source code, there is nothing to implement *from* except the thing that must
+not be copied — "I read darktable and reimplemented it" is copying with extra
+steps.
+
 ## Hard constraints — do not violate
 
 - **No Rust.** The developer cannot debug it. Propose C++ alternatives even when Rust is the popular answer. This rules out Tauri, wgpu, egui, iced.

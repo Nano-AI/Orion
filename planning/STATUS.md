@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (⚠ **the plateau's alternatives are patented or
-GPL, #173 — freedom to operate has never been considered here.** §3.4 itself
-does not apply, #172. ⚠ **#162 needs your call**)
+**Last updated:** 2026-08-04 (**`CLAUDE.md` now says a citation is not
+clearance, #174** — the sourcing rule was silent about patents and "cited" was
+being read as "safe". ⚠ **#162 and freedom-to-operate need your call**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
