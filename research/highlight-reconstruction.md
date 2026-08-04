@@ -667,9 +667,34 @@ sees the sign and reports nothing, while the lamp qualifies perfectly. The paper
 writes the test over the region sets without saying it is evaluated per
 component, and nothing in it settles the question.
 
-**So piece 5 cannot be gated globally. It must decide per region — and that is
-this repository's choice, not Rouf et al.'s**, the second such alongside the
-frame-edge case above. Both must be labelled as ours where they land.
+**So piece 5 cannot be gated globally.** The obvious repair is to decide per
+region — but that does not work either, and the reason is structural.
+
+### ⚠ Per region does not rescue it — the shoulder is the problem (#172)
+
+Dilating the fully-clipped set by 8 blocks and asking where the partial blocks
+sit: **`_PIC8220` 9,505 near / 11,776 far (44.7% near)**, **`_PIC8095` 18,087 /
+5,914 (75.4% near)**.
+
+The near ones are **the shoulder**. `Ω^∩ = Ω_k` requires channel `k` to clip
+*nowhere except the fully clipped core* — so nowhere in the ring around it. A
+shoulder is by definition the ring where some channels clip and others do not.
+**Restricting the test to one region does not remove the ring; it puts the ring
+inside the region.**
+
+Blue comes closest — 3,143 partial blocks on `_PIC8220` against red's 18,364 —
+but the condition needs **zero**, not fewest.
+
+⚠ **So §3.4's precondition is not met by this sensor's frames, read either way.**
+Implementing it as written gives a pass that almost never fires. The tempting
+repair — take the least-clipped channel and accept approximate containment — is
+**a deviation from the paper**, not an implementation detail: it would need its
+own argument and an `UNSOURCED.md` entry, because it is no longer what Rouf et
+al. justified.
+
+⚠ **None of this says the plateau is acceptable.** It says §3.4 is not the route
+to fixing it on these photographs. The frame-edge case above remains our choice
+to make if piece 5 is ever built.
 
 ⚠ The count is a **proxy**: raw CFA blocks, before demosaic and before the window
 fit, so it over-counts clipping against `hl_mask.slang`, which calls a channel a

@@ -129,6 +129,71 @@ int main(int argc, char** argv) {
                 else for (int k = 0; k < 3; ++k) if (clip[k]) ++onlyMissing[k];
             }
         }
+        // ⚠ **Where those channel-only blocks sit decides everything** — #171.
+        // The global count above cannot distinguish "red clips alone inside the
+        // blown lamp", which kills containment for red, from "red clips alone
+        // in a sign on the other side of the frame", which does not: the
+        // paper's test is over a *region*, and two lamps are two regions.
+        //
+        // Connected-component labelling would answer it exactly and needs its
+        // own session. This bounds it instead: dilate the fully-clipped set by
+        // `kReach` blocks and count how many channel-only blocks land inside.
+        // **Near** means they share a region and containment really is broken;
+        // **far** means they are separate features and a per-region gate would
+        // still fire. A bound is enough to decide whether to build the exact
+        // thing.
+        constexpr int kReach = 8;   // 16 px at 2x2 blocks
+        {
+            const std::uint32_t bw = (w) / 2, bh = (h) / 2;
+            if (bw > 0 && bh > 0) {
+                std::vector<std::uint8_t> full(std::size_t(bw) * bh, 0), only(std::size_t(bw) * bh, 0);
+                std::size_t bi = 0;
+                for (std::uint32_t y = y0; y + 1 < y0 + h; y += 2) {
+                    for (std::uint32_t x = x0; x + 1 < x0 + w; x += 2) {
+                        bool clip[3] = {false, false, false}; bool seen[3] = {false, false, false};
+                        for (int dy = 0; dy < 2; ++dy) for (int dx = 0; dx < 2; ++dx) {
+                            const int c = static_cast<int>(img.channelAt(x + dx, y + dy));
+                            const int k = (c == 3) ? 1 : c;
+                            const std::uint16_t v = img.samples[std::size_t(y + dy) * img.width + x + dx];
+                            const bool hit = v >= ceilingOf(c) - 0.5;
+                            if (!seen[k]) { clip[k] = hit; seen[k] = true; } else { clip[k] = clip[k] && hit; }
+                        }
+                        const int n = int(clip[0]) + int(clip[1]) + int(clip[2]);
+                        if (bi < full.size()) { full[bi] = (n == 3); only[bi] = (n > 0 && n < 3); }
+                        ++bi;
+                    }
+                }
+                // Separable dilation by kReach, rows then columns.
+                std::vector<std::uint8_t> near_ = full;
+                std::vector<std::uint8_t> tmp(near_.size(), 0);
+                for (int pass = 0; pass < 2; ++pass) {
+                    for (std::uint32_t r = 0; r < bh; ++r) for (std::uint32_t c = 0; c < bw; ++c) {
+                        std::uint8_t v = 0;
+                        for (int d = -kReach; d <= kReach && !v; ++d) {
+                            const long rr = pass ? long(r) + d : long(r);
+                            const long cc = pass ? long(c) : long(c) + d;
+                            if (rr < 0 || cc < 0 || rr >= long(bh) || cc >= long(bw)) continue;
+                            v = near_[std::size_t(rr) * bw + std::size_t(cc)];
+                        }
+                        tmp[std::size_t(r) * bw + c] = v;
+                    }
+                    near_.swap(tmp);
+                }
+                std::uint64_t onlyNear = 0, onlyFar = 0;
+                for (std::size_t i = 0; i < only.size(); ++i) {
+                    if (!only[i]) continue;
+                    if (near_[i]) ++onlyNear; else ++onlyFar;
+                }
+                const double tot = double(onlyNear + onlyFar);
+                std::printf("\n  §3.4 gate, where the partial blocks sit (#171, %d-block reach)\n", kReach);
+                std::printf("    partial blocks NEAR a fully clipped one   %llu  (%.1f%%)\n",
+                            (unsigned long long)onlyNear, tot ? 100.0 * double(onlyNear) / tot : 0.0);
+                std::printf("    partial blocks FAR from any               %llu  (%.1f%%)"
+                            "  <- a per-region gate would ignore these\n",
+                            (unsigned long long)onlyFar, tot ? 100.0 * double(onlyFar) / tot : 0.0);
+            }
+        }
+
         std::printf("\n  §3.4 gate (raw CFA proxy, decision #170)\n");
         std::printf("    fully clipped blocks           %llu of %llu  (%.4f%%)\n",
                     (unsigned long long)allThree, (unsigned long long)blocks,
