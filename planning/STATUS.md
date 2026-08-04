@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (**the lens data is CC BY-SA 3.0 and refreshing it
-is clear, #163** — and the attribution it requires was missing from a public
-build. ⚠ **The 8 GB trade, #162, still needs your call.**)
+**Last updated:** 2026-08-04 (**the `SQLITE_BUSY` row was stale — it is tested,
+and it asked for the wrong experiment, #164.** ⚠ **The 8 GB trade, #162, still
+needs your call**; refreshing the lens data needs your go-ahead to download)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
