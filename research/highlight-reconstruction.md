@@ -703,6 +703,29 @@ hole only where the fit failed to lift it. It answers *is this worth pursuing*.
 ⚠ And `_PIC8148` has **5 fully clipped blocks in six million** — it is not a
 highlight frame, and any highlight number quoting it is quoting noise.
 
+### ⚠ What may replace §3.4 — and the constraint nobody has checked (#173)
+
+§3.4 does not apply to these frames, so the plateau needs a deviation or a
+different method. **One search** was run for alternatives. This is not a survey
+and must not be read as one.
+
+It surfaces two kinds of thing, and both are already governed by rules here:
+
+- **US patents** on highlight and saturated-region restoration. ⚠ **This is a
+  different hazard from the copyright rule.** `CLAUDE.md` says implementing a
+  published algorithm from its description is fine — which is true of
+  *copyright* and says nothing about *patents*. The alpha is publicly
+  downloadable. **Freedom to operate has never been considered in this project**;
+  the sourcing rule was written about provenance and correctness.
+- **GPL implementations** — darktable's *guided laplacians* and *colour
+  propagation*, RawTherapee's modes. Copying them is already forbidden. The trap
+  is subtler: **a module in a GPL program is not automatically a published
+  algorithm.** Where the only description *is* the source, there is nothing to
+  implement from except the thing that must not be copied.
+
+**So the question before any replacement is chosen is a licensing one, and it is
+the developer's to answer**, not a technical one to be settled by measurement.
+
 ## 6. Honest limits
 
 - **§3.4 is not built.** The fill puts a measured hue into a blown core and

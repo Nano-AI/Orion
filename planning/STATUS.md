@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (⚠ **§3.4's precondition is not met by this
-sensor's frames at all, #172** — a per-region gate does not rescue it, because
-the shoulder is what breaks it. ⚠ **#162 needs your call**)
+**Last updated:** 2026-08-04 (⚠ **the plateau's alternatives are patented or
+GPL, #173 — freedom to operate has never been considered here.** §3.4 itself
+does not apply, #172. ⚠ **#162 needs your call**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
