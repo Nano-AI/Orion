@@ -23,6 +23,25 @@ the method and the numbers are in `research/camera-profiles.md`. See
 Raw decoding uses LibRaw, dual-licensed LGPL-2.1 and CDDL-1.0. Orion links it
 dynamically. See `planning/DECISIONS.md` #43.
 
+## Lens correction database
+
+`data/lensfun/` is the **lensfun** camera and lens database, redistributed under
+**Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)**. The
+full licence travels with it, as `data/lensfun/COPYING.CC_BY-SA_3.0`, inside the
+application bundle as well as in this repository.
+
+Copyright the lensfun project and its contributors — <https://lensfun.github.io>.
+About 1,450 lenses, with their measured distortion and vignetting calibrations.
+Orion reads the XML directly and does **not** link the lensfun library, so the
+library's LGPL does not apply here; the data's CC BY-SA does.
+
+⚠ **Share-alike binds the data, not Orion.** CC BY-SA 3.0 covers the database
+and anything derived from it, so a corrected or extended calibration must be
+offered under the same licence — while the application that reads it is
+unaffected, exactly as reading a CC BY-SA map does not relicense the reader.
+Practically: **fixing a lens entry means contributing it back**, and that is the
+right outcome anyway.
+
 ## Algorithms implemented from published descriptions
 
 Mathematics is not copyrightable, and none of these is a port of anyone's

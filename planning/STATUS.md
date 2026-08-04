@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (⚠ **both pool shapes are costed and neither is
-free, #162 — the memory IS the cache.** An 8 GB Mac must choose: open the frame
-and drag at 15 fps, or not open it. **Needs your call.**)
+**Last updated:** 2026-08-04 (**the lens data is CC BY-SA 3.0 and refreshing it
+is clear, #163** — and the attribution it requires was missing from a public
+build. ⚠ **The 8 GB trade, #162, still needs your call.**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -266,8 +266,15 @@ and **five stale figures corrected** (#144, #148, #149, #150, #151).
   DG DN lens never matches a DG HSM entry.
   ⚠ **Not done:** the bundled lensfun data is still whatever was copied on the
   day, so a lens newer than it stays absent and a photographer has to pick a
-  near equivalent knowingly. Refreshing that data is its own item, uncosted, and
-  wants a licence check before anything is downloaded.
+  near equivalent knowingly. ✅ **The licence question is settled (#163): the
+  database is CC BY-SA 3.0, not the library's LGPL** — Orion parses the XML and
+  links nothing — **so refreshing it is clear to do.** Share-alike binds the
+  data, not the application; a corrected calibration goes back under the same
+  licence, which means fixing a lens entry means contributing it upstream.
+  ⚠ That check also found `NOTICE` carried **no attribution for the database at
+  all**, only for the poly3 *model* — fixed in the same commit, since the build
+  is publicly downloadable. **Nothing was downloaded**; refreshing is its own
+  story with its own diff.
 
 **Closed, each with the decision that closed it** — the full write-ups are in
 `DECISIONS.md` and the session log below:
