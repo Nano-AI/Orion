@@ -9,6 +9,7 @@ add_library(orion_engine STATIC
     src/raw/RawImage.cpp
     src/raw/NoiseProfile.cpp
     src/gpu/Resources.mm
+    src/gpu/TexturePool.cpp
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp
     src/pipe/DevelopCapture.cpp
@@ -41,6 +42,7 @@ add_dependencies(orion_engine orion_shaders)
 set_source_files_properties(
     src/gpu/MetalDevice.mm
     src/gpu/Resources.mm
+    src/gpu/TexturePool.cpp
     src/util/ImageWriter.mm
     PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
 )

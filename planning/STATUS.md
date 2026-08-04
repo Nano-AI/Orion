@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the performance audit is complete, #154** — six
-areas, one real defect (the 8 GB ceiling), one design question settled by
-measurement, five stale figures corrected. **Next story: build the pool.**)
+**Last updated:** 2026-08-03 (**the texture pool is built and tested, #155** —
+and wired into nothing, deliberately. **Next story: `Pipeline` adopts it**, which
+is the half that can render another node's pixels)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -154,8 +154,19 @@ held from construction to destruction. **The fix is a pooled allocator**, and
 neither expensive rewrite is warranted. ⚠ The figure is deliberately optimistic
 (it lets differing sizes share), so the truth is between 1,202 and 7,186 — but
 even a poor pool lands far under 6,144, which is what settles it.
-**Next story: build the pool.** Free each output at its last read, and keep the
-early refusal as the backstop for whatever still will not fit.
+✅ **The pool is built and tested (#155)** — `gpu/TexturePool`, a free list keyed
+by exact shape, with `liveBytes`/`peakLiveBytes`/`hits`/`misses` so the wiring
+can be checked against #153's predicted **1,202 MiB** rather than assumed. Two
+mutations, two caught.
+⚠ **It is wired into nothing, and that is the decision.** A texture handed back
+while a later node still reads it renders a *plausible* picture made of another
+node's pixels — caught before only by a byte-for-byte test.
+**Next story: `Pipeline` adopts it.** Free each output at its last read, using
+the liveness walk `peakLiveBytes` already implements; check the pool's own peak
+against 1,202 MiB; keep the early refusal as the backstop for whatever still
+will not fit. ⚠ **Land it so it can be reverted alone**, and pin it with a
+byte-for-byte render comparison — the failure mode is a believable picture, not
+a crash.
 ✅ **Scroll, zoom, pan and the filmstrip are answered (#154) — by reading, and
 recorded as a reading rather than dressed up as a measurement.** Zoom and pan
 transform the *already-rendered* texture in the canvas blit; neither re-runs the

@@ -4,6 +4,8 @@
 
 #include "harness.h"
 
+#include "gpu/TexturePool.h"
+
 bool readBack(const std::string& path, int& bitsPerComponent, double rgb[3]) {
     CFStringRef p = CFStringCreateWithCString(nullptr, path.c_str(), kCFStringEncodingUTF8);
     if (p == nullptr) return false;
@@ -820,3 +822,105 @@ void testExportFormats() {
 /// This is the test that would have caught the torn, sideways frame: the maths
 /// tests above all pass on code that renders garbage, because they never touch
 /// a texture.
+
+/// The texture pool, which nothing uses yet — decisions #152, #153.
+///
+/// ⚠ **A pool is a use-after-free waiting to happen**, so it is tested before
+/// anything depends on it rather than after. What is checked is that it reuses,
+/// that it never confuses two shapes, and that its accounting survives the
+/// mistakes a caller will eventually make.
+void testTexturePool() {
+    section("Texture pool");
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    using orion::gpu::PixelFormat;
+    orion::gpu::TexturePool pool(*device);
+
+    {
+        auto a = pool.acquire(64, 64, PixelFormat::R16Float);
+        const void* first = a->raw();
+        report(pool.misses() == 1 && pool.hits() == 0,
+               "the first acquire of a shape allocates");
+
+        pool.release(std::move(a));
+        auto b = pool.acquire(64, 64, PixelFormat::R16Float);
+        report(pool.hits() == 1, "and the next acquire of that shape reuses");
+        // ⚠ Identity, not merely shape. A pool that quietly allocated a second
+        // texture would pass every size check and save nothing — the failure
+        // that looks most like success.
+        report(b->raw() == first, "the same texture comes back, not an equal one");
+        pool.release(std::move(b));
+    }
+
+    // ⚠ Exact match, never "big enough". Handing a 64x64 back for a 32x32
+    // request works for a kernel that writes what it is told, and breaks the
+    // moment anything samples by normalized coordinate or asks the texture its
+    // own size — which the mask kernels and every downsample do.
+    {
+        const std::size_t before = pool.hits();
+        auto small = pool.acquire(32, 32, PixelFormat::R16Float);
+        report(pool.hits() == before,
+               "a smaller request does not take a larger free texture");
+        report(small->width() == 32 && small->height() == 32,
+               "and gets the shape it asked for");
+        pool.release(std::move(small));
+
+        auto other = pool.acquire(64, 64, PixelFormat::R32Float);
+        report(other->format() == PixelFormat::R32Float,
+               "a different format is a different shape");
+        pool.release(std::move(other));
+    }
+
+    {
+        orion::gpu::TexturePool p(*device);
+        report(p.liveBytes() == 0 && p.idleBytes() == 0, "a new pool holds nothing");
+
+        auto a = p.acquire(128, 128, PixelFormat::R32Float);
+        const std::size_t one = a->sizeBytes();
+        auto b = p.acquire(128, 128, PixelFormat::R32Float);
+        report(p.liveBytes() == 2 * one, "live bytes count what is handed out");
+        report(p.peakLiveBytes() == 2 * one, "and peak records the high-water mark");
+
+        p.release(std::move(a));
+        p.release(std::move(b));
+        report(p.liveBytes() == 0, "releasing everything returns live to zero");
+        report(p.idleBytes() == 2 * one, "and the bytes are idle rather than gone");
+        // ⚠ Peak must NOT fall back. It is the number #153 predicted at 1,202
+        // MiB, and a peak that decayed would report a graph as cheaper than it
+        // ever was.
+        report(p.peakLiveBytes() == 2 * one, "peak does not decay when memory is freed");
+
+        auto c = p.acquire(128, 128, PixelFormat::R32Float);
+        auto d = p.acquire(128, 128, PixelFormat::R32Float);
+        report(p.liveBytes() == 2 * one, "reuse does not double-count live bytes");
+        report(p.idleBytes() == 0, "and the free list is empty again");
+        p.release(std::move(c));
+        p.release(std::move(d));
+
+        p.shrink();
+        report(p.idleBytes() == 0, "shrink drops the free list");
+    }
+
+    {
+        orion::gpu::TexturePool p(*device);
+        p.release(nullptr);
+        report(p.liveBytes() == 0, "releasing null is ignored rather than counted");
+
+        // ⚠ A texture this pool never handed out. The counter is unsigned, so
+        // an unguarded subtraction reports live bytes in the exabytes and the
+        // instrument becomes a source of false alarms. The double release is
+        // still a bug; the number stays honest.
+        auto stray = orion::gpu::Texture::create(*device, 16, 16, PixelFormat::R16Float);
+        p.release(std::move(stray));
+        report(p.liveBytes() == 0,
+               "releasing a texture it never issued clamps rather than wrapping",
+               std::to_string(p.liveBytes()));
+    }
+}
