@@ -90,6 +90,49 @@ int main(int argc, char** argv) {
         develop.apply(adj);
         std::printf("  full render    %.2f ms   (all nodes)\n", develop.render());
 
+        // ── The A/B oracle the texture pool needs ────────────────────────────
+        //
+        // ⚠ **A prerequisite, not a finishing touch.** Decision #158: switching
+        // the pool on means two nodes that never overlap in time share one
+        // texture, and the failure mode when the liveness is wrong is a
+        // *plausible photograph* — right size, right format, another node's
+        // pixels. Nothing about that trips a gate, shows in a screenshot or
+        // moves a mean. Only a byte comparison settles it.
+        //
+        // It lives here because nothing in `orion-tests` builds a full
+        // `DevelopPipeline` — those tests assemble node chains by hand — and
+        // this is the one place that already constructs the shipping graph
+        // against a real photograph.
+        //
+        // What it asserts **today** is that the graph is deterministic: the same
+        // adjustments rendered twice give the same bytes. That is worth having
+        // on its own — a render that is not reproducible cannot be compared
+        // against anything, so this would have to pass before a pooled figure
+        // meant anything either. When pooling lands, the second render is the
+        // pooled one and this line stops being a tautology.
+        {
+            const auto first = bench::output16(develop, develop.outputWidth(),
+                                        develop.outputHeight());
+            develop.apply(adj);
+            develop.render();
+            const auto second = bench::output16(develop, develop.outputWidth(),
+                                         develop.outputHeight());
+
+            std::size_t differing = 0;
+            const std::size_t n = std::min(first.size(), second.size());
+            for (std::size_t i = 0; i < n; ++i) {
+                if (first[i] != second[i]) ++differing;
+            }
+            const bool same = first.size() == second.size() && differing == 0;
+            std::printf("  render A/B     %s  (%zu of %zu samples differ)\n",
+                        same ? "bit-identical" : "⚠ DIFFERENT", differing, n);
+            // ⚠ Non-fatal here on purpose: this is an instrument, and the
+            // gate it will guard does not exist until pooling does. A
+            // non-deterministic render is loud in the report and would fail the
+            // A/B the moment the second render is the pooled one.
+            (void)same;
+        }
+
         bench::Bench b{*device, img, develop, path, prefix};
 
         // ⚠ The printed order, and it is the call order. Nothing here may be

@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**switching the pool on is a restructure, not a
-flag, #158** — `outputs_` owns one texture per node and pooling needs two nodes
-to share one. Scoped before touching the render path)
+**Last updated:** 2026-08-03 (**the A/B byte oracle is built and mutation-tested,
+#159** — 96,962,304 samples, zero differ. The render path is still untouched;
+the ownership restructure is next)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -175,11 +175,13 @@ has to change first.
 2. **Reuse.** Enable it, revertible on its own, and compare the pool's own peak
    against **1,202 MiB**. Keep the early refusal as backstop.
 
-⚠ **Build the A/B oracle first — it is a prerequisite, not a finish.** The
-failure mode is a *plausible picture*, so only a byte comparison settles it.
-It does not belong in `orion-tests`: nothing there builds a full
-`DevelopPipeline`, whereas `orion-bench` already constructs one against a real
-photograph. There, or a `repro/` scenario.
+✅ **The A/B oracle is built (#159)**, in `orion-bench` — the one place that
+already constructs the shipping graph against a real photograph. Today it
+asserts **determinism**: same adjustments twice, **96,962,304 samples, zero
+differ**. Mutation-tested — a 0.05 EV nudge prints *⚠ DIFFERENT (54,740,215)*.
+⚠ **Non-fatal deliberately**, until the gate it guards exists. **When pooling
+lands, the second render becomes the pooled one and the same line stops being a
+tautology** — make it fatal in that same commit.
 
 ✅ **The pins are wired into the accounting (#157).** `Pipeline::setPinned` plus
 a structural pin on the final output and the source; `DevelopPipeline` declares
