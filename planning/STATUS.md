@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the pins are real in the accounting and cost
-14.5 MiB, #157** — probed rather than assumed, because the figure did not move.
-The render path is still untouched)
+**Last updated:** 2026-08-03 (**switching the pool on is a restructure, not a
+flag, #158** — `outputs_` owns one texture per node and pooling needs two nodes
+to share one. Scoped before touching the render path)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -161,12 +161,25 @@ mutations, two caught.
 ⚠ **It is wired into nothing, and that is the decision.** A texture handed back
 while a later node still reads it renders a *plausible* picture made of another
 node's pixels — caught before only by a byte-for-byte test.
-**Next story: `Pipeline` adopts it.** Free each output at its last read, using
-the liveness walk `peakLiveBytes` already implements; check the pool's own peak
-against 1,202 MiB; keep the early refusal as the backstop for whatever still
-will not fit. ⚠ **Land it so it can be reverted alone** — a default-off flag —
-and pin it with an **A/B bit-identity check**: the failure mode is a believable
-picture, not a crash.
+**Next story: `Pipeline` adopts it — and it is two commits, not one (#158).**
+
+⚠ **`outputs_` is a `vector<unique_ptr<Texture>>`, one owner per node**, and
+pooling means two non-overlapping nodes **share** a texture, which a vector of
+unique owners cannot express. So a default-off flag is not available: the *type*
+has to change first.
+
+1. **Ownership.** `outputs_` becomes non-owning — a raw pointer or an index into
+   storage the pool holds. Pooling stays **disabled**; the render must come out
+   **bit-identical**. Three places touch it: `output()`, `nodeOutput()`, and the
+   dispatch loop's `textures.push_back(outputs_[id].get())`.
+2. **Reuse.** Enable it, revertible on its own, and compare the pool's own peak
+   against **1,202 MiB**. Keep the early refusal as backstop.
+
+⚠ **Build the A/B oracle first — it is a prerequisite, not a finish.** The
+failure mode is a *plausible picture*, so only a byte comparison settles it.
+It does not belong in `orion-tests`: nothing there builds a full
+`DevelopPipeline`, whereas `orion-bench` already constructs one against a real
+photograph. There, or a `repro/` scenario.
 
 ✅ **The pins are wired into the accounting (#157).** `Pipeline::setPinned` plus
 a structural pin on the final output and the source; `DevelopPipeline` declares
