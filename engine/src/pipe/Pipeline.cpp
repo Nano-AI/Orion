@@ -332,6 +332,10 @@ std::size_t Pipeline::intermediateBytes() const noexcept {
     return total;
 }
 
+void Pipeline::setPinned(std::vector<int> nodeIds) {
+    pinned_ = std::move(nodeIds);
+}
+
 std::size_t Pipeline::peakLiveBytes() const noexcept {
     // Last reader of each node's output, in execution order. A node nobody
     // reads is still written, so it is live for exactly its own step.
@@ -348,6 +352,26 @@ std::size_t Pipeline::peakLiveBytes() const noexcept {
         }
     }
 
+    // ⚠ **Pinned outputs are live for the whole render and never come back.**
+    // The last node is pinned structurally — it is the picture — and so is
+    // anything `setPinned` names, because `nodeOutput` will hand it out after
+    // the graph has finished and a liveness walk cannot see that reader.
+    // Decision #156.
+    std::vector<bool> pinned(nodes_.size(), false);
+    for (int id : pinned_) {
+        if (id >= 0 && static_cast<std::size_t>(id) < pinned.size()) {
+            pinned[static_cast<std::size_t>(id)] = true;
+        }
+    }
+    if (!order_.empty()) {
+        const int last = order_.back();
+        if (last >= 0 && static_cast<std::size_t>(last) < pinned.size()) {
+            pinned[static_cast<std::size_t>(last)] = true;
+        }
+    }
+
+    // The source is pinned too, and is already counted below as the starting
+    // figure that is never subtracted.
     std::size_t live = source_ ? source_->sizeBytes() : 0;
     std::size_t peak = live;
     // ⚠ **Only what has actually been written can be freed**, which is not the
@@ -366,8 +390,9 @@ std::size_t Pipeline::peakLiveBytes() const noexcept {
         peak = std::max(peak, live);
         // Everything whose last reader was this step can go back to the pool.
         for (std::size_t n = 0; n < nodes_.size(); ++n) {
-            if (written[n] && lastUse[n] == step && n < outputs_.size() &&
-                outputs_[n] && static_cast<int>(n) != id) {
+            if (written[n] && !pinned[n] && lastUse[n] == step &&
+                n < outputs_.size() && outputs_[n] &&
+                static_cast<int>(n) != id) {
                 live -= outputs_[n]->sizeBytes();
                 written[n] = false;
             }

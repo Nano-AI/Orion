@@ -167,6 +167,29 @@ public:
     /// `intermediateBytes`. Deliberately optimistic: the point is an upper
     /// bound on the saving, and a disappointing upper bound settles the
     /// question immediately.
+    /// Node outputs that must never be recycled, because something outside the
+    /// graph reads them after the render has finished.
+    ///
+    /// ⚠ **This is the difference between a pool that works and one that
+    /// renders another node's picture.** `nodeOutput` hands out any node's
+    /// texture once the render is done, and a liveness walk cannot see that —
+    /// it only knows who reads a texture *inside* the graph. A recycled
+    /// intermediate handed to such a reader is correctly sized, correctly
+    /// formatted and wrong, which is a defect this repository has shipped
+    /// before and caught only byte for byte. Decision #156.
+    ///
+    /// `DevelopPipeline` declares its own: the fusion proxy and the dehaze peak
+    /// (`DevelopLocal.cpp`). The final output and the source are pinned by
+    /// `peakLiveBytes` itself and need not be listed — they are structural
+    /// rather than a property of any particular graph.
+    void setPinned(std::vector<int> nodeIds);
+
+    /// The bytes a pooled graph would need, honestly — see `setPinned`.
+    ///
+    /// ⚠ Still optimistic in one remaining way, stated so nobody treats it as a
+    /// target: it lets textures of differing shapes share an allocation, which
+    /// a real pool keyed by exact shape cannot always do. The truth sits
+    /// between this and `intermediateBytes`.
     [[nodiscard]] std::size_t peakLiveBytes() const noexcept;
 
 private:
@@ -181,6 +204,7 @@ private:
     std::vector<std::unique_ptr<gpu::Texture>> outputs_;
     std::vector<bool>                          dirty_;
     std::vector<int>                           order_;
+    std::vector<int>                           pinned_;
 
     struct AuxSpec { std::uint32_t width, height; gpu::PixelFormat format; };
     std::vector<AuxSpec>                       auxSpecs_;

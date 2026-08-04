@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**four textures outlive the graph and the pool must
-pin them, #156** — found before touching the render path, not after. The pool
-itself is built and tested, #155)
+**Last updated:** 2026-08-03 (**the pins are real in the accounting and cost
+14.5 MiB, #157** — probed rather than assumed, because the figure did not move.
+The render path is still untouched)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -168,7 +168,15 @@ will not fit. ⚠ **Land it so it can be reverted alone** — a default-off flag
 and pin it with an **A/B bit-identity check**: the failure mode is a believable
 picture, not a crash.
 
-⚠⚠ **FOUR TEXTURES OUTLIVE THE GRAPH AND MUST BE PINNED (#156).** In-graph
+✅ **The pins are wired into the accounting (#157).** `Pipeline::setPinned` plus
+a structural pin on the final output and the source; `DevelopPipeline` declares
+the fusion proxy and the dehaze peak after `compile`. ⚠ **The figure did not
+move — still 1,202 MiB — so it was probed**: the pinned nodes cost **2.9 and
+11.6 MiB**, 14.5 against 1,202, which rounds away. Genuinely negligible, not
+silently broken; had the ids been unassigned the same unchanged number would
+have meant the opposite. **Still nothing pooled** — bookkeeping only.
+
+⚠⚠ **WHY THEY MUST BE PINNED (#156).** In-graph
 liveness is not the whole rule: `Pipeline::nodeOutput(int)` hands out any node's
 texture *after* the render, so a pooled texture reissued to a later node would
 hand a consumer another node's pixels — right size, right format, wrong picture.

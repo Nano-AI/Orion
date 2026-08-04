@@ -38,6 +38,17 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     pipeline_.compile(width_, height_);
 
+    // ⚠ **What `nodeOutput` hands out after the render, and a liveness walk
+    // cannot see.** `DevelopLocal` reads these two once the graph has finished
+    // — the fusion proxy for its histogram and the dehaze peak for its
+    // estimate — so neither may ever be recycled into a later node. A pool that
+    // missed this would give those readers another node's pixels: right size,
+    // right format, wrong picture. Decision #156.
+    //
+    // The final output and the source are pinned structurally by `Pipeline`
+    // itself and are deliberately not repeated here.
+    pipeline_.setPinned({nFuseProxy_, nPeak_});
+
     // Once per graph. The plate is 33 MB and identical for every photograph.
     uploadGrainPlate();
 
