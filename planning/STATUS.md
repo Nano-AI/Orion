@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (**the highlight plateau is measured, #165** — nine
-radial samples flat at the clip value, colour already correct. ⚠ **The 8 GB
-trade, #162, needs your call**; the lens refresh needs a download go-ahead)
+**Last updated:** 2026-08-04 (**the index already collects missing folders,
+#166 — seventh stale row this stretch.** ⚠ **The 8 GB trade, #162, needs your
+call**; the lens refresh needs a download go-ahead)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
