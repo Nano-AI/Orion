@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (**piece 5 starts with a count, not a solver,
-#170** — its gate condition has never been measured on a real photograph. ⚠ **The
-8 GB trade, #162, needs your call**)
+**Last updated:** 2026-08-04 (**§3.4's gate holds for no channel on any real
+frame, #171** — so piece 5 must gate per region, which is our choice not the
+paper's. ⚠ **The 8 GB trade, #162, needs your call**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a

@@ -80,6 +80,67 @@ int main(int argc, char** argv) {
         }
     }
 
+    // ── Does §3.4's gate condition hold? — decision #170 ─────────────────
+    //
+    // Rouf et al.'s gradient fill-in applies **only** where one channel k has
+    // its clipped region wholly inside every other channel's — `Ω^∩ = Ω_k`.
+    // Whether that is ever true of a real photograph is a property of the
+    // sensor and the scene, not of the algorithm, so it can only be counted.
+    // Piece 5 is not worth its nodes if the answer is "almost never".
+    //
+    // ⚠ **A proxy, and the difference matters.** The shipping mask
+    // (`hl_mask.slang`) runs on demosaiced data *after* the window fit, and
+    // counts a channel as a hole only where the fit failed to lift it. This
+    // counts raw CFA blocks before any of that, so it is an **upper bound** on
+    // how blown the frame is and a lower bound on containment. It answers "is
+    // this worth pursuing", not "this is the number the kernel will see".
+    //
+    // One 2x2 block per sample: R, two G, B. A block counts a channel clipped
+    // when its sample is at that channel's own post-white-balance ceiling.
+    {
+        const auto ceilingOf = [&](int c) {
+            return (mul[c] > 1e-6f)
+                ? (double(img.white) - img.black[c]) / mul[c] + img.black[c]
+                : double(img.white);
+        };
+        std::uint64_t blocks = 0, allThree = 0, onlyMissing[3] = {0, 0, 0};
+        for (std::uint32_t y = y0; y + 1 < y0 + h; y += 2) {
+            for (std::uint32_t x = x0; x + 1 < x0 + w; x += 2) {
+                bool clip[3] = {false, false, false};   // R, G, B
+                bool seen[3] = {false, false, false};
+                for (int dy = 0; dy < 2; ++dy) {
+                    for (int dx = 0; dx < 2; ++dx) {
+                        const int c = static_cast<int>(img.channelAt(x + dx, y + dy));
+                        const int k = (c == 3) ? 1 : c;   // G2 is green
+                        const std::uint16_t v =
+                            img.samples[std::size_t(y + dy) * img.width + x + dx];
+                        // ⚠ Green is clipped only when **both** greens are: one
+                        // green at the ceiling and one below is a block that
+                        // still carries green information.
+                        if (!seen[k]) { clip[k] = v >= ceilingOf(c) - 0.5; seen[k] = true; }
+                        else          { clip[k] = clip[k] && v >= ceilingOf(c) - 0.5; }
+                    }
+                }
+                ++blocks;
+                const int n = int(clip[0]) + int(clip[1]) + int(clip[2]);
+                if (n == 3) ++allThree;
+                // `Ω_k \ Ω^∩` is where k is clipped and the pixel is not fully
+                // clipped — the set that must be **empty** for containment.
+                else for (int k = 0; k < 3; ++k) if (clip[k]) ++onlyMissing[k];
+            }
+        }
+        std::printf("\n  §3.4 gate (raw CFA proxy, decision #170)\n");
+        std::printf("    fully clipped blocks           %llu of %llu  (%.4f%%)\n",
+                    (unsigned long long)allThree, (unsigned long long)blocks,
+                    blocks ? 100.0 * double(allThree) / double(blocks) : 0.0);
+        static const char* kRGB[3] = {"R", "G", "B"};
+        for (int k = 0; k < 3; ++k) {
+            std::printf("    %s clipped but not all three     %llu%s\n", kRGB[k],
+                        (unsigned long long)onlyMissing[k],
+                        onlyMissing[k] == 0 ? "   <- containment HOLDS for this channel" : "");
+        }
+    }
+
     static const char* kName[4] = {"R", "G", "B", "G2"};
     std::printf("\n  ch   raw mean    peak   ceiling   %% at ceiling\n");
     for (int c = 0; c < 4; ++c) {

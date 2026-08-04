@@ -647,6 +647,37 @@ Three outcomes, and they lead different places:
 algorithm**, so it cannot be reasoned about from the paper — Rouf et al. simply
 state when their method applies. It has to be counted.
 
+### ✅ Counted, 2026-08-04 — and it holds for nothing (#171)
+
+`orion-rawstat` now reports it. Over 2×2 CFA blocks:
+
+| frame | fully clipped | R only | G only | B only |
+|---|---|---|---|---|
+| `_PIC8220` | 27,530 of 6,060,144 (0.45%) | **18,364** | **7,190** | **3,143** |
+| `_PIC8095` | 10,943 (0.18%) | **10,659** | **13,658** | **13,717** |
+| `_PIC8148` | 5 (0.0001%) | 10 | 4 | 19 |
+
+For `Ω^∩ = Ω_k` one of those columns must be **zero**. None is close. **Read
+literally, §3.4 never fires on a photograph.**
+
+⚠⚠ **The honest reading is that the test is meant per connected region, and this
+count is global.** A frame can hold a blown lamp where red *is* contained inside
+green and blue, and a red sign elsewhere where red clips alone — the global count
+sees the sign and reports nothing, while the lamp qualifies perfectly. The paper
+writes the test over the region sets without saying it is evaluated per
+component, and nothing in it settles the question.
+
+**So piece 5 cannot be gated globally. It must decide per region — and that is
+this repository's choice, not Rouf et al.'s**, the second such alongside the
+frame-edge case above. Both must be labelled as ours where they land.
+
+⚠ The count is a **proxy**: raw CFA blocks, before demosaic and before the window
+fit, so it over-counts clipping against `hl_mask.slang`, which calls a channel a
+hole only where the fit failed to lift it. It answers *is this worth pursuing*.
+
+⚠ And `_PIC8148` has **5 fully clipped blocks in six million** — it is not a
+highlight frame, and any highlight number quoting it is quoting noise.
+
 ## 6. Honest limits
 
 - **§3.4 is not built.** The fill puts a measured hue into a blown core and
