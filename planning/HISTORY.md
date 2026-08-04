@@ -8195,3 +8195,132 @@ preserves cross-ratios along a line and not ratios.
 
 **810 engine checks** (four new), 3708 viewport, 41 of 41 scenarios, bench exit 0
 on all three frames.
+
+
+## Session `2026-08-02g` — a gradient is a covector, and the endpoints were not
+
+The defect #136 turned up, fixed. A linear gradient's **level sets** were wrong
+under any correction that is not conformal — not its direction, which a
+homography carries exactly, and not its length, which #134 made exact. Both
+endpoints were right, and that is what hid it: everything anybody had thought to
+check about the ramp was correct.
+
+`mask_component.slang` kind 1 projected onto the segment between them, so its
+level sets were the lines perpendicular to that segment **in frame
+coordinates**. The drawn mask's are perpendicular in *display* coordinates. t is
+a linear **functional** — it transforms by **J⁻ᵀ** while a pair of endpoints
+transforms by J, and the two agree only where J is conformal: a rotation, a
+uniform scale, a crop. Every case anybody checks by hand.
+
+**The exact answer is cheaper than the approximation.** Pulling an affine ramp
+back through a projectivity gives a ratio of two linear forms:
+
+    t(q) = ⟨n, (q,1)⟩ / ⟨M₃, (q,1)⟩,   n = (uₓ·M₁ + u_y·M₂ − ⟨z,u⟩·M₃) / |u|²
+
+Six floats, two dots and one divide, against four floats and one dot. M is the
+whole frame → display map, so this is exact for the homography, the crop, the
+straighten and the quarter turns **at once** — the mask's own numbers now go
+through no transform at all, and the transform is applied to the *point*.
+
+| | Before | After |
+|---|---|---|
+| `maskcheck 20 -2.0`, ramp under `perspectiveAspect 1.0` | 3 of 27 clear cells leaked, worst **0.1300** luma | clean |
+| `maskcheck 12 -2.0`, same | 1 of 100 covered cells did nothing | clean |
+
+⚠ **The squeeze, not the keystone — the opposite of §4b's instinct.** A
+keystone's derivative is anisotropic but mildly so over a short ramp;
+diag(1/g, g) at g = √2 is as far from conformal as this control goes. §4b spent
+a session concluding the squeeze was where nothing happened.
+
+⚠ **One mutation was green on everything.** Replacing the exact ratio with its
+affine part — dropping the projective divide — passed all 32 scenario checks and
+all 821 engine checks. `maskcheck` asserts that cells drawn *clear* are
+bit-identical and cells drawn *covered* moved, and says nothing about the falloff
+band between them, which is exactly where that error lives.
+`testRampIsTheExactPullBack` closes it by checking the algebra directly against
+`fromFrame` over seven configurations, and reddens 5 checks on that mutation.
+**Six mutations tried, six caught** — the other five were on `displayMatrix`
+(straighten aspect weighting, turn direction, composition order, straighten sign,
+crop translation), all red.
+
+Two pieces landed with it, both of which `ROADMAP.md` had costed separately:
+`mask::displayMatrix` and `mask::ramp`, in `MaskGeometry.h` beside the map they
+belong to. The GPU tests call `mask::ramp` rather than keeping a second copy of
+the algebra, which is the rule that file already states.
+
+⚠ The params struct grew 8 bytes and every offset from `center` on moved; the
+`static_assert`s were updated with it, and six scalars were used rather than two
+`float3`s because a `float3` aligns to sixteen and offset 56 does not.
+
+Decision #137. Gates: **829** engine checks (+8), 3708 viewport, 41 of 41 repro,
+bench exit 0 on three frames.
+
+## Session `2026-08-02f` — the curvature is costed, and measuring it found a live defect
+
+The queue's next item was the map's **curvature** across a large mask, the only
+one carried as *uncosted*. Costing it meant measuring it rather than inferring it
+from cell counts: carry each frame point out to the displayed picture and
+evaluate the mask the photographer drew, which is exact by construction.
+
+**Three findings, in the order they arrived. Nothing was built.**
+
+**1. The curvature is bigger than the record said.** 600 × 600 grid, feather
+0.06, roundness 2, shipping ellipse against exact:
+
+| Correction | Mask | max ΔCoverage | mean Δ | frame >10⁻³ |
+|---|---|---|---|---|
+| aspect +1.0 | 0.20 round | **0.0000** | 0.00000 | 0.00% |
+| vertical 0.45 | 0.34 × 0.34 | 1.0000 | 0.02832 | 5.59% |
+| vertical 1.00 | 0.34 × 0.34 | **1.0000** | 0.03913 | 5.81% |
+| vertical 1.00 | 0.10 × 0.10 | 0.9947 | 0.00095 | 0.25% |
+
+The first row is the harness checking itself: an aspect squeeze is exactly
+linear, so an exact derivative must be exactly right, and it returns 0.0000 and
+not 10⁻⁶. "About a fifth off" was an artefact of counting *cells* — most of the
+disagreement is inside cells the overlay already calls covered. Quadratic in
+mask size, as second order requires.
+
+**2. A claim shipped with #134 was false, and it had reached five documents.**
+It said `perspectiveAspect` alone leaves `Placement::jac` the identity, so a
+ramp changes nothing at all under a squeeze and the frames are byte-identical.
+⚠ Printed directly, that Jacobian is **diag(0.500050, 1.000100)**; a 6 × 6 patch
+grid moves in **7 of 36** places under the squeeze (worst 0.0003 luma) and 10 of
+36 under a keystone (worst 0.0018, corroborating #134's 0.0019 by a second
+route). The *observation* is real — a ramp fixture built around the squeeze does
+pass with the fix reverted — and #134's conclusion survives. Only its reason was
+invented, and it was written into `research/perspective.md` **by the session
+immediately before this one**, which is how five copies happen.
+
+⚠ **A wrong explanation attached to a right observation is the hard case.** The
+observation keeps confirming it. It came out only because somebody printed the
+matrix instead of re-reading the sentence.
+
+**3. And there is a first-order defect in the shipping build that is not
+curvature.** A linear gradient's **level sets**. The kernel projects onto the
+segment between two endpoints, so its level sets are perpendicular to it in
+*frame* coordinates while the drawn mask's are perpendicular in *display*
+coordinates. t is a linear functional: it goes through **J⁻ᵀ**, the endpoints go
+through **J**, and the two agree exactly when J is conformal — which is every
+case anybody checks by hand.
+
+    maskcheck 20 -2.0, shipping build, ramp under perspectiveAspect 1.0
+      3 of 27 clear cells leaked, worst 0.1300 luma
+      2 of 287 covered cells did nothing
+
+Worst coverage difference **1.0000** under a squeeze. J⁻ᵀ alone removes about
+three quarters; the residual 0.27 is the perspective divide, which makes t a
+*ratio* of linear forms. The exact form is closed and **cheaper than what it
+replaces** — six floats, two dots, one divide against four floats and one dot —
+verified to **2.2 × 10⁻⁶** on a 400 × 400 grid across four corrections.
+
+⚠ **Not added to `repro/` as a red section.** A repository whose gate is red
+teaches everyone to ignore the gate. The four-line recipe is a comment in
+`perspective-carries-the-mask.txt`, marked to become §4c when the fix lands.
+
+Both remaining terms share a first piece — folding crop, straighten, turns and
+the homography into one 3 × 3 — so `ROADMAP.md` costs them together at ~2
+sessions. Decision #136.
+
+⚠ **The tree is unchanged.** The only edits are documents; the mutation used to
+measure #134 was reverted and `git status` is clean. Gates run anyway: 810 / 3708
+/ 41 of 41 / bench 0 on three frames.
