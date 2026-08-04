@@ -76,9 +76,11 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
     libraries_.clear();
     kernels_.clear();
     outputs_.clear();
+    ownedOutputs_.clear();
     libraries_.reserve(n);
     kernels_.reserve(n);
     outputs_.reserve(n);
+    ownedOutputs_.reserve(n);
     // ⚠ One `MTLLibrary` per distinct metallib, not one per node. The develop
     // graph is 149 nodes over **48** distinct kernels, so loading per node
     // created ~101 redundant libraries and held them for the graph's lifetime —
@@ -126,7 +128,8 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
 
         const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;
         const std::uint32_t h = node.outHeight ? node.outHeight : height_;
-        outputs_.push_back(gpu::Texture::create(device_, w, h, node.format));
+        ownedOutputs_.push_back(gpu::Texture::create(device_, w, h, node.format));
+        outputs_.push_back(ownedOutputs_.back().get());
     }
 
     dirty_.assign(n, true);
@@ -160,7 +163,13 @@ void Pipeline::setNodeFormat(int nodeId, gpu::PixelFormat format) {
     const auto& node = nodes_[nodeId];
     const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;
     const std::uint32_t h = node.outHeight ? node.outHeight : height_;
-    outputs_[nodeId] = gpu::Texture::create(device_, w, h, format);
+    // ⚠ Replace the owner first, then re-point. The other order leaves
+    // `outputs_[nodeId]` dangling for the length of one statement, which is
+    // exactly long enough for a future reader to be added between them.
+    ownedOutputs_[static_cast<std::size_t>(nodeId)] =
+        gpu::Texture::create(device_, w, h, format);
+    outputs_[static_cast<std::size_t>(nodeId)] =
+        ownedOutputs_[static_cast<std::size_t>(nodeId)].get();
 
     // The old texture is gone, so whatever was cached in it is gone with it.
     dirty_[nodeId] = true;
@@ -274,12 +283,12 @@ double Pipeline::render() {
         textures.reserve(node.inputs.size() + node.aux.size() + 1);
         for (int in : node.inputs) {
             const int src = (in == kSource) ? kSource : resolve(in);
-            textures.push_back(src == kSource ? source_.get() : outputs_[src].get());
+            textures.push_back(src == kSource ? source_.get() : outputs_[src]);
         }
         for (int a : node.aux) {
             textures.push_back(aux_[a].get());
         }
-        textures.push_back(outputs_[id].get());
+        textures.push_back(outputs_[id]);
 
         // Dispatch over the node's own output, which may differ from the
         // graph's working size once rotation or crop is in play.
@@ -328,7 +337,7 @@ const gpu::Texture& Pipeline::sourceTexture() const {
 
 std::size_t Pipeline::intermediateBytes() const noexcept {
     std::size_t total = source_ ? source_->sizeBytes() : 0;
-    for (const auto& t : outputs_) total += t->sizeBytes();
+    for (const auto& t : ownedOutputs_) { if (t) total += t->sizeBytes(); }
     return total;
 }
 

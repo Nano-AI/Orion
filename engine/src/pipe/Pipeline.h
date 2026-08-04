@@ -201,7 +201,24 @@ private:
     std::vector<Node>                          nodes_;
     std::vector<std::unique_ptr<gpu::Library>> libraries_;
     std::vector<std::unique_ptr<gpu::Kernel>>  kernels_;
-    std::vector<std::unique_ptr<gpu::Texture>> outputs_;
+    /// ⚠ **Non-owning, as of decision #158.** These were `unique_ptr`, one
+    /// owner per node — which cannot express what a texture pool is for: two
+    /// nodes that never overlap in time sharing one texture. There is no way to
+    /// put the same `unique_ptr` at index 12 and index 47.
+    ///
+    /// Ownership lives in `ownedOutputs_` below. Today that is still exactly
+    /// one texture per node and the render is bit-identical to before the
+    /// change; the pool replaces it as a second, separately revertible step.
+    /// A null entry means the node has no output yet.
+    std::vector<gpu::Texture*>                 outputs_;
+
+    /// What actually owns the textures `outputs_` points into.
+    ///
+    /// ⚠ Entries are never erased while a graph lives, only replaced — see
+    /// `reallocateOutput`. A pointer in `outputs_` is invalidated the moment
+    /// its owner is dropped, and the reallocation path is the one place that
+    /// happens.
+    std::vector<std::unique_ptr<gpu::Texture>> ownedOutputs_;
     std::vector<bool>                          dirty_;
     std::vector<int>                           order_;
     std::vector<int>                           pinned_;

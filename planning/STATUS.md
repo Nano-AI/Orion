@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the A/B byte oracle is built and mutation-tested,
-#159** — 96,962,304 samples, zero differ. The render path is still untouched;
-the ownership restructure is next)
+**Last updated:** 2026-08-03 (**`outputs_` stops owning and the render is
+bit-identical, #160** — first of the pool's two commits. **Next: enable reuse**,
+which is the half a byte comparison has to judge)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -168,10 +168,11 @@ pooling means two non-overlapping nodes **share** a texture, which a vector of
 unique owners cannot express. So a default-off flag is not available: the *type*
 has to change first.
 
-1. **Ownership.** `outputs_` becomes non-owning — a raw pointer or an index into
-   storage the pool holds. Pooling stays **disabled**; the render must come out
-   **bit-identical**. Three places touch it: `output()`, `nodeOutput()`, and the
-   dispatch loop's `textures.push_back(outputs_[id].get())`.
+1. ~~**Ownership.**~~ ✅ **done, #160.** `outputs_` is a vector of raw pointers
+   into `ownedOutputs_`, which still holds one texture per node — no allocation
+   changed, and the A/B reports **bit-identical, 0 of 96,962,304**. ⚠ A pointer
+   in `outputs_` dies with its owner, and `reallocateOutput` is the only place
+   that happens; it replaces the owner *before* re-pointing.
 2. **Reuse.** Enable it, revertible on its own, and compare the pool's own peak
    against **1,202 MiB**. Keep the early refusal as backstop.
 
