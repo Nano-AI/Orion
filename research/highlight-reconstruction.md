@@ -511,6 +511,72 @@ construction the way `ρ|∂Ω = f|∂Ω` gives piece 3 one. Unmeasured, and nam
 
 ---
 
+## 5d. Piece 5 — what must be settled before a line of it is written
+
+⚠ **This section deliberately contains no discretisation.** §3.4 is summarised
+above from the paper — two Poisson solves, in log space, extrapolating a gradient
+across `Ω^∩` (Eqs. 9–10) — and that summary is as far as anyone should go from
+memory. Writing a scheme here that *looks* like theirs would be the same error
+§5b already names: *"rescaling `ρ` to imitate a falloff would be inventing the
+shape their paper derives."* The purple cast this repository's sourcing rule
+exists for came from exactly that kind of plausible construction.
+
+What follows is the scaffolding: what the tree already provides, what it forbids,
+and the questions the paper has to answer before code starts.
+
+### What already exists and must be reused
+
+- **A pull-push Dirichlet solver** — `hl_pull.slang` / `hl_push.slang`, after
+  Gortler et al. (SIGGRAPH 1996 §3.5.1), with `pipe/HighlightFill.h` driving it.
+  It solves `∇²ρ = 0` over `Ω^∪` with `ρ|∂Ω = f|∂Ω`. §3.4's solves are the same
+  *class* of problem on a different field, so the pyramid is machinery to reuse
+  rather than rebuild — which is what made piece 4 cost zero new nodes.
+- **`Ω^∩` is already identified.** `hl_mask.slang` distinguishes the all-channels-
+  clipped core from the shoulder where only some are, and §5b established the
+  core is enclosed by its own shoulder ring, so it is solved from its own rim
+  regardless of the background.
+- **The node chain and its budget** — 11 pulls, 11 pushes, `hl_apply`. Piece 3
+  was costed 16× wrong by assuming a new pyramid; the estimate to beat is
+  whatever reuses this one.
+
+### What the tree forbids
+
+- ⚠ **The rim must stay continuous.** `ρ|∂Ω = f|∂Ω` is what makes the join
+  seamless today — there is **no Mach band**, and that is not luck, it is the
+  boundary condition. Anything §3.4 adds inside `Ω^∩` has to meet the existing
+  solution at the boundary, and the regression to watch is a visible ring.
+- ⚠ **No new control.** Piece 6 already argues one: the fill runs on
+  `highlightRecovery`, which is plumbed end to end, and one control for both
+  halves of one coverage is the honest default.
+- **One node = one small shader**, 50–150 lines, and the citation lands with it.
+
+### The target, as a number
+
+`testHarmonicHighlightFillWiring` prints radial red after the window fit:
+**1.00 at radii 40, 44, 48, 52, 56, 60, 64, 68 and 72**, then 1.18 at 76. Nine
+samples flat at the clip value — that is the plateau, and **whatever §3.4 lands,
+those nine must stop being equal.** The check already exists, so piece 5 does not
+need a new oracle; it needs to move a number the suite already prints.
+
+⚠ And the colour must not regress while the shape is fixed: distance from the
+lamp's own colour is **0.5756 off, 0.0442 on**, against a truth of
+(0.7631, −0.0496). Piece 5 changes the luminance profile; if that figure moves,
+something has been broken rather than added.
+
+### What the paper must answer first
+
+1. **What field is extrapolated** — the log-domain gradient itself, and by what
+   boundary condition at `∂Ω^∩`.
+2. **What the second solve integrates**, and how its constant of integration is
+   fixed so the rim still matches.
+3. **Whether the two solves are separable per channel**, which decides whether
+   this is one pass over three channels or three passes.
+4. **What happens where `Ω^∩` touches the frame edge**, which the existing solve
+   handles by the pyramid's clamp and §3.4 may not.
+
+None of the four is answerable from the summary above, and each changes the node
+count. **Read Rouf, Lau & Heidrich (PROCAMS 2012) §3.4 before starting.**
+
 ## 6. Honest limits
 
 - **§3.4 is not built.** The fill puts a measured hue into a blown core and
