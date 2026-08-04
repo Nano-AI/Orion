@@ -535,6 +535,66 @@ candidate fixes in order.
 
 ---
 
+## Sessions `2026-08-03b` – `2026-08-04` — the performance audit, and a memory ceiling nobody could see
+
+⚠ **One entry for eighteen decisions (#148–#165), written 2026-08-04 because it
+had not been written at all.** The ledger carried every one; this file — the
+recovery point — carried none of them, which is the same failure as a stale
+queue wearing different clothes.
+
+### The performance audit, asked for 2026-08-01, complete
+
+Six areas. **One real defect, one design question settled by measurement, and
+five figures found stale against the tree.**
+
+| Area | Outcome |
+|---|---|
+| Gestures (#148) | Premise table wrong in **all four rows** — all six already armed. `tools/check-gestures.py` added: a **grep, not a test**, because #110.3 proved a `DragGesture` cannot be driven from either suite |
+| The tick (#149) | *"Sliders slow"* answered. Clarity **4.2 ms armed / 56.4 unarmed**, 13.4×. The instrument had only ever driven the unarmed path, reporting 17 fps for a gesture running at 235 |
+| Protocol (#150) | Spread **0.14 ms** over five runs. **CPU load is harmless; anything else on the GPU is fatal** (a second Orion → spread 11.14). Bench now warns above 2 ms — it had printed *PASS at 10.09* captioned "machine noise" |
+| Cold open (#151) | **210.9 ms**, and the canvas shows the **previous photograph** throughout — `isLoaded` set once, never cleared, and there is **no busy state anywhere in the app** |
+| Memory (#152) | ⚠ **The defect.** 7,186 MiB of intermediates against ~6,144 on an 8 GB Mac. **A 24 MP frame cannot open there, and nothing checks** |
+| Scroll/zoom/pan (#154) | Cheap by construction — the canvas transforms an **already-rendered** texture. Recorded as a *reading*, with no number quoted, because the harness cannot drive the gesture |
+
+### ⚠ The 8 GB ceiling, and why it is still open
+
+#153 costed the fix by measurement rather than argument: peak live memory is
+**1,202 MiB** against 7,186 allocated — **83% held for nothing** — which ruled
+out tiling and lower precision, because the problem is **lifetime**, not size.
+
+Everything to fix it was then built and is correct: the pool and its tests
+(#155), the four textures that outlive the graph and must be pinned (#156), the
+pins in the accounting (#157), the A/B byte oracle (#159, **0 of 96,962,304**),
+and `outputs_` made non-owning with the render **bit-identical** (#160).
+
+⚠ **Then #161 found by reading `render()` that pooling breaks the interactive
+path**: a skipped node contributes the pixels still in its output texture, and a
+pool recycles exactly those — every render becomes full, **9.33 ms → 67.25**.
+
+⚠ **#162 costed both ways out and neither is free, because the memory *is* the
+cache**: a drag recomputes only **2–11 of 173 nodes**, so ~162 textures exist
+purely as cache. **This is a product trade, and it is the developer's call** —
+see the top of this file.
+
+### Also
+
+**The lens picker shipped** (#145–#147) after #144 found the developer's own lens
+is *absent from the data*, not misspelled — `…DG DN | Art 023`, and the bundled
+database has no `Art 023` entry at all. **#163** settled the licence: the data is
+**CC BY-SA 3.0**, not the library's LGPL, so refreshing is clear — and the check
+found `NOTICE` had **no attribution for the database** in a publicly
+downloadable build. **#164** corrected a sixth stale row. **#165** measured the
+highlight plateau: nine radial samples flat at the clip value, colour already
+correct.
+
+### ⚠ What this stretch should teach the next session
+
+**Six rows were stale** (#144, #148, #149, #150, #151, #164). **Check the tree,
+never the record.** And four things were found by *reading* rather than shipping
+— #156's pin list, #158's ownership problem, #161's cache conflict, #157's
+silently-ineffective pin — each of which would otherwise have surfaced as a red
+gate or a **believable wrong picture**.
+
 ## Session `2026-08-03a` — the ⓘ drew perfectly and explained nothing
 
 **Reported against a public release.** #140's icon did nothing on hover. It was
@@ -914,109 +974,12 @@ sessions. Decision #136.
 measure #134 was reverted and `git status` is clean. Gates run anyway: 810 / 3708
 / 41 of 41 / bench 0 on three frames.
 
-## Session `2026-08-02e` — the queue was offering two shipped features as the next story
-
-Asked whether the docs were up to date. They were not, in two ways, and the
-second one matters.
-
-**`research/perspective.md` was a day stale on #134.** Its four-property table
-still said a gradient's ramp length is *isotropic, first order — √|det J|*, the
-section on the ellipse covered only the radial row, and "What is pinned" did not
-mention `lengthAlong`. That is the document `CLAUDE.md` names as required
-reading **before touching a filter**, so a stale row there is worth more than a
-stale row anywhere else. It now carries *The ramp, which the ellipse did not
-touch*: the |J·u| construction, the four checks, the measured 0.6753 → 0.6734,
-the fact that an aspect squeeze changes **nothing** for a ramp because
-`perspectiveAspect` leaves `Placement::jac` the identity — the opposite way round
-from the radial case — and the admission that the call site is unpinned.
-
-**`STATUS.md`'s header had regrown its duplicates**, one day after a prune
-removed them: two `Last updated` lines, two `Phase:` blocks, three copies of the
-queue. Three agents had looked at this and declined it as cosmetic. ⚠ **It was
-not cosmetic.** The three copies disagreed, and merging them is what showed it:
-
-| Queue item | Two copies said | The tree said |
-|---|---|---|
-| Incremental brush accumulation | open, "~1-2 sessions" | ✅ shipped #102, #108 |
-| Snapshots / versions | "the last unbuilt line of M4", unestimated | ✅ shipped #99, `app/Snapshots.swift` |
-| The grading panel's Balance | open, "~half a session" | ✅ shipped #104, `color_grade.slang` |
-
-Four open items; two of them finished. A recovery point that sends the next
-session to rebuild `app/Snapshots.swift` is worse than not having one.
-
-⚠ **Every item was checked against the tree rather than against this file** —
-grep for the code, then the ROADMAP ✅ — which is the only method a queue this
-old admits. The open list is now **two** items: the perspective map's curvature
-(uncosted) and the persisted-key migration (#89, needs sign-off).
-
-⚠ **The export panel's decision numbers were wrong** in one copy and right four
-lines later: #93-#95, not #90-#92. #90 is directory enumeration and #92 is
-dehaze.
-
-**`HISTORY.md` held 771 lines of byte-identical duplicate sessions** — whole
-blocks pasted three times, `2026-08-01a`/`b` and `2026-07-31k`/`l` at three
-copies each. Deleted under an assertion that no removed line existed nowhere
-else in the file; the script refused to write unless that set was empty. Two
-further pairs were **label collisions**, not copies — two different sessions
-sharing `2026-07-30k` (landing page vs colour range masks) and `2026-08-01m`
-(Balance #104 vs the accumulator #108). Relabelled to free letters with a note
-that the letter carries **no claim about ordering**, because the sequence cannot
-be recovered and inventing one would be the same failure in a new place. A
-session's reliable identifier is its decision number.
-
-Decision #135. Doc-only: no engine, app or shader file was touched, and the
-gates were run anyway to say so with evidence rather than by reasoning about it.
-
-## Session `2026-08-02d` — the ramp length, and a fixture that passed either way
-
-The queue's next item was **a mask's extent under a perspective correction is
-first order**. The radial half went on 2026-08-01 (#102); this closes the other,
-the linear gradient's **ramp length**, which was still the isotropic √|det J|.
-Decision #134.
-
-A ramp has exactly one direction, and the geometric mean of two axis scales is
-not the scale along it. `mask::lengthAlong` returns **|J·u|** for the ramp's
-*pre-image* direction — `Placement::angle` is already the image and would be the
-wrong argument — and is exactly 1 at the identity. Four checks in
-`tests_mask_geom.cpp`, the shear among them so no answer can come from reading
-one matrix entry.
-
-### ⚠ Both measurements were worth more than the change
-
-**The first fixture could not fail, and it took a mutation to find out.** It was
-written around the aspect squeeze, because that is the case that rescued the
-radial mask: exactly linear, exactly area-preserving, so √|det J| is 1 and the
-mask came out round under a two-to-one stretch. It passed. **It passed just as
-happily with the fix reverted** — `perspectiveAspect` on its own leaves
-`Placement::jac` the identity, so both codes multiply by 1 and the frames are
-*byte-identical*. The case that made the radial error unmissable makes this one
-invisible.
-
-Rewritten around a real keystone with an off-centre angled ramp, the fix does
-move pixels: **0.6753 → 0.6734 luma** on a patch straddling the ramp's edge.
-Against **0.1461** for the radial first-order error. And the mutation **still**
-passes, because a cell flips or it does not, and 0.002 luma flips nothing at 12
-cells or at 20.
-
-### What ships, and what is knowingly unpinned
-
-`lengthAlong` is pinned. **The line that calls it is not**, and both
-`repro/perspective-carries-the-mask.txt` §4b and `UNSOURCED.md` §24 say so with
-the number beside it, rather than leaving it to be discovered. A golden-value
-check with a 0.002 margin fails for reasons other than the defect; a block that
-implies coverage it lacks is the failure this repository keeps cataloguing. §4b
-does pin something new — a **linear** mask's placement under a keystone, which
-sections 3 and 4 only ever asserted for a radial one.
-
-The ramp's **non-uniformity** stays and cannot go the same way: a projective map
-preserves cross-ratios along a line and not ratios.
-
-**810 engine checks** (four new), 3708 viewport, 41 of 41 scenarios, bench exit 0
-on all three frames.
-
 ## The session log
 
-The **six most recent sessions are above** — `2026-08-02i` (#139), `h` (#138),
+⚠ **Pruned 2026-08-04**: `2026-08-02d` and `2026-08-02e` moved to
+`HISTORY.md`, verified absent here and present there; **1,092 → 992 lines**
+before the consolidated entry above was added. The **six most recent sessions
+are above** — `2026-08-02i` (#139), `h` (#138),
 `g` (#137), `f` (#136), `e` (#135) and `d` (#134). **Everything older lives in
 [`HISTORY.md`](HISTORY.md)**, which is the archive and is deliberately *not* part
 of the read order in `CLAUDE.md`.

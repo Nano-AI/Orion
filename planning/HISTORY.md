@@ -8094,3 +8094,104 @@ gate that runs in seconds could not see it. What *is* pinned is the cause #90
 found: `testSweepDoesNotHoardTheDirectory`, 400 sweeps of a 300-file folder under
 an 8 MB ceiling. The residual is a measurement in this file, not a test, and that
 is stated rather than implied.
+
+
+## Session `2026-08-02e` — the queue was offering two shipped features as the next story
+
+Asked whether the docs were up to date. They were not, in two ways, and the
+second one matters.
+
+**`research/perspective.md` was a day stale on #134.** Its four-property table
+still said a gradient's ramp length is *isotropic, first order — √|det J|*, the
+section on the ellipse covered only the radial row, and "What is pinned" did not
+mention `lengthAlong`. That is the document `CLAUDE.md` names as required
+reading **before touching a filter**, so a stale row there is worth more than a
+stale row anywhere else. It now carries *The ramp, which the ellipse did not
+touch*: the |J·u| construction, the four checks, the measured 0.6753 → 0.6734,
+the fact that an aspect squeeze changes **nothing** for a ramp because
+`perspectiveAspect` leaves `Placement::jac` the identity — the opposite way round
+from the radial case — and the admission that the call site is unpinned.
+
+**`STATUS.md`'s header had regrown its duplicates**, one day after a prune
+removed them: two `Last updated` lines, two `Phase:` blocks, three copies of the
+queue. Three agents had looked at this and declined it as cosmetic. ⚠ **It was
+not cosmetic.** The three copies disagreed, and merging them is what showed it:
+
+| Queue item | Two copies said | The tree said |
+|---|---|---|
+| Incremental brush accumulation | open, "~1-2 sessions" | ✅ shipped #102, #108 |
+| Snapshots / versions | "the last unbuilt line of M4", unestimated | ✅ shipped #99, `app/Snapshots.swift` |
+| The grading panel's Balance | open, "~half a session" | ✅ shipped #104, `color_grade.slang` |
+
+Four open items; two of them finished. A recovery point that sends the next
+session to rebuild `app/Snapshots.swift` is worse than not having one.
+
+⚠ **Every item was checked against the tree rather than against this file** —
+grep for the code, then the ROADMAP ✅ — which is the only method a queue this
+old admits. The open list is now **two** items: the perspective map's curvature
+(uncosted) and the persisted-key migration (#89, needs sign-off).
+
+⚠ **The export panel's decision numbers were wrong** in one copy and right four
+lines later: #93-#95, not #90-#92. #90 is directory enumeration and #92 is
+dehaze.
+
+**`HISTORY.md` held 771 lines of byte-identical duplicate sessions** — whole
+blocks pasted three times, `2026-08-01a`/`b` and `2026-07-31k`/`l` at three
+copies each. Deleted under an assertion that no removed line existed nowhere
+else in the file; the script refused to write unless that set was empty. Two
+further pairs were **label collisions**, not copies — two different sessions
+sharing `2026-07-30k` (landing page vs colour range masks) and `2026-08-01m`
+(Balance #104 vs the accumulator #108). Relabelled to free letters with a note
+that the letter carries **no claim about ordering**, because the sequence cannot
+be recovered and inventing one would be the same failure in a new place. A
+session's reliable identifier is its decision number.
+
+Decision #135. Doc-only: no engine, app or shader file was touched, and the
+gates were run anyway to say so with evidence rather than by reasoning about it.
+
+## Session `2026-08-02d` — the ramp length, and a fixture that passed either way
+
+The queue's next item was **a mask's extent under a perspective correction is
+first order**. The radial half went on 2026-08-01 (#102); this closes the other,
+the linear gradient's **ramp length**, which was still the isotropic √|det J|.
+Decision #134.
+
+A ramp has exactly one direction, and the geometric mean of two axis scales is
+not the scale along it. `mask::lengthAlong` returns **|J·u|** for the ramp's
+*pre-image* direction — `Placement::angle` is already the image and would be the
+wrong argument — and is exactly 1 at the identity. Four checks in
+`tests_mask_geom.cpp`, the shear among them so no answer can come from reading
+one matrix entry.
+
+### ⚠ Both measurements were worth more than the change
+
+**The first fixture could not fail, and it took a mutation to find out.** It was
+written around the aspect squeeze, because that is the case that rescued the
+radial mask: exactly linear, exactly area-preserving, so √|det J| is 1 and the
+mask came out round under a two-to-one stretch. It passed. **It passed just as
+happily with the fix reverted** — `perspectiveAspect` on its own leaves
+`Placement::jac` the identity, so both codes multiply by 1 and the frames are
+*byte-identical*. The case that made the radial error unmissable makes this one
+invisible.
+
+Rewritten around a real keystone with an off-centre angled ramp, the fix does
+move pixels: **0.6753 → 0.6734 luma** on a patch straddling the ramp's edge.
+Against **0.1461** for the radial first-order error. And the mutation **still**
+passes, because a cell flips or it does not, and 0.002 luma flips nothing at 12
+cells or at 20.
+
+### What ships, and what is knowingly unpinned
+
+`lengthAlong` is pinned. **The line that calls it is not**, and both
+`repro/perspective-carries-the-mask.txt` §4b and `UNSOURCED.md` §24 say so with
+the number beside it, rather than leaving it to be discovered. A golden-value
+check with a 0.002 margin fails for reasons other than the defect; a block that
+implies coverage it lacks is the failure this repository keeps cataloguing. §4b
+does pin something new — a **linear** mask's placement under a keystone, which
+sections 3 and 4 only ever asserted for a radial one.
+
+The ramp's **non-uniformity** stays and cannot go the same way: a projective map
+preserves cross-ratios along a line and not ratios.
+
+**810 engine checks** (four new), 3708 viewport, 41 of 41 scenarios, bench exit 0
+on all three frames.
