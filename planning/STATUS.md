@@ -4,8 +4,8 @@
 
 ---
 
-**Last updated:** 2026-08-04 (**the paper is read and piece 5 is smaller than
-costed, #169** — a *conditional single-channel* pass, not three solves. ⚠ **The
+**Last updated:** 2026-08-04 (**piece 5 starts with a count, not a solver,
+#170** — its gate condition has never been measured on a real photograph. ⚠ **The
 8 GB trade, #162, needs your call**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.

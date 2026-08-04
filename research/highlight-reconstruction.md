@@ -620,6 +620,33 @@ per-pixel but *applied* over a neighbourhood, so the paper **low-pass filters th
 weights over that same neighbourhood with a minimum filter** — a detail that
 belongs to piece 4's weighting and is worth checking against what shipped.
 
+### ⚠ Measure the gate before building what sits behind it
+
+§3.4 fires **only** when some channel `k` has `Ω^∩ = Ω_k` — its clipped region
+wholly contained in every other channel's. Nothing in this repository knows how
+often that is true of a real photograph, and **the answer decides whether piece 5
+is worth its nodes**.
+
+The measurement is small and belongs first. `hl_mask.slang` already computes the
+per-channel `hole` at each pixel, so the statistic is: for each channel `k`,
+count pixels where `hole[k]` is set and the other two are not — that is
+`Ω_k \ Ω^∩`. **Containment holds for `k` exactly when that count is zero.**
+Run it over the three bench frames and the `testHighlightFillWiring` fixture.
+
+Three outcomes, and they lead different places:
+
+- **Holds often** — build it as specified, single channel, conditional.
+- **Holds rarely** — piece 5 fires on almost nothing, and the honest move is to
+  say so in `ROADMAP.md` and spend the session elsewhere. A correct
+  implementation of something that never runs is still a plateau on screen.
+- **Holds only on the synthetic fixture** — the worst case, because the suite
+  would go green on a feature no photograph exercises. That is the shape of
+  every over-claimed check this project has already catalogued.
+
+⚠ **The condition is a property of the *sensor and the scene*, not of the
+algorithm**, so it cannot be reasoned about from the paper — Rouf et al. simply
+state when their method applies. It has to be counted.
+
 ## 6. Honest limits
 
 - **§3.4 is not built.** The fill puts a measured hue into a blown core and
