@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (⚠ **pooling would break the interactive path,
-#161** — a skipped node reads pixels the pool would recycle, taking a 9.33 ms
-drag to 67. Found by reading `render()`, before writing it)
+**Last updated:** 2026-08-04 (⚠ **both pool shapes are costed and neither is
+free, #162 — the memory IS the cache.** An 8 GB Mac must choose: open the frame
+and drag at 15 fps, or not open it. **Needs your call.**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -191,6 +191,26 @@ has to change first.
    ⚠ **#153 still stands** — the *lifetime* is the problem, not tiling or
    precision. What changed is that the lifetime worth shortening is the one
    inside a single cold render, which the liveness walk already models.
+
+⚠⚠ **BOTH SHAPES COSTED (#162) — AND THIS NOW NEEDS YOUR DECISION.**
+Measured across every ordinary control: a drag recomputes **2–11 of 173 nodes**
+(exposure 3, temp 11, contrast 2 …). **So ~162 node textures exist purely as
+cache, and that is where the 7,186 MiB is.**
+- **Shape 2 (pool the always-dirty nodes) is dead** — those are the 2–11; the
+  memory is in the ~162 that are never recomputed while editing.
+- **Shape 1 (pool the cold render) does not survive either.** It makes the
+  *open* fit — 1,202 MiB instead of 7,186 — but the interactive path then wants
+  its cache back, the same 7,186 against ~6,144. **The frame would open and then
+  fail**, which is worse than not opening, because it has already been seen.
+
+**So it is a product trade, not an implementation choice**, and only on machines
+that cannot hold the cache: **run pooled and re-render fully — 67.25 ms a tick
+against 9.33, about 15 fps — or refuse to open the photograph.** The engine
+already reads `recommendedMaxWorkingSetSize` (#152) and can tell which machine
+it is on. ⚠ The pooled mode **fails M0 by design** (<16 ms p95 is unreachable at
+67); a waiver on 8 GB is the honest form of *"this is the degraded mode"*.
+**Slow-but-opens vs fast-but-refuses is a question about what Orion is.**
+Everything to implement either is built and correct (#155–#160).
 
 ✅ **The A/B oracle is built (#159)**, in `orion-bench` — the one place that
 already constructs the shipping graph against a real photograph. Today it
