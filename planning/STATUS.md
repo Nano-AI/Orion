@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-03 (**the texture pool is built and tested, #155** —
-and wired into nothing, deliberately. **Next story: `Pipeline` adopts it**, which
-is the half that can render another node's pixels)
+**Last updated:** 2026-08-03 (**four textures outlive the graph and the pool must
+pin them, #156** — found before touching the render path, not after. The pool
+itself is built and tested, #155)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -164,9 +164,21 @@ node's pixels — caught before only by a byte-for-byte test.
 **Next story: `Pipeline` adopts it.** Free each output at its last read, using
 the liveness walk `peakLiveBytes` already implements; check the pool's own peak
 against 1,202 MiB; keep the early refusal as the backstop for whatever still
-will not fit. ⚠ **Land it so it can be reverted alone**, and pin it with a
-byte-for-byte render comparison — the failure mode is a believable picture, not
-a crash.
+will not fit. ⚠ **Land it so it can be reverted alone** — a default-off flag —
+and pin it with an **A/B bit-identity check**: the failure mode is a believable
+picture, not a crash.
+
+⚠⚠ **FOUR TEXTURES OUTLIVE THE GRAPH AND MUST BE PINNED (#156).** In-graph
+liveness is not the whole rule: `Pipeline::nodeOutput(int)` hands out any node's
+texture *after* the render, so a pooled texture reissued to a later node would
+hand a consumer another node's pixels — right size, right format, wrong picture.
+**The list, checked by grep and complete:** `nFuseProxy_` and `nPeak_`
+(`DevelopLocal.cpp:626` and `:664`), the final `output()`, and
+`sourceTexture()`. `nodeOutput` has no other caller in the tree.
+⚠ So **1,202 MiB is optimistic twice**: it lets differing sizes share an
+allocation, and now also assumes those four recycle, which they cannot. The true
+figure is higher and still far under the 6,144 MiB an 8 GB Mac allows — which is
+what keeps #153's conclusion standing.
 ✅ **Scroll, zoom, pan and the filmstrip are answered (#154) — by reading, and
 recorded as a reading rather than dressed up as a measurement.** Zoom and pan
 transform the *already-rendered* texture in the canvas blit; neither re-runs the
