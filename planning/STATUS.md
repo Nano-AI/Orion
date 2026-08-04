@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (**the `SQLITE_BUSY` row was stale — it is tested,
-and it asked for the wrong experiment, #164.** ⚠ **The 8 GB trade, #162, still
-needs your call**; refreshing the lens data needs your go-ahead to download)
+**Last updated:** 2026-08-04 (**the highlight plateau is measured, #165** — nine
+radial samples flat at the clip value, colour already correct. ⚠ **The 8 GB
+trade, #162, needs your call**; the lens refresh needs a download go-ahead)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
