@@ -563,19 +563,62 @@ lamp's own colour is **0.5756 off, 0.0442 on**, against a truth of
 (0.7631, −0.0496). Piece 5 changes the luminance profile; if that figure moves,
 something has been broken rather than added.
 
-### What the paper must answer first
+### What the paper says — read 2026-08-04, and it settles three of the four
 
-1. **What field is extrapolated** — the log-domain gradient itself, and by what
-   boundary condition at `∂Ω^∩`.
-2. **What the second solve integrates**, and how its constant of integration is
-   fixed so the rim still matches.
-3. **Whether the two solves are separable per channel**, which decides whether
-   this is one pass over three channels or three passes.
-4. **What happens where `Ω^∩` touches the frame edge**, which the existing solve
-   handles by the pyramid's clamp and §3.4 may not.
+Rouf, Lau & Heidrich, *Gradient Domain Color Restoration of Clipped Highlights*,
+PROCAMS 2012, **§3.4 "Gradient smoothing for fully clipped regions"** and **§3.5
+"Discretization"**. Retrieved from the authors' copy at
+`vccimaging.org/Publications/Rouf2012GDC/`.
 
-None of the four is answerable from the summary above, and each changes the node
-count. **Read Rouf, Lau & Heidrich (PROCAMS 2012) §3.4 before starting.**
+**1. What is extrapolated, and with what boundary condition.** The **log-space
+gradient field**, by a Laplace solve — their Eq. 9, hatted quantities being log
+images:
+
+    ∇²ĝ*_k = 0   over Ω_k,   with  ĝ*_k|∂Ω_k = ∇ log f_k|∂Ω_k
+
+So the *gradient* is interpolated harmonically from the observed log-gradient on
+the boundary. That is the step the current fill does not have — it interpolates
+the **value**, which is why a roughly circular rim gives a flat interior.
+
+**2. What the second solve integrates, and how the constant is fixed.** Eq. 10, a
+Poisson solve whose Dirichlet condition *is* the constant of integration:
+
+    ∇²f̂*_k = ∇ · ĝ*_k   over Ω_k,   with  f̂*_k|∂Ω_k = log f_k|∂Ω_k
+
+then `f*_k = exp(f̂*_k)`. ⚠ **The rim therefore stays continuous by exactly the
+mechanism it does today** — a Dirichlet condition matching the observed boundary,
+in log space instead of linear. The invariant §5d flags as the regression to
+watch is preserved *by the paper's own construction*, not by care in the port.
+
+**3. Per-channel or joint — and this is the answer that changes the design.**
+**One channel, not three, and only sometimes.** The paper: *"we generate
+gradients for one of the channels over Ω^∩. We only apply this method if there is
+one channel k whose clipping region is completely contained within the clipping
+regions of the other channels, i.e. Ω^∩ = Ω_k."* It is also described as an
+**optional pre-processing stage**. So piece 5 is a **conditional single-channel
+pass** with a containment test to evaluate first — not three solves, and not
+unconditional.
+
+**4. Regions touching the frame edge — the paper does not say.** §3.5 defines the
+boundary as *"unclipped pixels with at least one clipped pixel in their
+neighborhood"*, which has no answer for a clipped region running off the frame:
+there is no unclipped ring on that side to take a Dirichlet condition from. **The
+implementer must decide and write down which**, and the existing pyramid's clamp
+is the obvious candidate — but it is a choice this repository is making, not one
+Rouf et al. hand over, and it must be labelled as such.
+
+**Why log space, in their words.** It *"corresponds to a generalization of
+fitting a Gaussian to the gradients"*: take the log of a clipped signal, solve
+for a gradient that varies linearly across the region, integrate, and the log
+image varies quadratically — which in linear space is a **Gaussian
+extrapolation**. True Gaussians only for circular regions with rotationally
+symmetric boundary gradients; other shapes come out asymmetric but still smooth.
+
+**Also from §3.5, and easy to miss.** Gradients by divided differences over
+4-connected neighbourhoods `N_p`. The Eq. 8 blending weights are computed
+per-pixel but *applied* over a neighbourhood, so the paper **low-pass filters the
+weights over that same neighbourhood with a minimum filter** — a detail that
+belongs to piece 4's weighting and is worth checking against what shipped.
 
 ## 6. Honest limits
 

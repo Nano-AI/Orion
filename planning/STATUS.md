@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (**piece 5's scaffolding is written, #168** — every
-constraint and the target number, and **no discretisation**, which the paper
-owes. ⚠ **The 8 GB trade, #162, needs your call**)
+**Last updated:** 2026-08-04 (**the paper is read and piece 5 is smaller than
+costed, #169** — a *conditional single-channel* pass, not three solves. ⚠ **The
+8 GB trade, #162, needs your call**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
