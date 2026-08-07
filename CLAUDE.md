@@ -72,9 +72,10 @@ C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · L
 ./tools/check-decisions.py         the decision ledger indexes the tree
 ./tools/check-gestures.py          every gesture still arms the preview graph
 ./tools/check-screens.py           the three interface scenes that assert
+./tools/check-modes.py             --library-open and --batch-export still run
 ```
 
-Run all five before claiming anything works. The GPU tests matter most: pure
+Run all six before claiming anything works. The GPU tests matter most: pure
 maths tests pass happily on code that renders garbage, because they never touch
 a texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
 inspection and obvious to a five-line assertion.
@@ -102,6 +103,14 @@ their oracle is a person looking at a PNG. ⚠ It exists because those three
 checks were written against named mutations (#125) and then invoked by nobody:
 `--scenario` is what the repro sweep drives, and `--screenshot` had no gate at
 all (#121, #177).
+
+`check-modes.py` is the same story for the last two command-line modes. Both
+already assert — `--library-open` opens one folder cold, warm and indexless in
+one process and fails when they disagree; `--batch-export` exits 1 when a
+photograph fails — and neither was run by anything, so deleting either
+four-line dispatch in `OrionApp.init` was green everywhere (#121, #179).
+⚠ A deleted dispatch does not make Orion exit; it makes Orion **open a window**,
+so both gates catch that by timeout rather than by exit code.
 
 ## Working agreement
 - One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable. **Prune it in the same breath:** it reached 4,643 lines over 56 sessions before anyone noticed that a recovery point nobody can read is not one. Six or so recent sessions is plenty; the rest belongs in `HISTORY.md`.

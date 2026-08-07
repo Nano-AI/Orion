@@ -4,11 +4,11 @@
 
 ---
 
-**Last updated:** 2026-08-07 (**the `--screenshot` scenes are a gate, #177–#178**
-— `tools/check-screens.py`. ⚠⚠ **Two first-cut checks in one session went green
-on the mutation they were written for**, both found by running it. ⚠⚠ **The repo
-is public with NO LICENSE — source-available, not open source.** Awaiting the
-choice)
+**Last updated:** 2026-08-07 (**all four command-line modes are now gated,
+#177–#179** — `check-screens.py` and `check-modes.py`. ⚠⚠ **Two first-cut checks
+in one session went green on the mutation they were written for**, both found by
+running it. ⚠⚠ **The repo is public with NO LICENSE — source-available, not open
+source.** Awaiting the choice)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -509,7 +509,7 @@ Small, named, and none of them blocking the next story:
 | **The 1000-line rule is not broken anywhere.** ⚠ **Recounted by sweep 2026-08-02 at `191b451`, on a clean worktree with nothing else running** — `git ls-files` over all **239** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files, counted with `grep -c ''`, not a directory list, so nothing is out of scope by being somewhere nobody thought to look. **Over 1,000: none.** Largest anywhere: `ShaderParams.h` **905**, `tests_highlights.cpp` **897**, `tests_tone.cpp` **858**, `tests_perspective.cpp` **837**, `tests_brush.cpp` **824**, `ViewportTests+Index.swift` **809**, `Engine.swift` **795**, `tests_grain.cpp` **788**. Narrowing the sweep to `.cpp/.swift/.h/.mm` gives **177** files and the same head of the list. ⚠ **The previous copy of this row went stale within hours of being written, which is exactly what it warns about**: it recorded `tests_highlights.cpp` at **865** as at `6767716`, and `1a3083d` — *"bound the fill's weight, and say what the constant rim actually reaches"* — took that file to **897** on the same day. Every other number in it re-derived unchanged. ⚠ **`app/Screenshot.swift` was the last one over the line**, at **1,196** — 809 lines on the morning of 2026-08-02, taken over the line the same day by #125's three interface checks, and split five ways by #131 at the seam between a scene that *asserts* and a scene that *poses*. ⚠ A sweep is of **one worktree at one commit** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling. Eleven splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `tests_effects.cpp` 1,716→555 (#127), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `Screenshot.swift` 1,196→315 (#131), and #129's three: `tests_brush.cpp` 1,142→824, `tests_perspective.cpp` 1,110→837, `tests_grade.cpp` 1,029→653. ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into one on 2026-08-02 | whole tree |
 | ~~⚠ **The whole Photo menu is unreachable from every check.**~~ ✅ **closed 2026-08-02, decision #125.** `--screenshot --scene menu` hands the process back to `OrionApp.main()` and reads `NSApp.mainMenu` — the shipping `Scene` building the shipping `PhotoCommands` — and asserts **26 commands by title**, exiting 1 and printing the whole 75-item bar when one is missing. Deleting Reset Adjustments now prints `MISSING from the menu bar — "Reset Adjustments"` and exits 1, with every frame and all 40 scenarios still green. ⚠ It asserts **presence, not firing**: the items are disabled at launch and firing one needs a photograph, a key window and focus (#110.3's shape). ⚠ It is not driven through `CullActions`, deliberately — that would be green on the mutation, which deletes the button and leaves the action | `Screenshot.swift` |
 | ~~⚠ **The Compare Original menu item ships without its key.**~~ ✅ **closed — and this row was stale for five days, the eighth plan row found so (#177).** The bug was real: a `Button`'s string is a `LocalizedStringKey` whose escape character is the backslash, so `"Compare Original  (\\)"` shipped as **`Compare Original  ()`** — the one item spelling its key only in its title lost it. It was fixed with `Text(verbatim:)` in **`676d24e`**, #125's own merge, *before this row was written as open*. The menu check has been pinning the fixed spelling ever since. ⚠ **Reverting the `Text(verbatim:)` prints `Compare Original  ()` and exits 1**, measured 2026-08-07 — so the bug is reproducible on demand and the check is not decorative | `OrionApp+Commands.swift` |
-| ⚠ **Two of the four command-line modes are checked by nothing in the repository** — narrowed from three, 2026-08-07 (#177). `--batch-export` and `--library-open` each have their four-line dispatch in `OrionApp.init`, and deleting either is green on every gate (#121, M3/M4). **`--screenshot` is no longer one of them**: `tools/check-screens.py` drives it three times, so deleting its dispatch now reddens a gate. ⚠ Structural, not a coverage oversight: `apps/tests` and `apps/bench` are pure C++ and name no Swift, and `orion-viewport-tests` compiles a Swift list with **zero** `OrionApp*` files | `OrionApp.swift` |
+| ~~⚠ **Three of the four command-line modes are checked by nothing.**~~ ✅ **all four covered as of 2026-08-07** — `--scenario` by the repro sweep, `--screenshot` by `check-screens.py` (#177), and `--library-open` and `--batch-export` by `tools/check-modes.py` (#179). ⚠ **Neither of the last two needed an oracle written** — both already asserted and were simply never invoked: `--library-open` prints **13 checks** over a cold/warm/indexless open, `--batch-export` exits 1 on a photograph that fails. ⚠⚠ **A deleted dispatch does not make Orion exit, it makes Orion open a window**, so both gates catch it by **timeout**, not exit code | `OrionApp.swift` |
 | ~~**`Engine.lastFailure` is pinned, the line that displays it is not.**~~ ✅ **closed 2026-08-02, decision #125.** `--scene render-failed` plants the failure **and suspends the engine** — laying the interface out renders, and a successful render clears the value, which wiped the first attempt and photographed the ordinary hint — so the amber "Render failed — …" line is in a byte-compared frame. Deleting the branch changes the frame; `nofailure` stays green on the same mutation, which is exactly the distinction: it pins the state, this pins the line | `Screenshot.swift` |
 | ~~⚠ **The three interface checks are run by hand.**~~ ✅ **closed 2026-08-07, #177.** `tools/check-screens.py` runs all three and is in `CLAUDE.md` beside the other four. ⚠ **`render-failed` had to be given an oracle first** — it exited 0 whatever the footer did, because its check was two PNGs and a person. It now renders its own control in-process, so no reference image is on disk. ⚠⚠ **And the first version of that comparison did not catch its own mutation:** deleting the footer's warning line left it green, because the readout beside the dimensions also reads `lastFailure` and still switched to `failed`. It now compares two frames that both carry a failure and differ only in its **text**, which the readout renders identically. All three mutation-tested through the gate. ⚠ **Still nobody's gate: the other ~35 scenes**, which pose rather than assert | `Screenshot.swift` |
 | ~~**One screenshot scene is not byte-stable, so it cannot be an oracle.**~~ ✅ **closed 2026-08-07, #178.** A fixed instant in the harness — `Screenshot.epoch` — not in the product, since the panel is right to print when a version was taken. ⚠⚠ **The obvious check for it went green on the mutation:** rendering twice and demanding agreement catches this about **one run in twenty**, because `.short` time style has *minute* resolution and two renders seconds apart share a minute. The deterministic catch is `assertVersionsDoNotShowTheClock` — the rows must be years old, not seconds old. The two-render check is kept for what it alone sees (a random id, an unsettled layout, a late thumbnail). ⚠ **Stable across runs, not across machines** — the string still goes through the machine's locale and time zone | `Screenshot+Scenes.swift` |
@@ -611,6 +611,27 @@ layout, a late thumbnail.
 **Twice in one session, both found by running the mutation rather than reading
 the check.** That is the whole lesson of this session and it is not a new one —
 it is `CLAUDE.md`'s rule about pure-maths tests, in a different costume.
+
+### And the last two command-line modes, #179
+
+`--library-open` and `--batch-export` were the remaining pair nothing ran, so
+deleting either four-line dispatch was green everywhere. `tools/check-modes.py`
+runs them.
+
+⚠ **Neither needed an oracle written for it** — checked before writing one.
+`--library-open` opens `samples/` cold, warm and indexless in one process and
+prints **13 checks**; `--batch-export` exits 1 on a photograph that fails,
+verified against a path that does not exist. They were assertions nobody
+invoked, which is the same shape as #177.
+
+⚠⚠ **A deleted dispatch does not make Orion exit — it opens a window and
+waits.** Both gates catch that by **timeout**, not exit code. Measured at
+**0.08 s** and **1.55 s**, bounded at 60.
+
+⚠ Two floors were added and their strength is stated rather than implied: the
+dispatch deletions were run and caught; the floors (ten library checks, 500 KB
+per export) were proved only by raising their constants, so they work and have
+never been needed.
 
 ### ⚠ The eighth and ninth stale plan rows
 
