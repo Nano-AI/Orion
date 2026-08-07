@@ -71,9 +71,10 @@ C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · L
 ./build/orion-viewport-tests       canvas geometry
 ./tools/check-decisions.py         the decision ledger indexes the tree
 ./tools/check-gestures.py          every gesture still arms the preview graph
+./tools/check-screens.py           the three interface scenes that assert
 ```
 
-Run all four before claiming anything works. The GPU tests matter most: pure
+Run all five before claiming anything works. The GPU tests matter most: pure
 maths tests pass happily on code that renders garbage, because they never touch
 a texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
 inspection and obvious to a five-line assertion.
@@ -92,6 +93,15 @@ call is green everywhere. It catches the deletion and claims nothing more. It
 exists because a `ROADMAP.md` table asserting four gestures did *not* arm was
 the premise of a performance audit, and all four had been fixed without it
 being updated.
+
+`check-screens.py` launches the application three times, so it is the slow one.
+It runs the `--screenshot` scenes that *assert* — the menu bar AppKit really
+builds, the Detail panel's controls below the fold, and the footer's failure
+line. **The other ~35 scenes pose rather than assert and this cannot run them**:
+their oracle is a person looking at a PNG. ⚠ It exists because those three
+checks were written against named mutations (#125) and then invoked by nobody:
+`--scenario` is what the repro sweep drives, and `--screenshot` had no gate at
+all (#121, #177).
 
 ## Working agreement
 - One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable. **Prune it in the same breath:** it reached 4,643 lines over 56 sessions before anyone noticed that a recovery point nobody can read is not one. Six or so recent sessions is plenty; the rest belongs in `HISTORY.md`.

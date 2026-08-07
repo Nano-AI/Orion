@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 /// The scenes that are checks rather than pictures.
 ///
@@ -11,8 +12,13 @@ import Foundation
 /// | Scene | Fires when | Exits nonzero |
 /// |---|---|---|
 /// | `detail-tail` | anything below the fold in Detail is deleted or moved | when nothing overflows the panel column |
-/// | `render-failed` | the footer stops drawing `engine.lastFailure` | no — the frame differs |
+/// | `render-failed` | the footer stops drawing `engine.lastFailure` | yes — it renders the control itself and compares |
 /// | `menu` | a `PhotoCommands` item is deleted or renamed | when a command is missing |
+///
+/// **All three exit nonzero on their own mutation, so `tools/check-screens.py`
+/// can run them as a gate.** `render-failed` was the exception until
+/// 2026-08-07: its oracle was two PNGs and a person, which is to say it ran
+/// nowhere. See `assertFailureLineDrawn`.
 ///
 /// ⚠ **Adding a check-scene is this file plus one `case` in
 /// `Screenshot+Scenes.swift`.** What belongs here is the assertion and the
@@ -45,18 +51,15 @@ extension Screenshot {
     private static let requiredCommands: [String] = [
         // The tool tabs, ⌘1–⌘7.
         "Light", "Color", "Detail", "Optics", "Mask", "Crop", "Presets",
-        // ⚠ **Two characters short of what the source says, and that is a
-        // finding rather than a typo here.** `OrionApp+Commands` writes
-        // `"Compare Original  (\\)"`, which is `Compare Original  (\)` in
-        // Swift — but a `Button`'s string is a `LocalizedStringKey`, and a
-        // backslash is that grammar's escape character, so AppKit installs
-        // **`Compare Original  ()`**: the one item whose key is spelled only in
-        // its title has lost the key. Nothing in the repository could see it
-        // until something read the real menu bar. Pinned as it ships, because
-        // the fix is a line in `OrionApp+Commands.swift` and that file belongs
-        // to another story; a check that is red the day it lands is not a check.
-        // When it *is* fixed this goes red and prints the bar, which is the
-        // right way round.
+        // ⚠ **This entry is `Compare Original  (\)` and it is the fixed
+        // spelling, not the shipped bug.** A `Button`'s string is a
+        // `LocalizedStringKey`, whose escape character is the backslash, so the
+        // item shipped as **`Compare Original  ()`** — the one command that
+        // spells its shortcut only in its title was the one that lost it.
+        // Nothing could see it until something read the real menu bar (#125).
+        // `OrionApp+Commands` now builds this title with `Text(verbatim:)`, so
+        // the backslash survives and this line matches what AppKit installs.
+        // ⚠ Reverting that `Text(verbatim:)` to a bare string reddens this.
         "Compare Original  (\\)",
         "Fit in Window  (0)", "Actual Size  (9)",
         "Export…", "Reveal Session Log in Finder",
@@ -153,6 +156,125 @@ extension Screenshot {
     /// string the scene plants and the string a reviewer looks for are the same
     /// string.
     static let failureText = "the compute pipeline could not be built"
+
+    /// A second message, for the comparison that isolates the warning line from
+    /// the `failed` readout — see `assertFailureLineDrawn`.
+    ///
+    /// ⚠ **Deliberately a different length**, so it cannot wrap to the same
+    /// glyphs by coincidence, and deliberately plausible: it is a message this
+    /// footer could really carry, not `xxxxx`, because it is also what a person
+    /// looking at the frame while debugging this check will see.
+    static let otherFailureText = "the GPU device went away mid-frame"
+
+    // MARK: The failure line
+
+    /// `render-failed`, made to assert on its own — three frames in one process,
+    /// no reference image on disk.
+    ///
+    /// ⚠ **Why it needed one at all.** This scene was the only check-scene that
+    /// exited 0 no matter what: the table above said *"no — the frame differs"*,
+    /// meaning the oracle was a person opening two PNGs. So the check existed on
+    /// paper and ran nowhere, and deleting the footer's failure branch was green
+    /// in every gate this repository has.
+    ///
+    /// The failure frame is already captured when this runs. Clearing
+    /// `lastFailure` and laying the same interface out again gives the control,
+    /// and **the two must differ** — a footer that stops drawing the warning
+    /// draws the ordinary hint in both, and the bytes come back equal.
+    ///
+    /// ⚠ **The second control is the half that makes this trustworthy, and it is
+    /// not redundant.** A frame-differs check passes whenever two renders are
+    /// unequal, including when they are unequal for reasons that have nothing to
+    /// do with the warning — a clock in the interface, an unsettled layout, a
+    /// thumbnail that arrived between passes. That is a check that goes green on
+    /// noise, which is the failure mode this project keeps finding in its own
+    /// tests. Rendering the control **twice** and demanding those two agree
+    /// establishes the harness is byte-stable *in this process, on this run*
+    /// before the difference is allowed to mean anything.
+    ///
+    /// ⚠ The engine stays suspended throughout. A successful render clears
+    /// `lastFailure`, and laying the interface out renders — see the comment at
+    /// the plant site in `Screenshot.run`, which is a bug this scene has already
+    /// had once.
+    ///
+    /// ⚠⚠ **The second comparison is here because the first one is not enough,
+    /// and that was found by running the mutation rather than by reasoning.**
+    /// The footer reads `lastFailure` in *two* places: the warning line, and the
+    /// readout beside the dimensions, which says `failed` instead of a
+    /// millisecond count. So deleting the warning line outright — the exact
+    /// mutation this scene exists to catch — still moves bytes through the
+    /// readout, and a plain failure-against-no-failure comparison **stayed
+    /// green on it**. That is this repository's recurring defect: a check that
+    /// names the mutation it is for and does not catch it.
+    ///
+    /// The fix is to compare two frames that *both* have a failure and differ
+    /// only in its **text**. The readout renders `failed` identically in both,
+    /// in the same colour, so the only thing that can move a byte is something
+    /// drawing the message — and if nothing does, the frames are equal.
+    ///
+    /// ⚠ **What it still does not pin:** the wording, the colour, the position,
+    /// or that a human could read it. A warning line rendered one pixel tall in
+    /// the background colour would pass. It pins that the text reaches the
+    /// frame.
+    static func assertFailureLineDrawn<V: View>(_ failed: Data, view: V,
+                                                size: CGSize, engine: Engine) {
+        // ⚠ **Checked first, because without it this check accuses the wrong
+        // code.** The whole status line is inside `if engine.isLoaded`, so with
+        // no photograph open the footer draws nothing in either frame, the two
+        // come back equal, and the message below would blame a footer that is
+        // working. Run without `--photo` this is the state — and it is exactly
+        // the state in which the old, non-asserting version of this scene
+        // exited 0 and wrote a frame with no failure line in it.
+        guard engine.isLoaded else {
+            fail("render-failed needs a photograph: nothing is loaded, so the "
+                 + "status line this scene checks is not in the frame at all. "
+                 + "Pass --photo <file>")
+        }
+
+        engine.lastFailure = nil
+
+        guard let controlA = render(view, size: size),
+              let controlB = render(view, size: size) else {
+            fail("the control frame for render-failed produced no image")
+        }
+
+        guard controlA == controlB else {
+            fail("the two control frames disagree (\(controlA.count) bytes "
+                 + "against \(controlB.count)), so this harness is not "
+                 + "byte-stable on this run and a frame-differs check would "
+                 + "pass on the noise rather than on the warning line")
+        }
+
+        guard failed != controlA else {
+            fail("the footer draws the same frame with a failure planted as "
+                 + "without one, so nothing in the interface is showing "
+                 + "engine.lastFailure — see OrionApp+Chrome's status line")
+        }
+
+        // The same footer state, a different message. Everything else the
+        // failure switches — the `failed` readout, its colour, the hint being
+        // suppressed — is identical between these two frames, so a difference
+        // can only come from the text being drawn.
+        engine.lastFailure = otherFailureText
+        guard let other = render(view, size: size) else {
+            fail("the second failure frame for render-failed produced no image")
+        }
+
+        guard failed != other else {
+            fail("two different failure messages render the same frame, so the "
+                 + "text of engine.lastFailure reaches nothing on screen. The "
+                 + "footer's `failed` readout can still be switching — that is "
+                 + "why this check is here and the frame-differs one is not "
+                 + "enough — but the warning line is gone. "
+                 + "See OrionApp+Chrome's status line")
+        }
+
+        let note = "orion: the failure line moves "
+            + "\(abs(failed.count - controlA.count)) bytes of frame against no "
+            + "failure, and \(abs(failed.count - other.count)) against a "
+            + "different message; two controls agreed at \(controlA.count)\n"
+        FileHandle.standardError.write(Data(note.utf8))
+    }
 
     /// Scenes that capture the panel column scrolled to its end rather than at
     /// rest.

@@ -302,6 +302,13 @@ enum Screenshot {
         do { try png.write(to: URL(fileURLWithPath: o.output)) }
         catch { fail("could not write \(o.output) — \(error.localizedDescription)") }
 
+        // Written before it is checked, deliberately: the frame is the evidence
+        // when the check goes red, and a check that exits before writing leaves
+        // whoever has to look at it with nothing to look at.
+        if o.scene == "render-failed" {
+            assertFailureLineDrawn(png, view: view, size: o.size, engine: engine)
+        }
+
         let note = "orion: wrote \(o.output) "
             + "(\(Int(o.size.width))x\(Int(o.size.height)), scene \(o.scene))\n"
         FileHandle.standardError.write(Data(note.utf8))
