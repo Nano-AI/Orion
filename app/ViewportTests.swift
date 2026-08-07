@@ -105,6 +105,7 @@ enum ViewportTests {
         testMaskDragStaysInSliderRange()
         testMaskHitPrefersHandlesOverBody()
         testMaskAnglesAreNormalizedNotScreen()
+        testBrushSpacingIsUnderItsBound()
         testBrushDabsAreEvenlySpaced()
         testBrushSpacingSurvivesTheEventRate()
 

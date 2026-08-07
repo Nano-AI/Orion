@@ -4,11 +4,12 @@
 
 ---
 
-**Last updated:** 2026-08-07 (**all four command-line modes are now gated,
-#177–#179** — `check-screens.py` and `check-modes.py`. ⚠⚠ **Two first-cut checks
-in one session went green on the mutation they were written for**, both found by
-running it. ⚠⚠ **The repo is public with NO LICENSE — source-available, not open
-source.** Awaiting the choice)
+**Last updated:** 2026-08-07 (**all four command-line modes are gated,
+#177–#179**, and **the nib's spacing is derived rather than cited, #180** —
+there was nothing to cite. ⚠⚠ **Three first-cut checks in one session went green
+on the mutation they were written for**, every one found by running it. ⚠⚠ **The
+repo is public with NO LICENSE — source-available, not open source.** Awaiting
+the choice)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -503,7 +504,7 @@ Small, named, and none of them blocking the next story:
 | ~~**The session log replay now exits 1.**~~ ✅ **already closed in the tree, found stale at the 2026-08-02 prune.** `InteractionLog.start()` writes `minchecks 0` into the header it emits, with five comment lines above it saying why (`InteractionLog.swift:65-78`) — so a replayed session log asserts nothing and exits 0, which is the one workflow it exists for. The row said the header "owes" that line and that it was left for whoever owns the file; whoever owns it had already written it | `InteractionLog.swift` |
 | **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand — and #79 now adds a second reason it must stay on demand: a model that has changed between OS releases would give a *different* selection, silently, on a finished edit | `SubjectMatte` |
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
-| The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
+| ~~The **nib's constants are uncited** — dab spacing, hardness clamp~~ ✅ **spacing derived and measured 2026-08-07, #180** — `research/brush-nib.md`. **There is nothing to cite**: two dabs `k` radii apart dip the stroke's edge inward by `1 − sqrt(1 − k²/4)`, the hardness clamp makes the falloff band `0.02 r`, and a dip inside that band is swallowed — bounding spacing at **k = 0.398**. ⚠⚠ **The two constants are one decision** and cannot move apart. ⚠ **The margin is 9%, not 37%** — only a smootherstep's steep middle reads as an edge. Measured: **1.12 px ripple against a 2.26 px feather**. ⚠ The **hardness clamp's own value is still chosen**, but it is no longer free | `UNSOURCED.md` §17 |
 | **363 commits carry `Co-Authored-By` / `Claude-Session` trailers.** ⚠ **Recounted at the 2026-08-02 prune — the row said 101, and it is 363**, because every agent in every wave since has added more. `git log --format=%B \| grep -c 'Co-Authored-By: Claude'`. Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history, and the longer it waits the larger the rewrite | whole history |
 | ~~**A check names the mutation it exists to catch and does not catch it.**~~ ✅ **stale — closed by re-measurement 2026-08-07, #178, the ninth stale row.** The diagnosis was right: check 6 drives a **pure aspect squeeze**, whose Jacobian is diagonal, so `b = c = 0` and the conjugation multiplies two zeros. But **check 6b was added afterwards and does catch it** — a two-way keystone at four off-axis spots, graded against a central difference of `toFrame`'s own centres. Deleting `W⁻¹JW` from `mask::unperspective` now **fails 2 checks, worst axis 1.48 rad**, measured. ⚠ Check 6's squeeze block stays and asserts its own blindness (`b == 0 && c == 0`), so a future fixture cannot quietly go back to being diagonal | `MaskGeometry.h` |
 | **The 1000-line rule is not broken anywhere.** ⚠ **Recounted by sweep 2026-08-02 at `191b451`, on a clean worktree with nothing else running** — `git ls-files` over all **239** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files, counted with `grep -c ''`, not a directory list, so nothing is out of scope by being somewhere nobody thought to look. **Over 1,000: none.** Largest anywhere: `ShaderParams.h` **905**, `tests_highlights.cpp` **897**, `tests_tone.cpp` **858**, `tests_perspective.cpp` **837**, `tests_brush.cpp` **824**, `ViewportTests+Index.swift` **809**, `Engine.swift` **795**, `tests_grain.cpp` **788**. Narrowing the sweep to `.cpp/.swift/.h/.mm` gives **177** files and the same head of the list. ⚠ **The previous copy of this row went stale within hours of being written, which is exactly what it warns about**: it recorded `tests_highlights.cpp` at **865** as at `6767716`, and `1a3083d` — *"bound the fill's weight, and say what the constant rim actually reaches"* — took that file to **897** on the same day. Every other number in it re-derived unchanged. ⚠ **`app/Screenshot.swift` was the last one over the line**, at **1,196** — 809 lines on the morning of 2026-08-02, taken over the line the same day by #125's three interface checks, and split five ways by #131 at the seam between a scene that *asserts* and a scene that *poses*. ⚠ A sweep is of **one worktree at one commit** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling. Eleven splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `tests_effects.cpp` 1,716→555 (#127), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `Screenshot.swift` 1,196→315 (#131), and #129's three: `tests_brush.cpp` 1,142→824, `tests_perspective.cpp` 1,110→837, `tests_grade.cpp` 1,029→653. ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into one on 2026-08-02 | whole tree |
@@ -632,6 +633,33 @@ waits.** Both gates catch that by **timeout**, not exit code. Measured at
 dispatch deletions were run and caught; the floors (ten library checks, 500 KB
 per export) were proved only by raising their constants, so they work and have
 never been needed.
+
+### The nib's spacing, derived — and a third check that missed its mutation, #180
+
+§17 asked for an hour's search before anyone tuned `brushSpacing` by feel. The
+search was done and **there is no constant to cite**: the spacing follows from
+the nib's falloff. Two dabs `k` radii apart dip the edge inward by
+`1 − sqrt(1 − k²/4)`; the hardness clamp makes the falloff band `0.02 r`; a dip
+inside the band is swallowed. **k_max = 0.398.**
+
+⚠⚠ **So the two constants §17 listed separately are one decision.** The clamp
+sets the spacing budget. Neither may move alone now.
+
+⚠⚠ **And the algebra flattered itself.** Only a smootherstep's steep middle
+reads as an edge, so the honest bound is ≈**0.274** and 0.25 has about **9% of
+margin, not 37%**. Measured on real strokes: **1.12 px ripple against a 2.26 px
+feather** at the shipped spacing, **5.95 against 2.28** at 0.5 r. The old
+comment said "comfortably inside"; it is the right side of the line, closely.
+
+⚠ **The GPU test's first version could not fail.** It asked for hardness at
+exactly 0.98 and computed the feather from its own copy of that number — so
+moving the shader's clamp to 0.999 left it green, because `clamp(0.98, 0,
+0.999)` is still 0.98 and both sides of the comparison lived in the test file.
+Rewritten to ask for **1.0**, letting the shader's clamp answer, and to measure
+the feather **off the pixels**. The same mutation now fails: 2.00 px against a
+0.87 px feather.
+
+**Three times this session.** Every one found by running the mutation.
 
 ### ⚠ The eighth and ninth stale plan rows
 

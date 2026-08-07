@@ -450,6 +450,47 @@ extension ViewportTests {
     /// string of beads, so it is checked as an actual distance between
     /// consecutive dabs rather than as a count — a count is satisfied by dabs
     /// bunched at one end.
+    /// The shipped spacing is under the bound the geometry gives it.
+    ///
+    /// ⚠ **This is the check that pins the constant; the GPU one pins the
+    /// model.** `testBrushSpacingRipple` in `orion-tests` measures a real
+    /// stroke's edge at 0.25, 0.5 and 1.0 radii and confirms the derivation —
+    /// but it names those spacings itself, so raising `brushSpacing` here would
+    /// leave it green. This side owns the number.
+    ///
+    /// The bound, from `research/brush-nib.md`: a stroke is a row of
+    /// overlapping discs, and between two centres `k` radii apart the union
+    /// dips inward by `1 - sqrt(1 - k²/4)` of the radius. The nib's falloff
+    /// hides that dip while it stays inside the feather, and the feather at the
+    /// hardest the nib is allowed to be is `1 - 0.98 = 0.02` of the radius.
+    /// Equating them gives `k = 2·sqrt(1 - 0.98²) = 0.398`.
+    ///
+    /// ⚠ **0.02 is the shader's clamp, restated here**, and a change to
+    /// `dabCoverage` will not redden this line. What catches that pairing is
+    /// the GPU test, whose feather is computed from the same clamp and whose
+    /// "inside the feather" check fails when the clamp moves. The two halves
+    /// are written down because neither is the whole of it.
+    static func testBrushSpacingIsUnderItsBound() {
+        let hardestFeather = 1.0 - 0.98
+        let bound = 2.0 * (1.0 - (1.0 - hardestFeather) * (1.0 - hardestFeather)).squareRoot()
+        let k = Double(CanvasLayout.brushSpacing)
+        let dip = 1.0 - (1.0 - k * k / 4.0).squareRoot()
+
+        report(k < bound,
+               "the dab spacing is under the bound its own falloff sets",
+               String(format: "%.3f radii against a bound of %.3f", k, bound))
+        report(dip < hardestFeather,
+               "so the dip between two dabs stays inside the hardest feather",
+               String(format: "%.5f of the radius against %.5f", dip, hardestFeather))
+
+        // ⚠ The bound is only meaningful if it is one. Stated so a future edit
+        // that quietly makes `bound` enormous — by mistyping the clamp, say —
+        // cannot leave the two checks above passing on nothing.
+        report(bound > 0.05 && bound < 1.0,
+               "and the bound is a real constraint rather than a formality",
+               String(format: "%.3f", bound))
+    }
+
     static func testBrushDabsAreEvenlySpaced() {
         for radius in [0.02, 0.08, 0.3] as [CGFloat] {
             var carry: CGFloat = 0

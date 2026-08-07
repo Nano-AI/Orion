@@ -482,22 +482,39 @@ list of dab centres with one radius for the whole mask, accumulated in R16F —
 and that part is followed. **What the research does not give is any of the
 numbers below, and none of them are cited.**
 
-### Dab spacing: a quarter of the radius
+### ~~Dab spacing: a quarter of the radius~~ ✅ derived and measured, 2026-08-07
 
-`CanvasLayout.brushSpacing = 0.25`. Justified in the code as "the usual figure
-in paint engines", which is **not a citation** — it is recollection. It is the
-right order of magnitude (scalloping on a stroke's edge becomes visible
-somewhere above roughly half a radius, and below about an eighth the extra dabs
-are wasted work), but the specific value is a judgement.
+**Moved to `research/brush-nib.md`.** It was looked for, and the finding is that
+**there is no constant to cite** — the spacing follows from the nib's own
+falloff, and the answer is a chord of a circle rather than a convention.
 
-What *is* pinned is the property that matters more than the constant: spacing is
-continuous across pointer events, so a fast stroke and a slow one over the same
-path lay identical paint. Tested against a 3-event and a 60-event stream.
+Two dabs `k` radii apart leave the stroke's edge dipping inward by
+`1 − sqrt(1 − k²/4)` of the radius. `dabCoverage` clamps hardness to 0.98, so
+the falloff band at its hardest is `0.02 r`, and a dip inside that band is
+swallowed by the ramp. Equating them bounds the spacing at **k = 0.398**.
 
-⚠ **A published source for dab spacing was not looked for.** The obvious places
-are libmypaint's dynamics (ISC, so readable) and the GIMP/Krita brush engines
-(GPL — readable as *description* only, never as code). Worth an hour before
-anyone tunes this by feel.
+⚠ **The two constants this section listed separately are one decision.** The
+hardness clamp sets the spacing budget; they cannot be tuned independently.
+
+⚠ **And the margin is thinner than the algebra suggests.** Only the steep middle
+of a smootherstep reads as an edge — the 10–90 span is 0.47 of the band — which
+moves the honest bound to ≈0.274 and leaves 0.25 with about **9% of margin**.
+Measured on a real stroke: ripple **1.12 px** against a **2.26 px** feather at
+the shipped spacing, and **5.95** against **2.28** at 0.5 r. Right side of the
+line, not comfortably.
+
+*The model* — a stroke as a repeatedly composited stamp — is Whitted, SIGGRAPH
+'83, pp. 151–156. ⚠ Searching for the *constant* returns mostly US patents,
+which #174 says are not a source to implement from; none is cited.
+
+Pinned by `testBrushSpacingRipple` (renders strokes, measures edges) and
+`testBrushSpacingIsUnderItsBound` (owns the shipped number). Moving the shader's
+clamp reddens the first; raising `brushSpacing` reddens the second. Both
+measured.
+
+What was already pinned and still is: spacing is continuous across pointer
+events, so a fast stroke and a slow one over the same path lay identical paint.
+Tested against a 3-event and a 60-event stream.
 
 ### Hardness
 
@@ -506,6 +523,11 @@ rim. The clamp exists because a truly hard circle aliases into a visible
 staircase, and the mask is multiplied into a *parameter*, so that staircase
 becomes a banded edit rather than a jagged edge. The reasoning is sound; the
 0.98 is chosen, not derived.
+
+⚠ **But it is no longer free.** `research/brush-nib.md` shows the clamp sets the
+bound on dab spacing — hardening it to 0.999 makes the shipped spacing bead, and
+`testBrushSpacingRipple` goes red on exactly that. So this constant may not be
+changed on its own any more, whatever replaces the 0.98.
 
 The falloff itself *is* sourced — Perlin's smootherstep, shared with the
 gradient masks rather than reimplemented, so a feather behaves the same under a

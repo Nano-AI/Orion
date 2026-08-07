@@ -644,9 +644,24 @@ enum CanvasLayout {
     /// How far apart dabs are laid, as a fraction of the brush radius.
     ///
     /// A stroke is a row of stamps, so the spacing is what decides whether it
-    /// reads as a line or as a string of beads. A quarter of the radius is the
-    /// usual figure in paint engines and it is comfortably inside the point
-    /// where the scalloping on the edge of a stroke becomes visible.
+    /// reads as a line or as a string of beads.
+    ///
+    /// ⚠ **Derived, not conventional — `research/brush-nib.md`.** This comment
+    /// used to say a quarter of a radius was "the usual figure in paint
+    /// engines", which was recollection rather than a source. There is no
+    /// constant to cite: two dabs `k` radii apart leave the stroke's edge
+    /// dipping inward by `1 − sqrt(1 − k²/4)` of the radius, and `dabCoverage`
+    /// clamps hardness at 0.98, so the falloff band at its hardest is `0.02 r`.
+    /// A dip inside that band is swallowed by the ramp, which bounds the
+    /// spacing at `k = 0.398`.
+    ///
+    /// ⚠ **So this and the shader's hardness clamp are one decision** and
+    /// cannot be tuned apart. Hardening the clamp makes this spacing bead.
+    ///
+    /// ⚠ **And "comfortably" was wrong.** Only the steep middle of a
+    /// smootherstep reads as an edge, which moves the honest bound to ≈0.274
+    /// and leaves this about 9% under it. Measured on a real stroke: a 1.12 px
+    /// ripple against a 2.26 px feather. The right side of the line, closely.
     static let brushSpacing: CGFloat = 0.25
 
     /// The dab centers a drag from `a` to `b` should add, given what the stroke

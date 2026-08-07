@@ -23,6 +23,7 @@ add_executable(orion-tests
     tests_mask_geom.cpp
     tests_brush.cpp
     tests_brush_accum.cpp
+    tests_brush_spacing.cpp
     tests_spot.cpp
     tests_mask_range.cpp
     tests_mask_matte.cpp

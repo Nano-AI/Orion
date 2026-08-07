@@ -69,6 +69,7 @@ int main() {
     testBrushPrefixPredicate();
     testBrushPrefixWiring();
     testBrushAccumulator();
+    testBrushSpacingRipple();
     testMaskGeometryInverse();
     testLocalAdjustments();
     testMaskRangeGpu();
