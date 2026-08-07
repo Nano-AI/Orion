@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-04 (**nine decisions, no behaviour changed, and that
-is the finding** — seven of eight plan rows were wrong and piece 5 dead-ended on
-measurement. ⚠ **Four things need your call; nothing is startable without them**)
+**Last updated:** 2026-08-07 (**lens database refreshed to upstream, #175** —
+2,607 → 2,615 models, and ⚠ **it does not contain the developer's lens either**:
+nobody has calibrated it for lensfun. X-Trans is dropped from scope)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
