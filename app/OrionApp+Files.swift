@@ -235,10 +235,39 @@ extension Editor {
         // new frame, which is what produced the doubled, offset picture.
         engine.resetCrop()
 
+        // ⚠ **The photograph being opened, standing in for itself.** Decoding a
+        // raw file is synchronous and took **210.9 ms** when it was measured
+        // (#151), and for every one of those milliseconds the canvas went on
+        // showing the *previous* photograph — `isLoaded` is set once and never
+        // cleared, so nothing told it to stop. A window that asserts the wrong
+        // picture for a fifth of a second is worse than one that admits it is
+        // busy, and it is worst in the flat-frame case, where a correct
+        // photograph lingers over a wrong one.
+        //
+        // ⚠⚠ **The mechanism for this was already built and connected to
+        // nothing.** `Engine.placeholder` is drawn by `OrionApp+Canvas` over the
+        // Metal view, under a comment saying it is "held while a new photo
+        // decodes" — and the only caller of `showPlaceholder` in the tree was
+        // the screenshot harness. `clearPlaceholder` had no caller at all. The
+        // line below is the wiring those two comments already described.
+        //
+        // The library's thumbnail is the right still to use: it is the picture
+        // being asked for, it is already decoded, and where there is none — a
+        // file opened from outside a folder — the canvas simply keeps what it
+        // had, which is the behaviour that was there before.
+        engine.showPlaceholder(library.photos.first { $0.url == url }?.thumbnail)
+
         Task { @MainActor in
             // One runloop turn, so the placeholder actually paints before the
             // synchronous decode begins.
             await Task.yield()
+            // ⚠ `defer`, not a line at the end of the `do`. A photograph that
+            // fails to open must take the still down too — otherwise the canvas
+            // keeps a thumbnail of a file it never managed to read, over the
+            // previous photograph, with an error in the footer explaining
+            // neither. `orion_engine_render` is synchronous, so by the time any
+            // of these paths unwinds the frame behind this is the real one.
+            defer { engine.clearPlaceholder() }
             do {
                 try engine.open(path: url.path)
                 viewport.reset()

@@ -150,13 +150,20 @@ binary spread **0.14 ms**; a saturated CPU changes nothing (**8.98, spread
 The rule is *CPU load is harmless, anything else on the GPU is fatal*, and the
 bench now warns above a 2 ms spread instead of captioning it as noise. **Every
 other number in this audit was taken on a quiet machine and is comparable.**
-✅ **Cold open is measured (#151): 210.9 ms**, and for all of it the canvas holds
-the *previous* photograph — `isLoaded` is set once and never cleared, and there
-is **no busy state anywhere in the application**. ⚠ **A design question is open
-because of it**, deliberately unsettled: holding the last frame avoids a flash
-of black, but for a fifth of a second the window asserts a picture that is not
-the one being opened — worst in the flat-frame case, where a correct photograph
-lingers over a wrong one. A busy state is its own story, with a screenshot check.
+✅ **Cold open is measured (#151): 210.9 ms**, and for all of it the canvas held
+the *previous* photograph — `isLoaded` is set once and never cleared.
+✅ **Fixed 2026-08-07 (#181), and it was never the design question this file
+called it.** The decision had been made and the wiring was missing:
+`Engine.showPlaceholder`/`clearPlaceholder` existed, `OrionApp+Canvas` drew
+`engine.placeholder` over the Metal view under a comment saying *"held while a
+new photo decodes"*, and a second comment promised a runloop turn *"so the
+placeholder actually paints"* — while **`showPlaceholder`'s only caller was the
+screenshot harness and `clearPlaceholder` had none**. The canvas now shows the
+arriving photograph's own thumbnail, taken down by a `defer` so a file that
+fails to open does not leave its thumbnail over the one still loaded.
+⚠ **No test can reach it** — `orion-viewport-tests` compiles zero `OrionApp*`
+files (#121) — so `tools/check-wiring.py` is a grep, and its rule is the useful
+half: **a harness caller does not count.**
 ⚠⚠ **Memory is measured and it is the audit's one real defect (#152): a 24 MP
 frame wants 7,186 MiB of intermediates and an 8 GB Mac has about 6,144.** It
 cannot open there, the `CLAUDE.md` floor of macOS 14 admits those machines, and
@@ -633,6 +640,24 @@ waits.** Both gates catch that by **timeout**, not exit code. Measured at
 dispatch deletions were run and caught; the floors (ten library checks, 500 KB
 per export) were proved only by raising their constants, so they work and have
 never been needed.
+
+### The canvas stopped lying about which photograph it was showing, #181
+
+`STATUS.md` carried the cold-open finding as a *design question* — flash of
+black against a stale picture — with the note that a busy state was its own
+story. ⚠⚠ **It was not a design question.** The decision had been made:
+`Engine.showPlaceholder` exists, the canvas draws it, and two comments describe
+it holding the picture while a photo decodes. **Its only caller was the
+screenshot harness; `clearPlaceholder` had none.** One line of wiring, plus a
+`defer` so a photograph that fails to open takes its thumbnail down too.
+
+⚠ Nothing could have caught it and no test can: `orion-viewport-tests` compiles
+**zero** `OrionApp*` files. `tools/check-wiring.py` is a grep, and its rule
+generalises — **a call from the harness does not count**, because a function
+that looks used because a test uses it is exactly this failure.
+
+⚠ **Noticed in passing and not acted on: there is a fifth command-line mode.**
+`--open` drives the real `MTKView`, and #177/#179 both called them four.
 
 ### The nib's spacing, derived — and a third check that missed its mutation, #180
 
