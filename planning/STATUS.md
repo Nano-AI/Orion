@@ -4,9 +4,9 @@
 
 ---
 
-**Last updated:** 2026-08-07 (**lens database refreshed to upstream, #175** —
-2,607 → 2,615 models, and ⚠ **it does not contain the developer's lens either**:
-nobody has calibrated it for lensfun. X-Trans is dropped from scope)
+**Last updated:** 2026-08-07 (**three blockers closed by decision, #176** —
+X-Trans out of scope, flat frame accepted, patents noted. ⚠⚠ **The repo is
+public with NO LICENSE — source-available, not open source.** Awaiting the choice)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -100,21 +100,36 @@ options, from `ROADMAP.md`: X-Trans (pieces 1–6), Core ML denoise (research
 landed under #111, explicitly not built), Windows port, DCP profiles. The three
 items below need you and cannot move from this side.
 
-**Blocked on the developer, not on work** — these cannot move from this side:
+**Scope, settled by the developer 2026-08-07 (#176)** — three long-standing
+entries are closed, and none of them by building anything:
 
-- ⚠ **The flat frame.** A photograph came back as one flat brown rectangle on
-  the developer's screen, twice, and nothing in this repository could reproduce
-  it: the engine renders that file correctly with the developer's own sidecar
-  restored, and so do the export path, `--screenshot`, both suites and ten real
-  window opens. Instrumentation shipped instead of a guess (#b3ee5a1) — the
-  footer now reads **"Not a photograph — the render is one flat colour,
-  rgb(…)"** when it happens. What is needed is one reproduction and the file
-  `~/Library/Logs/Orion/session.txt`. ⚠ **Copy that log before running any
-  Orion command**, including the CLI ones — every launch rewrites it.
+- ~~**X-Trans**~~ ❌ **out of scope.** *"Not needed, stick to what camera I
+  have."* The developer shoots Bayer. **ROADMAP's X-Trans section stays as a
+  costed plan and is not queued**, and the CC0-frames approval it was blocked on
+  is moot. ⚠ This is a *scope* decision, not a discovery: the plan is still
+  correct, nobody is going to execute it.
+- ~~**The flat frame**~~ ✅ **accepted as-is.** Unreproduced after
+  instrumentation, both suites, the export path, `--screenshot` and ten real
+  window opens. The footer says **"Not a photograph — the render is one flat
+  colour, rgb(…)"** when it happens (#b3ee5a1). ⚠ **The instrument stays** — if
+  it recurs, `~/Library/Logs/Orion/session.txt` is still the evidence, and it
+  must be copied **before** any Orion command, CLI included, because every
+  launch rewrites it.
+- ~~**Patent exposure**~~ — understood, no action wanted. #174's rule stands as
+  written: a citation is not clearance, and it gates the *next* filter rather
+  than anything shipped.
+
+**Still blocked on the developer:**
+
 - **Does the brush feel fast?** The numbers say yes (#108); nobody has said so
   with a stylus in hand.
-- **Approval to download CC0 X-Trans frames** for piece 0. Without them the
-  X-Trans path has no real sensor to test against.
+- ⚠⚠ **The licence.** `Nano-AI/Orion` is a **public repo with no LICENSE file**,
+  so default copyright applies: source-available, **not** open source — nobody
+  may legally fork, modify or contribute. Options put to the developer:
+  **Apache-2.0** (MIT plus a patent grant — the recommendation, given #174) or
+  **GPL-3.0** (nobody can ship a closed paid fork). Both are compatible with
+  LibRaw's LGPL and the CC BY-SA lens data.
+- ⚠⚠ **#162**, below — still the only shipped defect.
 
 ⚠ **The performance audit (`ROADMAP.md`) has started, and its first finding was
 about itself, #148.** The table it opens with — four gestures that do not arm
