@@ -288,9 +288,11 @@ enum Screenshot {
             engine.lastFailure = failureText
         }
 
+        let versions = snapshots(for: o.scene, photo: o.photo)
+
         let view = Editor(engine: engine, startTab: tab(for: o.scene),
                           startLibrary: library,
-                          startSnapshots: snapshots(for: o.scene, photo: o.photo))
+                          startSnapshots: versions)
             .frame(width: o.size.width, height: o.size.height)
             .preferredColorScheme(.dark)
 
@@ -307,6 +309,9 @@ enum Screenshot {
         // whoever has to look at it with nothing to look at.
         if o.scene == "render-failed" {
             assertFailureLineDrawn(png, view: view, size: o.size, engine: engine)
+        }
+        if o.scene == "versions" {
+            assertVersionsDoNotShowTheClock(versions)
         }
 
         let note = "orion: wrote \(o.output) "

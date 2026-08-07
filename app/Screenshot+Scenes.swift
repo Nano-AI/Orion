@@ -49,6 +49,25 @@ extension Screenshot {
     /// third is the row that exists to stop a mask silently coming back empty,
     /// and it is the one most likely to be reviewed by reading it rather than
     /// by looking at it. Its matte id is deliberately a name no file has.
+    /// ⚠ **A fixed instant, and it is what makes this scene comparable at all.**
+    /// These rows were built from `Date()`, and the panel prints an absolute
+    /// clock time in `.short` style — so **two runs of the same binary produced
+    /// different frames**, differing by 2,380 bytes purely in the timestamp
+    /// glyphs. `versions.png` was the one scene of 38 that could never be
+    /// compared against anything, including itself, which took it out of the
+    /// only oracle the ~35 posing scenes could ever have.
+    ///
+    /// The fix belongs here and not in `DevelopPanels+Presets`: the product is
+    /// right to print the time a version was taken, and a formatter bent to suit
+    /// a test is a test changing the thing it measures.
+    ///
+    /// ⚠ **This buys stability across runs, not across machines.** The string
+    /// still goes through a `DateFormatter` in the machine's own locale and time
+    /// zone, so two computers render this row differently. That is fine for what
+    /// it is for — one binary compared against itself — and it is the reason a
+    /// checked-in reference PNG would still be wrong.
+    static let epoch = Date(timeIntervalSince1970: 1_700_000_000)
+
     static func snapshots(for scene: String, photo: String?) -> SnapshotStore? {
         guard scene == "versions", let photo else { return nil }
 
@@ -64,12 +83,12 @@ extension Screenshot {
         warm.exposureEv = 0.6
 
         return SnapshotStore(photo: URL(fileURLWithPath: photo), showing: [
-            Snapshot(name: "Before restoring warmer", created: Date(),
+            Snapshot(name: "Before restoring warmer", created: epoch,
                      state: DevelopState(), automatic: true),
-            Snapshot(name: "warmer", created: Date().addingTimeInterval(-3600),
+            Snapshot(name: "warmer", created: epoch.addingTimeInterval(-3600),
                      state: warm),
             Snapshot(name: "with the sky darkened",
-                     created: Date().addingTimeInterval(-86_400), state: lost),
+                     created: epoch.addingTimeInterval(-86_400), state: lost),
         ])
     }
 

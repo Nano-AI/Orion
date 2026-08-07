@@ -276,6 +276,62 @@ extension Screenshot {
         FileHandle.standardError.write(Data(note.utf8))
     }
 
+    // MARK: The versions panel's clock
+
+    /// `--scene versions` must not draw the time it was run.
+    ///
+    /// ⚠ **Byte-stability alone does not catch this, and that was measured
+    /// rather than assumed.** The obvious check — render twice, demand the
+    /// frames agree — went **green on the mutation that puts `Date()` back**,
+    /// because the panel formats with `.short` time style, whose resolution is
+    /// one **minute**, and two renders three seconds apart nearly always land
+    /// inside the same one. The original 2,380-byte difference was a pair of
+    /// runs that happened to straddle a minute boundary. So that check catches
+    /// this defect roughly one time in twenty, which is worse than not having it
+    /// — it reads as coverage.
+    ///
+    /// This is the deterministic half: the rows must be **old**. A fixed epoch
+    /// sits years in the past; anything derived from the clock is within seconds
+    /// of now. That distinction does not depend on when the check runs.
+    ///
+    /// ⚠ **Deliberately not a comparison against `Screenshot.epoch` itself.**
+    /// The fixture is built from that constant, so checking one against the
+    /// other asks whether a value equals itself and passes for any value,
+    /// including `Date()`. The property that matters is *independence from the
+    /// clock*, and that is what is asserted.
+    ///
+    /// ⚠ It says nothing about the rows being right — three of them, in the
+    /// right order, with the right names. A panel drawing one row passes.
+    static func assertVersionsDoNotShowTheClock(_ store: SnapshotStore?) {
+        guard let store else {
+            fail("versions needs a photograph: the snapshot fixture is only "
+                 + "built when one is given. Pass --photo <file>")
+        }
+
+        // A month. Far enough that no plausible fixed fixture date is mistaken
+        // for the clock, and far closer than the epoch actually sits.
+        let ancient: TimeInterval = 30 * 86_400
+
+        for row in store.snapshots {
+            let age: TimeInterval = -row.created.timeIntervalSinceNow
+            guard age > ancient else {
+                let seconds = Int(age)
+                fail("the versions row \"\(row.name)\" is dated \(seconds) "
+                     + "seconds ago, so it is being built from the clock "
+                     + "rather than from a fixed instant. The panel prints an "
+                     + "absolute time, so this frame cannot be compared "
+                     + "against another run of the same binary — see "
+                     + "Screenshot.epoch")
+            }
+        }
+
+        let oldest = store.snapshots.map(\.created).min() ?? Date()
+        let days = Int(-oldest.timeIntervalSinceNow / 86_400)
+        let note = "orion: \(store.snapshots.count) version rows, oldest \(days) "
+            + "days back — none of them from the clock\n"
+        FileHandle.standardError.write(Data(note.utf8))
+    }
+
     /// Scenes that capture the panel column scrolled to its end rather than at
     /// rest.
     ///

@@ -4,11 +4,11 @@
 
 ---
 
-**Last updated:** 2026-08-07 (**the three asserting `--screenshot` scenes are a
-gate, #177** — `tools/check-screens.py`, and `render-failed` was made to assert
-on its own after its first version missed the mutation it exists for. ⚠⚠ **The
-repo is public with NO LICENSE — source-available, not open source.** Awaiting
-the choice)
+**Last updated:** 2026-08-07 (**the `--screenshot` scenes are a gate, #177–#178**
+— `tools/check-screens.py`. ⚠⚠ **Two first-cut checks in one session went green
+on the mutation they were written for**, both found by running it. ⚠⚠ **The repo
+is public with NO LICENSE — source-available, not open source.** Awaiting the
+choice)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -505,14 +505,14 @@ Small, named, and none of them blocking the next story:
 | **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
 | The **nib's constants are uncited** — dab spacing, hardness clamp | `UNSOURCED.md` §17 |
 | **363 commits carry `Co-Authored-By` / `Claude-Session` trailers.** ⚠ **Recounted at the 2026-08-02 prune — the row said 101, and it is 363**, because every agent in every wave since has added more. `git log --format=%B \| grep -c 'Co-Authored-By: Claude'`. Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history, and the longer it waits the larger the rewrite | whole history |
-| **A check names the mutation it exists to catch and does not catch it, for the second time in two days.** `testPerspectiveMaskExtent` check 6 (now in `tests_mask_geom.cpp`) says *"getting the conjugation W⁻¹JW wrong on a 3:2 frame"* is what it is for — and **deleting that conjugation from `mask::unperspective` outright leaves 800 / 3708 / 40 / bench 0 all green** (#129, mutation M6). The fault is the fixture: the check drives a **pure aspect squeeze**, whose Jacobian is diagonal, and a diagonal `J` has `b = c = 0` — so the conjugation multiplies two zeros. It needs a keystone, which has an off-diagonal derivative. **Recorded rather than fixed**, per the brief. Its neighbour in the same session, #127's *"a constant rim fills with that constant"*, is the same shape | `MaskGeometry.h` |
+| ~~**A check names the mutation it exists to catch and does not catch it.**~~ ✅ **stale — closed by re-measurement 2026-08-07, #178, the ninth stale row.** The diagnosis was right: check 6 drives a **pure aspect squeeze**, whose Jacobian is diagonal, so `b = c = 0` and the conjugation multiplies two zeros. But **check 6b was added afterwards and does catch it** — a two-way keystone at four off-axis spots, graded against a central difference of `toFrame`'s own centres. Deleting `W⁻¹JW` from `mask::unperspective` now **fails 2 checks, worst axis 1.48 rad**, measured. ⚠ Check 6's squeeze block stays and asserts its own blindness (`b == 0 && c == 0`), so a future fixture cannot quietly go back to being diagonal | `MaskGeometry.h` |
 | **The 1000-line rule is not broken anywhere.** ⚠ **Recounted by sweep 2026-08-02 at `191b451`, on a clean worktree with nothing else running** — `git ls-files` over all **239** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files, counted with `grep -c ''`, not a directory list, so nothing is out of scope by being somewhere nobody thought to look. **Over 1,000: none.** Largest anywhere: `ShaderParams.h` **905**, `tests_highlights.cpp` **897**, `tests_tone.cpp` **858**, `tests_perspective.cpp` **837**, `tests_brush.cpp` **824**, `ViewportTests+Index.swift` **809**, `Engine.swift` **795**, `tests_grain.cpp` **788**. Narrowing the sweep to `.cpp/.swift/.h/.mm` gives **177** files and the same head of the list. ⚠ **The previous copy of this row went stale within hours of being written, which is exactly what it warns about**: it recorded `tests_highlights.cpp` at **865** as at `6767716`, and `1a3083d` — *"bound the fill's weight, and say what the constant rim actually reaches"* — took that file to **897** on the same day. Every other number in it re-derived unchanged. ⚠ **`app/Screenshot.swift` was the last one over the line**, at **1,196** — 809 lines on the morning of 2026-08-02, taken over the line the same day by #125's three interface checks, and split five ways by #131 at the seam between a scene that *asserts* and a scene that *poses*. ⚠ A sweep is of **one worktree at one commit** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling. Eleven splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `tests_effects.cpp` 1,716→555 (#127), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `Screenshot.swift` 1,196→315 (#131), and #129's three: `tests_brush.cpp` 1,142→824, `tests_perspective.cpp` 1,110→837, `tests_grade.cpp` 1,029→653. ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into one on 2026-08-02 | whole tree |
 | ~~⚠ **The whole Photo menu is unreachable from every check.**~~ ✅ **closed 2026-08-02, decision #125.** `--screenshot --scene menu` hands the process back to `OrionApp.main()` and reads `NSApp.mainMenu` — the shipping `Scene` building the shipping `PhotoCommands` — and asserts **26 commands by title**, exiting 1 and printing the whole 75-item bar when one is missing. Deleting Reset Adjustments now prints `MISSING from the menu bar — "Reset Adjustments"` and exits 1, with every frame and all 40 scenarios still green. ⚠ It asserts **presence, not firing**: the items are disabled at launch and firing one needs a photograph, a key window and focus (#110.3's shape). ⚠ It is not driven through `CullActions`, deliberately — that would be green on the mutation, which deletes the button and leaves the action | `Screenshot.swift` |
 | ~~⚠ **The Compare Original menu item ships without its key.**~~ ✅ **closed — and this row was stale for five days, the eighth plan row found so (#177).** The bug was real: a `Button`'s string is a `LocalizedStringKey` whose escape character is the backslash, so `"Compare Original  (\\)"` shipped as **`Compare Original  ()`** — the one item spelling its key only in its title lost it. It was fixed with `Text(verbatim:)` in **`676d24e`**, #125's own merge, *before this row was written as open*. The menu check has been pinning the fixed spelling ever since. ⚠ **Reverting the `Text(verbatim:)` prints `Compare Original  ()` and exits 1**, measured 2026-08-07 — so the bug is reproducible on demand and the check is not decorative | `OrionApp+Commands.swift` |
 | ⚠ **Two of the four command-line modes are checked by nothing in the repository** — narrowed from three, 2026-08-07 (#177). `--batch-export` and `--library-open` each have their four-line dispatch in `OrionApp.init`, and deleting either is green on every gate (#121, M3/M4). **`--screenshot` is no longer one of them**: `tools/check-screens.py` drives it three times, so deleting its dispatch now reddens a gate. ⚠ Structural, not a coverage oversight: `apps/tests` and `apps/bench` are pure C++ and name no Swift, and `orion-viewport-tests` compiles a Swift list with **zero** `OrionApp*` files | `OrionApp.swift` |
 | ~~**`Engine.lastFailure` is pinned, the line that displays it is not.**~~ ✅ **closed 2026-08-02, decision #125.** `--scene render-failed` plants the failure **and suspends the engine** — laying the interface out renders, and a successful render clears the value, which wiped the first attempt and photographed the ordinary hint — so the amber "Render failed — …" line is in a byte-compared frame. Deleting the branch changes the frame; `nofailure` stays green on the same mutation, which is exactly the distinction: it pins the state, this pins the line | `Screenshot.swift` |
 | ~~⚠ **The three interface checks are run by hand.**~~ ✅ **closed 2026-08-07, #177.** `tools/check-screens.py` runs all three and is in `CLAUDE.md` beside the other four. ⚠ **`render-failed` had to be given an oracle first** — it exited 0 whatever the footer did, because its check was two PNGs and a person. It now renders its own control in-process, so no reference image is on disk. ⚠⚠ **And the first version of that comparison did not catch its own mutation:** deleting the footer's warning line left it green, because the readout beside the dimensions also reads `lastFailure` and still switched to `failed`. It now compares two frames that both carry a failure and differ only in its **text**, which the readout renders identically. All three mutation-tested through the gate. ⚠ **Still nobody's gate: the other ~35 scenes**, which pose rather than assert | `Screenshot.swift` |
-| **One screenshot scene is not byte-stable, so it cannot be an oracle.** `--scene versions` builds its rows in `Screenshot.snapshots` from `Date()` and the panel prints an absolute clock time, so **two runs of the same binary disagree** — 37/38 scenes byte-identical, `versions.png` differing by 2,380 bytes purely in the timestamp glyphs. Found by self-checking the oracle before trusting it (#121); every other scene is stable across runs and across the split. ⚠ Left alone rather than fixed, because a behaviour change hidden inside a refactor is unreviewable. The fix is a fixed `Date` in the harness, not in the product | `Screenshot.swift` |
+| ~~**One screenshot scene is not byte-stable, so it cannot be an oracle.**~~ ✅ **closed 2026-08-07, #178.** A fixed instant in the harness — `Screenshot.epoch` — not in the product, since the panel is right to print when a version was taken. ⚠⚠ **The obvious check for it went green on the mutation:** rendering twice and demanding agreement catches this about **one run in twenty**, because `.short` time style has *minute* resolution and two renders seconds apart share a minute. The deterministic catch is `assertVersionsDoNotShowTheClock` — the rows must be years old, not seconds old. The two-render check is kept for what it alone sees (a random id, an unsettled layout, a late thumbnail). ⚠ **Stable across runs, not across machines** — the string still goes through the machine's locale and time zone | `Screenshot+Scenes.swift` |
 | **Nothing asserts that a gesture *arms*** — narrowed 2026-08-01, decision #110.3, and it is now the *first* link only. `repro/gesture-preview-agrees.txt` used to compare an armed run against an unarmed one and demand they agree, which is green when arming does nothing; it now also asserts arming has an effect (the preview surface goes 0.2323/0.2918 → 0.4814/0.2037 over the same eight ticks), so a no-op `beginInteraction` fails. What is still unreachable is a `DragGesture` closure calling it: **attempted** — `NSHostingView` off-screen lays the wheel out and hit-tests it, but `NSEvent.mouseEvent` through `NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s call is green across 744 / 3624 / 39, measured | `Scenario.swift` |
 | ~~**The grading wheel's arming is unmeasured.**~~ ✅ **closed 2026-08-01, decision #110.2.** `wheel` and `dragwheel` drive a three-component control, added beside the scalar spellings rather than replacing them (#89). **9.6 ms per tick unarmed against 1.2 armed, 8.0×**, settled picture identical at luma 0.2268 / sat 0.5136 | `Scenario.swift` |
 | ~~**The tick is timed whole, not attributed.**~~ ✅ **Attributed 2026-08-01.** One pointer event of paint is now three measured columns in `orion-bench` — `setBrushStroke` ×2, `apply` ×2, preview render. At 49 → 294 dabs: **0.001 / 0.057 / 0.77 ms → 0.001 / 0.057 / 2.82 ms.** Everything that grows is the GPU, and all of it is `mask:0` | `ROADMAP.md` |
@@ -593,12 +593,37 @@ so only something drawing the message can move a byte. That mutation reddens.
 | A window taller than the panel content | `detail-tail` red — nothing overflows, so scrolled and at-rest cover the same controls |
 | `--screenshot` dispatch deleted from `OrionApp.init` | Caught, but **by timeout** — the flag falls through and Orion opens a real window. At the first 300 s bound that took a quarter of an hour to report; measured the scenes at **1.98 / 3.49 / 5.80 s** and bounded it at 60 |
 
-### ⚠ The eighth stale plan row
+### The same thing happened again an hour later, #178
+
+`--scene versions` was the one frame of 38 that disagreed with itself: its rows
+came from `Date()` and the panel prints an absolute clock time. Fixed with a
+fixed instant **in the harness**, since the product is right to print when a
+version was taken.
+
+⚠⚠ **And the obvious check for it also went green on its mutation.** Render
+twice, demand the frames agree — but `.short` time style has **minute**
+resolution, and two renders three seconds apart share a minute. It would catch
+this **one run in twenty**. The deterministic catch is that the rows must be
+*years* old rather than seconds old, which does not depend on when it runs. The
+two-render check is kept for what it alone sees: a random id, an unsettled
+layout, a late thumbnail.
+
+**Twice in one session, both found by running the mutation rather than reading
+the check.** That is the whole lesson of this session and it is not a new one —
+it is `CLAUDE.md`'s rule about pure-maths tests, in a different costume.
+
+### ⚠ The eighth and ninth stale plan rows
 
 The gaps table said Compare Original *ships* without its key and the fix belonged
 to another story. It was fixed in **`676d24e`**, #125's own merge — before the
 row was written as open — and the check has pinned the fixed spelling since.
-**Check the tree, never the record**, for the eighth time.
+
+The ninth, same day: the row saying `testPerspectiveMaskExtent` names the
+conjugation mutation and cannot catch it. **Check 6b was added afterwards and
+does** — deleting `W⁻¹JW` from `mask::unperspective` fails 2 checks, worst axis
+**1.48 rad**. Measured, not read.
+
+**Check the tree, never the record**, for the ninth time.
 
 **872 / 3708 / 42 of 42 / bench 0 on three frames / check-decisions 0 /
 check-gestures 0 / check-screens 0.**
