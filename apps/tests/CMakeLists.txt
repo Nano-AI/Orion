@@ -21,6 +21,7 @@ add_executable(orion-tests
     tests_fusion.cpp
     tests_mask.cpp
     tests_mask_geom.cpp
+    tests_mask_pullback.cpp
     tests_brush.cpp
     tests_brush_accum.cpp
     tests_brush_spacing.cpp
