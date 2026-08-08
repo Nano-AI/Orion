@@ -641,6 +641,31 @@ dispatch deletions were run and caught; the floors (ten library checks, 500 KB
 per export) were proved only by raising their constants, so they work and have
 never been needed.
 
+### The sweep stops at Swift, decided by running it on C++ — #184
+
+#183 left the engine as an open question. It was tried: **401 candidates, 52
+flagged, mostly noise.** Swift has `func`; C++ has no declaration marker, so a
+pattern loose enough to find a function also finds `in`, `src`, `rng` and
+`fprintf`. ⚠ And structurally the **C facade is called from Swift**, so a sweep
+confined to C++ reports the application's own boundary as dead. **A gate whose
+allowlist mostly suppresses its own false positives reads as coverage while
+providing none** — #143's deleted tooltip walk. So it stays Swift-only, and says
+why.
+
+⚠⚠ **The one-off run still found three.** `radiusToFrame`, `lengthToFrame` and
+`lengthAlong` have had **no product caller since #138** (zero against two, one
+and one in the harness; `toFrame`, `fromFrame`, `displayMatrix` are live) — and
+their headers described rendering **in the present tense**. `lengthToFrame`'s
+said *"without this a mask's feather widens every time the picture is cropped
+tighter"*. Anyone reading them, or their tests, would take the extent maths for
+shipped.
+
+**Annotated, not deleted**, and that distinction is the finding:
+`testPerspectiveMaskExtent` observes **live** Jacobian maths *through*
+`radiusToFrame`, including 6b — the only check in the tree that catches
+`unperspective`'s conjugation (#178). The lens is not shipped; what it points at
+is.
+
 ### The sweep #181 named and did not build, #183 — and it found one immediately
 
 `check-wiring.py` shipped as a *declared* list and said so: it could not find

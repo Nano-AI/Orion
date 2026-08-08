@@ -45,8 +45,24 @@ a line somebody has to write a justification for rather than a silent pass.
 ⚠ **What this still does NOT do.** It is a regex over Swift source, not a
 compiler: a call made through a stored closure, a selector, a protocol witness
 or a SwiftUI key path is invisible to it, so it can call a *used* function
-unused. Every entry below was checked by hand. It also only looks at `app/` —
-the C++ engine has its own reachability question and this is not it.
+unused. Every entry below was checked by hand.
+
+⚠⚠ **And it stays Swift-only on purpose, which was decided by trying the other
+thing (#184).** The same sweep was run by hand over `engine/src`: 401 candidate
+functions, **52 flagged, and most of them noise.** Swift has `func`, so a
+declaration is unambiguous; C++ has no such marker, and the pattern that finds a
+function also finds `in`, `src`, `rng`, `db` and `fprintf`. Worse, the C facade
+— `orion_engine_destroy`, `orion_status_string` — is called from **Swift**, so a
+sweep confined to C++ calls it dead. A gate whose allowlist is mostly
+suppressing its own false positives reads as coverage while providing none,
+which is the standing of the AppKit tooltip walk that was written, run, shown to
+be worthless and deleted (#143).
+
+**The one-off run was still worth doing**, and it found three: `radiusToFrame`,
+`lengthToFrame` and `lengthAlong` have had **no product caller since #138** and
+their headers still described rendering behaviour in the present tense. They are
+annotated now, not deleted — `testPerspectiveMaskExtent` observes live Jacobian
+maths *through* them.
 """
 
 import re

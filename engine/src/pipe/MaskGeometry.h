@@ -383,6 +383,13 @@ struct Ramp {
 
 /// A length on screen, as a length in the frame.
 ///
+/// ⚠⚠ **NOT ON THE RENDER PATH since decision #138**, and the sentence below is
+/// written in the present tense about a call the renderer no longer makes. A
+/// gradient's ramp is pulled back through `displayMatrix` in the kernel now, so
+/// the crop is in the matrix and not applied to a length by hand here. Zero
+/// product callers, one harness call site — found by extending #183's sweep to
+/// the engine.
+///
 /// A crop magnifies: a gradient spanning half the visible width spans half of
 /// the *crop*, which is a smaller fraction of the whole frame. Without this a
 /// mask's feather widens every time the picture is cropped tighter.
@@ -415,6 +422,12 @@ struct Ramp {
 ///
 /// Exactly 1 at the identity, short-circuited for the reason `radiusToFrame`
 /// gives: the algebra returns 1 in exact arithmetic and not in float.
+/// ⚠⚠ **NOT ON THE RENDER PATH since decision #138** — zero product callers,
+/// one harness call site. `DevelopMask`'s note at the ramp says what replaced
+/// it: the endpoints built from `placed.angle` and this length were wrong in a
+/// way no care about their position could fix, and the ramp is pulled back
+/// through the matrix instead. Kept as a derivation and as the tests' lens on
+/// the Jacobian, not as shipping code. Found by extending #183's sweep.
 [[nodiscard]] inline float lengthAlong(const persp::Jacobian& j,
                                        float angle) noexcept {
     if (j.a == 1.0f && j.b == 0.0f && j.c == 0.0f && j.d == 1.0f) return 1.0f;
@@ -520,6 +533,23 @@ struct Extent {
 /// function (they are already in `Placement::angle`, decision #83), and it is
 /// **exactly zero** at a neutral control, so a photograph with the perspective
 /// slider at rest renders bit-for-bit as it did before any of this existed.
+/// ⚠⚠ **NOT ON THE RENDER PATH since decision #138, and the paragraphs above
+/// were written when it was.** Read them as the derivation they are, not as a
+/// description of what the shipping renderer does: `DevelopMask` no longer
+/// pushes a mask forward into frame coordinates at all — the kernel carries
+/// each pixel back through `displayMatrix` and evaluates the ellipse the
+/// photographer drew. The line above about a neutral slider rendering
+/// bit-for-bit is a claim about a call the renderer stopped making.
+///
+/// **It is kept because it is the instrument, not because it is dead weight.**
+/// `testPerspectiveMaskExtent` observes `toFrame`'s Jacobian *through* this
+/// function — including check 6b, the keystone fixture that is the only thing
+/// in the tree which catches the conjugation `unperspective` performs (#178,
+/// worst axis 1.48 rad on the mutation). That conjugation **is** shipped, so
+/// the checks are protecting live maths through a lens that is not.
+///
+/// ⚠ Found by extending #183's harness-only sweep to the engine: zero product
+/// callers, two harness call sites.
 [[nodiscard]] inline Extent radiusToFrame(float rx, float ry, const Crop& c,
                                           const persp::Jacobian& j,
                                           float angle) noexcept {
