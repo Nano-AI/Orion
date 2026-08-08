@@ -248,3 +248,144 @@ void testBrushSpacingRipple() {
            "above is not vacuous",
            std::to_string(veryCoarse) + " px against " + std::to_string(featherPx));
 }
+
+/// One dab's edge, across nib sizes, at the hardest the nib is allowed to be.
+///
+/// ⚠ **The question `dabCoverage`'s comment raises and never answers.** The
+/// clamp exists because "a truly hard circle aliases into a visible staircase",
+/// and the mask multiplies a *parameter*, so that staircase becomes a banded
+/// edit rather than a jagged edge. That reasoning is sound. But the clamp is a
+/// fraction — `1 - h` of the radius — and aliasing is a phenomenon in
+/// **pixels**, so the feather a fixed clamp buys shrinks with the nib: 0.02 of
+/// a 200-pixel radius is four pixels, and 0.02 of an 8-pixel radius is 0.16 of
+/// one. The same constant either antialiases or does not depending on how big
+/// the brush is.
+///
+/// This measures it rather than arguing it. For each radius: the feather in
+/// pixels, taken between the 0.1 and 0.9 coverage contours off the frame, and
+/// the **worst step** between horizontally adjacent pixels crossing the rim. A
+/// well-resolved edge moves in small increments; an aliased one jumps.
+void testDabHardnessAcrossNibSizes() {
+    section("Brush hardness — one dab's edge, by nib size");
+
+    using orion::gpu::PixelFormat;
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 900, kH = 900;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto lib = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/maskComponent.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *lib, "maskComponent");
+
+    auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto matte = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto reference = orion::gpu::Texture::create(*device, kW, kH,
+                                                 PixelFormat::RGBA16Float);
+    auto dabTex = orion::gpu::Texture::create(*device, params::kDabStride,
+                                              params::kDabRows,
+                                              PixelFormat::RGBA32Float);
+    auto boundsTex = orion::gpu::Texture::create(
+        *device, params::kMaxDabBlocks, 1, PixelFormat::RGBA32Float);
+    const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
+
+    struct Edge { double featherPx; double worstStep; };
+
+    const auto edgeAt = [&](float radiusPx, float hardness) -> Edge {
+        std::vector<float> texels(std::size_t(params::kDabStride)
+                                  * params::kDabRows * 4, 0.0f);
+        texels[0] = 0.5f; texels[1] = 0.5f; texels[2] = 0.0f;
+        dabTex->upload(texels.data(),
+                       std::size_t(params::kDabStride) * 4 * sizeof(float));
+        std::vector<float> bounds(std::size_t(params::kMaxDabBlocks) * 4, 0.0f);
+        params::buildDabBounds(texels.data(), 1, bounds.data());
+        boundsTex->upload(bounds.data(),
+                          std::size_t(params::kMaxDabBlocks) * 4 * sizeof(float));
+
+        params::MaskComponent m{};
+        m.size[0] = kW; m.size[1] = kH;
+        m.kind = 3;
+        m.count = 1;
+        m.dabStride = params::kDabStride;
+        m.flow = 1.0f;
+        m.hardness = hardness;      // asked for; the shader's clamp answers
+        m.nibPx = radiusPx;
+
+        src->upload(zeroes.data(), std::size_t(kW) * sizeof(__fp16));
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), reference.get(), matte.get(),
+                              dabTex.get(), boundsTex.get(),
+                              &scratchAccum(*device, kW, kH), dst.get()},
+                    &m, sizeof m, kW, kH);
+        cb.commitAndWait();
+
+        std::vector<__fp16> out(std::size_t(kW) * kH);
+        dst->download(out.data(), std::size_t(kW) * sizeof(__fp16), kW, kH);
+
+        // The row through the dab's centre, walking outward to its right rim.
+        const std::uint32_t cy = kH / 2, cx = kW / 2;
+        const auto at = [&](std::uint32_t x) {
+            return double(out[std::size_t(cy) * kW + x]);
+        };
+
+        double worst = 0.0;
+        for (std::uint32_t x = cx; x + 1 < kW; ++x) {
+            worst = std::max(worst, std::fabs(at(x + 1) - at(x)));
+            if (at(x) <= 0.0 && x > cx + std::uint32_t(radiusPx) + 4) break;
+        }
+
+        // The feather, between the 0.9 and 0.1 crossings on that same row.
+        const auto crossing = [&](double level) -> double {
+            for (std::uint32_t x = cx; x + 1 < kW; ++x) {
+                const double a = at(x), b = at(x + 1);
+                if (a >= level && b < level) return double(x) + (a - level) / (a - b);
+            }
+            return -1.0;
+        };
+        const double hard = crossing(0.9), soft = crossing(0.1);
+        return {(hard >= 0.0 && soft >= 0.0) ? soft - hard : -1.0, worst};
+    };
+
+    const float radii[] = {8.0f, 25.0f, 50.0f, 200.0f};
+    double worstOfAll = 0.0, leastFeather = 1e9;
+    for (float r : radii) {
+        const Edge e = edgeAt(r, 1.0f);
+        std::printf("  nib %6.1f px: feather %6.2f px, worst adjacent step %.3f\n",
+                    r, e.featherPx, e.worstStep);
+        worstOfAll = std::max(worstOfAll, e.worstStep);
+        leastFeather = std::min(leastFeather, e.featherPx);
+    }
+
+    // ⚠ **The claim, and it is about pixels rather than about the constant.** A
+    // step of 1.0 is full coverage beside none — the staircase `dabCoverage`'s
+    // clamp is written to prevent. Before the pixel-aware clamp the 8 px and
+    // 25 px nibs both measured exactly 1.000 here while 50 px and 200 px were
+    // fine, which is what a fraction-of-radius guard does to a phenomenon that
+    // happens in pixels.
+    report(worstOfAll < 0.75,
+           "no nib size steps straight from covered to uncovered at full "
+           "hardness",
+           "worst " + std::to_string(worstOfAll));
+    report(leastFeather > 0.9,
+           "and every nib keeps at least a pixel of ramp to resolve its edge in",
+           "least " + std::to_string(leastFeather) + " px");
+
+    // ⚠ **The control, because the two checks above are satisfied by a metric
+    // that never moves.** A soft nib spreads its falloff over most of its
+    // radius, so its worst step must be far smaller than a hard one's — if it
+    // is not, this is measuring something that is not the edge.
+    const Edge soft = edgeAt(25.0f, 0.0f);
+    const Edge hard = edgeAt(25.0f, 1.0f);
+    std::printf("  nib   25.0 px soft: worst adjacent step %.4f\n", soft.worstStep);
+    report(soft.worstStep < hard.worstStep / 4.0,
+           "a soft nib's edge moves far more gently than a hard one's, so the "
+           "measurement tracks the falloff rather than a constant",
+           std::to_string(soft.worstStep) + " against "
+               + std::to_string(hard.worstStep));
+}

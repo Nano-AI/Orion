@@ -529,6 +529,20 @@ bound on dab spacing — hardening it to 0.999 makes the shipped spacing bead, a
 `testBrushSpacingRipple` goes red on exactly that. So this constant may not be
 changed on its own any more, whatever replaces the 0.98.
 
+⚠⚠ **And 0.98 alone was the wrong shape — fixed 2026-08-07, #186.** A fraction
+of the radius guards a phenomenon that happens in *pixels*, so the feather it
+bought shrank with the nib and the guard stopped working on small brushes.
+Measured at full hardness, the worst coverage step between adjacent pixels
+across the rim was **1.000 at both 8 px and 25 px** — a covered pixel beside an
+empty one, which is the staircase this clamp exists to prevent — while 50 px and
+200 px were fine. The clamp is now `min(0.98, 1 − 1/radiusPx)`: it **only ever
+tightens**, nothing at or above 50 px renders differently, and all 42 repro
+scenarios and the bench are unmoved. `testDabHardnessAcrossNibSizes` reddens on
+the revert with *"worst 1.000000"*.
+
+⚠ `kMinFeatherPx = 1.0` is still chosen. What is no longer chosen is the
+**unit**: the bound has to be in pixels because the thing it prevents is.
+
 The falloff itself *is* sourced — Perlin's smootherstep, shared with the
 gradient masks rather than reimplemented, so a feather behaves the same under a
 brush as under a gradient.

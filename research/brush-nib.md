@@ -105,12 +105,45 @@ dip in. That is not guaranteed in general: with the clamp moved to 0.999 the
 0.25 r ripple measured 2.00 px against a sagitta of 1.57. Treat it as the
 scale of the thing, not as a ceiling.
 
-## What is still not sourced
+## The hardness clamp, and why a fraction was the wrong unit
 
-- **The 0.98 clamp itself.** Its *reason* is sound and written down — a truly
-  hard circle aliases, and the mask multiplies a parameter, so the staircase
-  becomes a banded edit rather than a jagged edge — but the value is chosen.
-  What this file adds is that it is no longer free: it sets the spacing bound,
-  so the two must move together.
+**Derived and measured 2026-08-07 (#186).** The clamp's *reason* was always
+sound and written down — a truly hard circle aliases, and the mask multiplies a
+parameter, so the staircase becomes a banded edit rather than a jagged edge.
+
+⚠⚠ **But 0.98 is a fraction of the radius, and aliasing happens in pixels.** The
+feather a fixed fraction buys is `(1 − h)·r`, which shrinks with the nib: four
+pixels at `r = 200`, and a sixth of one at `r = 8`. The guard silently stopped
+guarding on small brushes.
+
+Measured at hardness 1.0 — the worst coverage step between horizontally
+adjacent pixels crossing the rim, which reaches 1.0 when a covered pixel sits
+beside an empty one:
+
+| nib radius | worst step, before | worst step, after |
+|---|---|---|
+| 8 px | **1.000** | 0.531 |
+| 25 px | **1.000** | 0.510 |
+| 50 px | 0.505 | 0.505 |
+| 200 px | 0.449 | 0.449 |
+
+**At 25 px — an ordinary brush — the edge was fully aliased at full hardness.**
+The clamp is now the tighter of two bounds: never harder than 0.98, and never
+leaving less than **one pixel** of ramp.
+
+    h ≤ min(0.98, 1 − kMinFeatherPx / radiusPx),   kMinFeatherPx = 1.0
+
+⚠ **It only ever tightens.** Above `r = kMinFeatherPx / 0.02 = 50 px` the 0.98
+still wins, and the last two columns are identical there — this changes exactly
+the case that was broken and no other. All 42 repro scenarios and the bench are
+unmoved.
+
+⚠ **`kMinFeatherPx = 1.0` is itself chosen**, and that is the honest residue.
+What is *not* chosen is the shape: the bound has to be in pixels, because the
+thing it prevents happens in pixels. One pixel is the least that can carry a
+ramp at all; a larger value would soften every small nib further for no measured
+reason.
+
+## What is still not sourced
 - **Flow, and the buildup series.** Untouched here.
 - `kMaskDabsPerPass = 256` is a buffer size, not a claim.

@@ -70,6 +70,7 @@ int main() {
     testBrushPrefixWiring();
     testBrushAccumulator();
     testBrushSpacingRipple();
+    testDabHardnessAcrossNibSizes();
     testMaskGeometryInverse();
     testLocalAdjustments();
     testMaskRangeGpu();

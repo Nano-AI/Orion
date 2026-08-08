@@ -641,6 +641,35 @@ dispatch deletions were run and caught; the floors (ten library checks, 500 KB
 per export) were proved only by raising their constants, so they work and have
 never been needed.
 
+### ⚠⚠ The hardness clamp was the wrong *unit*, and small brushes aliased, #186
+
+#180 left the clamp's value chosen while proving it bounds the spacing. Asking
+whether **0.98** is right turns out to be the wrong question — the number is not
+the problem, the **unit** is. It clamps a *fraction* of the radius, and aliasing
+happens in *pixels*, so the feather it buys shrinks with the nib: four pixels at
+`r = 200`, a sixth of one at `r = 8`.
+
+Measured at full hardness — worst coverage step between adjacent pixels across
+the rim, where 1.0 is a covered pixel beside an empty one:
+
+| nib | before | after |
+|---|---|---|
+| 8 px | **1.000** | 0.531 |
+| 25 px | **1.000** | 0.510 |
+| 50 px | 0.505 | 0.505 |
+| 200 px | 0.449 | 0.449 |
+
+**At 25 px — an ordinary brush — the edge was fully aliased**, which is exactly
+the staircase the clamp's own comment says it exists to prevent. Now
+`min(0.98, 1 − 1/radiusPx)`.
+
+⚠ **It only ever tightens**, and the identical right-hand figures at 50 and
+200 px are the evidence: nothing at or above 50 px renders differently. 42 repro
+scenarios and the bench unmoved. ⚠ `kMinFeatherPx = 1.0` is still chosen; the
+*shape* of the bound is not. ⚠ The test carries a control — a soft nib measures
+**0.0747** against the hard nib's 0.510, so the metric tracks the falloff rather
+than sitting at a constant.
+
 ### ⚠⚠ The ceiling was broken and the row watching it said otherwise, #185
 
 `CLAUDE.md` forbids a file over 1,000 lines. `tests_mask_geom.cpp` was at

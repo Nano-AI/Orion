@@ -147,9 +147,34 @@ struct MaskComponentParams
 /// only the last sliver softened. The sliver is deliberate: a truly hard circle
 /// aliases into a visible staircase at any radius, and the mask is multiplied
 /// into a parameter where that staircase becomes a banded edit.
-float dabCoverage(float d, float hardness)
+///
+/// ⚠⚠ **The sliver has to be a sliver *in pixels*, and for a long time it was
+/// not.** The clamp was a bare 0.98 — a fraction of the radius — guarding a
+/// phenomenon that happens in pixels, so the feather it bought shrank with the
+/// nib and the guard quietly stopped working on small brushes. Measured at
+/// hardness 1.0, worst coverage step between horizontally adjacent pixels
+/// across the rim:
+///
+///     nib   8 px → 1.000     nib  50 px → 0.505
+///     nib  25 px → 1.000     nib 200 px → 0.449
+///
+/// A step of 1.000 is full coverage beside none: the staircase this clamp is
+/// written to prevent, at an ordinary brush size. `research/brush-nib.md`.
+///
+/// So the clamp is now the tighter of the two: never harder than 0.98, and
+/// never leaving less than `kMinFeatherPx` of ramp to resolve the edge in.
+/// ⚠ **It only ever tightens.** At `r >= kMinFeatherPx / 0.02` — 50 px — the
+/// 0.98 still wins and nothing renders differently, so this changes exactly the
+/// case that was broken and no other.
+static const float kMinFeatherPx = 1.0f;
+
+float dabCoverage(float d, float hardness, float radiusPx)
 {
-    const float h = clamp(hardness, 0.0f, 0.98f);
+    // A nib smaller than the feather it needs cannot have one; `min` keeps the
+    // bound below 0.98 rather than letting a sub-pixel nib ask for a negative
+    // hardness.
+    const float byPixels = 1.0f - kMinFeatherPx / max(radiusPx, 1.0f);
+    const float h = clamp(hardness, 0.0f, min(0.98f, byPixels));
     return 1.0f - maskFalloff((d - h) / max(1.0f - h, 1e-3f));
 }
 
@@ -450,7 +475,7 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
             // radii out.
             if (d >= 1.0f) continue;
 
-            const float cov = flow * dabCoverage(d, p.hardness);
+            const float cov = flow * dabCoverage(d, p.hardness, r);
 
             // ⚠ Erase is **destination-out**, the exact inverse of the
             // source-over below, and that pairing is what makes the two
