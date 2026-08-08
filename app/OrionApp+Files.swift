@@ -267,7 +267,22 @@ extension Editor {
             // previous photograph, with an error in the footer explaining
             // neither. `orion_engine_render` is synchronous, so by the time any
             // of these paths unwinds the frame behind this is the real one.
-            defer { engine.clearPlaceholder() }
+            //
+            // ⚠⚠ **Only the most recent load takes the still down**, and that
+            // guard is not hypothetical: `--open` steps a list with a dwell,
+            // and `--dwell 200` against a 210 ms decode (#151) exists precisely
+            // so a load begins while the one before it is in flight — its own
+            // comment says so. Without the check, the older task's `defer`
+            // fires after the newer one has put *its* thumbnail up, clearing
+            // the picture being opened and leaving the canvas on the one being
+            // left, which is the bug this whole mechanism exists to prevent.
+            //
+            // ⚠ Reasoned, not reproduced. The interleaving needs the main actor
+            // to schedule the two tasks in a particular order and nothing in
+            // this repository can drive the open path at all (#121, #181), so
+            // this is recorded as a reading rather than dressed up as a
+            // measurement — the shape #154 settled on for the same situation.
+            defer { if current == url { engine.clearPlaceholder() } }
             do {
                 try engine.open(path: url.path)
                 viewport.reset()

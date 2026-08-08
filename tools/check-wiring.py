@@ -55,6 +55,17 @@ EXPECTED = {
         "the still must come down when the render lands, and on the failure "
         "path too — otherwise a photograph that would not open leaves its "
         "thumbnail sitting over the one that is still loaded",
+    # ⚠ `--open` is the **fifth** command-line mode, and #177 and #179 both
+    # called them four while closing the others. It is the only one that cannot
+    # be a gate: it opens a real window, steps a list with a dwell, and never
+    # exits — it exists so a person can reproduce a fault visible only on
+    # screen, which is how the flat brown rectangle was found. So there is no
+    # exit code to check and no oracle to write, and this is what is left: the
+    # dispatch must still be there. Deleting it is otherwise green everywhere.
+    "openFromCommandLine":
+        "`--open` is the only path that drives the real MTKView, and the bug it "
+        "was built for was reproducible no other way. It cannot be gated — it "
+        "never exits — so a grep on its wiring is the whole of the coverage",
 }
 
 

@@ -641,6 +641,21 @@ dispatch deletions were run and caught; the floors (ten library checks, 500 KB
 per export) were proved only by raising their constants, so they work and have
 never been needed.
 
+### ⚠ And #181 introduced a bug, found a turn later by reading #182's mode
+
+The placeholder came down in an unconditional `defer`, which is right only while
+opens are serial. They usually are — the decode is synchronous on the main
+actor — but **`--open --dwell 200` exists precisely to start a load while the
+previous decode is in flight**, and its own comment says so. In that
+interleaving the older task's `defer` fires after the newer one has put its
+thumbnail up: the picture being opened is cleared and the canvas falls back to
+the one being left. **That is the exact bug #181 was written to prevent,
+reintroduced by its own cleanup path.**
+
+Guarded on `current == url`, so only the most recent load takes the still down.
+⚠ **Reasoned, not reproduced** — nothing here can drive the open path (#121) —
+and recorded as a reading rather than dressed up as a measurement, #154's shape.
+
 ### The canvas stopped lying about which photograph it was showing, #181
 
 `STATUS.md` carried the cold-open finding as a *design question* — flash of
@@ -656,8 +671,12 @@ screenshot harness; `clearPlaceholder` had none.** One line of wiring, plus a
 generalises — **a call from the harness does not count**, because a function
 that looks used because a test uses it is exactly this failure.
 
-⚠ **Noticed in passing and not acted on: there is a fifth command-line mode.**
-`--open` drives the real `MTKView`, and #177/#179 both called them four.
+⚠ **Noticed in passing: there is a fifth command-line mode.** `--open` drives the
+real `MTKView`, and #177/#179 both called them four. ✅ **Handled 2026-08-07,
+#182** — and it **cannot** be a gate, measured: started on two frames at
+`--dwell 200` it was **still running after 25 seconds having printed nothing**.
+It never exits, because it exists so a *person* can reproduce a fault visible
+only on screen. So its coverage is a row in `check-wiring.py` and nothing more.
 
 ### The nib's spacing, derived — and a third check that missed its mutation, #180
 
