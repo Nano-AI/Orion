@@ -8,14 +8,21 @@ aims at the gap: a GPU pipeline quick enough that adjustments feel instant, a
 toolset capable of transforming an image rather than nudging it, and an
 interface that stays out of the way of the photograph.
 
-**Status: M0–M2 complete, M3 not started.** It browses a folder, culls, develops,
-crops, and exports with metadata and a color profile. The panel covers white
-balance, tone, a tone curve, three-way color grading, an eight-band color
-mixer, profiled noise reduction, lens corrections, sharpening, highlight
-recovery, crop and straighten. Undo is unlimited and edits persist per photo in XMP sidecars.
+**Status: M0–M4 complete.** It browses a folder, culls, develops, crops, masks,
+heals and exports with metadata and a color profile. The panel covers white
+balance, tone, a tone curve, three-way color grading, an eight-band color mixer,
+profiled noise reduction, lens corrections from a bundled 2,600-lens database,
+sharpening, highlight recovery, clarity, dehaze, exposure fusion, creative LUTs,
+film grain, a creative vignette, crop and straighten. Masks come in six kinds —
+linear, radial, brush, subject matte, luminance range and colour range —
+combined as a list and optionally feathered onto the photograph's own edges.
+Undo is unlimited and edits persist per photo in XMP sidecars.
 
-**Not there yet:** masking, healing, a lens database, tethering. See [`planning/ROADMAP.md`](planning/ROADMAP.md) and
-[`planning/STATUS.md`](planning/STATUS.md), which is the honest list.
+**Not there yet:** tethering, X-Trans sensors, a Windows port. See
+[`planning/ROADMAP.md`](planning/ROADMAP.md) and
+[`planning/STATUS.md`](planning/STATUS.md), which is the honest list — including
+the one shipped defect: a 24 MP frame allocates more intermediate memory than an
+8 GB Mac has, so it will not open there.
 
 ---
 
@@ -96,7 +103,7 @@ open build/Orion.app
 ./build/apps/bench/orion-bench file.ARW   # latency gate and per-control checks
 ```
 
-208 engine checks, 2067 viewport checks.
+889 engine checks, 3711 viewport checks, 42 recorded repro scenarios, and five lint gates.
 
 The GPU tests matter most. Pure maths tests pass happily on code that renders
 garbage, because they never touch a texture — two shipped bugs proved it.
@@ -116,3 +123,31 @@ photo" became a number that could be watched going down.
 **What it cannot see:** the Metal canvas (AppKit cannot capture a Metal layer,
 so it draws a still), and any 3D transform (`cacheDisplay` skips them). Both
 limits are recorded in `planning/STATUS.md` rather than left to be rediscovered.
+
+---
+
+## License
+
+**Apache License 2.0** — see [`LICENSE`](LICENSE).
+
+You may use, modify and redistribute Orion, including commercially. The licence
+carries an **explicit patent grant**, which is why it was chosen over MIT: see
+`planning/DECISIONS.md` #174 for why patents are treated as a separate question
+from copyright in this project, and #188 for this decision.
+
+⚠ **[`NOTICE`](NOTICE) has to travel with any redistribution** (Apache-2.0
+§4(d)). It carries obligations that are not Orion's to waive:
+
+| What | Terms |
+|---|---|
+| LibRaw | LGPL-2.1 / CDDL-1.0, linked dynamically |
+| `data/lensfun/` | CC BY-SA 3.0 — **share-alike binds the data**, so a corrected calibration goes back under the same licence |
+| Adobe DNG | royalty-free patent grant, conditional on the notice appearing |
+| `web/fonts/` | SIL OFL 1.1 |
+
+⚠ **A licence is not a freedom-to-operate assessment, and none has been done.**
+`CLAUDE.md` says this in as many words: a method can be published, dated,
+correctly attributed and still be covered by a live patent. Every algorithm here
+is implemented from a published description and cited in `research/`, and no
+GPL source was read to write any of it — but nobody has searched the patent
+literature.
