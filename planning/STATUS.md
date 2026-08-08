@@ -641,6 +641,34 @@ dispatch deletions were run and caught; the floors (ten library checks, 500 KB
 per export) were proved only by raising their constants, so they work and have
 never been needed.
 
+### The guided filter's epsilon, measured — and the comment was out by 2×, #187
+
+`UNSOURCED.md` §7 held the guided filter's parameters as *reasoned but
+untested*. The reasoning was right; **the arithmetic joining it to an edge had
+never been written down.**
+
+`a = var/(var + eps)`, so `sqrt(eps)` is a local **standard deviation** of 0.2
+stops. But a window straddling a step of `h` stops half and half has variance
+`h²/4`, so the *step* that half-passes is `2·sqrt(eps)` = **0.4 stops**. ⚠ The
+comment said "a fifth of a stop" and meant the standard deviation — anyone
+checking it against a real edge would have measured twice that and concluded the
+filter was broken.
+
+Measured off the shipping kernel, driven with moments computed by hand:
+
+| step | 0.05 | 0.1 | 0.2 | **0.4** | 0.8 | 1.6 | 3.2 |
+|---|---|---|---|---|---|---|---|
+| passes | 0.015 | 0.059 | 0.200 | **0.500** | 0.800 | 0.941 | 0.985 |
+
+A flat window passes **nothing** — the property that stops highlight recovery
+haloing round a skyline, claimed since the filter landed and checked now.
+
+⚠ `0.04f` was a bare literal; it is `params::kGuideEpsilon` now, so the check
+reads what the product ships rather than a copy — #180's first-version mistake.
+Mutation-tested, and the test carries a control: quadrupling epsilon must move
+the half-pass step by exactly two, and does. ⚠ **The radius is still only
+reasoned.**
+
 ### ⚠⚠ The hardness clamp was the wrong *unit*, and small brushes aliased, #186
 
 #180 left the clamp's value chosen while proving it bounds the spacing. Asking

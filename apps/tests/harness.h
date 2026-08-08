@@ -140,6 +140,7 @@ void testBrushPrefixWiring();
 void testBrushAccumulator();
 void testBrushSpacingRipple();
 void testDabHardnessAcrossNibSizes();
+void testGuideEpsilonInStops();
 void testMaskRangeGpu();
 void testMaskColorGpu();
 void testMaskMatteGpu();

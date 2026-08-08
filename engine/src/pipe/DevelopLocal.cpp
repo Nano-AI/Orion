@@ -285,8 +285,10 @@ void DevelopPipeline::pushStaticLocalParams() {
 
     // Guided filter parameters. Radius scales with the frame so the effect
     // covers the same fraction of the picture regardless of megapixels;
-    // epsilon is in squared log2-exposure units, and 0.04 is about a fifth of
-    // a stop — below that is texture and noise, above it is an edge.
+    // epsilon is `params::kGuideEpsilon`, in squared log2-exposure units — see
+    // its header for what the number means in stops, and for the factor of two
+    // between a standard deviation and a step height that this comment used to
+    // blur together.
     // The radius is subsampled along with the image, so the filter still covers
     // the same fraction of the picture.
     const int fullRadius =
@@ -309,7 +311,7 @@ void DevelopPipeline::pushStaticLocalParams() {
     pipeline_.setParams(nGuideH2_, &bh, sizeof bh);
     pipeline_.setParams(nGuideV2_, &bv, sizeof bv);
 
-    params::GuideAb ga{{guideW_, guideH_}, 0.04f, 0.0f};
+    params::GuideAb ga{{guideW_, guideH_}, params::kGuideEpsilon, 0.0f};
     pipeline_.setParams(nGuideAb_, &ga, sizeof ga);
 }
 

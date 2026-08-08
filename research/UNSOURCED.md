@@ -156,7 +156,31 @@ log2-exposure units.
 fraction of the picture regardless of megapixels; eps ≈ a fifth of a stop, below
 which is texture and noise.
 
-**Cost:** low, but untested against a reference.
+**Measured 2026-08-07 (#187), and the reasoning was right while the arithmetic
+joining it to an edge had never been written down.** `a = var/(var + eps)`, so
+`sqrt(eps)` is a local **standard deviation** of 0.2 stops — but a window
+straddling a step of `h` stops half and half has variance `h²/4`, which makes
+the *step* that half-passes `2·sqrt(eps)` = **0.4 stops**. ⚠ The comment said "a
+fifth of a stop" and meant the standard deviation; anyone checking it against a
+real edge would have measured twice that and concluded the filter was wrong.
+
+Off the shipping kernel, driven with moments computed by hand:
+
+| step | 0.05 | 0.1 | 0.2 | **0.4** | 0.8 | 1.6 | 3.2 stops |
+|---|---|---|---|---|---|---|---|
+| passes | 0.015 | 0.059 | 0.200 | **0.500** | 0.800 | 0.941 | 0.985 |
+
+So a tenth of a stop is smoothed away as texture and three stops passes
+essentially untouched, which is exactly what the entry claimed and nothing had
+checked. `params::kGuideEpsilon` is now a named constant the test reads, so the
+product and the check cannot drift; `testGuideEpsilonInStops` reddens when it
+moves, and its control quadruples epsilon and demands the threshold shift by the
+factor of two the square root predicts.
+
+**Still not sourced:** the radius, `max(4, longest/200)`. Its scaling argument is
+untouched here and remains reasoning rather than measurement.
+
+**Cost:** low. No longer untested; the number now means something checkable.
 
 ---
 

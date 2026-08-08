@@ -71,6 +71,7 @@ int main() {
     testBrushAccumulator();
     testBrushSpacingRipple();
     testDabHardnessAcrossNibSizes();
+    testGuideEpsilonInStops();
     testMaskGeometryInverse();
     testLocalAdjustments();
     testMaskRangeGpu();

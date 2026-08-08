@@ -116,6 +116,26 @@ struct GuideAb {
 };
 static_assert(sizeof(GuideAb) == 16);
 
+/// The guided filter's edge threshold, in **squared log2-exposure units**.
+///
+/// He, Sun & Tang's coefficient is `a = var(I) / (var(I) + eps)`, so `eps` is
+/// the local variance at which exactly half the detail passes through. In the
+/// units this pipeline works in that makes `sqrt(eps)` a **local standard
+/// deviation in stops**: 0.2 of one.
+///
+/// ⚠ **A standard deviation, not a step height, and the two differ by a factor
+/// of two.** A window straddling a step of `h` stops half and half has variance
+/// `h²/4`, so the step that half-passes is `h = 2·sqrt(eps)` = **0.4 stops**.
+/// The comment at the call site said "about a fifth of a stop" and meant the
+/// standard deviation; a reader checking it against an edge in a photograph
+/// would have measured twice that and thought the filter wrong.
+///
+/// ⚠ Named here rather than written at the call site so a check can assert the
+/// threshold the product actually ships. `research/UNSOURCED.md` §7 carried this
+/// as *reasoned but untested* until #187 measured it — the reasoning was right
+/// and the arithmetic relating it to an edge was never written down.
+inline constexpr float kGuideEpsilon = 0.04f;
+
 // ── Guided feathering of the mask group (research/masking.md §4) ───────────
 
 struct MaskGuidePrep {
