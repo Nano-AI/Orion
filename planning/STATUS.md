@@ -641,6 +641,31 @@ dispatch deletions were run and caught; the floors (ten library checks, 500 KB
 per export) were proved only by raising their constants, so they work and have
 never been needed.
 
+### The sweep #181 named and did not build, #183 — and it found one immediately
+
+`check-wiring.py` shipped as a *declared* list and said so: it could not find
+the next dead mechanism. It can now. It walks every `func` declared in a product
+file and reports any whose callers are **all** harness — `showPlaceholder`'s
+exact shape.
+
+**First run: 356 product functions swept, nine harness-only.** Eight were
+defensible and now carry their reason in `HARNESS_ONLY` — `setWideOutput`'s own
+docstring already said *"this is here for the screenshot harness"*, `composite`
+is the offscreen render the scenario runner shares deliberately, `maskAlpha` is
+the model a rendered mask is graded against, and so on.
+
+⚠⚠ **The ninth was real.** `SyncSettings.pasted` read
+`Preset(...).applied(to:)` and nothing else, and its only caller was a test —
+the product pastes through `Engine.apply(preset:)`, which calls `applied(to:)`
+itself and records undo and the log besides. It **looked** like the paste path
+and was a second spelling of it: editing it would have moved a check and nothing
+a photographer could see. Deleted; the test now calls what the product calls.
+
+⚠ **The allowlist is the point, not a suppression** — a harness-only function
+must say why, so the next one is a line somebody has to justify.
+⚠ **A regex, not a compiler**: a call through a closure, a selector or a key
+path is invisible to it, so all nine were checked by hand.
+
 ### ⚠ And #181 introduced a bug, found a turn later by reading #182's mode
 
 The placeholder came down in an unconditional `defer`, which is right only while

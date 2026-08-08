@@ -102,15 +102,18 @@ enum SyncSettings {
                                            options: [.sortedKeys])
     }
 
-    /// What a paste does to the photo that is currently open.
-    ///
-    /// The in-memory path, where the state is known in full and there is no
-    /// as-shot question to worry about — so it goes through the same
-    /// `Preset.applied(to:)` a saved look does.
-    static func pasted(source: DevelopState, onto base: DevelopState,
-                       groups: Set<PresetGroup>) -> DevelopState {
-        Preset(name: "Paste", groups: groups, state: source).applied(to: base)
-    }
+    // ⚠ **`pasted(source:onto:groups:)` was here and is deleted, 2026-08-07.**
+    // It read `Preset(name:groups:state:).applied(to:)` and nothing else, and
+    // **its only caller in the tree was a test**: the product does the
+    // in-memory paste through `Engine.apply(preset:)`, which calls
+    // `applied(to:)` itself (`Engine+Document.swift:133`) and also records
+    // undo and the session log. So this was a second spelling that *looked*
+    // like the paste path, and editing it would have changed a check and
+    // nothing a photographer could see.
+    //
+    // Found by `tools/check-wiring.py`'s sweep for product functions whose only
+    // callers are the harness — the same shape as `showPlaceholder` (#181),
+    // caught this time before it could mislead anyone.
 
     /// Syncs to a list of photographs, none of which is opened.
     ///

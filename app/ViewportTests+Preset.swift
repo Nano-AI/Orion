@@ -346,8 +346,17 @@ extension ViewportTests {
         source.lutStrength = 0.25
 
         for group in PresetGroup.allCases {
-            let viaStruct = SyncSettings.pasted(source: source, onto: base,
-                                                groups: [group])
+            // ⚠ **`Preset.applied(to:)` directly, which is the line the product
+            // runs.** This used to call `SyncSettings.pasted`, a wrapper around
+            // exactly this expression whose only caller in the tree was this
+            // test — the product reaches the same logic through
+            // `Engine.apply(preset:)`, which calls `applied(to:)` itself
+            // (`Engine+Document.swift:133`). So the wrapper looked like the
+            // paste path and was not one, and editing it would have changed
+            // this check and nothing a photographer can see. Found by
+            // `check-wiring.py`'s sweep; the wrapper is deleted.
+            let viaStruct = Preset(name: "Paste", groups: [group], state: source)
+                .applied(to: base)
 
             // The same patch through the JSON path, then decoded back so the
             // two can be compared as states.

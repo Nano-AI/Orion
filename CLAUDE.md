@@ -119,8 +119,12 @@ drawn by the canvas, described by two comments as holding the picture while a
 new photo decodes — and its only caller in the tree was the screenshot harness,
 so the canvas showed the *previous* photograph for the whole 210.9 ms of a cold
 open (#151, #181). A mechanism that looks used because a test uses it is the
-shape this catches. ⚠ It cannot find the *next* one: the list is declared, not
-discovered.
+shape this catches. It **sweeps** as well as declares (#183): every `func` in a
+product file whose callers are all harness is reported, and a legitimate one has
+to say why in `HARNESS_ONLY`. That found `SyncSettings.pasted` on its first
+run — a second spelling of the paste path that only a test called. ⚠ It is a
+regex, not a compiler: a call through a closure, selector or key path is
+invisible to it, so triage by hand before believing it.
 
 ## Working agreement
 - One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable. **Prune it in the same breath:** it reached 4,643 lines over 56 sessions before anyone noticed that a recovery point nobody can read is not one. Six or so recent sessions is plenty; the rest belongs in `HISTORY.md`.
