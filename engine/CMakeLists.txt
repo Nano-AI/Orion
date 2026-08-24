@@ -23,6 +23,7 @@ add_library(orion_engine STATIC
     src/util/ImageWriter.mm
     src/util/DngWriter.cpp
     src/merge/Merge.cpp
+    src/merge/MergeRender.cpp
 )
 
 add_library(Orion::Engine ALIAS orion_engine)

@@ -93,6 +93,7 @@ void testLinearDngEngineOpen();
 void testMergeExposureMaths();
 void testMergeReconstruction();
 void testMergeDeghostAndCoverage();
+void testMergeRenderDemosaic();
 void testOrientGpu();
 void testDisplayNeutrality();
 void testCropGpu();

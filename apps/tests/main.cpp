@@ -94,6 +94,7 @@ int main() {
     testMergeExposureMaths();
     testMergeReconstruction();
     testMergeDeghostAndCoverage();
+    testMergeRenderDemosaic();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();
