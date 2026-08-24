@@ -24,6 +24,7 @@ add_library(orion_engine STATIC
     src/util/DngWriter.cpp
     src/merge/Merge.cpp
     src/merge/MergeRender.cpp
+    src/merge/Align.cpp
 )
 
 add_library(Orion::Engine ALIAS orion_engine)
@@ -72,8 +73,34 @@ set(LIBRAW_LIBRARY ${LIBRAW_LIBRARY} PARENT_SCOPE)
 
 target_include_directories(orion_engine PRIVATE ${LIBRAW_INCLUDE_DIR})
 
+# OpenCV — for HDR-merge alignment ONLY. src/merge/Align.cpp is the single
+# translation unit that includes it, and the include path is scoped to that
+# file so the dependency cannot leak into a header by accident. OpenCV 5
+# renamed features2d to features and split calib3d: findHomography is in
+# geometry, ECC refinement in video. Apache-2.0; listed in NOTICE.
+find_path(OPENCV_INCLUDE_DIR
+    NAMES opencv2/core.hpp
+    HINTS /opt/homebrew/opt/opencv/include/opencv5
+          /opt/homebrew/opt/opencv/include/opencv4
+          /usr/local/opt/opencv/include/opencv5
+          /usr/local/opt/opencv/include/opencv4
+    REQUIRED
+)
+set(OPENCV_LIBRARIES "")
+foreach(mod core imgproc features geometry video)
+    find_library(OPENCV_${mod}_LIBRARY
+        NAMES opencv_${mod}
+        HINTS /opt/homebrew/opt/opencv/lib /usr/local/opt/opencv/lib
+        REQUIRED
+    )
+    list(APPEND OPENCV_LIBRARIES ${OPENCV_${mod}_LIBRARY})
+endforeach()
+message(STATUS "OpenCV: ${OPENCV_core_LIBRARY}")
+set_source_files_properties(src/merge/Align.cpp
+    PROPERTIES INCLUDE_DIRECTORIES ${OPENCV_INCLUDE_DIR})
+
 target_link_libraries(orion_engine
     PRIVATE ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK}
             ${COREGRAPHICS_FRAMEWORK} ${IMAGEIO_FRAMEWORK}
-            ${LIBRAW_LIBRARY}
+            ${LIBRAW_LIBRARY} ${OPENCV_LIBRARIES}
 )
