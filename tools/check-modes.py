@@ -73,12 +73,19 @@ MIN_LIBRARY_CHECKS = 10
 # oracle, and the docstring says so.
 MIN_EXPORT_BYTES = 500_000
 
+# A merged fp16 DNG of a 24 MP frame is ~140 MB; a header with no strips is
+# kilobytes. Same floor-not-oracle reasoning as MIN_EXPORT_BYTES.
+MIN_MERGE_BYTES = 10_000_000
+
 # Measured 2026-08-07: --library-open 0.08s, --batch-export 1.55s for two
 # frames. ⚠ Generous by a wide margin on purpose — deleting a dispatch does not
 # make the process exit, it makes Orion **open a real window and wait for a
 # person**, and this timeout is the only thing that ends it. Keep it well above
 # the real cost and well below anybody's patience.
-TIMEOUT = 60
+# (--hdr-merge decodes and demosaics every frame and runs a CPU merge; on two
+# 24 MP frames it is the slowest mode here, and still far inside a minute
+# twice over.)
+TIMEOUT = 120
 
 CHECK_LINE = re.compile(r"^\s+(ok|FAIL)\b", re.M)
 
@@ -162,6 +169,33 @@ def main():
                         kb = sum(f.stat().st_size for f in written) / 1024
                         notes.append(f"--batch-export {len(written)} files, "
                                      f"{kb:.0f} KB")
+
+    # --hdr-merge: two of the samples into one DNG that must itself open.
+    # The samples are different scenes, not a bracket — alignment refuses and
+    # the merge degrades to reference-only, which is exactly the degradation
+    # path worth gating: decode, demosaic, refusal, merge, write, reopen.
+    with tempfile.TemporaryDirectory() as tmp:
+        merged = os.path.join(tmp, "merged.dng")
+        r = run(["--hdr-merge", merged] + [str(SAMPLES / p) for p in EXPORTS],
+                problems, "--hdr-merge")
+        if r is not None:
+            out = (r.stderr or "") + (r.stdout or "")
+            if r.returncode != 0:
+                detail = out.strip()[-500:] or "(no output)"
+                problems.append(f"--hdr-merge exited {r.returncode}\n"
+                                f"      {detail}")
+            elif not os.path.isfile(merged):
+                problems.append(
+                    "--hdr-merge exited 0 and wrote nothing. The mode asserts "
+                    "its own output opens, so this means the assertion is gone")
+            elif os.path.getsize(merged) < MIN_MERGE_BYTES:
+                problems.append(
+                    f"--hdr-merge wrote {os.path.getsize(merged)} bytes, under "
+                    f"the {MIN_MERGE_BYTES} floor. A full-resolution fp16 DNG "
+                    f"does not fit there; a header with no strips does")
+            else:
+                mb = os.path.getsize(merged) / 1_048_576
+                notes.append(f"--hdr-merge {mb:.0f} MB DNG")
 
     if problems:
         print(f"check-modes: {len(problems)} problem(s)\n")

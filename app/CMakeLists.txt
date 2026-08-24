@@ -44,6 +44,8 @@ set(SWIFT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExportDriver.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeDriver.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergePanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SubjectMatte.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SkyDetector.swift
@@ -155,6 +157,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
@@ -173,6 +176,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Curve.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Merge.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Canvas.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
@@ -194,6 +198,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Merge.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift

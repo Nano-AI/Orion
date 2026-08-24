@@ -153,6 +153,10 @@ enum ViewportTests {
         testExportDefaults()
         testSizeEstimateFollowsTheDepth()
 
+        testMergeEligibility()
+        testMergeDefaultReference()
+        testMergeOutputNaming()
+
         print("\n\(checks) checks, \(failures) failures")
         return failures
     }

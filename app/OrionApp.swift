@@ -170,6 +170,13 @@ struct Editor: View {
     @State var batchProgress: (done: Int, total: Int)?
     @State var batchCancelled = false
 
+    /// The HDR merge sheet's state: the frames under consideration (nil when
+    /// the sheet is closed), the chosen reference, and 0...1 while the engine
+    /// runs. See HdrMergePanel.swift.
+    @State var mergeCandidates: [HdrMergeFlow.Candidate]?
+    @State var mergeReference = 0
+    @State var mergeProgress: Double?
+
     /// Set while a segmentation model is running, so the two buttons can say so
     /// and cannot be pressed twice. research/masking.md §5.
     @State var matteRunning = false
@@ -206,10 +213,17 @@ struct Editor: View {
             }
 
             if !library.photos.isEmpty {
-                Filmstrip(library: library, selected: current, onSelect: load)
+                Filmstrip(library: library, selected: current, onSelect: load,
+                          onMerge: askHdrMerge)
             }
         }
         .background(Palette.ground)
+        // Item-bound sheets want Identifiable; this state is a plain optional
+        // array, so presence is the binding.
+        .sheet(isPresented: .init(get: { mergeCandidates != nil },
+                                  set: { if !$0 && mergeProgress == nil { mergeCandidates = nil } })) {
+            hdrMergeSheet
+        }
         .focusable()
         .onKeyPress(.init("z"), phases: .down) { press in
             guard press.modifiers.contains(.command) else { return .ignored }
