@@ -50,6 +50,10 @@ struct OrionApp: App {
         if CommandLine.arguments.contains("--batch-export") {
             BatchExport.runCommandLine(CommandLine.arguments)
         }
+        // Same reasoning for the merge: the mode asserts its own output opens.
+        if CommandLine.arguments.contains("--hdr-merge") {
+            HdrMergeCLI.runCommandLine(CommandLine.arguments)
+        }
         // A folder open, cold then warm then indexless, through the product's
         // own Library — the only thing that can see whether the index is wired
         // in at all.

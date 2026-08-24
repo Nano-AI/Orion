@@ -10,7 +10,11 @@
 
 namespace orion {
 
-Engine::Engine() : device_(gpu::Device::create()) {}
+Engine::Engine() : device_(gpu::Device::create()) {
+    // Eager, so hdrMergeProgress/hdrMergeCancel from another thread never
+    // race a lazy construction inside run().
+    hdrMerge_ = std::make_unique<merge::HdrMerge>(*device_, res::shaderDir());
+}
 
 Engine::~Engine() = default;
 
@@ -88,6 +92,19 @@ void Engine::openRaw(const std::string& path) {
         preview_ = std::move(smallNext);
         camera_  = image.camera;
     }, decoded);
+}
+
+float Engine::hdrMerge(const std::vector<std::string>& paths, int referenceIndex,
+                       const std::string& outputPath) {
+    return hdrMerge_->run(paths, referenceIndex, outputPath);
+}
+
+float Engine::hdrMergeProgress() const noexcept {
+    return hdrMerge_->progress();
+}
+
+void Engine::hdrMergeCancel() noexcept {
+    hdrMerge_->cancel();
 }
 
 std::vector<std::string> Engine::lensDatabaseNames() {

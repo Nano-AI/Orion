@@ -97,6 +97,8 @@ int main() {
     testMergeRenderDemosaic();
     testAlignRecoversHomography();
     testAlignRefusesFeatureless();
+    testHdrMergeFacade();
+    testHdrMergeCancelIsAtomic();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();

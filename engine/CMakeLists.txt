@@ -25,6 +25,7 @@ add_library(orion_engine STATIC
     src/merge/Merge.cpp
     src/merge/MergeRender.cpp
     src/merge/Align.cpp
+    src/merge/HdrMerge.cpp
 )
 
 add_library(Orion::Engine ALIAS orion_engine)
@@ -96,6 +97,7 @@ foreach(mod core imgproc features geometry video)
     list(APPEND OPENCV_LIBRARIES ${OPENCV_${mod}_LIBRARY})
 endforeach()
 message(STATUS "OpenCV: ${OPENCV_core_LIBRARY}")
+set(OPENCV_LIBRARIES ${OPENCV_LIBRARIES} PARENT_SCOPE)
 set_source_files_properties(src/merge/Align.cpp
     PROPERTIES INCLUDE_DIRECTORIES ${OPENCV_INCLUDE_DIR})
 

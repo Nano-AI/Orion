@@ -96,6 +96,8 @@ void testMergeDeghostAndCoverage();
 void testMergeRenderDemosaic();
 void testAlignRecoversHomography();
 void testAlignRefusesFeatureless();
+void testHdrMergeFacade();
+void testHdrMergeCancelIsAtomic();
 void testOrientGpu();
 void testDisplayNeutrality();
 void testCropGpu();
