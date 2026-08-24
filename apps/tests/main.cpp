@@ -86,6 +86,8 @@ int main() {
     testLensDatabase();
     testBlackLevels();
     testExportFormats();
+    testFloatToHalf();
+    testDngRoundTrip();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();

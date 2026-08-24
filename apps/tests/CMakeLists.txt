@@ -32,9 +32,10 @@ add_executable(orion-tests
     tests_grain.cpp
     tests_vignette.cpp
     tests_pipeline.cpp
+    tests_dng.cpp
 )
 
-target_include_directories(orion-tests PRIVATE ${CMAKE_SOURCE_DIR}/engine/src)
+target_include_directories(orion-tests PRIVATE ${CMAKE_SOURCE_DIR}/engine/src ${LIBRAW_INCLUDE_DIR})
 target_compile_definitions(orion-tests PRIVATE ORION_SHADER_DIR="${ORION_SHADER_DIR}"
             ORION_DATA_DIR="${CMAKE_SOURCE_DIR}/data")
 target_link_libraries(orion-tests PRIVATE Orion::Engine)

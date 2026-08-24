@@ -85,6 +85,8 @@ void testOrientation();
 void testLensDatabase();
 void testBlackLevels();
 void testExportFormats();
+void testFloatToHalf();
+void testDngRoundTrip();
 void testOrientGpu();
 void testDisplayNeutrality();
 void testCropGpu();

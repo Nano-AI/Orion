@@ -21,6 +21,7 @@ add_library(orion_engine STATIC
     src/pipe/ToneCurve.cpp
     src/pipe/WhiteBalance.cpp
     src/util/ImageWriter.mm
+    src/util/DngWriter.cpp
 )
 
 add_library(Orion::Engine ALIAS orion_engine)
@@ -44,6 +45,7 @@ set_source_files_properties(
     src/gpu/Resources.mm
     src/gpu/TexturePool.cpp
     src/util/ImageWriter.mm
+    src/util/DngWriter.cpp
     PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
 )
 
