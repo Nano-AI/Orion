@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,14 @@ public:
 
     /// Uploads the source mosaic. Marks the whole graph dirty.
     void setSource(const void* samples, std::size_t bytesPerRow);
+
+    /// What the source texture is. R16Uint — one mosaic sample per pixel —
+    /// unless a graph whose source is already demosaiced says otherwise.
+    /// Must be called before compile(); the texture is allocated there.
+    void setSourceFormat(gpu::PixelFormat format) {
+        if (compiled_) throw std::runtime_error("setSourceFormat after compile()");
+        sourceFormat_ = format;
+    }
 
     /// Registers a texture that nodes can read but no node produces — curve
     /// LUTs now, masks and lens-correction maps later. Must be called before
@@ -228,6 +237,7 @@ private:
     std::vector<std::unique_ptr<gpu::Texture>> aux_;
 
     std::unique_ptr<gpu::Texture> source_;
+    gpu::PixelFormat sourceFormat_ = gpu::PixelFormat::R16Uint;
     std::uint32_t width_ = 0, height_ = 0;
     bool compiled_ = false;
     bool profiling_ = false;

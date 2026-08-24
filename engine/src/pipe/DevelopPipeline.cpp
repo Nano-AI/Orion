@@ -28,8 +28,17 @@ int quarterTurnsFor(int flip) {
  */
 
 DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
-                                 const raw::BayerImage& image)
-    : pipeline_(device, shaderDir), width_(image.width), height_(image.height) {
+                                 std::uint32_t width, std::uint32_t height,
+                                 bool linearSource)
+    : pipeline_(device, shaderDir), width_(width), height_(height),
+      linearSource_(linearSource) {
+
+    // A linear source arrives demosaiced: RGBA half data instead of a
+    // 16-bit mosaic sample per pixel. Declared before compile, which is
+    // where the texture is allocated.
+    if (linearSource_) {
+        pipeline_.setSourceFormat(gpu::PixelFormat::RGBA16Float);
+    }
 
     buildCaptureNodes();
     buildLocalNodes();
@@ -51,18 +60,33 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
 
     // Once per graph. The plate is 33 MB and identical for every photograph.
     uploadGrainPlate();
+}
 
+DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
+                                 const raw::BayerImage& image)
+    : DevelopPipeline(device, shaderDir, image.width, image.height, false) {
     applyImageParams(image);
-
     pipeline_.setSource(image.samples.data(), static_cast<std::size_t>(width_) * 2);
 }
 
+DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
+                                 const raw::LinearImage& image)
+    : DevelopPipeline(device, shaderDir, image.width, image.height, true) {
+    applyImageParams(image);
+    // fp16 RGBA: eight bytes per pixel.
+    pipeline_.setSource(image.rgba.data(), static_cast<std::size_t>(width_) * 8);
+}
+
 bool DevelopPipeline::canReload(const raw::BayerImage& image) const noexcept {
-    return image.width == width_ && image.height == height_ &&
+    return !linearSource_ && image.width == width_ && image.height == height_ &&
            image.filters == filters_;
 }
 
-void DevelopPipeline::reload(const raw::BayerImage& image) {
+bool DevelopPipeline::canReload(const raw::LinearImage& image) const noexcept {
+    return linearSource_ && image.width == width_ && image.height == height_;
+}
+
+void DevelopPipeline::clearPaintState() {
     // ⚠ A reload is a *different photograph* through the same compiled graph,
     // and paint and mattes are the two pieces of state `Adjustments` does not
     // carry — so nothing above would replace them. A matte in particular is not
@@ -92,6 +116,10 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
         matteDirty_[i] = true;
     }
     accumOwner_ = -1;
+}
+
+void DevelopPipeline::reload(const raw::BayerImage& image) {
+    clearPaintState();
 
     applyImageParams(image);
 
@@ -104,6 +132,20 @@ void DevelopPipeline::reload(const raw::BayerImage& image) {
     apply(initial);
 
     pipeline_.setSource(image.samples.data(), static_cast<std::size_t>(width_) * 2);
+}
+
+void DevelopPipeline::reload(const raw::LinearImage& image) {
+    clearPaintState();
+
+    applyImageParams(image);
+
+    // Same reasoning as the mosaic reload, one line up.
+    primed_ = false;
+    Adjustments initial;
+    initial.wb = asShot_;
+    apply(initial);
+
+    pipeline_.setSource(image.rgba.data(), static_cast<std::size_t>(width_) * 8);
 }
 
 void DevelopPipeline::gradeOffsets(float x, float y, float out[3]) noexcept {
@@ -273,6 +315,19 @@ std::pair<float, float> DevelopPipeline::frameToDisplayed(float x, float y) cons
 void DevelopPipeline::applyImageParams(const raw::BayerImage& image) {
     exifQuarters_ = quarterTurnsFor(image.flip);
     filters_      = image.filters;
+
+    pushStaticCaptureParams(image);
+    pushStaticLocalParams();
+    pushStaticMaskParams();
+
+    Adjustments initial;
+    initial.wb = asShot_;
+    apply(initial);
+}
+
+void DevelopPipeline::applyImageParams(const raw::LinearImage& image) {
+    exifQuarters_ = quarterTurnsFor(image.flip);
+    filters_      = 0;   // no mosaic; nothing downstream may index a pattern
 
     pushStaticCaptureParams(image);
     pushStaticLocalParams();

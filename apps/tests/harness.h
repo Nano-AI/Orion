@@ -87,6 +87,8 @@ void testBlackLevels();
 void testExportFormats();
 void testFloatToHalf();
 void testDngRoundTrip();
+void testLinearDngOpens();
+void testLinearDngEngineOpen();
 void testOrientGpu();
 void testDisplayNeutrality();
 void testCropGpu();

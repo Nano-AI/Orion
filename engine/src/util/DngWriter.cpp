@@ -20,6 +20,8 @@
 
 #include "util/DngWriter.h"
 
+#include "util/Half.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -110,45 +112,6 @@ Entry rationalEntry(std::uint16_t tag, const float* vs, std::size_t n,
 }
 
 }  // namespace
-
-std::uint16_t floatToHalf(float value) noexcept {
-    // IEEE 754-2008 binary32 -> binary16, round to nearest even. Bit
-    // manipulation over frexp because the tests assert the file's exact
-    // quantization and this form has no libm variability to inherit.
-    std::uint32_t bits;
-    std::memcpy(&bits, &value, sizeof bits);
-
-    const std::uint32_t sign     = (bits >> 16) & 0x8000u;
-    const std::uint32_t exponent = (bits >> 23) & 0xffu;
-    const std::uint32_t mantissa = bits & 0x7fffffu;
-
-    if (exponent == 0xffu) {  // inf or NaN: keep the class, keep a payload bit
-        return static_cast<std::uint16_t>(
-            sign | 0x7c00u | (mantissa ? 0x0200u : 0u));
-    }
-
-    // Re-bias 127 -> 15. e is the unclamped half exponent.
-    const int e = static_cast<int>(exponent) - 127 + 15;
-
-    if (e >= 31) return static_cast<std::uint16_t>(sign | 0x7c00u);  // overflow -> inf
-    if (e <= 0) {
-        // Subnormal half, or underflow to zero. Shift the implicit-1 mantissa
-        // right and round; below 2^-24 everything rounds to zero.
-        if (e < -10) return static_cast<std::uint16_t>(sign);
-        const std::uint32_t m     = mantissa | 0x800000u;
-        const int           shift = 14 - e;
-        std::uint32_t       half  = m >> shift;
-        const std::uint32_t rest  = m & ((1u << shift) - 1u);
-        const std::uint32_t point = 1u << (shift - 1);
-        if (rest > point || (rest == point && (half & 1u))) ++half;
-        return static_cast<std::uint16_t>(sign | half);
-    }
-
-    std::uint32_t half = (static_cast<std::uint32_t>(e) << 10) | (mantissa >> 13);
-    const std::uint32_t rest = mantissa & 0x1fffu;
-    if (rest > 0x1000u || (rest == 0x1000u && (half & 1u))) ++half;  // may carry into exponent — that is correct rounding
-    return static_cast<std::uint16_t>(sign | half);
-}
 
 void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     if (image.rgb == nullptr || image.width == 0 || image.height == 0) {

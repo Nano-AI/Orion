@@ -88,6 +88,8 @@ int main() {
     testExportFormats();
     testFloatToHalf();
     testDngRoundTrip();
+    testLinearDngOpens();
+    testLinearDngEngineOpen();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();

@@ -57,9 +57,4 @@ struct DngLinearImage {
 /// path is left absent rather than holding a truncated file.
 void writeDngLinear(const std::string& path, const DngLinearImage& image);
 
-/// IEEE 754 binary16 conversion, round-to-nearest-even. Public because the
-/// tests must know the exact quantization the file went through to assert a
-/// round-trip within one ULP.
-[[nodiscard]] std::uint16_t floatToHalf(float value) noexcept;
-
 }  // namespace orion::util

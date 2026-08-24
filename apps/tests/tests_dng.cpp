@@ -14,7 +14,9 @@
  */
 
 #include "harness.h"
+#include "Engine.h"
 #include "util/DngWriter.h"
+#include "util/Half.h"
 
 #include <libraw/libraw.h>
 
@@ -242,5 +244,141 @@ void testDngRoundTrip() {
     report(rejected, "a truncated DNG is refused, not misread");
 
     std::remove(cut.c_str());
+    std::remove(path.c_str());
+}
+
+void testLinearDngOpens() {
+    section("a linear DNG develops through the linear-source graph");
+
+    // Three landmark patches on a neutral-colored card: the pixel value is the
+    // DNG's AsShotNeutral color scaled by k, so after the as-shot white
+    // balance every patch must come out *gray* at exactly k — through the
+    // row-normalized camera matrix and the profile's hue/sat table, both of
+    // which must preserve neutrals. A clipped patch checks the other half of
+    // the head node's contract: over-unity gains on blown data clip to the
+    // common ceiling instead of tinting.
+    const std::string path = "/tmp/orion-dng-linear-open.dng";
+
+    std::vector<float> rgb(std::size_t(kW) * kH * 3);
+    const auto patchLevel = [](std::uint32_t x, std::uint32_t y) {
+        if (x < 16)  return 0.25f;             // control: must stay distinct
+        if (x >= kW - 16 && y < 16) return 1.0f;   // clipped block
+        return 0.5f;
+    };
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const float k = patchLevel(x, y);
+            float* px = &rgb[(std::size_t(y) * kW + x) * 3];
+            px[0] = k * kNeutral[0];
+            px[1] = k * kNeutral[1];
+            px[2] = k * kNeutral[2];
+        }
+    }
+
+    orion::util::DngLinearImage img;
+    img.width  = kW;
+    img.height = kH;
+    img.rgb    = rgb.data();
+    img.xyzToCam = kXyzToCam;
+    img.asShotNeutral = kNeutral;
+    img.camera = "SONY ILCE-7RM3";
+    try {
+        orion::util::writeDngLinear(path, img);
+    } catch (const std::exception& e) {
+        report(false, "linear-open DNG write succeeds", e.what());
+        return;
+    }
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device for linear DNG test", e.what());
+        return;
+    }
+
+    try {
+        const auto decoded = orion::raw::decode(path);
+        const auto* linear = std::get_if<orion::raw::LinearImage>(&decoded);
+        if (linear == nullptr) {
+            report(false, "decode() classifies the DNG as linear");
+            std::remove(path.c_str());
+            return;
+        }
+        report(true, "decode() classifies the DNG as linear");
+        checkNear(linear->width, kW, 0, "linear decode width");
+        checkNear(linear->camMul[1] > 0 ? linear->camMul[0] / linear->camMul[1] : 0,
+                  kNeutral[1] / kNeutral[0], 1e-3, "linear decode red gain ratio");
+
+        orion::pipe::DevelopPipeline dev(*device, ORION_SHADER_DIR, *linear);
+        dev.graph().render();
+
+        // referenceImage() is the post-profile texture: white balance, the
+        // camera matrix and the hue/sat table applied, no user adjustment.
+        const auto& ref = dev.referenceImage();
+        std::vector<std::uint16_t> half(std::size_t(kW) * kH * 4);
+        ref.download(half.data(), std::size_t(kW) * 4 * sizeof(std::uint16_t),
+                     kW, kH);
+        const auto px = [&](std::uint32_t x, std::uint32_t y, int c) {
+            return halfToFloat(half[(std::size_t(y) * kW + x) * 4 + std::size_t(c)]);
+        };
+
+        // fp16 quantizes twice (file, texture); 2^-9 covers both with margin.
+        const float tol = 0x1p-9f;
+        checkNear(px(32, 24, 0), 0.5, tol, "mid patch is gray at 0.5 (R)");
+        checkNear(px(32, 24, 1), 0.5, tol, "mid patch is gray at 0.5 (G)");
+        checkNear(px(32, 24, 2), 0.5, tol, "mid patch is gray at 0.5 (B)");
+        checkNear(px(4, 24, 1), 0.25, tol, "control patch stays at 0.25");
+        report(px(32, 24, 1) != px(4, 24, 1),
+               "the two levels stay distinct — nothing flattened");
+
+        // The blown patch: gains of 2.2/1.0/1.4 on 1.0 clip to the common
+        // ceiling, which for these multipliers is 1.0 — white, not magenta.
+        checkNear(px(kW - 8, 8, 0), 1.0, tol, "clipped patch is white (R)");
+        checkNear(px(kW - 8, 8, 2), 1.0, tol, "clipped patch is white (B)");
+    } catch (const std::exception& e) {
+        report(false, "linear DNG develops", e.what());
+    }
+
+    std::remove(path.c_str());
+}
+
+void testLinearDngEngineOpen() {
+    section("the engine opens a linear DNG like any photo");
+
+    const std::string path = "/tmp/orion-dng-engine-open.dng";
+    std::vector<float> rgb(std::size_t(kW) * kH * 3, 0.25f);
+    orion::util::DngLinearImage img;
+    img.width  = kW;
+    img.height = kH;
+    img.rgb    = rgb.data();
+    img.xyzToCam = kXyzToCam;
+    img.asShotNeutral = kNeutral;
+    img.camera = "SONY ILCE-7RM3";
+    try {
+        orion::util::writeDngLinear(path, img);
+    } catch (const std::exception& e) {
+        report(false, "engine-open DNG write succeeds", e.what());
+        return;
+    }
+
+    try {
+        orion::Engine engine;
+        engine.openRaw(path);
+        report(true, "openRaw takes the DNG");
+        engine.render();
+        report(true, "the full graph renders it");
+        // The preview graph is the decimate + reload path in one: built from
+        // the quarter-scale linear image at open.
+        report(engine.renderPreview() >= 0.0, "the preview graph exists or reports zero");
+
+        // Opening the same file again exercises the linear reload path.
+        engine.openRaw(path);
+        engine.render();
+        report(true, "a second open reloads the compiled linear graph");
+    } catch (const std::exception& e) {
+        report(false, "engine opens and renders the linear DNG", e.what());
+    }
+
     std::remove(path.c_str());
 }
