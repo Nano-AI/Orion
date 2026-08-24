@@ -22,9 +22,12 @@ extension Editor {
                                           aperture: photo.aperture)
         }
         if let reason = HdrMergeFlow.ineligibility(candidates) {
+            FileHandle.standardError.write(Data("orion merge: refused: \(reason)\n".utf8))
             message = reason
             return
         }
+        FileHandle.standardError.write(Data(
+            "orion merge: sheet for \(candidates.count) frames\n".utf8))
         mergeCandidates = candidates
         mergeReference = HdrMergeFlow.defaultReference(candidates)
     }
@@ -103,6 +106,9 @@ extension Editor {
             exists: { FileManager.default.fileExists(atPath: $0.path) })
         let paths = candidates.map(\.url.path)
 
+        FileHandle.standardError.write(Data(
+            "orion merge: start ref=\(reference) -> \(output.path)\n".utf8))
+
         // Anything owed to the open photo lands first — the merge reads the
         // files, not the session.
         autosave.flush()
@@ -132,17 +138,20 @@ extension Editor {
             mergeCandidates = nil
 
             if let outcome {
+                FileHandle.standardError.write(Data(
+                    "orion merge: failed: \(outcome)\n".utf8))
                 message = outcome
                 return
             }
+            FileHandle.standardError.write(Data("orion merge: wrote \(output.path)\n".utf8))
             // The new DNG is a library photo like any other: rescan the
             // folder so it appears, then open it.
             if let folder = library.folder {
                 await library.open(folder: folder)
             }
             load(output)
-            message = "Merged \(paths.count) exposures into "
-                    + output.lastPathComponent
+            notice = "Merged \(paths.count) exposures into "
+                   + output.lastPathComponent
         }
     }
 }

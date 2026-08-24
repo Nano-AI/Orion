@@ -176,6 +176,13 @@ struct Editor: View {
     @State var mergeCandidates: [HdrMergeFlow.Candidate]?
     @State var mergeReference = 0
     @State var mergeProgress: Double?
+    /// Good news, as opposed to `message`: that one presents under a
+    /// "Something went wrong" title, and a completed merge announced there
+    /// reads as a failure — which is exactly how it was read, the first time
+    /// a real bracket went through. ⚠ The batch summary still rides
+    /// `message` because it can genuinely be mixed news ("Exported 3,
+    /// 2 failed"); splitting that is its own small story.
+    @State var notice: String?
 
     /// Set while a segmentation model is running, so the two buttons can say so
     /// and cannot be pressed twice. research/masking.md §5.
@@ -267,6 +274,13 @@ struct Editor: View {
             Button("OK") { message = nil }
         } message: {
             Text(message ?? "")
+        }
+        .alert("Done",
+               isPresented: Binding(get: { notice != nil },
+                                    set: { if !$0 { notice = nil } })) {
+            Button("OK") { notice = nil }
+        } message: {
+            Text(notice ?? "")
         }
         // ⚠ Confirmed, and the count is in the question. Sync writes a sidecar
         // for every photograph in view — dozens of files, on disk, without
