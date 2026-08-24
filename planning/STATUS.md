@@ -4,12 +4,10 @@
 
 ---
 
-**Last updated:** 2026-08-07 (**all four command-line modes are gated,
-#177–#179**, and **the nib's spacing is derived rather than cited, #180** —
-there was nothing to cite. ⚠⚠ **Three first-cut checks in one session went green
-on the mutation they were written for**, every one found by running it. ⚠⚠ **The
-repo is public with NO LICENSE — source-available, not open source.** Awaiting
-the choice)
+**Last updated:** 2026-08-24 (**HDR merge shipped end to end, #189–#192** —
+bracketed exposures to one fp16 LinearRaw DNG beside the sources, handheld
+alignment included, on the branch `feat/hdr-merge`. The licence question that
+sat here is closed: **Apache-2.0, #188.**)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -560,6 +558,56 @@ candidate fixes in order.
 
 ---
 
+## Session `2026-08-24` — HDR merge, camera raw bracket to one linear DNG
+
+**A genuinely new feature, planned as an eight-story epic and shipped in one
+long session on `feat/hdr-merge`.** Merge 2+ handheld bracketed ARWs into a
+floating-point LinearRaw DNG written beside the sources, which then opens,
+develops, previews, reloads and exports like any library photo. The stories,
+in the order they landed:
+
+- **DNG 1.4 fp16 writer** (`util/DngWriter`) from the Adobe spec — never from
+  hdrmerge's GPLv3 writer, which is in the tree strictly as a citation index
+  and is now gitignored. The read spike in the same story settled the format:
+  LibRaw 0.22.2 reads it bit-exactly once `CONVERTFLOAT_TO_INT` is cleared.
+- **Linear-DNG decode + a linear-source develop graph**: one `linearSource`
+  node (linearize's own parameter block, so WB pushes have no per-mode branch)
+  stands where linearize/RCD/highlights/denoise stand for a mosaic, and the
+  skipped nodes are never built — disabled nodes still own their textures.
+- **The merge core** (`merge/Merge`): saturation-ramped, inverse-variance,
+  reference-consistency-deghosted radiance estimation, exact on a synthetic
+  bracket at zero noise, ≥2× shadow-variance win under a fitted model.
+  House constants in `UNSOURCED.md` §30.
+- **#190**: BaselineExposure is a *decode-time gain* through `invRange`, and
+  the clip scales with it — highlights ride above 1.0 into the scene-referred
+  pipeline; reset and third-party readers both stay correct. Replaced the
+  planned sidecar seed, which a paste could clobber.
+- **MergeRender**: the six-node demosaic graph (1,051 MiB at 42 MP), because
+  the merge must not drag the develop graph's gigabytes (#162) through a
+  batch operation.
+- **Alignment** (`merge/Align`): ORB + RANSAC + ECC on exposure-normalized
+  log-luma proxies; **OpenCV 5 (Apache-2.0) is a new dependency, #192,
+  confined to that one TU**. Failure returns identity + ok=false and the
+  merge degrades to reference-only — never a warp by a guess.
+- **Orchestrator + facade + `--hdr-merge`** (three `orion_engine_hdr_merge*`
+  entries, progress/cancel as atomics; the CLI asserts its own output opens).
+  Measured: 3 synthetic frames → valid DNG in 172 ms, exit 0.
+- **UI**: filmstrip context menu on a multi-selection → reference-picker
+  sheet (`HdrMergeFlow` logic is pure and tested in the viewport suite;
+  default reference = middle of the exposure ladder) → background merge with
+  progress and Stop → library rescan → the merged file opens.
+
+⚠ **What is NOT covered: no real ARW has been through it.** `samples/` is
+absent on this machine, so `check-screens` and `check-modes` skip (exit 2, as
+they did before this branch), and the new `--hdr-merge` gate in check-modes has
+never run on a real bracket. **The developer owes the tree a 3-frame handheld
+a7riii bracket in `samples/`.** Second gap, related: the merged DNG embeds no
+thumbnail yet, so the filmstrip shows a placeholder for it until the writer
+grows a preview IFD (costed as the optional compression story).
+
+**990 / 3,721 / check-decisions, check-gestures, check-wiring exit 0 /
+check-screens, check-modes exit 2 for want of samples.**
+
 ## Session `2026-08-07b` — three checks that ran nowhere, and one that missed its own mutation
 
 **The queue is empty and the blocked items need the developer**, so this came off
@@ -1067,230 +1115,4 @@ comment now says so for whoever moves panel content next.
 **844 / 3708 / 41 of 41 / bench exit 0 on three frames / check-decisions exit 0**,
 and all three check-scenes render.
 
-## Session `2026-08-02i` — the queue's last item was done, and the ledger never heard
-
-**The queue offered "Americanising the persisted keys (#89) — needs sign-off, it
-rewrites sidecars already on disk."** It had shipped the day before as **#112**.
-
-⚠ **The reason nobody knew is the finding.** #112 had **no row in
-`DECISIONS.md`** — the file `CLAUDE.md` calls the record of every settled choice.
-It was cited nine times, from `EditHistory.swift`, `Presets.swift`,
-`ViewportTests+Sidecar.swift` and `ViewportTests+Preset.swift`, and the only
-prose anywhere describing it was a comment inside the decoder. A session that
-trusted the queue would have re-run a schema migration over the photographer's
-sidecars — the one item on that queue with a blast radius.
-
-**Closed by mutation, not by reading.** Deleting one `?? float(.legacyColourR)`
-fallback reddens `colourR still lands on colorR — got 0.18000, want 0.44000` and
-*and to exactly the same component the British one gave*. The migration is
-genuinely complete, and its test is better than it needed to be: it ends by
-asking `CanvasLayout.maskAlpha` on a grid of points, so a renamed key cannot pass
-by landing on the default — which is exactly how this failure would have looked.
-
-### ⚠ Five more holes, and a warning aimed at the wrong number
-
-`DECISIONS.md` was missing **#110, #112 and #115** — and, further back, had no
-row for **22, 23 or 24** either. It also carried
-**two rows numbered 71** underneath a prominent header warning that two rows were
-numbered **96**.
-
-That warning was false in all three of its claims. There is **one** row 96; there
-is **one** citation of #96 in the tree (`hl_mask.slang:110`); and it means the row
-that exists. Its *"twelve files cite decision #96"* was **one file counted twelve
-times**, because the count had swept `.claude/worktrees/` — checkouts of this
-same repository. The real duplicate sat unmentioned underneath it for two days.
-
-`git log -S` over the whole history of the file finds **no version that ever
-contained** #110, #112 or #115. They were never written, not lost. All three are
-now reconstructed from the code that cites them, `HISTORY.md` and the tests — and
-**each row says on its face that it is a reconstruction**, because a rebuilt row
-presented as contemporaneous is the same class of error as the invented constant
-this repository has a sourcing rule for.
-
-**22, 23 and 24 are declared gaps**, and are written without the `#` on purpose:
-the sigil would claim a decision exists. No row was ever written and **nothing in
-the tree cites them**, in code or prose — numbers skipped on 2026-07-27, not
-decisions lost. Backfilling them would be invention. The uncited `71` became
-**`71b`**.
-
-### The gate, which is the actual deliverable
-
-`tools/check-decisions.py`, in `CLAUDE.md`'s test list beside the two suites.
-Fails on a duplicate number, on a `#N` the tree cites that has no row, and on an
-undeclared gap. It excludes `.claude/worktrees/` — load-bearing, for the reason
-above.
-
-**Three mutations, three caught**, each exiting 1: re-colliding `71b`, deleting
-row 112 (it names all nine citations back), and undeclaring gap 23.
-
-⚠ **Nothing in `engine/` or `app/` changed this session.** The tree was already
-right; the record was not. That is why the gates below are identical to `h`'s —
-and running them anyway is the point, since a documentation session that quietly
-breaks a build is the failure this file exists to make survivable.
-
-**844 / 3708 / 41 of 41 / bench exit 0 on three frames / check-decisions exit 0.**
-
-## Session `2026-08-02h` — the mask stopped travelling, and the pixel started
-
-**The queue's last geometric item, and it turned into a deletion.** A radial mask
-reached the kernel as an ellipse pushed *forward* into frame coordinates: centre
-through `mask::toFrame`, semi-axes and angle through the map's derivative at that
-centre — √|det J| first (#100), then the exact singular values of J·R·diag
-(#128). The second removed the whole first-order error, which is all it claimed.
-What was left is second order, and #136 had measured it the day before at a
-**full 1.0000 of coverage** at the rim of a 0.34 mask under a vertical keystone
-of 1.00, over 5.8% of the frame.
-
-⚠ **The fix was already written, and it was being used as the ruler.** Every
-number in that table came from comparing the shipping answer against the exact
-one — carry each frame point out with `mask::fromFrame`, evaluate the mask as
-drawn. The reference implementation *was* the answer. It had sat in the
-measurement harness for a session grading an approximation it could have
-replaced, and nobody noticed because it was filed under "how do I measure this"
-rather than under "what should this be".
-
-The kernel now multiplies each pixel by `mask::displayMatrix` — crop, straighten,
-quarter turns and the correction as one 3 × 3, the same matrix #137's ramp
-already used — divides, and evaluates the superellipse. **The centre, the
-semi-axes and the angle reach the shader untransformed.** They are the numbers in
-the sidecar.
-
-### It is a net deletion, and that is the strongest thing about it
-
-Gone from the render path: `toFrame` and `radiusToFrame` for the radial; the
-angle-as-a-*delta* bookkeeping of #83, which existed only because `toFrame` had
-already applied the quarter turns and `radiusToFrame` must not apply them again;
-the straighten added to the ellipse's angle while the turns are kept out of it —
-#83 again; and `MaskComponent::rampDen`, which was field for field the bottom row
-of the matrix now being sent anyway. `testRampDenominatorIsTheMatrix` is a check
-on that last deletion: the two must be bit-identical, because the kernel now
-reads one where the host derives the other.
-
-`radiusToFrame` and `lengthAlong` stay in the tree, still tested, marked in their
-own headers as **not on the render path**. They are the first-order answer, kept
-so the exact one can be measured against something.
-
-### ⚠ The performance question, and the instrument that could not answer it
-
-The item carried the one open performance question in the area: the exact answer
-is a per-pixel 3 × 3 and a divide, in a kernel that already runs full-resolution
-once per component, and nobody had measured it.
-
-The first attempt to measure it came back as **pure noise** — the A/B differed by
-less than the spread within either arm. The reason is worth more than the answer:
-**`mask:0` appeared in `orion-bench` four times and was a *brush* every time.**
-The parametric kinds that every local adjustment starts as had no timing at all,
-so the A/B was measuring a kernel the change could not reach.
-
-With a radial node profile added — permanently, so this cannot happen again —
-the answer is **1.02 ms with the arithmetic and 1.07 ms with it removed**, on
-24 MP. The same number twice. The pass is bound by writing R16Float over the
-frame, not by anything computed per pixel. A keystone on top costs nothing
-further, because the matrix is applied whether or not it is the identity —
-deliberately, so there is no second code path and no branch that only the
-uncommon case exercises.
-
-### ⚠ Almost the whole new test passes on the code it replaced
-
-`mask::displayMatrix` and `mask::fromFrame` were **both always correct**; what was
-wrong was using a derivative instead of either. So a test that checks the kernel's
-arithmetic against `fromFrame` — nine configurations, up to crop + two turns +
-straighten + keystone + squeeze at once — is a real check of the plumbing and
-says nothing at all about the defect.
-
-What says something is the block after it: build the first-order ellipse the old
-host built, and **bound the gap**. 0.0000 under an aspect squeeze — exactly
-linear, so there is nothing to buy, and that row is the measurement checking
-itself — and between 0.50 and 1.00 under a keystone at 1.00. The GPU case carries
-the same pairing: the render matches `fromFrame`, *and* disagrees with the
-first-order ellipse by more than 0.5, so the case cannot go slack without saying
-so.
-
-### Gates and mutations
-
-**Five mutations tried, five caught**: skipping the pull-back (GPU, worst
-1.0000), dropping the projective divide (0.9693), transposing the matrix
-(1.0000), kind 1 reading the wrong matrix row (two checks), and the full host
-revert to the push-forward construction (four scenario checks, worst 0.1219
-luma). `repro/perspective-carries-the-mask.txt` went 32 → 40 checks.
-
-**844 / 3708 / 41 of 41 / bench exit 0 on `_PIC8220`, `_PIC8095`, `_PIC8148`.**
-
-## The session log
-
-⚠ **Pruned 2026-08-04**: `2026-08-02d` and `2026-08-02e` moved to
-`HISTORY.md`, verified absent here and present there; **1,092 → 992 lines**
-before the consolidated entry above was added. The **six most recent sessions
-are above** — `2026-08-02i` (#139), `h` (#138),
-`g` (#137), `f` (#136), `e` (#135) and `d` (#134). **Everything older lives in
-[`HISTORY.md`](HISTORY.md)**, which is the archive and is deliberately *not* part
-of the read order in `CLAUDE.md`.
-
-⚠ **Pruned again 2026-08-02 at #139**, same rule, same proof: adding `i` made
-seven, so `2026-08-02c` moved to `HISTORY.md` and its four headings were checked
-by exact match to be absent here and present there before the write. **880 → 823
-lines.**
-
-⚠ **Pruned again 2026-08-02 at #138, and a prune moves rather than copies.**
-Adding `h` took the count to twelve blocks, so seven moved: the six wave
-write-ups `#131`, `#130`, `#129`, `#128`, `#127` and `#125`, plus session
-`2026-08-02b`. **1,061 → 702 lines**, and all seven headings were checked by
-exact match to be *absent here and present there* before the write was made —
-7 of 7. The rule this enforces is #132's: 2026-08-01 left `2026-07-31j` in both
-files byte for byte, and a duplicate is worse than a long file, because the two
-copies drift and each looks complete from either end.
-
-⚠ **Pruned 2026-08-02, decision #132.** Twelve agents merged that day and every
-one of them appended an entry, taking this file to **2,221 lines across 28
-session and wave blocks** — the same failure the 4,643-line prune was for.
-**Twenty-two blocks moved to `HISTORY.md`**: sixteen from the body of this file
-(#124, #122, #120, #121, #123, #117, #118, #113, the silent-failure inventory,
-the concurrent-sidecar note, two stale *In flight* tables, and the second, third,
-fourth and fifth wave write-ups) and the six `## Session` entries that were the
-tail of this log — `2026-08-02a`, `2026-08-01r`, `q`, `p`, `o` and `n`. Nothing
-was edited on the way across, and **745 lines are left here**.
-
-⚠ **A prune moves; it never copies.** The 2026-08-01 prune left `2026-07-31j` in
-both files byte for byte, and a duplicated entry is invisible from either end
-because each copy looks complete. So all **63** headings that moved — the
-twenty-two blocks plus every sub-heading inside them — were checked afterwards by
-exact-match grep: **present in `HISTORY.md`, absent here**, 63 of 63. That check
-is cheap and is worth repeating on the next prune.
-
-⚠ **Four claims in the gap table and the counts above were stale, and were
-re-derived from the tree rather than trusted** — the ceiling row's largest test
-file, a gap that the tree had already closed, the trailer count, and the suite
-totals. All four are corrected in place with the measurement beside them. The
-lesson is that a number written into this file goes stale in *hours* on a day
-like 2026-08-02, so a prune re-derives; it does not proof-read.
-
-⚠ **`HISTORY.md` itself carries duplicates, and they predate this prune.**
-`2026-08-01b` appears three times; `2026-08-01a`, `2026-07-31l`, `2026-07-31k`
-and `2026-07-31i` twice each. Left alone deliberately, because the brief for this
-prune was append-only — but it is the next thing to fix in the archive, and it is
-the same defect the paragraph above is about.
-
-⚠ **The header of this file is still duplicated, and that was left alone on
-purpose.** Two `Last updated` lines, two `Phase` paragraphs, and **three
-overlapping copies of the "next story" queue** numbered 1-6, 1-5 and 1-6 with
-different contents. Deciding which queue is the real one is a judgement about
-what the next story is, which is not a prune's business; it is named here so the
-next session does it deliberately rather than by accident.
-
-⚠ This file had grown to **4,643 lines across 56 sessions**, which broke the one
-job it has. `CLAUDE.md` calls it the recovery point and says to read it first on
-a fresh session; at that length nobody reads it, and in practice the last six
-sessions each read only its opening fifty lines while adding another hundred to
-the end. A recovery point that cannot be recovered from is not one.
-
-⚠ The tail also held scaffolding from the first week that had gone plainly
-false — a "Where we are" section still describing a **7-node, 971 MiB**
-pipeline (it is 148 nodes and 6878 MiB) and an "In flight" section reading
-"nothing in flight, planning is complete enough to start coding". Both are in
-`HISTORY.md` now, marked as superseded rather than deleted.
-
-The M3 cost table above was 3,392 lines down. It is the standing answer to the
-kickoff prompt that keeps arriving, so it is now next to the thing it answers.
-
-*Sessions `2026-08-01m` and earlier were already in `HISTORY.md` before this
-prune.*
+*Sessions `2026-08-02i` and earlier are in `HISTORY.md`.*

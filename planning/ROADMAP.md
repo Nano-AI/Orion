@@ -841,6 +841,27 @@ gap — a blown lamp comes back with the right color and no falloff.
   core, so #29's outcome is reached by evidence rather than by decree, and the
   clip itself is untouched.
 
+## HDR merge — ✅ shipped 2026-08-24, #189–#192
+
+`research/hdr-merge.md` is the sourcing; `feat/hdr-merge` is the branch. Eight
+stories, one session: the DNG 1.4 fp16 writer and its LibRaw read spike, the
+linear-source develop graph, the CPU merge core, the units decision point
+(#190: BaselineExposure as a decode-time gain), the six-node MergeRender
+demosaic, OpenCV alignment (#192, one TU), the orchestrator + facade +
+`--hdr-merge` mode, and the filmstrip-to-sheet UI. Architecture in #191:
+demosaic-first, camera-native RGB, an fp16 LinearRaw DNG beside the sources.
+
+### ⚠ What is deliberately not in it
+
+| Left out | Why, and where it would go |
+|---|---|
+| A real-ARW end-to-end run | `samples/` is absent on this machine; the `--hdr-merge` check-modes gate is written and waiting. **Needs a 3-frame handheld a7riii bracket from the developer** |
+| An embedded thumbnail in the merged DNG | The filmstrip shows a placeholder for merged files. A preview IFD belongs with the compression story below |
+| Deflate + FP-predictor compression | The DNG is ~253 MB at 42 MP uncompressed. DNG 1.4 Compression=8 + Predictor=3 roughly halves it. ~1 session, contained in `DngWriter` |
+| Automatic bracket detection | The photographer selects the frames; grouping by capture-time adjacency is a filmstrip feature, not a merge one |
+| Lens-distortion-aware alignment | Corrections run inside the develop graph, after the merge, so wide-angle corners can misalign by a few pixels; ECC + the deghost gate absorb the residue. Documented in `research/hdr-merge.md`, not solved |
+| Tile/patch merging (HDR+ style) | **Off the table — Google patents.** #189 and the must-not-do list in `research/hdr-merge.md` |
+
 ## M5 — Advanced
 
 - ML denoise (NAFNet-class via Core ML) as an **on-demand pass**, not a graph
