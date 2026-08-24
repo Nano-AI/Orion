@@ -343,6 +343,72 @@ void testLinearDngOpens() {
     std::remove(path.c_str());
 }
 
+void testLinearDngBaselineExposure() {
+    section("BaselineExposure is a decode-time gain, and the clip rides with it");
+
+    // Same neutral-card scene as above at 0.25 and 1.0, but the file says
+    // +1 EV. The head must render the card at 0.5 — and the blown patch at
+    // 2.0, still neutral: the ceiling scales with the gain, so the headroom
+    // the merge bought is above 1.0 rather than cut at it.
+    const std::string path = "/tmp/orion-dng-baseline.dng";
+
+    std::vector<float> rgb(std::size_t(kW) * kH * 3);
+    for (std::uint32_t y = 0; y < kH; ++y) {
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const float k = (x >= kW - 16 && y < 16) ? 1.0f : 0.25f;
+            float* px = &rgb[(std::size_t(y) * kW + x) * 3];
+            px[0] = k * kNeutral[0];
+            px[1] = k * kNeutral[1];
+            px[2] = k * kNeutral[2];
+        }
+    }
+
+    orion::util::DngLinearImage img;
+    img.width  = kW;
+    img.height = kH;
+    img.rgb    = rgb.data();
+    img.xyzToCam = kXyzToCam;
+    img.asShotNeutral = kNeutral;
+    img.baselineExposureEv = 1.0f;
+    img.camera = "SONY ILCE-7RM3";
+    try {
+        orion::util::writeDngLinear(path, img);
+    } catch (const std::exception& e) {
+        report(false, "baseline DNG write succeeds", e.what());
+        return;
+    }
+
+    try {
+        auto device = orion::gpu::Device::create();
+        const auto decoded = orion::raw::decode(path);
+        const auto& linear = std::get<orion::raw::LinearImage>(decoded);
+        checkNear(linear.baselineExposureEv, 1.0, 1e-2, "the tag decodes");
+
+        orion::pipe::DevelopPipeline dev(*device, ORION_SHADER_DIR, linear);
+        dev.graph().render();
+
+        const auto& ref = dev.referenceImage();
+        std::vector<std::uint16_t> half(std::size_t(kW) * kH * 4);
+        ref.download(half.data(), std::size_t(kW) * 4 * sizeof(std::uint16_t),
+                     kW, kH);
+        const auto px = [&](std::uint32_t x, std::uint32_t y, int c) {
+            return halfToFloat(half[(std::size_t(y) * kW + x) * 4 + std::size_t(c)]);
+        };
+
+        const float tol = 0x1p-8f;
+        checkNear(px(16, 30, 0), 0.5, tol, "0.25 renders at 0.5 (R)");
+        checkNear(px(16, 30, 1), 0.5, tol, "0.25 renders at 0.5 (G)");
+        // The blown patch: above the old 1.0 ceiling, not cut at it.
+        checkNear(px(kW - 8, 8, 1), 2.0, 4.0f * tol, "the clip scaled to 2.0");
+        checkNear(px(kW - 8, 8, 0) / px(kW - 8, 8, 2), 1.0, 1e-2,
+                  "and the blown patch is still neutral");
+    } catch (const std::exception& e) {
+        report(false, "baseline-exposure DNG develops", e.what());
+    }
+
+    std::remove(path.c_str());
+}
+
 void testLinearDngEngineOpen() {
     section("the engine opens a linear DNG like any photo");
 

@@ -88,6 +88,7 @@ void testExportFormats();
 void testFloatToHalf();
 void testDngRoundTrip();
 void testLinearDngOpens();
+void testLinearDngBaselineExposure();
 void testLinearDngEngineOpen();
 void testMergeExposureMaths();
 void testMergeReconstruction();

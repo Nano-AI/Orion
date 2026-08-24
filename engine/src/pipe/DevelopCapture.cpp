@@ -393,7 +393,14 @@ void DevelopPipeline::pushStaticCaptureParams(const raw::LinearImage& image) {
         const float mul = (c == 3 || image.camMul[c] == 0.0f) ? g : image.camMul[c];
         lin.whiteBalance[c] = mul / g;
     }
-    lin.invRange = 1.0f;
+    // BaselineExposure applied as a decode-time gain (decision #190): the
+    // shared range multiplier scales the data by 2^EV, and because
+    // whiteClipFor multiplies the same invRange, the clip scales with it —
+    // the recovered highlights ride above 1.0 into the scene-referred
+    // pipeline instead of being cut at the old ceiling. The exposure slider
+    // reads zero and "reset to as-shot" stays correct, with no sidecar seed
+    // to lose.
+    lin.invRange = std::exp2(image.baselineExposureEv);
     lin.filters  = 0;
     lin.size[0] = width_; lin.size[1] = height_;
     whiteLevel_ = 1.0f;

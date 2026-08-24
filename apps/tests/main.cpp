@@ -89,6 +89,7 @@ int main() {
     testFloatToHalf();
     testDngRoundTrip();
     testLinearDngOpens();
+    testLinearDngBaselineExposure();
     testLinearDngEngineOpen();
     testMergeExposureMaths();
     testMergeReconstruction();
