@@ -95,3 +95,6 @@ dist/
 # --- Editor and tool indexes -----------------------------------------------
 # clangd writes its index here whenever anything opens the compile database.
 .cache/
+
+# --- Third-party reference clones (GPL - never commit, never copy) --------
+hdrmerge/
