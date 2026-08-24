@@ -90,6 +90,9 @@ int main() {
     testDngRoundTrip();
     testLinearDngOpens();
     testLinearDngEngineOpen();
+    testMergeExposureMaths();
+    testMergeReconstruction();
+    testMergeDeghostAndCoverage();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();

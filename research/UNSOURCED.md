@@ -1284,3 +1284,49 @@ revisions starts being quoted as a number.
 **To fix.** Nothing, until a piece is actually built. If piece 3 chooses option
 (d), measure its error against a full re-decode on a real frame before shipping
 it, and replace item 1 with that measurement or with the decision not to.
+
+## §30 — The HDR merge's saturation ramp, deghost gate and luma scalar
+
+**Where:** `engine/src/merge/Merge.cpp` (`Options`, `saturationWeight`, the ghost gate, `luma`).
+
+**Sourced:** the weighting scheme itself — inverse-variance exposure weighting
+(Hasinoff, Durand & Freeman 2010 §3), the discard-the-clipped rule (Debevec &
+Malik 1997 §2.2) and the shortest-frame fallback (Luijk, *Zero Noise*).
+See `research/hdr-merge.md`.
+
+**Not sourced, three numbers and one choice:**
+
+1. **The saturation ramp `0.85 → 0.98`** on the per-pixel max channel.
+   [DM97]'s hat function reaches zero *at* the clip; the earlier fade is ours.
+2. **The deghost gate `k = 6` reference sigmas.** Reference-consistency
+   testing is a published family; the specific k is not from any of it.
+3. **The variance floor `1e-12`** that keeps the weight finite for a frame
+   declaring zero noise.
+4. **Luma as the plain channel mean.** The data is camera RGB, where no
+   published luminance weights are defined; Rec. weights would be a borrowed
+   costume, not a source.
+
+**Reasoned:** the ramp starts at 0.85 because a sensor's shoulder bends before
+it stops — near-clip data is *biased*, not merely noisy, and a weight that
+only went to zero at 1.0 would average that bias in; 0.98 rather than 1.0
+keeps a pixel one fp16 step under the clip from being trusted. k = 6 is wide
+enough that Poisson–Gaussian noise essentially never trips it (the
+`tests_merge.cpp` shadow band sits ~9σ of the difference distribution inside
+the gate) and narrow enough that a subject a few multiples of σ away is cut.
+The floor makes the zero-noise degenerate case come out as pure E² weighting —
+the photon-limited ideal — rather than a division by zero.
+
+**Measured 2026-08-24** (`tests_merge.cpp`): with the numbers as stated, a
+synthetic ±2 EV stack reconstructs its radiance map exactly at zero noise, the
+long exposure at least halves shadow variance under a fitted noise model, a
+moved subject is fully rejected, and the positive control — the same stack with
+the gate opened — demonstrably lands the ghost, so the rejection is real and
+not vacuous.
+
+**Still not sourced:** all four. The ramp bounds and k have no published home
+to point at; they are tuning, argued and tested but not cited.
+
+**Cost:** low-to-moderate. The failure mode of a wrong ramp is residual color
+bias in near-clipped highlights; of a wrong k, either ghost leakage (too wide)
+or noisy seams where the gate flickers (too tight). Both are visible in real
+brackets, which is what the sample-folder end-to-end run exists to catch.

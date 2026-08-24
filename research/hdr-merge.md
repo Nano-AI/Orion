@@ -77,7 +77,7 @@ This keeps [DNG14]'s default WhiteLevel semantics and Orion's clip-at-white line
 
 ---
 
-## The merge (story C — designed, not yet built)
+## The merge (story C — built, `engine/src/merge/Merge.{h,cpp}`)
 
 Per frame *i*, per pixel, with yᵢ the frame's own normalized linear value (1.0 = that frame's clip) and x̂ᵢ = yᵢ/Eᵢ its radiance estimate at reference scale:
 
