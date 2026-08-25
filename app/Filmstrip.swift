@@ -17,6 +17,9 @@ struct Filmstrip: View {
     @Bindable var library: Library
     let selected: URL?
     let onSelect: (URL) -> Void
+    /// Offered on a multi-photo scope; nil hides the entry (the screenshot
+    /// harness builds a strip with no editor behind it).
+    var onMerge: (([URL]) -> Void)? = nil
 
     private let cellHeight: CGFloat = 58
 
@@ -303,6 +306,12 @@ struct Filmstrip: View {
                 }
             }
             Button("No rating" + suffix) { library.setRating(0, for: urls) }
+            // A merge is only meaningful over a group, so the entry appears
+            // only when the scope is one — same logic as the counted suffix.
+            if let onMerge, urls.count > 1 {
+                Divider()
+                Button("Merge to HDR…" + suffix) { onMerge(urls) }
+            }
         }
     }
 

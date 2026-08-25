@@ -43,6 +43,9 @@ set(SWIFT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExportDriver.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeDriver.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergePanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SubjectMatte.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SkyDetector.swift
@@ -113,8 +116,11 @@ add_custom_command(
             # adding an rpath to a signed binary invalidates the signature.
             # tools/package-app.sh drops the Homebrew entry when it packages.
             -Xlinker -rpath -Xlinker /opt/homebrew/opt/libraw/lib
+            -Xlinker -rpath -Xlinker /opt/homebrew/opt/opencv/lib
             -Xlinker -rpath -Xlinker @executable_path/../Frameworks
             ${LIBRAW_LIBRARY}
+            # OpenCV, for the HDR-merge aligner (engine/src/merge/Align.cpp).
+            ${OPENCV_LIBRARIES}
             # The engine is C++ and throws internally, so the Swift link needs
             # libc++ and its unwinder even though nothing escapes the facade.
             -lc++ -lc++abi
@@ -151,6 +157,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
@@ -169,6 +176,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Curve.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Merge.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Canvas.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
@@ -190,6 +198,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Merge.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift

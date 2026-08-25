@@ -74,6 +74,30 @@ void normalizeRows(float m[9]) {
 void DevelopPipeline::buildCaptureNodes() {
     using gpu::PixelFormat;
 
+    // ── The linear head ───────────────────────────────────────────────────
+    //
+    // A demosaiced source (a merged HDR DNG) needs exactly one of this
+    // region's jobs: the white-balance gains and the clip to the brightest
+    // describable neutral. One node stands in for linearize, the RCD chain,
+    // the highlight machinery and the denoise pyramid — and the absent nodes
+    // are not built at all, because built-but-disabled nodes still own their
+    // full-resolution textures.
+    //
+    // ⚠ It is deliberately named into nLinearize_: the node takes the same
+    // parameter block as linearize (see linear_source.slang), so
+    // applyWhiteBalance pushes to "the graph's head" with no per-mode branch.
+    // The ids of the skipped nodes stay -1, which is what the guards in
+    // applyHighlights and applyDenoise key on.
+    if (linearSource_) {
+        nLinearize_ = pipeline_.add({"linear source", "linearSource", {kSource},
+                                     PixelFormat::RGBA16Float, {}});
+
+        nLens_ = pipeline_.add({"lens", "lensCorrect", {nLinearize_},
+                                PixelFormat::RGBA16Float, {}});
+        buildCaptureTail();
+        return;
+    }
+
     nLinearize_ = pipeline_.add({"linearize", "linearize", {kSource},
                                  PixelFormat::R32Float, {}});
     nDirs_      = pipeline_.add({"rcd:dirs", "rcdDirs", {nLinearize_},
@@ -186,6 +210,14 @@ void DevelopPipeline::buildCaptureNodes() {
     nLens_ = pipeline_.add({"lens", "lensCorrect", {nAtrousShrink_[0]},
                             PixelFormat::RGBA16Float, {}});
 
+    buildCaptureTail();
+}
+
+/// Spots, sharpening and the camera profile — identical for both kinds of
+/// source, downstream of whichever head the branch above built into nLens_.
+void DevelopPipeline::buildCaptureTail() {
+    using gpu::PixelFormat;
+
     // ── Spot removal ──────────────────────────────────────────────────────
     //
     // After the lens correction, which is the one stage that *warps* rather
@@ -281,8 +313,23 @@ void DevelopPipeline::pushStaticCaptureParams(const raw::BayerImage& image) {
         pipeline_.setParams(nHlPush_[l], &push, sizeof push);
     }
 
+    pushColorProfile(image.camToXyz, image.camMul);
+
+    // Measured from this frame rather than looked up per camera and ISO. See
+    // raw/NoiseProfile.h for why, and for the citation.
+    noise_ = estimateNoise(image);
+    if (const char* v = std::getenv("ORION_DEBUG_NOISE"); v != nullptr && *v == '1') {
+        std::fprintf(stderr, "orion: noise a=%.3e b=%.3e measured=%d\n",
+                     noise_.a, noise_.b, noise_.measured ? 1 : 0);
+    }
+}
+
+void DevelopPipeline::pushColorProfile(const std::array<float, 9>& camToXyzStored,
+                                       const std::array<float, 4>& camMul) {
+    const std::uint32_t size[2] = {width_, height_};
+
     float xyzToCam[9], camToXyz[9], camToWorking[9];
-    std::copy_n(image.camToXyz.begin(), 9, xyzToCam);
+    std::copy_n(camToXyzStored.begin(), 9, xyzToCam);
     if (!invert3x3(xyzToCam, camToXyz)) {
         throw std::runtime_error("camera color matrix is singular");
     }
@@ -324,19 +371,53 @@ void DevelopPipeline::pushStaticCaptureParams(const raw::BayerImage& image) {
     // inferred from them. The temperature is only a handle for the user to
     // turn; routing "as shot" through it would bake every estimation error
     // into the image as a color cast.
-    const float gRef = (image.camMul[1] != 0.0f) ? image.camMul[1] : 1.0f;
-    asShotMul_ = {image.camMul[0] / gRef, 1.0f, image.camMul[2] / gRef};
-
-    // Measured from this frame rather than looked up per camera and ISO. See
-    // raw/NoiseProfile.h for why, and for the citation.
-    noise_ = estimateNoise(image);
-    if (const char* v = std::getenv("ORION_DEBUG_NOISE"); v != nullptr && *v == '1') {
-        std::fprintf(stderr, "orion: noise a=%.3e b=%.3e measured=%d\n",
-                     noise_.a, noise_.b, noise_.measured ? 1 : 0);
-    }
+    const float gRef = (camMul[1] != 0.0f) ? camMul[1] : 1.0f;
+    asShotMul_ = {camMul[0] / gRef, 1.0f, camMul[2] / gRef};
 
     asShot_    = estimateFrom(asShotMul_, xyzToCam_);
     asShotRef_ = multipliersFor(asShot_, xyzToCam_);
+}
+
+void DevelopPipeline::pushStaticCaptureParams(const raw::LinearImage& image) {
+    // The head node reuses linearize's parameter block with the mosaic's
+    // fields at identity: the DNG's floating-point data is defined
+    // black-subtracted and normalized to 1.0 at its ceiling (DNG 1.4 ch. 4),
+    // so black is zero and the range is one. White balance and the clip work
+    // exactly as they do for a mosaic — including whiteClipFor, whose inputs
+    // (white 1, black 0, invRange 1) make the ceiling min(gains), the
+    // brightest neutral this file can still describe.
+    params::Linearize lin{};
+    const float g = (image.camMul[1] != 0.0f) ? image.camMul[1] : 1.0f;
+    for (int c = 0; c < 4; ++c) {
+        lin.black[c] = 0.0f;
+        const float mul = (c == 3 || image.camMul[c] == 0.0f) ? g : image.camMul[c];
+        lin.whiteBalance[c] = mul / g;
+    }
+    // BaselineExposure applied as a decode-time gain (decision #190): the
+    // shared range multiplier scales the data by 2^EV, and because
+    // whiteClipFor multiplies the same invRange, the clip scales with it —
+    // the recovered highlights ride above 1.0 into the scene-referred
+    // pipeline instead of being cut at the old ceiling. The exposure slider
+    // reads zero and "reset to as-shot" stays correct, with no sidecar seed
+    // to lose.
+    lin.invRange = std::exp2(image.baselineExposureEv);
+    lin.filters  = 0;
+    lin.size[0] = width_; lin.size[1] = height_;
+    whiteLevel_ = 1.0f;
+    for (int c = 0; c < 3; ++c) blackLevel_[c] = 0.0f;
+    linBase_ = lin;
+
+    const float asShot[3] = {lin.whiteBalance[0], lin.whiteBalance[1],
+                             lin.whiteBalance[2]};
+    linBase_.whiteClip = whiteClipFor(asShot);
+
+    pushColorProfile(image.camToXyz, image.camMul);
+
+    // ⚠ Unmeasured, on purpose. The noise estimator reads a mosaic, and a
+    // merged frame's variance is not one profile anyway — every pixel carries
+    // a different mix of exposures. `measured = false` keeps the denoise
+    // chain off, which for this source is also not built.
+    noise_ = {};
 }
 
 void DevelopPipeline::applyWhiteBalance(const Adjustments& adj,
@@ -373,6 +454,10 @@ void DevelopPipeline::applyWhiteBalance(const Adjustments& adj,
 
 void DevelopPipeline::applyHighlights(const Adjustments& adj,
                                       const ApplyContext& ctx) {
+    // A linear source has no highlight machinery to drive — recovery already
+    // happened, in the merge that made the file.
+    if (nHighlights_ < 0) return;
+
     const bool first = ctx.first;
 
     // ── Highlight reconstruction ─────────────────────────────────────────
@@ -560,6 +645,9 @@ void DevelopPipeline::applyLens(const Adjustments& adj,
 
 void DevelopPipeline::applyDenoise(const Adjustments& adj,
                                    const ApplyContext& ctx) {
+    // Not built for a linear source; see buildCaptureNodes.
+    if (nAtrousBlur_[0] < 0) return;
+
     const bool first = ctx.first;
 
     // ── Denoise ──────────────────────────────────────────────────────────

@@ -1,6 +1,10 @@
 #include "raw/RawImage.h"
 
+#include "util/Half.h"
+
 #include <libraw/libraw.h>
+
+#include <cmath>
 
 #include <memory>
 #include <stdexcept>
@@ -127,17 +131,29 @@ std::array<std::uint16_t, 4> BayerImage::blackLevels(unsigned black,
     return out;
 }
 
-BayerImage decodeBayer(const std::string& path) {
-    auto owned = std::make_unique<LibRaw>();
-    LibRaw& proc = *owned;
+namespace {
 
+/// Open + unpack, shared by both decoders.
+///
+/// ⚠ The flag matters: LibRaw's default is to flatten floating-point data to
+/// 16-bit integers at unpack, which would quietly throw away the shadow
+/// precision a merged HDR DNG exists to carry. Measured in tests_dng.cpp —
+/// with the default options float3_image stays null and color3_image gets the
+/// quantized copy. Harmless for integer sources, so it is cleared always.
+void openUnpacked(LibRaw& proc, const std::string& path) {
     if (int rc = proc.open_file(path.c_str()); rc != LIBRAW_SUCCESS) {
         fail("could not open raw file", rc);
     }
+    proc.imgdata.rawparams.options &=
+        ~static_cast<unsigned>(LIBRAW_RAWOPTIONS_CONVERTFLOAT_TO_INT);
     if (int rc = proc.unpack(); rc != LIBRAW_SUCCESS) {
         fail("could not unpack raw data", rc);
     }
+}
 
+/// The mosaic path: everything decodeBayer always did, from the format checks
+/// down. Assumes raw_image is present.
+BayerImage buildBayer(LibRaw& proc) {
     const auto& sizes = proc.imgdata.sizes;
     const auto& idata = proc.imgdata.idata;
     const auto& color = proc.imgdata.color;
@@ -149,19 +165,6 @@ BayerImage decodeBayer(const std::string& path) {
     // breaks that assumption in a different way, and two of them would render
     // silently — a scrambled X-Trans frame and a four-color sensor's cast both
     // look like a bug in the pipeline rather than an unsupported file.
-    if (proc.imgdata.rawdata.raw_image == nullptr) {
-        const bool threeColor = proc.imgdata.rawdata.color3_image != nullptr;
-        const bool fourColor  = proc.imgdata.rawdata.color4_image != nullptr;
-        proc.recycle();
-        if (threeColor || fourColor) {
-            throw std::runtime_error(
-                "this file is already demosaiced (a linear DNG or a Foveon "
-                "frame). Orion develops mosaic data — open the camera's "
-                "original raw file instead");
-        }
-        throw std::runtime_error("no mosaic data in this file");
-    }
-
     if (idata.filters == 9) {
         proc.recycle();
         throw std::runtime_error(
@@ -225,6 +228,103 @@ BayerImage decodeBayer(const std::string& path) {
     return out;
 }
 
+/// The linear path: a demosaiced three-channel DNG, floating-point or
+/// integer. Assumes one of float3_image / color3_image is present.
+LinearImage buildLinear(LibRaw& proc) {
+    const auto& sizes = proc.imgdata.sizes;
+    const auto& idata = proc.imgdata.idata;
+    const auto& color = proc.imgdata.color;
+    const auto& rd    = proc.imgdata.rawdata;
+
+    LinearImage out;
+    out.width  = sizes.width;
+    out.height = sizes.height;
+    out.camera = std::string(idata.make) + " " + idata.model;
+    out.flip   = sizes.flip;
+
+    const float baseline = color.dng_levels.baseline_exposure;
+    out.baselineExposureEv = std::isfinite(baseline) ? baseline : 0.0f;
+
+    for (int c = 0; c < 4; ++c) out.camMul[c] = color.cam_mul[c];
+    for (int r = 0; r < 3; ++r) {
+        for (int c = 0; c < 3; ++c) out.camToXyz[r * 3 + c] = color.cam_xyz[r][c];
+    }
+
+    // Copy the visible area, converting to the fp16 RGBA layout an
+    // RGBA16Float texture uploads directly. Alpha is a constant 1.0.
+    constexpr std::uint16_t kHalfOne = 0x3c00;
+    out.rgba.resize(out.pixelCount() * 4);
+
+    // Integer linear data is normalized against the file's own white level so
+    // both kinds mean the same thing downstream: 1.0 at the ceiling.
+    const float invMax =
+        1.0f / static_cast<float>(color.maximum > 0 ? color.maximum : 65535);
+
+    for (std::uint32_t y = 0; y < out.height; ++y) {
+        const std::size_t srcRow =
+            (static_cast<std::size_t>(y) + sizes.top_margin) * sizes.raw_width
+            + sizes.left_margin;
+        std::uint16_t* dst = out.rgba.data() + static_cast<std::size_t>(y) * out.width * 4;
+        if (rd.float3_image != nullptr) {
+            for (std::uint32_t x = 0; x < out.width; ++x) {
+                const float* px = rd.float3_image[srcRow + x];
+                dst[x * 4 + 0] = util::floatToHalf(px[0]);
+                dst[x * 4 + 1] = util::floatToHalf(px[1]);
+                dst[x * 4 + 2] = util::floatToHalf(px[2]);
+                dst[x * 4 + 3] = kHalfOne;
+            }
+        } else {
+            for (std::uint32_t x = 0; x < out.width; ++x) {
+                const std::uint16_t* px = rd.color3_image[srcRow + x];
+                dst[x * 4 + 0] = util::floatToHalf(static_cast<float>(px[0]) * invMax);
+                dst[x * 4 + 1] = util::floatToHalf(static_cast<float>(px[1]) * invMax);
+                dst[x * 4 + 2] = util::floatToHalf(static_cast<float>(px[2]) * invMax);
+                dst[x * 4 + 3] = kHalfOne;
+            }
+        }
+    }
+
+    proc.recycle();
+    return out;
+}
+
+}  // namespace
+
+BayerImage decodeBayer(const std::string& path) {
+    auto owned = std::make_unique<LibRaw>();
+    LibRaw& proc = *owned;
+    openUnpacked(proc, path);
+
+    if (proc.imgdata.rawdata.raw_image == nullptr) {
+        const bool demosaiced = proc.imgdata.rawdata.color3_image != nullptr ||
+                                proc.imgdata.rawdata.color4_image != nullptr ||
+                                proc.imgdata.rawdata.float3_image != nullptr;
+        proc.recycle();
+        if (demosaiced) {
+            throw std::runtime_error(
+                "this file is already demosaiced (a linear DNG or a Foveon "
+                "frame). Orion develops mosaic data — open the camera's "
+                "original raw file instead");
+        }
+        throw std::runtime_error("no mosaic data in this file");
+    }
+    return buildBayer(proc);
+}
+
+DecodedImage decode(const std::string& path) {
+    auto owned = std::make_unique<LibRaw>();
+    LibRaw& proc = *owned;
+    openUnpacked(proc, path);
+
+    const auto& rd = proc.imgdata.rawdata;
+    if (rd.raw_image != nullptr) return buildBayer(proc);
+    if (rd.float3_image != nullptr || rd.color3_image != nullptr) {
+        return buildLinear(proc);
+    }
+    proc.recycle();
+    throw std::runtime_error("no mosaic data in this file");
+}
+
 BayerImage decimate(const BayerImage& image, int scale) {
     if (scale < 2 || (scale % 2) != 0) return image;
 
@@ -280,6 +380,46 @@ BayerImage decimate(const BayerImage& image, int scale) {
     // on the same cell boundary as the input and every sample keeps its phase,
     // so the pattern is the same pattern — recomputing it would be inventing a
     // second source of truth for something that did not change.
+    return out;
+}
+
+LinearImage decimate(const LinearImage& image, int scale) {
+    if (scale < 2 || (scale % 2) != 0) return image;
+
+    const std::uint32_t outW = image.width  / std::uint32_t(scale);
+    const std::uint32_t outH = image.height / std::uint32_t(scale);
+    if (outW == 0 || outH == 0) return image;
+
+    LinearImage out = image;
+    out.width  = outW;
+    out.height = outH;
+    out.rgba.assign(out.pixelCount() * 4, 0);
+
+    constexpr std::uint16_t kHalfOne = 0x3c00;
+    const float inv = 1.0f / static_cast<float>(scale * scale);
+
+    for (std::uint32_t oy = 0; oy < outH; ++oy) {
+        for (std::uint32_t ox = 0; ox < outW; ++ox) {
+            float sum[3] = {0.0f, 0.0f, 0.0f};
+            for (int dy = 0; dy < scale; ++dy) {
+                const std::size_t row =
+                    (std::size_t(oy) * scale + std::size_t(dy)) * image.width;
+                for (int dx = 0; dx < scale; ++dx) {
+                    const std::uint16_t* px =
+                        image.rgba.data() + (row + std::size_t(ox) * scale + std::size_t(dx)) * 4;
+                    sum[0] += util::halfToFloat(px[0]);
+                    sum[1] += util::halfToFloat(px[1]);
+                    sum[2] += util::halfToFloat(px[2]);
+                }
+            }
+            std::uint16_t* dst =
+                out.rgba.data() + (std::size_t(oy) * outW + ox) * 4;
+            dst[0] = util::floatToHalf(sum[0] * inv);
+            dst[1] = util::floatToHalf(sum[1] * inv);
+            dst[2] = util::floatToHalf(sum[2] * inv);
+            dst[3] = kHalfOne;
+        }
+    }
     return out;
 }
 

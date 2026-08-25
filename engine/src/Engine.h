@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "gpu/MetalDevice.h"
+#include "merge/HdrMerge.h"
 #include "pipe/DevelopPipeline.h"
 #include "pipe/LensDatabase.h"
 #include "raw/RawImage.h"
@@ -171,11 +172,25 @@ public:
     }
     [[nodiscard]] gpu::Device& device() noexcept { return *device_; }
 
+    // ── HDR merge ────────────────────────────────────────────────────────
+    //
+    // Independent of the open photograph: the merge runs its own minimal
+    // graph and never touches develop_/preview_. Blocking — the facade's
+    // caller runs it on a worker thread and polls progress from another,
+    // which is why the two small calls are noexcept reads of atomics.
+    float hdrMerge(const std::vector<std::string>& paths, int referenceIndex,
+                   const std::string& outputPath);
+    [[nodiscard]] float hdrMergeProgress() const noexcept;
+    void hdrMergeCancel() noexcept;
+
     void setError(std::string message) { lastError_ = std::move(message); }
     [[nodiscard]] const char* lastError() const noexcept { return lastError_.c_str(); }
 
 private:
     std::unique_ptr<gpu::Device>           device_;
+    // Constructed eagerly so progress/cancel from another thread never race
+    // a lazy creation inside run().
+    std::unique_ptr<merge::HdrMerge>       hdrMerge_;
     std::unique_ptr<pipe::DevelopPipeline> develop_;
     std::unique_ptr<pipe::DevelopPipeline> preview_;
     std::string                            camera_;

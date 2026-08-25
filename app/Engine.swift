@@ -47,12 +47,14 @@ final class Engine {
         case create(String)
         case open(String)
         case export(String)
+        case merge(String)
 
         var errorDescription: String? {
             switch self {
             case .create(let m): return "Could not start the engine: \(m)"
             case .open(let m):   return "Could not open that photo: \(m)"
             case .export(let m): return "Could not export: \(m)"
+            case .merge(let m):  return "Could not merge: \(m)"
             }
         }
     }

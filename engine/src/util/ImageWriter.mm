@@ -475,6 +475,31 @@ std::size_t encodedSize(const std::uint16_t* rgba,
     }
 }
 
+std::vector<std::uint8_t> encodeJpeg(const std::uint16_t* rgba,
+                                     std::uint32_t width, std::uint32_t height,
+                                     std::size_t bytesPerRow, float quality) {
+    @autoreleasepool {
+        CFHolder<CGImageRef> image(makeImage(rgba, width, height, bytesPerRow));
+        if (!image) return {};
+
+        NSMutableData* data = [NSMutableData data];
+        CFHolder<CGImageDestinationRef> dest(CGImageDestinationCreateWithData(
+            (__bridge CFMutableDataRef)data, uti(ImageFormat::Jpeg), 1, nullptr));
+        if (!dest) return {};
+
+        NSDictionary* props = @{
+            (__bridge NSString*)kCGImageDestinationLossyCompressionQuality :
+                @(std::clamp(quality, 0.0f, 1.0f))
+        };
+        CGImageDestinationAddImage(dest.ref, image.ref, (__bridge CFDictionaryRef)props);
+        if (!CGImageDestinationFinalize(dest.ref)) return {};
+
+        std::vector<std::uint8_t> out(data.length);
+        memcpy(out.data(), data.bytes, data.length);
+        return out;
+    }
+}
+
 void writePng(const std::string& path, const std::uint16_t* rgba,
               std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow) {
     writeImage(path, rgba, width, height, bytesPerRow,

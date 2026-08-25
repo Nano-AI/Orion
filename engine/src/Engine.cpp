@@ -5,11 +5,16 @@
 
 #include <stdexcept>
 #include <algorithm>
+#include <variant>
 #include <vector>
 
 namespace orion {
 
-Engine::Engine() : device_(gpu::Device::create()) {}
+Engine::Engine() : device_(gpu::Device::create()) {
+    // Eager, so hdrMergeProgress/hdrMergeCancel from another thread never
+    // race a lazy construction inside run().
+    hdrMerge_ = std::make_unique<merge::HdrMerge>(*device_, res::shaderDir());
+}
 
 Engine::~Engine() = default;
 
@@ -22,7 +27,9 @@ const pipe::LensDatabase& Engine::lensDatabase() {
 }
 
 void Engine::openRaw(const std::string& path) {
-    const auto image = raw::decodeBayer(path);
+    // Either a mosaic or a demosaiced linear DNG — a merged HDR frame comes
+    // back through this same door, which is the point of writing one.
+    const auto decoded = raw::decode(path);
     sourcePath_ = path;
 
     // The lens name lives in the metadata rather than the mosaic, so it takes a
@@ -38,47 +45,66 @@ void Engine::openRaw(const std::string& path) {
     lensChoice_.clear();
     lensProfile_ = lensDatabase().lookup(info.lens, info.focalLength, info.aperture);
 
-    // Reuse the compiled graph whenever the new frame has the same shape.
-    // Rebuilding recompiles sixteen shaders and reallocates roughly 2.5 GiB of
-    // textures — for a folder of frames from one camera, all of that is
-    // identical work repeated per photo.
-    // The preview mosaic. Decimated once here rather than per render: it is
-    // the same pixels every time, and at 24 MP the decimation is not free.
-    const auto small = raw::decimate(image, kPreviewScale);
+    // One body for both kinds of source: every operation below — decimate,
+    // canReload, reload, the pipeline constructor — is overloaded for the
+    // mosaic and the linear image, and a mosaic graph never reloads a linear
+    // frame or vice versa (the two build different node sets).
+    std::visit([&](const auto& image) {
+        // Reuse the compiled graph whenever the new frame has the same shape.
+        // Rebuilding recompiles sixteen shaders and reallocates roughly 2.5 GiB
+        // of textures — for a folder of frames from one camera, all of that is
+        // identical work repeated per photo.
+        // The preview image. Decimated once here rather than per render: it is
+        // the same pixels every time, and at 24 MP the decimation is not free.
+        const auto small = raw::decimate(image, kPreviewScale);
 
-    if (develop_ && develop_->canReload(image)) {
-        develop_->reload(image);
-        if (preview_ && preview_->canReload(small)) preview_->reload(small);
-        camera_ = image.camera;
-        return;
-    }
+        if (develop_ && develop_->canReload(image)) {
+            develop_->reload(image);
+            if (preview_ && preview_->canReload(small)) preview_->reload(small);
+            camera_ = image.camera;
+            return;
+        }
 
-    // Replace only once decode and construction have both succeeded, so a
-    // failed open leaves the previously open image intact.
-    auto next = std::make_unique<pipe::DevelopPipeline>(*device_, res::shaderDir(), image);
+        // Replace only once decode and construction have both succeeded, so a
+        // failed open leaves the previously open image intact.
+        auto next = std::make_unique<pipe::DevelopPipeline>(*device_, res::shaderDir(), image);
 
-    // ⚠ Built after the full graph and allowed to fail. A machine that cannot
-    // find room for the preview's intermediates should still be able to edit
-    // the photograph — degrade-then-refine is a comfort, and losing it is not
-    // a reason to refuse the file. `renderPreview` reports zero when there is
-    // none and the caller falls back to the full graph.
-    std::unique_ptr<pipe::DevelopPipeline> smallNext;
-    try {
-        smallNext = std::make_unique<pipe::DevelopPipeline>(
-            *device_, res::shaderDir(), small);
-        // ⚠ One grain field at two resolutions, not two realisations of it.
-        // The plate is addressed in frame coordinates, so the preview has to
-        // say how many frame pixels each of its pixels covers or it will show
-        // the per-pixel variance where the settled render averages sixteen —
-        // and read an order of magnitude grainier than the picture it previews.
-        smallNext->setGridStep(static_cast<float>(kPreviewScale));
-    } catch (const std::exception&) {
-        smallNext.reset();
-    }
+        // ⚠ Built after the full graph and allowed to fail. A machine that cannot
+        // find room for the preview's intermediates should still be able to edit
+        // the photograph — degrade-then-refine is a comfort, and losing it is not
+        // a reason to refuse the file. `renderPreview` reports zero when there is
+        // none and the caller falls back to the full graph.
+        std::unique_ptr<pipe::DevelopPipeline> smallNext;
+        try {
+            smallNext = std::make_unique<pipe::DevelopPipeline>(
+                *device_, res::shaderDir(), small);
+            // ⚠ One grain field at two resolutions, not two realisations of it.
+            // The plate is addressed in frame coordinates, so the preview has to
+            // say how many frame pixels each of its pixels covers or it will show
+            // the per-pixel variance where the settled render averages sixteen —
+            // and read an order of magnitude grainier than the picture it previews.
+            smallNext->setGridStep(static_cast<float>(kPreviewScale));
+        } catch (const std::exception&) {
+            smallNext.reset();
+        }
 
-    develop_ = std::move(next);
-    preview_ = std::move(smallNext);
-    camera_  = image.camera;
+        develop_ = std::move(next);
+        preview_ = std::move(smallNext);
+        camera_  = image.camera;
+    }, decoded);
+}
+
+float Engine::hdrMerge(const std::vector<std::string>& paths, int referenceIndex,
+                       const std::string& outputPath) {
+    return hdrMerge_->run(paths, referenceIndex, outputPath);
+}
+
+float Engine::hdrMergeProgress() const noexcept {
+    return hdrMerge_->progress();
+}
+
+void Engine::hdrMergeCancel() noexcept {
+    hdrMerge_->cancel();
 }
 
 std::vector<std::string> Engine::lensDatabaseNames() {

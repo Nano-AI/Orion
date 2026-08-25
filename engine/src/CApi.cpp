@@ -602,6 +602,38 @@ orion::util::Sharpen toSharpen(int32_t s) {
 }
 }  // namespace
 
+OrionStatus orion_engine_hdr_merge(OrionEngine* engine,
+                                   const char* const* paths, int32_t count,
+                                   int32_t reference_index,
+                                   const char* output_path) {
+    if (engine == nullptr || paths == nullptr || count < 2 ||
+        output_path == nullptr) {
+        return ORION_ERR_BAD_ARG;
+    }
+    return guard(engine, [&]() -> OrionStatus {
+        std::vector<std::string> files;
+        files.reserve(std::size_t(count));
+        for (int32_t i = 0; i < count; ++i) {
+            if (paths[i] == nullptr) return ORION_ERR_BAD_ARG;
+            files.emplace_back(paths[i]);
+        }
+        engine->impl.hdrMerge(files, reference_index, output_path);
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_hdr_merge_progress(OrionEngine* engine, float* out) {
+    if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+    *out = engine->impl.hdrMergeProgress();
+    return ORION_OK;
+}
+
+OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    engine->impl.hdrMergeCancel();
+    return ORION_OK;
+}
+
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
                                 const OrionExportOptions* options) {
     if (engine == nullptr || path == nullptr) return ORION_ERR_BAD_ARG;

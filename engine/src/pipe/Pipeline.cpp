@@ -64,8 +64,9 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
         throw std::runtime_error("pipeline graph contains a cycle");
     }
 
-    // Source mosaic: one 16-bit sample per pixel.
-    source_ = gpu::Texture::create(device_, width_, height_, gpu::PixelFormat::R16Uint);
+    // The source: a 16-bit mosaic sample per pixel unless the graph said
+    // otherwise — a linear DNG's graph reads demosaiced RGBA half data.
+    source_ = gpu::Texture::create(device_, width_, height_, sourceFormat_);
 
     aux_.clear();
     aux_.reserve(auxSpecs_.size());

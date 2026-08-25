@@ -39,6 +39,15 @@ the method and the numbers are in `research/camera-profiles.md`. See
 Raw decoding uses LibRaw, dual-licensed LGPL-2.1 and CDDL-1.0. Orion links it
 dynamically. See `planning/DECISIONS.md` #43.
 
+## OpenCV
+
+Bracket alignment for the HDR merge uses OpenCV (5.x), licensed under the
+**Apache License 2.0**. Orion links it dynamically and confines it to one
+translation unit (`engine/src/merge/Align.cpp`): ORB feature detection,
+Hamming matching, RANSAC homography estimation and ECC refinement.
+
+Copyright the OpenCV team and contributors — <https://opencv.org>.
+
 ## Lens correction database
 
 `data/lensfun/` is the **lensfun** camera and lens database, redistributed under
@@ -70,6 +79,12 @@ source. Each entry in `research/` names its paper.
 - ASC CDL colour grading
 - poly3 lens distortion and its autoscale, as lensfun documents the model
 - Highlight reconstruction — Masood, Zhu & Tang
+- HDR radiance merge weighting — Debevec & Malik; Hasinoff, Durand & Freeman;
+  Guillermo Luijk's Zero Noise
+- Bracket alignment method — Rublee et al. (ORB); Fischler & Bolles (RANSAC);
+  Evangelidis & Psarakis (ECC); via OpenCV, above
+- DNG 1.4 floating-point LinearRaw reading and writing — Adobe's published
+  specification (see the DNG notice above)
 
 ## Fonts on the landing site
 

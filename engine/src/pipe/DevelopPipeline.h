@@ -69,14 +69,28 @@ public:
     DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
                     const raw::BayerImage& image);
 
+    /// The linear-source graph: a demosaiced DNG (a merged HDR frame) instead
+    /// of a mosaic. One node — white balance and the clip — stands where
+    /// linearize, the demosaic and the highlight machinery stand for a mosaic;
+    /// everything from the denoise input onward is the same graph. The absent
+    /// nodes are not built at all rather than disabled: disabled nodes still
+    /// own their textures, and this path exists partly to *not* pay for them.
+    DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
+                    const raw::LinearImage& image);
+
     /// True when this pipeline can be reused for `image` — same dimensions and
     /// same CFA layout. Rebuilding costs sixteen shader compiles and about
     /// 2.5 GiB of texture allocation, so reusing is the difference between
     /// switching photos in milliseconds and in seconds.
     [[nodiscard]] bool canReload(const raw::BayerImage& image) const noexcept;
 
+    /// The linear twin. A linear image never reloads a mosaic graph and vice
+    /// versa — the two build different node sets.
+    [[nodiscard]] bool canReload(const raw::LinearImage& image) const noexcept;
+
     /// Swaps in a new image without touching the compiled graph.
     void reload(const raw::BayerImage& image);
+    void reload(const raw::LinearImage& image);
 
     /// Pushes the current adjustments into the graph, dirtying only what they
     /// affect. Cheap — call it freely on every slider tick.
@@ -309,6 +323,9 @@ private:
 
     // The four regions' constructors, called in this order and no other.
     void buildCaptureNodes();
+    /// Spots, sharpening and the camera profile — the part of the capture
+    /// region both kinds of source share, downstream of nLens_.
+    void buildCaptureTail();
     void buildLocalNodes();
     void buildMaskNodes();
     void buildOutputNodes();
@@ -317,6 +334,12 @@ private:
     // than per tick. ⚠ Decision #92: a block re-pushed for a value nothing
     // reads still dirties everything downstream of it.
     void pushStaticCaptureParams(const raw::BayerImage&);
+    void pushStaticCaptureParams(const raw::LinearImage&);
+    /// The tail both overloads share: the camera matrix, the profile's
+    /// hue/sat table, and the as-shot anchors — everything derived from the
+    /// color metadata rather than from the mosaic.
+    void pushColorProfile(const std::array<float, 9>& camToXyzStored,
+                          const std::array<float, 4>& camMul);
     void pushStaticLocalParams();
     void pushStaticMaskParams();
     /// The grain plate. After `compile`, because it is an upload rather than a
@@ -341,8 +364,21 @@ private:
     void applyOutput(const Adjustments&, const ApplyContext&);
     void applyGeometry(const Adjustments&, const ApplyContext&);
 
+    /// Everything both public constructors share; `linearSource_` decides
+    /// what buildCaptureNodes makes of the graph's head.
+    DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
+                    std::uint32_t width, std::uint32_t height, bool linearSource);
+
+    /// The paint and matte state a reload must clear — a different photograph
+    /// through the same graph shares nothing with the strokes laid on it.
+    void clearPaintState();
+
     Pipeline      pipeline_;
     std::uint32_t width_ = 0, height_ = 0;
+    /// The source is demosaiced linear RGB rather than a mosaic. Set once at
+    /// construction; in this mode nLinearize_ names the linearSource node and
+    /// the rcd/highlight/denoise ids stay -1.
+    bool linearSource_ = false;
     int nLinearize_ = -1, nDirs_ = -1, nLpf_ = -1, nGreen_ = -1, nRgb_ = -1;
     int nSharpen_ = -1, nMatrix_ = -1, nLinear_ = -1, nDisplay_ = -1, nOrient_ = -1;
     int nGeometry_ = -1, nGrain_ = -1;
@@ -641,6 +677,7 @@ private:
     params::Linearize linBase_{};
     std::uint32_t filters_ = 0;
     void applyImageParams(const raw::BayerImage&);
+    void applyImageParams(const raw::LinearImage&);
 
     /// The brightest neutral this frame can describe, once white balance has
     /// been applied — the lowest of the three per-channel saturation levels.

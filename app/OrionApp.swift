@@ -50,6 +50,10 @@ struct OrionApp: App {
         if CommandLine.arguments.contains("--batch-export") {
             BatchExport.runCommandLine(CommandLine.arguments)
         }
+        // Same reasoning for the merge: the mode asserts its own output opens.
+        if CommandLine.arguments.contains("--hdr-merge") {
+            HdrMergeCLI.runCommandLine(CommandLine.arguments)
+        }
         // A folder open, cold then warm then indexless, through the product's
         // own Library — the only thing that can see whether the index is wired
         // in at all.
@@ -166,6 +170,20 @@ struct Editor: View {
     @State var batchProgress: (done: Int, total: Int)?
     @State var batchCancelled = false
 
+    /// The HDR merge sheet's state: the frames under consideration (nil when
+    /// the sheet is closed), the chosen reference, and 0...1 while the engine
+    /// runs. See HdrMergePanel.swift.
+    @State var mergeCandidates: [HdrMergeFlow.Candidate]?
+    @State var mergeReference = 0
+    @State var mergeProgress: Double?
+    /// Good news, as opposed to `message`: that one presents under a
+    /// "Something went wrong" title, and a completed merge announced there
+    /// reads as a failure — which is exactly how it was read, the first time
+    /// a real bracket went through. ⚠ The batch summary still rides
+    /// `message` because it can genuinely be mixed news ("Exported 3,
+    /// 2 failed"); splitting that is its own small story.
+    @State var notice: String?
+
     /// Set while a segmentation model is running, so the two buttons can say so
     /// and cannot be pressed twice. research/masking.md §5.
     @State var matteRunning = false
@@ -202,10 +220,17 @@ struct Editor: View {
             }
 
             if !library.photos.isEmpty {
-                Filmstrip(library: library, selected: current, onSelect: load)
+                Filmstrip(library: library, selected: current, onSelect: load,
+                          onMerge: askHdrMerge)
             }
         }
         .background(Palette.ground)
+        // Item-bound sheets want Identifiable; this state is a plain optional
+        // array, so presence is the binding.
+        .sheet(isPresented: .init(get: { mergeCandidates != nil },
+                                  set: { if !$0 && mergeProgress == nil { mergeCandidates = nil } })) {
+            hdrMergeSheet
+        }
         .focusable()
         .onKeyPress(.init("z"), phases: .down) { press in
             guard press.modifiers.contains(.command) else { return .ignored }
@@ -249,6 +274,13 @@ struct Editor: View {
             Button("OK") { message = nil }
         } message: {
             Text(message ?? "")
+        }
+        .alert("Done",
+               isPresented: Binding(get: { notice != nil },
+                                    set: { if !$0 { notice = nil } })) {
+            Button("OK") { notice = nil }
+        } message: {
+            Text(notice ?? "")
         }
         // ⚠ Confirmed, and the count is in the question. Sync writes a sidecar
         // for every photograph in view — dozens of files, on disk, without

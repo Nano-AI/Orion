@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace orion::raw {
@@ -76,6 +77,39 @@ struct BayerImage {
     }
 };
 
+/// A demosaiced linear-RGB "raw" — what a merged HDR DNG (or any linear DNG)
+/// decodes to. Same metadata contract as BayerImage where the fields overlap;
+/// no mosaic, no black levels (a linear DNG's floating-point data is defined
+/// black-subtracted and normalized to 1.0 at its ceiling, DNG 1.4 chapter 4).
+struct LinearImage {
+    std::uint32_t width  = 0;
+    std::uint32_t height = 0;
+
+    /// fp16 RGBA (A = 1.0), visible area, row-major — the exact layout an
+    /// RGBA16Float texture uploads, chosen here so a 42 MP frame is staged
+    /// once at 8 bytes a pixel instead of converted per open.
+    std::vector<std::uint16_t> rgba;
+
+    /// As-shot white balance multipliers, camera-native order. From the DNG's
+    /// AsShotNeutral, via LibRaw.
+    std::array<float, 4> camMul{};
+
+    /// Same name, same convention, same caveat as BayerImage: LibRaw's
+    /// cam_xyz, which is XYZ->camera, inverted downstream in the color node.
+    std::array<float, 9> camToXyz{};
+
+    /// The DNG's BaselineExposure tag, in EV. Zero when absent. Carried for
+    /// callers that seed a sidecar; the pipeline itself never reads it.
+    float baselineExposureEv = 0.0f;
+
+    int flip = 0;
+    std::string camera;
+
+    [[nodiscard]] std::size_t pixelCount() const noexcept {
+        return static_cast<std::size_t>(width) * height;
+    }
+};
+
 /// Basic facts about a raw file, read without decoding the sensor data.
 struct RawInfo {
     std::uint32_t width = 0, height = 0;
@@ -100,7 +134,16 @@ std::vector<std::uint8_t> extractThumbnail(const std::string& path);
 
 /// Decodes the CFA mosaic and metadata from a raw file.
 /// Throws std::runtime_error with LibRaw's message on failure.
+/// ⚠ Rejects linear (demosaiced) files with a specific message — a caller
+/// that can take either goes through decode() instead.
 BayerImage decodeBayer(const std::string& path);
+
+/// Either kind of raw, decided by what the file actually holds: a mosaic
+/// becomes a BayerImage exactly as decodeBayer would make it, a demosaiced
+/// linear DNG (floating-point or integer samples) becomes a LinearImage.
+/// One open and one unpack either way.
+using DecodedImage = std::variant<BayerImage, LinearImage>;
+[[nodiscard]] DecodedImage decode(const std::string& path);
 
 /// A smaller mosaic, for a preview that has to be rendered while a slider moves.
 ///
@@ -122,5 +165,10 @@ BayerImage decodeBayer(const std::string& path);
 /// `scale` must be even and at least 2; anything else returns the image
 /// unchanged rather than guessing.
 [[nodiscard]] BayerImage decimate(const BayerImage& image, int scale);
+
+/// The same job for a linear image, without the mosaic's one hazard: no CFA
+/// phase to preserve, so this is a plain per-channel box average over
+/// scale x scale blocks. Same contract on `scale` as the mosaic overload.
+[[nodiscard]] LinearImage decimate(const LinearImage& image, int scale);
 
 }  // namespace orion::raw

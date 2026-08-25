@@ -573,6 +573,26 @@ typedef struct OrionExportOptions {
     int32_t  sharpen;        /* OrionSharpen                                  */
 } OrionExportOptions;
 
+/* ── HDR merge ─────────────────────────────────────────────────────────────
+ *
+ * Merges two or more bracketed raw files into one floating-point linear DNG
+ * written to output_path (which must not already exist — the caller picks
+ * collision-free names). paths[reference_index] sets the framing. Blocking:
+ * call from a worker thread; poll progress and request cancellation from
+ * any other thread. Cancellation surfaces as ORION_ERR_INTERNAL with
+ * "merge cancelled" in orion_last_error, and never leaves a partial file. */
+OrionStatus orion_engine_hdr_merge(OrionEngine* engine,
+                                   const char* const* paths, int32_t count,
+                                   int32_t reference_index,
+                                   const char* output_path);
+
+/* 0..1, monotone within one merge. Safe from any thread. */
+OrionStatus orion_engine_hdr_merge_progress(OrionEngine* engine, float* out);
+
+/* Makes the running merge fail at its next stage boundary. Safe from any
+ * thread; a no-op when nothing is running. */
+OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine);
+
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
                                 const OrionExportOptions* options);
 

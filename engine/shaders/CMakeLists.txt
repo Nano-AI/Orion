@@ -23,6 +23,7 @@ endif()
 # is what the pipeline looks up at runtime.
 set(ORION_SHADERS
     linearize:linearize
+    linear_source:linearSource
     rcd_dirs:rcdDirs
     rcd_lpf:rcdLpf
     rcd_green:rcdGreen
