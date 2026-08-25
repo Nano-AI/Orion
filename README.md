@@ -95,6 +95,32 @@ cmake --build build
 open build/Orion.app
 ```
 
+### Opening a folder or photo from the shell
+
+`Orion --open <folder|file>` opens a folder as the library, or a photo with its
+parent folder as the library.
+A convenient wrapper (this is the whole feature - see decision #193):
+
+```sh
+# ~/.zshrc - `orion` opens the cwd; `orion pic.ARW` opens that photo.
+orion() {
+  local app="$HOME/Documents/Orion/build/Orion.app"
+  if [[ ! -d "$app" ]]; then
+    echo "orion: $app not built" >&2
+    return 1
+  fi
+  local -a paths
+  local p
+  for p in "${@:-$PWD}"; do paths+=("${p:A}"); done
+  open -n -a "$app" --args --open "${paths[@]}"
+}
+```
+
+Paths must be absolute - `open(1)` launches apps with cwd `/`, which is what
+the `:A` modifier is for.
+`-n` starts a new instance each time: `open -a` on a running app activates it
+but drops `--args`, so the path would never arrive.
+
 ## Tests
 
 ```sh
