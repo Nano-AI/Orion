@@ -558,6 +558,80 @@ candidate fixes in order.
 
 ---
 
+## Session `2026-08-24c` - four masking fixes, and a test target that had stopped linking
+
+**Asked for directly**, all four: Show mask drowned the mask being edited in
+every other mask's red; highlights/shadows/whites/blacks were not on the mask
+panel; a new mask arrived linked to the previous one; and unlinking a mask made
+the previous mask's edits vanish until its eye button was toggled twice.
+
+**The bug first, and it was a guard with a blind spot (#194).** `applyTone`'s
+`linearMoved` named every field the pushed struct depends on except the
+`startsLayer` flags - and the layer table is a function of exactly those flags.
+The split re-rendered the row's coverage while the table kept last frame's
+runs, so layer 0's grade landed through the new row's coverage only. The eye
+button "fixed" it because `visibilityMoved` forces the rebuild, and every older
+script missed it because each touched a slider right after splitting - any
+slider rebuilds the table. `runsMoved()` closes it, `maskmove` included.
+Watched fail before the fix: `testLayerBreakRefreshesTheLayerTable` (two-push,
+GPU) and `repro/mask-split-stale.txt`, whose load-bearing lines are measures
+with **no set between the split and the look**.
+
+**Show mask paints the selected layer (#195)** - a deliberate reversal of the
+shader's documented union. `maskOverlayLayer` rides `LinearAdjust` (252 → 256),
+and a selection change while the overlay is up is itself a render now.
+
+**The four tone bands went local (#196)**, engine then app. `applyTone`'s
+deltaEv is linear in each band, so coverage-scales-the-parameter is exact;
+the old refusal's sentence survives as the stated approximation (one guided
+estimate per frame, research/masking.md §2b). `LinearAdjust` 256 → 320. Traps
+closed on the way: `guideNeeded` is one predicate at three former inline
+sites; `AdjustmentGroup`'s `(.highlights, _)` bindings would have driven the
+**global** from the mask panel; `LocalAdjustState`'s synthesised decoder would
+have silently dropped layers 2+ from every older sidecar.
+
+**New masks stack (#197)**, with `masksplit`/`masklink` made SET-not-toggle
+first, so every script kept meaning what it said across the default change.
+
+Housekeeping that mattered:
+
+- ⚠ **`orion-tests` had not linked since the HDR merge landed** - four test
+  files and their `main.cpp` calls arrived without `apps/tests/CMakeLists.txt`
+  rows. Fixed first, as its own commit; the merge suites run again (1009).
+- **`samples/` on this machine is the developer's dog bracket** -
+  `overexposed-background.ARW` and `underexposedsubject.ARW`, copied from
+  `/Volumes/wintermute/pictures/dog/hdr-test`. The four new repro scripts
+  assert against relative measures on those files and all pass. ⚠ The 80+
+  older scripts, `check-modes.py` and `check-screens.py` still want
+  `_PIC8220.ARW`/`_PIC8148.ARW`, which this machine does not have - they
+  remain unrunnable here, as before this session.
+
+## Session `2026-08-24b` - opening a folder or photo from the shell
+
+**Asked for directly:** *"open the current folder in Orion or a particular file
+in Orion from the command line ... pretty minimal and the wiring ... could be
+done just from my .zshrc."*
+
+**Zero app code.** `--open` (#182) already takes folders and files and walks the
+product's own `openFile()` path, so the feature is an `orion()` function in
+`~/.zshrc`: absolutize every argument with `:A` (because `open(1)` launches apps
+with cwd `/`), then `open -n -a build/Orion.app --args --open <paths>`. No
+arguments means `$PWD`. Decision #193; the README's build section documents the
+flag and reproduces the function, since `~/.zshrc` is outside the repo.
+
+Two things the wrapper exists to know:
+
+- **`-n` is load-bearing.** Plain `open -a` on a running app activates it and
+  drops `--args` - there is no route into a running instance without an app
+  delegate and `CFBundleDocumentTypes`, declined as out of proportion. So each
+  invocation is a fresh instance; sidecars make concurrent edits safe, though
+  two instances may both write the SQLite index.
+- **Verified by process args, not by pixels:** `samples/` does not exist on this
+  machine, so `check-modes.py` cannot run here (pre-existing; it wants
+  `_PIC8220.ARW`, `_PIC8148.ARW`). Both wrapper cases were run for real - bare
+  `orion` and `orion ./fake.ARW` - and the spawned processes carried the
+  absolutized `--open` path each time, alongside an already-running instance.
+
 ## Session `2026-08-24` — HDR merge, camera raw bracket to one linear DNG
 
 **A genuinely new feature, planned as an eight-story epic and shipped in one
@@ -1012,107 +1086,3 @@ never the record.** And four things were found by *reading* rather than shipping
 — #156's pin list, #158's ownership problem, #161's cache conflict, #157's
 silently-ineffective pin — each of which would otherwise have surfaced as a red
 gate or a **believable wrong picture**.
-
-## Session `2026-08-03a` — the ⓘ drew perfectly and explained nothing
-
-**Reported against a public release.** #140's icon did nothing on hover. It was
-a bare `Image` carrying `.help(…)`; SwiftUI needs a hit-testable view for that,
-and every other `.help` in this app — all ten — happens to sit on a `Button`, so
-the pattern had never been tried anywhere else and looked obviously right.
-
-⚠ **The defect is not the missing modifier, it is how it was signed off.** The
-session that shipped it looked at a screenshot, saw the icon, and called it
-done — in a repository whose stated rule is that a picture is not a test. **A
-capture of a working ⓘ and a dead one are the same pixels.**
-
-### Two gates were attempted for it, and both were deleted rather than shipped
-
-⚠ **Walking AppKit for `NSView.toolTip`** reports **0 tooltips in a panel with
-seven icons** — and **0 on the fixed build too**, so it proves nothing. SwiftUI
-collapses that panel into **134 views containing 2 `NSButton`s**, and `.help`
-never reaches `NSView.toolTip` at all. Written, run, shown to be worthless,
-deleted. A false gate is worse than an admitted gap.
-
-⚠ **Drawing the bubble as a `.popover` so a forced-open capture could photograph
-it** fails differently: a popover is its own window and does not appear in a
-capture of the hosting view. No verification bought, one more failure mode
-added. Also reverted.
-
-### What the developer's own observation settled
-
-With hit testing fixed the glyph **highlights** on hover and **still shows no
-text**. That splits it cleanly: events reach the icon, and `.help` produces
-nothing here. So the text is now **drawn** in a popover rather than delegated —
-a popover and not an overlay, because the nameplate is inside a scroll view and
-an overlay wide enough to read is clipped exactly where the sentence ends.
-`.help` is kept beside it at a cost of one line; nothing depends on it.
-
-✅ **Confirmed working by hand, 2026-08-03**, on the third attempt — the drawn
-popover appears on hover where `.help` never did. **v0.4.0-alpha.5 carries it**;
-alpha.4 remains public with the broken icon and its notes describe the feature
-working, which is why a release followed the fix rather than waiting.
-
-⚠ **It stays unverifiable by the suite**, and is recorded as such rather than
-quietly closed. `Engraved.Info`'s header says in as many words that the
-verification for this control is a person putting a pointer on it — a control
-whose correctness is invisible to the suite should say so where it lives instead
-of implying coverage it does not have.
-
-**844 / 3708 / 41 of 41 / bench exit 0 on three frames / check-decisions exit 0.**
-The site's interface shot was also regenerated: it was captured 30 July under a
-caption reading *"the interface as it runs today"*.
-
-## Session `2026-08-02j` — the panel stopped explaining itself in prose
-
-**Asked for directly:** *"add an i info icon and move all the text into the info
-hover — I feel like it's kind of bad to stuff text there."*
-
-It is. Thirty-odd helper paragraphs sat under the sliders they explained, three
-lines of 10-point gray each. The panel paid for them on every draw; the
-photographer read each one once.
-
-**Fourteen sections** now carry the text on an `Engraved.Info` ⓘ at the far end
-of the nameplate — **after** the hairline, so every icon lands in one column at
-the panel's right edge. Before it, each would sit at the end of its own name and
-the column would ripple down the panel.
-
-⚠ **`.help` and not a popover**, and that is a narrowing rather than a shortcut:
-already the idiom in ten places here, no `@State` per row, cannot get stuck open,
-and **VoiceOver reads it for free**. The cost is a system hover delay and plain
-text — so nothing needed *while dragging* belongs there.
-
-### ⚠ The transform was mechanical, and two attempts were wrong
-
-Matching the enclosing `section("…") {` by counting braces forward picks the
-wrong section on nested content, and produced files that would not parse. The
-correct walk is backwards from the paragraph: depth 0 on `}`, and the first `{`
-at depth 0 is the enclosing brace.
-
-What saved it was that the script **refuses and exits rather than dropping a
-paragraph it cannot re-home** — the first run hit a block with no enclosing
-section and stopped with the tree untouched, instead of quietly deleting prose.
-
-Six blocks are deliberately left: interpolated status strings — `"Exporting
-\(p.done) of \(p.total)…"`, a lens-profile name, a refusal — not explanations.
-An ⓘ that explains nothing teaches the photographer the icon is not worth
-hovering.
-
-### ⚠ And a gate that nearly started failing for the wrong reason
-
-`detail-tail` asserts the Detail panel **overflows** its column, and exits
-nonzero when nothing does. It ran under a **1,500-point window override** chosen
-when the panel's content was 1,701 points.
-
-This change took the content to **1,147**, and the fold with it to **16 points**
-— one row of margin from going red and blaming whatever touched the panel next.
-The override is **deleted rather than retuned**: at the default window the fold
-is **466 points**, the two frames overlap by **215**, and nothing sits unseen
-between them. Better than the override ever bought.
-
-The number that matters there is the **overlap**, not the overflow, and the
-comment now says so for whoever moves panel content next.
-
-**844 / 3708 / 41 of 41 / bench exit 0 on three frames / check-decisions exit 0**,
-and all three check-scenes render.
-
-*Sessions `2026-08-02i` and earlier are in `HISTORY.md`.*
