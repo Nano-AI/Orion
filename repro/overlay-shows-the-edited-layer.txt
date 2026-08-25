@@ -1,0 +1,54 @@
+# Show mask paints the layer being edited, and selection moves the paint.
+#
+# Reported from the panel: with two masks placed, the toggle drowned the one
+# under the cursor in the other's red - the overlay was the union of every
+# layer. It now reads exactly one layer's coverage, the selected one, and a
+# selection change while the overlay is up is itself a render: the didSet on
+# `selectedMask` pushes, because the overlay's meaning just moved.
+#
+# ⚠ The `masklayer` steps below are the load-bearing ones. Nothing else is
+# touched between them and the measures, so a selection that failed to push
+# would leave the paint on the old layer and both == expectations would fail.
+#
+# Needs samples/overexposed-background.ARW.
+
+open samples/overexposed-background.ARW
+
+# Two stacked masks: a radial over the left, a radial over the right.
+mask radial
+set maskCentreX 0.25
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+
+maskadd radial
+masksplit 1
+set maskCentreX 0.75
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+
+measure 0.25,0.50,0.06,0.06 leftOff
+measure 0.75,0.50,0.06,0.06 rightOff
+
+# Row 1 is selected, so the edited layer is the right one: its region takes
+# the red and the left region stays bit-for-bit the picture.
+overlay on
+measure 0.25,0.50,0.06,0.06 leftEditingRight
+measure 0.75,0.50,0.06,0.06 rightEditingRight
+expect rightEditingRight != rightOff
+expect leftEditingRight == leftOff
+
+# Select the other layer and only look - the paint must follow the selection.
+masklayer 0
+measure 0.25,0.50,0.06,0.06 leftEditingLeft
+measure 0.75,0.50,0.06,0.06 rightEditingLeft
+expect leftEditingLeft != leftOff
+expect rightEditingLeft == rightOff
+
+# And off is off.
+overlay off
+measure 0.25,0.50,0.06,0.06 leftBack
+measure 0.75,0.50,0.06,0.06 rightBack
+expect leftBack == leftOff
+expect rightBack == rightOff

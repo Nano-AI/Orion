@@ -83,6 +83,9 @@ struct LinearAdjustParams
     /// to tell "the brush did nothing" from "the brush painted somewhere else".
     /// Never set while exporting — this is a viewing aid, not an edit.
     float maskOverlay;
+    /// Which layer the overlay paints — the one being edited. Ignored when
+    /// maskOverlay is zero.
+    int   maskOverlayLayer;
 };
 
 /// Bilinear lift of the guide coefficients from their subsampled grid.
@@ -248,16 +251,19 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     // where a photographer most wants to check coverage.
     if (p.maskOverlay != 0.0f && p.maskActive != 0.0f)
     {
-        // ⚠ The **union** of every layer, not one of them. Show mask answers
-        // "where is the mask", and with a stack that question is about all of
-        // it — an overlay showing only the last layer would report a stack of
-        // four as if three of them were not there.
-        float a = 0.0f;
-        for (int L = 0; L < p.layerCount; ++L)
-        {
-            a = max(a, saturate(coverage(p.layerMask[L], tid.xy,
-                                         mask0, mask1, mask2, mask3)));
-        }
+        // ⚠ The **selected layer**, not the union of all of them. This began
+        // as the union — "where is the mask" — and the photographer's answer
+        // was that with two masks placed, the toggle drowned the one being
+        // edited in the other's red. Show mask now answers "where is the mask
+        // I am editing"; the rest of the stack acts on the picture as always,
+        // which is its own report of where it is.
+        //
+        // ⚠ If the selected layer's only component is hidden, its disabled
+        // node resolves to the fold so far, and the overlay shows the previous
+        // run's coverage — the documented run-terminator behavior.
+        const int L = clamp(p.maskOverlayLayer, 0, p.layerCount - 1);
+        const float a = saturate(coverage(p.layerMask[L], tid.xy,
+                                          mask0, mask1, mask2, mask3));
         const float3 red = float3(0.35f, 0.012f, 0.02f);
         c = lerp(c, red + c * 0.25f, a * 0.6f);
     }

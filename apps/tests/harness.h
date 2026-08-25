@@ -142,6 +142,7 @@ void testMaskGpu();
 void testMaskBrushGpu();
 void testMaskCompositeGpu();
 void testLayerBreakRefreshesTheLayerTable();
+void testOverlayPaintsTheSelectedLayer();
 void testBrushDabsFollowTheFrame();
 void testMaskGeometry();
 void testMaskGeometryInverse();

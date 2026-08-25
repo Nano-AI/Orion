@@ -244,6 +244,7 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         first || visibilityMoved || runsMoved() ||
         adj.layers != lastAdj_.layers ||
         adj.maskOverlay != lastAdj_.maskOverlay ||
+        adj.maskOverlayLayer != lastAdj_.maskOverlayLayer ||
         adj.maskCount != lastAdj_.maskCount ||
         adj.hueShift != lastAdj_.hueShift ||
         adj.satShift != lastAdj_.satShift ||
@@ -298,6 +299,11 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         }
         la.maskActive  = (liveCount(adj) > 0) ? 1.0f : 0.0f;
         la.maskOverlay = adj.maskOverlay ? 1.0f : 0.0f;
+        // Second belt after CApi's clamp: the shader clamps to layerCount - 1
+        // as well, but an index the host knows is out of range should never
+        // travel at all.
+        la.maskOverlayLayer =
+            std::clamp(adj.maskOverlayLayer, 0, std::max(la.layerCount - 1, 0));
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
         std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);
         std::copy(adj.lumShift.begin(), adj.lumShift.end(), la.lumShift);

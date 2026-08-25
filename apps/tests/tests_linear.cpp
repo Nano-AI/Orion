@@ -388,3 +388,108 @@ void testLocalAdjustments() {
                std::to_string(luma(x)));
     }
 }
+
+/// Show mask paints the layer being edited — not the union it used to paint.
+///
+/// The union drowned the mask under the cursor in every other mask's red, so
+/// the overlay now reads exactly one layer's coverage, chosen by
+/// `maskOverlayLayer`. Two layers on two disjoint coverages: the tint must
+/// land on the chosen one and leave the other bit-exact, whichever is chosen.
+void testOverlayPaintsTheSelectedLayer() {
+    section("Mask overlay (GPU)");
+
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 64, kH = 16;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/developLinear.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "developLinear");
+
+    using orion::gpu::PixelFormat;
+    auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+    auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+    auto maskL = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto maskR = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+
+    constexpr double kR = 0.22, kG = 0.18, kB = 0.14;
+    {
+        std::vector<__fp16> in(std::size_t(kW) * kH * 4);
+        for (std::size_t i = 0; i < std::size_t(kW) * kH; ++i) {
+            in[i * 4 + 0] = __fp16(kR); in[i * 4 + 1] = __fp16(kG);
+            in[i * 4 + 2] = __fp16(kB); in[i * 4 + 3] = __fp16(1.0f);
+        }
+        src->upload(in.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+    }
+    // Disjoint coverages: slot 0 owns the left half, slot 1 the right.
+    {
+        std::vector<__fp16> left(std::size_t(kW) * kH), right(left.size());
+        for (std::uint32_t y = 0; y < kH; ++y)
+            for (std::uint32_t x = 0; x < kW; ++x) {
+                left[std::size_t(y) * kW + x]  = __fp16(x < kW / 2 ? 1.0f : 0.0f);
+                right[std::size_t(y) * kW + x] = __fp16(x < kW / 2 ? 0.0f : 1.0f);
+            }
+        maskL->upload(left.data(), std::size_t(kW) * sizeof(__fp16));
+        maskR->upload(right.data(), std::size_t(kW) * sizeof(__fp16));
+    }
+
+    params::LinearAdjust la{};
+    la.size[0] = kW; la.size[1] = kH;
+    la.guideSize[0] = kW; la.guideSize[1] = kH;
+    la.maskActive = 1.0f;
+    la.layerCount = 2;
+    la.layerMask[0] = 0;
+    la.layerMask[1] = 1;
+    la.maskOverlay = 1.0f;
+
+    std::vector<__fp16> out(std::size_t(kW) * kH * 4);
+    const auto run = [&]() {
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), src.get(), src.get(),
+                              maskL.get(), maskR.get(), maskL.get(), maskL.get(),
+                              dst.get()},
+                    &la, sizeof la, kW, kH);
+        cb.commitAndWait();
+        dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+    };
+    const auto px = [&](int x, int c) {
+        return double(out[(std::size_t(kH / 2) * kW + std::size_t(x)) * 4
+                          + std::size_t(c)]);
+    };
+    // The overlay is the only thing acting here, so "tinted" is a red/green
+    // ratio well above the input's, and "untouched" is bit-level equality.
+    const auto tinted = [&](int x) { return px(x, 0) / px(x, 1) > (kR / kG) * 1.5; };
+    const auto untouched = [&](int x) {
+        return std::abs(px(x, 0) - kR) < 2e-3 && std::abs(px(x, 1) - kG) < 2e-3
+            && std::abs(px(x, 2) - kB) < 2e-3;
+    };
+    const int xl = int(kW) / 4, xr = int(kW) * 3 / 4;
+
+    la.maskOverlayLayer = 0;
+    run();
+    report(tinted(xl) && untouched(xr),
+           "editing layer 0, the overlay paints its coverage and no other",
+           std::to_string(px(xl, 0) / px(xl, 1)) + " left, right "
+         + std::to_string(px(xr, 0)));
+
+    la.maskOverlayLayer = 1;
+    run();
+    report(tinted(xr) && untouched(xl),
+           "editing layer 1, the paint moves with the selection",
+           std::to_string(px(xr, 0) / px(xr, 1)) + " right, left "
+         + std::to_string(px(xl, 0)));
+
+    // An index past the stack is clamped to the last layer, not read off the
+    // end of the table.
+    la.maskOverlayLayer = 7;
+    run();
+    report(tinted(xr) && untouched(xl),
+           "an out-of-range selection clamps to the last layer",
+           std::to_string(px(xr, 0) / px(xr, 1)));
+}

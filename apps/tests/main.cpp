@@ -61,6 +61,7 @@ int main() {
     testMaskBrushGpu();
     testMaskCompositeGpu();
     testLayerBreakRefreshesTheLayerTable();
+    testOverlayPaintsTheSelectedLayer();
     testMaskGeometry();
     testMaskRefineGpu();
     testMaskMatteGpu();

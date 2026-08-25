@@ -93,8 +93,10 @@ struct LinearAdjust {
     float         maskActive;
     /// Draw the coverage on screen. A viewing aid; never set for an export.
     float         maskOverlay;
+    /// Which layer the overlay paints — the one being edited.
+    std::int32_t  maskOverlayLayer;
 };
-static_assert(sizeof(LinearAdjust) == 252);
+static_assert(sizeof(LinearAdjust) == 256);
 
 struct GuidePrep {
     std::uint32_t size[2];

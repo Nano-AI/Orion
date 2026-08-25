@@ -297,6 +297,10 @@ struct Adjustments {
     /// A viewing aid — `Engine` forces it off around an export.
     bool  maskOverlay = false;
 
+    /// Which layer the overlay paints — the one being edited. Ignored when
+    /// `maskOverlay` is false.
+    int   maskOverlayLayer = 0;
+
     /// What the mask does. Scales the *parameter*, so alpha 0.5 with +1 EV is
     /// exactly 2^0.5 — not a blend between two rendered frames.
     /// One layer's local adjustments. Pointwise only — research/masking.md §2b

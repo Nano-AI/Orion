@@ -251,6 +251,8 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         out.heal = in.heal != 0;
     }
     a.maskOverlay     = adj->mask_overlay != 0;
+    a.maskOverlayLayer = std::clamp(adj->mask_overlay_layer, 0,
+                                    ORION_MAX_MASK_COMPONENTS - 1);
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;
     a.lutStrength     = adj->lut_strength;

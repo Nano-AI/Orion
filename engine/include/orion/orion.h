@@ -289,6 +289,10 @@ typedef struct OrionAdjustments {
      * A viewing aid only — an export must never set it. */
     int   mask_overlay;
 
+    /* Which layer the overlay paints — the one being edited. Ignored when
+     * mask_overlay is 0. */
+    int   mask_overlay_layer;
+
     /* Single-image exposure fusion, 0..1 — shadow lift that keeps local
      * contrast. The value is a power applied to the emitted gain, so zero is
      * bit-exactly the identity. research/exposure-fusion.md. */

@@ -297,7 +297,11 @@ final class Engine {
         didSet {
             let clamped = maskComponents.isEmpty
                 ? 0 : min(max(0, selectedMask), maskComponents.count - 1)
-            if clamped != selectedMask { selectedMask = clamped }
+            if clamped != selectedMask { selectedMask = clamped; return }
+            // The overlay paints the layer being edited, so while it is up a
+            // selection *is* a render. The reassignment above re-enters this
+            // didSet and returns early, so the push happens exactly once.
+            if maskOverlay { pushAndRender() }
         }
     }
 
@@ -752,6 +756,7 @@ final class Engine {
             }
         }
         a.mask_overlay = maskOverlay ? 1 : 0
+        a.mask_overlay_layer = Int32(selectedLayer)
 
         a.fusion = fusion; a.dehaze = dehaze; a.clarity = clarity
         a.sharpen_amount = sharpenAmount; a.sharpen_radius = sharpenRadius
