@@ -225,8 +225,23 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         return n;
     };
 
+    // ⚠ The layer table below is a function of the `startsLayer` flags, so a
+    // break that moves must re-push it. This was the one field the guard did
+    // not name: splitting a row re-rendered its coverage (the fold restarts
+    // from zero) while the table kept naming last frame's runs, and layer 0's
+    // grade landed through the new row's coverage — in the app, unlinking a
+    // mask made the previous mask's edits vanish until the eye button forced a
+    // push. A reorder that moves a flag across indices is the same defect.
+    const auto runsMoved = [&] {
+        for (int i = 0; i < adj.maskCount; ++i)
+            if (adj.maskComponents[std::size_t(i)].startsLayer !=
+                lastAdj_.maskComponents[std::size_t(i)].startsLayer)
+                return true;
+        return false;
+    };
+
     const bool linearMoved =
-        first || visibilityMoved ||
+        first || visibilityMoved || runsMoved() ||
         adj.layers != lastAdj_.layers ||
         adj.maskOverlay != lastAdj_.maskOverlay ||
         adj.maskCount != lastAdj_.maskCount ||

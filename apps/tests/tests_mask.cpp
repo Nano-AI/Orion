@@ -879,3 +879,119 @@ void testMaskCompositeGpu() {
 /// they must sit where the same transform puts a gradient center placed at each
 /// of them. If the two ever disagree again, a mask's shapes have stopped
 /// agreeing about where the picture is.
+
+/// The layer table is rebuilt when a layer break moves — the unlink bug.
+///
+/// `applyTone` resolves layers from runs of `startsLayer` flags and pushes the
+/// table only when `linearMoved` says the linear params moved. That comparison
+/// named every field the pushed struct depends on except the flags themselves —
+/// so splitting a row re-rendered its coverage (the fold restarts from zero)
+/// while the linear pass kept last frame's table, and layer 0's grade was
+/// applied through the new row's coverage only. In the app: unlink a mask and
+/// the previous mask's edits vanish until its eye button forces a push.
+///
+/// ⚠ Two pushes on one pipeline, deliberately: a fresh `apply` takes the
+/// `first` branch and cannot see a stale guard. The reorder push at the end is
+/// the same defect arriving through `maskmove`, which swaps rows wholesale.
+void testLayerBreakRefreshesTheLayerTable() {
+    section("Layer break staleness (GPU)");
+
+    namespace pipe = orion::pipe;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    // A flat frame: every comparison below is a region against the unmasked
+    // base, and a gradient would put the answer in the geometry instead.
+    orion::raw::BayerImage img;
+    img.width = 96;
+    img.height = 96;
+    img.samples.assign(std::size_t(96) * 96, 1200);
+    img.filters = 0x94949494u;             // RGGB
+    img.white = 4095;
+    img.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
+    img.camToXyz = {0.4124f, 0.3576f, 0.1805f,
+                    0.2126f, 0.7152f, 0.0722f,
+                    0.0193f, 0.1192f, 0.9505f};
+
+    std::unique_ptr<pipe::DevelopPipeline> dev;
+    try {
+        dev = std::make_unique<pipe::DevelopPipeline>(
+            *device, std::string(ORION_SHADER_DIR), img);
+    } catch (const std::exception& e) {
+        report(false, "develop graph builds", e.what());
+        return;
+    }
+
+    const std::uint32_t w = dev->outputWidth(), h = dev->outputHeight();
+    std::vector<std::uint8_t> px(std::size_t(w) * h * 4);
+    // Mean of the green channel over a 5×5 patch at displayed (fx, fy).
+    const auto patch = [&](float fx, float fy) {
+        dev->output().download(px.data(), std::size_t(w) * 4, w, h);
+        const int cx = int(fx * float(w)), cy = int(fy * float(h));
+        double sum = 0.0;
+        for (int dy = -2; dy <= 2; ++dy)
+            for (int dx = -2; dx <= 2; ++dx)
+                sum += double(px[(std::size_t(cy + dy) * w + std::size_t(cx + dx))
+                               * 4 + 1]);
+        return sum / 25.0;
+    };
+
+    // Two radials that do not overlap: one over the left, one over the right,
+    // linked into a single run carrying layer 0's -2 EV.
+    pipe::Adjustments adj{};
+    adj.wb = pipe::WhiteBalance{};
+    adj.maskCount = 2;
+    adj.layers[0].exposureEv = -2.0f;
+    for (int i = 0; i < 2; ++i) {
+        auto& c = adj.maskComponents[std::size_t(i)];
+        c.kind = 2;
+        c.center[0] = (i == 0) ? 0.25f : 0.75f;
+        c.center[1] = 0.5f;
+        c.radius[0] = c.radius[1] = 0.16f;
+        c.feather = 0.3f;
+    }
+
+    dev->apply(adj);
+    dev->render();
+    const double base  = patch(0.5f, 0.06f);
+    const double left  = patch(0.25f, 0.5f);
+    const double right = patch(0.75f, 0.5f);
+    report(left < base * 0.8 && right < base * 0.8,
+           "linked, one run darkens both regions",
+           "base " + std::to_string(base) + " left " + std::to_string(left) +
+           " right " + std::to_string(right));
+
+    // The unlink. The split row's fold restarts from zero and the table must
+    // follow: layer 0 is now the left radial alone, and the right radial is a
+    // new layer with no adjustments.
+    adj.maskComponents[1].startsLayer = true;
+    dev->apply(adj);
+    dev->render();
+    const double leftSplit  = patch(0.25f, 0.5f);
+    const double rightSplit = patch(0.75f, 0.5f);
+    report(leftSplit < base * 0.8,
+           "after the split, the first mask keeps its grade",
+           "base " + std::to_string(base) + " left " + std::to_string(leftSplit));
+    report(rightSplit > base * 0.95,
+           "and the split-off mask starts from no adjustments",
+           "base " + std::to_string(base) + " right " + std::to_string(rightSplit));
+
+    // The reorder. `maskmove` swaps rows wholesale, so the flags travel with
+    // them: after the swap the second row no longer starts a layer, the two
+    // fold back into one run, and both regions carry layer 0's grade again.
+    std::swap(adj.maskComponents[0], adj.maskComponents[1]);
+    dev->apply(adj);
+    dev->render();
+    const double leftSwap  = patch(0.25f, 0.5f);
+    const double rightSwap = patch(0.75f, 0.5f);
+    report(leftSwap < base * 0.8 && rightSwap < base * 0.8,
+           "a reorder that moves the break re-folds the run",
+           "base " + std::to_string(base) + " left " + std::to_string(leftSwap) +
+           " right " + std::to_string(rightSwap));
+}
