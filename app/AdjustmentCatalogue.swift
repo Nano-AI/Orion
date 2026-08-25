@@ -119,18 +119,23 @@ enum AdjustmentCatalogue {
               global: .init(lower: 0.5, upper: 2, stage: .display),
               local: .init(lower: -1, upper: 1, stage: .tone)),
 
+        // ⚠ The four bands were refused locally for a long time — "reads the
+        // guided-filter chain, which runs once for the frame" — and that
+        // sentence is now the *approximation* rather than the refusal: a
+        // layer's highlights and shadows read the frame's one guided estimate,
+        // as it stood before any local adjustment. research/masking.md §2b.
         .init(id: .highlights, title: "Highlights",
-              global: .init(lower: -1, upper: 1, stage: .tone), local: nil,
-              localRefusal: "reads the guided-filter chain, which runs once for the frame"),
+              global: .init(lower: -1, upper: 1, stage: .tone),
+              local: .init(lower: -1, upper: 1, stage: .tone)),
         .init(id: .shadows, title: "Shadows",
-              global: .init(lower: -1, upper: 1, stage: .tone), local: nil,
-              localRefusal: "reads the guided-filter chain, which runs once for the frame"),
+              global: .init(lower: -1, upper: 1, stage: .tone),
+              local: .init(lower: -1, upper: 1, stage: .tone)),
         .init(id: .whites, title: "Whites",
-              global: .init(lower: -1, upper: 1, stage: .tone), local: nil,
-              localRefusal: "an endpoint, and an endpoint per region is not an endpoint"),
+              global: .init(lower: -1, upper: 1, stage: .tone),
+              local: .init(lower: -1, upper: 1, stage: .tone)),
         .init(id: .blacks, title: "Blacks",
-              global: .init(lower: -1, upper: 1, stage: .tone), local: nil,
-              localRefusal: "an endpoint, and an endpoint per region is not an endpoint"),
+              global: .init(lower: -1, upper: 1, stage: .tone),
+              local: .init(lower: -1, upper: 1, stage: .tone)),
 
         .init(id: .vibrance, title: "Vibrance",
               global: .init(lower: -1, upper: 1, stage: .tone), local: nil,

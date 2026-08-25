@@ -47,12 +47,13 @@ extension ViewportTests {
     /// those two disagree the interface shows a control that does nothing, or
     /// hides one that works — and both look like the feature being broken.
     ///
-    /// The shader's local set is exposure, contrast, saturation, warmth and
-    /// tint. Written out here rather than derived, because deriving it from the
-    /// same table it is checking would prove nothing.
+    /// The shader's local set is exposure, contrast, saturation, warmth, tint
+    /// and the four tone bands. Written out here rather than derived, because
+    /// deriving it from the same table it is checking would prove nothing.
     static func testCatalogueAgreesWithTheShaderAboutWhatIsLocal() {
         let expected: Set<String> = ["exposure", "contrast", "saturation",
-                                     "warmth", "localTint"]
+                                     "warmth", "localTint",
+                                     "highlights", "shadows", "whites", "blacks"]
         let offered = Set(AdjustmentCatalogue.localSet.map(\.id.rawValue))
         report(offered == expected,
                "the catalogue offers exactly the adjustments the shader applies locally",

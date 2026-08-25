@@ -289,6 +289,45 @@ struct LocalAdjustState: Equatable, Codable {
     /// A colour cast where the mask covers, not a white balance.
     var warmth: Float = 0
     var tint: Float = 0
+    /// The four tone bands, in the globals' units. Highlights and shadows read
+    /// the frame's one guided estimate — research/masking.md §2b records the
+    /// approximation that accepts.
+    var highlights: Float = 0
+    var shadows: Float = 0
+    var whites: Float = 0
+    var blacks: Float = 0
+}
+
+/// ⚠ Hand-written and forgiving, like `MaskComponentState`'s. The synthesised
+/// decoder requires every key, so the first field added to this struct made
+/// every older sidecar's `layers` array throw — and the `try?` around that
+/// decode swallows the throw and falls to the legacy-scalar branch, which
+/// keeps layer 1 and silently drops the rest.
+///
+/// In an extension rather than the declaration, so the memberwise initializer
+/// the test fixtures build layers with survives.
+extension LocalAdjustState {
+    private enum Key: String, CodingKey {
+        case exposureEv, contrast, saturation, warmth, tint
+        case highlights, shadows, whites, blacks
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init()
+        guard let c = try? decoder.container(keyedBy: Key.self) else { return }
+        func float(_ key: Key) -> Float? {
+            (try? c.decodeIfPresent(Float.self, forKey: key)).flatMap { $0 }
+        }
+        exposureEv = float(.exposureEv) ?? exposureEv
+        contrast = float(.contrast) ?? contrast
+        saturation = float(.saturation) ?? saturation
+        warmth = float(.warmth) ?? warmth
+        tint = float(.tint) ?? tint
+        highlights = float(.highlights) ?? highlights
+        shadows = float(.shadows) ?? shadows
+        whites = float(.whites) ?? whites
+        blacks = float(.blacks) ?? blacks
+    }
 }
 
 /// Every setting that belongs to a photograph, as one value.

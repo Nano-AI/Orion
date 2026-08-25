@@ -335,6 +335,10 @@ extension Scenario {
         case "localSaturation": e.localSaturation = value
         case "localWarmth": e.localWarmth = value
         case "localTint": e.localTint = value
+        case "localHighlights": e.localHighlights = value
+        case "localShadows": e.localShadows = value
+        case "localWhites": e.localWhites = value
+        case "localBlacks": e.localBlacks = value
         case "maskRefine": e.maskRefine = value
         case "brushRadius": e.brushRadius = value
         case "brushFlow":   e.brushFlow = value

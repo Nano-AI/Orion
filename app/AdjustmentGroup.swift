@@ -42,10 +42,14 @@ struct AdjustmentGroup: View {
         case (.exposure, .local):     $engine.localExposureEv
         case (.contrast, .global):    $engine.contrast
         case (.contrast, .local):     $engine.localContrast
-        case (.highlights, _):        $engine.highlights
-        case (.shadows, _):           $engine.shadows
-        case (.whites, _):            $engine.whites
-        case (.blacks, _):            $engine.blacks
+        case (.highlights, .global):  $engine.highlights
+        case (.highlights, .local):   $engine.localHighlights
+        case (.shadows, .global):     $engine.shadows
+        case (.shadows, .local):      $engine.localShadows
+        case (.whites, .global):      $engine.whites
+        case (.whites, .local):       $engine.localWhites
+        case (.blacks, .global):      $engine.blacks
+        case (.blacks, .local):       $engine.localBlacks
         case (.vibrance, _):          $engine.vibrance
         case (.saturation, .global):  $engine.saturation
         case (.saturation, .local):   $engine.localSaturation
@@ -79,10 +83,14 @@ struct AdjustmentGroup: View {
         case (.exposure, .local):     return l.exposureEv
         case (.contrast, .global):    return d.contrast
         case (.contrast, .local):     return l.contrast
-        case (.highlights, _):        return d.highlights
-        case (.shadows, _):           return d.shadows
-        case (.whites, _):            return d.whites
-        case (.blacks, _):            return d.blacks
+        case (.highlights, .global):  return d.highlights
+        case (.highlights, .local):   return l.highlights
+        case (.shadows, .global):     return d.shadows
+        case (.shadows, .local):      return l.shadows
+        case (.whites, .global):      return d.whites
+        case (.whites, .local):       return l.whites
+        case (.blacks, .global):      return d.blacks
+        case (.blacks, .local):       return l.blacks
         case (.vibrance, _):          return d.vibrance
         case (.saturation, .global):  return d.saturation
         case (.saturation, .local):   return l.saturation

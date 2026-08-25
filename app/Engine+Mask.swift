@@ -75,6 +75,24 @@ extension Engine {
         get { layer.tint }
         set { editLayer { $0.tint = newValue } }
     }
+    /// The four tone bands, in the globals' units. Highlights and shadows read
+    /// the frame's one guided estimate — research/masking.md §2b.
+    var localHighlights: Float {
+        get { layer.highlights }
+        set { editLayer { $0.highlights = newValue } }
+    }
+    var localShadows: Float {
+        get { layer.shadows }
+        set { editLayer { $0.shadows = newValue } }
+    }
+    var localWhites: Float {
+        get { layer.whites }
+        set { editLayer { $0.whites = newValue } }
+    }
+    var localBlacks: Float {
+        get { layer.blacks }
+        set { editLayer { $0.blacks = newValue } }
+    }
 
     /// The selected component, or nil when the group is empty.
     var selected: MaskComponentState? {
