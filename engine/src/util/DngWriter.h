@@ -51,6 +51,12 @@ struct DngLinearImage {
 
     /// UniqueCameraModel, and the TIFF Make/Model pair (split on first space).
     std::string camera;
+
+    /// LibRaw's flip convention, as BayerImage/LinearImage carry it: 0 none,
+    /// 3 = 180, 5 = 90 CCW, 6 = 90 CW. Written as the TIFF Orientation tag,
+    /// so a portrait bracket merges to a portrait DNG — the reader turns it
+    /// back into the same flip and the canvas orients as it does every raw.
+    int flip = 0;
 };
 
 /// Writes the DNG. Throws std::runtime_error on failure; on any throw the

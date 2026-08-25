@@ -139,6 +139,7 @@ void testDngRoundTrip() {
     img.asShotNeutral = kNeutral;
     img.baselineExposureEv = 2.0f;
     img.camera = "SONY ILCE-7RM3";
+    img.flip = 5;   // a portrait frame: 90 CCW, TIFF orientation 8
 
     try {
         orion::util::writeDngLinear(path, img);
@@ -160,6 +161,10 @@ void testDngRoundTrip() {
     CHECK(proc.is_floating_point() != 0);
     checkNear(proc.imgdata.sizes.raw_width, kW, 0, "declared width");
     checkNear(proc.imgdata.sizes.raw_height, kH, 0, "declared height");
+    // A portrait bracket must merge to a portrait DNG: flip 5 rides out as
+    // Orientation 8 and comes back as flip 5 — the bug this catches showed
+    // every merged photograph sideways.
+    checkNear(proc.imgdata.sizes.flip, 5, 0, "orientation survives the round trip");
 
     // The color tags came back — this is what makes WB editable on re-open.
     // dng_color[0] holds the tag verbatim; cam_xyz is dcraw-cooked and, for a

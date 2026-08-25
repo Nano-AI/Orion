@@ -142,7 +142,11 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     entries.push_back(asciiEntry(271, make));               // Make
     entries.push_back(asciiEntry(272, model));              // Model
     entries.push_back(longEntry(273, 0));                   // StripOffsets — patched at layout
-    entries.push_back(shortEntry(274, {1}));                // Orientation: as stored
+    // LibRaw flip -> TIFF Orientation (the exact inverse of the mapping
+    // LibRaw applies when reading): none->1, 180->3, 90 CCW->8, 90 CW->6.
+    const std::uint16_t orientation =
+        image.flip == 3 ? 3 : image.flip == 5 ? 8 : image.flip == 6 ? 6 : 1;
+    entries.push_back(shortEntry(274, {orientation}));      // Orientation
     entries.push_back(shortEntry(277, {3}));                // SamplesPerPixel
     entries.push_back(longEntry(278, image.height));        // RowsPerStrip: one strip
     entries.push_back(longEntry(279, stripBytes));          // StripByteCounts

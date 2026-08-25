@@ -37,6 +37,7 @@ struct Loaded {
     std::array<float, 4> camMul{};
     std::array<float, 9> camToXyz{};
     std::string camera;
+    int flip = 0;
 };
 
 }  // namespace
@@ -91,6 +92,7 @@ float HdrMerge::run(const std::vector<std::string>& paths, int referenceIndex,
             f.camMul = bayer->camMul;
             f.camToXyz = bayer->camToXyz;
             f.camera = bayer->camera;
+            f.flip = bayer->flip;
             f.rgb = render.demosaic(*bayer);
         } else {
             // A linear DNG merges too — it is the same scene-linear camera
@@ -102,6 +104,7 @@ float HdrMerge::run(const std::vector<std::string>& paths, int referenceIndex,
             f.camMul = linear.camMul;
             f.camToXyz = linear.camToXyz;
             f.camera = linear.camera;
+            f.flip = linear.flip;
             f.rgb.resize(linear.pixelCount() * 3);
             for (std::size_t p = 0; p < linear.pixelCount(); ++p) {
                 f.rgb[p * 3 + 0] = util::halfToFloat(linear.rgba[p * 4 + 0]);
@@ -181,6 +184,8 @@ float HdrMerge::run(const std::vector<std::string>& paths, int referenceIndex,
     }
     out.baselineExposureEv = result.headroomEv;
     out.camera = r.camera;
+    // The reference frames the picture, so its orientation is the picture's.
+    out.flip = r.flip;
 
     util::writeDngLinear(outputPath, out);
 
