@@ -75,6 +75,24 @@ extension Engine {
         get { layer.tint }
         set { editLayer { $0.tint = newValue } }
     }
+    /// The four tone bands, in the globals' units. Highlights and shadows read
+    /// the frame's one guided estimate — research/masking.md §2b.
+    var localHighlights: Float {
+        get { layer.highlights }
+        set { editLayer { $0.highlights = newValue } }
+    }
+    var localShadows: Float {
+        get { layer.shadows }
+        set { editLayer { $0.shadows = newValue } }
+    }
+    var localWhites: Float {
+        get { layer.whites }
+        set { editLayer { $0.whites = newValue } }
+    }
+    var localBlacks: Float {
+        get { layer.blacks }
+        set { editLayer { $0.blacks = newValue } }
+    }
 
     /// The selected component, or nil when the group is empty.
     var selected: MaskComponentState? {
@@ -220,13 +238,23 @@ extension Engine {
     ///
     /// A new row composes with `add` — the only op that does anything on a first
     /// row, and the one a photographer means by "and also this".
+    ///
+    /// ⚠ **A new mask starts its own layer.** The linked default made "add a
+    /// mask, grade it" grade the previous mask too, because the new row folded
+    /// into its run and shared its adjustments — a masks list that behaves
+    /// like one mask until the link icon is found. The link icon still folds a
+    /// row into the layer above when folding is what is wanted. Decision #197.
     @discardableResult
     func addMaskComponent(kind: Int32 = 1) -> Bool {
         guard maskComponents.count < Self.maxMaskComponents else { return false }
         var m = MaskComponentState()
         m.kind = kind
         m.compose = 0
+        m.startsLayer = !maskComponents.isEmpty
         maskComponents.append(m)
+        // The new layer needs somewhere to keep its adjustments — the same
+        // growth `setLayerBreak` does.
+        while layers.count < layerCount { layers.append(LocalAdjustState()) }
         selectedMask = maskComponents.count - 1
         pushAndRender()
         return true
@@ -362,19 +390,29 @@ extension Engine {
         }
     }
 
-    /// Starts or ends a layer at this row.
+    /// Sets a row's layer break outright.
     ///
     /// ⚠ Row 1 always begins one — a stack has to start somewhere, and a first
     /// row that could be "continue" would continue from nothing.
-    func toggleLayerBreak(at index: Int) {
-        guard maskComponents.indices.contains(index), index > 0 else { return }
-        let starting = maskComponents[index].startsLayer
-        edit(starting ? "Merge layer" : "Split layer") {
-            maskComponents[index].startsLayer.toggle()
+    ///
+    /// The scenario verbs come here rather than to the toggle: a toggle's
+    /// meaning depends on the default a new row was given, and a script that
+    /// says `masksplit` has to mean split whatever that default is.
+    func setLayerBreak(_ starts: Bool, at index: Int) {
+        guard maskComponents.indices.contains(index), index > 0,
+              maskComponents[index].startsLayer != starts else { return }
+        edit(starts ? "Split layer" : "Merge layer") {
+            maskComponents[index].startsLayer = starts
             // A new layer needs somewhere to keep its adjustments.
             while layers.count < layerCount { layers.append(LocalAdjustState()) }
             pushAndRender()
         }
+    }
+
+    /// Starts or ends a layer at this row — the panel's link button.
+    func toggleLayerBreak(at index: Int) {
+        guard maskComponents.indices.contains(index) else { return }
+        setLayerBreak(!maskComponents[index].startsLayer, at: index)
     }
 
     /// Moves a row up or down the fold.

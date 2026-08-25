@@ -225,10 +225,26 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         return n;
     };
 
+    // ⚠ The layer table below is a function of the `startsLayer` flags, so a
+    // break that moves must re-push it. This was the one field the guard did
+    // not name: splitting a row re-rendered its coverage (the fold restarts
+    // from zero) while the table kept naming last frame's runs, and layer 0's
+    // grade landed through the new row's coverage — in the app, unlinking a
+    // mask made the previous mask's edits vanish until the eye button forced a
+    // push. A reorder that moves a flag across indices is the same defect.
+    const auto runsMoved = [&] {
+        for (int i = 0; i < adj.maskCount; ++i)
+            if (adj.maskComponents[std::size_t(i)].startsLayer !=
+                lastAdj_.maskComponents[std::size_t(i)].startsLayer)
+                return true;
+        return false;
+    };
+
     const bool linearMoved =
-        first || visibilityMoved ||
+        first || visibilityMoved || runsMoved() ||
         adj.layers != lastAdj_.layers ||
         adj.maskOverlay != lastAdj_.maskOverlay ||
+        adj.maskOverlayLayer != lastAdj_.maskOverlayLayer ||
         adj.maskCount != lastAdj_.maskCount ||
         adj.hueShift != lastAdj_.hueShift ||
         adj.satShift != lastAdj_.satShift ||
@@ -249,8 +265,10 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
                                 // Tell the shader whether the guide textures
                                 // hold what it thinks they hold. `linearMoved`
                                 // already covers every way this can flip:
-                                // `needsGuide` turns on exactly when highlights
-                                // or shadows crosses zero, and both are in it.
+                                // `needsGuide` turns on exactly when a
+                                // highlights or shadows crosses zero — the
+                                // global pair is compared above, and the
+                                // layers' are inside `adj.layers`.
                                 needsGuide ? 1.0f : 0.0f,
                                 {size[0], size[1]},
                                 {guideW_, guideH_},
@@ -280,9 +298,18 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
             la.layerSaturation[L] = e.saturation;
             la.layerWarmth[L]     = e.warmth;
             la.layerTint[L]       = e.tint;
+            la.layerHighlights[L] = e.highlights;
+            la.layerShadows[L]    = e.shadows;
+            la.layerWhites[L]     = e.whites;
+            la.layerBlacks[L]     = e.blacks;
         }
         la.maskActive  = (liveCount(adj) > 0) ? 1.0f : 0.0f;
         la.maskOverlay = adj.maskOverlay ? 1.0f : 0.0f;
+        // Second belt after CApi's clamp: the shader clamps to layerCount - 1
+        // as well, but an index the host knows is out of range should never
+        // travel at all.
+        la.maskOverlayLayer =
+            std::clamp(adj.maskOverlayLayer, 0, std::max(la.layerCount - 1, 0));
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
         std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);
         std::copy(adj.lumShift.begin(), adj.lumShift.end(), la.lumShift);

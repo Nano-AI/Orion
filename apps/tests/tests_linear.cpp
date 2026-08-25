@@ -293,11 +293,13 @@ void testLocalAdjustments() {
     {
         la.layerContrast[0] = 0.7f; la.layerSaturation[0] = -0.8f;
         la.layerWarmth[0] = 0.6f; la.layerTint[0] = -0.4f;
+        la.layerHighlights[0] = 0.8f; la.layerShadows[0] = -0.7f;
+        la.layerWhites[0] = 0.5f; la.layerBlacks[0] = -0.6f;
         run();
         const bool same = std::abs(px(0, 0) - kR) < 2e-3
                        && std::abs(px(0, 1) - kG) < 2e-3
                        && std::abs(px(0, 2) - kB) < 2e-3;
-        report(same, "all four leave a pixel with no coverage exactly as it was",
+        report(same, "all eight leave a pixel with no coverage exactly as it was",
                std::to_string(px(0, 0)) + ", " + std::to_string(px(0, 1)) + ", "
              + std::to_string(px(0, 2)));
         la = params::LinearAdjust{};
@@ -386,5 +388,148 @@ void testLocalAdjustments() {
         report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
                "and holds the luminance too",
                std::to_string(luma(x)));
+        la.layerTint[0] = 0.0f;
     }
+
+    // ── The tone bands, per layer and closed-form ─────────────────────────
+    //
+    // `guideEnabled` is zero here, so the shader's guideEv falls back to the
+    // pixel's own log2 luminance and the whole deltaEv is computable below by
+    // the published construction (research/deep-research-2026-07-27.md §3) —
+    // a different order of operations from the kernel's, deliberately.
+    {
+        la.layerShadows[0]    = 1.0f;
+        la.layerHighlights[0] = 0.4f;
+        la.layerWhites[0]     = -0.3f;
+        la.layerBlacks[0]     = 0.2f;
+        run();
+        const double ev = std::log2(baseLuma / 0.18);
+        const auto w = [&](double center) {
+            const double d = (ev - center) / 1.6;
+            return std::exp(-0.5 * d * d);
+        };
+        const double wB = w(-5.5), wS = w(-2.5), wH = w(2.5), wW = w(5.5);
+        const double total = wB + wS + wH + wW + 1e-6;
+        const double delta = ((wB * 0.2) + (wS * 1.0) + (wH * 0.4)
+                              + (wW * -0.3)) * 2.0 / total;
+
+        const double want = baseLuma * std::exp2(delta);
+        report(std::abs(luma(int(kW) - 1) - want) / want < 0.02,
+               "the four bands sum into one exponent at full coverage",
+               std::to_string(luma(int(kW) - 1)) + " against "
+             + std::to_string(want));
+
+        // The alpha scales the parameter, and deltaEv is linear in each — so
+        // half coverage is exactly half the exponent, not a blend of frames.
+        const double half = baseLuma * std::exp2(delta * 0.5);
+        const int mid = int(kW) / 2;
+        report(std::abs(luma(mid) - half) / half < 0.03,
+               "and half coverage halves the exponent",
+               std::to_string(luma(mid)) + " against " + std::to_string(half));
+    }
+}
+
+/// Show mask paints the layer being edited — not the union it used to paint.
+///
+/// The union drowned the mask under the cursor in every other mask's red, so
+/// the overlay now reads exactly one layer's coverage, chosen by
+/// `maskOverlayLayer`. Two layers on two disjoint coverages: the tint must
+/// land on the chosen one and leave the other bit-exact, whichever is chosen.
+void testOverlayPaintsTheSelectedLayer() {
+    section("Mask overlay (GPU)");
+
+    namespace params = orion::pipe::params;
+    constexpr std::uint32_t kW = 64, kH = 16;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/developLinear.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "developLinear");
+
+    using orion::gpu::PixelFormat;
+    auto src   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+    auto dst   = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::RGBA16Float);
+    auto maskL = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+    auto maskR = orion::gpu::Texture::create(*device, kW, kH, PixelFormat::R16Float);
+
+    constexpr double kR = 0.22, kG = 0.18, kB = 0.14;
+    {
+        std::vector<__fp16> in(std::size_t(kW) * kH * 4);
+        for (std::size_t i = 0; i < std::size_t(kW) * kH; ++i) {
+            in[i * 4 + 0] = __fp16(kR); in[i * 4 + 1] = __fp16(kG);
+            in[i * 4 + 2] = __fp16(kB); in[i * 4 + 3] = __fp16(1.0f);
+        }
+        src->upload(in.data(), std::size_t(kW) * 4 * sizeof(__fp16));
+    }
+    // Disjoint coverages: slot 0 owns the left half, slot 1 the right.
+    {
+        std::vector<__fp16> left(std::size_t(kW) * kH), right(left.size());
+        for (std::uint32_t y = 0; y < kH; ++y)
+            for (std::uint32_t x = 0; x < kW; ++x) {
+                left[std::size_t(y) * kW + x]  = __fp16(x < kW / 2 ? 1.0f : 0.0f);
+                right[std::size_t(y) * kW + x] = __fp16(x < kW / 2 ? 0.0f : 1.0f);
+            }
+        maskL->upload(left.data(), std::size_t(kW) * sizeof(__fp16));
+        maskR->upload(right.data(), std::size_t(kW) * sizeof(__fp16));
+    }
+
+    params::LinearAdjust la{};
+    la.size[0] = kW; la.size[1] = kH;
+    la.guideSize[0] = kW; la.guideSize[1] = kH;
+    la.maskActive = 1.0f;
+    la.layerCount = 2;
+    la.layerMask[0] = 0;
+    la.layerMask[1] = 1;
+    la.maskOverlay = 1.0f;
+
+    std::vector<__fp16> out(std::size_t(kW) * kH * 4);
+    const auto run = [&]() {
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), src.get(), src.get(),
+                              maskL.get(), maskR.get(), maskL.get(), maskL.get(),
+                              dst.get()},
+                    &la, sizeof la, kW, kH);
+        cb.commitAndWait();
+        dst->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+    };
+    const auto px = [&](int x, int c) {
+        return double(out[(std::size_t(kH / 2) * kW + std::size_t(x)) * 4
+                          + std::size_t(c)]);
+    };
+    // The overlay is the only thing acting here, so "tinted" is a red/green
+    // ratio well above the input's, and "untouched" is bit-level equality.
+    const auto tinted = [&](int x) { return px(x, 0) / px(x, 1) > (kR / kG) * 1.5; };
+    const auto untouched = [&](int x) {
+        return std::abs(px(x, 0) - kR) < 2e-3 && std::abs(px(x, 1) - kG) < 2e-3
+            && std::abs(px(x, 2) - kB) < 2e-3;
+    };
+    const int xl = int(kW) / 4, xr = int(kW) * 3 / 4;
+
+    la.maskOverlayLayer = 0;
+    run();
+    report(tinted(xl) && untouched(xr),
+           "editing layer 0, the overlay paints its coverage and no other",
+           std::to_string(px(xl, 0) / px(xl, 1)) + " left, right "
+         + std::to_string(px(xr, 0)));
+
+    la.maskOverlayLayer = 1;
+    run();
+    report(tinted(xr) && untouched(xl),
+           "editing layer 1, the paint moves with the selection",
+           std::to_string(px(xr, 0) / px(xr, 1)) + " right, left "
+         + std::to_string(px(xl, 0)));
+
+    // An index past the stack is clamped to the last layer, not read off the
+    // end of the table.
+    la.maskOverlayLayer = 7;
+    run();
+    report(tinted(xr) && untouched(xl),
+           "an out-of-range selection clamps to the last layer",
+           std::to_string(px(xr, 0) / px(xr, 1)));
 }

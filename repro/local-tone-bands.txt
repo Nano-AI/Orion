@@ -1,0 +1,50 @@
+# The four tone bands, offered on a mask - decision #196.
+#
+# The engine maths is pinned closed-form in tests_linear.cpp; this is the
+# *wiring*: catalogue scope, AdjustmentGroup binding, the engine property, the
+# facade arrays and the shader's layer loop, driven the way the panel drives
+# them. A slider that reaches the wrong scope - the mask panel's Highlights
+# writing the global - moves the whole frame, and the `== awayBase` checks
+# below are what catches exactly that.
+#
+# Needs samples/overexposed-background.ARW.
+
+open samples/overexposed-background.ARW
+
+measure 0.50,0.10,0.06,0.06 topBase
+measure 0.25,0.25,0.06,0.06 darkBase
+measure 0.75,0.75,0.06,0.06 awayBase
+
+# A radial over the bright top edge: the highlight-weighted bands live there.
+mask radial
+set maskCentreX 0.50
+set maskCentreY 0.10
+set maskRadiusX 0.12
+set maskRadiusY 0.12
+
+set localHighlights -1.0
+measure 0.50,0.10,0.06,0.06 topHighlights
+measure 0.75,0.75,0.06,0.06 awayHighlights
+expect topHighlights != topBase
+expect awayHighlights == awayBase
+
+set localHighlights 0.0
+set localWhites -1.0
+measure 0.50,0.10,0.06,0.06 topWhites
+expect topWhites != topBase
+
+# Move the same mask over the dark corner: the shadow-weighted bands' ground.
+set localWhites 0.0
+set maskCentreX 0.25
+set maskCentreY 0.25
+
+set localShadows 1.0
+measure 0.25,0.25,0.06,0.06 darkShadows
+measure 0.75,0.75,0.06,0.06 awayShadows
+expect darkShadows != darkBase
+expect awayShadows == awayBase
+
+set localShadows 0.0
+set localBlacks 1.0
+measure 0.25,0.25,0.06,0.06 darkBlacks
+expect darkBlacks != darkBase

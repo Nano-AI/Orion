@@ -212,10 +212,19 @@ extension Scenario {
             engine.selectedMask = found
 
         case "masksplit":
+            // ⚠ Sets, never toggles. A toggle verb's meaning would flip with
+            // the default a new row gets, and a script has to keep meaning
+            // what it said when the default moves.
             guard let i = Int(args.first ?? "") else {
                 throw Bad(what: "masksplit needs a row index")
             }
-            engine.toggleLayerBreak(at: i)
+            engine.setLayerBreak(true, at: i)
+
+        case "masklink":
+            guard let i = Int(args.first ?? "") else {
+                throw Bad(what: "masklink needs a row index")
+            }
+            engine.setLayerBreak(false, at: i)
 
         case "maskhide":
             // The eye button, through the same Engine call it makes. ⚠ Not

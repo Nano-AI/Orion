@@ -75,7 +75,8 @@ import SwiftUI
 ///     maskadd <kind>                    add a *row* — `mask <kind>` changes
 ///                                       the selected row instead
 ///     masklayer <n>                     select layer n (by its first row)
-///     masksplit <n>                     start or end a layer at row n
+///     masksplit <n>                     row n starts its own layer
+///     masklink <n>                      row n folds into the layer above
 ///     maskhide <n>                      the eye button on a mask row
 ///     maskmove <n> <offset>             reorder a mask row in the fold
 ///     maskkind <n> <kind>               change what an existing row is

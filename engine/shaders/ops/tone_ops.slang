@@ -43,8 +43,9 @@ float3 applyExposure(float3 c, float ev)
 // Highlights and shadows read the guided-filter estimate of the neighborhood;
 // whites and blacks read the pixel. That split is confirmed correct by the
 // research: the first pair adjusts the base layer so detail survives, the
-// second sets the display endpoints and must stay global, or extreme contrast
-// boundaries — a dark window frame against bright sky — grow halos.
+// second sets the display endpoints and reads the pixel wherever it is
+// applied — as a global or scaled by a layer's coverage — or extreme contrast
+// boundaries, a dark window frame against bright sky, grow halos.
 
 static const float kEvBlacks     = -5.5f;
 static const float kEvShadows    = -2.5f;

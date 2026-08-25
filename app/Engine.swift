@@ -297,7 +297,11 @@ final class Engine {
         didSet {
             let clamped = maskComponents.isEmpty
                 ? 0 : min(max(0, selectedMask), maskComponents.count - 1)
-            if clamped != selectedMask { selectedMask = clamped }
+            if clamped != selectedMask { selectedMask = clamped; return }
+            // The overlay paints the layer being edited, so while it is up a
+            // selection *is* a render. The reassignment above re-enters this
+            // didSet and returns early, so the push happens exactly once.
+            if maskOverlay { pushAndRender() }
         }
     }
 
@@ -730,15 +734,22 @@ final class Engine {
         // sends four, and the engine reads only `layerCount` of them.
         var ev = [Float](repeating: 0, count: Self.maxMaskComponents)
         var ct = ev, sa = ev, wa = ev, ti = ev
+        var hi = ev, sh = ev, wh = ev, bl = ev
         for (i, l) in layers.prefix(Self.maxMaskComponents).enumerated() {
             ev[i] = l.exposureEv; ct[i] = l.contrast; sa[i] = l.saturation
             wa[i] = l.warmth; ti[i] = l.tint
+            hi[i] = l.highlights; sh[i] = l.shadows
+            wh[i] = l.whites; bl[i] = l.blacks
         }
         a.local_exposure_ev = (ev[0], ev[1], ev[2], ev[3])
         a.local_contrast = (ct[0], ct[1], ct[2], ct[3])
         a.local_saturation = (sa[0], sa[1], sa[2], sa[3])
         a.local_warmth = (wa[0], wa[1], wa[2], wa[3])
         a.local_tint = (ti[0], ti[1], ti[2], ti[3])
+        a.local_highlights = (hi[0], hi[1], hi[2], hi[3])
+        a.local_shadows = (sh[0], sh[1], sh[2], sh[3])
+        a.local_whites = (wh[0], wh[1], wh[2], wh[3])
+        a.local_blacks = (bl[0], bl[1], bl[2], bl[3])
         a.mask_refine = maskRefine
 
         a.spot_count = Int32(min(spots.count, Self.maxSpots))
@@ -752,6 +763,7 @@ final class Engine {
             }
         }
         a.mask_overlay = maskOverlay ? 1 : 0
+        a.mask_overlay_layer = Int32(selectedLayer)
 
         a.fusion = fusion; a.dehaze = dehaze; a.clarity = clarity
         a.sharpen_amount = sharpenAmount; a.sharpen_radius = sharpenRadius

@@ -1,0 +1,62 @@
+# Unlinking a mask must not take the previous mask's edits with it.
+#
+# Reported from the panel: create a mask, grade it, add a second mask, click
+# the link icon to give it its own layer - and the first mask's edits vanish
+# until its eye button is toggled twice. Nothing was hidden; the *layer table*
+# was stale. `applyTone` rebuilds it only when the linear params move, and the
+# guard named every field the table depends on except the `startsLayer` flags
+# themselves - so the split re-rendered the row's coverage (the fold restarts
+# from zero) while the table kept last frame's runs, and layer 0's grade landed
+# through the new row's coverage only.
+#
+# ⚠ The eye-button workaround is why every older script missed this: hiding
+# forces the rebuild, and so does touching any slider. The load-bearing lines
+# here are the measures right after `masksplit`, with **no set between them** -
+# the defect is only visible in a render whose sole change is the break.
+#
+# Needs samples/overexposed-background.ARW.
+
+open samples/overexposed-background.ARW
+
+measure 0.25,0.50,0.06,0.06 leftBase
+measure 0.75,0.50,0.06,0.06 rightBase
+
+# The first mask: a radial over the left, pulled down two and a half stops.
+mask radial
+set maskCentreX 0.25
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+set localExposure -2.5
+
+# The second mask, folded into the same run - `masklink` says so outright, so
+# this script keeps meaning the same thing whatever default a new row gets.
+maskadd radial
+masklink 1
+set maskCentreX 0.75
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+
+measure 0.25,0.50,0.06,0.06 leftLinked
+measure 0.75,0.50,0.06,0.06 rightLinked
+expect leftLinked < leftBase
+expect rightLinked < rightBase
+
+# The unlink - and then nothing but looking.
+masksplit 1
+measure 0.25,0.50,0.06,0.06 leftSplit
+measure 0.75,0.50,0.06,0.06 rightSplit
+
+# The first mask keeps its grade, and the split-off mask starts from no
+# adjustments at all.
+expect leftSplit < leftBase
+expect rightSplit == rightBase
+
+# And folding it back is just as bare: link, look, nothing else. The run is
+# whole again and the shared grade reaches both regions.
+masklink 1
+measure 0.25,0.50,0.06,0.06 leftMerged
+measure 0.75,0.50,0.06,0.06 rightMerged
+expect leftMerged == leftLinked
+expect rightMerged == rightLinked

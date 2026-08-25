@@ -272,6 +272,11 @@ typedef struct OrionAdjustments {
     float local_saturation[ORION_MAX_MASK_COMPONENTS];
     float local_warmth[ORION_MAX_MASK_COMPONENTS];
     float local_tint[ORION_MAX_MASK_COMPONENTS];
+    /* The four tone bands, per layer, in the globals' units. */
+    float local_highlights[ORION_MAX_MASK_COMPONENTS];
+    float local_shadows[ORION_MAX_MASK_COMPONENTS];
+    float local_whites[ORION_MAX_MASK_COMPONENTS];
+    float local_blacks[ORION_MAX_MASK_COMPONENTS];
 
     /* Dust and blemishes. research/spot-removal.md. Applied between the lens
      * correction and sharpening, in scene-linear light. */
@@ -288,6 +293,10 @@ typedef struct OrionAdjustments {
     /* Paint the mask's coverage over the picture so it can be placed by eye.
      * A viewing aid only — an export must never set it. */
     int   mask_overlay;
+
+    /* Which layer the overlay paints — the one being edited. Ignored when
+     * mask_overlay is 0. */
+    int   mask_overlay_layer;
 
     /* Single-image exposure fusion, 0..1 — shadow lift that keeps local
      * contrast. The value is a power applied to the emitted gain, so zero is

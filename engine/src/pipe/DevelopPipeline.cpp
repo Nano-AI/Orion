@@ -344,6 +344,13 @@ void DevelopPipeline::applyImageParams(const raw::LinearImage& image) {
 /// but in the other space" is how a mask ends up a few percent off its subject
 /// on a corrected photograph, and a second "did the frame move" is how a stroke
 /// stops following the hand.
+bool DevelopPipeline::guideNeeded(const Adjustments& adj) {
+    if (adj.highlights != 0.0f || adj.shadows != 0.0f) return true;
+    for (const auto& l : adj.layers)
+        if (l.highlights != 0.0f || l.shadows != 0.0f) return true;
+    return false;
+}
+
 DevelopPipeline::ApplyContext
 DevelopPipeline::contextFor(const Adjustments& adj) {
     ApplyContext ctx;
@@ -431,12 +438,13 @@ DevelopPipeline::contextFor(const Adjustments& adj) {
     }
     ctx.visibilityMoved = visibilityMoved;
 
-    // The guided filter is six nodes and only feeds the local highlight and
-    // shadow masks. With both at zero it is pure cost, and white balance —
-    // which rewrites the head of the graph and reruns everything — pays it on
-    // every tick. Skipping it takes a temperature drag from sixteen nodes to
-    // ten.
-    const bool needsGuide = adj.highlights != 0.0f || adj.shadows != 0.0f;
+    // The guided filter is six nodes and only feeds the highlight and shadow
+    // bands — the global pair and every layer's, which is why the predicate
+    // walks the layers too. With all of them at zero it is pure cost, and
+    // white balance — which rewrites the head of the graph and reruns
+    // everything — pays it on every tick. Skipping it takes a temperature
+    // drag from sixteen nodes to ten.
+    const bool needsGuide = guideNeeded(adj);
     ctx.needsGuide = needsGuide;
 
     const bool refining = adj.maskCount > 0 && adj.maskRefine > 0.0f;

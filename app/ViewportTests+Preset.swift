@@ -86,10 +86,16 @@ extension ViewportTests {
         s.maskRefine = 0.72
         // ⚠ Two layers, not one: a fixture with a single layer cannot see a
         // round trip that drops every layer after the first.
+        // ⚠ Every field of both layers off-default, tone bands included — the
+        // round-trip guard only sees the fields the fixture fills.
         s.layers = [LocalAdjustState(exposureEv: 1.5, contrast: 0.42,
-                                     saturation: -0.33, warmth: 0.27, tint: -0.19),
+                                     saturation: -0.33, warmth: 0.27, tint: -0.19,
+                                     highlights: 0.55, shadows: -0.25,
+                                     whites: 0.15, blacks: -0.35),
                     LocalAdjustState(exposureEv: -0.8, contrast: -0.2,
-                                     saturation: 0.66, warmth: -0.4, tint: 0.31)]
+                                     saturation: 0.66, warmth: -0.4, tint: 0.31,
+                                     highlights: -0.45, shadows: 0.6,
+                                     whites: -0.1, blacks: 0.2)]
         return s
     }
 

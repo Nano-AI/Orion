@@ -237,6 +237,10 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         e.saturation = std::clamp(adj->local_saturation[i], -1.0f, 1.0f);
         e.warmth     = std::clamp(adj->local_warmth[i], -1.0f, 1.0f);
         e.tint       = std::clamp(adj->local_tint[i], -1.0f, 1.0f);
+        e.highlights = std::clamp(adj->local_highlights[i], -1.0f, 1.0f);
+        e.shadows    = std::clamp(adj->local_shadows[i], -1.0f, 1.0f);
+        e.whites     = std::clamp(adj->local_whites[i], -1.0f, 1.0f);
+        e.blacks     = std::clamp(adj->local_blacks[i], -1.0f, 1.0f);
     }
     a.maskRefine = std::clamp(adj->mask_refine, 0.0f, 1.0f);
 
@@ -251,6 +255,8 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         out.heal = in.heal != 0;
     }
     a.maskOverlay     = adj->mask_overlay != 0;
+    a.maskOverlayLayer = std::clamp(adj->mask_overlay_layer, 0,
+                                    ORION_MAX_MASK_COMPONENTS - 1);
     a.fusion          = adj->fusion;
     a.dehaze          = adj->dehaze;
     a.lutStrength     = adj->lut_strength;

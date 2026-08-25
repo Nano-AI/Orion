@@ -297,6 +297,10 @@ struct Adjustments {
     /// A viewing aid — `Engine` forces it off around an export.
     bool  maskOverlay = false;
 
+    /// Which layer the overlay paints — the one being edited. Ignored when
+    /// `maskOverlay` is false.
+    int   maskOverlayLayer = 0;
+
     /// What the mask does. Scales the *parameter*, so alpha 0.5 with +1 EV is
     /// exactly 2^0.5 — not a blend between two rendered frames.
     /// One layer's local adjustments. Pointwise only — research/masking.md §2b
@@ -308,6 +312,13 @@ struct Adjustments {
         /// A color cast where the mask covers, **not** a white balance.
         float warmth = 0.0f;
         float tint = 0.0f;
+        /// The four tone bands, in the globals' units. Highlights and shadows
+        /// read the frame's one guided estimate — see the layer loop in
+        /// develop_linear.slang for the approximation this accepts.
+        float highlights = 0.0f;
+        float shadows = 0.0f;
+        float whites = 0.0f;
+        float blacks = 0.0f;
         bool operator==(const LocalEdit&) const = default;
     };
     /// ⚠ One per layer, so the subject can be graded one way and the sky

@@ -70,6 +70,12 @@ struct LinearAdjustParams
     /// A color **cast**, not a white balance. See the note at the call site.
     float layerWarmth[4];
     float layerTint[4];
+    /// The four tone bands, per layer. Same units as the globals above; the
+    /// coverage scales the parameter like every other local control.
+    float layerHighlights[4];
+    float layerShadows[4];
+    float layerWhites[4];
+    float layerBlacks[4];
     /// Which of the four coverage textures carries each layer. ⚠ The graph is
     /// static, so a layer's coverage cannot be a node chosen per render — the
     /// kernel binds all four and this says which one to read.
@@ -83,6 +89,9 @@ struct LinearAdjustParams
     /// to tell "the brush did nothing" from "the brush painted somewhere else".
     /// Never set while exporting — this is a viewing aid, not an edit.
     float maskOverlay;
+    /// Which layer the overlay paints — the one being edited. Ignored when
+    /// maskOverlay is zero.
+    int   maskOverlayLayer;
 };
 
 /// Bilinear lift of the guide coefficients from their subsampled grid.
@@ -190,6 +199,25 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
 
         if (p.layerExposureEv[L] != 0.0f) c *= exp2(a * p.layerExposureEv[L]);
 
+        // The tone bands. `applyTone`'s deltaEv is linear in each band, so
+        // scaling the parameters by the coverage is exactly scaling the
+        // exponent — the same construction the exposure above uses, never a
+        // blend of two rendered frames.
+        //
+        // ⚠ `guideEv` is the frame's one guided estimate, computed above and
+        // not per layer — highlights and shadows here read the neighborhood
+        // as it stood before any local adjustment. That approximation is the
+        // reason these four were once refused locally; it is now accepted and
+        // recorded, because a per-layer guide chain would run the six-node
+        // filter once per layer per frame.
+        if (p.layerHighlights[L] != 0.0f || p.layerShadows[L] != 0.0f ||
+            p.layerWhites[L] != 0.0f || p.layerBlacks[L] != 0.0f)
+        {
+            c = applyTone(c, guideEv,
+                          a * p.layerHighlights[L], a * p.layerShadows[L],
+                          a * p.layerWhites[L], a * p.layerBlacks[L]);
+        }
+
         // Contrast, as a gain on the pixel's distance from the pivot measured
         // in stops — so it is a multiply like the exposure above and keeps the
         // color's ratios, rather than bending each channel separately and
@@ -248,16 +276,19 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     // where a photographer most wants to check coverage.
     if (p.maskOverlay != 0.0f && p.maskActive != 0.0f)
     {
-        // ⚠ The **union** of every layer, not one of them. Show mask answers
-        // "where is the mask", and with a stack that question is about all of
-        // it — an overlay showing only the last layer would report a stack of
-        // four as if three of them were not there.
-        float a = 0.0f;
-        for (int L = 0; L < p.layerCount; ++L)
-        {
-            a = max(a, saturate(coverage(p.layerMask[L], tid.xy,
-                                         mask0, mask1, mask2, mask3)));
-        }
+        // ⚠ The **selected layer**, not the union of all of them. This began
+        // as the union — "where is the mask" — and the photographer's answer
+        // was that with two masks placed, the toggle drowned the one being
+        // edited in the other's red. Show mask now answers "where is the mask
+        // I am editing"; the rest of the stack acts on the picture as always,
+        // which is its own report of where it is.
+        //
+        // ⚠ If the selected layer's only component is hidden, its disabled
+        // node resolves to the fold so far, and the overlay shows the previous
+        // run's coverage — the documented run-terminator behavior.
+        const int L = clamp(p.maskOverlayLayer, 0, p.layerCount - 1);
+        const float a = saturate(coverage(p.layerMask[L], tid.xy,
+                                          mask0, mask1, mask2, mask3));
         const float3 red = float3(0.35f, 0.012f, 0.02f);
         c = lerp(c, red + c * 0.25f, a * 0.6f);
     }

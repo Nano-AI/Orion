@@ -321,6 +321,14 @@ private:
     /// Composes the above. The one place any of it is derived.
     [[nodiscard]] ApplyContext contextFor(const Adjustments&);
 
+    /// Whether these adjustments want the guided-filter chain: the global
+    /// highlights or shadows, or a layer's. ⚠ One predicate, used everywhere
+    /// "was guiding" is asked about — three sites once derived it inline from
+    /// `lastAdj_`, and a fourth reading (#113, #119) is how a chain ends up
+    /// enabled by one and read by another. Whites and blacks stay out: they
+    /// read the pixel, not the neighborhood.
+    [[nodiscard]] static bool guideNeeded(const Adjustments&);
+
     // The four regions' constructors, called in this order and no other.
     void buildCaptureNodes();
     /// Spots, sharpening and the camera profile — the part of the capture

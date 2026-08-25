@@ -30,9 +30,9 @@ set maskRadiusX 0.15
 set maskRadiusY 0.15
 set localExposure -2.5
 
-# Layer 2: a radial over the right, its own row and its own break.
+# Layer 2: a radial over the right. Its own row *is* its own break since
+# #197 - a new mask starts its own layer.
 maskadd radial
-masksplit 1
 set maskCentreX 0.78
 set maskCentreY 0.50
 set maskRadiusX 0.15
@@ -90,6 +90,9 @@ set maskRadiusX 0.15
 set maskRadiusY 0.15
 
 maskadd radial
+# Folded back into layer 1 - a new mask starts its own layer since #197, and
+# this block needs the row *inside* the fold for its subtract to mean anything.
+masklink 1
 set maskCentreX 0.78
 set maskCentreY 0.50
 set maskRadiusX 0.15
