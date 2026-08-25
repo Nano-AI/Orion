@@ -238,13 +238,23 @@ extension Engine {
     ///
     /// A new row composes with `add` — the only op that does anything on a first
     /// row, and the one a photographer means by "and also this".
+    ///
+    /// ⚠ **A new mask starts its own layer.** The linked default made "add a
+    /// mask, grade it" grade the previous mask too, because the new row folded
+    /// into its run and shared its adjustments — a masks list that behaves
+    /// like one mask until the link icon is found. The link icon still folds a
+    /// row into the layer above when folding is what is wanted. Decision #197.
     @discardableResult
     func addMaskComponent(kind: Int32 = 1) -> Bool {
         guard maskComponents.count < Self.maxMaskComponents else { return false }
         var m = MaskComponentState()
         m.kind = kind
         m.compose = 0
+        m.startsLayer = !maskComponents.isEmpty
         maskComponents.append(m)
+        // The new layer needs somewhere to keep its adjustments — the same
+        // growth `setLayerBreak` does.
+        while layers.count < layerCount { layers.append(LocalAdjustState()) }
         selectedMask = maskComponents.count - 1
         pushAndRender()
         return true

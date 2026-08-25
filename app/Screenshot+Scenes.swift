@@ -167,8 +167,8 @@ extension Screenshot {
             engine.maskRadiusX = 0.15; engine.maskRadiusY = 0.15
             engine.localExposureEv = -2.5
             engine.localSaturation = -1.0
+            // A new mask starts its own layer since #197, so no break to set.
             _ = engine.addMaskComponent(kind: 2)
-            engine.toggleLayerBreak(at: 1)
             engine.maskCenterX = 0.78; engine.maskCenterY = 0.5
             engine.maskRadiusX = 0.15; engine.maskRadiusY = 0.15
             engine.localExposureEv = 1.5

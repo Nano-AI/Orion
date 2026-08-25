@@ -60,6 +60,10 @@ expect backToRadial == shown
 # built a one-row group and the reorder check passed against a swap that could
 # not happen.
 maskadd radial
+# A new mask starts its own layer since #197, and a subtract only means
+# something inside a fold - so this row says outright that it belongs to the
+# one above.
+masklink 1
 set maskCentreX 0.40
 set maskCentreY 0.5
 set maskRadiusX 0.10

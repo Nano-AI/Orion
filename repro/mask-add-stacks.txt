@@ -1,0 +1,39 @@
+# A new mask starts its own layer - decision #197.
+#
+# Reported from the panel: "when creating a new mask, the default new mask is
+# linked to the previous mask - they should be stacked by default." Under the
+# linked default, "add a mask, grade it" graded the previous mask too: the new
+# row folded into its run and shared its adjustments, so the masks list
+# behaved like one mask until the link icon was found.
+#
+# The load-bearing checks: the add itself moves nothing, and each mask's grade
+# reaches only its own region. Fold-on-purpose still exists - `masklink` - and
+# repro/mask-rows.txt subtracts through it.
+#
+# Needs samples/overexposed-background.ARW.
+
+open samples/overexposed-background.ARW
+measure 0.25,0.50,0.06,0.06 leftBase
+measure 0.75,0.50,0.06,0.06 rightBase
+mask radial
+set maskCentreX 0.25
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+set localExposure -2.5
+measure 0.25,0.50,0.06,0.06 leftGraded
+expect leftGraded < leftBase
+maskadd radial
+set maskCentreX 0.75
+set maskCentreY 0.50
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+measure 0.25,0.50,0.06,0.06 leftAfterAdd
+measure 0.75,0.50,0.06,0.06 rightAfterAdd
+expect leftAfterAdd == leftGraded
+expect rightAfterAdd == rightBase
+set localExposure 1.5
+measure 0.75,0.50,0.06,0.06 rightOwnGrade
+measure 0.25,0.50,0.06,0.06 leftStill
+expect rightOwnGrade > rightBase
+expect leftStill == leftGraded
