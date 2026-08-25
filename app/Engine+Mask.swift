@@ -362,19 +362,29 @@ extension Engine {
         }
     }
 
-    /// Starts or ends a layer at this row.
+    /// Sets a row's layer break outright.
     ///
     /// ⚠ Row 1 always begins one — a stack has to start somewhere, and a first
     /// row that could be "continue" would continue from nothing.
-    func toggleLayerBreak(at index: Int) {
-        guard maskComponents.indices.contains(index), index > 0 else { return }
-        let starting = maskComponents[index].startsLayer
-        edit(starting ? "Merge layer" : "Split layer") {
-            maskComponents[index].startsLayer.toggle()
+    ///
+    /// The scenario verbs come here rather than to the toggle: a toggle's
+    /// meaning depends on the default a new row was given, and a script that
+    /// says `masksplit` has to mean split whatever that default is.
+    func setLayerBreak(_ starts: Bool, at index: Int) {
+        guard maskComponents.indices.contains(index), index > 0,
+              maskComponents[index].startsLayer != starts else { return }
+        edit(starts ? "Split layer" : "Merge layer") {
+            maskComponents[index].startsLayer = starts
             // A new layer needs somewhere to keep its adjustments.
             while layers.count < layerCount { layers.append(LocalAdjustState()) }
             pushAndRender()
         }
+    }
+
+    /// Starts or ends a layer at this row — the panel's link button.
+    func toggleLayerBreak(at index: Int) {
+        guard maskComponents.indices.contains(index) else { return }
+        setLayerBreak(!maskComponents[index].startsLayer, at: index)
     }
 
     /// Moves a row up or down the fold.
