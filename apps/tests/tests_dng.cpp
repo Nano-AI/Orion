@@ -348,6 +348,78 @@ void testLinearDngOpens() {
     std::remove(path.c_str());
 }
 
+void testDngEmbeddedPreview() {
+    section("an embedded preview rides IFD0 and the raw still decodes");
+
+    const std::string path = "/tmp/orion-dng-preview.dng";
+    const auto rgb = gradientFrame();
+
+    // A real JPEG, made by the same encoder the merge uses.
+    std::vector<std::uint16_t> tiny(std::size_t(16) * 12 * 4, 0);
+    for (std::size_t i = 0; i < tiny.size(); i += 4) {
+        tiny[i] = 30000; tiny[i + 1] = 40000; tiny[i + 2] = 50000;
+        tiny[i + 3] = 65535;
+    }
+    const auto jpeg = orion::util::encodeJpeg(tiny.data(), 16, 12,
+                                              16 * 4 * sizeof(std::uint16_t), 0.9f);
+    report(!jpeg.empty(), "the preview encoder produces a JPEG");
+    if (jpeg.empty()) return;
+
+    orion::util::DngLinearImage img;
+    img.width  = kW;
+    img.height = kH;
+    img.rgb    = rgb.data();
+    img.xyzToCam = kXyzToCam;
+    img.asShotNeutral = kNeutral;
+    img.camera = "SONY ILCE-7RM3";
+    img.flip = 5;                       // the two-IFD file must keep this
+    img.previewJpeg = jpeg.data();
+    img.previewJpegBytes = jpeg.size();
+    img.previewWidth = 16;
+    img.previewHeight = 12;
+
+    try {
+        orion::util::writeDngLinear(path, img);
+    } catch (const std::exception& e) {
+        report(false, "preview DNG write succeeds", e.what());
+        return;
+    }
+
+    LibRaw proc;
+    if (int rc = proc.open_file(path.c_str()); rc != LIBRAW_SUCCESS) {
+        report(false, "LibRaw opens the preview DNG", libraw_strerror(rc));
+        return;
+    }
+    // The raw image keeps its identity behind the preview...
+    CHECK(proc.imgdata.idata.filters == 0);
+    CHECK(proc.imgdata.idata.colors == 3);
+    checkNear(proc.imgdata.sizes.raw_width, kW, 0, "raw width behind the preview");
+    checkNear(proc.imgdata.sizes.flip, 5, 0,
+              "orientation still comes from the raw IFD");
+
+    // ...the thumbnail path finds the JPEG...
+    if (int rc = proc.unpack_thumb(); rc != LIBRAW_SUCCESS) {
+        report(false, "unpack_thumb finds the preview", libraw_strerror(rc));
+    } else {
+        CHECK(proc.imgdata.thumbnail.tformat == LIBRAW_THUMBNAIL_JPEG);
+        report(proc.imgdata.thumbnail.tlength == jpeg.size(),
+               "and it is byte-for-byte the embedded stream");
+    }
+
+    // ...and the pixels are untouched by the restructuring.
+    proc.imgdata.rawparams.options &=
+        ~std::uint32_t(LIBRAW_RAWOPTIONS_CONVERTFLOAT_TO_INT);
+    if (int rc = proc.unpack(); rc != LIBRAW_SUCCESS) {
+        report(false, "raw unpacks behind the preview", libraw_strerror(rc));
+    } else if (proc.imgdata.rawdata.float3_image == nullptr) {
+        report(false, "float plane behind the preview");
+    } else {
+        const float* got = proc.imgdata.rawdata.float3_image[2 * kW + 2];
+        checkNear(got[0], 1.0f, 0.0f, "clipped block still exact behind the preview");
+    }
+    std::remove(path.c_str());
+}
+
 void testLinearDngBaselineExposure() {
     section("BaselineExposure is a decode-time gain, and the clip rides with it");
 

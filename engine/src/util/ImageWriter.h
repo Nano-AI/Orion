@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace orion::util {
 
@@ -98,6 +99,14 @@ void writeImage(const std::string& path, const std::uint16_t* rgba,
 
 void writePng(const std::string& path, const std::uint16_t* rgba,
               std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow);
+
+/// JPEG-encodes 16-bit RGBA to memory. Exists for the DNG preview: the
+/// merged file embeds a viewable JPEG so the filmstrip and Finder have
+/// something to show without decoding a quarter-gigabyte of half floats.
+/// Returns empty on failure.
+[[nodiscard]] std::vector<std::uint8_t> encodeJpeg(
+    const std::uint16_t* rgba, std::uint32_t width, std::uint32_t height,
+    std::size_t bytesPerRow, float quality);
 
 /// Picks a format from the path's extension, defaulting to JPEG.
 ImageFormat formatForPath(const std::string& path);

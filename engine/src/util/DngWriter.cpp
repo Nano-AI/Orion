@@ -131,53 +131,108 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     }
     if (model.empty()) model = image.camera;
 
-    // ── The IFD, entries ascending by tag (TIFF 6.0 §2 requires it) ────────
-    std::vector<Entry> entries;
-    entries.push_back(longEntry(254, 0));                   // NewSubfileType: full-resolution image
-    entries.push_back(longEntry(256, image.width));         // ImageWidth
-    entries.push_back(longEntry(257, image.height));        // ImageLength
-    entries.push_back(shortEntry(258, {16, 16, 16}));       // BitsPerSample
-    entries.push_back(shortEntry(259, {1}));                // Compression: none
-    entries.push_back(shortEntry(262, {34892}));            // Photometric: LinearRaw
-    entries.push_back(asciiEntry(271, make));               // Make
-    entries.push_back(asciiEntry(272, model));              // Model
-    entries.push_back(longEntry(273, 0));                   // StripOffsets — patched at layout
+    // ── The IFDs, entries ascending by tag (TIFF 6.0 §2 requires it) ──────
+    //
+    // Two shapes. Without a preview: one IFD carrying everything, the layout
+    // story A shipped. With one: the standard DNG arrangement — IFD0 holds
+    // the JPEG preview plus the camera metadata and points at the raw image
+    // through SubIFDs (330), which is where every mainstream DNG keeps it
+    // and therefore the shape thumbnailers actually look in.
+    const bool withPreview =
+        image.previewJpeg != nullptr && image.previewJpegBytes > 0 &&
+        image.previewWidth > 0 && image.previewHeight > 0;
+
     // LibRaw flip -> TIFF Orientation (the exact inverse of the mapping
     // LibRaw applies when reading): none->1, 180->3, 90 CCW->8, 90 CW->6.
     const std::uint16_t orientation =
         image.flip == 3 ? 3 : image.flip == 5 ? 8 : image.flip == 6 ? 6 : 1;
-    entries.push_back(shortEntry(274, {orientation}));      // Orientation
-    entries.push_back(shortEntry(277, {3}));                // SamplesPerPixel
-    entries.push_back(longEntry(278, image.height));        // RowsPerStrip: one strip
-    entries.push_back(longEntry(279, stripBytes));          // StripByteCounts
-    entries.push_back(shortEntry(284, {1}));                // PlanarConfiguration: chunky
-    entries.push_back(shortEntry(339, {3, 3, 3}));          // SampleFormat: IEEE float
-    entries.push_back(byteEntry(50706, {1, 4, 0, 0}));      // DNGVersion
-    entries.push_back(byteEntry(50707, {1, 4, 0, 0}));      // DNGBackwardVersion — FP data is a 1.4 feature
-    entries.push_back(asciiEntry(50708, image.camera));     // UniqueCameraModel
-    entries.push_back(srationalEntry(50721, image.xyzToCam.data(), 9));       // ColorMatrix1
-    entries.push_back(rationalEntry(50728, image.asShotNeutral.data(), 3));   // AsShotNeutral
-    entries.push_back(srationalEntry(50730, &image.baselineExposureEv, 1, 100));  // BaselineExposure
-    entries.push_back(shortEntry(50778, {21}));             // CalibrationIlluminant1: D65
 
-    // ── Layout: header | IFD | external values | strip ─────────────────────
-    const std::uint32_t ifdOffset = 8;
-    const std::uint32_t ifdBytes =
-        2 + static_cast<std::uint32_t>(entries.size()) * 12 + 4;
-    std::uint32_t cursor = ifdOffset + ifdBytes;
+    // The raw image's own tags — a full IFD alone, or the SubIFD.
+    std::vector<Entry> raw;
+    raw.push_back(longEntry(254, withPreview ? 0 : 0));     // NewSubfileType: the full-resolution image
+    raw.push_back(longEntry(256, image.width));             // ImageWidth
+    raw.push_back(longEntry(257, image.height));            // ImageLength
+    raw.push_back(shortEntry(258, {16, 16, 16}));           // BitsPerSample
+    raw.push_back(shortEntry(259, {1}));                    // Compression: none
+    raw.push_back(shortEntry(262, {34892}));                // Photometric: LinearRaw
+    raw.push_back(longEntry(273, 0));                       // StripOffsets — patched at layout
+    raw.push_back(shortEntry(274, {orientation}));          // Orientation
+    raw.push_back(shortEntry(277, {3}));                    // SamplesPerPixel
+    raw.push_back(longEntry(278, image.height));            // RowsPerStrip: one strip
+    raw.push_back(longEntry(279, stripBytes));              // StripByteCounts
+    raw.push_back(shortEntry(284, {1}));                    // PlanarConfiguration: chunky
+    raw.push_back(shortEntry(339, {3, 3, 3}));              // SampleFormat: IEEE float
 
-    std::vector<std::uint32_t> valueOffsets(entries.size(), 0);
-    for (std::size_t i = 0; i < entries.size(); ++i) {
-        if (entries[i].data.size() > 4) {
-            cursor += cursor & 1;  // values live at even offsets (TIFF 6.0 §2)
-            valueOffsets[i] = cursor;
-            cursor += static_cast<std::uint32_t>(entries[i].data.size());
-        }
+    // The camera metadata, which belongs in IFD0 whichever shape is written.
+    std::vector<Entry> meta;
+    meta.push_back(asciiEntry(271, make));                  // Make
+    meta.push_back(asciiEntry(272, model));                 // Model
+    meta.push_back(byteEntry(50706, {1, 4, 0, 0}));         // DNGVersion
+    meta.push_back(byteEntry(50707, {1, 4, 0, 0}));         // DNGBackwardVersion — FP data is a 1.4 feature
+    meta.push_back(asciiEntry(50708, image.camera));        // UniqueCameraModel
+    meta.push_back(srationalEntry(50721, image.xyzToCam.data(), 9));       // ColorMatrix1
+    meta.push_back(rationalEntry(50728, image.asShotNeutral.data(), 3));   // AsShotNeutral
+    meta.push_back(srationalEntry(50730, &image.baselineExposureEv, 1, 100));  // BaselineExposure
+    meta.push_back(shortEntry(50778, {21}));                // CalibrationIlluminant1: D65
+
+    std::vector<Entry> ifd0;
+    std::vector<Entry> sub;
+    if (withPreview) {
+        // The preview IFD: an ordinary JPEG-compressed TIFF image whose one
+        // strip is the whole JFIF stream — how DNG previews are stored.
+        ifd0.push_back(longEntry(254, 1));                  // NewSubfileType: reduced-resolution
+        ifd0.push_back(longEntry(256, image.previewWidth));
+        ifd0.push_back(longEntry(257, image.previewHeight));
+        ifd0.push_back(shortEntry(258, {8, 8, 8}));
+        ifd0.push_back(shortEntry(259, {7}));               // Compression: JPEG
+        ifd0.push_back(shortEntry(262, {6}));               // Photometric: YCbCr
+        ifd0.push_back(longEntry(273, 0));                  // StripOffsets — patched
+        ifd0.push_back(shortEntry(277, {3}));
+        ifd0.push_back(longEntry(278, image.previewHeight));
+        ifd0.push_back(longEntry(279, std::uint32_t(image.previewJpegBytes)));
+        ifd0.push_back(longEntry(330, 0));                  // SubIFDs — patched
+        for (auto& e : meta) ifd0.push_back(std::move(e));
+        sub = std::move(raw);
+    } else {
+        ifd0 = std::move(raw);
+        for (auto& e : meta) ifd0.push_back(std::move(e));
     }
+    std::sort(ifd0.begin(), ifd0.end(),
+              [](const Entry& a, const Entry& b) { return a.tag < b.tag; });
+    std::sort(sub.begin(), sub.end(),
+              [](const Entry& a, const Entry& b) { return a.tag < b.tag; });
+
+    // ── Layout: header | IFD0 | values | subIFD | values | jpeg | strip ───
+    const auto ifdBytes = [](const std::vector<Entry>& ifd) {
+        return std::uint32_t(2 + ifd.size() * 12 + 4);
+    };
+    const auto externalBytes = [](const std::vector<Entry>& ifd) {
+        std::uint32_t total = 0;
+        for (const auto& e : ifd) {
+            if (e.data.size() > 4) total += std::uint32_t(e.data.size() + 1) & ~1u;
+        }
+        return total;
+    };
+
+    const std::uint32_t ifd0Offset = 8;
+    const std::uint32_t subOffset =
+        sub.empty() ? 0
+                    : ifd0Offset + ifdBytes(ifd0) + externalBytes(ifd0);
+    std::uint32_t cursor = sub.empty()
+        ? ifd0Offset + ifdBytes(ifd0) + externalBytes(ifd0)
+        : subOffset + ifdBytes(sub) + externalBytes(sub);
+
+    cursor += cursor & 1;
+    const std::uint32_t jpegOffset = cursor;
+    if (withPreview) cursor += std::uint32_t(image.previewJpegBytes);
     cursor += cursor & 1;
     const std::uint32_t stripOffset = cursor;
 
-    for (auto& e : entries) {  // patch StripOffsets now the layout is known
+    for (auto& e : ifd0) {
+        if (e.tag == 273) { e.data.clear(); put32(e.data, withPreview ? jpegOffset : stripOffset); }
+        if (e.tag == 330) { e.data.clear(); put32(e.data, subOffset); }
+    }
+    for (auto& e : sub) {
         if (e.tag == 273) { e.data.clear(); put32(e.data, stripOffset); }
     }
 
@@ -186,28 +241,50 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     head.reserve(stripOffset);
     head.push_back('I'); head.push_back('I');  // little-endian
     put16(head, 42);
-    put32(head, ifdOffset);
+    put32(head, ifd0Offset);
 
-    put16(head, static_cast<std::uint16_t>(entries.size()));
-    for (std::size_t i = 0; i < entries.size(); ++i) {
-        const Entry& e = entries[i];
-        put16(head, e.tag);
-        put16(head, e.type);
-        put32(head, e.count);
-        if (e.data.size() <= 4) {
-            head.insert(head.end(), e.data.begin(), e.data.end());
-            head.resize(head.size() + (4 - e.data.size()), 0);
-        } else {
-            put32(head, valueOffsets[i]);
+    const auto serializeIfd = [&](const std::vector<Entry>& ifd,
+                                  std::uint32_t ifdOffset) {
+        // Values wider than four bytes live after the IFD at even offsets.
+        std::uint32_t valueCursor = ifdOffset + ifdBytes(ifd);
+        std::vector<std::uint32_t> valueOffsets(ifd.size(), 0);
+        for (std::size_t i = 0; i < ifd.size(); ++i) {
+            if (ifd[i].data.size() > 4) {
+                valueCursor += valueCursor & 1;
+                valueOffsets[i] = valueCursor;
+                valueCursor += std::uint32_t(ifd[i].data.size());
+            }
         }
-    }
-    put32(head, 0);  // no next IFD
+        head.resize(ifdOffset, 0);
+        put16(head, std::uint16_t(ifd.size()));
+        for (std::size_t i = 0; i < ifd.size(); ++i) {
+            const Entry& e = ifd[i];
+            put16(head, e.tag);
+            put16(head, e.type);
+            put32(head, e.count);
+            if (e.data.size() <= 4) {
+                head.insert(head.end(), e.data.begin(), e.data.end());
+                head.resize(head.size() + (4 - e.data.size()), 0);
+            } else {
+                put32(head, valueOffsets[i]);
+            }
+        }
+        put32(head, 0);  // no next IFD
+        for (std::size_t i = 0; i < ifd.size(); ++i) {
+            if (ifd[i].data.size() > 4) {
+                head.resize(valueOffsets[i], 0);
+                head.insert(head.end(), ifd[i].data.begin(), ifd[i].data.end());
+            }
+        }
+    };
 
-    for (std::size_t i = 0; i < entries.size(); ++i) {
-        if (entries[i].data.size() > 4) {
-            head.resize(valueOffsets[i], 0);  // even-offset padding
-            head.insert(head.end(), entries[i].data.begin(), entries[i].data.end());
-        }
+    serializeIfd(ifd0, ifd0Offset);
+    if (!sub.empty()) serializeIfd(sub, subOffset);
+
+    if (withPreview) {
+        head.resize(jpegOffset, 0);
+        head.insert(head.end(), image.previewJpeg,
+                    image.previewJpeg + image.previewJpegBytes);
     }
     head.resize(stripOffset, 0);
 

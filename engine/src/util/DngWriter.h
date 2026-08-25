@@ -57,6 +57,19 @@ struct DngLinearImage {
     /// so a portrait bracket merges to a portrait DNG — the reader turns it
     /// back into the same flip and the canvas orients as it does every raw.
     int flip = 0;
+
+    /// An optional embedded JPEG preview — what the filmstrip and Finder
+    /// show without decoding a quarter-gigabyte of half floats. When set,
+    /// the file takes the standard DNG shape: the preview and the camera
+    /// metadata in IFD0 (NewSubfileType 1), the raw image in a SubIFD.
+    /// ⚠ The pixels must already be upright: the preview's own orientation
+    /// is written as 1, because thumbnail consumers (LibRaw's unpack_thumb,
+    /// QuickLook) hand the JPEG stream around without the TIFF tag it sat
+    /// under. The raw SubIFD keeps the real orientation.
+    const std::uint8_t* previewJpeg = nullptr;
+    std::size_t  previewJpegBytes = 0;
+    std::uint32_t previewWidth  = 0;
+    std::uint32_t previewHeight = 0;
 };
 
 /// Writes the DNG. Throws std::runtime_error on failure; on any throw the

@@ -856,7 +856,7 @@ demosaic-first, camera-native RGB, an fp16 LinearRaw DNG beside the sources.
 | Left out | Why, and where it would go |
 |---|---|
 | A real-ARW end-to-end run | `samples/` is absent on this machine; the `--hdr-merge` check-modes gate is written and waiting. **Needs a 3-frame handheld a7riii bracket from the developer** |
-| An embedded thumbnail in the merged DNG | The filmstrip shows a placeholder for merged files. A preview IFD belongs with the compression story below |
+| ~~An embedded thumbnail in the merged DNG~~ | ✅ Done on first field report: the writer now takes the standard DNG shape (JPEG preview + metadata in IFD0, raw in a SubIFD), so the filmstrip and Finder both show the merge. The preview is tone-shouldered and baked upright, because thumbnail consumers hand the JPEG around without the TIFF tag it sat under |
 | Deflate + FP-predictor compression | The DNG is ~253 MB at 42 MP uncompressed. DNG 1.4 Compression=8 + Predictor=3 roughly halves it. ~1 session, contained in `DngWriter` |
 | Automatic bracket detection | The photographer selects the frames; grouping by capture-time adjacency is a filmstrip feature, not a merge one |
 | Lens-distortion-aware alignment | Corrections run inside the develop graph, after the merge, so wide-angle corners can misalign by a few pixels; ECC + the deghost gate absorb the residue. Documented in `research/hdr-merge.md`, not solved |
