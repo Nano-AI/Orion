@@ -265,8 +265,10 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
                                 // Tell the shader whether the guide textures
                                 // hold what it thinks they hold. `linearMoved`
                                 // already covers every way this can flip:
-                                // `needsGuide` turns on exactly when highlights
-                                // or shadows crosses zero, and both are in it.
+                                // `needsGuide` turns on exactly when a
+                                // highlights or shadows crosses zero — the
+                                // global pair is compared above, and the
+                                // layers' are inside `adj.layers`.
                                 needsGuide ? 1.0f : 0.0f,
                                 {size[0], size[1]},
                                 {guideW_, guideH_},
@@ -296,6 +298,10 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
             la.layerSaturation[L] = e.saturation;
             la.layerWarmth[L]     = e.warmth;
             la.layerTint[L]       = e.tint;
+            la.layerHighlights[L] = e.highlights;
+            la.layerShadows[L]    = e.shadows;
+            la.layerWhites[L]     = e.whites;
+            la.layerBlacks[L]     = e.blacks;
         }
         la.maskActive  = (liveCount(adj) > 0) ? 1.0f : 0.0f;
         la.maskOverlay = adj.maskOverlay ? 1.0f : 0.0f;

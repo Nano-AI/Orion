@@ -579,8 +579,7 @@ void DevelopPipeline::applyGuide(const Adjustments& adj,
     const bool first = ctx.first;
     const bool needsGuide = ctx.needsGuide;
 
-    if (first || needsGuide != (lastAdj_.highlights != 0.0f ||
-                                lastAdj_.shadows != 0.0f)) {
+    if (first || needsGuide != guideNeeded(lastAdj_)) {
         for (int n : {nGuideDown_, nGuideH1_, nGuideV1_,
                       nGuideAb_, nGuideH2_, nGuideV2_}) {
             pipeline_.setEnabled(n, needsGuide);

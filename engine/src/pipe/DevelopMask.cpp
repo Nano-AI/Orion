@@ -609,8 +609,7 @@ void DevelopPipeline::applyMaskRefine(const Adjustments& adj,
     // `Texture2D<float2>` binding and read color components as a luminance and
     // its square. Not a crash — a plausible-looking wrong mask.
     if (first || (needsGuide || refining) !=
-                 ((lastAdj_.highlights != 0.0f || lastAdj_.shadows != 0.0f) ||
-                  wasRefining)) {
+                 (guideNeeded(lastAdj_) || wasRefining)) {
         pipeline_.setEnabled(nGuidePrep_, needsGuide || refining);
     }
 

@@ -293,11 +293,13 @@ void testLocalAdjustments() {
     {
         la.layerContrast[0] = 0.7f; la.layerSaturation[0] = -0.8f;
         la.layerWarmth[0] = 0.6f; la.layerTint[0] = -0.4f;
+        la.layerHighlights[0] = 0.8f; la.layerShadows[0] = -0.7f;
+        la.layerWhites[0] = 0.5f; la.layerBlacks[0] = -0.6f;
         run();
         const bool same = std::abs(px(0, 0) - kR) < 2e-3
                        && std::abs(px(0, 1) - kG) < 2e-3
                        && std::abs(px(0, 2) - kB) < 2e-3;
-        report(same, "all four leave a pixel with no coverage exactly as it was",
+        report(same, "all eight leave a pixel with no coverage exactly as it was",
                std::to_string(px(0, 0)) + ", " + std::to_string(px(0, 1)) + ", "
              + std::to_string(px(0, 2)));
         la = params::LinearAdjust{};
@@ -386,6 +388,44 @@ void testLocalAdjustments() {
         report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
                "and holds the luminance too",
                std::to_string(luma(x)));
+        la.layerTint[0] = 0.0f;
+    }
+
+    // ── The tone bands, per layer and closed-form ─────────────────────────
+    //
+    // `guideEnabled` is zero here, so the shader's guideEv falls back to the
+    // pixel's own log2 luminance and the whole deltaEv is computable below by
+    // the published construction (research/deep-research-2026-07-27.md §3) —
+    // a different order of operations from the kernel's, deliberately.
+    {
+        la.layerShadows[0]    = 1.0f;
+        la.layerHighlights[0] = 0.4f;
+        la.layerWhites[0]     = -0.3f;
+        la.layerBlacks[0]     = 0.2f;
+        run();
+        const double ev = std::log2(baseLuma / 0.18);
+        const auto w = [&](double center) {
+            const double d = (ev - center) / 1.6;
+            return std::exp(-0.5 * d * d);
+        };
+        const double wB = w(-5.5), wS = w(-2.5), wH = w(2.5), wW = w(5.5);
+        const double total = wB + wS + wH + wW + 1e-6;
+        const double delta = ((wB * 0.2) + (wS * 1.0) + (wH * 0.4)
+                              + (wW * -0.3)) * 2.0 / total;
+
+        const double want = baseLuma * std::exp2(delta);
+        report(std::abs(luma(int(kW) - 1) - want) / want < 0.02,
+               "the four bands sum into one exponent at full coverage",
+               std::to_string(luma(int(kW) - 1)) + " against "
+             + std::to_string(want));
+
+        // The alpha scales the parameter, and deltaEv is linear in each — so
+        // half coverage is exactly half the exponent, not a blend of frames.
+        const double half = baseLuma * std::exp2(delta * 0.5);
+        const int mid = int(kW) / 2;
+        report(std::abs(luma(mid) - half) / half < 0.03,
+               "and half coverage halves the exponent",
+               std::to_string(luma(mid)) + " against " + std::to_string(half));
     }
 }
 

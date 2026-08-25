@@ -312,6 +312,13 @@ struct Adjustments {
         /// A color cast where the mask covers, **not** a white balance.
         float warmth = 0.0f;
         float tint = 0.0f;
+        /// The four tone bands, in the globals' units. Highlights and shadows
+        /// read the frame's one guided estimate — see the layer loop in
+        /// develop_linear.slang for the approximation this accepts.
+        float highlights = 0.0f;
+        float shadows = 0.0f;
+        float whites = 0.0f;
+        float blacks = 0.0f;
         bool operator==(const LocalEdit&) const = default;
     };
     /// ⚠ One per layer, so the subject can be graded one way and the sky

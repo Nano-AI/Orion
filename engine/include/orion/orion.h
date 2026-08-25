@@ -272,6 +272,11 @@ typedef struct OrionAdjustments {
     float local_saturation[ORION_MAX_MASK_COMPONENTS];
     float local_warmth[ORION_MAX_MASK_COMPONENTS];
     float local_tint[ORION_MAX_MASK_COMPONENTS];
+    /* The four tone bands, per layer, in the globals' units. */
+    float local_highlights[ORION_MAX_MASK_COMPONENTS];
+    float local_shadows[ORION_MAX_MASK_COMPONENTS];
+    float local_whites[ORION_MAX_MASK_COMPONENTS];
+    float local_blacks[ORION_MAX_MASK_COMPONENTS];
 
     /* Dust and blemishes. research/spot-removal.md. Applied between the lens
      * correction and sharpening, in scene-linear light. */

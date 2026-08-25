@@ -70,6 +70,12 @@ struct LinearAdjustParams
     /// A color **cast**, not a white balance. See the note at the call site.
     float layerWarmth[4];
     float layerTint[4];
+    /// The four tone bands, per layer. Same units as the globals above; the
+    /// coverage scales the parameter like every other local control.
+    float layerHighlights[4];
+    float layerShadows[4];
+    float layerWhites[4];
+    float layerBlacks[4];
     /// Which of the four coverage textures carries each layer. ⚠ The graph is
     /// static, so a layer's coverage cannot be a node chosen per render — the
     /// kernel binds all four and this says which one to read.
@@ -192,6 +198,25 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
         if (a <= 0.0f) continue;
 
         if (p.layerExposureEv[L] != 0.0f) c *= exp2(a * p.layerExposureEv[L]);
+
+        // The tone bands. `applyTone`'s deltaEv is linear in each band, so
+        // scaling the parameters by the coverage is exactly scaling the
+        // exponent — the same construction the exposure above uses, never a
+        // blend of two rendered frames.
+        //
+        // ⚠ `guideEv` is the frame's one guided estimate, computed above and
+        // not per layer — highlights and shadows here read the neighborhood
+        // as it stood before any local adjustment. That approximation is the
+        // reason these four were once refused locally; it is now accepted and
+        // recorded, because a per-layer guide chain would run the six-node
+        // filter once per layer per frame.
+        if (p.layerHighlights[L] != 0.0f || p.layerShadows[L] != 0.0f ||
+            p.layerWhites[L] != 0.0f || p.layerBlacks[L] != 0.0f)
+        {
+            c = applyTone(c, guideEv,
+                          a * p.layerHighlights[L], a * p.layerShadows[L],
+                          a * p.layerWhites[L], a * p.layerBlacks[L]);
+        }
 
         // Contrast, as a gain on the pixel's distance from the pivot measured
         // in stops — so it is a multiply like the exposure above and keeps the

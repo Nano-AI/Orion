@@ -85,6 +85,12 @@ struct LinearAdjust {
     /// before the demosaic and cannot be local.
     float         layerWarmth[4];
     float         layerTint[4];
+    /// The four tone bands, per layer, in the globals' units. The coverage
+    /// scales the parameter, like every other local control.
+    float         layerHighlights[4];
+    float         layerShadows[4];
+    float         layerWhites[4];
+    float         layerBlacks[4];
     /// Which coverage texture each layer reads. ⚠ The graph is static, so a
     /// layer's coverage cannot be a node picked per render — the kernel binds
     /// all four component slots and this says which one ends each layer.
@@ -96,7 +102,7 @@ struct LinearAdjust {
     /// Which layer the overlay paints — the one being edited.
     std::int32_t  maskOverlayLayer;
 };
-static_assert(sizeof(LinearAdjust) == 256);
+static_assert(sizeof(LinearAdjust) == 320);
 
 struct GuidePrep {
     std::uint32_t size[2];

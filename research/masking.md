@@ -128,6 +128,13 @@ term in a node that is already running.
 | Contrast | a gain on the pixel's distance from the pivot, in log |
 | Saturation | a lerp toward the pixel's own luminance |
 | Colour cast | a per-channel multiply |
+| Tone bands | `applyTone`'s deltaEv is linear in each band, so `α·param` is exactly `α·deltaEv` — one exponent (deep-research-2026-07-27.md §3) |
+
+⚠ The tone bands carry a stated approximation.
+Highlights and shadows read the guided-filter estimate of the neighbourhood, and the frame computes **one** such estimate — a per-layer guide chain would run the six-node filter once per layer per frame.
+So a layer's highlights and shadows read the neighbourhood as it stood before any local adjustment, which is also the reason these four were once refused locally.
+Whites and blacks read the pixel and carry no approximation at all.
+The guide chain must enable when *any* layer's highlights or shadows is nonzero, not only the globals' — `DevelopPipeline::guideNeeded` is the one predicate, and the dead-chain hazard it guards against is #113/#119.
 
 ### ⚠ White balance cannot be local, and the reason is structural
 

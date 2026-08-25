@@ -994,4 +994,18 @@ void testLayerBreakRefreshesTheLayerTable() {
            "a reorder that moves the break re-folds the run",
            "base " + std::to_string(base) + " left " + std::to_string(leftSwap) +
            " right " + std::to_string(rightSwap));
+
+    // A layer's shadows alone must enable the guide chain. The dead-chain
+    // hazard (#113, #119): every global path was checked at zero here, so a
+    // predicate that forgot the layers would leave the six nodes disabled and
+    // the local band quietly reading the pixel's own EV — roughly right,
+    // everywhere, and never what was asked for.
+    adj.layers[1].shadows = 0.5f;
+    dev->apply(adj);
+    dev->render();
+    int guides = 0;
+    for (const auto& t : dev->graph().lastRun())
+        if (t.executed && t.name.rfind("guide:", 0) == 0) ++guides;
+    report(guides >= 6, "a layer's shadows alone enables the guide chain",
+           std::to_string(guides) + " guide nodes ran");
 }
