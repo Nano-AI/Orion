@@ -237,7 +237,18 @@ struct Filmstrip: View {
         // dimmer one says "this is in the set a batch will act on". One mark for
         // both would make a forty-frame selection look like forty open photos.
         let inSelection = library.hasExplicitSelection && library.isSelected(photo.url)
-        let frameWidth = cellHeight * 1.5
+        // A cell is as wide as its picture at the strip's height, the way a
+        // contact sheet lays frames - a portrait photograph gets a tall narrow
+        // cell rather than an upright picture chopped to a landscape band.
+        // Clamped so a panorama widens its cell gently instead of taking the
+        // strip with it; inside the clamp `.fill` below never actually crops.
+        // No thumbnail yet means the classic 3:2 stand-in, and the cell takes
+        // its real shape when the image streams in.
+        let aspect: CGFloat = {
+            guard let image = photo.thumbnail, image.size.height > 0 else { return 1.5 }
+            return max(0.5, min(image.size.width / image.size.height, 2.0))
+        }()
+        let frameWidth = cellHeight * aspect + 6
 
         return VStack(spacing: 0) {
             sprockets(width: frameWidth, top: true)
