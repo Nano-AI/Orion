@@ -62,7 +62,14 @@ extension Screenshot {
         // ⚠ Reverting that `Text(verbatim:)` to a bare string reddens this.
         "Compare Original  (\\)",
         "Fit in Window  (0)", "Actual Size  (9)",
-        "Export…", "Reveal Session Log in Finder",
+        "Export…",
+        // ⚠ The batch, at the title it carries with nothing open — which is the
+        // state this check runs in. It counts the photographs once there are
+        // some ("Export All 45 in View…"), so pinning the empty form is what can
+        // be pinned here; that it *is* on the menu is the part that was missing,
+        // and the part a photographer looking for bulk export needs.
+        "Export All…",
+        "Reveal Session Log in Finder",
         "Reset Adjustments",
         "Reject  (R)",
         "1 Star  (1)", "2 Stars  (2)", "3 Stars  (3)", "4 Stars  (4)",

@@ -165,12 +165,30 @@ extension Editor {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                     } else {
+                        // ⚠ Guarded on `exportTargets`, not on `photos`. A
+                        // folder of nothing but rejects has photographs in it
+                        // and nothing this button would write, and an enabled
+                        // control there opens a folder panel onto an empty
+                        // batch.
                         Button("Export all…") { runBatchExport() }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
-                            .disabled(!engine.isLoaded || library.photos.isEmpty)
+                            .disabled(!engine.isLoaded || library.exportTargets.isEmpty)
                     }
                     Spacer(minLength: 0)
+                }
+
+                // What the batch will actually write, before it is pressed. The
+                // folder panel says this too, but that is the last moment and
+                // this is the one where the count on the button gets explained.
+                if batchProgress == nil, library.rejectedInView > 0 {
+                    Text("Exports \(library.exportTargets.count) photos. "
+                       + (library.rejectedInView == 1
+                            ? "1 rejected photo is left out."
+                            : "\(library.rejectedInView) rejected photos are left out."))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Text("A preset changes only the groups it carries and leaves "

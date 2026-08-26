@@ -657,4 +657,52 @@ extension ViewportTests {
                "progress starts at zero and reaches the total",
                "\(seen)")
     }
+
+    /// A rejected photograph is not a deliverable.
+    ///
+    /// ⚠ Written from a report — *"I don't want export all to export my
+    /// rejected photos"* — on the second round of one bug. It first ignored the
+    /// filter entirely, so culling to Rated and pressing Export all wrote every
+    /// reject alongside the keepers; following the filter fixed that case and
+    /// left the common one, because the resting filter is **All** and All
+    /// includes rejects.
+    ///
+    /// Check 3 is the one that keeps the fix honest. Dropping rejects
+    /// unconditionally is the obvious implementation and it is wrong in a way
+    /// nobody notices until they need it: a photographer who filtered to
+    /// Rejected, or who selected those frames by hand, gets an empty export and
+    /// no explanation. Both are unambiguous requests and neither is reachable by
+    /// accident.
+    static func testExportSkipsRejects() {
+        let u = (0..<5).map { URL(fileURLWithPath: "/f/IMG_\($0).ARW") }
+        let rejected: Set<URL> = [u[1], u[3]]
+
+        // 1. The resting state: no selection, the All filter, rejects dropped.
+        report(BatchExport.exportable(u, rejected: rejected, asked: false)
+                   == [u[0], u[2], u[4]],
+               "an unasked-for batch leaves the rejects behind",
+               "\(BatchExport.exportable(u, rejected: rejected, asked: false))")
+
+        // 2. Order is the strip's, not a set's. A batch that reordered the
+        //    folder would collide differently and number the duplicates
+        //    differently on every run.
+        report(BatchExport.exportable(u, rejected: [], asked: false) == u,
+               "a folder with no rejects is untouched, in strip order")
+
+        // 3. ⚠ Asked for by hand or by the Rejected filter — both honoured, or
+        //    the button does nothing at all and says nothing about why.
+        report(BatchExport.exportable(u, rejected: rejected, asked: true) == u,
+               "an explicit selection or the Rejected filter still exports them",
+               "\(BatchExport.exportable(u, rejected: rejected, asked: true))")
+
+        // 4. The count the interface promises is the count it writes. The menu
+        //    title and the panel's readout are both derived from this list, and
+        //    a title offering 5 against a batch of 3 is the surprise the whole
+        //    rule exists to remove.
+        let everyOne = Set(u)
+        report(BatchExport.exportable(u, rejected: everyOne, asked: false).isEmpty,
+               "a folder of nothing but rejects exports nothing")
+        report(!BatchExport.exportable(u, rejected: everyOne, asked: true).isEmpty,
+               "and exports them all when the Rejected filter is what is showing")
+    }
 }

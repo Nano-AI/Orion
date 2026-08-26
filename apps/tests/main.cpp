@@ -85,6 +85,7 @@ int main() {
     testHighlightFillGpu();
     testHighlightFillWiring();
     testOutputDepth();
+    testAgxLatitudeIsAnAnchoredRescale();
     testLensDatabase();
     testBlackLevels();
     testExportFormats();

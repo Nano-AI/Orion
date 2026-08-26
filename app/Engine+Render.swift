@@ -62,8 +62,30 @@ extension Engine {
             maskOverlay = heldOverlay
         }
 
-        let size = MatteGeometry.previewSize(frameWidth: Int(imageWidth),
-                                             frameHeight: Int(imageHeight),
+        // ⚠ **Asked for, not derived.** The size this render has to come back at
+        // is the size `setMaskMatte` will accept, and that is a number the
+        // engine already owns — `kMaxMatteEdge` on the frame's long side. This
+        // used to recompute it from `imageWidth`/`imageHeight`, and the two
+        // derivations disagreed by one row: the engine truncated the short edge
+        // and `MatteGeometry.previewSize` rounded it. On a 7968 x 5320 sensor
+        // that is 683 against 684, one row too tall, and a matte one row too
+        // tall is rejected outright — so **every** Subject, Person and Sky
+        // selection on that camera failed with "that selection was too large
+        // for this photo", while the same code was fine on a sensor whose
+        // aspect happened to truncate and round to the same integer.
+        //
+        // `maxMatteSize` is in frame coordinates and this render is in display
+        // coordinates, so the EXIF quarter turn swaps them here and
+        // `MatteGeometry.undoTurns` swaps them back. `longEdge` is now only the
+        // ceiling a caller is willing to pay for, never the answer.
+        let matte = maxMatteSize
+        guard matte.width > 0, matte.height > 0 else { return nil }
+        let turned = exifQuarterTurns % 2 == 0
+            ? (width: matte.width, height: matte.height)
+            : (width: matte.height, height: matte.width)
+
+        let size = MatteGeometry.previewSize(frameWidth: turned.width,
+                                             frameHeight: turned.height,
                                              longEdge: longEdge)
         guard size.width > 0, size.height > 0 else { return nil }
         return Screenshot.developedCGImage(self, fitting: size)

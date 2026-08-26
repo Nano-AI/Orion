@@ -113,6 +113,13 @@ struct ImageCanvas: NSViewRepresentable {
         private var pipeline: MTLRenderPipelineState?
         private var sampler: MTLSamplerState?
 
+        /// The mip chain the blit actually samples, and the render it was built
+        /// from. See `minified(_:)`.
+        private var mipped: MTLTexture?
+        private var mippedFrom: UInt64 = .max
+        private var mippedSource: ObjectIdentifier?
+        private var halve: MTLComputePipelineState?
+
         /// Shader-side view transform. Shared with the offscreen compositor —
         /// see `CanvasBlit`.
         private typealias Transform = CanvasBlit.Transform
@@ -160,9 +167,86 @@ struct ImageCanvas: NSViewRepresentable {
             let sd = MTLSamplerDescriptor()
             sd.minFilter = .linear
             sd.magFilter = .linear   // swapped to nearest past 400%, below
+            // ⚠ **The mip filter is the whole point** — see `minified(_:)`.
+            // `minFilter` only chooses between texels *within* one level, so on
+            // a chain of one it is a 2x2 tap however far the picture is being
+            // shrunk. Fitting a 42 Mpx frame to a 1600 pt canvas is a 4.9x
+            // reduction: the tap reads 4 of every 24 texels and throws the rest
+            // away, which is point sampling with extra steps. Sensor noise
+            // survives at full amplitude instead of averaging down, and every
+            // edge aliases — the picture reads harsher and grainier on screen
+            // than the same render exported to a file, which is what a
+            // photographer comparing Orion to Darktable actually sees.
+            sd.mipFilter = .linear
             sd.sAddressMode = .clampToEdge
             sd.tAddressMode = .clampToEdge
             sampler = device.makeSamplerState(descriptor: sd)
+        }
+
+        /// The render, with a mip chain, so minification averages rather than
+        /// decimates.
+        ///
+        /// The engine's output cannot carry one itself: it is the target of a
+        /// compute write and is allocated per graph, so the levels are built
+        /// here into a texture the canvas owns.
+        ///
+        /// ⚠ Rebuilt on a **new render**, not on every draw. `Engine.generation`
+        /// ticks once per published frame, so panning and zooming — which redraw
+        /// constantly and change no pixels — reuse the chain. Without that this
+        /// copies and reduces 42 Mpx on every scroll event.
+        ///
+        /// ⚠ And the levels are averaged in the **display encoding**, which is
+        /// what this texture holds. That is deliberate and is decision #40's
+        /// reasoning verbatim: averaging unbounded scene-linear values blooms a
+        /// specular edge, which is why `geometry.slang` resamples display-encoded
+        /// pixels too.
+        ///
+        /// ⚠ **Only the valid rectangle is copied**, and the chain is built over
+        /// a texture of exactly that size. The orientation node writes into a
+        /// square texture with only its top-left rectangle live, so reducing the
+        /// whole thing would fold the dead region into every level and fringe the
+        /// right and bottom edges of the picture with it — a defect that draws a
+        /// plausible image rather than an obviously broken one. A tight copy also
+        /// makes `validU`/`validV` in `CanvasBlit.transform` exactly 1.
+        ///
+        /// ⚠ `generateMipmaps` was refused for the grain plate (#81) because its
+        /// filter is implementation-defined and the plate has to be identical on
+        /// every machine or two exports of one edit differ. Nothing here is ever
+        /// exported — this texture exists for the length of one draw — so that
+        /// argument does not reach it.
+        ///
+        /// ⚠ **The chain starts at half the render, not at the render**, and that
+        /// is a memory decision rather than a quality one. A full-resolution base
+        /// plus its levels is 226 MB at 42 Mpx and 452 MB in wide output, on a
+        /// budget that #162 already has the developer choosing between tiling and
+        /// lower precision. Halving first costs 56 MB and gives up nothing that
+        /// is used: the caller only asks for this at a reduction of 2x or more,
+        /// where a half-resolution base is at worst being drawn 1:1.
+        private func minified(_ source: MTLTexture,
+                              valid: (width: UInt32, height: UInt32),
+                              device: MTLDevice?) -> MTLTexture? {
+            let w = (Int(valid.width) + 1) / 2, h = (Int(valid.height) + 1) / 2
+            guard w > 1, h > 1,
+                  Int(valid.width) <= source.width,
+                  Int(valid.height) <= source.height else { return nil }
+
+            let id = ObjectIdentifier(source)
+            if let mipped, mippedFrom == engine.generation, mippedSource == id,
+               mipped.width == w, mipped.height == h {
+                return mipped
+            }
+            guard let device, let queue else { return nil }
+            if halve == nil { halve = CanvasReduce.makePipeline(device: device) }
+            guard let halve,
+                  let target = CanvasReduce.reduced(
+                      source, valid: (Int(valid.width), Int(valid.height)),
+                      device: device, queue: queue, halve: halve)
+            else { return nil }
+
+            mipped = target
+            mippedFrom = engine.generation
+            mippedSource = id
+            return target
         }
 
         // MARK: Input
@@ -203,16 +287,13 @@ struct ImageCanvas: NSViewRepresentable {
         func beginDrag(at point: CGPoint, in view: NSView) {
             dragAnchor = point
 
-            // Spot removal, armed from the Detail panel. Checked before the
-            // eyedropper because the two are never armed together and this one
-            // consumes the click outright — the photograph must not also pan.
-            // The mask color picker, armed from the Mask panel. Same shape as
-            // spot placement below and checked first for the same reason: it
-            // consumes the click outright, so the photograph must not also pan.
-            if engine.colorPicking, let uv = imageUV(point, in: view) {
+            // The mask color picker, armed from the Mask panel. It consumes
+            // the click outright — the photograph must not also pan — and
+            // disarms, because it is a pick, not a mode.
+            if engine.tool == .maskColor, let uv = imageUV(point, in: view) {
                 dragAnchor = nil
                 engine.pickMaskColor(at: uv)
-                engine.colorPicking = false
+                engine.tool = .none
                 view.needsDisplay = true
                 return
             }
@@ -223,7 +304,7 @@ struct ImageCanvas: NSViewRepresentable {
             // which owns the whole gesture. Two handlers for one press is how a
             // single drag places two spots.
 
-            guard targeted.isActive,
+            guard engine.tool == .targeted,
                   let uv = imageUV(point, in: view),
                   let s = engine.sample(u: Float(uv.x), v: Float(uv.y)),
                   let hue = TargetedAdjust.hue(r: s.scene.r, g: s.scene.g, b: s.scene.b)
@@ -246,7 +327,7 @@ struct ImageCanvas: NSViewRepresentable {
             // With the tool armed, a vertical drag adjusts the band under the
             // cursor rather than panning. Up increases, matching every other
             // drag-to-adjust control on the platform.
-            if targeted.isActive, let band = targeted.activeBand {
+            if engine.tool == .targeted, let band = targeted.activeBand {
                 let delta = Float(-dy) * 2.0
                 let i = band.rawValue
                 switch targeted.mode {
@@ -264,8 +345,10 @@ struct ImageCanvas: NSViewRepresentable {
         }
 
         /// Publishes the color under the cursor so the loupe can show it.
+        /// Serves both pickers: the targeted tool reads the band caption, the
+        /// mask color picker just needs to not click blind.
         func hover(at point: CGPoint, in view: NSView) {
-            guard targeted.isActive else {
+            guard engine.tool.wantsLoupe else {
                 if targeted.hoverPoint != nil { targeted.clearHover() }
                 return
             }
@@ -339,19 +422,52 @@ struct ImageCanvas: NSViewRepresentable {
                   // only while a control is being dragged. Export, the
                   // histogram, the eyedropper and the screenshot harness all
                   // read the full graph and must keep doing so.
-                  let texture = engine.displayTexture,
+                  let rendered = engine.displayTexture,
                   let descriptor = view.currentRenderPassDescriptor,
                   let drawable = view.currentDrawable,
                   let buffer = queue.makeCommandBuffer(),
                   let encoder = buffer.makeRenderCommandEncoder(descriptor: descriptor)
             else { return }
 
-            var t = transform(for: view, texture: texture)
+            // ⚠ `transform` writes `viewport.fitScale`, and the magnification
+            // below reads it, so it has to run before the choice of texture — and
+            // the choice of texture is what decides whether the picture is
+            // averaged down or decimated. See `minified`.
+            var t = transform(for: view, texture: rendered)
 
             // Past 4x, linear filtering just smears — a photographer inspecting
             // at that magnification wants to see the actual pixels.
             let magnified = viewport.fitScale * viewport.zoom > 4.0
             let samp = magnified ? nearestSampler(view.device) : sampler
+
+            // Shrinking by 2x or more is the case the chain exists for, and the
+            // threshold is the half-resolution base it starts from — above it
+            // there is nothing to average and the base would be magnified.
+            // Compare holds the *full-resolution* original and both sides are
+            // read through one set of UVs, so the split keeps the untouched pair.
+            let valid: (width: UInt32, height: UInt32) =
+                engine.interacting ? engine.previewSize
+                                   : (engine.imageWidth, engine.imageHeight)
+            let shrinking = viewport.fitScale * viewport.zoom <= 0.5
+            let texture = (shrinking && !magnified && engine.compareSplit >= 0.999)
+                ? (minified(rendered, valid: valid, device: view.device) ?? rendered)
+                : rendered
+
+            // The reduced base is exactly the valid rectangle, so the scaling
+            // that fitted image UVs into a corner of the square render is the
+            // identity here and has to come back out. ⚠ Recomputing the whole
+            // transform against the smaller texture would also rewrite
+            // `viewport.fitScale`, which is the *picture's* magnification and is
+            // what the toolbar percentage and the 400% nearest-sampling switch
+            // both read — it would read double.
+            if texture !== rendered, rendered.width > 0, rendered.height > 0 {
+                let u = Float(valid.width) / Float(rendered.width)
+                let v = Float(valid.height) / Float(rendered.height)
+                if u > 0, v > 0 {
+                    t.uvMin  = SIMD2<Float>(t.uvMin.x / u,  t.uvMin.y / v)
+                    t.uvSize = SIMD2<Float>(t.uvSize.x / u, t.uvSize.y / v)
+                }
+            }
 
             t.split = Float(engine.compareSplit)
             t.vertical = engine.compareVertical ? 1 : 0

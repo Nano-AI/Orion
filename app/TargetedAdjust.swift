@@ -57,7 +57,8 @@ final class TargetedAdjust {
         }
     }
 
-    var isActive = false
+    // Arming lives on `Engine.tool` with every other canvas tool — this class
+    // holds only what the tool reads and shows once armed.
     var mode: Mode = .saturation
 
     /// The band under the cursor when the drag started, and what it read.

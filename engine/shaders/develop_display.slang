@@ -12,7 +12,7 @@
 struct DisplayParams
 {
     float contrast;     // slope of the sigmoid at middle gray
-    float pivot;        // middle gray in log2, typically -2.5
+    float pivotUnused;  // see ShaderParams.h: the pivot is kPivotNorm
     uint  curveIdentity;// skip the LUT entirely when the curve is untouched
     uint  resolution;   // LUT entries per row
     uint2 size;
@@ -103,8 +103,63 @@ float3 sampleCube(Texture2D<float4> cube, float3 c, uint size,
     return c000 + f.g * (a - c000) + f.r * (b - a) + f.b * (c111 - b);
 }
 
-static const float kMinEv = -12.47393f;
-static const float kMaxEv =   4.026069f;
+// The log encoding's range, as stops either side of middle gray. This is what
+// "black relative exposure" and "white relative exposure" mean in darktable's
+// filmic rgb, and what AgX's own reference calls its dynamic range.
+// log2(0.18) = -2.473931.
+//
+// ⚠ **The black end is a look, and it had never been chosen.** AgX's reference
+// range is 10 stops under middle gray, which suits a scene with ten usable stops
+// beneath the key; a photograph out of a camera does not have them, so the
+// deepest shadows never reached black. Measured against macOS ImageIO's decode
+// of the same raw, Orion's specular highlights agreed to within 3% and its
+// darkest patch rendered **1.63x too bright**, monotonically worse the darker
+// the patch. That lifted floor is where the sensor's noise lives, which is why
+// the picture read as both brighter *and* grainier than the same frame in
+// Darktable or Affinity.
+//
+// **8 stops, and the number is darktable filmic rgb's own default black
+// relative exposure** rather than a fit — but it was checked by fitting, on the
+// developer's frame, against macOS as the reference. 10 / 9 / 8.5 / 8 stops give
+// the darkest patch 1.63x / 1.29x / 1.13x / **0.98x**, and at 8 every patch
+// from the specular lamp down lands within 10%: lamp 0.95x, ball 0.99x, shorts
+// 0.95x, grass 1.07x, shirt 1.10x, face 1.01x, background 0.98x.
+//
+// ⚠ It is a **shape** change and not an exposure one — it moves where the curve
+// runs out of latitude, so the highlights are untouched and the midtones barely
+// move. That is what makes it the right control: a contrast slope steep enough
+// to buy the same toe darkens the low midtones on the way past them, and the
+// face goes with them. Worked through before measuring: slope 1.8 lands the
+// background right and the face at 0.058 against 0.085.
+//
+// ⚠⚠ **The range cannot simply be narrowed, and the first attempt was 1.7 stops
+// dark across the whole picture.** `agxCurve` is a fit of the sigmoid over a
+// *normalized* axis, and middle gray does not sit at the middle of it — it sits
+// at 10 / 16.5 = 0.606061, because that is where the reference range puts it.
+// Rewriting the minimum while leaving `(ev - min) / (max - min)` alone moves
+// gray to 0.498, where the polynomial returns 0.285 instead of 0.497. The tell
+// was that *every* patch fell, the specular lamp included: a toe cannot move a
+// highlight, so gray had moved.
+//
+// So the axis is normalized in **two pieces about gray**, and gray is pinned to
+// the polynomial's own anchor: below it `kBlackStops` covers 0 .. 0.606061,
+// above it `kWhiteStops` covers 0.606061 .. 1. Setting the two to 10 and 6.5
+// makes this identical to the single expression it replaces — asserted by
+// `testAgxLatitudeIsAnAnchoredRescale`, and confirmed end to end by a render at
+// 10 stops matching the pre-change export patch for patch.
+static const float kMidGrayEv  = -2.473931f;   // log2(0.18)
+static const float kPivotNorm  = 10.0f / 16.5f; // where the fit puts gray
+static const float kBlackStops = 8.0f;
+static const float kWhiteStops = 6.5f;
+
+/// Scene EV relative to middle gray -> the polynomial's normalized axis.
+float agxNormalize(float ev)
+{
+    const float t = clamp(ev - kMidGrayEv, -kBlackStops, kWhiteStops);
+    return t < 0.0f
+        ? kPivotNorm * (1.0f + t / kBlackStops)
+        : kPivotNorm + (1.0f - kPivotNorm) * (t / kWhiteStops);
+}
 
 // Working space is linear Rec.2020; AgX is defined against Rec.709 primaries,
 // so convert first. Skipping this step is not a subtle error — it silently
@@ -172,13 +227,15 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
     c = max(mul(kRec2020ToRec709, c), 0.0f);
     c = mul(kInset, c);
 
-    c = clamp(log2(max(c, 1e-10f)), kMinEv, kMaxEv);
-    c = (c - kMinEv) / (kMaxEv - kMinEv);
+    const float3 ev = log2(max(c, 1e-10f));
+    c = float3(agxNormalize(ev.r), agxNormalize(ev.g), agxNormalize(ev.b));
 
     // Contrast pivots about middle gray, so raising it does not also shift
-    // overall brightness.
-    const float pivotNorm = (p.pivot - kMinEv) / (kMaxEv - kMinEv);
-    c = saturate((c - pivotNorm) * p.contrast + pivotNorm);
+    // overall brightness. ⚠ `p.pivot` is now only ever middle gray, and the
+    // normalized position of middle gray is `kPivotNorm` by construction — the
+    // two-piece axis is *defined* by pinning it there — so deriving it from the
+    // range again would be a second derivation of a constant.
+    c = saturate((c - kPivotNorm) * p.contrast + kPivotNorm);
 
     c = float3(agxCurve(c.r), agxCurve(c.g), agxCurve(c.b));
     c = saturate(mul(kOutset, c));

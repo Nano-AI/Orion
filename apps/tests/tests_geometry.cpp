@@ -160,7 +160,6 @@ void testDisplayNeutrality() {
 
     orion::pipe::params::Display p{};
     p.contrast = 1.0f;
-    p.pivot = -2.5f;
     p.curveIdentity = 1u;
     p.resolution = orion::pipe::kCurveResolution;
     p.size[0] = kN;

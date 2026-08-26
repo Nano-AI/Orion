@@ -35,6 +35,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Compare.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ImageCanvas.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasBlit.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/CanvasReduce.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
@@ -52,6 +53,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Navigator.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/TargetedAdjust.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorLoupe.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/ToolButton.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engraved.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Histogram.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
@@ -152,6 +154,7 @@ add_custom_command(
             -target arm64-apple-macos14.0
             ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CanvasReduce.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
@@ -193,6 +196,7 @@ add_custom_command(
             -o ${VIEWPORT_TESTS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CanvasReduce.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift

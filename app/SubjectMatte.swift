@@ -94,7 +94,10 @@ enum SubjectMatte {
 
         guard engine.isLoaded else { throw Failure.noPhoto }
 
-        let turns = engine.quarterTurns
+        // ⚠ The **camera's** turn, not the sum. `renderForAnalysis` resets the
+        // photographer's rotation before it renders, so that is the only turn
+        // the returned picture carries — see `Engine.exifQuarterTurns`.
+        let turns = engine.exifQuarterTurns
         guard let image = engine.renderForAnalysis(longEdge: previewLongEdge) else {
             throw Failure.couldNotRender
         }
@@ -122,7 +125,7 @@ enum SubjectMatte {
         -> (alpha: [Float], width: Int, height: Int) {
 
         guard engine.isLoaded else { throw Failure.noPhoto }
-        let turns = engine.quarterTurns
+        let turns = engine.exifQuarterTurns
         guard let image = engine.renderForAnalysis(longEdge: previewLongEdge) else {
             throw Failure.couldNotRender
         }

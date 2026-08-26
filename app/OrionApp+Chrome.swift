@@ -297,6 +297,15 @@ extension Editor {
     }
 
     private var hint: String {
+        // The armed tool wins: it is the one state where a click on the photo
+        // does something the panel controls no longer show, so the footer is
+        // where "what does a click do right now" always has an answer.
+        switch engine.tool {
+        case .targeted:  return "drag on the photo to adjust its color · esc cancels"
+        case .maskColor: return "click the photo to set the mask color · esc cancels"
+        case .spot:      return "press on the photo, drag out the source · esc cancels"
+        case .none:      break
+        }
         if tab == .crop { return "drag the rectangle or its corners" }
         if !library.photos.isEmpty {
             return viewport.isFit

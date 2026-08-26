@@ -48,6 +48,8 @@ enum ViewportTests {
         testCurvePointsStayOrdered()
         testModifiedTracksTheReadout()
         testDrawnRectFollowsTheZoom()
+        testCanvasReductionAverages()
+        testExportSkipsRejects()
         testDevelopStateRoster()
         testSidecarSurvivesAMissingField()
         testMaskGroupSidecar()
