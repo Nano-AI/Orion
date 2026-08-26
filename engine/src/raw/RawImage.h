@@ -126,11 +126,31 @@ struct RawInfo {
 /// folder scan uses, so opening a directory of 500 frames stays instant.
 RawInfo readInfo(const std::string& path);
 
+/// LibRaw's flip flag as clockwise quarter turns. One mapping for the whole
+/// tree: the pipeline's geometry node and the thumbnail path must agree, or
+/// the filmstrip and the canvas would turn the same frame by different
+/// amounts.
+int quarterTurnsFor(int flip) noexcept;
+
+/// The camera's embedded JPEG preview, with the orientation it was stored
+/// under.
+///
+/// ⚠ The flip has to ride along, because it is not in the JPEG: the preview
+/// stream inside an ARW carries no EXIF segment at all - the orientation
+/// lives in the raw's TIFF IFD, which LibRaw surfaces as `sizes.flip`.
+/// Handing out the bytes alone loses it, and every portrait frame then
+/// displays on its side. The DNG writer learned the same lesson from the
+/// other direction (`DngWriter.h`).
+struct Thumbnail {
+    std::vector<std::uint8_t> jpeg;
+    int flip = 0;
+};
+
 /// The JPEG preview the camera embedded. Every raw file carries one, and it is
 /// what makes a filmstrip viable: decoding 500 mosaics to build thumbnails
 /// would take minutes, extracting 500 JPEGs takes about a second.
-/// Returns an empty vector when the file has no usable preview.
-std::vector<std::uint8_t> extractThumbnail(const std::string& path);
+/// Returns an empty JPEG when the file has no usable preview.
+Thumbnail extractThumbnail(const std::string& path);
 
 /// Decodes the CFA mosaic and metadata from a raw file.
 /// Throws std::runtime_error with LibRaw's message on failure.

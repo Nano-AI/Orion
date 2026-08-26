@@ -750,6 +750,97 @@ extension ViewportTests {
         report(corners.topLeft < 0.4, "rather than staying put")
     }
 
+    /// The ARW shape: a preview with **no EXIF segment at all**, whose
+    /// orientation arrives as explicit quarter turns from LibRaw's
+    /// `sizes.flip`. The transform above has nothing to read for these -
+    /// which is exactly how every portrait frame in the strip shipped lying
+    /// on its side.
+    ///
+    /// **Mutation:** ignore `turns` and the one-turn checks fail the same way
+    /// the shipped bug looked; flip the rotation's sign and the bright corner
+    /// lands bottom-left instead of top-right.
+    static func testAnUntaggedPreviewTurnsByExplicitQuarters() {
+        guard let plain = indexJpeg(800, 500, orientation: nil) else {
+            report(false, "the untagged fixture builds"); return
+        }
+
+        // One clockwise turn: portrait, and the bright top-left corner is now
+        // top-right.
+        if let turned = PhotoIndex.shrink(plain, longEdge: 512, turns: 1),
+           let size = indexSize(turned), let corners = indexCorners(turned) {
+            report(size.w == 320 && size.h == 512,
+                   "one turn makes the frame portrait", "\(size.w)x\(size.h)")
+            report(corners.topRight > 0.6, "and the turn went clockwise",
+                   String(format: "%.2f", corners.topRight))
+            report(corners.topLeft < 0.4 && corners.bottomLeft < 0.4,
+                   "with the other corners dark")
+        } else {
+            report(false, "an untagged preview shrinks with one turn")
+        }
+
+        // Two turns: landscape again, bright corner at the bottom right - so
+        // all three sampled corners are dark.
+        if let turned = PhotoIndex.shrink(plain, longEdge: 512, turns: 2),
+           let size = indexSize(turned), let corners = indexCorners(turned) {
+            report(size.w == 512 && size.h == 320,
+                   "two turns keep the frame landscape", "\(size.w)x\(size.h)")
+            report(corners.topLeft < 0.4 && corners.topRight < 0.4
+                       && corners.bottomLeft < 0.4,
+                   "and the bright corner went to the one unsampled spot",
+                   String(format: "%.2f/%.2f/%.2f", corners.topLeft,
+                          corners.topRight, corners.bottomLeft))
+        } else {
+            report(false, "an untagged preview shrinks with two turns")
+        }
+
+        // Three turns: portrait, bright corner bottom-left.
+        if let turned = PhotoIndex.shrink(plain, longEdge: 512, turns: 3),
+           let size = indexSize(turned), let corners = indexCorners(turned) {
+            report(size.w == 320 && size.h == 512,
+                   "three turns make the frame portrait", "\(size.w)x\(size.h)")
+            report(corners.bottomLeft > 0.6, "and land the bright corner bottom-left",
+                   String(format: "%.2f", corners.bottomLeft))
+            report(corners.topLeft < 0.4 && corners.topRight < 0.4,
+                   "with the top corners dark")
+        } else {
+            report(false, "an untagged preview shrinks with three turns")
+        }
+    }
+
+    /// ⚠ **The tag wins over the turns.** Formats that tag their embedded
+    /// preview *and* report a flip would otherwise rotate twice, while the
+    /// untagged ARW shape turned once - the same frame upright in one strip
+    /// and sideways in another, depending on the camera brand.
+    static func testATaggedPreviewIsNotTurnedTwice() {
+        guard let tagged = indexJpeg(800, 500, orientation: 6),
+              let turned = PhotoIndex.shrink(tagged, longEdge: 512, turns: 1),
+              let size = indexSize(turned), let corners = indexCorners(turned) else {
+            report(false, "a tagged preview shrinks with turns given"); return
+        }
+        // Once, not twice: the tag alone puts the bright corner top-right in a
+        // portrait frame. Applying the turns on top would land it bottom-right
+        // in a landscape one.
+        report(size.w == 320 && size.h == 512, "the tag rotated the frame once",
+               "\(size.w)x\(size.h)")
+        report(corners.topRight > 0.6, "and the turns were ignored",
+               String(format: "%.2f", corners.topRight))
+    }
+
+    /// Zero turns and no tag must be a no-op - the path every landscape frame
+    /// takes on every open.
+    static func testAnExplicitZeroTurnsChangesNothing() {
+        guard let plain = indexJpeg(800, 500, orientation: nil),
+              let shrunk = PhotoIndex.shrink(plain, longEdge: 512, turns: 0),
+              let size = indexSize(shrunk), let corners = indexCorners(shrunk) else {
+            report(false, "an untagged preview shrinks with zero turns"); return
+        }
+        report(size.w == 512 && size.h == 320, "zero turns keep the shape",
+               "\(size.w)x\(size.h)")
+        report(corners.topLeft > 0.6 && corners.topRight < 0.4
+                   && corners.bottomLeft < 0.4,
+               "and the picture where it was")
+    }
+
     // MARK: Image fixtures
 
     /// A JPEG, black with a bright top-left quadrant, optionally tagged.

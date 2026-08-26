@@ -567,15 +567,21 @@ OrionStatus orion_read_info(const char* path, OrionRawInfo* out) {
 }
 
 OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
-                                 uint32_t capacity, uint32_t* out_size) {
+                                 uint32_t capacity, uint32_t* out_size,
+                                 int32_t* out_turns) {
     if (path == nullptr || out_size == nullptr) return ORION_ERR_BAD_ARG;
     return guard(nullptr, [&]() -> OrionStatus {
-        const auto jpeg = orion::raw::extractThumbnail(path);
-        *out_size = static_cast<uint32_t>(jpeg.size());
-        if (jpeg.empty()) return ORION_ERR_INTERNAL;
+        const auto thumb = orion::raw::extractThumbnail(path);
+        *out_size = static_cast<uint32_t>(thumb.jpeg.size());
+        // Quarter turns rather than LibRaw's flip encoding, so the private
+        // vocabulary stays on this side of the facade.
+        if (out_turns != nullptr) {
+            *out_turns = orion::raw::quarterTurnsFor(thumb.flip);
+        }
+        if (thumb.jpeg.empty()) return ORION_ERR_INTERNAL;
         if (buffer == nullptr) return ORION_OK;          // size query
-        if (capacity < jpeg.size()) return ORION_ERR_BAD_ARG;
-        std::memcpy(buffer, jpeg.data(), jpeg.size());
+        if (capacity < thumb.jpeg.size()) return ORION_ERR_BAD_ARG;
+        std::memcpy(buffer, thumb.jpeg.data(), thumb.jpeg.size());
         return ORION_OK;
     });
 }

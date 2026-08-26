@@ -1,22 +1,16 @@
 #include "pipe/DevelopPipeline.h"
 
+#include "raw/RawImage.h"
+
 #include <cmath>
 #include <string>
 
 namespace orion::pipe {
-namespace {
 
-/// LibRaw's flip flag as clockwise quarter turns.
-int quarterTurnsFor(int flip) {
-    switch (flip) {
-        case 3: return 2;   // 180
-        case 5: return 3;   // 90 anticlockwise
-        case 6: return 1;   // 90 clockwise
-        default: return 0;
-    }
-}
-
-}  // namespace
+// The flip-to-turns mapping lives in raw/RawImage.h: the thumbnail path needs
+// the same answer, and two copies of an EXIF table is how a filmstrip and a
+// canvas come to disagree about which way is up.
+using orion::raw::quarterTurnsFor;
 
 /*  The spine.
  *

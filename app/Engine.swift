@@ -814,13 +814,17 @@ final class Engine {
 
     /// A still of the developed image, drawn in place of the Metal canvas.
     ///
-    /// Only the screenshot harness sets this: AppKit cannot capture a Metal
-    /// layer, so a still is the only way to photograph the interface. It used
-    /// to double as a stand-in during a photo switch, showing the camera's
-    /// embedded JPEG until the render landed — but that preview carries its own
-    /// orientation, so opening a portrait frame drew it landscape and then
-    /// snapped. Holding the previous frame for the 26 ms decode is calmer than
-    /// showing a picture that turns.
+    /// Two callers set it. The screenshot harness, because AppKit cannot
+    /// capture a Metal layer, so a still is the only way to photograph the
+    /// interface. And `openFile` (#181), which shows the arriving photograph's
+    /// own thumbnail while it decodes, taken down by a `defer` when the open
+    /// finishes either way.
+    ///
+    /// History, because this flag has been both ways: the stand-in was removed
+    /// once for drawing portrait frames landscape and then snapping. The
+    /// orientation was the raw file's, which the thumbnail bytes could not
+    /// carry - fixed since in `PhotoIndex.shrink`, which bakes the turn into
+    /// the stored pixels, so the still now goes up the right way around.
     var placeholder: NSImage?
 
     var histogramTask: Task<Void, Never>?

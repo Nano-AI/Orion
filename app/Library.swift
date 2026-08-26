@@ -331,7 +331,8 @@ final class Library {
             return image
         }
         guard let embedded = readThumbnail(plan.url),
-              let small = PhotoIndex.shrink(embedded) else { return nil }
+              let small = PhotoIndex.shrink(embedded.data, turns: embedded.turns)
+        else { return nil }
         index.record(thumbnail: small, for: plan.url, stamp: plan.photo)
         return NSImage(data: small)
     }
@@ -351,16 +352,23 @@ final class Library {
 
     /// Uses the camera's embedded JPEG preview. Decoding the mosaic for a
     /// thumbnail would take ~50ms per frame; this takes about two.
-    private nonisolated static func readThumbnail(_ url: URL) -> Data? {
+    ///
+    /// The quarter turns ride along because the JPEG stream cannot carry them:
+    /// an ARW's preview has no EXIF segment, so the orientation exists only in
+    /// the raw's own metadata and is lost the moment the bytes travel alone.
+    private nonisolated static func readThumbnail(_ url: URL) -> (data: Data, turns: Int)? {
         var size: UInt32 = 0
-        guard orion_read_thumbnail(url.path, nil, 0, &size) == ORION_OK, size > 0 else {
+        guard orion_read_thumbnail(url.path, nil, 0, &size, nil) == ORION_OK,
+              size > 0 else {
             return nil
         }
         var buffer = [UInt8](repeating: 0, count: Int(size))
-        guard orion_read_thumbnail(url.path, &buffer, size, &size) == ORION_OK else {
+        var turns: Int32 = 0
+        guard orion_read_thumbnail(url.path, &buffer, size, &size, &turns) == ORION_OK
+        else {
             return nil
         }
-        return Data(buffer)
+        return (Data(buffer), Int(turns))
     }
 
     // MARK: Ratings

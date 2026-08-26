@@ -361,19 +361,14 @@ void testBayerDecimation() {
 
 // ── Orientation ────────────────────────────────────────────────────────────
 
-/// Mirrors quarterTurnsFor in DevelopPipeline.cpp. Kept in step by this test.
-int quarterTurnsFor(int flip) {
-    switch (flip) {
-        case 3: return 2;
-        case 5: return 3;
-        case 6: return 1;
-        default: return 0;
-    }
-}
-
 void testOrientation() {
     section("Orientation");
 
+    // The shared mapping itself — one function in raw/RawImage.h, used by the
+    // pipeline's geometry node and the thumbnail path alike. This used to
+    // check a local mirror "kept in step by this test"; now that both callers
+    // share the declared symbol, the real one is checked directly.
+    using orion::raw::quarterTurnsFor;
     report(quarterTurnsFor(0) == 0, "flip 0 is no rotation");
     report(quarterTurnsFor(3) == 2, "flip 3 is 180 degrees");
     report(quarterTurnsFor(6) == 1, "flip 6 is 90 clockwise");

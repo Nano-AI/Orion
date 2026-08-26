@@ -92,7 +92,14 @@ final class PhotoIndex: @unchecked Sendable {
     /// Bumped when the columns change. A schema change **drops and rebuilds**;
     /// there is no migration, because a migration would imply the data is worth
     /// keeping, and it is not.
-    static let schemaVersion: Int32 = 1
+    ///
+    /// 2: thumbnails are stored already turned upright (the untagged-preview
+    /// fix). The columns did not change, the *pixels* did - every cached
+    /// portrait thumbnail from version 1 is on its side, and the stamp that
+    /// keys the cache is the photograph's, which the fix does not touch, so
+    /// only a version bump can evict them. This is the SQLite cache, never a
+    /// sidecar: the cost of the bump is one cold rebuild.
+    static let schemaVersion: Int32 = 2
 
     /// Filmstrip cells are ~110pt wide, so 512 covers a 2× display with room to
     /// spare, and it is what the *live* path produces too — a cache that hands
@@ -529,18 +536,28 @@ final class PhotoIndex: @unchecked Sendable {
 
     // MARK: Scaling
 
-    /// A camera's embedded preview, cut down to what a filmstrip cell shows.
+    /// A camera's embedded preview, cut down to what a filmstrip cell shows,
+    /// and turned upright while it is at it.
     ///
-    /// ⚠ `kCGImageSourceCreateThumbnailWithTransform` is load bearing. An
-    /// embedded preview from a portrait frame is stored landscape with an EXIF
-    /// orientation tag, and the re-encode below writes no tag at all. Without
-    /// the transform the pixels come out unrotated and the tag that said to
-    /// rotate them is gone — every portrait frame in the strip lying on its
-    /// side, with nothing crashing.
+    /// Two previews arrive here and they carry their orientation differently:
+    ///
+    /// - A preview **with an EXIF orientation tag** (a JPEG someone exported,
+    ///   the test fixtures). `kCGImageSourceCreateThumbnailWithTransform`
+    ///   applies the tag, and since the re-encode below writes no tag at all,
+    ///   dropping the transform would strand the pixels sideways forever.
+    /// - A preview **with no EXIF segment at all**, which is what an ARW
+    ///   embeds: the orientation lives in the raw's TIFF IFD, LibRaw surfaces
+    ///   it as `sizes.flip`, and the caller hands it in here as `turns`. The
+    ///   transform has nothing to read and is a no-op for these.
+    ///
+    /// ⚠ **The tag wins.** When the source carries a tag, `turns` is ignored -
+    /// applying both would rotate formats that tag their previews (and also
+    /// report a flip) twice, while the ARW shape still turns once.
     ///
     /// Pure and static, so the round trip is pinned in `orion-viewport-tests`,
     /// which has no database and no photograph.
-    static func shrink(_ data: Data, longEdge: Int = PhotoIndex.thumbnailLongEdge) -> Data? {
+    static func shrink(_ data: Data, longEdge: Int = PhotoIndex.thumbnailLongEdge,
+                       turns: Int = 0) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let scaled = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -548,13 +565,52 @@ final class PhotoIndex: @unchecked Sendable {
                   kCGImageSourceThumbnailMaxPixelSize: longEdge,
               ] as CFDictionary)
         else { return nil }
+
+        let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let tag = props?[kCGImagePropertyOrientation] as? UInt32
+        let tagged = (tag ?? 1) != 1
+
+        var upright = scaled
+        let q = ((turns % 4) + 4) % 4
+        if !tagged, q != 0 {
+            guard let turned = rotated(scaled, quarters: q) else { return nil }
+            upright = turned
+        }
+
         let out = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
             out, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(dest, scaled,
+        CGImageDestinationAddImage(dest, upright,
                                    [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return out as Data
+    }
+
+    /// The image turned by `quarters` clockwise quarter turns, as pixels.
+    ///
+    /// Baked rather than tagged, because the JPEG this ends up in is handed to
+    /// `NSImage` and drawn - a tag would need every consumer to honor it, and
+    /// the one lesson of this file is that consumers do not. The DNG writer
+    /// bakes its preview upright for the same reason.
+    private static func rotated(_ image: CGImage, quarters: Int) -> CGImage? {
+        let w = image.width, h = image.height
+        let odd = quarters % 2 != 0
+        let outW = odd ? h : w, outH = odd ? w : h
+
+        guard let ctx = CGContext(
+            data: nil, width: outW, height: outH,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+
+        // CoreGraphics rotates anticlockwise for positive angles and this
+        // wants clockwise quarters, hence the minus.
+        ctx.translateBy(x: CGFloat(outW) / 2, y: CGFloat(outH) / 2)
+        ctx.rotate(by: -CGFloat(quarters) * .pi / 2)
+        ctx.draw(image, in: CGRect(x: -CGFloat(w) / 2, y: -CGFloat(h) / 2,
+                                   width: CGFloat(w), height: CGFloat(h)))
+        return ctx.makeImage()
     }
 
     /// Runs SQL against a database file directly, so a test can present this

@@ -509,9 +509,14 @@ typedef struct OrionRawInfo {
 OrionStatus orion_read_info(const char* path, OrionRawInfo* out);
 
 /* Copies the camera's embedded JPEG preview into `buffer`. Pass a NULL buffer
- * to query the size first. *out_size receives the byte count needed or written. */
+ * to query the size first. *out_size receives the byte count needed or written.
+ * *out_turns, when non-NULL, receives the clockwise quarter turns that display
+ * the preview upright. The JPEG stream itself carries no orientation - the tag
+ * lives in the raw's TIFF IFD - so a caller that drops this number shows every
+ * portrait frame on its side. */
 OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
-                                 uint32_t capacity, uint32_t* out_size);
+                                 uint32_t capacity, uint32_t* out_size,
+                                 int32_t* out_turns);
 
 /* Export. Renders at full resolution and writes the file. */
 typedef enum OrionImageFormat {

@@ -68,7 +68,16 @@ RawInfo readInfo(const std::string& path) {
     return info;
 }
 
-std::vector<std::uint8_t> extractThumbnail(const std::string& path) {
+int quarterTurnsFor(int flip) noexcept {
+    switch (flip) {
+        case 3: return 2;   // 180
+        case 5: return 3;   // 90 anticlockwise
+        case 6: return 1;   // 90 clockwise
+        default: return 0;
+    }
+}
+
+Thumbnail extractThumbnail(const std::string& path) {
     // Heap for the same reason as readInfo: this runs off the main thread.
     auto owned = std::make_unique<LibRaw>();
     LibRaw& proc = *owned;
@@ -85,7 +94,12 @@ std::vector<std::uint8_t> extractThumbnail(const std::string& path) {
         return {};
     }
 
-    std::vector<std::uint8_t> out(t.thumb, t.thumb + t.tlength);
+    // `sizes.flip`, not anything on the thumbnail struct: `libraw_thumbnail_t`
+    // has no orientation of its own, and the preview stream carries none
+    // either (see the header). Read before recycle(), which clears it.
+    Thumbnail out;
+    out.jpeg.assign(t.thumb, t.thumb + t.tlength);
+    out.flip = proc.imgdata.sizes.flip;
     proc.recycle();
     return out;
 }

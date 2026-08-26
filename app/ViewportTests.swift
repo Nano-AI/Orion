@@ -147,6 +147,9 @@ enum ViewportTests {
         testASidecarChangingUnderTheReadIsNotFiled()
         testTheThumbnailCacheEvictsTheLeastRecentlyUsed()
         testAThumbnailKeepsItsShapeAndItsWayUp()
+        testAnUntaggedPreviewTurnsByExplicitQuarters()
+        testATaggedPreviewIsNotTurnedTwice()
+        testAnExplicitZeroTurnsChangesNothing()
 
         testOnePhotoIsNotASelection()
         testModifiedClicksBuildASelection()
