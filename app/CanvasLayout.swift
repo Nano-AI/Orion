@@ -185,6 +185,94 @@ enum CanvasLayout {
         return r
     }
 
+    /// Which part of the crop rectangle a drag has hold of.
+    enum CropHandle: Equatable, Hashable {
+        case move
+        case topLeft, topRight, bottomLeft, bottomRight
+    }
+
+    /// What a crop drag does to the rectangle.
+    ///
+    /// The whole gesture lives here rather than in `CropOverlay`, for the same
+    /// reason as `maskDrag`: a `DragGesture` closure cannot be driven from any
+    /// test (#110.3), and a pure function can. Normalized crop coordinates in
+    /// and out; `dx`/`dy` are the drag translation already converted by the
+    /// caller from view points to crop fractions. Everything is recomputed from
+    /// `start` on every tick, so pressing or releasing Shift mid-drag snaps the
+    /// rectangle to the right shape by itself.
+    ///
+    /// With `lockAspect` on, a corner drag keeps `start`'s aspect ratio. Crop
+    /// coordinates are normalized against the frame, so the stored ratio *is*
+    /// the visual ratio up to the frame's own aspect, which does not change
+    /// during a drag - locking one locks the other.
+    static func cropDrag(_ h: CropHandle, start: CGRect,
+                         dx: CGFloat, dy: CGFloat,
+                         lockAspect: Bool) -> CGRect {
+        var r = start
+
+        if h == .move {
+            r.origin.x = min(max(start.origin.x + dx, 0), 1 - r.width)
+            r.origin.y = min(max(start.origin.y + dy, 0), 1 - r.height)
+            return r
+        }
+
+        if !lockAspect {
+            switch h {
+            case .move:
+                break
+            case .topLeft:
+                r.origin.x += dx; r.size.width -= dx
+                r.origin.y += dy; r.size.height -= dy
+            case .topRight:
+                r.size.width += dx
+                r.origin.y += dy; r.size.height -= dy
+            case .bottomLeft:
+                r.origin.x += dx; r.size.width -= dx
+                r.size.height += dy
+            case .bottomRight:
+                r.size.width += dx
+                r.size.height += dy
+            }
+            return clampedCrop(r)
+        }
+
+        // The locked resize. The opposite corner is the anchor and never
+        // moves; the ratio is whatever the rectangle had when the drag began.
+        let sx: CGFloat = (h == .topRight || h == .bottomRight) ? 1 : -1
+        let sy: CGFloat = (h == .bottomLeft || h == .bottomRight) ? 1 : -1
+        let anchor = CGPoint(x: sx > 0 ? start.minX : start.maxX,
+                             y: sy > 0 ? start.minY : start.maxY)
+        let movingX = sx > 0 ? start.maxX : start.minX
+        let movingY = sy > 0 ? start.maxY : start.minY
+        let rho = start.width / max(start.height, 1e-6)
+
+        // Extents the cursor asks for, measured from the anchor. A drag past
+        // the anchor collapses to zero rather than inverting the rectangle.
+        let w0 = max(0, (movingX + dx - anchor.x) * sx)
+        let h0 = max(0, (movingY + dy - anchor.y) * sy)
+
+        // The dominant axis wins: the locked rectangle circumscribes the
+        // cursor, so pulling mostly along one edge still grows both. This is
+        // how every shape tool resolves a constrained drag.
+        var w = max(w0, h0 * rho)
+
+        // Both floors and both walls, aspect-aware, so the result already
+        // satisfies `clampedCrop` and the engine's per-axis clamp never gets
+        // the chance to break the ratio. The two bounds cannot conflict: the
+        // anchor is a corner of a valid start rectangle, so the room on each
+        // side is at least `start`'s own extent, and `start` already clears
+        // the aspect-aware minimum - hence wMax >= start.width >= wMin.
+        w = max(w, 0.05, 0.05 * rho)
+        let roomX = sx > 0 ? 1 - anchor.x : anchor.x
+        let roomY = sy > 0 ? 1 - anchor.y : anchor.y
+        w = min(w, roomX, roomY * rho)
+
+        let hh = w / rho
+        return CGRect(x: sx > 0 ? anchor.x : anchor.x - w,
+                      y: sy > 0 ? anchor.y : anchor.y - hh,
+                      width: w, height: hh)
+    }
+
     // MARK: The picture on screen
 
     /// The map between normalized picture coordinates and view points.

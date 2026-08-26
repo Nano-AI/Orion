@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Interactive crop, drawn over the canvas.
@@ -6,10 +7,11 @@ import SwiftUI
 /// giving up — that context is the whole reason a crop overlay beats numeric
 /// fields.
 ///
-/// The rectangle moves and resizes by drag. Corner handles resize freely;
-/// dragging the interior pans the crop across the frame, which is what you
-/// want after picking an aspect ratio and finding it centered on the wrong part
-/// of the picture.
+/// The rectangle moves and resizes by drag. Corner handles resize freely, or
+/// hold the ratio the rectangle had at the start of the drag while Shift is
+/// down; dragging the interior pans the crop across the frame, which is what
+/// you want after picking an aspect ratio and finding it centered on the wrong
+/// part of the picture.
 struct CropOverlay: View {
     @Bindable var engine: Engine
 
@@ -31,10 +33,9 @@ struct CropOverlay: View {
     @State private var dragging: Handle?
     @State private var startRect: CGRect?
 
-    private enum Handle: Equatable, Hashable {
-        case move
-        case topLeft, topRight, bottomLeft, bottomRight
-    }
+    // The drag maths lives in `CanvasLayout.cropDrag`, where the tests can
+    // reach it; the enum lives beside it so both speak the same names.
+    private typealias Handle = CanvasLayout.CropHandle
 
     /// Crop rectangle in view coordinates. The engine stores the crop
     /// normalized to the frame, so this is the one conversion.
@@ -186,24 +187,12 @@ struct CropOverlay: View {
                 let dx = value.translation.width / frame.width * canvas.size
                 let dy = value.translation.height / frame.height * canvas.size
 
-                var r = start
-                switch handle {
-                case .move:
-                    r.origin.x += dx
-                    r.origin.y += dy
-                case .topLeft:
-                    r.origin.x += dx; r.size.width -= dx
-                    r.origin.y += dy; r.size.height -= dy
-                case .topRight:
-                    r.size.width += dx
-                    r.origin.y += dy; r.size.height -= dy
-                case .bottomLeft:
-                    r.origin.x += dx; r.size.width -= dx
-                    r.size.height += dy
-                case .bottomRight:
-                    r.size.width += dx
-                    r.size.height += dy
-                }
+                // Polled every tick rather than captured at the press, the way
+                // AnalogTrack reads Option: pressing or releasing Shift in the
+                // middle of a drag takes effect on the next pointer movement.
+                let lock = handle != .move && NSEvent.modifierFlags.contains(.shift)
+                let r = CanvasLayout.cropDrag(handle, start: start,
+                                              dx: dx, dy: dy, lockAspect: lock)
 
                 // The engine constrains it to the turned frame; asking for
                 // more than fits simply gets less.

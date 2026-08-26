@@ -174,6 +174,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Curve.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Merge.swift
@@ -216,6 +217,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Curve.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
