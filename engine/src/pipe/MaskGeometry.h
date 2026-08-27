@@ -609,4 +609,122 @@ struct Extent {
     return {s1, s2, delta};
 }
 
+/// One stored mask component's geometry, in whichever space it is currently
+/// expressed. The fields mirror `MaskComponentEdit`'s spatial ones and nothing
+/// else — compose ops, feather and roundness are dimensionless and do not
+/// convert.
+struct PlacedShape {
+    float centerX = 0.5f, centerY = 0.5f;
+    float angle = 0.0f;
+    float length = 0.5f;         // linear: zero-to-full ramp distance
+    float semiX = 0.3f, semiY = 0.3f;  // radial semi-axes
+    float brushRadius = 0.08f;   // nib, as a fraction of the shown short side
+};
+
+/// A whole component's geometry, display space → frame space, under one
+/// explicit geometry. **The migration function**: a sidecar written before
+/// masks were stored in frame coordinates holds display-space numbers *and*
+/// the crop, turns, straighten and perspective they were relative to, so the
+/// conversion is deterministic — this is it, and it is the only place the
+/// legacy convention survives.
+///
+/// The centre goes through `toFrame` and is exact under everything. The
+/// extents go through the **whole map's derivative at the centre**, taken
+/// from `toFrame` itself by central differences — one derivation, two
+/// consumers, the rule this file already states twice: a hand-written "the
+/// same Jacobian, assembled from the steps" is how the straighten's aspect
+/// shear got left out of an angle and an anisotropic crop out of a semi-axis.
+/// Every step but the keystone is affine, so the derivative *is* the map for
+/// them and the converted extents are **exact** under crops of any aspect,
+/// quarter turns, straightens and the aspect correction. Under a keystone the
+/// ellipse's image is not an ellipse; what is stored is its image under the
+/// derivative — first order, the accuracy every render shipped before
+/// decision #138, stated rather than hidden.
+///
+/// `kind` selects which extents matter (1 linear, 2 radial); everything else
+/// converts centre, angle and nib alone. `sensorW`/`sensorH` are the
+/// **unturned** frame's dimensions; the rotated pair is derived from `turns`
+/// here rather than passed, so the two cannot disagree.
+///
+/// ⚠ The nib rule reproduces `DevelopMask`'s legacy expression exactly —
+/// `brushRadius · min(sensorW·cropW, sensorH·cropH)` of shown pixels — and
+/// re-bases it on the frame short side, so the painted stroke's dab radius in
+/// frame pixels is unchanged at the instant of migration.
+[[nodiscard]] inline PlacedShape placeToFrame(
+        PlacedShape s, int kind, const Crop& c, int turns,
+        float straightenRad, float sensorW, float sensorH,
+        const persp::Matrix3* perspective) noexcept {
+    const int k = ((turns % 4) + 4) % 4;
+
+    // ⚠ Neutral is short-circuited rather than computed, for the same reason
+    // `radiusToFrame` short-circuits: a sidecar whose geometry was never moved
+    // must migrate to *bitwise* its own numbers, and a numerical derivative of
+    // the identity is the identity to seven decimal places, not exactly.
+    if (k == 0 && std::fabs(straightenRad) <= 1e-6f &&
+        (perspective == nullptr || persp::isIdentity(*perspective)) &&
+        c.x == 0.0f && c.y == 0.0f && c.w == 1.0f && c.h == 1.0f) {
+        return s;
+    }
+
+    const bool swaps = (k % 2) != 0;
+    const float rotW = swaps ? sensorH : sensorW;
+    const float rotH = swaps ? sensorW : sensorH;
+    const float pivotX = c.x + c.w * 0.5f;
+    const float pivotY = c.y + c.h * 0.5f;
+
+    const auto map = [&](float x, float y) {
+        const Placement p = toFrame({x, y, 0.0f}, c, k, straightenRad,
+                                    pivotX, pivotY, rotW, rotH, perspective);
+        return std::pair<float, float>{p.centerX, p.centerY};
+    };
+
+    PlacedShape out = s;
+    const auto centre = map(s.centerX, s.centerY);
+    out.centerX = centre.first;
+    out.centerY = centre.second;
+
+    // The map's derivative at the centre. In double, because the differences
+    // divide a step small enough that float cancellation would cost half the
+    // mantissa — and the affine cases are exact only as far as this is.
+    const float hstep = 1e-3f;
+    const auto xr = map(s.centerX + hstep, s.centerY);
+    const auto xl = map(s.centerX - hstep, s.centerY);
+    const auto yd = map(s.centerX, s.centerY + hstep);
+    const auto yu = map(s.centerX, s.centerY - hstep);
+    const double inv2h = 1.0 / (2.0 * double(hstep));
+    const persp::Jacobian jac{
+        float((double(xr.first)  - double(xl.first))  * inv2h),
+        float((double(yd.first)  - double(yu.first))  * inv2h),
+        float((double(xr.second) - double(xl.second)) * inv2h),
+        float((double(yd.second) - double(yu.second)) * inv2h)};
+
+    // The image of the mask's own x direction — the exact angle of anything
+    // that survives as a direction, since a projectivity takes lines to lines
+    // and the image line's direction is the Jacobian applied to the original.
+    const float cs = std::cos(s.angle), sn = std::sin(s.angle);
+    const float tx = jac.a * cs + jac.b * sn;
+    const float ty = jac.c * cs + jac.d * sn;
+    out.angle = (tx != 0.0f || ty != 0.0f) ? std::atan2(ty, tx) : s.angle;
+
+    if (kind == 2) {
+        // The crop is already in `jac`, so `radiusToFrame` gets a unit one —
+        // its own per-axis crop scaling is the approximation this Jacobian
+        // route exists to avoid. Its delta is relative to the image of the
+        // mask's x direction, which is exactly `out.angle`.
+        const Crop unit{};
+        const Extent ext = radiusToFrame(s.semiX, s.semiY, unit, jac, s.angle);
+        out.semiX = ext.semiX;
+        out.semiY = ext.semiY;
+        out.angle += ext.angleDelta;
+    } else if (kind == 1) {
+        out.length = s.length * lengthAlong(jac, s.angle);
+    }
+
+    const float shownShort = std::min(sensorW * std::max(c.w, 1e-6f),
+                                      sensorH * std::max(c.h, 1e-6f));
+    const float frameShort = std::max(std::min(sensorW, sensorH), 1e-6f);
+    out.brushRadius = s.brushRadius * shownShort / frameShort;
+    return out;
+}
+
 }  // namespace orion::pipe::mask

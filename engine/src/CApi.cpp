@@ -371,6 +371,34 @@ OrionStatus orion_engine_from_frame(const OrionEngine* engine,
     });
 }
 
+OrionStatus orion_engine_mask_place_to_frame(
+    const OrionEngine* engine, const OrionMaskLegacyGeometry* geometry,
+    int kind, OrionMaskShape* shape, float* dab_xy, int dab_count) {
+    if (engine == nullptr || geometry == nullptr || shape == nullptr)
+        return ORION_ERR_BAD_ARG;
+    // A null buffer with a positive count is a caller bug, not an empty stroke.
+    if (dab_xy == nullptr && dab_count > 0) return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        const orion::pipe::mask::PlacedShape in{
+            shape->center_x, shape->center_y, shape->angle, shape->length,
+            shape->radius_x, shape->radius_y, shape->brush_radius};
+        const auto out = engine->impl.develop().placeMaskToFrame(
+            in, kind, geometry->crop_x, geometry->crop_y, geometry->crop_w,
+            geometry->crop_h, geometry->rotate_quarters,
+            geometry->straighten_deg, geometry->perspective_vertical,
+            geometry->perspective_horizontal, geometry->perspective_aspect,
+            dab_xy, dab_count);
+        shape->center_x = out.centerX;
+        shape->center_y = out.centerY;
+        shape->angle    = out.angle;
+        shape->length   = out.length;
+        shape->radius_x = out.semiX;
+        shape->radius_y = out.semiY;
+        shape->brush_radius = out.brushRadius;
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
                                         unsigned* out_w, unsigned* out_h) {
     if (engine == nullptr || out_w == nullptr || out_h == nullptr)

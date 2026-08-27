@@ -135,10 +135,28 @@ public:
     /// kernels work in. Uses the geometry last applied.
     [[nodiscard]] std::pair<float, float> displayedToFrame(float x, float y) const;
 
-    /// The inverse. A spot is stored in frame coordinates, so drawing one takes
-    /// this — nothing else in the program needs it, because a mask is stored in
-    /// displayed coordinates already.
+    /// The inverse. Anything stored in frame coordinates takes this to be
+    /// drawn — spots, and the mask overlay's outline points.
     [[nodiscard]] std::pair<float, float> frameToDisplayed(float x, float y) const;
+
+    /// A legacy mask component's geometry, display space → frame space, under
+    /// an **explicit** geometry rather than the one last applied — a sidecar
+    /// carries the crop, turns, straighten and perspective its display-space
+    /// numbers were relative to, and a snapshot being restored mid-session may
+    /// carry a different one than the picture currently shows.
+    ///
+    /// `dabXy` is `dabCount` interleaved display-space centers, converted in
+    /// place; null with a zero count is an empty stroke. The mathematics is
+    /// `mask::placeToFrame`; this supplies what only the pipeline knows — the
+    /// EXIF turn, the sensor's dimensions and the composed homography.
+    mask::PlacedShape placeMaskToFrame(const mask::PlacedShape& s, int kind,
+                                       float cropX, float cropY,
+                                       float cropW, float cropH,
+                                       int rotateQuarters, float straightenDeg,
+                                       float perspectiveVertical,
+                                       float perspectiveHorizontal,
+                                       float perspectiveAspect,
+                                       float* dabXy, int dabCount) const;
 
     [[nodiscard]] std::uint32_t maxMatteWidth()  const noexcept { return matteW_; }
     [[nodiscard]] std::uint32_t maxMatteHeight() const noexcept { return matteH_; }

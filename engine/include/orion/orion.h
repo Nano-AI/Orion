@@ -400,6 +400,48 @@ OrionStatus orion_engine_to_frame(const OrionEngine* engine,
 OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
                                         unsigned* out_w, unsigned* out_h);
 
+/* The geometry a legacy sidecar's display-space mask numbers were relative to:
+ * the crop, the user's rotation, the straighten and the perspective sliders,
+ * exactly as that sidecar persisted them. The EXIF turn is the engine's own
+ * and is not in here. */
+typedef struct OrionMaskLegacyGeometry {
+    float crop_x, crop_y, crop_w, crop_h;
+    int   rotate_quarters;
+    float straighten_deg;
+    float perspective_vertical;
+    float perspective_horizontal;
+    float perspective_aspect;
+} OrionMaskLegacyGeometry;
+
+/* One mask component's spatial numbers. Which fields matter follows the kind:
+ * center and angle always, length for a linear gradient, the radii for a
+ * radial one, brush_radius for a brush. */
+typedef struct OrionMaskShape {
+    float center_x, center_y;
+    float angle;
+    float length;
+    float radius_x, radius_y;
+    float brush_radius;
+} OrionMaskShape;
+
+/* Converts one legacy component's geometry from display space — normalized
+ * against the crop it was saved under — into frame coordinates, the space
+ * masks are stored and evaluated in now.
+ *
+ * The migration call: a sidecar written before frame-space masks holds
+ * display-space numbers alongside the geometry they were relative to, so the
+ * conversion is deterministic. `shape` converts in place. `dab_xy` is
+ * `dab_count` interleaved brush-dab centers, converted in place; NULL with a
+ * zero count is an empty stroke.
+ *
+ * The centre and angle are exact; a radial's semi-axes and a linear's length
+ * are exact under crops and quarter turns and first order under a straighten
+ * or a keystone — the same numbers every render produced before decision
+ * #137, so nothing converted renders worse than it always had. */
+OrionStatus orion_engine_mask_place_to_frame(
+    const OrionEngine* engine, const OrionMaskLegacyGeometry* geometry,
+    int kind, OrionMaskShape* shape, float* dab_xy, int dab_count);
+
 /* The camera's own white balance, so the UI can open on "as shot". Only the
  * temperature and tint fields are filled; the rest are zeroed. */
 OrionStatus orion_engine_as_shot(const OrionEngine* engine, OrionAdjustments* out);

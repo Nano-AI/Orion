@@ -649,6 +649,45 @@ void DevelopPipeline::setBrushStroke(int component, const float* xy,
     if (erase != nullptr) signs.assign(erase, erase + std::size_t(count));
 }
 
+mask::PlacedShape DevelopPipeline::placeMaskToFrame(
+        const mask::PlacedShape& s, int kind,
+        float cropX, float cropY, float cropW, float cropH,
+        int rotateQuarters, float straightenDeg,
+        float perspectiveVertical, float perspectiveHorizontal,
+        float perspectiveAspect, float* dabXy, int dabCount) const {
+    const mask::Crop crop{cropX, cropY, cropW, cropH};
+    const int turns = ((exifQuarters_ + rotateQuarters) % 4 + 4) % 4;
+    const bool swaps = (turns % 2) != 0;
+    const float rotW = float(swaps ? height_ : width_);
+    const float rotH = float(swaps ? width_  : height_);
+    constexpr float kPi = 3.14159265358979324f;
+    const float rad = straightenDeg * kPi / 180.0f;
+
+    // The same composition `contextFor` performs, against the geometry the
+    // sidecar states rather than the one last applied — a snapshot restored
+    // mid-session may carry a crop the picture no longer shows.
+    const persp::Matrix3 h = persp::compose(
+        {perspectiveVertical, perspectiveHorizontal, perspectiveAspect},
+        rotW, rotH);
+    const persp::Matrix3* hp = persp::isIdentity(h) ? nullptr : &h;
+
+    if (dabXy != nullptr) {
+        const float pivotX = cropX + cropW * 0.5f;
+        const float pivotY = cropY + cropH * 0.5f;
+        for (int d = 0; d < dabCount; ++d) {
+            const auto p = mask::toFrame(
+                {dabXy[std::size_t(d) * 2 + 0], dabXy[std::size_t(d) * 2 + 1],
+                 0.0f},
+                crop, turns, rad, pivotX, pivotY, rotW, rotH, hp);
+            dabXy[std::size_t(d) * 2 + 0] = p.centerX;
+            dabXy[std::size_t(d) * 2 + 1] = p.centerY;
+        }
+    }
+
+    return mask::placeToFrame(s, kind, crop, turns, rad,
+                              float(width_), float(height_), hp);
+}
+
 bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
                                    int width, int height) {
     // Ignored rather than clamped, for the same reason a brush stroke is: a

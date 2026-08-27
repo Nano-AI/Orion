@@ -39,6 +39,7 @@ int main() {
     testRampIsTheExactPullBack();
     testRampDenominatorIsTheMatrix();
     testRadialIsTheExactPullBack();
+    testPlaceToFrame();
     testTexturePool();
     testPerspectiveWiring();
     testNoiseEstimator();

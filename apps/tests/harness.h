@@ -115,6 +115,7 @@ void testDisplayMatrixMatchesFromFrame();
 void testRampIsTheExactPullBack();
 void testRampDenominatorIsTheMatrix();
 void testRadialIsTheExactPullBack();
+void testPlaceToFrame();
 void testTexturePool();
 void testPerspectiveWiring();
 void testNoiseEstimator();
