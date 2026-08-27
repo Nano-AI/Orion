@@ -58,6 +58,7 @@ enum ViewportTests {
         testDevelopStateRoster()
         testSidecarSurvivesAMissingField()
         testMaskGroupSidecar()
+        testMaskSpaceMarkerGatesTheLegacyRead()
         testAmericanKeyMigration()
         testSidecarEscapingDoesNotCompound()
         testEditsSurviveAQuit()

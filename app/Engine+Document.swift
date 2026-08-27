@@ -109,12 +109,17 @@ extension Engine {
     /// Both callers now branch on the answer, and both say so out loud.
     @discardableResult
     func restore(encoded: Data) -> Bool {
-        guard let s = try? JSONDecoder().decode(DevelopState.self, from: encoded) else {
+        guard let decoded = try? JSONDecoder().decode(DevelopState.self, from: encoded) else {
             let why = "the saved edits could not be read"
             lastFailure = why
             FileHandle.standardError.write(Data("orion: restore failed — \(why)\n".utf8))
             return false
         }
+        // A sidecar from before frame anchoring converts on the way in, under
+        // its own persisted geometry. No rewrite pass: the file adopts frame
+        // numbers and the marker on the next edit's save, and converts afresh
+        // — deterministically — on every open until then.
+        let s = migratedToFrameSpace(decoded)
         suspended = true
         assign(s)
         suspended = false
@@ -158,8 +163,15 @@ extension Engine {
     /// the panel says so.
     func restore(snapshot: Snapshot, photo: URL?) {
         guard isLoaded else { return }
+        // Converted at restore, never at store: `SnapshotStore` re-encoding a
+        // legacy version it never restored keeps that version's `maskSpace: 0`
+        // and untouched numbers, so the file stays self-describing. Once
+        // through here, every history entry this session records is
+        // frame-space — undo across the migration boundary cannot resurrect
+        // display numbers.
+        let restored = migratedToFrameSpace(snapshot.state)
         suspended = true
-        assign(snapshot.state)
+        assign(restored)
         suspended = false
         pushAndRender()
         if let photo { restoreMattes(photo: photo) }

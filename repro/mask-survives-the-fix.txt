@@ -1,0 +1,46 @@
+# A display-space-era sidecar's masks land where they always rendered.
+#
+# Masks are stored in frame coordinates now; every sidecar written before
+# that stores them normalized against the displayed picture, alongside the
+# geometry they were relative to. `DevelopState.maskSpace` is the marker
+# (absent means legacy), and the load-time migration converts under the
+# sidecar's own persisted geometry. This file watches it happen:
+#
+# 1. place a radial under a real turn (EXIF three quarters plus `rotate 3` -
+#    two quarter turns total, so frame and display genuinely disagree),
+# 2. measure a covered patch and a clear one,
+# 3. `maskdowngrade` rewrites the sidecar exactly as an old build would have
+#    (display numbers, legacy marker) - the verb refuses any geometry it
+#    cannot invert exactly, so the assertion below is about the migration,
+# 4. reopen, and demand the same picture to the last code.
+#
+# Mutation this catches: skip the `migratedToFrameSpace` call at
+# `Engine.restore(encoded:)` and the reopened mask reads its display numbers
+# as frame coordinates - the covered patch moves across the frame and
+# `maskedAfter` comes back at `clearBefore`'s brightness.
+
+open samples/underexposedsubject.ARW
+rotate 3
+
+mask radial
+set maskCentreX 0.30
+set maskCentreY 0.40
+set maskRadiusX 0.18
+set maskRadiusY 0.12
+set maskAngle 0.5
+set localExposure 2.5
+
+# Frame (0.30, 0.40) under two total quarter turns displays at (0.70, 0.60).
+measure 0.64,0.54,0.12,0.12 maskedBefore
+measure 0.05,0.05,0.10,0.10 clearBefore
+
+save samples/underexposedsubject.ARW
+maskdowngrade samples/underexposedsubject.ARW
+reopen
+
+measure 0.64,0.54,0.12,0.12 maskedAfter
+measure 0.05,0.05,0.10,0.10 clearAfter
+
+print the migrated mask covers what it covered, and nothing it did not
+expect maskedAfter == maskedBefore
+expect clearAfter == clearBefore

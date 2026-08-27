@@ -514,6 +514,9 @@ final class Engine {
             gradeHighlight: gradeHighlight, gradeBalance: gradeBalance,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             lutStrength: lutStrength,
+            // The live state is always frame-space; a legacy sidecar converts
+            // on the way in, at the restore points, never here.
+            maskSpace: 1,
             maskComponents: maskComponents,
             maskRefine: maskRefine,
             spots: spots,

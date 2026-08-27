@@ -708,4 +708,55 @@ extension ViewportTests {
                    text == original ? "" : "became \(text)")
         }
     }
+
+    /// The `maskSpace` marker gates which space a sidecar's mask numbers are
+    /// read in — and absent means LEGACY, not the default, wherever there are
+    /// masks for it to gate.
+    ///
+    /// Every sidecar written before frame anchoring carries display-space
+    /// numbers and no marker; reading those as frame coordinates would move
+    /// every finished mask silently, which is the #112 failure shape with a
+    /// coordinate system in place of a key spelling. A maskless sidecar
+    /// decodes to the default 1 instead, so an empty file is still exactly
+    /// `DevelopState()`.
+    static func testMaskSpaceMarkerGatesTheLegacyRead() {
+        func decode(_ json: String) -> DevelopState? {
+            guard let data = json.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode(DevelopState.self, from: data)
+        }
+
+        // A sidecar carrying a mask and no marker is the display-space era.
+        let legacy = decode(#"{"maskComponents":[{"kind":2,"centerX":0.3}]}"#)
+        report(legacy?.maskSpace == 0,
+               "a marker-less sidecar with masks reads as legacy display space",
+               "maskSpace \(legacy?.maskSpace ?? -1)")
+
+        // The pre-group single-mask spelling is the same era by construction.
+        let preGroup = decode(#"{"maskKind":2,"maskCentreX":0.3}"#)
+        report(preGroup?.maskSpace == 0,
+               "and so does the pre-group single-mask spelling",
+               "maskSpace \(preGroup?.maskSpace ?? -1)")
+
+        // A stated marker wins, in both directions.
+        let framed = decode(#"{"maskSpace":1,"maskComponents":[{"kind":2}]}"#)
+        report(framed?.maskSpace == 1,
+               "a stated marker is believed over the legacy inference")
+        let stated = decode(#"{"maskSpace":0,"maskComponents":[{"kind":2}]}"#)
+        report(stated?.maskSpace == 0, "and a stated zero stays zero")
+
+        // No masks, no marker: the default, so an empty sidecar is exactly
+        // the defaults — the invariant the empty-sidecar check holds.
+        let empty = decode("{}")
+        report(empty?.maskSpace == 1,
+               "a maskless sidecar keeps the frame-space default",
+               "maskSpace \(empty?.maskSpace ?? -1)")
+
+        // The encoder always writes the marker, so a fresh save is
+        // self-describing whatever build reads it next.
+        if let data = try? JSONEncoder().encode(DevelopState()),
+           let text = String(data: data, encoding: .utf8) {
+            report(text.contains(#""maskSpace":1"#),
+                   "the encoder writes the marker on every save")
+        }
+    }
 }

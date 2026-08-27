@@ -133,6 +133,64 @@ extension Scenario {
             try persistMatte(m.alpha, width: m.width, height: m.height,
                              engine: engine, source: which.label)
 
+        case "maskdowngrade":
+            // Rewrites the sidecar's develop blob into the display-space
+            // era's form — what an old build would have written — so the
+            // load-time migration can be watched doing its job rather than
+            // reasoned about. The `corrupt` verb's shape, for the same
+            // reason: the unreadable branch there and the legacy branch here
+            // are both unreachable headlessly without a verb that
+            // manufactures the past.
+            //
+            // ⚠ Only under a geometry this verb can invert *exactly*:
+            // quarter turns, no crop, no straighten, no keystone. Turns are
+            // rigid in normalized coordinates, so the inverse is the point
+            // map plus k·π/2 on the angle and nothing else — and the
+            // round-trip assertion in `repro/mask-survives-the-fix.txt` is
+            // then about the migration, not about this verb's arithmetic.
+            guard let p = args.first else {
+                throw Bad(what: "maskdowngrade needs a path")
+            }
+            let target = URL(fileURLWithPath: p)
+            guard let blob = Sidecar.read(for: target)?.develop,
+                  var s = try? JSONDecoder().decode(DevelopState.self, from: blob)
+            else { throw Bad(what: "no develop state in \(p) to downgrade") }
+            guard s.maskSpace == 1 else {
+                throw Bad(what: "the sidecar is already legacy")
+            }
+            guard s.cropX == 0, s.cropY == 0, s.cropW == 1, s.cropH == 1,
+                  s.straightenDeg == 0, s.perspectiveVertical == 0,
+                  s.perspectiveHorizontal == 0, s.perspectiveAspect == 0 else {
+                throw Bad(what: "maskdowngrade only inverts a turns-only "
+                              + "geometry exactly")
+            }
+            // The engine's own frame → display map, which under turns alone
+            // is the exact inverse of what the migration will apply.
+            let down = engine.frameDisplayMap
+            let k = ((engine.quarterTurns % 4) + 4) % 4
+            for i in s.maskComponents.indices {
+                var c = s.maskComponents[i]
+                let d = down.display(CGPoint(x: CGFloat(c.centerX),
+                                             y: CGFloat(c.centerY)))
+                c.centerX = Float(d.x)
+                c.centerY = Float(d.y)
+                c.angle += Float(k) * .pi / 2
+                var stroke = c.brushStroke
+                for j in stride(from: 0, to: stroke.count - 1, by: 2) {
+                    let q = down.display(CGPoint(x: CGFloat(stroke[j]),
+                                                 y: CGFloat(stroke[j + 1])))
+                    stroke[j] = Float(q.x)
+                    stroke[j + 1] = Float(q.y)
+                }
+                c.brushStroke = stroke
+                s.maskComponents[i] = c
+            }
+            s.maskSpace = 0
+            guard let encoded = try? JSONEncoder().encode(s),
+                  Sidecar.merge(into: target, { $0.develop = encoded }) else {
+                throw Bad(what: "the sidecar refused the downgraded write")
+            }
+
         case "refuses":
             // Asserts a detector **declines** this photograph.
             //

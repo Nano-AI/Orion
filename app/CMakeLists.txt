@@ -29,6 +29,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Geometry.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Spots.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Mask.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine+MaskMigration.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Brush.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Document.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Render.swift

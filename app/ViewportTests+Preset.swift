@@ -84,6 +84,10 @@ extension ViewportTests {
         m.colorTol = 0.19; m.colorSoft = 0.07
         s.maskComponents = [m]
         s.maskRefine = 0.72
+        // Off its default of 1, so the round trip can see the marker — and 0
+        // is the value that must survive: a legacy snapshot re-encoded without
+        // being restored keeps its 0, or it stops being self-describing.
+        s.maskSpace = 0
         // ⚠ Two layers, not one: a fixture with a single layer cannot see a
         // round trip that drops every layer after the first.
         // ⚠ Every field of both layers off-default, tone bands included — the

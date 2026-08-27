@@ -397,6 +397,21 @@ struct DevelopState: Equatable, Codable {
     var denoiseLuma: Float
     var denoiseColor: Float
     var lutStrength: Float
+    /// Which space `maskComponents`' spatial numbers are in: 0 is the legacy
+    /// display convention (normalized against the crop this state also
+    /// carries), 1 is frame coordinates — the space the engine stores and
+    /// renders since frame anchoring.
+    ///
+    /// ⚠ **The marker gates meaning; the numbers are never reinterpreted
+    /// without it** — the #112 rule. Absent from a sidecar means 0, because
+    /// every sidecar written before the marker existed is display-space; the
+    /// encoder always writes 1, because the live state is always frame-space
+    /// (a legacy state converts on the way in, at the two restore points,
+    /// through the engine's `mask::placeToFrame` under the geometry persisted
+    /// beside these numbers). A snapshot file re-encoded without being
+    /// restored keeps its 0 and its untouched numbers, so the file stays
+    /// self-describing.
+    var maskSpace: Int32
     /// The mask group, folded left in listed order. Empty means no mask.
     /// research/masking.md §6.
     var maskComponents: [MaskComponentState]
@@ -468,6 +483,7 @@ extension DevelopState {
             gradeHighlight: [0, 0, 0], gradeBalance: 0,
             denoiseLuma: 0, denoiseColor: 0,
             lutStrength: 1,
+            maskSpace: 1,
             maskComponents: [],
             maskRefine: 0,
             spots: [],
@@ -504,7 +520,7 @@ extension DevelopState {
         "highlightRecovery",
         "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance",
         "denoiseLuma", "denoiseColor", "lutStrength",
-        "maskComponents", "maskRefine", "spots", "layers",
+        "maskSpace", "maskComponents", "maskRefine", "spots", "layers",
         "fusion", "dehaze", "clarity",
         "grainAmount", "grainSize",
         "vignetteAmount", "vignetteFieldAngle",
@@ -538,6 +554,7 @@ extension DevelopState {
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue, lensChoice
         case highlightRecovery, denoiseLuma, denoiseColor
         case gradeShadow, gradeMidtone, gradeHighlight, gradeBalance
+        case maskSpace
         case maskComponents, localExposureEv, maskRefine, spots
         case localContrast, localSaturation, localWarmth, localTint
         case layers
@@ -677,6 +694,20 @@ extension DevelopState {
             m.brushHardness = float(.legacyBrushHardness) ?? m.brushHardness
             m.brushStroke = (try? c.decode([Float].self, forKey: .legacyBrushStroke)) ?? []
             maskComponents = [m]
+        }
+
+        // ⚠ Absent means LEGACY, not the default — but only where there is
+        // anything for the marker to gate. `self.init()` set 1, because fresh
+        // states are frame-space; a sidecar carrying masks without the marker
+        // was written before it existed and its numbers are display-space. A
+        // sidecar with no masks decodes to the default 1, so an empty file is
+        // still exactly `DevelopState()` and nothing downstream has to ask
+        // which era a maskless state came from.
+        if let stated = (try? c.decodeIfPresent(Int32.self, forKey: .maskSpace))
+            .flatMap({ $0 }) {
+            maskSpace = stated
+        } else if !maskComponents.isEmpty {
+            maskSpace = 0
         }
 
         fusion = float(.fusion) ?? fusion
