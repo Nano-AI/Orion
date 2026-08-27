@@ -4,11 +4,14 @@
 
 ---
 
-**Last updated:** 2026-08-25 (**Shift-locked crop drags #198, portrait
-thumbnails upright #199, filmstrip cells take their picture's aspect #200** -
-the sideways-strip and landscape-then-portrait-flash bug is fixed at its root:
-the ARW preview JPEG carries no EXIF, so the orientation now crosses the
-facade as quarter turns and is baked into the cached pixels.)
+**Last updated:** 2026-08-27 (**Masks anchored to the image #202/#203, and
+subject/sky detection un-broken on full-frame bodies #201** - the two
+reported bugs: parametric masks now live in frame coordinates like spots and
+mattes, converted once at the gesture and once at load for old sidecars, so
+a crop/straighten/turn/keystone after placement moves nothing; and the
+analysis render takes its size from the engine's own matte allocation, which
+ends the round-vs-floor half-pixel that refused every Subject/Sky press on a
+7968x5320 frame.)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -439,11 +442,16 @@ there now.
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** re-measured 2026-08-25 at #200. `orion-tests` **1009 checks** ·
-`orion-viewport-tests` **3940 checks** · all 0 failures. ⚠ Of the 80+
-`repro/` scenarios only the **four** that use the dog-bracket samples can
-run on this machine (all exit 0); the rest still want `_PIC8220.ARW` /
-`_PIC8148.ARW`, as does the bench. Bench exits 0 on all three frames.
+**Suites:** re-measured 2026-08-27 at #203. `orion-tests` **1005 checks** ·
+`orion-viewport-tests` **4027 checks** · all 0 failures. ⚠ The counts moved
+in both directions this time: #202 deleted three tests that graded the dead
+display-space kernel spelling along with the code they graded, and added the
+conversion, anchoring and map tests. **Eight** `repro/` scenarios run on this
+machine's dog-bracket samples now (all exit 0) - the four from before, their
+mask centres rewritten to frame coordinates, plus the new
+`subject-selection-42mp`, `sky-selection-42mp`, `mask-follows-the-frame` and
+`mask-survives-the-fix`; the rest still want `_PIC8220.ARW` /
+`_PIC8148.ARW`, as does the bench.
 ⚠ Earlier copies of this block said **806/3708/40**, and before that **800** and
 **3702** — the counts before #125 and #129 added checks; the suites only ever
 grow, so a stale number here reads as a regression. The bench prints **54 named
@@ -560,6 +568,57 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-27` - masks anchored to the image, and detection un-broken
+
+**Both reported directly by the user, both root-caused before any fix.**
+
+**Subject/sky detection never worked on a full-frame body (#201).** The
+analysis render sized itself with round-to-nearest while the engine sizes its
+matte texture with floor division: 1024x684 against a 1024x683 allocation on
+a 7968x5320 a7R III, and `setMaskMatte` rejects over-allocation by design.
+Exact 3:2 sensors trip the same half-pixel, and the one test in the area
+carried a +-1 tolerance that specifically absorbed it. The size now comes
+from `orion_engine_max_matte_size` - one source of truth - and
+`renderForAnalysis` returns the EXIF-only turn it rendered under, closing a
+latent un-turn-by-the-wrong-turn bug on rotated photographs. Verified on the
+reporter's own files (subject 21.5%, sky 25.3% covered) and pinned by
+`repro/subject-selection-42mp.txt` / `sky-selection-42mp.txt` on the
+dog-bracket samples, which are the exact camera that always failed.
+
+**A mask warped with the crop (#202, #203).** Parametric masks were stored in
+display space - normalized against the *live* crop - and the kernel folded
+the current geometry in per apply, so every later crop, straighten, turn or
+keystone re-aimed every mask at new image pixels. `research/masking.md`'s
+"Same result" departure note was the claim that hid it (corrected in place),
+and the overlay moved with the render, so the maskcheck oracle was blind by
+construction. Masks now live in frame coordinates like spots and mattes:
+the kernel applies no geometry at all, the gesture layer converts once at
+the boundary through the engine's own `orion_engine_display_map`, and a
+display-space-era sidecar converts once at load under its own persisted
+geometry, gated by the `maskSpace` marker (#112's rule; absent means legacy
+wherever masks exist). Free wins, both pinned: geometry ticks no longer
+re-stamp four full-resolution mask nodes, and a straighten no longer
+re-uploads every brush stroke. E2E: `repro/mask-follows-the-frame.txt` holds
+exact-pixel patches across a turn and a crop placed *after* the mask - the
+crop check read 0.3130 -> 0.5248 before the fix and is bit-identical now -
+and `repro/mask-survives-the-fix.txt` watches the sidecar migration round-trip
+a real file, mutation-tested by skipping the migration call.
+
+⚠ **Not runnable here:** `mask-alignment.txt` and
+`perspective-carries-the-mask.txt` are reinterpreted by the convention change
+(their headers say how) and want `_PIC` samples this machine lacks - their
+first run elsewhere should re-read the cell counts. The ~35 posed screenshot
+scenes shift wherever a mask is posed under geometry. Out of scope, noted:
+`renderForAnalysis` still does a full-resolution RGBA16F readback plus a
+per-pixel Swift loop on the main actor, so Subject on 42 MP blocks the UI
+for a beat even now that it works.
+
+**1005 / 4027 / eight sample-runnable repro scenarios exit 0 /
+check-decisions, -gestures, -wiring exit 0 / check-screens, -modes exit 2
+for want of `_PIC` samples (pre-existing). Largest file in the tree:
+`tests_mask.cpp` at 955.** Still owed by the developer: a stylus verdict on
+the brush, and the trailer-stripping history rewrite.
 
 ## Session `2026-08-25` - shift-locked crop, and the sideways portrait bug
 
@@ -1031,118 +1090,3 @@ does** — deleting `W⁻¹JW` from `mask::unperspective` fails 2 checks, worst 
 
 **872 / 3708 / 42 of 42 / bench 0 on three frames / check-decisions 0 /
 check-gestures 0 / check-screens 0.**
-
-## Sessions `2026-08-04b` — everything left was blocked, so the work was finding out why
-
-⚠ **Nine decisions (#166–#174) and not one line of shipped behaviour changed.**
-That is the honest summary, and it is not a bad session: the queue was empty of
-anything startable, and what these turns produced is the reason *why*, measured
-rather than assumed.
-
-### Seven of eight plan rows were wrong
-
-Checked against the tree, one at a time, because #135 and #139 had already
-caught the queue offering finished work twice.
-
-| Row | Reality |
-|---|---|
-| `SQLITE_BUSY` untested (#164) | Tested, registered, with a named mutation — and the row asked for a **second process** when SQLite locks the *file*, so a second **connection** contends identically |
-| Folder rows never collected (#166) | `collectMissingFolders()` runs at `init` and is tested. Only *stale-but-present* folders remain |
-| Thumbnail budget a constant, no readout (#167) | **Both false.** `budgetBytes` is a parameter the tests drive at 4096; `heldBytes` already reads it. Only the **button** is missing |
-| Highlight plateau (#165) | ⚠ **Accurate** — the one row that was |
-
-⚠ **#167 nearly shipped a duplicate accessor.** Acting on the row as written,
-`bytesHeld` was exposed and a check added — a second name for a number that
-already had one. It **built, passed, and took the suite 3708 → 3709 green.**
-`heldBytes` surfaced only on reading the test three lines below the edit.
-**A green suite is not evidence a change was needed.**
-
-### Piece 5 was prepared, then dead-ended by measurement
-
-#168 wrote the scaffolding and refused to invent the discretisation. #169
-**fetched the paper** — Rouf, Lau & Heidrich PROCAMS 2012 §3.4 — which answered
-three of four questions and shrank the work: a **conditional single-channel**
-pass, not three solves. Eq. 9 interpolates the **gradient**; the shipped fill
-interpolates the **value**, which *is* the plateau, in one line.
-
-⚠ Then #170 asked whether its gate condition ever holds, and #171/#172 counted:
-`Ω^∩ = Ω_k` is **not met by this sensor's frames**, globally *or* per region —
-**44.7% and 75.4%** of partially-clipped blocks are the **shoulder**, and a
-shoulder is definitionally the ring containment forbids.
-
-**So §3.4 is not the route on these photographs.** The plateau is still real.
-
-### And the rule everything rests on had a hole
-
-#173 looked for alternatives: they are **US patents** or **GPL implementations**.
-#174 followed that back to `CLAUDE.md`, which demands a citation and then says
-reimplementing from a description is fine — **true of copyright, silent about
-patents.** *"Cited" was being read as "clearance"*, including by me, twice.
-The rule now says it is not.
-
-### What this leaves
-
-**Four things need the developer** and none of them is technical: the #162
-memory trade, freedom-to-operate, the flat-frame log, and permission to
-download the lens data. **Every gate stayed green throughout: 872 / 3708 /
-42 of 42 / bench 0 on three frames / two lints.**
-
-## Sessions `2026-08-03b` – `2026-08-04` — the performance audit, and a memory ceiling nobody could see
-
-⚠ **One entry for eighteen decisions (#148–#165), written 2026-08-04 because it
-had not been written at all.** The ledger carried every one; this file — the
-recovery point — carried none of them, which is the same failure as a stale
-queue wearing different clothes.
-
-### The performance audit, asked for 2026-08-01, complete
-
-Six areas. **One real defect, one design question settled by measurement, and
-five figures found stale against the tree.**
-
-| Area | Outcome |
-|---|---|
-| Gestures (#148) | Premise table wrong in **all four rows** — all six already armed. `tools/check-gestures.py` added: a **grep, not a test**, because #110.3 proved a `DragGesture` cannot be driven from either suite |
-| The tick (#149) | *"Sliders slow"* answered. Clarity **4.2 ms armed / 56.4 unarmed**, 13.4×. The instrument had only ever driven the unarmed path, reporting 17 fps for a gesture running at 235 |
-| Protocol (#150) | Spread **0.14 ms** over five runs. **CPU load is harmless; anything else on the GPU is fatal** (a second Orion → spread 11.14). Bench now warns above 2 ms — it had printed *PASS at 10.09* captioned "machine noise" |
-| Cold open (#151) | **210.9 ms**, and the canvas shows the **previous photograph** throughout — `isLoaded` set once, never cleared, and there is **no busy state anywhere in the app** |
-| Memory (#152) | ⚠ **The defect.** 7,186 MiB of intermediates against ~6,144 on an 8 GB Mac. **A 24 MP frame cannot open there, and nothing checks** |
-| Scroll/zoom/pan (#154) | Cheap by construction — the canvas transforms an **already-rendered** texture. Recorded as a *reading*, with no number quoted, because the harness cannot drive the gesture |
-
-### ⚠ The 8 GB ceiling, and why it is still open
-
-#153 costed the fix by measurement rather than argument: peak live memory is
-**1,202 MiB** against 7,186 allocated — **83% held for nothing** — which ruled
-out tiling and lower precision, because the problem is **lifetime**, not size.
-
-Everything to fix it was then built and is correct: the pool and its tests
-(#155), the four textures that outlive the graph and must be pinned (#156), the
-pins in the accounting (#157), the A/B byte oracle (#159, **0 of 96,962,304**),
-and `outputs_` made non-owning with the render **bit-identical** (#160).
-
-⚠ **Then #161 found by reading `render()` that pooling breaks the interactive
-path**: a skipped node contributes the pixels still in its output texture, and a
-pool recycles exactly those — every render becomes full, **9.33 ms → 67.25**.
-
-⚠ **#162 costed both ways out and neither is free, because the memory *is* the
-cache**: a drag recomputes only **2–11 of 173 nodes**, so ~162 textures exist
-purely as cache. **This is a product trade, and it is the developer's call** —
-see the top of this file.
-
-### Also
-
-**The lens picker shipped** (#145–#147) after #144 found the developer's own lens
-is *absent from the data*, not misspelled — `…DG DN | Art 023`, and the bundled
-database has no `Art 023` entry at all. **#163** settled the licence: the data is
-**CC BY-SA 3.0**, not the library's LGPL, so refreshing is clear — and the check
-found `NOTICE` had **no attribution for the database** in a publicly
-downloadable build. **#164** corrected a sixth stale row. **#165** measured the
-highlight plateau: nine radial samples flat at the clip value, colour already
-correct.
-
-### ⚠ What this stretch should teach the next session
-
-**Six rows were stale** (#144, #148, #149, #150, #151, #164). **Check the tree,
-never the record.** And four things were found by *reading* rather than shipping
-— #156's pin list, #158's ownership problem, #161's cache conflict, #157's
-silently-ineffective pin — each of which would otherwise have surfaced as a red
-gate or a **believable wrong picture**.

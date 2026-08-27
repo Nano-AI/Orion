@@ -182,6 +182,13 @@ coordinates, so each dab centre goes through the same matrix the image does. A
 few kilobytes per mask, resolution-independent, and exact under any geometric
 edit.
 
+> ✅ **This is what is built, since 2026-08-27.** It was not for a year of
+> sessions: §6b's departure note stored masks in the displayed picture's space
+> instead and called the result the same. It is not the same — see the
+> correction there — and the fix was to build exactly this section: frame
+> coordinates in `Adjustments::MaskComponentEdit`, conversion once at the
+> gesture, a kernel that applies no geometry.
+
 The alternative — a raster mask in image space — costs 24–120 MB per mask at
 24–60 MP, must be resampled on every geometry change, and compounds blur because
 an already-feathered mask is being re-interpolated.
@@ -601,13 +608,25 @@ fourth dead control of session 2026-07-29n's class — invert never reached a
 brush, because the gradient node held it and the brush node discarded that
 node's output. Pinned by a GPU test now.
 
-**Departures from §1 and §3, both deliberate:**
+**Departures from §1 and §3 — one reversed, one deliberate:**
 
-- §3 says store strokes in the *uncropped* image's normalized space. Orion
+- ~~§3 says store strokes in the *uncropped* image's normalized space. Orion
   stores them in the **displayed** picture's space instead, and `MaskGeometry.h`
   transforms them at render. Same result — a stroke stays on its subject through
   crop, straighten and quarter turns — but it keeps one copy of that transform,
-  shared with the gradients, rather than two conventions to reconcile.
+  shared with the gradients, rather than two conventions to reconcile.~~
+  ⚠ **CORRECTED 2026-08-27 — "same result" was false, and the sentence hid the
+  bug it described.** Display-space storage with the *live* geometry folded in
+  at render keeps a mask fixed to the **crop rectangle**, not to the pixels: a
+  stroke at `centerX = 0.5` means "middle of whatever the crop currently is",
+  so every crop, straighten, turn or keystone applied *after* placement dragged
+  every mask off its subject — the reported bug, watched failing at 0.21 of
+  luma in `repro/mask-follows-the-frame.txt`'s crop check. The transform being
+  one shared copy made the tracking exact, not correct. **§3 is now what is
+  built**: every parametric mask is stored in frame coordinates, converted once
+  at the gesture (`FrameDisplayMap`) or once at load for a display-space-era
+  sidecar (`maskSpace` marker, `mask::placeToFrame`), and the kernel applies no
+  geometry at all — the raster matte's own contract, §5.
 - §1's "one radius per mask, plus mask-level Flow and CenterWeight" is followed.
   **CenterWeight is called Hardness** in the interface, because that is the word
   photographers use.

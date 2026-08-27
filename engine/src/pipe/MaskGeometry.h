@@ -1,15 +1,24 @@
 /*  Putting a mask where the photographer put it.
  *
  *  A mask is placed on the picture the user is looking at — which is rotated
- *  and cropped — but it is *applied* in `develop:linear`, which runs before the
- *  geometry node and therefore sees the whole frame, unturned. Handing the
- *  displayed coordinates straight to the shader means a mask slides off its
- *  subject the moment the photograph is rotated, and shrinks away from it under
- *  a crop.
+ *  and cropped — but it is *stored and applied* in frame coordinates: the
+ *  whole sensor picture, unturned, the space `develop:linear` runs in. The
+ *  conversion happens **once, at the boundary** — a gesture's point crosses
+ *  through `toFrame` as it lands, the overlay's outline crosses back through
+ *  `displayMatrix` to be drawn, and a display-space-era sidecar crosses
+ *  through `placeToFrame` at load. The kernel itself applies no geometry, and
+ *  that ignorance is what anchors a mask to its subject through any *later*
+ *  crop, straighten, turn or correction.
  *
- *  This is the transform between the two, and it is the reason a *parametric*
- *  mask is worth the trouble: there is nothing to resample, only a center and
- *  an angle to move. research/masking.md §3.
+ *  ⚠ The other arrangement — display-space storage, with this file's maps
+ *  folded into the render per apply — shipped for a year and is the bug the
+ *  boundary rule replaces: the fold used the *live* geometry, so cropping
+ *  after placement re-aimed every stored number at new image pixels. Exactly
+ *  transformed, anchored to the wrong thing.
+ *
+ *  This file is the transform between the two spaces, and it is the reason a
+ *  *parametric* mask is worth the trouble: there is nothing to resample, only
+ *  a center and an angle to move. research/masking.md §3.
  */
 
 #pragma once
@@ -216,9 +225,9 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
 /// picture.
 ///
 /// Needed the moment anything stored in *frame* coordinates has to be drawn —
-/// which is spots, and only spots. A mask is stored in displayed coordinates
-/// and needs no inverse to draw; dust is on the sensor, so it is stored where
-/// the sensor put it and has to be carried back out to be shown.
+/// which is everything now: spots always lived there, and masks joined them
+/// with frame anchoring, so the overlay's outlines, handles and iso-lines all
+/// come back out through this map (as `displayMatrix`, its one-matrix form).
 ///
 /// ⚠ **The order is the reverse of `toFrame`'s, not the same order with
 /// opposite signs.** `toFrame` goes crop, straighten, perspective, turns; this

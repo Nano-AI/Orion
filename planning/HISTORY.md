@@ -20,6 +20,121 @@ point — but nothing in them should be taken as current.
 Sessions `2026-07-31a` through `2026-07-31f` were moved here on 2026-07-31,
 in the same breath as the STATUS update that pushed the count past six.
 They are newer than everything below them.Sessions `2026-07-31i` and `2026-07-31j` were moved here on 2026-08-01, when the folder-index session pushed the count past six. They are newer than everything below them.
+## Sessions `2026-08-04b` — everything left was blocked, so the work was finding out why
+
+⚠ **Nine decisions (#166–#174) and not one line of shipped behaviour changed.**
+That is the honest summary, and it is not a bad session: the queue was empty of
+anything startable, and what these turns produced is the reason *why*, measured
+rather than assumed.
+
+### Seven of eight plan rows were wrong
+
+Checked against the tree, one at a time, because #135 and #139 had already
+caught the queue offering finished work twice.
+
+| Row | Reality |
+|---|---|
+| `SQLITE_BUSY` untested (#164) | Tested, registered, with a named mutation — and the row asked for a **second process** when SQLite locks the *file*, so a second **connection** contends identically |
+| Folder rows never collected (#166) | `collectMissingFolders()` runs at `init` and is tested. Only *stale-but-present* folders remain |
+| Thumbnail budget a constant, no readout (#167) | **Both false.** `budgetBytes` is a parameter the tests drive at 4096; `heldBytes` already reads it. Only the **button** is missing |
+| Highlight plateau (#165) | ⚠ **Accurate** — the one row that was |
+
+⚠ **#167 nearly shipped a duplicate accessor.** Acting on the row as written,
+`bytesHeld` was exposed and a check added — a second name for a number that
+already had one. It **built, passed, and took the suite 3708 → 3709 green.**
+`heldBytes` surfaced only on reading the test three lines below the edit.
+**A green suite is not evidence a change was needed.**
+
+### Piece 5 was prepared, then dead-ended by measurement
+
+#168 wrote the scaffolding and refused to invent the discretisation. #169
+**fetched the paper** — Rouf, Lau & Heidrich PROCAMS 2012 §3.4 — which answered
+three of four questions and shrank the work: a **conditional single-channel**
+pass, not three solves. Eq. 9 interpolates the **gradient**; the shipped fill
+interpolates the **value**, which *is* the plateau, in one line.
+
+⚠ Then #170 asked whether its gate condition ever holds, and #171/#172 counted:
+`Ω^∩ = Ω_k` is **not met by this sensor's frames**, globally *or* per region —
+**44.7% and 75.4%** of partially-clipped blocks are the **shoulder**, and a
+shoulder is definitionally the ring containment forbids.
+
+**So §3.4 is not the route on these photographs.** The plateau is still real.
+
+### And the rule everything rests on had a hole
+
+#173 looked for alternatives: they are **US patents** or **GPL implementations**.
+#174 followed that back to `CLAUDE.md`, which demands a citation and then says
+reimplementing from a description is fine — **true of copyright, silent about
+patents.** *"Cited" was being read as "clearance"*, including by me, twice.
+The rule now says it is not.
+
+### What this leaves
+
+**Four things need the developer** and none of them is technical: the #162
+memory trade, freedom-to-operate, the flat-frame log, and permission to
+download the lens data. **Every gate stayed green throughout: 872 / 3708 /
+42 of 42 / bench 0 on three frames / two lints.**
+
+## Sessions `2026-08-03b` – `2026-08-04` — the performance audit, and a memory ceiling nobody could see
+
+⚠ **One entry for eighteen decisions (#148–#165), written 2026-08-04 because it
+had not been written at all.** The ledger carried every one; this file — the
+recovery point — carried none of them, which is the same failure as a stale
+queue wearing different clothes.
+
+### The performance audit, asked for 2026-08-01, complete
+
+Six areas. **One real defect, one design question settled by measurement, and
+five figures found stale against the tree.**
+
+| Area | Outcome |
+|---|---|
+| Gestures (#148) | Premise table wrong in **all four rows** — all six already armed. `tools/check-gestures.py` added: a **grep, not a test**, because #110.3 proved a `DragGesture` cannot be driven from either suite |
+| The tick (#149) | *"Sliders slow"* answered. Clarity **4.2 ms armed / 56.4 unarmed**, 13.4×. The instrument had only ever driven the unarmed path, reporting 17 fps for a gesture running at 235 |
+| Protocol (#150) | Spread **0.14 ms** over five runs. **CPU load is harmless; anything else on the GPU is fatal** (a second Orion → spread 11.14). Bench now warns above 2 ms — it had printed *PASS at 10.09* captioned "machine noise" |
+| Cold open (#151) | **210.9 ms**, and the canvas shows the **previous photograph** throughout — `isLoaded` set once, never cleared, and there is **no busy state anywhere in the app** |
+| Memory (#152) | ⚠ **The defect.** 7,186 MiB of intermediates against ~6,144 on an 8 GB Mac. **A 24 MP frame cannot open there, and nothing checks** |
+| Scroll/zoom/pan (#154) | Cheap by construction — the canvas transforms an **already-rendered** texture. Recorded as a *reading*, with no number quoted, because the harness cannot drive the gesture |
+
+### ⚠ The 8 GB ceiling, and why it is still open
+
+#153 costed the fix by measurement rather than argument: peak live memory is
+**1,202 MiB** against 7,186 allocated — **83% held for nothing** — which ruled
+out tiling and lower precision, because the problem is **lifetime**, not size.
+
+Everything to fix it was then built and is correct: the pool and its tests
+(#155), the four textures that outlive the graph and must be pinned (#156), the
+pins in the accounting (#157), the A/B byte oracle (#159, **0 of 96,962,304**),
+and `outputs_` made non-owning with the render **bit-identical** (#160).
+
+⚠ **Then #161 found by reading `render()` that pooling breaks the interactive
+path**: a skipped node contributes the pixels still in its output texture, and a
+pool recycles exactly those — every render becomes full, **9.33 ms → 67.25**.
+
+⚠ **#162 costed both ways out and neither is free, because the memory *is* the
+cache**: a drag recomputes only **2–11 of 173 nodes**, so ~162 textures exist
+purely as cache. **This is a product trade, and it is the developer's call** —
+see the top of this file.
+
+### Also
+
+**The lens picker shipped** (#145–#147) after #144 found the developer's own lens
+is *absent from the data*, not misspelled — `…DG DN | Art 023`, and the bundled
+database has no `Art 023` entry at all. **#163** settled the licence: the data is
+**CC BY-SA 3.0**, not the library's LGPL, so refreshing is clear — and the check
+found `NOTICE` had **no attribution for the database** in a publicly
+downloadable build. **#164** corrected a sixth stale row. **#165** measured the
+highlight plateau: nine radial samples flat at the clip value, colour already
+correct.
+
+### ⚠ What this stretch should teach the next session
+
+**Six rows were stale** (#144, #148, #149, #150, #151, #164). **Check the tree,
+never the record.** And four things were found by *reading* rather than shipping
+— #156's pin list, #158's ownership problem, #161's cache conflict, #157's
+silently-ineffective pin — each of which would otherwise have surfaced as a red
+gate or a **believable wrong picture**.
+
 ## Session `2026-08-03a` — the ⓘ drew perfectly and explained nothing
 
 **Reported against a public release.** #140's icon did nothing on hover. It was

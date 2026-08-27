@@ -23,6 +23,18 @@
 # clipped white, and a *positive* local exposure over them changes nothing, so a
 # covered cell there reads as a failure that is really the photograph.
 
+# ⚠ REINTERPRETED BY FRAME ANCHORING (2026-08-27). The `set maskCentre…`
+# numbers below are FRAME coordinates now — the space masks are stored in —
+# and `maskcheck`'s oracle converts every display sample into frame space
+# through the engine's own map before asking `maskAlpha`. The two-sided
+# property this file asserts is unchanged and strictly stronger: a green grid
+# now also means `mask::displayMatrix` and `geometry.slang` agree per cell.
+# What changed is the meaning of a run: the mask no longer moves with the
+# geometry, so each maskcheck holds the SAME frame-space mask under a
+# different view of it. ⚠ Not re-run since the change — this machine lacks
+# the _PIC samples — so the first run elsewhere should re-read its cell
+# counts knowing coverage may straddle cells differently than the recorded
+# figures in these comments.
 open samples/_PIC8220.ARW
 set exposure 2.6
 mask radial

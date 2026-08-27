@@ -1,0 +1,64 @@
+# A mask, placed, stays on its subject while the geometry moves.
+#
+# The discriminating check `mask-alignment.txt` could never run: its oracle
+# compares the render against the overlay, and when masks were stored in
+# display space the two moved together - a crop dragged the mask off the
+# subject and every cell still agreed. This file asserts the anchoring
+# itself, the way `matte-follows-the-frame.txt` always has for a raster
+# matte: place a parametric mask, move the geometry AFTERWARDS, and demand
+# the same image pixels come back with the same coverage to the last code.
+#
+# Before frame-space storage this file's first expect failed at
+# luma 0.3130 -> 0.5248: the crop re-centred the mask onto itself and lit
+# image content nobody had masked.
+#
+# The regions are exact-pixel comparisons, which quarter turns and crops
+# allow (a turn is a permutation, a crop a window - neither resamples). A
+# straighten and a keystone do resample, so those are held by `maskcheck`
+# instead: with the oracle converting display samples into frame space, a
+# green grid now means CanvasLayout's transcription, mask::displayMatrix and
+# geometry.slang all agree about where the mask sits under that geometry.
+#
+# Needs samples/underexposedsubject.ARW (EXIF turn of three quarters, so the
+# frame-space centre below sits at display (0.4, 0.7) on opening).
+
+open samples/underexposedsubject.ARW
+
+mask radial
+set maskCentreX 0.30
+set maskCentreY 0.40
+set maskRadiusX 0.30
+set maskRadiusY 0.22
+set maskAngle 0.5
+set maskFeather 0.2
+set localExposure 3.0
+
+measure 0.34,0.64,0.12,0.12 subjectBefore
+
+# One more quarter turn makes the total four: the picture stands unturned,
+# and the covered patch - the same normalized pixel set, permuted - must
+# carry its coverage along exactly.
+rotate 1
+measure 0.24,0.34,0.12,0.12 subjectTurned
+print a quarter turn carries the coverage with the picture
+expect subjectTurned == subjectBefore
+
+# Crop to the quarter that holds the subject. The same pixel set again -
+# twice the magnification, no resample - so the patch must read identically.
+# This is the exact reported bug: before anchoring, the mask re-centred on
+# the crop and this patch brightened.
+crop 0.0 0.0 0.5 0.5
+measure 0.48,0.68,0.24,0.24 subjectCropped
+print and a crop after placement does not move the mask off its subject
+expect subjectCropped == subjectTurned
+crop 0.0 0.0 1.0 1.0
+
+# A straighten and a keystone resample, so exact patches cannot hold; the
+# converted maskcheck oracle holds instead - clear cells bit-identical,
+# covered cells moved, under each geometry the mask was NOT placed under.
+straighten 5
+maskcheck 10 -2.0
+straighten 0
+set perspectiveVertical 0.5
+maskcheck 10 -2.0
+set perspectiveVertical 0.0
