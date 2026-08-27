@@ -140,8 +140,7 @@ extension Screenshot {
                             through surface: Surface = .output)
         -> (luma: Double, saturation: Double)? {
         if surface == .analysis {
-            guard let image = engine.renderForAnalysis(
-                    longEdge: SubjectMatte.previewLongEdge) else { return nil }
+            guard let (image, _) = engine.renderForAnalysis() else { return nil }
             return regionStats(of: image, region: region)
         }
 

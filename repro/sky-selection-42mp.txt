@@ -1,0 +1,23 @@
+# Sky selection on a 42 MP frame — the other half of the size handshake.
+#
+# Same reason as `repro/subject-selection-42mp.txt`, same failing shape: sky
+# runs the classical detector on the same analysis render Subject uses and
+# hands its raster down the same `setMaskMatte` path, so the round-vs-floor
+# size mismatch killed it identically on every full-frame body. `select`
+# throws when the detector declines or the engine refuses; the checks pin that
+# the coverage lands on the sky and nowhere near the ground.
+
+open samples/overexposed-background.ARW
+
+measure 0.80,0.02,0.15,0.10 skyBefore
+measure 0.45,0.80,0.15,0.15 groundBefore
+
+select sky
+set localExposure -2.5
+
+measure 0.80,0.02,0.15,0.10 skyAfter
+measure 0.45,0.80,0.15,0.15 groundAfter
+
+print the sky darkens and the ground does not move
+expect skyAfter != skyBefore
+expect groundAfter == groundBefore

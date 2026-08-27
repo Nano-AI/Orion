@@ -1,0 +1,38 @@
+# Vision subject selection on a 42 MP frame — the size handshake.
+#
+# `repro/subject-selection.txt` already pins that the integration is wired; it
+# wants `_PIC8220.ARW`, which not every machine has. This file exists for a
+# narrower reason and runs on the dog bracket in `samples/`: **the raster the
+# real analysis path produces must be one the engine accepts.**
+#
+# That handshake shipped broken for every full-frame body. The analysis render
+# sized itself with round-to-nearest while the engine sizes its matte texture
+# with floor division, so on a 7968×5320 a7R III the model handed back
+# 1024×684 against a 1024×683 allocation — rejected by design ("rejected, not
+# resampled"), and every press of Subject, Person or Sky ended in "That
+# selection was too large for this photo." The 6024×4024 frame the older
+# scripts used is one where the two roundings happen to agree, which is why no
+# scenario ever saw it. `select` throws when the engine refuses the matte, so
+# this file failing is the bug coming back.
+#
+# The pure half of the fix — the analysis size is taken from
+# `orion_engine_max_matte_size`, never re-derived — is swept across sensor
+# shapes in `ViewportTests+MatteGeom.swift`; this is the end-to-end half on a
+# real frame of the failing shape.
+
+open samples/underexposedsubject.ARW
+
+measure 0.45,0.45,0.15,0.15 dogBefore
+measure 0.05,0.05,0.15,0.15 cornerBefore
+
+# Throws if the model finds nothing — and, the point of this file, throws if
+# the engine refuses the raster's size.
+select subject
+set localExposure 2.5
+
+measure 0.45,0.45,0.15,0.15 dogAfter
+measure 0.05,0.05,0.15,0.15 cornerAfter
+
+print the selection reaches the picture, on the subject and only there
+expect dogAfter != dogBefore
+expect cornerAfter == cornerBefore

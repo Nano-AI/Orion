@@ -70,24 +70,68 @@ extension ViewportTests {
         }
     }
 
-    static func testMattePreviewSize() {
-        // Capped on the long edge, aspect preserved.
-        let a = MatteGeometry.previewSize(frameWidth: 6024, frameHeight: 4024,
-                                          longEdge: 1024)
-        report(a.width == 1024 && abs(a.height - 684) <= 1,
-               "a landscape frame is capped on its long edge", "\(a.width)x\(a.height)")
+    /// The engine's matte allocation, transcribed: `kMaxMatteEdge` on the long
+    /// side, the short side by **floor** division
+    /// (`DevelopPipeline::buildMaskNodes`). The transcription is itself pinned
+    /// end to end by `repro/subject-selection.txt`, which drives the real
+    /// render → `setMaskMatte` path; this keeps the pure half honest across a
+    /// sweep no scenario could afford.
+    private static func engineMatteAllocation(frameW: Int, frameH: Int)
+        -> (width: Int, height: Int) {
+        let edge = 1024
+        return frameH > frameW
+            ? (max(1, edge * frameW / frameH), edge)
+            : (edge, max(1, edge * frameH / frameW))
+    }
 
-        let b = MatteGeometry.previewSize(frameWidth: 4024, frameHeight: 6024,
-                                          longEdge: 1024)
-        report(b.height == 1024 && abs(b.width - 684) <= 1,
-               "and a portrait one on its own long edge", "\(b.width)x\(b.height)")
+    static func testMatteAnalysisSize() {
+        // ⚠ The case that shipped broken. 7968×5320 is what LibRaw decodes a
+        // 42 MP a7R III to; the short edge lands on 683.67, which the old
+        // `.rounded()` took to 684 while the engine allocated 683 — so
+        // `setMaskMatte` refused every Subject, Person and Sky selection on a
+        // full-frame body. The size must be the engine's own number, floored,
+        // not a re-derivation that agrees on friendly aspects only.
+        let cap = engineMatteAllocation(frameW: 7968, frameH: 5320)
+        let broken = MatteGeometry.analysisSize(
+            imageWidth: 7968, imageHeight: 5320,
+            maxMatteWidth: cap.width, maxMatteHeight: cap.height, turns: 0)
+        report(broken.width == 1024 && broken.height == 683,
+               "the 42 MP frame that always failed now fits the allocation",
+               "\(broken.width)x\(broken.height)")
+
+        // Sweep real and adversarial sensor shapes, both orientations and all
+        // four turns: after `undoTurns` puts the raster back into frame
+        // coordinates, it must fit the engine's allocation exactly — never one
+        // pixel over (the bug), never needlessly under (a quality loss).
+        let sensors = [(7968, 5320), (6024, 4024), (8256, 5504), (8192, 5464),
+                       (9504, 6336), (6000, 4000), (5472, 3648), (8688, 5792),
+                       (4000, 4000), (7728, 4344)]
+        for (fw, fh) in sensors {
+            for (w, h) in [(fw, fh), (fh, fw)] {
+                let alloc = engineMatteAllocation(frameW: w, frameH: h)
+                for turns in 0...3 {
+                    let odd = turns % 2 != 0
+                    let s = MatteGeometry.analysisSize(
+                        imageWidth: odd ? h : w, imageHeight: odd ? w : h,
+                        maxMatteWidth: alloc.width, maxMatteHeight: alloc.height,
+                        turns: turns)
+                    let framed = (width: odd ? s.height : s.width,
+                                  height: odd ? s.width : s.height)
+                    report(framed == alloc,
+                           "\(w)x\(h) turned \(turns) fills the allocation exactly",
+                           "\(framed.width)x\(framed.height) vs \(alloc.width)x\(alloc.height)")
+                }
+            }
+        }
 
         // ⚠ Never upscales. Handing a model more pixels than the photograph has
         // is inventing detail for it to segment.
-        let c = MatteGeometry.previewSize(frameWidth: 640, frameHeight: 480,
-                                          longEdge: 1024)
-        report(c.width == 640 && c.height == 480,
-               "a frame under the cap is passed at its own size", "\(c.width)x\(c.height)")
+        let small = MatteGeometry.analysisSize(
+            imageWidth: 640, imageHeight: 480,
+            maxMatteWidth: 1024, maxMatteHeight: 768, turns: 0)
+        report(small.width == 640 && small.height == 480,
+               "a frame under the allocation is passed at its own size",
+               "\(small.width)x\(small.height)")
     }
 
     // MARK: Presets

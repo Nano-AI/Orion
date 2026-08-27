@@ -25,7 +25,13 @@ extension Engine {
     ///
     /// Two renders and a readback, and it restores the caller's state exactly —
     /// the same shape as `captureOriginal`, for the same reason.
-    func renderForAnalysis(longEdge: Int) -> CGImage? {
+    ///
+    /// Returns the quarter turn the picture was rendered under alongside it —
+    /// the EXIF turn only, since the user's rotation is neutralised here. The
+    /// caller must undo exactly this turn and nothing else; reading
+    /// `quarterTurns` outside this call includes the user's rotation and would
+    /// un-turn the matte by a turn the render never had.
+    func renderForAnalysis() -> (image: CGImage, turns: Int)? {
         guard isLoaded else { return nil }
 
         let held = state
@@ -62,11 +68,25 @@ extension Engine {
             maskOverlay = heldOverlay
         }
 
-        let size = MatteGeometry.previewSize(frameWidth: Int(imageWidth),
-                                             frameHeight: Int(imageHeight),
-                                             longEdge: longEdge)
+        // ⚠ The size is the engine's, not a computation of our own.
+        // `setMaskMatte` rejects anything over its allocation, and the one time
+        // this was derived independently the two disagreed by a rounding rule —
+        // one pixel, on every full-frame body, which read as "Subject never
+        // works". `maxMatteSize` is frame-oriented; `analysisSize` turns it to
+        // match the render. Read after `apply(neutral)`, so the turn is the
+        // EXIF one alone.
+        let turns = quarterTurns
+        let (mw, mh) = maxMatteSize
+        let size = MatteGeometry.analysisSize(imageWidth: Int(imageWidth),
+                                              imageHeight: Int(imageHeight),
+                                              maxMatteWidth: mw,
+                                              maxMatteHeight: mh,
+                                              turns: turns)
         guard size.width > 0, size.height > 0 else { return nil }
-        return Screenshot.developedCGImage(self, fitting: size)
+        guard let image = Screenshot.developedCGImage(self, fitting: size) else {
+            return nil
+        }
+        return (image, turns)
     }
 
     var metalDevice: MTLDevice? {

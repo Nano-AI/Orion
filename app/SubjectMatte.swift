@@ -79,23 +79,21 @@ enum SubjectMatte {
         }
     }
 
-    /// Long edge handed to the model. See `MatteGeometry.previewSize` for why
-    /// more than this buys nothing.
-    /// `nonisolated` because it is a constant, and the measurement path that
-    /// renders the analysis surface reads it from outside the actor.
-    nonisolated static let previewLongEdge = 1024
-
     /// Produces a matte for the open photo, in **frame** coordinates.
     ///
     /// The render and the readback happen on the main actor because they touch
     /// the engine; the inference does not, and is the part worth getting off it.
+    ///
+    /// ⚠ The turn undone below is the one `renderForAnalysis` says it rendered
+    /// under — the EXIF turn alone. Reading `engine.quarterTurns` here instead
+    /// would fold in the user's rotation, which the analysis render neutralises,
+    /// and the matte would come back turned on any rotated photograph.
     static func generate(engine: Engine, kind: Kind) async throws
         -> (alpha: [Float], width: Int, height: Int) {
 
         guard engine.isLoaded else { throw Failure.noPhoto }
 
-        let turns = engine.quarterTurns
-        guard let image = engine.renderForAnalysis(longEdge: previewLongEdge) else {
+        guard let (image, turns) = engine.renderForAnalysis() else {
             throw Failure.couldNotRender
         }
 
@@ -122,8 +120,7 @@ enum SubjectMatte {
         -> (alpha: [Float], width: Int, height: Int) {
 
         guard engine.isLoaded else { throw Failure.noPhoto }
-        let turns = engine.quarterTurns
-        guard let image = engine.renderForAnalysis(longEdge: previewLongEdge) else {
+        guard let (image, turns) = engine.renderForAnalysis() else {
             throw Failure.couldNotRender
         }
         let screenSpace = try infer(image, kind: kind,

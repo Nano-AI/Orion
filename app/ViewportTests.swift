@@ -102,7 +102,7 @@ enum ViewportTests {
 
         testMatteTurnsRoundTrip()
         testMatteTurnAgreesWithTheMaskTransform()
-        testMattePreviewSize()
+        testMatteAnalysisSize()
         testMaskOutlineLandsOnTheFalloff()
         testMaskIsoLinesAreIsoAlpha()
         testMaskEndpointLandsUnderTheCursor()

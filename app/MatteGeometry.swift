@@ -71,23 +71,42 @@ enum MatteGeometry {
         return (out, outW, outH)
     }
 
-    /// The size to hand a segmentation model, given the frame's own.
+    /// The size to hand a segmentation model: the engine's own matte
+    /// allocation, oriented like the render the model will see.
     ///
-    /// Capped on the long edge. These models run at a fixed internal resolution
-    /// and upsample whatever they are given, so past that cap the extra pixels
-    /// buy nothing but readback and inference time — and the boundary is
-    /// recovered afterwards by the guided refinement (`research/masking.md` §4),
-    /// which works from the *full*-resolution photograph rather than from this.
+    /// ⚠ **The engine's numbers, never a second computation.** This function
+    /// used to scale the frame down itself, rounding the short edge to nearest
+    /// — while the engine sizes its matte texture with floor division. On a
+    /// 7968×5320 frame that is 684 against 683, `setMaskMatte` rejects anything
+    /// over its allocation by design, and every Subject/Person/Sky press on a
+    /// full-frame body failed with "too large for this photo". Two copies of
+    /// one derivation always drift; the fix is that there is one, and it is the
+    /// engine's.
     ///
-    /// Never upscales: a frame smaller than the cap is passed at its own size.
-    static func previewSize(frameWidth: Int, frameHeight: Int,
-                            longEdge: Int) -> (width: Int, height: Int) {
-        guard frameWidth > 0, frameHeight > 0, longEdge > 0 else { return (0, 0) }
-        let longest = max(frameWidth, frameHeight)
-        if longest <= longEdge { return (frameWidth, frameHeight) }
+    /// `maxMatteWidth`/`maxMatteHeight` are `orion_engine_max_matte_size` —
+    /// **frame**-oriented, like everything engine-side. `turns` is the quarter
+    /// turn the analysis render is taken under (the EXIF turn only; the caller
+    /// neutralises the user's rotation), and an odd turn swaps the axes, the
+    /// same rule `undoTurns` applies on the way back.
+    ///
+    /// Never upscales: a frame that already fits the allocation is passed at
+    /// its own size. These models run at a fixed internal resolution and
+    /// upsample whatever they are given, so extra pixels buy nothing but
+    /// readback and inference time — the boundary is recovered afterwards by
+    /// the guided refinement (`research/masking.md` §4) from the full
+    /// photograph.
+    static func analysisSize(imageWidth: Int, imageHeight: Int,
+                             maxMatteWidth: Int, maxMatteHeight: Int,
+                             turns: Int) -> (width: Int, height: Int) {
+        guard imageWidth > 0, imageHeight > 0,
+              maxMatteWidth > 0, maxMatteHeight > 0 else { return (0, 0) }
 
-        let scale = Double(longEdge) / Double(longest)
-        return (max(1, Int((Double(frameWidth) * scale).rounded())),
-                max(1, Int((Double(frameHeight) * scale).rounded())))
+        let odd = (((turns % 4) + 4) % 4) % 2 != 0
+        let capW = odd ? maxMatteHeight : maxMatteWidth
+        let capH = odd ? maxMatteWidth : maxMatteHeight
+        if imageWidth <= capW && imageHeight <= capH {
+            return (imageWidth, imageHeight)
+        }
+        return (capW, capH)
     }
 }
