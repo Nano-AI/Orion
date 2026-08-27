@@ -147,6 +147,92 @@ extension ViewportTests {
         }
     }
 
+    /// The 3×3's adjugate, for building a test fixture's inverse pair. The
+    /// product only: the engine owns the real inversion, and this exists so a
+    /// hand-written matrix here cannot silently disagree with its inverse.
+    private static func inverted(_ m: [CGFloat]) -> [CGFloat] {
+        let a = m[0], b = m[1], c = m[2]
+        let d = m[3], e = m[4], f = m[5]
+        let g = m[6], h = m[7], i = m[8]
+        let det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+        let s = 1 / det
+        return [(e * i - f * h) * s, (c * h - b * i) * s, (b * f - c * e) * s,
+                (f * g - d * i) * s, (a * i - c * g) * s, (c * d - a * f) * s,
+                (d * h - e * g) * s, (b * g - a * h) * s, (a * e - b * d) * s]
+    }
+
+    /// A drag crosses the frame ↔ display map at the view boundary and does
+    /// its arithmetic in frame space — the space the mask is stored and
+    /// rendered in since frame anchoring. The invariant is the same round
+    /// trip the identity-map test holds: drag a handle to a view point and
+    /// the handle must redraw at that point, now through a map that bends
+    /// directions (a keystone-like projectivity over a crop-like affine).
+    ///
+    /// ⚠ This is the check that reddens if the `atan2` moves back to display
+    /// space: under a projective map the stored frame angle and the display
+    /// angle disagree, so a handle dragged and redrawn through mismatched
+    /// spaces slides off the cursor.
+    static func testMaskDragCrossesTheGeometryMap() {
+        let view = CGSize(width: 1200, height: 800)
+        let viewAspect = view.width / view.height
+
+        // Crop-like affine times a mild projectivity — every kind of term a
+        // real geometry produces, none of them axis-aligned trivial.
+        let toDisplay: [CGFloat] = [1.6, 0.10, -0.12,
+                                    0.08, 1.4, -0.20,
+                                    0.25, 0.15, 1.0]
+        var fd = CanvasLayout.FrameDisplayMap()
+        fd.toDisplay = toDisplay
+        fd.toFrame = inverted(toDisplay)
+
+        // The pair really is a pair.
+        for p in [CGPoint(x: 0.2, y: 0.3), CGPoint(x: 0.7, y: 0.6),
+                  CGPoint(x: 0.45, y: 0.85)] {
+            let back = fd.frame(fd.display(p))
+            near(back.x, p.x, 1e-9, "frame ∘ display is the identity (x)")
+            near(back.y, p.y, 1e-9, "frame ∘ display is the identity (y)")
+        }
+
+        let v = Viewport()
+        var map = CanvasLayout.pictureMap(
+            quadScale: v.quadScale(imageAspect: landscape, viewAspect: viewAspect),
+            visible: v.visibleFraction(imageAspect: landscape, viewAspect: viewAspect),
+            center: v.center, in: view)
+        map.fd = fd
+
+        var m = CanvasLayout.MaskPlacement()
+        m.kind = 1
+        m.center = CGPoint(x: 0.5, y: 0.5)
+
+        let grab = CanvasLayout.maskHandlePoint(.fullEnd, m, map)
+        for target in [CGPoint(x: 700, y: 430), CGPoint(x: 540, y: 330),
+                       CGPoint(x: 660, y: 500)] {
+            for handle in [CanvasLayout.MaskHandle.fullEnd, .zeroEnd] {
+                let moved = CanvasLayout.maskDrag(handle, from: grab, to: target,
+                                                  start: m, map)
+                let where_ = CanvasLayout.maskHandlePoint(handle, moved, map)
+                near(where_.x, target.x, 1e-6,
+                     "\(handle) lands on the cursor through the geometry map (x)")
+                near(where_.y, target.y, 1e-6,
+                     "\(handle) lands on the cursor through the geometry map (y)")
+            }
+        }
+
+        // A body drag follows the cursor's own frame displacement — two
+        // points through the map, never a scaled vector, because a projective
+        // map has no single scale.
+        var r = m
+        r.kind = 2
+        let from = CGPoint(x: 600, y: 400), to = CGPoint(x: 680, y: 350)
+        let dragged = CanvasLayout.maskDrag(.body, from: from, to: to,
+                                            start: r, map)
+        let want = CGPoint(
+            x: r.center.x + (map.frameUnit(to).x - map.frameUnit(from).x),
+            y: r.center.y + (map.frameUnit(to).y - map.frameUnit(from).y))
+        near(dragged.center.x, want.x, 1e-9, "a body drag crosses as two points (x)")
+        near(dragged.center.y, want.y, 1e-9, "a body drag crosses as two points (y)")
+    }
+
     /// The rotate handle keeps a fixed screen distance and stays on the ray
     /// from the center through the cursor. It cannot sit *on* the cursor —
     /// it is a lollipop at a fixed stem length — so the property to check is

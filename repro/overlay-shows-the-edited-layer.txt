@@ -12,19 +12,24 @@
 #
 # Needs samples/overexposed-background.ARW.
 
+# ⚠ Mask centres below are FRAME coordinates - the space a mask is stored
+# in since frame-space anchoring. This file's sample carries an EXIF turn of
+# three quarters (flip 5), so a centre meant to sit at display (x, y) is
+# written here as frame (1 - y, x). The measure regions stay display-space,
+# which is what the runner reads off the rendered picture.
 open samples/overexposed-background.ARW
 
 # Two stacked masks: a radial over the left, a radial over the right.
 mask radial
-set maskCentreX 0.25
-set maskCentreY 0.50
+set maskCentreX 0.50
+set maskCentreY 0.25
 set maskRadiusX 0.15
 set maskRadiusY 0.15
 
 maskadd radial
 masksplit 1
-set maskCentreX 0.75
-set maskCentreY 0.50
+set maskCentreX 0.50
+set maskCentreY 0.75
 set maskRadiusX 0.15
 set maskRadiusY 0.15
 

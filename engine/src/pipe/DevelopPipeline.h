@@ -97,8 +97,11 @@ public:
     void apply(const Adjustments&);
 
     /// Replaces one component's brush stroke: dab centers in normalized
-    /// coordinates of the displayed picture, the same space the gradient masks
-    /// are placed in.
+    /// **frame** coordinates — the kernel's own space, the same contract the
+    /// matte and the gradient parameters carry. The gesture layer converts
+    /// from the displayed picture once, as the dab is laid; nothing here
+    /// re-anchors a stroke afterwards, which is exactly why a painted stroke
+    /// holds still under a later crop or turn.
     ///
     /// Kept out of `Adjustments` because it is variable-length and that struct
     /// is compared field by field on every tick. Bump a center and
@@ -138,6 +141,12 @@ public:
     /// The inverse. Anything stored in frame coordinates takes this to be
     /// drawn — spots, and the mask overlay's outline points.
     [[nodiscard]] std::pair<float, float> frameToDisplayed(float x, float y) const;
+
+    /// The whole frame ↔ display map under the geometry last applied, as a
+    /// projective 3×3 each way, row-major, in normalized coordinates. The
+    /// composition is `frameToDisplayed`'s, written once; the overlay takes
+    /// the matrices so a 128-point outline is not 128 facade calls.
+    void displayMap(float toDisplay[9], float toFrame[9]) const;
 
     /// A legacy mask component's geometry, display space → frame space, under
     /// an **explicit** geometry rather than the one last applied — a sidecar
@@ -315,16 +324,12 @@ private:
         /// branch a build without perspective took and stays bit-identical.
         const persp::Matrix3* perspective = nullptr;
 
-        /// The crop, the total quarter turns and the rotated frame's shape, as
-        /// `geometry.slang` sees them. Every mask centre and every brush dab
-        /// goes through these — pipe/MaskGeometry.h.
-        mask::Crop crop{};
-        int   turns = 0;
-        float rotW = 0.0f, rotH = 0.0f;
+        /// ⚠ The crop, turns and rotated shape used to travel here too, with a
+        /// `frameMoved` flag beside them, because the mask stage folded the
+        /// live geometry into every component per apply. Masks are stored in
+        /// frame coordinates now, so no stage but the geometry node reads any
+        /// of it — and the geometry node has its own parameter block.
 
-        /// Anything a mask's placement depends on moved: the crop, the turns,
-        /// the straighten or the perspective.
-        bool frameMoved = false;
         /// A component was added, removed, hidden or shown.
         bool visibilityMoved = false;
 

@@ -692,57 +692,28 @@ struct alignas(8) MaskComponent {
     float         hardness;    // 0 soft, 1 hard-edged
     float         feather;     // radial, 0..1
     float         roundness;   // radial superellipse exponent
-    float         angle;       // radial rotation, radians, **as drawn**
+    float         angle;       // radial rotation, radians, in frame coordinates
     float         _pad;
-    /// A linear gradient's ramp, as the **exact** pull-back of the ramp the
-    /// photographer drew: t(q) = <rampNum, (q,1)> / <display row 2, (q,1)>.
+    /// A linear gradient's ramp: t(q) = <rampNum, (q,1)>, **affine in frame
+    /// coordinates** — the space the kernel runs in and the space every mask
+    /// is stored in. The geometry the mask was drawn under entered these
+    /// numbers once, at the gesture (or at migration for a display-space-era
+    /// sidecar); nothing here changes when the crop, straighten, turns or
+    /// correction move later, which is what anchors the ramp to the image.
     ///
-    /// ⚠ Two endpoints stood here until 2026-08-02, and the kernel projected
-    /// onto the segment between them — which puts the level sets perpendicular
-    /// to that segment **in frame coordinates**, while the drawn mask's are
-    /// perpendicular in *display* coordinates. t is a linear functional, so it
-    /// transforms by J^-T while a pair of endpoints transforms by J; the two
-    /// agree only where J is conformal, which is every case anybody checks by
-    /// hand. Decision #137, research/perspective.md.
-    ///
-    /// The numerator folds the ramp's own geometry in; the denominator is the
-    /// bottom row of `display` and is **not stored twice**. It stood here as its
-    /// own `rampDen[3]` until 2026-08-02 and was, field for field, that bottom
-    /// row — `mask::ramp` copied it out. Two copies of one derivation is the
-    /// hazard this file already warns about for the Oklab matrix.
+    /// ⚠ The field's history is the bug's history. Two endpoints (pre-#137)
+    /// put the level sets perpendicular in the wrong space under a keystone.
+    /// The exact display-space pull-back that replaced them (#137/#138 — this
+    /// numerator over a stored 3×3's bottom row) transformed exactly, and
+    /// *therefore* pinned the mask to the crop rectangle: the matrix carried
+    /// the live geometry, so cropping after placement re-aimed the stored
+    /// numbers at different image pixels. Frame storage removed the matrix
+    /// and the bug together.
     float         rampNum[3];  // linear
+    float         _pad2;
 
-    /// **The whole frame → display map, as one 3×3, row-major.**
-    ///
-    /// Crop, straighten, quarter turns and the perspective correction composed
-    /// in the order `mask::fromFrame` applies them — `mask::displayMatrix` is
-    /// the one derivation, and `testDisplayMatrixMatchesFromFrame` is what keeps
-    /// it equal to walking the four steps.
-    ///
-    /// ⚠ **This is what makes a radial mask exact rather than first order.**
-    /// The kernel carries each pixel back through it and asks the ellipse the
-    /// photographer drew. What stood here was the ellipse's image under the
-    /// map's *derivative* at the mask's centre (decision #100, then the singular
-    /// values in #128) — which removes all of the anisotropy and none of the
-    /// curvature, and a homography's derivative differs at every point. Measured
-    /// against the exact answer, a 0.34 mask under a vertical keystone of 1.00
-    /// reached a **full 1.0000 coverage difference** at its rim over 5.8% of the
-    /// frame. Decision #138, research/perspective.md.
-    ///
-    /// ⚠ **Defaulted to the identity, and that is the one field here that is
-    /// not left to zero.** Zero is a singular matrix: it sends every pixel to
-    /// the same place, so a block that forgot to set this would render a mask
-    /// that is entirely covered or entirely clear — plausible, and wrong.
-    /// `DevelopMask` sets it on every component of every apply; the default is
-    /// for the hand-built blocks in the GPU tests, which care about the ellipse
-    /// and not about the geometry, and which would otherwise each carry a copy
-    /// of the same nine constants.
-    float         display[9] = {1.0f, 0.0f, 0.0f,
-                                0.0f, 1.0f, 0.0f,
-                                0.0f, 0.0f, 1.0f};
-
-    float         center[2];   // radial centre, **as drawn** — display coordinates
-    float         semi[2];     // radial semi-axes, **as drawn** — display coordinates
+    float         center[2];   // radial centre, frame coordinates, as stored
+    float         semi[2];     // radial semi-axes, frame coordinates, as stored
     /// Luminance range (kind 5), in stops — log2 Rec.2020 luminance on the
     /// reference image. Two independent smootherstep edges `rangeSoft` stops
     /// wide. research/masking.md §4b.
@@ -795,29 +766,23 @@ struct alignas(8) MaskComponent {
     /// Non-zero when this component begins a layer — the fold restarts here.
     std::int32_t  startsLayer;
 };
-static_assert(sizeof(MaskComponent) == 184);
+static_assert(sizeof(MaskComponent) == 152);
 // Every float2 in the shader's struct must land on an eight-byte boundary, or
-// Metal pads and every field after the first pair shifts.
+// Metal pads and every field after the first pair shifts. `_pad2` after the
+// ramp exists for exactly that: without it `center` would sit at 68, which
+// Metal rounds up to 72 while C++ does not, and every field below would be
+// read four bytes off — a plausible mask, not an obvious break.
 static_assert(offsetof(MaskComponent, rampNum) == 56);
-// ⚠ Nine consecutive scalars on the shader side, not a float3x3 and not an
-// array. Metal aligns a float3 — and every column of a float3x3 — to sixteen
-// bytes, and 68 is not a multiple of sixteen, so either spelling would pad and
-// move every field below. Same reason the ramp is spelled out; see the shader.
-static_assert(offsetof(MaskComponent, display)   == 68);
-static_assert(offsetof(MaskComponent, center)    == 104);
-static_assert(offsetof(MaskComponent, semi)      == 112);
-static_assert(offsetof(MaskComponent, rangeLo)   == 120);
-static_assert(offsetof(MaskComponent, dabStride) == 136);
-// ⚠ These two took over two of `_pad3`'s three slots, so the struct did not
-// change size and every offset after them is where it was. Asserted rather
-// than trusted: the shader reads them by offset, and a disagreement here is a
-// dab loop starting in the wrong place, which draws a plausible stroke.
-static_assert(offsetof(MaskComponent, firstDab)  == 140);
-static_assert(offsetof(MaskComponent, accumUse)  == 144);
-static_assert(offsetof(MaskComponent, matteSize) == 152);
-static_assert(offsetof(MaskComponent, colorR)    == 160);
-static_assert(offsetof(MaskComponent, colorTol)  == 172);
-static_assert(offsetof(MaskComponent, colorSoft) == 176);
+static_assert(offsetof(MaskComponent, center)    == 72);
+static_assert(offsetof(MaskComponent, semi)      == 80);
+static_assert(offsetof(MaskComponent, rangeLo)   == 88);
+static_assert(offsetof(MaskComponent, dabStride) == 104);
+static_assert(offsetof(MaskComponent, firstDab)  == 108);
+static_assert(offsetof(MaskComponent, accumUse)  == 112);
+static_assert(offsetof(MaskComponent, matteSize) == 120);
+static_assert(offsetof(MaskComponent, colorR)    == 128);
+static_assert(offsetof(MaskComponent, colorTol)  == 140);
+static_assert(offsetof(MaskComponent, colorSoft) == 144);
 
 /// Guide subsampling. Mirrors GuideDownParams in guide_down.slang.
 struct GuideDown {

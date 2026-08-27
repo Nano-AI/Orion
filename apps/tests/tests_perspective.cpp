@@ -831,7 +831,55 @@ void testPerspectiveWiring() {
     checkNear(double(back.second), 0.72, 2e-3,
               "and the inverse brings it back to the displayed point (y)");
 
+    // 7. The whole map, as the overlay takes it.
+    //
+    // `displayMap` hands the frame ↔ display projectivity out as two 3×3s so
+    // a 128-point outline is one facade call. It is a third spelling of the
+    // same composition, which is exactly the arrangement this file warns
+    // about twice — so it is pinned to the pointwise calls under a geometry
+    // with every step live at once: crop, a turn, a straighten and the
+    // keystone still applied from check 6.
+    adj.cropX = 0.10f; adj.cropY = 0.15f; adj.cropW = 0.70f; adj.cropH = 0.60f;
+    adj.rotateQuarters = 1;
+    adj.straightenDeg = 3.0f;
+    dev->apply(adj);
+    {
+        float toD[9], toF[9];
+        dev->displayMap(toD, toF);
+        const auto through = [](const float m[9], float x, float y) {
+            const float w = m[6] * x + m[7] * y + m[8];
+            const float d = std::fabs(w) > 1e-9f ? w : 1e-9f;
+            return std::pair<float, float>{(m[0] * x + m[1] * y + m[2]) / d,
+                                           (m[3] * x + m[4] * y + m[5]) / d};
+        };
+        double worstMap = 0.0, worstTrip = 0.0;
+        for (int iy = 0; iy <= 4; ++iy) {
+            for (int ix = 0; ix <= 4; ++ix) {
+                const float qx = 0.1f + 0.2f * float(ix);
+                const float qy = 0.1f + 0.2f * float(iy);
+                const auto stepwise = dev->displayedToFrame(qx, qy);
+                const auto matrix = through(toF, qx, qy);
+                worstMap = std::max(worstMap,
+                    std::max(std::fabs(double(matrix.first) - stepwise.first),
+                             std::fabs(double(matrix.second) - stepwise.second)));
+                const auto back = through(toD, matrix.first, matrix.second);
+                worstTrip = std::max(worstTrip,
+                    std::max(std::fabs(double(back.first) - qx),
+                             std::fabs(double(back.second) - qy)));
+            }
+        }
+        report(worstMap < 2e-4,
+               "displayMap's frame direction is the pointwise conversion",
+               "worst " + std::to_string(worstMap));
+        report(worstTrip < 2e-4,
+               "and its two matrices are exact inverses through a round trip",
+               "worst " + std::to_string(worstTrip));
+    }
+
     adj.perspectiveVertical = 0.0f;
+    adj.cropX = 0.0f; adj.cropY = 0.0f; adj.cropW = 1.0f; adj.cropH = 1.0f;
+    adj.rotateQuarters = 0;
+    adj.straightenDeg = 0.0f;
     dev->apply(adj);
     dev->render();
 }

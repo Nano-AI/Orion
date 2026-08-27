@@ -467,6 +467,15 @@ extension Scenario {
         // Classify every cell by what the interface believes, sampling inside
         // the cell rather than at its center: a cell whose center is covered
         // can still straddle the falloff.
+        //
+        // ⚠ The grid is display cells — the rendered output being measured —
+        // and the mask is stored in frame coordinates, so every sample
+        // crosses through the engine's own map first, exactly as the overlay
+        // does. This is also what sharpens the check: the render's pixels
+        // went display → frame through `geometry.slang`, the oracle's samples
+        // go through `mask::displayMatrix`, and the two derivations agreeing
+        // on every cell is now part of what a green run means.
+        let fd = engine.frameDisplayMap
         let step = 1.0 / CGFloat(cells)
         var inside: [(Int, Int)] = [], outside: [(Int, Int)] = []
         var map = [[Character]](repeating: [Character](repeating: " ", count: cells),
@@ -478,7 +487,7 @@ extension Scenario {
                     for si in 0...4 {
                         let q = CGPoint(x: (CGFloat(i) + CGFloat(si) / 4) * step,
                                         y: (CGFloat(j) + CGFloat(sj) / 4) * step)
-                        let a = CanvasLayout.maskAlpha(q, m)
+                        let a = CanvasLayout.maskAlpha(fd.frame(q), m)
                         lo = min(lo, a); hi = max(hi, a)
                     }
                 }

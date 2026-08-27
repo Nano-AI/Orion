@@ -102,8 +102,7 @@ void testMaskGpu() {
         // Left edge to right edge, through the shipping derivation rather
         // than a second copy of it: centre 0.5, angle 0, length 1.
         {
-            const auto r = orion::pipe::mask::ramp(0.5f, 0.5f, 0.0f, 1.0f,
-                                                   orion::pipe::persp::identity());
+            const auto r = orion::pipe::mask::ramp(0.5f, 0.5f, 0.0f, 1.0f);
             for (int k = 0; k < 3; ++k) m.rampNum[k] = r.num[k];
         }
         const auto a = run(m);
@@ -727,8 +726,7 @@ void testMaskCompositeGpu() {
         g.size[0] = kW; g.size[1] = kH;
         g.kind = 1;
         {
-            const auto r = orion::pipe::mask::ramp(0.5f, 0.5f, 0.0f, 1.0f,
-                                                   orion::pipe::persp::identity());
+            const auto r = orion::pipe::mask::ramp(0.5f, 0.5f, 0.0f, 1.0f);
             for (int k = 0; k < 3; ++k) g.rampNum[k] = r.num[k];
         }
 
@@ -755,36 +753,16 @@ void testMaskCompositeGpu() {
                std::to_string(std::abs(at(got, 8, y) - at(grad, 8, y))));
     }
 
-    // ── A radial mask under a perspective correction, rendered ───────────────
+    // ── A radial mask at an angle, rendered where it is stored ──────────────
     //
-    // The maths for this is pinned on the CPU by `testRadialIsTheExactPullBack`.
-    // This is the *render*, and it is here because a mask kind whose parameters
-    // changed meaning is exactly the thing a pure-maths suite cannot see: the
-    // ellipse now travels to the kernel as the numbers the photographer set,
-    // and the map travels beside it as nine floats. Get one offset wrong in
-    // either struct and this draws a plausible ellipse in the wrong place.
-    //
-    // The reference walks `mask::fromFrame` — crop, straighten, perspective,
-    // turns, one step at a time — rather than the matrix the shader is handed,
-    // so the two sides do not share the derivation being checked.
+    // The kernel evaluates the ellipse directly at the frame pixel — no
+    // geometry, the matte's own contract. What this pins is the *struct*: the
+    // display matrix's nine floats left `MaskComponentParams`, every field
+    // after them moved, and a mis-agreed offset draws a plausible ellipse in
+    // the wrong place, which no maths-only test can see. The reference is the
+    // same superellipse transcribed on the CPU, at an angle and with a
+    // non-default roundness so no field of the block is left unread.
     {
-        namespace mg = orion::pipe::mask;
-        constexpr float kW6 = 6000.0f, kH4 = 4000.0f;
-        const mg::Crop crop{0.05f, 0.10f, 0.85f, 0.80f};
-        const float straighten = 0.04f;
-        const int turns = 1;
-
-        // A strong keystone: this is the configuration where the curvature was
-        // measured at a full unit of coverage. research/perspective.md.
-        const orion::pipe::persp::Params pp{1.0f, 0.30f, 0.0f};
-        const auto h    = orion::pipe::persp::compose(pp, kW6, kH4);
-        const auto hInv = orion::pipe::persp::inverse(h);
-        const auto display = mg::displayMatrix(crop, turns, straighten,
-                                               crop.x + crop.w * 0.5f,
-                                               crop.y + crop.h * 0.5f,
-                                               kW6, kH4, &hInv);
-
-        // Large enough that the map's curvature across it is the whole point.
         const float cx = 0.42f, cy = 0.48f, ang = 0.5f;
         const float rx = 0.34f, ry = 0.26f;
 
@@ -795,17 +773,18 @@ void testMaskCompositeGpu() {
         m.semi[0]   = rx; m.semi[1]   = ry;
         m.angle     = ang;
         m.feather   = 0.30f;
-        m.roundness = 2.0f;
+        m.roundness = 3.0f;
         m.startsLayer = 1;
-        for (int r = 0; r < 9; ++r) m.display[r] = display.m[r];
         const auto got = fold({m});
 
-        const auto coverage = [&](float dx, float dy) {
+        const auto coverage = [&](float qx, float qy) {
             const float c = std::cos(ang), s = std::sin(ang);
-            const float ex = dx - cx, ey = dy - cy;
+            const float ex = qx - cx, ey = qy - cy;
             const float u = ( c * ex + s * ey) / rx;
             const float v = (-s * ex + c * ey) / ry;
-            const float r = std::sqrt(u * u + v * v);
+            const float n = 3.0f;
+            const float r = std::pow(std::pow(std::abs(u), n)
+                                     + std::pow(std::abs(v), n), 1.0f / n);
             const float f = 0.30f;
             const float t = std::clamp((r - (1.0f - f)) / f, 0.0f, 1.0f);
             return 1.0f - t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
@@ -816,12 +795,8 @@ void testMaskCompositeGpu() {
             for (std::uint32_t px = 0; px < kW; ++px) {
                 const float qx = (float(px) + 0.5f) / float(kW);
                 const float qy = (float(py) + 0.5f) / float(kH);
-                const auto d = mg::fromFrame({qx, qy, 0.0f}, crop, turns, straighten,
-                                             crop.x + crop.w * 0.5f,
-                                             crop.y + crop.h * 0.5f,
-                                             kW6, kH4, &hInv);
                 worst = std::max(worst,
-                    std::abs(double(coverage(d.centerX, d.centerY))
+                    std::abs(double(coverage(qx, qy))
                              - double(at(got, int(px), int(py)))));
             }
         }
@@ -829,39 +804,8 @@ void testMaskCompositeGpu() {
         // different order of operations, so this is a tolerance on the format
         // rather than on the mathematics.
         report(worst < 3e-3,
-               "a radial mask renders the ellipse that was drawn, under a keystone",
+               "a radial mask renders the stored frame-space ellipse exactly",
                "worst " + std::to_string(worst));
-
-        // ⚠ **The half that gives this teeth.** Everything above would also pass
-        // on the first-order code this replaced if the map happened to be mild.
-        // Build the mask the old way — push the centre through `toFrame` and the
-        // semi-axes through the derivative at that centre — and assert the two
-        // answers are *far apart* here. If this stops being far apart, the case
-        // has gone slack and stopped testing what it was written for.
-        const auto placed = mg::toFrame({cx, cy, ang}, crop, turns, straighten,
-                                        crop.x + crop.w * 0.5f,
-                                        crop.y + crop.h * 0.5f, kW6, kH4, &h);
-        const auto ext = mg::radiusToFrame(rx, ry, crop, placed.jac, ang + straighten);
-        const float fc = std::cos(placed.angle + ext.angleDelta);
-        const float fs = std::sin(placed.angle + ext.angleDelta);
-        double spread = 0.0;
-        for (std::uint32_t py = 0; py < kH; ++py) {
-            for (std::uint32_t px = 0; px < kW; ++px) {
-                const float qx = (float(px) + 0.5f) / float(kW);
-                const float qy = (float(py) + 0.5f) / float(kH);
-                const float ex = qx - placed.centerX, ey = qy - placed.centerY;
-                const float u = ( fc * ex + fs * ey) / ext.semiX;
-                const float v = (-fs * ex + fc * ey) / ext.semiY;
-                const float r = std::sqrt(u * u + v * v);
-                const float t = std::clamp((r - 0.70f) / 0.30f, 0.0f, 1.0f);
-                const float old = 1.0f - t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
-                spread = std::max(spread, std::abs(double(old)
-                                                   - double(at(got, int(px), int(py)))));
-            }
-        }
-        report(spread > 0.5,
-               "and disagrees with the first-order ellipse it replaced",
-               "worst " + std::to_string(spread));
     }
 }
 

@@ -36,9 +36,6 @@ int main() {
     testPerspectiveMaskGeometry();
     testPerspectiveMaskExtent();
     testDisplayMatrixMatchesFromFrame();
-    testRampIsTheExactPullBack();
-    testRampDenominatorIsTheMatrix();
-    testRadialIsTheExactPullBack();
     testPlaceToFrame();
     testTexturePool();
     testPerspectiveWiring();

@@ -228,33 +228,17 @@ void DevelopPipeline::pushStaticMaskParams() {
 void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
                                           const ApplyContext& ctx) {
     const bool first = ctx.first;
-    const persp::Matrix3* perspective = ctx.perspective;
-    const mask::Crop& crop = ctx.crop;
-    const int turns = ctx.turns;
-    const float rotW = ctx.rotW, rotH = ctx.rotH;
-    const bool frameMoved = ctx.frameMoved;
     const bool visibilityMoved = ctx.visibilityMoved;
 
-    // The whole frame → display map as one matrix — crop, straighten, quarter
-    // turns and the correction — so a mask defined on the displayed picture can
-    // be pulled back into this one exactly rather than having its parameters
-    // pushed forward approximately. `ctx.perspective` is the display → frame
-    // direction the placements take, so this wants its inverse, which is the
-    // same argument `mask::fromFrame` takes.
-    //
-    // Computed once for the whole list: it depends on the geometry and not on
-    // any component, and `persp::inverse` is an adjugate nobody should pay for
-    // per row.
-    persp::Matrix3 perspInverse{};
-    const persp::Matrix3* perspInversePtr = nullptr;
-    if (perspective != nullptr && !persp::isIdentity(*perspective)) {
-        perspInverse = persp::inverse(*perspective);
-        perspInversePtr = &perspInverse;
-    }
-    const persp::Matrix3 display = mask::displayMatrix(
-        crop, turns, adj.straightenDeg * 3.14159265358979324f / 180.0f,
-        adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
-        rotW, rotH, perspInversePtr);
+    // ⚠ **No geometry in here, and that is the feature.** A mask is stored in
+    // frame coordinates — anchored at the gesture, or at migration for a
+    // sidecar from the display-space era — so the crop, the straighten, the
+    // turns and the correction are simply not this stage's business. The
+    // years-long other arrangement (display-space storage, with the live
+    // geometry folded in per apply) meant every geometry tick re-stamped four
+    // full-resolution mask nodes and, worse, *re-aimed* every mask at new
+    // image pixels: exactly transformed, anchored to the crop rectangle
+    // instead of the photograph. pipe/MaskGeometry.h tells the whole story.
 
     // ⚠ Hidden components are *disabled*, not zeroed. A disabled node resolves
     // to its first input, and this node's first input is the fold so far — so a
@@ -281,7 +265,7 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
         // was created under and drift off the picture as the slider moved —
         // the same staleness trap `matteDirty_` exists for, arriving by a
         // different route.
-        if (!first && frameMoved == false && !matteDirty_[std::size_t(i)] &&
+        if (!first && !matteDirty_[std::size_t(i)] &&
             adj.exposureEv == lastAdj_.exposureEv &&
             c == lastAdj_.maskComponents[std::size_t(i)] &&
             i < lastAdj_.maskCount) {
@@ -327,59 +311,17 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
         m.matteSize[0] = matteLive_[std::size_t(i)][0];
         m.matteSize[1] = matteLive_[std::size_t(i)][1];
 
-        // ⚠ **A radial mask now travels as the numbers the photographer set**,
-        // and the kernel carries each pixel back to meet them. Nothing here is
-        // transformed at all.
-        //
-        // What stood here pushed the mask *forward* into frame coordinates:
-        // `toFrame` for the centre and the angle, `radiusToFrame` for the
-        // semi-axes through the map's derivative at that centre. Every step of
-        // that was exact to first order and none of it could be exact, because
-        // one 2×2 cannot describe a map whose derivative differs at every point.
-        // The rim of a large mask under a strong keystone was off by a full unit
-        // of coverage. Decision #138.
-        //
-        // It also deletes a whole class of bookkeeping: the angle no longer has
-        // to be a *delta* against an already-turned placement (decision #83), the
-        // straighten no longer has to be added to the ellipse's angle while the
-        // quarter turns are kept out of it (#83 again), and the crop no longer
-        // scales the semi-axes by hand. All four live in the matrix.
+        // The stored numbers are the kernel's numbers: frame coordinates, no
+        // transform on the way through. The gesture (or the sidecar
+        // migration) put them in this space; render time has nothing to add.
         m.center[0] = c.center[0]; m.center[1] = c.center[1];
         m.semi[0]   = c.radius[0]; m.semi[1]   = c.radius[1];
         m.angle     = c.angle;
 
-        // The one map, for both geometric kinds — the ramp's denominator is its
-        // bottom row. `display` is computed once per apply, above the loop.
-        for (int r = 0; r < 9; ++r) m.display[r] = display.m[r];
-
-        // A linear gradient's ramp, pulled back from the picture the
-        // photographer is looking at instead of pushed forward into this one.
-        //
-        // ⚠ **The endpoints that stood here were wrong in a way no amount of
-        // care about their position could fix.** They were built from
-        // `placed.angle` and `lengthAlong` — the ramp's image direction and its
-        // image length, both exact — and the kernel then projected onto the
-        // segment between them, which puts the level sets perpendicular to that
-        // segment *in frame coordinates*. The drawn mask's level sets are
-        // perpendicular in *display* coordinates, and a homography preserves
-        // neither perpendicularity nor the spacing along the ramp. t is a linear
-        // **functional**: it goes through J⁻ᵀ where a pair of endpoints goes
-        // through J, and the two agree only where J is conformal — which is
-        // every case anybody checks by hand. Decision #137.
-        //
-        // In display coordinates the ramp runs from z along u, exactly as
-        // `CanvasLayout.MaskPlacement` derives its two handles, so these three
-        // numbers are the photographer's own and go through no transform at all.
-        // The transform is applied to the *point*, by the matrix.
-        // t(q) = ⟨n, (q,1)⟩ / ⟨M₃, (q,1)⟩, where M is the whole frame → display
-        // map. Exact for the homography, the crop, the straighten and the
-        // quarter turns at once, because all four are in M.
-        //
-        // ⚠ Only the numerator is copied. `ramp.den` *is* `display`'s bottom
-        // row — the kernel reads it there, and `testRampDenominatorIsTheMatrix`
-        // is what keeps that true rather than merely currently so.
+        // The ramp is the affine functional of those same stored numbers —
+        // one derivation, shared with the GPU tests.
         const auto ramp = mask::ramp(c.center[0], c.center[1], c.angle,
-                                     c.length, display);
+                                     c.length);
         for (int r = 0; r < 3; ++r) {
             m.rampNum[r] = ramp.num[r];
         }
@@ -400,10 +342,13 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
             // it on every tick would dirty the mask node on every tick, which
             // is the cost this graph exists to avoid.
             //
-            // The geometry counts as a change: every center goes through
-            // `mask::toFrame`, so a crop or a quarter turn moves all of them.
+            // Geometry no longer counts as a change: the stored dabs are frame
+            // coordinates, anchored at the gesture, so a crop tick moves none
+            // of them — which is also why `frameMoved` is gone from this
+            // predicate. When it was here, every crop drag re-walked and
+            // re-uploaded every stroke.
             const bool dabsStale =
-                first || frameMoved ||
+                first ||
                 i >= lastAdj_.maskCount ||
                 c.brushRevision != lastAdj_.maskComponents[std::size_t(i)].brushRevision ||
                 lastAdj_.maskComponents[std::size_t(i)].kind != 3;
@@ -413,28 +358,17 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
                 std::vector<float> texels(
                     std::size_t(params::kDabStride) * params::kDabRows * 4, 0.0f);
                 for (int d = 0; d < m.count; ++d) {
-                    // Every dab goes through the *same* transform the gradient's
-                    // center does, and it did not before: the centers were
-                    // copied straight from displayed coordinates into the
-                    // shader, so a stroke ignored the crop and the rotation.
-                    //
-                    // Not only a rotated-frame problem. A portrait file carries
-                    // an EXIF quarter turn, so `turns` is nonzero with the
-                    // rotate control untouched — which is why a stroke on a
-                    // portrait frame landed mirrored and ninety degrees off.
-                    const auto p = mask::toFrame(
-                        {dabs[std::size_t(d) * 2 + 0],
-                         dabs[std::size_t(d) * 2 + 1], 0.0f},
-                        crop, turns,
-                        adj.straightenDeg * 3.14159265358979324f / 180.0f,
-                        adj.cropX + adj.cropW * 0.5f, adj.cropY + adj.cropH * 0.5f,
-                        rotW, rotH, perspective);
+                    // Verbatim: the dab is stored in the kernel's own frame
+                    // coordinates. It went through `mask::toFrame` here, per
+                    // apply, when storage was display-space — which re-aimed
+                    // every painted dab at new image pixels whenever the crop
+                    // moved. The conversion now happens once, at the gesture.
                     const auto& signs = brushErase_[std::size_t(i)];
                     const float erasing =
                         (std::size_t(d) < signs.size() && signs[std::size_t(d)] != 0.0f)
                             ? 1.0f : 0.0f;
-                    texels[std::size_t(d) * 4 + 0] = p.centerX;
-                    texels[std::size_t(d) * 4 + 1] = p.centerY;
+                    texels[std::size_t(d) * 4 + 0] = dabs[std::size_t(d) * 2 + 0];
+                    texels[std::size_t(d) * 4 + 1] = dabs[std::size_t(d) * 2 + 1];
                     texels[std::size_t(d) * 4 + 2] = erasing;
                 }
                 // ⚠ **Before the upload, and before the boxes** — how much of
@@ -448,16 +382,15 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
                 // built, measured and attacked here, a session before anything
                 // depends on being able to trust it.
                 //
-                // ⚠ The nib is computed further down, from the crop, so it is
+                // ⚠ The nib is computed further down as well, so it is
                 // recomputed here rather than read from `m` — see the comment
                 // on `m.nibPx` below. The two expressions must stay identical;
                 // a predicate comparing a nib the kernel never sees would
                 // accept a stroke whose every dab changed size.
                 {
-                    const float shownW = float(width_)  * std::max(adj.cropW, 1e-6f);
-                    const float shownH = float(height_) * std::max(adj.cropH, 1e-6f);
                     const params::BrushShape shape{
-                        c.kind, c.brushRadius * std::min(shownW, shownH),
+                        c.kind,
+                        c.brushRadius * float(std::min(width_, height_)),
                         c.brushFlow, c.brushHardness};
 
                     // ⚠ **One accumulator, one owner.** Taking it away from
@@ -545,11 +478,15 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
             // ellipse on screen and the Size slider stretched it rather than
             // growing it. A brush has to be round under the cursor.
             //
-            // Measured against the *displayed* picture's shorter side, so the
-            // nib keeps its size on screen as the picture is cropped tighter.
-            const float shownW = float(width_)  * std::max(adj.cropW, 1e-6f);
-            const float shownH = float(height_) * std::max(adj.cropH, 1e-6f);
-            m.nibPx = c.brushRadius * std::min(shownW, shownH);
+            // ⚠ Against the **frame's** shorter side, not the crop's, since
+            // masks moved to frame storage. The crop-relative spelling kept
+            // the nib a constant size on screen — which reads as a feature
+            // until a stroke is already painted, at which point a tighter
+            // crop *thickened every dab of it* on the photograph, because one
+            // component has one nib. Painted coverage holding still under
+            // geometry wins; the gesture layer converts the on-screen brush
+            // size to this frame fraction at paint time instead.
+            m.nibPx = c.brushRadius * float(std::min(width_, height_));
 
             // ⚠ Still a cap, at sixty-four times the old one: about eighty
             // frame-widths of stroke. Said out loud rather than left to be

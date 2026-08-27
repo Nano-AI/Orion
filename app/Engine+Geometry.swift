@@ -108,6 +108,20 @@ extension Engine {
         pushAndRender()
     }
 
+    /// The frame ↔ display map under the geometry currently applied — what
+    /// every mask overlay point and gesture crosses through, fetched whole so
+    /// a 128-point outline is one facade call rather than 128.
+    var frameDisplayMap: CanvasLayout.FrameDisplayMap {
+        guard let handle, isLoaded else { return .identity }
+        var toDisplay = [Float](repeating: 0, count: 9)
+        var toFrame = [Float](repeating: 0, count: 9)
+        guard orion_engine_display_map(handle, &toDisplay, &toFrame) == ORION_OK
+        else { return .identity }
+        return CanvasLayout.FrameDisplayMap(
+            toDisplay: toDisplay.map { CGFloat($0) },
+            toFrame: toFrame.map { CGFloat($0) })
+    }
+
     /// Total clockwise quarter turns — the camera's own EXIF orientation plus
     /// the user's rotation. A matte producer needs it; see `MatteGeometry`.
     var quarterTurns: Int {

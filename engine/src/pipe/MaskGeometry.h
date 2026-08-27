@@ -339,27 +339,28 @@ inline void unperspective(float& x, float& y, float& angle, float& outScale,
     return persp::multiply(crop, m);
 }
 
-/// A linear gradient's ramp, as the two rows the kernel evaluates:
+/// A linear gradient's ramp, as the one affine row the kernel evaluates:
 ///
-///     t(q) = <num, (q, 1)> / <den, (q, 1)>
+///     t(q) = <num, (q, 1)>
 ///
-/// `centerX`, `centerY`, `angle` and `length` are the photographer's own numbers
-/// — normalized to the crop, exactly as `CanvasLayout.MaskPlacement` holds them
-/// — and they go through **no transform at all**. The transform is applied to
-/// the point, by `display`, which is why this is exact where pushing the
-/// endpoints forward was not.
+/// `centerX`, `centerY`, `angle` and `length` are the stored numbers — frame
+/// coordinates, the kernel's own space — so the ramp is a fixed function of
+/// the image and survives any later geometry change untouched.
 ///
-/// ⚠ **One derivation, two consumers**, the same rule `unperspective` states: the
-/// pipeline and the GPU tests both come here, so a test cannot pass against a
-/// second copy of the algebra that the shipping path does not use.
+/// ⚠ It took a `display` matrix until masks moved to frame storage: the
+/// stored numbers were display-space then, and folding the live geometry in
+/// here (t as a ratio of two linear forms, #137) was what made the ramp exact
+/// — and also what pinned it to the crop rectangle rather than the picture.
+///
+/// ⚠ **One derivation, two consumers**, the same rule `unperspective` states:
+/// the pipeline and the GPU tests both come here, so a test cannot pass
+/// against a second copy of the algebra that the shipping path does not use.
 struct Ramp {
     float num[3] = {0.0f, 0.0f, 1.0f};
-    float den[3] = {0.0f, 0.0f, 1.0f};
 };
 
 [[nodiscard]] inline Ramp ramp(float centerX, float centerY, float angle,
-                               float length,
-                               const persp::Matrix3& display) noexcept {
+                               float length) noexcept {
     const float ux = std::cos(angle) * length;
     const float uy = std::sin(angle) * length;
     const float uu = ux * ux + uy * uy;
@@ -373,11 +374,9 @@ struct Ramp {
     const float zu = zx * ux + zy * uy;
 
     Ramp out{};
-    for (int r = 0; r < 3; ++r) {
-        out.num[r] = (ux * display.m[r] + uy * display.m[3 + r]
-                      - zu * display.m[6 + r]) / uu;
-        out.den[r] = display.m[6 + r];
-    }
+    out.num[0] = ux / uu;
+    out.num[1] = uy / uu;
+    out.num[2] = -zu / uu;
     return out;
 }
 

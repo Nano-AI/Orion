@@ -296,6 +296,12 @@ enum CanvasLayout {
         var visible = CGSize(width: 1, height: 1)
         /// The normalized coordinate sitting at `rect`'s top-left corner.
         var origin: CGPoint = .zero
+        /// The frame ↔ display geometry, for anything stored in frame
+        /// coordinates — masks. Identity by default, which is a photograph
+        /// with no geometry and every pure test built before frame storage.
+        /// `framePoint`/`frameUnit` (FrameDisplayMap.swift) compose it with
+        /// the two functions below.
+        var fd = FrameDisplayMap.identity
 
         /// View points per unit of normalized coordinate.
         var scale: CGSize {
@@ -316,15 +322,6 @@ enum CanvasLayout {
             guard s.width > 1e-12, s.height > 1e-12 else { return origin }
             return CGPoint(x: origin.x + (p.x - rect.minX) / s.width,
                            y: origin.y + (p.y - rect.minY) / s.height)
-        }
-
-        /// A displacement, which has no origin. A drag translation is one of
-        /// these, and passing it through `unit` instead would add the origin in
-        /// twice.
-        func unitVector(_ d: CGSize) -> CGSize {
-            let s = scale
-            guard s.width > 1e-12, s.height > 1e-12 else { return .zero }
-            return CGSize(width: d.width / s.width, height: d.height / s.height)
         }
     }
 
@@ -347,13 +344,18 @@ enum CanvasLayout {
 
     // MARK: Gradient masks
 
-    /// A gradient mask in the coordinates it is *stored* in: normalized against
-    /// the displayed picture — cropped, turned and straightened.
+    /// A gradient mask in the coordinates it is *stored* in: normalized
+    /// against the **frame** — the whole sensor picture, unturned and
+    /// uncropped, the space the kernel evaluates in. The same convention a
+    /// spot and a matte carry, and for the same reason: a mask placed against
+    /// a subject must hold still while the crop or the rotation move later.
     ///
-    /// Nothing here repeats `pipe/MaskGeometry.h`. The engine owns the step from
-    /// these coordinates to the frame `develop:linear` sees, and it is the only
-    /// thing that should: two implementations of that transform agreeing today
-    /// is how they drift apart tomorrow.
+    /// Nothing here repeats `pipe/MaskGeometry.h`. The engine owns the frame ↔
+    /// display map and hands it over whole as `FrameDisplayMap`; every
+    /// function below that meets a *view* point crosses through that map at
+    /// the boundary and does its arithmetic in frame space, so the stored
+    /// numbers and the drawn shapes cannot disagree about what space they
+    /// mean.
     struct MaskPlacement: Equatable {
         var kind: Int = 0                    // 0 none, 1 linear, 2 radial
         var center = CGPoint(x: 0.5, y: 0.5)
@@ -507,19 +509,21 @@ enum CanvasLayout {
         if h == .rotate {
             // The stem's direction is the mask's +X axis *as drawn*, which is
             // not the same screen direction as (cos, sin) unless the picture is
-            // square. Taking it through the map rather than reusing the angle
-            // is what keeps the lollipop on the end of the axis it belongs to.
-            let s = map.scale
-            var dx = m.axisX.width * s.width
-            var dy = m.axisX.height * s.height
+            // square — and under a straighten or a keystone it bends further.
+            // Taking it through the whole map, as the image of a short step
+            // along the axis, is what keeps the lollipop on the end of the
+            // axis it belongs to.
+            let tip = m.along(m.axisX, m.radius.width)
+            let base = map.framePoint(tip)
+            let step = map.framePoint(m.along(m.axisX, m.radius.width + 1e-3))
+            var dx = step.x - base.x, dy = step.y - base.y
             let n = max(hypot(dx, dy), 1e-9)
             dx /= n; dy /= n
-            let base = map.point(m.along(m.axisX, m.radius.width))
             return CGPoint(x: base.x + dx * maskRotateStem,
                            y: base.y + dy * maskRotateStem)
         }
-        guard let u = m.handleUnit(h) else { return map.point(m.center) }
-        return map.point(u)
+        guard let u = m.handleUnit(h) else { return map.framePoint(m.center) }
+        return map.framePoint(u)
     }
 
     /// Which handle a press at `p` takes.
@@ -542,7 +546,7 @@ enum CanvasLayout {
         }
         if let b = best { return b.handle }
 
-        return maskBodyContains(map.unit(p), m) ? .body : nil
+        return maskBodyContains(map.frameUnit(p), m) ? .body : nil
     }
 
     /// Inside the part of the picture the mask is acting on.
@@ -671,27 +675,31 @@ enum CanvasLayout {
     /// `grab` is where the press landed and `p` is where the cursor is now.
     /// Both in view coordinates.
     ///
-    /// ⚠️ **Every angle here is taken in normalized space**, because that is the
+    /// ⚠️ **Every angle here is taken in frame space**, because that is the
     /// space the shader measures in and therefore the only one the stored angle
     /// can mean. Taking `atan2` on screen instead and converting afterwards
     /// makes the handle slide out from under the cursor as it is dragged, since
-    /// the handle is redrawn from the stored angle through the anisotropic map.
+    /// the handle is redrawn from the stored angle through the anisotropic map
+    /// — and now through the geometry map besides.
     static func maskDrag(_ h: MaskHandle, from grab: CGPoint, to p: CGPoint,
                          start: MaskPlacement, _ map: PictureMap) -> MaskPlacement {
         var m = start
 
         switch h {
         case .center, .body:
-            let d = map.unitVector(CGSize(width: p.x - grab.x, height: p.y - grab.y))
+            // A displacement has to cross the projective map as two points,
+            // not as a vector: the map has no single scale, only one at a
+            // point, and a drag can span the picture.
+            let a = map.frameUnit(grab), b = map.frameUnit(p)
             m.center = CGPoint(
-                x: clamp(start.center.x + d.width, maskCenterRange),
-                y: clamp(start.center.y + d.height, maskCenterRange))
+                x: clamp(start.center.x + (b.x - a.x), maskCenterRange),
+                y: clamp(start.center.y + (b.y - a.y), maskCenterRange))
 
         case .zeroEnd, .fullEnd:
             // An endpoint carries angle and length at once, which is why a
             // linear gradient needs no rotate handle: the point goes exactly
             // where the cursor is and the angle is whatever that implies.
-            let q = map.unit(p)
+            let q = map.frameUnit(p)
             let dx = q.x - start.center.x, dy = q.y - start.center.y
             let r = hypot(dx, dy)
             guard r > 1e-9 else { break }
@@ -702,7 +710,7 @@ enum CanvasLayout {
             // Size only, and the drag is projected onto the axis it belongs to
             // — pulling a side sideways must not quietly rotate the mask. The
             // rotate handle is the one thing that changes the angle.
-            let q = map.unit(p)
+            let q = map.frameUnit(p)
             let dx = q.x - start.center.x, dy = q.y - start.center.y
             let onX = (h == .plusX || h == .minusX)
             let axis = onX ? start.axisX : start.axisY
@@ -714,7 +722,7 @@ enum CanvasLayout {
             }
 
         case .rotate:
-            let q = map.unit(p)
+            let q = map.frameUnit(p)
             let dx = q.x - start.center.x, dy = q.y - start.center.y
             guard hypot(dx, dy) > 1e-9 else { break }
             m.angle = atan2(dy, dx)
@@ -798,16 +806,16 @@ enum CanvasLayout {
     /// A stale comment is what kept it: it named a file, the file was gone, and
     /// nothing failed. There is a check on the shape now.
     ///
-    /// `scale` is view points per normalized unit **per axis**, so its two
-    /// components are the displayed picture's two sides in points; the smaller
-    /// is the side `nibPx` is measured against. Taking it here rather than from
-    /// `rect` is what makes this correct while zoomed, where only part of the
-    /// picture is in `rect`.
+    /// `at` is a **frame** point — the space the dabs are stored in — and the
+    /// scale is taken there, per axis, through the whole composed map: the
+    /// geometry map is projective, so view points per frame unit is a number
+    /// at a point, not a constant. The smaller axis is the side `nibPx` is
+    /// measured against, exactly as `DevelopMask` computes it.
     static func brushCursor(at unit: CGPoint, radius: CGFloat,
                             _ map: PictureMap, samples: Int = 64) -> [CGPoint] {
         guard samples >= 3, radius > 0 else { return [] }
-        let center = map.point(unit)
-        let s = map.scale
+        let center = map.framePoint(unit)
+        let s = map.frameScale(at: unit)
         let r = radius * min(s.width, s.height)
         var out: [CGPoint] = []
         out.reserveCapacity(samples)

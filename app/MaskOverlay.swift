@@ -105,8 +105,8 @@ struct MaskOverlay: View {
     private func isoLine(_ t: CGFloat, dashed: Bool) -> some View {
         let (a, b) = CanvasLayout.maskIsoLine(mask, at: t)
         var p = Path()
-        p.move(to: map.point(a))
-        p.addLine(to: map.point(b))
+        p.move(to: map.framePoint(a))
+        p.addLine(to: map.framePoint(b))
 
         let dash = StrokeStyle(lineWidth: 1.5, lineCap: .round,
                                dash: dashed ? [5, 5] : [])
@@ -134,7 +134,7 @@ struct MaskOverlay: View {
     }
 
     private func outline(at level: CGFloat, dashed: Bool) -> some View {
-        let pts = CanvasLayout.maskOutline(mask, at: level).map(map.point)
+        let pts = CanvasLayout.maskOutline(mask, at: level).map(map.framePoint)
         var p = Path()
         if let first = pts.first {
             p.move(to: first)
@@ -203,7 +203,7 @@ struct MaskOverlay: View {
     /// Built in a plain function, not in the `ViewBuilder` — a `for` loop
     /// cannot live inside one.
     private func cursorPath(_ at: CGPoint) -> Path {
-        let pts = CanvasLayout.brushCursor(at: map.unit(at),
+        let pts = CanvasLayout.brushCursor(at: map.frameUnit(at),
                                            radius: CGFloat(engine.brushRadius),
                                            map)
         var p = Path()
@@ -232,7 +232,10 @@ struct MaskOverlay: View {
     private var paint: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                let here = map.unit(value.location)
+                // Frame coordinates from the first touch: the dabs are
+                // stored and rendered there, so a stroke is anchored the
+                // moment it is laid rather than converted per render.
+                let here = map.frameUnit(value.location)
                 if !painting {
                     painting = true
                     carry = 0

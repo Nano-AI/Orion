@@ -206,14 +206,6 @@ extension ViewportTests {
                     near(back.x, p.x, 1e-6, "view→unit→view x (\(image), \(zoom)x)")
                     near(back.y, p.y, 1e-6, "view→unit→view y (\(image), \(zoom)x)")
                 }
-
-                // A displacement must not pick up the origin on the way through.
-                let d = CGSize(width: 60, height: -25)
-                let u = map.unitVector(d)
-                let a = map.point(CGPoint(x: 0.4, y: 0.4))
-                let b = map.point(CGPoint(x: 0.4 + u.width, y: 0.4 + u.height))
-                near(b.x - a.x, d.width, 1e-6, "unitVector is a pure delta x")
-                near(b.y - a.y, d.height, 1e-6, "unitVector is a pure delta y")
             }
         }
     }

@@ -37,6 +37,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasBlit.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/FrameDisplayMap.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
@@ -152,6 +153,7 @@ add_custom_command(
             -target arm64-apple-macos14.0
             ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/FrameDisplayMap.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift
@@ -194,6 +196,7 @@ add_custom_command(
             -o ${VIEWPORT_TESTS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CanvasLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/FrameDisplayMap.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteGeometry.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Presets.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Snapshots.swift

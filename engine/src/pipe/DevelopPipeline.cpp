@@ -291,6 +291,29 @@ std::pair<float, float> DevelopPipeline::displayedToFrame(float x, float y) cons
     return {p.centerX, p.centerY};
 }
 
+void DevelopPipeline::displayMap(float toDisplay[9], float toFrame[9]) const {
+    const mask::Crop crop{lastAdj_.cropX, lastAdj_.cropY,
+                          lastAdj_.cropW, lastAdj_.cropH};
+    const bool swaps = (turns_ % 2) != 0;
+    const float rotW = float(swaps ? height_ : width_);
+    const float rotH = float(swaps ? width_  : height_);
+    // The same composition `frameToDisplayed` walks point by point — one
+    // derivation, and `testPerspectiveWiring`'s check 7 holds the two
+    // together. The whole matrix is exposed so the overlay can carry a curve's
+    // worth of points across without a facade call per point.
+    const persp::Matrix3 m = mask::displayMatrix(
+        crop, turns_,
+        lastAdj_.straightenDeg * 3.14159265358979324f / 180.0f,
+        lastAdj_.cropX + lastAdj_.cropW * 0.5f,
+        lastAdj_.cropY + lastAdj_.cropH * 0.5f, rotW, rotH,
+        persp::isIdentity(perspectiveInverse_) ? nullptr : &perspectiveInverse_);
+    const persp::Matrix3 inv = persp::inverse(m);
+    for (int i = 0; i < 9; ++i) {
+        toDisplay[i] = m.m[i];
+        toFrame[i]   = inv.m[i];
+    }
+}
+
 std::pair<float, float> DevelopPipeline::frameToDisplayed(float x, float y) const {
     const mask::Crop crop{lastAdj_.cropX, lastAdj_.cropY,
                           lastAdj_.cropW, lastAdj_.cropH};
@@ -389,41 +412,13 @@ DevelopPipeline::contextFor(const Adjustments& adj) {
         persp::isIdentity(perspective_) ? nullptr : &perspective_;
     ctx.perspective = perspective;
 
-    // The mask group. Each component gets its own staleness, so painting on one
-    // does not re-stamp the others and a gradient slider does not re-walk a
-    // stroke. The geometry that every component shares — the crop, the turns and
-    // the straighten — is computed once out here rather than four times.
-    const bool frameMoved =
-        first ||
-        adj.cropX != lastAdj_.cropX || adj.cropY != lastAdj_.cropY ||
-        adj.cropW != lastAdj_.cropW || adj.cropH != lastAdj_.cropH ||
-        adj.rotateQuarters != lastAdj_.rotateQuarters ||
-        adj.straightenDeg != lastAdj_.straightenDeg ||
-        // ⚠ Perspective is in here for the same reason the crop is: every mask
-        // center and every brush dab goes through it, so moving it moves all of
-        // them. Leaving it out is a stroke that stops following the hand — the
-        // exact shape of the bug the crop entry was added for.
-        adj.perspectiveVertical   != lastAdj_.perspectiveVertical ||
-        adj.perspectiveHorizontal != lastAdj_.perspectiveHorizontal ||
-        adj.perspectiveAspect     != lastAdj_.perspectiveAspect;
-
-    // The mask is placed on the picture the photographer is looking at, which is
-    // cropped and rotated; it is applied before the geometry node, which sees
-    // neither. Without this a mask slides off its subject the moment the frame is
-    // turned. pipe/MaskGeometry.h.
-    const mask::Crop crop{adj.cropX, adj.cropY, adj.cropW, adj.cropH};
-    const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
-    // The straighten pivot and the rotated frame's shape, both as the geometry
-    // shader sees them — the rotation happens in that frame's pixels, so its
-    // aspect is part of the transform.
-    const bool swaps = (turns % 2) != 0;
-    const float rotW = float(swaps ? height_ : width_);
-    const float rotH = float(swaps ? width_  : height_);
-    ctx.crop  = crop;
-    ctx.turns = turns;
-    ctx.rotW  = rotW;
-    ctx.rotH  = rotH;
-    ctx.frameMoved = frameMoved;
+    // ⚠ **No "did the frame move" flag any more, and no geometry handed to the
+    // mask stage.** A mask is stored in frame coordinates now, so a crop, a
+    // straighten, a turn or a perspective tick changes nothing a mask node
+    // reads — the flag that used to fan those ticks out into four
+    // full-resolution mask re-stamps (and a re-walk of every brush stroke)
+    // died with the display-space storage it served. The geometry node still
+    // gets everything, through its own parameter block below.
 
     bool visibilityMoved = first || adj.maskCount != lastAdj_.maskCount;
     for (int i = 0; !visibilityMoved && i < kMaxMaskComponents; ++i) {

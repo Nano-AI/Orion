@@ -461,8 +461,10 @@ extension Engine {
     /// going. Setting it is one suspended batch and one render, the same shape
     /// as `setCrop`.
     ///
-    /// These are *displayed* coordinates. The engine puts them where
-    /// `develop:linear` can use them; the overlay never sees that transform.
+    /// These are **frame** coordinates — the stored numbers, passed through
+    /// raw. The overlay crosses into display space through
+    /// `FrameDisplayMap`, which the engine also owns; nothing in between
+    /// converts anything.
     var maskPlacement: CanvasLayout.MaskPlacement {
         get {
             CanvasLayout.MaskPlacement(

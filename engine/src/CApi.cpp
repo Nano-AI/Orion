@@ -371,6 +371,18 @@ OrionStatus orion_engine_from_frame(const OrionEngine* engine,
     });
 }
 
+OrionStatus orion_engine_display_map(const OrionEngine* engine,
+                                     float* out_to_display9,
+                                     float* out_to_frame9) {
+    if (engine == nullptr || out_to_display9 == nullptr ||
+        out_to_frame9 == nullptr)
+        return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        engine->impl.develop().displayMap(out_to_display9, out_to_frame9);
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_mask_place_to_frame(
     const OrionEngine* engine, const OrionMaskLegacyGeometry* geometry,
     int kind, OrionMaskShape* shape, float* dab_xy, int dab_count) {

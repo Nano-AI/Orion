@@ -106,6 +106,7 @@ enum ViewportTests {
         testMaskOutlineLandsOnTheFalloff()
         testMaskIsoLinesAreIsoAlpha()
         testMaskEndpointLandsUnderTheCursor()
+        testMaskDragCrossesTheGeometryMap()
         testMaskRotateStaysOnTheCursorRay()
         testMaskBodyDragMovesByTheDrag()
         testMaskAxisDragDoesNotRotate()

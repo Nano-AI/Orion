@@ -756,22 +756,25 @@ void testBrushPrefixWiring() {
                "and destination-out is a different picture from source-over");
     }
 
-    // ── ⚠ The geometry moves and the stroke does not ───────────────────────
+    // ── ⚠ The geometry moves and the stroke does not — literally, now ──────
     //
-    // `setBrushStroke` is not called and `brushRevision` does not move. Every
-    // center still lands somewhere else, because `mask::toFrame` is between the
-    // stored list and the texture — which is why the predicate compares what was
-    // uploaded and never the displayed-coordinate dabs.
+    // `setBrushStroke` is not called and `brushRevision` does not move. The
+    // stored dabs are **frame coordinates**, anchored at the gesture, so a
+    // straighten changes no center: the stroke is not re-walked, not
+    // re-uploaded, and the predicate is not even asked. When storage was
+    // display-space this same straighten re-uploaded all 160 dabs and reset
+    // the prefix to zero — per tick of the drag — which is both the cost and
+    // the mask-slides-off-its-subject bug that frame storage removed.
     adj.straightenDeg = 3.0f;
     dev->apply(adj);
     dev->render();
     {
         const auto s = dev->brushPrefixStat(0);
-        report(s.evaluations == 5,
-               "a straighten re-uploads the stroke and asks again",
+        report(s.evaluations == 4,
+               "a straighten no longer touches the stroke at all",
                std::to_string(s.evaluations) + " evaluations");
-        report(s.prefix == 0,
-               "and every center has moved, so nothing is unchanged",
+        report(s.prefix == 157,
+               "and the accumulator's record survives the geometry untouched",
                std::to_string(s.prefix));
     }
     adj.straightenDeg = 0.0f;

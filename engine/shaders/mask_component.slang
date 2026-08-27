@@ -55,30 +55,31 @@ struct MaskComponentParams
     float  angle;       // radial rotation, radians
     float  _pad;
 
-    /// A linear gradient's ramp numerator:  t(q) = <num, (q,1)> / <dispW, (q,1)>.
-    /// The denominator is the matrix's bottom row, below, rather than a second
-    /// copy of it.
+    /// A linear gradient's ramp:  t(q) = <num, (q,1)>, affine in the frame
+    /// coordinates this kernel runs in — the same contract as every other
+    /// field here since masks moved to frame storage. The geometry the mask
+    /// was drawn under is nobody's business at render time: it entered the
+    /// stored numbers once, at the gesture (or at migration, for a sidecar
+    /// from the display-space era), which is what anchors the ramp to the
+    /// image through any later crop, straighten, turn or correction.
     ///
-    /// ⚠ Scalars and not float3s or a float3x3, deliberately: a float3 aligns
-    /// to sixteen bytes — and so does every column of a float3x3 — and offset 56
-    /// is not a multiple of sixteen, so Metal would pad and every field after
-    /// this would move. The C++ side asserts the offsets either way, but a
-    /// struct that only agrees by luck is a struct that stops agreeing when
-    /// somebody inserts an int.
+    /// ⚠ Scalars and not a float3, deliberately: a float3 aligns to sixteen
+    /// bytes and offset 56 is not a multiple of sixteen, so Metal would pad
+    /// and every field after this would move. The C++ side asserts the
+    /// offsets either way, but a struct that only agrees by luck is a struct
+    /// that stops agreeing when somebody inserts an int.
     float  rampNumX;
     float  rampNumY;
     float  rampNumW;
+    float  _pad2;
 
-    /// **The whole frame → display map**, row-major: crop, straighten, quarter
-    /// turns and the perspective correction, composed once by
-    /// `mask::displayMatrix`. Row W is the projective denominator, which is
-    /// (0, 0, 1) whenever no correction is in play.
-    float  dispXX; float dispXY; float dispXW;
-    float  dispYX; float dispYY; float dispYW;
-    float  dispWX; float dispWY; float dispWW;
-
-    float2 center;      // radial centre, as drawn — display coordinates
-    float2 semi;        // radial semi-axes, as drawn — display coordinates
+    /// The radial centre and semi-axes, **in frame coordinates, as stored** —
+    /// the same contract the matte carries at `matteSize`: the producer put
+    /// the numbers in this kernel's own space, and the kernel applies no
+    /// geometry at all. That ignorance is what makes a mask survive a crop
+    /// and a rotation.
+    float2 center;
+    float2 semi;
 
     /// Luminance range (kind 5), in **stops** — log2 of Rec.2020 luminance on
     /// the reference image. `rangeLo` and `rangeHi` are the band's edges and
@@ -304,65 +305,34 @@ void maskComponent(uint3 tid : SV_DispatchThreadID,
 
     if (p.kind == 1)
     {
-        // The ramp the photographer drew, pulled back exactly.
+        // The ramp, evaluated where it is stored: in this kernel's own frame
+        // coordinates. Affine, so its level sets are fixed lines of the
+        // *image* — which is the whole point. A crop, a straighten, a turn or
+        // a correction applied after the mask was placed changes what the
+        // geometry node shows, and changes nothing here.
         //
-        // ⚠ **This used to project onto the segment between two endpoints**, so
-        // its level sets were the lines perpendicular to that segment *in this
-        // kernel's own frame coordinates* — and the drawn mask's level sets are
-        // perpendicular in *display* coordinates. A homography does not preserve
-        // perpendicularity, and t is a linear functional rather than a vector:
-        // it transforms by the inverse transpose while a pair of endpoints
-        // transforms by the derivative. Where the correction is conformal the
-        // two agree, which is why it survived so long.
-        //
-        // The pull-back of an affine ramp through a projectivity is a ratio of
-        // two linear forms, so this is exact rather than closer — for the
-        // homography, the crop, the straighten and the quarter turns together,
-        // since they compose into the one matrix these six numbers come from.
-        // research/perspective.md; decision #137.
-        const float num = p.rampNumX * q.x + p.rampNumY * q.y + p.rampNumW;
-        // The denominator is the bottom row of that matrix, so it is 1 without
-        // a perspective and can only vanish on the line the correction sends to
-        // infinity — which is outside any frame the auto-scale will show.
-        const float den = p.dispWX * q.x + p.dispWY * q.y + p.dispWW;
-        const float t = (abs(den) > 1e-9f) ? num / den : 1.0f;
+        // ⚠ Two earlier spellings of this line are worth remembering. Two
+        // endpoints projected onto (pre-#137) put the level sets perpendicular
+        // in the wrong space under a keystone. The exact display-space
+        // pull-back that replaced them (#137, a ratio of two linear forms
+        // through the frame → display matrix) was exact — and *therefore*
+        // pinned the mask to the crop rectangle, because the matrix carried
+        // the live geometry: crop again and the same stored numbers meant new
+        // image pixels. Exactly transformed, anchored to the wrong thing.
+        // Frame storage is what fixed it, and it is also simpler than either.
+        const float t = p.rampNumX * q.x + p.rampNumY * q.y + p.rampNumW;
         own = maskFalloff(t);
     }
     else if (p.kind == 2)
     {
-        // ⚠ **Carry the pixel back to the picture, then ask the ellipse the
-        // photographer actually drew.** Exact, for the same reason kind 1 is:
-        // the crop, the straighten, the quarter turns and the correction are
-        // one projectivity, and a projectivity is invertible.
-        //
-        // What stood here was an ellipse whose centre, semi-axes and angle had
-        // been pushed *forward* into these coordinates using the map's
-        // derivative at the mask's own centre — √|det J| first (decision #100),
-        // then the exact singular values of J·R·diag (#128). Both remove the
-        // whole first-order error and neither can see the second: a homography's
-        // derivative differs at every point, so one 2×2 describes a large mask's
-        // rim only as well as the map is close to linear across it. It is not —
-        // a 0.34 mask under a vertical keystone of 1.00 reached a **full 1.0000
-        // coverage difference** at its rim, over 5.8% of the frame.
-        //
-        // The cost is one 3×3 and a divide per pixel, in a kernel that runs
-        // full-resolution once per component. That was the open performance
-        // question, and it is **measured, not argued**: `orion-bench` now times
-        // this node, and it is 1.02 ms with the arithmetic and 1.07 ms with it
-        // removed — the same number twice, on a pass that is bound by writing
-        // R16Float over 24 MP rather than by anything computed per pixel.
-        //
-        // ⚠ Applied whether or not the matrix is the identity, deliberately: a
-        // neutral photograph takes the same path as a corrected one, so there is
-        // no second code path to keep honest and no branch that only the
-        // uncommon case exercises. research/perspective.md, decision #138.
-        const float dw = p.dispWX * q.x + p.dispWY * q.y + p.dispWW;
-        const float2 d = float2(p.dispXX * q.x + p.dispXY * q.y + p.dispXW,
-                                p.dispYX * q.x + p.dispYY * q.y + p.dispYW)
-                       / ((abs(dw) > 1e-9f) ? dw : 1e-9f);
-
+        // The ellipse, asked directly at the frame pixel — the same one-liner
+        // the matte branch has always been, and for the same reason: the
+        // numbers are already in this kernel's space, so applying geometry
+        // here would *un*-anchor the mask from its subject (see kind 1's
+        // history note; the display-space pull-back this replaces did exactly
+        // that under a later crop).
         const float c = cos(p.angle), s = sin(p.angle);
-        const float2 e = d - p.center;
+        const float2 e = q - p.center;
         const float u = ( c * e.x + s * e.y) / max(p.semi.x, 1e-6f);
         const float v = (-s * e.x + c * e.y) / max(p.semi.y, 1e-6f);
 

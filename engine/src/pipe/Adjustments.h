@@ -48,6 +48,14 @@ struct MaskComponentEdit {
     /// one. research/masking.md §6 and ROADMAP's per-layer decomposition.
     bool  startsLayer = false;
 
+    /// ⚠ **Frame coordinates, all of them** — the whole sensor frame,
+    /// unturned and uncropped, the space `develop:linear` and the mask kernel
+    /// run in. The same convention as a spot and a matte, and for the same
+    /// reason: a mask is placed against a *subject*, so it must hold still
+    /// while the crop, straighten, turns or perspective move afterwards.
+    /// The gesture layer converts from the displayed picture once, at
+    /// placement; a sidecar from the display-space era converts once, at
+    /// load, through `mask::placeToFrame`.
     float center[2]{0.5f, 0.5f};
     float angle = 0.0f;                // radians, both gradient kinds
     float length = 0.5f;               // linear: zero-to-full distance
@@ -79,7 +87,7 @@ struct MaskComponentEdit {
     /// variable-length list and this struct is compared on every slider tick, so
     /// carrying them would make every tick walk every stroke.
     /// `setBrushStroke` owns them per component; this is only the revision.
-    float brushRadius = 0.08f;         // normalized
+    float brushRadius = 0.08f;         // fraction of the frame's short side
     float brushFlow = 0.5f;            // 0..1 per dab
     float brushHardness = 0.5f;        // 0 soft, 1 hard-edged
     unsigned brushRevision = 0;        // bumped whenever the stroke changes
@@ -93,18 +101,20 @@ struct MaskComponentEdit {
 
 /// One spot: a disc taken from elsewhere in the frame. research/spot-removal.md.
 ///
-/// ⚠ **Both centers are in FRAME coordinates, and a spot is the one thing here
-/// that wants them.** A mask is placed *against* a subject and stays where the
-/// photographer put it on screen; dust is *on the sensor* and is part of the
-/// picture, so a spot has to follow the subject through a later crop or quarter
-/// turn. Those are opposite behaviors and they need opposite storage.
+/// ⚠ **Both centers are in FRAME coordinates — the same convention every mask
+/// now uses, and the spot is where it was proven first.** The click is
+/// converted once, when the spot is placed, by `displayedToFrame`, and never
+/// re-anchored: that is what makes a heal follow its piece of dust through a
+/// later crop or quarter turn.
 ///
-/// The click is therefore converted once, when the spot is placed, by
-/// `displayedToFrame` — the same `mask::toFrame` a mask's center goes through,
-/// applied at placement rather than at render. Converting on every render would
-/// give the mask's behavior, and would also need the geometry in the
-/// staleness comparison, which is a trap this file has already fallen into
-/// twice.
+/// A paragraph stood here arguing the *opposite* storage for masks — "a mask
+/// stays where the photographer put it on screen" — and it was the written
+/// rationalization of a bug: a mask is placed against a subject, and pinning
+/// it to the screen meant every crop dragged it off that subject. Masks now
+/// convert at the gesture exactly as a spot always has. Converting per render
+/// instead would re-aim stored numbers as the geometry moves, and would also
+/// need the geometry in the staleness comparison — a trap this file has
+/// already fallen into twice.
 struct SpotEdit {
     float destX = 0.5f, destY = 0.5f;
     float srcX  = 0.5f, srcY  = 0.5f;

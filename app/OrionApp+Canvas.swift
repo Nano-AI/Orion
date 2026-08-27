@@ -235,10 +235,15 @@ extension Editor {
         }
         let imageAspect = CGFloat(engine.imageWidth) / CGFloat(engine.imageHeight)
         let viewAspect = size.width / size.height
-        return CanvasLayout.pictureMap(
+        var map = CanvasLayout.pictureMap(
             quadScale: viewport.quadScale(imageAspect: imageAspect, viewAspect: viewAspect),
             visible: viewport.visibleFraction(imageAspect: imageAspect, viewAspect: viewAspect),
             center: viewport.center,
             in: size)
+        // The geometry half: masks are stored in frame coordinates, and this
+        // is the engine's own frame ↔ display map — the overlay must not hold
+        // a second opinion about it any more than about where the pixels are.
+        map.fd = engine.frameDisplayMap
+        return map
     }
 }

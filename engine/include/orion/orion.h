@@ -396,6 +396,14 @@ OrionStatus orion_engine_from_frame(const OrionEngine* engine,
 OrionStatus orion_engine_to_frame(const OrionEngine* engine,
                                   float x, float y, float* out_x, float* out_y);
 
+/* The whole frame <-> display map under the geometry currently set: two
+ * projective 3x3 matrices, row-major, in normalized coordinates, one each
+ * way. The same map the two point calls above walk, exposed whole so the
+ * mask overlay can carry a 128-point outline across without 128 calls. */
+OrionStatus orion_engine_display_map(const OrionEngine* engine,
+                                     float* out_to_display9,
+                                     float* out_to_frame9);
+
 /* The largest matte this image will accept, in pixels. */
 OrionStatus orion_engine_max_matte_size(const OrionEngine* engine,
                                         unsigned* out_w, unsigned* out_h);
