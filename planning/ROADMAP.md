@@ -30,7 +30,7 @@ Rule: every milestone ends with something you can actually shoot with. No milest
 
 **Definition of done:** you edit a real shoot in Orion start to finish and export JPEGs you're happy with. No other tool involved.
 
-- ✅ **Epic: Browse** — folder open, grid + filmstrip, async thumbnails, LRU cache
+- ✅ **Epic: Browse** — folder open, grid + filmstrip, async thumbnails, LRU cache. ⚠ This line said "grid" for weeks while only the filmstrip existed; **the grid is real as of 2026-08-28** — the gallery view, #204 (G toggles it, never the default), with 1024-edge thumbnails (#205) and trash-backed deletion (#206)
 - **Epic: Cull** — ✅ star ratings, reject flags, color labels, filter and sort. ⚠ **The SQLite index was never built** — `Library.scan` rescans the folder and re-reads every sidecar on every open. It is also the last unbuilt piece of M1 and a performance item
 - ✅ **Epic: Core develop** — exposure, contrast, highlights/shadows, whites/blacks, WB (temp/tint + eyedropper), vibrance/saturation
 - ✅ **Epic: Geometry** — crop, rotate, straighten

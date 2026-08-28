@@ -4,14 +4,12 @@
 
 ---
 
-**Last updated:** 2026-08-27 (**Masks anchored to the image #202/#203, and
-subject/sky detection un-broken on full-frame bodies #201** - the two
-reported bugs: parametric masks now live in frame coordinates like spots and
-mattes, converted once at the gesture and once at load for old sidecars, so
-a crop/straighten/turn/keystone after placement moves nothing; and the
-analysis render takes its size from the engine's own matte allocation, which
-ends the round-vs-floor half-pixel that refused every Subject/Sky press on a
-7968x5320 frame.)
+**Last updated:** 2026-08-28 (**The gallery - #204/#205/#206.** A second face
+of the window: G toggles a grid of every photo in the folder, embedded-preview
+cells at 200-400 pt, arrows/1-5/`/R act on the focus without a decode, and the
+first deletion path in the tree - Finder Trash, sidecar+versions+mattes travel
+together, confirmed and counted, single/⌘⌫/Delete Rejected. Thumbnails grew
+512 → 1024 (schema 3, one cold rebuild). Editor stays the default view.)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -442,8 +440,9 @@ there now.
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** re-measured 2026-08-27 at #203. `orion-tests` **1005 checks** ·
-`orion-viewport-tests` **4027 checks** · all 0 failures. ⚠ The counts moved
+**Suites:** re-measured 2026-08-28 at #206. `orion-tests` **1005 checks** ·
+`orion-viewport-tests` **4059 checks** · all 0 failures. The viewport count
+grew by 32: gallery column/2D-navigation maths and the trash sibling rules. ⚠ The counts moved
 in both directions this time: #202 deleted three tests that graded the dead
 display-space kernel spelling along with the code they graded, and added the
 conversion, anchoring and map tests. **Eight** `repro/` scenarios run on this
@@ -568,6 +567,61 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-28` - the gallery, and the first deletion path
+
+**Asked for directly:** one view of all the photos to rate/reject them, delete
+one and delete all rejected (both confirmed), optimized - embedded previews,
+never the raw - but big enough to judge framing, and **not** the default view.
+Decisions #204 (the mode), #205 (thumbnails), #206 (trash).
+
+**The gallery (#204).** `EditorMode { develop, cull }` on `Editor`; bare `G`
+(the local monitor), a toolbar chip and "Gallery  (G)" in the View menu toggle
+it; the grid replaces canvas+tools+filmstrip below the toolbar. The focus is
+its own `@State`, never `current` - browsing moves a ring for free and only
+Return/double-click pays the ~210 ms decode. Arrows are 2D through pure
+`GalleryLayout.move` (clamped, ragged-last-row aware; the live column count is
+written back from layout); 1-5/`/R act through `cullScope(focus)`, the same
+scope as the menu and strip. Cells: 3:2 letterboxed (framing is the question,
+so never cropped), 200-400 pt slider (`@AppStorage`), real stars, the strip's
+two-ring selection language, its context menu plus Open in Editor and Move to
+Trash. Develop-only commands grey in gallery; `0 9 \ [ ]` are swallowed.
+`PhotoSelection` reused verbatim - shift/cmd click ranges work day one.
+
+**Thumbnails 512 → 1024 (#205).** Schema 2 → 3 (pixels changed, stamps did
+not - one cold rebuild), budget 512 MB → 1.5 GB,
+`testGallerySliderConstantsHoldTheirOrder` pins `maxCell * 2 <=
+thumbnailLongEdge`. ⚠ Decoded-side memory (~2.8 MB/frame in `Library.photos`)
+is **unmeasured on a big folder** - two sample frames here; 768 is the
+recorded fallback if a real shoot objects.
+
+**Deletion (#206).** `TrashPlan.plan` (pure, listing-driven) decides what
+travels: `BASE.xmp`, `BASE.orion-snapshots.json`, `BASE.orion-matte-*.png` -
+the `IMG_1`/`IMG_10` prefix trap is pinned. `Library.trash` moves the raw
+first, per photograph; sibling failure never stops the batch; one complaint
+sentence, never a dialog per frame. `runTrash` stops autosave *before* files
+move (a coalesced write would resurrect a sidecar beside a trashed raw),
+re-arms it if the raw refuses to move, computes canvas/focus survivors before
+mutation, and lands an emptied folder on the empty gallery. Index untouched
+by design - `plan` prunes on next open, stale rows miss on their stamps.
+Entry points: ⌘⌫ "Move to Trash…" over `cullScope`, "Delete Rejected
+Photos…" folder-wide with the count in the alert title, the gallery header
+button and context menu - one `pendingTrash` alert in the sync-confirm shape.
+
+**Verified:** suites 1005 / 4059, 0 failures; all eight sample-runnable repros
+exit 0; check-decisions/-gestures/-wiring exit 0; the menu scene reads **29 of
+29** commands (three new titles asserted); `--library-open samples` rebuilds
+cold at schema 3 and passes all 13 checks warm; `--screenshot --scene gallery`
+(new posing scene, via the `startMode:` seam) renders the grid with letterboxed
+cells, greyed edit chips and a disabled Delete Rejected. check-screens/-modes
+still exit 2 for want of `_PIC` samples (pre-existing). ⚠ **Owed:** a real
+hand-driven trash of a photograph - the `FileManager.trashItem` calls have no
+automated coverage (a test that trashes real files would be its own hazard),
+so the first delete on a real shoot should be watched: raw+xmp+json together
+in the Trash, and put-back restoring an editable photo. ⚠ The ~35 posed
+screenshot scenes are untouched (the gallery is a new scene, not a change to
+any existing one). Sessions `2026-08-24` (HDR merge) and `2026-08-07b` moved
+to `HISTORY.md` at this prune.
 
 ## Session `2026-08-27` - masks anchored to the image, and detection un-broken
 
@@ -751,342 +805,3 @@ Two things the wrapper exists to know:
   `orion` and `orion ./fake.ARW` - and the spawned processes carried the
   absolutized `--open` path each time, alongside an already-running instance.
 
-## Session `2026-08-24` — HDR merge, camera raw bracket to one linear DNG
-
-**A genuinely new feature, planned as an eight-story epic and shipped in one
-long session on `feat/hdr-merge`.** Merge 2+ handheld bracketed ARWs into a
-floating-point LinearRaw DNG written beside the sources, which then opens,
-develops, previews, reloads and exports like any library photo. The stories,
-in the order they landed:
-
-- **DNG 1.4 fp16 writer** (`util/DngWriter`) from the Adobe spec — never from
-  hdrmerge's GPLv3 writer, which is in the tree strictly as a citation index
-  and is now gitignored. The read spike in the same story settled the format:
-  LibRaw 0.22.2 reads it bit-exactly once `CONVERTFLOAT_TO_INT` is cleared.
-- **Linear-DNG decode + a linear-source develop graph**: one `linearSource`
-  node (linearize's own parameter block, so WB pushes have no per-mode branch)
-  stands where linearize/RCD/highlights/denoise stand for a mosaic, and the
-  skipped nodes are never built — disabled nodes still own their textures.
-- **The merge core** (`merge/Merge`): saturation-ramped, inverse-variance,
-  reference-consistency-deghosted radiance estimation, exact on a synthetic
-  bracket at zero noise, ≥2× shadow-variance win under a fitted model.
-  House constants in `UNSOURCED.md` §30.
-- **#190**: BaselineExposure is a *decode-time gain* through `invRange`, and
-  the clip scales with it — highlights ride above 1.0 into the scene-referred
-  pipeline; reset and third-party readers both stay correct. Replaced the
-  planned sidecar seed, which a paste could clobber.
-- **MergeRender**: the six-node demosaic graph (1,051 MiB at 42 MP), because
-  the merge must not drag the develop graph's gigabytes (#162) through a
-  batch operation.
-- **Alignment** (`merge/Align`): ORB + RANSAC + ECC on exposure-normalized
-  log-luma proxies; **OpenCV 5 (Apache-2.0) is a new dependency, #192,
-  confined to that one TU**. Failure returns identity + ok=false and the
-  merge degrades to reference-only — never a warp by a guess.
-- **Orchestrator + facade + `--hdr-merge`** (three `orion_engine_hdr_merge*`
-  entries, progress/cancel as atomics; the CLI asserts its own output opens).
-  Measured: 3 synthetic frames → valid DNG in 172 ms, exit 0.
-- **UI**: filmstrip context menu on a multi-selection → reference-picker
-  sheet (`HdrMergeFlow` logic is pure and tested in the viewport suite;
-  default reference = middle of the exposure ladder) → background merge with
-  progress and Stop → library rescan → the merged file opens.
-
-⚠ **What is NOT covered: no real ARW has been through it.** `samples/` is
-absent on this machine, so `check-screens` and `check-modes` skip (exit 2, as
-they did before this branch), and the new `--hdr-merge` gate in check-modes has
-never run on a real bracket. **The developer owes the tree a 3-frame handheld
-a7riii bracket in `samples/`.** Second gap, related: the merged DNG embeds no
-thumbnail yet, so the filmstrip shows a placeholder for it until the writer
-grows a preview IFD (costed as the optional compression story).
-
-**990 / 3,721 / check-decisions, check-gestures, check-wiring exit 0 /
-check-screens, check-modes exit 2 for want of samples.**
-
-## Session `2026-08-07b` — three checks that ran nowhere, and one that missed its own mutation
-
-**The queue is empty and the blocked items need the developer**, so this came off
-the gaps table: *"the three interface checks are run by hand."* They were —
-`menu`, `detail-tail` and `render-failed` were written in #125 against named
-mutations, and then invoked by nobody. The 42-file sweep drives `--scenario`;
-**nothing in the repository drove `--screenshot` at all** (#121). A check nobody
-runs is a comment.
-
-`tools/check-screens.py` runs all three and is in `CLAUDE.md` beside the other
-four. Decision **#177**.
-
-### ⚠ One of them could not be gated, and the fix for that was wrong first
-
-`render-failed`'s own table entry said its oracle was *"no — the frame
-differs"*: two PNGs and a person. It exited 0 whatever the footer did. So it now
-renders its **own control** in-process — clear `lastFailure`, lay the same
-interface out, compare — needing no reference image. The frame was checked
-byte-stable across processes first, because a frame-differs check on an unstable
-frame passes on noise.
-
-⚠⚠ **And then the mutation it exists for left it green.** Deleting the footer's
-warning line outright: still green. The footer reads `lastFailure` in **two**
-places, and the readout beside the dimensions still switched to `failed`, so
-bytes moved anyway. **This is the repository's recurring defect** — a check that
-names the mutation it is for and does not catch it — and it was caught only by
-running the mutation rather than reasoning about the check.
-
-The comparison is now between two frames that **both** carry a failure and
-differ only in its **text**. The readout renders `failed` identically in both,
-so only something drawing the message can move a byte. That mutation reddens.
-
-### Mutations, four run and four caught
-
-| Mutation | Result |
-|---|---|
-| The footer's warning line deleted | `render-failed` red — *"two different failure messages render the same frame"* |
-| `Text(verbatim:)` → a bare string | `menu` red, printing **`Compare Original  ()`** — the shipped bug, on demand |
-| A window taller than the panel content | `detail-tail` red — nothing overflows, so scrolled and at-rest cover the same controls |
-| `--screenshot` dispatch deleted from `OrionApp.init` | Caught, but **by timeout** — the flag falls through and Orion opens a real window. At the first 300 s bound that took a quarter of an hour to report; measured the scenes at **1.98 / 3.49 / 5.80 s** and bounded it at 60 |
-
-### The same thing happened again an hour later, #178
-
-`--scene versions` was the one frame of 38 that disagreed with itself: its rows
-came from `Date()` and the panel prints an absolute clock time. Fixed with a
-fixed instant **in the harness**, since the product is right to print when a
-version was taken.
-
-⚠⚠ **And the obvious check for it also went green on its mutation.** Render
-twice, demand the frames agree — but `.short` time style has **minute**
-resolution, and two renders three seconds apart share a minute. It would catch
-this **one run in twenty**. The deterministic catch is that the rows must be
-*years* old rather than seconds old, which does not depend on when it runs. The
-two-render check is kept for what it alone sees: a random id, an unsettled
-layout, a late thumbnail.
-
-**Twice in one session, both found by running the mutation rather than reading
-the check.** That is the whole lesson of this session and it is not a new one —
-it is `CLAUDE.md`'s rule about pure-maths tests, in a different costume.
-
-### And the last two command-line modes, #179
-
-`--library-open` and `--batch-export` were the remaining pair nothing ran, so
-deleting either four-line dispatch was green everywhere. `tools/check-modes.py`
-runs them.
-
-⚠ **Neither needed an oracle written for it** — checked before writing one.
-`--library-open` opens `samples/` cold, warm and indexless in one process and
-prints **13 checks**; `--batch-export` exits 1 on a photograph that fails,
-verified against a path that does not exist. They were assertions nobody
-invoked, which is the same shape as #177.
-
-⚠⚠ **A deleted dispatch does not make Orion exit — it opens a window and
-waits.** Both gates catch that by **timeout**, not exit code. Measured at
-**0.08 s** and **1.55 s**, bounded at 60.
-
-⚠ Two floors were added and their strength is stated rather than implied: the
-dispatch deletions were run and caught; the floors (ten library checks, 500 KB
-per export) were proved only by raising their constants, so they work and have
-never been needed.
-
-### The guided filter's epsilon, measured — and the comment was out by 2×, #187
-
-`UNSOURCED.md` §7 held the guided filter's parameters as *reasoned but
-untested*. The reasoning was right; **the arithmetic joining it to an edge had
-never been written down.**
-
-`a = var/(var + eps)`, so `sqrt(eps)` is a local **standard deviation** of 0.2
-stops. But a window straddling a step of `h` stops half and half has variance
-`h²/4`, so the *step* that half-passes is `2·sqrt(eps)` = **0.4 stops**. ⚠ The
-comment said "a fifth of a stop" and meant the standard deviation — anyone
-checking it against a real edge would have measured twice that and concluded the
-filter was broken.
-
-Measured off the shipping kernel, driven with moments computed by hand:
-
-| step | 0.05 | 0.1 | 0.2 | **0.4** | 0.8 | 1.6 | 3.2 |
-|---|---|---|---|---|---|---|---|
-| passes | 0.015 | 0.059 | 0.200 | **0.500** | 0.800 | 0.941 | 0.985 |
-
-A flat window passes **nothing** — the property that stops highlight recovery
-haloing round a skyline, claimed since the filter landed and checked now.
-
-⚠ `0.04f` was a bare literal; it is `params::kGuideEpsilon` now, so the check
-reads what the product ships rather than a copy — #180's first-version mistake.
-Mutation-tested, and the test carries a control: quadrupling epsilon must move
-the half-pass step by exactly two, and does. ⚠ **The radius is still only
-reasoned.**
-
-### ⚠⚠ The hardness clamp was the wrong *unit*, and small brushes aliased, #186
-
-#180 left the clamp's value chosen while proving it bounds the spacing. Asking
-whether **0.98** is right turns out to be the wrong question — the number is not
-the problem, the **unit** is. It clamps a *fraction* of the radius, and aliasing
-happens in *pixels*, so the feather it buys shrinks with the nib: four pixels at
-`r = 200`, a sixth of one at `r = 8`.
-
-Measured at full hardness — worst coverage step between adjacent pixels across
-the rim, where 1.0 is a covered pixel beside an empty one:
-
-| nib | before | after |
-|---|---|---|
-| 8 px | **1.000** | 0.531 |
-| 25 px | **1.000** | 0.510 |
-| 50 px | 0.505 | 0.505 |
-| 200 px | 0.449 | 0.449 |
-
-**At 25 px — an ordinary brush — the edge was fully aliased**, which is exactly
-the staircase the clamp's own comment says it exists to prevent. Now
-`min(0.98, 1 − 1/radiusPx)`.
-
-⚠ **It only ever tightens**, and the identical right-hand figures at 50 and
-200 px are the evidence: nothing at or above 50 px renders differently. 42 repro
-scenarios and the bench unmoved. ⚠ `kMinFeatherPx = 1.0` is still chosen; the
-*shape* of the bound is not. ⚠ The test carries a control — a soft nib measures
-**0.0747** against the hard nib's 0.510, so the metric tracks the falloff rather
-than sitting at a constant.
-
-### ⚠⚠ The ceiling was broken and the row watching it said otherwise, #185
-
-`CLAUDE.md` forbids a file over 1,000 lines. `tests_mask_geom.cpp` was at
-**1,173** while the gap row read *"Over 1,000: none"* as at `191b451` — five
-days and three sessions stale. **The row's own last sentence warns that it goes
-stale within hours and must be recounted before editing.** Nobody recounted it.
-
-Re-swept as prescribed: 242 tracked source files, `grep -c ''`. One violation,
-now none.
-
-⚠ **The cut is at a seam, not a line number, and the seam is #138.**
-`tests_mask_geom.cpp` (795) keeps the **forward transport**; the new
-`tests_mask_pullback.cpp` (397) takes what the renderer actually does — one
-3 × 3, each pixel carried back through it. That is #184's distinction made
-structural: the first file's checks point at live Jacobian maths *through*
-functions with no product caller, and both headers now say so.
-
-**A pure move** — 879 checks before, 879 after, all four moved sections
-printing. ⚠ And registered is not the same as live, so a mutation was run
-through it: dropping the quarter turns from `displayMatrix` fails **11 checks**,
-six in the moved file.
-
-### The sweep stops at Swift, decided by running it on C++ — #184
-
-#183 left the engine as an open question. It was tried: **401 candidates, 52
-flagged, mostly noise.** Swift has `func`; C++ has no declaration marker, so a
-pattern loose enough to find a function also finds `in`, `src`, `rng` and
-`fprintf`. ⚠ And structurally the **C facade is called from Swift**, so a sweep
-confined to C++ reports the application's own boundary as dead. **A gate whose
-allowlist mostly suppresses its own false positives reads as coverage while
-providing none** — #143's deleted tooltip walk. So it stays Swift-only, and says
-why.
-
-⚠⚠ **The one-off run still found three.** `radiusToFrame`, `lengthToFrame` and
-`lengthAlong` have had **no product caller since #138** (zero against two, one
-and one in the harness; `toFrame`, `fromFrame`, `displayMatrix` are live) — and
-their headers described rendering **in the present tense**. `lengthToFrame`'s
-said *"without this a mask's feather widens every time the picture is cropped
-tighter"*. Anyone reading them, or their tests, would take the extent maths for
-shipped.
-
-**Annotated, not deleted**, and that distinction is the finding:
-`testPerspectiveMaskExtent` observes **live** Jacobian maths *through*
-`radiusToFrame`, including 6b — the only check in the tree that catches
-`unperspective`'s conjugation (#178). The lens is not shipped; what it points at
-is.
-
-### The sweep #181 named and did not build, #183 — and it found one immediately
-
-`check-wiring.py` shipped as a *declared* list and said so: it could not find
-the next dead mechanism. It can now. It walks every `func` declared in a product
-file and reports any whose callers are **all** harness — `showPlaceholder`'s
-exact shape.
-
-**First run: 356 product functions swept, nine harness-only.** Eight were
-defensible and now carry their reason in `HARNESS_ONLY` — `setWideOutput`'s own
-docstring already said *"this is here for the screenshot harness"*, `composite`
-is the offscreen render the scenario runner shares deliberately, `maskAlpha` is
-the model a rendered mask is graded against, and so on.
-
-⚠⚠ **The ninth was real.** `SyncSettings.pasted` read
-`Preset(...).applied(to:)` and nothing else, and its only caller was a test —
-the product pastes through `Engine.apply(preset:)`, which calls `applied(to:)`
-itself and records undo and the log besides. It **looked** like the paste path
-and was a second spelling of it: editing it would have moved a check and nothing
-a photographer could see. Deleted; the test now calls what the product calls.
-
-⚠ **The allowlist is the point, not a suppression** — a harness-only function
-must say why, so the next one is a line somebody has to justify.
-⚠ **A regex, not a compiler**: a call through a closure, a selector or a key
-path is invisible to it, so all nine were checked by hand.
-
-### ⚠ And #181 introduced a bug, found a turn later by reading #182's mode
-
-The placeholder came down in an unconditional `defer`, which is right only while
-opens are serial. They usually are — the decode is synchronous on the main
-actor — but **`--open --dwell 200` exists precisely to start a load while the
-previous decode is in flight**, and its own comment says so. In that
-interleaving the older task's `defer` fires after the newer one has put its
-thumbnail up: the picture being opened is cleared and the canvas falls back to
-the one being left. **That is the exact bug #181 was written to prevent,
-reintroduced by its own cleanup path.**
-
-Guarded on `current == url`, so only the most recent load takes the still down.
-⚠ **Reasoned, not reproduced** — nothing here can drive the open path (#121) —
-and recorded as a reading rather than dressed up as a measurement, #154's shape.
-
-### The canvas stopped lying about which photograph it was showing, #181
-
-`STATUS.md` carried the cold-open finding as a *design question* — flash of
-black against a stale picture — with the note that a busy state was its own
-story. ⚠⚠ **It was not a design question.** The decision had been made:
-`Engine.showPlaceholder` exists, the canvas draws it, and two comments describe
-it holding the picture while a photo decodes. **Its only caller was the
-screenshot harness; `clearPlaceholder` had none.** One line of wiring, plus a
-`defer` so a photograph that fails to open takes its thumbnail down too.
-
-⚠ Nothing could have caught it and no test can: `orion-viewport-tests` compiles
-**zero** `OrionApp*` files. `tools/check-wiring.py` is a grep, and its rule
-generalises — **a call from the harness does not count**, because a function
-that looks used because a test uses it is exactly this failure.
-
-⚠ **Noticed in passing: there is a fifth command-line mode.** `--open` drives the
-real `MTKView`, and #177/#179 both called them four. ✅ **Handled 2026-08-07,
-#182** — and it **cannot** be a gate, measured: started on two frames at
-`--dwell 200` it was **still running after 25 seconds having printed nothing**.
-It never exits, because it exists so a *person* can reproduce a fault visible
-only on screen. So its coverage is a row in `check-wiring.py` and nothing more.
-
-### The nib's spacing, derived — and a third check that missed its mutation, #180
-
-§17 asked for an hour's search before anyone tuned `brushSpacing` by feel. The
-search was done and **there is no constant to cite**: the spacing follows from
-the nib's falloff. Two dabs `k` radii apart dip the edge inward by
-`1 − sqrt(1 − k²/4)`; the hardness clamp makes the falloff band `0.02 r`; a dip
-inside the band is swallowed. **k_max = 0.398.**
-
-⚠⚠ **So the two constants §17 listed separately are one decision.** The clamp
-sets the spacing budget. Neither may move alone now.
-
-⚠⚠ **And the algebra flattered itself.** Only a smootherstep's steep middle
-reads as an edge, so the honest bound is ≈**0.274** and 0.25 has about **9% of
-margin, not 37%**. Measured on real strokes: **1.12 px ripple against a 2.26 px
-feather** at the shipped spacing, **5.95 against 2.28** at 0.5 r. The old
-comment said "comfortably inside"; it is the right side of the line, closely.
-
-⚠ **The GPU test's first version could not fail.** It asked for hardness at
-exactly 0.98 and computed the feather from its own copy of that number — so
-moving the shader's clamp to 0.999 left it green, because `clamp(0.98, 0,
-0.999)` is still 0.98 and both sides of the comparison lived in the test file.
-Rewritten to ask for **1.0**, letting the shader's clamp answer, and to measure
-the feather **off the pixels**. The same mutation now fails: 2.00 px against a
-0.87 px feather.
-
-**Three times this session.** Every one found by running the mutation.
-
-### ⚠ The eighth and ninth stale plan rows
-
-The gaps table said Compare Original *ships* without its key and the fix belonged
-to another story. It was fixed in **`676d24e`**, #125's own merge — before the
-row was written as open — and the check has pinned the fixed spelling since.
-
-The ninth, same day: the row saying `testPerspectiveMaskExtent` names the
-conjugation mutation and cannot catch it. **Check 6b was added afterwards and
-does** — deleting `W⁻¹JW` from `mask::unperspective` fails 2 checks, worst axis
-**1.48 rad**. Measured, not read.
-
-**Check the tree, never the record**, for the ninth time.
-
-**872 / 3708 / 42 of 42 / bench 0 on three frames / check-decisions 0 /
-check-gestures 0 / check-screens 0.**

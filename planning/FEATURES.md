@@ -7,7 +7,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Feature | Status | Notes |
 |---|---|---|
 | Folder-based browse (no catalog) | M1 | Matches how you already work |
-| Grid + filmstrip, fast thumbnails | M1 | Async workers, LRU cache, bilinear demosaic |
+| Grid + filmstrip, fast thumbnails | M1 | Async workers, LRU cache. The grid is the gallery view (#204): G toggles it, embedded-preview cells at 200-400 pt, rate/reject/trash without a decode |
 | Star ratings, reject flags, color labels | M1 | Written to XMP sidecar |
 | Filter/sort by rating, flag, label, date | M1 | SQLite index makes this instant |
 | XMP sidecars as source of truth | M1 | Portable, no lock-in |
