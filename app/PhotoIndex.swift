@@ -99,12 +99,20 @@ final class PhotoIndex: @unchecked Sendable {
     /// keys the cache is the photograph's, which the fix does not touch, so
     /// only a version bump can evict them. This is the SQLite cache, never a
     /// sidecar: the cost of the bump is one cold rebuild.
-    static let schemaVersion: Int32 = 2
+    ///
+    /// 3: thumbnails grew from 512 to 1024 on the long edge for the gallery
+    /// view. Columns unchanged, pixels changed again - every cached 512-edge
+    /// blob would otherwise be served forever, because the stamp that keys the
+    /// cache is the photograph's and the photograph did not change. Same shape
+    /// as version 2: one cold rebuild, never a sidecar.
+    static let schemaVersion: Int32 = 3
 
-    /// Filmstrip cells are ~110pt wide, so 512 covers a 2× display with room to
-    /// spare, and it is what the *live* path produces too — a cache that hands
-    /// back a different picture from the one it stands in for is not a cache.
-    static let thumbnailLongEdge = 512
+    /// Gallery cells run up to ~400pt wide, so 1024 covers a 2× display at the
+    /// slider's top with a little room, and the ~110pt filmstrip cells simply
+    /// downsample at draw. It is what the *live* path produces too - a cache
+    /// that hands back a different picture from the one it stands in for is
+    /// not a cache.
+    static let thumbnailLongEdge = 1024
 
     // MARK: What a file looked like
 
@@ -210,9 +218,11 @@ final class PhotoIndex: @unchecked Sendable {
                    .appendingPathComponent("index.sqlite3")
     }
 
-    /// - Parameter budgetBytes: the thumbnail cache's ceiling. 512 MB is about
-    ///   ten thousand frames at this edge length, which is two or three shoots.
-    init(at url: URL?, budgetBytes: Int64 = 512 << 20) {
+    /// - Parameter budgetBytes: the thumbnail cache's ceiling. A 1024-edge
+    ///   blob at q0.8 runs 200–350 KB, so 1.5 GB is five to seven thousand
+    ///   frames - the same two or three shoots the old 512 MB bought at the
+    ///   smaller edge.
+    init(at url: URL?, budgetBytes: Int64 = 1536 << 20) {
         budget = budgetBytes
         guard let url else { return }
         try? FileManager.default.createDirectory(
