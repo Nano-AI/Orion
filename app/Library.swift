@@ -437,6 +437,56 @@ final class Library {
         index.refreshMarks(for: photo.url)
     }
 
+    // MARK: Trash
+
+    /// Moves photographs, and everything Orion wrote beside them, to the
+    /// Finder's Trash. Never a hard delete - the confirmation that precedes
+    /// every call here promises recoverability, and this is what keeps it.
+    ///
+    /// ⚠ The raw goes first, per photograph. A sidecar trashed ahead of a raw
+    /// that then fails to move is a photograph that silently lost its edits;
+    /// the other way round, a raw that moved and a sidecar that did not is an
+    /// orphan the next open ignores. So a raw that fails keeps its siblings,
+    /// and a sibling that fails is reported and left - never fatal.
+    ///
+    /// The index is deliberately not touched: `plan` prunes rows absent from
+    /// the next listing, and a mid-session lookup misses on the stamp of a
+    /// file that no longer stats. The sidecars are *in the Trash*, which is
+    /// the one deletion path that cannot conflict with decision #9.
+    func trash(_ urls: [URL]) -> TrashPlan.Outcome {
+        let fm = FileManager.default
+        var trashed: [URL] = []
+        var failures: [(name: String, reason: String)] = []
+
+        for url in urls {
+            let listing = (try? fm.contentsOfDirectory(
+                atPath: url.deletingLastPathComponent().path)) ?? []
+            let plan = TrashPlan.plan(for: url, directoryListing: listing)
+
+            do {
+                try fm.trashItem(at: plan.photo, resultingItemURL: nil)
+            } catch {
+                failures.append((url.lastPathComponent, error.localizedDescription))
+                continue
+            }
+            trashed.append(url)
+            for sibling in plan.siblings {
+                do { try fm.trashItem(at: sibling, resultingItemURL: nil) }
+                catch {
+                    failures.append((sibling.lastPathComponent,
+                                     error.localizedDescription))
+                }
+            }
+        }
+
+        let gone = Set(trashed)
+        photos.removeAll { gone.contains($0.url) }
+        selection.confine(to: visibleURLs)
+
+        return TrashPlan.Outcome.summarize(attempted: urls.count,
+                                           trashed: trashed, failures: failures)
+    }
+
     func index(of url: URL) -> Int? { visible.firstIndex { $0.url == url } }
 
     /// Next or previous photo passing the filter, for arrow-key navigation.

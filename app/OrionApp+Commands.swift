@@ -33,14 +33,27 @@ struct PhotoCommands: Commands {
     /// Nothing open means nothing to cull.
     private var idle: Bool { cull?.url == nil }
 
+    /// True while the gallery is up, which is when every command that needs a
+    /// canvas greys out - there is no canvas to zoom, compare or crop.
+    private var gallery: Bool { cull?.inGallery == true }
+
     var body: some Commands {
         CommandGroup(after: .sidebar) {
             ForEach(Array(ToolTab.allCases.enumerated()), id: \.element) { index, t in
                 Button(t.title) { cull?.selectTab(t) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")),
                                       modifiers: [.command])
-                    .disabled(idle)
+                    .disabled(idle || gallery)
             }
+
+            Divider()
+
+            // The bare G lives in the key monitor with the other unmodified
+            // keys; the title spells it, the way "Reject  (R)" does.
+            Button(gallery ? "Exit Gallery  (G)" : "Gallery  (G)") {
+                cull?.toggleGallery()
+            }
+            .disabled(idle)
 
             Divider()
 
@@ -57,16 +70,16 @@ struct PhotoCommands: Commands {
                 Text(verbatim: cull?.comparing == true
                      ? "Hide Original  (\\)" : "Compare Original  (\\)")
             }
-            .disabled(idle)
+            .disabled(idle || gallery)
 
             Divider()
 
             Button("Fit in Window  (0)") { cull?.fit() }
                 .keyboardShortcut("0", modifiers: [.command])
-                .disabled(idle)
+                .disabled(idle || gallery)
             Button("Actual Size  (9)") { cull?.actualSize() }
                 .keyboardShortcut("9", modifiers: [.command])
-                .disabled(idle)
+                .disabled(idle || gallery)
         }
 
         CommandGroup(after: .importExport) {
@@ -89,7 +102,7 @@ struct PhotoCommands: Commands {
         CommandGroup(after: .undoRedo) {
             Button("Reset Adjustments") { cull?.resetEdits() }
                 .keyboardShortcut("r", modifiers: [.command])
-                .disabled(idle)
+                .disabled(idle || gallery)
         }
 
         CommandMenu("Photo") {
@@ -139,6 +152,18 @@ struct PhotoCommands: Commands {
 
             Divider()
 
+            // Both confirm before touching a file, which is why the titles
+            // carry an ellipsis. The counts live in the confirmation rather
+            // than in these titles - the menu check pins titles by string, and
+            // a title that counts is a title that is never the same twice.
+            Button("Move to Trash…") { cull?.trashFocused() }
+                .keyboardShortcut(.delete, modifiers: [.command])
+                .disabled(idle)
+            Button("Delete Rejected Photos…") { cull?.trashRejected() }
+                .disabled((cull?.rejectedCount ?? 0) == 0)
+
+            Divider()
+
             Button("Apply Crop  (⏎)") { cull?.applyCrop() }
                 .disabled(cull?.cropping != true)
             Button("Cancel Crop  (⎋)") { cull?.cancelCrop() }
@@ -183,9 +208,23 @@ struct CullActions: Equatable {
     let toggleCompare: () -> Void
     let export: () -> Void
 
+    /// True while the gallery is up. In the equality because half the menu
+    /// bar greys on it.
+    let inGallery: Bool
+    let toggleGallery: () -> Void
+
+    /// Both ask for confirmation; neither touches a file on its own.
+    let trashFocused: () -> Void
+    let trashRejected: () -> Void
+    /// In the equality: it is what enables Delete Rejected Photos…, and a
+    /// rejection from a context menu changes it without moving `url` or
+    /// `isRejected`.
+    let rejectedCount: Int
+
     static func == (a: CullActions, b: CullActions) -> Bool {
         a.url == b.url && a.isRejected == b.isRejected && a.rating == b.rating
             && a.cropping == b.cropping && a.tab == b.tab && a.comparing == b.comparing
+            && a.inGallery == b.inGallery && a.rejectedCount == b.rejectedCount
     }
 }
 
@@ -204,9 +243,14 @@ extension Editor {
     /// Published to the scene so the Photo and View menus can act on whatever
     /// is open, from wherever focus happens to be.
     var cullActions: CullActions {
-        let photo = current.flatMap { url in library.photos.first { $0.url == url } }
+        // ⚠ In the gallery the menu acts on the *focused* photograph, not the
+        // decoded one - pressing 3 while looking at a grid cell that is not
+        // on the canvas must rate the cell being looked at, or the menu and
+        // the grid disagree about what the keys do.
+        let focused = mode == .cull ? (galleryFocus ?? current) : current
+        let photo = focused.flatMap { url in library.photos.first { $0.url == url } }
         return CullActions(
-            url: current,
+            url: focused,
             isRejected: photo?.rejected ?? false,
             rating: photo?.rating ?? 0,
             // ⚠ Over the selection when there is one, so the Photo menu and the
@@ -215,18 +259,23 @@ extension Editor {
             // frame from the menu and forty from the strip and cannot say which
             // rule they are under.
             toggleReject: {
-                guard let current, let photo else { return }
-                library.setRejected(!photo.rejected, for: library.cullScope(current))
+                guard let focused, let photo else { return }
+                library.setRejected(!photo.rejected, for: library.cullScope(focused))
             },
             rate: { stars in
-                guard let current else { return }
-                library.setRating(stars, for: library.cullScope(current))
+                guard let focused else { return }
+                library.setRating(stars, for: library.cullScope(focused))
             },
-            step: { offset in step(offset) },
+            // Stepping in the gallery moves the focus ring, never the canvas:
+            // ⌘→ across two hundred frames must not be two hundred decodes.
+            step: { offset in
+                mode == .cull ? moveGalleryFocus(offset > 0 ? .right : .left)
+                              : step(offset)
+            },
             fit: { viewport.reset() },
             actualSize: { viewport.toggleFitAndActual() },
             resetEdits: { engine.resetEdits() },
-            cropping: tab == .crop,
+            cropping: tab == .crop && mode == .develop,
             // Applying is just leaving the tool: the preview canvas goes away
             // and the engine renders the crop itself.
             applyCrop: { tab = .light },
@@ -240,7 +289,56 @@ extension Editor {
             toggleCompare: {
                 engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
             },
-            export: { showingExport = true })
+            export: { showingExport = true },
+            inGallery: mode == .cull,
+            toggleGallery: { mode == .cull ? leaveGallery() : enterGallery() },
+            trashFocused: {
+                guard let focused else { return }
+                confirmTrash(library.cullScope(focused))
+            },
+            trashRejected: { confirmTrashRejected() },
+            rejectedCount: library.photos.filter(\.rejected).count)
+    }
+
+    // MARK: The gallery's comings and goings
+
+    func enterGallery() {
+        guard !library.photos.isEmpty else { return }
+        galleryFocus = current ?? library.visible.first?.url
+        if let galleryFocus { library.focus(galleryFocus) }
+        mode = .cull
+    }
+
+    /// Back to the canvas, which still holds whatever it held - leaving the
+    /// gallery is free and never decodes, with one exception: a canvas whose
+    /// photograph was trashed from the grid has nothing honest to show, so
+    /// stepping out of the gallery then loads the focused photograph instead
+    /// of presenting a picture that is in the Trash.
+    func leaveGallery() {
+        mode = .develop
+        if current == nil, let next = galleryFocus ?? library.visible.first?.url {
+            load(next)
+        } else {
+            library.focus(current)
+        }
+    }
+
+    /// Return or a double-click: the one gallery gesture that costs a decode.
+    func openFromGallery(_ url: URL) {
+        mode = .develop
+        load(url)
+    }
+
+    func moveGalleryFocus(_ direction: GalleryLayout.Direction) {
+        let list = library.visibleURLs
+        guard !list.isEmpty else { return }
+        let i = galleryFocus.flatMap { list.firstIndex(of: $0) } ?? 0
+        let next = GalleryLayout.move(from: i, direction: direction,
+                                      columns: galleryColumns, count: list.count)
+        galleryFocus = list[next]
+        // The selection follows the focus the way it follows the canvas -
+        // arrowing must not accumulate a selection nobody asked for.
+        library.focus(list[next])
     }
 
     /// Single keys, seen before AppKit dispatches them.
@@ -272,6 +370,11 @@ extension Editor {
         let press = (characters: event.charactersIgnoringModifiers ?? "",
                      keyCode: event.keyCode)
 
+        // The gallery has its own key map - same monitor, different face. It
+        // does not wait for `engine.isLoaded`: the grid is browsable the
+        // moment the folder lists, decoded photograph or not.
+        if mode == .cull { return handleGalleryKey(press) }
+
         // Escape and Return, by key code: their characters are control
         // sequences that do not compare well.
         switch press.keyCode {
@@ -290,6 +393,14 @@ extension Editor {
             step(1); return true
         default:
             break
+        }
+
+        // Before the `isLoaded` guard: the gallery needs a folder, not a
+        // decoded photograph.
+        if press.characters.lowercased() == "g" {
+            guard !library.photos.isEmpty else { return false }
+            enterGallery()
+            return true
         }
 
         guard engine.isLoaded else { return false }
@@ -314,6 +425,55 @@ extension Editor {
             engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset(); return true
         case "]":
             engine.edit("Rotate") { engine.rotate(1) }; viewport.reset(); return true
+        default:
+            return false
+        }
+    }
+
+    /// The gallery's keys. Arrows move the focus ring in two dimensions,
+    /// Return opens, Escape and G leave, and the culling keys act on the
+    /// focus through the same `cullScope` the menus use. The develop keys
+    /// that need a canvas - zoom, compare, rotate - are swallowed rather than
+    /// passed on, so they cannot act on a view that is not showing.
+    private func handleGalleryKey(
+        _ press: (characters: String, keyCode: UInt16)) -> Bool {
+        switch press.keyCode {
+        case 53:   // escape
+            leaveGallery(); return true
+        case 36, 76:   // return, enter
+            if let galleryFocus { openFromGallery(galleryFocus) }
+            return true
+        case 123: moveGalleryFocus(.left);  return true
+        case 124: moveGalleryFocus(.right); return true
+        case 125: moveGalleryFocus(.down);  return true
+        case 126: moveGalleryFocus(.up);    return true
+        default:
+            break
+        }
+
+        switch press.characters.lowercased() {
+        case "g":
+            leaveGallery(); return true
+        case "r":
+            guard let galleryFocus,
+                  let photo = library.photos.first(where: { $0.url == galleryFocus })
+            else { return false }
+            library.setRejected(!photo.rejected,
+                                for: library.cullScope(galleryFocus))
+            return true
+        case "1", "2", "3", "4", "5":
+            guard let galleryFocus, let n = Int(press.characters) else { return false }
+            library.setRating(n, for: library.cullScope(galleryFocus))
+            return true
+        case "`":
+            guard let galleryFocus else { return false }
+            library.setRating(0, for: library.cullScope(galleryFocus))
+            return true
+        case "0", "9", "\\", "[", "]":
+            // Zoom, compare and rotate belong to the canvas. Swallowed, not
+            // forwarded: acting on an invisible view and saying nothing is
+            // worse than doing nothing.
+            return true
         default:
             return false
         }

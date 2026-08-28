@@ -131,7 +131,7 @@ struct Editor: View {
     /// screenshot at all and was checked by reading the code. Handing in a
     /// pre-scanned library is the smallest seam that fixes that.
     init(engine: Engine, startTab: ToolTab = .light, startLibrary: Library? = nil,
-         startSnapshots: SnapshotStore? = nil) {
+         startSnapshots: SnapshotStore? = nil, startMode: EditorMode = .develop) {
         self.engine = engine
         _tab = State(initialValue: startTab)
         _library = State(initialValue: startLibrary ?? Library())
@@ -139,6 +139,9 @@ struct Editor: View {
         // `load`, so a per-photograph list would be empty in every capture and
         // the rows would be reviewed by reading them.
         _snapshots = State(initialValue: startSnapshots ?? SnapshotStore())
+        // And once more for the gallery: the product enters it through a key
+        // or the toolbar, which no capture can press.
+        _mode = State(initialValue: startMode)
     }
 
     @State var band: HueBand = .blue
@@ -208,20 +211,53 @@ struct Editor: View {
     @State var autosave = Autosave()
     @State private var lifecycleObservers: [NSObjectProtocol] = []
 
+    /// Which face the window shows - the develop editor or the culling
+    /// gallery. See `EditorMode` in GalleryView.swift; entered and left in
+    /// `+Commands`, never by anything the engine does.
+    @State var mode: EditorMode
+    /// The gallery's focused photograph - what the arrow keys move and the
+    /// bare keys act on there. ⚠ Deliberately not `current`: `current` means
+    /// "decoded on the canvas" and half the app hangs off it (autosave,
+    /// snapshots, mattes, the placeholder), so browsing the grid must never
+    /// touch it.
+    @State var galleryFocus: URL?
+    /// How many columns the grid is laying out right now, written back by
+    /// `GalleryView` so the up and down arrows can move a row without the key
+    /// handler knowing the window's width.
+    @State var galleryColumns = 1
+    /// The photographs a confirmed Move to Trash would act on; nil when no
+    /// confirmation is up. Presence drives the alert, the way `mergeCandidates`
+    /// drives its sheet.
+    @State var pendingTrash: [URL]?
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Rectangle().fill(Palette.line).frame(height: 1)
 
-            HStack(spacing: 0) {
-                canvas
-                Rectangle().fill(Palette.line).frame(width: 1)
-                tools.frame(width: 364)
-            }
+            if mode == .cull {
+                // The gallery replaces the canvas, the tools and the strip in
+                // one piece - it *is* the strip, at a size framing can be
+                // judged at. The toolbar stays: Open, undo and Export mean
+                // the same thing from both faces.
+                GalleryView(library: library,
+                            focused: galleryFocus,
+                            columns: $galleryColumns,
+                            onFocus: { galleryFocus = $0 },
+                            onOpen: { openFromGallery($0) },
+                            onTrash: { confirmTrash($0) },
+                            onTrashRejected: { confirmTrashRejected() })
+            } else {
+                HStack(spacing: 0) {
+                    canvas
+                    Rectangle().fill(Palette.line).frame(width: 1)
+                    tools.frame(width: 364)
+                }
 
-            if !library.photos.isEmpty {
-                Filmstrip(library: library, selected: current, onSelect: load,
-                          onMerge: askHdrMerge)
+                if !library.photos.isEmpty {
+                    Filmstrip(library: library, selected: current, onSelect: load,
+                              onMerge: askHdrMerge)
+                }
             }
         }
         .background(Palette.ground)
@@ -294,6 +330,28 @@ struct Editor: View {
         } message: {
             Text(syncWarning)
         }
+        // ⚠ Confirmed, counted, and it says what travels - the sync alert's
+        // shape, for the one operation here that moves the photographer's own
+        // files. "Move to Trash", never "Delete": the Trash is the promise
+        // that a mis-click after the confirmation is still recoverable.
+        .alert(trashQuestion,
+               isPresented: Binding(get: { pendingTrash != nil },
+                                    set: { if !$0 { pendingTrash = nil } })) {
+            Button("Cancel", role: .cancel) { pendingTrash = nil }
+            Button("Move to Trash", role: .destructive) { runTrash() }
+        } message: {
+            Text("Their edits go with them: sidecars, saved versions and "
+                 + "masks. Recover from the Trash in Finder.")
+        }
+    }
+
+    /// The trash alert's counted title. Built from the pending list so the
+    /// number the photographer reads is the number the button acts on.
+    private var trashQuestion: String {
+        let n = pendingTrash?.count ?? 0
+        return n == 1
+            ? "Move \(pendingTrash?.first?.lastPathComponent ?? "1 photo") to the Trash?"
+            : "Move \(n) photos to the Trash?"
     }
 
     /// Edits reach disk on their own from here on.

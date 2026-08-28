@@ -107,7 +107,25 @@ extension Editor {
 
             // ── Looking ──────────────────────────────────────────────────
             HStack(spacing: 7) {
-                if engine.isLoaded {
+                // The other face of the window. Accented while up, like
+                // Compare, because both answer "what am I looking at".
+                Button {
+                    mode == .cull ? leaveGallery() : enterGallery()
+                } label: {
+                    Text("Gallery")
+                        .font(.system(size: 11))
+                        .padding(.horizontal, 9)
+                        .frame(height: Self.chipHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(mode == .cull ? Palette.accent : Palette.dim)
+                .overlay(RoundedRectangle(cornerRadius: 5)
+                    .stroke(mode == .cull ? Palette.accent : Palette.line, lineWidth: 1))
+                .disabled(library.photos.isEmpty)
+                .help("Every photo in the folder at once, for culling (G)")
+
+                if engine.isLoaded && mode == .develop {
                     Text("\(viewport.percent)%")
                         .font(.system(size: 11)).monospacedDigit()
                         .foregroundStyle(Palette.faint)
@@ -127,7 +145,7 @@ extension Editor {
                 .foregroundStyle(engine.comparing ? Palette.accent : Palette.dim)
                 .overlay(RoundedRectangle(cornerRadius: 5)
                     .stroke(engine.comparing ? Palette.accent : Palette.line, lineWidth: 1))
-                .disabled(!engine.isLoaded)
+                .disabled(!engine.isLoaded || mode == .cull)
                 .help("Split the view against the original")
 
                 if engine.comparing {
@@ -144,28 +162,34 @@ extension Editor {
             divider
 
             // ── Editing ──────────────────────────────────────────────────
+            // Greyed as a group in the gallery: every one of these edits the
+            // photograph on a canvas that is not showing.
             HStack(spacing: 7) {
-                iconChip("arrow.uturn.backward", enabled: engine.history.canUndo) {
+                iconChip("arrow.uturn.backward",
+                         enabled: engine.history.canUndo && mode == .develop) {
                     engine.undo()
                 }
                 .help(engine.history.undoLabel.map { "Undo \($0)" } ?? "Undo")
 
-                iconChip("arrow.uturn.forward", enabled: engine.history.canRedo) {
+                iconChip("arrow.uturn.forward",
+                         enabled: engine.history.canRedo && mode == .develop) {
                     engine.redo()
                 }
                 .help(engine.history.redoLabel.map { "Redo \($0)" } ?? "Redo")
 
-                iconChip("rotate.left", enabled: engine.isLoaded) {
+                iconChip("rotate.left", enabled: engine.isLoaded && mode == .develop) {
                     engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset()
                 }
                 .help("Rotate left")
-                iconChip("rotate.right", enabled: engine.isLoaded) {
+                iconChip("rotate.right", enabled: engine.isLoaded && mode == .develop) {
                     engine.edit("Rotate") { engine.rotate(1) }; viewport.reset()
                 }
                 .help("Rotate right")
 
-                chip("Reset", enabled: engine.isLoaded) { engine.resetEdits() }
-                    .help("Put every adjustment back")
+                chip("Reset", enabled: engine.isLoaded && mode == .develop) {
+                    engine.resetEdits()
+                }
+                .help("Put every adjustment back")
             }
 
             divider

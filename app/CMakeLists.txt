@@ -71,6 +71,9 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Library.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/LibraryProbe.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Filmstrip.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/GalleryView.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CompareOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Scenario.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Scenario+Frame.swift
@@ -175,6 +178,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
@@ -183,6 +188,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Merge.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Canvas.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Gallery.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Trash.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MatteGeom.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
@@ -219,6 +226,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
@@ -226,6 +235,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Canvas.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Gallery.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Trash.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MatteGeom.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift

@@ -335,6 +335,90 @@ extension Editor {
         }
     }
 
+    // MARK: Trash
+
+    /// Puts the confirmation up. Nothing moves until "Move to Trash" is
+    /// pressed in the alert this arms - see `runTrash`.
+    func confirmTrash(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        pendingTrash = urls
+    }
+
+    /// Delete Rejected, folder-wide: every rejected photograph, whatever the
+    /// current filter shows. The confirmation's counted title is what keeps
+    /// that honest - the number read is the number acted on.
+    func confirmTrashRejected() {
+        let rejected = library.photos.filter(\.rejected).map(\.url)
+        guard !rejected.isEmpty else { return }
+        pendingTrash = rejected
+    }
+
+    /// The confirmed move. Order matters twice here:
+    ///
+    /// ⚠ `autosave.stop()` runs *before* the files move - a coalesced write
+    /// landing after the trash would resurrect a sidecar beside a raw that is
+    /// gone, which is exactly the orphan `TrashPlan` exists to prevent.
+    ///
+    /// ⚠ The survivors are computed *before* the library mutates, from the
+    /// list order the photographer was looking at - afterwards the trashed
+    /// photographs are no longer in it to measure from.
+    func runTrash() {
+        guard let pending = pendingTrash, !pending.isEmpty else {
+            pendingTrash = nil
+            return
+        }
+        pendingTrash = nil
+        let goes = Set(pending)
+
+        // The nearest photograph that stays: forward first, then backward,
+        // the way deleting from any list advances.
+        let list = library.visibleURLs
+        func survivor(of url: URL?) -> URL? {
+            guard let url else { return nil }
+            guard goes.contains(url) else { return url }
+            guard let i = list.firstIndex(of: url) else { return nil }
+            return list[(i + 1)...].first { !goes.contains($0) }
+                ?? list[..<i].reversed().first { !goes.contains($0) }
+        }
+        let canvasSurvivor = survivor(of: current)
+        let focusSurvivor = survivor(of: galleryFocus)
+
+        let currentGoes = current.map(goes.contains) ?? false
+        if currentGoes {
+            autosave.stop()
+            snapshots.open(photo: nil)
+        }
+
+        let outcome = library.trash(pending)
+        if let complaint = outcome.complaint { message = complaint }
+        let gone = Set(outcome.trashed)
+
+        if let cur = current, gone.contains(cur) {
+            current = nil
+            if mode == .develop {
+                if let canvasSurvivor {
+                    load(canvasSurvivor)
+                } else {
+                    // Nothing left to put on the canvas. The empty gallery is
+                    // the honest face for an emptied folder - the canvas would
+                    // go on showing a photograph that is in the Trash.
+                    mode = .cull
+                }
+            }
+        } else if currentGoes, let cur = current {
+            // The raw refused to move, so the photograph is still open - put
+            // back what the failed attempt disarmed, or the next slider tick
+            // silently stops reaching the sidecar.
+            autosave.begin(url: cur, saved: engine.state)
+            snapshots.open(photo: cur)
+        }
+
+        if mode == .cull {
+            galleryFocus = focusSurvivor ?? library.visible.first?.url
+            if let galleryFocus { library.focus(galleryFocus) }
+        }
+    }
+
     func exportFile() {
         let panel = NSSavePanel()
         // The photo's own name, not "export": a folder of files called
