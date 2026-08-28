@@ -292,7 +292,11 @@ enum Screenshot {
 
         let view = Editor(engine: engine, startTab: tab(for: o.scene),
                           startLibrary: library,
-                          startSnapshots: versions)
+                          startSnapshots: versions,
+                          // The product enters the gallery through a key or
+                          // the toolbar, which no capture can press - the same
+                          // seam and reason as `startLibrary`.
+                          startMode: o.scene == "gallery" ? .cull : .develop)
             .frame(width: o.size.width, height: o.size.height)
             .preferredColorScheme(.dark)
 

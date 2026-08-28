@@ -61,6 +61,9 @@ extension Screenshot {
         // the backslash survives and this line matches what AppKit installs.
         // ⚠ Reverting that `Text(verbatim:)` to a bare string reddens this.
         "Compare Original  (\\)",
+        // Idle form: `inGallery` is false with no window focused, so the
+        // launch menu says enter, not exit.
+        "Gallery  (G)",
         "Fit in Window  (0)", "Actual Size  (9)",
         "Export…", "Reveal Session Log in Finder",
         "Reset Adjustments",
@@ -69,6 +72,7 @@ extension Screenshot {
         "5 Stars  (5)", "No Rating  (`)",
         "Next Photo  (→)", "Previous Photo  (←)",
         "Select All Photos", "Deselect",
+        "Move to Trash…", "Delete Rejected Photos…",
         "Apply Crop  (⏎)", "Cancel Crop  (⎋)",
     ]
 
