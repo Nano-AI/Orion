@@ -406,6 +406,90 @@ extension Engine {
         setLayerBreak(!maskComponents[index].startsLayer, at: index)
     }
 
+    /// Renames the mask whose run starts at `start` — the card's rename field.
+    ///
+    /// A whitespace-only submission clears the field rather than storing it, so
+    /// the card falls back to its default name instead of going blank. No
+    /// render: a name never crosses the facade, so the picture cannot change —
+    /// but it is an edit like any other and lands in history and the sidecar.
+    func renameMask(layerStartingAt start: Int, to newName: String) {
+        guard maskComponents.indices.contains(start) else { return }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value: String? = trimmed.isEmpty ? nil : trimmed
+        guard maskComponents[start].name != value else { return }
+        edit("Rename mask") { maskComponents[start].name = value }
+    }
+
+    /// Folds the mask that starts at `start` into the mask above it, with the
+    /// op that says why — the context menu's "Subtract from mask above".
+    ///
+    /// One undoable act. This is `setLayerBreak(false)` and the compose in the
+    /// same step, because doing them separately leaves an intermediate state —
+    /// merged but still adding — that renders once and lands in history, and
+    /// because the two are one intention: #197 made every new mask its own
+    /// layer, so *combining* is now always a deliberate act with a direction.
+    func mergeIntoLayerAbove(at start: Int, compose: Int32) {
+        guard maskComponents.indices.contains(start), start > 0,
+              maskComponents[start].startsLayer else { return }
+        let label = compose == 1 ? "Subtract from mask above"
+                  : compose == 2 ? "Intersect with mask above" : "Add to mask above"
+        edit(label) {
+            maskComponents[start].startsLayer = false
+            maskComponents[start].compose = compose
+            pushAndRender()
+        }
+    }
+
+    /// Adds a shape into the layer that contains `index` — the Add menu's
+    /// "Add shape to current mask", against `addMaskComponent`'s new-layer
+    /// default (#197).
+    ///
+    /// The row goes at the **end of the run**, continuing it, and composes with
+    /// add until told otherwise. ⚠ Inserting mid-list shifts every later slot,
+    /// and the engine indexes brush strokes by slot — `pushStrokes` re-sends
+    /// them, the same hazard remove and reorder document.
+    @discardableResult
+    func addShape(kind: Int32, intoLayerContaining index: Int) -> Bool {
+        guard maskComponents.count < Self.maxMaskComponents,
+              !maskComponents.isEmpty else { return false }
+        let runs = MaskLayers.group(maskComponents)
+        let layer = MaskLayers.layerIndex(ofComponent: index, in: maskComponents)
+        guard runs.indices.contains(layer) else { return false }
+        var m = MaskComponentState()
+        m.kind = kind
+        m.compose = 0
+        m.startsLayer = false
+        let at = runs[layer].last! + 1
+        maskComponents.insert(m, at: at)
+        selectedMask = at
+        pushStrokes()
+        pushAndRender()
+        return true
+    }
+
+    /// The card's eye: hides or shows the whole mask — every row of its run in
+    /// one step, one history entry, so undo brings the mask back whole rather
+    /// than a row at a time.
+    func toggleLayerHidden(_ layer: Int) {
+        let runs = MaskLayers.group(maskComponents)
+        guard runs.indices.contains(layer) else { return }
+        let hide = !runs[layer].allSatisfy { maskComponents[$0].hidden }
+        edit(hide ? "Hide mask" : "Show mask") {
+            for i in runs[layer] { maskComponents[i].hidden = hide }
+            // ⚠ The render is not implied — `edit` records and does not push,
+            // and `maskComponents` has no didSet. `toggleMaskHidden` documents
+            // the shape (#67's mirror).
+            pushAndRender()
+        }
+    }
+
+    /// Whether every row of a layer is hidden — what the card's eye shows.
+    func layerHidden(_ layer: Int) -> Bool {
+        let runs = MaskLayers.group(maskComponents)
+        guard runs.indices.contains(layer) else { return false }
+        return runs[layer].allSatisfy { maskComponents[$0].hidden }
+    }
+
     /// Moves a row up or down the fold.
     ///
     /// ⚠ **Every stroke has to be re-sent.** The engine indexes brush strokes

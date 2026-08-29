@@ -1,0 +1,43 @@
+# Merging is one act with a direction - the card's context menu.
+#
+# The panel gap this pins: after #197 every new mask starts its own layer, so
+# combining two masks took the link icon *and* the compose picker, found in
+# that order, with an intermediate state (merged but still adding) rendered
+# and recorded between them. `maskmergeup` is the one-step fold the context
+# menu calls - subtract here - and `masksplit` is still its exact inverse.
+#
+# The load-bearing checks: a rename moves nothing on the picture (names never
+# cross the facade), a subtract-merge of an identical shape cancels the
+# coverage exactly, and splitting restores the mask's own grade untouched.
+#
+# Needs samples/overexposed-background.ARW.
+
+# Mask centres are FRAME coordinates (this sample carries an EXIF turn of
+# three quarters, so display (0.25, 0.50) is frame (0.50, 0.25)); measure
+# regions stay display-space, read off the rendered picture.
+open samples/overexposed-background.ARW
+measure 0.25,0.50,0.06,0.06 leftBase
+mask radial
+set maskCentreX 0.50
+set maskCentreY 0.25
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+set localExposure -2.5
+measure 0.25,0.50,0.06,0.06 leftGraded
+expect leftGraded < leftBase
+maskname 0 Shadow pool
+measure 0.25,0.50,0.06,0.06 leftNamed
+expect leftNamed == leftGraded
+maskadd radial
+set maskCentreX 0.50
+set maskCentreY 0.25
+set maskRadiusX 0.15
+set maskRadiusY 0.15
+measure 0.25,0.50,0.06,0.06 leftAfterAdd
+expect leftAfterAdd == leftGraded
+maskmergeup 1 subtract
+measure 0.25,0.50,0.06,0.06 leftMerged
+expect leftMerged == leftBase
+masksplit 1
+measure 0.25,0.50,0.06,0.06 leftSplit
+expect leftSplit == leftGraded

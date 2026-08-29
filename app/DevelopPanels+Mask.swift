@@ -133,6 +133,31 @@ extension Editor {
                 Button("Brightness range") { add(kind: 5) }
                 Button("Color range") { add(kind: 6) }
             }
+            // The other direction (#197): everything above makes a NEW mask;
+            // this folds a shape into the one selected — a subtract or a
+            // refinement, chosen from the same three families. The shape lands
+            // continuing the mask's run, composing with add until the row's
+            // context menu says otherwise.
+            if !engine.maskComponents.isEmpty {
+                Section {
+                    Menu("Into the selected mask") {
+                        Section("Draw") {
+                            Button("Linear gradient") { addInto(kind: 1) }
+                            Button("Radial gradient") { addInto(kind: 2) }
+                            Button("Brush") { addInto(kind: 3) }
+                        }
+                        Section("Detect") {
+                            Button("Subject") { addDetectedInto(.subject) }
+                            Button("Person") { addDetectedInto(.person) }
+                            Button("Sky (estimated)") { addDetectedInto(.sky) }
+                        }
+                        Section("Match") {
+                            Button("Brightness range") { addInto(kind: 5) }
+                            Button("Color range") { addInto(kind: 6) }
+                        }
+                    }
+                }
+            }
         } label: {
             Label("Add", systemImage: "plus")
         }
@@ -161,6 +186,23 @@ extension Editor {
         findMatte(kind)
     }
 
+    /// The Add menu's other direction: a shape folded into the selected mask
+    /// rather than a mask of its own.
+    private func addInto(kind: Int32) {
+        if engine.addShape(kind: kind, intoLayerContaining: engine.selectedMask) {
+            engine.commitMaskGroupEdit("Add shape")
+        }
+    }
+
+    /// A detected shape into the selected mask — the row and the model in one
+    /// act, same as `addDetected`, so a Subject row never exists unfilled.
+    private func addDetectedInto(_ kind: SubjectMatte.Kind) {
+        if engine.addShape(kind: 4, intoLayerContaining: engine.selectedMask) {
+            engine.commitMaskGroupEdit("Add shape")
+        }
+        findMatte(kind)
+    }
+
     /// Masks — "local" adjustments, on a tab of their own.
     ///
     /// ⚠ It was a section inside Light, and it was 264 lines of one: a row
@@ -180,95 +222,13 @@ extension Editor {
             section("Local") {
                 let maskDefaults = MaskComponentState()
 
-                // The group's rows. A mask is a list folded left in listed
-                // order, so the list has to be visible — the order is part of
-                // the edit, not an implementation detail.
+                // The stack as cards — one per mask, its shapes beneath, the
+                // count at the bottom. A mask is a list folded left in listed
+                // order, so the list has to be visible: the order is part of
+                // the edit, not an implementation detail. `MaskList` is its
+                // own view because renaming carries draft state.
                 if !engine.maskComponents.isEmpty {
-                    VStack(spacing: 2) {
-                        ForEach(Array(engine.maskComponents.enumerated()), id: \.offset) { i, m in
-                          HStack(spacing: 4) {
-                            // ⚠ Its own button, outside the row's. Inside it, a
-                            // press on the eye would also change which row is
-                            // selected — so hiding row 3 while working on row 1
-                            // would move you to row 3.
-                            Button { engine.toggleMaskHidden(i) } label: {
-                                Image(systemName: m.hidden ? "eye.slash" : "eye")
-                                    .font(.system(size: 10))
-                                    .frame(width: 16)
-                                    .foregroundStyle(m.hidden ? Palette.faint : Palette.dim)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .help(m.hidden ? "Show this mask" : "Hide this mask")
-
-                            Button {
-                                engine.selectedMask = i
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text("\(i + 1)")
-                                        .foregroundStyle(Palette.faint)
-                                        .frame(width: 12, alignment: .trailing)
-                                    Text(Self.maskKindName(m.kind))
-                                    // The first row's op is not shown because it
-                                    // cannot mean anything: the fold starts from
-                                    // zero, so add is the identity there and the
-                                    // other two give an empty group.
-                                    // ⚠ Only where it can mean something. A row
-                                    // that begins a layer folds from zero, so
-                                    // add is the identity and the other two
-                                    // empty the layer — the engine forces add
-                                    // there, and showing an op the engine
-                                    // ignores is a label that lies.
-                                    if i > 0 && !m.startsLayer {
-                                        Text(Self.composeName(m.compose))
-                                            .foregroundStyle(Palette.faint)
-                                    }
-                                    Spacer(minLength: 0)
-                                    if m.kind == 3 && !m.brushStroke.isEmpty {
-                                        Text("\(m.brushStroke.count / 2) dabs")
-                                            .foregroundStyle(Palette.faint)
-                                    }
-                                }
-                                .font(.system(size: 11))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .frame(maxWidth: .infinity)
-                                .background(i == engine.selectedMask
-                                            ? Palette.faint.opacity(0.18)
-                                            : Color.clear)
-                                .clipShape(RoundedRectangle(cornerRadius: 3))
-                            }
-                            .buttonStyle(.plain)
-                            // A hidden row is dimmed, so the list says at a
-                            // glance which of them are actually contributing.
-                            .opacity(m.hidden ? 0.45 : 1)
-
-                            // ⚠ The layer break. Rows in one run fold together
-                            // into a single coverage and share one set of
-                            // adjustments; a break starts a new coverage with
-                            // its own. Row 1 always begins a layer, so it has
-                            // no control — a first row that could "continue"
-                            // would continue from nothing.
-                            if i > 0 {
-                                Button { engine.toggleLayerBreak(at: i) } label: {
-                                    Image(systemName: m.startsLayer
-                                          ? "rectangle.split.1x2" : "link")
-                                        .font(.system(size: 10))
-                                        .frame(width: 16)
-                                        .foregroundStyle(m.startsLayer
-                                                         ? Palette.accent : Palette.faint)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .help(m.startsLayer
-                                      ? "Starts its own layer — click to fold into the one above"
-                                      : "Folds into the layer above — click to start its own")
-                            } else {
-                                Color.clear.frame(width: 16)
-                            }
-                          }
-                        }
-                    }
+                    MaskList(engine: engine)
 
                     HStack(spacing: 8) {
                         addMenu

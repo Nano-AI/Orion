@@ -258,16 +258,14 @@ extension Scenario {
         case "masklayer":
             // Selects a layer by index, by selecting its first row. Layers are
             // runs of components, so there is no separate layer list to index.
+            // `MaskLayers.group` is the one grouping definition — the same one
+            // the cards and `Engine.selectedLayer` read.
             guard let want = Int(args.first ?? "") else {
                 throw Bad(what: "masklayer needs an index")
             }
-            var seen = 0
-            var found = -1
-            for (i, m) in engine.maskComponents.enumerated() {
-                if i == 0 || m.startsLayer { if seen == want { found = i; break }; seen += 1 }
-            }
-            guard found >= 0 else { throw Bad(what: "no layer \(want)") }
-            engine.selectedMask = found
+            let runs = MaskLayers.group(engine.maskComponents)
+            guard runs.indices.contains(want) else { throw Bad(what: "no layer \(want)") }
+            engine.selectedMask = runs[want][0]
 
         case "masksplit":
             // ⚠ Sets, never toggles. A toggle verb's meaning would flip with
@@ -307,6 +305,38 @@ extension Scenario {
                          "matte": 4, "range": 5, "color": 6, "colour": 6]
             guard let k = named[args[1]] else { throw Bad(what: "no kind \(args[1])") }
             engine.setMaskKind(k, at: i)
+
+        case "maskname":
+            // Renames the mask whose run starts at the row — the card's rename
+            // field, through the same Engine call it makes. The rest of the
+            // line is the name, spaces and all.
+            guard let i = Int(args.first ?? "") else {
+                throw Bad(what: "maskname needs a row index and a name")
+            }
+            engine.renameMask(layerStartingAt: i, to: args.dropFirst().joined(separator: " "))
+
+        case "maskshape":
+            // The Add menu's other direction: a shape folded into the mask
+            // containing the selected row, continuing its run.
+            let intoNamed = ["linear": Int32(1), "radial": 2, "brush": 3,
+                             "matte": 4, "range": 5, "color": 6, "colour": 6]
+            guard let k = intoNamed[args.first ?? ""] else {
+                throw Bad(what: "maskshape needs a kind")
+            }
+            guard engine.addShape(kind: k, intoLayerContaining: engine.selectedMask) else {
+                throw Bad(what: "the group is full or empty")
+            }
+            engine.commitMaskGroupEdit("Add shape")
+
+        case "maskmergeup":
+            // The card's context menu: fold the mask starting at the row into
+            // the mask above it, with the op that says why. One undoable act.
+            guard args.count >= 2, let i = Int(args[0]) else {
+                throw Bad(what: "maskmergeup needs a row index and an op")
+            }
+            let ops = ["add": Int32(0), "subtract": 1, "intersect": 2]
+            guard let op = ops[args[1]] else { throw Bad(what: "no op \(args[1])") }
+            engine.mergeIntoLayerAbove(at: i, compose: op)
 
         case "spotdrag":
             // Moves a spot's source or its destination, through the same

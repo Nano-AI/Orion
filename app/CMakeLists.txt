@@ -24,6 +24,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Detail.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Optics.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Mask.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+MaskList.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Presets.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine+Geometry.swift
