@@ -9,22 +9,10 @@ import SwiftUI
 
 extension Editor {
 
-    /// Row labels for the mask group. Named here rather than in the state struct
-    /// because they are interface words: the shader's `kind` is a number and
-    /// `MaskComponentState` has no business knowing what a photographer calls it.
-    static func maskKindName(_ kind: Int32) -> String {
-        switch kind {
-        case 1:  return "Linear"
-        case 2:  return "Radial"
-        case 3:  return "Brush"
-        case 4:  return "Selection"
-        case 5:  return "Range"
-        // ⚠ Kind 6 was missing, so every Color range row was labelled "Off" —
-        // the one word that says a row is doing nothing, on a row that is.
-        case 6:  return "Color"
-        default: return "Off"
-        }
-    }
+    /// Row labels for the mask group. Interface words live in `MaskLayers`
+    /// beside the grouping the list is drawn from; this forwarder keeps the
+    /// panel's existing call sites.
+    static func maskKindName(_ kind: Int32) -> String { MaskLayers.kindName(kind) }
 
     static func composeName(_ compose: Int32) -> String {
         switch compose {
@@ -384,8 +372,13 @@ extension Editor {
                     // be five controls whose target is a property of the row
                     // selection three rows above them.
                     if engine.layerCount > 1 {
+                        // Named, not numbered: "Sky 1 — mask 2 of 3" says which
+                        // coverage these sliders belong to in the mask's own
+                        // words, which a bare ordinal never did.
                         Engraved.Label(
-                            text: "Layer \(engine.selectedLayer + 1) of \(engine.layerCount)",
+                            text: MaskLayers.displayName(ofLayer: engine.selectedLayer,
+                                                         in: engine.maskComponents)
+                                + " — mask \(engine.selectedLayer + 1) of \(engine.layerCount)",
                             color: Palette.accent, size: 9)
                     }
 

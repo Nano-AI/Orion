@@ -57,6 +57,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Engraved.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Histogram.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/MaskLayers.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
@@ -173,6 +174,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentCatalogue.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SkyDetector.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/MaskLayers.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
@@ -191,6 +193,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Gallery.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Trash.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MaskLayers.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MatteGeom.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Snapshot.swift
@@ -221,6 +224,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/AdjustmentCatalogue.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/SkyDetector.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/MaskLayers.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
@@ -238,6 +242,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Gallery.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Trash.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Mask.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MaskLayers.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+MatteGeom.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Snapshot.swift

@@ -22,23 +22,14 @@ extension Engine {
     /// added, removed or reordered. Storing it would be a second copy of the
     /// grouping, and the two would disagree the first time a row moved.
     var selectedLayer: Int {
-        guard !maskComponents.isEmpty else { return 0 }
-        let upTo = min(max(selectedMask, 0), maskComponents.count - 1)
-        // ⚠ `1...upTo` is an invalid range when `upTo` is zero, and Swift traps
-        // on it rather than producing an empty sequence — selecting the first
-        // row crashed the process. A half-open range over a prefix has no such
-        // edge, which is why it is written this way now.
-        var n = 0
-        for m in maskComponents[..<upTo].dropFirst() where m.startsLayer { n += 1 }
-        if upTo > 0 && maskComponents[upTo].startsLayer { n += 1 }
-        return min(n, Engine.maxMaskComponents - 1)
+        min(MaskLayers.layerIndex(ofComponent: selectedMask, in: maskComponents),
+            Engine.maxMaskComponents - 1)
     }
 
-    /// How many layers the stack has.
-    var layerCount: Int {
-        guard !maskComponents.isEmpty else { return 0 }
-        return maskComponents.dropFirst().reduce(1) { $1.startsLayer ? $0 + 1 : $0 }
-    }
+    /// How many layers the stack has. `MaskLayers.group` is the one grouping
+    /// definition — the panel's cards read the same one, so the two cannot
+    /// disagree about where a mask begins.
+    var layerCount: Int { MaskLayers.group(maskComponents).count }
 
     private func editLayer(_ change: (inout LocalAdjustState) -> Void) {
         let i = selectedLayer

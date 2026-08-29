@@ -163,6 +163,13 @@ struct MaskComponentState: Equatable, Codable {
     var matteId: String?
     var matteSource: String?
 
+    /// The photographer's own name for this mask, shown by the panel's layer
+    /// card. Interface words stay out of here (`maskKindName` is the UI's),
+    /// but a *chosen* name is the edit's, like `matteSource`: it cannot be
+    /// recovered from anything else, so it rides the sidecar. The layer's
+    /// display name is its starting component's — `MaskLayers.displayName`.
+    var name: String?
+
     /// Decoding takes what the sidecar has and leaves the rest at its default,
     /// for the same reason `DevelopState` does: the synthesized decoder throws
     /// on a missing key, so adding one field would discard every component in
@@ -190,6 +197,7 @@ struct MaskComponentState: Equatable, Codable {
         case colorR, colorG, colorB, colorTol, colorSoft
         case brushRadius, brushFlow, brushHardness, brushStroke, brushErase
         case matteId, matteSource
+        case name
 
         // ── The British spellings these seven were written under ────────────
         //
@@ -264,7 +272,28 @@ struct MaskComponentState: Equatable, Codable {
         brushErase = (try? c.decode([Float].self, forKey: .brushErase)) ?? brushErase
         matteId = (try? c.decodeIfPresent(String.self, forKey: .matteId)).flatMap { $0 }
         matteSource = (try? c.decodeIfPresent(String.self, forKey: .matteSource)).flatMap { $0 }
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)).flatMap { $0 }
     }
+
+    /// Every stored property's name, checked against reflection by
+    /// `testMaskComponentRoster` — `DevelopState.fieldRoster`'s rule (#110)
+    /// applied to the nested struct that never had it. This struct's encoder is
+    /// synthesized from the stored properties while its decoder reads `Key`, so
+    /// a field listed in only one of the two is *write-only*: `rangeLo`,
+    /// `rangeHi` and `rangeSoft` shipped that way and every sidecar silently
+    /// dropped them on the way back in for five sessions. A new field goes in
+    /// three places — the struct, `Key`, and `init(from:)` — and this roster is
+    /// what names it when one is missed.
+    static let fieldRoster: Set<String> = [
+        "kind", "compose", "invert", "hidden", "startsLayer",
+        "centerX", "centerY", "angle", "length",
+        "radiusX", "radiusY", "feather", "roundness",
+        "rangeLo", "rangeHi", "rangeSoft",
+        "colorR", "colorG", "colorB", "colorTol", "colorSoft",
+        "brushRadius", "brushFlow", "brushHardness", "brushStroke", "brushErase",
+        "matteId", "matteSource",
+        "name",
+    ]
 }
 
 /// One spot: a disc taken from elsewhere in the frame.

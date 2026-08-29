@@ -312,6 +312,7 @@ extension ViewportTests {
         var full = DevelopState()
         var a = MaskComponentState()
         a.kind = 1; a.centerX = 0.3; a.angle = 0.8; a.length = 0.7
+        a.name = "Sky edge"
         var b = MaskComponentState()
         b.kind = 3; b.compose = 1; b.brushStroke = [0.1, 0.2, 0.3, 0.4]
         var c = MaskComponentState()
