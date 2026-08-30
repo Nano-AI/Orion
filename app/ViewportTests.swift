@@ -64,6 +64,7 @@ enum ViewportTests {
         testMaskLayersGrouping()
         testMaskLayerNames()
         testMaskComponentRoster()
+        testTrackTintEndpoints()
         testCurveMatchesTheEngine()
         testCurvePointsStayOrdered()
         testModifiedTracksTheReadout()

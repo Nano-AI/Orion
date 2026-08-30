@@ -152,10 +152,15 @@ extension Editor {
     /// It is spelled out at every call site on purpose: a control whose reset
     /// silently disagreed with its binding would put the wrong number back, and
     /// nothing else in the app would notice.
+    /// `tint` is the track's label gradient — see `TrackTint`. Only the
+    /// sliders whose extremes *mean a color* carry one; nil is the plain
+    /// engraved groove.
     func slider(_ name: String, _ value: Binding<Float>,
                         _ range: ClosedRange<Float>, _ unit: String,
-                        _ decimals: Int, resetsTo base: Float) -> some View {
+                        _ decimals: Int, resetsTo base: Float,
+                        tint: Gradient? = nil) -> some View {
         AdjustmentSlider(name: name, value: value, range: range, unit: unit,
-                         decimals: decimals, base: base, engine: engine)
+                         decimals: decimals, base: base, engine: engine,
+                         tint: tint)
     }
 }

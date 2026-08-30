@@ -25,7 +25,8 @@ struct AdjustmentGroup: View {
                                  range: s.range, unit: s.unit,
                                  decimals: s.decimals,
                                  base: reset(spec.id, scope),
-                                 engine: engine)
+                                 engine: engine,
+                                 tint: TrackTint.forAdjustment(spec.id))
             }
         }
     }

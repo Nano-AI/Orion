@@ -88,8 +88,10 @@ extension Editor {
             slider("Vignetting", $engine.lensVignette, -1...1, "", 2, resetsTo: engine.defaults.lensVignette)
                 .disabled(profiled)
                 .opacity(profiled ? 0.4 : 1)
-            slider("Fringe R/C", $engine.lensCaRed, -1...1, "", 2, resetsTo: engine.defaults.lensCaRed)
-            slider("Fringe B/Y", $engine.lensCaBlue, -1...1, "", 2, resetsTo: engine.defaults.lensCaBlue)
+            slider("Fringe R/C", $engine.lensCaRed, -1...1, "", 2,
+                   resetsTo: engine.defaults.lensCaRed, tint: TrackTint.fringeRC)
+            slider("Fringe B/Y", $engine.lensCaBlue, -1...1, "", 2,
+                   resetsTo: engine.defaults.lensCaBlue, tint: TrackTint.fringeBY)
         }
         }
     }

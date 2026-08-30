@@ -37,6 +37,13 @@ struct AnalogTrack: View {
     /// graph — and gets a keyboard nudge wrong in the other direction.
     var interacting: (Bool) -> Void = { _ in }
 
+    /// A label gradient for the groove — what each extreme would do, painted
+    /// where the throw goes. See `TrackTint`. Nil renders exactly the plain
+    /// control; a tinted track trades the accent departure fill for the
+    /// gradient revealed at full strength over the throw, because the color
+    /// under the thumb *is* the departure.
+    var tint: Gradient?
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var dragging = false
@@ -144,14 +151,40 @@ struct AnalogTrack: View {
                     Capsule().strokeBorder(Palette.line, lineWidth: 0.5)
                 )
 
-            // Filled from the index mark, not from the left end. What the
-            // control is doing is a departure from its default, and a bar that
-            // grows from the far edge says the wrong thing about a value like
-            // exposure, whose neutral is in the middle.
-            Capsule()
-                .fill(Palette.accent.opacity(0.55))
-                .frame(width: max(hi - lo, 0), height: grooveHeight - 1.5)
-                .offset(x: lo, y: 0.75)
+            if let tint {
+                // The label, faint across the whole throw so both extremes can
+                // be read before moving anything…
+                Capsule()
+                    .fill(LinearGradient(gradient: tint,
+                                         startPoint: .leading, endPoint: .trailing))
+                    .opacity(0.45)
+                    .frame(width: width, height: grooveHeight - 1.5)
+                    .offset(y: 0.75)
+
+                // …and at full strength over the departure, in place of the
+                // accent bar: the throw *reveals* the color it is applying,
+                // still growing from the index mark, not the far edge.
+                Capsule()
+                    .fill(LinearGradient(gradient: tint,
+                                         startPoint: .leading, endPoint: .trailing))
+                    .opacity(0.85)
+                    .frame(width: width, height: grooveHeight - 1.5)
+                    .offset(y: 0.75)
+                    .mask(alignment: .topLeading) {
+                        Rectangle()
+                            .frame(width: max(hi - lo, 0))
+                            .offset(x: lo)
+                    }
+            } else {
+                // Filled from the index mark, not from the left end. What the
+                // control is doing is a departure from its default, and a bar
+                // that grows from the far edge says the wrong thing about a
+                // value like exposure, whose neutral is in the middle.
+                Capsule()
+                    .fill(Palette.accent.opacity(0.55))
+                    .frame(width: max(hi - lo, 0), height: grooveHeight - 1.5)
+                    .offset(x: lo, y: 0.75)
+            }
         }
         .frame(width: width, height: grooveHeight, alignment: .topLeading)
         .offset(y: grooveY - grooveHeight / 2)

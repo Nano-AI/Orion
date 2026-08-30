@@ -20,7 +20,7 @@ public enum Orion {
         public static let surround = Color(hex: 0x2A2A2C)
         /// Hairlines, borders, dividers
         public static let line = Color(hex: 0x313135)
-        /// Slider tracks, scrollbar thumbs
+        /// Scrollbar thumbs. Not slider tracks: AnalogTrack engraves its groove in `ground` deliberately, and tinted tracks draw their own label gradient (TrackTint)
         public static let rail = Color(hex: 0x3A3A3E)
         /// Primary text, slider thumbs
         public static let text = Color(hex: 0xE8E8EA)

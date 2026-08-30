@@ -9,8 +9,10 @@ extension Editor {
     var lightPanel: some View {
         Group {
             section("White Balance") {
-                slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0, resetsTo: engine.defaults.temperatureK)
-                slider("Tint", $engine.tint, -1...1, "", 2, resetsTo: engine.defaults.tint)
+                slider("Temperature", $engine.temperatureK, 2000...12000, " K", 0,
+                       resetsTo: engine.defaults.temperatureK, tint: TrackTint.temperature)
+                slider("Tint", $engine.tint, -1...1, "", 2,
+                       resetsTo: engine.defaults.tint, tint: TrackTint.tint)
             }
             section("Light") {
                 // Auto-enhance writes Exposure, Whites and Blacks — three of

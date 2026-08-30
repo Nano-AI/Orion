@@ -57,10 +57,17 @@ struct ColorWheel: View {
 
             disc
 
+            // ⚠ `interacting:` was missing here — the one track in the app
+            // whose drag never armed degrade-then-refine, so a luminance drag
+            // paid the full-resolution render on every tick. The disc's drag
+            // at the bottom of this file always armed; this brings the track
+            // in line with it and with every AdjustmentSlider.
             AnalogTrack(value: value.count > 2 ? value[2] : 0,
-                        range: -0.5...0.5, base: 0) { v in
+                        range: -0.5...0.5, base: 0, set: { v in
                 engine.edit("\(title) luminance") { value[2] = v }
-            }
+            }, interacting: { on in
+                if on { engine.beginInteraction() } else { engine.endInteraction() }
+            }, tint: TrackTint.wheelLuma)
             .frame(width: size)
         }
     }

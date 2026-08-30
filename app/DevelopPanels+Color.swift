@@ -8,8 +8,10 @@ extension Editor {
     var colorPanel: some View {
         Group {
             section("Presence") {
-                slider("Vibrance", $engine.vibrance, -1...1, "", 2, resetsTo: engine.defaults.vibrance)
-                slider("Saturation", $engine.saturation, -1...1, "", 2, resetsTo: engine.defaults.saturation)
+                slider("Vibrance", $engine.vibrance, -1...1, "", 2,
+                       resetsTo: engine.defaults.vibrance, tint: TrackTint.presence)
+                slider("Saturation", $engine.saturation, -1...1, "", 2,
+                       resetsTo: engine.defaults.saturation, tint: TrackTint.presence)
             }
             section("Color Grading", info: "Angle picks the hue, distance picks how far. The wheels "
                      + "only change color — the slider under each one is what "
@@ -92,9 +94,15 @@ extension Editor {
                             .foregroundStyle(Palette.accent)
                     }
                 }
-                slider("Hue", bandBinding(\.hueShift), -1...1, "", 2, resetsTo: 0)
-                slider("Saturation", bandBinding(\.satShift), -1...1, "", 2, resetsTo: 0)
-                slider("Luminance", bandBinding(\.lumShift), -1...1, "", 2, resetsTo: 0)
+                // The tracks wear the selected band's own colors — the Hue
+                // ends are the shader's real ±30° travel, so what the track
+                // promises is what the extreme does. See `TrackTint`.
+                slider("Hue", bandBinding(\.hueShift), -1...1, "", 2, resetsTo: 0,
+                       tint: TrackTint.hue(for: band))
+                slider("Saturation", bandBinding(\.satShift), -1...1, "", 2, resetsTo: 0,
+                       tint: TrackTint.saturation(for: band))
+                slider("Luminance", bandBinding(\.lumShift), -1...1, "", 2, resetsTo: 0,
+                       tint: TrackTint.luminance(for: band))
             }
         }
     }

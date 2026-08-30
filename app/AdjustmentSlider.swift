@@ -29,6 +29,10 @@ struct AdjustmentSlider: View {
 
     let engine: Engine
 
+    /// The track's label gradient, passed straight through to `AnalogTrack`.
+    /// Nil is the plain engraved groove.
+    var tint: Gradient?
+
     @State private var pointerInside = false
 
     /// Forces the hover state on for the screenshot harness. A pointer cannot
@@ -78,7 +82,7 @@ struct AdjustmentSlider: View {
                 // A cheap control on the preview path costs nothing it was not
                 // already spending.
                 if on { engine.beginInteraction() } else { engine.endInteraction() }
-            })
+            }, tint: tint)
             .accessibilityLabel(Text(name))
         }
         // The section's nameplate marks itself when anything under it has moved.
