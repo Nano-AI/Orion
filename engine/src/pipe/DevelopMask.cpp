@@ -4,7 +4,7 @@
  *  parameters rather than an image — normalized coordinates in, alpha out — so
  *  it survives a resize, and an export matches the preview it was made on.
  *
- *  All of it in one place: the base the fold starts from and the four component
+ *  All of it in one place: the base the fold starts from and the eight component
  *  nodes chained onto it, the raster mattes, the dab and dab-bounds textures,
  *  the single incremental accumulator, seven refine nodes per slot, and the two
  *  calls that wrap a render so the accumulator cannot composite the same dabs
@@ -40,7 +40,7 @@ void DevelopPipeline::buildMaskNodes() {
 
     // One node per component, each folding its own coverage into the one before
     // it. All the same shape, so a group of one runs the same code as a group of
-    // four; unused components are disabled in `apply`, which costs their texture
+    // eight; unused components are disabled in `apply`, which costs their texture
     // and none of their time. research/masking.md §6.
     // One matte per component slot, so a group can hold a subject on one row
     // and a person on another. Allocated at `kMaxMatteEdge` on the long side

@@ -18,12 +18,15 @@ namespace orion::pipe {
 /// How many components one mask group holds.
 ///
 /// Each is one node and one full-resolution R16Float intermediate — 48 MB at
-/// 24 MP — so this is a memory number, not a conceptual limit. Four covers the
-/// shapes photographers actually build (a sky gradient minus the trees, a
-/// radial on the face plus a stroke on the hands) and costs 192 MB of
-/// intermediates. Raising it is this constant plus the matching one in
-/// `orion.h`, and the cost is linear.
-inline constexpr int kMaxMaskComponents = 4;
+/// 24 MP — so this is a memory number, not a conceptual limit. Eight is where
+/// it stands now (raised from four for the masking UX revamp, decision #209 —
+/// the shapes are also the masks, so four was the whole *stack*, not one
+/// mask's shapes) and costs 384 MB of component intermediates at 24 MP plus
+/// each slot's refine chain. Raising it further is this constant plus the
+/// matching one in `orion.h`, the tuple fills in `Engine.swift`, and
+/// `develop_linear.slang`'s hand-branched texture bindings; the cost is
+/// linear. The bench numbers for 4 → 8 are in the #209 row.
+inline constexpr int kMaxMaskComponents = 8;
 
 /// One component of the mask group, in the form a person manipulates — a center
 /// and an angle rather than the two endpoints the linear gradient's maths wants.

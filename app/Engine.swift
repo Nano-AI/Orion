@@ -276,7 +276,10 @@ final class Engine {
 
     /// How many components one group holds. Matches the engine's own cap; the
     /// facade rejects an index past it.
-    static let maxMaskComponents = 4
+    /// Must agree with `ORION_MAX_MASK_COMPONENTS` — the C pair is
+    /// static_asserted in `CApi.cpp`, this one is pinned by
+    /// `testMaskCapMatchesTheFacade`. Raised 4 → 8, decision #209.
+    static let maxMaskComponents = 8
 
     var maskComponents: [MaskComponentState] = []
 
@@ -459,6 +462,12 @@ final class Engine {
     var handle: OpaquePointer?
 
     init() throws {
+        // The C pair is static_asserted in CApi.cpp; Swift has no static
+        // assert, so the third copy of the cap is pinned here — every gate
+        // that launches Orion runs through this line. A mismatch scatters
+        // components into each other's facade fields, silently.
+        precondition(Self.maxMaskComponents == Int(ORION_MAX_MASK_COMPONENTS),
+                     "Engine.maxMaskComponents must match ORION_MAX_MASK_COMPONENTS")
         var h: OpaquePointer?
         let status = orion_engine_create(&h)
         guard status == ORION_OK, let h else {
@@ -731,10 +740,11 @@ final class Engine {
             c.brush_revision = brushRevisions[i]
             return c
         }
-        a.mask_components = (cs[0], cs[1], cs[2], cs[3])
+        a.mask_components = (cs[0], cs[1], cs[2], cs[3],
+                             cs[4], cs[5], cs[6], cs[7])
         a.mask_count = Int32(maskComponents.count)
         // Padded to the facade's fixed arrays: a stack with two layers still
-        // sends four, and the engine reads only `layerCount` of them.
+        // sends eight, and the engine reads only `layerCount` of them.
         var ev = [Float](repeating: 0, count: Self.maxMaskComponents)
         var ct = ev, sa = ev, wa = ev, ti = ev
         var hi = ev, sh = ev, wh = ev, bl = ev
@@ -744,15 +754,15 @@ final class Engine {
             hi[i] = l.highlights; sh[i] = l.shadows
             wh[i] = l.whites; bl[i] = l.blacks
         }
-        a.local_exposure_ev = (ev[0], ev[1], ev[2], ev[3])
-        a.local_contrast = (ct[0], ct[1], ct[2], ct[3])
-        a.local_saturation = (sa[0], sa[1], sa[2], sa[3])
-        a.local_warmth = (wa[0], wa[1], wa[2], wa[3])
-        a.local_tint = (ti[0], ti[1], ti[2], ti[3])
-        a.local_highlights = (hi[0], hi[1], hi[2], hi[3])
-        a.local_shadows = (sh[0], sh[1], sh[2], sh[3])
-        a.local_whites = (wh[0], wh[1], wh[2], wh[3])
-        a.local_blacks = (bl[0], bl[1], bl[2], bl[3])
+        a.local_exposure_ev = toTuple8(ev)
+        a.local_contrast = toTuple8(ct)
+        a.local_saturation = toTuple8(sa)
+        a.local_warmth = toTuple8(wa)
+        a.local_tint = toTuple8(ti)
+        a.local_highlights = toTuple8(hi)
+        a.local_shadows = toTuple8(sh)
+        a.local_whites = toTuple8(wh)
+        a.local_blacks = toTuple8(bl)
         a.mask_refine = maskRefine
 
         a.spot_count = Int32(min(spots.count, Self.maxSpots))

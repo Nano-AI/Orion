@@ -22,12 +22,18 @@ static const float kContrastPivot = -2.5f;
 /// layer uses is only known at render.
 float coverage(int slot, uint2 p,
                Texture2D<float> m0, Texture2D<float> m1,
-               Texture2D<float> m2, Texture2D<float> m3)
+               Texture2D<float> m2, Texture2D<float> m3,
+               Texture2D<float> m4, Texture2D<float> m5,
+               Texture2D<float> m6, Texture2D<float> m7)
 {
     if (slot == 0) return m0[p];
     if (slot == 1) return m1[p];
     if (slot == 2) return m2[p];
-    return m3[p];
+    if (slot == 3) return m3[p];
+    if (slot == 4) return m4[p];
+    if (slot == 5) return m5[p];
+    if (slot == 6) return m6[p];
+    return m7[p];
 }
 
 struct LinearAdjustParams
@@ -62,24 +68,24 @@ struct LinearAdjustParams
     /// why: white balance is applied before the demosaic and the pyramid
     /// operators are not pointwise.
     ///
-    /// ⚠ Four sets, not one. A layer is a run of mask components with its own
+    /// ⚠ Eight sets, not one. A layer is a run of mask components with its own
     /// coverage, so the subject can be graded one way and the sky another.
-    float layerExposureEv[4];
-    float layerContrast[4];
-    float layerSaturation[4];
+    float layerExposureEv[8];
+    float layerContrast[8];
+    float layerSaturation[8];
     /// A color **cast**, not a white balance. See the note at the call site.
-    float layerWarmth[4];
-    float layerTint[4];
+    float layerWarmth[8];
+    float layerTint[8];
     /// The four tone bands, per layer. Same units as the globals above; the
     /// coverage scales the parameter like every other local control.
-    float layerHighlights[4];
-    float layerShadows[4];
-    float layerWhites[4];
-    float layerBlacks[4];
-    /// Which of the four coverage textures carries each layer. ⚠ The graph is
+    float layerHighlights[8];
+    float layerShadows[8];
+    float layerWhites[8];
+    float layerBlacks[8];
+    /// Which of the eight coverage textures carries each layer. ⚠ The graph is
     /// static, so a layer's coverage cannot be a node chosen per render — the
-    /// kernel binds all four and this says which one to read.
-    int   layerMask[4];
+    /// kernel binds all eight and this says which one to read.
+    int   layerMask[8];
     int   layerCount;
     float maskActive;
 
@@ -126,6 +132,10 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
                    uniform Texture2D<float>    mask1,     // one per component
                    uniform Texture2D<float>    mask2,     // slot; `layerMask`
                    uniform Texture2D<float>    mask3,     // picks per layer
+                   uniform Texture2D<float>    mask4,
+                   uniform Texture2D<float>    mask5,
+                   uniform Texture2D<float>    mask6,
+                   uniform Texture2D<float>    mask7,
                    uniform RWTexture2D<float4> dst,
                    uniform ConstantBuffer<LinearAdjustParams> p)
 {
@@ -194,7 +204,8 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     for (int L = 0; L < p.layerCount; ++L)
     {
         const float a = saturate(coverage(p.layerMask[L], tid.xy,
-                                          mask0, mask1, mask2, mask3));
+                                          mask0, mask1, mask2, mask3,
+                                          mask4, mask5, mask6, mask7));
         if (a <= 0.0f) continue;
 
         if (p.layerExposureEv[L] != 0.0f) c *= exp2(a * p.layerExposureEv[L]);
@@ -288,7 +299,8 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
         // run's coverage — the documented run-terminator behavior.
         const int L = clamp(p.maskOverlayLayer, 0, p.layerCount - 1);
         const float a = saturate(coverage(p.layerMask[L], tid.xy,
-                                          mask0, mask1, mask2, mask3));
+                                          mask0, mask1, mask2, mask3,
+                                          mask4, mask5, mask6, mask7));
         const float3 red = float3(0.35f, 0.012f, 0.02f);
         c = lerp(c, red + c * 0.25f, a * 0.6f);
     }

@@ -75,26 +75,26 @@ struct LinearAdjust {
     float         lumShift[8];
     /// A local adjustment and its coverage. See mask_gradient.slang and
     /// research/masking.md — the alpha scales the parameter, not the result.
-    /// ⚠ Four local sets, one per layer. A layer is a run of mask components
+    /// ⚠ Eight local sets, one per layer. A layer is a run of mask components
     /// with its own coverage, so the subject can be graded one way and the sky
     /// another. All pointwise — research/masking.md §2b.
-    float         layerExposureEv[4];
-    float         layerContrast[4];
-    float         layerSaturation[4];
+    float         layerExposureEv[8];
+    float         layerContrast[8];
+    float         layerSaturation[8];
     /// A color cast, not a white balance: temperature and tint are applied
     /// before the demosaic and cannot be local.
-    float         layerWarmth[4];
-    float         layerTint[4];
+    float         layerWarmth[8];
+    float         layerTint[8];
     /// The four tone bands, per layer, in the globals' units. The coverage
     /// scales the parameter, like every other local control.
-    float         layerHighlights[4];
-    float         layerShadows[4];
-    float         layerWhites[4];
-    float         layerBlacks[4];
+    float         layerHighlights[8];
+    float         layerShadows[8];
+    float         layerWhites[8];
+    float         layerBlacks[8];
     /// Which coverage texture each layer reads. ⚠ The graph is static, so a
     /// layer's coverage cannot be a node picked per render — the kernel binds
-    /// all four component slots and this says which one ends each layer.
-    std::int32_t  layerMask[4];
+    /// all eight component slots and this says which one ends each layer.
+    std::int32_t  layerMask[8];
     std::int32_t  layerCount;
     float         maskActive;
     /// Draw the coverage on screen. A viewing aid; never set for an export.
@@ -102,7 +102,7 @@ struct LinearAdjust {
     /// Which layer the overlay paints — the one being edited.
     std::int32_t  maskOverlayLayer;
 };
-static_assert(sizeof(LinearAdjust) == 320);
+static_assert(sizeof(LinearAdjust) == 480);
 
 struct GuidePrep {
     std::uint32_t size[2];

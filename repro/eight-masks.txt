@@ -1,0 +1,96 @@
+# Eight masks, end to end - decision #209 raised the cap from four.
+#
+# The GPU suite pins the graph's eight slots; this drives the same eight
+# through the app's own path - Engine's facade fill hand-spells the component
+# and local-adjustment tuples, and before #209 nothing past index 3 existed to
+# spell wrong. Each mask grades only its own region, and the eighth layer's
+# grade is provably the eighth's: zeroed, its region alone recovers.
+#
+# The ninth add is refused by `Engine.addMaskComponent`'s cap guard and the
+# panel's disabled Add button; the scenario language has no expect-refusal
+# verb, so that guard is not driven here.
+#
+# Needs samples/overexposed-background.ARW.
+
+# Mask centres are FRAME coordinates (this sample carries an EXIF turn of
+# three quarters): display (x, 0.50) is frame (0.50, x). Measure regions stay
+# display-space.
+open samples/overexposed-background.ARW
+measure 0.0625,0.50,0.04,0.04 r0Base
+measure 0.1875,0.50,0.04,0.04 r1Base
+measure 0.3125,0.50,0.04,0.04 r2Base
+measure 0.4375,0.50,0.04,0.04 r3Base
+measure 0.5625,0.50,0.04,0.04 r4Base
+measure 0.6875,0.50,0.04,0.04 r5Base
+measure 0.8125,0.50,0.04,0.04 r6Base
+measure 0.9375,0.50,0.04,0.04 r7Base
+mask radial
+set maskCentreX 0.50
+set maskCentreY 0.0625
+set maskRadiusX 0.05
+set maskRadiusY 0.05
+set localExposure -2.5
+maskadd radial
+set maskCentreX 0.50
+set maskCentreY 0.1875
+set maskRadiusX 0.05
+set maskRadiusY 0.05
+set localExposure -2.5
+maskadd radial
+set maskCentreX 0.50
+set maskCentreY 0.3125
+set maskRadiusX 0.05
+set maskRadiusY 0.05
+set localExposure -2.5
+maskadd radial
+set maskCentreX 0.50
+set maskCentreY 0.4375
+set maskRadiusX 0.05
+set maskRadiusY 0.05
+set localExposure -2.5
+maskadd radial
+set maskCentreX 0.50
+set maskCentreY 0.5625
+set maskRadiusX 0.05
+set maskRadiusY 0.05
+set localExposure -2.5
+maskadd radial
+set maskCentreX 0.50
+set maskCentreY 0.6875
+set maskRadiusX 0.05
+set maskRadiusY 0.05
+set localExposure -2.5
+maskadd radial
+set maskCentreX 0.50
+set maskCentreY 0.8125
+set maskRadiusX 0.05
+set maskRadiusY 0.05
+set localExposure -2.5
+maskadd radial
+set maskCentreX 0.50
+set maskCentreY 0.9375
+set maskRadiusX 0.05
+set maskRadiusY 0.05
+set localExposure -2.5
+measure 0.0625,0.50,0.04,0.04 r0Masked
+measure 0.1875,0.50,0.04,0.04 r1Masked
+measure 0.3125,0.50,0.04,0.04 r2Masked
+measure 0.4375,0.50,0.04,0.04 r3Masked
+measure 0.5625,0.50,0.04,0.04 r4Masked
+measure 0.6875,0.50,0.04,0.04 r5Masked
+measure 0.8125,0.50,0.04,0.04 r6Masked
+measure 0.9375,0.50,0.04,0.04 r7Masked
+expect r0Masked < r0Base
+expect r1Masked < r1Base
+expect r2Masked < r2Base
+expect r3Masked < r3Base
+expect r4Masked < r4Base
+expect r5Masked < r5Base
+expect r6Masked < r6Base
+expect r7Masked < r7Base
+masklayer 7
+set localExposure 0
+measure 0.9375,0.50,0.04,0.04 r7Zeroed
+measure 0.8125,0.50,0.04,0.04 r6Still
+expect r7Zeroed == r7Base
+expect r6Still == r6Masked

@@ -62,8 +62,10 @@ typedef struct OrionCurveChannel {
 
 /* How many components one mask group holds. Each live component is one GPU
  * pass and one full-resolution alpha — a memory number, not a concept. Must
- * match kMaxMaskComponents in the engine. */
-#define ORION_MAX_MASK_COMPONENTS 4
+ * match kMaxMaskComponents in the engine. Raised 4 -> 8 for the masking UX
+ * revamp (decision #209): the components are also the masks, so four was the
+ * whole stack, not one mask's shapes. */
+#define ORION_MAX_MASK_COMPONENTS 8
 
 /* One component of the mask group: a primitive plus how it folds into the
  * components listed before it. research/masking.md §6.

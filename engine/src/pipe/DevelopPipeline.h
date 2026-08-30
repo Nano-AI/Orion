@@ -531,14 +531,14 @@ private:
     /// lets a matte survive a crop and a quarter turn the same way a parametric
     /// component does.
     static constexpr std::uint32_t kMaxMatteEdge = 1024;
-    int auxMatte_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int auxMatte_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
     /// One texel per brush dab. See the note in `apply`: the stroke outgrew
     /// what a constant block can carry, and a texture is a binding the pipeline
     /// already had.
-    int auxDabs_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int auxDabs_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
     /// One axis-aligned box per run of `kDabBlock` dabs, so a pixel can skip a
     /// whole run with one test. research/brush-acceleration.md.
-    int auxDabBounds_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int auxDabBounds_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
     std::uint32_t matteW_ = 0, matteH_ = 0;
     /// The live rectangle of each matte, or zero where none has been uploaded.
     std::uint32_t matteLive_[kMaxMaskComponents][2]{};
@@ -566,13 +566,13 @@ private:
     /// changes at runtime — so every slot gets a chain and `layerMask` picks
     /// the one that matters. Seven nodes each, all disabled at strength zero,
     /// so an unrefined stack pays for their textures and none of their time.
-    int nMaskGuidePrep_[kMaxMaskComponents]{-1, -1, -1, -1};
-    int nMaskGuideH1_[kMaxMaskComponents]{-1, -1, -1, -1};
-    int nMaskGuideV1_[kMaxMaskComponents]{-1, -1, -1, -1};
-    int nMaskGuideAb_[kMaxMaskComponents]{-1, -1, -1, -1};
-    int nMaskGuideH2_[kMaxMaskComponents]{-1, -1, -1, -1};
-    int nMaskGuideV2_[kMaxMaskComponents]{-1, -1, -1, -1};
-    int nMaskRefine_[kMaxMaskComponents]{-1, -1, -1, -1};
+    int nMaskGuidePrep_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
+    int nMaskGuideH1_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
+    int nMaskGuideV1_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
+    int nMaskGuideAb_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
+    int nMaskGuideH2_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
+    int nMaskGuideV2_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
+    int nMaskRefine_[kMaxMaskComponents]{-1, -1, -1, -1, -1, -1, -1, -1};
     std::uint32_t fuseW_[kFuseLevels]{}, fuseH_[kFuseLevels]{};
 
     /// The simulated-image plan. Derived from the frame's median, so it is a

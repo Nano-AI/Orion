@@ -119,6 +119,8 @@ void testToneBandsWithoutGuide() {
                      live ? guideRaw.get() : src.get(),
                      maskStub.get(), maskStub.get(),
                      maskStub.get(), maskStub.get(),
+                     maskStub.get(), maskStub.get(),
+                     maskStub.get(), maskStub.get(),
                      dst.get()},
                     &la, sizeof la, kW, kH);
         cb.commitAndWait();
@@ -272,6 +274,7 @@ void testLocalAdjustments() {
     const auto run = [&]() {
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*kernel, {src.get(), src.get(), src.get(),
+                              mask.get(), mask.get(), mask.get(), mask.get(),
                               mask.get(), mask.get(), mask.get(), mask.get(),
                               dst.get()},
                     &la, sizeof la, kW, kH);
@@ -493,6 +496,7 @@ void testOverlayPaintsTheSelectedLayer() {
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*kernel, {src.get(), src.get(), src.get(),
                               maskL.get(), maskR.get(), maskL.get(), maskL.get(),
+                              maskL.get(), maskL.get(), maskL.get(), maskL.get(),
                               dst.get()},
                     &la, sizeof la, kW, kH);
         cb.commitAndWait();

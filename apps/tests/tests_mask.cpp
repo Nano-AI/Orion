@@ -209,7 +209,7 @@ void testMaskGpu() {
         la.guideEnabled = 0.0f;
         la.layerExposureEv[0] = 1.0f;
         la.maskActive = 1.0f;
-        // One layer reading coverage slot 0. The kernel binds four slots
+        // One layer reading coverage slot 0. The kernel binds eight slots
         // because a layer's coverage cannot be a node picked per render.
         la.layerCount = 1;
         la.layerMask[0] = 0;
@@ -217,6 +217,7 @@ void testMaskGpu() {
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*kLinear.second,
                     {src.get(), guide.get(), guide.get(),
+                     mask.get(), mask.get(), mask.get(), mask.get(),
                      mask.get(), mask.get(), mask.get(), mask.get(), out.get()},
                     &la, sizeof la, kW, 1);
         cb.commitAndWait();

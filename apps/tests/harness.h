@@ -140,6 +140,7 @@ void testMaskGpu();
 void testMaskBrushGpu();
 void testMaskCompositeGpu();
 void testLayerBreakRefreshesTheLayerTable();
+void testMaskEightSlotsGpu();
 void testOverlayPaintsTheSelectedLayer();
 void testBrushDabsFollowTheFrame();
 void testMaskGeometry();

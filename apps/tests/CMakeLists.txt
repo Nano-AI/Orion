@@ -28,6 +28,7 @@ add_executable(orion-tests
     tests_guide_eps.cpp
     tests_spot.cpp
     tests_mask_range.cpp
+    tests_mask_slots.cpp
     tests_mask_matte.cpp
     tests_grain.cpp
     tests_vignette.cpp

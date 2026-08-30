@@ -46,7 +46,9 @@ void DevelopPipeline::buildOutputNodes() {
     nLinear_    = pipeline_.add({"develop:linear", "developLinear",
                                  {nFusion_, nGuideV2_, nGuidePrep_,
                                   nMaskRefine_[0], nMaskRefine_[1],
-                                  nMaskRefine_[2], nMaskRefine_[3]},
+                                  nMaskRefine_[2], nMaskRefine_[3],
+                                  nMaskRefine_[4], nMaskRefine_[5],
+                                  nMaskRefine_[6], nMaskRefine_[7]},
                                  PixelFormat::RGBA16Float, {}});
 
     // Grading sits after the tone controls and before the display transform,
