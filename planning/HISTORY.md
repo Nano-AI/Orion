@@ -9108,3 +9108,77 @@ sessions. Decision #136.
 ⚠ **The tree is unchanged.** The only edits are documents; the mutation used to
 measure #134 was reverted and `git status` is clean. Gates run anyway: 810 / 3708
 / 41 of 41 / bench 0 on three frames.
+
+## Session `2026-08-24c` - four masking fixes, and a test target that had stopped linking
+
+**Asked for directly**, all four: Show mask drowned the mask being edited in
+every other mask's red; highlights/shadows/whites/blacks were not on the mask
+panel; a new mask arrived linked to the previous one; and unlinking a mask made
+the previous mask's edits vanish until its eye button was toggled twice.
+
+**The bug first, and it was a guard with a blind spot (#194).** `applyTone`'s
+`linearMoved` named every field the pushed struct depends on except the
+`startsLayer` flags - and the layer table is a function of exactly those flags.
+The split re-rendered the row's coverage while the table kept last frame's
+runs, so layer 0's grade landed through the new row's coverage only. The eye
+button "fixed" it because `visibilityMoved` forces the rebuild, and every older
+script missed it because each touched a slider right after splitting - any
+slider rebuilds the table. `runsMoved()` closes it, `maskmove` included.
+Watched fail before the fix: `testLayerBreakRefreshesTheLayerTable` (two-push,
+GPU) and `repro/mask-split-stale.txt`, whose load-bearing lines are measures
+with **no set between the split and the look**.
+
+**Show mask paints the selected layer (#195)** - a deliberate reversal of the
+shader's documented union. `maskOverlayLayer` rides `LinearAdjust` (252 → 256),
+and a selection change while the overlay is up is itself a render now.
+
+**The four tone bands went local (#196)**, engine then app. `applyTone`'s
+deltaEv is linear in each band, so coverage-scales-the-parameter is exact;
+the old refusal's sentence survives as the stated approximation (one guided
+estimate per frame, research/masking.md §2b). `LinearAdjust` 256 → 320. Traps
+closed on the way: `guideNeeded` is one predicate at three former inline
+sites; `AdjustmentGroup`'s `(.highlights, _)` bindings would have driven the
+**global** from the mask panel; `LocalAdjustState`'s synthesised decoder would
+have silently dropped layers 2+ from every older sidecar.
+
+**New masks stack (#197)**, with `masksplit`/`masklink` made SET-not-toggle
+first, so every script kept meaning what it said across the default change.
+
+Housekeeping that mattered:
+
+- ⚠ **`orion-tests` had not linked since the HDR merge landed** - four test
+  files and their `main.cpp` calls arrived without `apps/tests/CMakeLists.txt`
+  rows. Fixed first, as its own commit; the merge suites run again (1009).
+- **`samples/` on this machine is the developer's dog bracket** -
+  `overexposed-background.ARW` and `underexposedsubject.ARW`, copied from
+  `/Volumes/wintermute/pictures/dog/hdr-test`. The four new repro scripts
+  assert against relative measures on those files and all pass. ⚠ The 80+
+  older scripts, `check-modes.py` and `check-screens.py` still want
+  `_PIC8220.ARW`/`_PIC8148.ARW`, which this machine does not have - they
+  remain unrunnable here, as before this session.
+
+## Session `2026-08-24b` - opening a folder or photo from the shell
+
+**Asked for directly:** *"open the current folder in Orion or a particular file
+in Orion from the command line ... pretty minimal and the wiring ... could be
+done just from my .zshrc."*
+
+**Zero app code.** `--open` (#182) already takes folders and files and walks the
+product's own `openFile()` path, so the feature is an `orion()` function in
+`~/.zshrc`: absolutize every argument with `:A` (because `open(1)` launches apps
+with cwd `/`), then `open -n -a build/Orion.app --args --open <paths>`. No
+arguments means `$PWD`. Decision #193; the README's build section documents the
+flag and reproduces the function, since `~/.zshrc` is outside the repo.
+
+Two things the wrapper exists to know:
+
+- **`-n` is load-bearing.** Plain `open -a` on a running app activates it and
+  drops `--args` - there is no route into a running instance without an app
+  delegate and `CFBundleDocumentTypes`, declined as out of proportion. So each
+  invocation is a fresh instance; sidecars make concurrent edits safe, though
+  two instances may both write the SQLite index.
+- **Verified by process args, not by pixels:** `samples/` does not exist on this
+  machine, so `check-modes.py` cannot run here (pre-existing; it wants
+  `_PIC8220.ARW`, `_PIC8148.ARW`). Both wrapper cases were run for real - bare
+  `orion` and `orion ./fake.ARW` - and the spawned processes carried the
+  absolutized `--open` path each time, alongside an already-running instance.

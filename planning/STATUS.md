@@ -4,12 +4,15 @@
 
 ---
 
-**Last updated:** 2026-08-28 (**The gallery - #204/#205/#206.** A second face
-of the window: G toggles a grid of every photo in the folder, embedded-preview
-cells at 200-400 pt, arrows/1-5/`/R act on the focus without a decode, and the
-first deletion path in the tree - Finder Trash, sidecar+versions+mattes travel
-together, confirmed and counted, single/⌘⌫/Delete Rejected. Thumbnails grew
-512 → 1024 (schema 3, one cold rebuild). Editor stays the default view.)
+**Last updated:** 2026-08-30 (**The masking UX revamp - #207/#208/#209/#210.**
+Masks have names (sidecar field, layer answers to its starting shape's name,
+nested roster guard closes the write-only-field shape). The list is cards -
+one per mask, shapes as rows with their op written on them, rename by
+double-click, merge is one context-menu act with a direction. The cap is
+**eight** components, bench-verified: 173 → 205 nodes, +1,375 MiB at 42 MP,
+drag cost unchanged. Color-meaning sliders wear label gradients - mixer H/S/L
+pinned to the shader's own ±30°, WB, presence, fringe, wheel luma - and the
+wheel's luminance track arms degrade-then-refine at last.)
 
 **Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
 **`research/masking.md` is finished** — primitives, groups, guided refinement, a
@@ -440,17 +443,14 @@ there now.
 ⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
 below is either cosmetic, named-and-costed, or needs the developer.
 
-**Suites:** re-measured 2026-08-28 at #206. `orion-tests` **1005 checks** ·
-`orion-viewport-tests` **4059 checks** · all 0 failures. The viewport count
-grew by 32: gallery column/2D-navigation maths and the trash sibling rules. ⚠ The counts moved
-in both directions this time: #202 deleted three tests that graded the dead
-display-space kernel spelling along with the code they graded, and added the
-conversion, anchoring and map tests. **Eight** `repro/` scenarios run on this
-machine's dog-bracket samples now (all exit 0) - the four from before, their
-mask centres rewritten to frame coordinates, plus the new
-`subject-selection-42mp`, `sky-selection-42mp`, `mask-follows-the-frame` and
-`mask-survives-the-fix`; the rest still want `_PIC8220.ARW` /
-`_PIC8148.ARW`, as does the bench.
+**Suites:** re-measured 2026-08-30 at #210. `orion-tests` **1008 checks** ·
+`orion-viewport-tests` **4103 checks** · all 0 failures. The growth since
+#206: the eight-slot GPU fixture (+3 engine), and MaskLayers grouping/naming,
+the nested component roster, and the track-tint endpoint pins (+44 viewport).
+**Ten** `repro/` scenarios run on this machine's dog-bracket samples now (all
+exit 0) - the eight from #206 plus `mask-merge` and `eight-masks`; the rest
+still want `_PIC8220.ARW` / `_PIC8148.ARW`. ⚠ The bench *does* run on the
+dog bracket (42.4 MP) - #209's before/after was measured there.
 ⚠ Earlier copies of this block said **806/3708/40**, and before that **800** and
 **3702** — the counts before #125 and #129 added checks; the suites only ever
 grow, so a stale number here reads as a regression. The bench prints **54 named
@@ -567,6 +567,61 @@ candidate fixes in order.
 
 
 ---
+
+## Session `2026-08-30` - the masking UX revamp, and gradient tracks
+
+**Asked for directly:** commit the gallery session conventionally, then a much
+more polished masking experience - named masks, easy merging (subtract), a
+list that says how many masks exist and what each does - and gradient tracks
+on the hue sliders and wherever else they make sense. Cap raise to 8 and the
+gradient scope settled by Q&A. Decisions #207-#210, four stories, each
+committed green.
+
+**Names (#207).** `MaskComponentState.name` through all three halves of the
+decoder trap (struct, `Key`, `init(from:)`); layer's display name = its
+starting shape's, defaults like "Radial 2" / "Sky 1". `MaskLayers` (pure,
+SwiftUI-free) is now the one grouping definition - `Engine.selectedLayer`,
+`layerCount`, the cards and `masklayer` all read it. ⚠ The real win is the
+**nested roster guard**: `testMaskComponentRoster` applies #110's Mirror rule
+to the nested struct whose write-only-field failure (rangeLo/Hi/Soft, five
+sessions) motivated it.
+
+**Cards and merge (#208).** `DevelopPanels+MaskList.swift`: header (rename on
+double-click - draft state, submit commits, escape abandons), layer-wide eye,
+shape rows with op glyphs, "N masks · M of 8 shapes" always visible.
+"Subtract from mask above" is `mergeIntoLayerAbove` - `setLayerBreak(false)`
+plus compose in **one** undoable act, closing #197's gap where a fresh
+two-mask stack showed no compose control at all. Add menu gained "Into the
+selected mask". Verbs `maskname`/`maskshape`/`maskmergeup`;
+`repro/mask-merge.txt` pins rename-moves-nothing, subtract-cancels-exactly,
+split-restores.
+
+**Cap 4 → 8 (#209).** Three constants, the shader's hand-branched
+`mask4..mask7` bindings, `LinearAdjust` 320 → 480 both sides, `toTuple8` for
+the nine `local_*` fills, and the `{-1, -1, -1, -1}` initializers that would
+have **zero-filled** slots 4-7 (0 is a valid node index). ⚠ Nothing in the
+tree exercised past slot 3 - `testMaskEightSlotsGpu` and
+`repro/eight-masks.txt` now do, GPU and app path respectively. **Measured:
+173 → 205 nodes, 12,567 → 13,942 MiB at 42.4 MP, exposure drag 4.54 ms and
+still 3 nodes, A/B bit-identical.** #152's ceiling was already breached
+pre-change; the lazy-allocation shrink option is recorded in the row.
+
+**Gradient tracks (#210).** `TrackTint` - labels, not renderings; mixer Hue
+ends are the shader's own centers ∓30° and pinned; moderated below the
+swatches per #63; the throw reveals the gradient at full strength in place of
+the accent bar. Catalogue rows tint through `TrackTint.forAdjustment` so the
+spec stays SwiftUI-free. Judged from a rendered frame, not reasoned - 0.28
+base opacity was too faint, shipped at 0.45. Drive-bys: `ColorWheel`'s
+luminance track never armed degrade-then-refine (now does, plus its tint);
+`Palette.rail`'s stale doc fixed in `tokens.json` and regenerated.
+
+**Verified:** suites 1008 / 4103, 0 failures; ten sample-runnable repros exit
+0; check-decisions/-gestures/-wiring exit 0; check-screens/-modes exit 2 for
+want of `_PIC` samples (pre-existing). ⚠ The ~35 posed screenshot scenes
+shift wherever a tinted slider or the mask panel is posed - the three
+asserting scenes are untouched (detail-tail photographs the Detail panel,
+which carries no gradients; geometry unchanged everywhere). Sessions
+`2026-08-24c` and `2026-08-24b` moved to `HISTORY.md` at this prune.
 
 ## Session `2026-08-28` - the gallery, and the first deletion path
 
@@ -730,78 +785,3 @@ do not assert strip layout.
 check-decisions, -gestures, -wiring exit 0 / check-screens, -modes exit 2
 for want of `_PIC` samples (pre-existing).** Still owed by the developer: a
 stylus verdict on the brush, and the trailer-stripping history rewrite.
-
-## Session `2026-08-24c` - four masking fixes, and a test target that had stopped linking
-
-**Asked for directly**, all four: Show mask drowned the mask being edited in
-every other mask's red; highlights/shadows/whites/blacks were not on the mask
-panel; a new mask arrived linked to the previous one; and unlinking a mask made
-the previous mask's edits vanish until its eye button was toggled twice.
-
-**The bug first, and it was a guard with a blind spot (#194).** `applyTone`'s
-`linearMoved` named every field the pushed struct depends on except the
-`startsLayer` flags - and the layer table is a function of exactly those flags.
-The split re-rendered the row's coverage while the table kept last frame's
-runs, so layer 0's grade landed through the new row's coverage only. The eye
-button "fixed" it because `visibilityMoved` forces the rebuild, and every older
-script missed it because each touched a slider right after splitting - any
-slider rebuilds the table. `runsMoved()` closes it, `maskmove` included.
-Watched fail before the fix: `testLayerBreakRefreshesTheLayerTable` (two-push,
-GPU) and `repro/mask-split-stale.txt`, whose load-bearing lines are measures
-with **no set between the split and the look**.
-
-**Show mask paints the selected layer (#195)** - a deliberate reversal of the
-shader's documented union. `maskOverlayLayer` rides `LinearAdjust` (252 → 256),
-and a selection change while the overlay is up is itself a render now.
-
-**The four tone bands went local (#196)**, engine then app. `applyTone`'s
-deltaEv is linear in each band, so coverage-scales-the-parameter is exact;
-the old refusal's sentence survives as the stated approximation (one guided
-estimate per frame, research/masking.md §2b). `LinearAdjust` 256 → 320. Traps
-closed on the way: `guideNeeded` is one predicate at three former inline
-sites; `AdjustmentGroup`'s `(.highlights, _)` bindings would have driven the
-**global** from the mask panel; `LocalAdjustState`'s synthesised decoder would
-have silently dropped layers 2+ from every older sidecar.
-
-**New masks stack (#197)**, with `masksplit`/`masklink` made SET-not-toggle
-first, so every script kept meaning what it said across the default change.
-
-Housekeeping that mattered:
-
-- ⚠ **`orion-tests` had not linked since the HDR merge landed** - four test
-  files and their `main.cpp` calls arrived without `apps/tests/CMakeLists.txt`
-  rows. Fixed first, as its own commit; the merge suites run again (1009).
-- **`samples/` on this machine is the developer's dog bracket** -
-  `overexposed-background.ARW` and `underexposedsubject.ARW`, copied from
-  `/Volumes/wintermute/pictures/dog/hdr-test`. The four new repro scripts
-  assert against relative measures on those files and all pass. ⚠ The 80+
-  older scripts, `check-modes.py` and `check-screens.py` still want
-  `_PIC8220.ARW`/`_PIC8148.ARW`, which this machine does not have - they
-  remain unrunnable here, as before this session.
-
-## Session `2026-08-24b` - opening a folder or photo from the shell
-
-**Asked for directly:** *"open the current folder in Orion or a particular file
-in Orion from the command line ... pretty minimal and the wiring ... could be
-done just from my .zshrc."*
-
-**Zero app code.** `--open` (#182) already takes folders and files and walks the
-product's own `openFile()` path, so the feature is an `orion()` function in
-`~/.zshrc`: absolutize every argument with `:A` (because `open(1)` launches apps
-with cwd `/`), then `open -n -a build/Orion.app --args --open <paths>`. No
-arguments means `$PWD`. Decision #193; the README's build section documents the
-flag and reproduces the function, since `~/.zshrc` is outside the repo.
-
-Two things the wrapper exists to know:
-
-- **`-n` is load-bearing.** Plain `open -a` on a running app activates it and
-  drops `--args` - there is no route into a running instance without an app
-  delegate and `CFBundleDocumentTypes`, declined as out of proportion. So each
-  invocation is a fresh instance; sidecars make concurrent edits safe, though
-  two instances may both write the SQLite index.
-- **Verified by process args, not by pixels:** `samples/` does not exist on this
-  machine, so `check-modes.py` cannot run here (pre-existing; it wants
-  `_PIC8220.ARW`, `_PIC8148.ARW`). Both wrapper cases were run for real - bare
-  `orion` and `orion ./fake.ARW` - and the spawned processes carried the
-  absolutized `--open` path each time, alongside an already-running instance.
-
