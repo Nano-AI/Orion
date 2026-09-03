@@ -37,6 +37,26 @@ struct PhotoCommands: Commands {
     /// canvas greys out - there is no canvas to zoom, compare or crop.
     private var gallery: Bool { cull?.inGallery == true }
 
+    /// What the batch item says it will do, counted.
+    ///
+    /// ⚠ **"Export All" is a lie about half the time and the count is what stops
+    /// it being one.** `runBatchExport` acts on `library.targets` — the
+    /// selection when one exists, otherwise everything the *filter* leaves in
+    /// view — so with the filter on Picks, "Export All" writes the picks and
+    /// nothing else. That distinction already cost a photographer once, in the
+    /// other direction: it exported the whole folder regardless of the filter,
+    /// so culling to Rated and pressing it wrote every reject alongside the
+    /// keepers (see the ⚠ on `runBatchExport`). The behavior was fixed then; the
+    /// wording is fixed here.
+    static func batchTitle(_ cull: CullActions?) -> String {
+        let n = cull?.batchCount ?? 0
+        guard n > 0 else { return "Export All…" }
+        if cull?.selectionCount ?? 0 > 0 {
+            return "Export \(n) Selected…"
+        }
+        return n == 1 ? "Export 1 Photo in View…" : "Export All \(n) in View…"
+    }
+
     var body: some Commands {
         CommandGroup(after: .sidebar) {
             ForEach(Array(ToolTab.allCases.enumerated()), id: \.element) { index, t in
@@ -86,6 +106,15 @@ struct PhotoCommands: Commands {
             Button("Export…") { cull?.export() }
                 .keyboardShortcut("e", modifiers: [.command])
                 .disabled(idle)
+
+            // ⚠ The title says *which* photographs, because the answer is not
+            // "the folder" and getting it wrong writes files. With a selection
+            // made it is the selection; without one it is everything **in
+            // view**, so a filter set to Picks exports the picks — the same
+            // rule `runBatchExport` follows, stated where the finger is.
+            Button(Self.batchTitle(cull)) { cull?.exportAll() }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(idle || (cull?.batchCount ?? 0) == 0)
 
             Divider()
 
@@ -207,6 +236,20 @@ struct CullActions: Equatable {
     let comparing: Bool
     let toggleCompare: () -> Void
     let export: () -> Void
+    /// The batch. ⚠ On the menu as well as in the Presets panel, and the reason
+    /// is a report rather than a preference: the developer had just edited a
+    /// folder, asked for bulk export, and did not find it — because the only way
+    /// in was a small bordered button in the *Presets* tab, which is a
+    /// defensible place for it (a batch is the same gesture as Sync all) and not
+    /// a findable one. A person looking for "export everything" opens the File
+    /// menu, finds `Export…` and stops looking.
+    let exportAll: () -> Void
+    /// How many photographs the batch would write — `library.targets.count`,
+    /// which is the selection when there is one and everything in view when
+    /// there is not. Zero disables the item: a photograph can be open with no
+    /// folder behind it (the harness does exactly that) and a menu command
+    /// offering to export a folder there would open a panel onto nothing.
+    let batchCount: Int
 
     /// True while the gallery is up. In the equality because half the menu
     /// bar greys on it.
@@ -290,6 +333,11 @@ extension Editor {
                 engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
             },
             export: { showingExport = true },
+            exportAll: { runBatchExport() },
+            // ⚠ `exportTargets`, the same list `runBatchExport` writes. Counting
+            // `targets` here would put the rejects back into the title and
+            // nowhere else — a menu item promising 45 and delivering 38.
+            batchCount: library.exportTargets.count,
             inGallery: mode == .cull,
             toggleGallery: { mode == .cull ? leaveGallery() : enterGallery() },
             trashFocused: {
@@ -379,6 +427,13 @@ extension Editor {
         // sequences that do not compare well.
         switch press.keyCode {
         case 53:   // escape
+            // An armed tool first: Escape means "stop waiting for my click",
+            // and it should mean that from any tab, the way it already does
+            // for crop below.
+            if engine.tool != .none {
+                engine.tool = .none
+                return true
+            }
             guard tab == .crop else { return false }
             engine.edit("Crop") { engine.resetCrop() }
             tab = .light

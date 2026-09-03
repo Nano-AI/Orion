@@ -4,6 +4,7 @@
 
 import CoreGraphics
 import Foundation
+import Metal
 
 extension ViewportTests {
 
@@ -349,6 +350,115 @@ extension ViewportTests {
                      "and matches nibPx (\(image), zoom \(zoom))")
             }
         }
+    }
+
+    /// Shrinking the picture must **average** the render, not sample four
+    /// texels out of it.
+    ///
+    /// ⚠ This is a GPU check in the geometry suite, which is unusual, and it is
+    /// here because there is nowhere else it can be: `Renderer.draw` is not
+    /// reachable from either suite — the screenshot harness composites offscreen
+    /// and never calls the `MTKView` delegate — so the canvas's own sampling is
+    /// the one part of the render path with no oracle but a person looking at
+    /// the screen. It had no mip chain for that reason, and `minFilter` alone is
+    /// a 2x2 tap however far the picture is being reduced, so a 42 Mpx frame
+    /// fitted to a window showed sensor noise at full amplitude and aliased
+    /// every edge — the "it looks noisier and sharper than Darktable" report.
+    ///
+    /// A one-pixel checkerboard is the whole assertion: its average is mid grey
+    /// everywhere, and *any* form of decimation returns one of the two source
+    /// values instead. The old path scores 0 or 255; the fix scores 128.
+    static func testCanvasReductionAverages() {
+        guard let device = MTLCreateSystemDefaultDevice(),
+              let queue = device.makeCommandQueue(),
+              let halve = CanvasReduce.makePipeline(device: device) else {
+            report(false, "the canvas reduction pipeline builds")
+            return
+        }
+        report(true, "the canvas reduction pipeline builds")
+
+        // Deliberately larger than the valid rectangle asked for below, the way
+        // the orientation node's square texture is: the dead remainder must not
+        // reach the levels.
+        let side = 64, valid = 48
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm, width: side, height: side, mipmapped: false)
+        desc.usage = [.shaderRead, .shaderWrite]
+        desc.storageMode = .shared
+        guard let source = device.makeTexture(descriptor: desc) else {
+            report(false, "the checkerboard allocates"); return
+        }
+
+        var px = [UInt8](repeating: 0, count: side * side * 4)
+        for y in 0..<side {
+            for x in 0..<side {
+                // Black and white by the pixel inside the valid rectangle, and a
+                // saturated red outside it — so folding the dead region in would
+                // show up as a red cast rather than as nothing.
+                let live = x < valid && y < valid
+                let v: UInt8 = live ? ((x + y) % 2 == 0 ? 0 : 255) : 255
+                let i = (y * side + x) * 4
+                px[i] = v; px[i + 1] = live ? v : 0; px[i + 2] = live ? v : 0
+                px[i + 3] = 255
+            }
+        }
+        px.withUnsafeBytes {
+            source.replace(region: MTLRegionMake2D(0, 0, side, side), mipmapLevel: 0,
+                           withBytes: $0.baseAddress!, bytesPerRow: side * 4)
+        }
+
+        guard let target = CanvasReduce.reduced(source, valid: (valid, valid),
+                                              device: device, queue: queue,
+                                              halve: halve) else {
+            report(false, "the reduction runs"); return
+        }
+        report(target.width == valid / 2 && target.height == valid / 2,
+               "the reduction is half the valid rectangle",
+               "\(target.width)x\(target.height), wanted \(valid / 2)x\(valid / 2)")
+        report(target.mipmapLevelCount > 1,
+               "and carries a chain rather than one level",
+               "\(target.mipmapLevelCount) level(s)")
+
+        // Level 0 back off the GPU. `reduced` allocates private, which is right
+        // for the canvas and means the read has to go through a blit.
+        let readDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm, width: target.width, height: target.height,
+            mipmapped: false)
+        readDesc.usage = [.shaderRead]
+        readDesc.storageMode = .shared
+        guard let readback = device.makeTexture(descriptor: readDesc),
+              let buffer = queue.makeCommandBuffer(),
+              let blit = buffer.makeBlitCommandEncoder() else {
+            report(false, "the readback allocates"); return
+        }
+        blit.copy(from: target, sourceSlice: 0, sourceLevel: 0,
+                  sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                  sourceSize: MTLSize(width: target.width, height: target.height,
+                                      depth: 1),
+                  to: readback, destinationSlice: 0, destinationLevel: 0,
+                  destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.endEncoding()
+        buffer.commit()
+        buffer.waitUntilCompleted()
+
+        var out = [UInt8](repeating: 0, count: target.width * target.height * 4)
+        out.withUnsafeMutableBytes {
+            readback.getBytes($0.baseAddress!, bytesPerRow: target.width * 4,
+                              from: MTLRegionMake2D(0, 0, target.width, target.height),
+                              mipmapLevel: 0)
+        }
+
+        var worstGrey = 0, reddest = 0
+        for i in stride(from: 0, to: out.count, by: 4) {
+            worstGrey = max(worstGrey, abs(Int(out[i]) - 128))
+            reddest = max(reddest, Int(out[i]) - Int(out[i + 1]))
+        }
+        // 8-bit rounding of an exact 127.5 is one count either way.
+        report(worstGrey <= 1,
+               "a one-pixel checkerboard reduces to its mean, not to one of its values",
+               "worst departure from mid grey \(worstGrey) counts")
+        report(reddest <= 1, "and nothing outside the valid rectangle reaches it",
+               "worst red/green split \(reddest) counts")
     }
 
 }

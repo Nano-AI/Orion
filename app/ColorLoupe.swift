@@ -1,17 +1,21 @@
 import SwiftUI
 
-/// Shows the color under the cursor while the targeted tool is armed.
+/// Shows the color under the cursor while a picking tool is armed.
 ///
 /// Without it you are clicking blind: the bands are 60° wide and a sky can
 /// cross from aqua into blue without looking like it changed. This makes the
-/// pick legible before you commit to it.
+/// pick legible before you commit to it. It follows `Engine.tool`, so it
+/// serves every picker the same — the mask color picker used to click blind
+/// precisely because this view was keyed to the targeted tool alone.
 struct ColorLoupe: View {
+    let engine: Engine
     let targeted: TargetedAdjust
 
     private let diameter: CGFloat = 46
 
     var body: some View {
-        if let point = targeted.hoverPoint, let color = targeted.hoverColor {
+        if engine.tool.wantsLoupe,
+           let point = targeted.hoverPoint, let color = targeted.hoverColor {
             VStack(spacing: 5) {
                 ZStack {
                     Circle()
@@ -66,6 +70,10 @@ struct ColorLoupe: View {
     }
 
     private var label: String {
+        // The band caption belongs to the targeted tool — the mask picker
+        // stores a color, not a band, and captioning it "Blue" would promise
+        // a mixer edit the click does not make.
+        if engine.tool == .maskColor { return "click sets the mask color" }
         if targeted.hoverIsNeutral { return "neutral — no hue" }
         return targeted.hoverBand?.name ?? "—"
     }

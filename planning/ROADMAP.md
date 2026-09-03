@@ -875,6 +875,36 @@ demosaic-first, camera-native RGB, an fp16 LinearRaw DNG beside the sources.
 
 ---
 
+## M6 — Parity & polish (added 2026-08-10, #212)
+
+The committed batch out of the 2026-08-10 Lightroom audit — the items that
+block the vision's own success bar or are small against their payoff. The
+audit's bigger items are **recorded, not committed**, in `FEATURES.md` §15;
+none of them gets code before a decision row settles it.
+
+In order:
+
+| Story | Cost | Notes |
+|---|---|---|
+| S6.1 WB eyedropper + presets | ~1–2 sessions | The `research/` entry for the click-a-neutral temp/tint inversion comes first (#211 found FEATURES had claimed this shipped since scope lock). Lands as a fourth `CanvasTool` case, one `ToolButton` line |
+| S6.2 B&W conversion + per-band gray mix | ~1–2 sessions | The largest parity hole: nothing in the tree maps color to gray per band. One pointwise node + a panel; any band weights that are chosen rather than cited go to `UNSOURCED.md` |
+| S6.3 Busy state on photo open | small | #151: the canvas holds the previous photograph for the whole 210.9 ms of a cold open. The design question #151 deliberately left open — hold the last frame or show a stale marker — gets decided in the story |
+| S6.4 Slider color scales | small | Temperature blue→yellow, tint green→magenta, mixer tracks tinted per band. `AnalogTrack` is flat + accent today |
+| S6.5 Interactive histogram | ~1 session | Clipping-overlay toggle on the image, drag a histogram region to move the matching slider. The instrument already computes clip shares |
+| S6.6 Before/after side-by-side | ~1 session | The split-with-divider ships (`CompareOverlay`); the Y-style side-by-side does not |
+| S6.7 Defringe (manual purple/green) | ~1 session | lensfun CA correction ships; manual fringe suppression needs its own `research/` citation before code |
+| S6.8 Soft proofing | ~1–2 sessions | lcms2 and OCIO are already in the stack — this is UI plus a proof transform, not new color machinery |
+| S6.9 Live folder watch (FSEvents) | ~1 session | Already costed under *Library index — what is not done*: a rating written by another app appears without reopening |
+| S6.10 Multi-selection | ~1 session | Sync currently applies to every photo in view (FEATURES §11's own ⚠); selection scoping is the missing half |
+| S6.11 Export presets + format probe | small | Named export settings; verify ImageIO's JPEG XL / AVIF support before promising either (the M1 export section's own caveat) |
+
+⚠ **#162 is not in this table on purpose** — it is the only shipped defect, it
+outranks all of the above, and it is blocked on the developer choosing between
+tiling, lower intermediate precision, and refusing early with a usable
+sentence. The choice is the story.
+
+---
+
 ## Core ML denoise — costed, nothing built
 
 `research/denoise-learned.md` settles what this line can and cannot be. **It was

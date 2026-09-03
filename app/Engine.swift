@@ -322,11 +322,13 @@ final class Engine {
 
     var spots: [SpotState] = []
 
-    /// True while the tool is armed and a click on the photo places a spot.
+    /// Which tool owns the next click on the photograph — see `CanvasTool`.
     ///
     /// View state, not an edit — like `maskOverlay` it never reaches the
     /// sidecar, and unlike it there is nothing to re-render when it changes.
-    var spotPlacing = false
+    /// One value rather than one Bool per panel, so two tools armed at once is
+    /// unrepresentable instead of merely unintended.
+    var tool: CanvasTool = .none
 
     /// Nib settings for the *next* spot, and for the selected one. Not part of
     /// `DevelopState`: they are how the tool is set up, and a photograph with
@@ -341,10 +343,6 @@ final class Engine {
 
     /// One local adjustment set per layer.
     var layers: [LocalAdjustState] = [LocalAdjustState()]
-
-    /// Armed by the panel's picker button. The canvas consumes the next click,
-    /// exactly as it does for spot placement.
-    var colorPicking = false
 
     /// What the picked pixel looked like **on screen**, for the panel's swatch.
     ///
@@ -373,7 +371,7 @@ final class Engine {
     var brushRevisions = [UInt32](repeating: 0, count: Engine.maxMaskComponents)
 
     /// Whether the brush is currently taking coverage away. Tool state, not
-    /// part of the photograph — it belongs to the hand, like `spotPlacing`.
+    /// part of the photograph — it belongs to the hand, like `tool`.
     var brushErasing = false
 
     // ── A live stroke, which deliberately touches nothing observable ──────

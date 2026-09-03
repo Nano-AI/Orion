@@ -4,7 +4,19 @@
 
 ---
 
-**Last updated:** 2026-08-30 (**The masking UX revamp - #207/#208/#209/#210.**
+**Last updated:** 2026-09-03 (**`fix/display-path` merged, and the version is
+0.5.0.** Six decisions came in renumbered #211-#216 - main had already spent
+#198-#210 while the branch sat unmerged. The branch's own matte-size fix was
+dropped rather than recorded twice: main's #201 is the same fix, arrived at
+independently, and main's code is what the merge kept. #217 is the merge's own
+find - a hex colour in `HISTORY.md` prose had been readable as a decision
+citation all along, and growing the ledger past 212 is what made
+`check-decisions.py` finally say so. All seven gates green - check-screens and
+check-modes had been reporting missing samples for a month because three
+symlinks in `samples/` dangled, which is not the same thing as the frames being
+absent and had been read as such three sessions running.)
+
+**Previously:** 2026-08-30 (**The masking UX revamp - #207/#208/#209/#210.**
 Masks have names (sidecar field, layer answers to its starting shape's name,
 nested roster guard closes the write-only-field shape). The list is cards -
 one per mask, shapes as rows with their op written on them, rename by
@@ -565,6 +577,107 @@ much with the same node count. `Pipeline::setProfiling` prints a per-node
 ranking on every bench run, and `research/local-laplacian.md` names the two
 candidate fixes in order.
 
+
+---
+
+## Session `2026-09-03` - `fix/display-path` merged, six decisions renumbered, #217
+
+**Asked for directly:** pull main, merge what was ahead, rebuild, bump the
+version and push - a build to record video against.
+
+**What was actually ahead was one commit and a month of drift.**
+`fix/display-path` carried `0f4bee7`, two sessions of work committed on
+2026-08-25 but *done* on 2026-08-10 and 2026-08-14. Main moved twenty commits
+past it in the meantime. Six files conflicted and the interesting ones were not
+the code.
+
+**Two conflicts were the same bug fixed twice, and main's fix won.**
+`Engine+Render.swift` and `SubjectMatte.swift` both carried the 42 Mpx subject
+selection fix - the matte's size having two derivations, one truncating and one
+rounding, disagreeing by a row at 7968 x 5320. The branch filed it as #200 on
+2026-08-14; main reached the same conclusion independently as #201 on
+2026-08-27 and went further, moving the arithmetic into
+`MatteGeometry.analysisSize` and returning the turn count from
+`renderForAnalysis` rather than having the caller name it. ⚠ **The branch's
+`MatteGeometry.previewSize` no longer exists**, so taking either side was not a
+style question - the branch's code would not have compiled. Main's side taken
+whole, the branch's #200 row dropped rather than written twice.
+
+**The other four merged as additions, because they were.**
+`app/CMakeLists.txt` wanted both new sources (`CanvasReduce.swift` from the
+branch, `FrameDisplayMap.swift` from main) in the viewport-tests target, not
+one. `OrionApp+Commands.swift` was two independent growths of the same struct -
+the branch's `exportAll`/`batchCount` and main's gallery and trash commands -
+and `CullActions` had already auto-merged to hold all of both, so the
+initialiser just needed its arguments back in declaration order.
+
+**The ledger numbers collided and the branch renumbered, #211-#216.** Main
+spent #198-#210 between 2026-08-25 and 2026-08-30; the branch had spent
+#198-#204 on dates a fortnight earlier. Main is pushed, so the incoming rows
+moved: #198→#211 (the `CanvasTool` enum and `ToolButton` template), #199→#212
+(M6 committed scope), #201→#213 (the canvas decimating instead of averaging),
+#202→#214 (AgX's black latitude), #203→#215 (bulk export on the File menu),
+#204→#216 (a reject is never batch-exported unasked). Citations moved with them
+across `FEATURES.md` (13), `ROADMAP.md` (2) and the three session records, which
+went to `HISTORY.md` where sessions that old belong. ⚠ **The branch's #200
+citations point at main's #201 now**, not at a renumbered row - the decision
+they refer to is main's.
+
+**#217, which the merge found rather than caused.** Growing the ledger to 216
+turned `check-decisions.py` red on a sentence nobody had touched: `HISTORY.md`
+records a marker stroke's unlit text as holding the colour `#262c30`, and the
+citation regex has always read that as a reference to decision 262. It stayed
+green only because of the guard `if n > max(numbers) + 50: continue` - at 210
+rows the ceiling was 260 and 262 sat outside it. At 216 rows the ceiling is 266.
+⚠ **Fixed in the regex, not in the archive**: `HISTORY.md` opens by saying
+nothing in it is edited, and quietly rewriting a recorded colour to appease a
+checker is the damage that promise exists to prevent. Hex-shaped tokens are now
+struck from a line before citations are read, and **only those carrying a hex
+letter** - a pure-digit `#204` is still a citation. The blanket rule ("never
+followed by a word character") was rejected because it would also silence
+`#71b`, the letter-suffix spelling this same script recommends for a duplicate
+row. Swept: exactly one token in the tree is affected either way.
+
+**Version 0.5.0**, from 0.4.0, by developer instruction - `project(Orion
+VERSION)` in `CMakeLists.txt`, which the plist template reads. Ninety-two
+commits since `v0.4.0-alpha.6` on 2026-08-02, among them gallery mode, the
+deletion path, HDR merge, snapshots and the eight-slot masking revamp. Tagged
+`v0.5.0-alpha.1`; the prerelease suffix stays in the tag, per
+`tools/package-app.sh`.
+
+**Also swept up:** `.claude/` is in `.gitignore` at last. `scheduled_tasks.lock`
+had reached two commits, and `.claude/worktrees/` holds whole checkouts of this
+repository - which is why `check-decisions.py` and `check-wiring.py` already
+skip that path by name.
+
+**All seven gates ran and all seven are green** - the first time in a month, and
+the reason is worth writing down because three sessions in a row recorded the
+wrong cause.
+
+**check-screens and check-modes were never short of samples. The symlinks were
+dangling.** `samples/` holds three of them, made on 2026-08-02 and pointing into
+`~/Pictures/July 25`, `~/Pictures/Rejects` and `~/Pictures/Cars july 25th` -
+folders since renamed or emptied. ⚠ **A dangling symlink is not a missing file
+and `ls` will not tell you which you have**: the entry is listed, `ls -la` shows
+it, and only `Path.is_file()` or `ls -L` says it resolves to nothing. Both gates
+check with `is_file()`, correctly reported "no sample photograph", and every
+session since 2026-08-14 read that as "the frames are gone" and moved on. The
+frames *were* gone; the fix was never to find them, only to point three
+symlinks at any raw that decodes. Repointed at `~/Pictures/moon/DSC0950{2,4,6}`.
+
+⚠ **`samples/` is gitignored, so this repair is local and the next machine
+starts dangling again.** Also: `check-modes.py` keeps `_PIC8095.ARW` out of
+`EXPORTS` because that frame has people in it, and on this machine the name now
+resolves to a moon. The comment records intent about a *frame*, so leave it
+standing - but the names no longer describe what they point at here, and the
+replacements were picked as moon shots so the privacy rule cannot be broken by
+the substitution either way.
+
+**1012 / 4113 / check-decisions 0 / check-gestures 0 / check-wiring 0 /
+check-screens 3 asserting scenes green, versions byte-stable / check-modes
+--library-open 13 checks, --batch-export 2 files at 2635 KB, --hdr-merge a
+243 MB DNG.** **Still owed by the developer:** a stylus verdict on the brush,
+and the trailer-stripping history rewrite.
 
 ---
 

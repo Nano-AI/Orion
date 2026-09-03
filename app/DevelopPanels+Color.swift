@@ -43,22 +43,14 @@ extension Editor {
                 // Targeted adjustment: click a color in the photo and drag.
                 // Beats guessing which of eight swatches the sky falls into.
                 HStack(spacing: 6) {
-                    Button {
-                        targeted.isActive.toggle()
-                        if !targeted.isActive { targeted.clearHover() }
-                    } label: {
-                        Image(systemName: targeted.isActive
-                              ? "scope" : "eyedropper")
-                            .font(.system(size: 12))
-                            .frame(width: 26, height: 22)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(targeted.isActive ? Palette.accent : Palette.dim)
-                    .overlay(RoundedRectangle(cornerRadius: 5)
-                        .stroke(targeted.isActive ? Palette.accent : Palette.line, lineWidth: 1))
-                    .help("Targeted adjustment — drag on the photo")
+                    ToolButton(tool: .targeted,
+                               icon: "eyedropper", armedIcon: "scope",
+                               label: "Target",
+                               armedLabel: "Drag on the photo",
+                               help: "Targeted adjustment — drag on the photo",
+                               engine: engine)
 
-                    if targeted.isActive {
+                    if engine.tool == .targeted {
                         Picker("", selection: $targeted.mode) {
                             ForEach(TargetedAdjust.Mode.allCases) { m in
                                 Text(m.title).tag(m)

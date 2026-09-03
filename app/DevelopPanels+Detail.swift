@@ -44,12 +44,11 @@ extension Editor {
                 // photo" would be a promise the interface does not keep, and a
                 // click on the canvas would still pan — the same class of thing
                 // as a control that is drawn but not wired.
-                Toggle(isOn: $engine.spotPlacing) {
-                    Text(engine.spotPlacing ? "Placing…" : "Place spots")
-                        .font(.system(size: 11))
-                }
-                .toggleStyle(.button)
-                .controlSize(.small)
+                ToolButton(tool: .spot, icon: "bandage",
+                           label: "Place spots",
+                           armedLabel: "Placing — drag on the photo",
+                           help: "Press on the photo to place a spot, then drag out its source",
+                           engine: engine)
                 Spacer(minLength: 0)
             }
 

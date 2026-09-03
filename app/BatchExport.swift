@@ -56,6 +56,28 @@ enum BatchExport {
     /// suffix — `IMG_0001-2.jpg` — which is what every other application does
     /// and what a photographer will recognize.
     ///
+    /// Which of the photographs in view a batch export should actually write.
+    ///
+    /// ⚠ **A rejection is a decision, and writing the file anyway overrides
+    /// it.** The filter already excludes rejects under Rated and Unrated, but
+    /// the resting filter is **All** — so the ordinary case, open a folder, cull,
+    /// edit, export everything, delivered the rejects alongside the keepers.
+    ///
+    /// ⚠ `asked` is the escape hatch and it has to exist: a photographer who
+    /// **selected** those frames by hand, or who **filtered to Rejected**, has
+    /// said unambiguously which photographs they mean, and exporting nothing at
+    /// all in that case is the same defect pointing the other way. Neither route
+    /// can be arrived at by accident, which is what makes them safe to trust.
+    ///
+    /// Here rather than on `Library` so it can be asserted: `Library` is not in
+    /// `orion-viewport-tests`, and a rule about which files get written is not
+    /// one to leave to a person reading it. The same split `plan` and `run`
+    /// already use.
+    static func exportable(_ inView: [URL], rejected: Set<URL>,
+                           asked: Bool) -> [URL] {
+        asked ? inView : inView.filter { !rejected.contains($0) }
+    }
+
     /// `exists` is injected so the collision rules are testable without a
     /// filesystem, which is most of what makes them testable at all.
     static func plan(sources: [URL], into folder: URL, extension ext: String,

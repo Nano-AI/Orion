@@ -64,7 +64,7 @@ extension Editor {
                         // armed, since the two live on different tabs, and this
                         // is the belt to that brace.
                         .overlay {
-                            if tab == .detail && !engine.spots.isEmpty || tab == .detail && engine.spotPlacing {
+                            if tab == .detail && (!engine.spots.isEmpty || engine.tool == .spot) {
                                 GeometryReader { canvasGeo in
                                     SpotOverlay(engine: engine,
                                                 map: pictureMap(in: canvasGeo.size))
@@ -110,14 +110,13 @@ extension Editor {
 
                             // Anything armed and waiting for a click on the
                             // photo belongs to the panel that armed it. Leaving
-                            // that panel with the color picker still live means
-                            // the next click on the picture does something the
-                            // visible controls no longer explain.
-                            targeted.isActive = false
+                            // that panel with a tool still live means the next
+                            // click on the picture does something the visible
+                            // controls no longer explain. One assignment covers
+                            // every tool — the per-flag version of this block
+                            // is how the mask color picker survived a switch.
+                            engine.tool = .none
                             targeted.clearHover()
-                            // Spot placing belongs to the panel that armed it,
-                            // for the same reason.
-                            engine.spotPlacing = false
 
                             // Compare holds a copy of the unedited render at the
                             // current geometry. Cropping changes that geometry
@@ -129,7 +128,7 @@ extension Editor {
                             engine.cropPreview = (tab == .crop)
                             viewport.locked = (tab == .crop)
                         }
-                        .overlay { ColorLoupe(targeted: targeted) }
+                        .overlay { ColorLoupe(engine: engine, targeted: targeted) }
                         .onChange(of: targeted.lastPicked) { _, picked in
                             // Follow the pick, so the sliders below act on the
                             // band you just clicked rather than a stale one.

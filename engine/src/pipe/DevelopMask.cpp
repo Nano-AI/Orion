@@ -48,11 +48,22 @@ void DevelopPipeline::buildMaskNodes() {
     // internal resolution far below 24 MP, and the guided refinement is what
     // recovers the boundary afterwards. Four of these cost about 4 MB together,
     // against 48 MB for one at full resolution.
+    // ⚠ **Rounded, not truncated, and the producer must ask rather than derive.**
+    // `MatteGeometry.previewSize` sizes the picture the model sees by rounding
+    // the short edge; this sized the texture by truncating it. On a 3:2 sensor
+    // of 7968 x 5320 that is 684 against 683 — one row — and one row over is
+    // rejected outright by `setMaskMatte`, so **every** Subject, Person and Sky
+    // selection on an A7R III failed with "that selection was too large for
+    // this photo". Two derivations of one number, disagreeing in the last
+    // digit. `matteWidth`/`matteHeight` below is now the only one, and
+    // `renderForAnalysis` reads it instead of recomputing it.
     const bool tall = height_ > width_;
-    matteW_ = tall ? std::max(1u, kMaxMatteEdge * width_ / std::max(height_, 1u))
-                   : kMaxMatteEdge;
-    matteH_ = tall ? kMaxMatteEdge
-                   : std::max(1u, kMaxMatteEdge * height_ / std::max(width_, 1u));
+    const auto shortEdge = [](std::uint32_t s, std::uint32_t l) {
+        const std::uint32_t d = std::max(l, 1u);
+        return std::max(1u, (kMaxMatteEdge * s + d / 2u) / d);
+    };
+    matteW_ = tall ? shortEdge(width_, height_) : kMaxMatteEdge;
+    matteH_ = tall ? kMaxMatteEdge : shortEdge(height_, width_);
 
     int prevMask = nMaskBase_;
     for (int i = 0; i < kMaxMaskComponents; ++i) {

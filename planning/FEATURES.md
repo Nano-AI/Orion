@@ -1,6 +1,7 @@
 # Orion — Feature Map
 
-Status: **M0–M5** = target milestone · **cut** = explicitly out. **Scope locked 2026-07-27** — no `?` remain.
+Status: **M0–M6** = target milestone · **cut** = explicitly out. **Scope locked 2026-07-27** — no `?` remain.
+**M6 added 2026-08-10 (#212)**: the committed batch from the Lightroom audit, by developer instruction — stories and costs in `ROADMAP.md`. The audit's bigger items are recorded in §15 and are **not** committed; nothing there gets code before a decision row settles it.
 Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 
 ## 1. Library & Browse
@@ -11,6 +12,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Star ratings, reject flags, color labels | M1 | Written to XMP sidecar |
 | Filter/sort by rating, flag, label, date | M1 | SQLite index makes this instant |
 | XMP sidecars as source of truth | M1 | Portable, no lock-in |
+| Live folder watch (FSEvents) | M6 | S6.9 — a rating written by another app appears without reopening. Costed under *Library index* in `ROADMAP.md` |
 | Import from card (copy + rename) | **cut** | Point Orion at a folder; card offload stays in Finder. Zero import code, no data-safety failure modes |
 | Keywords / search | cut (v1) | Catalog territory |
 
@@ -33,7 +35,8 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Feature | Status | Notes |
 |---|---|---|
 | Exposure, contrast, highlights/shadows, whites/blacks | M1 | All scene-linear |
-| White balance (temp/tint, eyedropper, presets) | M1 | |
+| White balance (temp/tint, eyedropper, presets) | M1 | ⚠ **Corrected 2026-08-10, #211: only temp/tint shipped.** The eyedropper and the presets this row has claimed since scope lock exist nowhere in the tree — `DevelopPanels+Light.swift` is two sliders. Queued **M6, S6.1**; the click-a-neutral inversion needs a `research/` entry before code |
+| B&W conversion + per-band gray mix | M6 | S6.2 (#212) — the largest Lightroom parity hole: nothing in the tree maps color to gray per band. LUTs cover looks, not the mix control |
 | Vibrance / saturation | M1 | |
 | Tone curve (parametric + point, per-channel) | M2 | |
 | HSL / color mixer (8 hue bands) | M2 | |
@@ -65,6 +68,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Sharpening (amount/radius/masking) | M2 | |
 | Denoise: profiled wavelet (à-trous) | M2 | Per-camera/ISO noise model |
 | Denoise: NLM luma option | M4 | |
+| Defringe (manual purple/green) | M6 | S6.7 (#212) — lensfun's CA correction ships (§7); manual fringe suppression does not, and needs its own `research/` citation |
 | Denoise: ML (NAFNet-class, Core ML) | M5 | **On-demand pass — not a graph node, not a slider.** Researched and costed 2026-08-01, **not built**: `research/denoise-learned.md`, decision #111, six pieces in `ROADMAP.md`. ⚠ The blocker is the *domain*, not the framework — Orion's denoise runs post-demosaic in linear camera RGB, which is neither the sRGB nor the Bayer domain any published checkpoint is trained for. ⚠ The ~12s/24MP figure is DxO's, carried over and **not re-verifiable** (their page 403s); NAFNet's own 65 GMAC works out to 48.1 TFLOP a frame, ≥1.6 s on optimistic hardware |
 
 ## 7. Optics & Geometry
@@ -102,7 +106,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | User presets | M4 | ✅ **Built 2026-07-30**. A **patch** over DevelopState, not a state: only the groups it carries are applied. Crop, dust spots and masks are excluded from every group — they belong to one photograph. Four built-in looks, not written to the user file so improving one reaches everybody |
 | Built-in looks | M4 | Sells the "stunning" promise |
-| Copy/paste settings, sync across selection | M4 | ✅ **Built 2026-07-30**. Sync patches sidecars at the JSON-key level without decoding them, so an unedited photo keeps its as-shot white balance. Confirmed, with the group names in the question. ⚠ Applies to every photo in view — no multi-selection yet |
+| Copy/paste settings, sync across selection | M4 | ✅ **Built 2026-07-30**. Sync patches sidecars at the JSON-key level without decoding them, so an unedited photo keeps its as-shot white balance. Confirmed, with the group names in the question. ⚠ Applies to every photo in view — no multi-selection yet. Selection scoping queued **M6, S6.10** (#212) |
 | Batch export | M4 | ✅ **Built 2026-07-30**. One reused engine, ~466 ms a photo with flat memory. ⚠ Each photo's sidecar is restored before export — without that the second frame exports with the first frame's grade, which looks plausible. Numbered suffixes rather than overwriting |
 
 ## 12. Edit Model
@@ -118,6 +122,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | JPEG/TIFF/PNG, quality, resize, color space | M1 | |
 | Full-res tiled render path | M1 | Separate from preview pipe |
 | Output sharpening, metadata options | M4 | |
+| Export presets + JPEG XL/AVIF probe | M6 | S6.11 (#212) — named export settings; verify ImageIO support before promising either format |
 | Watermark | M5 | Low priority |
 
 ## 14. Performance & UI
@@ -125,7 +130,32 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | <16 ms slider feedback (preview ROI pipe) | M0 | **Benchmark, not a feature — validate first** |
 | Per-node caching, degrade-then-refine on drag | M1 | |
-| Before/after, split view | M2 | |
+| Before/after, split view | M2 | Split-with-divider ships (`CompareOverlay`); the Y-style side-by-side does not — queued **M6, S6.6** (#212) |
+| Side-by-side compare | M6 | S6.6 (#212) |
+| Busy state on photo open | M6 | S6.3 (#212) — #151: the canvas holds the *previous* photograph for the 210.9 ms of a cold open, and nothing anywhere marks it stale |
+| Slider color scales | M6 | S6.4 (#212) — temp blue→yellow, tint green→magenta, mixer tracks tinted per band. `AnalogTrack` is flat + accent today |
+| Interactive histogram | M6 | S6.5 (#212) — clipping overlay on the image, drag a region to move the matching slider |
+| Soft proofing | M6 | S6.8 (#212) — lcms2 + OCIO already in the stack; UI plus a proof transform |
 | Keyboard-first workflow | M2 | Capture One's Speed Edit is the model |
 | Neutral-gray dark theme | M1 | Neutral surround improves color judgment |
 | Customizable tool panels / workspaces | M5 | Capture One's differentiator |
+
+## 15. Recorded, not committed — needs a decision before any code (2026-08-10, #212)
+
+From the Lightroom audit. Each of these is real but either large, patent-gated
+(#174: **a citation is not clearance**), or in tension with a settled design.
+None gets code before a `DECISIONS.md` row settles it.
+
+| Feature | Why it waits |
+|---|---|
+| Local clarity / dehaze / sharpen / noise | `AdjustmentCatalogue` refuses multi-pass filters locally **by design** — the graph is static (#77's constraint). Undoing that is an engine decision, not a panel |
+| Point Color (per-sampled-hue edit) | Finer than the 8-band mixer; patent check first |
+| Content-aware / generative remove | ML + patents; spot heal's bounded failure is stated in the panel today |
+| HDR editing + gain-map export | Modern LR headline; Metal EDR makes it plausible, but it touches the display transform end to end |
+| Panorama / HDR merge | Multi-image — VISION says single-image toolkit |
+| Super resolution / lens blur / reflection removal / adaptive presets | ML, v2 territory |
+| Depth range mask, people-parts masks | Depth data / segmentation models; niche next to the six shipped kinds |
+| Navigator panel, zoom presets | |
+| Reference view (pin a second image) | |
+| Second-monitor support | |
+| ISO-adaptive presets | Preset system is a patch model — adaptivity is a new axis |

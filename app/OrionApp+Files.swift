@@ -23,13 +23,16 @@ extension Editor {
     /// off the main thread, and honest about it: the panel says "working" and
     /// the rest of the interface is disabled while it does.
     func runBatchExport() {
-        // ⚠ `targets`, not `photos`. This exported the whole folder regardless
-        // of the filter, so culling to Rated and pressing Export all wrote every
-        // reject alongside the keepers — into a folder the photographer had just
-        // told it was for their picks. The selection subsumes that: with none
-        // made it is everything *in view*, which is what the panel already
-        // claimed to be doing.
-        let targets = library.targets
+        // ⚠ `exportTargets`, not `photos` and not `targets`. Two rounds of the
+        // same bug: it first exported the whole folder regardless of the filter,
+        // so culling to Rated and pressing Export all wrote every reject
+        // alongside the keepers — into a folder the photographer had just told
+        // it was for their picks. Following the filter fixed that case and left
+        // the common one, because the resting filter is **All** and All includes
+        // rejects. `exportTargets` drops them unless they were asked for by hand
+        // or by the Rejected filter; see the note on it.
+        let targets = library.exportTargets
+        let skipped = library.rejectedInView
         guard engine.isLoaded, !targets.isEmpty else { return }
 
         let panel = NSOpenPanel()
@@ -37,9 +40,17 @@ extension Editor {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.prompt = "Export Here"
-        panel.message = library.hasExplicitSelection
+        // ⚠ The skipped count is said out loud, on the panel that chooses the
+        // folder — the last moment before files are written. A batch that
+        // quietly delivers fewer photographs than the button offered is the
+        // same class of surprise as one that delivers more, and this program
+        // has already shipped the second.
+        let rejects = skipped == 0 ? ""
+            : skipped == 1 ? " 1 rejected photo is not included."
+                           : " \(skipped) rejected photos are not included."
+        panel.message = (library.hasExplicitSelection
             ? "Choose a folder for the \(targets.count) selected photos."
-            : "Choose a folder for \(targets.count) exported photos."
+            : "Choose a folder for \(targets.count) exported photos.") + rejects
         guard panel.runModal() == .OK, let folder = panel.url else { return }
 
         // Anything owed to the open photo is written first: batch reads

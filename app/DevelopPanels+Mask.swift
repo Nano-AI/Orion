@@ -387,12 +387,11 @@ extension Editor {
                                 .frame(width: 26, height: 18)
                                 .overlay(RoundedRectangle(cornerRadius: 3)
                                     .strokeBorder(Palette.line, lineWidth: 1))
-                            Button(engine.colorPicking ? "Click the photo…" : "Pick color") {
-                                engine.colorPicking.toggle()
-                            }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11))
-                            .foregroundStyle(engine.colorPicking ? Palette.accent : Palette.text)
+                            ToolButton(tool: .maskColor, icon: "eyedropper",
+                                       label: "Pick color",
+                                       armedLabel: "Click the photo…",
+                                       help: "The next click on the photo sets the mask's target color",
+                                       engine: engine)
                             Spacer(minLength: 0)
                         }
 

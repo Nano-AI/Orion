@@ -51,7 +51,7 @@ struct SpotOverlay: View {
     /// anywhere.
     private var spotRegions: some Shape {
         Path { p in
-            if engine.spotPlacing { p.addRect(map.rect) }
+            if engine.tool == .spot { p.addRect(map.rect) }
             for s in spots {
                 for c in [s.destination, s.source] {
                     let v = map.point(c)
@@ -124,7 +124,7 @@ struct SpotOverlay: View {
                         switch hit {
                         case .destination(let i), .source(let i): engine.selectedSpot = i
                         }
-                    } else if engine.spotPlacing {
+                    } else if engine.tool == .spot {
                         // ⚠ Placed on press, then its source dragged out — the
                         // gesture Lightroom uses and the reason the tool reads
                         // as one action. Placing on *release* instead would

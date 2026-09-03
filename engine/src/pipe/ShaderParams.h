@@ -223,7 +223,16 @@ static_assert(sizeof(Sharpen) == 32);
 /// AgX plus the tone curve plus the creative LUT plus the display encode.
 struct alignas(16) Display {
     float         contrast;
-    float         pivot;
+    /// ⚠ **Unused, and kept only to hold the layout.** The contrast slope pivots
+    /// on middle gray, and middle gray's position on the normalized axis is
+    /// `kPivotNorm` *by construction* now that `agxNormalize` pins it there — so
+    /// deriving it from a passed-in value would be a second derivation of a
+    /// constant. It was also being passed in two different units: the product
+    /// sent `-2.5` (log2) and `tests_display.cpp` sent `0.18` (linear), and
+    /// nothing noticed because every caller used contrast 1.0, where the pivot
+    /// cancels. Removing the field would repack the struct against the Slang
+    /// side; zero it and leave it.
+    float         pivotUnused;
     std::uint32_t curveIdentity;
     std::uint32_t resolution;
     std::uint32_t size[2];

@@ -98,3 +98,10 @@ dist/
 
 # --- Third-party reference clones (GPL - never commit, never copy) --------
 hdrmerge/
+
+# --- Claude Code's own state ------------------------------------------------
+# `.claude/scheduled_tasks.lock` reached two commits before anybody noticed, and
+# `.claude/worktrees/` holds whole checkouts of this repository — which is also
+# why check-decisions.py and check-wiring.py skip that path. Session state, not
+# source. Anything here worth tracking (settings, skills) can be force-added.
+.claude/

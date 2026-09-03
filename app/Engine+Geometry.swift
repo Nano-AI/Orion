@@ -131,6 +131,18 @@ extension Engine {
         return Int(t)
     }
 
+    /// The camera's own turn, without the photographer's.
+    ///
+    /// ⚠ `quarterTurns` is the **sum** — `exifQuarters + rotateQuarters` — and
+    /// that is the wrong number for anything working against `renderForAnalysis`,
+    /// which resets `rotateQuarters` to zero before it renders. Reading the sum
+    /// and then undoing it against a picture that only carried the EXIF turn
+    /// lands a matte a quarter turn out **and** the wrong shape, so the engine
+    /// refuses it. Only the camera's turn is a permutation this render kept.
+    var exifQuarterTurns: Int {
+        ((quarterTurns - Int(rotateQuarters)) % 4 + 4) % 4
+    }
+
     /// Rotates by a quarter turn, wrapping. Clockwise is positive.
     /// A quarter turn swaps the frame's width and height, so a crop rectangle
     /// expressed against the old one no longer means anything. Resetting it is

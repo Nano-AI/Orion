@@ -52,7 +52,6 @@ void testOutputDepth() {
 
     orion::pipe::params::Display dp{};
     dp.contrast = 1.0f;
-    dp.pivot = 0.18f;
     dp.curveIdentity = 1;
     dp.resolution = orion::pipe::kCurveResolution;
     dp.size[0] = kN;
@@ -253,7 +252,6 @@ void testCreativeLut() {
     const auto run = [&](std::uint32_t lutSize, float strength) {
         orion::pipe::params::Display p{};
         p.contrast = 1.0f;
-        p.pivot = -2.5f;
         p.curveIdentity = 1u;
         p.resolution = 256u;
         p.size[0] = kN; p.size[1] = 1;
@@ -328,4 +326,121 @@ void testCreativeLut() {
     }
     report(worstId <= 1, "an identity LUT leaves every pixel where it was",
            "worst " + std::to_string(worstId) + "/255");
+}
+
+/// Middle gray is the anchor, and the toe reaches black where it says it does.
+///
+/// ⚠ **Written because the display transform's shadow end had no assertion at
+/// all.** Shortening AgX's latitude — the fix for a default that rendered the
+/// darkest patch of a photograph 1.63x brighter than macOS ImageIO's decode of
+/// the same raw — moved every shadow in the program, and all 889 checks passed
+/// unchanged. A suite that cannot see a change that large is not covering the
+/// thing that changed.
+///
+/// The first attempt at that fix is what check 1 catches. `agxCurve` is a fit
+/// over a normalized axis on which middle gray sits at 10/16.5 = 0.606061, not
+/// at the middle; rewriting the range while leaving `(ev - min) / (max - min)`
+/// alone slides gray down to 0.498, where the polynomial returns 0.285. Every
+/// tone in the picture fell by 1.7 stops. Middle gray in must be middle gray
+/// out, whatever the latitude is set to, and that is check 1.
+///
+/// Check 2 pins the latitude to its declared meaning rather than to a number:
+/// `kBlackStops` under gray is black, half a stop above that is not. Change the
+/// constant and both move together; delete the two-piece normalization and
+/// check 1 fails immediately.
+void testAgxLatitudeIsAnAnchoredRescale() {
+    section("AgX latitude");
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/developDisplay.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "developDisplay");
+
+    // Middle gray, then a walk down from it in stops. The two either side of
+    // `kBlackStops` are the ones that matter; the rest are there so a failure
+    // says *where* the curve went wrong rather than only that it did.
+    const float kBlackStops = 8.0f;   // must match develop_display.slang
+    const std::vector<float> stops{0.0f, -2.0f, -4.0f, -6.0f,
+                                   -(kBlackStops - 0.5f), -kBlackStops};
+    const auto kN = static_cast<std::uint32_t>(stops.size());
+
+    auto src = orion::gpu::Texture::create(*device, kN, 1,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto dst = orion::gpu::Texture::create(*device, kN, 1,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto lut = orion::gpu::Texture::create(*device, orion::pipe::kCurveResolution,
+                                           orion::pipe::kCurveRows,
+                                           orion::gpu::PixelFormat::R32Float);
+    const auto identity = orion::pipe::buildCurveLut({});
+    lut->upload(identity.data(), orion::pipe::kCurveResolution * sizeof(float));
+
+    // ⚠ Rec.2020 neutral, not (0.18, 0.18, 0.18) in some other space. The
+    // kernel's first act is a rotation into Rec.709 and then the AgX inset, and
+    // both preserve neutrals *because every row sums to one* — the property
+    // #29's purple cast came from breaking. A gray in, a gray out, so the
+    // green channel alone is the whole story.
+    std::vector<__fp16> input(std::size_t(kN) * 4);
+    for (std::uint32_t i = 0; i < kN; ++i) {
+        const float v = 0.18f * std::pow(2.0f, stops[i]);
+        input[i * 4 + 0] = static_cast<__fp16>(v);
+        input[i * 4 + 1] = static_cast<__fp16>(v);
+        input[i * 4 + 2] = static_cast<__fp16>(v);
+        input[i * 4 + 3] = 1;
+    }
+    src->upload(input.data(), std::size_t(kN) * 4 * sizeof(__fp16));
+
+    orion::pipe::params::Display dp{};
+    dp.contrast = 1.0f;     // the anchor is a property of the axis, not the slope
+    dp.curveIdentity = 1;
+    dp.resolution = orion::pipe::kCurveResolution;
+    dp.size[0] = kN;
+    dp.size[1] = 1;
+
+    orion::gpu::CommandBuffer cb(*device);
+    auto cubeStub = orion::gpu::Texture::create(*device, 2, 4,
+                                                orion::gpu::PixelFormat::RGBA32Float);
+    cb.dispatch(*kernel, {src.get(), lut.get(), cubeStub.get(), dst.get()},
+                &dp, sizeof dp, kN, 1);
+    cb.commitAndWait();
+
+    std::vector<__fp16> out(std::size_t(kN) * 4);
+    dst->download(out.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, 1);
+    const auto green = [&](std::size_t i) { return float(out[i * 4 + 1]); };
+
+    // 1. The anchor. AgX puts 0.18 scene at ~0.5 display by construction, and
+    //    that must not depend on how much latitude sits underneath it.
+    report(std::fabs(green(0) - 0.497f) < 0.02f,
+           "middle gray renders at the sigmoid's own midpoint",
+           "got " + std::to_string(green(0)) + ", wanted 0.497 +- 0.02");
+
+    // 2. The latitude means what it is named. Anything at or past the black
+    //    stop is black; half a stop inside it is not.
+    // Exactly zero, not merely small: the clamp puts the black stop on the
+    // normalized axis at 0, where the polynomial's constant term is negative
+    // and `saturate` floors it. Half a stop inside, there is still signal —
+    // 0.0025, which is a quarter of an eight-bit step and the difference
+    // between a toe and a cliff.
+    report(green(kN - 1) == 0.0f,
+           "the declared black stop renders exactly black",
+           std::to_string(kBlackStops) + " stops under gray gave "
+               + std::to_string(green(kN - 1)));
+    report(green(kN - 2) > 0.0f,
+           "and half a stop inside it still carries signal",
+           std::to_string(kBlackStops - 0.5f) + " stops under gray gave "
+               + std::to_string(green(kN - 2)));
+
+    // 3. Monotone all the way down, which a mis-anchored two-piece axis is not
+    //    obliged to be — a discontinuity at the join would show here.
+    bool monotone = true;
+    for (std::uint32_t i = 1; i < kN; ++i) {
+        if (green(i) > green(i - 1) + 1e-4f) { monotone = false; break; }
+    }
+    report(monotone, "the walk down from gray is monotone");
 }

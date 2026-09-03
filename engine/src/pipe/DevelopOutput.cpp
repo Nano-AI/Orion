@@ -463,7 +463,7 @@ std::uint32_t DevelopPipeline::frameHeight() const noexcept { return frameH_; }
 void DevelopPipeline::pushDisplayParams(const Adjustments& adj) {
     params::Display d{};
     d.contrast      = adj.contrast;
-    d.pivot         = -2.5f;
+
     d.curveIdentity = adj.curve.isIdentity() ? 1u : 0u;
     d.resolution    = kCurveResolution;
     d.size[0] = width_; d.size[1] = height_;

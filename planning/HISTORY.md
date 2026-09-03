@@ -70,6 +70,157 @@ grows a preview IFD (costed as the optional compression story).
 **990 / 3,721 / check-decisions, check-gestures, check-wiring exit 0 /
 check-screens, check-modes exit 2 for want of samples.**
 
+Sessions `2026-08-14`, `2026-08-10b` and `2026-08-10` were recorded on the
+`fix/display-path` branch and reached this file when that branch merged on
+2026-09-03. Their decisions were renumbered #211-#216 on the way in: main had
+already spent #198-#210, and the matte-size fix they filed as #200 is main's
+own #201, so that row was dropped rather than recorded twice.
+
+## Session `2026-08-14` — three display-path faults the developer's new camera exposed, #213/#214 (and #201, re-recorded on main)
+
+Reported, not planned: *"whenever I open an image it shows up a lot noisier than
+it does on Affinity and on Darktable... a lot more sharp, and a lot more
+bright"*, and, on trying to mask a player, **"That selection was too large for
+this photo."** Both reproduced on the developer's own A7R III frames.
+
+**Three findings, all three shipped.**
+
+1. **The matte's size had two derivations, #200.** The engine truncated
+   `1024 * short / long` and the producer rounded it — 683 against 684 on
+   7968 x 5320 — and `setMaskMatte` rejects one row over rather than resampling,
+   so every Subject, Person and Sky press failed. ⚠ **Aspect-dependent, not
+   megapixel-dependent**: 6000 x 4000 fails identically. Fixed by deleting the
+   second derivation — `orion_engine_max_matte_size` already existed and only a
+   scenario verb had ever called it. A second fault in the same path went with
+   it: `SubjectMatte` undid `exifQuarters + rotateQuarters` against a render that
+   only carried the EXIF turn.
+2. **The canvas decimated the render, #201.** `minFilter = .linear` on a
+   one-level texture is a 2 x 2 tap at any reduction, so a 42 Mpx frame fitted to
+   a window read 4 texels in every 28. **Measured: 2.5x the noise** of a true
+   footprint average in the dark background at a 5.3x reduction, 2.3x in the
+   grass. Display only — the exported JPEG is byte-identical across that fix. The
+   chain starts at half resolution because a full-resolution one is 226 MB at
+   42 Mpx and #162 is already a memory question.
+3. **AgX had no toe, #202.** Latitude cut from the reference 10 stops under
+   middle gray to darktable filmic's 8. Put to the developer with the measured
+   options first, because it moves every photograph; they chose the latitude.
+
+### The tone finding, measured three ways before anything was changed
+
+Orion's export, the camera's own JPEG, and macOS ImageIO's decode of one raw.
+Display-encoded mean of each patch, and the last column is what shipped:
+
+| patch | camera | macOS | Orion, 10 stops | Orion, 8 stops |
+|---|---|---|---|---|
+| street lamp (specular) | 0.671 | 0.686 | 0.665 (0.97x) | 0.651 (0.95x) |
+| white ball | 0.550 | 0.533 | 0.538 (1.01x) | 0.525 (0.99x) |
+| white shorts | 0.366 | 0.365 | 0.372 (1.02x) | 0.347 (0.95x) |
+| grass | 0.250 | 0.269 | 0.322 (1.20x) | 0.287 (1.07x) |
+| red shirt | 0.119 | 0.125 | 0.157 (1.25x) | 0.137 (1.10x) |
+| face | 0.082 | 0.085 | 0.108 (1.27x) | 0.086 (1.01x) |
+| dark background | 0.029 | 0.031 | 0.052 (**1.63x**) | 0.031 (**0.98x**) |
+
+**The highlights agreed and the shadows did not**, monotonically, which is the
+signature of a missing toe and rules out every scaling explanation. Ruled out
+individually: the camera matrix is row-normalized so white maps to white; AgX's
+mid gray lands at 0.497 as it should; raw saturation does reach 255 in the
+output; and `Engine.contrast` already opens at **1.45**, so "no contrast is
+applied" was not it either.
+
+⚠ **The latitude and not the slope, and that is arithmetic rather than taste.**
+Contrast here is a slope about the gray pivot, so it steepens everything: the
+slope that lands the background right puts the face at 0.058 against 0.085.
+Latitude moves only where the curve runs out, so the top of the range does not
+move at all.
+
+⚠⚠ **The first attempt was 1.7 stops dark across the whole picture, and the tell
+was the lamp.** `agxCurve` is a fit over a normalized axis on which middle gray
+sits at 10/16.5 = 0.606061, not at the middle; narrowing the range without
+re-anchoring slid gray to 0.498, where the polynomial returns 0.285. A toe
+cannot move a specular highlight, so a lamp that fell meant gray had moved.
+
+⚠⚠ **All 889 checks passed unchanged through a change that moved every shadow in
+the program.** That is the more useful finding: the display transform's black end
+had no assertion at all. `testAgxLatitudeIsAnAnchoredRescale` is the four that
+exist now, and the mutation restoring the single-range expression fails the
+first at 0.387.
+
+### ⚠ Two gates could not run, and it is the samples
+
+`samples/*.ARW` are symlinks into `~/Pictures/July 25/`, `Rejects/` and
+`Cars july 25th/`, **all three of which are gone**, so `check-modes.py` and
+`check-screens.py` both exit on "no sample photograph". Not repointed: the
+scenes and repros assert against *those* photographs — `subject-selection.txt`
+checks that the selection lands on a car and not on the foreground tarmac — so
+aiming them at a different frame would turn a missing gate into a lying one.
+⚠ **The three asserting scenes were run by hand against an A7R III file and all
+three pass**; what is unavailable is the gate, not the coverage.
+
+## Session `2026-08-10b` — the audit becomes scope: M6 committed, the maybes fenced, #212
+
+A full feature audit against Lightroom Classic, then the developer's
+instruction: *"log everything that would be important as features that must be
+done."* Scope was locked 2026-07-27, so the addition is a decision — #199.
+
+**M6, S6.1–S6.11**, costed in `ROADMAP.md`: WB eyedropper+presets, **B&W mix**
+(largest parity hole), busy state (#151), slider color scales, interactive
+histogram, side-by-side compare, defringe, soft proofing, FSEvents watch,
+multi-selection, export presets + JXL/AVIF probe. Bar for inclusion: the
+vision's success criteria plus cheap-against-payoff polish — not parity for
+its own sake.
+
+**FEATURES §15** is new and holds what was recorded and *not* committed —
+local multi-pass adjustments (static-graph tension, #77), Point Color,
+generative remove, HDR, merge, the ML tier, navigator, reference view, second
+monitor — each behind its own future decision row, several behind #174.
+
+⚠ The audit corrected itself twice: colour range mask and sky mask were listed
+missing and both **ship**; "split view missing" was wrong too — only the
+Y-style side-by-side is absent. Recorded in #212 so the first draft is not
+quoted later. ⚠ **#162 outranks the whole queue** and still waits on the
+developer's choice. Docs-only session: check-decisions 0, no code byte changed.
+
+---
+
+## Session `2026-08-10` — the armed-click flags become one enum and one template, #211
+
+The developer's words, and the brief for the session: *"color picking sucks,
+the UI is quite hard to navigate. We need to simplify and find a way to ensure
+functionality"* — then, explicitly: make the UI templated and reusable.
+
+**What was found before anything was designed.** Three Bools for one idea —
+`targeted.isActive`, `engine.colorPicking`, `engine.spotPlacing` — three
+hand-rolled arm buttons in three styles, three disarm rules. The tab-switch
+hygiene cleared two of the three: **the mask color picker survived a switch and
+ate the next click on the photograph**, directly under an `ImageCanvas` comment
+saying the tools are *"never armed together."* Escape cancelled only crop. The
+loupe served the targeted tool alone, so the mask picker clicked blind — the
+failure the loupe's own header says it exists to prevent.
+
+**What shipped.** `CanvasTool` on `Engine` + `ToolButton` (`ToolButton.swift`):
+arming is one enum value, so two armed tools are **unrepresentable rather than
+tested for**; every panel arms through the same one-line button, the
+`slider(...)` shape — adding a tool is one case, one canvas branch, one button
+line. Tab switch and Escape (any tab) disarm by one assignment; the footer
+names the armed tool; the loupe follows `tool.wantsLoupe` and captions a mask
+pick as a pick, not a mixer band. `TargetedAdjust` keeps only what an armed
+tool reads.
+
+⚠ **FEATURES §3 had claimed a WB eyedropper and WB presets since scope lock;
+neither exists** — `DevelopPanels+Light.swift` is two sliders. Row corrected in
+the same session. Building it is an open story: the click-a-neutral temp/tint
+inversion wants a `research/` entry first, and it should arrive as a fourth
+`CanvasTool` case.
+
+⚠ **Residual, stated:** the tab-switch disarm is a SwiftUI `onChange` closure
+no suite can drive (#110.3's boundary). It is one assignment now instead of a
+per-flag list that has already been wrong once, but deleting it is still green
+everywhere.
+
+Gates: **889 / 3711 / 42 of 42 / check-decisions 0 / check-gestures 0 /
+check-screens 0 / check-modes 0 / check-wiring 0** — bench not run, no engine
+or shader byte changed.
+
 ## Session `2026-08-07b` — three checks that ran nowhere, and one that missed its own mutation
 
 **The queue is empty and the blocked items need the developer**, so this came off

@@ -53,6 +53,16 @@ DECLARED_GAPS = re.compile(r"\*\*Declared gaps:\s*([0-9,\s]+)\.?\s*\*\*")
 # "#137", "decision #96" — but not "#1234567" and not a markdown heading.
 CITATION = re.compile(r"(?<![\w#])#(\d+)(?![\d.])")
 
+# ⚠ A hex colour is not a citation, and this was a *latent* false positive: the
+# `max(numbers) + 50` guard below let `#262c30` in HISTORY.md's prose through as
+# a citation of row 262 the moment the ledger passed row 212 and the guard moved
+# past it. Only tokens carrying a hex letter are struck out, so a pure-digit
+# `#204` is still read as a citation — which is why the lookahead is here
+# rather than a blanket "no word character follows".
+# That blanket rule would also have silenced `#71b`, the letter-suffix spelling
+# this file's own duplicate check recommends.
+HEX_COLOUR = re.compile(r"(?<![\w#])#(?![0-9]+\b)[0-9a-fA-F]{3,8}\b")
+
 
 def ledger_numbers(text):
     """Every row's number, in file order, as (number, suffix, line)."""
@@ -139,7 +149,7 @@ def main():
                 m = ROW.match(line)
                 if m:
                     line = line[m.end():]
-            for m in CITATION.finditer(line):
+            for m in CITATION.finditer(HEX_COLOUR.sub("", line)):
                 n = int(m.group(1))
                 if n > max(numbers) + 50:
                     continue      # a big number is a pixel count, not a decision

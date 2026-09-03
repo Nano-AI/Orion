@@ -126,6 +126,41 @@ final class Library {
     /// The photographs a batch operation should act on, in strip order.
     var targets: [URL] { selection.targets(in: visibleURLs) }
 
+    /// The photographs a batch **export** should write, in strip order.
+    ///
+    /// ⚠ **A rejection is a decision, and writing the file anyway overrides it.**
+    /// `targets` follows the filter, so Rated and Unrated already exclude
+    /// rejects — but the resting filter is **All**, which does not, so the
+    /// ordinary case of "open a folder, cull, edit, export everything" wrote the
+    /// rejects into the delivery folder alongside the keepers. Reported by the
+    /// developer in exactly those words.
+    ///
+    /// ⚠ **Two ways to say you meant it, and both are honoured**: select the
+    /// photographs by hand, or set the filter to Rejected. Either is an explicit
+    /// request for those frames and neither can be arrived at by accident, so
+    /// this drops rejects only when it was never asked. Silently exporting
+    /// nothing at all when somebody filters to Rejected and presses the button
+    /// would be the same defect pointing the other way.
+    ///
+    /// ⚠ **Export only, deliberately.** `syncSettings` still uses `targets`: a
+    /// sidecar is a note about a photograph, not a deliverable, and a reject
+    /// that later gets un-rejected should carry the grade its neighbours got.
+    /// The two commands look alike from the panel and they are not alike here.
+    /// The rule itself is `BatchExport.exportable`, where it can be asserted.
+    var exportTargets: [URL] {
+        BatchExport.exportable(targets, rejected: rejectedURLs,
+                               asked: selection.isExplicit || filter == .rejected)
+    }
+
+    private var rejectedURLs: Set<URL> {
+        Set(photos.filter(\.rejected).map(\.url))
+    }
+
+    /// How many photographs `exportTargets` left behind, so the interface can
+    /// say so rather than quietly writing a smaller folder than the count on
+    /// the button implied.
+    var rejectedInView: Int { targets.count - exportTargets.count }
+
     /// True when the photographer has actually chosen a set, rather than simply
     /// having one photo open.
     var hasExplicitSelection: Bool { selection.isExplicit }

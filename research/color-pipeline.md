@@ -146,9 +146,48 @@ would fail rather than pass.
 - [darktable — AgX module](https://docs.darktable.org/usermanual/development/en/module-reference/processing-modules/agx/) (darktable 5.4, 2025)
 - [Explainer: AgX and the "notorious six"](https://avidandrew.com/agx-color.html)
 
-**What we implement:** convert Rec.2020 → Rec.709, apply the inset matrix, map to
-normalized log2 exposure over [−12.47, +4.03] EV, apply contrast about the middle
-gray pivot, run the six-term sigmoid fit per channel, then the outset matrix.
+**What we implement:** convert Rec.2020 → Rec.709, apply the inset matrix, map
+log2 exposure onto the sigmoid's normalized axis, apply contrast about middle
+gray, run the six-term sigmoid fit per channel, then the outset matrix.
+
+### ⚠️ The latitude is a look, and Orion's is 8 stops under gray, not 10
+
+**Source for the number:** darktable's *filmic rgb*, whose **black relative
+exposure defaults to −8.00 EV** against a +4.00 EV white — the same "how far
+under middle gray does the toe run out" parameter, in the same units.
+- [darktable — filmic rgb](https://docs.darktable.org/usermanual/4.6/en/module-reference/processing-modules/filmic-rgb/) (scene tab, *black relative exposure*)
+- [Aurélien Pierre, *filmic FAQ / darktable 3.0*](https://eng.aurelienpierre.com/2020/01/filmic-faq/) — why the black end is set from the scene's dynamic range rather than left at the transform's maximum
+
+AgX's reference range is **10 stops** under middle gray and 6.5 above. That is
+right for rendering a scene with ten usable stops beneath the key; a photograph
+out of a camera does not have them, and carrying the reference value means the
+darkest tones never reach black. Measured on a night frame from an ILCE-7RM3
+against macOS ImageIO's decode of the same raw, patch means in display encoding:
+
+| latitude under gray | darkest patch, Orion / macOS |
+|---|---|
+| 10 stops (AgX reference) | **1.63×** |
+| 9 | 1.29× |
+| 8.5 | 1.13× |
+| **8 (shipped)** | **0.98×** |
+
+At 8 stops every patch measured lands within 10% of the reference — lamp 0.95×,
+ball 0.99×, shorts 0.95×, grass 1.07×, shirt 1.10×, face 1.01×, background
+0.98× — where at 10 the highlights already agreed (0.97×) and only the shadows
+did not. **The signature of a missing toe is exactly that**: agreement at the
+top, monotonically worse the darker the patch. It is why the fix is the latitude
+and not the contrast slope; a slope steep enough to buy the same toe takes the
+low midtones with it, and at slope 1.8 the face lands at 0.058 against 0.085.
+
+**⚠️ Third bug worth recording, and it is a trap for anyone changing this
+number.** `agxCurve` is a fit over a *normalized* axis on which middle gray sits
+at 10/16.5 = 0.606061 — not at the middle. Narrowing the range while leaving
+`(ev − min) / (max − min)` in place slides gray down to 0.498, where the
+polynomial returns 0.285 instead of 0.497, and the whole picture drops 1.7
+stops. The axis is therefore normalized in **two pieces about gray**, pinning it
+to the polynomial's anchor. `testAgxLatitudeIsAnAnchoredRescale` asserts middle
+gray in gives middle gray out whatever the latitude is; the mutation that
+restores the single expression fails it at 0.387.
 
 **Why the inset matters:** applying a sigmoid per channel in the working
 primaries skews hue as channels clip at different points — the "notorious six"
@@ -194,6 +233,10 @@ easy to miss because the result still looks like a photograph.
 
 ## History
 
+- **2026-08-14** — AgX's black latitude cut from the reference 10 stops under
+  middle gray to darktable filmic's 8, after a photograph opened with its
+  darkest patch 1.63× brighter than macOS ImageIO's decode. The log axis is now
+  anchored in two pieces so middle gray cannot move with the range.
 - **2026-07-27** — AgX inset/outset replaced after the purple-cast bug; Rec.2020 →
   Rec.709 conversion added; sRGB double-encode removed. Neutrality test added.
 - **2026-07-27** — White balance re-anchored on the camera's own multipliers
