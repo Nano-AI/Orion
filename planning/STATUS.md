@@ -626,9 +626,19 @@ walk runs in **33 seconds**.
 
 **1012 / 4113 / check-decisions 0 / check-gestures 0 / check-screens 3 scenes /
 check-modes 13 checks + 2 exports + a merge / check-wiring 0.**
-⚠ `dist/Orion-v0.5.0-alpha.1.dmg` is built and installed but **not published** -
-`web/index.html` still points at `v0.4.0-alpha.6`, and the GitHub release for
-`v0.5.0-alpha.1` is the developer's to cut.
+**Published**, by developer instruction, as a **pre-release**:
+`https://github.com/Nano-AI/Orion/releases/tag/v0.5.0-alpha.1`, 33.7 MB.
+⚠ Verified the way the fix was: the asset was **downloaded back**, checksummed
+byte-identical to what was built, mounted, and run from the read-only image -
+13 of 13 library checks, signature valid. The tag was force-moved from the
+version-bump commit to the packaging fix, since checking out the old one gives
+a script that builds a bundle nobody can run; safe because no release object
+had consumed it yet.
+
+⚠ **`web/index.html` still points at `v0.4.0-alpha.6`** and is deliberately
+left there. `v0.4.0-alpha.6` also remains flagged Latest. The new build is a
+pre-release, so the site's only call to action should not lead to it until the
+developer says so.
 
 ---
 
