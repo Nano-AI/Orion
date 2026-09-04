@@ -4,7 +4,14 @@
 
 ---
 
-**Last updated:** 2026-09-03 (**`fix/display-path` merged, and the version is
+**Last updated:** 2026-09-03 (**The bundle was never self-contained - #218.**
+The packaged app only ran where Homebrew's OpenCV was installed, and the
+script's own check said otherwise because it read `otool -L` and not
+`LC_RPATH`. Rpaths swept, `@rpath` dependencies followed, walk de-quadratic-ed
+from eleven minutes to 33 seconds. 98 dylibs, 32 MB dmg, zero Homebrew images
+at runtime. Nothing published was affected.)
+
+**Previously:** 2026-09-03 (**`fix/display-path` merged, and the version is
 0.5.0.** Six decisions came in renumbered #211-#216 - main had already spent
 #198-#210 while the branch sat unmerged. The branch's own matte-size fix was
 dropped rather than recorded twice: main's #201 is the same fix, arrived at
@@ -580,57 +587,48 @@ candidate fixes in order.
 
 ---
 
-## Open, needs a decision before the next release - the bundle is not redistributable
+## Session `2026-09-03b` - the bundle was never self-contained, #218
 
-⚠ **`tools/package-app.sh` produces a disk image that only runs on a machine
-with Homebrew's OpenCV installed, and its own self-contained check says
-otherwise.** Found on 2026-09-03 while packaging 0.5.0, by running the packaged
-app rather than by reading it. Nothing published is affected:
-`v0.4.0-alpha.6` is the newest release and it predates OpenCV, which arrived in
-`49bac4b` with bracket alignment. **The first release built after that commit
-will carry this.**
+**Asked for directly, and the answer was no:** *"how do i send it to people?"*
+You could not. The packaged app only ran on a machine with Homebrew's OpenCV
+installed, and `package-app.sh` printed **"verified no paths outside the
+bundle"** while producing it.
 
-**Three faults, each hiding the next.**
+**Four faults, each hiding the next.** The binary's rpath list carries
+`/opt/homebrew/opt/opencv/lib` ahead of `@executable_path/../Frameworks`, so
+the shipped app loaded OpenCV from the Cellar, which pulled a second `libomp`,
+and it died on the first raw with `OMP: Error #15`. The script deleted one
+rpath by name — LibRaw's, from when LibRaw was the only dependency — and OpenCV
+arrived in `49bac4b` without telling it. The dependency walk followed only
+absolute Homebrew paths, so `@rpath/libopencv_dnn` was invisible and 92 of the
+98 needed libraries were never copied; it ran anyway because the stale rpath
+caught every miss. And the verification read `otool -L` only, which shows what
+is referenced and nothing about where `@rpath` looks — half the mechanism,
+reporting success for the exact failure it exists to catch.
 
-1. The binary's rpath list carries `/opt/homebrew/opt/opencv/lib` *ahead of*
-   `@executable_path/../Frameworks` (set in `app/CMakeLists.txt:129`), so the
-   packaged app loads five OpenCV dylibs out of the Cellar and never touches
-   the copies beside it. Those pull a second `libomp`, and the app dies on the
-   first raw it decodes: `OMP: Error #15: Initializing libomp.dylib, but found
-   libomp.dylib already initialized`. One file, two paths, two OpenMP runtimes.
-2. The script's verification reads `otool -L` only. ⚠ **It printed "verified no
-   paths outside the bundle" on that bundle** - load commands say what is
-   referenced and nothing about where `@rpath` will look for it, so a check
-   inspecting half the mechanism reported success for exactly the failure it
-   exists to catch.
-3. The dependency walk collects only absolute Homebrew paths, so a dep written
-   `@rpath/libfoo.dylib` is invisible to it. Homebrew's OpenCV refers to its own
-   siblings that way. The bundle was missing most of its tree and ran anyway,
-   because fault 1 was catching every miss.
+**The size argument was had with the wrong number first.** `du` on
+`/opt/homebrew/opt/openvino/lib` reads 106 MB and pointed at a 300-400 MB app,
+which is why dropping `opencv_video` looked necessary. The real dependency
+closure is **98 dylibs, 82 MB** — OpenVINO contributes 25 MB and the rest of
+that directory is plugins nothing references. ⚠ **Measured before decided.** The
+bundle ships whole at **32 MB compressed**; `Align.cpp` keeps its ECC
+refinement, which it already treats as best-effort inside a try/catch.
 
-**Why it is not simply fixed, and what the decision is.** Strip the rpaths and
-follow the `@rpath` deps properly - both tried, both work - and the true closure
-appears: `opencv_video` (wanted for ECC refinement alone) requires
-`opencv_dnn`, which requires **protobuf, ~50 absl libraries and OpenVINO**.
-OpenVINO is **106 MB** by itself; the honest bundle is 300-400 MB for a photo
-editor whose only use of OpenCV is aligning a bracket. So the choice is the
-developer's and there are three shapes to it:
+⚠ **The fix contained a fifth fault of the same family.** Marking a library seen
+when it came *off* the queue rather than when it went *on* made the walk
+quadratic: at 98 libraries it held 100% CPU with no child processes for eleven
+minutes, which reads as a hang and is arithmetic. Bounded at enqueue, the same
+walk runs in **33 seconds**.
 
-| Option | Cost |
-|---|---|
-| Ship the full closure | ~350 MB download, correct and genuinely redistributable |
-| Drop `opencv_video`, replace ECC refinement | Code change in `src/merge/Align.cpp`; ORB + RANSAC stay, the refinement step needs another source |
-| Keep OpenCV out of the bundle by design | Honest only if the app refuses to start without it and says so; today it aborts inside OpenMP with a message about nothing the user did |
+**Verified by running it, not by reading it:** zero `/opt/homebrew` images under
+`DYLD_PRINT_LIBRARIES`, 13 of 13 library checks, a real 7968x5320 render, and
+`--hdr-merge` — the OpenCV path itself — writing a 243 MB DNG.
 
-⚠ **The packaging changes were written and then reverted** - `package-app.sh` is
-untouched at HEAD. Fixing the script without settling the question above just
-trades a broken 20 MB download for a working 350 MB one nobody agreed to.
-
-⚠ **`/Applications/Orion.app` on this machine is 0.5.0 and works**, but it is
-the build-tree bundle with `shaders/` and `data/lensfun` copied into
-`Contents/Resources` - it links Homebrew exactly as the build tree does, which
-is why it has one `libomp` and runs. It is for recording, not for sending
-anyone.
+**1012 / 4113 / check-decisions 0 / check-gestures 0 / check-screens 3 scenes /
+check-modes 13 checks + 2 exports + a merge / check-wiring 0.**
+⚠ `dist/Orion-v0.5.0-alpha.1.dmg` is built and installed but **not published** -
+`web/index.html` still points at `v0.4.0-alpha.6`, and the GitHub release for
+`v0.5.0-alpha.1` is the developer's to cut.
 
 ---
 
