@@ -580,6 +580,60 @@ candidate fixes in order.
 
 ---
 
+## Open, needs a decision before the next release - the bundle is not redistributable
+
+⚠ **`tools/package-app.sh` produces a disk image that only runs on a machine
+with Homebrew's OpenCV installed, and its own self-contained check says
+otherwise.** Found on 2026-09-03 while packaging 0.5.0, by running the packaged
+app rather than by reading it. Nothing published is affected:
+`v0.4.0-alpha.6` is the newest release and it predates OpenCV, which arrived in
+`49bac4b` with bracket alignment. **The first release built after that commit
+will carry this.**
+
+**Three faults, each hiding the next.**
+
+1. The binary's rpath list carries `/opt/homebrew/opt/opencv/lib` *ahead of*
+   `@executable_path/../Frameworks` (set in `app/CMakeLists.txt:129`), so the
+   packaged app loads five OpenCV dylibs out of the Cellar and never touches
+   the copies beside it. Those pull a second `libomp`, and the app dies on the
+   first raw it decodes: `OMP: Error #15: Initializing libomp.dylib, but found
+   libomp.dylib already initialized`. One file, two paths, two OpenMP runtimes.
+2. The script's verification reads `otool -L` only. ⚠ **It printed "verified no
+   paths outside the bundle" on that bundle** - load commands say what is
+   referenced and nothing about where `@rpath` will look for it, so a check
+   inspecting half the mechanism reported success for exactly the failure it
+   exists to catch.
+3. The dependency walk collects only absolute Homebrew paths, so a dep written
+   `@rpath/libfoo.dylib` is invisible to it. Homebrew's OpenCV refers to its own
+   siblings that way. The bundle was missing most of its tree and ran anyway,
+   because fault 1 was catching every miss.
+
+**Why it is not simply fixed, and what the decision is.** Strip the rpaths and
+follow the `@rpath` deps properly - both tried, both work - and the true closure
+appears: `opencv_video` (wanted for ECC refinement alone) requires
+`opencv_dnn`, which requires **protobuf, ~50 absl libraries and OpenVINO**.
+OpenVINO is **106 MB** by itself; the honest bundle is 300-400 MB for a photo
+editor whose only use of OpenCV is aligning a bracket. So the choice is the
+developer's and there are three shapes to it:
+
+| Option | Cost |
+|---|---|
+| Ship the full closure | ~350 MB download, correct and genuinely redistributable |
+| Drop `opencv_video`, replace ECC refinement | Code change in `src/merge/Align.cpp`; ORB + RANSAC stay, the refinement step needs another source |
+| Keep OpenCV out of the bundle by design | Honest only if the app refuses to start without it and says so; today it aborts inside OpenMP with a message about nothing the user did |
+
+⚠ **The packaging changes were written and then reverted** - `package-app.sh` is
+untouched at HEAD. Fixing the script without settling the question above just
+trades a broken 20 MB download for a working 350 MB one nobody agreed to.
+
+⚠ **`/Applications/Orion.app` on this machine is 0.5.0 and works**, but it is
+the build-tree bundle with `shaders/` and `data/lensfun` copied into
+`Contents/Resources` - it links Homebrew exactly as the build tree does, which
+is why it has one `libomp` and runs. It is for recording, not for sending
+anyone.
+
+---
+
 ## Session `2026-09-03` - `fix/display-path` merged, six decisions renumbered, #217
 
 **Asked for directly:** pull main, merge what was ahead, rebuild, bump the
