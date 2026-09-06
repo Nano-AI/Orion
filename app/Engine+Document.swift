@@ -39,7 +39,31 @@ extension Engine {
         pushAndRender()
     }
 
-    func open(path: String) throws {
+    /// Opens a photograph at its as-shot settings.
+    ///
+    /// ⚠ **`restoring` exists because opening an edited photograph rendered it
+    /// twice.** `OrionApp` opens, then reads the sidecar, then `restore`s — and
+    /// both halves ended with their own `pushAndRender`. At 42 MP that is two
+    /// full renders of ~100 ms each on a cold open, and the first one is a
+    /// picture the photographer never asked to see: their edit briefly replaced
+    /// by the camera's own settings. Reported as *"it renders the image, and
+    /// THEN applies, giving a weird jitter."*
+    ///
+    /// Pass `true` when a `restore` is certain to follow and the render is left
+    /// to it. ⚠ The caller then owns the failure path: `restore` returning
+    /// false renders nothing, so a sidecar that does not decode would leave the
+    /// canvas on the *previous* photograph. `OrionApp+Files` renders there.
+    ///
+    /// ⚠ **Reasoned from the call sites, not measured** — the same admission
+    /// the placeholder comment in `OrionApp+Files` makes about this very
+    /// function, and for the same reason: nothing in this repository can drive
+    /// the product open path (#121, #181). `--library-open` probes the folder
+    /// index, and the scenario runner's reload verb calls `restore` directly
+    /// without ever going through `OrionApp`'s loader, so neither reaches the
+    /// `restoring: true` branch. What is checkable by reading is that there is
+    /// now exactly one `pushAndRender` on each of the three ways out: restore
+    /// succeeds, restore fails, no sidecar at all.
+    func open(path: String, restoring: Bool = false) throws {
         guard let handle else { return }
 
         let status = orion_engine_open_raw(handle, path)
@@ -103,7 +127,8 @@ extension Engine {
         isLoaded = true
         history.reset(to: state)
         log.opened(path, state: state)
-        pushAndRender()
+        // The as-shot render, unless a restore is about to replace it anyway.
+        if !restoring { pushAndRender() }
     }
 
     /// Restores a state saved to a sidecar. Returns false when the blob would

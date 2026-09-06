@@ -295,15 +295,26 @@ extension Editor {
             // measurement — the shape #154 settled on for the same situation.
             defer { if current == url { engine.clearPlaceholder() } }
             do {
-                try engine.open(path: url.path)
-                viewport.reset()
+                // ⚠ **Read before the open, so the open knows whether to
+                // render.** An edited photograph used to render twice — once at
+                // the camera's settings and once at the photographer's — and
+                // the first of those is a picture nobody asked for. See
+                // `Engine.open(path:restoring:)`.
                 let saved = Sidecar.read(for: url)?.develop
+                try engine.open(path: url.path, restoring: saved != nil)
+                viewport.reset()
                 // ⚠ `restored` is the parse's *answer*, not "a blob was
                 // present". They used to be conflated and the two lines below
                 // both read the wrong one. See `Engine.restore`.
                 var restored = false
                 if let saved {
                     restored = engine.restore(encoded: saved)
+                    // ⚠ The failure path the suppressed render above hands us.
+                    // `restore` renders only when it succeeds, so a sidecar
+                    // that does not decode would leave the canvas showing the
+                    // *previous* photograph — the #151/#181 shape exactly, and
+                    // this time we would have caused it.
+                    if !restored { engine.pushAndRender() }
                     // ⚠ Inside the successful-parse branch, because a sidecar
                     // that failed to parse yields no components and restoring
                     // from that would discard the photograph's edits.
