@@ -272,6 +272,135 @@ work did not touch.**
 without sidecars, both instruments agreeing). The daylight side rests on four
 frames from one camera and one afternoon.
 
+### ⚠️ 2026-09-06: the contrast that gives punch is the contrast that hard-clips shadows, and a mean-luma fit cannot see it (decision #222)
+
+The developer, repeatedly, on a daylight frame: *"the RAW doesn't render
+anything close to the JPEG. it comes out blasted, over contrasted, and looking
+awful."* Confirmed on `DSC09734.ARW`: a person in the bottom-left corner
+disappears into flat black that the camera's own JPEG still shows with
+texture. The mechanism was already known — `develop_display.slang:238`,
+`c = saturate((c - kPivotNorm) * p.contrast + kPivotNorm)`, is a **hard clamp
+in log space, applied before the AgX sigmoid**. Solving it, the clamp lands at
+`-kBlackStops / contrast` stops under gray: `-8.0` at `contrast = 1.0`,
+**`-5.517`** at the shipping `1.45` — 2.5 stops shallower than the declared
+8-stop latitude.
+
+**7 frames** (`~/Pictures/sept 5th forks/`, none with `.xmp` sidecars except
+the reported frame, whose sidecar was overridden for the test), covering deep
+shade, open daylight and backlit, a shadow/midtone/highlight patch each,
+against the camera's own JPEG and `sips -s format jpeg` (macOS ImageIO):
+
+| frame | patch | cam JPEG | macOS | Orion @1.00 | Orion @1.45 (ships) |
+|---|---|---|---|---|---|
+| DSC09734 (reported) | shadow | 0.0264 | 0.0240 | 0.0734 | 0.0269 |
+| | midtone | 0.4371 | 0.4218 | 0.5148 | 0.5189 |
+| | highlight | 0.9673 | 0.9615 | 0.8268 | 0.9104 |
+| DSC09736 (sidewalk, sun) | shadow | 0.0723 | 0.1184 | 0.2513 | 0.1693 |
+| | midtone | 0.4449 | 0.4728 | 0.5044 | 0.5080 |
+| | highlight | 0.9694 | 0.9673 | 0.8097 | 0.8986 |
+| DSC09760 (forest hollow) | shadow | 0.0355 | 0.0233 | 0.1217 | 0.0679 |
+| | midtone | 0.4490 | 0.4304 | 0.5913 | 0.6321 |
+| | highlight | 0.8031 | 0.8041 | 0.8102 | 0.9039 |
+| DSC09765 (mossy cave) | shadow | 0.0170 | 0.0076 | 0.0447 | 0.0122 |
+| | midtone | 0.4687 | 0.4336 | 0.4827 | 0.4802 |
+| | highlight | 0.6589 | 0.6397 | 0.7131 | 0.7660 |
+| DSC09783 (backlit arch) | shadow | 0.0202 | 0.0065 | 0.0266 | 0.0041 |
+| | midtone | 0.4354 | 0.3609 | 0.3666 | 0.3463 |
+| | highlight | 0.9654 | 0.9810 | 0.8193 | 0.9112 |
+| DSC09759 (overcast portrait) | shadow | 0.0203 | 0.0133 | 0.0837 | 0.0289 |
+| | midtone | 0.4515 | 0.4079 | 0.4819 | 0.4781 |
+| | highlight | 0.7371 | 0.7195 | 0.6251 | 0.6787 |
+| DSC09747 (overcast beach) | shadow | 0.1051 | 0.1384 | 0.3341 | 0.2706 |
+| | midtone | 0.4518 | 0.4736 | 0.5226 | 0.5344 |
+| | highlight | 0.9691 | 0.9768 | 0.8275 | 0.9199 |
+
+**⚠️ The trap: a mean-luma fit, swept from 0.8 to 2.0 contrast, does not
+favor lowering it — it favors raising it further.** Mean absolute error
+against macOS, aggregated over all 21 patches:
+
+| contrast | all | shadow | midtone | highlight |
+|---|---|---|---|---|
+| 0.80 | 0.1122 | 0.1249 | 0.0651 | 0.1467 |
+| 1.00 | 0.0878 | 0.0863 | 0.0662 | 0.1110 |
+| 1.15 | 0.0767 | 0.0652 | 0.0685 | 0.0965 |
+| **1.45 (ships)** | **0.0615** | **0.0359** | **0.0752** | **0.0733** |
+| 1.60 | 0.0565 | 0.0271 | 0.0780 | 0.0643 |
+| 2.00 | 0.0516 | 0.0186 | 0.0844 | 0.0518 |
+
+Every column keeps improving past 1.45. This is not a contradiction of the
+crush — it is the shadow-patch *mean* being pulled up by whichever pixels in
+the patch survive the clip, while highlight error falls because the same slope
+that clips shadows is the only thing giving highlights punch (they sit below
+the +3.674 EV data ceiling, so it is the slope and not a clamp doing that
+work — decision #221). **A single coarse mean cannot see a hard clip**: it
+only sees that the average got darker, which happens to move toward the
+reference for an unrelated reason.
+
+**What does see it: the fraction of a real patch flattened to one value.**
+Orion's own GPU output (`--scenario`'s `shot`, not the bench), same three
+deep-shadow patches, `near-black` = luma < 2/255, `exact-(0,0,0)` = the literal
+hard-clip signature a sensor's noise floor does not produce on its own:
+
+| contrast | DSC09734 near-black / exact-0 | DSC09765 | DSC09783 |
+|---|---|---|---|
+| 1.00 | 0.01% / 0.00% | 1.94% / 0.00% | 0.71% / 0.04% |
+| 1.15 | 0.15% / 0.00% | 12.76% / 0.45% | 7.67% / 0.32% |
+| 1.30 | 2.77% / 0.00% | 38.39% / 6.32% | 48.84% / 4.15% |
+| **1.45 (ships)** | **20.73% / 0.07%** | **62.62% / 26.14%** | **91.82% / 36.01%** |
+| 1.60 | 52.30% / 1.10% | 78.26% / 49.01% | 99.73% / 78.33% |
+
+Same patches, the two references: cam JPEG 0% exact-black on all three;
+macOS ImageIO 0% / 1.30% / 2.47% — macOS's own default rendering is not gentle
+(it is *darker* than Orion's on these patches, per the table above), but it
+gets there with a soft toe, not a flat plateau: at the shipping contrast Orion
+produces 15-25x more literal `(0,0,0)` pixels than macOS on the same patch.
+That is the signature of a hard clamp specifically, not of "shadows going
+dark," which both references also do.
+
+**Conclusion: contrast alone does not fix this, and no compromise value is
+defensible.** The crush grows continuously and steeply from 1.0 — there is no
+plateau, no knee that separates "safe" from "not." A contrast low enough to
+keep exact-black near zero on the deepest patch measured (≈1.0-1.05) gives up
+essentially all the midtone/highlight punch decision #46 fitted 1.45 *for*,
+returning the "flat and washed" complaint #46 was answering in the first
+place. `Engine.contrast` **stays at 1.45**, undefended as anything but the
+least-bad single number, and the doc comment now says so.
+
+**`kBaselineExposureEv` was not touched, and could not have helped** — #220
+already established this ("baseline exposure cannot fix a contrast error"):
+shifting the baseline moves *which* scene EVs land in the clipped zone, not
+whether the clamp is hard. Raising it to lift shadows clear of the clip pushes
+more of the frame past the highlight ceiling and re-breaks the midtone fit
+#46 measured; lowering it makes the clip strictly worse.
+
+**What a soft roll-off would need**, if a future session takes this on
+(not built here — `develop_display.slang` is outside this session's file
+ownership, and this is real shader-design work, not a constant tune):
+
+1. Replace the hard `saturate` at `develop_display.slang:238` with a smooth,
+   monotonic, *injective* compressive function — no two distinct inputs may
+   share an output — so contrast's slope still does midtone punch but the
+   tails compress asymptotically instead of clipping. A soft-clip / Reinhard-
+   style operator, or tapering the effective slope back toward 1.0 outside a
+   middle band via a smoothstep, are candidates; either needs a published
+   source per `CLAUDE.md`'s sourcing rule before it ships.
+2. Re-derive `agxCurve`'s effective zero crossing under the new function —
+   the polynomial's own constant term is negative (`-0.00232`), so "the input
+   is technically positive" does not mean "the output is." This session's
+   `testAgxLatitudeIsAnAnchoredRescale` extension (checks 7-8,
+   `apps/tests/tests_display.cpp`) had to account for exactly this and is a
+   worked example of the trap.
+3. A test in the shape of the near-black-fraction table above, not just a
+   mean: assert that two scene EVs some fixed distance apart never render
+   bit-identical, which the current hard clamp fails by construction and a
+   soft roll-off should pass.
+4. A decision entry once it ships, since it changes the look every open
+   photograph gets.
+
+**Confidence:** the crush is high-confidence and reproduced on the GPU, not
+inferred from the mean table alone (see decision #222's mutation test). Which
+soft-roll-off *shape* is right is not decided by anything here.
+
 **Why the inset matters:** applying a sigmoid per channel in the working
 primaries skews hue as channels clip at different points — the "notorious six"
 failure, where bright saturated colors rotate toward the nearest primary. AgX
@@ -316,6 +445,12 @@ easy to miss because the result still looks like a photograph.
 
 ## History
 
+- **2026-09-06** — the shipping contrast's hard clamp measured on real
+  photographs (a person disappearing in shadow): 21-92% of a genuinely dark
+  patch flattened to one value at 1.45, against 0-2.5% for the camera JPEG and
+  macOS. No contrast value fixes it without giving up the midtone punch #46
+  fitted for; `Engine.contrast` unchanged, the defect documented, a soft
+  roll-off specified but not built (#222).
 - **2026-08-14** — AgX's black latitude cut from the reference 10 stops under
   middle gray to darktable filmic's 8, after a photograph opened with its
   darkest patch 1.63× brighter than macOS ImageIO's decode. The log axis is now

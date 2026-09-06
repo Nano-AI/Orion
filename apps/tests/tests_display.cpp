@@ -372,7 +372,19 @@ void testAgxLatitudeIsAnAnchoredRescale() {
     // `kBlackStops` are the ones that matter; the rest are there so a failure
     // says *where* the curve went wrong rather than only that it did.
     const float kBlackStops = 8.0f;   // must match develop_display.slang
-    const std::vector<float> stops{0.0f, -2.0f, -4.0f, -6.0f,
+    const float kShipContrast = 1.45f;   // app/Engine.swift's default
+    // The contrast slope's `saturate` (develop_display.slang:238) hard-clips
+    // the normalized axis *before* the sigmoid runs, and that clip is not at
+    // kBlackStops once contrast != 1 -- it lands at kBlackStops/contrast
+    // stops under gray (decision #222). The two points below straddle it,
+    // with asymmetric margin: `agxCurve`'s own constant term is negative
+    // (see check 2's comment), so the *final* zero crossing sits a little
+    // past where the pre-curve saturate reaches 0 -- 0.15 EV of margin is
+    // enough on the clipped side but not the surviving one, which needs
+    // ~0.46 EV before the polynomial itself turns positive.
+    const float kClipEv = -kBlackStops / kShipContrast;
+    const std::vector<float> stops{0.0f, -2.0f, -4.0f,
+                                   kClipEv + 0.5f, kClipEv - 0.15f, -6.0f,
                                    -(kBlackStops - 0.5f), -kBlackStops};
     const auto kN = static_cast<std::uint32_t>(stops.size());
 
@@ -464,7 +476,7 @@ void testAgxLatitudeIsAnAnchoredRescale() {
     //
     // So this second dispatch pins the shipping toe. It reuses the same source
     // walk; only the slope changes.
-    dp.contrast = 1.45f;
+    dp.contrast = kShipContrast;
     orion::gpu::CommandBuffer cb2(*device);
     cb2.dispatch(*kernel, {src.get(), lut.get(), cubeStub.get(), dst.get()},
                  &dp, sizeof dp, kN, 1);
@@ -488,7 +500,23 @@ void testAgxLatitudeIsAnAnchoredRescale() {
 
     // 6. And the toe closes well inside the declared latitude. At 10 stops this
     //    reads 0.0075 instead — a lifted floor is exactly what "washed out" is.
-    report(green(3) == 0.0f,
+    report(green(5) == 0.0f,
            "six stops under gray is already black at the shipping contrast",
-           "got " + std::to_string(green(3)));
+           "got " + std::to_string(green(5)));
+
+    // 7. The clip the contrast slope adds is not at kBlackStops -- it is at
+    //    kBlackStops/contrast, 2.5 EV shallower than the declared latitude at
+    //    the shipping contrast. Decision #222 measured what that costs on
+    //    real photographs: 21-92% of a genuinely dark patch flattened to a
+    //    single value on three daylight frames, against 0-2.5% for the same
+    //    patch in the camera's own JPEG and macOS ImageIO. This pins the
+    //    boundary itself, not just a point safely past it.
+    report(green(4) == 0.0f,
+           "the contrast-scaled clip boundary (kBlackStops/contrast EV) renders exactly black",
+           "got " + std::to_string(green(4)) + " at " + std::to_string(kClipEv - 0.15f)
+               + " stops (boundary " + std::to_string(kClipEv) + ")");
+    report(green(3) > 0.0f,
+           "0.5 EV toward gray from the clip boundary still carries signal",
+           "got " + std::to_string(green(3)) + " at " + std::to_string(kClipEv + 0.5f)
+               + " stops");
 }

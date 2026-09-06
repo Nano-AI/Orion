@@ -126,10 +126,25 @@ final class Engine {
     /// "the original colors". Every raw editor answers this the same way, by
     /// shipping a base contrast rather than showing the neutral transform raw.
     ///
-    /// 1.15 was measured, not chosen by eye: against the embedded JPEG of the
-    /// test frame it puts mean luma at 0.051 against the camera's 0.052, and
-    /// mean saturation at 0.81 against 0.85. Drag the slider to 1.00 for the
-    /// neutral transform.
+    /// 1.45 is decision #46's fit, co-measured with `kBaselineExposureEv`
+    /// (`DevelopInternal.h`) against two references over six patches. Moving
+    /// one without the other re-breaks the pair.
+    ///
+    /// ⚠️ **Known defect, not yet fixable by this slider.** The display
+    /// transform applies contrast as a hard clamp in log space *before* the
+    /// AgX sigmoid (`develop_display.slang:238`), so the slope does double
+    /// duty: midtone punch and, as a side effect, where shadow detail gets
+    /// flattened to a single value. At 1.45 that boundary sits 2.5 EV inside
+    /// the declared 8-stop latitude, and decision #222 measured the cost on
+    /// real photographs — 21-92% of a genuinely dark patch collapsed to one
+    /// flat value, against 0-2.5% for the same patch in the camera's own JPEG
+    /// and macOS ImageIO. No contrast value fixes this without giving up the
+    /// midtone punch #46 fitted for: the crush grows continuously from 1.0
+    /// upward on every dark patch measured, with no plateau to land on. Drag
+    /// the slider to 1.00 for the neutral transform, which does not crush but
+    /// reads flat and washed against the camera JPEG (the complaint #46 was
+    /// answering). Fixing this needs a soft roll-off in the display
+    /// transform, not a new number here — see research/color-pipeline.md.
     var contrast: Float = 1.45     { didSet { pushAndRender() } }
 
     /// Extra quarter turns clockwise, on top of the camera's own orientation.
