@@ -348,6 +348,11 @@ void testCreativeLut() {
 /// `kBlackStops` under gray is black, half a stop above that is not. Change the
 /// constant and both move together; delete the two-piece normalization and
 /// check 1 fails immediately.
+///
+/// ⚠ Checks 4-6 dispatch the same walk a **second** time at `contrast = 1.45`,
+/// because 1-3 run at 1.0 and the product never does. See the note beside them:
+/// the whole washed-out-shadows report of 2026-09-05 was a measurement taken at
+/// 1.0 (#220), and nothing here could tell the two apart.
 void testAgxLatitudeIsAnAnchoredRescale() {
     section("AgX latitude");
 
@@ -443,4 +448,47 @@ void testAgxLatitudeIsAnAnchoredRescale() {
         if (green(i) > green(i - 1) + 1e-4f) { monotone = false; break; }
     }
     report(monotone, "the walk down from gray is monotone");
+
+    // ── The same walk, at the contrast the product actually opens with ──────
+    //
+    // ⚠ **Everything above runs at `contrast = 1.0`, which nothing ships.**
+    // `Engine.contrast` opens at **1.45** (app/Engine.swift), and the slope
+    // pivots about gray on the normalized axis, so it multiplies the distance
+    // to the black end: the render reaches zero at about **5.5** stops under
+    // gray, not at `kBlackStops`. Every assertion this file had was therefore
+    // about a shadow end no photograph is ever shown through, and the gap cost
+    // a session: a night sky measured off `orion-bench`, whose `Adjustments{}`
+    // default is also 1.0, reads 5-10x brighter than macOS ImageIO's decode of
+    // the same raw and looks milky — while the *product's* render of that frame
+    // matches macOS to within 15%. See decision #220.
+    //
+    // So this second dispatch pins the shipping toe. It reuses the same source
+    // walk; only the slope changes.
+    dp.contrast = 1.45f;
+    orion::gpu::CommandBuffer cb2(*device);
+    cb2.dispatch(*kernel, {src.get(), lut.get(), cubeStub.get(), dst.get()},
+                 &dp, sizeof dp, kN, 1);
+    cb2.commitAndWait();
+    dst->download(out.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, 1);
+
+    // 4. Gray is still gray. Contrast pivots about `kPivotNorm`, so the slope
+    //    must not move the anchor — if this fails, the pivot and the axis have
+    //    stopped agreeing and every tone in the program has shifted.
+    report(std::fabs(green(0) - 0.497f) < 0.02f,
+           "at the shipping contrast middle gray is still the anchor",
+           "got " + std::to_string(green(0)) + ", wanted 0.497 +- 0.02");
+
+    // 5. Four stops under gray is where a night sky sits, and it is the one
+    //    number that moves whichever way `kBlackStops` is pushed: 0.038 at 10
+    //    stops (the AgX reference latitude, which renders that sky milky) and
+    //    0.0002 at 6 (which crushes it to nothing). 0.0175 is 8.
+    report(std::fabs(green(2) - 0.0175f) < 0.006f,
+           "four stops under gray renders at the measured shipping value",
+           "got " + std::to_string(green(2)) + ", wanted 0.0175 +- 0.006");
+
+    // 6. And the toe closes well inside the declared latitude. At 10 stops this
+    //    reads 0.0075 instead — a lifted floor is exactly what "washed out" is.
+    report(green(3) == 0.0f,
+           "six stops under gray is already black at the shipping contrast",
+           "got " + std::to_string(green(3)));
 }

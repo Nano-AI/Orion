@@ -161,8 +161,9 @@ under middle gray does the toe run out" parameter, in the same units.
 AgX's reference range is **10 stops** under middle gray and 6.5 above. That is
 right for rendering a scene with ten usable stops beneath the key; a photograph
 out of a camera does not have them, and carrying the reference value means the
-darkest tones never reach black. Measured on a night frame from an ILCE-7RM3
-against macOS ImageIO's decode of the same raw, patch means in display encoding:
+darkest tones never reach black. Measured on an indoor frame from an ILCE-7RM3
+(a lamp, a ball, shorts, grass, a shirt, a face) against macOS ImageIO's decode
+of the same raw, patch means in display encoding:
 
 | latitude under gray | darkest patch, Orion / macOS |
 |---|---|
@@ -188,6 +189,88 @@ stops. The axis is therefore normalized in **two pieces about gray**, pinning it
 to the polynomial's anchor. `testAgxLatitudeIsAnAnchoredRescale` asserts middle
 gray in gives middle gray out whatever the latitude is; the mutation that
 restores the single expression fails it at 0.387.
+
+### ⚠️ Re-measured 2026-09-05 against night frames: 8 stops stays, and the number that decides the look is the contrast
+
+The frames #214 was fitted on are gone (`samples/*.ARW` were relinked to moon
+photographs on 2026-09-03), so this is a **fresh fit on different frames**, not a
+reproduction of the one above. Reference is macOS ImageIO (`sips -s format jpeg
+-Z 900 <raw>`) and, where the camera wrote one, the in-camera JPEG. Every Orion
+figure is the **product's own defaults** — exposure 0.00 EV, `Engine.contrast`
+1.45 — read off the output texture with `--measure`.
+
+**The night sky is not lifted.** Three night frames, mean display code value:
+
+| frame | patch | macOS | Orion | Orion / macOS |
+|---|---|---|---|---|
+| DSC09506 · moon, 1/60 ISO 800 | sky | 0.0001 | 0.0000 | — |
+| | moon disc | 0.9684 | 0.9340 | 0.96× |
+| | whole frame | 0.0243 | 0.0220 | 0.91× |
+| DSC09665 · moon in cloud, 1/40 ISO 3200 | sky, top-left | 0.0033 | 0.0038 | 1.15× |
+| | sky, top-right | 0.0014 | 0.0021 | 1.50× |
+| | moon glow | 0.2159 | 0.1996 | 0.92× |
+| | lit cloud | 0.3329 | 0.3482 | 1.05× |
+| | moon disc | 1.0000 | 0.9662 | 0.97× |
+| DSC09640 · 30 s ISO 1250 star field | sky, top-left | 0.0593 | 0.0316 | 0.53× |
+| | whole frame | 0.1019 | 0.0638 | 0.63× |
+
+**Where it *is* lifted is at `contrast = 1.0`** — the `Adjustments{}` default
+`orion-bench` renders with, and the value any headless measurement that does not
+pass `--contrast 1.45` uses. Same frame, same regions:
+
+| patch | macOS | Orion @ 1.0 | Orion @ 1.45 (ships) |
+|---|---|---|---|
+| sky, top-left | 0.0033 | 0.0199 (6.0×) | 0.0038 (1.15×) |
+| sky, top-right | 0.0014 | 0.0143 (10.2×) | 0.0021 (1.50×) |
+| sky, upper middle | 0.0055 | 0.0292 (5.3×) | 0.0064 (1.16×) |
+| lit cloud | 0.3329 | 0.3915 (1.18×) | 0.3482 (1.05×) |
+| whole frame | 0.1220 | 0.1505 (1.23×) | 0.1123 (0.92×) |
+
+⚠️ **A milky night sky measured off the bench is a milky night sky nobody is
+shown.** The slope pivots about gray on the normalized axis, so 1.45 multiplies
+the distance to the black end: the render reaches zero at about **5.5** stops
+under gray, not at `kBlackStops`. The name of the constant describes the axis,
+not the shipped toe.
+
+**The latitude sweep, at 1.45.** `sips`/camera-JPEG references in the header row:
+
+| `kBlackStops` | night sky (0.0033) | night cloud (0.3329) | night whole (0.1220) | day hollow (0.0690 / 0.0877) | day log (0.7172 / 0.7132) | day whole (0.3340 / 0.3605) |
+|---|---|---|---|---|---|---|
+| 6 | 0.0004 | 0.3055 | 0.0898 | 0.0143 | 0.9045 | 0.4250 |
+| **8 (ships)** | **0.0038** | **0.3482** | **0.1123** | **0.0401** | **0.9045** | **0.4511** |
+| 10 (AgX reference) | 0.0115 | 0.3758 | 0.1355 | 0.0758 | 0.9045 | 0.4728 |
+| 12 | 0.0223 | 0.3949 | 0.1584 | 0.1139 | 0.9045 | 0.4905 |
+
+Two things fall out. **#214's central claim survives on the GPU**: the bright
+driftwood log reads 0.9045 at every latitude, so this really is a shape control
+and the highlights genuinely do not move. And **narrowing makes both frames
+worse** — at 6 the night sky is 0.0004 against 0.0033 and the daylight shadow is
+0.0143 against 0.069–0.088. The two frames disagree about the *right* value
+(the night sky prefers 8, the daylight shadow prefers 10), which is a look
+question and not one these measurements settle; 8 is kept because it is the
+incumbent and the only setting where neither frame is badly wrong.
+
+**Baseline exposure cannot fix a contrast error.** `kBaselineExposureEv` swept on
+the one daylight frame that *is* off (DSC09760, deep forest shade):
+
+| `kBaselineExposureEv` | whole frame | bright log | deep hollow |
+|---|---|---|---|
+| **1.2 (ships)** | 0.4511 | 0.9045 | 0.0401 |
+| 0.9 | 0.4103 | 0.8768 | 0.0295 |
+| 0.6 | 0.3708 | 0.8442 | 0.0218 |
+| macOS / camera JPEG | 0.3340 / 0.3605 | 0.7172 / 0.7132 | 0.0690 / 0.0877 |
+
+Lowering it lands the *mean* and leaves the shape wrong: the log is still blown
+and the hollow gets darker still. On the other three daylight frames Orion
+already agrees with both references — whole-frame mean 0.5318 vs 0.5331/0.5460,
+0.4878 vs 0.5083/0.5439, 0.5251 vs 0.5042/0.5090 — so #46's +1.2 EV is not the
+defect either. **What DSC09760 shows is too much contrast, and the contrast is
+`Engine.contrast = 1.45`, which #46 co-fitted with the baseline and which this
+work did not touch.**
+
+**Confidence:** the night-frame conclusion is high (three frames, two of them
+without sidecars, both instruments agreeing). The daylight side rests on four
+frames from one camera and one afternoon.
 
 **Why the inset matters:** applying a sigmoid per channel in the working
 primaries skews hue as channels clip at different points — the "notorious six"
@@ -237,6 +320,10 @@ easy to miss because the result still looks like a photograph.
   middle gray to darktable filmic's 8, after a photograph opened with its
   darkest patch 1.63× brighter than macOS ImageIO's decode. The log axis is now
   anchored in two pieces so middle gray cannot move with the range.
+- **2026-09-05** — a washed-out night sky was re-measured on three night frames
+  and did not reproduce at the product's defaults; it reproduces at
+  `contrast = 1.0`, which only the bench renders with. 8 stops kept, nothing
+  changed, and the shipping contrast is now asserted on the GPU (#220).
 - **2026-07-27** — AgX inset/outset replaced after the purple-cast bug; Rec.2020 →
   Rec.709 conversion added; sRGB double-encode removed. Neutrality test added.
 - **2026-07-27** — White balance re-anchored on the camera's own multipliers

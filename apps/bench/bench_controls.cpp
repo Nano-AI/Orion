@@ -26,13 +26,27 @@ void controlProbes(Bench& b) {
     // ── Every control does something ──────────────────────────────────
     // A slider that silently no-ops is worse than one that is missing, so
     // assert each moves the image before trusting any of it.
-    std::printf("Control check (mean luma, identity = %.4f)\n", [&] {
-        orion::pipe::Adjustments base;
-        base.wb = develop.asShotWhiteBalance();
-        develop.apply(base);
+    // ⚠ **The identity here is `Adjustments{}`, which opens at contrast 1.0,
+    // and the product opens at 1.45** (`Engine.contrast`, decision #46). So
+    // every floor in the table below is calibrated against a look no
+    // photographer is ever shown, and this file's own header claim — "what is
+    // measured here is what you see on screen" — is not true of the base state.
+    //
+    // It is printed rather than fixed because fixing it is not one line: every
+    // floor was fitted at 1.0 and would have to be refitted together, and a
+    // slope change moves them by different amounts. Printed because reading a
+    // washed-out flat render off this bench and concluding the shipped picture
+    // is washed out cost a whole session on 2026-09-05, and the number was
+    // nowhere on screen to contradict it. `tests_display.cpp` now dispatches
+    // the shadow walk at 1.45 as well (#220), which covers the display end.
+    orion::pipe::Adjustments identity;
+    identity.wb = develop.asShotWhiteBalance();
+    std::printf("Control check (mean luma, identity = %.4f)"
+                "  ⚠ at contrast %.2f — the product opens at 1.45\n", [&] {
+        develop.apply(identity);
         develop.render();
         return meanOf(develop, Metric::Luma);
-    }());
+    }(), identity.contrast);
 
     {
         orion::pipe::Adjustments base;
@@ -170,7 +184,38 @@ void controlProbes(Bench& b) {
             // and leave the middle alone, so their means move less than
             // exposure's. The floors are low; the guide-chain pair check
             // under Invariants is what actually pins them.
-            {"whites +1",      lift, [](auto& a) { a.whites = 1.0f; }, Metric::Luma, 0.045},
+            //
+            // ⚠ **`flat`, not `lift`, and that is the whole point of this
+            // line.** This probe ran under the 4.3 EV `lift` context for as
+            // long as it existed, and a 4.3-stop push is what dragged the
+            // frame up into a band centered above the sensor's own clip. The
+            // slider was dead at the exposure the product actually opens at
+            // — 0.0003 against `blacks -1`'s 0.0189, 63x weaker than its
+            // supposed mirror — and the probe printed `ok` anyway, because
+            // the context it was judged in did not exist outside this file.
+            // Decision #221. A probe whose context is not a state the user
+            // can reach is measuring the harness.
+            //
+            // Half the smallest ratio over four frames, on the rule every
+            // probe here follows: 0.136 on `_PIC8095`, 0.032 on a night
+            // Bellevue frame, 0.310 on a daylight one, 0.096 on a second
+            // Bellevue. The spread is four to one and it is the frame's own
+            // highlights — a whites band has less to act on the less of the
+            // picture sits near clip — so the floor comes from the darkest,
+            // as decision #47 requires. Before the band moved, the same four
+            // read 0.068 / 0.008 / 0.085 / 0.013.
+            //
+            // ⚠ **What this floor does not catch, said plainly.** A dead
+            // whites path reads 0.000 and fails it on every frame — verified
+            // by zeroing the whites term in `applyTone`, which turns this
+            // line NO EFFECT and the bench exit 1. But the band sitting in
+            // the wrong place is only caught where the picture has
+            // highlights: the two Bellevue frames fell under 0.016 before
+            // the fix, `_PIC8095` and the daylight frame did not. A floor
+            // high enough to trip on `_PIC8095`'s 0.068 would trip on the
+            // night frame's *correct* 0.032, so there is no single number
+            // that does both and this one is not it.
+            {"whites +1",      flat, [](auto& a) { a.whites = 1.0f; }, Metric::Luma, 0.016},
             {"blacks -1",      flat, [](auto& a) { a.blacks = -1.0f; }, Metric::Luma, 0.023},
             {"vibrance +1",    flat, [](auto& a) { a.vibrance = 1.0f; }, Metric::Chroma, 0.068},
             {"saturation -1",  flat, [](auto& a) { a.saturation = -1.0f; }, Metric::Chroma, 0.213},

@@ -21,9 +21,9 @@ implementation — see [demosaic.md](demosaic.md).
 that the code has not used since the partition-of-unity change. A register that
 describes code which no longer exists is worse than no register.
 
-**Not sourced:** the band centers (−5.5 / −2.5 / +2.5 / +5.5 EV relative to
-middle gray), `kBandSigma = 1.6`, and `kEvPerUnit = 2.0`. The *shape* — Gaussian
-bands normalized to a partition of unity, summing exponents rather than
+**Not sourced:** the band centers (−5.5 / −2.5 / +2.5 / **+3.674** EV relative
+to middle gray), `kBandSigma = 1.6`, and `kEvPerUnit = 2.0`. The *shape* —
+Gaussian bands normalized to a partition of unity, summing exponents rather than
 multiplying gains — is sourced (deep-research §3); where the centers sit is not.
 
 **Cost:** the controls will not agree numerically with Lightroom or darktable.
@@ -32,6 +32,65 @@ not mean the same thing.
 
 **To fix:** derive centers from a published tone-mapping operator, or calibrate
 against reference renders of the same file.
+
+---
+
+### 1a. Whites at +3.674 EV — moved 2026-09-05, and still my formulation
+
+**The research table's +5.5 EV is above everything this pipeline can produce.**
+`linearize` normalizes sensor saturation to 1.0 (`whiteClipFor` sets the ceiling
+to `min(gains)`, which is the green channel's 1.0 because white balance is
+normalized to green), and the frame opens with `kBaselineExposureEv` = +1.2 EV
+applied. So the top of the scene-linear data at the default opening state is
+
+    2^1.2 = 2.2974        →   EV = log2(2.2974 / 0.18) = 1.2 + 2.473931 = +3.674
+
+The whites band was centered 1.83 EV above that, and its sourced *active range*
+of +4.0 EV and up contains no pixels at all. What was left was the Gaussian's
+lower tail. **Measured** with `orion-bench`, `whites +1` at the product's normal
+opening state, as a fraction of what `exposure +1 EV` moves on the same frame:
+
+| frame | before | after |
+|---|---|---|
+| `samples/_PIC8095` (moon) | 0.068 | 0.136 |
+| Bellevue night city | 0.008 | 0.032 |
+| daylight | 0.085 | 0.310 |
+| Bellevue, second | 0.013 | 0.096 |
+
+On the night frame `whites +1` moved 0.0003 against `blacks -1`'s 0.0189 — 63x
+weaker than the control the same table makes its mirror.
+
+**What is sourced and what is not.** The mismatch is a *fact about this
+pipeline*, arithmetic from two constants that are themselves sourced
+(`kBaselineExposureEv`, measured against Apple's RAW rendering and the camera
+JPEG; middle gray at 0.18). The *rule* used to place the band — "the endpoint
+band goes on the axis's own white anchor" — is my reading of why the source puts
+whites at +5.5 on an axis symmetric at ±5.5, and it is not something the source
+states. **So this number is no better sourced than the one it replaced; it is
+only in the data.** That is the whole claim, and the honest version of it.
+
+**What was ruled out.** Moving Orion's data up to meet the band instead: the
++1.2 EV is a two-reference fit (`pipe/DevelopInternal.h`) and raising it re-breaks
+the midtone match it was measured to fix. The display transform clipping the
+band before it can be seen: `saturate((c - kPivotNorm) * contrast + kPivotNorm)`
+at the product's contrast of 1.45 clips at `6.5 / 1.45 = +4.483` EV over middle
+gray, which is *above* the +3.674 ceiling, so at the default state it never
+touches the data. It does bound how far whites can push — a pixel at clip with
+`whites +1` gains 1.13 EV and lands at +4.80, past the clip — which is a whites
+slider blowing a highlight, not a bug.
+
+**What remains wrong and was deliberately not touched.** The same argument puts
+blacks at −8.0 (where `kBlackStops` runs the AgX toe out of latitude) rather
+than −5.5, and highlights proportionally lower than +2.5. Both measurably reach
+real data where they are, neither is the reported bug, and moving either is a
+tuning change with nothing behind it. Whites and highlights are now 1.17 EV
+apart against the source's 3.0, so they overlap far more than the source
+intends; what still separates them is that highlights reads the guided-filter
+neighborhood and whites reads the pixel, which is the distinction the research
+actually argues for.
+
+**To fix properly:** the same as §1 — calibrate all four against reference
+renders of the same file. Four numbers, one reference set, one afternoon.
 
 ---
 

@@ -11,6 +11,9 @@
 
 #include "harness.h"
 
+// For `kBaselineExposureEv` — the constant `kEvWhites` is derived from.
+#include "pipe/DevelopInternal.h"
+
 /// The tone bands, with the guided-filter chain switched off.
 ///
 /// The guide chain is seven nodes feeding only the highlight and shadow bands,
@@ -411,7 +414,35 @@ void testLocalAdjustments() {
             const double d = (ev - center) / 1.6;
             return std::exp(-0.5 * d * d);
         };
-        const double wB = w(-5.5), wS = w(-2.5), wH = w(2.5), wW = w(5.5);
+        // ⚠ The whites center mirrors `kEvWhites` in ops/tone_ops.slang, which
+        // is `kBaselineExposureEv` - log2(0.18) and not the research table's
+        // +5.5 — decision #221. A closed form that re-derives the shader by a
+        // different route still has to carry the same constants.
+        constexpr double kEvWhitesMirror = 3.673931;
+
+        // ⚠ **The one thing that makes the number above safe to duplicate.**
+        // `kEvWhites` is *derived* from `kBaselineExposureEv`, and it is written
+        // out longhand in two places — the shader, which cannot include a C++
+        // header, and the line below. `kBaselineExposureEv` is itself a fit
+        // (#46, #190) and is exactly the kind of constant a later session
+        // remeasures. Move it without this and the whites band silently slides
+        // off the white anchor, which is the defect #221 closed, restored in
+        // full and just as invisible: the bench probe keeps passing on any
+        // frame with highlights, because the band is still *near* the data.
+        //
+        // So the derivation is asserted rather than trusted. This fails the
+        // moment the baseline moves, and it names the two files to fix.
+        report(std::abs(kEvWhitesMirror
+                        - (orion::pipe::kBaselineExposureEv - std::log2(0.18))) < 1e-4,
+               "kEvWhites still sits on the white anchor kBaselineExposureEv puts it at",
+               "kBaselineExposureEv = "
+               + std::to_string(orion::pipe::kBaselineExposureEv)
+               + " wants kEvWhites "
+               + std::to_string(orion::pipe::kBaselineExposureEv - std::log2(0.18))
+               + ", but ops/tone_ops.slang and this file both say "
+               + std::to_string(kEvWhitesMirror));
+
+        const double wB = w(-5.5), wS = w(-2.5), wH = w(2.5), wW = w(kEvWhitesMirror);
         const double total = wB + wS + wH + wW + 1e-6;
         const double delta = ((wB * 0.2) + (wS * 1.0) + (wH * 0.4)
                               + (wW * -0.3)) * 2.0 / total;
