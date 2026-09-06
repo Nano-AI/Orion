@@ -389,6 +389,16 @@ void Pipeline::releaseIfDone(int reader) {
 
 void Pipeline::maybeFree(int n, int reader) {
     if (n < 0 || static_cast<std::size_t>(n) >= nodes_.size()) return;
+    // ponytail: `lastReader_` counts disabled nodes, so a texture whose last
+    // reader is switched off is never freed — that reader never dispatches, so
+    // this early-out is never reached with a matching `reader`. It stays
+    // resident for the graph's life instead of going back to the pool. A leak
+    // of *reuse*, not of memory: it is bounded, it is one texture per such
+    // node, and nothing reads a stale pointer. Upgrade path if the residency
+    // number starts mattering: make `computeLastUseSteps` skip disabled nodes
+    // and recompute `lastReader_` in `setEnabled` rather than once in
+    // `compile()`. Not done because enabled-ness moves per frame and the
+    // headline was 13861 -> 1560 MiB without it (#219).
     if (lastReader_[static_cast<std::size_t>(n)] != reader) return;
     if (everFreed_[static_cast<std::size_t>(n)]) return;   // once, ever — see the header
     if (isPinnedOrTerminal(n)) return;
