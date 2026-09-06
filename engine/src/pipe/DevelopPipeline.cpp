@@ -42,15 +42,28 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     pipeline_.compile(width_, height_);
 
     // ⚠ **What `nodeOutput` hands out after the render, and a liveness walk
-    // cannot see.** `DevelopLocal` reads these two once the graph has finished
-    // — the fusion proxy for its histogram and the dehaze peak for its
-    // estimate — so neither may ever be recycled into a later node. A pool that
-    // missed this would give those readers another node's pixels: right size,
-    // right format, wrong picture. Decision #156.
+    // cannot see.** `DevelopLocal` reads two of these once the graph has
+    // finished — the fusion proxy for its histogram and the dehaze peak for
+    // its estimate — so neither may ever be recycled into a later node. A
+    // pool that missed this would give those readers another node's pixels:
+    // right size, right format, wrong picture. Decision #156.
+    //
+    // ⚠ **Grown to six, decision #219.** #156's own grep found exactly four
+    // external readers and pinned two of them (the other two, `output()` and
+    // `sourceTexture()`, are pinned structurally by `Pipeline` and are
+    // deliberately not repeated here) — but that was before `referenceImage()`
+    // and `highlightStages()` existed. Both read a node's texture from outside
+    // the graph the same way `estimateFusionPlan`/`estimateAirlight` do —
+    // `nHueSat_` for the color picker, `nRgb_`/`nHighlights_`/`nHlFill_` for
+    // the highlight-fill census — and neither was pinned, so wiring the pool
+    // in would have freed them the moment their last *in-graph* reader ran,
+    // silently, the exact defect #156 named. Re-grepped for every
+    // `nodeOutput`/`referenceImage`/`highlightStages` caller before adding
+    // these; there are no others.
     //
     // The final output and the source are pinned structurally by `Pipeline`
     // itself and are deliberately not repeated here.
-    pipeline_.setPinned({nFuseProxy_, nPeak_});
+    pipeline_.setPinned({nFuseProxy_, nPeak_, nHueSat_, nRgb_, nHighlights_, nHlFill_});
 
     // Once per graph. The plate is 33 MB and identical for every photograph.
     uploadGrainPlate();

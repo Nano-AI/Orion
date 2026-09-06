@@ -5,13 +5,17 @@
  *  downstream of it instead of the whole pipeline. That is the difference
  *  between a 16 ms response and a 100 ms one.
  *
- *  Each node is exactly one compute shader (ARCHITECTURE.md), and every
- *  intermediate stays resident on the GPU.
+ *  Each node is exactly one compute shader (ARCHITECTURE.md). Intermediates
+ *  are pooled (decision #219): a texture is only resident between the node
+ *  that writes it and the last node that reads it, and a node whose input was
+ *  recycled simply recomputes it — every node here is a pure function of its
+ *  own inputs, so that costs time once and never changes a pixel.
  */
 
 #pragma once
 
 #include "gpu/Resources.h"
+#include "gpu/TexturePool.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -162,14 +166,17 @@ public:
     /// The bytes a graph would need if a texture were reused the moment its
     /// last consumer had run, rather than held for the graph's lifetime.
     ///
-    /// ⚠ **This is a costing number, not a promise.** `intermediateBytes` is
-    /// what is allocated today: one texture per node, alive from construction
-    /// to destruction. This walks the execution order, keeps a texture live
-    /// only between the node that writes it and the last node that reads it,
-    /// and reports the high-water mark — which is what a pooled allocator
-    /// could reach. The gap between the two is the size of the prize, and it
-    /// is worth knowing before choosing between tiling, dropping precision and
-    /// refusing to open (#152).
+    /// ⚠ **This is `render()`'s own schedule, read back rather than
+    /// re-derived — decision #219 wires the pool this used to only cost.**
+    /// `intermediateBytes()` now reports whatever is *currently* resident,
+    /// which right after `compile()` is close to nothing: nodes allocate
+    /// lazily, on their first `computeOne`/`ensure`, and this walks the
+    /// execution order, keeps a texture live only between the node that
+    /// writes it and the last node that reads it, and reports the high-water
+    /// mark that `TexturePool` actually reaches during a render. Before the
+    /// pool this was a costing number rather than a promise; it is worth
+    /// knowing before choosing between tiling, dropping precision and
+    /// refusing to open (#152) either way.
     ///
     /// It assumes textures of differing sizes can share an allocation, which a
     /// real pool cannot always do, so the true figure sits between this and
@@ -197,15 +204,88 @@ public:
     ///
     /// ⚠ Still optimistic in one remaining way, stated so nobody treats it as a
     /// target: it lets textures of differing shapes share an allocation, which
-    /// a real pool keyed by exact shape cannot always do. The truth sits
-    /// between this and `intermediateBytes`.
+    /// a real pool keyed by exact shape cannot always do (`TexturePool::acquire`
+    /// matches on exact width, height and format). The truth sits between this
+    /// and `intermediateBytes`. `poolPeakBytes()` below is what to compare it
+    /// against now that `render()` actually pools (decision #219) —
+    /// `intermediateBytes()` reads back what is resident *right now*, which
+    /// a working pool keeps small once a render has freed what it can, so it
+    /// is no longer the number that should land near this estimate.
     [[nodiscard]] std::size_t peakLiveBytes() const noexcept;
+
+    /// A node's output size, from its own declared shape and format — never
+    /// from `outputs_[id]->sizeBytes()`. Both this and `peakLiveBytes()` are
+    /// hypotheticals ("if a full render ran right now"), and allocation is
+    /// lazy, so a node's actual texture may not exist yet; sizing from the
+    /// `Node` itself keeps the estimate independent of what has or hasn't been
+    /// computed. Public because the bench sums it to report what eager
+    /// allocation used to cost.
+    [[nodiscard]] std::size_t nodeBytes(int id) const noexcept;
+
+    /// The pool's own high-water mark — what `TexturePool::acquire` actually
+    /// reached during rendering, as opposed to `peakLiveBytes()`'s static
+    /// estimate of what it should reach. Comparing the two is how the wiring
+    /// gets checked, the way decision #157 checked the pins against #153's
+    /// estimate. Does not decay when memory is later freed — see
+    /// `TexturePool::peakLiveBytes`.
+    [[nodiscard]] std::size_t poolPeakBytes() const noexcept { return pool_.peakLiveBytes(); }
 
 private:
     void markDownstreamDirty(int nodeId);
 
-    gpu::Device& device_;
-    std::string  shaderDir_;
+    /// The topological step of each node's last static reader — shared by
+    /// `render()`'s pool and `peakLiveBytes()`'s cost estimate, so the two
+    /// analyses can never say different things about which read is last.
+    /// #153 already computed this once per call; this is that same walk,
+    /// factored out so render() can act on it instead of merely reporting it.
+    [[nodiscard]] std::vector<std::size_t> computeLastUseSteps() const;
+
+
+    /// Whether `n` must never be recycled: it is `setPinned`'s list, or it is
+    /// the graph's terminal node. Checked dynamically rather than cached,
+    /// because `setPinned` is called after `compile()` (decision #156).
+    [[nodiscard]] bool isPinnedOrTerminal(int n) const noexcept;
+
+    /// Makes sure `id`'s output exists, recursing into its inputs first if
+    /// they too were recycled. A no-op if the texture is already there.
+    ///
+    /// ⚠ **Why recomputing a "clean" node is safe.** Every node here is a pure
+    /// function of its inputs (`nodeDirty`'s comment names the one exception),
+    /// so rebuilding one whose own inputs have not changed reproduces the
+    /// exact bytes it held before — this is what lets the pool recycle a
+    /// texture without a reader ever seeing the difference.
+    void ensure(int id, gpu::CommandBuffer* batch);
+
+    /// Gives `id` a fresh texture (returning whatever it held to the pool
+    /// first), dispatches its kernel, and frees any input whose last reader
+    /// this was. The one place that actually writes a node's output —
+    /// `render()`'s dirty path and `ensure()`'s recovery path both funnel
+    /// through it, so the two can never disagree about how a texture is
+    /// acquired, dispatched or released.
+    void computeOne(int id, gpu::CommandBuffer* batch);
+
+    /// After `reader` has been dispatched, releases every input whose last
+    /// reader (per `lastReader_`) was `reader` — including `reader` itself,
+    /// for the degenerate case of a node nobody reads at all.
+    void releaseIfDone(int reader);
+
+    /// Returns `n`'s texture to the pool if `reader` is its last static
+    /// reader, it has never been freed before, and it is not pinned.
+    ///
+    /// ⚠ **Once, ever, per node — not once per render.** `lastReader_[n]`
+    /// does not change, so without the "never freed before" guard this would
+    /// fire again on *every* future render that dispatches `reader`: free it,
+    /// let `ensure()` rebuild it for the next tick, free it again. That is
+    /// the regression decision #161 measured (a drag tick turning into a full
+    /// render) reintroduced one node at a time. Freeing once and letting a
+    /// later independent read rebuild it (`ensure()`) costs that one rebuild
+    /// exactly once for the pipeline's life; freeing on every match costs it
+    /// forever.
+    void maybeFree(int n, int reader);
+
+    gpu::Device&      device_;
+    std::string       shaderDir_;
+    gpu::TexturePool  pool_;
 
     std::vector<Node>                          nodes_;
     std::vector<std::unique_ptr<gpu::Library>> libraries_;
@@ -215,22 +295,37 @@ private:
     /// nodes that never overlap in time sharing one texture. There is no way to
     /// put the same `unique_ptr` at index 12 and index 47.
     ///
-    /// Ownership lives in `ownedOutputs_` below. Today that is still exactly
-    /// one texture per node and the render is bit-identical to before the
-    /// change; the pool replaces it as a second, separately revertible step.
-    /// A null entry means the node has no output yet.
+    /// Ownership lives in `ownedOutputs_` below, and as of the pool's adoption
+    /// a null entry is the ordinary case rather than a construction detail: it
+    /// means either "not computed yet" or "computed, read by everything that
+    /// will ever read it, and returned to the pool" (`releaseIfDone`). Either
+    /// way `ensure()` rebuilds it on demand, so a null pointer here is never a
+    /// bug by itself — only a stale non-null one, if a release forgot to clear
+    /// the pointer alongside it, would be.
     std::vector<gpu::Texture*>                 outputs_;
 
     /// What actually owns the textures `outputs_` points into.
     ///
-    /// ⚠ Entries are never erased while a graph lives, only replaced — see
-    /// `reallocateOutput`. A pointer in `outputs_` is invalidated the moment
-    /// its owner is dropped, and the reallocation path is the one place that
-    /// happens.
+    /// ⚠ Entries are replaced — never erased — throughout a graph's life: by
+    /// `computeOne` on every recompute, by `setNodeFormat` on a format change,
+    /// and set to `nullptr` by `releaseIfDone` once a node's last reader has
+    /// run. A pointer in `outputs_` is invalidated the moment its owner here
+    /// changes, which is why the two are always updated together.
     std::vector<std::unique_ptr<gpu::Texture>> ownedOutputs_;
     std::vector<bool>                          dirty_;
     std::vector<int>                           order_;
     std::vector<int>                           pinned_;
+
+    /// `lastReader_[n]`: the id of the last node (in topological order) that
+    /// reads `n`, or `n` itself if nothing does. Static — the graph's wiring
+    /// never changes after `compile()` — computed once there from
+    /// `computeLastUseSteps()` and read by `releaseIfDone`/`maybeFree` for the
+    /// rest of the pipeline's life.
+    std::vector<int>                           lastReader_;
+
+    /// `everFreed_[n]`: has `n`'s texture already been returned to the pool
+    /// once. See `maybeFree`'s comment for why this must never happen twice.
+    std::vector<bool>                           everFreed_;
 
     struct AuxSpec { std::uint32_t width, height; gpu::PixelFormat format; };
     std::vector<AuxSpec>                       auxSpecs_;

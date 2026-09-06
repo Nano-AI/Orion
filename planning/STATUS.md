@@ -4,7 +4,48 @@
 
 ---
 
-**Last updated:** 2026-09-03 (**The bundle was never self-contained - #218.**
+**Last updated:** 2026-09-05 (**The graph wanted 13.9 GiB and took the machine
+down - #219.** `Pipeline::compile()` gave all 205 nodes a texture eagerly and
+held them for the graph's life: **13861 MiB** on a 42 MP frame, allocated on
+every open. Pooled and lazy now, **1560 MiB high-water, 8.9x**, and that
+allocation was also the two-second photo swap. #158's A/B oracle stopped being a
+tautology and passed - 0 of 169,559,040 samples differ. Lazy allocation exposed
+a latent read of uninitialized GPU memory: `highlightStages()` handed back the
+`highlights` node's never-written texture whenever `highlightRecovery` was zero,
+which is the default. Also landed: the `MaskList` index-out-of-range crash, from
+two `.ips` reports, and the lens-choice render leak. Seven gates green -
+1012 / 4113 / decisions / gestures / screens / modes / wiring.
+
+**Whites reaches the data now - #221.** Its band sat at +5.5 EV over middle
+gray; the brightest value this pipeline can produce is **+3.674**, so the whole
+of its declared active range was empty and only the Gaussian's tail was working.
+`whites +1` moved 0.0003 against `blacks -1`'s 0.0189. The bench probe that
+missed it was judged under a 4.3 EV lift - the very push that drags a frame into
+a band above the sensor clip - and is measured `flat` now.
+
+⚠ **The washed-out grey-green night render did not reproduce, and the premise
+was this session's own - #220.** Measured against macOS ImageIO on three of the
+developer's night frames, Orion's sky is at or *below* the reference
+(0.0038 vs 0.0033; 0.0316 vs 0.0593). It reproduces only at **contrast 1.0**,
+which is `Adjustments{}`'s default and what every headless instrument shows -
+the product opens at **1.45**. The earlier reading came from comparing an app
+*UI screenshot* against a full-frame `sips` render, which is not a comparison.
+#214's latitude survived a GPU sweep and 8 stops is kept. `tests_display.cpp`
+now dispatches its shadow walk at 1.45 as well, because all three of its
+original checks ran at a look nobody is shown.
+
+⚠ **Two things still open, both the developer's call.**
+**(1)** `Engine.contrast = 1.45` is the remaining suspect on one deep-shade
+daylight frame - too bright *and* too dark at once, which is slope, not black
+level. #46 co-fitted it with the baseline exposure and lowering it moves every
+photograph.
+**(2)** All three `samples/*.ARW` symlinks point at moon shots in
+`~/Pictures/moon/`, relinked 2026-09-03 to stop them dangling. The frames #46
+and #214 were fitted on - a daylight frame, a forecourt, a lamp/face/grass
+frame - **are gone**, so neither fit can be reproduced or re-checked here. Every
+control floor in `bench_controls.cpp` is also still fitted at contrast 1.0.)
+
+**Previously:** 2026-09-03 (**The bundle was never self-contained - #218.**
 The packaged app only ran where Homebrew's OpenCV was installed, and the
 script's own check said otherwise because it read `otool -L` and not
 `LC_RPATH`. Rpaths swept, `@rpath` dependencies followed, walk de-quadratic-ed

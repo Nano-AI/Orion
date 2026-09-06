@@ -32,7 +32,21 @@ float3 applyExposure(float3 c, float ev)
 // Four Gaussian masks centered on the exposure bands photographers reason in:
 //
 //     Blacks     −5.5 EV      Shadows    −2.5 EV
-//     Highlights +2.5 EV      Whites     +5.5 EV
+//     Highlights +2.5 EV      Whites     +3.674 EV
+//
+// ⚠ The research table puts whites at +5.5 EV, and that is one stop and
+// five sixths above the brightest value this pipeline can produce. Sensor
+// saturation is normalized to 1.0 by `linearize` (`whiteClipFor` makes the
+// ceiling min(gains), which is the green channel's 1.0), and the frame opens at
+// `kBaselineExposureEv` = +1.2 EV, so the top of the data sits at
+// log2(2^1.2 / 0.18) = 1.2 + 2.473931 = **+3.674 EV**. The source's axis is
+// symmetric about middle gray at ±5.5 and therefore assumes a scene whose white
+// anchor is +5.5 EV; Orion's white anchor is +3.674 EV. Pasting the number
+// across put the endpoint band entirely outside the data — its whole active
+// range, +4.0 EV and up, is unreachable — and left the slider working only off
+// the Gaussian's lower tail. Measured: at the default opening state `whites +1`
+// moved 0.0003 against `blacks -1`'s 0.0189 on a night city frame, 63x weaker
+// than its supposed mirror. See research/UNSOURCED.md §1a and DECISIONS #221.
 //
 // ★ The masks are normalized to a **partition of unity** — they sum to 1 at
 // every exposure — and the four exposure offsets are summed into a *single*
@@ -50,7 +64,13 @@ float3 applyExposure(float3 c, float ev)
 static const float kEvBlacks     = -5.5f;
 static const float kEvShadows    = -2.5f;
 static const float kEvHighlights =  2.5f;
-static const float kEvWhites     =  5.5f;
+
+// The endpoint band goes on the endpoint: `kBaselineExposureEv` (1.2, in
+// pipe/DevelopInternal.h) minus log2(0.18). ⚠ The 1.2 is duplicated from C++
+// because a .slang cannot include that header; if the baseline is ever
+// remeasured this has to move with it, and the `whites +1` probe in
+// apps/bench/bench_controls.cpp is what notices if it does not.
+static const float kEvWhites     =  3.673931f;   // 1.2f + 2.473931f
 
 // Wide enough that adjacent bands overlap smoothly rather than stepping.
 static const float kBandSigma = 1.6f;

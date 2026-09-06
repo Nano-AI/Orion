@@ -48,10 +48,22 @@ int main(int argc, char** argv) {
         orion::pipe::DevelopPipeline develop(*device, ORION_SHADER_DIR, img);
         orion::pipe::Adjustments adj;
 
+        // ⚠ **One render before any of these numbers are read.** Allocation is
+        // lazy now (#219): straight after `compile()` every node output is null
+        // and `intermediateBytes()` reports only the source and the aux plates.
+        // Printing it there would have said "243 MiB" for a graph that goes on
+        // to touch fifteen times that, and — worse — the 8 GB refusal below
+        // would have been tested against a number that can never reach it.
+        develop.apply(adj);
+        const double fullRenderMs = develop.render();
+
         const double intermediatesMiB =
             static_cast<double>(develop.graph().intermediateBytes()) / (1024.0 * 1024.0);
-        std::printf("Pipeline  %zu nodes, %.0f MiB of intermediates\n",
-                    develop.graph().nodeCount(), intermediatesMiB);
+        const double poolPeakMiB =
+            static_cast<double>(develop.graph().poolPeakBytes()) / (1024.0 * 1024.0);
+        std::printf("Pipeline  %zu nodes, %.0f MiB resident after a full render"
+                    " (pool high-water %.0f MiB)\n",
+                    develop.graph().nodeCount(), intermediatesMiB, poolPeakMiB);
 
         // ⚠ **Both of these numbers were printed already and never compared**,
         // which is how a 7.2 GiB pipeline shipped without anybody saying what it
@@ -62,33 +74,61 @@ int main(int argc, char** argv) {
         // and the base M1 and M2 Air are 8 GB machines that run it. Metal
         // recommends roughly three quarters of unified memory, so ~6 GiB — and
         // a 24 MP frame wants more than that here.
-        // ⚠ **What a pooled allocator could reach**, walked over the execution
-        // order rather than guessed. The gap between this and the figure above
-        // is the size of the prize, and it decides whether #152 wants tiling,
-        // lower precision, or simply not holding dead textures.
+        // ⚠ **This used to be the prize and is now the check.** `peakLiveBytes`
+        // walks the execution order and says what a pool freeing each texture
+        // at its last read would reach; `poolPeakBytes` is what the pool
+        // actually reached. Before #219 the first was a costing number against
+        // an allocator that did not exist; now it is the pool's own schedule
+        // read back, so the pair is worth watching together.
+        //
+        // ⚠ **Not a threshold, and the two are not directly comparable.**
+        // `peakLiveBytes` costs *every* node in `order_` including the disabled
+        // ones a real render never dispatches, so it over-counts — which is why
+        // the pool comes in well under it rather than near it. What makes a
+        // regression visible here is the number moving, not the ratio reaching
+        // any particular value. The oracle that actually catches a wrong
+        // liveness is the bit-identical A/B render below (#158).
         const double peakMiB =
             static_cast<double>(develop.graph().peakLiveBytes()) / (1024.0 * 1024.0);
         std::printf("          %.0f MiB if a texture were freed at its last read"
-                    " (%.0f MiB held for nothing)\n",
-                    peakMiB, intermediatesMiB - peakMiB);
+                    " — the pool reached %.0f%% of that\n",
+                    peakMiB, peakMiB > 0.0 ? 100.0 * poolPeakMiB / peakMiB : 0.0);
+        // Eager allocation — one texture per node, held from compile to
+        // destruction — is what this replaced, and it is the number that
+        // crashed a 24 GB machine on a 42 MP frame. Printed so the prize stays
+        // visible rather than becoming folklore.
+        double eagerMiB = 0.0;
+        for (std::size_t i = 0; i < develop.graph().nodeCount(); ++i) {
+            eagerMiB += static_cast<double>(develop.graph().nodeBytes(static_cast<int>(i)));
+        }
+        eagerMiB /= (1024.0 * 1024.0);
+        std::printf("          %.0f MiB if every node kept its own texture"
+                    " (what #219 removed)\n", eagerMiB);
 
         const double workingSetMiB =
             static_cast<double>(device->info().recommendedWorkingSet) / (1024.0 * 1024.0);
         if (workingSetMiB > 0.0) {
-            const double share = 100.0 * intermediatesMiB / workingSetMiB;
+            // ⚠ The pool's high-water mark, not what is resident now. What
+            // decides whether a frame opens is the peak a render passes
+            // through, and after #219 those are different numbers — resident
+            // settles back down once the pool has freed what it can.
+            const double share = 100.0 * poolPeakMiB / workingSetMiB;
             std::printf("          %.0f MiB working set on this GPU — the graph wants %.0f%% of it\n",
                         workingSetMiB, share);
             // Three quarters of 8 GiB, the smallest machine the floor admits.
             constexpr double kSmallestMachineMiB = 8192.0 * 0.75;
-            if (intermediatesMiB > kSmallestMachineMiB) {
+            if (poolPeakMiB > kSmallestMachineMiB) {
                 std::printf("          ⚠ MORE THAN AN 8 GB MAC WILL HOLD (~%.0f MiB)."
                             " A frame this size cannot open there, and nothing in"
                             " the engine checks before trying.\n", kSmallestMachineMiB);
             }
         }
 
-        develop.apply(adj);
-        std::printf("  full render    %.2f ms   (all nodes)\n", develop.render());
+        // The render above, reported here. ⚠ Not a second `apply`+`render`:
+        // the adjustments have not moved, so nothing is dirty and the second
+        // one measured 0.00 ms — a full-render line that timed an empty
+        // command buffer.
+        std::printf("  full render    %.2f ms   (all nodes)\n", fullRenderMs);
 
         // ── The A/B oracle the texture pool needs ────────────────────────────
         //

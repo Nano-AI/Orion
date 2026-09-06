@@ -312,6 +312,7 @@ extension Editor {
                     // silently does nothing on two of its three settings, and
                     // an emptied layer looks exactly like a mask placed wrong.
                     let continues = engine.selectedMask > 0
+                        && engine.maskComponents.indices.contains(engine.selectedMask)
                         && !engine.maskComponents[engine.selectedMask].startsLayer
                     if continues {
                         Picker("", selection: $engine.maskCompose) {

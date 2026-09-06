@@ -142,9 +142,16 @@ struct MaskList: View {
 
     // MARK: One shape
 
+    // ⚠ @ViewBuilder, not a plain `-> some View`: ForEach can re-run this
+    // closure with an index from the *previous* photo after `Engine.open`
+    // has already replaced `maskComponents` (SwiftUI re-entrancy, #110.3
+    // class of bug — a real crash, see the confirmed-crash report). The
+    // bounds check below drops the row instead of indexing out of range.
+    @ViewBuilder
     private func shapeRow(_ i: Int, position: Int) -> some View {
+        if engine.maskComponents.indices.contains(i) {
         let m = engine.maskComponents[i]
-        return HStack(spacing: 4) {
+        HStack(spacing: 4) {
             Button { engine.toggleMaskHidden(i) } label: {
                 Image(systemName: m.hidden ? "eye.slash" : "eye")
                     .font(.system(size: 9))
@@ -198,6 +205,7 @@ struct MaskList: View {
             }
         }
         .padding(.leading, 14)
+        }
     }
 
     private func beginRename(layer: Int, start: Int) {

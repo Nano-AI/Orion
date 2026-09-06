@@ -39,7 +39,31 @@ extension Engine {
         pushAndRender()
     }
 
-    func open(path: String) throws {
+    /// Opens a photograph at its as-shot settings.
+    ///
+    /// ⚠ **`restoring` exists because opening an edited photograph rendered it
+    /// twice.** `OrionApp` opens, then reads the sidecar, then `restore`s — and
+    /// both halves ended with their own `pushAndRender`. At 42 MP that is two
+    /// full renders of ~100 ms each on a cold open, and the first one is a
+    /// picture the photographer never asked to see: their edit briefly replaced
+    /// by the camera's own settings. Reported as *"it renders the image, and
+    /// THEN applies, giving a weird jitter."*
+    ///
+    /// Pass `true` when a `restore` is certain to follow and the render is left
+    /// to it. ⚠ The caller then owns the failure path: `restore` returning
+    /// false renders nothing, so a sidecar that does not decode would leave the
+    /// canvas on the *previous* photograph. `OrionApp+Files` renders there.
+    ///
+    /// ⚠ **Reasoned from the call sites, not measured** — the same admission
+    /// the placeholder comment in `OrionApp+Files` makes about this very
+    /// function, and for the same reason: nothing in this repository can drive
+    /// the product open path (#121, #181). `--library-open` probes the folder
+    /// index, and the scenario runner's reload verb calls `restore` directly
+    /// without ever going through `OrionApp`'s loader, so neither reaches the
+    /// `restoring: true` branch. What is checkable by reading is that there is
+    /// now exactly one `pushAndRender` on each of the three ways out: restore
+    /// succeeds, restore fails, no sidecar at all.
+    func open(path: String, restoring: Bool = false) throws {
         guard let handle else { return }
 
         let status = orion_engine_open_raw(handle, path)
@@ -62,6 +86,26 @@ extension Engine {
         // it again for the one arriving.
         missingMattes = []
 
+        // Reset to the camera's own settings before marking loaded, so the
+        // didSet observers don't each trigger a render on a half-set model.
+        //
+        // ⚠ **Started here, not at `assign(defaults)` below.** `lensChoice`'s
+        // own `didSet` pushes a render too (it is not a plain adjustment — see
+        // its doc comment), and it used to sit above this guard: opening a
+        // second photo after ever hand-picking a lens on the first fired that
+        // render with the *outgoing* photo's whole `DevelopState` — contrast,
+        // exposure, every slider — against the *incoming* photo's pixels,
+        // already swapped in by `orion_engine_open_raw` above. Reproduced with
+        // `repro/lens-choice-leaks-a-render.txt`: `set contrast 2.80` on photo
+        // one, `lens <name>`, `open` photo two — the log shows a render at
+        // contrast 2.8 sandwiched between the correct 1.45 default before it
+        // and the correct one after. One extra render most of the time, and
+        // whatever the previous photo's edit happened to be whenever the
+        // canvas is not covered by `showPlaceholder`'s thumbnail long enough to
+        // hide it — the shape of "the photo opens looking right, then a moment
+        // later the contrast and exposure are wrong."
+        suspended = true
+
         // A choice belongs to the photograph it was made on; the engine clears
         // its own on open, and this keeps the two in step.
         lensChoice = ""
@@ -76,9 +120,6 @@ extension Engine {
         originalGeometry = nil
         maskColorSwatch = nil
 
-        // Reset to the camera's own settings before marking loaded, so the
-        // didSet observers don't each trigger a render on a half-set model.
-        suspended = true
         defaults = asShotState()
         assign(defaults)
         suspended = false
@@ -86,7 +127,8 @@ extension Engine {
         isLoaded = true
         history.reset(to: state)
         log.opened(path, state: state)
-        pushAndRender()
+        // The as-shot render, unless a restore is about to replace it anyway.
+        if !restoring { pushAndRender() }
     }
 
     /// Restores a state saved to a sidecar. Returns false when the blob would
