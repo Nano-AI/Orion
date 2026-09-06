@@ -4,7 +4,29 @@
 
 ---
 
-**Last updated:** 2026-09-03 (**The bundle was never self-contained - #218.**
+**Last updated:** 2026-09-05 (**The graph wanted 13.9 GiB and took the machine
+down - #219.** `Pipeline::compile()` gave all 205 nodes a texture eagerly and
+held them for the graph's life: **13861 MiB** on a 42 MP frame, allocated on
+every open. Pooled and lazy now, **1560 MiB high-water, 8.9x**, and that
+allocation was also the two-second photo swap. #158's A/B oracle stopped being a
+tautology and passed - 0 of 169,559,040 samples differ. Lazy allocation exposed
+a latent read of uninitialized GPU memory: `highlightStages()` handed back the
+`highlights` node's never-written texture whenever `highlightRecovery` was zero,
+which is the default. Also landed: the `MaskList` index-out-of-range crash, from
+two `.ips` reports, and the lens-choice render leak. Seven gates green -
+1012 / 4113 / decisions / gestures / screens / modes / wiring.
+
+⚠ **Two things found and deliberately not fixed - both want the developer.**
+**(1)** The night sky renders washed-out grey-green where macOS renders it
+black; cancelling `kBaselineExposureEv`'s silent +1.2 EV matches macOS. But #46
+fitted that value and #214 fitted the 8-stop black latitude, both against
+references, and a look is not changed unilaterally - see the gap table.
+**(2)** All three `samples/*.ARW` symlinks point at moon shots in
+`~/Pictures/moon/`, relinked 2026-09-03 to stop them dangling. The frames #46
+and #214 were fitted on - a daylight frame, a forecourt, a lamp/face/grass
+frame - **are gone**, so neither fit can be reproduced or re-checked here.)
+
+**Previously:** 2026-09-03 (**The bundle was never self-contained - #218.**
 The packaged app only ran where Homebrew's OpenCV was installed, and the
 script's own check said otherwise because it read `otool -L` and not
 `LC_RPATH`. Rpaths swept, `@rpath` dependencies followed, walk de-quadratic-ed

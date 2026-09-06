@@ -62,6 +62,26 @@ extension Engine {
         // it again for the one arriving.
         missingMattes = []
 
+        // Reset to the camera's own settings before marking loaded, so the
+        // didSet observers don't each trigger a render on a half-set model.
+        //
+        // ⚠ **Started here, not at `assign(defaults)` below.** `lensChoice`'s
+        // own `didSet` pushes a render too (it is not a plain adjustment — see
+        // its doc comment), and it used to sit above this guard: opening a
+        // second photo after ever hand-picking a lens on the first fired that
+        // render with the *outgoing* photo's whole `DevelopState` — contrast,
+        // exposure, every slider — against the *incoming* photo's pixels,
+        // already swapped in by `orion_engine_open_raw` above. Reproduced with
+        // `repro/lens-choice-leaks-a-render.txt`: `set contrast 2.80` on photo
+        // one, `lens <name>`, `open` photo two — the log shows a render at
+        // contrast 2.8 sandwiched between the correct 1.45 default before it
+        // and the correct one after. One extra render most of the time, and
+        // whatever the previous photo's edit happened to be whenever the
+        // canvas is not covered by `showPlaceholder`'s thumbnail long enough to
+        // hide it — the shape of "the photo opens looking right, then a moment
+        // later the contrast and exposure are wrong."
+        suspended = true
+
         // A choice belongs to the photograph it was made on; the engine clears
         // its own on open, and this keeps the two in step.
         lensChoice = ""
@@ -76,9 +96,6 @@ extension Engine {
         originalGeometry = nil
         maskColorSwatch = nil
 
-        // Reset to the camera's own settings before marking loaded, so the
-        // didSet observers don't each trigger a render on a half-set model.
-        suspended = true
         defaults = asShotState()
         assign(defaults)
         suspended = false

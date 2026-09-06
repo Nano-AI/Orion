@@ -1,0 +1,46 @@
+# A render leaked between two photographs, carrying the wrong one's edits.
+#
+# The report: "on opening a photo the image first appears as intended, then a
+# moment later contrast and exposure become badly wrong." `Engine+Document.swift`
+# `open(path:)` used to set `lensChoice = ""` — resetting the hand-picked lens
+# a previous photo may have carried — *before* the `suspended` guard that wraps
+# `assign(defaults)`. `lensChoice`'s own `didSet` pushes a render (it seats a
+# profile, which is not a plain per-frame parameter — see its doc comment), and
+# at that point `orion_engine_open_raw` has already swapped the engine over to
+# the *new* photograph's pixels while every other Swift property — contrast,
+# exposure, every slider — still holds the *outgoing* photo's values. The
+# result was a real, GPU-rendered, published frame combining one photograph's
+# edits with another's pixels, sandwiched between the correct default render
+# and the correct restored one.
+#
+# ⚠ **Nothing here can assert this.** By the time a `measure` line runs, the
+# scenario's `open` step has already finished end to end and the *final* state
+# is always correct — the leaked frame is a middle step of one synchronous
+# call, not a resting state. This is the same shape as #151/#181: reasoned
+# from the code and confirmed with temporary instrumentation (a print in
+# `Engine.pushAndRender` logging `contrast`/`lensChoice` on every call), not
+# something this file's oracle can see. `minchecks 0` accordingly.
+#
+# What temporary instrumentation showed, before the fix (`Engine+Document.swift`
+# moving `suspended = true` above `lensChoice = ""`):
+#
+#   pushAndRender contrast=1.45 lensChoice=                    (photo one, default)
+#   pushAndRender contrast=2.80 lensChoice=                    (set contrast 2.80)
+#   pushAndRender contrast=2.80 lensChoice=Sony E 50mm f/1.8 OSS  (lens verb)
+#   pushAndRender contrast=2.80 lensChoice=                    (open photo two -- LEAK: photo one's
+#                                                                contrast, photo two's pixels)
+#   pushAndRender contrast=1.45 lensChoice=                    (open photo two, correct default)
+#
+# After the fix, the fourth line does not appear.
+#
+# Run by hand to watch the sequence again if this regresses:
+#   add `FileHandle.standardError.write(...)` printing `contrast`/`lensChoice`
+#   at the top of `Engine.pushAndRender`, rebuild, then:
+#   ./build/Orion.app/Contents/MacOS/Orion --scenario repro/lens-choice-leaks-a-render.txt
+
+minchecks 0
+
+open samples/_PIC8095.ARW
+set contrast 2.80
+lens Sony FE 24-70mm f/2.8 GM
+open samples/_PIC8148.ARW
