@@ -26,18 +26,32 @@ namespace orion::pipe {
 namespace {
 
 // Which soft-clip `develop:display` uses in place of the hard `saturate` at
-// the contrast stage (decision #223) -- 0 is today's hard clamp and the
-// default for every caller that does not set this. Not a product control:
-// there is no UI or Adjustments field for it, on purpose, so a blind
-// comparison of the candidates cannot leak which is which through a sidecar
-// or a preset. `ORION_ROLLOFF=0..4`, mirroring `ORION_DEBUG_NOISE`
-// (DevelopCapture.cpp) -- `BatchExportDriver.swift`'s `--rolloff` sets it.
+// the contrast stage (#223). ⚠ **1 -- ACES RGC -- is the default now (#224),
+// and it was chosen on a property rather than on looks.**
+//
+// The blind comparison it was built for returned a clear negative: across six
+// frames with independently reshuffled labels, the developer identified
+// Reinhard (mode 3) every single time and never once distinguished the hard
+// clamp, ACES, BT.2390 or filmic from each other -- at 1:1, on the very pixels
+// where those four differ most. So no amount of further looking was going to
+// separate them, and picking by eye was not available.
+//
+// What separates them is **injectivity**, which is not a matter of taste: the
+// hard clamp maps two distinct scene values onto one output, and no later edit
+// recovers what that erased. `testDisplayRollOffIsInjective` asserts mode 0
+// collides two EVs 1.5 apart and that 1-4 keep them apart. ACES is therefore
+// free perceptually and strictly better on what survives to the file.
+//
+// Still no UI or `Adjustments` field, on purpose, so a re-run of the blind
+// comparison cannot leak through a sidecar or a preset.
+// `ORION_ROLLOFF=0..4`, mirroring `ORION_DEBUG_NOISE` (DevelopCapture.cpp);
+// `BatchExportDriver.swift`'s `--rolloff` sets it.
 std::uint32_t rollOffMode() {
     if (const char* v = std::getenv("ORION_ROLLOFF"); v != nullptr) {
         const int m = std::atoi(v);
         if (m >= 0 && m <= 4) return static_cast<std::uint32_t>(m);
     }
-    return 0u;
+    return 1u;   // ACES RGC -- see above
 }
 
 }  // namespace
