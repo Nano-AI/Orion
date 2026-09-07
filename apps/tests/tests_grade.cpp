@@ -34,7 +34,7 @@ void testHueSatMapGpu() {
 
     // The table's own structure, which the spec constrains.
     {
-        const auto table = huesat::buildTable(huesat::blueSky());
+        const auto table = huesat::buildTable({huesat::blueSky()});
         bool neutralClean = true, valueScaleOne = true;
         for (int h = 0; h < huesat::kHueDivisions; ++h) {
             const std::size_t i = std::size_t(h) * huesat::kSatDivisions * 4;
@@ -138,7 +138,7 @@ void testHueSatMapGpu() {
     {
         huesat::Correction none{};
         none.satScale = 1.0f;
-        run(huesat::buildTable(none));
+        run(huesat::buildTable({none}));
 
         double worst = 0.0;
         for (std::uint32_t y = 0; y < kH; ++y)
@@ -154,7 +154,7 @@ void testHueSatMapGpu() {
 
     // 2. The fitted table, on a neutral: still neutral.
     {
-        run(huesat::buildTable(huesat::blueSky()));
+        run(huesat::buildTable({huesat::blueSky()}));
 
         double worstTint = 0.0;
         for (std::uint32_t x = 1; x < kW; ++x) {
@@ -184,6 +184,79 @@ void testHueSatMapGpu() {
         };
         checkNear(same(leafIn, leafOut), 0.0, 6e-3, "foliage is not in the corrected window");
         checkNear(same(skinIn, skinOut), 0.0, 6e-3, "skin is not in the corrected window");
+    }
+
+    // 4. Both regions composed — decision #225. `warmTan()` is centered where
+    // `skinIn` above actually sits (hue ~18°), so the correction that section
+    // 2/3 deliberately left it out of is now the one this fixture exercises.
+    {
+        run(huesat::buildTable({huesat::blueSky(), huesat::warmTan()}));
+
+        double worstTint = 0.0;
+        for (std::uint32_t x = 1; x < kW; ++x) {
+            const auto p = pixel(out, x, 0);
+            const double mean = (p[0] + p[1] + p[2]) / 3.0;
+            for (int c = 0; c < 3; ++c)
+                worstTint = std::max(worstTint, std::abs(p[c] - mean) / std::max(1e-4, mean));
+        }
+        checkNear(worstTint, 0.0, 6e-3,
+                  "a gray ramp still comes through gray with both regions composed");
+
+        const std::uint32_t mid = kW / 2;
+        const auto hueOf = [](const std::array<double, 3>& c) {
+            const double mx = std::max({c[0], c[1], c[2]});
+            const double mn = std::min({c[0], c[1], c[2]});
+            const double span = mx - mn;
+            if (span <= 0.0) return 0.0;
+            double h;
+            if (mx == c[0])      h = std::fmod((c[1] - c[2]) / span, 6.0);
+            else if (mx == c[1]) h = (c[2] - c[0]) / span + 2.0;
+            else                 h = (c[0] - c[1]) / span + 4.0;
+            h *= 60.0;
+            if (h < 0.0) h += 360.0;
+            return h;
+        };
+
+        const auto blueIn  = pixel(input, mid, 1), blueOut  = pixel(out, mid, 1);
+        const auto leafIn  = pixel(input, mid, 2), leafOut  = pixel(out, mid, 2);
+        const auto skinIn  = pixel(input, mid, 3), skinOut  = pixel(out, mid, 3);
+
+        const auto rb = [](const std::array<double, 3>& p) { return p[0] / p[2]; };
+        report(rb(blueOut) < rb(blueIn) * 0.9,
+               "blue still moves with the warm region also composed in",
+               std::to_string(rb(blueIn)) + " -> " + std::to_string(rb(blueOut)));
+
+        const auto same = [](const std::array<double, 3>& a, const std::array<double, 3>& b) {
+            double worst = 0.0;
+            for (int c = 0; c < 3; ++c)
+                worst = std::max(worst, std::abs(a[c] - b[c]) / std::max(1e-4, a[c]));
+            return worst;
+        };
+        checkNear(same(leafIn, leafOut), 0.0, 6e-3,
+                  "foliage stays outside both corrected windows");
+
+        // Skin sits at hue ~18°, inside warmTan's window (center 38, width
+        // 45) but well off its center, so the raised-cosine weight is partial
+        // — assert the direction and a wide bound rather than the peak value.
+        const double hueBefore = hueOf(skinIn), hueAfter = hueOf(skinOut);
+        report(hueAfter < hueBefore - 1.0 && hueAfter > hueBefore - 9.0,
+               "skin now rotates toward red under the fitted warm correction",
+               std::to_string(hueBefore) + "deg -> " + std::to_string(hueAfter) + "deg");
+    }
+
+    // 5. The warm region's own table entry, at its center where the
+    // raised-cosine weight is exactly 1 — same shape as the blue check above.
+    {
+        const auto table = huesat::buildTable({huesat::warmTan()});
+        const auto entry = [&](int hueDeg, int sat) {
+            const int h = (hueDeg * huesat::kHueDivisions / 360) % huesat::kHueDivisions;
+            const std::size_t i = (std::size_t(h) * huesat::kSatDivisions + sat) * 4;
+            return table[i];
+        };
+        checkNear(entry(38, huesat::kSatDivisions - 1), huesat::warmTan().hueShiftDeg, 0.35,
+                  "the warm center carries the fitted rotation");
+        checkNear(entry(180, huesat::kSatDivisions - 1), 0.0, 1e-6,
+                  "cyan, opposite the warm center, is outside its window");
     }
 }
 

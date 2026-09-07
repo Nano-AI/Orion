@@ -4,7 +4,29 @@
 
 ---
 
-**Last updated:** 2026-09-05 (**The graph wanted 13.9 GiB and took the machine
+**Last updated:** 2026-09-06 (**The developer's colour complaint had a place at
+last: white balance/matrix territory, not AgX - #225.** Five sessions of
+"over saturated greenish image" / "color is gone" had gone to tone (#222
+contrast crush, #223 the roll-off switch, #224 ACES RGC default - none of
+these three got a `STATUS.md` line when they landed, which this paragraph is
+also catching up on) because nobody had separated a white-balance/matrix error
+from AgX's own hue skew. An ablation on the pre-display linear buffer did:
+**8.4° pre-AgX, 9.3° post-AgX** mean hue error against the camera JPEG, and
+hand-running AgX's own inset/curve/outset on the pre-AgX values moves hue
+under 1° a patch. Upstream of the display transform, matching the existing
+blue-sky `HueSatMap` correction's own Luther-Ives argument that a fixed 3x3
+cannot be right for every narrow-band reflectance - warm/earth tones are a
+second such register and "everything else the matrix handles" was never
+checked there. Fitted a second HueSatMap region the same way blue's was
+fitted: **mean hue error 9.1 -> 2.2 degrees**, 5 frames, 14 patches, landing
+next to the macOS-camera baseline (+2.09 degrees) rather than at zero.
+⚠ **Chroma re-measured after, not assumed fixed**: saturation ratio to the
+camera JPEG is still **0.83** - open, different mechanism, untouched this
+session. All seven gates green - 1029 / 4113 / decisions / gestures / screens
+/ modes / wiring; bench M0 read 16-17 ms across two runs, the known-flaky gate
+(#116), unrelated.
+
+**Previously:** 2026-09-05 (**The graph wanted 13.9 GiB and took the machine
 down - #219.** `Pipeline::compile()` gave all 205 nodes a texture eagerly and
 held them for the graph's life: **13861 MiB** on a 42 MP frame, allocated on
 every open. Pooled and lazy now, **1560 MiB high-water, 8.9x**, and that

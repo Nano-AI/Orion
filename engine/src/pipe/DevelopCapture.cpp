@@ -362,7 +362,7 @@ void DevelopPipeline::pushColorProfile(const std::array<float, 9>& camToXyzStore
         hs.satDivisions = huesat::kSatDivisions;
         pipeline_.setParams(nHueSat_, &hs, sizeof hs);
 
-        const auto table = huesat::buildTable(huesat::blueSky());
+        const auto table = huesat::buildTable({huesat::blueSky(), huesat::warmTan()});
         pipeline_.updateAux(auxHueSat_, table.data(),
                             huesat::kSatDivisions * 4 * sizeof(float));
     }

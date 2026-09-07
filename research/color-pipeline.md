@@ -585,6 +585,28 @@ easy to miss because the result still looks like a photograph.
 
 ## History
 
+- **2026-09-06** — a hue-only ablation (pre- vs post-AgX linear buffer, two
+  frames, 11 patches) placed the developer's "over saturated greenish image" /
+  "color is gone" complaint upstream of the display transform: the pre-AgX
+  buffer and the full post-AgX render disagree with the camera JPEG by 8.4°
+  and 9.3° respectively, and hand-running AgX's own inset/curve/outset on the
+  pre-AgX values moves hue by under 1° on every patch. `develop_display.slang`
+  is close to hue-preserving away from its roll-off boundary; the rotation is
+  in white balance / the camera matrix / the profile stage. Fixed by fitting a
+  second `HueSatMap` region (warm/tan, center 38°, −10°) alongside the
+  existing blue-sky one — mean error against the camera JPEG **9.1° → 2.2°**
+  across 14 patches, 5 frames, landing next to the macOS−camera baseline
+  (+2.09°) rather than at zero. Full method, fit sweep and the verification
+  table: `research/camera-profiles.md`. Chroma re-measured after (not
+  assumed fixed): saturation ratio to the camera JPEG is **0.83**, still low,
+  left open (decision #225).
+- **2026-09-06** — ACES RGC (mode 1) became the default roll-off after a blind
+  A/B across #223's five operators came back unable to tell four of them
+  apart — the developer identified Reinhard's missing identity zone every
+  time and never the other four from each other — so the choice moved to
+  injectivity (#224), which is measurable rather than a look. Did not touch
+  hue; the complaint that motivated it was chroma and white balance, which
+  #225 above addresses.
 - **2026-09-06** — the hard clamp #222 measured is now switchable
   (`DisplayParams::rollOff`, `ORION_ROLLOFF`/`--rolloff`) rather than replaced
   with one chosen fix: mode 0 is the same clamp and stays the default, modes

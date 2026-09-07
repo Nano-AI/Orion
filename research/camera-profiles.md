@@ -282,3 +282,117 @@ The stage is still the DNG specification's, and implementing it was still right
 What is overstated is the attribution of these particular numbers. Recorded in
 `UNSOURCED.md` alongside the fitted BaselineExposure, which has the same defect
 and a larger one besides.
+
+
+## A second region — warm/tan hues, decision #225 (2026-09-06)
+
+"Everything else the matrix handles" (this file's own line, above) was never
+checked past blue. It was false. The developer's repeated report — *"some over
+saturated greenish image"*, *"a lot of the color is gone and a lot of the
+depth is gone"* — survived #222/#223/#224's contrast and AgX-operator work
+untouched, because the defect was never in the tone stage those decisions
+measured.
+
+### The ablation that placed it
+
+Sampled the same chromatic patches on `DevelopPipeline`'s pre-display buffer
+— everything up to and including grading, but before `develop_display.slang`'s
+`kInset`/`agxCurve`/`kOutset` — converted to Rec.709 primaries (the same
+gamut matrix AgX itself uses, not part of AgX's tone shaping) and left linear,
+against the camera JPEG and macOS ImageIO **linearized by the sRGB EOTF** so
+all three sit in the same domain. Two frames, 11 patches
+(`~/Pictures/sept 5th forks/DSC09762.ARW`, `DSC09759.ARW`):
+
+| | mean \|hue error\| vs camera JPEG |
+|---|---|
+| pre-AgX buffer (this session's probe) | **8.4°** |
+| full render, post-AgX (`--batch-export`) | **9.3°** |
+
+The two numbers agree to within a degree. Directly running the pre-AgX
+buffer's own patch values through AgX's inset/curve/outset by hand (Python,
+not the shader, but the same constants) confirms it: hue moved by **under
+1°** on every one of the 11 patches. AgX's per-channel sigmoid is exactly the
+kind of thing that skews hue near clipping (the "notorious six"), but these
+are ordinary mid-toned bark and soil, nowhere near the roll-off boundary
+(#221/#223), and there AgX is close to hue-preserving. **The rotation is
+upstream of the display transform — white balance, the camera matrix, or the
+profile stage — not AgX.** `develop_display.slang` was not touched.
+
+### The fix is the same stage as the blue-sky one, for the same reason
+
+`RawImage.cpp` uses LibRaw's `cam_mul` (the camera's own as-shot gains, not a
+daylight fallback) and `cam_xyz` (the Adobe-coefficient-derived camera→XYZ
+matrix); `pushColorProfile` row-normalizes it into working space. Nothing
+found here says that matrix is *wrong* — only that, exactly as the blue-sky
+section above already argues from Luther-Ives, **no fixed 3×3 is correct for
+every narrow-band reflectance**, and warm/earth tones (bark, soil, sunlit
+tan) are a second register where real spectra commonly fall outside what a
+matrix alone carries. The existing HueSatMap machinery is the DNG
+specification's own answer to exactly this — it was just never fitted past
+one hue.
+
+`huesat::warmTan()` (`HueSatMap.h`) adds a second raised-cosine region,
+centered at 38° (orange/tan), width 45°, alongside the existing blue one at
+250°; `buildTable` now composes as many regions as it is given (a sum of hue
+shifts, a product of saturation scales) rather than taking exactly one.
+
+### The fit, same method as blue's
+
+Swept shift at center 38° / width 45°, scored as mean \|hue error\| of the
+real `--batch-export`ed render against the mean of the camera JPEG and macOS
+ImageIO, same 11 patches:
+
+| shift | MAE | mean(orion − camera) |
+|---|---|---|
+| 0° (unfit) | 7.17° | 9.32° |
+| −6° | 2.80° | 4.62° |
+| −8° | 1.87° | 3.11° |
+| **−10°** | **1.69°** | **1.62°** |
+| −11° | 1.76° | 0.89° |
+| −12° | 2.15° | 0.17° |
+
+−10° both minimizes the error and lands closest to the macOS−camera baseline
+itself (+2.09°) rather than to zero — −12° would have landed nearer zero,
+which means copying the camera's own look rather than sitting between two
+independent renderers the way the blue fit does. Center/width checked the
+same way at −10°: 38°/45° (1.69°) beat 30°/45° (1.98°), 45°/45° (1.84°),
+38°/30° (1.98°) and 38°/60° (2.07°). `satScale` left at 1.0 — see below.
+
+### Verification, six frames, 20 patches (14 after dropping two mis-picked ones — see caveat)
+
+Before (shift 0, i.e. blue-only, matching every prior build) against after
+(shipped default), same patches, against the camera JPEG:
+
+| | mean \|error\| vs camera | mean signed vs camera |
+|---|---|---|
+| before | 9.12° | +9.10° |
+| after | **2.18°** | **+1.66°** |
+
+Against macOS ImageIO: 5.31° → 2.74°. `DSC09762` (the developer's named
+evidence frame) alone: 8.83° → 2.79° mean \|error\| across its 6 patches.
+
+⚠ **Two of the original 16 patches (on `DSC09800`, a driftwood log with dark
+stacked stones on it) were dropped from this table** — they landed at hue
+~200-220°, inside the *blue* window, not the warm one; a coordinate guessed
+from a downsized preview hit a stone, not wood grain. They are visible in
+`--scenario` if re-picked, but are not evidence for or against this fix
+either way, so reporting them as if they were would be the same mistake this
+file's own history section already corrects once.
+
+⚠ **This is the same caveat the blue-sky section above already states, and it
+applies just as much here.** The fit target is the *mean of two renderers'
+own looks*, not a spectral measurement — a DCP built from a measured target
+could differ. This is a deliberate, documented look correction, presented as
+one, not as newly-discovered colorimetric accuracy.
+
+### Chroma — still open, re-measured rather than assumed moot
+
+The task that produced this fix flagged saturation/vibrance shipping at 0
+against contrast 1.45 as a candidate secondary defect, to be re-measured
+after the hue fix rather than stacked blind. Measured: mean ratio of Orion's
+HSV saturation to the camera JPEG's, same patches, **after** this fix —
+**0.83** (range 0.41–1.38, most patches under 1.0). The deficit is not moot.
+Left untouched this session: it is a different mechanism (global saturation/
+vibrance sliders, or the AgX inset's desaturating pull), needs its own
+measurement to attribute, and `research/UNSOURCED.md` already carries the
+vibrance-weighting formula as unsourced without this number.
