@@ -51,7 +51,7 @@ decode → white balance → demosaic → camera matrix → linear working space
 | Index/cache | **SQLite** | Public domain |
 | ML inference | **Core ML** (ANE) now; ONNX Runtime when porting | — |
 
-⚠️ **Avoid exiv2** — GPL-2.0, which would force Orion open-source or a paid commercial license. Apple's ImageIO covers metadata reads on macOS for free; revisit when porting.
+⚠️ **Avoid exiv2** — GPL-2.0, which Apache-2.0 cannot absorb. Not a commercial concern: Orion is open source already (#43, `LICENSE`). Apple's ImageIO covers metadata reads on macOS; revisit when porting.
 
 ## Library, not catalog — answering "why a DB at all?"
 
@@ -100,5 +100,10 @@ Swift 5.9+ imports C++ headers directly, no shim required — but still hand-aut
 ⚠️ **C++ exceptions cannot be caught by Swift — an uncaught one terminates the process.** The engine must never let one escape the facade.
 
 ## Open decisions
-- **License strategy** — free/open vs paid closed-source. Currently building to keep both open. (Note: no UI-framework licensing obligations now that Qt is out.)
+
+**License strategy is not one of them — closed 2026-07-28 by #43, reaffirmed
+2026-09-06.** Orion is Apache-2.0 and there is no paid distribution. The
+GPL-avoidance rule outlived the reversibility hedge it was written for and is
+kept for the plain reason that Apache-2.0 and GPL cannot be combined.
+
 - **Distribution** — direct download + notarization assumed; Mac App Store sandboxing complicates folder-based workflow.

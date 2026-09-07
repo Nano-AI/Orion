@@ -57,7 +57,11 @@ steps.
 - **No Vulkan.** Too much boilerplate for a solo maintainer. Metal on macOS; shaders authored in Slang for later portability.
 - **Maintainability is a hard requirement.** One node = one small shader (50–150 lines). Adding a feature should be a repeatable 3-file change. No 1000-line anything. The developer must be able to hand-edit any file later.
 - **Prefer mature libraries** over hand-rolled code, even at some performance cost.
-- **Avoid GPL libraries** (notably exiv2) until the license model is settled.
+- **Avoid GPL libraries** (notably exiv2). ⚠ The reason is **not** a paid
+  option — there has never been one. Orion is **Apache-2.0** (see `LICENSE`),
+  settled by decision #43, and Apache-2.0 and GPL-2.0 cannot be combined in a
+  redistributable work. Going "more open source" does not lift this; only
+  relicensing Orion itself to GPL would, and that is a one-way door.
 
 ## Stack
 C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · LibRaw decode · OpenColorIO + lcms2 color · SQLite index · XMP sidecars as source of truth.
