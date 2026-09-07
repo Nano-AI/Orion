@@ -85,6 +85,7 @@ int main() {
     testHighlightFillWiring();
     testOutputDepth();
     testAgxLatitudeIsAnAnchoredRescale();
+    testDisplayRollOffIsInjective();
     testLensDatabase();
     testBlackLevels();
     testExportFormats();

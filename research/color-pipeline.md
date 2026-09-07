@@ -373,33 +373,173 @@ whether the clamp is hard. Raising it to lift shadows clear of the clip pushes
 more of the frame past the highlight ceiling and re-breaks the midtone fit
 #46 measured; lowering it makes the clip strictly worse.
 
-**What a soft roll-off would need**, if a future session takes this on
-(not built here — `develop_display.slang` is outside this session's file
-ownership, and this is real shader-design work, not a constant tune):
+**Built, decision #223 — a switch, not a single answer.** The developer asked
+for a blind A/B across published operators rather than one this session
+picked, so `develop_display.slang:238`'s hard `saturate` is now
+`DisplayParams::rollOff`-gated: mode 0 is that exact `saturate` and stays the
+default everywhere (verified byte-for-byte in the paragraph below), modes 1-4
+are four published soft-clips. `ORION_ROLLOFF=0..4` (an env var, mirroring
+`ORION_DEBUG_NOISE`) or `--batch-export ... --rolloff N` selects one; nothing
+in a filename, log line or EXIF field says which.
 
-1. Replace the hard `saturate` at `develop_display.slang:238` with a smooth,
-   monotonic, *injective* compressive function — no two distinct inputs may
-   share an output — so contrast's slope still does midtone punch but the
-   tails compress asymptotically instead of clipping. A soft-clip / Reinhard-
-   style operator, or tapering the effective slope back toward 1.0 outside a
-   middle band via a smoothstep, are candidates; either needs a published
-   source per `CLAUDE.md`'s sourcing rule before it ships.
-2. Re-derive `agxCurve`'s effective zero crossing under the new function —
-   the polynomial's own constant term is negative (`-0.00232`), so "the input
-   is technically positive" does not mean "the output is." This session's
-   `testAgxLatitudeIsAnAnchoredRescale` extension (checks 7-8,
-   `apps/tests/tests_display.cpp`) had to account for exactly this and is a
-   worked example of the trap.
-3. A test in the shape of the near-black-fraction table above, not just a
-   mean: assert that two scene EVs some fixed distance apart never render
-   bit-identical, which the current hard clamp fails by construction and a
-   soft roll-off should pass.
-4. A decision entry once it ships, since it changes the look every open
-   photograph gets.
+**Mode 1 — ACES Reference Gamut Compression.** Academy of Motion Picture Arts
+and Sciences, *"Reference Gamut Compression Specification"*, ACES 1.3,
+https://docs.acescentral.com/rgc/specification/. The published parametric
+family is `f(x) = t + (x-t) / (1 + ((x-t)/s)^p)^(1/p)` for `x >= t`.
+**`s = 1 - t` here, not the spec's `l`-derived `s`**: the spec solves for `s`
+so the curve reaches exactly 1 at a chosen limit `l`, which is correct for a
+gamut *distance* and puts the asymptote above 1 — wrong for a value that must
+stay under 1. `s = 1 - t` asymptotes to exactly 1. `p = 2`, so the root is a
+`sqrt` and `f'(u) = (1 + (u/s)^2)^(-3/2)`, positive for every real `u` —
+monotonic by construction, not by clamping. Mirrored for the low side by the
+identity `g(y) = 1 - f(1-y, 1-t)` rather than a second derivation.
+`engine/shaders/ops/rolloff_ops.slang`, `acesRgc`/`acesRgcHi`.
 
-**Confidence:** the crush is high-confidence and reproduced on the GPU, not
-inferred from the mean table alone (see decision #222's mutation test). Which
-soft-roll-off *shape* is right is not decided by anything here.
+**Mode 2 — ITU-R BT.2390 EETF.** Report ITU-R BT.2390-11 (07/2023), *"High
+dynamic range television for production and international programme
+exchange"*, Annex 5. The knee-to-white shoulder is a cubic Hermite spline —
+value `KS` and tangent 1 at the knee (matching identity), value `MAXLUM` and
+tangent 0 at the top — `T = (E-KS)/(1-KS)`,
+`P(T) = (2T³-3T²+1)·KS + (T³-2T²+T)·(1-KS) + (-2T³+3T²)·MAXLUM`. The PDF text
+itself would not extract cleanly through automated fetching (an image-scanned
+page); the formula above was cross-checked against two independent secondary
+technical sources describing the same standard (a GitHub issue quoting it and
+a third-party HDR tone-mapping reference) rather than taken from memory alone.
+⚠ **The standard's own domain does not fit here as published.** BT.2390
+assumes its input already lives in `[KS, 1]`, true for a PQ signal and false
+once `contrast > 1` pushes this axis's `y` past 1 — using the formula as
+written would re-hard-clip anything past `y = 1`, the defect this exists to
+remove. So the far anchor is this pixel's actual reachable extreme (`yMin`/
+`yMax`, computed from `x ∈ [0,1]` through the live contrast) rather than a
+literal 0/1: an adaptation of the published formula's domain, not the formula
+itself. `bt2390`/`hermite01` in the same file.
+
+**Mode 3 — Reinhard.** Reinhard, Stark, Shirley & Ferwerda, *"Photographic
+Tone Reproduction for Digital Images"*, ACM TOG 21(3), 2002, the global
+operator `L/(1+L)` (their eq. 3), applied about the pivot instead of 0 so gray
+is its fixed point. **Deliberately has no identity zone** — it is the same
+mirrored-rational family as mode 1 with the identity-zone half-width set to
+zero, so compression starts the instant a value leaves gray. Included as the
+comparison's "no latitude" arm, not fixed to match the others: the measured
+table below shows it perturbing midtones and highlights on every frame, which
+is expected and is why it is there.
+
+**Mode 4 — darktable filmic rgb's construction, from its published
+description, not its (GPL) source.** Worked from Aurélien Pierre's
+*"Filmic, darktable and the quest of the HDR tone mapping"*
+(eng.aurelienpierre.com, Nov. 2018) and independently re-fetched to verify
+before implementing — `src/iop/filmicrgb.c` was not opened, read, or
+consulted, per `CLAUDE.md`'s rule that a GPL module's source is not a
+published algorithm even as a check on a constant. The article describes a
+middle segment linear in the log-encoded axis with slope = contrast, joined to
+toe/shoulder quartics by value + first + second derivative continuity at the
+latitude bounds and zero tangent at the black/white extremes — five conditions
+on a quartic's five coefficients, an exactly determined linear system. This
+session solved that system itself (`research/UNSOURCED.md §31` has the
+worked boundary-value derivation); the coefficients in `filmicToe`/
+`filmicShoulder` are this session's solution, not a transcription. The
+article's display-space grey anchor (`G_d = 0.18^(1/gamma)`) is replaced with
+`kPivotNorm` — an adaptation, registered in `research/UNSOURCED.md §31`, since
+Orion's roll-off sits earlier in the pipe than Pierre's gamma encode.
+
+**Where the identity zone ends, for modes 1/2/4.** Symmetric about
+`kPivotNorm` on the contrast-scaled axis, sized from decision #221's measured
+real-photograph ceiling: real frames' brightest content never exceeds
+**+3.674 EV** over gray, so setting the high threshold there means every
+measured highlight sits at or under it — untouched, not merely close. Solving
+for the half-width that puts the threshold at that ceiling at the shipping
+contrast (1.45) gives **`kRollOffHalf` = 0.3229** on the normalized axis,
+`kRollOffLo = 0.2832`, `kRollOffHi = 0.9289` — preserving **~2.94 EV** below
+gray and **3.674 EV** above it untouched. That preserved range is this
+session's own rule (not read off any of the four papers) for turning one
+empirical number into two thresholds; `research/UNSOURCED.md §31` says so.
+Mode 4 uses the pre-contrast equivalent of the same boundary (`kRollOffXLo` =
+0.3834, `kRollOffXHi` = 0.8287) so all three threshold-based modes share
+exactly the same identity zone and the comparison isolates *shape*, not zone
+width.
+
+**Injectivity, on the GPU (`testDisplayRollOffIsInjective`,
+`apps/tests/tests_display.cpp`).** Two scene EVs 1.5 EV apart (-6 and -7.5
+under gray), both inside the declared 8-stop latitude and both past mode 0's
+contrast-scaled clip boundary (`kBlackStops/contrast` = -5.517 EV, decision
+#222) — under mode 0 both render `0.000000`; the test asserts they must. Every
+other mode renders them distinctly, asserted the same way: mode 1
+`0.006065`/`0.002340`, mode 2 `0.003437`/`0.000000`, mode 3
+`0.053955`/`0.038910`, mode 4 `0.001512`/`0.000000` (measured `fp16` values,
+green channel). One check per direction, not a description plus a manual
+restore-the-clamp step.
+
+**Mode 0 is not quite bit-identical to the build before `rollOff` existed —
+measured, not assumed.** `-ffast-math` (`engine/shaders/CMakeLists.txt`, a
+project-wide flag, unchanged by this session) lets the shader compiler
+contract and reassociate float arithmetic, and its choices for mode 0's
+expression shifted when the other four branches were added to the same
+kernel, even though that expression is textually identical to what shipped
+before. Measured directly (two metallibs, one built from each source, same
+dispatch): a 4096-point gray-ramp sweep at the shipping contrast differs at 2
+of 4096 samples, by exactly one `fp16` ULP (`0.000488`), both within half a
+stop of the old clip boundary where `agxCurve`'s slope is steepest. On
+`samples/_PIC8095.ARW`, `--batch-export`'s default output differs from a
+pre-`rollOff` build's at 3,667 of 127,169,280 decoded pixel bytes (0.0029%),
+max per-channel delta 4/255 — a handful of pixels crossing an 8-bit rounding
+edge in deep shadow, which then cascades through the rest of a JPEG's
+entropy-coded stream the way any single-pixel change does. This is a
+compiler-codegen effect of the branches existing at all, not a logic
+difference in mode 0's own arithmetic, and fixing it would mean touching
+`-ffast-math` for every shader in the engine — outside this session's scope
+and this file's ownership.
+
+**Measured: near-black / exact-0% of a real dark patch, five modes, seven
+frames** (`~/Pictures/sept 5th forks/`, `--scenario`'s `open`+`shot` so no
+saved `.xmp` state intervenes; patch picked per frame from the darkest cell of
+a 12×12 grid over the camera's own JPEG, applied as the same fractional box to
+every render):
+
+| frame | camera JPEG | macOS ImageIO | mode 0 (hard) | mode 1 (ACES) | mode 2 (BT.2390) | mode 3 (Reinhard) | mode 4 (filmic) |
+|---|---|---|---|---|---|---|---|
+| DSC09734 | 0.02% / 0.000% | 0.00% / 0.000% | 3.06% / 0.008% | 0.26% / 0.000% | 0.62% / 0.000% | 0.00% / 0.000% | 1.31% / 0.000% |
+| DSC09765 | 6.53% / 0.543% | 26.15% / 0.470% | 29.05% / 9.616% | 10.76% / 0.013% | 15.66% / 0.585% | 0.00% / 0.000% | 21.38% / 1.745% |
+| DSC09783 | 1.31% / 0.024% | 60.50% / 0.242% | 70.14% / 19.757% | 21.77% / 0.004% | 33.04% / 0.300% | 0.00% / 0.000% | 51.06% / 1.275% |
+| DSC09745 | 0.05% / 0.000% | 4.52% / 0.000% | 2.51% / 0.024% | 0.12% / 0.000% | 0.29% / 0.000% | 0.00% / 0.000% | 0.81% / 0.000% |
+| DSC09755 | 0.13% / 0.008% | 5.84% / 0.194% | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% |
+| DSC09775 | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% |
+| DSC09800 | 0.01% / 0.002% | 0.00% / 0.000% | 0.08% / 0.001% | 0.00% / 0.000% | 0.00% / 0.000% | 0.00% / 0.000% | 0.01% / 0.000% |
+
+⚠ This is a *different* patch on each frame than decision #222's own table
+(pixel coordinates were never recorded there), so absolute magnitudes are not
+directly comparable frame-for-frame — the shape is: on every frame with a real
+crush (DSC09765, DSC09783), modes 1/2/4 all cut it substantially, mode 1 by
+the most and mode 4 by the least, and mode 3 eliminates it by moving the whole
+patch instead (next paragraph). Frames with little or no crush at mode 0
+(DSC09755, DSC09775, DSC09800) show all modes near zero, as they should.
+
+**Midtones and highlights, same seven frames, mean luma of a midtone and a
+bright patch.** Modes 0/1/2/4 agree to 4-6 significant figures on every
+frame's bright patch and all but two frames' midtone patch (where a 12×12
+grid cell straddles the roll-off boundary by a few percent of its area,
+moving the cell mean by ~1e-4 — not the midtones themselves moving, the patch
+partly overlapping the tail). Mode 3 moves both on every frame: bright patch
+falls 8-24% (e.g. DSC09783: 0.9469 -> 0.8133; DSC09745: 0.9600 -> 0.8239),
+confirming its no-identity-zone design perturbs exactly what it is documented
+to perturb. Full per-frame table in the decision-223 validation run;
+representative rows:
+
+| frame | patch | mode 0 | mode 1 | mode 2 | mode 4 | mode 3 |
+|---|---|---|---|---|---|---|
+| DSC09734 | bright | 0.942777 | 0.942777 | 0.942777 | 0.942777 | 0.811030 |
+| DSC09783 | bright | 0.946906 | 0.946906 | 0.946906 | 0.946906 | 0.813308 |
+| DSC09775 | bright | 0.892269 | 0.892269 | 0.892269 | 0.892269 | 0.776622 |
+| DSC09765 | mid | 0.500655 | 0.500655 | 0.500655 | 0.500655 | 0.498709 |
+| DSC09783 | mid | 0.431064 | 0.431181 | 0.431234 | 0.431123 | 0.438931 |
+
+**No winner chosen.** Mode 0 stays the default everywhere; the developer
+selects blind from rendered images.
+
+**Confidence:** the crush and its fix are both measured on the GPU, not
+inferred from a mean (decision #222's mutation test; this session's
+injectivity test). Which shape is *preferred* is a look question this
+session's numbers do not settle — that is the point of shipping four rather
+than one.
 
 **Why the inset matters:** applying a sigmoid per channel in the working
 primaries skews hue as channels clip at different points — the "notorious six"
@@ -445,6 +585,13 @@ easy to miss because the result still looks like a photograph.
 
 ## History
 
+- **2026-09-06** — the hard clamp #222 measured is now switchable
+  (`DisplayParams::rollOff`, `ORION_ROLLOFF`/`--rolloff`) rather than replaced
+  with one chosen fix: mode 0 is the same clamp and stays the default, modes
+  1-4 are ACES RGC, ITU-R BT.2390's EETF, Reinhard, and darktable filmic rgb's
+  construction from its published description. All four cut the measured
+  crush; mode 3 does it by perturbing midtones and highlights too, which is
+  documented as the point of including it. No winner chosen (#223).
 - **2026-09-06** — the shipping contrast's hard clamp measured on real
   photographs (a person disappearing in shadow): 21-92% of a genuinely dark
   patch flattened to one value at 1.45, against 0-2.5% for the camera JPEG and

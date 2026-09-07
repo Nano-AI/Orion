@@ -22,7 +22,11 @@ struct DisplayParams
     uint  dither;
     uint  lutSize;      // creative LUT grid edge; 0 when none is loaded
     float lutStrength;
-    float _pad[3];
+    // Which soft-clip stands in for the contrast stage's `saturate` -- see
+    // kRollOff* below and decision #223. 0 (hard clamp) is the default and
+    // matches every render before this field existed.
+    uint  rollOff;
+    float _pad[2];
     float4 lutMin;      // the file's DOMAIN_MIN
     float4 lutMax;
 };
@@ -152,6 +156,34 @@ static const float kPivotNorm  = 10.0f / 16.5f; // where the fit puts gray
 static const float kBlackStops = 8.0f;
 static const float kWhiteStops = 6.5f;
 
+// ── Where the soft roll-offs stop being identity (decision #223) ──────────
+//
+// `kRollOffLo`/`kRollOffHi` bound the zone, on this same normalized-then-
+// contrast-scaled axis, that modes 1/2/4 leave untouched -- decision #222's
+// fix. Placed symmetrically about `kPivotNorm`, sized from real data rather
+// than guessed: decision #221 measured this pipeline's own real photographs
+// never exceed **+3.674 EV** over gray (`kBaselineExposureEv` plus the sensor's
+// own headroom), so a threshold at that ceiling means every highlight in the
+// measured frames sits at or under it -- untouched, not merely close.
+// Symmetry about the pivot on this axis is a design choice (not a second
+// measurement): it is the plainest way to place two thresholds from one
+// number, and decision #223's validation confirms shadows keep enough
+// latitude at the number this produces (~2.94 EV preserved below gray).
+//
+// The half-width is derived from the **shipping** contrast, not the live
+// uniform -- these are fixed design points, same as `kBlackStops` itself,
+// not a curve that moves as someone drags the slider.
+static const float kHighlightCeilingEv = 3.674f;  // decision #221
+static const float kDesignContrast     = 1.45f;   // Engine.swift's shipping default
+static const float kRollOffHalf =
+    kHighlightCeilingEv * kDesignContrast * (1.0f - kPivotNorm) / kWhiteStops;
+static const float kRollOffLo   = kPivotNorm - kRollOffHalf;   // y-space, modes 1/2/3
+static const float kRollOffHi   = kPivotNorm + kRollOffHalf;
+static const float kRollOffXLo  = kPivotNorm - kRollOffHalf / kDesignContrast; // x-space, mode 4
+static const float kRollOffXHi  = kPivotNorm + kRollOffHalf / kDesignContrast;
+
+#include "ops/rolloff_ops.slang"
+
 /// Scene EV relative to middle gray -> the polynomial's normalized axis.
 float agxNormalize(float ev)
 {
@@ -228,14 +260,63 @@ void developDisplay(uint3 tid : SV_DispatchThreadID,
     c = mul(kInset, c);
 
     const float3 ev = log2(max(c, 1e-10f));
-    c = float3(agxNormalize(ev.r), agxNormalize(ev.g), agxNormalize(ev.b));
+    const float3 xPre = float3(agxNormalize(ev.r), agxNormalize(ev.g), agxNormalize(ev.b));
 
     // Contrast pivots about middle gray, so raising it does not also shift
     // overall brightness. ⚠ `p.pivot` is now only ever middle gray, and the
     // normalized position of middle gray is `kPivotNorm` by construction — the
     // two-piece axis is *defined* by pinning it there — so deriving it from the
     // range again would be a second derivation of a constant.
-    c = saturate((c - kPivotNorm) * p.contrast + kPivotNorm);
+    const float3 y = (xPre - kPivotNorm) * p.contrast + kPivotNorm;
+
+    // The old unconditional `saturate` here hard-clipped this axis before the
+    // sigmoid ever saw it, flattening real shadow detail (decision #222).
+    // `rollOff` switches in three published soft-clips plus filmic rgb's
+    // construction, judged blind rather than chosen here (#223); mode 0 is
+    // this same `saturate` and is the default everywhere.
+    //
+    // ⚠ **Not quite bit-identical to the build before this field existed.**
+    // `-ffast-math` (engine/shaders/CMakeLists.txt) lets the compiler contract
+    // and reassociate float ops, and its choices for this arithmetic shifted
+    // when these branches were added even though mode 0's expression is
+    // textually the same one-liner as before. Measured: 2-3 of 4096 samples
+    // in a fine gray-ramp sweep differ by exactly one `fp16` ULP
+    // (0.000488), all within half a stop of the old contrast-scaled clip
+    // boundary (kBlackStops/contrast, decision #222) where `agxCurve`'s
+    // slope is steepest. On `samples/_PIC8095.ARW` this flips a small number
+    // of 8-bit output values by 1 in the same deep-shadow region, which is
+    // why the exported JPEG is not byte-identical either — any pixel change
+    // cascades through the rest of a JPEG's entropy-coded stream, so a
+    // handful of 1-LSB shifts anywhere in the frame is enough to make most of
+    // the file's bytes differ from the differing pixel onward. This is a
+    // compiler-codegen effect of the branch existing at all, not a logic
+    // difference: no reassociation of this build's own flags changes it, and
+    // it is outside this session's file ownership (`-ffast-math` is a
+    // project-wide flag, and changing it would move every other shader too).
+    if (p.rollOff == 0u)
+    {
+        c = saturate(y);
+    }
+    else if (p.rollOff == 1u)
+    {
+        c = float3(acesRgc(y.r), acesRgc(y.g), acesRgc(y.b));
+    }
+    else if (p.rollOff == 2u)
+    {
+        c = float3(bt2390(y.r, p.contrast), bt2390(y.g, p.contrast), bt2390(y.b, p.contrast));
+    }
+    else if (p.rollOff == 3u)
+    {
+        c = float3(reinhard(y.r), reinhard(y.g), reinhard(y.b));
+    }
+    else
+    {
+        // Mode 4 reads the pre-contrast axis directly -- see filmicRgb's own
+        // comment for why.
+        c = float3(filmicRgb(xPre.r, p.contrast),
+                   filmicRgb(xPre.g, p.contrast),
+                   filmicRgb(xPre.b, p.contrast));
+    }
 
     c = float3(agxCurve(c.r), agxCurve(c.g), agxCurve(c.b));
     c = saturate(mul(kOutset, c));

@@ -21,8 +21,29 @@ extension BatchExport {
     /// the right pixels for each — and that a folder of them does not grow
     /// without bound.
     @MainActor
-    static func runCommandLine(_ arguments: [String]) -> Never {
+    static func runCommandLine(_ rawArguments: [String]) -> Never {
         NSApplication.shared.setActivationPolicy(.accessory)
+
+        // Dev-only: which soft-clip `develop:display` uses for the contrast
+        // stage's roll-off (decision #223). 0 (today's hard clamp) is the
+        // default for every caller that omits the flag, so a normal export is
+        // unchanged. Set as an environment variable rather than threaded
+        // through `Engine`/`Adjustments` so a blind comparison has nothing —
+        // no field, no log line, no filename — for the mode to leak through;
+        // read back in `DevelopPipeline::pushDisplayParams`
+        // (DevelopOutput.cpp). Stripped out of `arguments` before the
+        // `--batch-export` parsing below ever sees it.
+        var arguments = rawArguments
+        if let r = arguments.firstIndex(of: "--rolloff") {
+            guard r + 1 < arguments.count, let mode = Int(arguments[r + 1]),
+                  (0...4).contains(mode) else {
+                FileHandle.standardError.write(Data(
+                    "orion: --rolloff needs an integer 0-4\n".utf8))
+                exit(2)
+            }
+            setenv("ORION_ROLLOFF", String(mode), 1)
+            arguments.removeSubrange(r...(r + 1))
+        }
 
         guard let i = arguments.firstIndex(of: "--batch-export"),
               i + 2 < arguments.count else {

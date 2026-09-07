@@ -15,12 +15,32 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
 #include "pipe/DevelopInternal.h"
 
 namespace orion::pipe {
+
+namespace {
+
+// Which soft-clip `develop:display` uses in place of the hard `saturate` at
+// the contrast stage (decision #223) -- 0 is today's hard clamp and the
+// default for every caller that does not set this. Not a product control:
+// there is no UI or Adjustments field for it, on purpose, so a blind
+// comparison of the candidates cannot leak which is which through a sidecar
+// or a preset. `ORION_ROLLOFF=0..4`, mirroring `ORION_DEBUG_NOISE`
+// (DevelopCapture.cpp) -- `BatchExportDriver.swift`'s `--rolloff` sets it.
+std::uint32_t rollOffMode() {
+    if (const char* v = std::getenv("ORION_ROLLOFF"); v != nullptr) {
+        const int m = std::atoi(v);
+        if (m >= 0 && m <= 4) return static_cast<std::uint32_t>(m);
+    }
+    return 0u;
+}
+
+}  // namespace
 
 namespace {
 
@@ -478,6 +498,7 @@ void DevelopPipeline::pushDisplayParams(const Adjustments& adj) {
     const bool applying = lutSize_ >= 2 && adj.lutStrength > 1e-4f;
     d.lutSize     = applying ? static_cast<std::uint32_t>(lutSize_) : 0u;
     d.lutStrength = std::clamp(adj.lutStrength, 0.0f, 1.0f);
+    d.rollOff     = rollOffMode();
     for (int c = 0; c < 3; ++c) {
         d.lutMin[c] = lutMin_[static_cast<std::size_t>(c)];
         d.lutMax[c] = lutMax_[static_cast<std::size_t>(c)];

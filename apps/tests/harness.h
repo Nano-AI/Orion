@@ -128,6 +128,7 @@ void testLocalAdjustments();
 void testLensAutoScale();
 void testOutputDepth();
 void testAgxLatitudeIsAnAnchoredRescale();
+void testDisplayRollOffIsInjective();
 void testHighlightHaloGpu();
 void testHighlightFillGpu();
 void testHighlightFillWiring();

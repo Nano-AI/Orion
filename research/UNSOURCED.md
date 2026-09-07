@@ -1389,3 +1389,43 @@ to point at; they are tuning, argued and tested but not cited.
 bias in near-clipped highlights; of a wrong k, either ghost leakage (too wide)
 or noisy seams where the gate flickers (too tight). Both are visible in real
 brackets, which is what the sample-folder end-to-end run exists to catch.
+
+---
+
+## §31 — The display roll-off's identity-zone boundary, and mode 4's grey anchor
+
+**Where:** `engine/shaders/ops/rolloff_ops.slang`, `kRollOffLo`/`kRollOffHi`/
+`kRollOffXLo`/`kRollOffXHi` (`develop_display.slang`). Decision #223.
+
+**Sourced:** all four *operators* — ACES RGC (mode 1), the ITU-R BT.2390 EETF
+Hermite knee (mode 2), Reinhard's `L/(1+L)` (mode 3), and filmic rgb's
+toe/latitude/shoulder construction from Aurélien Pierre's published
+description (mode 4). None of the four papers says where to put the boundary
+in *this* pipeline, because none of them is written against this axis.
+
+**Not sourced:** where the identity zone ends. `kRollOffLo`/`kRollOffHi` are
+placed symmetrically about `kPivotNorm`, sized so the high threshold lands
+exactly at decision #221's measured real-photograph ceiling (+3.674 EV over
+gray) at the shipping contrast — a rule this session invented to turn one
+empirical number into two thresholds, the same shape of move as §1a's "the
+endpoint band goes on the axis's own anchor." A different, equally defensible
+rule (say, weighting the two sides by their own stop counts rather than by a
+shared normalized-axis distance) would place the boundary somewhere else and
+was not tried.
+
+**Mode 4's grey anchor is a substitution, not a reading.** Pierre's
+construction targets a *display*-space grey, `G_d = 0.18^(1/gamma)`, gamma-
+encoded straight to output. Orion's roll-off sits earlier in the pipe, on the
+same normalized log axis on both sides, so `G_d` is replaced with
+`kPivotNorm` — the axis's own grey — so the anchor this session's build
+actually holds is "grey does not move on this axis," which decision #222's
+trap already requires of every mode, not "grey lands at Pierre's target
+brightness." Defensible (the two are the same requirement read onto different
+axes), but it is a substitution this session made, not a value the article
+supplies.
+
+**Cost:** low. Every mode is anchored to the same measured ceiling, so the
+comparison in decision #223 is apples to apples regardless of whether the
+rule that produced the ceiling is the only reasonable one; what is untested is
+whether a *different* placement would make one of the four operators look
+better or worse relative to the others.

@@ -247,7 +247,16 @@ struct alignas(16) Display {
     /// fetches on every pixel of every frame.
     std::uint32_t lutSize;
     float         lutStrength;
-    float         _pad[3];
+    /// Which soft-clip replaces the contrast stage's hard `saturate` --
+    /// 0 hard clamp (today's shipping behaviour, and the default everywhere),
+    /// 1 ACES RGC, 2 BT.2390 EETF, 3 Reinhard, 4 filmic rgb's construction.
+    /// See develop_display.slang and decision #223. Not reachable from the
+    /// product UI -- `DevelopPipeline::pushDisplayParams` reads it from the
+    /// `ORION_ROLLOFF` debug env var (mirroring `ORION_DEBUG_NOISE`) so a
+    /// blind comparison needs no rebuild and nothing about the mode leaks
+    /// into any output.
+    std::uint32_t rollOff;
+    float         _pad[2];
     float         lutMin[4];    // the .cube file's DOMAIN_MIN, w unused
     float         lutMax[4];
 };

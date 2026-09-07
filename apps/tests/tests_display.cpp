@@ -520,3 +520,92 @@ void testAgxLatitudeIsAnAnchoredRescale() {
            "got " + std::to_string(green(3)) + " at " + std::to_string(kClipEv + 0.5f)
                + " stops");
 }
+
+/// `DisplayParams::rollOff` (decision #223): the hard clamp at line 238's old
+/// unconditional `saturate` fails injectivity *by construction* -- two
+/// distinct scene EVs, both inside the declared 8-stop latitude and both past
+/// the contrast-scaled clip boundary decision #222 measured, render the
+/// literal same pixel. Every published alternative it can be switched to
+/// must not do that across the same pair, so this asserts both directions
+/// rather than describing one and hand-restoring the clamp to see the other.
+///
+/// -6 and -7.5 EV under gray: 1.5 EV apart, both past
+/// `kBlackStops/kShipContrast = -5.517` EV (#222) and short of `kBlackStops`
+/// itself, so `agxNormalize`'s own end-of-latitude clamp (a real, declared
+/// boundary, not this bug) has not yet made them the same input -- they
+/// reach the roll-off as two distinct x's.
+void testDisplayRollOffIsInjective() {
+    section("Roll-off modes");
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    auto library = orion::gpu::Library::createFromFile(
+        *device, std::string(ORION_SHADER_DIR) + "/developDisplay.metallib");
+    auto kernel = orion::gpu::Kernel::create(*device, *library, "developDisplay");
+
+    const float kShipContrast = 1.45f;   // app/Engine.swift's default
+    const std::vector<float> stops{-6.0f, -7.5f};
+    const auto kN = static_cast<std::uint32_t>(stops.size());
+
+    auto src = orion::gpu::Texture::create(*device, kN, 1,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto dst = orion::gpu::Texture::create(*device, kN, 1,
+                                           orion::gpu::PixelFormat::RGBA16Float);
+    auto lut = orion::gpu::Texture::create(*device, orion::pipe::kCurveResolution,
+                                           orion::pipe::kCurveRows,
+                                           orion::gpu::PixelFormat::R32Float);
+    const auto identity = orion::pipe::buildCurveLut({});
+    lut->upload(identity.data(), orion::pipe::kCurveResolution * sizeof(float));
+    auto cubeStub = orion::gpu::Texture::create(*device, 2, 4,
+                                                orion::gpu::PixelFormat::RGBA32Float);
+
+    std::vector<__fp16> input(std::size_t(kN) * 4);
+    for (std::uint32_t i = 0; i < kN; ++i) {
+        const float v = 0.18f * std::pow(2.0f, stops[i]);
+        input[i * 4 + 0] = static_cast<__fp16>(v);
+        input[i * 4 + 1] = static_cast<__fp16>(v);
+        input[i * 4 + 2] = static_cast<__fp16>(v);
+        input[i * 4 + 3] = 1;
+    }
+    src->upload(input.data(), std::size_t(kN) * 4 * sizeof(__fp16));
+
+    std::vector<__fp16> out(std::size_t(kN) * 4);
+    const auto renderGreen = [&](std::uint32_t rollOff) {
+        orion::pipe::params::Display dp{};
+        dp.contrast      = kShipContrast;
+        dp.curveIdentity = 1;
+        dp.resolution    = orion::pipe::kCurveResolution;
+        dp.size[0] = kN;
+        dp.size[1] = 1;
+        dp.rollOff = rollOff;
+
+        orion::gpu::CommandBuffer cb(*device);
+        cb.dispatch(*kernel, {src.get(), lut.get(), cubeStub.get(), dst.get()},
+                    &dp, sizeof dp, kN, 1);
+        cb.commitAndWait();
+        dst->download(out.data(), std::size_t(kN) * 4 * sizeof(__fp16), kN, 1);
+        return std::vector<float>{float(out[1]), float(out[4 + 1])};
+    };
+
+    const auto hard = renderGreen(0u);
+    report(hard[0] == hard[1],
+           "mode 0 (hard clamp) fails injectivity, exactly the shape #222 measured",
+           "-6 EV and -7.5 EV both render " + std::to_string(hard[0]));
+
+    static const char* const kNames[5] = {"", "ACES RGC", "BT.2390", "Reinhard",
+                                          "filmic rgb"};
+    for (std::uint32_t mode = 1u; mode <= 4u; ++mode) {
+        const auto got = renderGreen(mode);
+        report(got[0] != got[1],
+               std::string("mode ") + std::to_string(mode) + " (" + kNames[mode] +
+                   ") renders the two EVs distinctly",
+               "-6 EV gave " + std::to_string(got[0]) + ", -7.5 EV gave "
+                   + std::to_string(got[1]));
+    }
+}
