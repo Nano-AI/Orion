@@ -1,595 +1,97 @@
 # Orion — Status
 
-**Update this at the end of every session.** It is the recovery point when context is cleared.
+**Update this at the end of every session.** It is the recovery point when
+context is cleared.
+
+⚠ **Before you write: check the top of this file for a second copy of what you
+are about to add.** The header is one `Last updated` line, one `Phase:` block
+and one queue. That rule has failed three times — duplicated blocks were removed
+on 2026-08-01 and had grown back by 2026-08-02, because each session appends to
+the top without reading what is there, and appending is invisible in a diff that
+is already long.
+
+⚠️ **M3 is done — do not rebuild it.** Dehaze, creative LUTs, exposure fusion
+and auto-enhance all shipped with research files, GPU tests and bench probes.
+A stale kickoff prompt naming those four has arrived **36 times**; the answer
+each time is that they exist, and each now has something that fails when its
+*wiring* breaks. The cost table is below.
 
 ---
 
-**Last updated:** 2026-09-06 (**The developer's colour complaint had a place at
-last: white balance/matrix territory, not AgX - #225.** Five sessions of
-"over saturated greenish image" / "color is gone" had gone to tone (#222
-contrast crush, #223 the roll-off switch, #224 ACES RGC default - none of
-these three got a `STATUS.md` line when they landed, which this paragraph is
-also catching up on) because nobody had separated a white-balance/matrix error
-from AgX's own hue skew. An ablation on the pre-display linear buffer did:
-**8.4° pre-AgX, 9.3° post-AgX** mean hue error against the camera JPEG, and
-hand-running AgX's own inset/curve/outset on the pre-AgX values moves hue
-under 1° a patch. Upstream of the display transform, matching the existing
-blue-sky `HueSatMap` correction's own Luther-Ives argument that a fixed 3x3
-cannot be right for every narrow-band reflectance - warm/earth tones are a
-second such register and "everything else the matrix handles" was never
-checked there. Fitted a second HueSatMap region the same way blue's was
-fitted: **mean hue error 9.1 -> 2.2 degrees**, 5 frames, 14 patches, landing
-next to the macOS-camera baseline (+2.09 degrees) rather than at zero.
-⚠ **Chroma re-measured after, not assumed fixed**: saturation ratio to the
-camera JPEG is still **0.83** - open, different mechanism, untouched this
-session. All seven gates green - 1029 / 4113 / decisions / gestures / screens
-/ modes / wiring; bench M0 read 16-17 ms across two runs, the known-flaky gate
-(#116), unrelated.
+**Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete.**
+`research/masking.md` is finished — six mask kinds, a mask is a *list* of
+components folded per §6, optionally feathered onto the photograph's own edges,
+through the graph, the POD facade, the panel rows, the sidecar, undo and the
+bench.
 
-**Previously:** 2026-09-05 (**The graph wanted 13.9 GiB and took the machine
-down - #219.** `Pipeline::compile()` gave all 205 nodes a texture eagerly and
-held them for the graph's life: **13861 MiB** on a 42 MP frame, allocated on
-every open. Pooled and lazy now, **1560 MiB high-water, 8.9x**, and that
-allocation was also the two-second photo swap. #158's A/B oracle stopped being a
-tautology and passed - 0 of 169,559,040 samples differ. Lazy allocation exposed
-a latent read of uninitialized GPU memory: `highlightStages()` handed back the
-`highlights` node's never-written texture whenever `highlightRecovery` was zero,
-which is the default. Also landed: the `MaskList` index-out-of-range crash, from
-two `.ips` reports, and the lens-choice render leak. Seven gates green -
-1012 / 4113 / decisions / gestures / screens / modes / wiring.
+**Last updated:** 2026-09-07 — pruned. 1,025 lines → this. See *The 2026-09-07
+prune* in `HISTORY.md` for what moved and why.
 
-**Whites reaches the data now - #221.** Its band sat at +5.5 EV over middle
-gray; the brightest value this pipeline can produce is **+3.674**, so the whole
-of its declared active range was empty and only the Gaussian's tail was working.
-`whites +1` moved 0.0003 against `blacks -1`'s 0.0189. The bench probe that
-missed it was judged under a 4.3 EV lift - the very push that drags a frame into
-a band above the sensor clip - and is measured `flat` now.
+**Recent sessions** — full write-ups below, older ones in `HISTORY.md`:
 
-⚠ **The washed-out grey-green night render did not reproduce, and the premise
-was this session's own - #220.** Measured against macOS ImageIO on three of the
-developer's night frames, Orion's sky is at or *below* the reference
-(0.0038 vs 0.0033; 0.0316 vs 0.0593). It reproduces only at **contrast 1.0**,
-which is `Adjustments{}`'s default and what every headless instrument shows -
-the product opens at **1.45**. The earlier reading came from comparing an app
-*UI screenshot* against a full-frame `sips` render, which is not a comparison.
-#214's latitude survived a GPU sweep and 8 stops is kept. `tests_display.cpp`
-now dispatches its shadow walk at 1.45 as well, because all three of its
-original checks ran at a look nobody is shown.
+| Date | What landed |
+|---|---|
+| 2026-09-06 | The colour complaint was white-balance/matrix, not AgX. A second `HueSatMap` region for warm/earth tones: mean hue error **9.1° → 2.2°**, 5 frames, 14 patches — #225 |
+| 2026-09-05 | The graph wanted **13.9 GiB** and took the machine down. Pooled and lazy: **1560 MiB high-water, 8.9×**; also the two-second photo swap, a `MaskList` crash and the lens render leak — #219 |
+| 2026-09-04 | Whites reached the data — its band sat at +5.5 EV over middle gray against a pipeline maximum of **+3.674** — #221. The washed-out night render did not reproduce; the premise was a UI screenshot compared against a `sips` render — #220 |
+| 2026-09-03b | The bundle was never self-contained: the check read `otool -L` and not `LC_RPATH`. 98 dylibs, 32 MB dmg, zero Homebrew images at runtime — #218 |
+| 2026-09-03 | `fix/display-path` merged, six decisions renumbered #211–#216, version **0.5.0** — #217 |
+| 2026-08-30 | The masking UX revamp: named masks, cards, merge with a direction, cap of **eight** components — #207/#208/#209/#210 |
 
-⚠ **Two things still open, both the developer's call.**
-**(1)** `Engine.contrast = 1.45` is the remaining suspect on one deep-shade
-daylight frame - too bright *and* too dark at once, which is slope, not black
-level. #46 co-fitted it with the baseline exposure and lowering it moves every
-photograph.
-**(2)** All three `samples/*.ARW` symlinks point at moon shots in
-`~/Pictures/moon/`, relinked 2026-09-03 to stop them dangling. The frames #46
-and #214 were fitted on - a daylight frame, a forecourt, a lamp/face/grass
-frame - **are gone**, so neither fit can be reproduced or re-checked here. Every
-control floor in `bench_controls.cpp` is also still fitted at contrast 1.0.)
+---
 
-**Previously:** 2026-09-03 (**The bundle was never self-contained - #218.**
-The packaged app only ran where Homebrew's OpenCV was installed, and the
-script's own check said otherwise because it read `otool -L` and not
-`LC_RPATH`. Rpaths swept, `@rpath` dependencies followed, walk de-quadratic-ed
-from eleven minutes to 33 seconds. 98 dylibs, 32 MB dmg, zero Homebrew images
-at runtime. Nothing published was affected.)
+## Open — and all three need you
 
-**Previously:** 2026-09-03 (**`fix/display-path` merged, and the version is
-0.5.0.** Six decisions came in renumbered #211-#216 - main had already spent
-#198-#210 while the branch sat unmerged. The branch's own matte-size fix was
-dropped rather than recorded twice: main's #201 is the same fix, arrived at
-independently, and main's code is what the merge kept. #217 is the merge's own
-find - a hex colour in `HISTORY.md` prose had been readable as a decision
-citation all along, and growing the ledger past 212 is what made
-`check-decisions.py` finally say so. All seven gates green - check-screens and
-check-modes had been reporting missing samples for a month because three
-symlinks in `samples/` dangled, which is not the same thing as the frames being
-absent and had been read as such three sessions running.)
+**The queue is empty.** Every item it carried is shipped. This is the **third**
+time it offered already-shipped work as the next story (#135 found two, #139
+found the third), and the third time the *decision that closed it* had never
+been written down, so a session that trusted this file would have re-run a
+schema migration over the photographer's sidecars. `tools/check-decisions.py`
+is what stops the fourth.
 
-**Previously:** 2026-08-30 (**The masking UX revamp - #207/#208/#209/#210.**
-Masks have names (sidecar field, layer answers to its starting shape's name,
-nested roster guard closes the write-only-field shape). The list is cards -
-one per mask, shapes as rows with their op written on them, rename by
-double-click, merge is one context-menu act with a direction. The cap is
-**eight** components, bench-verified: 173 → 205 nodes, +1,375 MiB at 42 MP,
-drag cost unchanged. Color-meaning sliders wear label gradients - mixer H/S/L
-pinned to the shader's own ±30°, WB, presence, fringe, wheel luma - and the
-wheel's luminance track arms degrade-then-refine at last.)
+**So there is no next story queued, and picking one is your call.** Uncosted,
+from `ROADMAP.md`: Core ML denoise (research landed under #111, explicitly not
+built), Windows port, DCP profiles. X-Trans is out of scope (#176).
 
-**Phase:** M0 done. **M1 complete.** M2, **M3 and M4's geometry complete**.
-**`research/masking.md` is finished** — primitives, groups, guided refinement, a
-raster component, Vision filling it, and a band on brightness. Six mask kinds. A
-mask is a *list* of components folded per §6 (add/subtract/intersect), optionally
-feathered onto the photograph's own edges, through the graph, the POD facade, the
-panel rows, the sidecar, undo and the bench.
-
-⚠ **Duplicated blocks were removed from this header on 2026-08-01, and they grew
-back by 2026-08-02** — which is the useful part of the story. The first clean-up
-took out two `Last updated` lines, two overlapping queues numbered 4/5 twice, and
-three `Suites:` paragraphs, one of them two sessions stale. A day later the
-header carried **two `Last updated` lines and two `Phase:` blocks** again, and the
-queue had **three** copies rather than two. Nobody added a duplicate on purpose:
-each session appends to the top of this file without reading what is already
-there, and appending is invisible in a diff that is already long.
-
-⚠ **So check the top of this file for a second copy of what you are about to
-write, before you write it.** The header is one `Last updated` line, one `Phase:`
-block, and one queue. That is the whole rule, and it has now failed twice.
-
-⚠️ **M3 is done — do not rebuild it.** Dehaze, creative LUTs, exposure fusion
-and auto-enhance all shipped with research files, GPU tests and bench probes
-(sessions `2026-07-28e` through `2026-07-29d`, now in `HISTORY.md`; the cost
-table is immediately below). A stale kickoff prompt naming those four has now
-arrived **36 times**; the answer each time is that they exist, and each of the
-four now also has something that fails when its *wiring* breaks.
-
-**Next story:** the queue, in order, each with a cost.
-
-⚠ **This list had grown to three overlapping copies**, numbered 1-6, 1-5 and
-1-6, each spliced into the next **mid-sentence** — so the seams were invisible
-unless you read the whole thing end to end, and the second copy began in the
-middle of the first copy's item 6. They disagreed about the one thing a fresh
-session would act on: **incremental brush accumulation** was the top open story
-in two of the three, costed at "~1-2 sessions", and it **shipped on 2026-08-01**
-(#102 and #108; `ROADMAP.md` heads its section *"Incremental brush accumulation
-— ✅ shipped"*). Merged 2026-08-02. Closed items are now one line each with the
-decision that closed them; **every measurement removed from here was checked to
-exist in `DECISIONS.md`, `HISTORY.md` or `ROADMAP.md` first**, so this is a
-shortening and not a deletion.
-
-**Open, in order:**
-
-1. ~~**A linear gradient's level sets under a non-conformal correction.**~~ ✅
-   **done 2026-08-02, decision #137.** `maskcheck 20 -2.0` under
-   `perspectiveAspect 1.0` went from **3 of 27 clear cells leaked, worst 0.1300
-   luma** to clean; §4c pins it both signs and against a squeeze composed with a
-   keystone. Both prerequisite pieces landed with it — `mask::displayMatrix`
-   folds crop, straighten, turns and the correction into one 3 × 3, and
-   `mask::ramp` builds the two rows the kernel evaluates.
-2. ~~**The perspective map's curvature across a large mask.**~~ ✅ **done
-   2026-08-02, decision #138.** Not reduced — removed. A radial mask is no
-   longer transported into frame coordinates at all; the kernel carries each
-   pixel back through `mask::displayMatrix` and evaluates the ellipse as drawn,
-   so there is no derivative left to be first order about. §4d of
-   `repro/perspective-carries-the-mask.txt` is the two-sided proof and fails in
-   **four places at once** on a revert, worst 0.1219 luma. ⚠ **The performance
-   question that came with it is answered by measurement**: 1.02 ms with the
-   per-pixel 3 × 3 and divide, 1.07 ms with it removed, on 24 MP — and the
-   instrument had to be built first, because all four of `orion-bench`'s
-   `mask:0` timings were brushes.
-3. ~~**Americanising the persisted keys** (#89) — needs sign-off, it rewrites
-   sidecars already on disk.~~ ✅ **already shipped, 2026-08-02, decision
-   #112** — a day before this queue offered it. Dual reads on all seven mask
-   keys plus `denoiseColour` and `PresetGroup`'s `"colour"`; American keys
-   written and British ones never written back; both-keys-present rules asserted
-   at two levels; `testAmericanKeyMigration` closes with `CanvasLayout.maskAlpha`
-   on a grid, so a renamed key cannot pass by quietly landing on the default.
-   **Confirmed by mutation** (#139): deleting one `?? float(.legacyColourR)`
-   fallback reddens two viewport checks. ⚠ **Nobody knew because #112 had no row
-   in `DECISIONS.md`** — cited nine times from the code, absent from the ledger.
-
-⚠ **THE QUEUE IS EMPTY.** All three items are shipped. This is the **third**
-time it has offered already-shipped work as the next story: #135 found two
-(snapshots #99 and Balance #104), and #139 found this one. The first two were
-duplicate copies of the queue disagreeing with each other; this one was quieter
-and worse — the work was done, and the *decision that closed it* had never been
-written down, so the only record was a comment inside `EditHistory.swift`. A
-session that trusted this file would have re-run a schema migration over the
-photographer's sidecars.
-
-⚠ **`tools/check-decisions.py` is what stops the fourth time**, and it is in
-`CLAUDE.md`'s test list beside the two suites. It fails on a duplicate decision
-number, on a `#N` the tree cites that has no row, and on a gap nobody declared.
-It does not check this queue — nothing can, since only the tree knows what is
-built — but it does guarantee that a shipped thing has somewhere to be recorded.
-
-**So there is no next story queued, and picking one is your call.** Uncosted
-options, from `ROADMAP.md`: X-Trans (pieces 1–6), Core ML denoise (research
-landed under #111, explicitly not built), Windows port, DCP profiles. The three
-items below need you and cannot move from this side.
-
-**Scope, settled by the developer 2026-08-07 (#176)** — three long-standing
-entries are closed, and none of them by building anything:
-
-- ~~**X-Trans**~~ ❌ **out of scope.** *"Not needed, stick to what camera I
-  have."* The developer shoots Bayer. **ROADMAP's X-Trans section stays as a
-  costed plan and is not queued**, and the CC0-frames approval it was blocked on
-  is moot. ⚠ This is a *scope* decision, not a discovery: the plan is still
-  correct, nobody is going to execute it.
-- ~~**The flat frame**~~ ✅ **accepted as-is.** Unreproduced after
-  instrumentation, both suites, the export path, `--screenshot` and ten real
-  window opens. The footer says **"Not a photograph — the render is one flat
-  colour, rgb(…)"** when it happens (#b3ee5a1). ⚠ **The instrument stays** — if
-  it recurs, `~/Library/Logs/Orion/session.txt` is still the evidence, and it
-  must be copied **before** any Orion command, CLI included, because every
-  launch rewrites it.
-- ~~**Patent exposure**~~ — understood, no action wanted. #174's rule stands as
-  written: a citation is not clearance, and it gates the *next* filter rather
-  than anything shipped.
-
-**Still blocked on the developer:**
-
-- **Does the brush feel fast?** The numbers say yes (#108); nobody has said so
-  with a stylus in hand.
-- ⚠⚠ **The licence.** `Nano-AI/Orion` is a **public repo with no LICENSE file**,
-  so default copyright applies: source-available, **not** open source — nobody
-  may legally fork, modify or contribute. Options put to the developer:
-  **Apache-2.0** (MIT plus a patent grant — the recommendation, given #174) or
-  **GPL-3.0** (nobody can ship a closed paid fork). Both are compatible with
-  LibRaw's LGPL and the CC BY-SA lens data.
-- ⚠⚠ **#162**, below — still the only shipped defect.
-
-⚠ **The performance audit (`ROADMAP.md`) has started, and its first finding was
-about itself, #148.** The table it opens with — four gestures that do not arm
-the preview graph — was **wrong in all four rows**; every one had been fixed and
-nobody updated it. `tools/check-gestures.py` is now a gate so it cannot rot
-again, and it is a grep rather than a test on purpose: a `DragGesture` closure
-cannot be driven from either suite (#110.3), so deleting one of these calls is
-green everywhere. **The tick is now measured too (#149)**: clarity drags at **4.2 ms** and releases
-at **56.4** — the instrument had recorded only the unarmed path since it was
-written, so it reported 17 fps for a gesture that runs at 235, and its own text
-called the preview path unbuilt long after it was built.
-✅ **The measuring protocol is settled and measured (#150)** — five runs of one
-binary spread **0.14 ms**; a saturated CPU changes nothing (**8.98, spread
-0.06**); a second Orion on the GPU gives **10.09 / 21.23 / 11.23, spread 11.14**.
-The rule is *CPU load is harmless, anything else on the GPU is fatal*, and the
-bench now warns above a 2 ms spread instead of captioning it as noise. **Every
-other number in this audit was taken on a quiet machine and is comparable.**
-✅ **Cold open is measured (#151): 210.9 ms**, and for all of it the canvas held
-the *previous* photograph — `isLoaded` is set once and never cleared.
-✅ **Fixed 2026-08-07 (#181), and it was never the design question this file
-called it.** The decision had been made and the wiring was missing:
-`Engine.showPlaceholder`/`clearPlaceholder` existed, `OrionApp+Canvas` drew
-`engine.placeholder` over the Metal view under a comment saying *"held while a
-new photo decodes"*, and a second comment promised a runloop turn *"so the
-placeholder actually paints"* — while **`showPlaceholder`'s only caller was the
-screenshot harness and `clearPlaceholder` had none**. The canvas now shows the
-arriving photograph's own thumbnail, taken down by a `defer` so a file that
-fails to open does not leave its thumbnail over the one still loaded.
-⚠ **No test can reach it** — `orion-viewport-tests` compiles zero `OrionApp*`
-files (#121) — so `tools/check-wiring.py` is a grep, and its rule is the useful
-half: **a harness caller does not count.**
-⚠⚠ **Memory is measured and it is the audit's one real defect (#152): a 24 MP
-frame wants 7,186 MiB of intermediates and an 8 GB Mac has about 6,144.** It
-cannot open there, the `CLAUDE.md` floor of macOS 14 admits those machines, and
-**the alpha is publicly downloadable**. Nothing in the engine checks —
-`recommendedMaxWorkingSetSize` is read, carried and exposed, and never compared
-against what the graph allocates. The bench prints the ratio and warns now.
-✅ **Costed 2026-08-03 (#153), and the answer eliminates two of the three.**
-`Pipeline::peakLiveBytes` reports **1,202 MiB** of peak live memory against the
-**7,186 MiB** actually allocated — **83% held for nothing**. Tiling and lower
-precision both shrink the *working set*, and the working set already fits an
-8 GB Mac with room; what does not fit is the **lifetime**, one texture per node
-held from construction to destruction. **The fix is a pooled allocator**, and
-neither expensive rewrite is warranted. ⚠ The figure is deliberately optimistic
-(it lets differing sizes share), so the truth is between 1,202 and 7,186 — but
-even a poor pool lands far under 6,144, which is what settles it.
-✅ **The pool is built and tested (#155)** — `gpu/TexturePool`, a free list keyed
-by exact shape, with `liveBytes`/`peakLiveBytes`/`hits`/`misses` so the wiring
-can be checked against #153's predicted **1,202 MiB** rather than assumed. Two
-mutations, two caught.
-⚠ **It is wired into nothing, and that is the decision.** A texture handed back
-while a later node still reads it renders a *plausible* picture made of another
-node's pixels — caught before only by a byte-for-byte test.
-**Next story: `Pipeline` adopts it — and it is two commits, not one (#158).**
-
-⚠ **`outputs_` is a `vector<unique_ptr<Texture>>`, one owner per node**, and
-pooling means two non-overlapping nodes **share** a texture, which a vector of
-unique owners cannot express. So a default-off flag is not available: the *type*
-has to change first.
-
-1. ~~**Ownership.**~~ ✅ **done, #160.** `outputs_` is a vector of raw pointers
-   into `ownedOutputs_`, which still holds one texture per node — no allocation
-   changed, and the A/B reports **bit-identical, 0 of 96,962,304**. ⚠ A pointer
-   in `outputs_` dies with its owner, and `reallocateOutput` is the only place
-   that happens; it replaces the owner *before* re-pointing.
-2. ⚠⚠ **Reuse — BLOCKED, and the plan was wrong (#161).** `Pipeline::render`
-   skips nodes that are not dirty, and a skipped node contributes **the pixels
-   still in its output texture from last render**. A pool recycles exactly
-   those, so every render becomes a full one: an exposure drag is **9.33 ms with
-   3 of 173 nodes** against **67.25 ms** for all — about **7×**, against an M0
-   gate of **<16 ms at p95**. It would turn a passing gate into a failing one.
-
-   ⚠ **The way out is that they only conflict *while editing*.** Opening a
-   photograph is a cold render — every node runs, nothing is cached, and the
-   7,186 MiB is held for a reuse that has not happened yet. That is also the
-   only moment #152's ceiling bites: the frame **fails to open**, not to be
-   edited. **So cost these two:** a pool used for the cold render and released
-   before the interactive one begins, or a pool restricted to nodes the dirty
-   walk always recomputes.
-
-   ⚠ **#153 still stands** — the *lifetime* is the problem, not tiling or
-   precision. What changed is that the lifetime worth shortening is the one
-   inside a single cold render, which the liveness walk already models.
-
-⚠⚠ **BOTH SHAPES COSTED (#162) — AND THIS NOW NEEDS YOUR DECISION.**
-Measured across every ordinary control: a drag recomputes **2–11 of 173 nodes**
-(exposure 3, temp 11, contrast 2 …). **So ~162 node textures exist purely as
-cache, and that is where the 7,186 MiB is.**
-- **Shape 2 (pool the always-dirty nodes) is dead** — those are the 2–11; the
-  memory is in the ~162 that are never recomputed while editing.
-- **Shape 1 (pool the cold render) does not survive either.** It makes the
-  *open* fit — 1,202 MiB instead of 7,186 — but the interactive path then wants
-  its cache back, the same 7,186 against ~6,144. **The frame would open and then
-  fail**, which is worse than not opening, because it has already been seen.
-
-**So it is a product trade, not an implementation choice**, and only on machines
-that cannot hold the cache: **run pooled and re-render fully — 67.25 ms a tick
-against 9.33, about 15 fps — or refuse to open the photograph.** The engine
-already reads `recommendedMaxWorkingSetSize` (#152) and can tell which machine
-it is on. ⚠ The pooled mode **fails M0 by design** (<16 ms p95 is unreachable at
-67); a waiver on 8 GB is the honest form of *"this is the degraded mode"*.
-**Slow-but-opens vs fast-but-refuses is a question about what Orion is.**
-Everything to implement either is built and correct (#155–#160).
-
-✅ **The A/B oracle is built (#159)**, in `orion-bench` — the one place that
-already constructs the shipping graph against a real photograph. Today it
-asserts **determinism**: same adjustments twice, **96,962,304 samples, zero
-differ**. Mutation-tested — a 0.05 EV nudge prints *⚠ DIFFERENT (54,740,215)*.
-⚠ **Non-fatal deliberately**, until the gate it guards exists. **When pooling
-lands, the second render becomes the pooled one and the same line stops being a
-tautology** — make it fatal in that same commit.
-
-✅ **The pins are wired into the accounting (#157).** `Pipeline::setPinned` plus
-a structural pin on the final output and the source; `DevelopPipeline` declares
-the fusion proxy and the dehaze peak after `compile`. ⚠ **The figure did not
-move — still 1,202 MiB — so it was probed**: the pinned nodes cost **2.9 and
-11.6 MiB**, 14.5 against 1,202, which rounds away. Genuinely negligible, not
-silently broken; had the ids been unassigned the same unchanged number would
-have meant the opposite. **Still nothing pooled** — bookkeeping only.
-
-⚠⚠ **WHY THEY MUST BE PINNED (#156).** In-graph
-liveness is not the whole rule: `Pipeline::nodeOutput(int)` hands out any node's
-texture *after* the render, so a pooled texture reissued to a later node would
-hand a consumer another node's pixels — right size, right format, wrong picture.
-**The list, checked by grep and complete:** `nFuseProxy_` and `nPeak_`
-(`DevelopLocal.cpp:626` and `:664`), the final `output()`, and
-`sourceTexture()`. `nodeOutput` has no other caller in the tree.
-⚠ So **1,202 MiB is optimistic twice**: it lets differing sizes share an
-allocation, and now also assumes those four recycle, which they cannot. The true
-figure is higher and still far under the 6,144 MiB an 8 GB Mac allows — which is
-what keeps #153's conclusion standing.
-✅ **Scroll, zoom, pan and the filmstrip are answered (#154) — by reading, and
-recorded as a reading rather than dressed up as a measurement.** Zoom and pan
-transform the *already-rendered* texture in the canvas blit; neither re-runs the
-graph. The filmstrip is a `LazyHStack`. ⚠ No number is quoted because driving a
-scroll or a magnify needs a gesture, and #110.3 established this harness cannot
-drive one. Closing it properly wants a verb driving `Viewport.zoomBy` and the
-filmstrip offset directly — its own small story.
-
-✅ **THE PERFORMANCE AUDIT ASKED FOR ON 2026-08-01 IS COMPLETE.** Six areas.
-**One real defect** (#152, the 8 GB ceiling), **one design question settled by
-measurement rather than argument** (#153, pooling beats tiling and precision),
-and **five stale figures corrected** (#144, #148, #149, #150, #151).
-
-**Asked for, not yet built** — raised 2026-08-03, uncosted:
-
-- ~~⚠ **A lens cannot be chosen by hand.**~~ ✅ **done 2026-08-03, #147** —
-  engine (#145), facade (#146) and interface all landed. Type two characters in
-  Optics and pick from the 1,452 the bundled database carries; the choice
-  persists per photograph as a **name**, never an index, because the data will
-  be refreshed and an index would silently mean a different lens afterwards.
-  ⚠ **Why it had to exist:** the developer's file names its lens correctly and
-  the bundled database has **no `Art 023` entry at all** (#144) — absent from
-  the data, not misspelled, so no matching rule could ever reach it. `lookup`
-  still refuses near-misses and must keep doing so; `tests_io.cpp` pins that a
-  DG DN lens never matches a DG HSM entry.
-  ⚠ **Not done:** the bundled lensfun data is still whatever was copied on the
-  day, so a lens newer than it stays absent and a photographer has to pick a
-  near equivalent knowingly. ✅ **The licence question is settled (#163): the
-  database is CC BY-SA 3.0, not the library's LGPL** — Orion parses the XML and
-  links nothing — **so refreshing it is clear to do.** Share-alike binds the
-  data, not the application; a corrected calibration goes back under the same
-  licence, which means fixing a lens entry means contributing it upstream.
-  ⚠ That check also found `NOTICE` carried **no attribution for the database at
-  all**, only for the poly3 *model* — fixed in the same commit, since the build
-  is publicly downloadable. **Nothing was downloaded**; refreshing is its own
-  story with its own diff.
-
-**Closed, each with the decision that closed it** — the full write-ups are in
-`DECISIONS.md` and the session log below:
-
-- ~~**Dehaze's drag cost**~~ ✅ **#92, 2026-08-01.** The chain's parameter blocks
-  were re-pushed every tick and `setParams` dirties the whole downstream
-  subgraph whether or not the bytes changed, so nine nodes — six of them
-  full-resolution over 24 MP — were redone for a value none of them read.
-  **147.3/146.4 → 102.7/100.6 ms**, paired and interleaved. Pinned by the
-  bench's `dehaze drag` invariant, which counts *named nodes* rather than
-  milliseconds; reverting the guard prints `DEHAZE REDOES THE DARK CHANNEL`.
-- ~~**`reopen` grows 25-49 KB a cycle**~~ ✅ **#133, 2026-08-02, closed by
-  measurement** — it does not, any more. 240 reopens: one 556 MB step on the
-  first cycle, then **+0.9 KB a cycle** over the remaining ~230, which is the
-  `open` control's own slope. Decision #90's fix held. ⚠ The methodology trap is
-  the more useful half and is in the session entry below.
-- ~~**Incremental brush accumulation**~~ ✅ **#102 and #108, 2026-08-01, both
-  sessions.** A pointer event's cost is now flat in what is already painted —
-  `mask:0` **5.20 ms appending 49 dabs to 294 against 36.46 ms re-laying them**,
-  same dab count and same host work, interleaved. One R32Float accumulator for
-  the live component, **98.25 MiB** rather than the 393 a per-component one
-  would have cost, decided from the arithmetic before the code. ⚠ The *first*
-  evaluation of a component is still linear — once after a reload, not once an
-  event. ⚠ The bench's old "the mask kernel is flat in dabs" was a fixture
-  artifact and is withdrawn.
-- ~~**A mask's extent under a perspective correction is first order**~~ ✅ the
-  radial half #102 (2026-08-01), the ramp length #134 (2026-08-02). What is left
-  is open item 1 above.
-- ~~**M1's library gap**~~ ✅ **#91, 2026-08-01.** SQLite index and a persistent
-  thumbnail cache: 300 frames with the page cache warm, **454-688 ms cold
-  against 28-54 ms warm, 12.9-17.2×**. The leftovers are named and costed in
-  `ROADMAP.md` under *Library index — what is not done*.
-- ~~**The creative vignette**~~ ✅ **#103, 2026-08-01** — an exposure change in
-  scene-linear light, shaped by the cos⁴ law and centred on the crop. ⚠ Its
-  sibling, **split toning, was refused** (#97): the grading wheels already do
-  it, and the one thing it has that they do not is Balance, which is open item 3
-  above.
-- ~~**Export panel**: bit depth, metadata policy, output sharpening~~ ✅
-  **#93-#95, 2026-08-01.** ⚠ The premise was wrong in two ways: metadata policy
-  had been built and wired for some time, and 16-bit was not "not offered" — it
-  was the *only* mode, so every file Orion had ever written was 16-bit. The work
-  was the 8-bit path, output sharpening, and a location strip that also removes
-  the IPTC place names.
-- ~~**Eleven files over the 1,000-line ceiling**~~ ✅ **#113, #117, #118, #120,
-  #121, #122, #127, #129, #131.** `DevelopPipeline.cpp` 2,896→452,
-  `Engine.swift` 2,331→795, `bench/main.cpp` 2,289→85, `tests_effects.cpp`
-  1,716→555, `Scenario.swift` 1,615→301, `OrionApp.swift` 1,557→299,
-  `DevelopPanels.swift` 1,366→56, `Screenshot.swift` 1,196→315, and #129's three
-  test files. **Nothing in the tree is over 1,000**; the gap table below carries
-  the sweep that says so and the warning about believing it. ⚠ Three of these
-  splits found checks that **cannot fail** and recorded them rather than quietly
-  fixing them: #122's five panel sections below the fold (since closed by #125),
-  #120's runner exiting 0 on a scenario that asserts nothing, and #117's two
-  mutations that were green everywhere.
-- ~~**Snapshots / versions**~~ ✅ **#99, 2026-08-01.** This photograph's whole
-  state under a name, in a sibling `PHOTO.orion-snapshots.json`. ⚠ **Two of the
-  three merged queue copies still called this "the last unbuilt line of M4",
-  unestimated**, while `app/Snapshots.swift` and `ROADMAP.md`'s ✅ had both been
-  in the tree since the day it shipped.
-- ~~**The grading panel's Balance**~~ ✅ **#104, 2026-08-01** — a rigid shift of
-  all three zone centres, ±1.25 EV at full travel; `color_grade.slang` carries
-  `float balance` and the reference behaviour (Adobe's Balance, Camera Raw 4,
-  2007). ⚠ **Also still listed as open at "~half a session"** in the copy it
-  came from, citing #97's remainder — which is exactly what #104 built.
-
-⚠ **M5 is months, not sessions**, and saying otherwise would be a lie: it holds
-an X-Trans demosaic (Markesteijn), a Windows port, Core ML denoise and
-user-loadable DCP profiles, each a multi-week epic on its own.
-
-✅ **Two of those four are now researched, and neither was built.** Core ML
-denoise (2026-08-01, #111) and **X-Trans (2026-08-02, #114)**. Both deliverables
-were the write-up and a costed piece table; both tables have a **guess** column,
-because `highlight-reconstruction.md`'s estimate was 16× out for want of one.
-
-✅ **X-Trans — `research/demosaic-xtrans.md`, seven pieces in `ROADMAP.md`,
-`UNSOURCED.md` §29, decision #114.** ⚠ **The line's own name is wrong.** It is
-not "port Markesteijn": **that algorithm has never been published**, so the only
-description is source code and the accessible copies (darktable, RawTherapee) are
-GPL-3 — closed. And no port is needed, because **LibRaw already ships the same
-code as `xtrans_interpolate` under LGPL-2.1 / CDDL-1.0** (`libraw.h:451`, read
-off this machine), which Orion already links. ⚠ **The price is decision #29, not
-the licence:** #29 clips between white balance and demosaic, so a demosaic that
-leaves the GPU takes the temperature slider with it. Two surprises — the GPU
-graph gets **smaller** (−5 nodes, −446 MiB, so 168 against 173), and a **40 MP**
-X-Trans body puts the *existing* graph at **~11.8 GiB** before any of this.
-
-✅ **Core ML denoise, 2026-08-01, decision
-#111.** `research/denoise-learned.md` plus a six-piece table in `ROADMAP.md`.
-**Nothing was built and that was the deliverable.** The line above is confirmed
-rather than contradicted: it is **not a graph node** (one fp16 32-channel
-activation at 24 Mpx is 1,480 MiB — exactly what the whole existing 8-node
-denoise chain costs) and **not a slider** (NAFNet's own 65 GMAC is 48.1 TFLOP a
-frame, ≥1.6 s on optimistic hardware against a 16 ms budget). ⚠ **The real
-blocker is the domain, and it was mis-stated everywhere until now**: Orion's
-noise *fit* is pre-demosaic but its *filter* runs post-demosaic in linear camera
-RGB, which is neither the sRGB nor the Bayer domain any published checkpoint is
-trained for. Pieces 1–3 are two measurements and a decision that is allowed to
-say stop.
-
-Film grain is **finished and shipped**. All six canvas gestures arm. The rest of
-the performance action item is in `ROADMAP.md`. `DevelopPipeline.cpp` was the
-largest standing violation of a stated hard constraint and **is not any more**
-(#113, 2026-08-02); `apps/bench/main.cpp` was the second and **is not any
-more** either (#118, same day, **2,289 → 85**). `apps/tests/tests_effects.cpp`
-was the third and the largest file in the tree, and **is not any more** (#127,
-same day, **1,716 → 555 + 865 + 331**, cut at the fixture). The gap row below has
-been **recounted by sweep** rather than edited.
-
-### ⚠ In flight — seventh wave, two agents, 2026-08-02
-
-Both stories are **holes the splitting wave found by mutation and correctly left
-alone**, because a fix inside a refactor is unreviewable. Neither is a feature;
-both are coverage the project believed it had.
-
-| Working on | Decision | The hole |
+| # | Open | Why it needs you |
 |---|---|---|
-| A floor so a scenario that measures nothing cannot pass | #124 | ⚠ Make one verb family claim every verb and **39 of 40 scenarios still exit 0** — 38 of them run *zero* checks, print `orion: 0 checks, 0 failures`, and exit 0. This is the gate named in `CLAUDE.md`, in the working agreement and in every brief. Told to check how many of the 40 legitimately assert little before choosing a rule, and to mutation-test the guard itself |
-| Three UI coverage holes with one root cause | #125 | `Screenshot.swift` builds `Editor` directly and drives only what is on screen at rest. So: the **Detail panel scrolls and coverage stops at the fold** (Grain, Vignette, Dehaze, Clarity, Sharpening — 60 lines of shipped controls — delete with everything green); the **Photo menu is in no capture** (`PhotoCommands` never reached, deleting Reset Adjustments reddens nothing); and the **footer's `lastFailure` display has no oracle** — today's `nofailure` verb pins the engine's *state*, not the line that shows it |
+| 1 | **Chroma is at 0.83** of the camera JPEG's saturation | Re-measured after #225 rather than assumed fixed. Hue is solved (2.2°); saturation is a different mechanism and untouched |
+| 2 | **`Engine.contrast = 1.45`** | The remaining suspect on one deep-shade daylight frame — too bright *and* too dark at once, which is slope, not black level. #46 co-fitted it with the baseline exposure, so lowering it moves every photograph |
+| 3 | **The frames both fits were made on are gone** | All three `samples/*.ARW` symlinks resolve to moon shots in `~/Pictures/moon/`, relinked 2026-09-03 to stop them dangling. The daylight, forecourt and lamp/face/grass frames behind #46 and #214 are absent, so neither fit can be reproduced here. Every control floor in `bench_controls.cpp` is still fitted at contrast 1.0 |
 
-⚠ **#125 is told that "unreachable, and here is the consequence pinned instead"
-is an acceptable answer** for the menu, because that is what #110.3 concluded
-about gesture arming after genuinely trying, and it was right.
+⚠ **(3) gates (1) and (2).** Neither the chroma ratio nor the contrast slope can
+be re-fitted without the frames they were fitted on.
 
-### ⚠ The first wave, and the wave that died — both in `HISTORY.md`
+**Also still on you, carried forward:** *does the brush feel fast?* The numbers
+say yes (#108); nobody has said so with a stylus in hand.
 
-Five agents landed on 2026-08-01 and a second wave of four was killed by an
-API session limit with nothing committed. Both accounts, and the one lesson
-worth keeping — **an agent on a multi-hour task commits a skeleton early and
-refines it, so a kill costs the last increment rather than the session** — are
-in `HISTORY.md` under *Agent waves, 2026-08-01*. They are history now: the
-first wave is merged and the second was relaunched and landed. ⚠ **Waves two
-through six, and their write-ups, moved to `HISTORY.md` at the 2026-08-02 prune
-(#132)** — this line used to end "and is the table below", and the table is
-there now.
+---
 
-### Where the counts stand, and the one gate that flakes
+## Where the counts stand, and the one gate that flakes
 
-⚠ **Nothing is reported and nothing carried forward loses work.** Every gap
-below is either cosmetic, named-and-costed, or needs the developer.
+**All seven gates green, measured 2026-09-07:**
+`orion-tests` **1029 checks** · `orion-viewport-tests` **4113 checks** · both 0
+failures · decisions (223 rows, 3 declared gaps, 184 cited) · gestures (6) ·
+screens (3 asserting + 1 byte-stable) · modes (`--library-open` 13 checks,
+`--batch-export`, `--hdr-merge`) · wiring (3 declared, 414 swept, 8 harness-only).
 
-**Suites:** re-measured 2026-08-30 at #210. `orion-tests` **1008 checks** ·
-`orion-viewport-tests` **4103 checks** · all 0 failures. The growth since
-#206: the eight-slot GPU fixture (+3 engine), and MaskLayers grouping/naming,
-the nested component roster, and the track-tint endpoint pins (+44 viewport).
-**Ten** `repro/` scenarios run on this machine's dog-bracket samples now (all
-exit 0) - the eight from #206 plus `mask-merge` and `eight-masks`; the rest
-still want `_PIC8220.ARW` / `_PIC8148.ARW`. ⚠ The bench *does* run on the
-dog bracket (42.4 MP) - #209's before/after was measured there.
-⚠ Earlier copies of this block said **806/3708/40**, and before that **800** and
-**3702** — the counts before #125 and #129 added checks; the suites only ever
-grow, so a stale number here reads as a regression. The bench prints **54 named
-checks** on `_PIC8220`
-and `_PIC8095` and 55 on `_PIC8148`, the extra one being that frame's waiver
-banner. `Orion --library-open <folder>` is a fourth gate: it
-opens a folder cold, warm and indexless in one process and fails when the warm
-pass did not hit, or when any of the three disagree about a field.
+⚠ **Re-measure; never adjust these in place.** This block has carried up to
+*four* copies of itself at once with four different numbers, and the three most
+recent copies read 806/3708, 1008/4103 and 1012/4113. The suites only ever grow,
+so a stale number here reads as a regression.
 
-⚠ **This block had grown to *four* copies of itself** carrying 722/626/586/641
-engine checks, 3620/3561 viewport, 39/35/36 scenarios and 149 nodes — none of
-them current, all of them left behind by merges that added without deleting, and
-the file had already flagged the same thing happening twice before. **One copy
-now, measured 2026-08-01 against a run of all four gates**, and the node count is
-173 rather than 149 because the highlight fill landed (#105/#106).
+⚠ **Both suites fail inside a sandboxed shell** — `no Metal device available`,
+and the viewport suite dies on blocked file writes. That is the sandbox, not the
+code. Run them with it off.
 
-⚠ **The M0 gate is not a reliable pass/fail on this machine, and it cost four
-sessions and three agents hours on 2026-08-01.** Twelve consecutive runs of one
-unchanged binary, nothing else on the machine (loadavg 2.9, `orion-bench` the
-only process above 6% CPU):
+⚠ **The M0 bench gate is a wall-clock threshold and it therefore flakes**, in
+both directions, and it cost four sessions before it was named (#116). Eleven
+runs of one binary once spread 8.83 → **30.42 ms** with `CoreSpotlight` at 99%
+CPU indexing the sample folder. A p95 is only meaningful next to one taken
+minutes away from it: **compare paired runs or do not compare**, and do not
+chase this number on a busy machine.
 
-    min 8.54 … 16.94   median 8.65 … 19.95   p95 9.70 … 31.30
-
-⚠ **The whole distribution shifts, not the tail.** `min` alone varies two-fold,
-so this is not a few stalled frames inside a run — the GPU is in a different
-clock state from one run to the next. A p95 threshold cannot separate that from
-a regression, and every red it produced tonight was environmental.
-
-**Until that is fixed, treat the gate as advisory**: on a red, re-run and report
-the spread. The load-immune checks are the ones to trust — node counts, which
-`exposure drag, lens on` and `dehaze drag` both assert by name.
-⚠ This block had **three** copies of itself carrying three different numbers.
-One copy, measured this session.
-
-⚠ **That p95 is only meaningful next to one taken minutes away from it.** The
-same binary measured 8.97, 16.75, 44.53 and 40.69 ms on this machine within an
-hour, tracking GUI load rather than anything in the graph. HEAD measured
-16.99/44.75/37.81 in the same window. Compare paired runs or do not compare.
-
-⚠ **The M0 gate is a wall-clock threshold and it therefore flakes, in both
-directions.** Measured again 2026-08-01: one binary gave 8.97 / 16.60 / 18.57 /
-23.73 / 20.05 / 20.54 ms inside half an hour, crossing the 16 ms line four
-times, while an unrelated build gave 9.02 / 8.73 / 8.95 and then 18.67 / 23.64.
-Interleaved five rounds, the two are **9.23 against 9.30 ms median** — the same
-number. So a red bench run means "run it again beside a control", never "this
-change regressed". This is the shape decision #92 already ruled against for
-node-level probes; the top-level gate has not been converted yet and is the last
-wall-clock assertion in the bench.
-
-hour, tracking GUI load rather than anything in the graph. Compare paired runs or
-do not compare.
-⚠ It happened again on 2026-08-01e and the cause was named this time. Eleven
-runs of **one binary**: 8.83, 8.92, 8.97, 9.00, 9.00, 9.22, 11.06, 16.86, 20.91,
-21.47, **30.42** — a 3.4× spread with `CoreSpotlight` at 99% CPU indexing the
-sample folder. It settled to 8.7–9.2 once the indexer finished, and the gate
-measures the *exposure* path, which that session did not touch: 3 nodes and 149
-nodes / 6971 MiB either way. **Do not chase this number on a busy machine.**
+---
 
 ### Known gaps, carried forward
 
@@ -600,9 +102,9 @@ Small, named, and none of them blocking the next story:
 | ⚠ **The check floor says a file measured something, never that it measured the right thing.** #124 takes M4 (one verb family claiming every verb) from 39/40 exiting 0 to 3/40. Two survivors are the declared instruments. The third, `snapshot-keeps-its-matte.txt`, keeps 3 real checks under the mutation because `snapshot missing` is implemented by the very family that claims everything — a floor cannot see that. The oracles that *can* are the byte comparison of rendered frames and the full-output diff, and neither is what the gate runs. Raising the floor would not help; the residual is a coverage shape, not a threshold | `repro/` |
 | ~~**The session log replay now exits 1.**~~ ✅ **already closed in the tree, found stale at the 2026-08-02 prune.** `InteractionLog.start()` writes `minchecks 0` into the header it emits, with five comment lines above it saying why (`InteractionLog.swift:65-78`) — so a replayed session log asserts nothing and exits 0, which is the one workflow it exists for. The row said the header "owes" that line and that it was left for whoever owns the file; whoever owns it had already written it | `InteractionLog.swift` |
 | **A matte is not regenerated when the edit changes.** Exposure and white balance change what Vision would see; they do not move the subject. Regenerating costs two renders and an inference, so it is on demand — and #79 now adds a second reason it must stay on demand: a model that has changed between OS releases would give a *different* selection, silently, on a finished edit | `SubjectMatte` |
-| **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87 | `MatteStore` |
+| **A regenerated matte leaves the old file until the next open.** Files are immutable by design, so pressing Subject five times writes five PNGs; the sweep runs on open. Bounded and cheap, but it is not zero. ⚠ It was **not** bounded until 2026-08-01 — on a photograph with no sidecar the sweep could never run at all, and 26 orphans had piled up beside one sample frame. Decision #87. ⚠⚠ **Recounted 2026-09-07: there are now 134**, 126 of them on `_PIC8095` alone, against **one** remaining sidecar in `samples/`. The sweep is keyed on open, and these frames are not being opened — so "bounded" is bounded by a sweep that does not run, not by the sweep working. 2.7 MB, so still cheap; the *number* is what was wrong | `MatteStore` |
 | ~~The **nib's constants are uncited** — dab spacing, hardness clamp~~ ✅ **spacing derived and measured 2026-08-07, #180** — `research/brush-nib.md`. **There is nothing to cite**: two dabs `k` radii apart dip the stroke's edge inward by `1 − sqrt(1 − k²/4)`, the hardness clamp makes the falloff band `0.02 r`, and a dip inside that band is swallowed — bounding spacing at **k = 0.398**. ⚠⚠ **The two constants are one decision** and cannot move apart. ⚠ **The margin is 9%, not 37%** — only a smootherstep's steep middle reads as an edge. Measured: **1.12 px ripple against a 2.26 px feather**. ⚠ The **hardness clamp's own value is still chosen**, but it is no longer free | `UNSOURCED.md` §17 |
-| **363 commits carry `Co-Authored-By` / `Claude-Session` trailers.** ⚠ **Recounted at the 2026-08-02 prune — the row said 101, and it is 363**, because every agent in every wave since has added more. `git log --format=%B \| grep -c 'Co-Authored-By: Claude'`. Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history, and the longer it waits the larger the rewrite | whole history |
+| **446 commits carry `Co-Authored-By` / `Claude-Session` trailers**, of 535 total. ⚠ **Recounted at the 2026-09-07 prune — the row said 363, and it is 446**; before that it said 101 and was recounted to 363 on 2026-08-02, because every agent in every wave since has added more. `git log --format=%B \| grep -c 'Co-Authored-By: Claude'`. Developer approved stripping them; needs a history rewrite and a force-push to a public repo. ⚠ Not done unasked — it rewrites published history, and the longer it waits the larger the rewrite | whole history |
 | ~~**A check names the mutation it exists to catch and does not catch it.**~~ ✅ **stale — closed by re-measurement 2026-08-07, #178, the ninth stale row.** The diagnosis was right: check 6 drives a **pure aspect squeeze**, whose Jacobian is diagonal, so `b = c = 0` and the conjugation multiplies two zeros. But **check 6b was added afterwards and does catch it** — a two-way keystone at four off-axis spots, graded against a central difference of `toFrame`'s own centres. Deleting `W⁻¹JW` from `mask::unperspective` now **fails 2 checks, worst axis 1.48 rad**, measured. ⚠ Check 6's squeeze block stays and asserts its own blindness (`b == 0 && c == 0`), so a future fixture cannot quietly go back to being diagonal | `MaskGeometry.h` |
 | **The 1000-line rule is not broken anywhere.** ⚠⚠ **It was, and this row said otherwise for five days — recounted 2026-08-07 at `5038f07` (#185).** `tests_mask_geom.cpp` stood at **1,173**. The previous copy of this row read *"Over 1,000: none"* as at `191b451` on 2026-08-02, and nothing recounted it while three sessions added code — which is the failure the row's own last sentence warns about, happening to the row that warns about it. Re-swept as prescribed: `git ls-files` over all **242** tracked `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files, counted with `grep -c ''`, not a directory list. **Over 1,000: none**, after the split. Largest anywhere: `tests_mask_geom.cpp` **809**, `ShaderParams.h` **954**, `tests_io.cpp` **926**, `tests_highlights.cpp` **897**, `tests_mask.cpp` **881**, `tests_tone.cpp` **858**, `Engine.swift` **844**, `tests_perspective.cpp` **837**, `tests_brush.cpp` **824**, `ViewportTests+Index.swift` **809**. ⚠ **The previous copy of this row went stale within hours of being written, which is exactly what it warns about**: it recorded `tests_highlights.cpp` at **865** as at `6767716`, and `1a3083d` — *"bound the fill's weight, and say what the constant rim actually reaches"* — took that file to **897** on the same day. Every other number in it re-derived unchanged. ⚠ **`app/Screenshot.swift` was the last one over the line**, at **1,196** — 809 lines on the morning of 2026-08-02, taken over the line the same day by #125's three interface checks, and split five ways by #131 at the seam between a scene that *asserts* and a scene that *poses*. ⚠ A sweep is of **one worktree at one commit** and cannot see whatever is in flight elsewhere — it is a floor on the violation, not a ceiling. Eleven splits are done: `DevelopPipeline.cpp` 2,896→452 (#113), `Engine.swift` 2,331→795 (#117), `bench/main.cpp` 2,289→85 (#118), `tests_effects.cpp` 1,716→555 (#127), `Scenario.swift` 1,615→301 (#120), `OrionApp.swift` 1,557→299 (#121), `DevelopPanels.swift` 1,366→56 (#122), `Screenshot.swift` 1,196→315 (#131), and #129's three: `tests_brush.cpp` 1,142→824, `tests_perspective.cpp` 1,110→837, `tests_grade.cpp` 1,029→653. ⚠ **Recount by sweep before editing this row; never adjust the numbers in place** — it has carried up to four contradictory copies of itself at once, and three were collapsed into one on 2026-08-02 | whole tree |
 | ~~⚠ **The whole Photo menu is unreachable from every check.**~~ ✅ **closed 2026-08-02, decision #125.** `--screenshot --scene menu` hands the process back to `OrionApp.main()` and reads `NSApp.mainMenu` — the shipping `Scene` building the shipping `PhotoCommands` — and asserts **26 commands by title**, exiting 1 and printing the whole 75-item bar when one is missing. Deleting Reset Adjustments now prints `MISSING from the menu bar — "Reset Adjustments"` and exits 1, with every frame and all 40 scenarios still green. ⚠ It asserts **presence, not firing**: the items are disabled at launch and firing one needs a photograph, a key window and focus (#110.3's shape). ⚠ It is not driven through `CullActions`, deliberately — that would be green on the mutation, which deletes the button and leaves the action | `Screenshot.swift` |
