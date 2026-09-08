@@ -40,7 +40,7 @@ prune* in `HISTORY.md` for what moved and why.
 
 ---
 
-## Open — and all three need you
+## Open
 
 **The queue is empty.** Every item it carried is shipped. This is the **third**
 time it offered already-shipped work as the next story (#135 found two, #139
@@ -53,14 +53,28 @@ is what stops the fourth.
 from `ROADMAP.md`: Core ML denoise (research landed under #111, explicitly not
 built), Windows port, DCP profiles. X-Trans is out of scope (#176).
 
-| # | Open | Why it needs you |
+| # | Open | State |
 |---|---|---|
-| 1 | **Chroma is at 0.83** of the camera JPEG's saturation | Re-measured after #225 rather than assumed fixed. Hue is solved (2.2°); saturation is a different mechanism and untouched |
-| 2 | **`Engine.contrast = 1.45`** | The remaining suspect on one deep-shade daylight frame — too bright *and* too dark at once, which is slope, not black level. #46 co-fitted it with the baseline exposure, so lowering it moves every photograph |
-| 3 | **The frames both fits were made on are gone** | All three `samples/*.ARW` symlinks resolve to moon shots in `~/Pictures/moon/`, relinked 2026-09-03 to stop them dangling. The daylight, forecourt and lamp/face/grass frames behind #46 and #214 are absent, so neither fit can be reproduced here. Every control floor in `bench_controls.cpp` is still fitted at contrast 1.0 |
+| 1 | ~~**Chroma is at 0.83** of the camera JPEG~~ | ✅ **closed 2026-09-07, #229 — it was never a defect.** Measured on eight sidecar-free frames against two references: **Orion/camera 0.778, Apple RAW/camera 0.796, Orion/Apple 0.978.** Apple sits as far below the camera JPEG as Orion does, because a camera JPEG carries Sony's Creative Style and `Contrast: High` and a neutral RAW render carries neither. Five sessions hunted a bug inside a look difference |
+| 2 | **High-key desaturation, 14-18% below Apple** | ⚠ #230, the one saturation finding that survives. Six of eight frames put Orion at 0.98-1.04 of Apple; `DSC09747` reads **0.861** and `DSC09749` **0.817**, and those two are the brightest (luma 0.69/0.75 against 0.33-0.66). Cause undiagnosed. **Do not widen it into #225's old shape** — two frames, one reference, bright content only |
+| 3 | **`Engine.contrast = 1.45`** | Unchanged and still yours. #46 co-fitted it with the baseline exposure, so lowering it moves every photograph. ⚠ Exposure is **not** the problem: Orion is within **±0.08 EV of Apple on all eight frames** (#229) |
+| 4 | **The default look, if you want the camera's** | Not a defect — a decision. Closing the 0.78 gap to the camera JPEG means a camera-matching profile, the way Lightroom ships one. #229 |
 
-⚠ **(3) gates (1) and (2).** Neither the chroma ratio nor the contrast slope can
-be re-fitted without the frames they were fitted on.
+⚠ **(3) no longer gates anything, and the frames were never the blocker.**
+**Every RAW carries the camera's own JPEG inside it** (`extractThumbnail`,
+`LIBRAW_THUMBNAIL_JPEG`), so any photograph is its own reference and #229 was
+measured without adding a single sample. The `samples/*.ARW` symlinks are still
+three moon shots, and `bench_controls.cpp`'s floors are still fitted at
+contrast 1.0 — but a measurement no longer waits on either.
+
+⚠ **What the developer sees on open is the placeholder swap, not a fault.**
+`OrionApp+Files.swift:269` paints the camera's embedded JPEG and `:296` clears
+it ~210.9 ms later (#151), so a photograph shows Sony's punchy rendering and
+then a neutral one at ~0.78 its saturation. ⚠ **Saved sidecars made it look far
+worse**: `DSC09734` carries `exposureEv −1.96`, `DSC09742` −2.73, `DSC09752`
+−3.22 with blacks and whites pinned at the slider limits. Orion applied them
+correctly, and they were mistaken for a renderer defect twice in one session —
+an argument for showing the edited state on open.
 
 **Also still on you, carried forward:** *does the brush feel fast?* The numbers
 say yes (#108); nobody has said so with a stylus in hand.

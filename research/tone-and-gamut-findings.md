@@ -345,6 +345,76 @@ inference, and inference is what the measurement was for.
 
 ---
 
+## G. ⚠⚠ Measured against two references — #225's deficit is a look, not a defect
+
+Sections D and E hunted a saturation defect. There isn't one. The measurement
+that settles it needed no new sample frames, because **every RAW carries the
+camera's own JPEG inside it** (`extractThumbnail`, `LIBRAW_THUMBNAIL_JPEG`) —
+the reference was free and available the whole time.
+
+Eight **sidecar-free** frames from the developer's own Sony shoot, three
+renderings each — the camera's embedded JPEG, macOS ImageIO, and Orion.
+Saturation here is the **mean of per-pixel** `(max-min)/max` over pixels above
+0.05 luma, not §231's saturation-of-the-mean.
+
+| frame | orion/camera | apple/camera | orion/apple |
+|---|---|---|---|
+| DSC09737 | 0.879 | 0.845 | 1.040 |
+| DSC09738 | 0.901 | 0.912 | 0.988 |
+| DSC09743 | 0.767 | 0.747 | 1.026 |
+| DSC09744 | 0.789 | 0.764 | 1.033 |
+| DSC09745 | 0.788 | 0.762 | 1.034 |
+| DSC09746 | 0.777 | 0.759 | 1.024 |
+| DSC09747 | 0.703 | 0.816 | **0.861** |
+| DSC09749 | 0.622 | 0.761 | **0.817** |
+| **mean** | **0.778** | **0.796** | **0.978** |
+
+⚠⚠ **Apple sits as far below the camera JPEG as Orion does.** The camera JPEG
+carries Sony's Creative Style and its own `Contrast: High` setting; a neutral
+RAW render carries neither, and no RAW developer's does. #225's 0.83 was
+measuring the gap between a camera JPEG and a RAW render, which every RAW
+developer has.
+
+**Exposure, measured in the same run, is sound.** Orion is within **±0.08 EV of
+Apple on all eight frames**. `DSC09738` reads −0.54 EV against the *camera*
+JPEG and −0.08 against Apple: Sony's DRO lifted that frame and neither RAW
+developer did.
+
+### The residual finding (#230)
+
+Six frames put Orion at 0.98–1.04 of Apple. Two do not — **`DSC09747` 0.861 and
+`DSC09749` 0.817** — and they are the two brightest (mean luma 0.69 and 0.75
+against 0.33–0.66). So there is a real **high-key desaturation** relative to
+Apple, keyed to bright content rather than to a hue. Cause undiagnosed;
+candidates are AgX's shoulder compressing bright chroma harder than Apple's
+transform, or `kOutset` under-restoring — §B records that AgX's inset/outset is
+published with no derivation of how much the outset should give back.
+
+⚠ **Do not let this grow back into #225's shape.** Two frames, one reference,
+bright content only. It wants its own measurement across a wider luma range
+before anything changes.
+
+### ⚠ What the developer actually sees, and why it is not any of the above
+
+Orion paints **the camera's embedded JPEG** as a placeholder on open
+(`OrionApp+Files.swift:269`), and clears it when the render lands (`:296`),
+~210.9 ms later (#151). So opening a photograph shows Sony's punchy rendering
+and then replaces it with a neutral one at ~0.78 its saturation. The reported
+symptom — *"it renders properly, then a quarter second later the colours
+flatten"* — is that swap, and it is inherent to rendering RAW rather than a
+fault. Closing the gap is a **default-look decision** (a camera-matching
+profile, as Lightroom ships) and not a bug fix.
+
+⚠ Two of the developer's own frames made it look far worse than it is:
+**sidecars carrying extreme saved edits** — `DSC09734` `exposureEv −1.96`,
+`DSC09742` `−2.73`, `DSC09752` `−3.22` with blacks *and* whites pinned at
+±1.0000, the slider limits. Orion was applying them correctly. **A saved edit
+was mistaken for a renderer defect twice in this session**, once by the
+developer and once here, which is an argument for the edited state being
+visible on open.
+
+---
+
 ## F. What was not checked
 
 Said plainly, per CLAUDE.md's own rule that a gap is recorded rather than
