@@ -224,6 +224,39 @@ it is not guessed at here.
 
 ---
 
+### ⚠⚠ Measured 2026-09-07 — the clamps are not the chroma deficit either
+
+| probe | all 4 clamps | remove all 4 |
+|---|---|---|
+| Rec.2020 primaries + secondaries | 0.702 | **1.000** |
+| CIE1931 spectral locus (31 pts) | 0.880 | 0.998 |
+| **Synthetic ColorChecker24** | 0.467 | **0.467 — zero change** |
+
+On real photographic subject matter the clamps cost **nothing**, to five
+decimals. They engage only for colour outside Rec.709 but inside Rec.2020,
+which is expected: AgX is defined against Rec.709 primaries.
+
+On the three real ARWs the clamps fire on **~46% of pixels**, but at **mean
+0.00004, max 0.0047** against a mid-gray of 0.18 — near-black rounding noise,
+not saturated content being cut.
+
+⚠ **Three of the four sites are inert.** Removing `tone_ops.slang:112`, `:130`
+or `develop_display.slang:256` individually changes nothing measurable, because
+`:259` re-clips whatever survives two lines later. Architecturally this is *one*
+clamp with three redundant guards.
+
+⚠⚠ **But they are load-bearing.** Removing all four takes `orion-tests` from
+1029/0 to **7 failures**, and in those the *unmasked control patch* renders
+byte-0 black — the entire frame collapses, not just the graded region. Not
+root-caused. Anyone deleting a redundant-looking guard here should start from
+that fact.
+
+**So section D's hypothesis is wrong, and #225's 17% is still unexplained.**
+What survives is the Mantiuk cross-check ruling out the contrast slope. Both
+named suspects are now eliminated.
+
+---
+
 ## E. Exposure fusion reconstructs an unguided upsample where the same tree does the guided one twice
 
 **Where:** `fuse_apply.slang:39-77`.
