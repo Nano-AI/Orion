@@ -46,6 +46,7 @@ support what it is attached to.
 | [`lens-corrections.md`](lens-corrections.md) | Distortion, TCA and vignetting; the vendored lensfun database |
 | [`perspective.md`](perspective.md) | Keystone correction — the 4-point homography, the zoom, and why it is not its own node |
 | [`masking.md`](masking.md) | Plan of record for M4's local edits — not built |
+| [`tone-and-gamut-findings.md`](tone-and-gamut-findings.md) | 2026-09-07 audit: the roll-off's mirrored shadow threshold, the patent check that precedes measuring it independently, the chroma deficit's clamp mechanism, exposure fusion's unguided upsample |
 | [`deep-research-2026-07-27.md`](deep-research-2026-07-27.md) | A research run's raw findings, referenced by several entries above |
 | [`UNSOURCED.md`](UNSOURCED.md) | **Honest register of what is still invention** |
 
