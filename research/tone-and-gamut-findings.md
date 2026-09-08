@@ -272,6 +272,46 @@ That number belongs here once it lands.
 
 ---
 
+### ⚠⚠ Measured 2026-09-07 — the halo is real, the diagnosis above is not
+
+Driving the real shader chain (`fuseProxy` → `fuseSplit` → `llfDownPacked` →
+`fuseBlend` → `fuseApply`) on a synthetic 6000×4000 vertical step edge of 6.64
+stops:
+
+| strength | 10–90% transition | excursion |
+|---|---|---|
+| 0.5 | **61 px** | 2.04 EV (~4.1× swing) |
+| 1.0 | **95 px** | 4.08 EV (~16.9× swing) |
+
+Four to six times the ~16 px this section predicted, so the halo is worse than
+guessed. **But the upsample does not cause it.** Measuring the gain ratio at
+proxy resolution — before any lift happens at all — already gives a 23–24
+proxy-texel transition, **92–96 full-resolution px**. The halo is fully formed
+in the low-resolution data. A prototype following `dehaze_recover.slang`'s
+pattern exactly (coefficients lifted, evaluated against the true full-resolution
+guide) measured **61 px and 96 px** — statistically identical to the version
+called defective above.
+
+So the pattern mismatch is a real code fact worth about **one proxy texel, 4 px
+of 90+**. The width is set by running a 6-level Laplacian pyramid on a 4×
+downsampled proxy, and `fuse_blend.slang:13-14` already quotes Mertens et al.
+§3.2 calling that a deliberate trade: *"pre-smoothing the weights trades the
+seams for halos."* A genuine fix means changing the pyramid's operating
+resolution or level count — a much larger change than swapping a sampler.
+
+⚠ **Fusion is also off by default**: `Adjustments.h:345` sets `fusion = 0.0f`,
+the 32-node chain is disabled below `1e-4` (`DevelopLocal.cpp:434`), and Auto
+Enhance zeroes it for any frame at or above mid-gray. A normally-exposed
+photograph opened cold never runs this code. Priority: low.
+
+⚠ **The lesson worth keeping** is the shape of the error, not the number. A
+verified code-level inconsistency — one stage doing what two neighbours
+document as wrong — read as a cause, and the measurement found it was a
+correlate. The inconsistency was real; the causal claim attached to it was
+inference, and inference is what the measurement was for.
+
+---
+
 ## F. What was not checked
 
 Said plainly, per CLAUDE.md's own rule that a gap is recorded rather than
