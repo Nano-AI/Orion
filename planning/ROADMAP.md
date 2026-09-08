@@ -898,10 +898,13 @@ In order:
 | S6.10 Multi-selection | ~1 session | Sync currently applies to every photo in view (FEATURES §11's own ⚠); selection scoping is the missing half |
 | S6.11 Export presets + format probe | small | Named export settings; verify ImageIO's JPEG XL / AVIF support before promising either (the M1 export section's own caveat) |
 
-⚠ **#162 is not in this table on purpose** — it is the only shipped defect, it
-outranks all of the above, and it is blocked on the developer choosing between
-tiling, lower intermediate precision, and refusing early with a usable
-sentence. The choice is the story.
+⚠ **#162 was not in this table on purpose** — it was the only shipped defect and
+outranked all of the above. ✅ **Closed by #219, 2026-09-05**, and none of the
+three options it was blocked on is what did it: graph textures are **pooled and
+allocated lazily**, so the 42 MP frame that wanted **13,861 MiB** now peaks at
+**1,560 MiB**, 8.9×. No tiling, no precision drop, no early refusal. ⚠ This
+paragraph asked for a decision that had already been made for two days, the
+same way `STATUS.md` did until the 2026-09-07 prune.
 
 ---
 
