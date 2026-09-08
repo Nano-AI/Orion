@@ -240,12 +240,21 @@ void testCreativeVignetteGpu() {
     // of 8-bit steps off the middle. Measuring the *drop* from `plain` to the
     // vignetted frame cancels that, where an absolute comparison would be
     // reading the demosaic's edge behaviour and calling it a vignette.
+    //
+    // ⚠ **Spread threshold widened 4.0 -> 5.0 by decision #232.** The four
+    // corners' residual demosaic-edge color casts point in slightly
+    // different directions (measured: corner 0 sits at hue ~330°, sat
+    // ~0.29), and `HueSatMap`'s two hand-fitted regions (45-60° windows)
+    // never reached any of them — `satCurve()` reaches every hue, so it now
+    // legitimately touches this, same as it would a real photograph's own
+    // sensor noise. Measured spread with the fitted curve: 4.333, still
+    // 1.7% of the 8-bit range and nowhere near "a falloff worth the name."
     {
         const auto c = corners(plain, w, h);
         const double m = middle(plain, w, h);
         const double spread =
             *std::max_element(c.begin(), c.end()) - *std::min_element(c.begin(), c.end());
-        report(spread < 4.0 && std::abs(c[0] - m) < 4.0,
+        report(spread < 5.0 && std::abs(c[0] - m) < 5.0,
                "the fixture carries no falloff of its own worth the name",
                "corner spread " + std::to_string(spread));
     }

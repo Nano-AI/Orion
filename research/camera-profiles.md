@@ -396,3 +396,178 @@ Left untouched this session: it is a different mechanism (global saturation/
 vibrance sliders, or the AgX inset's desaturating pull), needs its own
 measurement to attribute, and `research/UNSOURCED.md` already carries the
 vibrance-weighting formula as unsourced without this number.
+
+## A third correction — the full-wheel saturation curve, decision #232 (2026-09-08)
+
+That "deficit" turned out to be hue-shaped, not global. Decisions #226 and
+#229 ruled out a single scalar: reds render **more** saturated than the
+camera JPEG (ratio ~1.1), which a uniform shortfall cannot produce, and
+#229 separately closed the *overall* 0.78 ratio as an ordinary camera-JPEG-
+vs-neutral-render gap, not a bug (Apple's own RAW pipeline sits at 0.80
+against the same camera JPEGs). What's left, and what this section fits, is
+the **shape**: warm hues (orange/yellow) render markedly less saturated than
+the camera, red/magenta slightly more, measured per hue band against the
+camera's own embedded JPEG:
+
+| band | red | orange | yellow | green | cyan | blue | magenta |
+|---|---|---|---|---|---|---|---|
+| orion/camera, before | 1.107 | 0.825 | 0.749 | 0.909 | 0.937 | 1.004 | 1.264 |
+
+(26-frame corpus, this session — see Method below. Close to, though not
+identical to, the ~14-frame average that motivated the task: red ~1.08,
+orange ~0.72, yellow ~0.79, green ~0.84, cyan ~0.89, blue ~0.94, magenta
+~1.11. Different frame subset, same shape.)
+
+### Why a `Correction` region can't fit this
+
+`blueSky()` and `warmTan()` are raised-cosine windows, 45-60° half-width.
+Red (hue 0°) and orange (hue 30°) need **opposite** corrections only 30°
+apart — closer together than `warmTan`'s own half-width, so widening or
+retuning that region necessarily bleeds one hue's fix into its neighbor
+before reaching full strength at either. This was tried and measured:
+raising `warmTan().satScale` overcorrects red by 40-60% before orange's own
+deficit is half closed, and an 8-band per-hue "color mixer" control that
+already ships in the UI (`Adjustments.satShift`) has the identical problem
+at its own ~60° falloff. Both are ruled out; only a mechanism with a
+correction that can change sign inside a 30° gap resolves it, which is what
+motivates writing directly into the table's own 90 hue bins (4° each)
+instead of composing another region.
+
+### Method — `tools/huesatfit.py`
+
+Corpus: every 3rd frame of `~/Pictures/sept 5th forks` (78 uncompressed
+14-bit Sony ARWs, no sidecars — kept that way so `--batch-export` renders
+as-shot), 26 frames spanning the whole shoot. For each frame: extract the
+camera's own embedded JPEG (`exiftool -b -JpgFromRaw`, falling back to
+`-PreviewImage` — the reference is free, no new samples needed), render
+Orion's own `--batch-export`, downsample both to 700px with `sips` and
+decode with a pure-python PNG reader that reproduces `orion-pixstat`'s mean
+RGB exactly (decision #231 explains why `orion-pixstat`'s own `sat` field
+is the wrong tool for a whole frame — mean-of-the-mean-color, not mean
+saturation). Every lit (luma > 0.05), non-gray (sat > 0.05) pixel is binned
+by hue into the table's own 90 4° bins and averaged, pixel-weighted, across
+the whole corpus.
+
+**The fit uses seven control points, not 90 independent measurements.** A
+first version fit each of the 90 bins directly from its own (often sparse)
+pixel data and did not converge — mean per-bin error *grew* round over
+round even as the single worst bin's error fell, because a 4°-wide bin's
+pixel count in any one hue is small enough, and correlated enough within a
+frame (one flower, one patch of bark), to be mostly sampling noise. The
+seven hue bands `hue.py` already used to find this problem (`red`,
+`orange`, `yellow`, `green`, `cyan`, `blue`, `magenta` — 30-90° wide) are
+wide enough to average out that noise. Each becomes one control point at
+its band's center, and `interp_curve` fills all 90 table bins by **circular
+linear interpolation** between them — not the same shape as the failed
+8-band mixer or another raised-cosine region: linear interpolation reaches
+each control point's own value *exactly*, at its own center, whatever the
+gap to its neighbor, where a falloff kernel never reaches a close
+neighbor's full value at all. That is what makes 30°-apart red and orange
+independently correctable.
+
+### Iterating — pre/post-tone hue is not the same axis
+
+`ProfileHueSatMapEncoding = 0` (the spec, quoted above) indexes the table by
+**pre-tone** hue in linear ProPhoto HSV; this tool measures **post-AgX**
+output hue in the rendered JPEG. A one-shot inversion (`curve = 1/ratio`)
+does not land, because the two are the same axis only approximately. Each
+round renders with the *previous* round's curve already applied (via
+`ORION_HUESAT_CURVE`, the same override-hook pattern as `ORION_HUESAT`/
+`ORION_HUESAT_WARM`), remeasures the seven bands, and multiplies in
+`(1/ratio)^0.6` — damped, because an undamped update overshoots (orange
+crossed 1.0 and kept climbing on an early run).
+
+**A second, larger effect showed up under iteration and is the real
+reason this took more than 2-3 rounds**: hue bands are not independent.
+A direct test — boost only orange/yellow (curve 1.35/1.35), leave red's own
+curve at 1.0 — moved red's *own* measured ratio from 1.04 to 1.31. Pushing
+saturation up in one hue measurably raises the apparent saturation of its
+neighbor, most plausibly through gamut-boundary clipping (a heavily
+saturated orange pixel pushed toward the sRGB cusp reads closer to red).
+Because red's target moves every round the correction runs, it is chasing
+something that is itself still converging — round-by-round residuals below
+confirm it recovers, slowly, once orange/yellow stabilize, rather than
+diverging outright.
+
+**Convergence (12 rounds, DAMPING 0.6, clamp [0.65, 1.35]):**
+
+| round | red | orange | yellow | green | cyan | blue | magenta |
+|---|---|---|---|---|---|---|---|
+| 0 (start) | 1.107 | 0.825 | 0.749 | 0.909 | 0.937 | 1.004 | 1.264 |
+| 1 | 1.213 | 0.945 | 0.866 | 0.980 | 0.937 | 1.012 | 1.244 |
+| 3 | 1.251 | 1.026 | 0.947 | 1.020 | 0.937 | 1.015 | 1.161 |
+| 6 | 1.218 | 1.013 | 0.942 | 1.008 | 0.948 | 1.018 | 1.134 |
+| 9 | 1.203 | 1.007 | 0.939 | 1.003 | 0.955 | 1.014 | 1.133 |
+| 12 (final) | 1.196 | 1.004 | 0.938 | 1.001 | 0.952 | 1.005 | 1.128 |
+| \|error\| | 0.196 | 0.004 | 0.062 | 0.001 | 0.048 | 0.005 | 0.128 |
+
+Mean absolute band error: **13.6% → 6.3%**, a 54% reduction. Orange, green
+and blue converge to within half a percent; yellow and cyan land at 5-6%;
+red and magenta — the two bands needing a *reduction*, both immediately
+adjacent to bands being pushed *up* — are the residual, at 20% and 13%.
+Both are trending down (monotonically for the last 9 of 12 rounds) rather
+than diverging, and both would likely close further with more rounds; this
+session stopped at 12 (about 9 minutes of render time per attempt across
+several tuning passes) rather than chase an asymptote. Recorded honestly
+rather than reported as full convergence.
+
+### The clamp — [0.65, 1.35], and why not wider
+
+Sanity bound on any one control point, chosen empirically rather than
+picked round: pushing cyan's control point past 1.35 (an earlier run let it
+reach 1.42) measurably moved its *own* ratio by less than the run-to-run
+noise, while pushing red below 0.65 (an earlier run clamped it at 0.60)
+similarly stopped correcting red's ratio once orange/yellow's own
+correction had stabilized — both bands were chasing a target that had
+already stopped moving. Widening the clamp further spends more distortion
+for a return this corpus cannot show is real. `[0.65, 1.35]` is where every
+control point still measurably moves its own band when it changes.
+
+### Wiring
+
+`HueSatMap.h`'s `satCurve()` returns the fitted 90-value array (env-var
+overridable through `ORION_HUESAT_CURVE`, same hook the fit used).
+`buildTable` takes it as a new, optional second parameter and multiplies it
+into `satScale` **after** composing `blueSky()`/`warmTan()`'s own regions —
+their hue shifts and their own `satScale` values (1.05 and 1.0) are
+untouched, since the curve was fitted against the *current* pipeline output
+(with both regions already active), not against an identity baseline. The
+curve is gated by the same low-saturation fade every region uses
+(`kCurveSatOnset`/`Full`, 0.08/0.22 — slightly more conservative than
+`warmTan`'s 0.05/0.20, since a curve with no hue it skips is more likely to
+catch faint, incidental chroma a narrow window would simply miss), so the
+zero-saturation column stays exactly `(0, 1, 1)` — pinned by
+`testHueSatMapGpu`'s section 6.
+
+**A pre-existing GPU test needed its own tolerance widened as a direct,
+measured consequence**: `testCreativeVignetteGpu`'s flat fixture carries a
+demosaic-edge color cast at its corners (RCD has no neighbours to
+interpolate from at a border) around hue 330°, saturation 0.29 — well
+inside the curve's now-universal reach, where it sat outside both
+`blueSky`'s and `warmTan`'s narrow windows before. Measured corner spread
+with the fitted curve: 4.333 (was <4.0), against a widened threshold of
+5.0 — still 1.7% of the 8-bit range, nowhere near an actual falloff.
+
+### Gate
+
+`tools/huesatfit.py --check` renders the same 26-frame corpus with the
+*compiled* curve (no env override) and fails if the worst band residual
+exceeds 0.24 — looser than `huefit.py`'s 0.02 or `warmTan`'s degree
+tolerance by necessity (this fit's own worst residual is 0.196, an order of
+magnitude harder problem than either single-region fit), but tight enough
+that a real regression — the curve reverting toward identity, say — trips
+it immediately. Measured at commit time: worst band residual 0.180-0.196
+across repeated runs (corpus sampling and JPEG re-encoding both add a
+little run-to-run noise).
+
+### This is a camera-matching profile
+
+Restating decision #229's own finding, because it applies here even more
+directly than to the hue-only fix above: Orion already matches Apple's own
+RAW pipeline within 2% on saturation. Closing the gap to the *camera's*
+JPEG — Sony's Creative Style, its own contrast curve, its own house
+saturation — is a decision to match one body's look, the way Lightroom
+ships a per-camera profile, not a correctness fix. ⚠ **Do not fit to Sony
+alone silently** — this section says so, in the file that would be read
+before touching this table again, and the fitted curve's own doc comment
+in `HueSatMap.h` repeats it.

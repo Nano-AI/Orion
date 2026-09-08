@@ -78,14 +78,6 @@ HARNESS = re.compile(r"^(Screenshot|Scenario|ViewportTests|LibraryProbe)")
 
 # symbol -> why the product must go on calling it.
 EXPECTED = {
-    "showPlaceholder":
-        "a raw decode is synchronous and took 210.9 ms when measured (#151); "
-        "without this the canvas shows the PREVIOUS photograph for all of it, "
-        "and the flat-frame case puts a correct picture over a wrong one",
-    "clearPlaceholder":
-        "the still must come down when the render lands, and on the failure "
-        "path too — otherwise a photograph that would not open leaves its "
-        "thumbnail sitting over the one that is still loaded",
     # ⚠ `--open` is the **fifth** command-line mode, and #177 and #179 both
     # called them four while closing the others. It is the only one that cannot
     # be a gate: it opens a real window, steps a list with a dwell, and never
@@ -131,6 +123,25 @@ HARNESS_ONLY = {
         "AdjustmentCatalogue's per-id lookup, which exists so a check can "
         "assert the catalogue covers every adjustment; the interface iterates "
         "`specs` instead",
+    # ⚠ **Moved here from EXPECTED on 2026-09-08 (#233), and this is the
+    # opposite direction from every other entry in this dict.** These two used
+    # to be the textbook case EXPECTED existed to catch — built, drawn,
+    # documented, wired to nothing (#181). The product call #181 added is now
+    # gone on purpose: it showed the arriving photo's own library thumbnail
+    # over the canvas while it decoded, and that thumbnail is the camera's own
+    # punchier JPEG (#226/#229), so the photographer watched a flattering
+    # preview get replaced by Orion's flatter one. `Engine.isOpening` blanks
+    # the canvas to `Palette.surround` instead, and does not touch `placeholder`
+    # at all, so both functions' only remaining caller is the screenshot
+    # harness — legitimately, this time, not by omission.
+    "showPlaceholder":
+        "AppKit cannot capture a Metal layer, so `Screenshot.run` renders the "
+        "developed image and hands it here to draw as a still — the harness's "
+        "only way to photograph the interface at all",
+    "clearPlaceholder":
+        "the other half of the mechanism above; nothing sets `placeholder` "
+        "outside the harness any more, so nothing outside it needs to clear "
+        "it either",
 }
 
 

@@ -258,6 +258,45 @@ void testHueSatMapGpu() {
         checkNear(entry(180, huesat::kSatDivisions - 1), 0.0, 1e-6,
                   "cyan, opposite the warm center, is outside its window");
     }
+
+    // 6. The full-wheel saturation curve — decision #232. Green (hue 120)
+    // sits well outside both raised-cosine windows above (checks 2-5 already
+    // pin that), so this isolates the curve's own effect with no regions at
+    // all: `buildTable({}, &curve)`.
+    {
+        const auto curve = huesat::satCurve();
+        const auto table = huesat::buildTable({}, &curve);
+        const int h120 = (120 * huesat::kHueDivisions / 360) % huesat::kHueDivisions;
+
+        const auto entry = [&](int hueDeg, int sat) {
+            const int h = (hueDeg * huesat::kHueDivisions / 360) % huesat::kHueDivisions;
+            const std::size_t i = (std::size_t(h) * huesat::kSatDivisions + sat) * 4;
+            return std::array<float, 2>{table[i + 0], table[i + 1]};
+        };
+
+        const auto zeroSat = entry(120, 0);
+        checkNear(zeroSat[0], 0.0, 1e-6, "the curve never rotates hue");
+        checkNear(zeroSat[1], 1.0, 1e-6,
+                  "a zero-saturation entry stays (0, 1, 1) whatever the curve says — the "
+                  "table's own low-saturation gate, not a coincidence of the fitted values");
+
+        const auto fullSat = entry(120, huesat::kSatDivisions - 1);
+        checkNear(fullSat[1], curve[std::size_t(h120)], 1e-4,
+                  "at full saturation the table carries the curve's own fitted value");
+
+        // Mutation check: an identity curve is a no-op, so the fitted value
+        // above is measurably doing something, not reading through a gate
+        // that would report the same number for any array.
+        std::array<float, huesat::kHueDivisions> identity{};
+        identity.fill(1.0f);
+        const auto identityTable = huesat::buildTable({}, &identity);
+        const std::size_t i = (std::size_t(h120) * huesat::kSatDivisions
+                               + huesat::kSatDivisions - 1) * 4;
+        checkNear(identityTable[i + 1], 1.0, 1e-6, "an identity curve leaves saturation alone");
+        report(std::abs(fullSat[1] - identityTable[i + 1]) > 0.005f,
+               "the fitted curve measurably differs from identity at green's table entry",
+               std::to_string(fullSat[1]) + " vs " + std::to_string(identityTable[i + 1]));
+    }
 }
 
 void testColorGradeGpu() {

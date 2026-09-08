@@ -24,19 +24,21 @@ components folded per §6, optionally feathered onto the photograph's own edges,
 through the graph, the POD facade, the panel rows, the sidecar, undo and the
 bench.
 
-**Last updated:** 2026-09-07 — pruned. 1,025 lines → this. See *The 2026-09-07
-prune* in `HISTORY.md` for what moved and why.
+**Last updated:** 2026-09-08b — the orange/yellow saturation gap fitted
+directly into the 90-bin `HueSatMap` table. Concurrent with #233's session
+(the loading-placeholder fix) — both landed the same day.
 
 **Recent sessions** — full write-ups below, older ones in `HISTORY.md`:
 
 | Date | What landed |
 |---|---|
+| 2026-09-08b | The orange/yellow saturation deficit (and red/magenta excess) fitted into the table's own 90 hue bins rather than another region — mean band error **13.6% → 6.3%** over 12 damped rounds; red and magenta, coupled to the bands being pushed up, land at 20%/13% and were still improving when the fit stopped. `tools/huesatfit.py` is the new instrument — #232 |
+| 2026-09-08 | Two photographs on screen at once, fixed by blanking to neutral instead of a thumbnail; the open photograph's filename now drawn in the footer — #233 |
 | 2026-09-06 | The colour complaint was white-balance/matrix, not AgX. A second `HueSatMap` region for warm/earth tones: mean hue error **9.1° → 2.2°**, 5 frames, 14 patches — #225 |
 | 2026-09-05 | The graph wanted **13.9 GiB** and took the machine down. Pooled and lazy: **1560 MiB high-water, 8.9×**; also the two-second photo swap, a `MaskList` crash and the lens render leak — #219 |
 | 2026-09-04 | Whites reached the data — its band sat at +5.5 EV over middle gray against a pipeline maximum of **+3.674** — #221. The washed-out night render did not reproduce; the premise was a UI screenshot compared against a `sips` render — #220 |
 | 2026-09-03b | The bundle was never self-contained: the check read `otool -L` and not `LC_RPATH`. 98 dylibs, 32 MB dmg, zero Homebrew images at runtime — #218 |
 | 2026-09-03 | `fix/display-path` merged, six decisions renumbered #211–#216, version **0.5.0** — #217 |
-| 2026-08-30 | The masking UX revamp: named masks, cards, merge with a direction, cap of **eight** components — #207/#208/#209/#210 |
 
 ---
 
@@ -58,7 +60,7 @@ built), Windows port, DCP profiles. X-Trans is out of scope (#176).
 | 1 | ~~**Chroma is at 0.83** of the camera JPEG~~ | ✅ **closed 2026-09-07, #229 — it was never a defect.** Measured on eight sidecar-free frames against two references: **Orion/camera 0.778, Apple RAW/camera 0.796, Orion/Apple 0.978.** Apple sits as far below the camera JPEG as Orion does, because a camera JPEG carries Sony's Creative Style and `Contrast: High` and a neutral RAW render carries neither. Five sessions hunted a bug inside a look difference |
 | 2 | **High-key desaturation, 14-18% below Apple** | ⚠ #230, the one saturation finding that survives. Six of eight frames put Orion at 0.98-1.04 of Apple; `DSC09747` reads **0.861** and `DSC09749` **0.817**, and those two are the brightest (luma 0.69/0.75 against 0.33-0.66). Cause undiagnosed. **Do not widen it into #225's old shape** — two frames, one reference, bright content only |
 | 3 | **`Engine.contrast = 1.45`** | Unchanged and still yours. #46 co-fitted it with the baseline exposure, so lowering it moves every photograph. ⚠ Exposure is **not** the problem: Orion is within **±0.08 EV of Apple on all eight frames** (#229) |
-| 4 | **The default look, if you want the camera's** | Not a defect — a decision. Closing the 0.78 gap to the camera JPEG means a camera-matching profile, the way Lightroom ships one. #229 |
+| 4 | **The default look, if you want the camera's** | ⚠ **Partially built, 2026-09-08, #232.** A fitted 90-bin saturation curve closes most of the per-hue gap (mean band error 13.6% → 6.3%) but not all of it — red/magenta land at 19.6%/12.8%, still converging when the fit stopped, coupled to orange/yellow through gamut-boundary clipping. Still a camera-matching decision, not a correctness fix — #229 |
 
 ⚠ **(3) no longer gates anything, and the frames were never the blocker.**
 **Every RAW carries the camera's own JPEG inside it** (`extractThumbnail`,
@@ -67,14 +69,18 @@ measured without adding a single sample. The `samples/*.ARW` symlinks are still
 three moon shots, and `bench_controls.cpp`'s floors are still fitted at
 contrast 1.0 — but a measurement no longer waits on either.
 
-⚠ **What the developer sees on open is the placeholder swap, not a fault.**
-`OrionApp+Files.swift:269` paints the camera's embedded JPEG and `:296` clears
-it ~210.9 ms later (#151), so a photograph shows Sony's punchy rendering and
-then a neutral one at ~0.78 its saturation. ⚠ **Saved sidecars made it look far
-worse**: `DSC09734` carries `exposureEv −1.96`, `DSC09742` −2.73, `DSC09752`
-−3.22 with blacks and whites pinned at the slider limits. Orion applied them
-correctly, and they were mistaken for a renderer defect twice in one session —
-an argument for showing the edited state on open.
+⚠ **Closed 2026-09-08, #233 — the placeholder swap no longer shows a picture at
+all.** It used to paint the camera's embedded JPEG and clear it ~210.9 ms later
+(#151), so a photograph shifted from Sony's punchy rendering to a neutral one
+at ~0.78 its saturation on every open — reported as the picture "washing out".
+`Engine.isOpening` now blanks the canvas to `Palette.surround` instead of
+drawing anything over it, so there is no second look to see. ⚠ **Saved
+sidecars made the old symptom look far worse**: `DSC09734` carries
+`exposureEv −1.96`, `DSC09742` −2.73, `DSC09752` −3.22 with blacks and whites
+pinned at the slider limits. Orion applied them correctly, and they were
+mistaken for a renderer defect twice in one session before this fix — an
+argument that still stands for showing the edited state on open sooner than
+~210 ms in.
 
 **Also still on you, carried forward:** *does the brush feel fast?* The numbers
 say yes (#108); nobody has said so with a stylus in hand.
@@ -83,11 +89,23 @@ say yes (#108); nobody has said so with a stylus in hand.
 
 ## Where the counts stand, and the one gate that flakes
 
-**All seven gates green, measured 2026-09-07:**
-`orion-tests` **1029 checks** · `orion-viewport-tests` **4113 checks** · both 0
-failures · decisions (223 rows, 3 declared gaps, 184 cited) · gestures (6) ·
-screens (3 asserting + 1 byte-stable) · modes (`--library-open` 13 checks,
-`--batch-export`, `--hdr-merge`) · wiring (3 declared, 414 swept, 8 harness-only).
+**All seven green, measured 2026-09-08b (after #232 landed):**
+`orion-tests` **1034 checks** (was 1029 — +5 from `testHueSatMapGpu` §6, the
+new `satCurve()` section) · `orion-viewport-tests` **4113 checks**, unchanged
+· both 0 failures · decisions (231 rows, 3 declared gaps, 192 cited — #232's
+row resolves the citation #233's own session flagged as red) · gestures (6)
+· screens (3 asserting + 1 byte-stable) · modes (`--library-open` 13 checks,
+`--batch-export`, `--hdr-merge`) · wiring (1 declared, 414 swept, 9
+harness-only — unchanged by this session; `showPlaceholder`/
+`clearPlaceholder` moved there by #233's session, not this one).
+⚠ **`testCreativeVignetteGpu`'s corner-spread threshold moved 4.0 → 5.0,
+decision #232** — the fitted curve reaches a demosaic-edge color cast in
+that fixture's corners (hue ~330°, sat ~0.29) that both narrow regions
+before it missed; measured spread 4.333, still 1.7% of the 8-bit range.
+Confirmed by reverting only `HueSatMap.h`/`DevelopCapture.cpp` and
+re-running: the failure disappears, so it is this session's curve, not
+#233's concurrent Swift changes (which touch no engine code) or a
+pre-existing flake.
 
 ⚠ **Re-measure; never adjust these in place.** This block has carried up to
 *four* copies of itself at once with four different numbers, and the three most

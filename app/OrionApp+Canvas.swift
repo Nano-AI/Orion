@@ -16,14 +16,23 @@ extension Editor {
             ZStack(alignment: .bottomLeading) {
                 Palette.surround
 
-                if engine.isLoaded {
+                // ⚠ `!engine.isOpening` is what keeps this from being decision
+                // #151's bug again. `isLoaded` never goes false once a first
+                // photo opens, so without this a photo switch would go on
+                // drawing `ImageCanvas` — still holding the *previous*
+                // photograph's texture for the whole decode — right through
+                // the gap this exists to blank. Neither branch below fires
+                // while opening, so the picture area falls through to bare
+                // `Palette.surround` above: a neutral background rather than
+                // a second photograph (#233).
+                if engine.isLoaded && !engine.isOpening {
                     ImageCanvas(engine: engine, viewport: viewport,
                                 targeted: targeted, generation: engine.generation)
-                        // Held while a new photo decodes, and what the
-                        // screenshot harness draws into — AppKit cannot capture
-                        // a Metal layer, so the canvas has to be a still there.
-                        // First in the chain, so every overlay below is drawn
-                        // over it rather than hidden by it.
+                        // What the screenshot harness draws into — AppKit
+                        // cannot capture a Metal layer, so the canvas has to
+                        // be a still there. First in the chain, so every
+                        // overlay below is drawn over it rather than hidden
+                        // by it.
                         .overlay {
                             if let still = engine.placeholder {
                                 Image(nsImage: still)
@@ -162,7 +171,7 @@ extension Editor {
                         }
                     }
                     .padding(14)
-                } else {
+                } else if !engine.isLoaded {
                     VStack(spacing: 0) {
                         Text("Orion")
                             .font(.system(size: 52, weight: .regular, design: .serif))

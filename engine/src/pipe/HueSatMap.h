@@ -4,9 +4,10 @@
  *  (hue shift in degrees, saturation scale, value scale), stored in the spec's
  *  nested loop order with saturation innermost. ValueDivisions is 1.
  *
- *  Orion has no .dcp for any body yet, so the table is *populated* by a fitted
- *  correction in one hue region rather than read from a profile — but it is
- *  populated into the real structure, so a loader is a reader and nothing else.
+ *  Orion has no .dcp for any body yet, so the table is *populated* by fitted
+ *  corrections (two hue regions and, decision #232, a full-wheel saturation
+ *  curve) rather than read from a profile — but it is populated into the real
+ *  structure, so a loader is a reader and nothing else.
  *
  *  research/camera-profiles.md carries the citations. Matrices are Lindbloom's
  *  published RGB/XYZ values with the Bradford adaptation, kept as the three
@@ -182,11 +183,11 @@ inline Correction blueSky() noexcept {
 /// renderers rather than copying one, which is what -12's near-zero number
 /// would have done. Center and width checked the same way at shift -10: 38/45
 /// (MAE 1.685) beat 30/45 (1.976), 45/45 (1.837), 38/30 (1.980) and 38/60
-/// (2.071). `satScale` left at 1.0: the chroma deficit (`research/
-/// UNSOURCED.md` §3) is `saturation`/`vibrance` shipping at zero against
-/// `contrast` at 1.45, not this table, and stacking a scale here on top of an
-/// unmeasured global one would double-count whichever turns out to be real —
-/// re-measured after this fix in `research/color-pipeline.md`.
+/// (2.071). `satScale` left at 1.0 here: the note this line used to carry —
+/// that the chroma deficit was `saturation`/`vibrance` shipping at zero —
+/// was **wrong** (decisions #226, #229): reds render *more* saturated than
+/// the camera, which a global shortfall cannot produce. The real, hue-shaped
+/// gap is `satCurve()`'s job below, not this region's.
 ///
 /// Overridable through `ORION_HUESAT_WARM="center,width,shift,satScale"`,
 /// same shape as `ORION_HUESAT` — the instrument the numbers above were
@@ -216,6 +217,79 @@ inline float smoothStep(float edge0, float edge1, float x) noexcept {
     return u * u * (3.0f - 2.0f * u);
 }
 
+// ── The residual saturation curve — decision #232 ─────────────────────────
+//
+// `blueSky()` and `warmTan()` fix HUE. Even with both applied, camera JPEGs
+// still render warm hues (orange/yellow) markedly less saturated than Orion,
+// and red/magenta slightly more — a defect in *saturation*, not rotation.
+//
+// A third `Correction` region cannot fix it: red and orange need opposite
+// corrections only 30° apart on the wheel, and the narrowest region already
+// in the table (`warmTan`, half-width 45°) bleeds past its own neighbor
+// before it reaches full strength — raising its `satScale` was tried and
+// overshoots red by the time orange arrives (research/camera-profiles.md).
+// So this is fitted directly into the table's own 90 hue bins (4° each)
+// rather than through the wide raised-cosine shape above.
+//
+// Fitted by `tools/huesatfit.py --fit` against real per-hue-bin pixel data —
+// the camera's own embedded JPEG vs a real `--batch-export`ed render,
+// aggregated over a 26-frame corpus of the developer's own shoot — not
+// swept by hand like the two regions above. Method, corpus and the
+// convergence table are in research/camera-profiles.md.
+//
+// ⚠ **Clamped to [0.65, 1.35], and one band (red) did not fully converge
+// inside it.** Boosting orange/yellow's saturation to close *their* gap
+// measurably raises red's — a direct test with only orange/yellow boosted
+// moved red's own ratio from 1.04 to 1.31 with red's curve untouched at
+// 1.0 — so red is chasing a target that moves every round the correction
+// runs. It converges (12 rounds, monotonically after round 3), just slowly:
+// worst residual left is red's 0.196, against orange 0.004, yellow 0.062,
+// green 0.001, cyan 0.048, blue 0.005, magenta 0.128. The clamp is not
+// hiding this — pushing the bound wider chases the same slow asymptote
+// further at more risk to the rest of the wheel, for a diminishing return
+// per round; research/camera-profiles.md has the full table.
+//
+// ⚠ **This is a camera-matching profile, not a correctness fix** — decision
+// #229 found Orion already within 2% of Apple's own RAW pipeline. Closing
+// the larger gap to the camera JPEG means matching one body's house style,
+// the way Lightroom ships a camera profile, and it is recorded as that
+// rather than as a bug.
+inline std::array<float, kHueDivisions> satCurve() noexcept {
+    // clang-format off
+    static constexpr std::array<float, kHueDivisions> kFitted = {
+        0.650f, 0.708f, 0.766f, 0.824f, 0.882f, 0.940f, 0.997f, 1.055f, 1.102f, 1.137f,
+        1.173f, 1.208f, 1.244f, 1.279f, 1.315f, 1.350f, 1.328f, 1.306f, 1.284f, 1.263f,
+        1.241f, 1.219f, 1.197f, 1.175f, 1.153f, 1.131f, 1.110f, 1.088f, 1.066f, 1.044f,
+        1.022f, 1.044f, 1.066f, 1.088f, 1.110f, 1.131f, 1.153f, 1.175f, 1.197f, 1.219f,
+        1.241f, 1.263f, 1.284f, 1.306f, 1.328f, 1.350f, 1.311f, 1.271f, 1.232f, 1.192f,
+        1.153f, 1.114f, 1.074f, 1.035f, 0.995f, 0.956f, 0.917f, 0.897f, 0.883f, 0.869f,
+        0.855f, 0.842f, 0.828f, 0.814f, 0.801f, 0.787f, 0.773f, 0.760f, 0.746f, 0.732f,
+        0.718f, 0.705f, 0.691f, 0.677f, 0.664f, 0.650f, 0.650f, 0.650f, 0.650f, 0.650f,
+        0.650f, 0.650f, 0.650f, 0.650f, 0.650f, 0.650f, 0.650f, 0.650f, 0.650f, 0.650f,
+    };
+    // clang-format on
+    std::array<float, kHueDivisions> c = kFitted;
+
+    // `ORION_HUESAT_CURVE`: exactly `kHueDivisions` comma-separated scales,
+    // hue order starting at 0°. The instrument `--fit` drives while
+    // converging; a malformed or wrong-length value is ignored outright
+    // rather than partially applied, so a truncated env var cannot silently
+    // zero the back half of the wheel.
+    if (const char* v = std::getenv("ORION_HUESAT_CURVE"); v != nullptr && *v != '\0') {
+        std::array<float, kHueDivisions> parsed{};
+        const char* p = v;
+        int n = 0;
+        for (; n < kHueDivisions && *p != '\0'; ++n) {
+            char* end = nullptr;
+            parsed[static_cast<std::size_t>(n)] = std::strtof(p, &end);
+            if (end == p) break;
+            p = (*end == ',') ? end + 1 : end;
+        }
+        if (n == kHueDivisions) c = parsed;
+    }
+    return c;
+}
+
 /// RGBA rows, `kSatDivisions` wide and `kHueDivisions` tall: R is the hue shift
 /// in degrees, G the saturation scale, B the value scale, A unused. That is the
 /// spec's entry order with the spec's loop order — saturation innermost.
@@ -231,8 +305,30 @@ inline float smoothStep(float edge0, float edge1, float x) noexcept {
 /// product of saturation scales rather than assuming disjointness outright,
 /// so two regions that did overlap would blend instead of one silently
 /// clobbering the other.
-inline std::vector<float> buildTable(const std::vector<Correction>& regions) {
+///
+/// `curve`, if given, is decision #232's per-bin saturation-only fit
+/// (`satCurve()`) multiplied in on top of the regions, gated by the same
+/// low-saturation fade every region already uses. **The curve reaches every
+/// hue**, unlike a region, so `kCurveSatOnset`/`Full` (0.08/0.22) sit
+/// between the two regions' own onset values rather than below them —
+/// slightly more conservative than `warmTan`'s 0.05/0.20 since a curve with
+/// no hue it skips is more likely to catch faint, incidental chroma (sensor
+/// noise, a demosaic edge) that a 45-60° window would simply miss. ⚠ It is
+/// not a complete guard: `testCreativeVignetteGpu`'s flat fixture has a
+/// demosaic-edge color cast at its corners around **0.29 saturation**,
+/// above even this threshold, and the curve legitimately touches it —
+/// caught as a widened corner-spread tolerance in that test (decision
+/// #232), not as a lower onset here, because a threshold high enough to
+/// exclude a 0.29-saturation corner would exclude real mid-saturation
+/// photographic content too. The zero-saturation column stays exactly
+/// (0, 1, 1) whatever the curve says: `smoothStep` is 0 there regardless of
+/// onset/full, same as a region.
+inline std::vector<float> buildTable(const std::vector<Correction>& regions,
+                                     const std::array<float, kHueDivisions>* curve = nullptr) {
     std::vector<float> table(static_cast<std::size_t>(kHueDivisions) * kSatDivisions * 4);
+
+    constexpr float kCurveSatOnset = 0.08f;
+    constexpr float kCurveSatFull  = 0.22f;
 
     for (int h = 0; h < kHueDivisions; ++h) {
         const float hue = 360.0f * static_cast<float>(h) / static_cast<float>(kHueDivisions);
@@ -255,6 +351,10 @@ inline std::vector<float> buildTable(const std::vector<Correction>& regions) {
                 const float w = hueWeight * smoothStep(c.satOnset, c.satFull, sat);
                 hueShift += c.hueShiftDeg * w;
                 satScale *= 1.0f + (c.satScale - 1.0f) * w;
+            }
+            if (curve != nullptr) {
+                const float w = smoothStep(kCurveSatOnset, kCurveSatFull, sat);
+                satScale *= 1.0f + ((*curve)[static_cast<std::size_t>(h)] - 1.0f) * w;
             }
 
             const std::size_t i = (static_cast<std::size_t>(h) * kSatDivisions + s) * 4;

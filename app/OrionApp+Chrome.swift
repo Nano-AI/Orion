@@ -397,6 +397,18 @@ extension Editor {
                     Engraved.Label(text: hint, color: Palette.faint, size: 9)
                         .lineLimit(1)
                 }
+                // Which photograph this is. Nothing else on screen says so —
+                // `Library.Photo.name` reaches VoiceOver and a filmstrip
+                // tooltip but was never drawn (#233). Its own line rather than
+                // folded into the readout row below: `Engraved.Label` is the
+                // "names of things" widget and `Engraved.Readout` the
+                // "numbers" one, and mixing a filename into a monospaced
+                // dimensions/milliseconds row would set it in the wrong font.
+                if let current {
+                    Engraved.Label(text: current.lastPathComponent, color: Palette.dim, size: 9)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 HStack(spacing: 0) {
                     Engraved.Readout(text: "\(engine.imageWidth) × \(engine.imageHeight)",
                                      color: Palette.dim)

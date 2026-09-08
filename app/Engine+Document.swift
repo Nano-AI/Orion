@@ -100,10 +100,10 @@ extension Engine {
         // one, `lens <name>`, `open` photo two — the log shows a render at
         // contrast 2.8 sandwiched between the correct 1.45 default before it
         // and the correct one after. One extra render most of the time, and
-        // whatever the previous photo's edit happened to be whenever the
-        // canvas is not covered by `showPlaceholder`'s thumbnail long enough to
-        // hide it — the shape of "the photo opens looking right, then a moment
-        // later the contrast and exposure are wrong."
+        // whatever the previous photo's edit happened to be whenever
+        // `Engine.isOpening` (#233) is not covering the canvas for long enough
+        // to hide it — the shape of "the photo opens looking right, then a
+        // moment later the contrast and exposure are wrong."
         suspended = true
 
         // A choice belongs to the photograph it was made on; the engine clears

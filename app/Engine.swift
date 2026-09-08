@@ -81,6 +81,22 @@ final class Engine {
     var lastRenderMs: Double = 0
     var isLoaded = false
 
+    /// True for the span of an `open` — set right before it starts, cleared
+    /// once the new frame has landed or the open has failed.
+    ///
+    /// ⚠ **Deliberately not folded into `isLoaded`.** `isLoaded` is set once
+    /// and never cleared again (#151/#181) — the chrome, the toolbar and the
+    /// rating bar all gate on it staying true across a photo switch, so
+    /// flipping it mid-switch would blank all of that, not only the picture.
+    /// This gates the canvas alone: `OrionApp+Canvas` hides `ImageCanvas`
+    /// while this is true rather than drawing the *previous* photograph's
+    /// texture, which is still sitting in `outputTexture` for the whole
+    /// decode. It replaces `showPlaceholder`'s camera-JPEG thumbnail (#181),
+    /// which was a flatter bait-and-switch than a blank: the thumbnail is the
+    /// camera's own punchier JPEG (decisions #226/#229), so the picture
+    /// visibly washed out the moment Orion's own render replaced it.
+    var isOpening = false
+
     /// Why the last render failed, or `nil` if it did not.
     ///
     /// ⚠ This exists because a failed render used to be **completely silent**.
@@ -840,15 +856,21 @@ final class Engine {
 
     /// A still of the developed image, drawn in place of the Metal canvas.
     ///
-    /// Two callers set it. The screenshot harness, because AppKit cannot
-    /// capture a Metal layer, so a still is the only way to photograph the
-    /// interface. And `openFile` (#181), which shows the arriving photograph's
-    /// own thumbnail while it decodes, taken down by a `defer` when the open
-    /// finishes either way.
+    /// ⚠ **Harness-only as of #233.** It used to have a second caller —
+    /// `openFile` (#181), which showed the arriving photograph's own library
+    /// thumbnail while it decoded, taken down by a `defer` when the open
+    /// finished either way. That thumbnail is the camera's own embedded JPEG
+    /// and is markedly punchier than Orion's neutral render (#226/#229), so
+    /// the photographer saw a flattering preview replaced by a flatter one —
+    /// reported as the picture "washing out". `Engine.isOpening` does the
+    /// canvas-blanking job now, to a plain neutral background instead of a
+    /// second photograph. What is left is the screenshot harness's own use:
+    /// AppKit cannot capture a Metal layer, so a still is the only way to
+    /// photograph the interface.
     ///
-    /// History, because this flag has been both ways: the stand-in was removed
-    /// once for drawing portrait frames landscape and then snapping. The
-    /// orientation was the raw file's, which the thumbnail bytes could not
+    /// History, because this flag has been both ways before: the stand-in was
+    /// removed once for drawing portrait frames landscape and then snapping.
+    /// The orientation was the raw file's, which the thumbnail bytes could not
     /// carry - fixed since in `PhotoIndex.shrink`, which bakes the turn into
     /// the stored pixels, so the still now goes up the right way around.
     var placeholder: NSImage?

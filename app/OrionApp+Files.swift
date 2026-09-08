@@ -255,45 +255,50 @@ extension Editor {
         // busy, and it is worst in the flat-frame case, where a correct
         // photograph lingers over a wrong one.
         //
-        // ⚠⚠ **The mechanism for this was already built and connected to
-        // nothing.** `Engine.placeholder` is drawn by `OrionApp+Canvas` over the
-        // Metal view, under a comment saying it is "held while a new photo
-        // decodes" — and the only caller of `showPlaceholder` in the tree was
-        // the screenshot harness. `clearPlaceholder` had no caller at all. The
-        // line below is the wiring those two comments already described.
+        // ⚠⚠ **#181 built a mechanism for this and it shipped a second bug.**
+        // `Engine.placeholder` drew the arriving photo's own library thumbnail
+        // over the Metal view while it decoded. That thumbnail is the camera's
+        // own embedded JPEG, and it is markedly punchier than Orion's neutral
+        // render — orange/yellow at 0.55-0.87 of the camera (#226, #229) — so
+        // the photographer saw a flattering preview replaced by a flatter one,
+        // reported as the picture "washing out". Worse, `.fit` letterboxes a
+        // thumbnail of a different aspect than the previous photograph, and the
+        // bars it leaves are transparent, so cycling between a landscape and a
+        // portrait frame put two photographs on screen at once.
         //
-        // The library's thumbnail is the right still to use: it is the picture
-        // being asked for, it is already decoded, and where there is none — a
-        // file opened from outside a folder — the canvas simply keeps what it
-        // had, which is the behaviour that was there before.
-        engine.showPlaceholder(library.photos.first { $0.url == url }?.thumbnail)
+        // The fix (#233) is `Engine.isOpening`, which `OrionApp+Canvas` reads
+        // to hide `ImageCanvas` outright rather than draw anything over it —
+        // the picture area falls through to the neutral `Palette.surround`
+        // already under it, never a second photograph, camera JPEG or not.
+        engine.isOpening = true
 
         Task { @MainActor in
-            // One runloop turn, so the placeholder actually paints before the
+            // One runloop turn, so the blank canvas actually paints before the
             // synchronous decode begins.
             await Task.yield()
             // ⚠ `defer`, not a line at the end of the `do`. A photograph that
-            // fails to open must take the still down too — otherwise the canvas
-            // keeps a thumbnail of a file it never managed to read, over the
-            // previous photograph, with an error in the footer explaining
-            // neither. `orion_engine_render` is synchronous, so by the time any
-            // of these paths unwinds the frame behind this is the real one.
+            // fails to open must take the canvas out of its opening state too
+            // — otherwise it stays blank forever over a file it never managed
+            // to read, with an error in the footer explaining neither.
+            // `orion_engine_render` is synchronous, so by the time any of
+            // these paths unwinds the frame behind this is the real one.
             //
-            // ⚠⚠ **Only the most recent load takes the still down**, and that
-            // guard is not hypothetical: `--open` steps a list with a dwell,
-            // and `--dwell 200` against a 210 ms decode (#151) exists precisely
-            // so a load begins while the one before it is in flight — its own
+            // ⚠⚠ **Only the most recent load clears it**, and that guard is
+            // not hypothetical: `--open` steps a list with a dwell, and
+            // `--dwell 200` against a 210 ms decode (#151) exists precisely so
+            // a load begins while the one before it is in flight — its own
             // comment says so. Without the check, the older task's `defer`
-            // fires after the newer one has put *its* thumbnail up, clearing
-            // the picture being opened and leaving the canvas on the one being
-            // left, which is the bug this whole mechanism exists to prevent.
+            // fires after the newer one has set `isOpening` for *its* own
+            // load, taking the canvas out of its opening state for the
+            // picture being opened rather than the one being left — the same
+            // bug #182 found in the thumbnail-based version of this mechanism.
             //
             // ⚠ Reasoned, not reproduced. The interleaving needs the main actor
             // to schedule the two tasks in a particular order and nothing in
             // this repository can drive the open path at all (#121, #181), so
             // this is recorded as a reading rather than dressed up as a
             // measurement — the shape #154 settled on for the same situation.
-            defer { if current == url { engine.clearPlaceholder() } }
+            defer { if current == url { engine.isOpening = false } }
             do {
                 // ⚠ **Read before the open, so the open knows whether to
                 // render.** An edited photograph used to render twice — once at
