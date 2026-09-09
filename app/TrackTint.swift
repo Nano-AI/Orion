@@ -11,10 +11,12 @@ import SwiftUI
 /// is honest and pinned: the hue mixer's ends are the shader's own band centers
 /// shifted by its own full-travel constant.
 ///
-/// Saturation and brightness are moderated below `HueBand.swatch`'s 0.75/0.85 —
-/// decision #63 keeps loud color off the panels so the photograph can be
-/// judged against a neutral surround, and a rail of saturated rainbow would be
-/// exactly what that rule exists to keep out. The numbers live here as data,
+/// Saturation and brightness are moderated below `HueBand.swatchSaturation` /
+/// `swatchBrightness` — decision #63 keeps loud color off the panels so the
+/// photograph can be judged against a neutral surround, and a rail of saturated
+/// rainbow would be exactly what that rule exists to keep out. ⚠ The swatch was
+/// itself the rainbow this warns about until it was moderated too; see the note
+/// on those constants. The numbers live here as data,
 /// separate from the `Gradient` builders, so the viewport suite can grade them
 /// without unpacking a SwiftUI `Color`.
 enum TrackTint {

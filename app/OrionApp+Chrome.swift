@@ -151,11 +151,11 @@ extension Editor {
                 if engine.comparing {
                     iconChip(engine.compareVertical
                              ? "rectangle.split.2x1" : "rectangle.split.1x2",
+                             name: "Swap between a vertical and horizontal split",
                              enabled: true) {
                         engine.compareVertical.toggle()
                         engine.generationBump()
                     }
-                    .help("Swap between a vertical and horizontal split")
                 }
             }
 
@@ -166,25 +166,25 @@ extension Editor {
             // photograph on a canvas that is not showing.
             HStack(spacing: 7) {
                 iconChip("arrow.uturn.backward",
+                         name: engine.history.undoLabel.map { "Undo \($0)" } ?? "Undo",
                          enabled: engine.history.canUndo && mode == .develop) {
                     engine.undo()
                 }
-                .help(engine.history.undoLabel.map { "Undo \($0)" } ?? "Undo")
 
                 iconChip("arrow.uturn.forward",
+                         name: engine.history.redoLabel.map { "Redo \($0)" } ?? "Redo",
                          enabled: engine.history.canRedo && mode == .develop) {
                     engine.redo()
                 }
-                .help(engine.history.redoLabel.map { "Redo \($0)" } ?? "Redo")
 
-                iconChip("rotate.left", enabled: engine.isLoaded && mode == .develop) {
+                iconChip("rotate.left", name: "Rotate left",
+                         enabled: engine.isLoaded && mode == .develop) {
                     engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset()
                 }
-                .help("Rotate left")
-                iconChip("rotate.right", enabled: engine.isLoaded && mode == .develop) {
+                iconChip("rotate.right", name: "Rotate right",
+                         enabled: engine.isLoaded && mode == .develop) {
                     engine.edit("Rotate") { engine.rotate(1) }; viewport.reset()
                 }
-                .help("Rotate right")
 
                 chip("Reset", enabled: engine.isLoaded && mode == .develop) {
                     engine.resetEdits()
@@ -226,7 +226,16 @@ extension Editor {
             .frame(width: 1, height: 18)
     }
 
-    private func iconChip(_ symbol: String, enabled: Bool,
+    /// An icon-only toolbar button.
+    ///
+    /// ⚠ **`name` is one string doing two jobs, and it used to do neither
+    /// properly.** Every call site already wrote the sentence out in a trailing
+    /// `.help(…)`, so the tooltip was right — but the button's *label* was a
+    /// bare `Image`, which is what VoiceOver reads, and an SF Symbol has no
+    /// spoken name. Five of the toolbar's controls announced nothing at all.
+    /// Taking the sentence as a parameter and applying it to both is the same
+    /// number of strings in the file and one fewer thing to forget.
+    private func iconChip(_ symbol: String, name: String, enabled: Bool,
                           action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
@@ -238,6 +247,8 @@ extension Editor {
         .foregroundStyle(enabled ? Palette.dim : Palette.faint)
         .overlay(RoundedRectangle(cornerRadius: 5).stroke(Palette.line, lineWidth: 1))
         .disabled(!enabled)
+        .accessibilityLabel(Text(name))
+        .help(name)
     }
 
     private func chip(_ title: String, enabled: Bool,
@@ -278,8 +289,16 @@ extension Editor {
     /// The selected plate is filled in the panel's own color so it reads as
     /// continuous with the panel below it, and marked at its top edge in
     /// film-rebate amber.
+    /// ⚠ **PRESETS was clipping, and the note above says why without saying it
+    /// had happened.** Seven plates at 8 points of bar padding and 2 of gap
+    /// leave 48 points each; PRESETS sets to about 51 at 9-point with 0.5 of
+    /// tracking, so the last tab lost its final letter in every render. The
+    /// three numbers that were free are spent rather than the type size, which
+    /// the note is right to defend: padding 8 → 5, gap 2 → 1, tracking 0.5 →
+    /// 0.2 puts every plate at 51 points and the longest word inside it. The
+    /// bar still cannot hold an eighth tab and that is still the answer.
     var tabBar: some View {
-        HStack(alignment: .bottom, spacing: 2) {
+        HStack(alignment: .bottom, spacing: 1) {
             ForEach(ToolTab.allCases) { t in
                 let selected = t == tab
                 Button { withAnimation(.easeOut(duration: 0.16)) { tab = t } } label: {
@@ -292,7 +311,7 @@ extension Editor {
                     // than one tab being visibly different from the other five.
                     Engraved.Label(text: t.title,
                                    color: selected ? Palette.text : Palette.faint,
-                                   size: 9, tracking: 0.5)
+                                   size: 9, tracking: 0.2)
                         .lineLimit(1)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity)
@@ -315,7 +334,7 @@ extension Editor {
                 .help(t.title)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 5)
         .padding(.top, 6)
         .background(Palette.ground)
     }

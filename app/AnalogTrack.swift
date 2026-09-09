@@ -97,29 +97,33 @@ struct AnalogTrack: View {
 
     // MARK: The engraving
 
-    /// The index scale. Five major marks and four minor between each, which is
-    /// enough to read a quarter of the throw off without counting.
+    /// The index scale: quarters of the throw, and the index mark.
     ///
     /// Deliberately unlabeled. The numbers under a camera's scale are the ones
     /// the scale is *for*; here the readout above already carries the exact
     /// value, and repeating it in five places would be noise rather than
     /// information.
+    ///
+    /// ⚠ **The sixteen minor marks between them are gone, and the same argument
+    /// is why.** The comment above was right about labels and wrong to stop
+    /// there: twenty-one teeth under a control that prints its own value is the
+    /// noise it warns about, and a panel stacks ten of these — two hundred marks
+    /// on one screen, none of which is read. Quarters are what the doc claimed
+    /// the scale was for, and the accent index mark is the one a photographer
+    /// actually looks for. Majors dropped to `faint` for the same reason: the
+    /// index mark has to be the brightest thing on the rule or it is not an
+    /// index mark.
     private func scale(width: CGFloat, travel: CGFloat) -> some View {
         Canvas { context, _ in
             let left = thumbWidth / 2
-            let divisions = 20
 
-            for i in 0...divisions {
-                let t = CGFloat(i) / CGFloat(divisions)
-                let x = left + t * travel
-                let major = i % 5 == 0
-                let h = major ? scaleHeight : scaleHeight * 0.42
+            for i in 0...4 {
+                let x = left + CGFloat(i) / 4 * travel
 
                 var line = Path()
-                line.move(to: CGPoint(x: x, y: scaleHeight - h))
+                line.move(to: CGPoint(x: x, y: 0))
                 line.addLine(to: CGPoint(x: x, y: scaleHeight))
-                context.stroke(line, with: .color(major ? Palette.dim : Palette.faint),
-                               lineWidth: 1)
+                context.stroke(line, with: .color(Palette.faint), lineWidth: 1)
             }
 
             // The index mark. Taller than a major tick and in the accent, so
@@ -192,35 +196,44 @@ struct AnalogTrack: View {
     }
 
     /// A milled cylinder: lit from above, knurled across its face.
+    ///
+    /// ⚠ **Quieted rather than removed.** The knurl was five grooves drawn
+    /// twice each — a black line at 0.28 and a white one beside it at 0.35 —
+    /// over a three-stop gradient, inside nineteen points. At render size that
+    /// is not a machined face, it is a hash: this control appears about forty
+    /// times in one panel, which made the thumbs the loudest thing in a window
+    /// whose whole job is to be quieter than the photograph. Three grooves at a
+    /// third of the contrast still read as milled at a glance and stop
+    /// competing with the picture. The three-stop gradient went with them —
+    /// the light one at the bottom was reading as a second highlight and
+    /// muddying the middle.
     private var thumb: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(LinearGradient(
-                    colors: [Color(white: 0.78), Color(white: 0.55), Color(white: 0.68)],
+                    colors: [Color(white: 0.74), Color(white: 0.52)],
                     startPoint: .top, endPoint: .bottom))
 
             Canvas { context, size in
-                // Knurling. Five grooves, so it reads as machined at this size
-                // rather than as a hatch pattern.
-                for i in 0..<5 {
-                    let x = size.width / 2 + CGFloat(i - 2) * 3
+                for i in 0..<3 {
+                    let x = size.width / 2 + CGFloat(i - 1) * 3.5
                     var line = Path()
-                    line.move(to: CGPoint(x: x, y: 3))
-                    line.addLine(to: CGPoint(x: x, y: size.height - 3))
-                    context.stroke(line, with: .color(.black.opacity(0.28)), lineWidth: 0.75)
+                    line.move(to: CGPoint(x: x, y: 3.5))
+                    line.addLine(to: CGPoint(x: x, y: size.height - 3.5))
+                    context.stroke(line, with: .color(.black.opacity(0.20)), lineWidth: 0.75)
 
                     var light = Path()
-                    light.move(to: CGPoint(x: x + 0.75, y: 3))
-                    light.addLine(to: CGPoint(x: x + 0.75, y: size.height - 3))
-                    context.stroke(light, with: .color(.white.opacity(0.35)), lineWidth: 0.75)
+                    light.move(to: CGPoint(x: x + 0.75, y: 3.5))
+                    light.addLine(to: CGPoint(x: x + 0.75, y: size.height - 3.5))
+                    context.stroke(light, with: .color(.white.opacity(0.12)), lineWidth: 0.75)
                 }
             }
 
             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .strokeBorder(.black.opacity(0.35), lineWidth: 0.5)
+                .strokeBorder(.black.opacity(0.30), lineWidth: 0.5)
         }
         .frame(width: thumbWidth, height: thumbHeight)
-        .shadow(color: .black.opacity(dragging ? 0.5 : 0.35),
+        .shadow(color: .black.opacity(dragging ? 0.45 : 0.28),
                 radius: dragging ? 3 : 1.5, y: 1)
         .scaleEffect(dragging ? 1.06 : 1)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: dragging)

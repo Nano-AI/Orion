@@ -30,8 +30,16 @@ extension Editor {
 
             tabBar
 
+            // ⚠ 26 between sections against 11 inside them, and the gap
+            // between those two numbers is the whole point. It was 18 and 11:
+            // a ratio of 1.6, which the eye does not resolve into groups, so a
+            // panel of five sections and forty controls read as one list of
+            // forty-five things. `space.xl` in `design/tokens.json` is 26 and
+            // is what a section break is for; `SectionPlate` closes to 9 above
+            // its own content in the same breath, so every nameplate is nearer
+            // what it names than the group it follows.
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 26) {
                     switch tab {
                     case .light:  lightPanel
                     case .color: colorPanel

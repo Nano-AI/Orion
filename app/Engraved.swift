@@ -194,9 +194,20 @@ struct SectionPlate<Content: View>: View {
     @State private var modified = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        // 9 above the content, against 26 between sections and 11 between the
+        // controls inside one. A nameplate that sits as far from its own first
+        // control as it does from the section above it is not labelling
+        // anything — proximity is what says which rows the name owns, and it
+        // has to be the closest gap on the panel, not the middle one.
+        //
+        // ⚠ The inner `VStack` is what makes the two gaps different. `content`
+        // is a `ViewBuilder`, so its rows land as siblings of the plate and
+        // take the *same* spacing — one number for both gaps, which is why
+        // there was no way to close one without closing the other. Wrapping
+        // them buys the second number.
+        VStack(alignment: .leading, spacing: 9) {
             Engraved.Plate(title: title, modified: modified, info: info)
-            content()
+            VStack(alignment: .leading, spacing: 11) { content() }
         }
         .onPreferenceChange(SectionModifiedKey.self) { modified = $0 }
     }

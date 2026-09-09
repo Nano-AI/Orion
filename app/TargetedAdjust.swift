@@ -20,10 +20,25 @@ enum HueBand: Int, CaseIterable, Identifiable {
         }
     }
 
+    /// The chroma a band swatch is drawn at.
+    ///
+    /// ⚠ **Was 0.75/0.85, and that broke decision #63 in the one place nobody
+    /// checked.** `TrackTint` moderates every slider label to 0.55/0.65 and
+    /// says why in its own header: "a rail of saturated rainbow would be
+    /// exactly what that rule exists to keep out." The mixer draws eight of
+    /// them as circles, four inches from the photograph, and they were the
+    /// highest chroma anywhere in the window — louder than the tracks the rule
+    /// was written for. Moderated to sit just above the labels: still eight
+    /// distinguishable hues, no longer the brightest thing on screen.
+    /// `ViewportTests+Tint` reads these rather than the old literals, so the
+    /// ordering is asserted instead of remembered.
+    static let swatchSaturation: Double = 0.60
+    static let swatchBrightness: Double = 0.74
+
     /// Swatch hue, matching the band centers in hsl_ops.slang.
     var swatch: Color {
         Color(hue: Double([0, 30, 60, 120, 180, 240, 285, 320][rawValue]) / 360.0,
-              saturation: 0.75, brightness: 0.85)
+              saturation: Self.swatchSaturation, brightness: Self.swatchBrightness)
     }
 }
 

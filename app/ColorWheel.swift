@@ -88,10 +88,30 @@ struct ColorWheel: View {
             // `testGradePrimaryAngles` pins the engine half of that; this
             // comment is the only thing holding the other half, so do not
             // "tidy" this back into alphabetical rainbow order.
+            //
+            // ⚠ **The rim is drawn at the panel's moderated chroma, not at the
+            // sRGB primaries.** It was `.red, .magenta, .blue, .cyan, .green,
+            // .yellow` — fully saturated, full brightness — across three discs
+            // of 78 points each, which made this the loudest colour anywhere in
+            // the window by a wide margin. Decision #63 is that the panels stay
+            // quiet so the photograph can be judged against a neutral surround,
+            // and `TrackTint`'s header calls a saturated rainbow the exact thing
+            // the rule exists to keep out; three rainbow discs are more rail
+            // than any rail. Same two numbers as the mixer swatches, so the
+            // panel has one chroma for "this control is about colour" and a
+            // quieter one for the rails.
+            //
+            // ⚠ **The hue *order* is load-bearing and unchanged** — see the
+            // note above. These are the same six hues in the same six places,
+            // written as angles because a moderated magenta has no
+            // `Color.magenta` to spell it with.
             Circle()
                 .fill(AngularGradient(
-                    colors: [.red, Color(red: 1, green: 0, blue: 1), .blue,
-                             .cyan, .green, .yellow, .red],
+                    colors: [0.0, 300.0, 240.0, 180.0, 120.0, 60.0, 0.0].map {
+                        Color(hue: $0 / 360,
+                              saturation: HueBand.swatchSaturation,
+                              brightness: HueBand.swatchBrightness)
+                    },
                     center: .center))
                 // Saturation falls to nothing at the middle, so the center
                 // reads as "no correction" rather than as a color you happen

@@ -39,9 +39,20 @@ extension Editor {
 
             }
 
-            section("Color Mixer") {
+            section("Color Mixer",
+                    info: "Pick a band below, or press Target and drag on the "
+                        + "photograph itself — that finds which band the pixel "
+                        + "under the pointer belongs to, which beats guessing "
+                        + "which of eight swatches the sky falls into.") {
                 // Targeted adjustment: click a color in the photo and drag.
-                // Beats guessing which of eight swatches the sky falls into.
+                //
+                // ⚠ **The sentence that used to sit beside this button is in
+                // the ⓘ above now.** It was the same instruction the footer
+                // already prints once the tool is armed and the button's own
+                // tooltip carries unarmed — three copies of one sentence, one
+                // of them permanently occupying a control row. `Engraved.Info`
+                // exists because this panel already made that trade for the
+                // slider prose; this row had simply never been included in it.
                 HStack(spacing: 6) {
                     ToolButton(tool: .targeted,
                                icon: "eyedropper", armedIcon: "scope",
@@ -59,31 +70,41 @@ extension Editor {
                         .pickerStyle(.segmented)
                         .controlSize(.small)
                         .labelsHidden()
-                    } else {
-                        Text("Drag on the photo to adjust its color")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.faint)
                     }
                 }
 
-                HStack(spacing: 4) {
+                // The band's name sits at the end of its own rail rather than
+                // on a row underneath it. It was a third line of sentence-case
+                // gray under a row of circles that already showed which one was
+                // chosen — a caption for a control that is its own caption. On
+                // the rail it is one line shorter, in the panel's own engraved
+                // register, and the eye reads swatch and name together.
+                HStack(spacing: 0) {
                     ForEach(HueBand.allCases) { b in
                         Circle()
                             .fill(b.swatch)
-                            .frame(width: 19, height: 19)
+                            .frame(width: 16, height: 16)
                             .overlay(Circle().strokeBorder(
                                 band == b ? Palette.text : .clear, lineWidth: 1.5))
+                            // ⚠ The target is the square, not the dot. A 16-point
+                            // circle with 4 points of air around it is a hard
+                            // thing to hit and there are eight of them in a row;
+                            // padding to 24 makes the whole cell live and puts
+                            // the gaps *inside* the targets rather than between
+                            // them, so there is no dead strip to miss into.
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                             .onTapGesture { band = b }
                             .help(b.name)
+                            .accessibilityLabel(Text(b.name))
+                            .accessibilityAddTraits(band == b ? [.isButton, .isSelected]
+                                                              : .isButton)
                     }
-                }
-                HStack {
-                    Text(band.name).font(.system(size: 11)).foregroundStyle(Palette.dim)
+                    Spacer(minLength: 8)
                     if let active = targeted.activeBand {
-                        Spacer()
-                        Text("adjusting \(active.name)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.accent)
+                        Engraved.Label(text: active.name, color: Palette.accent)
+                    } else {
+                        Engraved.Label(text: band.name)
                     }
                 }
                 // The tracks wear the selected band's own colors — the Hue

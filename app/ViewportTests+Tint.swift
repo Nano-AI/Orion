@@ -41,12 +41,27 @@ extension ViewportTests {
                    && inRange(TrackTint.fringeBYEnds.to, 40, 70),
                "fringe B/Y likewise")
 
-        // The moderation rule: every label sits below HueBand.swatch's
-        // 0.75/0.85, so the panels stay quieter than the swatches they sit
-        // beside — #63's neutral surround, applied to a rail.
-        report(TrackTint.labelSaturation < 0.75 && TrackTint.labelBrightness < 0.85,
+        // The moderation rule: every label sits below the band swatches, so the
+        // panels stay quieter than the controls they sit beside — #63's neutral
+        // surround, applied to a rail.
+        //
+        // ⚠ **Against the swatch's own constants, not against 0.75/0.85.** The
+        // literals were written when the swatch was that loud and stayed behind
+        // when it was moderated, at which point the assertion was comparing a
+        // live number against a remembered one — green whatever the swatch
+        // does. The comparison is the whole claim, so it reads both ends.
+        report(TrackTint.labelSaturation < HueBand.swatchSaturation
+                   && TrackTint.labelBrightness < HueBand.swatchBrightness,
                "track labels are drawn quieter than the band swatches",
-               "sat \(TrackTint.labelSaturation), bright \(TrackTint.labelBrightness)")
+               "labels \(TrackTint.labelSaturation)/\(TrackTint.labelBrightness), "
+                   + "swatches \(HueBand.swatchSaturation)/\(HueBand.swatchBrightness)")
+
+        // And the swatches themselves stay inside #63: the rule is about the
+        // panel, not about which panel element is loudest, so a rail that is
+        // merely quieter than an even louder rail would still fail it.
+        report(HueBand.swatchSaturation <= 0.65 && HueBand.swatchBrightness <= 0.80,
+               "the band swatches are moderated too (#63)",
+               "sat \(HueBand.swatchSaturation), bright \(HueBand.swatchBrightness)")
 
         // Presence starts at gray: the left extreme genuinely is a monochrome
         // picture, so the first stop must carry no chroma and sit at the end.

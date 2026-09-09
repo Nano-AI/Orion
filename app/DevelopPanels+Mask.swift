@@ -283,10 +283,18 @@ extension Editor {
                 // ⚠ Beside the mask it describes. It was at the bottom of a
                 // 264-line section, so the control that shows you where the
                 // coverage *is* sat below every slider that moves it.
-                Toggle("Show mask", isOn: $engine.maskOverlay)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .font(.system(size: 11))
+                // ⚠ The label is engraved, like every other name in the panel.
+                // A `Toggle("Show mask", …)` sets its own title in the system
+                // face at sentence case, which put a second typographic register
+                // three points under `LOCAL` — the panel's identity is the
+                // engraved caps and a stock control label reads as something
+                // pasted in from another program. Same argument as `Invert`
+                // below, and the same one `Engraved` was written for.
+                Toggle(isOn: $engine.maskOverlay) {
+                    Engraved.Label(text: "Show mask")
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
 
                 if matteRunning {
                     Text("Selecting…")
@@ -484,12 +492,13 @@ extension Editor {
                     }
 
                     HStack(spacing: 14) {
-                        Toggle("Invert", isOn: $engine.maskInvert)
-                            .toggleStyle(.checkbox)
+                        Toggle(isOn: $engine.maskInvert) {
+                            Engraved.Label(text: "Invert")
+                        }
+                        .toggleStyle(.checkbox)
                         // Not in the sidecar and not undoable: this is how you
                         // are looking at the photo, not an edit to it.
                     }
-                    .font(.system(size: 11))
                 }
 
                 // ⚠ Three explanatory blocks used to sit here — how a masked
