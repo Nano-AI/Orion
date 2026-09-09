@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Orion — a RAW editor you own</title>
+<title>Orion - a RAW editor you own</title>
 <meta name="description" content="A fast, subscription-free RAW photo editor for macOS. Full-resolution edits that keep up with your hands, corrections for 1,558 lenses, and every filter traced to a published paper.">
 <meta name="color-scheme" content="dark">
-<meta property="og:title" content="Orion — a RAW editor you own">
+<meta property="og:title" content="Orion - a RAW editor you own">
 <meta property="og:description" content="A fast, subscription-free RAW photo editor for macOS. Full resolution, right now.">
 <meta property="og:image" content="https://nano-ai.github.io/Orion/img/photo-aston-trio-1200.jpg">
+<meta property="og:image:alt" content="Three Aston Martins parked at night outside a lit dealership.">
 <meta property="og:url" content="https://nano-ai.github.io/Orion/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -20,6 +21,7 @@
 <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceGrotesk-var.woff2">
 <!-- The mark is Orion's Belt: Alnitak, Alnilam, Mintaka. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0c0d'/%3E%3Ccircle cx='9.5' cy='22' r='2.2' fill='%234DB6C4'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%234DB6C4'/%3E%3Ccircle cx='22.5' cy='10' r='2.5' fill='%234DB6C4'/%3E%3C/svg%3E">
+<link rel="canonical" href="https://nano-ai.github.io/Orion/">
 <link rel="stylesheet" href="styles.css">
 <script type="application/ld+json">
 {
@@ -39,9 +41,9 @@
 
 <a class="skip" href="#main">Skip to content</a>
 
-<!-- The quiet route to the build. Hidden while the finder is up; surfaces
-     once the visitor is on the roll, same cue as the frame counter. The
-     close still owns the big CTA — this is the shortcut, not the pitch. -->
+<!-- The quiet route to the build. Hidden while the finder is up, it
+     surfaces once the visitor is past it. The close still owns the big
+     CTA; this is the shortcut, not the pitch. -->
 <a class="dl mono" id="dlChip" href="https://github.com/Nano-AI/Orion/releases/tag/v0.4.0-alpha.6">Download <span class="dl__tag">alpha</span></a>
 
 <!-- ================================================================
@@ -60,8 +62,8 @@
   <div class="dev__pin">
     <!-- Everything seen THROUGH the eyepiece is clipped by this wrapper.
          The scroll opens the ocular from a small rounded window to the
-         full frame; the wordmark and the cue live outside it, over the
-         black, so the name is there before the eye is. -->
+         full frame; the wordmark lives outside it, over the black, so
+         the name is there before the eye is. -->
     <div class="dev__eye" id="devEye">
       <div class="dev__zoom" id="devZoom">
         <img class="dev__img" id="devImg" src="img/photo-aston-trio.jpg"
@@ -134,8 +136,6 @@
       <h1 class="vf__name lines rv-lines" data-rv><span class="l"><span>Orion</span></span></h1>
       <p class="vf__sub rv d2">Full resolution, right now.</p>
     </div>
-
-    <p class="dev__cue mono rv d3" id="devCue">scroll to look through <span class="cue__tick" aria-hidden="true">▾</span></p>
   </div>
 </header>
 
@@ -164,7 +164,7 @@
      line drags full resolution across the frame as you scroll. The
      no-script page is simply sharp.
      ================================================================ -->
-<section class="wipe" id="speed" data-frame="01 · Speed">
+<section class="wipe" id="speed">
   <div class="wipe__pin">
     <img class="wipe__img" src="img/photo-mclaren.jpg"
          srcset="img/photo-mclaren-1200.jpg 1200w, img/photo-mclaren.jpg 2400w"
@@ -184,13 +184,13 @@
       <h2 class="disp disp--num lines rv-lines" data-rv>
         <span class="l"><span>9.29 <small>MS</small></span></span>
       </h2>
-      <p class="kicker rv d2">Instant updates · an exposure drag · 24 MP · full resolution</p>
+      <p class="kicker rv d2">One exposure drag, 24 MP, at full resolution</p>
     </div>
   </div>
 </section>
 
 <!-- ============ LOCAL LIGHT — the mask sweep ============ -->
-<section class="maskscene" id="masks" data-frame="02 · Local light">
+<section class="maskscene" id="masks">
   <div class="mask__pin">
     <img class="mask__img" src="img/photo-nightsky.jpg"
          srcset="img/photo-nightsky-1200.jpg 1200w, img/photo-nightsky.jpg 2400w"
@@ -210,7 +210,7 @@
       <h2 class="disp disp--num lines rv-lines" data-rv>
         <span class="l"><span><span id="hMask">−1.60</span> <small>EV</small></span></span>
       </h2>
-      <p class="kicker rv d2">Local light · a gradient dragged onto the photograph</p>
+      <p class="kicker rv d2">A gradient dragged onto the photograph</p>
     </div>
   </div>
 </section>
@@ -227,7 +227,7 @@
 </section>
 
 <!-- ============ COLOR — a print, shown whole ============ -->
-<section class="duo" id="color" data-frame="03 · Color">
+<section class="duo" id="color">
   <div class="duo__text">
     <h2 class="disp lines rv-lines" data-rv>
       <span class="l"><span>Color you</span></span>
@@ -242,7 +242,7 @@
 </section>
 
 <!-- ============ LEDGER ============ -->
-<section class="ledger" data-frame="04 · Sources">
+<section class="ledger">
   <h2 class="disp lines rv-lines" data-rv>
     <span class="l"><span>Every filter</span></span>
     <span class="l"><span>cites its paper</span></span>
@@ -261,7 +261,7 @@
 </section>
 
 <!-- ============ OWNERSHIP ============ -->
-<section class="own" data-frame="05 · Yours">
+<section class="own">
   <div class="own__text">
     <h2 class="disp lines rv-lines" data-rv>
       <span class="l"><span>No lock-in</span></span>
@@ -275,46 +275,81 @@
 </section>
 
 <!-- ============ REGISTER ============ -->
-<section class="reg" id="today" data-frame="06 · The build">
-  <div class="reg__cols">
-    <div class="reg__col rv">
-      <p class="reg__h mono"><span class="dot dot--on"></span>Working today</p>
-      <ul>
-        <li>Exposure, contrast, highlights, shadows, whites, blacks</li>
-        <li>White balance, color grading, tone curves</li>
-        <li>Crop, straighten, rotate</li>
-        <li>Distortion and vignetting for 1,558 lenses</li>
-        <li>Haze removal, clarity, shadow recovery</li>
-        <li>Noise reduction, sharpening, color mixer</li>
-        <li>Film looks from any <code>.cube</code> file</li>
-        <li>Gradient, radial, brush, brightness and color masks</li>
-        <li>Selecting a subject, a person or a sky</li>
-        <li>Masks combined — add, subtract, intersect — and feathered to real edges</li>
-        <li>Spot and blemish removal</li>
-        <li>Perspective and keystone correction</li>
-        <li>Film grain, and a vignette you can dial in</li>
-        <li>Saved versions of a photograph, to come back to later</li>
-        <li>Presets, and copying settings between photos</li>
-        <li>One-click auto-enhance</li>
-        <li>Browsing a folder of 300 frames without waiting on it</li>
-        <li>Export at 8 or 16 bits, resized, sharpened for screen or print</li>
-        <li>Export with your location stripped by default</li>
-      </ul>
+<!-- Nineteen shipped features were a nineteen-row hairline list beside a
+     three-row one, which made the honest half of the page the ugliest and
+     left a quarter of the section empty. Same twenty-two strings, unchanged,
+     grouped into the six things a person actually looks for, one soft rule
+     per group instead of one per row, and the unbuilt three moved underneath
+     where they read as the closing admission rather than a stub column. -->
+<section class="reg" id="today">
+  <div class="reg__now rv">
+    <p class="reg__h mono">Working today</p>
+    <div class="reg__groups">
+      <div class="reg__g">
+        <p class="reg__gh mono">Tone and color</p>
+        <ul>
+          <li>Exposure, contrast, highlights, shadows, whites, blacks</li>
+          <li>White balance, color grading, tone curves</li>
+          <li>Film looks from any <code>.cube</code> file</li>
+          <li>One-click auto-enhance</li>
+        </ul>
+      </div>
+      <div class="reg__g">
+        <p class="reg__gh mono">Detail and repair</p>
+        <ul>
+          <li>Haze removal, clarity, shadow recovery</li>
+          <li>Noise reduction, sharpening, color mixer</li>
+          <li>Spot and blemish removal</li>
+          <li>Film grain, and a vignette you can dial in</li>
+        </ul>
+      </div>
+      <div class="reg__g">
+        <p class="reg__gh mono">Geometry</p>
+        <ul>
+          <li>Crop, straighten, rotate</li>
+          <li>Distortion and vignetting for 1,558 lenses</li>
+          <li>Perspective and keystone correction</li>
+        </ul>
+      </div>
+      <div class="reg__g">
+        <p class="reg__gh mono">Masking</p>
+        <ul>
+          <li>Gradient, radial, brush, brightness and color masks</li>
+          <li>Selecting a subject, a person or a sky</li>
+          <li>Masks combined (add, subtract, intersect) and feathered to real edges</li>
+        </ul>
+      </div>
+      <div class="reg__g">
+        <p class="reg__gh mono">Library</p>
+        <ul>
+          <li>Browsing a folder of 300 frames without waiting on it</li>
+          <li>Saved versions of a photograph, to come back to later</li>
+          <li>Presets, and copying settings between photos</li>
+        </ul>
+      </div>
+      <div class="reg__g">
+        <p class="reg__gh mono">Export</p>
+        <ul>
+          <li>Export at 8 or 16 bits, resized, sharpened for screen or print</li>
+          <li>Export with your location stripped by default</li>
+        </ul>
+      </div>
     </div>
-    <div class="reg__col rv d1">
-      <p class="reg__h mono"><span class="dot"></span>Not yet</p>
-      <ul class="dim">
-        <li>Highlight reconstruction: the region fill runs and has a slider, but the detail transfer and the edge falloff are not built</li>
-        <li>Fujifilm X-Trans sensors</li>
-        <li>Windows</li>
-      </ul>
-      <p class="reg__note">Listed because it is true. Nothing on this page pretends to exist.</p>
-    </div>
+  </div>
+
+  <div class="reg__not rv d1">
+    <p class="reg__h mono">Not yet</p>
+    <ul class="dim">
+      <li>Highlight reconstruction: the region fill runs and has a slider, but the detail transfer and the edge falloff are not built</li>
+      <li>Fujifilm X-Trans sensors</li>
+      <li>Windows</li>
+    </ul>
+    <p class="reg__note">Listed because it is true. Nothing on this page pretends to exist.</p>
   </div>
 </section>
 
 <!-- ============ CLOSE ============ -->
-<section class="close" data-frame="End of roll">
+<section class="close">
   <img class="close__img plx fadei" data-plx data-rv src="img/photo-monoplane.jpg"
        srcset="img/photo-monoplane-1200.jpg 1200w, img/photo-monoplane.jpg 2400w"
        sizes="100vw" loading="lazy" decoding="async"
@@ -329,20 +364,26 @@
     <p class="rv d2">Every decision, measurement and mistake is in the repository.</p>
     <p class="rv d3"><a class="cta" href="https://github.com/Nano-AI/Orion/releases/tag/v0.4.0-alpha.6">Download the alpha</a></p>
     <p class="rv d3 alt"><a href="https://github.com/Nano-AI/Orion">or read the source</a></p>
-    <p class="status mono rv d4">v0.4.0-alpha.6 · Apple silicon · macOS 14+ · unsigned build, open it once from the right-click menu</p>
+    <p class="status mono rv d4">v0.4.0-alpha.6 for Apple silicon, macOS 14 or later. The build is unsigned: open it once from the right-click menu.</p>
   </div>
 </section>
 
 </main>
 
+<!-- The footer used to be two dead strings, one of them repeating the
+     platform line the CTA already carries. It is the only place a visitor
+     who has read the page can go next, so it carries the four routes that
+     exist: the code, the builds, the sources behind the filters, and the
+     licence the whole thing is under. -->
 <footer class="bar">
   <span>Orion · a RAW editor for macOS</span>
-  <span class="mono">macOS 14+ · Apple silicon</span>
+  <nav class="bar__nav mono" aria-label="Project">
+    <a href="https://github.com/Nano-AI/Orion">Source</a>
+    <a href="https://github.com/Nano-AI/Orion/releases">Releases</a>
+    <a href="https://github.com/Nano-AI/Orion/tree/main/research">Research</a>
+    <a href="https://github.com/Nano-AI/Orion/blob/main/LICENSE">Apache-2.0</a>
+  </nav>
 </footer>
-
-<!-- The live frame counter — film-rebate edge markings for wherever you are
-     on the roll. Script-fed; hidden without it. -->
-<div class="fr mono" id="frameHud" aria-hidden="true"><span id="frameTxt">01 · Speed</span></div>
 
 <script src="main.js"></script>
 </body>

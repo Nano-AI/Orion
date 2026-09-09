@@ -110,7 +110,7 @@
     var q = function (id) { return document.getElementById(id); };
 
     var devWrap = q('dev'), devImg = q('devImg'), devZoom = q('devZoom'),
-        devFill = q('devFill'), devThumb = q('devThumb'), devCue = q('devCue'),
+        devFill = q('devFill'), devThumb = q('devThumb'),
         vf = q('vf'), devEye = q('devEye'), vfCenter = q('vfCenter'),
         hExp = q('hExp'), hCon = q('hCon'), hTmp = q('hTmp'),
         evNeedle = q('evNeedle');
@@ -118,7 +118,6 @@
     var wipeWrap = q('speed'), wipeProxy = q('wipeProxy'), wipeEdge = q('wipeEdge');
     var maskWrap = q('masks'), maskSweep = q('maskSweep'), hMask = q('hMask');
     var proof = q('proofShot');
-    var hud = q('frameHud'), hudTxt = q('frameTxt');
     var dl = q('dlChip');
     var closeEl = document.querySelector('.close');
 
@@ -237,7 +236,6 @@
 
       if (devFill) devFill.style.height = (e * 100).toFixed(2) + '%';
       if (devThumb) devThumb.style.top = (e * 100).toFixed(2) + '%';
-      if (devCue) devCue.style.opacity = String(1 - clamp01((p - 0.02) * 4));
 
       var push = clamp01((p - 0.76) / 0.24);
       push = push * push;
@@ -297,26 +295,6 @@
       }
     }
 
-    // The frame counter follows whichever section crosses mid-viewport.
-    var hudLabel = '';
-    function setFrame(label) {
-      if (!hud || label === hudLabel) return;
-      hudLabel = label;
-      setText(hudTxt, label);
-      hud.classList.remove('tick');
-      void hud.offsetWidth;                    // restart the tick animation
-      hud.classList.add('tick');
-    }
-    var fio = new IntersectionObserver(function (entries) {
-      for (var i = 0; i < entries.length; i++) {
-        if (entries[i].isIntersecting) {
-          setFrame(entries[i].target.getAttribute('data-frame'));
-        }
-      }
-    }, { rootMargin: '-42% 0px -42% 0px', threshold: 0 });
-    var framed = document.querySelectorAll('[data-frame]');
-    for (var fi = 0; fi < framed.length; fi++) fio.observe(framed[fi]);
-
     /* ---------- The loop ---------- */
 
     var running = false;
@@ -358,9 +336,8 @@
       drawProof(sm.proof.c);
       drawPlx();
 
-      if (hud) hud.classList.toggle('fr--on', devBottom < vh * 0.4);
       // The chip is the shortcut for mid-roll; it leaves when the close's
-      // own CTA arrives — two download controls on screen is one too many.
+      // own CTA arrives, since two download controls on screen is one too many.
       if (dl) {
         var closeTop = closeEl ? closeEl.getBoundingClientRect().top : Infinity;
         dl.classList.toggle('dl--on', devBottom < vh * 0.4 && closeTop > vh * 0.75);

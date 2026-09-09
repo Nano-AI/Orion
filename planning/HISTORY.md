@@ -9824,3 +9824,62 @@ Two things the wrapper exists to know:
   `_PIC8220.ARW`, `_PIC8148.ARW`). Both wrapper cases were run for real - bare
   `orion` and `orion ./fake.ARW` - and the spawned processes carried the
   absolutized `--open` path each time, alongside an already-running instance.
+
+---
+
+## Session `2026-08-25` - shift-locked crop, and the sideways portrait bug
+
+**Asked for directly, both:** Shift while dragging a crop corner should hold
+the ratio the rectangle had when the drag began (like every shape tool); and
+portrait photos rendered sideways in the filmstrip, then painted the canvas
+landscape before snapping upright on open.
+
+**The crop lock (#198).** The drag arithmetic left `CropOverlay` for a pure
+`CanvasLayout.cropDrag(handle:start:dx:dy:lockAspect:)` per the `maskDrag`
+pattern - #110.3 means the pure function is the only coverage a drag can
+have. The locked solve anchors the opposite corner, lets the dominant axis
+win, then clamps aspect-aware (minimum and frame room in an order that
+cannot conflict), so the result is a **fixed point of `clampedCrop`** - the
+engine's per-axis clamp never gets to break the ratio. Shift is
+`NSEvent.modifierFlags` polled per tick (the `AnalogTrack` precedent), so
+pressing or releasing it mid-drag snaps on the next movement. Seven checks
+in `ViewportTests+Crop.swift`, mutation-tested (a 2% ratio skew reddens the
+suite). ⚠ No repro scenario, deliberately: scenarios reach `setCrop`, never
+the drag layer, and `controlValue` getters nobody asserts are forbidden by
+that function's own comment.
+
+**The portrait bug (#199), one root, two symptoms.** An ARW's embedded
+preview JPEG begins `FF D8 FF DB` - **no EXIF segment at all** - so
+`shrink`'s `kCGImageSourceCreateThumbnailWithTransform` (whose comment
+claimed the tag "is stored" with the preview) was a no-op, and
+`extractThumbnail` discarded the actual source, LibRaw's `sizes.flip`. Now
+the flip rides `extractThumbnail`, crosses the facade as a nullable
+`int32_t* out_turns` on `orion_read_thumbnail` (quarter turns, not LibRaw's
+private vocabulary; an `OrionRawInfo` field was rejected - info and
+thumbnail are read at different times, and routing through `readInfo` would
+cost a second LibRaw open per thumbnail), and `PhotoIndex.shrink` bakes it
+into the stored pixels. ⚠ **The tag wins where one exists**, or formats that
+tag their previews *and* report a flip would turn twice. `quarterTurnsFor`
+is one declared symbol in `raw/RawImage.h` now, used by the geometry node
+and the thumbnail path alike; `testOrientation`'s "mirror kept in step"
+checks the real function. **`schemaVersion` 1 → 2** evicts every cached
+sideways thumbnail (the SQLite cache, never a sidecar; one cold rebuild).
+The placeholder flash fixed itself: `showPlaceholder` (#181) draws the same
+thumbnail, now upright. Verified end to end on this machine's two portrait
+sample ARWs: the facade returns turns=3 (flip 5), and a real `--open
+samples` launch rebuilt the index at version 2 holding a 288x512 thumbnail
+where version 1 held 512x288.
+
+**The strip's cells follow (#200).** Upright thumbnails exposed the fixed
+`cellHeight * 1.5` gate: `.fill` chopped a portrait to a landscape band of
+its middle. Cells now take their picture's aspect at the strip height,
+clamped 0.5...2.0 (letterbox rejected - bars inside a film gate read as part
+of the photograph). Checked by eye on a rendered `--screenshot` frame: two
+tall narrow cells, whole frames visible, sprockets and gates aligned. ⚠ The
+~35 posed scenes that show the strip all shift; the three asserting scenes
+do not assert strip layout.
+
+**1009 / 3940 / four sample-runnable repro scenarios exit 0 /
+check-decisions, -gestures, -wiring exit 0 / check-screens, -modes exit 2
+for want of `_PIC` samples (pre-existing).** Still owed by the developer: a
+stylus verdict on the brush, and the trailer-stripping history rewrite.

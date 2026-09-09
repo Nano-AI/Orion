@@ -24,14 +24,18 @@ components folded per §6, optionally feathered onto the photograph's own edges,
 through the graph, the POD facade, the panel rows, the sidecar, undo and the
 bench.
 
-**Last updated:** 2026-09-08b — the orange/yellow saturation gap fitted
-directly into the 90-bin `HueSatMap` table. Concurrent with #233's session
-(the loading-placeholder fix) — both landed the same day.
+**Last updated:** 2026-09-09b — a design pass over the landing page, on
+branch `web/design-pass`. Two decisions (#241, #242), no engine change and no
+app change: the page's honesty block stopped being its ugliest block, two
+scroll-theatre devices were retired, and the footer became an exit instead of
+two dead strings. The session before it was the develop panels (#234-#240).
 
 **Recent sessions** — full write-ups below, older ones in `HISTORY.md`:
 
 | Date | What landed |
 |---|---|
+| 2026-09-09b | **The landing page, reworked against four taste skills** — audit first, targeted evolution, no rewrite. Nineteen hairlined register rows became six groups in a grid that fills at every breakpoint, all 22 feature strings byte-identical; the footer gained the four routes out of the page; the frame counter and the hero's scroll cue retired, taking an `IntersectionObserver` and 49 lines with them. Zero em-dashes, `rel=canonical`, 44-point targets, `prefers-reduced-transparency` — #241, #242 |
+| 2026-09-09 | **The develop panels, quieted.** ~200 tick marks and 40 knurled thumbs cut back to what a camera scale actually needs; the mixer swatches and the three grading wheels brought under #63's chroma rule, which they had never been inside; one typographic register (engraved names, sentence-case buttons); section rhythm 26/11/9; PRESETS stopped clipping. Two a11y fixes no check can see: five icon-only toolbar buttons had no spoken name, and the swatches had 16-point targets — #234-#240 |
 | 2026-09-08b | The orange/yellow saturation deficit (and red/magenta excess) fitted into the table's own 90 hue bins rather than another region — mean band error **13.6% → 6.3%** over 12 damped rounds; red and magenta, coupled to the bands being pushed up, land at 20%/13% and were still improving when the fit stopped. `tools/huesatfit.py` is the new instrument — #232 |
 | 2026-09-08 | Two photographs on screen at once, fixed by blanking to neutral instead of a thumbnail; the open photograph's filename now drawn in the footer — #233 |
 | 2026-09-06 | The colour complaint was white-balance/matrix, not AgX. A second `HueSatMap` region for warm/earth tones: mean hue error **9.1° → 2.2°**, 5 frames, 14 patches — #225 |
@@ -181,6 +185,88 @@ much with the same node count. `Pipeline::setProfiling` prints a per-node
 ranking on every bench run, and `research/local-laplacian.md` names the two
 candidate fixes in order.
 
+
+---
+
+## Session `2026-09-09b` - the landing page, reworked against four taste skills, #241/#242
+
+**Asked for directly:** apply `design-taste-frontend`, `redesign-existing-projects`,
+`interface-kit` and `high-end-visual-design` to the website, on a new branch,
+and update the docs.
+
+**The mode was the whole decision.** `design-taste-frontend`'s own redesign
+protocol (§11.E) says: if the information architecture, the content and the SEO
+are sound, take the targeted evolution and not the rewrite — about 70% of the
+value at 40% of the risk. All three are sound here. The page is already
+art-directed, already dependency-free (#58), already correct without JavaScript
+(#59), and its scenes are the brand. So this was an audit and a set of targeted
+fixes, and **nothing structural was rewritten**. What follows is only what
+genuinely failed.
+
+**What the skills were right about.** Two of the page's devices are on the same
+ban list and agreeing cost less code than defending them: the hero's `scroll to
+look through` cue, and the fixed frame counter ticking `01 · Speed` through
+`End of roll`. The counter's case does not need the skill — it told the reader
+what the page already showed, cost a second `IntersectionObserver` and a class
+toggle every animation frame, and was the only reason the page carried two
+accent inks. Both gone, with `.dev__cue`, `.fr`, `@keyframes tick`,
+`@keyframes frtick` and 27 lines of `main.js`. **#241 records that this reverses
+half of #60**, which introduced rebate amber for exactly that counter.
+
+**The register was the real defect and no checklist was needed to see it.**
+Nineteen shipped features as nineteen hairlined rows beside a three-row column
+left a quarter of the section empty, so the block whose entire job is *we do not
+overclaim* was the worst-looking thing on the page. Now six groups (Library and
+Export split, which is the truer division) in a grid that divides evenly by
+three, two and one, so it is full at every breakpoint; "Not yet" moved
+underneath as a full-width closer. ⚠ **All 22 feature strings were diffed
+byte-for-byte against `HEAD` before and after** — `ea94b0e` and `901cfcb` exist
+because this list has twice been wrong about what ships, so the regroup was
+allowed to move strings and not to edit them.
+
+**The footer was a dead end** and is the only exit the page offers, so it now
+carries source, releases, research and the licence at a 44-point target.
+
+**Mechanical, all verified in a browser against the live page:** zero em-dashes
+anywhere visible (`−` in the mask readout is U+2212 and stays), middle dots
+rationed to one per line, `rel=canonical` and `og:image:alt`, `text-wrap:
+pretty`, the citation hover moved off `padding-left` onto `transform`, an
+invisible 44-point reach around the download chip, and a
+`prefers-reduced-transparency` fallback for the two blurred surfaces.
+
+⚠ **What was deliberately NOT done, and why.**
+
+| Skill said | Not done because |
+|---|---|
+| React / Next / Tailwind / Motion as the default stack | #58 settled this: dependency-free static files, and the page has no interactivity to justify a runtime |
+| Install Phosphor or Tabler, never hand-roll an SVG icon | Four icons on a page with no `package.json`. A CDN request is exactly what #58 and the self-hosted fonts exist to avoid |
+| Use `picsum.photos` placeholders | The photographs are real, taken by the developer, and screened (see the `_PIC8095` note above) |
+| Serif display, premium palettes, glass, bento | Contextual advice for a brief this is not. The page is dark by decision, and teal-for-live-numbers-only is #60's rule |
+| Add a nav | One page, one narrative, one CTA. A nav bar would fight the hero and add a component to maintain |
+
+⚠ **`DESIGN.md` at the repository root is a trap and was left alone.** It is
+untracked, and it is a design system for **Anthropic's Claude product** —
+cream canvas, coral CTAs, Copernicus serif. `interface-kit` opens by saying a
+root `DESIGN.md` overrides all of its defaults, so any future session that loads
+that skill will try to paint Orion in another company's brand. It was not
+applied here and it is not deleted, because it is not this session's file.
+Rename it or move it under `research/` before it is believed.
+
+⚠ **Nine image files in `web/img/` are referenced by nothing** —
+`orion-hero-canvas`, `orion-mask-radial` (both sizes), and the
+`photo-lambo-showroom` / `photo-m5-bluehour` / `photo-revuelto` pairs. Left in
+place; flagged rather than deleted, since spare frames may be intentional.
+
+⚠ **`web/index.html` still points at `v0.4.0-alpha.6`** and this pass did not
+touch that, the schema block, any anchor `id`, or any URL. Same reasoning as the
+note above: the site's only call to action must not lead at a pre-release until
+the developer says so.
+
+**Gates:** `check-decisions.py` green (240 rows, 1-242, all cited numbers
+resolve). The other six are engine and app gates and this branch changes neither
+`app/` nor `engine/`; the page was verified in a browser instead — markup
+balanced, all 25 element `id`s preserved, 22 register items, no console errors,
+no horizontal overflow, footer targets measured at 44 points.
 
 ---
 
@@ -500,60 +586,3 @@ check-decisions, -gestures, -wiring exit 0 / check-screens, -modes exit 2
 for want of `_PIC` samples (pre-existing). Largest file in the tree:
 `tests_mask.cpp` at 955.** Still owed by the developer: a stylus verdict on
 the brush, and the trailer-stripping history rewrite.
-
-## Session `2026-08-25` - shift-locked crop, and the sideways portrait bug
-
-**Asked for directly, both:** Shift while dragging a crop corner should hold
-the ratio the rectangle had when the drag began (like every shape tool); and
-portrait photos rendered sideways in the filmstrip, then painted the canvas
-landscape before snapping upright on open.
-
-**The crop lock (#198).** The drag arithmetic left `CropOverlay` for a pure
-`CanvasLayout.cropDrag(handle:start:dx:dy:lockAspect:)` per the `maskDrag`
-pattern - #110.3 means the pure function is the only coverage a drag can
-have. The locked solve anchors the opposite corner, lets the dominant axis
-win, then clamps aspect-aware (minimum and frame room in an order that
-cannot conflict), so the result is a **fixed point of `clampedCrop`** - the
-engine's per-axis clamp never gets to break the ratio. Shift is
-`NSEvent.modifierFlags` polled per tick (the `AnalogTrack` precedent), so
-pressing or releasing it mid-drag snaps on the next movement. Seven checks
-in `ViewportTests+Crop.swift`, mutation-tested (a 2% ratio skew reddens the
-suite). ⚠ No repro scenario, deliberately: scenarios reach `setCrop`, never
-the drag layer, and `controlValue` getters nobody asserts are forbidden by
-that function's own comment.
-
-**The portrait bug (#199), one root, two symptoms.** An ARW's embedded
-preview JPEG begins `FF D8 FF DB` - **no EXIF segment at all** - so
-`shrink`'s `kCGImageSourceCreateThumbnailWithTransform` (whose comment
-claimed the tag "is stored" with the preview) was a no-op, and
-`extractThumbnail` discarded the actual source, LibRaw's `sizes.flip`. Now
-the flip rides `extractThumbnail`, crosses the facade as a nullable
-`int32_t* out_turns` on `orion_read_thumbnail` (quarter turns, not LibRaw's
-private vocabulary; an `OrionRawInfo` field was rejected - info and
-thumbnail are read at different times, and routing through `readInfo` would
-cost a second LibRaw open per thumbnail), and `PhotoIndex.shrink` bakes it
-into the stored pixels. ⚠ **The tag wins where one exists**, or formats that
-tag their previews *and* report a flip would turn twice. `quarterTurnsFor`
-is one declared symbol in `raw/RawImage.h` now, used by the geometry node
-and the thumbnail path alike; `testOrientation`'s "mirror kept in step"
-checks the real function. **`schemaVersion` 1 → 2** evicts every cached
-sideways thumbnail (the SQLite cache, never a sidecar; one cold rebuild).
-The placeholder flash fixed itself: `showPlaceholder` (#181) draws the same
-thumbnail, now upright. Verified end to end on this machine's two portrait
-sample ARWs: the facade returns turns=3 (flip 5), and a real `--open
-samples` launch rebuilt the index at version 2 holding a 288x512 thumbnail
-where version 1 held 512x288.
-
-**The strip's cells follow (#200).** Upright thumbnails exposed the fixed
-`cellHeight * 1.5` gate: `.fill` chopped a portrait to a landscape band of
-its middle. Cells now take their picture's aspect at the strip height,
-clamped 0.5...2.0 (letterbox rejected - bars inside a film gate read as part
-of the photograph). Checked by eye on a rendered `--screenshot` frame: two
-tall narrow cells, whole frames visible, sprockets and gates aligned. ⚠ The
-~35 posed scenes that show the strip all shift; the three asserting scenes
-do not assert strip layout.
-
-**1009 / 3940 / four sample-runnable repro scenarios exit 0 /
-check-decisions, -gestures, -wiring exit 0 / check-screens, -modes exit 2
-for want of `_PIC` samples (pre-existing).** Still owed by the developer: a
-stylus verdict on the brush, and the trailer-stripping history rewrite.

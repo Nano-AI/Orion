@@ -4,8 +4,8 @@
  *  is used in a dark room and the page is the same room. The chrome is
  *  near-black plus one teal, exactly as the editor's interface is, and teal is
  *  reserved for live numbers — never a button, never a wash. One more ink is
- *  allowed: the amber of film-rebate edge markings, for the frame counter in
- *  the corner, and nothing else. Every other color on this page comes out of
+ *  allowed: the rebate amber of a film edge, which marks one sentence and
+ *  nothing else. Every other color on this page comes out of
  *  the photographs, which is the whole point: it is a photo editor, so the
  *  photographs do the talking.
  *
@@ -52,7 +52,7 @@
   --body:   #c9d2d5;   /* running text, a step down from headings */
   --slate:  #9aa6ab;   /* muted, cool, biased toward the accent */
   --teal:   #4DB6C4;   /* live numbers only */
-  --rebate: #F0C674;   /* film-edge amber — the frame counter only */
+  --rebate: #F0C674;   /* film-edge amber, the highlighter and nothing else */
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
   --disp: var(--sans);
@@ -73,11 +73,15 @@ body {
   font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;          /* the body never scrolls sideways */
 }
 
 img { display: block; max-width: 100%; height: auto; }
+/* balance is already on .disp; pretty is what keeps a lone word off the
+ * last line of running text and of every register row. */
 p { margin: 0; }
+p, li { text-wrap: pretty; }
 
 /* ---------- Display type ----------
  * Heavy, tight and optically sized — the headlines are the loud thing on
@@ -514,19 +518,6 @@ html:not(.scrub) .dev__rail { display: none; }
 .dev__hud b { color: var(--teal); font-weight: 700; }
 .hud__ms { margin-left: auto; }
 
-/* The invitation, over the black, under the window. */
-.dev__cue {
-  position: absolute; left: 0; right: 0;
-  bottom: clamp(1.4rem, 4vh, 2.8rem);
-  z-index: 2;
-  text-align: center;
-  letter-spacing: .3em; text-transform: uppercase; font-size: .72rem;
-  color: var(--ivory);
-}
-.cue__tick { display: inline-block; animation: tick 2.2s ease-in-out infinite; }
-@keyframes tick { 0%,100% { transform: translateY(0); opacity: .4; } 50% { transform: translateY(4px); opacity: 1; } }
-html:not(.scrub) .dev__cue { display: none; }
-
 /* ---------- Statement — lit word by word ----------
  * The script wraps the words; until each is reached it sits in the dark.
  * Without the script there are no .w spans and the line is simply lit. */
@@ -761,9 +752,11 @@ html.scrub .plx { will-change: transform; }
   display: flex; justify-content: space-between; gap: 1.5rem;
   padding: 1rem 0; border-top: 1px solid var(--rail);
   font-family: var(--mono); font-size: .8rem;
-  transition: background .25s ease, padding-left .25s ease;
+  /* The nudge was padding-left, which relays the row on every hover.
+   * translate is the same 0.6rem on the compositor. */
+  transition: background .25s ease, transform .25s ease;
 }
-.cites li:hover { background: rgba(20,22,24,.65); padding-left: .6rem; }
+.cites li:hover { background: rgba(20,22,24,.65); transform: translateX(.6rem); }
 .cites li:last-child { border-bottom: 1px solid var(--rail); }
 /* The rows arrive as a cascade, one after the next. */
 .cites li:nth-child(2) { transition-delay: .07s; }
@@ -811,33 +804,64 @@ html.scrub .plx { will-change: transform; }
   padding: clamp(3.5rem, 11vh, 8rem) var(--gut);
   border-top: 1px solid var(--rail);
 }
-.reg__cols {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-  gap: clamp(2rem, 5vw, 5rem);
-}
+/* Nineteen shipped features against three unbuilt ones is not a two-column
+ * shape: side by side it was a nineteen-row tower next to three rows of air,
+ * a quarter of the section empty. The shipped six run across the full width
+ * in a grid that fills exactly (six groups, three columns, two rows) and the
+ * unbuilt three close the section underneath. */
 .reg__h {
   font-size: .72rem; letter-spacing: .18em;
   text-transform: uppercase; color: var(--slate);
-  display: flex; align-items: center; gap: .6rem;
   margin: 0;
 }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rail); }
-.dot--on { background: var(--teal); box-shadow: 0 0 12px rgba(77,182,196,.8); }
+/* One soft rule per group, not one per row. Three columns fixed rather than
+ * auto-fit: six groups divide into three exactly, and auto-fit was picking
+ * four at some widths and leaving two cells of nothing. */
+.reg__groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem clamp(1.6rem, 3vw, 3.4rem);
+  margin-top: 1.6rem;
+}
+.reg__g { padding-top: 1rem; border-top: 1px solid rgba(36,40,43,.85); }
+.reg__gh {
+  margin: 0; font-size: .62rem; letter-spacing: .24em;
+  text-transform: uppercase; color: var(--slate);
+}
 .reg ul { margin: 1.3rem 0 0; padding: 0; list-style: none; }
+.reg__g ul { margin-top: .7rem; }
 .reg li {
   position: relative;
-  padding: .5rem 0 .5rem 1.7em;
-  border-bottom: 1px solid rgba(36,40,43,.6); font-size: .95rem;
+  padding: .34rem 0 .34rem 1.7em;
+  font-size: .92rem;
+}
+.reg__not {
+  margin-top: clamp(2.6rem, 6vh, 4.4rem);
+  padding-top: clamp(2rem, 4vh, 3rem);
+  border-top: 1px solid var(--rail);
+}
+.reg__not ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 clamp(1.6rem, 3vw, 3.4rem);
+  align-items: start;
+}
+.reg__not li { padding: .5rem 0 .5rem 1.7em; }
+
+/* Six groups divide evenly by three, two and one, so every step down is a
+ * full grid and never a row with holes in it. */
+@media (max-width: 1180px) {
+  .reg__groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .reg li::before {
-  content: ""; position: absolute; left: 0; top: .82em;
+  content: ""; position: absolute; left: 0; top: .68em;
   width: 1.05em; height: 1.05em;
   background-color: var(--teal);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.3'/%3E%3Cpath d='M5.3 8.3l1.9 1.9 3.5-4.2' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.3'/%3E%3Cpath d='M5.3 8.3l1.9 1.9 3.5-4.2' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 .reg .dim li { color: var(--slate); }
+.reg__not li::before { top: .82em; }
 .reg .dim li::before {
   background-color: var(--slate); opacity: .75;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.3' stroke-dasharray='2.7 2.5'/%3E%3C/svg%3E") center/contain no-repeat;
@@ -924,35 +948,30 @@ html.scrub .plx { will-change: transform; }
 /* ---------- Footer ---------- */
 
 .bar {
-  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem;
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 1rem;
   padding: 2rem var(--gut) 3rem;
   border-top: 1px solid var(--rail);
   font-size: .78rem; color: var(--slate);
 }
-
-/* ---------- The frame counter ----------
- * Film-rebate edge markings for wherever you are on the roll. Fed by the
- * script; does not exist without it. */
-.fr {
-  position: fixed; right: clamp(1rem, 2.5vw, 2.2rem); bottom: 1.4rem;
-  z-index: 50;
-  font-size: .64rem; letter-spacing: .3em; text-transform: uppercase;
-  color: var(--rebate);
-  opacity: 0; pointer-events: none;
-  transition: opacity .45s ease;
-  overflow: hidden;
+.bar__nav { display: flex; flex-wrap: wrap; gap: 0 clamp(1.1rem, 3vw, 2.2rem); }
+/* The links are .7rem type; the 44px box is the touch target around them,
+ * not a bigger label. */
+.bar__nav a {
+  display: inline-flex; align-items: center; min-height: 44px;
+  font-size: .7rem; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--slate); text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color .25s ease, border-color .25s ease;
 }
-.fr.fr--on { opacity: .92; }
-.fr span { display: inline-block; }
-.fr.tick span { animation: frtick .4s cubic-bezier(.16,1,.3,1); }
-@keyframes frtick { from { transform: translateY(120%); } to { transform: none; } }
-html:not(.scrub) .fr { display: none; }
+.bar__nav a:hover { color: var(--ivory); border-bottom-color: var(--ivory); }
+.bar__nav a:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
 
 /* ---------- The download chip ----------
  * The page's one job, reachable from anywhere on the roll. Dressed like the
- * platform badge — hairline, blur, no fill — because teal is never a button.
- * Hidden over the hero (the close owns the pitch), it surfaces on the same
- * cue as the frame counter. Without the script the close CTA is the route. */
+ * platform badge, hairline and blur and no fill, because teal is never a
+ * button. Hidden over the hero, since the close owns the pitch; it surfaces
+ * once the finder is behind you. No script, and the close CTA is the route. */
 .dl {
   position: fixed; top: 1.1rem; right: clamp(1rem, 2.5vw, 2.2rem);
   z-index: 60;
@@ -974,10 +993,24 @@ html:not(.scrub) .fr { display: none; }
   transition: opacity .45s ease, transform .45s ease,
               border-color .25s ease, color .25s ease;
 }
+/* The chip is deliberately small; the target around it is not. Nine points
+ * of invisible reach in each direction puts it over 44px without the pill
+ * growing into the photograph. */
+.dl::after { content: ""; position: absolute; inset: -9px -6px; }
 .dl:hover { color: #fff; border-color: rgba(240,243,244,.5); }
 .dl:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
 .dl__tag { color: var(--slate); letter-spacing: .14em; }
 html:not(.scrub) .dl { display: none; }
+
+/* ---------- Reduced transparency ----------
+ * The two blurred surfaces are the only glass on the page. Asked for less
+ * of it, they become the flat panel they were imitating. */
+@media (prefers-reduced-transparency: reduce) {
+  .badge, .dl {
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    background: rgba(20,22,24,.94);
+  }
+}
 
 /* ---------- Narrow ---------- */
 
@@ -1013,6 +1046,7 @@ html:not(.scrub) .dl { display: none; }
     mask-image: linear-gradient(to bottom, transparent, #000 24%);
   }
   .own { grid-template-columns: 1fr; }
+  .reg__groups, .reg__not ul { grid-template-columns: 1fr; }
   .sidecar__row { grid-template-columns: minmax(0, 1fr) auto; }
   .sidecar__what { display: none; }
   .dev__rail { display: none; }
@@ -1022,7 +1056,6 @@ html:not(.scrub) .dl { display: none; }
   .vf__shot { font-size: .66rem; gap: .3rem .7rem; }
   .vf__shot .shot__c:first-child, .vf__shot .shot__c:nth-child(4) { display: none; }
   .vf__status { font-size: .52rem; letter-spacing: .14em; }
-  .fr { display: none; }
   .wipe__lab { top: 12%; }
 }
 
@@ -1031,7 +1064,6 @@ html:not(.scrub) .dl { display: none; }
  * html.scrub), reveals are instant, and the ambient loops stop. */
 @media (prefers-reduced-motion: reduce) {
   html.js .rv, html.js .lines .l > span { opacity: 1 !important; transform: none !important; transition: none !important; }
-  .cue__tick { animation: none; }
   .dev__img { animation: none; }
   *, *::before, *::after {
     animation-duration: .001ms !important;
