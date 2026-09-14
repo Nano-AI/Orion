@@ -156,13 +156,9 @@ limits are recorded in `planning/STATUS.md` rather than left to be rediscovered.
 
 **Proprietary. See [`LICENSE`](LICENSE).**
 
-You may use, modify and redistribute Orion, including commercially. The licence
-carries an **explicit patent grant**, which is why it was chosen over MIT: see
-`planning/DECISIONS.md` #174 for why patents are treated as a separate question
-from copyright in this project, and #188 for this decision.
+All rights reserved; no use, copying or redistribution without written permission. Revisions through commit abf3a51 were published under Apache-2.0 and remain available under it.
 
-⚠ **[`NOTICE`](NOTICE) has to travel with any redistribution** (Apache-2.0
-§4(d)). It carries obligations that are not Orion's to waive:
+⚠ **[`NOTICE`](NOTICE) carries third-party licenses and obligations**:
 
 | What | Terms |
 |---|---|
