@@ -113,8 +113,9 @@ struct AssistantTerminalView: NSViewRepresentable {
         context.coordinator.launchedCommand = command
         context.coordinator.launchedDirectory = workingDirectory
         context.coordinator.launchedToken = restartToken
+        let args = AssistantProcess.buildArgv(for: command)
         view.startProcess(executable: "/bin/zsh",
-                           args: ["-l", "-c", command],
+                           args: args,
                            currentDirectory: workingDirectory.path)
     }
 

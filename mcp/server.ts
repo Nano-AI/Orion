@@ -75,8 +75,13 @@ async function resolve(given: string | undefined, key: "photo" | "folder"): Prom
   return (await readCurrent())?.[key] ?? null;
 }
 
+const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`. All values are absolute, never deltas. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked. A 512 px proxy costs about 220 tokens; prefer \`get_stats\` when numbers will do.`;
+
 export function createServer() {
-  const server = new McpServer({ name: "orion", version: "0.1.0" });
+  const server = new McpServer(
+    { name: "orion", version: "0.1.0" },
+    { instructions: ORION_INSTRUCTIONS }
+  );
 
   server.registerTool(
     "current_photo",

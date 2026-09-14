@@ -312,6 +312,13 @@ test("propose_edit sends a composite value whole and gets it back unchanged in s
   assert.deepEqual(JSON.parse(content[0].text!).state.curve, curve);
 });
 
+test("server instructions mention current_photo and never ask which file", async () => {
+  const instructions = client.getInstructions();
+  assert.ok(instructions, "server should have instructions");
+  assert.match(instructions, /current_photo/i, "instructions should mention current_photo");
+  assert.match(instructions, /never ask which file/i, "instructions should say never ask which file");
+});
+
 test("entry point runs when its own path contains a space", async () => {
   const dir = path.join(import.meta.dirname, "test", "has space");
   await fs.mkdir(dir, { recursive: true });

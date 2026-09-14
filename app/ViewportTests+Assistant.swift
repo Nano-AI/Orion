@@ -55,4 +55,21 @@ extension ViewportTests {
         report(model.fontSize == AssistantPanelModel.minFontSize,
                "⌘- stops at the min rather than shrinking without bound", "\(model.fontSize)")
     }
+
+    static func testAssistantArgvBuilderAppendsClaude() {
+        let argvClaude = AssistantProcess.buildArgv(for: "claude")
+        let hasAppendSystemPrompt = argvClaude.contains("--append-system-prompt")
+        let orionContextIndex = argvClaude.firstIndex { $0.contains("Orion") && $0.contains("current_photo") }
+        report(hasAppendSystemPrompt,
+               "claude argv contains --append-system-prompt")
+        report(orionContextIndex != nil,
+               "claude argv contains the Orion context after --append-system-prompt")
+    }
+
+    static func testAssistantArgvBuilderOmitsCodex() {
+        let argvCodex = AssistantProcess.buildArgv(for: "codex")
+        let hasAppendSystemPrompt = argvCodex.contains("--append-system-prompt")
+        report(!hasAppendSystemPrompt,
+               "codex argv does not contain --append-system-prompt")
+    }
 }

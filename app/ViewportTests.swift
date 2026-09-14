@@ -232,6 +232,8 @@ enum ViewportTests {
         testAssistantFontShortcutMatchesCommandEqualsMinusAndZero()
         testAssistantFontShortcutIgnoresEverythingElse()
         testAssistantFontSizeClampsAtBothEnds()
+        testAssistantArgvBuilderAppendsClaude()
+        testAssistantArgvBuilderOmitsCodex()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures

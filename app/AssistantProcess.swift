@@ -95,6 +95,23 @@ final class AssistantPanelModel {
     func resetFontSize() { fontSize = Self.defaultFontSize }
 }
 
+enum AssistantProcess {
+    static let orionContext = "Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one `current_photo` returns, and every tool's `path` defaults to it, so never ask which file. Start any edit with `describe_edits` and `get_stats`. All values are absolute, never deltas. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after `propose_edit` say what you changed and stop; do not call `approve_edit` unless asked. A 512 px proxy costs about 220 tokens; prefer `get_stats` when numbers will do."
+
+    /// Builds args array for the terminal command, adding --append-system-prompt for claude.
+    /// For claude, returns ["-l", "-c", "exec \"$0\" \"$@\"", "claude", "--append-system-prompt", "<context>"]
+    /// so the context is passed as a separate argv element and never interpolated into -c.
+    /// For other commands, returns ["-l", "-c", command].
+    static func buildArgv(for command: String) -> [String] {
+        switch command {
+        case "claude":
+            return ["-l", "-c", "exec \"$0\" \"$@\"", "claude", "--append-system-prompt", orionContext]
+        default:
+            return ["-l", "-c", command]
+        }
+    }
+}
+
 /// Which of Orion's two key handlers a keyDown event should reach — the
 /// assistant terminal (every bare key, plus ⌘=/⌘-/⌘0 for its font) or
 /// Orion's own shortcuts. Pure: takes only whether the terminal is first
