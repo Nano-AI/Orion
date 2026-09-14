@@ -24,19 +24,13 @@ components folded per §6, optionally feathered onto the photograph's own edges,
 through the graph, the POD facade, the panel rows, the sidecar, undo and the
 bench.
 
-**Last updated:** 2026-09-13 — the agent surface POC (#243-#246): a fifth CLI
-mode dispatches to MCP server, which speaks JSON-RPC over Orion's binary; no
-RAW leaves the machine, no sidecar writes until a human approves. **Incident
-#247**: a model called `propose_edit` with `temperatureK: 150` as a delta (not
-absolute), nothing said the vocabulary, proxy rendered black, further proposals
-merged onto poisoned file, model approved. Fix: validate at merge against
-product's slider ranges, prefix rejections "REJECTED:", publish the vocabulary
-via `describe_edits`, document absolute values. All 8 gates now pass 10/10.
+**Last updated:** 2026-09-14 — proposal view and composite edits (decisions #248-#251): the app watches for `.proposed.json`, previews it in compare split, and approves/rejects inline with panels locked; `current.json` publishes the open photo so the MCP model never needs the path; agent edits are validated at merge and composite fields replaced whole; SwiftTerm is vendored (MIT) with `Color` renamed `TermColor` to avoid SwiftUI ambiguity. All 8 gates pass with check-agent at 14/14.
 
 **Recent sessions** — full write-ups below, older ones in `HISTORY.md`:
 
 | Date | What landed |
 |---|---|
+| 2026-09-14 | **Proposal view with in-app compare, composite edits validated, current.json watch, assistant terminal (#248-#251).** The app watches the RAW's directory for `.proposed.json`, previews proposals in compare split, Approve ⌘⏎ / Reject ⌘⎋ in footer; develop panels disable while a proposal is live. Fixed autosave order: `stopAutosave` before `captureOriginal`. `current.json` publishes the open photo to `~/Library/Application Support/Orion/current.json` so `get_stats` and `get_proxy` resolve paths from there — the model never learns which photo is open. Composite fields (`layers`, `spots`, `maskComponents`) replace whole-value with strict decoding and range validation against product sliders; why not merge-by-index? Index order is unknown to the model and would silently corrupt on mismatch. SwiftTerm v1.20.0 (MIT, commit 5d14406, 63 files) is vendored under `third_party/`, with `Color` renamed `TermColor` to avoid SwiftUI collision; hand-edit cost < package update cost. Terminal ⌘⌥A toggle, claude/codex selector, `/bin/zsh -l -c` launch so .mcp.json loads. All 8 gates pass (1034/4192/244/6/3/2+4/459/14 checks). Follow-ups: quit does not null current.json (needs terminate hook); manual edits during preview are locked not merged (known limitation); SwiftTerm upstream pulls need TermColor re-applied; maxMaskComponents 8 / maxSpots 64 not enforced by apply (Engine silently prefixes); mean-luminance floor on get_proxy; measure culling time on real shoot. |
 | 2026-09-13b | **Agent edits validated and vocabulary published (#247).** Out-of-range `temperatureK: 150` was accepted and rendered the photo black. Fix: `apply` validates every edit against product's slider ranges from `app/DevelopPanels+*.swift:88-116`, rejects with exit 2; MCP server prefixes "REJECTED:" so the model reads it as rejection not glitch; `describe_edits` / `keys` verb publishes 44-key vocabulary (unit, range, default, note); `propose_edit` documents all values are absolute. Unit test in `mcp/server.test.ts` validates prefix. Gate 8 extended with checks 8-10: describe_edits has ≥30 keys with temperatureK.min ≥ 2000 and absolute: true; propose_edit {temperatureK: 150} rejects with "REJECTED: temperatureK 150" and writes no proposed file; propose_edit with reset: true discards prior proposal. All 8 gates pass (1034/4148/244/6/3/2+4/427/10 checks). Follow-ups: mean-luminance floor on get_proxy results would have caught tonight's black render; in-app proxy check before approve. |
 | 2026-09-13 | **The agent surface POC, licensed proprietary.** The MCP server (#245) pairs with `--agent` CLI mode (#244) to cull and edit RAW files without the RAW reaching the model — it sees proxies and numbers, proposes edits to a `.json` file beside the RAW (#246), and nothing touches the sidecar until the human approves in the client's chat. Seven tools, gate passes 7/7; the eighth gate (`check-agent.py`) runs real server against `samples/_PIC8095.ARW`, 7/7 in 3.5 s. #243: Orion proprietary from 2026-09-13. Commits through `abf3a51` remain Apache-2.0; `NOTICE` holds all third-party licenses unchanged. ⚠ Distributed binary needs Homebrew dylibs bundled and re-pathed (from `planning/LICENSE-AUDIT.md`). Follow-ups queued: deep-merge composite fields in `apply`; in-app approve/deny diff view; Apple Vision blink and near-duplicate culling; restore-failure stderr cosmetics; measure agent culling time on real shoot. |
 | 2026-09-09b | **The landing page, reworked against four taste skills** — audit first, targeted evolution, no rewrite. Nineteen hairlined register rows became six groups in a grid that fills at every breakpoint, all 22 feature strings byte-identical; the footer gained the four routes out of the page; the frame counter and the hero's scroll cue retired, taking an `IntersectionObserver` and 49 lines with them. Zero em-dashes, `rel=canonical`, 44-point targets, `prefers-reduced-transparency` — #241, #242 |
@@ -99,12 +93,11 @@ say yes (#108); nobody has said so with a stylus in hand.
 ## Where the counts stand, and the one gate that flakes
 
 **All eight green, measured 2026-09-13 (after #246 landed):**
-`orion-tests` **1034 checks**, 0 failures · `orion-viewport-tests` **4125 checks**,
-0 failures · decisions (246 rows, 0 declared gaps, all 246 cited) · gestures (6)
+`orion-tests` **1034 checks**, 0 failures · `orion-viewport-tests` **4192 checks**,
+0 failures · decisions (251 rows, 0 declared gaps, all 251 cited) · gestures (6)
 · screens (3 asserting + 1 byte-stable) · modes (`--library-open` 13 checks,
-`--batch-export`, `--hdr-merge`) · wiring (424 product functions, 9 harness-only,
-all pre-existing) · agent (7/7 tools, real server against `samples/_PIC8095.ARW`,
-3.5 s).
+`--batch-export`, `--hdr-merge`) · wiring (459 product functions, 8 harness-only,
+all pre-existing) · agent (14/14 checks in ~8 s, real server against `samples/_PIC8095.ARW`).
 ⚠ **`testCreativeVignetteGpu`'s corner-spread threshold moved 4.0 → 5.0,
 decision #232** — the fitted curve reaches a demosaic-edge color cast in
 that fixture's corners (hue ~330°, sat ~0.29) that both narrow regions
