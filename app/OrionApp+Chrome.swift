@@ -337,6 +337,12 @@ extension Editor {
         .padding(.horizontal, 5)
         .padding(.top, 6)
         .background(Palette.ground)
+        // A manual edit during a live proposal is neither saved (autosave is
+        // off for the whole preview) nor recoverable (Reject discards it
+        // silently) — see the note on `ProposalWatcher.isLive`. Switching
+        // tabs is the smallest way in, so it is locked here; the panel
+        // content itself is locked in `OrionApp+Tools.swift`'s `tools`.
+        .disabled(ProposalWatcher.shared.isLive)
     }
 
     private var hint: String {
@@ -437,6 +443,15 @@ extension Editor {
                                        color: Palette.accent, size: 9)
                             .lineLimit(1)
                         Spacer(minLength: 8)
+                        // The develop panels are locked for the whole
+                        // preview (tabBar here, the panel content in
+                        // OrionApp+Tools.swift's `tools`) — said here too,
+                        // beside the only two controls still live, since a
+                        // photographer reaching for a slider that does not
+                        // respond needs the reason next to their hand.
+                        Engraved.Label(text: "Approve or reject to keep editing",
+                                       color: Palette.faint, size: 9)
+                            .lineLimit(1)
                         chip("Approve", enabled: true) { ProposalWatcher.shared.approve() }
                             .keyboardShortcut(.return, modifiers: [.command])
                             .help("Approve the proposed edit  (⌘⏎)")

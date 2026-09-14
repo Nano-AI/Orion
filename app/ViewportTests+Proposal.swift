@@ -92,8 +92,33 @@ extension ViewportTests {
         let (phase, actions) = Proposal.transition(.idle, on: .appeared(keys: ["exposureEv"]))
         report(phase == .previewing(keys: ["exposureEv"]),
                "appearing enters previewing with its keys", "\(phase)")
-        report(actions == [.captureOriginal, .stopAutosave, .restoreProposed, .setCompare],
-               "captures, stops autosave, restores, then splits the compare", "\(actions)")
+        report(actions == [.stopAutosave, .captureOriginal, .restoreProposed, .setCompare],
+               "stops autosave, captures, restores, then splits the compare", "\(actions)")
+    }
+
+    /// The data-loss bug found in review of 806a00d: `.captureOriginal`
+    /// (`Engine.captureOriginal`, Engine+Compare.swift:59-99) renders twice
+    /// — `apply(neutral)` then `apply(current)` — and each `apply` fires
+    /// `onEdit` into `autosave.note(state)` through `pushAndRender`. With
+    /// autosave still armed, `note(neutral)` queues the *neutral* state
+    /// (every adjustment zeroed) as pending; `note(current)` is a no-op
+    /// since `current == saved`. So if `.stopAutosave` ran anywhere but
+    /// first, `autosave.stop()`'s own `flush()` would write that neutral
+    /// state to the photographer's sidecar the instant a proposal is
+    /// detected, before anything is even shown on screen. Both `.appeared`
+    /// and `.changed` trigger `.captureOriginal`, so both are pinned here.
+    static func testProposalStopAutosaveRunsBeforeEverythingElse() {
+        let cases: [(Proposal.Phase, Proposal.Event)] = [
+            (.idle, .appeared(keys: ["exposureEv"])),
+            (.previewing(keys: ["exposureEv"]), .changed(keys: ["exposureEv", "contrast"])),
+        ]
+        for (phase, event) in cases {
+            let (_, actions) = Proposal.transition(phase, on: event)
+            report(actions.first == .stopAutosave,
+                   "\(event): stopAutosave is the very first action, before "
+                       + "captureOriginal's two renders can queue anything for it to flush",
+                   "got \(actions)")
+        }
     }
 
     static func testProposalChangedWhileIdleIsANoOp() {

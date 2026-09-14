@@ -145,14 +145,30 @@ enum Proposal {
     /// itself.
     static func transition(_ phase: Phase, on event: Event) -> (Phase, [Action]) {
         switch event {
+        // ⚠ **`.stopAutosave` first, not second — a data-loss bug found in
+        // review of 806a00d.** `.captureOriginal` (`Engine.captureOriginal`,
+        // Engine+Compare.swift:59-99) renders twice — `apply(neutral)` then
+        // `apply(current)` — and each `apply` goes through `pushAndRender`,
+        // which fires `onEdit` into `autosave.note(state)`. With autosave
+        // still armed, `note(neutral)` queues the *neutral* state as
+        // pending (`neutral != saved`); `note(current)` is a no-op
+        // (`current == saved`); so by the time `.stopAutosave` used to run
+        // *after* `.captureOriginal`, `autosave.stop()`'s own `flush()`
+        // wrote that neutral state — every adjustment zeroed — straight to
+        // the photographer's sidecar, the instant a proposal was detected
+        // and before anything was even shown. Stopping first disarms
+        // `note` (`Autosave.note` guards on `target`) before either render
+        // can queue anything, so the two renders inside `captureOriginal`
+        // are inert as far as the sidecar is concerned.
+        // `testProposalStopAutosaveRunsBeforeEverythingElse` pins the order.
         case let .appeared(keys):
             return (.previewing(keys: keys),
-                    [.captureOriginal, .stopAutosave, .restoreProposed, .setCompare])
+                    [.stopAutosave, .captureOriginal, .restoreProposed, .setCompare])
 
         case let .changed(keys):
             guard case .previewing = phase else { return (phase, []) }
             return (.previewing(keys: keys),
-                    [.captureOriginal, .stopAutosave, .restoreProposed, .setCompare])
+                    [.stopAutosave, .captureOriginal, .restoreProposed, .setCompare])
 
         case .approved:
             guard case let .previewing(keys) = phase else { return (phase, []) }

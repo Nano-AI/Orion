@@ -219,6 +219,7 @@ enum ViewportTests {
         testProposalCurrentJSONEncodesNoPhotoAsNull()
         testProposalCurrentFileURLSitsUnderOrion()
         testProposalAppearedEntersPreviewing()
+        testProposalStopAutosaveRunsBeforeEverythingElse()
         testProposalChangedWhileIdleIsANoOp()
         testProposalApprovedRecordsAndClearsToIdle()
         testProposalRejectedRestoresCommitted()

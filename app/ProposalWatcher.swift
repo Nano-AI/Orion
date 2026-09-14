@@ -19,6 +19,18 @@ final class ProposalWatcher {
 
     private(set) var phase: Proposal.Phase = .idle
 
+    /// True while a proposal is previewing — the develop panels' lockout
+    /// reads this (OrionApp+Tools.swift, OrionApp+Chrome.swift) rather than
+    /// `phase` directly, so a manual slider drag during a preview has one
+    /// place to check rather than a pattern match at every call site.
+    /// Autosave is off for the whole time this is true (`.stopAutosave` runs
+    /// before anything else `.appeared`/`.changed` do — see the ⚠ in
+    /// `Proposal.transition`), so an edit that slipped past this lockout
+    /// would be neither saved nor undoable: Reject would discard it
+    /// silently. Locking the panels is the honest fix; merging a manual
+    /// edit with a live proposal is not attempted.
+    var isLive: Bool { if case .previewing = phase { true } else { false } }
+
     private weak var engine: Engine?
     private weak var autosave: Autosave?
     private var photo: URL?

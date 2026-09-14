@@ -134,6 +134,12 @@ extension Editor {
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            // A manual edit here during a live proposal would be neither
+            // saved (autosave is off for the whole preview) nor recoverable
+            // (Reject discards it silently) — see `ProposalWatcher.isLive`.
+            // Scoped to the panel content alone, not the whole column: the
+            // footer below still has to take Approve and Reject.
+            .disabled(ProposalWatcher.shared.isLive)
 
             footer
         }
