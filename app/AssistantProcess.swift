@@ -1,5 +1,5 @@
-// The assistant drawer's state: which command runs, where, how tall the
-// drawer is, and the one-line notice when the working directory looks wrong.
+// The assistant column's state: which command runs, where, how wide the
+// column is, and the one-line notice when the working directory looks wrong.
 //
 // Plain @Observable, zero SwiftUI types — see CLAUDE.md's UI rule — so this
 // could be re-hosted in AppKit without dragging SwiftUI along. AppKit-facing
@@ -15,13 +15,18 @@ final class AssistantPanelModel {
 
     var isOpen = false
 
-    var height: Double {
-        didSet { UserDefaults.standard.set(height, forKey: Keys.height) }
+    var width: Double {
+        didSet { UserDefaults.standard.set(width, forKey: Keys.width) }
     }
 
     var command: String {
         didSet { UserDefaults.standard.set(command, forKey: Keys.command) }
     }
+
+    /// Bumped by `restart()`; `AssistantTerminalView` relaunches whenever this
+    /// changes, which is what gives the header's restart button something to
+    /// compare against even when the command and directory did not change.
+    private(set) var restartToken = UUID()
 
     /// Resolved once at launch (below) rather than on every SwiftUI body
     /// evaluation: there is no in-app control that changes it, and
@@ -30,20 +35,20 @@ final class AssistantPanelModel {
     let workingDirectory: URL
 
     /// Set while resolving `workingDirectory`, and shown as a one-line notice
-    /// in the drawer header rather than silently starting the shell
+    /// in the column header rather than silently starting the shell
     /// somewhere the photographer did not expect.
     private(set) var notice: String?
 
     private enum Keys {
-        static let height = "assistantPanelHeight"
+        static let width = "assistantPanelWidth"
         static let command = "assistantCommand"
         static let workingDirectory = "assistantWorkingDirectory"
     }
 
     init() {
         let defaults = UserDefaults.standard
-        let savedHeight = defaults.double(forKey: Keys.height)
-        height = savedHeight > 0 ? savedHeight : 260
+        let savedWidth = defaults.double(forKey: Keys.width)
+        width = savedWidth > 0 ? savedWidth : 360
         command = defaults.string(forKey: Keys.command) ?? "claude"
 
         // UserDefaults `assistantWorkingDirectory` when set; otherwise the
@@ -69,4 +74,5 @@ final class AssistantPanelModel {
     }
 
     func toggle() { isOpen.toggle() }
+    func restart() { restartToken = UUID() }
 }

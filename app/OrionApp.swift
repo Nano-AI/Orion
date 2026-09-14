@@ -109,17 +109,33 @@ struct RootView: View {
     @State private var startupError: String?
 
     var body: some View {
-        Group {
-            if let engine {
-                Editor(engine: engine, assistant: assistant)
-            } else {
-                VStack(spacing: 8) {
-                    Text("Orion could not start").font(.headline)
-                    Text(startupError ?? "Unknown error")
-                        .font(.callout).foregroundStyle(Palette.dim)
+        // The assistant column is a leading sibling here, outside `Editor`,
+        // rather than something `Editor`'s own layout makes room for: closed,
+        // it is absent from the HStack entirely, so the canvas and the
+        // develop panels get back exactly the width they had before it
+        // existed. Open, `tools.frame(width: 364)` inside `Editor` is a fixed
+        // frame — a hard constraint SwiftUI never shrinks — so the only
+        // flexible span left when the window is narrow is the canvas; the
+        // panels hold their width and the canvas gives way.
+        HStack(spacing: 0) {
+            // AssistantColumn's own trailing edge is the resize handle, so it
+            // is its own divider — nothing more to insert between it and the
+            // rest of the window.
+            if assistant.isOpen {
+                AssistantColumn(model: assistant, workingDirectory: assistant.workingDirectory)
+            }
+            Group {
+                if let engine {
+                    Editor(engine: engine)
+                } else {
+                    VStack(spacing: 8) {
+                        Text("Orion could not start").font(.headline)
+                        Text(startupError ?? "Unknown error")
+                            .font(.callout).foregroundStyle(Palette.dim)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Palette.ground)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Palette.ground)
             }
         }
         .task {
@@ -139,20 +155,14 @@ struct Editor: View {
     @State var viewport = Viewport()
     @State var tab: ToolTab
 
-    /// The assistant drawer. Defaulted so Screenshot.swift's harness
-    /// construction (which never mentions the assistant) keeps compiling.
-    let assistant: AssistantPanelModel
-
     /// `startLibrary` exists for the screenshot harness. The filmstrip has been
     /// changed twice without any capture showing it, because the harness opens
     /// one photo and never scans a folder — so the strip appeared in no
     /// screenshot at all and was checked by reading the code. Handing in a
     /// pre-scanned library is the smallest seam that fixes that.
-    init(engine: Engine, assistant: AssistantPanelModel = AssistantPanelModel(),
-         startTab: ToolTab = .light, startLibrary: Library? = nil,
+    init(engine: Engine, startTab: ToolTab = .light, startLibrary: Library? = nil,
          startSnapshots: SnapshotStore? = nil, startMode: EditorMode = .develop) {
         self.engine = engine
-        self.assistant = assistant
         _tab = State(initialValue: startTab)
         _library = State(initialValue: startLibrary ?? Library())
         // Same seam and same reason as `startLibrary`: the harness never calls
@@ -278,13 +288,6 @@ struct Editor: View {
                     Filmstrip(library: library, selected: current, onSelect: load,
                               onMerge: askHdrMerge)
                 }
-            }
-
-            // The assistant drawer: a toggleable strip under everything else,
-            // in both develop and cull mode. See AssistantPanel.swift.
-            if assistant.isOpen {
-                Rectangle().fill(Palette.line).frame(height: 1)
-                AssistantDrawer(model: assistant, workingDirectory: assistant.workingDirectory)
             }
         }
         .background(Palette.ground)

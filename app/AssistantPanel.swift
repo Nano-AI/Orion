@@ -1,13 +1,14 @@
-// The assistant drawer: a toggleable strip under the canvas that runs the
-// photographer's coding agent (`claude` by default, `codex` selectable)
-// inside Orion, so they can talk to the model without leaving the app.
+// The assistant column: a toggleable strip at the leading edge of the window
+// that runs the photographer's coding agent (`claude` by default, `codex`
+// selectable) inside Orion, so they can talk to the model without leaving
+// the app.
 //
 // Orion publishes the open photo to
 // `~/Library/Application Support/Orion/current.json` on its own (see
 // Engine+Document.swift) and the Orion MCP server reads it from there, so the
 // agent only needs to be launched somewhere that server is registered — see
-// `resolveWorkingDirectory` in AssistantProcess.swift, which is `.mcp.json`'s
-// directory.
+// `AssistantPanelModel.workingDirectory` in AssistantProcess.swift, which is
+// `.mcp.json`'s directory.
 //
 // Terminal hosting is third_party/SwiftTerm (MIT, vendored — see
 // third_party/SwiftTerm/VERSION), compiled straight into this target, so its
@@ -30,16 +31,19 @@ import SwiftUI
 struct AssistantTerminalView: NSViewRepresentable {
     let command: String
     let workingDirectory: URL
+    /// Changes on every tap of the header's restart button, so a relaunch can
+    /// be forced even when neither `command` nor `workingDirectory` changed.
+    let restartToken: UUID
 
     /// Remembers what is currently running so `updateNSView` only relaunches
-    /// when the popup or working directory actually changed, and terminates
-    /// the child on window close and on app quit — the two ways the drawer's
-    /// NSView can go away without SwiftUI calling `dismantleNSView` for the
-    /// second one.
+    /// when something actually changed, and terminates the child on window
+    /// close and on app quit — the two ways the column's NSView can go away
+    /// without SwiftUI calling `dismantleNSView` for the second one.
     final class Coordinator {
         weak var view: LocalProcessTerminalView?
         var launchedCommand: String?
         var launchedDirectory: URL?
+        var launchedToken: UUID?
         private var quitObserver: NSObjectProtocol?
 
         init() {
@@ -73,52 +77,62 @@ struct AssistantTerminalView: NSViewRepresentable {
 
     private func relaunchIfNeeded(_ view: LocalProcessTerminalView, context: Context) {
         guard context.coordinator.launchedCommand != command
-            || context.coordinator.launchedDirectory != workingDirectory else { return }
+            || context.coordinator.launchedDirectory != workingDirectory
+            || context.coordinator.launchedToken != restartToken else { return }
         if context.coordinator.launchedCommand != nil { view.terminate() }
         context.coordinator.launchedCommand = command
         context.coordinator.launchedDirectory = workingDirectory
+        context.coordinator.launchedToken = restartToken
         view.startProcess(executable: "/bin/zsh",
                            args: ["-l", "-c", command],
                            currentDirectory: workingDirectory.path)
     }
 }
 
-/// The drawer chrome: a drag-to-resize handle, a header with the claude/codex
-/// popup, and the terminal itself.
-struct AssistantDrawer: View {
+/// The column chrome: a header with the claude/codex popup and a restart
+/// button, the terminal, and a drag-to-resize handle on the trailing edge
+/// (the column sits at the window's leading edge, so its own trailing edge
+/// is the one touching the rest of the window).
+struct AssistantColumn: View {
     @Bindable var model: AssistantPanelModel
     let workingDirectory: URL
 
-    private let minHeight: Double = 160
-    private let maxHeight: Double = 640
-    @State private var dragStartHeight: Double?
+    private let minWidth: Double = 360
+    private let maxWidth: Double = 800
+    @State private var dragStartWidth: Double?
 
     var body: some View {
-        VStack(spacing: 0) {
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                header
+                Rectangle().fill(Palette.line).frame(height: 1)
+                AssistantTerminalView(command: model.command,
+                                      workingDirectory: workingDirectory,
+                                      restartToken: model.restartToken)
+            }
+            .frame(width: model.width)
+            .background(Palette.panel)
             resizeHandle
-            header
-            Rectangle().fill(Palette.line).frame(height: 1)
-            AssistantTerminalView(command: model.command, workingDirectory: workingDirectory)
         }
-        .frame(height: model.height)
-        .background(Palette.panel)
     }
 
     private var resizeHandle: some View {
-        Rectangle()
-            .fill(Palette.line)
-            .frame(height: 4)
-            .gesture(
+        ZStack {
+            Rectangle().fill(Palette.line).frame(width: 1)
+        }
+        .frame(width: 8) // wider than the visible line, for an easier drag target
+        .contentShape(Rectangle())
+        .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        let start = dragStartHeight ?? model.height
-                        dragStartHeight = start
-                        // The drawer grows from the bottom, so dragging the
-                        // handle up (negative translation) makes it taller.
-                        model.height = min(max(start - value.translation.height,
-                                                minHeight), maxHeight)
+                        let start = dragStartWidth ?? model.width
+                        dragStartWidth = start
+                        // The column is at the leading edge, so dragging the
+                        // handle right (positive translation) makes it wider.
+                        model.width = min(max(start + value.translation.width,
+                                               minWidth), maxWidth)
                     }
-                    .onEnded { _ in dragStartHeight = nil }
+                    .onEnded { _ in dragStartWidth = nil }
             )
     }
 
@@ -130,6 +144,13 @@ struct AssistantDrawer: View {
             .pickerStyle(.menu)
             .frame(width: 110)
             .labelsHidden()
+
+            Button { model.restart() } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Palette.dim)
+            .help("Restart")
 
             if let notice = model.notice {
                 Text(notice).font(.caption).foregroundStyle(Palette.dim)
@@ -148,7 +169,7 @@ struct AssistantDrawer: View {
     }
 }
 
-/// Toggling the drawer from the menu. A plain shared instance rather than
+/// Toggling the column from the menu. A plain shared instance rather than
 /// `@FocusedValue` — Orion is effectively single-window (`CommandGroup
 /// (replacing: .newItem) {}` in OrionApp.swift disables New Window), so
 /// there is exactly one `AssistantPanelModel` and no window to disambiguate.
