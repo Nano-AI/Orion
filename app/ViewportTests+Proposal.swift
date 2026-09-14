@@ -92,8 +92,43 @@ extension ViewportTests {
         let (phase, actions) = Proposal.transition(.idle, on: .appeared(keys: ["exposureEv"]))
         report(phase == .previewing(keys: ["exposureEv"]),
                "appearing enters previewing with its keys", "\(phase)")
-        report(actions == [.stopAutosave, .captureOriginal, .restoreProposed, .setCompare],
-               "stops autosave, captures, restores, then splits the compare", "\(actions)")
+        report(actions == [.stopAutosave, .captureOriginal, .setCompare, .restoreProposed],
+               "stops autosave, captures the committed baseline, splits the compare, "
+                   + "then restores the proposal", "\(actions)")
+    }
+
+    /// The compare-after-resolve investigation's finding: `.setCompare` has
+    /// to run before `.restoreProposed`, not after. `Engine.render` fires
+    /// `refreshOriginal` on every render (Engine+Render.swift:289), and
+    /// `refreshOriginal` wipes `originalTexture` whenever `compareSplit`
+    /// still reads "not comparing" (Engine+Compare.swift:135-144). With
+    /// `.setCompare` last, `.restoreProposed`'s own render fires
+    /// `refreshOriginal` before `compareSplit` has moved off 1.0, wiping the
+    /// baseline `.captureOriginal` just captured against the *committed*
+    /// state — and the recapture that follows runs with `engine.state`
+    /// already the *proposed* one, so the "Original" side would bake in the
+    /// proposal's own white balance and geometry. `.captureOriginal` before
+    /// `.setCompare` before `.restoreProposed` is the fix: `compareSplit`
+    /// already reads "comparing" by the time `.restoreProposed` renders, so
+    /// `refreshOriginal`'s own guard leaves the valid capture alone.
+    static func testProposalSetCompareRunsBeforeRestoreProposed() {
+        let cases: [(Proposal.Phase, Proposal.Event)] = [
+            (.idle, .appeared(keys: ["exposureEv"])),
+            (.previewing(keys: ["exposureEv"]), .changed(keys: ["exposureEv", "contrast"])),
+        ]
+        for (phase, event) in cases {
+            let (_, actions) = Proposal.transition(phase, on: event)
+            guard let setCompare = actions.firstIndex(of: .setCompare),
+                  let restoreProposed = actions.firstIndex(of: .restoreProposed) else {
+                report(false, "\(event) should carry both setCompare and restoreProposed",
+                       "got \(actions)")
+                continue
+            }
+            report(setCompare < restoreProposed,
+                   "\(event): setCompare moves compareSplit off 1.0 before restoreProposed's "
+                       + "render can fire refreshOriginal and wipe the just-captured baseline",
+                   "got \(actions)")
+        }
     }
 
     /// The data-loss bug found in review of 806a00d: `.captureOriginal`

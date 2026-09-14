@@ -220,6 +220,7 @@ enum ViewportTests {
         testProposalCurrentFileURLSitsUnderOrion()
         testProposalAppearedEntersPreviewing()
         testProposalStopAutosaveRunsBeforeEverythingElse()
+        testProposalSetCompareRunsBeforeRestoreProposed()
         testProposalChangedWhileIdleIsANoOp()
         testProposalApprovedRecordsAndClearsToIdle()
         testProposalRejectedRestoresCommitted()

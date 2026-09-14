@@ -161,14 +161,37 @@ enum Proposal {
         // can queue anything, so the two renders inside `captureOriginal`
         // are inert as far as the sidecar is concerned.
         // `testProposalStopAutosaveRunsBeforeEverythingElse` pins the order.
+        //
+        // ⚠ **`.setCompare` before `.restoreProposed`, not after — a second
+        // ordering bug in the same shape, found chasing a compare-after-
+        // resolve report that turned out not to reproduce, but this did.**
+        // `Engine.render()` (Engine+Render.swift:289) calls `refreshOriginal`
+        // unconditionally on every render, and `refreshOriginal` WIPES
+        // `originalTexture` whenever `compareSplit` still reads "not
+        // comparing" (Engine+Compare.swift:135-144). `.captureOriginal`
+        // correctly captures the as-shot baseline against the *committed*
+        // state (`.restoreProposed` hasn't run yet), but with `.setCompare`
+        // last, `.restoreProposed`'s own `apply` triggers exactly that
+        // render — before `compareSplit` has been moved off 1.0 — so the
+        // baseline `.captureOriginal` just captured is wiped again. The
+        // *next* action, `.setCompare`, then has to recapture from
+        // `refreshOriginal`'s own fallback — except by then `engine.state`
+        // is the *proposed* state, so the recaptured "Original" bakes in
+        // the proposal's own white balance and geometry rather than the
+        // photographer's. Moving `.setCompare` ahead of `.restoreProposed`
+        // means `compareSplit` already reads "comparing" by the time
+        // `.restoreProposed`'s render fires `refreshOriginal`, so that call
+        // sees the valid baseline already in place and leaves it alone
+        // (Engine+Compare.swift:142's guard) — one capture, against the
+        // right state, every time.
         case let .appeared(keys):
             return (.previewing(keys: keys),
-                    [.stopAutosave, .captureOriginal, .restoreProposed, .setCompare])
+                    [.stopAutosave, .captureOriginal, .setCompare, .restoreProposed])
 
         case let .changed(keys):
             guard case .previewing = phase else { return (phase, []) }
             return (.previewing(keys: keys),
-                    [.stopAutosave, .captureOriginal, .restoreProposed, .setCompare])
+                    [.stopAutosave, .captureOriginal, .setCompare, .restoreProposed])
 
         case .approved:
             guard case let .previewing(keys) = phase else { return (phase, []) }
