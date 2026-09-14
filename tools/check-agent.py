@@ -110,7 +110,7 @@ def main():
 
     problems = []
     checks_passed = 0
-    checks_total = 10
+    checks_total = 14
 
     # Copy sample to temp directory
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -488,12 +488,313 @@ def main():
             except Exception as e:
                 problems.append(f"Check 10 (propose_edit_reset): {e}")
 
+            # Check 13: propose_composite — curve with 3 points, get_proxy, reject
+            raw5_path = tmpdir / f"{SAMPLE_RAW[:-4]}_5.ARW"
+            shutil.copy2(SAMPLES / SAMPLE_RAW, raw5_path)
+
+            try:
+                # First get describe_edits to understand curve format
+                keys_desc_resp = call(proc, "tools/call", {
+                    "name": "describe_edits",
+                    "arguments": {},
+                }, req_id, TIMEOUT)
+                req_id += 1
+
+                if keys_desc_resp.get("error"):
+                    problems.append(f"Check 13 (describe_edits): {keys_desc_resp['error']['message']}")
+                else:
+                    content = keys_desc_resp.get("result", {}).get("content", [{}])[0]
+                    if content.get("type") == "text":
+                        keys_data = json.loads(content.get("text", "{}"))
+                        keys_array = keys_data.get("keys", []) if isinstance(keys_data, dict) else []
+
+                        # Find curve entry's example
+                        curve_entry = None
+                        for key_obj in keys_array:
+                            if key_obj.get("name") == "curve":
+                                curve_entry = key_obj
+                                break
+
+                        if curve_entry and curve_entry.get("example"):
+                            curve_example = curve_entry.get("example")
+                            # Modify master curve to 3 points: [[0,0],[0.5,0.6],[1,1]]
+                            # Keeping {x,y} object shape
+                            modified_curve = {k: v for k, v in curve_example.items()}
+                            modified_curve["master"] = [{"x": 0, "y": 0}, {"x": 0.5, "y": 0.6}, {"x": 1, "y": 1}]
+
+                            # propose_edit with the curve
+                            curve_propose_resp = call(proc, "tools/call", {
+                                "name": "propose_edit",
+                                "arguments": {"path": str(raw5_path), "edits": {"curve": modified_curve}},
+                            }, req_id, TIMEOUT)
+                            req_id += 1
+
+                            if curve_propose_resp.get("error"):
+                                problems.append(f"Check 13 (propose_edit curve): {curve_propose_resp['error']['message']}")
+                            else:
+                                result = curve_propose_resp.get("result", {})
+                                if result.get("isError") == True:
+                                    problems.append(f"Check 13 (propose_edit): {result.get('content', [{}])[0].get('text', '')}")
+                                else:
+                                    content_prop = result.get("content", [{}])[0]
+                                    if content_prop.get("type") == "text":
+                                        prop_result = json.loads(content_prop.get("text", "{}"))
+                                        state = prop_result.get("state", {})
+                                        state_curve = state.get("curve", {})
+                                        master_points = state_curve.get("master", [])
+
+                                        if len(master_points) == 3:
+                                            # get_proxy with state proposed
+                                            proxy_comp_resp = call(proc, "tools/call", {
+                                                "name": "get_proxy",
+                                                "arguments": {"path": str(raw5_path), "maxPx": 512, "state": "proposed"},
+                                            }, req_id, TIMEOUT)
+                                            req_id += 1
+
+                                            if proxy_comp_resp.get("error"):
+                                                problems.append(f"Check 13 (get_proxy proposed): {proxy_comp_resp['error']['message']}")
+                                            else:
+                                                content_img = proxy_comp_resp.get("result", {}).get("content", [{}])[0]
+                                                if content_img.get("type") == "image":
+                                                    # reject_edit
+                                                    reject_comp_resp = call(proc, "tools/call", {
+                                                        "name": "reject_edit",
+                                                        "arguments": {"path": str(raw5_path)},
+                                                    }, req_id, TIMEOUT)
+                                                    req_id += 1
+
+                                                    if reject_comp_resp.get("error"):
+                                                        problems.append(f"Check 13 (reject_edit): {reject_comp_resp['error']['message']}")
+                                                    else:
+                                                        result_rej = reject_comp_resp.get("result", {})
+                                                        if result_rej.get("isError") == True:
+                                                            problems.append(f"Check 13 (reject_edit): got error")
+                                                        else:
+                                                            content_rej = result_rej.get("content", [{}])[0]
+                                                            if content_rej.get("type") == "text":
+                                                                rej_result = json.loads(content_rej.get("text", "{}"))
+                                                                if rej_result.get("deleted") == True:
+                                                                    print(f"ok  propose_composite")
+                                                                    checks_passed += 1
+                                                                else:
+                                                                    problems.append(f"Check 13: deleted={rej_result.get('deleted')}, expected True")
+                                                            else:
+                                                                problems.append(f"Check 13: expected text reject result, got {content_rej.get('type')}")
+                                                else:
+                                                    problems.append(f"Check 13 (get_proxy): expected image, got {content_img.get('type')}")
+                                        else:
+                                            problems.append(f"Check 13: master has {len(master_points)} points, expected 3")
+                                    else:
+                                        problems.append(f"Check 13 (propose_edit): expected text result, got {content_prop.get('type')}")
+                        else:
+                            problems.append(f"Check 13: curve not found in describe_edits or missing example")
+                    else:
+                        problems.append(f"Check 13 (describe_edits): expected text, got {content.get('type')}")
+            except Exception as e:
+                problems.append(f"Check 13 (propose_composite): {e}")
+
+            # Check 14: propose_composite_rejected — incomplete layers
+            raw6_path = tmpdir / f"{SAMPLE_RAW[:-4]}_6.ARW"
+            shutil.copy2(SAMPLES / SAMPLE_RAW, raw6_path)
+
+            try:
+                # propose_edit with incomplete layers (missing required fields)
+                incomplete_layers_resp = call(proc, "tools/call", {
+                    "name": "propose_edit",
+                    "arguments": {"path": str(raw6_path), "edits": {"layers": [{"exposureEv": 1.0}]}},
+                }, req_id, TIMEOUT)
+                req_id += 1
+
+                if incomplete_layers_resp.get("error"):
+                    problems.append(f"Check 14 (propose_edit layers): {incomplete_layers_resp['error']['message']}")
+                else:
+                    result = incomplete_layers_resp.get("result", {})
+                    if result.get("isError") == True:
+                        content_err = result.get("content", [{}])[0]
+                        if content_err.get("type") == "text":
+                            error_text = content_err.get("text", "")
+                            if error_text.startswith("REJECTED:") and "missing" in error_text:
+                                print(f"ok  propose_composite_rejected")
+                                checks_passed += 1
+                            else:
+                                problems.append(f"Check 14: error text does not match pattern: '{error_text}'")
+                        else:
+                            problems.append(f"Check 14: expected text error, got {content_err.get('type')}")
+                    else:
+                        problems.append(f"Check 14: expected isError=True but got {result}")
+            except Exception as e:
+                problems.append(f"Check 14 (propose_composite_rejected): {e}")
+
         finally:
             proc.terminate()
             try:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+
+        # Check 11: current_photo_none — ORION_CURRENT points to non-existent file
+        # Uses its own server instance with ORION_CURRENT set to a non-existent path
+        nonexist_current = tmpdir / "nonexistent_current.json"
+        env_none = {**os.environ, "ORION_BIN": str(ORION), "ORION_CURRENT": str(nonexist_current)}
+        try:
+            proc_none = subprocess.Popen(
+                ["node", str(ROOT / "mcp" / "server.ts")],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env_none,
+            )
+        except Exception as e:
+            problems.append(f"Check 11 (current_photo_none): failed to start server: {e}")
+        else:
+            try:
+                # Initialize
+                init_resp = call(proc_none, "initialize", {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "check-agent", "version": "0.1"},
+                }, 1)
+                if init_resp.get("error"):
+                    problems.append(f"Check 11: initialize failed: {init_resp['error']}")
+                else:
+                    # Send initialized notification
+                    msg = json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
+                    proc_none.stdin.write(msg + "\n")
+                    proc_none.stdin.flush()
+
+                    # Call current_photo with no photo available
+                    current_resp = call(proc_none, "tools/call", {
+                        "name": "current_photo",
+                        "arguments": {},
+                    }, 2, TIMEOUT)
+
+                    if current_resp.get("error"):
+                        problems.append(f"Check 11 (current_photo): unexpected error: {current_resp['error']}")
+                    else:
+                        content = current_resp.get("result", {}).get("content", [{}])[0]
+                        if content.get("type") == "text":
+                            photo_data = json.loads(content.get("text", "{}"))
+                            if photo_data.get("photo") is None:
+                                # Now test get_stats with no path returns error
+                                stats_resp = call(proc_none, "tools/call", {
+                                    "name": "get_stats",
+                                    "arguments": {},
+                                }, 3, TIMEOUT)
+
+                                if stats_resp.get("error"):
+                                    problems.append(f"Check 11 (get_stats no path): unexpected error format")
+                                else:
+                                    result = stats_resp.get("result", {})
+                                    if result.get("isError") == True:
+                                        content_err = result.get("content", [{}])[0]
+                                        if content_err.get("type") == "text":
+                                            error_text = content_err.get("text", "")
+                                            if "no photo is open" in error_text:
+                                                print(f"ok  current_photo_none")
+                                                checks_passed += 1
+                                            else:
+                                                problems.append(f"Check 11: error text '{error_text}' missing 'no photo is open'")
+                                        else:
+                                            problems.append(f"Check 11: expected text error, got {content_err.get('type')}")
+                                    else:
+                                        problems.append(f"Check 11: get_stats should error but got {result}")
+                            else:
+                                problems.append(f"Check 11: current_photo should have photo: null, got {photo_data}")
+                        else:
+                            problems.append(f"Check 11: expected text content, got {content.get('type')}")
+            except Exception as e:
+                problems.append(f"Check 11 (current_photo_none): {e}")
+            finally:
+                proc_none.terminate()
+                try:
+                    proc_none.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc_none.kill()
+
+        # Check 12: current_photo_set — with ORION_CURRENT file present
+        # Create a current.json pointing to the sample copy
+        current_json_path = tmpdir / "current_test.json"
+        with open(current_json_path, "w") as f:
+            json.dump({
+                "photo": str(raw_path),
+                "folder": str(tmpdir),
+                "updated": "2026-09-14T00:00:00Z"
+            }, f)
+
+        env_set = {**os.environ, "ORION_BIN": str(ORION), "ORION_CURRENT": str(current_json_path)}
+        try:
+            proc_set = subprocess.Popen(
+                ["node", str(ROOT / "mcp" / "server.ts")],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env_set,
+            )
+        except Exception as e:
+            problems.append(f"Check 12 (current_photo_set): failed to start server: {e}")
+        else:
+            try:
+                # Initialize
+                init_resp = call(proc_set, "initialize", {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "check-agent", "version": "0.1"},
+                }, 1)
+                if init_resp.get("error"):
+                    problems.append(f"Check 12: initialize failed: {init_resp['error']}")
+                else:
+                    # Send initialized notification
+                    msg = json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
+                    proc_set.stdin.write(msg + "\n")
+                    proc_set.stdin.flush()
+
+                    # Test current_photo defaults to this path
+                    current_resp = call(proc_set, "tools/call", {
+                        "name": "current_photo",
+                        "arguments": {},
+                    }, 2, TIMEOUT)
+
+                    if current_resp.get("error"):
+                        problems.append(f"Check 12 (current_photo): {current_resp['error']}")
+                    else:
+                        content = current_resp.get("result", {}).get("content", [{}])[0]
+                        if content.get("type") == "text":
+                            photo_data = json.loads(content.get("text", "{}"))
+                            if photo_data.get("photo") == str(raw_path):
+                                # Now test get_stats with no path (defaults to current)
+                                stats_resp = call(proc_set, "tools/call", {
+                                    "name": "get_stats",
+                                    "arguments": {},
+                                }, 3, TIMEOUT)
+
+                                if stats_resp.get("error"):
+                                    problems.append(f"Check 12 (get_stats): {stats_resp['error']['message']}")
+                                else:
+                                    result = stats_resp.get("result", {})
+                                    content_stats = result.get("content", [{}])[0]
+                                    if content_stats.get("type") == "text":
+                                        stats = json.loads(content_stats.get("text", "{}"))
+                                        if stats.get("width", 0) > 0:
+                                            print(f"ok  current_photo_set")
+                                            checks_passed += 1
+                                        else:
+                                            problems.append(f"Check 12: width={stats.get('width')}, expected > 0")
+                                    else:
+                                        problems.append(f"Check 12: expected text stats, got {content_stats.get('type')}")
+                            else:
+                                problems.append(f"Check 12: current_photo returned {photo_data.get('photo')}, expected {raw_path}")
+                        else:
+                            problems.append(f"Check 12: expected text content, got {content.get('type')}")
+            except Exception as e:
+                problems.append(f"Check 12 (current_photo_set): {e}")
+            finally:
+                proc_set.terminate()
+                try:
+                    proc_set.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc_set.kill()
 
     # Verify samples/ is unchanged
     result = subprocess.run(["git", "status", "--porcelain", str(SAMPLES)],
