@@ -23,7 +23,7 @@ extension AgentCLI {
             FileHandle.standardError.write(Data("orion: \(message)\n".utf8))
             exit(2)
         } catch Failure.unknownKeys(let keys) {
-            let allowed = DevelopState.fieldRoster.sorted().joined(separator: ", ")
+            let allowed = scalarFieldNames.sorted().joined(separator: ", ")
             FileHandle.standardError.write(Data(
                 "orion: unknown keys \(keys.joined(separator: ", ")); allowed: \(allowed)\n"
                     .utf8))
@@ -122,7 +122,7 @@ extension AgentCLI {
         }
 
         let merged = try mergeEdits(base: base, edits: editsData)
-        try merged.state.write(to: URL(fileURLWithPath: out))
+        try merged.state.write(to: URL(fileURLWithPath: out), options: .atomic)
         return ["path": out, "changed": merged.changed]
     }
 
@@ -147,8 +147,11 @@ extension AgentCLI {
         }
         let url = URL(fileURLWithPath: raw)
 
-        // Same rules as Library.setRating / setRejected: a rating above zero
-        // clears reject, and rejecting clears the rating.
+        // The spec's rule (Part A): a rating above zero clears reject, and
+        // reject 1 zeroes the rating. ⚠ Not the same rule as
+        // Library.setRating, which clears reject unconditionally on every
+        // call, including a rating of 0 — that would make `flag --rating 0`
+        // silently un-reject a photo the caller never mentioned rejecting.
         let wrote = Sidecar.merge(into: url) { sidecar in
             if let rating {
                 sidecar.rating = max(0, min(5, rating))
@@ -173,17 +176,32 @@ extension AgentCLI {
     /// as-shot render whenever a restore is coming right behind it, so a
     /// photo with both a sidecar and a `--state` override still renders once
     /// per restore rather than three times running.
+    ///
+    /// ⚠ **Both restores' `Bool` is checked.** `Engine.restore(encoded:)`
+    /// returns false rather than throwing when the blob will not decode —
+    /// see its doc comment — and renders nothing in that case, so a caller
+    /// that ignored it would go on to read a histogram or export a JPEG off
+    /// whatever the engine last rendered, silently: black pixels for a cold
+    /// open, or the *previous* photograph's frame for a warm one. Same
+    /// failure OrionApp+Files.swift's loader guards against for the
+    /// sidecar's own restore; here it also covers `--state`, which never
+    /// existed at that call site.
     @MainActor
     private static func openEngine(url: URL, sidecarDevelop: Data?, state: String?)
         throws -> Engine {
         let engine = try Engine()
         try engine.open(path: url.path, restoring: sidecarDevelop != nil)
         if let sidecarDevelop {
-            engine.restore(encoded: sidecarDevelop)
+            guard engine.restore(encoded: sidecarDevelop) else {
+                throw Failure.run(
+                    "the saved edits could not be read: \(Sidecar.url(for: url).path)")
+            }
         }
         if let state {
             let data = try Data(contentsOf: URL(fileURLWithPath: state))
-            engine.restore(encoded: data)
+            guard engine.restore(encoded: data) else {
+                throw Failure.run("the saved edits could not be read: \(state)")
+            }
         }
         return engine
     }

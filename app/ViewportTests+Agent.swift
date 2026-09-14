@@ -19,8 +19,24 @@ extension ViewportTests {
         }
     }
 
-    /// `apply`'s merge: a known key lands and is reported changed; an
-    /// invented one is a usage error naming the key, not a silent drop.
+    /// An option a verb does not consume — `--sate` for `--state` — is a
+    /// usage error naming the flag, not silently parsed and dropped.
+    static func testAgentRejectsAnOptionTheVerbDoesNotTake() {
+        do {
+            _ = try AgentCLI.parse(
+                ["--agent", "proxy", "/a.arw", "--max", "512", "--out", "/o.jpg",
+                 "--sate", "/s.json"])
+            report(false, "parse should reject an option proxy does not take")
+        } catch AgentCLI.Failure.usage(let message) {
+            report(message.contains("sate"), "names the bad flag", message)
+        } catch {
+            report(false, "wrong error for an unconsumed option", "\(error)")
+        }
+    }
+
+    /// `apply`'s merge: a known scalar key lands and is reported changed,
+    /// and nothing else in the state moves; an invented key is a usage error
+    /// naming the key, not a silent drop.
     static func testAgentMergeEdits() {
         guard let base = try? JSONEncoder().encode(DevelopState()) else {
             report(false, "DevelopState() should encode")
@@ -35,6 +51,22 @@ extension ViewportTests {
                    "got \(state.exposureEv)")
             report(merged.changed == ["exposureEv"], "changed names exposureEv",
                    "got \(merged.changed)")
+
+            // Every other top-level value is untouched: re-encode both sides
+            // with sortedKeys, drop exposureEv from each, and compare bytes.
+            guard var baseObject = try JSONSerialization.jsonObject(with: base) as? [String: Any],
+                  var mergedObject = try JSONSerialization.jsonObject(with: merged.state)
+                      as? [String: Any] else {
+                report(false, "base and merged should both decode as JSON objects")
+                return
+            }
+            baseObject["exposureEv"] = nil
+            mergedObject["exposureEv"] = nil
+            let baseBytes = try JSONSerialization.data(withJSONObject: baseObject,
+                                                        options: [.sortedKeys])
+            let mergedBytes = try JSONSerialization.data(withJSONObject: mergedObject,
+                                                          options: [.sortedKeys])
+            report(baseBytes == mergedBytes, "no field other than exposureEv changed")
         } catch {
             report(false, "mergeEdits should not throw on a real DevelopState key", "\(error)")
         }
@@ -47,6 +79,41 @@ extension ViewportTests {
             report(keys == ["exposure"], "names the invented key", "got \(keys)")
         } catch {
             report(false, "wrong error for an unknown key", "\(error)")
+        }
+    }
+
+    /// POC scope (decided 2026-09-13): `apply` edits scalar top-level keys
+    /// only. A composite field — an array or an object, whether the whole
+    /// edit value is one or the base field it names is one — is refused, not
+    /// silently accepted or silently dropped, and the refusal must not offer
+    /// the composite field back as something the caller could have used
+    /// instead.
+    static func testAgentMergeEditsRejectsCompositeFields() {
+        guard let base = try? JSONEncoder().encode(DevelopState()) else {
+            report(false, "DevelopState() should encode")
+            return
+        }
+
+        do {
+            let edits = Data(#"{"layers": [{"exposureEv": 1.0}]}"#.utf8)
+            _ = try AgentCLI.mergeEdits(base: base, edits: edits)
+            report(false, "mergeEdits should reject the composite key layers")
+        } catch AgentCLI.Failure.usage(let message) {
+            report(!message.contains("layers"),
+                   "the message does not offer layers as an allowed key", message)
+        } catch {
+            report(false, "wrong error for a composite key", "\(error)")
+        }
+
+        do {
+            let edits = Data(#"{"gradeShadow": [0, 0, 0]}"#.utf8)
+            _ = try AgentCLI.mergeEdits(base: base, edits: edits)
+            report(false, "mergeEdits should reject the composite key gradeShadow")
+        } catch AgentCLI.Failure.usage(let message) {
+            report(message.contains("scalar keys only"),
+                   "explains that only scalar keys are editable", message)
+        } catch {
+            report(false, "wrong error for gradeShadow", "\(error)")
         }
     }
 

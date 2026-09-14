@@ -186,7 +186,9 @@ enum ViewportTests {
         testMergeOutputNaming()
 
         testAgentParsesProxy()
+        testAgentRejectsAnOptionTheVerbDoesNotTake()
         testAgentMergeEdits()
+        testAgentMergeEditsRejectsCompositeFields()
         testAgentStatsJSON()
 
         print("\n\(checks) checks, \(failures) failures")

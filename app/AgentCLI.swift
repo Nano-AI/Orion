@@ -29,6 +29,17 @@ enum AgentCLI {
 
     static let usageLine = "usage: Orion --agent <stats|proxy|apply|commit|flag> <raw> [options]"
 
+    /// Every verb's own option vocabulary. An option outside it is very
+    /// likely a typo (`--sate` for `--state`) that would otherwise be parsed
+    /// happily and then silently ignored.
+    private static let allowedOptions: [String: Set<String>] = [
+        "stats": [],
+        "proxy": ["max", "out", "state"],
+        "apply": ["edits", "out", "state"],
+        "commit": ["state"],
+        "flag": ["rating", "reject"],
+    ]
+
     /// Walks `--agent <verb> <raw> [--key value]…` out of the full process
     /// argument list, the same shape `--batch-export` and `--hdr-merge` read.
     static func parse(_ args: [String]) throws -> Command {
@@ -46,6 +57,11 @@ enum AgentCLI {
             }
             options[String(args[j].dropFirst(2))] = args[j + 1]
             j += 2
+        }
+
+        if let allowed = allowedOptions[verb],
+           let bad = options.keys.first(where: { !allowed.contains($0) }) {
+            throw Failure.usage("\(verb) does not take --\(bad)")
         }
 
         switch verb {
@@ -87,8 +103,19 @@ enum AgentCLI {
     ///
     /// A key `edits` names that `base` does not have is the model inventing
     /// vocabulary — that is a usage error (exit 2), not a silent drop, so the
-    /// failure teaches the caller the real field names
-    /// (`DevelopState.fieldRoster`).
+    /// failure teaches the caller the real field names (`scalarFieldNames`).
+    ///
+    /// **POC scope, decided 2026-09-13: scalar top-level fields only.** Every
+    /// array or object field — `layers`, `spots`, `maskComponents`, `curve`,
+    /// the three `grade*` triples, `hueShift`/`satShift`/`lumShift` — needs a
+    /// deep merge that does not exist yet, so a composite key or a composite
+    /// edit value is refused outright. Refused rather than merely ignored:
+    /// `DevelopState`'s decoder falls back to the field's default on a type
+    /// mismatch (`try?` throughout `init(from:)`), so an edit like
+    /// `{"layers": [...]}` given to today's whole-array assignment would
+    /// either silently replace the group with something not devised for it,
+    /// or — for an unrelated wrong-shaped value — silently do nothing, and
+    /// either way `changed` would claim it landed.
     static func mergeEdits(base: Data, edits: Data) throws -> (state: Data, changed: [String]) {
         guard let baseObject = try JSONSerialization.jsonObject(with: base) as? [String: Any] else {
             throw Failure.run("base state is not a JSON object")
@@ -102,6 +129,15 @@ enum AgentCLI {
             throw Failure.unknownKeys(unknown.sorted())
         }
 
+        let composite = editsObject.keys.contains {
+            isComposite(baseObject[$0]) || isComposite(editsObject[$0])
+        }
+        guard !composite else {
+            throw Failure.usage(
+                "composite fields are not editable through apply; scalar keys only: "
+                    + scalarFieldNames.sorted().joined(separator: ", "))
+        }
+
         var merged = baseObject
         for (key, value) in editsObject { merged[key] = value }
 
@@ -113,6 +149,21 @@ enum AgentCLI {
         let reencoded = try JSONEncoder().encode(state)
         return (reencoded, editsObject.keys.sorted())
     }
+
+    private static func isComposite(_ value: Any?) -> Bool {
+        value is [Any] || value is [String: Any]
+    }
+
+    /// The top-level `DevelopState` fields `apply` may actually edit —
+    /// scalars only. Derived from a fresh `DevelopState()` rather than
+    /// hand-listed, so it can never drift from what `mergeEdits` above
+    /// accepts.
+    static let scalarFieldNames: Set<String> = {
+        guard let data = try? JSONEncoder().encode(DevelopState()),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+        return Set(object.keys.filter { !isComposite(object[$0]) })
+    }()
 
     /// Per-channel clip shares and weighted mean of a `bins × 3`,
     /// channel-major histogram (`Engine.histogram(bins:)`: all of channel 0's
