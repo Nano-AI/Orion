@@ -78,9 +78,10 @@ C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · L
 ./tools/check-screens.py           the three interface scenes that assert
 ./tools/check-modes.py             --library-open and --batch-export still run
 ./tools/check-wiring.py            mechanisms the product must actually call
+./tools/check-agent.py             the MCP server drives a real render and a real approve
 ```
 
-Run all seven before claiming anything works. The GPU tests matter most: pure
+Run all eight before claiming anything works. The GPU tests matter most: pure
 maths tests pass happily on code that renders garbage, because they never touch
 a texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
 inspection and obvious to a five-line assertion.
