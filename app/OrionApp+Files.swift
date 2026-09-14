@@ -14,6 +14,22 @@ import UniformTypeIdentifiers
 // culling to Rated and pressing Export all wrote every reject.
 
 extension Editor {
+    /// `~/Library/Application Support/Orion/current.json` — Orion publishes
+    /// the photo it is on, so the MCP server
+    /// (docs/superpowers/specs/2026-09-13-agent-mcp-design.md) can read which
+    /// photo is open instead of a model having to be told. Written atomically
+    /// at every place the photo on the canvas settles or closes — see
+    /// `Proposal.currentJSON` for the pure encoding this wraps.
+    func publishCurrentPhoto() {
+        guard let base = try? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true) else { return }
+        let url = Proposal.currentFileURL(applicationSupport: base)
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Proposal.currentJSON(photo: current).write(to: url, options: .atomic)
+    }
+
     /// Exports every photo in view to a folder the photographer chooses.
     ///
     /// ⚠ Runs on the main actor because the engine does, so the interface would
@@ -355,6 +371,13 @@ extension Editor {
                     // already holds — so opening a file does not write straight
                     // back what it just read.
                     autosave.begin(url: url, saved: engine.state)
+                    // Orion publishes the photo it is on, and starts watching
+                    // its folder for a proposed edit — both at the same
+                    // settle point `autosave.begin` marks, for the same
+                    // reason: a photo mid-decode is not one either feature
+                    // should act on yet.
+                    ProposalWatcher.shared.attach(photo: url, engine: engine, autosave: autosave)
+                    publishCurrentPhoto()
                 }
             } catch {
                 message = error.localizedDescription
@@ -414,6 +437,11 @@ extension Editor {
         if currentGoes {
             autosave.stop()
             snapshots.open(photo: nil)
+            // Leaves any live proposal on disk for whichever photo replaces
+            // this one — the same reject-without-delete rule a photo switch
+            // follows, and the photo about to move to the Trash is exactly
+            // that: no longer the one on the canvas.
+            ProposalWatcher.shared.attach(photo: nil, engine: engine, autosave: autosave)
         }
 
         let outcome = library.trash(pending)
@@ -422,6 +450,7 @@ extension Editor {
 
         if let cur = current, gone.contains(cur) {
             current = nil
+            publishCurrentPhoto()
             if mode == .develop {
                 if let canvasSurvivor {
                     load(canvasSurvivor)
@@ -437,6 +466,8 @@ extension Editor {
             // back what the failed attempt disarmed, or the next slider tick
             // silently stops reaching the sidecar.
             autosave.begin(url: cur, saved: engine.state)
+            ProposalWatcher.shared.attach(photo: cur, engine: engine, autosave: autosave)
+            publishCurrentPhoto()
             snapshots.open(photo: cur)
         }
 

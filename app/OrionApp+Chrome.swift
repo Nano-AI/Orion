@@ -428,6 +428,23 @@ extension Editor {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
+                // An agent's proposed edit, live in compare — see
+                // `ProposalWatcher`. Shown only while one is actually up, so
+                // the footer costs nothing on every ordinary session.
+                if case let .previewing(keys) = ProposalWatcher.shared.phase {
+                    HStack(spacing: 8) {
+                        Engraved.Label(text: Proposal.summary(keys: keys),
+                                       color: Palette.accent, size: 9)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        chip("Approve", enabled: true) { ProposalWatcher.shared.approve() }
+                            .keyboardShortcut(.return, modifiers: [.command])
+                            .help("Approve the proposed edit  (⌘⏎)")
+                        chip("Reject", enabled: true) { ProposalWatcher.shared.reject() }
+                            .keyboardShortcut(.escape, modifiers: [.command])
+                            .help("Reject the proposed edit  (⌘⎋)")
+                    }
+                }
                 HStack(spacing: 0) {
                     Engraved.Readout(text: "\(engine.imageWidth) × \(engine.imageHeight)",
                                      color: Palette.dim)
