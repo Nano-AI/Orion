@@ -401,6 +401,19 @@ extension Editor {
     /// A local monitor sees every key event and hands back the ones that belong
     /// to somebody else — a sheet, a panel, a text field, or anything with a
     /// modifier.
+    ///
+    /// ⚠ The assistant terminal (AssistantPanel.swift) is the same shape of
+    /// problem the `NSTextView` check below already solved once: a local
+    /// monitor runs *before* AppKit's normal dispatch, so it swallowed every
+    /// bare key — Return, Escape, digits, letters — that was meant for the
+    /// shell, because SwiftTerm's `TerminalView` is a plain `NSView`, not an
+    /// `NSTextView`, and so was not covered by that check: reject/rate fired
+    /// while typing in the terminal, and the keystroke never reached the
+    /// shell at all — `handleKey` returned `true`, which is what makes this
+    /// monitor return `nil` and consume the event outright. Extending the
+    /// same firstResponder check is the smallest fix — one line, one file —
+    /// versus threading a new `terminalHasFocus` flag through every
+    /// shortcut definition.
     func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -409,7 +422,41 @@ extension Editor {
                   !(window.firstResponder is NSTextView)
             else { return event }
 
-            return handleKey(event) ? nil : event
+            // While the terminal is first responder it owns every bare key —
+            // and ⌘=/⌘-/⌘0, which resize its font (Terminal.app's own
+            // convention) instead of doing what they do everywhere else.
+            // Anything else with ⌘ (⌘C, ⌘1, the menu bar generally) is
+            // untouched here: menu key equivalents are matched by AppKit
+            // independently of first responder, which is exactly why Orion's
+            // own ⌘-shortcuts already worked from inside the terminal and
+            // only the bare ones needed gating. The routing decision itself
+            // (`AssistantKeyRoute`, AssistantProcess.swift) is a pure
+            // function of that one boolean, tested without a window.
+            switch AssistantKeyRoute.destination(
+                terminalIsFirstResponder: window.firstResponder is LocalProcessTerminalView) {
+            case .terminal:
+                return handleTerminalFontShortcut(event) ? nil : event
+            case .app:
+                return handleKey(event) ? nil : event
+            }
+        }
+    }
+
+    /// ⌘=/⌘-/⌘0 while the assistant terminal is focused. Handled here, in the
+    /// same local monitor that sees every other key first, rather than via
+    /// `NSResponder.performKeyEquivalent` on a SwiftTerm subclass: this
+    /// monitor already runs before AppKit's menu-key-equivalent matching, so
+    /// there is no ordering to get right, and it keeps the terminal's own
+    /// vendored view unsubclassed. The matching itself (`AssistantFontShortcut`,
+    /// AssistantProcess.swift) is pure; only turning the match into a font
+    /// change happens here.
+    private func handleTerminalFontShortcut(_ event: NSEvent) -> Bool {
+        switch AssistantFontShortcut.match(characters: event.charactersIgnoringModifiers,
+                                            command: event.modifierFlags.contains(.command)) {
+        case .increase: assistant.increaseFontSize(); return true
+        case .decrease: assistant.decreaseFontSize(); return true
+        case .reset: assistant.resetFontSize(); return true
+        case nil: return false
         }
     }
 

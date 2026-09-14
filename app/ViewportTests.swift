@@ -228,6 +228,11 @@ enum ViewportTests {
         testProposalSwitchedAwayLeavesTheFileAlone()
         testProposalEventsAreNoOpsWhenIdle()
 
+        testAssistantKeyRouteFollowsFirstResponder()
+        testAssistantFontShortcutMatchesCommandEqualsMinusAndZero()
+        testAssistantFontShortcutIgnoresEverythingElse()
+        testAssistantFontSizeClampsAtBothEnds()
+
         print("\n\(checks) checks, \(failures) failures")
         return failures
     }

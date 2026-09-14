@@ -34,9 +34,14 @@ struct AssistantTerminalView: NSViewRepresentable {
     /// Changes on every tap of the header's restart button, so a relaunch can
     /// be forced even when neither `command` nor `workingDirectory` changed.
     let restartToken: UUID
+    /// ⌘=/⌘-/⌘0 while focused — see `handleTerminalFontShortcut` in
+    /// OrionApp+Commands.swift.
+    let fontSize: Double
 
     /// Remembers what is currently running so `updateNSView` only relaunches
-    /// when something actually changed, and terminates the child on window
+    /// when something actually changed, applies `fontSize` without also
+    /// relaunching, hands the terminal first responder when it appears and
+    /// gives it back on the way out, and terminates the child on window
     /// close and on app quit — the two ways the column's NSView can go away
     /// without SwiftUI calling `dismantleNSView` for the second one.
     final class Coordinator {
@@ -44,7 +49,12 @@ struct AssistantTerminalView: NSViewRepresentable {
         var launchedCommand: String?
         var launchedDirectory: URL?
         var launchedToken: UUID?
+        var appliedFontSize: Double?
         private var quitObserver: NSObjectProtocol?
+        /// What held first responder before the terminal took it, so closing
+        /// the column hands focus back rather than leaving the window
+        /// pointed at a view that is about to be deallocated.
+        private weak var priorResponder: NSResponder?
 
         init() {
             quitObserver = NotificationCenter.default.addObserver(
@@ -56,6 +66,20 @@ struct AssistantTerminalView: NSViewRepresentable {
         deinit {
             if let quitObserver { NotificationCenter.default.removeObserver(quitObserver) }
         }
+
+        /// Called once the view has an actual `NSWindow` — `makeNSView` runs
+        /// before SwiftUI inserts the view into the hierarchy, so this is
+        /// dispatched to the next run-loop turn rather than called directly.
+        func takeFocusIfNeeded(_ view: LocalProcessTerminalView) {
+            guard let window = view.window, window.firstResponder !== view else { return }
+            priorResponder = window.firstResponder
+            window.makeFirstResponder(view)
+        }
+
+        func releaseFocus(_ view: LocalProcessTerminalView) {
+            guard let window = view.window, window.firstResponder === view else { return }
+            window.makeFirstResponder(priorResponder)
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -64,14 +88,20 @@ struct AssistantTerminalView: NSViewRepresentable {
         let view = LocalProcessTerminalView(frame: .zero)
         context.coordinator.view = view
         relaunchIfNeeded(view, context: context)
+        applyFontIfNeeded(view, context: context)
+        DispatchQueue.main.async { [coordinator = context.coordinator] in
+            coordinator.takeFocusIfNeeded(view)
+        }
         return view
     }
 
     func updateNSView(_ view: LocalProcessTerminalView, context: Context) {
         relaunchIfNeeded(view, context: context)
+        applyFontIfNeeded(view, context: context)
     }
 
     static func dismantleNSView(_ view: LocalProcessTerminalView, coordinator: Coordinator) {
+        coordinator.releaseFocus(view)
         view.terminate()
     }
 
@@ -87,6 +117,16 @@ struct AssistantTerminalView: NSViewRepresentable {
                            args: ["-l", "-c", command],
                            currentDirectory: workingDirectory.path)
     }
+
+    /// Guarded on the last-applied size rather than set unconditionally:
+    /// `TerminalView.font`'s setter also clears the active selection, so
+    /// writing it on every SwiftUI update (most of which have nothing to do
+    /// with the font) would drop a selection the photographer is mid-drag on.
+    private func applyFontIfNeeded(_ view: LocalProcessTerminalView, context: Context) {
+        guard context.coordinator.appliedFontSize != fontSize else { return }
+        context.coordinator.appliedFontSize = fontSize
+        view.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    }
 }
 
 /// The column chrome: a header with the claude/codex popup and a restart
@@ -100,6 +140,8 @@ struct AssistantColumn: View {
     private let minWidth: Double = 360
     private let maxWidth: Double = 800
     @State private var dragStartWidth: Double?
+    @State private var isHoveringHandle = false
+    @State private var resizeCursorPushed = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -108,7 +150,8 @@ struct AssistantColumn: View {
                 Rectangle().fill(Palette.line).frame(height: 1)
                 AssistantTerminalView(command: model.command,
                                       workingDirectory: workingDirectory,
-                                      restartToken: model.restartToken)
+                                      restartToken: model.restartToken,
+                                      fontSize: model.fontSize)
             }
             .frame(width: model.width)
             .background(Palette.panel)
@@ -122,18 +165,41 @@ struct AssistantColumn: View {
         }
         .frame(width: 8) // wider than the visible line, for an easier drag target
         .contentShape(Rectangle())
+        .onHover { inside in
+            isHoveringHandle = inside
+            syncResizeCursor()
+        }
         .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         let start = dragStartWidth ?? model.width
                         dragStartWidth = start
+                        syncResizeCursor()
                         // The column is at the leading edge, so dragging the
                         // handle right (positive translation) makes it wider.
                         model.width = min(max(start + value.translation.width,
                                                minWidth), maxWidth)
                     }
-                    .onEnded { _ in dragStartWidth = nil }
+                    .onEnded { _ in
+                        dragStartWidth = nil
+                        syncResizeCursor()
+                    }
             )
+    }
+
+    /// One push/pop pair kept in sync with hover-or-drag, rather than one
+    /// push/pop per gesture phase: `NSCursor.push`/`pop` is a stack, and
+    /// pushing on both hover and drag-start without matching pops would
+    /// leave the resize cursor stuck after the drag ends.
+    private func syncResizeCursor() {
+        let active = isHoveringHandle || dragStartWidth != nil
+        if active && !resizeCursorPushed {
+            NSCursor.resizeLeftRight.push()
+            resizeCursorPushed = true
+        } else if !active && resizeCursorPushed {
+            NSCursor.pop()
+            resizeCursorPushed = false
+        }
     }
 
     private var header: some View {

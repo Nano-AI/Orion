@@ -126,7 +126,7 @@ struct RootView: View {
             }
             Group {
                 if let engine {
-                    Editor(engine: engine)
+                    Editor(engine: engine, assistant: assistant)
                 } else {
                     VStack(spacing: 8) {
                         Text("Orion could not start").font(.headline)
@@ -155,14 +155,23 @@ struct Editor: View {
     @State var viewport = Viewport()
     @State var tab: ToolTab
 
+    /// Read by `installKeyMonitor`/`handleTerminalFontShortcut` in
+    /// OrionApp+Commands.swift: whether the assistant terminal is first
+    /// responder decides whether a bare key or ⌘=/⌘-/⌘0 belongs to Orion or
+    /// to the shell. Defaulted so Screenshot.swift's harness construction
+    /// (which never mentions the assistant) keeps compiling.
+    let assistant: AssistantPanelModel
+
     /// `startLibrary` exists for the screenshot harness. The filmstrip has been
     /// changed twice without any capture showing it, because the harness opens
     /// one photo and never scans a folder — so the strip appeared in no
     /// screenshot at all and was checked by reading the code. Handing in a
     /// pre-scanned library is the smallest seam that fixes that.
-    init(engine: Engine, startTab: ToolTab = .light, startLibrary: Library? = nil,
+    init(engine: Engine, assistant: AssistantPanelModel = AssistantPanelModel(),
+         startTab: ToolTab = .light, startLibrary: Library? = nil,
          startSnapshots: SnapshotStore? = nil, startMode: EditorMode = .develop) {
         self.engine = engine
+        self.assistant = assistant
         _tab = State(initialValue: startTab)
         _library = State(initialValue: startLibrary ?? Library())
         // Same seam and same reason as `startLibrary`: the harness never calls

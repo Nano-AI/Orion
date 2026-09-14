@@ -28,6 +28,17 @@ final class AssistantPanelModel {
     /// compare against even when the command and directory did not change.
     private(set) var restartToken = UUID()
 
+    /// ⌘= / ⌘- / ⌘0 while the terminal is focused (Terminal.app's own
+    /// convention) — see `handleTerminalFontShortcut` in
+    /// OrionApp+Commands.swift, the one place that already sees every key
+    /// event ahead of the rest of the app.
+    var fontSize: Double {
+        didSet { UserDefaults.standard.set(fontSize, forKey: Keys.fontSize) }
+    }
+    static let minFontSize: Double = 8
+    static let maxFontSize: Double = 28
+    static let defaultFontSize: Double = 13
+
     /// Resolved once at launch (below) rather than on every SwiftUI body
     /// evaluation: there is no in-app control that changes it, and
     /// recomputing it from a view's `body` would mean writing `notice`, an
@@ -43,6 +54,7 @@ final class AssistantPanelModel {
         static let width = "assistantPanelWidth"
         static let command = "assistantCommand"
         static let workingDirectory = "assistantWorkingDirectory"
+        static let fontSize = "assistantFontSize"
     }
 
     init() {
@@ -50,6 +62,8 @@ final class AssistantPanelModel {
         let savedWidth = defaults.double(forKey: Keys.width)
         width = savedWidth > 0 ? savedWidth : 360
         command = defaults.string(forKey: Keys.command) ?? "claude"
+        let savedFontSize = defaults.double(forKey: Keys.fontSize)
+        fontSize = savedFontSize > 0 ? savedFontSize : Self.defaultFontSize
 
         // UserDefaults `assistantWorkingDirectory` when set; otherwise the
         // Orion repo, derived from the app bundle two levels up
@@ -75,4 +89,44 @@ final class AssistantPanelModel {
 
     func toggle() { isOpen.toggle() }
     func restart() { restartToken = UUID() }
+
+    func increaseFontSize() { fontSize = min(fontSize + 1, Self.maxFontSize) }
+    func decreaseFontSize() { fontSize = max(fontSize - 1, Self.minFontSize) }
+    func resetFontSize() { fontSize = Self.defaultFontSize }
+}
+
+/// Which of Orion's two key handlers a keyDown event should reach — the
+/// assistant terminal (every bare key, plus ⌘=/⌘-/⌘0 for its font) or
+/// Orion's own shortcuts. Pure: takes only whether the terminal is first
+/// responder, not a real `NSWindow`/`NSResponder`, so the routing decision
+/// itself — the fix for the terminal's keystrokes firing Orion's shortcuts
+/// instead of reaching the shell — is unit-tested without building a window.
+/// The one real caller is `installKeyMonitor` in OrionApp+Commands.swift,
+/// which has the actual `NSEvent`/`NSWindow`; see ViewportTests+Assistant.swift
+/// for the test.
+enum AssistantKeyRoute: Equatable {
+    case terminal
+    case app
+
+    static func destination(terminalIsFirstResponder: Bool) -> AssistantKeyRoute {
+        terminalIsFirstResponder ? .terminal : .app
+    }
+}
+
+/// ⌘=/⌘-/⌘0 while the terminal is focused (Terminal.app's own convention).
+/// `characters` is `NSEvent.charactersIgnoringModifiers`; anything else,
+/// including every other ⌘-combination and every bare key, returns `nil` —
+/// "not a font shortcut, let it through unmodified."
+enum AssistantFontShortcut: Equatable {
+    case increase, decrease, reset
+
+    static func match(characters: String?, command: Bool) -> AssistantFontShortcut? {
+        guard command else { return nil }
+        switch characters {
+        case "=", "+": return .increase
+        case "-": return .decrease
+        case "0": return .reset
+        default: return nil
+        }
+    }
 }
