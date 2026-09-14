@@ -30,11 +30,12 @@ after(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test("tools/list names exactly the eight tools", async () => {
+test("tools/list names exactly the nine tools", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "approve_edit",
+    "current_photo",
     "describe_edits",
     "get_proxy",
     "get_stats",
@@ -181,6 +182,134 @@ test("get_proxy clamps maxPx to 2048 before it ever reaches the binary", async (
   assert.equal(result.isError, undefined);
   const received = (await fs.readFile(maxpxFile, "utf8")).trim();
   assert.equal(received, "2048");
+});
+
+test("current_photo returns the contents of current.json", async () => {
+  const file = path.join(tmpDir, "current-1.json");
+  const current = { photo: "/shoot/a.arw", folder: "/shoot", updated: "2026-09-14T00:00:00Z" };
+  await fs.writeFile(file, JSON.stringify(current));
+  process.env.ORION_CURRENT = file;
+  try {
+    const result = await client.callTool({ name: "current_photo", arguments: {} });
+    assert.equal(result.isError, undefined);
+    const content = result.content as Array<{ type: string; text?: string }>;
+    assert.deepEqual(JSON.parse(content[0].text!), current);
+  } finally {
+    delete process.env.ORION_CURRENT;
+  }
+});
+
+test("current_photo with a missing current.json is a non-error hint, not a tool error", async () => {
+  process.env.ORION_CURRENT = path.join(tmpDir, "does-not-exist.json");
+  try {
+    const result = await client.callTool({ name: "current_photo", arguments: {} });
+    assert.equal(result.isError, undefined);
+    const content = result.content as Array<{ type: string; text?: string }>;
+    assert.deepEqual(JSON.parse(content[0].text!), {
+      photo: null,
+      hint: "open a photo in Orion, or pass path explicitly",
+    });
+  } finally {
+    delete process.env.ORION_CURRENT;
+  }
+});
+
+test("current_photo with photo: null in current.json is the same non-error hint", async () => {
+  const file = path.join(tmpDir, "current-null.json");
+  await fs.writeFile(file, JSON.stringify({ photo: null, folder: null, updated: "2026-09-14T00:00:00Z" }));
+  process.env.ORION_CURRENT = file;
+  try {
+    const result = await client.callTool({ name: "current_photo", arguments: {} });
+    assert.equal(result.isError, undefined);
+    const content = result.content as Array<{ type: string; text?: string }>;
+    assert.deepEqual(JSON.parse(content[0].text!), {
+      photo: null,
+      hint: "open a photo in Orion, or pass path explicitly",
+    });
+  } finally {
+    delete process.env.ORION_CURRENT;
+  }
+});
+
+test("get_stats without a path resolves the photo from current.json", async () => {
+  const raw = path.join(tmpDir, "resolved.arw");
+  await fs.writeFile(raw, "");
+  const file = path.join(tmpDir, "current-2.json");
+  await fs.writeFile(file, JSON.stringify({ photo: raw, folder: tmpDir, updated: "2026-09-14T00:00:00Z" }));
+  process.env.ORION_CURRENT = file;
+  try {
+    const result = await client.callTool({ name: "get_stats", arguments: {} });
+    assert.equal(result.isError, undefined);
+    const content = result.content as Array<{ type: string; text?: string }>;
+    assert.equal(JSON.parse(content[0].text!).path, raw);
+  } finally {
+    delete process.env.ORION_CURRENT;
+  }
+});
+
+test("list_folder without a folder resolves it from current.json's folder field", async () => {
+  const file = path.join(tmpDir, "current-3.json");
+  await fs.writeFile(file, JSON.stringify({ photo: null, folder: tmpDir, updated: "2026-09-14T00:00:00Z" }));
+  process.env.ORION_CURRENT = file;
+  try {
+    const result = await client.callTool({ name: "list_folder", arguments: {} });
+    assert.equal(result.isError, undefined);
+  } finally {
+    delete process.env.ORION_CURRENT;
+  }
+});
+
+test("every optional-path tool gives the same isError when nothing is open and no path is given", async () => {
+  process.env.ORION_CURRENT = path.join(tmpDir, "does-not-exist-2.json");
+  try {
+    const calls: Array<[string, Record<string, unknown>]> = [
+      ["get_stats", {}],
+      ["get_proxy", {}],
+      ["propose_edit", { edits: { exposureEv: 0.1 } }],
+      ["approve_edit", {}],
+      ["reject_edit", {}],
+      ["set_flag", { rating: 3 }],
+      ["list_folder", {}],
+    ];
+    for (const [name, args] of calls) {
+      const result = await client.callTool({ name, arguments: args });
+      assert.equal(result.isError, true, name);
+      const content = result.content as Array<{ type: string; text?: string }>;
+      assert.equal(content[0].text, "no photo is open in Orion and no path was given", name);
+    }
+  } finally {
+    delete process.env.ORION_CURRENT;
+  }
+});
+
+test("describe_edits passes a composite key (curve) through unchanged", async () => {
+  const result = await client.callTool({ name: "describe_edits", arguments: {} });
+  const content = result.content as Array<{ type: string; text?: string }>;
+  const { keys } = JSON.parse(content[0].text!);
+  const curve = keys.find((k: { name: string }) => k.name === "curve");
+  assert.ok(curve, "expected a curve key");
+  assert.equal(curve.type, "array");
+  assert.equal(curve.absolute, true);
+  assert.deepEqual(curve.example, [
+    { x: 0, y: 0 },
+    { x: 1, y: 1 },
+  ]);
+  assert.equal(curve.min, undefined);
+  assert.equal(curve.max, undefined);
+});
+
+test("propose_edit sends a composite value whole and gets it back unchanged in state", async () => {
+  const raw = path.join(tmpDir, "composite.arw");
+  await fs.writeFile(raw, "");
+  const curve = [
+    { x: 0, y: 0 },
+    { x: 0.5, y: 0.65 },
+    { x: 1, y: 1 },
+  ];
+  const result = await client.callTool({ name: "propose_edit", arguments: { path: raw, edits: { curve } } });
+  assert.equal(result.isError, undefined);
+  const content = result.content as Array<{ type: string; text?: string }>;
+  assert.deepEqual(JSON.parse(content[0].text!).state.curve, curve);
 });
 
 test("entry point runs when its own path contains a space", async () => {

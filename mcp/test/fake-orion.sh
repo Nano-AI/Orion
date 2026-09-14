@@ -29,7 +29,7 @@ case "$verb" in
     echo '{"path":"'"$raw"'","width":100,"height":80,"camera":"Fake","rating":0,"rejected":false,"clipLow":[0,0,0],"clipHigh":[0,0,0],"mean":[0.5,0.5,0.5],"temperatureK":5500,"tint":0}'
     ;;
   keys)
-    echo '{"keys":[{"name":"temperatureK","type":"number","unit":"kelvin","min":2000,"max":50000,"default":5500,"absolute":true,"note":"White balance in kelvin. Absolute, not a delta."},{"name":"tint","type":"number","unit":"magenta-green","min":-100,"max":100,"default":0,"absolute":true,"note":"Placeholder range for the fake binary; the real range comes from Orion --agent keys."},{"name":"exposureEv","type":"number","unit":"EV","min":-5,"max":5,"default":0,"absolute":true}]}'
+    echo '{"keys":[{"name":"temperatureK","type":"number","unit":"kelvin","min":2000,"max":50000,"default":5500,"absolute":true,"note":"White balance in kelvin. Absolute, not a delta."},{"name":"tint","type":"number","unit":"magenta-green","min":-100,"max":100,"default":0,"absolute":true,"note":"Placeholder range for the fake binary; the real range comes from Orion --agent keys."},{"name":"exposureEv","type":"number","unit":"EV","min":-5,"max":5,"default":0,"absolute":true},{"name":"curve","type":"array","absolute":true,"example":[{"x":0,"y":0},{"x":1,"y":1}],"note":"Tone curve control points. Composite: send the whole array, partial elements are rejected."}]}'
     ;;
   proxy)
     dir=$(dirname "$0")
@@ -56,7 +56,7 @@ case "$verb" in
       const fs = require("fs");
       const editsPath = process.argv[1];
       const outPath = process.argv[2];
-      const allowed = ["exposureEv", "tint", "temperatureK"];
+      const allowed = ["exposureEv", "tint", "temperatureK", "curve"];
       const base = { exposureEv: 1.0, tint: 0, temperatureK: 5500 };
       const edits = editsPath ? JSON.parse(fs.readFileSync(editsPath, "utf8")) : {};
       const unknown = Object.keys(edits).filter((k) => !allowed.includes(k));

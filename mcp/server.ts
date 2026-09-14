@@ -52,19 +52,62 @@ const fail = (e: unknown) => {
 };
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v) }] });
 
+// current.json is written atomically by Orion on every photo change:
+// {"photo": "/abs/path.ARW" | null, "folder": "/abs/dir" | null, "updated": "<ISO 8601>"}
+const currentPath = () =>
+  process.env.ORION_CURRENT ?? path.join(os.homedir(), "Library/Application Support/Orion/current.json");
+
+async function readCurrent(): Promise<{ photo: string | null; folder: string | null } | null> {
+  try {
+    return JSON.parse(await fs.readFile(currentPath(), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+const NO_PHOTO_MSG = "no photo is open in Orion and no path was given";
+const noPhoto = () => ({ content: [{ type: "text" as const, text: NO_PHOTO_MSG }], isError: true });
+
+// The one resolution helper every path/folder-optional tool routes through:
+// an explicit argument wins, otherwise fall back to current.json.
+async function resolve(given: string | undefined, key: "photo" | "folder"): Promise<string | null> {
+  if (given) return given;
+  return (await readCurrent())?.[key] ?? null;
+}
+
 export function createServer() {
   const server = new McpServer({ name: "orion", version: "0.1.0" });
+
+  server.registerTool(
+    "current_photo",
+    {
+      description:
+        "Returns the photo currently open in Orion (from current.json): {photo, folder, " +
+        "updated}. Call this to find out what the user has open before asking them for a path " +
+        "— every other tool's path/folder argument already defaults to this. Cheap, about " +
+        "20-30 tokens.",
+      inputSchema: {},
+    },
+    async () => {
+      const current = await readCurrent();
+      if (!current?.photo) return text({ photo: null, hint: "open a photo in Orion, or pass path explicitly" });
+      return text(current);
+    }
+  );
 
   server.registerTool(
     "list_folder",
     {
       description:
         "Lists RAW files in a folder (~10-40 tokens per file). Call this first to see what's " +
-        "in a shoot before spending tokens on get_stats or get_proxy for individual photos.",
-      inputSchema: { folder: z.string() },
+        "in a shoot before spending tokens on get_stats or get_proxy for individual photos. " +
+        "folder is optional; defaults to the folder of the photo open in Orion.",
+      inputSchema: { folder: z.string().optional() },
     },
-    async ({ folder }) => {
+    async ({ folder: given }) => {
       try {
+        const folder = await resolve(given, "folder");
+        if (!folder) return noPhoto();
         const entries = await fs.readdir(folder, { withFileTypes: true });
         const raws = entries.filter((e) => e.isFile() && RAW_EXT.has(path.extname(e.name).toLowerCase()));
         const out = await Promise.all(
@@ -90,12 +133,15 @@ export function createServer() {
       description:
         "Cheap: a histogram summary as JSON, about 60-80 tokens. Prefer this over get_proxy " +
         "to decide whether a photo needs a closer look — reach for get_proxy only after stats " +
-        "look interesting (blown highlights, empty shadows, an unrated keeper).",
-      inputSchema: { path: z.string() },
+        "look interesting (blown highlights, empty shadows, an unrated keeper). path is " +
+        "optional; defaults to the photo open in Orion.",
+      inputSchema: { path: z.string().optional() },
     },
     async ({ path: raw }) => {
       try {
-        return text(await orion(["stats", raw]));
+        const p = await resolve(raw, "photo");
+        if (!p) return noPhoto();
+        return text(await orion(["stats", p]));
       } catch (e) {
         return fail(e);
       }
@@ -108,20 +154,19 @@ export function createServer() {
       description:
         "Expensive: a JPEG proxy as an image content block. A 512px proxy is about 220 tokens, " +
         "a 1024px proxy about 700-900, and cost grows with maxPx — get_stats first, and only " +
-        "call this when you need to actually see the photo.",
-      inputSchema: {
-        path: z.string(),
-        maxPx: z.number().int().min(64).default(1024),
-        state: z.enum(["current", "proposed"]).default("current"),
-      },
+        "call this when you need to actually see the photo. path is optional; defaults to the " +
+        "photo open in Orion.",
+      inputSchema: { path: z.string().optional(), maxPx: z.number().int().min(64).default(1024), state: z.enum(["current", "proposed"]).default("current") },
     },
     async ({ path: raw, maxPx, state }) => {
       let dir: string | undefined;
       try {
+        const p = await resolve(raw, "photo");
+        if (!p) return noPhoto();
         dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
         const out = path.join(dir, "proxy.jpg");
-        const args = ["proxy", raw, "--max", String(Math.min(maxPx, 2048)), "--out", out];
-        const proposed = proposedPath(raw);
+        const args = ["proxy", p, "--max", String(Math.min(maxPx, 2048)), "--out", out];
+        const proposed = proposedPath(p);
         if (state === "proposed" && (await fs.access(proposed).then(() => true, () => false))) {
           args.push("--state", proposed);
         }
@@ -167,17 +212,23 @@ export function createServer() {
         "of merging. An out-of-range value is rejected with an error naming the valid range — " +
         "that is a rejection, not a rendering glitch, and nothing was written. Cheap: returns " +
         "the merged state as JSON, about 40-100 tokens, including a `state` object (everything " +
-        "the proposed file now holds) — read it before deciding the edit worked.",
-      inputSchema: { path: z.string(), edits: z.record(z.string(), z.unknown()), reset: z.boolean().optional() },
+        "the proposed file now holds) — read it before deciding the edit worked. Composite " +
+        "controls (curve, gradeShadow/Midtone/Highlight, hueShift/satShift/lumShift, layers, " +
+        "spots, maskComponents) replace the whole value: read the current one from a previous " +
+        "result's `state` or from describe_edits' `example`, edit it, send it complete. Partial " +
+        "elements are rejected. path is optional; defaults to the photo open in Orion.",
+      inputSchema: { path: z.string().optional(), edits: z.record(z.string(), z.unknown()), reset: z.boolean().optional() },
     },
     async ({ path: raw, edits, reset }) => {
       let dir: string | undefined;
       try {
+        const p = await resolve(raw, "photo");
+        if (!p) return noPhoto();
         dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
         const editsFile = path.join(dir, "edits.json");
         await fs.writeFile(editsFile, JSON.stringify(edits));
-        const proposed = proposedPath(raw);
-        const args = ["apply", raw, "--edits", editsFile, "--out", proposed];
+        const proposed = proposedPath(p);
+        const args = ["apply", p, "--edits", editsFile, "--out", proposed];
         if (!reset && (await fs.access(proposed).then(() => true, () => false))) {
           args.push("--state", proposed);
         }
@@ -196,13 +247,16 @@ export function createServer() {
       description:
         "Human-approved only: commits the proposed edit to the real XMP sidecar and deletes " +
         "the proposal. Cheap: returns the sidecar path, about 20 tokens. Never call this without " +
-        "the user's explicit approval of the proposed edit.",
-      inputSchema: { path: z.string() },
+        "the user's explicit approval of the proposed edit. path is optional; defaults to the " +
+        "photo open in Orion.",
+      inputSchema: { path: z.string().optional() },
     },
     async ({ path: raw }) => {
-      const proposed = proposedPath(raw);
+      const p = await resolve(raw, "photo");
+      if (!p) return noPhoto();
+      const proposed = proposedPath(p);
       try {
-        const result = await orion(["commit", raw, "--state", proposed]);
+        const result = await orion(["commit", p, "--state", proposed]);
         await fs.rm(proposed, { force: true });
         return text(result);
       } catch (e) {
@@ -216,11 +270,14 @@ export function createServer() {
     {
       description:
         "Deletes the proposed edit file without touching the sidecar. Cheap: returns " +
-        "{deleted}, about 10 tokens. Safe to call even when there is no proposal.",
-      inputSchema: { path: z.string() },
+        "{deleted}, about 10 tokens. Safe to call even when there is no proposal. path is " +
+        "optional; defaults to the photo open in Orion.",
+      inputSchema: { path: z.string().optional() },
     },
     async ({ path: raw }) => {
-      const proposed = proposedPath(raw);
+      const p = await resolve(raw, "photo");
+      if (!p) return noPhoto();
+      const proposed = proposedPath(p);
       const deleted = await fs.access(proposed).then(() => true, () => false);
       try {
         if (deleted) await fs.rm(proposed);
@@ -236,12 +293,15 @@ export function createServer() {
     {
       description:
         "Sets rating (0-5) and/or reject on the real sidecar directly — this is not a proposal, " +
-        "it writes immediately. Cheap: returns {rating, rejected}, about 20 tokens.",
-      inputSchema: { path: z.string(), rating: z.number().int().min(0).max(5).optional(), reject: z.boolean().optional() },
+        "it writes immediately. Cheap: returns {rating, rejected}, about 20 tokens. path is " +
+        "optional; defaults to the photo open in Orion.",
+      inputSchema: { path: z.string().optional(), rating: z.number().int().min(0).max(5).optional(), reject: z.boolean().optional() },
     },
     async ({ path: raw, rating, reject }) => {
+      const p = await resolve(raw, "photo");
+      if (!p) return noPhoto();
       try {
-        const args = ["flag", raw];
+        const args = ["flag", p];
         if (rating !== undefined) args.push("--rating", String(rating));
         if (reject !== undefined) args.push("--reject", reject ? "1" : "0");
         return text(await orion(args));
