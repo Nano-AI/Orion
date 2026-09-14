@@ -10,12 +10,13 @@ shift 2
 raw=""
 out=""
 edits=""
+max=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) out="$2"; shift 2 ;;
     --edits) edits="$2"; shift 2 ;;
     --state) shift 2 ;;
-    --max) shift 2 ;;
+    --max) max="$2"; shift 2 ;;
     --rating) shift 2 ;;
     --reject) shift 2 ;;
     *) if [ -z "$raw" ]; then raw="$1"; fi; shift ;;
@@ -29,6 +30,11 @@ case "$verb" in
   proxy)
     dir=$(dirname "$0")
     cp "$dir/fixture.jpg" "$out"
+    # Records the --max this invocation actually received, under the system
+    # temp dir (not the ephemeral --out dir, which the caller cleans up, and
+    # not the repo tree), so tests can verify the server clamps maxPx before
+    # it reaches the binary.
+    echo "$max" > "${TMPDIR:-/tmp}/orion-mcp-test-last-maxpx.txt"
     bytes=$(wc -c < "$out" | tr -d ' ')
     echo '{"path":"'"$out"'","width":16,"height":12,"bytes":'"$bytes"'}'
     ;;

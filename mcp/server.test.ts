@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { spawn } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "./server.ts";
@@ -93,4 +94,54 @@ test("a verb exiting 2 becomes a tool error carrying the stderr line", async () 
   assert.equal(result.isError, true);
   const content = result.content as Array<{ type: string; text?: string }>;
   assert.match(content[0].text!, /unknown keys/);
+});
+
+test("get_proxy clamps maxPx to 2048 before it ever reaches the binary", async () => {
+  const maxpxFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-maxpx.txt");
+  await fs.rm(maxpxFile, { force: true });
+  const result = await client.callTool({ name: "get_proxy", arguments: { path: "/x.arw", maxPx: 3000 } });
+  assert.equal(result.isError, undefined);
+  const received = (await fs.readFile(maxpxFile, "utf8")).trim();
+  assert.equal(received, "2048");
+});
+
+test("entry point runs when its own path contains a space", async () => {
+  const dir = path.join(import.meta.dirname, "test", "has space");
+  await fs.mkdir(dir, { recursive: true });
+  const copiedServer = path.join(dir, "server.ts");
+  await fs.copyFile(path.join(import.meta.dirname, "server.ts"), copiedServer);
+  try {
+    const child = spawn("node", [copiedServer], {
+      env: { ...process.env, ORION_BIN: FAKE_BIN },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const response = await new Promise<any>((resolve, reject) => {
+      let buf = "";
+      const timer = setTimeout(() => reject(new Error("timed out waiting for initialize response")), 5000);
+      child.stdout.on("data", (chunk) => {
+        buf += chunk.toString();
+        const nl = buf.indexOf("\n");
+        if (nl !== -1) {
+          clearTimeout(timer);
+          resolve(JSON.parse(buf.slice(0, nl)));
+        }
+      });
+      child.on("error", (e) => {
+        clearTimeout(timer);
+        reject(e);
+      });
+      child.stdin.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "x", version: "0" } },
+        }) + "\n"
+      );
+    });
+    child.kill();
+    assert.equal(response.result.serverInfo.name, "orion");
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });

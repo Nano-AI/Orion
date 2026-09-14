@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 
 const RAW_EXT = new Set([".arw", ".nef", ".cr2", ".cr3", ".dng", ".raf", ".orf", ".rw2"]);
 const bin = () =>
@@ -92,14 +93,15 @@ export function createServer() {
         "call this when you need to actually see the photo.",
       inputSchema: {
         path: z.string(),
-        maxPx: z.number().int().positive().max(2048).default(1024),
+        maxPx: z.number().int().min(64).default(1024),
         state: z.enum(["current", "proposed"]).default("current"),
       },
     },
     async ({ path: raw, maxPx, state }) => {
-      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
-      const out = path.join(dir, "proxy.jpg");
+      let dir: string | undefined;
       try {
+        dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
+        const out = path.join(dir, "proxy.jpg");
         const args = ["proxy", raw, "--max", String(Math.min(maxPx, 2048)), "--out", out];
         const proposed = proposedPath(raw);
         if (state === "proposed" && (await fs.access(proposed).then(() => true, () => false))) {
@@ -111,7 +113,7 @@ export function createServer() {
       } catch (e) {
         return fail(e);
       } finally {
-        await fs.rm(dir, { recursive: true, force: true });
+        if (dir) await fs.rm(dir, { recursive: true, force: true });
       }
     }
   );
@@ -126,9 +128,10 @@ export function createServer() {
       inputSchema: { path: z.string(), edits: z.record(z.string(), z.unknown()) },
     },
     async ({ path: raw, edits }) => {
-      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
-      const editsFile = path.join(dir, "edits.json");
+      let dir: string | undefined;
       try {
+        dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
+        const editsFile = path.join(dir, "edits.json");
         await fs.writeFile(editsFile, JSON.stringify(edits));
         const proposed = proposedPath(raw);
         const args = ["apply", raw, "--edits", editsFile, "--out", proposed];
@@ -139,7 +142,7 @@ export function createServer() {
       } catch (e) {
         return fail(e);
       } finally {
-        await fs.rm(dir, { recursive: true, force: true });
+        if (dir) await fs.rm(dir, { recursive: true, force: true });
       }
     }
   );
@@ -208,6 +211,6 @@ export function createServer() {
   return server;
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   await createServer().connect(new StdioServerTransport());
 }
