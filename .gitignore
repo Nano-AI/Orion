@@ -62,6 +62,9 @@ thumbnail-cache/
 vendor/
 third_party/*/
 !third_party/CMakeLists.txt
+# SwiftTerm (MIT) backs the assistant drawer's terminal — vendored source,
+# not fetched at build time, so it is checked in. See third_party/SwiftTerm/VERSION.
+!third_party/SwiftTerm/
 
 # --- macOS -----------------------------------------------------------------
 .DS_Store

@@ -75,6 +75,8 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/SpotOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Proposal.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/ProposalWatcher.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Library.swift
@@ -104,6 +106,73 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/AnalogTrack.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/RatingBar.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorWheel.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/AssistantProcess.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/AssistantPanel.swift
+    # third_party/SwiftTerm (MIT, vendored — see third_party/SwiftTerm/VERSION),
+    # compiled straight into this target rather than through SwiftPM.
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/AppleTerminalView.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/ArabicShapingData.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/BellStyle.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/BidiMirroringData.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/BlockElementRenderer.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/BoxDrawingRenderer.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/CaretView.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/ColorBridge.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/Extensions.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/Metal/CoreTextGlyphRasterizer.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/Metal/GlyphAtlas.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/Metal/MetalBufferingMode.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/Metal/MetalError.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/Metal/MetalRendererRecovery.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/Metal/MetalTerminalRenderer.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/PowerlineRenderer.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/TerminalBidi.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/TerminalProgressBarView.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Apple/TerminalViewDelegate.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Bidi.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Buffer.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/BufferLine.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/BufferSet.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/CharData.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/CharSets.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/CircularList.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Colors.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/EscapeSequenceParser.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/EscapeSequences.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/ExtensionsTerminal.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/File.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/HangulInput.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/HeadlessTerminal.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/KittyGraphics.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/KittyKeyboardEncoder.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/KittyKeyboardProtocol.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/KittyPlaceholder.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Line.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/LocalProcess.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Mac/MacAccessibilityService.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Mac/MacCaretView.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Mac/MacDebugView.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Mac/MacExtensions.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Mac/MacFindBarView.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Mac/MacLocalTerminalView.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Mac/MacTerminalView.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Position.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Pty.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SearchEngine.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SearchLineCache.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SearchOptions.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SearchService.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SearchState.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SelectionService.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SemanticPrompt.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SixelDcsHandler.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SwiftTermBuildInfo.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/SyncDebug.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Terminal.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/TerminalOptions.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/TerminalViewSearch.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/UnicodeWidthData.swift
+    ${CMAKE_SOURCE_DIR}/third_party/SwiftTerm/Sources/SwiftTerm/Utilities.swift
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
@@ -190,6 +259,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Proposal.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
@@ -218,6 +288,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Index.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Export.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Agent.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Proposal.swift
             ${CMAKE_CURRENT_BINARY_DIR}/main.swift
             -o ${VIEWPORT_TESTS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Viewport.swift
@@ -247,6 +318,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Proposal.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
@@ -274,6 +346,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Index.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Export.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Agent.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Proposal.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift
     COMMENT "swiftc    orion-viewport-tests"
     VERBATIM

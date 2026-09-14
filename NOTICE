@@ -66,6 +66,19 @@ unaffected, exactly as reading a CC BY-SA map does not relicense the reader.
 Practically: **fixing a lens entry means contributing it back**, and that is the
 right outcome anyway.
 
+## SwiftTerm
+
+`third_party/SwiftTerm/` vendors the terminal view and local-process hosting
+behind the assistant drawer (View > Assistant, ⌘⌥A), licensed under the
+**MIT License**. Orion compiles its sources directly into the app target
+rather than linking it as a package; see `third_party/SwiftTerm/VERSION` for
+the vendored tag and commit.
+
+Copyright (c) 2019-2026 Miguel de Icaza — <https://github.com/migueldeicaza/SwiftTerm>.
+Portions Copyright (c) 2017-2019 The xterm.js authors; Copyright (c) 2014-2016
+SourceLair Private Company; Copyright (c) 2012-2013 Christopher Jeffrey. The
+full licence text travels with it, as `third_party/SwiftTerm/LICENSE`.
+
 ## Algorithms implemented from published descriptions
 
 Mathematics is not copyrightable, and none of these is a port of anyone's

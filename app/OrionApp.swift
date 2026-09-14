@@ -35,6 +35,13 @@ import UniformTypeIdentifiers
 
 @main
 struct OrionApp: App {
+    /// The assistant drawer's state, held here rather than in `RootView`
+    /// because `.commands` is a scene-level sibling of the window content —
+    /// there is no view-hierarchy path from a menu command down into a
+    /// window's state, so the toggle and the drawer need the same instance
+    /// from above both. See AssistantPanel.swift / AssistantProcess.swift.
+    @State private var assistant = AssistantPanelModel()
+
     /// `--screenshot` renders the interface to a PNG and exits without ever
     /// showing a window. Checked here because App.init runs before the scene.
     init() {
@@ -69,12 +76,13 @@ struct OrionApp: App {
 
     var body: some Scene {
         WindowGroup("Orion") {
-            RootView().frame(minWidth: 1100, minHeight: 700)
+            RootView(assistant: assistant).frame(minWidth: 1100, minHeight: 700)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
             PhotoCommands()
+            AssistantCommands(model: assistant)
         }
     }
 }
@@ -96,13 +104,14 @@ extension Orion.Palette {
 }
 
 struct RootView: View {
+    let assistant: AssistantPanelModel
     @State private var engine: Engine?
     @State private var startupError: String?
 
     var body: some View {
         Group {
             if let engine {
-                Editor(engine: engine)
+                Editor(engine: engine, assistant: assistant)
             } else {
                 VStack(spacing: 8) {
                     Text("Orion could not start").font(.headline)
@@ -130,14 +139,20 @@ struct Editor: View {
     @State var viewport = Viewport()
     @State var tab: ToolTab
 
+    /// The assistant drawer. Defaulted so Screenshot.swift's harness
+    /// construction (which never mentions the assistant) keeps compiling.
+    let assistant: AssistantPanelModel
+
     /// `startLibrary` exists for the screenshot harness. The filmstrip has been
     /// changed twice without any capture showing it, because the harness opens
     /// one photo and never scans a folder — so the strip appeared in no
     /// screenshot at all and was checked by reading the code. Handing in a
     /// pre-scanned library is the smallest seam that fixes that.
-    init(engine: Engine, startTab: ToolTab = .light, startLibrary: Library? = nil,
+    init(engine: Engine, assistant: AssistantPanelModel = AssistantPanelModel(),
+         startTab: ToolTab = .light, startLibrary: Library? = nil,
          startSnapshots: SnapshotStore? = nil, startMode: EditorMode = .develop) {
         self.engine = engine
+        self.assistant = assistant
         _tab = State(initialValue: startTab)
         _library = State(initialValue: startLibrary ?? Library())
         // Same seam and same reason as `startLibrary`: the harness never calls
@@ -263,6 +278,13 @@ struct Editor: View {
                     Filmstrip(library: library, selected: current, onSelect: load,
                               onMerge: askHdrMerge)
                 }
+            }
+
+            // The assistant drawer: a toggleable strip under everything else,
+            // in both develop and cull mode. See AssistantPanel.swift.
+            if assistant.isOpen {
+                Rectangle().fill(Palette.line).frame(height: 1)
+                AssistantDrawer(model: assistant, workingDirectory: assistant.workingDirectory)
             }
         }
         .background(Palette.ground)

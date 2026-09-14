@@ -1,0 +1,44 @@
+SwiftTerm
+Source: https://github.com/migueldeicaza/SwiftTerm
+Tag:    v1.20.0
+Commit: 5d14406844143538cd8f8851d2d8a67c1fe443e5
+License: MIT (see LICENSE)
+
+Vendored: Sources/SwiftTerm/** from the tag above, minus:
+  - Sources/SwiftTerm/iOS/**            (iOS only; Orion is macOS only)
+  - Sources/SwiftTerm/Documentation.docc/** (docs, not code)
+  - Sources/SwiftTerm/Mac/README.md     (docs, not code)
+  - Sources/SwiftTerm/Apple/Metal/Shaders.metal
+    (needs a compiled .metallib as a package resource, which swiftc-direct
+    builds have no pipeline for; MetalTerminalRenderer's
+    `device.makeDefaultLibrary()` returns nil without it and the view falls
+    back to its CoreGraphics/CoreText renderer, so Orion's terminal draws
+    without a GPU path rather than failing to build)
+
+One symbol renamed from upstream: `Colors.swift`'s top-level `public class
+Color` is `TermColor` here (and every unqualified reference to it, in
+Colors.swift, Apple/AppleTerminalView.swift, Apple/ColorBridge.swift,
+Mac/MacExtensions.swift and Terminal.swift — `Attribute.Color`, the
+*nested* per-cell color enum in CharData.swift, is untouched, it never
+collided). Orion compiles this library straight into the app's own module
+(no separate SwiftPM module boundary), so SwiftTerm's top-level `Color`
+and `SwiftUI.Color` become two same-named module-scope types; the compiler
+resolves that ambiguity inconsistently by call site rather than rejecting
+it outright, which broke `Palette.line`-style SwiftUI color usage in
+AssistantPanel.swift with no error anywhere else. Renaming the vendored
+class is the permanent fix — qualifying call sites in Orion's own files
+would only paper over the next file that hits it.
+
+Plus one generated file, checked in because Orion builds with swiftc
+directly rather than through SwiftPM's plugin pipeline:
+  - Sources/SwiftTerm/SwiftTermBuildInfo.swift
+    Produced by running the tag's own
+    Sources/SwiftTermBuildInfoGenerator/BuildInfoGenerator.swift against this
+    checkout (that generator is normally invoked by
+    Plugins/SwiftTermBuildInfoPlugin at SwiftPM build time). Only
+    `Terminal.swift`'s XTVERSION (DECRQSS) reply reads it; regenerate the
+    same way after re-vendoring a newer tag.
+
+Re-vendor: `git clone --depth 1 --branch <tag> https://github.com/migueldeicaza/SwiftTerm`,
+rsync Sources/SwiftTerm/ over this directory with the excludes above, then
+re-run BuildInfoGenerator as described and bump the tag/commit here.
