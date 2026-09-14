@@ -54,6 +54,11 @@ struct OrionApp: App {
         if CommandLine.arguments.contains("--hdr-merge") {
             HdrMergeCLI.runCommandLine(CommandLine.arguments)
         }
+        // The agent surface: five JSON verbs for an MCP client. Same reasoning
+        // as the batch: a mode nothing runs is a mode that silently breaks.
+        if CommandLine.arguments.contains("--agent") {
+            AgentCLI.runCommandLine(CommandLine.arguments)
+        }
         // A folder open, cold then warm then indexless, through the product's
         // own Library — the only thing that can see whether the index is wired
         // in at all.

@@ -185,6 +185,10 @@ enum ViewportTests {
         testMergeDefaultReference()
         testMergeOutputNaming()
 
+        testAgentParsesProxy()
+        testAgentMergeEdits()
+        testAgentStatsJSON()
+
         print("\n\(checks) checks, \(failures) failures")
         return failures
     }
