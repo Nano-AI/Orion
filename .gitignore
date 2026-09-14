@@ -108,3 +108,7 @@ hdrmerge/
 
 # Python bytecode from tools/
 __pycache__/
+
+# --- MCP server (mcp/) -------------------------------------------------------
+# npm install output; package.json/package-lock.json pin what's needed.
+mcp/node_modules/
