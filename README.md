@@ -154,7 +154,7 @@ limits are recorded in `planning/STATUS.md` rather than left to be rediscovered.
 
 ## License
 
-**Apache License 2.0** — see [`LICENSE`](LICENSE).
+**Proprietary. See [`LICENSE`](LICENSE).**
 
 You may use, modify and redistribute Orion, including commercially. The licence
 carries an **explicit patent grant**, which is why it was chosen over MIT: see
