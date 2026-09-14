@@ -140,7 +140,13 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Neutral-gray dark theme | M1 | Neutral surround improves color judgment |
 | Customizable tool panels / workspaces | M5 | Capture One's differentiator |
 
-## 15. Recorded, not committed — needs a decision before any code (2026-08-10, #212)
+## 15. Agent Surface
+
+| Feature | Status | Notes |
+|---|---|---|
+| Agent surface: `--agent` CLI + MCP server (POC) | M5 candidate | ⚠ No RAW sent to model. Proxy images (~512-1024 px, 220-900 tokens) and numbers only; human approves every edit in the MCP client's chat before any sidecar write. A fifth command-line mode reuses `Engine()`, `Sidecar`, and `Autosave` — no engine change (#244). TypeScript MCP server is a thin shell over the binary, no XMP parsing (#245). Proposed edits live as `.proposed.json` files beside the RAW; only `commit` writes the sidecar, and only a human calls it (#246). Gate: `tools/check-agent.py` runs the real server against `samples/_PIC8095.ARW`, 7/7 tool calls in 3.5 s |
+
+## 16. Recorded, not committed — needs a decision before any code (2026-08-10, #212)
 
 From the Lightroom audit. Each of these is real but either large, patent-gated
 (#174: **a citation is not clearance**), or in tension with a settled design.

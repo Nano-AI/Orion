@@ -24,16 +24,15 @@ components folded per §6, optionally feathered onto the photograph's own edges,
 through the graph, the POD facade, the panel rows, the sidecar, undo and the
 bench.
 
-**Last updated:** 2026-09-09b — a design pass over the landing page, on
-branch `web/design-pass`. Two decisions (#241, #242), no engine change and no
-app change: the page's honesty block stopped being its ugliest block, two
-scroll-theatre devices were retired, and the footer became an exit instead of
-two dead strings. The session before it was the develop panels (#234-#240).
+**Last updated:** 2026-09-13 — the agent surface POC (#243-#246): a fifth CLI
+mode dispatches to MCP server, which speaks JSON-RPC over Orion's binary; no
+RAW leaves the machine, no sidecar writes until a human approves.
 
 **Recent sessions** — full write-ups below, older ones in `HISTORY.md`:
 
 | Date | What landed |
 |---|---|
+| 2026-09-13 | **The agent surface POC, licensed proprietary.** The MCP server (#245) pairs with `--agent` CLI mode (#244) to cull and edit RAW files without the RAW reaching the model — it sees proxies and numbers, proposes edits to a `.json` file beside the RAW (#246), and nothing touches the sidecar until the human approves in the client's chat. Seven tools, gate passes 7/7; the eighth gate (`check-agent.py`) runs real server against `samples/_PIC8095.ARW`, 7/7 in 3.5 s. #243: Orion proprietary from 2026-09-13. Commits through `abf3a51` remain Apache-2.0; `NOTICE` holds all third-party licenses unchanged. ⚠ Distributed binary needs Homebrew dylibs bundled and re-pathed (from `planning/LICENSE-AUDIT.md`). Follow-ups queued: deep-merge composite fields in `apply`; in-app approve/deny diff view; Apple Vision blink and near-duplicate culling; restore-failure stderr cosmetics; measure agent culling time on real shoot. |
 | 2026-09-09b | **The landing page, reworked against four taste skills** — audit first, targeted evolution, no rewrite. Nineteen hairlined register rows became six groups in a grid that fills at every breakpoint, all 22 feature strings byte-identical; the footer gained the four routes out of the page; the frame counter and the hero's scroll cue retired, taking an `IntersectionObserver` and 49 lines with them. Zero em-dashes, `rel=canonical`, 44-point targets, `prefers-reduced-transparency` — #241, #242 |
 | 2026-09-09 | **The develop panels, quieted.** ~200 tick marks and 40 knurled thumbs cut back to what a camera scale actually needs; the mixer swatches and the three grading wheels brought under #63's chroma rule, which they had never been inside; one typographic register (engraved names, sentence-case buttons); section rhythm 26/11/9; PRESETS stopped clipping. Two a11y fixes no check can see: five icon-only toolbar buttons had no spoken name, and the swatches had 16-point targets — #234-#240 |
 | 2026-09-08b | The orange/yellow saturation deficit (and red/magenta excess) fitted into the table's own 90 hue bins rather than another region — mean band error **13.6% → 6.3%** over 12 damped rounds; red and magenta, coupled to the bands being pushed up, land at 20%/13% and were still improving when the fit stopped. `tools/huesatfit.py` is the new instrument — #232 |
@@ -93,15 +92,13 @@ say yes (#108); nobody has said so with a stylus in hand.
 
 ## Where the counts stand, and the one gate that flakes
 
-**All seven green, measured 2026-09-08b (after #232 landed):**
-`orion-tests` **1034 checks** (was 1029 — +5 from `testHueSatMapGpu` §6, the
-new `satCurve()` section) · `orion-viewport-tests` **4113 checks**, unchanged
-· both 0 failures · decisions (231 rows, 3 declared gaps, 192 cited — #232's
-row resolves the citation #233's own session flagged as red) · gestures (6)
+**All eight green, measured 2026-09-13 (after #246 landed):**
+`orion-tests` **1034 checks**, 0 failures · `orion-viewport-tests` **4125 checks**,
+0 failures · decisions (246 rows, 0 declared gaps, all 246 cited) · gestures (6)
 · screens (3 asserting + 1 byte-stable) · modes (`--library-open` 13 checks,
-`--batch-export`, `--hdr-merge`) · wiring (1 declared, 414 swept, 9
-harness-only — unchanged by this session; `showPlaceholder`/
-`clearPlaceholder` moved there by #233's session, not this one).
+`--batch-export`, `--hdr-merge`) · wiring (424 product functions, 9 harness-only,
+all pre-existing) · agent (7/7 tools, real server against `samples/_PIC8095.ARW`,
+3.5 s).
 ⚠ **`testCreativeVignetteGpu`'s corner-spread threshold moved 4.0 → 5.0,
 decision #232** — the fitted curve reaches a demosaic-edge color cast in
 that fixture's corners (hue ~330°, sat ~0.29) that both narrow regions
