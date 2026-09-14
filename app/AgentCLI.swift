@@ -120,20 +120,20 @@ enum AgentCLI {
     ///
     /// A key `edits` names that `base` does not have is the model inventing
     /// vocabulary — that is a usage error (exit 2), not a silent drop, so the
-    /// failure teaches the caller the real field names (`scalarFieldNames`).
+    /// failure teaches the caller the real field names (`scalarFieldNames`
+    /// union `AgentComposite.fieldNames`).
     ///
-    /// **POC scope, decided 2026-09-13: scalar top-level fields only.** Every
-    /// array or object field — `layers`, `spots`, `maskComponents`, `curve`,
-    /// the three `grade*` triples, `hueShift`/`satShift`/`lumShift` — needs a
-    /// deep merge that does not exist yet, so a composite key or a composite
-    /// edit value is refused outright. Refused rather than merely ignored:
-    /// `DevelopState`'s decoder falls back to the field's default on a type
-    /// mismatch (`try?` throughout `init(from:)`), so an edit like
-    /// `{"layers": [...]}` given to today's whole-array assignment would
-    /// either silently replace the group with something not devised for it,
-    /// or — for an unrelated wrong-shaped value — silently do nothing, and
-    /// either way `changed` would claim it landed.
-    static func mergeEdits(base: Data, edits: Data) throws -> (state: Data, changed: [String]) {
+    /// **A composite key — `layers`, `spots`, `maskComponents`, `curve`, the
+    /// three `grade*` triples, `hueShift`/`satShift`/`lumShift` — REPLACES the
+    /// whole field**, validated by `AgentComposite` before it ever reaches
+    /// `merged`. That validation is what makes replacing safe: `DevelopState`
+    /// and its nested structs decode leniently (`try?` throughout, so a
+    /// missing or ill-typed field silently falls back to a default rather than
+    /// throwing) — exactly what let a partial edit zero its siblings before
+    /// `AgentComposite` existed. `photo` threads through only for
+    /// `maskComponents`' kind-4 matte-exists check.
+    static func mergeEdits(base: Data, edits: Data, photo: URL? = nil)
+        throws -> (state: Data, changed: [String]) {
         guard let baseObject = try JSONSerialization.jsonObject(with: base) as? [String: Any] else {
             throw Failure.run("base state is not a JSON object")
         }
@@ -146,13 +146,15 @@ enum AgentCLI {
             throw Failure.unknownKeys(unknown.sorted())
         }
 
-        let composite = editsObject.keys.contains {
-            isComposite(baseObject[$0]) || isComposite(editsObject[$0])
-        }
-        guard !composite else {
-            throw Failure.usage(
-                "composite fields are not editable through apply; scalar keys only: "
-                    + scalarFieldNames.sorted().joined(separator: ", "))
+        // Every composite key gets its own strict, range-checked validator —
+        // AgentComposite.swift, file:line cited there the way the scalar
+        // ranges below are cited in AgentKeys.swift.
+        for (key, value) in editsObject where AgentComposite.fieldNames.contains(key) {
+            do {
+                try AgentComposite.validate(key: key, value: value, photo: photo)
+            } catch AgentComposite.Failure.rejected(let message) {
+                throw Failure.usage(message)
+            }
         }
 
         // Range check, against the same numbers the product's own sliders
@@ -192,16 +194,6 @@ enum AgentCLI {
         value is [Any] || value is [String: Any]
     }
 
-    /// The scalar half of an encoded `DevelopState` — what `apply`'s stdout
-    /// echoes back as `"state"`, so a caller sees what the proposed file now
-    /// holds without re-reading it and re-deriving which keys are scalar.
-    static func scalarValues(from state: Data) throws -> [String: Any] {
-        guard let object = try JSONSerialization.jsonObject(with: state) as? [String: Any] else {
-            throw Failure.run("state is not a JSON object")
-        }
-        return object.filter { scalarFieldNames.contains($0.key) }
-    }
-
     /// The top-level `DevelopState` fields `apply` may actually edit —
     /// scalars only. Derived from a fresh `DevelopState()` rather than
     /// hand-listed, so it can never drift from what `mergeEdits` above
@@ -213,17 +205,19 @@ enum AgentCLI {
         return Set(object.keys.filter { !isComposite(object[$0]) })
     }()
 
-    /// The `keys` verb's payload: one entry per scalar editable field, sorted
-    /// by name — the same set `mergeEdits` allows, since both are built from
-    /// `scalarFieldNames`. This is the contract `describe_edits` (mcp/) reads,
-    /// so the field names in each entry (name, type, unit, min, max, default,
-    /// absolute, note) are fixed.
+    /// The `keys` verb's payload: one entry per editable field — scalar and
+    /// composite together, sorted by name — the same set `mergeEdits` allows,
+    /// since all three are built from `scalarFieldNames` /
+    /// `AgentComposite.fieldNames`. This is the contract `describe_edits`
+    /// (mcp/) reads, so a scalar entry's fields (name, type, unit, min, max,
+    /// default, absolute, note) and a composite entry's (name, type, absolute,
+    /// example, note) are both fixed.
     static func keysJSON() -> [[String: Any]] {
         guard let data = try? JSONEncoder().encode(DevelopState()),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return [] }
 
-        return scalarFieldNames.sorted().map { name in
+        let scalars = scalarFieldNames.map { name -> [String: Any] in
             var entry: [String: Any] = ["name": name, "absolute": true]
             switch object[name] {
             case let s as String:
@@ -243,6 +237,66 @@ enum AgentCLI {
             }
             if let note = spec?.note { entry["note"] = note }
             return entry
+        }
+        return (scalars + compositeKeysJSON()).sorted {
+            ($0["name"] as? String ?? "") < ($1["name"] as? String ?? "")
+        }
+    }
+
+    /// One `keys` entry per composite field — `AgentComposite.fieldNames` —
+    /// each carrying a complete, valid `example` (round-tripped through
+    /// `JSONEncoder`/`JSONSerialization` from a real default instance rather
+    /// than hand-typed, so it cannot drift from the structs above) and a
+    /// `note` that both states the rule and repeats the replace-semantics
+    /// reminder, since a composite has no `min`/`max`/`unit`/`default`.
+    private static func compositeKeysJSON() -> [[String: Any]] {
+        func json<T: Encodable>(_ value: T) -> Any {
+            (try? JSONEncoder().encode(value))
+                .flatMap { try? JSONSerialization.jsonObject(with: $0, options: [.fragmentsAllowed]) }
+                ?? NSNull()
+        }
+        let sendComplete = " Send the complete value; read the current one from apply.state first."
+        var radial = MaskComponentState()
+        radial.kind = 2   // 0 is "no mask", never a kind to send.
+
+        let entries: [(name: String, type: String, example: Any, note: String)] = [
+            ("curve", "object", json(ToneCurve()),
+             "Each channel (master, red, green, blue) needs at least 2 points, x and y "
+                 + "each 0…1, sorted strictly ascending by x." + sendComplete),
+            ("gradeShadow", "array", json([Float](repeating: 0, count: 3)),
+             "[x, y, luminance]: x²+y² ≤ 1 (the puck stays in the wheel), luminance "
+                 + "-0.5…0.5." + sendComplete),
+            ("gradeMidtone", "array", json([Float](repeating: 0, count: 3)),
+             "[x, y, luminance]: x²+y² ≤ 1 (the puck stays in the wheel), luminance "
+                 + "-0.5…0.5." + sendComplete),
+            ("gradeHighlight", "array", json([Float](repeating: 0, count: 3)),
+             "[x, y, luminance]: x²+y² ≤ 1 (the puck stays in the wheel), luminance "
+                 + "-0.5…0.5." + sendComplete),
+            ("hueShift", "array", json([Float](repeating: 0, count: 8)),
+             "Eight bands in HueBand order, each -1…1." + sendComplete),
+            ("satShift", "array", json([Float](repeating: 0, count: 8)),
+             "Eight bands in HueBand order, each -1…1." + sendComplete),
+            ("lumShift", "array", json([Float](repeating: 0, count: 8)),
+             "Eight bands in HueBand order, each -1…1." + sendComplete),
+            ("layers", "array", json([LocalAdjustState()]),
+             "Every element needs every LocalAdjustState field (exposureEv, contrast, "
+                 + "saturation, warmth, tint, highlights, shadows, whites, blacks), each "
+                 + "checked against the *local* panel's own range, not the global scalar "
+                 + "one." + sendComplete),
+            ("spots", "array", json([SpotState()]),
+             "Every element needs every SpotState field (destX, destY, srcX, srcY, "
+                 + "radius, feather, heal); positions 0…1, radius and feather in the "
+                 + "product's ranges." + sendComplete),
+            ("maskComponents", "array", json([radial]),
+             "Every element needs every MaskComponentState field except the optional "
+                 + "matteId/matteSource/name; kind must be 1…6; positional, feather, "
+                 + "roundness and range fields are checked against the product's own "
+                 + "sliders; kind 4 (raster matte) is accepted only if matteId names a "
+                 + "PNG already saved beside the photo — a model cannot paint one."
+                 + sendComplete),
+        ]
+        return entries.map {
+            ["name": $0.name, "type": $0.type, "absolute": true, "example": $0.example, "note": $0.note]
         }
     }
 

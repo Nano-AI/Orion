@@ -23,7 +23,7 @@ extension AgentCLI {
             FileHandle.standardError.write(Data("orion: \(message)\n".utf8))
             exit(2)
         } catch Failure.unknownKeys(let keys) {
-            let allowed = scalarFieldNames.sorted().joined(separator: ", ")
+            let allowed = scalarFieldNames.union(AgentComposite.fieldNames).sorted().joined(separator: ", ")
             FileHandle.standardError.write(Data(
                 "orion: unknown keys \(keys.joined(separator: ", ")); allowed: \(allowed)\n"
                     .utf8))
@@ -131,12 +131,14 @@ extension AgentCLI {
             base = try JSONEncoder().encode(engine.state)
         }
 
-        let merged = try mergeEdits(base: base, edits: editsData)
+        let merged = try mergeEdits(base: base, edits: editsData, photo: url)
         try merged.state.write(to: URL(fileURLWithPath: out), options: .atomic)
-        // The scalar values the proposed file now holds, so a caller sees the
-        // result without re-reading `out` and re-deriving which keys are
-        // scalar.
-        let state = try scalarValues(from: merged.state)
+        // The FULL DevelopState the proposed file now holds — scalars and
+        // composites — so a caller can read-modify-write a composite field
+        // without re-reading `out` itself.
+        guard let state = try JSONSerialization.jsonObject(with: merged.state) as? [String: Any] else {
+            throw Failure.run("state is not a JSON object")
+        }
         return ["path": out, "changed": merged.changed, "state": state]
     }
 
