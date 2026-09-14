@@ -25,9 +25,15 @@ enum AgentCLI {
         case apply(raw: String, edits: String, out: String, state: String?)
         case commit(raw: String, state: String)
         case flag(raw: String, rating: Int?, reject: Bool?)
+        /// No photograph — just the edit vocabulary `apply` accepts, so a
+        /// caller can learn units and ranges before proposing an edit rather
+        /// than after `apply` rejects one.
+        case keys
     }
 
-    static let usageLine = "usage: Orion --agent <stats|proxy|apply|commit|flag> <raw> [options]"
+    static let usageLine =
+        "usage: Orion --agent <stats|proxy|apply|commit|flag> <raw> [options]"
+            + "  |  Orion --agent keys"
 
     /// Every verb's own option vocabulary. An option outside it is very
     /// likely a typo (`--sate` for `--state`) that would otherwise be parsed
@@ -42,11 +48,22 @@ enum AgentCLI {
 
     /// Walks `--agent <verb> <raw> [--key value]…` out of the full process
     /// argument list, the same shape `--batch-export` and `--hdr-merge` read.
+    ///
+    /// `keys` is the one verb with no `<raw>` — it names no photograph — so
+    /// it is peeled off before the rest of this assumes one is there.
     static func parse(_ args: [String]) throws -> Command {
-        guard let i = args.firstIndex(of: "--agent"), i + 2 < args.count else {
+        guard let i = args.firstIndex(of: "--agent"), i + 1 < args.count else {
             throw Failure.usage(usageLine)
         }
         let verb = args[i + 1]
+        if verb == "keys" {
+            guard i + 2 == args.count else {
+                throw Failure.usage("keys takes no arguments")
+            }
+            return .keys
+        }
+
+        guard i + 2 < args.count else { throw Failure.usage(usageLine) }
         let raw = args[i + 2]
 
         var options: [String: String] = [:]
@@ -138,6 +155,27 @@ enum AgentCLI {
                     + scalarFieldNames.sorted().joined(separator: ", "))
         }
 
+        // Range check, against the same numbers the product's own sliders
+        // enforce (`AgentKeys.specs` — file:line per field there). Every
+        // value here is absolute, never a delta: this is the guard that was
+        // missing when `temperatureK: 150` — meant as +150 K — was taken
+        // literally, rendered a flat black proxy, and got committed anyway.
+        // A key with no product range (`AgentKeys.specs[key]?.range == nil`)
+        // is left to whatever the type allows, same as before.
+        for (key, value) in editsObject {
+            guard let range = AgentKeys.specs[key]?.range,
+                  let number = value as? NSNumber else { continue }
+            let got = number.doubleValue
+            guard range.contains(got) else {
+                let unit = AgentKeys.specs[key]?.unit ?? "unitless"
+                throw Failure.usage(
+                    "\(key) \(AgentKeys.format(got)) is outside "
+                        + "\(AgentKeys.format(range.lowerBound))…"
+                        + "\(AgentKeys.format(range.upperBound)) "
+                        + "(\(unit), absolute not a delta)")
+            }
+        }
+
         var merged = baseObject
         for (key, value) in editsObject { merged[key] = value }
 
@@ -154,6 +192,16 @@ enum AgentCLI {
         value is [Any] || value is [String: Any]
     }
 
+    /// The scalar half of an encoded `DevelopState` — what `apply`'s stdout
+    /// echoes back as `"state"`, so a caller sees what the proposed file now
+    /// holds without re-reading it and re-deriving which keys are scalar.
+    static func scalarValues(from state: Data) throws -> [String: Any] {
+        guard let object = try JSONSerialization.jsonObject(with: state) as? [String: Any] else {
+            throw Failure.run("state is not a JSON object")
+        }
+        return object.filter { scalarFieldNames.contains($0.key) }
+    }
+
     /// The top-level `DevelopState` fields `apply` may actually edit —
     /// scalars only. Derived from a fresh `DevelopState()` rather than
     /// hand-listed, so it can never drift from what `mergeEdits` above
@@ -164,6 +212,39 @@ enum AgentCLI {
         else { return [] }
         return Set(object.keys.filter { !isComposite(object[$0]) })
     }()
+
+    /// The `keys` verb's payload: one entry per scalar editable field, sorted
+    /// by name — the same set `mergeEdits` allows, since both are built from
+    /// `scalarFieldNames`. This is the contract `describe_edits` (mcp/) reads,
+    /// so the field names in each entry (name, type, unit, min, max, default,
+    /// absolute, note) are fixed.
+    static func keysJSON() -> [[String: Any]] {
+        guard let data = try? JSONEncoder().encode(DevelopState()),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+
+        return scalarFieldNames.sorted().map { name in
+            var entry: [String: Any] = ["name": name, "absolute": true]
+            switch object[name] {
+            case let s as String:
+                entry["type"] = "string"
+                entry["default"] = s
+            case let n as NSNumber:
+                entry["type"] = "number"
+                entry["default"] = n.doubleValue
+            default:
+                entry["type"] = "number"
+            }
+            let spec = AgentKeys.specs[name]
+            entry["unit"] = spec?.unit ?? "unitless"
+            if let range = spec?.range {
+                entry["min"] = range.lowerBound
+                entry["max"] = range.upperBound
+            }
+            if let note = spec?.note { entry["note"] = note }
+            return entry
+        }
+    }
 
     /// Per-channel clip shares and weighted mean of a `bins × 3`,
     /// channel-major histogram (`Engine.histogram(bins:)`: all of channel 0's

@@ -189,7 +189,16 @@ enum ViewportTests {
         testAgentRejectsAnOptionTheVerbDoesNotTake()
         testAgentMergeEdits()
         testAgentMergeEditsRejectsCompositeFields()
+        testAgentMergeEditsRejectsAnOutOfRangeTemperature()
+        testAgentMergeEditsValidatesTintRange()
+        testAgentMergeEditsAcceptsAnInRangeExposure()
+        testAgentMergeEditsAcceptsExactBoundaries()
+        testAgentMergeEditsAcceptsAnyValueForAKeyWithNoRange()
+        testAgentParsesKeys()
+        testAgentKeysJSON()
         testAgentStatsJSON()
+        testAgentCommitPreservesAnExistingRating()
+        testSidecarReadHandlesAFileWithNoOrionDevelop()
 
         print("\n\(checks) checks, \(failures) failures")
         return failures

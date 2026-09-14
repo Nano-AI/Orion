@@ -47,6 +47,8 @@ extension AgentCLI {
             return try runCommit(raw: raw, state: state)
         case .flag(let raw, let rating, let reject):
             return try runFlag(raw: raw, rating: rating, reject: reject)
+        case .keys:
+            return ["keys": keysJSON()]
         }
     }
 
@@ -80,6 +82,14 @@ extension AgentCLI {
             "clipLow": stats.clipLow,
             "clipHigh": stats.clipHigh,
             "mean": stats.mean,
+            // The develop state's current white balance — after the sidecar
+            // restore above, so a caller with no sidecar sees the camera's
+            // as-shot reading (Engine.asShotState(), seated by
+            // `Engine.open(restoring:)`) rather than DevelopState()'s
+            // constant 5500 K / 0 tint. This is how a caller learns the real
+            // starting point before proposing a "warmer" delta on it.
+            "temperatureK": engine.temperatureK,
+            "tint": engine.tint,
         ]
     }
 
@@ -123,7 +133,11 @@ extension AgentCLI {
 
         let merged = try mergeEdits(base: base, edits: editsData)
         try merged.state.write(to: URL(fileURLWithPath: out), options: .atomic)
-        return ["path": out, "changed": merged.changed]
+        // The scalar values the proposed file now holds, so a caller sees the
+        // result without re-reading `out` and re-deriving which keys are
+        // scalar.
+        let state = try scalarValues(from: merged.state)
+        return ["path": out, "changed": merged.changed, "state": state]
     }
 
     // MARK: commit

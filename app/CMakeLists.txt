@@ -51,6 +51,7 @@ set(SWIFT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergePanel.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentKeys.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLIDriver.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SubjectMatte.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
@@ -191,6 +192,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentKeys.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
@@ -246,6 +248,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentKeys.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
