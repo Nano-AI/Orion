@@ -18,11 +18,20 @@ const proposedPath = (raw: string) => raw.replace(/\.[^.]+$/, ".proposed.json");
 // One execFile of the binary; stdout is one JSON object per the spec's verb
 // table. A non-zero exit throws with the stderr line (or the exit code) so
 // tool handlers can turn it into an MCP tool error.
+class OrionError extends Error {
+  exitCode?: number;
+  constructor(message: string, exitCode?: number) {
+    super(message);
+    this.exitCode = exitCode;
+  }
+}
+
 async function orion(args: string[]): Promise<any> {
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(bin(), ["--agent", ...args], (err, stdout, stderr) => {
       if (err) {
-        reject(new Error(stderr.trim() || err.message));
+        const code = typeof (err as NodeJS.ErrnoException).code === "number" ? (err as any).code : undefined;
+        reject(new OrionError(stderr.trim() || err.message, code));
       } else {
         resolve(stdout);
       }
@@ -31,7 +40,16 @@ async function orion(args: string[]): Promise<any> {
   return JSON.parse(stdout);
 }
 
-const fail = (e: unknown) => ({ content: [{ type: "text" as const, text: String((e as Error).message) }], isError: true });
+// Exit 2 is the binary's "rejected" contract (out-of-range value, unknown
+// key). Prefixing REJECTED: is the whole fix for the incident this server
+// shipped: a model that reads a plain error line as a rendering glitch and
+// "dials back" onto a still-poisoned proposed file. Every tool routes errors
+// through here, so this one prefix covers all of them.
+const fail = (e: unknown) => {
+  const err = e as OrionError;
+  const text = err.exitCode === 2 ? `REJECTED: ${err.message}` : err.message;
+  return { content: [{ type: "text" as const, text }], isError: true };
+};
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v) }] });
 
 export function createServer() {
@@ -119,15 +137,40 @@ export function createServer() {
   );
 
   server.registerTool(
+    "describe_edits",
+    {
+      description:
+        "Call this before your first propose_edit. Lists every editable key with unit, range " +
+        "and default. All values are ABSOLUTE settings, never deltas: temperatureK is the white " +
+        "balance in kelvin (thousands), not an offset.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return text(await orion(["keys"]));
+      } catch (e) {
+        return fail(e);
+      }
+    }
+  );
+
+  server.registerTool(
     "propose_edit",
     {
       description:
         "Writes a proposed edit beside the RAW (not the sidecar — nothing here touches the " +
-        "photographer's XMP). Merges onto any existing proposal. Cheap: returns the merged " +
-        "state as JSON, about 40-100 tokens depending on the edit count.",
-      inputSchema: { path: z.string(), edits: z.record(z.string(), z.unknown()) },
+        "photographer's XMP). ALL VALUES ARE ABSOLUTE, never deltas: call describe_edits first " +
+        "for every key's unit, range and default, and read the current temperatureK/tint from " +
+        "get_stats before changing white balance — 'make it warmer' is not '+150'. Edits " +
+        "ACCUMULATE onto any existing proposed file, so a second call keeps everything the " +
+        "first call set; pass reset: true to start over from the photo's current state instead " +
+        "of merging. An out-of-range value is rejected with an error naming the valid range — " +
+        "that is a rejection, not a rendering glitch, and nothing was written. Cheap: returns " +
+        "the merged state as JSON, about 40-100 tokens, including a `state` object (everything " +
+        "the proposed file now holds) — read it before deciding the edit worked.",
+      inputSchema: { path: z.string(), edits: z.record(z.string(), z.unknown()), reset: z.boolean().optional() },
     },
-    async ({ path: raw, edits }) => {
+    async ({ path: raw, edits, reset }) => {
       let dir: string | undefined;
       try {
         dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
@@ -135,7 +178,7 @@ export function createServer() {
         await fs.writeFile(editsFile, JSON.stringify(edits));
         const proposed = proposedPath(raw);
         const args = ["apply", raw, "--edits", editsFile, "--out", proposed];
-        if (await fs.access(proposed).then(() => true, () => false)) {
+        if (!reset && (await fs.access(proposed).then(() => true, () => false))) {
           args.push("--state", proposed);
         }
         return text(await orion(args));

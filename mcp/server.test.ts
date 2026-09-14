@@ -30,11 +30,12 @@ after(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test("tools/list names exactly the seven tools", async () => {
+test("tools/list names exactly the eight tools", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "approve_edit",
+    "describe_edits",
     "get_proxy",
     "get_stats",
     "list_folder",
@@ -42,6 +43,19 @@ test("tools/list names exactly the seven tools", async () => {
     "reject_edit",
     "set_flag",
   ]);
+});
+
+test("describe_edits returns keys containing temperatureK with absolute true", async () => {
+  const result = await client.callTool({ name: "describe_edits", arguments: {} });
+  assert.equal(result.isError, undefined);
+  const content = result.content as Array<{ type: string; text?: string }>;
+  const { keys } = JSON.parse(content[0].text!);
+  const temperatureK = keys.find((k: { name: string }) => k.name === "temperatureK");
+  assert.ok(temperatureK, "expected a temperatureK key");
+  assert.equal(temperatureK.absolute, true);
+  assert.equal(temperatureK.unit, "kelvin");
+  assert.equal(temperatureK.min, 2000);
+  assert.equal(temperatureK.max, 50000);
 });
 
 test("get_stats returns text whose JSON has width === 100", async () => {
@@ -84,7 +98,7 @@ test("propose_edit / approve_edit / reject_edit lifecycle", async () => {
   assert.deepEqual(JSON.parse(rejContent[0].text!), { deleted: false });
 });
 
-test("a verb exiting 2 becomes a tool error carrying the stderr line", async () => {
+test("a verb exiting 2 becomes a tool error carrying the stderr line, prefixed REJECTED:", async () => {
   const raw = path.join(tmpDir, "unknown-key.arw");
   await fs.writeFile(raw, "");
   const result = await client.callTool({
@@ -93,7 +107,71 @@ test("a verb exiting 2 becomes a tool error carrying the stderr line", async () 
   });
   assert.equal(result.isError, true);
   const content = result.content as Array<{ type: string; text?: string }>;
+  assert.match(content[0].text!, /^REJECTED: /);
   assert.match(content[0].text!, /unknown keys/);
+});
+
+test("propose_edit with an out-of-range temperatureK is REJECTED, not merged", async () => {
+  const raw = path.join(tmpDir, "too-cold.arw");
+  await fs.writeFile(raw, "");
+  const result = await client.callTool({
+    name: "propose_edit",
+    arguments: { path: raw, edits: { temperatureK: 150, tint: 15 } },
+  });
+  assert.equal(result.isError, true);
+  const content = result.content as Array<{ type: string; text?: string }>;
+  assert.match(content[0].text!, /^REJECTED: temperatureK 150/);
+});
+
+test("propose_edit accumulates onto an existing proposed file: second call passes --state", async () => {
+  const raw = path.join(tmpDir, "accumulate.arw");
+  await fs.writeFile(raw, "");
+  const stateFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-state.txt");
+
+  const first = await client.callTool({
+    name: "propose_edit",
+    arguments: { path: raw, edits: { exposureEv: 0.5 } },
+  });
+  assert.equal(first.isError, undefined);
+  const afterFirst = (await fs.readFile(stateFile, "utf8")).trim();
+  assert.equal(afterFirst, "<none>", "first call has no existing proposed file to pass as --state");
+
+  const second = await client.callTool({
+    name: "propose_edit",
+    arguments: { path: raw, edits: { tint: 5 } },
+  });
+  assert.equal(second.isError, undefined);
+  const afterSecond = (await fs.readFile(stateFile, "utf8")).trim();
+  assert.equal(afterSecond, raw.replace(/\.[^.]+$/, ".proposed.json"), "second call passes the existing proposed file as --state");
+});
+
+test("propose_edit reset: true ignores an existing proposed file: no --state passed", async () => {
+  const raw = path.join(tmpDir, "reset.arw");
+  await fs.writeFile(raw, "");
+  const stateFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-state.txt");
+
+  await client.callTool({ name: "propose_edit", arguments: { path: raw, edits: { exposureEv: 0.5 } } });
+  const resetResult = await client.callTool({
+    name: "propose_edit",
+    arguments: { path: raw, edits: { tint: 5 }, reset: true },
+  });
+  assert.equal(resetResult.isError, undefined);
+  const afterReset = (await fs.readFile(stateFile, "utf8")).trim();
+  assert.equal(afterReset, "<none>", "reset: true must not pass --state even though a proposed file exists");
+});
+
+test("propose_edit result text includes the merged state", async () => {
+  const raw = path.join(tmpDir, "state-passthrough.arw");
+  await fs.writeFile(raw, "");
+  const result = await client.callTool({
+    name: "propose_edit",
+    arguments: { path: raw, edits: { exposureEv: 0.5 } },
+  });
+  assert.equal(result.isError, undefined);
+  const content = result.content as Array<{ type: string; text?: string }>;
+  assert.match(content[0].text!, /"state"/);
+  const parsed = JSON.parse(content[0].text!);
+  assert.equal(typeof parsed.state, "object");
 });
 
 test("get_proxy clamps maxPx to 2048 before it ever reaches the binary", async () => {
