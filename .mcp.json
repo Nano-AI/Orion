@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "orion": {
+      "command": "node",
+      "args": ["/Users/grootbeat/Documents/Orion/mcp/server.ts"],
+      "env": {
+        "ORION_BIN": "/Users/grootbeat/Documents/Orion/build/Orion.app/Contents/MacOS/Orion"
+      }
+    }
+  }
+}
