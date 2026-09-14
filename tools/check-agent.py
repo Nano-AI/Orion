@@ -110,7 +110,7 @@ def main():
 
     problems = []
     checks_passed = 0
-    checks_total = 7
+    checks_total = 10
 
     # Copy sample to temp directory
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -364,6 +364,129 @@ def main():
                         problems.append(f"Check 7: unexpected response format")
             except Exception as e:
                 problems.append(f"Check 7 (reject_edit): {e}")
+
+            # Check 8: describe_edits → JSON has temperatureK with min ≥ 1000 and absolute true; ≥ 30 keys
+            try:
+                keys_resp = call(proc, "tools/call", {
+                    "name": "describe_edits",
+                    "arguments": {},
+                }, req_id, TIMEOUT)
+                req_id += 1
+
+                if keys_resp.get("error"):
+                    problems.append(f"Check 8 (describe_edits): {keys_resp['error']['message']}")
+                else:
+                    content = keys_resp.get("result", {}).get("content", [{}])[0]
+                    if content.get("type") == "text":
+                        keys_data = json.loads(content.get("text", "{}"))
+                        keys_array = keys_data.get("keys", []) if isinstance(keys_data, dict) else []
+                        num_keys = len(keys_array)
+
+                        # Find temperatureK entry
+                        temp_entry = None
+                        for key_obj in keys_array:
+                            if key_obj.get("name") == "temperatureK":
+                                temp_entry = key_obj
+                                break
+
+                        temp_min = temp_entry.get("min") if temp_entry else None
+                        temp_absolute = temp_entry.get("absolute") if temp_entry else None
+
+                        if num_keys >= 30 and (temp_min is None or temp_min >= 2000) and temp_absolute == True:
+                            print(f"ok  describe_edits")
+                            checks_passed += 1
+                        else:
+                            problems.append(f"Check 8: num_keys={num_keys} (need ≥30), temperatureK.min={temp_min} (need ≥2000), absolute={temp_absolute} (need True)")
+                    else:
+                        problems.append(f"Check 8: expected text content, got {content.get('type')}")
+            except Exception as e:
+                problems.append(f"Check 8 (describe_edits): {e}")
+
+            # Check 9: propose_edit with out-of-range temperatureK → rejected, no proposed file written
+            raw3_path = tmpdir / f"{SAMPLE_RAW[:-4]}_3.ARW"
+            shutil.copy2(raw_path, raw3_path)
+            proposed3_path = raw3_path.with_name(f"{raw3_path.stem}.proposed.json")
+
+            try:
+                reject_prop_resp = call(proc, "tools/call", {
+                    "name": "propose_edit",
+                    "arguments": {"path": str(raw3_path), "edits": {"temperatureK": 150}},
+                }, req_id, TIMEOUT)
+                req_id += 1
+
+                result = reject_prop_resp.get("result", {})
+                if result.get("isError") == True:
+                    # This is expected to have an error
+                    content = result.get("content", [{}])[0]
+                    if content.get("type") == "text":
+                        error_text = content.get("text", "")
+                        if error_text.startswith("REJECTED:") and "temperatureK" in error_text and "150" in error_text:
+                            if not proposed3_path.exists():
+                                print(f"ok  propose_edit_rejected")
+                                checks_passed += 1
+                            else:
+                                problems.append(f"Check 9: proposed file was created despite rejection at {proposed3_path}")
+                        else:
+                            problems.append(f"Check 9: error text '{error_text}' does not match expected pattern")
+                    else:
+                        problems.append(f"Check 9: expected text error content, got {content.get('type')}")
+                else:
+                    problems.append(f"Check 9: expected isError=True but got {result}")
+            except Exception as e:
+                problems.append(f"Check 9 (propose_edit_rejected): {e}")
+
+            # Check 10: propose_edit accumulation and reset
+            raw4_path = tmpdir / f"{SAMPLE_RAW[:-4]}_4.ARW"
+            shutil.copy2(raw_path, raw4_path)
+            proposed4_path = raw4_path.with_name(f"{raw4_path.stem}.proposed.json")
+
+            try:
+                # First proposal: exposureEv 0.5
+                prop1_resp = call(proc, "tools/call", {
+                    "name": "propose_edit",
+                    "arguments": {"path": str(raw4_path), "edits": {"exposureEv": 0.5}},
+                }, req_id, TIMEOUT)
+                req_id += 1
+
+                result1 = prop1_resp.get("result", {})
+                if result1.get("isError") == True:
+                    problems.append(f"Check 10a (propose_edit exposureEv): {result1.get('content', [{}])[0].get('text', '')}")
+                else:
+                    # Second proposal with reset: saturation 0.5, reset true
+                    prop2_resp = call(proc, "tools/call", {
+                        "name": "propose_edit",
+                        "arguments": {"path": str(raw4_path), "edits": {"saturation": 0.5}, "reset": True},
+                    }, req_id, TIMEOUT)
+                    req_id += 1
+
+                    result2 = prop2_resp.get("result", {})
+                    if result2.get("isError") == True:
+                        problems.append(f"Check 10b (propose_edit reset): {result2.get('content', [{}])[0].get('text', '')}")
+                    else:
+                        content = result2.get("content", [{}])[0]
+                        if content.get("type") == "text":
+                            result_obj = json.loads(content.get("text", "{}"))
+                            state = result_obj.get("state", {})
+                            exp_ev = state.get("exposureEv")
+                            sat = state.get("saturation")
+
+                            # After reset, exposureEv should be 0 or base value (not 0.5)
+                            # saturation should be 0.5
+                            if (exp_ev == 0 or exp_ev is None) and sat == 0.5:
+                                print(f"ok  propose_edit_reset")
+                                checks_passed += 1
+                                # Clean up
+                                reject_final_resp = call(proc, "tools/call", {
+                                    "name": "reject_edit",
+                                    "arguments": {"path": str(raw4_path)},
+                                }, req_id, TIMEOUT)
+                                req_id += 1
+                            else:
+                                problems.append(f"Check 10: after reset, exposureEv={exp_ev} (expected 0), saturation={sat} (expected 0.5)")
+                        else:
+                            problems.append(f"Check 10b: expected text content, got {content.get('type')}")
+            except Exception as e:
+                problems.append(f"Check 10 (propose_edit_reset): {e}")
 
         finally:
             proc.terminate()

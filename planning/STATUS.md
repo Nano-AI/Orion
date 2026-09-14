@@ -26,12 +26,18 @@ bench.
 
 **Last updated:** 2026-09-13 — the agent surface POC (#243-#246): a fifth CLI
 mode dispatches to MCP server, which speaks JSON-RPC over Orion's binary; no
-RAW leaves the machine, no sidecar writes until a human approves.
+RAW leaves the machine, no sidecar writes until a human approves. **Incident
+#247**: a model called `propose_edit` with `temperatureK: 150` as a delta (not
+absolute), nothing said the vocabulary, proxy rendered black, further proposals
+merged onto poisoned file, model approved. Fix: validate at merge against
+product's slider ranges, prefix rejections "REJECTED:", publish the vocabulary
+via `describe_edits`, document absolute values. All 8 gates now pass 10/10.
 
 **Recent sessions** — full write-ups below, older ones in `HISTORY.md`:
 
 | Date | What landed |
 |---|---|
+| 2026-09-13b | **Agent edits validated and vocabulary published (#247).** Out-of-range `temperatureK: 150` was accepted and rendered the photo black. Fix: `apply` validates every edit against product's slider ranges from `app/DevelopPanels+*.swift:88-116`, rejects with exit 2; MCP server prefixes "REJECTED:" so the model reads it as rejection not glitch; `describe_edits` / `keys` verb publishes 44-key vocabulary (unit, range, default, note); `propose_edit` documents all values are absolute. Unit test in `mcp/server.test.ts` validates prefix. Gate 8 extended with checks 8-10: describe_edits has ≥30 keys with temperatureK.min ≥ 2000 and absolute: true; propose_edit {temperatureK: 150} rejects with "REJECTED: temperatureK 150" and writes no proposed file; propose_edit with reset: true discards prior proposal. All 8 gates pass (1034/4148/244/6/3/2+4/427/10 checks). Follow-ups: mean-luminance floor on get_proxy results would have caught tonight's black render; in-app proxy check before approve. |
 | 2026-09-13 | **The agent surface POC, licensed proprietary.** The MCP server (#245) pairs with `--agent` CLI mode (#244) to cull and edit RAW files without the RAW reaching the model — it sees proxies and numbers, proposes edits to a `.json` file beside the RAW (#246), and nothing touches the sidecar until the human approves in the client's chat. Seven tools, gate passes 7/7; the eighth gate (`check-agent.py`) runs real server against `samples/_PIC8095.ARW`, 7/7 in 3.5 s. #243: Orion proprietary from 2026-09-13. Commits through `abf3a51` remain Apache-2.0; `NOTICE` holds all third-party licenses unchanged. ⚠ Distributed binary needs Homebrew dylibs bundled and re-pathed (from `planning/LICENSE-AUDIT.md`). Follow-ups queued: deep-merge composite fields in `apply`; in-app approve/deny diff view; Apple Vision blink and near-duplicate culling; restore-failure stderr cosmetics; measure agent culling time on real shoot. |
 | 2026-09-09b | **The landing page, reworked against four taste skills** — audit first, targeted evolution, no rewrite. Nineteen hairlined register rows became six groups in a grid that fills at every breakpoint, all 22 feature strings byte-identical; the footer gained the four routes out of the page; the frame counter and the hero's scroll cue retired, taking an `IntersectionObserver` and 49 lines with them. Zero em-dashes, `rel=canonical`, 44-point targets, `prefers-reduced-transparency` — #241, #242 |
 | 2026-09-09 | **The develop panels, quieted.** ~200 tick marks and 40 knurled thumbs cut back to what a camera scale actually needs; the mixer swatches and the three grading wheels brought under #63's chroma rule, which they had never been inside; one typographic register (engraved names, sentence-case buttons); section rhythm 26/11/9; PRESETS stopped clipping. Two a11y fixes no check can see: five icon-only toolbar buttons had no spoken name, and the swatches had 16-point targets — #234-#240 |
