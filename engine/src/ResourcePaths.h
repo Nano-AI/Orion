@@ -1,14 +1,14 @@
 /*  Where the shaders and the lens database live at runtime.
  *
- *  The build hands the engine absolute paths into the source tree —
- *  ORION_SHADER_DIR and ORION_DATA_DIR — which is right for the tests and the
- *  bench, and wrong for anything a user installs: those paths do not exist on
- *  their machine, so a shipped app finds no kernels and dies on the first open.
+ *  Inside an app bundle the resources sit in Contents/Resources. Outside one,
+ *  as for the tests and the bench, they are found from the build directory (the
+ *  nearest CMakeCache.txt above the executable) by the paths relative to it that
+ *  the build hands in: ORION_SHADER_DIR_REL and ORION_DATA_DIR_REL.
  *
- *  So the paths are resolved rather than baked. Inside an app bundle the
- *  resources sit in Contents/Resources; outside one, the compile-time path is
- *  still correct and still used. One rule, both cases, and nothing to remember
- *  when running the bench.
+ *  Never an absolute path compiled in. That was right for the tests and wrong
+ *  twice over for anything a user installs: the path does not exist on their
+ *  machine, so a shipped app found no kernels, and it spelled out the builder's
+ *  home directory inside the binary (#266).
  */
 
 #pragma once

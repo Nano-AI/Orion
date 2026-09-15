@@ -42,3 +42,7 @@ directly rather than through SwiftPM's plugin pipeline:
 Re-vendor: `git clone --depth 1 --branch <tag> https://github.com/migueldeicaza/SwiftTerm`,
 rsync Sources/SwiftTerm/ over this directory with the excludes above, then
 re-run BuildInfoGenerator as described and bump the tag/commit here.
+
+Local change: Buffer.dump() (no callers) writes to the temporary directory, not
+upstream's hardcoded /Users/<author>/Downloads/Logs, so no home path is compiled
+into Orion (DECISIONS #266).

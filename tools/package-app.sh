@@ -5,8 +5,9 @@
 # The development bundle is not redistributable, and none of the reasons are
 # obvious from looking at it:
 #
-#   1. The kernels are not in it. ORION_SHADER_DIR is an absolute path into this
-#      build tree, so a copied app finds no metallibs and dies on the first open.
+#   1. The kernels are not in it. Outside a bundle the engine finds them from
+#      the build directory it was built in, so a copied app finds no metallibs
+#      and dies on the first open.
 #      Same for data/lensfun. src/ResourcePaths.cpp prefers Contents/Resources
 #      when it exists, which is what this script fills in.
 #   2. It links Homebrew's libraw by absolute path, and libraw pulls libomp,
@@ -225,6 +226,17 @@ strip_rpaths "$BIN"
 for lib in "$FW"/*.dylib; do strip_rpaths "$lib"; done
 echo "  rpaths    Homebrew search paths removed"
 
+# ── Debug map ───────────────────────────────────────────────────────────────
+#
+# ⚠ The build is RelWithDebInfo, so the binary carries a debug map: an entry per
+# object file and source directory, each an absolute path into the checkout,
+# which is to say the builder's home directory, forty-eight times over. It is
+# there for dsymutil on this machine and no use to anyone the app is handed to.
+# `strip -S` drops those entries and keeps the symbol table, so a crash report
+# still names functions. Before signing, because stripping invalidates it.
+strip -S "$BIN"
+echo "  stripped  debug map"
+
 # ── Licenses ────────────────────────────────────────────────────────────────
 #
 # Copied verbatim from the installed packages, never retyped: LibRaw is
@@ -292,6 +304,28 @@ for target in "$BIN" "$FW"/*.dylib; do
 done
 ((leftover == 0)) || exit 1
 echo "  verified  no paths outside the bundle, and none searched"
+
+# ── Verify it names nobody ──────────────────────────────────────────────────
+#
+# The check above, for a different leak: nothing in the bundle may say who built
+# it or where. The 0.5.0-alpha.4 image carried /Users/<name>/... in the binary,
+# from the debug map and from resource paths the engine compiled in absolutely,
+# and the app looked no different for it (#266). A byte search, not a parse, so
+# a path in any file counts.
+#
+# ⚠ **Anyone's home directory, not only the builder's.** Vendored SwiftTerm
+# carried its author's /Users/<name>/Downloads/Logs, which a check for this
+# machine's user name passes without a word.
+literal=( -e "$HOME/" )
+email="$(git -C "$ROOT" config user.email 2>/dev/null || true)"
+if [[ -n "$email" ]]; then literal+=( -e "$email" ); fi
+leaks="$( { grep -rlaE '/Users/[^/[:space:]]+/' "$APP"; grep -rlaF "${literal[@]}" "$APP"; } | sort -u || true)"
+if [[ -n "$leaks" ]]; then
+    echo "error: the bundle names a person, in:" >&2
+    echo "$leaks" | sed "s|^$APP/|    |" >&2
+    exit 1
+fi
+echo "  verified  no home directory, user name or git email inside"
 
 # ── The disk image ──────────────────────────────────────────────────────────
 STAGE="$(mktemp -d)"

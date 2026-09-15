@@ -35,10 +35,15 @@ target_include_directories(orion_engine
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+# Relative to the build directory, never absolute: ResourcePaths finds the build
+# directory at runtime. An absolute path here is the builder's home directory,
+# compiled into every binary that links the engine, the shipped app included (#266).
+file(RELATIVE_PATH ORION_SHADER_DIR_REL ${CMAKE_BINARY_DIR} ${ORION_SHADER_DIR})
+file(RELATIVE_PATH ORION_DATA_DIR_REL ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/data)
 target_compile_definitions(orion_engine
     PRIVATE ORION_VERSION_STRING="${PROJECT_VERSION}"
-            ORION_SHADER_DIR="${ORION_SHADER_DIR}"
-            ORION_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+            ORION_SHADER_DIR_REL="${ORION_SHADER_DIR_REL}"
+            ORION_DATA_DIR_REL="${ORION_DATA_DIR_REL}"
 )
 
 add_dependencies(orion_engine orion_shaders)

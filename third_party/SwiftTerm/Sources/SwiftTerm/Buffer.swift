@@ -1565,7 +1565,9 @@ public final class Buffer {
             let cstr = String (format: "%03d", _lines.debugGetCyclicIndex(i))
             str += "[\(istr):\(cstr)]\(flag)\(txt)\n"
         }
-        let file = "/Users/miguel/Downloads/Logs/dump-\(Buffer.n)"
+        // Orion: upstream wrote to its author's own /Users/<name>/Downloads/Logs, a home
+        // path compiled into every app that vendors this. The temporary directory instead.
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("SwiftTerm-dump-\(Buffer.n)").path
         do {
             try str.write(to: URL.init (fileURLWithPath: file), atomically: false, encoding: .utf8)
 
