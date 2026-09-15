@@ -90,7 +90,10 @@ main, .footer { position: relative; z-index: 1; }
 .hero__copy { position: absolute; left: 0; right: 0; bottom: clamp(36px, 8vh, 96px); z-index: 3; pointer-events: none; }
 .hero__copy .display { max-width: 13ch; }
 .hero__sub { margin-top: 22px; max-width: 29rem; text-wrap: balance; font-size: clamp(1rem, 0.95rem + 0.3vw, 1.2rem); line-height: 1.5; color: rgba(236, 236, 238, 0.8); }
+.hero__cta, .alpha__cta { display: flex; flex-wrap: wrap; gap: 12px; }
 .hero__cta { margin-top: 30px; }
+/* Contact is glass on the photograph (base.css), beside the solid Download */
+.hero__cta .btn--ghost, .alpha__cta .btn--ghost { border-color: transparent; color: var(--text); }
 .hero__cta a { pointer-events: auto; }
 @media (max-width: 760px) { .hero .cmp > img { object-position: 60% 50%; } }
 

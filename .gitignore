@@ -117,3 +117,6 @@ __pycache__/
 # --- MCP server (mcp/) -------------------------------------------------------
 # npm install output; package.json/package-lock.json pin what's needed.
 mcp/node_modules/
+
+# The landing page's download is fetched from the newest release at deploy (.github/workflows/pages.yml, #268)
+web/download/
