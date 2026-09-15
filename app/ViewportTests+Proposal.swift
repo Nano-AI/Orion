@@ -43,13 +43,13 @@ extension ViewportTests {
     static func testProposalSummaryTruncatesAtFive() {
         let keys = ["blacks", "contrast", "exposureEv", "highlights", "shadows", "vibrance", "whites"]
         let got = Proposal.summary(keys: keys)
-        report(got == "Proposal: blacks, contrast, exposureEv, highlights, shadows +2",
+        report(got == "Proposal: Blacks, Contrast, Exposure, Highlights, Shadows +2",
                "shows the first five keys and counts the rest", got)
     }
 
     static func testProposalSummaryListsFewKeysInFull() {
         let got = Proposal.summary(keys: ["exposureEv", "contrast"])
-        report(got == "Proposal: exposureEv, contrast",
+        report(got == "Proposal: Exposure, Contrast",
                "two keys need no +N tail", got)
     }
 
@@ -107,7 +107,7 @@ extension ViewportTests {
     /// baseline `.captureOriginal` just captured against the *committed*
     /// state — and the recapture that follows runs with `engine.state`
     /// already the *proposed* one, so the "Original" side would bake in the
-    /// proposal's own white balance and geometry. `.captureOriginal` before
+    /// proposal's own geometry (and, before #269, its white balance). `.captureOriginal` before
     /// `.setCompare` before `.restoreProposed` is the fix: `compareSplit`
     /// already reads "comparing" by the time `.restoreProposed` renders, so
     /// `refreshOriginal`'s own guard leaves the valid capture alone.

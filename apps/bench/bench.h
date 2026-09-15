@@ -122,5 +122,6 @@ void autoEnhance(Bench& b);         ///< bench_compose.cpp — it converged
 void nodeProfiles(Bench& b);        ///< bench_profile.cpp — where a clarity or dehaze drag goes
 void brushProfiles(Bench& b);       ///< bench_brush.cpp — where a brush stroke goes
 void exportTiming(Bench& b);        ///< bench_profile.cpp — what a write costs
+bool fusionSweep(const std::string& path); ///< focused full/preview fusion invalidation probe
 
 }  // namespace bench

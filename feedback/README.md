@@ -14,6 +14,7 @@ how a defect got past every test — which is usually the more useful half.
 
 | File | What it is |
 |---|---|
+| `2026-09-15-engine-ui-audit.md` | Paired fusion optimization, desktop interaction fixes, nine-gate results and remaining exposure, memory and UI-coverage gaps (#271). |
 | `2026-09-15-website-audit.md` | Website interaction/fallback bugs, responsive polish and local browser verification on `web/site-audit-polish`. |
 | `2026-07-28-senior-review.md` | Outside senior review of the whole repository. 17 findings, ranked, each with file:line evidence and a concrete fix. The three P1s and finding 4 are closed; 6–14 are open. |
 | `2026-07-28-performance-and-quality.md` | Self-assessment written for a reviewer who has not seen the repository: what to run, the latency table, how correctness is defended, and a plainly stated list of known weaknesses. Contains corrections to its own earlier claims. |

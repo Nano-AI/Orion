@@ -12,6 +12,10 @@ extension Scenario {
     static func reportStep(_ verb: String, _ args: [String], engine: Engine,
                            targeted: TargetedAdjust) throws -> Bool {
         switch verb {
+        case "workflowcheck":
+            guard let photo else { throw Bad(what: "workflowcheck needs an open photo") }
+            try checkDesktopWorkflow(photo: photo)
+
         case "measure":
             guard args.count >= 2 else { throw Bad(what: "measure needs a region and a name") }
             let r = args[0].split(separator: ",").compactMap { Double($0) }

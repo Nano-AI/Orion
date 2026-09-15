@@ -170,6 +170,8 @@ import SwiftUI
 ///     identical <path> <path>           two files, byte for byte
 ///     shot <path>                       write a PNG
 ///     print <text>
+///     workflowcheck                     isolated disk/GPU checks of preview,
+///                                       Compare, undo and proposal review
 ///
 /// Exits nonzero if any `expect` fails — **and if the run asserted less than
 /// this file's floor**, which defaults to one check. See `minChecks`.

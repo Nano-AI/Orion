@@ -128,7 +128,7 @@ extension Editor {
                 if engine.isLoaded && mode == .develop {
                     Text("\(viewport.percent)%")
                         .font(.system(size: 11)).monospacedDigit()
-                        .foregroundStyle(Palette.faint)
+                        .foregroundStyle(Palette.dim)
                         .frame(width: 42, alignment: .trailing)
                 }
                 Button {
@@ -167,26 +167,26 @@ extension Editor {
             HStack(spacing: 7) {
                 iconChip("arrow.uturn.backward",
                          name: engine.history.undoLabel.map { "Undo \($0)" } ?? "Undo",
-                         enabled: engine.history.canUndo && mode == .develop) {
+                          enabled: engine.history.canUndo && mode == .develop && !engine.documentEditsLocked) {
                     engine.undo()
                 }
 
                 iconChip("arrow.uturn.forward",
                          name: engine.history.redoLabel.map { "Redo \($0)" } ?? "Redo",
-                         enabled: engine.history.canRedo && mode == .develop) {
+                          enabled: engine.history.canRedo && mode == .develop && !engine.documentEditsLocked) {
                     engine.redo()
                 }
 
                 iconChip("rotate.left", name: "Rotate left",
-                         enabled: engine.isLoaded && mode == .develop) {
-                    engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset()
+                          enabled: engine.isLoaded && mode == .develop && !engine.documentEditsLocked) {
+                    engine.rotate(-1); viewport.reset()
                 }
                 iconChip("rotate.right", name: "Rotate right",
-                         enabled: engine.isLoaded && mode == .develop) {
-                    engine.edit("Rotate") { engine.rotate(1) }; viewport.reset()
+                          enabled: engine.isLoaded && mode == .develop && !engine.documentEditsLocked) {
+                    engine.rotate(1); viewport.reset()
                 }
 
-                chip("Reset", enabled: engine.isLoaded && mode == .develop) {
+                chip("Reset", enabled: engine.isLoaded && mode == .develop && !engine.documentEditsLocked) {
                     engine.resetEdits()
                 }
                 .help("Put every adjustment back")
@@ -302,16 +302,12 @@ extension Editor {
             ForEach(ToolTab.allCases) { t in
                 let selected = t == tab
                 Button { withAnimation(.easeOut(duration: 0.16)) { tab = t } } label: {
-                    // ⚠ Nine point rather than the panel's ten, and one line
-                    // rather than as many as it likes. A sixth tab arrived with
-                    // the longest name of the six, and PRESETS wrapped inside
-                    // its plate — the word broke after PRESET and the S sat on a
-                    // second line, half outside the tab. Every label is set a
-                    // point smaller so the bar stays one typographic rank rather
-                    // than one tab being visibly different from the other five.
+                    // Ten-point functional text, without tracking so all seven
+                    // names fit. Unselected tabs are enabled navigation, not
+                    // disabled controls, so they use the readable secondary ink.
                     Engraved.Label(text: t.title,
-                                   color: selected ? Palette.text : Palette.faint,
-                                   size: 9, tracking: 0.2)
+                                   color: selected ? Palette.text : Palette.dim,
+                                   size: 10, tracking: 0)
                         .lineLimit(1)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity)
@@ -342,7 +338,7 @@ extension Editor {
         // silently) — see the note on `ProposalWatcher.isLive`. Switching
         // tabs is the smallest way in, so it is locked here; the panel
         // content itself is locked in `OrionApp+Tools.swift`'s `tools`.
-        .disabled(ProposalWatcher.shared.isLive)
+        .disabled(engine.documentEditsLocked)
     }
 
     private var hint: String {
@@ -419,8 +415,10 @@ extension Editor {
                         .lineLimit(2)
                         .textSelection(.enabled)
                 } else {
-                    Engraved.Label(text: hint, color: Palette.faint, size: 9)
-                        .lineLimit(1)
+                    Text(hint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.dim)
+                        .lineLimit(2)
                 }
                 // Which photograph this is. Nothing else on screen says so —
                 // `Library.Photo.name` reaches VoiceOver and a filmstrip
@@ -438,27 +436,27 @@ extension Editor {
                 // `ProposalWatcher`. Shown only while one is actually up, so
                 // the footer costs nothing on every ordinary session.
                 if case let .previewing(keys) = ProposalWatcher.shared.phase {
-                    HStack(spacing: 8) {
-                        Engraved.Label(text: Proposal.summary(keys: keys),
-                                       color: Palette.accent, size: 9)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        // The develop panels are locked for the whole
-                        // preview (tabBar here, the panel content in
-                        // OrionApp+Tools.swift's `tools`) — said here too,
-                        // beside the only two controls still live, since a
-                        // photographer reaching for a slider that does not
-                        // respond needs the reason next to their hand.
-                        Engraved.Label(text: "Approve or reject to keep editing",
-                                       color: Palette.faint, size: 9)
-                            .lineLimit(1)
-                        chip("Approve", enabled: true) { ProposalWatcher.shared.approve() }
-                            .keyboardShortcut(.return, modifiers: [.command])
-                            .help("Approve the proposed edit  (⌘⏎)")
-                        chip("Reject", enabled: true) { ProposalWatcher.shared.reject() }
-                            .keyboardShortcut(.escape, modifiers: [.command])
-                            .help("Reject the proposed edit  (⌘⎋)")
+                    VStack(alignment: .leading, spacing: 7) {
+                        Engraved.Label(text: "Proposed edit", color: Palette.accent)
+                        Text(keys.map(Proposal.productLabel).joined(separator: ", "))
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.text)
+                            .lineLimit(2)
+                            .help(keys.map(Proposal.productLabel).joined(separator: ", "))
+                        Text("Approve or reject to keep editing. Both sides use the proposed framing.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.dim)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            chip("Approve", enabled: true) { ProposalWatcher.shared.approve() }
+                                .keyboardShortcut(.return, modifiers: [.command])
+                                .help("Approve the proposed edit  (⌘⏎)")
+                            chip("Reject", enabled: true) { ProposalWatcher.shared.reject() }
+                                .keyboardShortcut(.escape, modifiers: [.command])
+                                .help("Reject the proposed edit  (⌘⎋)")
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
                 HStack(spacing: 0) {
                     Engraved.Readout(text: "\(engine.imageWidth) × \(engine.imageHeight)",

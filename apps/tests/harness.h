@@ -137,6 +137,7 @@ void testDehazeGpu();
 void testCreativeLut();
 void testExposureFusionMath();
 void testExposureFusionGpu();
+void testFusionInvalidationGpu();
 void testAutoEnhanceStats();
 void testMaskGpu();
 void testMaskBrushGpu();

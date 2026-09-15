@@ -51,11 +51,12 @@ extension Editor {
                         // handle to drag and nothing naming the two sides — the
                         // split itself was happening in the shader all along.
                         .overlay {
-                            if tab == .crop {
+                            if tab == .crop && !engine.documentEditsLocked {
                                 GeometryReader { canvasGeo in
                                     CropOverlay(engine: engine,
                                                 frame: photoFrame(in: canvasGeo.size),
                                                 bounds: canvasGeo.size)
+                                        .allowsHitTesting(!engine.documentEditsLocked)
                                 }
                                 .clipped()
                             }
@@ -73,19 +74,22 @@ extension Editor {
                         // armed, since the two live on different tabs, and this
                         // is the belt to that brace.
                         .overlay {
-                            if tab == .detail && (!engine.spots.isEmpty || engine.tool == .spot) {
+                            if tab == .detail && !engine.documentEditsLocked
+                                && (!engine.spots.isEmpty || engine.tool == .spot) {
                                 GeometryReader { canvasGeo in
                                     SpotOverlay(engine: engine,
                                                 map: pictureMap(in: canvasGeo.size))
+                                        .allowsHitTesting(!engine.documentEditsLocked)
                                 }
                                 .clipped()
                             }
                         }
                         .overlay {
-                            if tab == .mask && engine.maskKind != 0 {
+                            if tab == .mask && !engine.documentEditsLocked && engine.maskKind != 0 {
                                 GeometryReader { canvasGeo in
                                     MaskOverlay(engine: engine,
                                                 map: pictureMap(in: canvasGeo.size))
+                                        .allowsHitTesting(!engine.documentEditsLocked)
                                 }
                                 .clipped()
                             }

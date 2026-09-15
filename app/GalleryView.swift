@@ -183,7 +183,7 @@ struct GalleryView: View {
 
             Text(photo.name)
                 .font(.system(size: 10))
-                .foregroundStyle(isFocused ? Palette.text : Palette.faint)
+                .foregroundStyle(isFocused ? Palette.text : Palette.dim)
                 .lineLimit(1)
         }
         .contentShape(Rectangle())

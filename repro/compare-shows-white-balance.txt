@@ -1,0 +1,34 @@
+# Reported: "Compare is not working for temperature."
+#
+# Compare's original side is the photograph as shot. It was written before the
+# app could read the camera's white balance, so the neutral render copied the
+# CURRENT temperature and tint rather than fall back to a 0 K picture, and it
+# kept doing so after `Engine.defaults` began holding the camera's reading. A
+# white balance edit therefore showed on both halves, and compare could never
+# show one.
+#
+# A strong cool edit moves saturation and luma both; the original half has to
+# keep reading what the as-shot render read, and the edited half what the edit
+# reads.
+open samples/_PIC8220.ARW
+
+measure 0.10,0.40,0.20,0.20 asShotLeft
+set temperature 2800
+set tint 30
+measure 0.70,0.40,0.20,0.20 editedRight
+measure 0.10,0.40,0.20,0.20 editedLeft
+expect editedLeft != asShotLeft
+
+compare 0.5
+measure 0.10,0.40,0.20,0.20 originalLeft canvas
+measure 0.70,0.40,0.20,0.20 originalRight canvas
+expect originalLeft == asShotLeft
+expect originalRight == editedRight
+
+# A warm edit made with the split down, then compared: the original side is
+# still the camera's white balance, not the one just set.
+compare 1
+set temperature 9000
+compare 0.5
+measure 0.10,0.40,0.20,0.20 originalAfterWarm canvas
+expect originalAfterWarm == asShotLeft

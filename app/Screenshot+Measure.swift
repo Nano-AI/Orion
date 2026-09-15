@@ -21,8 +21,9 @@ extension Screenshot {
     /// frame. Flattened, the crop preview's surround came out black instead of
     /// the interface's own gray, which would have made every straighten
     /// screenshot a lie.
-    static func developed(_ engine: Engine) -> NSImage? {
-        guard let src = engine.outputTexture else { return nil }
+    static func developed(_ engine: Engine, includingCompare: Bool = false) -> NSImage? {
+        guard let src = includingCompare && engine.comparing
+            ? CanvasBlit.composite(engine: engine) : engine.outputTexture else { return nil }
 
         // Only the top-left rectangle of the texture is live; the rest is the
         // slack the graph allocates so a rotation never needs a recompile.

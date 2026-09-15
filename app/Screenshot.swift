@@ -156,6 +156,8 @@ enum Screenshot {
     /// Runs the capture and exits. Never returns.
     static func run(_ options: Options) -> Never {
         var o = options
+        var proposalFolder: URL?
+        let proposalAutosave = Autosave()
 
         // Not a picture: the one scene that has to be the real `Scene`.
         if o.scene == "menu" { checkMenu() }
@@ -193,6 +195,27 @@ enum Screenshot {
                 }
             }
 
+            if o.scene == "proposal" {
+                // Pose a real watcher-driven review without writing beside the
+                // photographer's RAW. This directory is only a review fixture.
+                let folder = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("orion-review-\(UUID().uuidString)")
+                do {
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    proposalFolder = folder
+                    let raw = folder.appendingPathComponent("review.ARW")
+                    engine.edit("Exposure") { engine.exposureEv = 1 }
+                    var proposed = engine.state
+                    proposed.exposureEv = 2
+                    proposed.temperatureK = 6500
+                    proposed.shadows = 0.2
+                    proposed.highlights = -0.3
+                    proposed.saturation = 0.15
+                    try JSONEncoder().encode(proposed).write(to: Proposal.proposedURL(for: raw))
+                    ProposalWatcher.shared.attach(photo: raw, engine: engine, autosave: proposalAutosave)
+                } catch { fail("could not prepare proposal review — \(error.localizedDescription)") }
+            }
+
             // `--measure` needs the wide tail: it resolves differences that
             // eight-bit quantisation would erase, and the changes hunted in
             // this codebase are four decimal places wide. A plain screenshot
@@ -204,13 +227,13 @@ enum Screenshot {
                 engine.setWideOutput(false)
             }
 
-            let image = developed(engine)
+            let image = developed(engine, includingCompare: true)
             engine.showPlaceholder(image)
         }
 
         // The export sheet is not reachable from the editor's own hierarchy in
         // a still, so it is rendered on its own.
-        if o.scene == "export" {
+        if o.scene == "export" || o.scene == "export-tail" {
             let settings = ExportSettings()
             settings.quality = 0.82
             settings.size = .custom
@@ -237,7 +260,8 @@ enum Screenshot {
                 .preferredColorScheme(.dark)
 
             let sheetSize = CGSize(width: 380, height: 520)
-            guard let sheet = render(panel, size: sheetSize) else {
+            guard let sheet = render(panel, size: sheetSize,
+                                     scrolledToBottom: o.scene == "export-tail") else {
                 fail("the export panel produced no image")
             }
             do { try sheet.write(to: URL(fileURLWithPath: o.output)) }
@@ -321,6 +345,10 @@ enum Screenshot {
         let note = "orion: wrote \(o.output) "
             + "(\(Int(o.size.width))x\(Int(o.size.height)), scene \(o.scene))\n"
         FileHandle.standardError.write(Data(note.utf8))
+        if let folder = proposalFolder {
+            ProposalWatcher.shared.attach(photo: nil, engine: engine, autosave: proposalAutosave)
+            try? FileManager.default.removeItem(at: folder)
+        }
         exit(0)
     }
 

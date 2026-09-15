@@ -221,9 +221,8 @@ struct Editor: View {
     /// Good news, as opposed to `message`: that one presents under a
     /// "Something went wrong" title, and a completed merge announced there
     /// reads as a failure — which is exactly how it was read, the first time
-    /// a real bracket went through. ⚠ The batch summary still rides
-    /// `message` because it can genuinely be mixed news ("Exported 3,
-    /// 2 failed"); splitting that is its own small story.
+    /// a real bracket went through. Successful batch export and sync use this
+    /// too; partial failures still use `message`.
     @State var notice: String?
 
     /// Set while a segmentation model is running, so the two buttons can say so

@@ -148,6 +148,10 @@ extension Engine {
     /// expressed against the old one no longer means anything. Resetting it is
     /// honest; carrying it over would silently reframe the picture.
     func rotate(_ turns: Int32) {
+        edit("Rotate") { rotateFrame(turns) }
+    }
+
+    private func rotateFrame(_ turns: Int32) {
         suspended = true
         cropX = 0; cropY = 0; cropW = 1; cropH = 1
         // Predict the swap rather than waiting for the render to report it,

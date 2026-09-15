@@ -1,5 +1,150 @@
 # Orion — session history
 
+## Recent-session rows archived 2026-09-15, #271
+
+Moved verbatim from `STATUS.md`; commit and follow-up claims describe their original sessions.
+
+| Date | What landed |
+|---|---|
+| 2026-09-14m | **The assistant as one window (#265).** Heading, lede and note centred; one window with a single title bar holds the Claude Code pane (leading, as `app/OrionApp.swift` docks it) and the proposal compare; it shrinks on short screens so the pin fits; Saturn moved clear. Nothing committed. |
+| 2026-09-14l | **Lift-off and re-entry, glass, the assistant as one scene (#264).** The hero shrinks into space as the stars converge; the close is full-bleed and flies in out of Orion's Belt as the sky goes black; glass nav, labels and panels; Approve/Reject removed and the assistant pinned whole with a fixed-size terminal; Jupiter moved left; the gap under the close removed. Scripted scroll 59.4 fps. Nothing committed. |
+| 2026-09-14k | **The sky stops freezing the browser; Orion joined; panels, not rules (#263).** High-quality smoothing on the Milky Way's upscale was the freeze (scripted scroll 21.6 → 59.9 fps at 1440×900 2×, idle 19 → 60); the per-frame `scrollHeight` read and Mars's canvas blur are gone too. Orion is d3-celestial's body figure (Meissa and eta Ori added), cores by magnitude, in open sky added under the close, label along the belt. Section and footer hairlines removed; register and keep on a panel. Nothing committed. |
+| 2026-09-14j | **No constellations (#262).** NASA sky and WebGL removed; a generated Milky Way (no download) behind; scattered stars in three parallax layers plus dust in front; planets far to near with size-scaled parallax, Mars softened, maps inlined as data: URLs so `file://` matches the site; Saturn's ring drawn in one pass (the dark seam line); Orion's seven bright stars rise at the end with the belt lit and named. Nothing committed. |
+| 2026-09-14i | **The sky is NASA's (#261).** d3-celestial figures and `tools/build-sky.py` removed; NASA SVS Deep Star Maps 2020 star map and figure map in a WebGL stereographic sky (flat fallback for `file://`), eight bright stars checked within 2 px of SIMBAD; pan ends on Orion's Belt, lit and named; planets with real axes, aligned ring, one sun, size-scaled parallax, dust; paper turn visible again; mail back to `alpha@`. Nothing committed. |
+| 2026-09-14h | **The landing page's fifth pass (#260).** Hand-traced constellations replaced by d3-celestial data, built and checked by `tools/build-sky.py` (every figure vertex on a star, all 88); canvas-2D planets (Mars, Jupiter, Saturn; Solar System Scope, CC BY 4.0); nav links centred on the pill; papers flip at every width; Exposure slider drawn like the app's; assistant compare rests at 6%; the pier slides; mail moved to `orion@bankoti.dev`. Nothing committed. |
+| 2026-09-14g | **The landing page's fourth pass (#259).** From the developer's annotations: floating pill nav with Phosphor icons and a sliding current-section pill; logo system moved to `brand/`, mark and favicon cut from it; hero DSC00027; Claude Code logo drawn as cells; register and Keep condensed; research as typeset pages turned on scroll; the assistant's yours/proposed compare back; the close develops and tilts; a sparse star field and Orion's asterism. Nothing committed. |
+| 2026-09-14f | **The landing page's third pass (#258).** The developer's own renders (hero DSC00007, close DSC09999); the Haiku sea-stacks edit moved to a Claude Code terminal mockup in the assistant section; a real seven-render exposure sweep replaces the preview compare; the app capture in 3D with the mask lines past the frame; no stats on images. ⚠ Measured at 42.4 MP on the MacBook Air M4: 17.34 ms median, 18.90 ms p95, so the page says under 20 ms and **the M0 gate fails at 42 MP**. Nothing committed. |
+| 2026-09-14e | **Personal email off the page, no money figures, humanized copy, a new close (#257).** The developer's personal address (never committed) is replaced by `alpha@bankoti.dev`, which needs Cloudflare Email Routing before a push; `check-site.py` now fails on any personal webmail address. The $600 sum, the $10-a-month line and the structured-data price are gone and "Yours to keep" is the two filenames; copy cut and humanized, the hero is now "See every edit at full resolution."; the soft cairn close replaced by DSC09775. `check-site.py` green. Nothing committed. |
+| 2026-09-14d | **The landing page as a darkroom (#256).** Third rework, asked for as a full, premium, animation-heavy rework. Every photograph is Orion's own output from the developer's Forks shoot, with approval: the hero pins and develops DSC09787 from as shot to the developer's edit on scroll, a real capture of the app, a real 7968 px against 2540 px compare replacing #252's CSS blur, the real assistant proposal on DSC09801, a close with a healed dust spot. GSAP + ScrollTrigger + Lenis vendored instead of Motion, still no build step; three scroll-linked moments, everything else enters once. Archivo wide with Martian Mono; teal only on values Orion changed. Research by two Sonnet and one Haiku subagents. `check-site.py` and `check-decisions.py` green. Nothing committed. |
+| 2026-09-14c | **The landing page, second pass: feedback, accessibility, legibility (#255).** Audit-first against the taste skill, Vercel's Web Interface Guidelines and the Apple DESIGN.md: display weight 300 → 500 and the hero copy kept under the cars; panel engraving to `--dim`; buttons lift on hover and sink on press; nav underline on hover, teal `aria-current` on the section in view, hamburger below 760px (scrollable row with scripts off); compare labels ride the 44px grip, slider has `aria-valuetext`; Not yet gets a heading and passes contrast; the assistant demo is two real buttons with a live region; closing heading no longer repeats the CTA and the address is printed; timeline 4.9 s and waits for a visible tab. ⚠ Scroll-reveal everywhere was refused on purpose. ⚠ The Chrome MCP tab is a hidden tab: a black hero in its screenshots is a capture artefact, not a page bug. `check-site.py` green. Nothing committed. |
+| 2026-09-14b | **The landing page, rebuilt product-forward (#252-#254).** The scroll-scrubbed cinema page is gone. Full-bleed photographs, Orion's own tool column floating over the hero with one load-time develop, a draggable proxy-versus-full compare, the register as "Everything in the current build" (22 strings byte-identical, gated), the file pair and the $600 sum, citations, an honest "coming next" for the assistant, a closing photograph with the CTA. Motion 12.43.0 vendored as one script; no build step (#58 amended). ⚠ **Every GitHub link on the live site 404s** since #243: the download was dead; it is now a `mailto:` waitlist by the developer's choice. ⚠ The first pass of the rebuild was rejected in-session as generic dark-SaaS and reworked; the record of what changed is in #252. `check-site.py` is the ninth gate and `CLAUDE.md` lists it. Nothing is committed or pushed: a push to `main` deploys, and the mailto address is the developer's to confirm. |
+| 2026-09-14 | **Proposal view with in-app compare, composite edits validated, current.json watch, assistant terminal (#248-#251).** The app watches the RAW's directory for `.proposed.json`, previews proposals in compare split, Approve ⌘⏎ / Reject ⌘⎋ in footer; develop panels disable while a proposal is live. Fixed autosave order: `stopAutosave` before `captureOriginal`. `current.json` publishes the open photo to `~/Library/Application Support/Orion/current.json` so `get_stats` and `get_proxy` resolve paths from there — the model never learns which photo is open. Composite fields (`layers`, `spots`, `maskComponents`) replace whole-value with strict decoding and range validation against product sliders; why not merge-by-index? Index order is unknown to the model and would silently corrupt on mismatch. SwiftTerm v1.20.0 (MIT, commit 5d14406, 63 files) is vendored under `third_party/`, with `Color` renamed `TermColor` to avoid SwiftUI collision; hand-edit cost < package update cost. Terminal ⌘⌥A toggle, claude/codex selector, `/bin/zsh -l -c` launch so .mcp.json loads. All 8 gates pass (1034/4192/244/6/3/2+4/459/14 checks). Follow-ups: quit does not null current.json (needs terminate hook); manual edits during preview are locked not merged (known limitation); SwiftTerm upstream pulls need TermColor re-applied; maxMaskComponents 8 / maxSpots 64 not enforced by apply (Engine silently prefixes); mean-luminance floor on get_proxy; measure culling time on real shoot. |
+| 2026-09-13b | **Agent edits validated and vocabulary published (#247).** Out-of-range `temperatureK: 150` was accepted and rendered the photo black. Fix: `apply` validates every edit against product's slider ranges from `app/DevelopPanels+*.swift:88-116`, rejects with exit 2; MCP server prefixes "REJECTED:" so the model reads it as rejection not glitch; `describe_edits` / `keys` verb publishes 44-key vocabulary (unit, range, default, note); `propose_edit` documents all values are absolute. Unit test in `mcp/server.test.ts` validates prefix. Gate 8 extended with checks 8-10: describe_edits has ≥30 keys with temperatureK.min ≥ 2000 and absolute: true; propose_edit {temperatureK: 150} rejects with "REJECTED: temperatureK 150" and writes no proposed file; propose_edit with reset: true discards prior proposal. All 8 gates pass (1034/4148/244/6/3/2+4/427/10 checks). Follow-ups: mean-luminance floor on get_proxy results would have caught tonight's black render; in-app proxy check before approve. |
+| 2026-09-13 | **The agent surface POC, licensed proprietary.** The MCP server (#245) pairs with `--agent` CLI mode (#244) to cull and edit RAW files without the RAW reaching the model — it sees proxies and numbers, proposes edits to a `.json` file beside the RAW (#246), and nothing touches the sidecar until the human approves in the client's chat. Seven tools, gate passes 7/7; the eighth gate (`check-agent.py`) runs real server against `samples/_PIC8095.ARW`, 7/7 in 3.5 s. #243: Orion proprietary from 2026-09-13. Commits through `abf3a51` remain Apache-2.0; `NOTICE` holds all third-party licenses unchanged. ⚠ Distributed binary needs Homebrew dylibs bundled and re-pathed (from `planning/LICENSE-AUDIT.md`). Follow-ups queued: deep-merge composite fields in `apply`; in-app approve/deny diff view; Apple Vision blink and near-duplicate culling; restore-failure stderr cosmetics; measure agent culling time on real shoot. |
+
+## Session `2026-09-14d` - the landing page as a darkroom, #256
+
+**Asked for directly:** a full front-end rework to a premium, animation-heavy
+site, against the developer's playbook (Lenis, GSAP + ScrollTrigger, a real
+before/after, anti-slop rules), the taste skill and four linked references;
+mid-session, research subagents sized by effort.
+
+**Found before anything was designed.** The three `samples/` RAWs are the same
+moon, so the before/after the playbook is built around could not come from the
+repo, and #252's "proxy" compare was a CSS blur of a finished JPEG. The developer
+approved rendering from the open Forks shoot instead, through Orion's own
+`--agent proxy/apply` and `--screenshot`. The research (two Sonnet agents on
+photo-tool and craft/motion sites with screenshots, one Haiku agent extracting
+fonts and colours) found three things no photo-tool site does: a before/after
+provably rendered from one RAW, a latency number with the hardware named, and
+cited algorithms. The page is built on those three.
+
+| Section | What it is | Moves |
+|---|---|---|
+| hero | DSC09787 as shot → the developer's own XMP edit, full bleed; the edit's real values in the caption | pinned, scroll develops it |
+| app | real `mask-linear` capture, people-free filmstrip, status line cropped (the harness prints 0.0 ms) | enters once |
+| speed | 9.29 ms in mono; one crop rendered at 7968 px vs 2540 px enlarged | compare opens on scroll |
+| build | the 22 register strings, sticky heading | enters once |
+| keep | the real `DSC09787.ARW` / `.xmp` names and sizes, set large (#257 removed the $600 sum) | enters once |
+| research | the 8 citations as an index; DOI or PDF links only where `research/` has one | enters once |
+| assistant | DSC09801 as shot vs its real `.proposed.json`, the proposal's real changes, Approve/Reject | pinned, proposal composes |
+| close | DSC09775 developed with a real spot heal of sensor dust (#257 replaced the soft DSC09780) | nothing animates the CTA |
+
+⚠ DSC09771 (the driftwood arch) was dropped: identifiable strangers. ⚠ The compare
+is a native `<input type=range>` over the figure, so keyboard, touch and screen
+readers come free; a hand on it stops the scroll steering it.
+
+**Verified by looking, not by reading:** headless Chrome over CDP against
+`python3 -m http.server`, 1440 × 900 and 400 × 860, twelve scroll positions with
+motion, then reduced motion and `?nomotion`; no console errors over HTTP, no
+horizontal scroll at either width. ⚠ `file://` blocks the woff2 by CORS and
+full-page captures skip lazy images, both capture artefacts. ⚠ **Not verified:**
+Safari and Firefox (the range-thumb CSS is vendor-prefixed and differs), a real
+phone, the Pages deploy.
+
+**Gates:** `check-site.py` 8/8 · `check-decisions.py` 254 rows, 1-256. The
+engine and app gates were not run: nothing under `app/` or `engine/` changed.
+
+**For the developer:** the hero headline is new copy, revised again by #257 to
+"See every edit at full resolution."; "Not in the current build" for the assistant predates #248-#251;
+"Apple silicon" says nothing about 8 GB Macs (#152, #162). Commit and push are
+yours: a push to `main` deploys.
+
+**Files:** `web/index.html` 337 lines, `css/base.css` 220, `css/sections.css` 238, `js/site.js` 83, `js/motion.js` 141; vendored `gsap.js`, `ScrollTrigger.js` (3.15.0) and `lenis.js`
+(1.3.26); 17 images; `Archivo-var.woff2`, `MartianMono-var.woff2`. Deleted:
+`hero.css`, `demos.css`, `pages.css`, `main.js`, `hero.js`, `vendor/motion.js`,
+twelve old photographs, Bricolage Grotesque and JetBrains Mono. `web/` is 2.3 MB.
+
+---
+
+## Session `2026-09-14b` - the landing page, rebuilt product-forward, #252/#253/#254
+
+**Asked for directly:** rework the entire website, which "looks bad and AI
+generated", with an animation library, as a startup product page; decide the
+look; deploy Sonnet/Opus subagents to build it.
+
+**What was found before anything was designed.** The repository went private
+under #243 and **every `github.com/Nano-AI/Orion` link on the live page returns
+404**: the download button, Source, Releases, Research, the licence. The page's
+one job had been dead since 2026-09-13. The site also lives at
+`https://bankoti.dev/Orion/` (the `nano-ai.github.io` URL 301s there) while
+canonical and OG still named the old host. Both are fixed; the download is a
+`mailto:` waitlist by the developer's choice (#253).
+
+**Settled with the developer, in two rounds:** stack is "whatever is best for
+Pages" (static files plus one vendored Motion script, #58 amended); direction
+is product-forward dark; Orion's own palette, not the root `DESIGN.md` (which
+was Anthropic's Claude-site tokens and is moved to
+`docs/reference/claude-design-analysis.md`); waitlist over download; "free
+while in alpha", no price; the assistant as one honest "coming next".
+
+**The first build was rejected in-session, and that is the useful record.**
+Three agents (Opus on the hero, Sonnet on the rest) built to a brief and the
+developer's verdict on the preview was "pretty shitty, very AI generated" and
+"a lot of fluff". Looking at it, they were right: text left, empty right,
+hairlines, six wireframe SVG illustrations, every section the same shape, a
+lede under every heading. The rework was one direction change, not more
+decoration: **the photographs are the page.** Hero, speed and close are
+full-bleed scenes with copy at the foot over a scrim; the product is the real
+tool column floating over the hero, exactly as the app looks fullscreen; the
+Tools grid was deleted (it duplicated the register); display type went light;
+and a fluff rule cut every section to one heading and at most one sentence
+outside lists and tables. Second look: a different page.
+
+**Verified by looking, not by reading:** 1440 and 400 wide, every section, no
+horizontal scroll at either; `?nojs` renders the finished frame (#59's rule
+kept); the hero timeline plays once and rests; the compare drags and takes
+arrow keys; the count-up lands on 600 and restores the text; console clean.
+⚠ Not verified: `prefers-reduced-motion` (the guard is in the code, the
+browser could not be switched); the Pages deploy (nothing pushed); the mailto
+address (the developer's personal one until told otherwise). ⚠ A single
+reload showed the hero photograph black while the sliders finished: the
+single-threaded preview server delivering a 2400 px JPEG late, not the page,
+and it did not reproduce; the script waits on `img.decode()` with a fallback.
+
+**Gates:** `check-site.py` 8/8 · `check-decisions.py` 252 rows, 1-254, all
+cited numbers resolve. The engine and app gates were not run: nothing under
+`app/`, `engine/` or `Sources/` changed.
+
+**Files:** `web/index.html` 389 lines, `css/base.css` 183, `css/hero.css`
+129, `css/demos.css` 61, `css/pages.css` 106, `js/main.js` 88, `js/hero.js`
+130, `js/vendor/motion.js` (46 KB gzipped), `tools/check-site.py` 215.
+Deleted: `styles.css`, `main.js`, three Space fonts, nine unreferenced images.
+`web/` is 5.4 MB.
+
+---
+
+## Count snapshot archived 2026-09-15
+
+The previous `STATUS.md` count header, superseded by a fresh nine-gate run:
+
+**All eight green, measured 2026-09-13 (after #246 landed):**
+`orion-tests` **1034 checks**, 0 failures · `orion-viewport-tests` **4192 checks**,
+0 failures · decisions (251 rows, 0 declared gaps, all 251 cited) · gestures (6)
+· screens (3 asserting + 1 byte-stable) · modes (`--library-open` 13 checks,
+`--batch-export`, `--hdr-merge`) · wiring (459 product functions, 8 harness-only,
+all pre-existing) · agent (14/14 checks in ~8 s, real server against `samples/_PIC8095.ARW`).
+
 Everything `STATUS.md` used to carry below its sixth-most-recent session, moved
 here verbatim on 2026-07-31. Nothing is edited and nothing is dropped: the
 reasoning in these entries is the record of how each decision was reached, and

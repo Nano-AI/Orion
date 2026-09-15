@@ -39,6 +39,7 @@ extension Editor {
     /// off the main thread, and honest about it: the panel says "working" and
     /// the rest of the interface is disabled while it does.
     func runBatchExport() {
+        guard !engine.documentEditsLocked else { return }
         // ⚠ `exportTargets`, not `photos` and not `targets`. Two rounds of the
         // same bug: it first exported the whole folder regardless of the filter,
         // so culling to Rated and pressing Export all wrote every reject
@@ -87,7 +88,8 @@ extension Editor {
                 isCanceled: { batchCancelled })
 
             batchProgress = nil
-            message = outcome.summary
+            if outcome.failed.isEmpty { notice = outcome.summary }
+            else { message = outcome.summary }
             // The engine is now sitting on the last photo of the batch. Put the
             // one the photographer was looking at back, or they return to a
             // different picture than they left.
@@ -145,7 +147,8 @@ extension Editor {
                           : "Synced \(n) other photos."
         // ⚠ One sentence, not one dialog per photograph. The count used to be
         // the *attempt* count, so a locked card reported a full success.
-        message = outcome.complaint.map { "\(done) \($0)" } ?? done
+        if let complaint = outcome.complaint { message = "\(done) \(complaint)" }
+        else { notice = done }
     }
 
     /// Opening one photo still scans its folder, so the filmstrip is populated
@@ -242,6 +245,8 @@ extension Editor {
         // `stop` writes what is owed *and* disarms: the engine renders several
         // times while a file opens, and until the sidecar has been restored
         // those renders still describe the photo being left.
+        // Resolve the outgoing preview before the engine decodes another RAW.
+        ProposalWatcher.shared.attach(photo: nil, engine: engine, autosave: autosave)
         autosave.stop()
         // ⚠ Closed before the new photograph opens, not after. The list is per
         // photograph, and a panel still showing the previous one's versions is

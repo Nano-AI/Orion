@@ -139,7 +139,7 @@ extension Editor {
             // (Reject discards it silently) — see `ProposalWatcher.isLive`.
             // Scoped to the panel content alone, not the whole column: the
             // footer below still has to take Approve and Reject.
-            .disabled(ProposalWatcher.shared.isLive)
+            .disabled(engine.documentEditsLocked)
 
             footer
         }

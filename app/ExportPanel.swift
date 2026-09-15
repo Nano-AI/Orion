@@ -27,7 +27,7 @@ struct ExportPanel: View {
         settings.dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
     }
 
-    var body: some View {
+    private var options: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Export")
                 .font(.system(size: 19, weight: .regular, design: .serif))
@@ -55,8 +55,8 @@ struct ExportPanel: View {
                             Spacer()
                             Text("better detail")
                         }
-                        .font(.system(size: 9))
-                        .foregroundStyle(Palette.faint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.dim)
                     }
                 }
             }
@@ -70,8 +70,8 @@ struct ExportPanel: View {
                     .labelsHidden()
 
                     Text(settings.space.note)
-                        .font(.system(size: 9))
-                        .foregroundStyle(Palette.faint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -91,8 +91,8 @@ struct ExportPanel: View {
                     Text(settings.format.carriesDepth
                          ? settings.depth.note
                          : "JPEG holds eight bits. Choose PNG or TIFF for more.")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Palette.faint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -106,8 +106,8 @@ struct ExportPanel: View {
                     .labelsHidden()
 
                     Text(settings.metadata.note)
-                        .font(.system(size: 9))
-                        .foregroundStyle(Palette.faint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -127,7 +127,7 @@ struct ExportPanel: View {
                                                    sourceHeight: sourceHeight)
                                 syncFields()
                             }
-                            Text("×").foregroundStyle(Palette.faint)
+                            Text("×").foregroundStyle(Palette.dim)
                             dimensionField("Height", field: .height, text: $heightText) { v in
                                 settings.setCustom(height: v, sourceWidth: sourceWidth,
                                                    sourceHeight: sourceHeight)
@@ -135,7 +135,7 @@ struct ExportPanel: View {
                             }
                             Text("px")
                                 .font(.system(size: 10))
-                                .foregroundStyle(Palette.faint)
+                                .foregroundStyle(Palette.dim)
                         }
                     }
                 }
@@ -154,8 +154,8 @@ struct ExportPanel: View {
                     .labelsHidden()
 
                     Text(settings.sharpening.note)
-                        .font(.system(size: 9))
-                        .foregroundStyle(Palette.faint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -183,9 +183,18 @@ struct ExportPanel: View {
                  ? "Measuring the encoded size…"
                  : "Encoded size, measured. Color space is \(settings.space.title).")
                 .font(.system(size: 10))
-                .foregroundStyle(Palette.faint)
+                .foregroundStyle(Palette.dim)
                 .fixedSize(horizontal: false, vertical: true)
 
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            // Keep the actions reachable on a small Mac window as descriptive
+            // text wraps. The options scroll; Cancel and Export stay put.
+            ScrollView { options }
+                .frame(maxHeight: 540)
             HStack(spacing: 8) {
                 Spacer()
                 Button("Cancel", action: onCancel)

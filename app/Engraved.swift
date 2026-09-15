@@ -36,7 +36,7 @@ enum Engraved {
                 // labels at that width is a wall of letters, and long names like
                 // ROUNDNESS and HIGHLIGHTS ran to the readout. Letter-spacing
                 // carries the same signal at a fraction of the horizontal cost.
-                .font(.system(size: size, weight: .medium))
+                .font(.system(size: max(size, 10), weight: .medium))
                 .tracking(tracking)
                 .foregroundStyle(color)
         }

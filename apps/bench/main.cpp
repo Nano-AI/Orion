@@ -18,13 +18,16 @@
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "usage: orion-bench <raw-file> [output-prefix]\n");
+        std::fprintf(stderr, "usage: orion-bench <raw-file> [output-prefix | --fusion-sweep]\n");
         return 2;
     }
     const std::string path = argv[1];
     const std::string prefix = (argc > 2) ? argv[2] : "orion";
 
     try {
+        if (argc > 2 && std::string(argv[2]) == "--fusion-sweep") {
+            return bench::fusionSweep(path) ? 0 : 1;
+        }
         using bench::Clock;
         using bench::msSince;
         // ── Decode ────────────────────────────────────────────────────────

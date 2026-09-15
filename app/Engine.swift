@@ -677,13 +677,27 @@ final class Engine {
 
     var originalGeometry: OriginalGeometry?
 
+    /// Proposal review compares the committed edit at the displayed framing.
+    /// Nil keeps ordinary Compare's as-shot baseline.
+    var comparisonReference: DevelopState?
+    var documentEditsLocked = false
+
     /// `captureOriginal` renders twice, and every render asks whether the held
     /// original is still good. Without this it would ask itself, forever.
     var capturingOriginal = false
 
-    func undo() { log.undo(); if let s = history.undo() { apply(s) } }
-    func redo() { log.redo(); if let s = history.redo() { apply(s) } }
-    func jumpHistory(to index: Int) { if let s = history.jump(to: index) { apply(s) } }
+    func undo() {
+        guard !documentEditsLocked else { return }
+        log.undo(); if let s = history.undo() { apply(s) }
+    }
+    func redo() {
+        guard !documentEditsLocked else { return }
+        log.redo(); if let s = history.redo() { apply(s) }
+    }
+    func jumpHistory(to index: Int) {
+        guard !documentEditsLocked else { return }
+        if let s = history.jump(to: index) { apply(s) }
+    }
 
     /// What the photographer did, as a runnable scenario. See
     /// `InteractionLog` — a report that names a *sequence* is the only kind
@@ -694,6 +708,7 @@ final class Engine {
     /// rather than like state dumps, and consecutive drags of one slider
     /// collapse into a single step.
     func edit(_ label: String, _ change: () -> Void) {
+        guard !documentEditsLocked else { return }
         change()
         if !restoring {
             history.record(state, label: label)

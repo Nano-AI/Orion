@@ -1,0 +1,4 @@
+# Disk/GPU workflow checks use their own private RAW copy and sidecar.
+# These exercise Engine and ProposalWatcher, not synthetic mouse gestures.
+open samples/_PIC8220.ARW
+workflowcheck

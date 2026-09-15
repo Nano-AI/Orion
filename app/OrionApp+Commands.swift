@@ -36,6 +36,7 @@ struct PhotoCommands: Commands {
     /// True while the gallery is up, which is when every command that needs a
     /// canvas greys out - there is no canvas to zoom, compare or crop.
     private var gallery: Bool { cull?.inGallery == true }
+    private var editingLocked: Bool { cull?.editingLocked == true }
 
     /// What the batch item says it will do, counted.
     ///
@@ -63,7 +64,7 @@ struct PhotoCommands: Commands {
                 Button(t.title) { cull?.selectTab(t) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")),
                                       modifiers: [.command])
-                    .disabled(idle || gallery)
+                    .disabled(idle || gallery || editingLocked)
             }
 
             Divider()
@@ -114,7 +115,7 @@ struct PhotoCommands: Commands {
             // rule `runBatchExport` follows, stated where the finger is.
             Button(Self.batchTitle(cull)) { cull?.exportAll() }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
-                .disabled(idle || (cull?.batchCount ?? 0) == 0)
+                .disabled(idle || editingLocked || (cull?.batchCount ?? 0) == 0)
 
             Divider()
 
@@ -131,7 +132,7 @@ struct PhotoCommands: Commands {
         CommandGroup(after: .undoRedo) {
             Button("Reset Adjustments") { cull?.resetEdits() }
                 .keyboardShortcut("r", modifiers: [.command])
-                .disabled(idle || gallery)
+                .disabled(idle || gallery || editingLocked)
         }
 
         CommandMenu("Photo") {
@@ -194,9 +195,9 @@ struct PhotoCommands: Commands {
             Divider()
 
             Button("Apply Crop  (⏎)") { cull?.applyCrop() }
-                .disabled(cull?.cropping != true)
+                .disabled(cull?.cropping != true || editingLocked)
             Button("Cancel Crop  (⎋)") { cull?.cancelCrop() }
-                .disabled(cull?.cropping != true)
+                .disabled(cull?.cropping != true || editingLocked)
         }
     }
 }
@@ -263,11 +264,13 @@ struct CullActions: Equatable {
     /// rejection from a context menu changes it without moving `url` or
     /// `isRejected`.
     let rejectedCount: Int
+    var editingLocked = false
 
     static func == (a: CullActions, b: CullActions) -> Bool {
         a.url == b.url && a.isRejected == b.isRejected && a.rating == b.rating
             && a.cropping == b.cropping && a.tab == b.tab && a.comparing == b.comparing
             && a.inGallery == b.inGallery && a.rejectedCount == b.rejectedCount
+            && a.editingLocked == b.editingLocked
     }
 }
 
@@ -321,13 +324,16 @@ extension Editor {
             cropping: tab == .crop && mode == .develop,
             // Applying is just leaving the tool: the preview canvas goes away
             // and the engine renders the crop itself.
-            applyCrop: { tab = .light },
-            cancelCrop: { engine.edit("Crop") { engine.resetCrop() }; tab = .light },
+            applyCrop: { if !engine.documentEditsLocked { tab = .light } },
+            cancelCrop: {
+                guard !engine.documentEditsLocked else { return }
+                engine.edit("Crop") { engine.resetCrop() }; tab = .light
+            },
             selectionCount: library.hasExplicitSelection ? library.targets.count : 0,
             selectAll: { library.selectAll() },
             collapseSelection: { library.collapseSelection() },
             tab: tab,
-            selectTab: { tab = $0 },
+            selectTab: { if !engine.documentEditsLocked { tab = $0 } },
             comparing: engine.comparing,
             toggleCompare: {
                 engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
@@ -345,7 +351,8 @@ extension Editor {
                 confirmTrash(library.cullScope(focused))
             },
             trashRejected: { confirmTrashRejected() },
-            rejectedCount: library.photos.filter(\.rejected).count)
+            rejectedCount: library.photos.filter(\.rejected).count,
+            editingLocked: engine.documentEditsLocked)
     }
 
     // MARK: The gallery's comings and goings
@@ -481,12 +488,12 @@ extension Editor {
                 engine.tool = .none
                 return true
             }
-            guard tab == .crop else { return false }
+            guard tab == .crop, !engine.documentEditsLocked else { return false }
             engine.edit("Crop") { engine.resetCrop() }
             tab = .light
             return true
         case 36, 76:   // return, enter
-            guard tab == .crop else { return false }
+            guard tab == .crop, !engine.documentEditsLocked else { return false }
             tab = .light
             return true
         case 123:  // left arrow
@@ -524,9 +531,11 @@ extension Editor {
             engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
             return true
         case "[":
-            engine.edit("Rotate") { engine.rotate(-1) }; viewport.reset(); return true
+            guard !engine.documentEditsLocked else { return true }
+            engine.rotate(-1); viewport.reset(); return true
         case "]":
-            engine.edit("Rotate") { engine.rotate(1) }; viewport.reset(); return true
+            guard !engine.documentEditsLocked else { return true }
+            engine.rotate(1); viewport.reset(); return true
         default:
             return false
         }

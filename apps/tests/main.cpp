@@ -54,6 +54,7 @@ int main() {
     testCreativeLut();
     testExposureFusionMath();
     testExposureFusionGpu();
+    testFusionInvalidationGpu();
     testAutoEnhanceStats();
     testMaskGpu();
     testMaskBrushGpu();

@@ -115,6 +115,12 @@ final class ProposalWatcher {
     /// same watch — falls through the `default` and does nothing.
     private func check() {
         guard let url = proposedURL, let engine else { return }
+        // Let a drag finish its document transaction before capturing the
+        // committed reference, especially a brush's out-of-model live dabs.
+        if engine.interacting || engine.liveIndex >= 0 {
+            debounced()
+            return
+        }
         let onDisk = try? Data(contentsOf: url)
 
         switch (phase, onDisk) {
@@ -149,6 +155,11 @@ final class ProposalWatcher {
     private func fire(_ event: Proposal.Event, proposedData: Data? = nil) {
         let (next, actions) = Proposal.transition(phase, on: event)
         phase = next
+        engine?.documentEditsLocked = isLive
+        if isLive {
+            engine?.endInteraction()
+            engine?.tool = .none
+        }
         for action in actions { perform(action, proposedData: proposedData) }
     }
 
@@ -168,6 +179,7 @@ final class ProposalWatcher {
         guard let engine else { return }
         switch action {
         case .captureOriginal:
+            engine.comparisonReference = committedState
             engine.captureOriginal()
         case .stopAutosave:
             autosave?.stop()
@@ -197,6 +209,7 @@ final class ProposalWatcher {
             else { return }
             engine.apply(decoded)
         case .clearCompare:
+            engine.comparisonReference = nil
             engine.clearCompare()
         }
     }

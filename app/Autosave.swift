@@ -110,7 +110,16 @@ final class Autosave {
     /// The engine's adjustments changed. Cheap enough to call on every render:
     /// it copies a struct of floats and compares it against the last one saved.
     func note(_ state: DevelopState) {
-        guard let target, state != saved else { return }
+        guard let target else { return }
+        if state == saved {
+            // Returning to the saved edit cancels an obsolete queued change.
+            // Do not discard an owed write belonging to another photograph.
+            if pending?.url == target {
+                pending = nil
+                lastFailure = nil
+            }
+            return
+        }
         pending = (target, state)
 
         guard !scheduled else { return }

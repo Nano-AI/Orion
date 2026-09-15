@@ -19,6 +19,7 @@ add_executable(orion-tests
     tests_display.cpp
     tests_highlights.cpp
     tests_fusion.cpp
+    tests_fusion_wiring.cpp
     tests_mask.cpp
     tests_mask_geom.cpp
     tests_mask_pullback.cpp

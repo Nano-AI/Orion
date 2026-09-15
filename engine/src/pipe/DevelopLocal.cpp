@@ -453,7 +453,13 @@ void DevelopPipeline::applyFusion(const Adjustments& adj,
         }
     }
 
-    if (fusing_ && (fusionMoved || !fusePlanValid_)) {
+    // Only FuseApply reads strength (research/exposure-fusion.md). Re-pushing
+    // the proxy and pyramid blocks dirties the entire chain even when their
+    // bytes are unchanged: the 42 MP strength sweep cost 35–38 ms per tick.
+    // Initialize on entry/reload or a new plan; ordinary upstream pixel changes
+    // already propagate through the graph's dependencies.
+    const bool enteringFusion = first || lastAdj_.fusion <= 1e-4f;
+    if (fusing_ && (enteringFusion || !fusePlanValid_)) {
         params::FuseProxy proxy{};
         proxy.outSize[0] = fuseW_[0]; proxy.outSize[1] = fuseH_[0];
         proxy.inSize[0]  = width_;    proxy.inSize[1]  = height_;
@@ -469,6 +475,10 @@ void DevelopPipeline::applyFusion(const Adjustments& adj,
             }
         }
 
+        pushFusionPlan();
+    }
+
+    if (fusing_ && fusionMoved) {
         params::FuseApply ap{};
         ap.size[0] = width_;       ap.size[1] = height_;
         ap.proxySize[0] = fuseW_[0]; ap.proxySize[1] = fuseH_[0];
@@ -476,8 +486,6 @@ void DevelopPipeline::applyFusion(const Adjustments& adj,
         ap.strength = std::clamp(adj.fusion, 0.0f, 1.0f);
         ap.maxGain  = sef::kMaxGain;
         pipeline_.setParams(nFusion_, &ap, sizeof ap);
-
-        pushFusionPlan();
     }
 }
 

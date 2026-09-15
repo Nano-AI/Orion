@@ -141,7 +141,13 @@ extension Engine {
         // full-resolution latency inside it is the right trade against a split
         // that lies.
         guard !comparing else { return }
-        guard isLoaded, previewTexture != nil, !interacting else { return }
+        guard isLoaded, !documentEditsLocked, !interacting else { return }
+        let size = previewSize
+        guard size.width > 0, size.height > 0 else { return }
+        // The graph is lazy: its output cannot be the prerequisite for its
+        // first render. Materialize once before the canvas switches textures.
+        if previewTexture == nil, !renderPreview() { return }
+        guard previewTexture != nil else { return }
         log.interacting(true)
         interacting = true
     }
@@ -234,7 +240,7 @@ extension Engine {
         } else {
             render()
         }
-        onEdit?(state)
+        if !capturingOriginal { onEdit?(state) }
     }
 
     /// Renders the quarter-linear graph and publishes a frame.
@@ -242,18 +248,21 @@ extension Engine {
     /// Deliberately does *not* re-read `imageWidth`, recompute the histogram or
     /// drop the compare original: those all describe the full render, and the
     /// preview is a stand-in for looking at, not a new state of the document.
-    func renderPreview() {
-        guard let handle else { return }
+    @discardableResult
+    func renderPreview() -> Bool {
+        guard let handle else { return false }
         var ms: Double = 0
         guard orion_engine_render_preview(handle, &ms) == ORION_OK else {
             // No preview graph on this machine. Fall back rather than showing
             // nothing — degrade-then-refine is a comfort, not a requirement.
+            interacting = false
             render()
-            return
+            return false
         }
         lastFailure = nil
         lastRenderMs = ms
         generation &+= 1
+        return true
     }
 
     func render() {

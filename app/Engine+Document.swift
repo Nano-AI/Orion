@@ -118,6 +118,7 @@ extension Engine {
         // captures this photo's own original through `refreshOriginal`.
         originalTexture = nil
         originalGeometry = nil
+        comparisonReference = nil
         maskColorSwatch = nil
 
         defaults = asShotState()
@@ -225,7 +226,7 @@ extension Engine {
     /// Returns every adjustment to its default, with white balance back to
     /// what the camera chose. One push, one render.
     func resetEdits() {
-        guard isLoaded else { return }
+        guard isLoaded, !documentEditsLocked else { return }
         suspended = true
         assign(defaults)
         suspended = false

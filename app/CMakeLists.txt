@@ -91,6 +91,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Scenario+Controls.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Scenario+Mask.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Scenario+Report.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Scenario+Workflow.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Scenes.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Checks.swift

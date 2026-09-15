@@ -21,8 +21,8 @@ struct CompareOverlay: View {
     var body: some View {
         if engine.comparing, frame.width > 0, frame.height > 0 {
             ZStack(alignment: .topLeading) {
-                label("Original", at: beforeAnchor)
-                label("Edited", at: afterAnchor)
+                label(engine.comparisonReference == nil ? "Original" : "Current edit", at: beforeAnchor, before: true)
+                label(engine.comparisonReference == nil ? "Edited" : "Proposed", at: afterAnchor, before: false)
                 handle
             }
         }
@@ -55,9 +55,9 @@ struct CompareOverlay: View {
 
     // MARK: Pieces
 
-    private func label(_ text: String, at point: CGPoint) -> some View {
+    private func label(_ text: String, at point: CGPoint, before: Bool) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 9, weight: .semibold))
+            .font(.system(size: 10, weight: .semibold))
             .tracking(0.9)
             .foregroundStyle(.white)
             .padding(.horizontal, 7)
@@ -66,13 +66,13 @@ struct CompareOverlay: View {
             .position(point)
             .allowsHitTesting(false)
             // Hide a label once its half is too narrow to hold it.
-            .opacity(halfIsWideEnough(text) ? 1 : 0)
+            .opacity(halfIsWideEnough(before: before) ? 1 : 0)
     }
 
-    private func halfIsWideEnough(_ text: String) -> Bool {
+    private func halfIsWideEnough(before: Bool) -> Bool {
         let extent = engine.compareVertical ? frame.width : frame.height
-        let share = text == "Original" ? split : 1 - split
-        return extent * share > 90
+        let share = before ? split : 1 - split
+        return extent * share > 110
     }
 
     /// The grab box: a band the width of the divider's reach, the length of

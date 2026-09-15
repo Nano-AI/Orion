@@ -29,6 +29,7 @@ miss the view-model layer, which is where these failures are.
 | `compare-shows-wrong-image.txt` | Passes — measured through the canvas now, not around it |
 | `rotate-then-compare.txt` | Passes — same, and it took saturation as well as luma to make it honest |
 | `geometry-while-comparing.txt` | Passes — fixed: the held original is re-taken when the geometry moves |
+| `compare-shows-white-balance.txt` | Passes — fixed: the original copied the *current* temperature and tint, so a white balance edit showed on both halves (#269) |
 | `mask-alignment.txt` | Passes — fixed: a radial mask's semi-axes were swapped on every odd quarter turn |
 | `eyedropper-latency.txt` | A measurement, not an assertion: 2.4 µs a read. ⚠ Declares `minchecks 0` — the only other file that does is the one below, and the declaration is what separates an instrument from a scenario that quietly stopped checking |
 | `slider-drag-cost.txt` | A measurement, and an open story: 9.4 / 65.7 / 116.4 ms a tick. ⚠ Declares `minchecks 0`, as above |

@@ -62,8 +62,32 @@ enum Proposal {
         guard !keys.isEmpty else { return "Proposal" }
         let shown = keys.prefix(5)
         let rest = keys.count - shown.count
-        let names = shown.joined(separator: ", ")
+        let names = shown.map(productLabel).joined(separator: ", ")
         return rest > 0 ? "Proposal: \(names) +\(rest)" : "Proposal: \(names)"
+    }
+
+    /// Use the names on the develop panels, not persistence keys or units.
+    static func productLabel(_ key: String) -> String {
+        let labels = [
+            "exposureEv": "Exposure", "temperatureK": "Temperature",
+            "highlightRecovery": "Highlight recovery", "fusion": "Shadow lift",
+            "gradeShadow": "Shadows grading", "gradeMidtone": "Midtones grading",
+            "gradeHighlight": "Highlights grading", "gradeBalance": "Grading balance",
+            "hueShift": "Color mixer hue", "satShift": "Color mixer saturation",
+            "lumShift": "Color mixer luminance", "curve": "Tone curve",
+            "denoiseLuma": "Luminance noise", "denoiseColor": "Color noise",
+            "sharpenAmount": "Sharpening", "sharpenRadius": "Sharpening radius",
+            "sharpenMasking": "Sharpening masking", "rotateQuarters": "Rotation",
+            "straightenDeg": "Straighten", "cropX": "Crop", "cropY": "Crop",
+            "cropW": "Crop", "cropH": "Crop", "maskComponents": "Mask shapes",
+            "layers": "Local adjustments", "spots": "Spot removal",
+            "lutStrength": "LUT strength", "vignetteAmount": "Vignette",
+            "vignetteFieldAngle": "Vignette field angle"
+        ]
+        if let label = labels[key] { return label }
+        let words = key.replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2",
+                                             options: .regularExpression)
+        return words.prefix(1).uppercased() + words.dropFirst().lowercased()
     }
 
     // MARK: current.json — the photo Orion is on
@@ -177,8 +201,8 @@ enum Proposal {
         // *next* action, `.setCompare`, then has to recapture from
         // `refreshOriginal`'s own fallback — except by then `engine.state`
         // is the *proposed* state, so the recaptured "Original" bakes in
-        // the proposal's own white balance and geometry rather than the
-        // photographer's. Moving `.setCompare` ahead of `.restoreProposed`
+        // the proposal's own geometry (and, before #269, its white balance)
+        // rather than the photographer's. Moving `.setCompare` ahead of `.restoreProposed`
         // means `compareSplit` already reads "comparing" by the time
         // `.restoreProposed`'s render fires `refreshOriginal`, so that call
         // sees the valid baseline already in place and leaves it alone

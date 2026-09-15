@@ -63,9 +63,14 @@ extension Engine {
         originalGeometry = currentGeometry
 
         let current = state
-        var neutral = DevelopState()
-        neutral.temperatureK = temperatureK      // as shot is not an edit
-        neutral.tint = tint
+        // As shot: `defaults` is a fresh state carrying the camera's own white
+        // balance, seated on open. ⚠ This copied the *current* temperature and
+        // tint instead, from before the app read the camera's number, so a
+        // white balance edit showed on both halves and compare could never show
+        // one (repro/compare-shows-white-balance.txt, #269).
+        var neutral = comparisonReference ?? defaults
+        // Both textures use one set of UVs. Proposal tone/color is compared
+        // against the committed edit, with proposed framing on both halves.
         neutral.rotateQuarters = rotateQuarters
         neutral.straightenDeg = straightenDeg
         neutral.perspectiveVertical = perspectiveVertical
