@@ -100,12 +100,38 @@ source. Each entry in `research/` names its paper.
 
 ## Fonts on the landing site
 
-`web/fonts/` vendors three typefaces, all under the SIL Open Font License 1.1.
+`web/fonts/` vendors two typefaces, both under the SIL Open Font License 1.1.
 The license and the per-family copyright notices are in `web/fonts/OFL.txt`,
 which the OFL requires to travel with the files.
 
-  Space Mono          — Copyright 2016 The Space Mono Project Authors
-  Space Grotesk       — Copyright 2020 The Space Grotesk Project Authors
+  Archivo      — Copyright 2020 The Archivo Project Authors
+  Martian Mono — Copyright 2021 The Martian Mono Project Authors
+
+`web/js/vendor/gsap.js` and `web/js/vendor/ScrollTrigger.js` are GSAP 3.15.0
+(https://gsap.com), Copyright 2026 GreenSock, under GSAP's Standard "No Charge"
+License (https://gsap.com/standard-license). That license is not open source:
+it permits use on any website, including commercial ones, and prohibits use in
+no-code visual animation builders that compete with Webflow. The files are
+vendored unmodified with their license headers.
+
+`web/js/vendor/lenis.js` is Lenis 1.3.26 (https://github.com/darkroomengineering/lenis),
+MIT License, Copyright (c) 2024 darkroom.engineering. The license text is in the
+file's header.
+
+`web/index.html` inlines thirteen Phosphor icons in the light weight (lightning,
+stack, hard-drives, book-open-text, sparkle, sliders-horizontal, bandaids, crop,
+selection-foreground, images, export, hourglass-medium, file-text;
+https://github.com/phosphor-icons/core), MIT License, Copyright (c) 2023 Phosphor Icons.
 
 Self-hosted rather than loaded from a font service, so the page makes no
 third-party request.
+
+## Planets on the landing site
+
+`web/img/planets/` holds planet maps from Solar System Scope
+(https://www.solarsystemscope.com/textures/), licensed under Creative Commons
+Attribution 4.0 International (https://creativecommons.org/licenses/by/4.0/).
+Changes: Jupiter, Mars and Saturn resized from 2048x1024 to 1024x512 and
+recompressed; Saturn's ring map reduced to 48 colour samples inside
+`web/js/motion.js`; the maps also travel base64-encoded in `web/js/planet-maps.js`
+(`tools/build-planet-maps.py`). The page's footer carries the attribution.

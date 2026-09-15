@@ -1,0 +1,200 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>ORION — luminous logo system</title>
+  <desc>Editable vector reconstruction of the glossy teal ORION identity concept, with gradient stars, specular highlights, subtle bloom, metallic wordmark, standalone mark, macOS icon and one-color version.</desc>
+
+  <defs>
+    <style><![CDATA[
+      .bg { fill:#050708; }
+      .muted { fill:#7E878C; }
+      .label { font-family:"Helvetica Neue",Arial,sans-serif; font-size:14px; font-weight:400; letter-spacing:7px; }
+      .sub { font-family:"Helvetica Neue",Arial,sans-serif; font-size:16px; font-weight:400; letter-spacing:8px; }
+      .micro { font-family:"Helvetica Neue",Arial,sans-serif; font-size:10px; font-weight:400; letter-spacing:6px; }
+      .wordmark { font-family:"Arial Black","Avenir Next",Arial,sans-serif; font-size:108px; font-weight:900; letter-spacing:25px; }
+      .wordmark-small { font-family:"Arial Black","Avenir Next",Arial,sans-serif; font-size:42px; font-weight:900; letter-spacing:13px; }
+      .rule { stroke:#14191C; stroke-width:1; }
+    ]]></style>
+
+    <!-- Teal glass / illuminated material -->
+    <linearGradient id="tealBody" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7EF0F4"/>
+      <stop offset="0.26" stop-color="#52D9E3"/>
+      <stop offset="0.58" stop-color="#24C3D0"/>
+      <stop offset="1" stop-color="#189AA8"/>
+    </linearGradient>
+    <linearGradient id="tealBodyDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2CC8D5"/>
+      <stop offset="0.55" stop-color="#16A9B7"/>
+      <stop offset="1" stop-color="#0F7180"/>
+    </linearGradient>
+    <radialGradient id="tealSpec" cx="30%" cy="24%" r="72%">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".88"/>
+      <stop offset=".12" stop-color="#D8FFFF" stop-opacity=".55"/>
+      <stop offset=".34" stop-color="#8EF8FF" stop-opacity=".22"/>
+      <stop offset=".72" stop-color="#4DE4EF" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#4DE4EF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="splitShade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#021013" stop-opacity=".34"/>
+      <stop offset=".78" stop-color="#021013" stop-opacity=".15"/>
+      <stop offset="1" stop-color="#021013" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rimStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#86F7FF" stop-opacity=".8"/>
+      <stop offset=".35" stop-color="#22D5E1" stop-opacity=".72"/>
+      <stop offset="1" stop-color="#0F7A87" stop-opacity=".15"/>
+    </linearGradient>
+
+    <!-- Vertical needle / glint -->
+    <linearGradient id="needle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4ED9E7" stop-opacity="0"/>
+      <stop offset=".20" stop-color="#55ECF3" stop-opacity=".85"/>
+      <stop offset=".49" stop-color="#F5FFFF" stop-opacity=".95"/>
+      <stop offset=".54" stop-color="#70F5FA" stop-opacity=".92"/>
+      <stop offset="1" stop-color="#28A5B4" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="needleMono" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset=".32" stop-color="#FFFFFF" stop-opacity=".75"/>
+      <stop offset=".5" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset=".7" stop-color="#FFFFFF" stop-opacity=".65"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Metallic wordmark -->
+    <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset=".18" stop-color="#F8F8F8"/>
+      <stop offset=".55" stop-color="#C8CBCD"/>
+      <stop offset=".74" stop-color="#F2F2F3"/>
+      <stop offset="1" stop-color="#B7BBBE"/>
+    </linearGradient>
+    <linearGradient id="monoMetal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset=".5" stop-color="#ECECEE"/>
+      <stop offset="1" stop-color="#C8CACC"/>
+    </linearGradient>
+
+    <!-- App tile -->
+    <radialGradient id="iconFill" cx="50%" cy="42%" r="70%">
+      <stop offset="0" stop-color="#102127"/>
+      <stop offset=".55" stop-color="#081013"/>
+      <stop offset="1" stop-color="#050708"/>
+    </radialGradient>
+    <linearGradient id="iconStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#56ECF2"/>
+      <stop offset=".45" stop-color="#1DA8B7" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#0B5F6C" stop-opacity=".7"/>
+    </linearGradient>
+
+    <!-- Soft bloom filters. Still vector; tiny blur is deliberately subtle. -->
+    <filter id="glowTeal" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.78  0 0 0 0 0.86  0 0 0 .42 0"/>
+    </filter>
+    <filter id="glowLine" x="-500%" y="-30%" width="1100%" height="160%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <filter id="softWord" x="-10%" y="-20%" width="120%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="b"/>
+      <feOffset dy="1" result="o"/>
+      <feColorMatrix in="o" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .13 0" result="s"/>
+      <feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- One luminous disc. Clip is reused to shade only the right half. -->
+    <clipPath id="discClipL"><circle cx="0" cy="0" r="36"/></clipPath>
+    <clipPath id="discClipM"><circle cx="0" cy="0" r="20"/></clipPath>
+    <clipPath id="discClipR"><circle cx="0" cy="0" r="39"/></clipPath>
+
+    <g id="discLarge">
+      <circle r="36" fill="#22C3D0" opacity=".24" filter="url(#glowTeal)"/>
+      <circle r="36" fill="url(#tealBody)"/>
+      <rect x="0" y="-36" width="36" height="72" fill="url(#splitShade)" clip-path="url(#discClipL)"/>
+      <circle r="36" fill="url(#tealSpec)"/>
+      <circle r="35.2" fill="none" stroke="url(#rimStroke)" stroke-width="1.3" stroke-opacity=".72"/>
+    </g>
+    <g id="discSmall">
+      <circle r="20" fill="#22C3D0" opacity=".24" filter="url(#glowTeal)"/>
+      <circle r="20" fill="url(#tealBody)"/>
+      <rect x="0" y="-20" width="20" height="40" fill="url(#splitShade)" clip-path="url(#discClipM)"/>
+      <circle r="20" fill="url(#tealSpec)"/>
+      <circle r="19.4" fill="none" stroke="url(#rimStroke)" stroke-width="1" stroke-opacity=".72"/>
+    </g>
+    <g id="discRight">
+      <circle r="39" fill="#22C3D0" opacity=".24" filter="url(#glowTeal)"/>
+      <circle r="39" fill="url(#tealBody)"/>
+      <rect x="0" y="-39" width="39" height="78" fill="url(#splitShade)" clip-path="url(#discClipR)"/>
+      <circle r="39" fill="url(#tealSpec)"/>
+      <circle r="38.3" fill="none" stroke="url(#rimStroke)" stroke-width="1.3" stroke-opacity=".72"/>
+    </g>
+
+    <g id="orionMarkLuminous">
+      <g transform="translate(0 42)"><use href="#discLarge"/></g>
+      <g transform="translate(74 5)"><use href="#discSmall"/></g>
+      <g transform="translate(148 -34)"><use href="#discRight"/></g>
+      <!-- blurred underglow behind needles -->
+      <rect x="-1" y="-35" width="2" height="145" fill="#28D5E3" opacity=".34" filter="url(#glowLine)"/>
+      <rect x="73" y="-51" width="2" height="112" fill="#28D5E3" opacity=".30" filter="url(#glowLine)"/>
+      <rect x="147" y="-110" width="2" height="172" fill="#28D5E3" opacity=".32" filter="url(#glowLine)"/>
+      <!-- crisp needles -->
+      <rect x="-0.6" y="-35" width="1.2" height="145" fill="url(#needle)"/>
+      <rect x="73.4" y="-51" width="1.2" height="112" fill="url(#needle)"/>
+      <rect x="147.4" y="-110" width="1.2" height="172" fill="url(#needle)"/>
+      <!-- pinpoint highlights at crossing -->
+      <circle cx="0" cy="42" r="2.6" fill="#F4FFFF" opacity=".72"/>
+      <circle cx="74" cy="5" r="2" fill="#F4FFFF" opacity=".70"/>
+      <circle cx="148" cy="-34" r="2.7" fill="#F4FFFF" opacity=".72"/>
+    </g>
+
+    <g id="orionMarkMono">
+      <circle cx="0" cy="42" r="34" fill="url(#monoMetal)"/>
+      <circle cx="74" cy="5" r="18" fill="url(#monoMetal)"/>
+      <circle cx="148" cy="-34" r="35" fill="url(#monoMetal)"/>
+      <rect x="-.55" y="-20" width="1.1" height="128" fill="url(#needleMono)"/>
+      <rect x="73.45" y="-41" width="1.1" height="92" fill="url(#needleMono)"/>
+      <rect x="147.45" y="-91" width="1.1" height="148" fill="url(#needleMono)"/>
+    </g>
+  </defs>
+
+  <rect width="1536" height="1024" class="bg"/>
+
+  <!-- TOP LOCKUP -->
+  <g transform="translate(252 244)"><use href="#orionMarkLuminous"/></g>
+  <text x="504" y="278" class="wordmark" fill="url(#metal)" filter="url(#softWord)">ORION</text>
+  <text x="510" y="321" class="sub muted">RAW EDITING FOR A BRIGHTER PERSPECTIVE</text>
+
+  <!-- Right editorial tagline -->
+  <g transform="translate(1399 189)">
+    <text x="0" y="0" class="label muted">SEE</text>
+    <text x="0" y="36" class="label muted">MORE</text>
+    <text x="0" y="72" class="label muted">IN</text>
+    <text x="0" y="108" class="label muted">RAW</text>
+    <line x1="0" y1="137" x2="27" y2="137" stroke="#718087" stroke-opacity=".7"/>
+  </g>
+
+  <!-- Lower layout -->
+  <line x1="532" y1="474" x2="532" y2="823" class="rule"/>
+  <line x1="1005" y1="474" x2="1005" y2="823" class="rule"/>
+
+  <text x="99" y="486" class="label muted">MARK ONLY</text>
+  <g transform="translate(211 693) scale(1.02)"><use href="#orionMarkLuminous"/></g>
+  <text x="135" y="833" class="micro muted">CLEAN. GEOMETRIC. TIMELESS.</text>
+  <line x1="277" y1="859" x2="297" y2="859" stroke="#48616A"/>
+
+  <text x="635" y="486" class="label muted">MACOS APP ICON</text>
+  <rect x="628" y="523" width="280" height="271" rx="67" fill="url(#iconFill)" stroke="url(#iconStroke)" stroke-width="1.8"/>
+  <!-- very subtle inner vignette -->
+  <rect x="638" y="533" width="260" height="251" rx="59" fill="none" stroke="#7EF7FF" stroke-opacity=".035"/>
+  <g transform="translate(697 685) scale(.86)"><use href="#orionMarkLuminous"/></g>
+
+  <text x="1090" y="486" class="label muted">ONE-COLOR VERSION</text>
+  <g transform="translate(1200 652) scale(.84)"><use href="#orionMarkMono"/></g>
+  <text x="1134" y="777" class="wordmark-small" fill="url(#monoMetal)">ORION</text>
+  <line x1="1247" y1="820" x2="1268" y2="820" stroke="#4C5B61"/>
+  <text x="1107" y="860" class="micro muted">ANY LIGHT. A CLEARER STORY.</text>
+
+  <!-- Footer -->
+  <text x="50" y="983" class="micro muted">ORION   —   RAW PHOTO EDITOR FOR MACOS</text>
+  <text x="1160" y="983" class="micro muted">CHASE A CLEARER TOMORROW</text>
+  <line x1="1468" y1="979" x2="1491" y2="979" stroke="#49616A"/>
+</svg>

@@ -3,26 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Orion - a RAW editor you own</title>
-<meta name="description" content="A fast, subscription-free RAW photo editor for macOS. Full-resolution edits that keep up with your hands, corrections for 1,558 lenses, and every filter traced to a published paper.">
+<title>Orion, a RAW editor for macOS</title>
+<meta name="description" content="A RAW photo editor for macOS that renders every slider move at full resolution. No subscription or account. Free while in alpha.">
 <meta name="color-scheme" content="dark">
-<meta property="og:title" content="Orion - a RAW editor you own">
-<meta property="og:description" content="A fast, subscription-free RAW photo editor for macOS. Full resolution, right now.">
-<meta property="og:image" content="https://nano-ai.github.io/Orion/img/photo-aston-trio-1200.jpg">
-<meta property="og:image:alt" content="Three Aston Martins parked at night outside a lit dealership.">
-<meta property="og:url" content="https://nano-ai.github.io/Orion/">
+<meta name="theme-color" content="#0b0b0c">
+<meta property="og:title" content="Orion, a RAW editor for macOS">
+<meta property="og:description" content="RAW editing at full resolution, without a subscription. Free while in alpha.">
+<meta property="og:image" content="https://bankoti.dev/Orion/img/og-stacks.jpg">
+<meta property="og:image:alt" content="Sea stacks in cold blue surf, developed in Orion.">
+<meta property="og:url" content="https://bankoti.dev/Orion/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#08090b">
-<link rel="preload" as="image" href="img/photo-aston-trio.jpg"
-      imagesrcset="img/photo-aston-trio-1200.jpg 1200w, img/photo-aston-trio.jpg 2400w"
-      imagesizes="100vw" fetchpriority="high">
-<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceMono-400.woff2">
-<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/SpaceGrotesk-var.woff2">
-<!-- The mark is Orion's Belt: Alnitak, Alnilam, Mintaka. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0c0d'/%3E%3Ccircle cx='9.5' cy='22' r='2.2' fill='%234DB6C4'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%234DB6C4'/%3E%3Ccircle cx='22.5' cy='10' r='2.5' fill='%234DB6C4'/%3E%3C/svg%3E">
-<link rel="canonical" href="https://nano-ai.github.io/Orion/">
-<link rel="stylesheet" href="styles.css">
+<link rel="canonical" href="https://bankoti.dev/Orion/">
+<!-- The mark is Orion's Belt: Alnitak, Alnilam, Mintaka. Source: brand/orion_logo_system_luminous.svg -->
+<link rel="icon" type="image/svg+xml" href="img/orion-icon.svg">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/Archivo-var.woff2">
+<link rel="preload" as="image" href="img/hero-asshot-2400.jpg" imagesrcset="img/hero-asshot-1200.jpg 1200w, img/hero-asshot-2400.jpg 2400w" imagesizes="100vw" fetchpriority="high">
+<link rel="preload" as="image" href="img/hero-edit-2400.jpg" imagesrcset="img/hero-edit-1200.jpg 1200w, img/hero-edit-2400.jpg 2400w" imagesizes="100vw">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/sections.css">
+<script>document.documentElement.classList.add('js')</script>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -30,361 +30,379 @@
   "name": "Orion",
   "operatingSystem": "macOS 14 or later",
   "applicationCategory": "PhotographyApplication",
-  "softwareVersion": "0.4.0-alpha.6",
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "downloadUrl": "https://github.com/Nano-AI/Orion/releases/tag/v0.4.0-alpha.6",
-  "url": "https://nano-ai.github.io/Orion/"
+  "url": "https://bankoti.dev/Orion/"
 }
 </script>
 </head>
 <body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-speed" viewBox="0 0 256 256"><path d="M213.84,118.63a6,6,0,0,0-3.73-4.25L150.88,92.17l15-75a6,6,0,0,0-10.27-5.27l-112,120a6,6,0,0,0,2.28,9.71l59.23,22.21-15,75a6,6,0,0,0,3.14,6.52A6.07,6.07,0,0,0,96,246a6,6,0,0,0,4.39-1.91l112-120A6,6,0,0,0,213.84,118.63ZM106,220.46l11.85-59.28a6,6,0,0,0-3.77-6.8l-55.6-20.85,91.46-98L138.12,94.82a6,6,0,0,0,3.77,6.8l55.6,20.85Z"/></symbol>
+  <symbol id="i-build" viewBox="0 0 256 256"><path d="M229.18,173a6,6,0,0,1-2.16,8.2l-96,56a6,6,0,0,1-6,0l-96-56a6,6,0,0,1,6-10.36l93,54.23,93-54.23A6,6,0,0,1,229.18,173ZM221,122.82l-93,54.23L35,122.82a6,6,0,0,0-6,10.36l96,56a6,6,0,0,0,6,0l96-56a6,6,0,0,0-6-10.36ZM26,80a6,6,0,0,1,3-5.18l96-56a6,6,0,0,1,6,0l96,56a6,6,0,0,1,0,10.36l-96,56a6,6,0,0,1-6,0l-96-56A6,6,0,0,1,26,80Zm17.91,0L128,129.05,212.09,80,128,31Z"/></symbol>
+  <symbol id="i-keep" viewBox="0 0 256 256"><path d="M208,138H48a14,14,0,0,0-14,14v48a14,14,0,0,0,14,14H208a14,14,0,0,0,14-14V152A14,14,0,0,0,208,138Zm2,62a2,2,0,0,1-2,2H48a2,2,0,0,1-2-2V152a2,2,0,0,1,2-2H208a2,2,0,0,1,2,2ZM208,42H48A14,14,0,0,0,34,56v48a14,14,0,0,0,14,14H208a14,14,0,0,0,14-14V56A14,14,0,0,0,208,42Zm2,62a2,2,0,0,1-2,2H48a2,2,0,0,1-2-2V56a2,2,0,0,1,2-2H208a2,2,0,0,1,2,2ZM190,80a10,10,0,1,1-10-10A10,10,0,0,1,190,80Zm0,96a10,10,0,1,1-10-10A10,10,0,0,1,190,176Z"/></symbol>
+  <symbol id="i-research" viewBox="0 0 256 256"><path d="M232,50H160a38,38,0,0,0-32,17.55A38,38,0,0,0,96,50H24a6,6,0,0,0-6,6V200a6,6,0,0,0,6,6H96a26,26,0,0,1,26,26,6,6,0,0,0,12,0,26,26,0,0,1,26-26h72a6,6,0,0,0,6-6V56A6,6,0,0,0,232,50ZM96,194H30V62H96a26,26,0,0,1,26,26V204.31A37.86,37.86,0,0,0,96,194Zm130,0H160a37.87,37.87,0,0,0-26,10.32V88a26,26,0,0,1,26-26h66ZM160,90h40a6,6,0,0,1,0,12H160a6,6,0,0,1,0-12Zm46,38a6,6,0,0,1-6,6H160a6,6,0,0,1,0-12h40A6,6,0,0,1,206,128Zm0,32a6,6,0,0,1-6,6H160a6,6,0,0,1,0-12h40A6,6,0,0,1,206,160Z"/></symbol>
+  <symbol id="i-assist" viewBox="0 0 256 256"><path d="M196.89,130.94,144.4,111.6,125.06,59.11a13.92,13.92,0,0,0-26.12,0L79.6,111.6,27.11,130.94a13.92,13.92,0,0,0,0,26.12L79.6,176.4l19.34,52.49a13.92,13.92,0,0,0,26.12,0L144.4,176.4l52.49-19.34a13.92,13.92,0,0,0,0-26.12Zm-4.15,14.86-55.08,20.3a6,6,0,0,0-3.56,3.56l-20.3,55.08a1.92,1.92,0,0,1-3.6,0L89.9,169.66a6,6,0,0,0-3.56-3.56L31.26,145.8a1.92,1.92,0,0,1,0-3.6l55.08-20.3a6,6,0,0,0,3.56-3.56l20.3-55.08a1.92,1.92,0,0,1,3.6,0l20.3,55.08a6,6,0,0,0,3.56,3.56l55.08,20.3a1.92,1.92,0,0,1,0,3.6ZM146,40a6,6,0,0,1,6-6h18V16a6,6,0,0,1,12,0V34h18a6,6,0,0,1,0,12H182V64a6,6,0,0,1-12,0V46H152A6,6,0,0,1,146,40ZM246,88a6,6,0,0,1-6,6H230v10a6,6,0,0,1-12,0V94H208a6,6,0,0,1,0-12h10V72a6,6,0,0,1,12,0V82h10A6,6,0,0,1,246,88Z"/></symbol>
+  <symbol id="i-tone" viewBox="0 0 256 256"><path d="M40,86H74.6a30,30,0,0,0,58.8,0H216a6,6,0,0,0,0-12H133.4a30,30,0,0,0-58.8,0H40a6,6,0,0,0,0,12Zm64-24A18,18,0,1,1,86,80,18,18,0,0,1,104,62ZM216,170H197.4a30,30,0,0,0-58.8,0H40a6,6,0,0,0,0,12h98.6a30,30,0,0,0,58.8,0H216a6,6,0,0,0,0-12Zm-48,24a18,18,0,1,1,18-18A18,18,0,0,1,168,194Z"/></symbol>
+  <symbol id="i-repair" viewBox="0 0 256 256"><path d="M181.74,128l29.13-29.13a38,38,0,1,0-53.74-53.74L128,74.26,98.87,45.13A38,38,0,1,0,45.13,98.87L74.26,128,45.13,157.13a38,38,0,1,0,53.74,53.74L128,181.74l29.13,29.13a38,38,0,1,0,53.74-53.74ZM165.62,53.62h0a26,26,0,1,1,36.76,36.77l-29.13,29.13L136.49,82.75ZM164.77,128,128,164.77,91.23,128,128,91.23ZM53.62,90.38A26,26,0,1,1,90.38,53.62l29.13,29.13L82.75,119.52Zm36.76,112a26,26,0,1,1-36.76-36.76l29.13-29.13,36.76,36.76Zm112,0a26,26,0,0,1-36.76,0l-29.14-29.13,36.77-36.77,29.13,29.14a26,26,0,0,1,0,36.76ZM118,128a10,10,0,1,1,10,10A10,10,0,0,1,118,128Z"/></symbol>
+  <symbol id="i-geo" viewBox="0 0 256 256"><path d="M238,192a6,6,0,0,1-6,6H198v34a6,6,0,0,1-12,0V198H64a6,6,0,0,1-6-6V70H24a6,6,0,0,1,0-12H58V24a6,6,0,0,1,12,0V186H232A6,6,0,0,1,238,192ZM96,70h90v90a6,6,0,0,0,12,0V64a6,6,0,0,0-6-6H96a6,6,0,0,0,0,12Z"/></symbol>
+  <symbol id="i-mask" viewBox="0 0 256 256"><path d="M62,216a6,6,0,0,1-6,6H48a14,14,0,0,1-14-14v-8a6,6,0,0,1,12,0v8a2,2,0,0,0,2,2h8A6,6,0,0,1,62,216Zm50-6H96a6,6,0,0,0,0,12h16a6,6,0,0,0,0-12ZM40,166a6,6,0,0,0,6-6V144a6,6,0,0,0-12,0v16A6,6,0,0,0,40,166Zm128,28a6,6,0,0,0-6,6v8a2,2,0,0,1-2,2h-8a6,6,0,0,0,0,12h8a14,14,0,0,0,14-14v-8A6,6,0,0,0,168,194Zm0-84a6,6,0,0,0,6-6V96a14,14,0,0,0-14-14h-8a6,6,0,0,0,0,12h8a2,2,0,0,1,2,2v8A6,6,0,0,0,168,110ZM56,82H48A14,14,0,0,0,34,96v8a6,6,0,0,0,12,0V96a2,2,0,0,1,2-2h8a6,6,0,0,0,0-12ZM208,34H96A14,14,0,0,0,82,48V88h0a6,6,0,0,0,6,6h24a6,6,0,0,0,0-12H94V48a2,2,0,0,1,2-2H208a2,2,0,0,1,2,2V160a2,2,0,0,1-2,2H174V144a6,6,0,0,0-12,0v24a6,6,0,0,0,6,6h40a14,14,0,0,0,14-14V48A14,14,0,0,0,208,34Z"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 256 256"><path d="M216,42H72A14,14,0,0,0,58,56V74H40A14,14,0,0,0,26,88V200a14,14,0,0,0,14,14H184a14,14,0,0,0,14-14V182h18a14,14,0,0,0,14-14V56A14,14,0,0,0,216,42ZM70,56a2,2,0,0,1,2-2H216a2,2,0,0,1,2,2v67.57L204.53,110.1a14,14,0,0,0-19.8,0l-21.42,21.41L117.9,86.1a14,14,0,0,0-19.8,0L70,114.2ZM186,200a2,2,0,0,1-2,2H40a2,2,0,0,1-2-2V88a2,2,0,0,1,2-2H58v82a14,14,0,0,0,14,14H186Zm30-30H72a2,2,0,0,1-2-2V131.17l36.58-36.58a2,2,0,0,1,2.83,0l49.66,49.66a6,6,0,0,0,8.49,0l25.65-25.66a2,2,0,0,1,2.83,0l22,22V168A2,2,0,0,1,216,170ZM162,84a10,10,0,1,1,10,10A10,10,0,0,1,162,84Z"/></symbol>
+  <symbol id="i-export" viewBox="0 0 256 256"><path d="M214,112v96a14,14,0,0,1-14,14H56a14,14,0,0,1-14-14V112A14,14,0,0,1,56,98H80a6,6,0,0,1,0,12H56a2,2,0,0,0-2,2v96a2,2,0,0,0,2,2H200a2,2,0,0,0,2-2V112a2,2,0,0,0-2-2H176a6,6,0,0,1,0-12h24A14,14,0,0,1,214,112ZM92.24,68.24,122,38.49V136a6,6,0,0,0,12,0V38.49l29.76,29.75a6,6,0,1,0,8.48-8.48l-40-40a6,6,0,0,0-8.48,0l-40,40a6,6,0,1,0,8.48,8.48Z"/></symbol>
+  <symbol id="i-later" viewBox="0 0 256 256"><path d="M198,75.64V40a14,14,0,0,0-14-14H72A14,14,0,0,0,58,40V76a14.06,14.06,0,0,0,5.6,11.2L118,128,63.6,168.8A14.06,14.06,0,0,0,58,180v36a14,14,0,0,0,14,14H184a14,14,0,0,0,14-14V180.36a14.08,14.08,0,0,0-5.56-11.17L138,128l54.49-41.19A14.08,14.08,0,0,0,198,75.64ZM70,40a2,2,0,0,1,2-2H184a2,2,0,0,1,2,2V75.64a2,2,0,0,1-.79,1.6L178.9,82H76.67L70.8,77.6A2,2,0,0,1,70,76Zm58,80.49L92.67,94H163Zm58,59.87V216a2,2,0,0,1-2,2H72a2,2,0,0,1-2-2V180a2,2,0,0,1,.8-1.6L122,140v28a6,6,0,0,0,12,0V140.06l51.21,38.7A2,2,0,0,1,186,180.36Z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 256 256"><path d="M212.24,83.76l-56-56A6,6,0,0,0,152,26H56A14,14,0,0,0,42,40V216a14,14,0,0,0,14,14H200a14,14,0,0,0,14-14V88A6,6,0,0,0,212.24,83.76ZM158,46.48,193.52,82H158ZM200,218H56a2,2,0,0,1-2-2V40a2,2,0,0,1,2-2h90V88a6,6,0,0,0,6,6h50V216A2,2,0,0,1,200,218Zm-34-82a6,6,0,0,1-6,6H96a6,6,0,0,1,0-12h64A6,6,0,0,1,166,136Zm0,32a6,6,0,0,1-6,6H96a6,6,0,0,1,0-12h64A6,6,0,0,1,166,168Z"/></symbol>
+</svg>
 
 <a class="skip" href="#main">Skip to content</a>
 
-<!-- The quiet route to the build. Hidden while the finder is up, it
-     surfaces once the visitor is past it. The close still owns the big
-     CTA; this is the shortcut, not the pitch. -->
-<a class="dl mono" id="dlChip" href="https://github.com/Nano-AI/Orion/releases/tag/v0.4.0-alpha.6">Download <span class="dl__tag">alpha</span></a>
-
-<!-- ================================================================
-     HERO — through the viewfinder.
-     The page opens inside a camera: frame brackets, a thirds grid, an
-     AF point, the wordmark where the eyepiece display sits. Scrolling
-     is the slider drag — the raw grades in while the readout ticks to
-     the real values from the real edit (see img/orion-mask-linear.jpg,
-     same photo, same panel) and the AF point locks when it lands. Keep
-     scrolling and you push through the finder: the whole overlay
-     scales past the eye and the photograph fills the frame. Without
-     JavaScript, or with reduced motion, the finder simply rests over
-     the developed frame.
-     ================================================================ -->
-<header class="dev" id="dev">
-  <div class="dev__pin">
-    <!-- Everything seen THROUGH the eyepiece is clipped by this wrapper.
-         The scroll opens the ocular from a small rounded window to the
-         full frame; the wordmark lives outside it, over the black, so
-         the name is there before the eye is. -->
-    <div class="dev__eye" id="devEye">
-      <div class="dev__zoom" id="devZoom">
-        <img class="dev__img" id="devImg" src="img/photo-aston-trio.jpg"
-             srcset="img/photo-aston-trio-1200.jpg 1200w, img/photo-aston-trio.jpg 2400w"
-             sizes="100vw" fetchpriority="high" decoding="async"
-             alt="Three Aston Martins parked at night outside a lit dealership: one yellow, one silver, one white.">
-      </div>
-      <div class="dev__grade"></div>
-      <div class="grain" aria-hidden="true"></div>
-      <!-- Centre-spot ND. The name lands on the blown showroom — that patch
-           of the plate is clipped, pure white, so white type on it measured
-           1.0:1. This is the filter a photographer would screw on: it
-           multiplies, so it takes about a stop and a half out of the
-           highlight and leaves the asphalt where it was. Outside the
-           eyepiece clip it does not exist, and it sits outside .vf because
-           .vf carries its own opacity and would isolate the blend. -->
-      <div class="vf__nd" aria-hidden="true"></div>
-
-      <!-- The finder furniture and the EXIF theatre are one decorative
-           assembly — a screen reader should hear the name and the claim,
-           not a spec sheet read as prose. -->
-      <div class="vf" id="vf" aria-hidden="true">
-        <div class="vf__frame" aria-hidden="true"></div>
-        <div class="vf__grid" aria-hidden="true"></div>
-        <div class="vf__af" aria-hidden="true"></div>
-
-        <!-- Top status line, the corners a finder keeps for the body and the
-             file. Ends only, so the platform badge sits between them. -->
-        <p class="vf__status mono rv d4">
-          <span>A7 III</span>
-          <span>ARW · 24.2 MP</span>
-        </p>
-
-        <!-- The slider being dragged, literally. -->
-        <div class="dev__rail rv d3" aria-hidden="true">
-          <span class="dev__fill" id="devFill"></span>
-          <span class="dev__thumb" id="devThumb"></span>
-        </div>
-
-        <!-- The readout, stacked the way a finder stacks it: what the camera
-             recorded on top, what Orion is doing to it underneath, one
-             hairline between. The shot line is this file's own EXIF — a
-             24 mm at f/1.4, 1/80, ISO 3200 — so the numbers are the
-             photograph's, not decoration. The scale is ±3 EV and the needle
-             is the develop: it walks right to +2.60 as the raw comes up. -->
-        <div class="vf__readout">
-          <p class="vf__shot mono rv d4">
-            <span class="shot__c">24<i>mm</i></span>
-            <span class="shot__c">f/1.4</span>
-            <span class="shot__c">1/80</span>
-            <span class="shot__c">ISO 3200</span>
-            <span class="evb" aria-hidden="true">
-              <span class="evb__n" id="evNeedle"></span>
-            </span>
-            <span class="shot__c"><b class="shot__ev" id="hExp">+2.60</b> <span class="shot__u">EV</span></span>
-          </p>
-
-          <p class="dev__hud mono rv d4">
-            <span class="hud__cell">CONTRAST <b id="hCon">1.45</b></span>
-            <span class="hud__cell hud__sep hud--wide">TEMP <b id="hTmp">3635</b> K</span>
-            <span class="hud__cell hud__ms">RENDER <b>9.3</b> MS</span>
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <p class="vf__eyebrow rv"><span class="badge"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282"/></svg>Built for macOS</span></p>
-
-    <div class="vf__center" id="vfCenter">
-      <h1 class="vf__name lines rv-lines" data-rv><span class="l"><span>Orion</span></span></h1>
-      <p class="vf__sub rv d2">Full resolution, right now.</p>
-    </div>
+<header class="nav">
+  <div class="nav__in">
+    <a class="nav__mark" href="#top" aria-label="Orion, home"><img src="img/orion-mark.svg" width="32" height="30" alt="" aria-hidden="true">Orion</a>
+    <nav class="nav__nav" aria-label="Sections">
+      <span class="nav__glow" aria-hidden="true"></span>
+      <ul class="nav__links" id="nav-links">
+        <li><a href="#speed"><svg class="ico" aria-hidden="true"><use href="#i-speed"/></svg>Speed</a></li>
+        <li><a href="#register"><svg class="ico" aria-hidden="true"><use href="#i-build"/></svg>Build</a></li>
+        <li><a href="#keep"><svg class="ico" aria-hidden="true"><use href="#i-keep"/></svg>Keep</a></li>
+        <li><a href="#research"><svg class="ico" aria-hidden="true"><use href="#i-research"/></svg>Research</a></li>
+        <li><a href="#assistant"><svg class="ico" aria-hidden="true"><use href="#i-assist"/></svg>MCP</a></li>
+      </ul>
+    </nav>
+    <a class="btn nav__cta" href="mailto:alpha@bankoti.dev?subject=Orion%20alpha">Request the alpha</a>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span></button>
   </div>
 </header>
 
 <main id="main">
 
-<!-- ============ THE NUMBERS ============ -->
-<section class="strip">
-  <p class="strip__lede rv">No subscription, no cloud. 24 megapixels live under your hand.</p>
-  <p class="stats rv d1">
-    <span class="stat"><b>$0</b><span class="stat__l">forever</span></span>
-    <span class="stat"><b data-count="1558" data-comma>1,558</b><span class="stat__l">lenses profiled</span></span>
-    <span class="stat"><b><span data-count="100">100</span>%</b><span class="stat__l">your files</span></span>
-  </p>
-</section>
-
-<!-- ============ STATEMENT — lights up word by word ============ -->
-<section class="sayscene" id="say">
-  <div class="say__pin">
-    <p class="say disp" id="sayText">Photo editors got rented out. <em>Orion is software you keep.</em></p>
-  </div>
-</section>
-
-<!-- ================================================================
-     SPEED — the proxy wipe.
-     Everyone else shows you a blurred proxy while you drag. A sweep
-     line drags full resolution across the frame as you scroll. The
-     no-script page is simply sharp.
-     ================================================================ -->
-<section class="wipe" id="speed">
-  <div class="wipe__pin">
-    <img class="wipe__img" src="img/photo-mclaren.jpg"
-         srcset="img/photo-mclaren-1200.jpg 1200w, img/photo-mclaren.jpg 2400w"
-         sizes="100vw" loading="lazy" decoding="async"
-         alt="A satin yellow McLaren Artura parked on dark asphalt among trees.">
-    <div class="wipe__proxy" id="wipeProxy" aria-hidden="true">
-      <img src="img/photo-mclaren.jpg"
-           srcset="img/photo-mclaren-1200.jpg 1200w, img/photo-mclaren.jpg 2400w"
-           sizes="100vw" loading="lazy" decoding="async" alt="">
-    </div>
-    <div class="wipe__edge" id="wipeEdge" aria-hidden="true">
-      <span class="wipe__lab wipe__lab--l mono">FULL RESOLUTION</span>
-      <span class="wipe__lab wipe__lab--r mono">PROXY</span>
-    </div>
-    <div class="wipe__wash"></div>
-    <div class="wipe__copy">
-      <h2 class="disp disp--num lines rv-lines" data-rv>
-        <span class="l"><span>9.29 <small>MS</small></span></span>
-      </h2>
-      <p class="kicker rv d2">One exposure drag, 24 MP, at full resolution</p>
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <figure class="cmp" data-compare style="--pos: 42%">
+    <img class="cmp__before" src="img/hero-asshot-2400.jpg"
+         srcset="img/hero-asshot-1200.jpg 1200w, img/hero-asshot-2400.jpg 2400w" sizes="100vw"
+         width="2400" height="1987" fetchpriority="high" decoding="async"
+         alt="Fir trees and a cliff face disappearing into fog, as shot.">
+    <img class="cmp__after" src="img/hero-edit-2400.jpg"
+         srcset="img/hero-edit-1200.jpg 1200w, img/hero-edit-2400.jpg 2400w" sizes="100vw"
+         width="2400" height="1987" decoding="async"
+         alt="The same frame as the photographer finished it, with the firs and the rock face lifted out of the shadow under the fog.">
+    <div class="hero__scrim" aria-hidden="true"></div>
+    <span class="cmp__line" aria-hidden="true"></span>
+    <span class="cmp__grip" aria-hidden="true"></span>
+    <span class="cmp__label cmp__label--after" aria-hidden="true">Developed</span>
+    <span class="cmp__label cmp__label--before" aria-hidden="true">As shot</span>
+    <input class="cmp__range" type="range" min="0" max="100" step="0.1" value="42"
+           aria-label="Compare the frame as shot with the frame developed in Orion" data-unit="as shot">
+  </figure>
+  <div class="hero__copy">
+    <div class="wrap">
+      <h1 class="display" id="hero-title">See every edit at full resolution.</h1>
+      <p class="hero__sub">A RAW editor for macOS, with no subscription and no account.</p>
+      <p class="hero__cta"><a class="btn btn--lg" href="mailto:alpha@bankoti.dev?subject=Orion%20alpha">Request the alpha</a></p>
     </div>
   </div>
 </section>
 
-<!-- ============ LOCAL LIGHT — the mask sweep ============ -->
-<section class="maskscene" id="masks">
-  <div class="mask__pin">
-    <img class="mask__img" src="img/photo-nightsky.jpg"
-         srcset="img/photo-nightsky-1200.jpg 1200w, img/photo-nightsky.jpg 2400w"
-         sizes="100vw" loading="lazy" decoding="async"
-         alt="A deep blue night sky full of faint stars above a dark treeline.">
-
-    <div class="mask__sweep" id="maskSweep" aria-hidden="true">
-      <div class="mask__shade"></div>
-      <div class="mask__line mask__line--full"></div>
-      <div class="mask__line mask__line--center"><span class="mask__handle"></span></div>
-      <div class="mask__line mask__line--zero"></div>
-    </div>
-
-    <div class="mask__wash"></div>
-
-    <div class="mask__copy">
-      <h2 class="disp disp--num lines rv-lines" data-rv>
-        <span class="l"><span><span id="hMask">−1.60</span> <small>EV</small></span></span>
-      </h2>
-      <p class="kicker rv d2">A gradient dragged onto the photograph</p>
-    </div>
+<section class="section app" id="app" aria-labelledby="app-title">
+  <div class="wrap">
+    <h2 class="h2" id="app-title" data-reveal>Seven panels around one photograph</h2>
   </div>
-</section>
-
-<!-- ============ PROOF ============ -->
-<section class="proof">
-  <figure class="shot" id="proofShot">
-    <img class="fadei" data-rv src="img/orion-mask-linear.jpg"
-         srcset="img/orion-mask-linear-900.jpg 900w, img/orion-mask-linear.jpg 1600w"
-         sizes="(max-width: 900px) 100vw, 74vw" loading="lazy" decoding="async"
-         alt="Orion's interface with a linear gradient mask drawn across a night photograph as three dashed guide lines with endpoint handles. The Local panel reads Exposure minus 1.60 EV.">
-    <figcaption class="mono rv">The interface as it runs today, not a mockup.</figcaption>
+  <figure class="app__shot">
+    <div class="app__stage">
+      <div class="app__tilt">
+        <div class="app__frame">
+          <img class="app__off" src="img/orion-mask-off-2400.jpg"
+               srcset="img/orion-mask-off-1200.jpg 1200w, img/orion-mask-off-2400.jpg 2400w" sizes="(max-width: 1640px) 94vw, 1520px"
+               width="2400" height="1290" loading="lazy" decoding="async" alt="" aria-hidden="true">
+          <img class="app__on" src="img/orion-mask-2400.jpg"
+               srcset="img/orion-mask-1200.jpg 1200w, img/orion-mask-2400.jpg 2400w" sizes="(max-width: 1640px) 94vw, 1520px"
+               width="2400" height="1290" loading="lazy" decoding="async"
+               alt="Orion's window: the sea stacks with a linear mask drawn across the sky, and the Mask panel holding its exposure at minus 1.60 EV.">
+        </div>
+        <div class="app__beams" aria-hidden="true">
+          <svg viewBox="0 0 2400 1290">
+            <defs>
+              <mask id="beam-mask" maskUnits="userSpaceOnUse" x="-1400" y="-1000" width="5200" height="3300">
+                <rect x="-1400" y="-1000" width="5200" height="3300" fill="#fff"/>
+                <rect x="0" y="0" width="2400" height="1290" fill="#000"/>
+                <rect x="34" y="112" width="1784" height="1178" fill="#fff"/>
+              </mask>
+            </defs>
+            <g mask="url(#beam-mask)">
+              <line class="beam beam--dash" x1="-1200" y1="1044.3" x2="3600" y2="-793.2"/>
+              <line class="beam" x1="-1200" y1="1423.8" x2="3600" y2="-413.7"/>
+              <line class="beam beam--dash" x1="-1200" y1="1802.8" x2="3600" y2="-34.7"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
   </figure>
 </section>
 
-<!-- ============ COLOR — a print, shown whole ============ -->
-<section class="duo" id="color">
-  <div class="duo__text">
-    <h2 class="disp lines rv-lines" data-rv>
-      <span class="l"><span>Color you</span></span>
-      <span class="l"><span>can check</span></span>
-    </h2>
-    <p class="rv d2">Built to the DNG spec, checked against the camera's own rendering.</p>
-  </div>
-  <img class="duo__img fadei" data-rv src="img/photo-glasshouse.jpg"
-       srcset="img/photo-glasshouse-1200.jpg 1200w, img/photo-glasshouse.jpg 2400w"
-       sizes="(max-width: 900px) 100vw, 54vw" loading="lazy" decoding="async"
-       alt="A glass-fronted building at golden hour with saturated yellow machinery visible inside.">
-</section>
-
-<!-- ============ LEDGER ============ -->
-<section class="ledger">
-  <h2 class="disp lines rv-lines" data-rv>
-    <span class="l"><span>Every filter</span></span>
-    <span class="l"><span>cites its paper</span></span>
-  </h2>
-  <p class="ledger__lede rv d2">What isn't sourced yet is <a href="https://github.com/Nano-AI/Orion/tree/main/research">written down too, in public</a>.</p>
-  <ul class="cites">
-    <li class="rv"><span class="k">Haze removal</span><span class="v">He, Sun &amp; Tang · CVPR <b>2009</b></span></li>
-    <li class="rv"><span class="k">Local contrast</span><span class="v">Paris, Hasinoff &amp; Kautz · SIGGRAPH <b>2011</b></span></li>
-    <li class="rv"><span class="k">Shadow recovery</span><span class="v">Hessel &amp; Morel · WACV <b>2020</b></span></li>
-    <li class="rv"><span class="k">Film looks</span><span class="v">Adobe Cube LUT spec · <b>2013</b></span></li>
-    <li class="rv"><span class="k">Mask falloff</span><span class="v">Perlin · ACM TOG <b>2002</b></span></li>
-    <li class="rv"><span class="k">Keystone correction</span><span class="v">Hartley &amp; Zisserman · CUP <b>2004</b></span></li>
-    <li class="rv"><span class="k">Blown highlights</span><span class="v">Rouf, Lau &amp; Heidrich · PROCAMS <b>2012</b></span></li>
-    <li class="rv"><span class="k">Vignette falloff</span><span class="v">Reiss · JOSA <b>1945</b></span></li>
-  </ul>
-</section>
-
-<!-- ============ OWNERSHIP ============ -->
-<section class="own">
-  <div class="own__text">
-    <h2 class="disp lines rv-lines" data-rv>
-      <span class="l"><span>No lock-in</span></span>
-    </h2>
-    <p class="rv d2">Plain XMP beside the file. Delete the app and nothing follows.</p>
-  </div>
-  <div class="sidecar mono rv d1" aria-label="A raw file and its sidecar, side by side">
-    <p class="sidecar__row"><span class="sidecar__name"><svg class="fico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10.2" r="1.5"/><path d="M6 16.5l3.6-4 2.8 2.8 2.3-2.6 3.3 3.8"/></svg>_PIC8220.ARW</span><span class="sidecar__what">the photograph</span><span class="sidecar__meta">24 MP · untouched</span></p>
-    <p class="sidecar__row"><span class="sidecar__name"><svg class="fico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h6.5L18 8v12.5H7z"/><path d="M13.5 3.5V8H18"/><path d="M10 13h5M10 16.2h5"/></svg>_PIC8220.xmp</span><span class="sidecar__what">your edits</span><span class="sidecar__meta">plain text · 4 KB</span></p>
+<section class="section speed" id="speed" aria-labelledby="speed-title">
+  <div class="wrap speed__grid">
+    <div class="speed__copy" data-reveal>
+      <p class="speed__num" aria-hidden="true"><span data-count="18.9" data-decimals="1">18<span class="dot">.</span>9</span><small>ms</small></p>
+      <h2 class="h2" id="speed-title">Under 20 milliseconds per slider move, at 42 megapixels</h2>
+      <p class="small">95th percentile over an exposure drag, on a 42&nbsp;MP Sony A7R&nbsp;III raw file at full resolution, on a MacBook Air&nbsp;M4.</p>
+    </div>
+    <figure class="sweep" data-sweep data-evs="-2,-1.4,-0.8,-0.2,0.4,1,1.6">
+      <div class="sweep__frames">
+          <img src="img/sweep-0.jpg" width="1400" height="935" loading="lazy" decoding="async" alt="A fallen, moss-covered log over a forest trail, rendered by Orion at seven exposures.">
+          <img src="img/sweep-1.jpg" width="1400" height="935" loading="lazy" decoding="async" alt="" aria-hidden="true">
+          <img src="img/sweep-2.jpg" width="1400" height="935" loading="lazy" decoding="async" alt="" aria-hidden="true">
+          <img src="img/sweep-3.jpg" width="1400" height="935" loading="lazy" decoding="async" alt="" aria-hidden="true">
+          <img src="img/sweep-4.jpg" width="1400" height="935" loading="lazy" decoding="async" alt="" aria-hidden="true">
+          <img src="img/sweep-5.jpg" width="1400" height="935" loading="lazy" decoding="async" alt="" aria-hidden="true">
+          <img src="img/sweep-6.jpg" width="1400" height="935" loading="lazy" decoding="async" alt="" aria-hidden="true">
+      </div>
+      <div class="sweep__panel">
+        <div class="sweep__head">
+          <span class="sweep__name">Exposure</span>
+          <output class="sweep__val is-changed" data-sweep-val>+0.40 EV</output>
+        </div>
+        <div class="sweep__track">
+          <span class="sweep__ticks" aria-hidden="true"></span>
+          <input class="sweep__range" type="range" min="0" max="6" step="0.01" value="4" aria-label="Exposure">
+        </div>
+      </div>
+      <figcaption class="caption">DSC09847.ARW, rendered by Orion at seven exposures from −2.0 to +1.6&nbsp;EV.</figcaption>
+    </figure>
   </div>
 </section>
 
-<!-- ============ REGISTER ============ -->
-<!-- Nineteen shipped features were a nineteen-row hairline list beside a
-     three-row one, which made the honest half of the page the ugliest and
-     left a quarter of the section empty. Same twenty-two strings, unchanged,
-     grouped into the six things a person actually looks for, one soft rule
-     per group instead of one per row, and the unbuilt three moved underneath
-     where they read as the closing admission rather than a stub column. -->
-<section class="reg" id="today">
-  <div class="reg__now rv">
-    <p class="reg__h mono">Working today</p>
-    <div class="reg__groups">
-      <div class="reg__g">
-        <p class="reg__gh mono">Tone and color</p>
-        <ul>
+<section class="section section--tight register" id="register" aria-labelledby="register-title">
+  <div class="wrap glass">
+    <h2 class="h2" id="register-title" data-reveal>Everything in the current build</h2>
+    <div class="register__groups">
+      <div class="register__group" data-reveal>
+        <h3 class="h3"><svg class="ico" aria-hidden="true"><use href="#i-tone"/></svg>Tone and color</h3>
+        <ul class="register__list">
           <li>Exposure, contrast, highlights, shadows, whites, blacks</li>
           <li>White balance, color grading, tone curves</li>
           <li>Film looks from any <code>.cube</code> file</li>
           <li>One-click auto-enhance</li>
         </ul>
       </div>
-      <div class="reg__g">
-        <p class="reg__gh mono">Detail and repair</p>
-        <ul>
+      <div class="register__group" data-reveal>
+        <h3 class="h3"><svg class="ico" aria-hidden="true"><use href="#i-repair"/></svg>Detail and repair</h3>
+        <ul class="register__list">
           <li>Haze removal, clarity, shadow recovery</li>
           <li>Noise reduction, sharpening, color mixer</li>
           <li>Spot and blemish removal</li>
           <li>Film grain, and a vignette you can dial in</li>
         </ul>
       </div>
-      <div class="reg__g">
-        <p class="reg__gh mono">Geometry</p>
-        <ul>
+      <div class="register__group" data-reveal>
+        <h3 class="h3"><svg class="ico" aria-hidden="true"><use href="#i-geo"/></svg>Geometry</h3>
+        <ul class="register__list">
           <li>Crop, straighten, rotate</li>
           <li>Distortion and vignetting for 1,558 lenses</li>
           <li>Perspective and keystone correction</li>
         </ul>
       </div>
-      <div class="reg__g">
-        <p class="reg__gh mono">Masking</p>
-        <ul>
+      <div class="register__group" data-reveal>
+        <h3 class="h3"><svg class="ico" aria-hidden="true"><use href="#i-mask"/></svg>Masking</h3>
+        <ul class="register__list">
           <li>Gradient, radial, brush, brightness and color masks</li>
           <li>Selecting a subject, a person or a sky</li>
           <li>Masks combined (add, subtract, intersect) and feathered to real edges</li>
         </ul>
       </div>
-      <div class="reg__g">
-        <p class="reg__gh mono">Library</p>
-        <ul>
+      <div class="register__group" data-reveal>
+        <h3 class="h3"><svg class="ico" aria-hidden="true"><use href="#i-lib"/></svg>Library</h3>
+        <ul class="register__list">
           <li>Browsing a folder of 300 frames without waiting on it</li>
           <li>Saved versions of a photograph, to come back to later</li>
           <li>Presets, and copying settings between photos</li>
         </ul>
       </div>
-      <div class="reg__g">
-        <p class="reg__gh mono">Export</p>
-        <ul>
+      <div class="register__group" data-reveal>
+        <h3 class="h3"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg>Export</h3>
+        <ul class="register__list">
           <li>Export at 8 or 16 bits, resized, sharpened for screen or print</li>
           <li>Export with your location stripped by default</li>
         </ul>
       </div>
+      <div class="register__group register__notyet" data-reveal>
+        <h3 class="h3"><svg class="ico" aria-hidden="true"><use href="#i-later"/></svg>Not yet</h3>
+        <ul class="register__list">
+          <li>Highlight reconstruction: the region fill runs and has a slider, but the detail transfer and the edge falloff are not built</li>
+          <li>Fujifilm X-Trans sensors</li>
+          <li>Windows</li>
+          <li>An assistant that proposes edits for you to approve</li>
+        </ul>
+      </div>
     </div>
-  </div>
-
-  <div class="reg__not rv d1">
-    <p class="reg__h mono">Not yet</p>
-    <ul class="dim">
-      <li>Highlight reconstruction: the region fill runs and has a slider, but the detail transfer and the edge falloff are not built</li>
-      <li>Fujifilm X-Trans sensors</li>
-      <li>Windows</li>
-    </ul>
-    <p class="reg__note">Listed because it is true. Nothing on this page pretends to exist.</p>
   </div>
 </section>
 
-<!-- ============ CLOSE ============ -->
-<section class="close">
-  <img class="close__img plx fadei" data-plx data-rv src="img/photo-monoplane.jpg"
-       srcset="img/photo-monoplane-1200.jpg 1200w, img/photo-monoplane.jpg 2400w"
-       sizes="100vw" loading="lazy" decoding="async"
-       alt="A hand-built early monoplane with exposed rigging, hanging under a glass museum roof.">
-  <div class="close__wash"></div>
-  <div class="grain" aria-hidden="true"></div>
-  <div class="close__body">
-    <h2 class="disp lines rv-lines" data-rv>
-      <span class="l"><span>Built by one person,</span></span>
-      <span class="l"><span>in the open</span></span>
-    </h2>
-    <p class="rv d2">Every decision, measurement and mistake is in the repository.</p>
-    <p class="rv d3"><a class="cta" href="https://github.com/Nano-AI/Orion/releases/tag/v0.4.0-alpha.6">Download the alpha</a></p>
-    <p class="rv d3 alt"><a href="https://github.com/Nano-AI/Orion">or read the source</a></p>
-    <p class="status mono rv d4">v0.4.0-alpha.6 for Apple silicon, macOS 14 or later. The build is unsigned: open it once from the right-click menu.</p>
+<section class="section section--tight keep" id="keep" aria-labelledby="keep-title">
+  <div class="wrap keep__grid glass">
+    <div data-reveal>
+      <h2 class="h2" id="keep-title">Yours to keep</h2>
+      <p class="lede keep__lede">Orion never changes the RAW file. Your edits are saved next to it in a small sidecar, and nothing is uploaded.</p>
+    </div>
+    <div class="keep__files" data-reveal>
+      <div class="keep__file">
+        <svg class="ico" aria-hidden="true"><use href="#i-lib"/></svg>
+        <span class="keep__name">DSC09787.ARW</span>
+        <span class="keep__meta">the photograph, 85.5&nbsp;MB, untouched</span>
+      </div>
+      <div class="keep__file">
+        <svg class="ico" aria-hidden="true"><use href="#i-file"/></svg>
+        <span class="keep__name">DSC09787.xmp</span>
+        <span class="keep__meta">your edits, 2&nbsp;KB of plain text</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section research" id="research" aria-labelledby="research-title">
+  <div class="wrap research__grid">
+    <div class="research__head">
+      <h2 class="h2" id="research-title" data-reveal>Every filter cites its paper</h2>
+      <p class="research__count" aria-hidden="true"><span data-paper-n>1</span> / 8</p>
+    </div>
+    <ol class="papers">
+      <li class="paper">
+        <div class="paper__top"><span class="paper__use">Haze removal</span><span>CVPR 2009</span></div>
+        <h3 class="paper__title"><a href="https://doi.org/10.1109/CVPR.2009.5206515">Single Image Haze Removal Using Dark Channel Prior</a></h3>
+        <p class="paper__authors">K. He, J. Sun, X. Tang</p>
+        <div class="paper__body" aria-hidden="true"></div>
+      </li>
+      <li class="paper">
+        <div class="paper__top"><span class="paper__use">Local contrast</span><span>SIGGRAPH 2011</span></div>
+        <h3 class="paper__title"><a href="https://people.csail.mit.edu/sparis/publi/2011/siggraph/Paris_11_Local_Laplacian_Filters.pdf">Local Laplacian Filters: Edge-aware Image Processing with a Laplacian Pyramid</a></h3>
+        <p class="paper__authors">S. Paris, S. W. Hasinoff, J. Kautz</p>
+        <div class="paper__body" aria-hidden="true"></div>
+      </li>
+      <li class="paper">
+        <div class="paper__top"><span class="paper__use">Shadow recovery</span><span>WACV 2020</span></div>
+        <h3 class="paper__title"><a href="https://openaccess.thecvf.com/content_WACV_2020/papers/Hessel_An_Extended_Exposure_Fusion_and_its_Application_to_Single_Image_WACV_2020_paper.pdf">An Extended Exposure Fusion and its Application to Single Image Contrast Enhancement</a></h3>
+        <p class="paper__authors">C. Hessel, J.-M. Morel</p>
+        <div class="paper__body" aria-hidden="true"></div>
+      </li>
+      <li class="paper">
+        <div class="paper__top"><span class="paper__use">Film looks</span><span>Adobe 2013</span></div>
+        <h3 class="paper__title">Cube LUT Specification, Version 1.0</h3>
+        <p class="paper__authors">Adobe Systems</p>
+        <div class="paper__body" aria-hidden="true"></div>
+      </li>
+      <li class="paper">
+        <div class="paper__top"><span class="paper__use">Mask falloff</span><span>ACM TOG 2002</span></div>
+        <h3 class="paper__title">Improving Noise</h3>
+        <p class="paper__authors">K. Perlin</p>
+        <div class="paper__body" aria-hidden="true"></div>
+      </li>
+      <li class="paper">
+        <div class="paper__top"><span class="paper__use">Keystone correction</span><span>CUP 2004</span></div>
+        <h3 class="paper__title"><a href="https://doi.org/10.1017/CBO9780511811685">Multiple View Geometry in Computer Vision</a></h3>
+        <p class="paper__authors">R. Hartley, A. Zisserman</p>
+        <div class="paper__body" aria-hidden="true"></div>
+      </li>
+      <li class="paper">
+        <div class="paper__top"><span class="paper__use">Blown highlights</span><span>PROCAMS 2012</span></div>
+        <h3 class="paper__title">Gradient Domain Color Restoration of Clipped Highlights</h3>
+        <p class="paper__authors">M. Rouf, C. Lau, W. Heidrich</p>
+        <div class="paper__body" aria-hidden="true"></div>
+      </li>
+      <li class="paper">
+        <div class="paper__top"><span class="paper__use">Vignette falloff</span><span>JOSA 1945</span></div>
+        <h3 class="paper__title"><a href="https://doi.org/10.1364/JOSA.35.000283">The cos⁴ Law of Illumination</a></h3>
+        <p class="paper__authors">M. Reiss</p>
+        <div class="paper__body" aria-hidden="true"></div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="section assistant" id="assistant" aria-labelledby="assistant-title">
+  <div class="assistant__scene">
+    <div class="assistant__head">
+      <h2 class="h2" id="assistant-title" data-reveal>MCP-driven workflow</h2>
+      <p class="assistant__sub" data-reveal>Coming next: Claude edits through Orion's MCP server, and nothing is saved until you approve.</p>
+    </div>
+    <div class="agent">
+      <div class="agent__bar" aria-hidden="true"><span class="agent__dots"><i></i><i></i><i></i></span>DSC09787.ARW</div>
+      <div class="agent__term">
+        <div class="agent__screen">
+          <div class="agent__banner">
+            <svg class="agent__logo" viewBox="0 0 18 6" preserveAspectRatio="none" aria-hidden="true"><path d="M3 0h1v1h-1zM3 1h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM4 1h1v1h-1zM6 0h1v1h-1zM7 0h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM8 0h1v1h-1zM9 0h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM10 0h1v1h-1zM11 0h1v1h-1zM10 1h1v1h-1zM11 1h1v1h-1zM12 0h1v1h-1zM13 0h1v1h-1zM13 1h1v1h-1zM14 0h1v1h-1zM14 1h1v1h-1zM1 2h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM3 3h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM4 3h1v1h-1zM5 3h1v1h-1zM6 2h1v1h-1zM7 2h1v1h-1zM6 3h1v1h-1zM7 3h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM8 3h1v1h-1zM9 3h1v1h-1zM10 2h1v1h-1zM11 2h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 2h1v1h-1zM13 2h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM14 2h1v1h-1zM15 2h1v1h-1zM14 3h1v1h-1zM16 2h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM11 4h1v1h-1zM13 4h1v1h-1z"/></svg>
+            <p><b>Claude Code</b> v2.1.271<br>Haiku 4.5 · Claude Max<br>~/Pictures</p>
+          </div>
+          <ol class="agent__log">
+            <li class="agent__user" data-step="0.30"><span class="agent__dot" aria-hidden="true">&gt;</span><span class="agent__said">Please increase the contrast and give it a more dramatic look.</span></li>
+            <li class="agent__step" data-step="0.40"><span class="agent__dot" aria-hidden="true">⏺</span><span>orion - current_photo <span class="agent__mcp">(MCP)</span><span class="agent__out">⎿&nbsp; DSC09787.ARW</span></span></li>
+            <li class="agent__step" data-step="0.50"><span class="agent__dot" aria-hidden="true">⏺</span><span>orion - describe_edits <span class="agent__mcp">(MCP)</span><span class="agent__out">⎿&nbsp; Done</span></span></li>
+            <li class="agent__step" data-step="0.62"><span class="agent__dot" aria-hidden="true">⏺</span><span>orion - propose_edit <span class="agent__mcp">(MCP)</span><span class="agent__out">⎿&nbsp; Proposal saved beside the photo</span></span></li>
+            <li class="agent__reply" data-step="0.76"><span class="agent__dot" aria-hidden="true">⏺</span><span>It's darker and higher in contrast, with cooler light. The proposal is open in Orion for you to approve.</span></li>
+          </ol>
+          <div class="agent__input" aria-hidden="true"><span class="agent__prompt">❯</span> <span class="agent__typed" data-typed></span></div>
+          <p class="agent__status" aria-hidden="true">Haiku 4.5</p>
+        </div>
+      </div>
+      <figure class="agent__photo cmp" data-compare style="--pos: 6%">
+        <img class="cmp__before" src="img/stacks-asshot-2400.jpg" srcset="img/stacks-asshot-1200.jpg 1200w, img/stacks-asshot-2400.jpg 2400w" sizes="(max-width: 900px) 92vw, 1150px"
+             width="2400" height="1602" loading="lazy" decoding="async" alt="Yours: sea stacks in grey surf, as shot.">
+        <img class="cmp__after" src="img/stacks-edit-2400.jpg" srcset="img/stacks-edit-1200.jpg 1200w, img/stacks-edit-2400.jpg 2400w" sizes="(max-width: 900px) 92vw, 1150px"
+             width="2400" height="1602" loading="lazy" decoding="async" alt="Proposed: the same frame with black rock, cold blue water and deeper contrast.">
+        <span class="cmp__line" aria-hidden="true"></span>
+        <span class="cmp__grip" aria-hidden="true"></span>
+        <span class="cmp__label cmp__label--before" aria-hidden="true">Yours</span>
+        <span class="cmp__label cmp__label--after" aria-hidden="true">Proposed</span>
+        <input class="cmp__range" type="range" min="0" max="100" step="0.1" value="6"
+               aria-label="Compare your version with the proposed edit" data-unit="yours">
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="alpha" id="alpha" aria-labelledby="alpha-title">
+  <figure class="alpha__frame cmp" data-compare style="--pos: 0%">
+    <img class="cmp__before" src="img/pier-asshot-2400.jpg"
+         srcset="img/pier-asshot-1200.jpg 1200w, img/pier-asshot-2400.jpg 2400w" sizes="100vw"
+         width="2400" height="1602" loading="lazy" decoding="async"
+         alt="Wooden pilings of an old pier standing in calm, pale water, as shot.">
+    <img class="cmp__after" src="img/pier-2400.jpg"
+         srcset="img/pier-1200.jpg 1200w, img/pier-2400.jpg 2400w" sizes="100vw"
+         width="2400" height="1602" loading="lazy" decoding="async"
+         alt="The same pier as the photographer finished it, in a cooler, deeper blue with darkened edges.">
+    <div class="alpha__scrim" aria-hidden="true"></div>
+    <span class="cmp__line" aria-hidden="true"></span>
+    <span class="cmp__grip" aria-hidden="true"></span>
+    <span class="cmp__label cmp__label--before" aria-hidden="true">As shot</span>
+    <span class="cmp__label cmp__label--after" aria-hidden="true">Developed</span>
+    <input class="cmp__range" type="range" min="0" max="100" step="0.1" value="0"
+           aria-label="Compare the pier as shot with the pier developed in Orion" data-unit="as shot">
+  </figure>
+  <div class="alpha__copy">
+    <div class="wrap">
+      <h2 class="display" id="alpha-title">Free while in alpha</h2>
+      <p class="alpha__cta"><a class="btn btn--lg" href="mailto:alpha@bankoti.dev?subject=Orion%20alpha">Request the alpha</a></p>
+      <p class="small alpha__fine">Requires macOS&nbsp;14 or later on Apple silicon. Builds are unsigned, so open Orion from the right-click menu the first time.</p>
+    </div>
   </div>
 </section>
 
 </main>
 
-<!-- The footer used to be two dead strings, one of them repeating the
-     platform line the CTA already carries. It is the only place a visitor
-     who has read the page can go next, so it carries the four routes that
-     exist: the code, the builds, the sources behind the filters, and the
-     licence the whole thing is under. -->
-<footer class="bar">
-  <span>Orion · a RAW editor for macOS</span>
-  <nav class="bar__nav mono" aria-label="Project">
-    <a href="https://github.com/Nano-AI/Orion">Source</a>
-    <a href="https://github.com/Nano-AI/Orion/releases">Releases</a>
-    <a href="https://github.com/Nano-AI/Orion/tree/main/research">Research</a>
-    <a href="https://github.com/Nano-AI/Orion/blob/main/LICENSE">Apache-2.0</a>
-  </nav>
+<footer class="footer">
+  <div class="wrap footer__in">
+    <div>
+      <span class="footer__mark"><img src="img/orion-mark.svg" width="26" height="24" alt="" aria-hidden="true">Orion</span>
+      <p class="small">A RAW editor for macOS. &copy; 2026 Nano-AI</p>
+      <p class="small footer__credit">Planet maps by <a href="https://www.solarsystemscope.com/textures/">Solar System Scope</a>, <a href="https://creativecommons.org/licenses/by/4.0/">CC&nbsp;BY&nbsp;4.0</a>.</p>
+    </div>
+    <ul class="footer__links">
+      <li><a href="#research">Research</a></li>
+      <li><a href="mailto:alpha@bankoti.dev?subject=Orion%20alpha">Request the alpha</a></li>
+    </ul>
+  </div>
 </footer>
 
-<script src="main.js"></script>
+<script src="js/vendor/gsap.js" defer></script>
+<script src="js/vendor/ScrollTrigger.js" defer></script>
+<script src="js/vendor/lenis.js" defer></script>
+<script src="js/site.js" defer></script>
+<script src="js/motion.js" defer></script>
 </body>
 </html>

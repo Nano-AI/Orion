@@ -3,13 +3,13 @@ Fonts vendored in this directory, and their licenses.
 All are licensed under the SIL Open Font License, Version 1.1,
 which requires this notice and the license text to travel with them.
 
-  Space Mono           (SpaceMono-400.woff2, SpaceMono-700.woff2)
-    Copyright 2016 The Space Mono Project Authors
-    https://github.com/googlefonts/spacemono
+  Archivo              (Archivo-var.woff2, wdth 62-125, wght 100-900, latin)
+    Copyright 2020 The Archivo Project Authors
+    https://github.com/Omnibus-Type/Archivo
 
-  Space Grotesk        (SpaceGrotesk-var.woff2)
-    Copyright 2020 The Space Grotesk Project Authors
-    https://github.com/floriankarsten/space-grotesk
+  Martian Mono         (MartianMono-var.woff2, wdth 75-112.5, wght 100-800, latin)
+    Copyright 2021 The Martian Mono Project Authors
+    https://github.com/evilmartians/mono
 
 Copyright lines taken from each family's own OFL.txt upstream, not
 transcribed from memory. The license text below is the standard OFL 1.1.

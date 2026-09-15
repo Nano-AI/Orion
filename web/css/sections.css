@@ -1,0 +1,363 @@
+/*  Orion site: the sections in page order, and the compare figure the hero
+ *  and the assistant use. Every section renders finished without JavaScript;
+ *  motion.js only animates toward what is written here. Everything that moves
+ *  shows a change: a develop, a mask landing, an exposure sweep, a proposal,
+ *  a page turned.
+ */
+
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ico { width: 1em; height: 1em; flex: none; fill: currentColor; vertical-align: -0.14em; }
+
+/* the star field motion.js draws sits behind the page, never over a photograph */
+.stars { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; }
+main, .footer { position: relative; z-index: 1; }
+
+/* ---------- compare: two renders of one frame ---------- */
+/* A native range input covers the figure, invisible. Its thumb is a full-
+ * height strip under the drawn grip, so a finger on the grip drags and a
+ * finger on the photograph scrolls the page; the keyboard and screen readers
+ * get a real slider for free. Before is left of --pos, after is right of it,
+ * and the input's value is --pos itself. */
+.cmp {
+  --pos: 50%;
+  position: relative; overflow: hidden; isolation: isolate;
+  background: var(--panel);
+  user-select: none; -webkit-user-select: none;
+}
+.cmp > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cmp__after { clip-path: inset(0 0 0 var(--pos)); }
+.cmp__line, .cmp__grip, .cmp__label { transition: opacity .35s, scale .35s var(--ease); }
+/* at either end the figure is one photograph: the handle steps aside until asked for */
+.cmp.is-end .cmp__line, .cmp.is-end .cmp__grip, .cmp.is-end .cmp__label { opacity: 0; }
+.cmp.is-end:hover .cmp__grip, .cmp.is-end:has(.cmp__range:focus-visible) .cmp__grip { opacity: 1; }
+/* a label with no room beside the divider steps aside */
+.cmp.is-low .cmp__label--before, .cmp.is-high .cmp__label--after { opacity: 0; }
+.cmp__line {
+  position: absolute; top: 0; bottom: 0; left: var(--pos); width: 1px; margin-left: -0.5px;
+  background: rgba(236, 236, 238, 0.9); box-shadow: 0 0 14px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.cmp__grip {
+  position: absolute; top: 50%; left: var(--pos); translate: -50% -50%;
+  width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--text); color: var(--ground);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  font: 400 15px/1 var(--mono); letter-spacing: 0.1em;
+  pointer-events: none;
+}
+.cmp__grip::before { content: "\2039\203A"; }
+.cmp:hover .cmp__grip { scale: 1.08; }
+.cmp:has(.cmp__range:active) .cmp__grip { scale: 0.94; }
+.cmp:has(.cmp__range:focus-visible) .cmp__grip { outline: 2px solid var(--accent); outline-offset: 4px; }
+.cmp__label {
+  position: absolute; bottom: 16px; z-index: 1;
+  padding: 7px 10px; border-radius: var(--r);
+  --glass-tint: rgba(11, 11, 12, 0.5);   /* glass (base.css), darker: it sits on a photograph */
+  font: 400 10.5px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text); white-space: nowrap; pointer-events: none;
+}
+.cmp__label--before { right: calc(100% - var(--pos) + 16px); }
+.cmp__label--after { left: calc(var(--pos) + 16px); }
+.cmp__range {
+  position: absolute; inset: 0; z-index: 2;
+  width: 100%; height: 100%; margin: 0;
+  opacity: 0; cursor: ew-resize;
+  -webkit-appearance: none; appearance: none; background: transparent;
+  touch-action: pan-y;
+}
+.cmp__range::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+.cmp__range::-webkit-slider-thumb { -webkit-appearance: none; width: 64px; height: 100vh; }
+.cmp__range::-moz-range-track { height: 100%; background: transparent; }
+.cmp__range::-moz-range-thumb { width: 64px; height: 100%; border: 0; background: transparent; }
+
+/* ---------- hero: the frame develops ---------- */
+.hero { position: relative; height: 100svh; min-height: 600px; overflow: hidden; }
+.hero .cmp { position: absolute; inset: 0; }
+.hero .cmp > img { object-position: 50% 44%; }
+.hero__scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(to top, rgba(11, 11, 12, 0.88) 0%, rgba(11, 11, 12, 0.4) 32%, rgba(11, 11, 12, 0) 56%),
+    linear-gradient(to bottom, rgba(11, 11, 12, 0.62) 0%, rgba(11, 11, 12, 0) 24%);
+}
+.hero .cmp__label { bottom: auto; top: calc(var(--nav-h) + 20px); }
+/* the divider fades before it reaches the headline */
+.hero .cmp__line {
+  -webkit-mask-image: linear-gradient(to bottom, #000 50%, transparent 68%);
+  mask-image: linear-gradient(to bottom, #000 50%, transparent 68%);
+}
+.hero__copy { position: absolute; left: 0; right: 0; bottom: clamp(36px, 8vh, 96px); z-index: 3; pointer-events: none; }
+.hero__copy .display { max-width: 13ch; }
+.hero__sub { margin-top: 22px; max-width: 29rem; text-wrap: balance; font-size: clamp(1rem, 0.95rem + 0.3vw, 1.2rem); line-height: 1.5; color: rgba(236, 236, 238, 0.8); }
+.hero__cta { margin-top: 30px; }
+.hero__cta a { pointer-events: auto; }
+@media (max-width: 760px) { .hero .cmp > img { object-position: 60% 50%; } }
+
+/* ---------- app: the real window, in space ---------- */
+/* The capture is tilted back and lands flat as it scrolls in; the mask's
+ * three lines float in front of it, reach past the edges of the screen, and
+ * settle exactly onto the lines Orion drew, which is when the masked frame
+ * replaces the unmasked one. Flat, aligned and masked is the static state. */
+.app__shot { margin-top: clamp(40px, 5vw, 72px); }
+.app__stage {
+  width: min(1520px, 100% - 2 * var(--gutter)); margin-inline: auto;
+  perspective: 1800px; perspective-origin: 50% 0%;
+}
+.app__tilt { position: relative; transform-style: preserve-3d; transform-origin: 50% 100%; }
+.app__frame {
+  position: relative; aspect-ratio: 2400 / 1290;
+  border: 1px solid var(--line); border-radius: var(--r); overflow: hidden;
+  background: var(--panel);
+  box-shadow: 0 60px 140px -50px rgba(0, 0, 0, 0.95);
+}
+.app__frame img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.app__beams { position: absolute; inset: 0; pointer-events: none; }
+.app__beams svg {
+  width: 100%; height: 100%; overflow: visible;
+  -webkit-mask-image: radial-gradient(closest-side, #000 55%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 55%, transparent 100%);
+  -webkit-mask-size: 170% 260%; mask-size: 170% 260%;
+  -webkit-mask-position: center; mask-position: center; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.beam { stroke: rgba(236, 236, 238, 0.85); stroke-width: 1.4px; vector-effect: non-scaling-stroke; }
+.beam--dash { stroke-dasharray: 7 6; stroke: rgba(236, 236, 238, 0.6); }
+
+/* ---------- speed: one exposure drag, seven real renders ---------- */
+.speed__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(40px, 5vw, 88px); align-items: center; }
+.speed__num {
+  font-family: var(--mono); font-weight: 300;
+  font-size: clamp(3.6rem, 8vw, 8rem); line-height: 0.9; letter-spacing: -0.06em;
+  color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.speed__num small { margin-left: 0.18em; font-size: 0.3em; letter-spacing: 0; color: var(--dim); }
+.speed__num .dot { margin-inline: -0.22em; }   /* a mono full stop owns a whole cell */
+.speed .h2 { margin-top: 32px; }
+.speed__copy .small { margin-top: 20px; max-width: 30rem; }
+.sweep { position: relative; --lo: 0.5556; --hi: 0.6667; --zero: 0.5556; }
+.sweep__frames { position: relative; aspect-ratio: 1400 / 935; border-radius: var(--r) var(--r) 0 0; overflow: hidden; background: #000; }
+.sweep__frames img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sweep__frames img:not(:first-child) { opacity: 0; }
+/* Orion's own slider, drawn the way the Develop panel draws it: an engraved
+ * name, the value in a well that turns teal once it leaves zero, ticks with
+ * zero in teal, a groove filled from zero to a ridged handle. */
+.sweep__panel { padding: 14px 16px 12px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--r) var(--r); background: #1c1c1e; }
+.sweep__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sweep__name { font-size: 11px; font-weight: 500; font-stretch: 100%; letter-spacing: 0.16em; text-transform: uppercase; color: #9a9aa0; }
+.sweep__val { padding: 3px 7px; border-radius: 4px; background: #111113; font-size: 12.5px; font-stretch: 100%; font-variant-numeric: tabular-nums; color: var(--text); }
+.sweep__val.is-changed { color: var(--accent); }
+.sweep__track { position: relative; margin-top: 8px; padding-top: 7px; }
+.sweep__ticks {
+  position: absolute; top: 0; left: 13px; right: 13px; height: 5px; pointer-events: none;
+  background:
+    linear-gradient(var(--accent), var(--accent)) calc(var(--zero) * 100%) 0 / 1.5px 100% no-repeat,
+    linear-gradient(#4a4a50, #4a4a50) 0 1px / 1px 4px no-repeat, linear-gradient(#4a4a50, #4a4a50) 25% 1px / 1px 4px no-repeat, linear-gradient(#4a4a50, #4a4a50) 50% 1px / 1px 4px no-repeat,
+    linear-gradient(#4a4a50, #4a4a50) 75% 1px / 1px 4px no-repeat, linear-gradient(#4a4a50, #4a4a50) 100% 1px / 1px 4px no-repeat;
+}
+.sweep__range {
+  --groove: #0f0f10; --fill: rgba(77, 182, 196, 0.72);
+  display: block; width: 100%; height: 18px; margin: 0; background: transparent;
+  -webkit-appearance: none; appearance: none; cursor: ew-resize; touch-action: pan-y;
+}
+.sweep__range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; box-shadow: inset 0 0 0 1px #2a2a2e; background: linear-gradient(to right, var(--groove) calc(13px + (100% - 26px) * var(--lo)), var(--fill) calc(13px + (100% - 26px) * var(--lo)) calc(13px + (100% - 26px) * var(--hi)), var(--groove) calc(13px + (100% - 26px) * var(--hi))); }
+.sweep__range::-moz-range-track { height: 6px; border-radius: 3px; box-shadow: inset 0 0 0 1px #2a2a2e; background: linear-gradient(to right, var(--groove) calc(13px + (100% - 26px) * var(--lo)), var(--fill) calc(13px + (100% - 26px) * var(--lo)) calc(13px + (100% - 26px) * var(--hi)), var(--groove) calc(13px + (100% - 26px) * var(--hi))); }
+.sweep__range::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 16px; margin-top: -5px; border-radius: 4px; background: linear-gradient(90deg, transparent 9px, rgba(0, 0, 0, 0.3) 9px 10px, transparent 10px 12.5px, rgba(0, 0, 0, 0.3) 12.5px 13.5px, transparent 13.5px 16px, rgba(0, 0, 0, 0.3) 16px 17px, transparent 17px) 0 50% / 100% 7px no-repeat, linear-gradient(#e4e4e5, #a7a7aa); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+.sweep__range::-moz-range-thumb { width: 26px; height: 16px; border: 0; border-radius: 4px; background: linear-gradient(90deg, transparent 9px, rgba(0, 0, 0, 0.3) 9px 10px, transparent 10px 12.5px, rgba(0, 0, 0, 0.3) 12.5px 13.5px, transparent 13.5px 16px, rgba(0, 0, 0, 0.3) 16px 17px, transparent 17px) 0 50% / 100% 7px no-repeat, linear-gradient(#e4e4e5, #a7a7aa); }
+.sweep__range:focus-visible { outline: none; }
+.sweep__range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--accent); }
+.sweep figcaption { margin-top: 14px; }
+@media (max-width: 900px) { .speed__grid { grid-template-columns: 1fr; } }
+
+/* ---------- register: four columns, Not yet takes the last two ---------- */
+/* register and keep sit on a glass panel that wraps their content, so their rules belong to something */
+.register > .wrap, .keep > .wrap { padding: clamp(22px, 3vw, 44px); border-radius: var(--r-glass); }
+.register__groups {
+  margin-top: clamp(28px, 3vw, 44px);
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: clamp(20px, 2.4vw, 40px);
+}
+.register__group { padding-block: 18px 26px; border-top: 1px solid var(--line); }
+.register__group .h3 { display: flex; align-items: center; gap: 9px; }
+.register__group .h3 .ico { font-size: 19px; color: var(--dim); }
+.register__list { list-style: none; margin: 10px 0 0; padding: 0; }
+.register__list li { font-size: 0.94rem; line-height: 1.42; color: rgba(236, 236, 238, 0.86); }
+.register__list li + li { margin-top: 7px; }
+.register__list code { font-family: var(--mono); font-size: 0.84em; color: var(--accent); }
+.register__notyet { grid-column: span 2; border-top: 1px dashed var(--faint); }
+.register__notyet .h3, .register__notyet li { color: var(--dim); }
+.register__notyet .register__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 28px; }
+.register__notyet .register__list li { margin: 0; }
+.register__notyet .register__list li:first-child { grid-column: 1 / -1; }
+@media (max-width: 1100px) { .register__groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .register__groups, .register__notyet .register__list { grid-template-columns: 1fr; }
+  .register__notyet { grid-column: auto; }
+}
+
+/* ---------- keep: the two files are the whole argument ---------- */
+.keep__grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 28px clamp(32px, 5vw, 88px); align-items: center; }
+.keep__lede { margin-top: 18px; }
+.keep__files { border-top: 1px solid var(--line); }
+.keep__file {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 14px;
+  padding-block: 16px; border-bottom: 1px solid var(--line);
+}
+.keep__file .ico { font-size: 22px; color: var(--dim); }
+.keep__name { font-family: var(--mono); font-weight: 300; font-size: clamp(1.05rem, 1.7vw, 1.5rem); line-height: 1.1; letter-spacing: -0.03em; }
+/* the sidecar is teal: it is the file Orion writes */
+.keep__file + .keep__file .keep__name, .keep__file + .keep__file .ico { color: var(--accent); }
+.keep__meta { font-family: var(--mono); font-size: 12px; color: var(--dim); text-align: right; }
+@media (max-width: 900px) { .keep__grid { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .keep__file { grid-template-columns: auto minmax(0, 1fr); } .keep__meta { grid-column: 2; text-align: left; } }
+
+/* ---------- research: the papers, as paper ---------- */
+/* Each citation is typeset as the first page of the work: venue, title,
+ * authors, and grey rules where the text would be (none of it is copied).
+ * Without motion the pages lie in a grid; motion.js stacks them at every
+ * width and turns one page per stretch of scroll. */
+.research { --sheet-w: min(480px, 40vw, 58vh); }
+.research__grid { display: grid; gap: clamp(28px, 3vw, 44px); }
+.research__count { display: none; margin-top: 28px; font-family: var(--mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.papers { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.paper {
+  position: relative; container-type: inline-size;
+  display: flex; flex-direction: column; aspect-ratio: 8.5 / 11;
+  padding: 9% 9% 10%; border-radius: 2px;
+  background: linear-gradient(170deg, #f7f7f5, #e4e4e1); color: #1c1c1f;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", Georgia, serif;
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.9), 0 2px 8px rgba(0, 0, 0, 0.4);
+  transform-origin: 50% 0; backface-visibility: hidden;
+}
+/* the underside of a page darkens as it turns toward you */
+.paper::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: var(--shade, 0); background: linear-gradient(to top, rgba(10, 10, 12, 0.6), rgba(10, 10, 12, 0.2)); }
+.paper__top { display: flex; justify-content: space-between; gap: 8px; font: 400 max(8px, 2.3cqi)/1.3 var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b70; }
+.paper__use { color: #16707c; }   /* the teal, darkened to read on paper */
+.paper__title { margin-top: 13%; font-size: clamp(0.85rem, 6cqi, 1.7rem); font-weight: 600; line-height: 1.16; text-align: center; text-wrap: balance; }
+.paper__title a { text-decoration: none; }
+.paper__title a:hover { text-decoration: underline; text-underline-offset: 0.14em; text-decoration-thickness: 1px; }
+.paper__authors { margin-top: 5%; font-size: clamp(0.66rem, 3.6cqi, 1rem); font-style: italic; text-align: center; color: #45454a; }
+.paper__body { position: relative; flex: 1; min-height: 38%; margin-top: 9%; }
+.paper__body::before { content: "Abstract"; display: block; text-align: center; font-size: max(8px, 2.6cqi); font-weight: 600; font-variant: small-caps; letter-spacing: 0.06em; color: #55555a; }
+.paper__body::after {
+  content: ""; position: absolute; inset: 2.2em 0 0;
+  background:
+    repeating-linear-gradient(to bottom, rgba(28, 28, 31, 0.17) 0 2px, transparent 2px 7px) 0 0 / 47% 100% no-repeat,
+    repeating-linear-gradient(to bottom, rgba(28, 28, 31, 0.17) 0 2px, transparent 2px 7px) 100% 0 / 47% 100% no-repeat;
+}
+/* every other page carries a figure in its right column */
+.paper:nth-child(even) .paper__body::after {
+  background:
+    linear-gradient(#d6d6d2, #d6d6d2) 100% 0 / 47% 48% no-repeat,
+    repeating-linear-gradient(to bottom, rgba(28, 28, 31, 0.17) 0 2px, transparent 2px 7px) 0 0 / 47% 100% no-repeat,
+    repeating-linear-gradient(to bottom, rgba(28, 28, 31, 0.17) 0 2px, transparent 2px 7px) 100% 0 / 47% 100% no-repeat;
+}
+@media (max-width: 1000px) { .papers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .papers { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 74%; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 12px; }
+  .paper { scroll-snap-align: start; }
+}
+/* stacked by motion.js */
+.research.is-stacked .research__grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; }
+.research.is-stacked .research__count { display: block; }
+.research.is-stacked .papers { display: block; position: relative; height: calc(var(--sheet-w) * 11 / 8.5 + 70px); overflow: visible; padding: 0; }
+.research.is-stacked .paper { position: absolute; top: 0; left: 50%; width: var(--sheet-w); margin-left: calc(var(--sheet-w) / -2); }
+.research.is-stacked .paper:nth-child(3n+1) { rotate: -1.1deg; }
+.research.is-stacked .paper:nth-child(3n+2) { rotate: 0.8deg; }
+@media (max-width: 760px) {
+  .research { --sheet-w: min(320px, 74vw, 46vh); }
+  .research.is-stacked .research__grid { grid-template-columns: 1fr; gap: 20px; }
+  .research.is-stacked .research__count { margin-top: 10px; }
+}
+
+/* ---------- assistant: a prompt, the tool calls, the proposal beside it ---------- */
+/* One window, framed the way Orion would show it: the photograph with the
+ * proposal across it, and Claude Code docked on its leading side, where the
+ * app puts its assistant column, in a Ghostty-style pane
+ * (the banner, the transcript, the ❯ input between two rules, the model
+ * underneath). The heading and one line sit in a row over it, as wide as the
+ * window, which takes most of the screen; on a wide screen the whole scene pins
+ * while the transcript runs. The logo is drawn cell by cell, the way a
+ * terminal draws block characters, so its rows meet. */
+.assistant__scene { width: min(1680px, 100% - 2 * clamp(16px, 2.5vw, 40px)); margin-inline: auto; }
+.assistant__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 40px; }
+.assistant__sub { max-width: 34rem; font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.1rem); line-height: 1.45; color: var(--dim); }
+.agent {
+  margin-top: clamp(18px, 2vw, 28px);
+  display: grid; grid-template-columns: minmax(320px, 1fr) minmax(0, 2.2fr);
+  overflow: hidden;
+  border: 1px solid var(--line); border-radius: 10px; background: #0c0c0d;
+  box-shadow: 0 40px 100px -40px rgba(0, 0, 0, 0.9);
+}
+.agent__bar {
+  grid-column: 1 / -1; position: relative; display: flex; align-items: center; justify-content: center; height: 34px;
+  background: #161618; border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-stretch: 100%; font-size: 11px; color: var(--dim);
+}
+.agent__dots { position: absolute; left: 12px; top: 50%; translate: 0 -50%; display: flex; gap: 7px; }
+.agent__dots i { width: 11px; height: 11px; border-radius: 50%; background: #3a3a3e; }
+.agent__photo { aspect-ratio: 16 / 9; }
+/* the pane keeps its size: the photograph sets the row's height, and the transcript runs inside */
+.agent__term {
+  display: flex; flex-direction: column; contain: size; overflow: hidden;
+  border-right: 1px solid var(--line);
+  font-family: var(--mono); font-stretch: 100%; font-size: clamp(11.5px, 0.85vw, 13px); line-height: 1.5; color: var(--text);
+}
+/* once the transcript outgrows the window its oldest lines leave off the top, as in a terminal */
+.agent__screen { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; overflow: hidden; }
+.agent__banner { display: grid; grid-template-columns: 9ch auto; column-gap: 2ch; align-items: center; padding: 16px 18px 4px; line-height: 1.3; }
+.agent__logo { display: block; width: 9ch; height: 3.9em; fill: #d97757; shape-rendering: crispEdges; }
+.agent__banner p { margin: 0; color: var(--dim); white-space: nowrap; }
+.agent__banner b { font-weight: 600; color: var(--text); }
+.agent__log { flex: 1; list-style: none; margin: 0; padding: 14px 18px 10px; display: grid; gap: 12px; align-content: start; }
+.agent__user, .agent__step, .agent__reply { display: grid; grid-template-columns: 1.6ch minmax(0, 1fr); column-gap: 1ch; }
+.agent__user { color: var(--dim); }
+.agent__said { color: var(--text); }
+.agent__dot { color: var(--accent); }
+.agent__user .agent__dot, .agent__reply .agent__dot { color: var(--dim); }
+.agent__mcp { color: var(--faint); }
+.agent__out { display: block; color: var(--dim); }
+.agent__input { margin: 0 14px; padding: 8px 4px; min-height: 2.8em; border-block: 1px solid #3a3a3e; color: var(--dim); }
+.agent__prompt, .agent__typed { color: var(--text); }
+.agent__typed::after { content: ""; display: inline-block; width: 0.6em; height: 1.2em; margin-left: 1px; vertical-align: -0.25em; background: var(--dim); animation: caret 1.1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.agent__status { margin: 0; padding: 6px 18px 12px; font-size: 11px; color: var(--faint); }
+/* staged by motion.js: the transcript arrives as the page scrolls */
+.is-staged [data-step]:not(.is-shown) { display: none; }
+.is-staged [data-step].is-shown { animation: line-in .35s var(--ease) both; }
+@keyframes line-in { from { opacity: 0; transform: translateY(6px); } }
+/* pinned whole on a wide screen: on a short one the scene narrows so it fits under the nav
+ * (heading ~52px, gap 28, bar 36, and a 16:9 photo 2.2/3.2 of the width: 0.387 of it tall) */
+@media (min-width: 901px) { .motion .assistant__scene { max-width: max(760px, calc((100svh - 240px) * 2.58)); } }
+@media (max-width: 900px) { .agent { grid-template-columns: 1fr; } .agent__term { height: 30em; border-right: 0; border-bottom: 1px solid var(--line); } }
+@media (max-width: 600px) { .agent__term { font-size: 10.5px; } }
+
+/* ---------- alpha: the close ---------- */
+/* The close answers the hero: the pier fills the screen, develops, and carries
+ * the ask. With motion it flies in out of Orion's Belt as the sky falls away to
+ * black, then develops. */
+.alpha { position: relative; height: 100svh; min-height: 600px; overflow: hidden; }
+.alpha__frame { position: absolute; inset: 0; }
+.alpha__scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(to right, rgba(11, 11, 12, 0.72) 0%, rgba(11, 11, 12, 0.3) 36%, rgba(11, 11, 12, 0) 60%),
+    linear-gradient(to bottom, rgba(11, 11, 12, 0.62) 0%, rgba(11, 11, 12, 0) 24%);
+}
+.alpha .cmp__label { bottom: auto; top: calc(var(--nav-h) + 20px); }
+.alpha__copy { position: absolute; left: 0; right: 0; bottom: clamp(36px, 8vh, 96px); z-index: 3; pointer-events: none; }
+.alpha__copy .display { max-width: 10ch; }
+.alpha__cta { margin-top: 30px; }
+.alpha__cta a { pointer-events: auto; }
+.alpha__fine { margin-top: 18px; max-width: 25rem; color: rgba(236, 236, 238, 0.74); }
+@media (max-width: 760px) {
+  .alpha__frame > img { object-position: 70% 50%; }
+  .alpha__scrim {
+    background:
+      linear-gradient(to top, rgba(11, 11, 12, 0.9) 0%, rgba(11, 11, 12, 0.4) 42%, rgba(11, 11, 12, 0) 66%),
+      linear-gradient(to bottom, rgba(11, 11, 12, 0.62) 0%, rgba(11, 11, 12, 0) 24%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; }
+}
