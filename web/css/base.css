@@ -189,6 +189,7 @@ html.lenis, html.lenis body { height: auto; }
   text-decoration: none;
 }
 .nav__mark img { width: 30px; height: auto; }
+.nav__mark { min-height: 44px; }
 .nav__nav { position: relative; }
 .nav__links { display: flex; gap: 2px; list-style: none; margin: 0; padding: 0; }
 .nav__links a {
@@ -241,7 +242,9 @@ html.lenis, html.lenis body { height: auto; }
   .js .nav.is-open .nav__links { visibility: visible; opacity: 1; transform: none; transition: opacity .25s, transform .35s var(--ease); }
   .js .nav__links a { padding: 13px 14px; font-size: 1rem; border-radius: 14px; }
   .js .nav__links .ico { display: block; }
-  html:not(.js) .nav__nav { overflow-x: auto; max-width: 42vw; }
+  html:not(.js) .nav__in { height: auto; min-height: 54px; grid-template-columns: 1fr auto; border-radius: 22px; }
+  html:not(.js) .nav__nav { grid-row: 2; grid-column: 1 / -1; overflow-x: auto; padding-block: 4px; }
+  html:not(.js) .nav__cta { grid-column: 2; grid-row: 1; }
 }
 @media (max-width: 400px) { .nav__mark { letter-spacing: 0.08em; } .nav__cta { padding-inline: 12px; } }
 
@@ -253,6 +256,6 @@ html.lenis, html.lenis body { height: auto; }
 .footer__mark img { width: 24px; height: auto; }
 .footer__credit { margin-top: 6px; font-size: 0.78rem; }
 .footer__credit a { text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 0.2em; }
-.footer__links a { text-decoration: none; }
+.footer__links a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
 .footer__links a:hover { color: var(--text); }
 .section--tight { padding-block: clamp(64px, 7vw, 112px); }

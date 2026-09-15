@@ -22,7 +22,6 @@
 <link rel="preload" as="image" href="img/hero-edit-2400.jpg" imagesrcset="img/hero-edit-1200.jpg 1200w, img/hero-edit-2400.jpg 2400w" imagesizes="100vw">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/sections.css">
-<script>document.documentElement.classList.add('js')</script>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -95,7 +94,8 @@
     <div class="wrap">
       <h1 class="display" id="hero-title">See every edit at full resolution.</h1>
       <p class="hero__sub">A RAW editor for macOS, with no subscription and no account.</p>
-      <p class="hero__cta"><a class="btn btn--lg btn--ghost glass" href="mailto:alpha@bankoti.dev?subject=Orion">Contact</a></p>
+      <p class="hero__cta"><a class="btn btn--lg" href="#app">Explore the editor</a><a class="btn btn--lg btn--ghost glass" href="mailto:alpha@bankoti.dev?subject=Orion">Contact</a></p>
+      <p class="hero__availability">In development for macOS 14 and later</p>
     </div>
   </div>
 </section>
@@ -262,7 +262,7 @@
       <h2 class="h2" id="research-title" data-reveal>Every filter cites its paper</h2>
       <p class="research__count" aria-hidden="true"><span data-paper-n>1</span> / 8</p>
     </div>
-    <ol class="papers">
+    <ol class="papers" id="papers">
       <li class="paper">
         <div class="paper__top"><span class="paper__use">Haze removal</span><span>CVPR 2009</span></div>
         <h3 class="paper__title"><a href="https://doi.org/10.1109/CVPR.2009.5206515">Single Image Haze Removal Using Dark Channel Prior</a></h3>

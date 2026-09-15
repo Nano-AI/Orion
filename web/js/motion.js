@@ -520,6 +520,31 @@
         tl.to(papers[k], { y: (k - i - 1) * STEP, scale: 1 - (k - i - 1) * SHRINK, duration: 0.6, ease: 'power2.out' }, i + 0.4);
       }
     }
+    // A direct route to every citation, including by keyboard. Focusing a paper
+    // under the pile must not leave the focused link covered by another sheet.
+    const browse = document.createElement('button');
+    browse.type = 'button';
+    browse.className = 'btn btn--ghost research__browse';
+    browse.textContent = 'View all papers';
+    browse.setAttribute('aria-controls', 'papers');
+    const expand = () => {
+      const top = section.getBoundingClientRect().top + scrollY;
+      tl.scrollTrigger.kill(true);
+      tl.kill();
+      gsap.set(papers, { clearProps: 'all' });
+      section.classList.remove('is-stacked');
+      browse.remove();
+      ScrollTrigger.refresh();
+      window.__lenis ? window.__lenis.scrollTo(top - NAV, { immediate: true }) : window.scrollTo(0, top - NAV);
+    };
+    browse.addEventListener('click', () => {
+      expand();
+      section.querySelector('.paper a')?.focus({ preventScroll: true });
+    });
+    section.querySelector('.research__head').append(browse);
+    section.querySelector('.papers').addEventListener('focusin', () => {
+      if (section.classList.contains('is-stacked')) expand();
+    });
   });
 
   // ---------- assistant: typed, called, and the proposal slides over yours ----------

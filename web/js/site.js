@@ -4,7 +4,6 @@
  */
 (() => {
   'use strict';
-  document.documentElement.classList.add('js');
 
   // A hand on a slider wins: motion.js stops steering a figure once touched.
   const touchable = (fig, input) => {
@@ -22,8 +21,14 @@
       toggle.setAttribute('aria-expanded', String(open));
     };
     toggle.addEventListener('click', () => setOpen(!nav.classList.contains('is-open')));
-    nav.addEventListener('keydown', e => { if (e.key === 'Escape') { setOpen(false); toggle.focus(); } });
+    nav.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && nav.classList.contains('is-open')) { setOpen(false); toggle.focus(); }
+    });
     nav.querySelectorAll('.nav__links a').forEach(a => a.addEventListener('click', () => setOpen(false)));
+    document.addEventListener('pointerdown', e => { if (!nav.contains(e.target)) setOpen(false); });
+    nav.addEventListener('focusout', e => { if (!nav.contains(e.relatedTarget)) setOpen(false); });
+    matchMedia('(max-width: 760px)').addEventListener('change', () => setOpen(false));
+    document.documentElement.classList.add('js');
   }
 
   if ('IntersectionObserver' in window) {
@@ -75,6 +80,13 @@
       input.setAttribute('aria-valuetext', `${Math.round(v)}% ${unit}`.trim());
     };
     input.addEventListener('input', set);
+    input.addEventListener('keydown', e => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      e.preventDefault();
+      const direction = ['ArrowRight', 'ArrowUp'].includes(e.key) ? 1 : -1;
+      input.value = Number(input.value) + direction * (e.shiftKey ? 10 : 1);
+      set();
+    });
     touchable(fig, input);
     set();
   });
