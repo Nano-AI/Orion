@@ -60,6 +60,8 @@ thumbnail-cache/
 
 # --- Third-party -----------------------------------------------------------
 vendor/
+# ...except the landing page's vendored GSAP, ScrollTrigger and Lenis, which Pages deploys (#267)
+!web/js/vendor/
 third_party/*/
 !third_party/CMakeLists.txt
 # SwiftTerm (MIT) backs the assistant drawer's terminal — vendored source,

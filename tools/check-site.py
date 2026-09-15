@@ -17,6 +17,7 @@ being built by separate agents. Checks, each printed as it runs:
   h. no personal webmail address (gmail, icloud, outlook, ...) in the page, CSS or JS
   i. no image under web/ (or inlined in its JS) carries EXIF, XMP or IPTC metadata
   j. no home-directory path (/Users/<name>/, /home/<name>/) in the page, CSS, JS or SVG
+  k. every local file the page references is tracked by git, so the deploy has it
 
 This is a parse over one HTML file, not a browser: it does not fetch remote
 URLs, run scripts, or check that srcset candidates are the right size. It
@@ -249,6 +250,19 @@ def main():
                     and home.search(f.read_text(encoding="utf-8", errors="ignore"))})
     ok &= check(not homes, "(j) no home-directory path in the page, CSS, JS or SVG",
                 f"(j) home-directory path in: {homes}")
+
+    # (k) every local file the page references is tracked by git. Pages deploys a
+    # checkout, so a file that exists here but is untracked, or ignored like the
+    # repository-wide vendor/ rule that kept GSAP, ScrollTrigger and Lenis out of
+    # the first deploy (#267), 404s live while the local preview works.
+    import subprocess
+    tracked = set(subprocess.run(["git", "ls-files", "-z", "web"], cwd=REPO,
+                                 capture_output=True, text=True).stdout.split("\0"))
+    untracked = sorted({url for _, url in p.local_urls
+                        if (clean := url.split("#")[0].split("?")[0]) and (WEB / clean).exists()
+                        and str((WEB / clean).resolve().relative_to(REPO)) not in tracked})
+    ok &= check(not untracked, "(k) every local file the page references is tracked by git",
+                f"(k) referenced but not tracked, so missing once deployed: {untracked}")
 
     if not ok:
         print("\ncheck-site.py: FAILED")
