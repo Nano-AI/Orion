@@ -35,25 +35,6 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      # The download button's file (#268). The repository is private, so a
-      # release asset's own URL 404s for a visitor: the newest release that has
-      # a disk image is fetched here and served from the site as
-      # download/Orion.dmg. No such release fails the deploy, rather than
-      # publishing a button that 404s. Publishing a release does not redeploy
-      # by itself; run this workflow afterwards (gh workflow run pages.yml).
-      - name: Fetch the newest release's disk image
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag=""
-          for t in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 30 --exclude-drafts --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[].tagName'); do
-            if gh release view "$t" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -q '\.dmg$'; then tag="$t"; break; fi
-          done
-          if [ -z "$tag" ]; then echo "::error::no release has a .dmg, so the download button would 404"; exit 1; fi
-          mkdir -p web/download
-          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern '*.dmg' --output web/download/Orion.dmg
-          echo "serving $tag as download/Orion.dmg ($(du -h web/download/Orion.dmg | cut -f1))"
-
       - name: Upload web/ as the Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

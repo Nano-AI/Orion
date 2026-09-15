@@ -18,7 +18,7 @@ being built by separate agents. Checks, each printed as it runs:
   i. no image under web/ (or inlined in its JS) carries EXIF, XMP or IPTC metadata
   j. no home-directory path (/Users/<name>/, /home/<name>/) in the page, CSS, JS or SVG
   k. every local file the page references is tracked by git, so the deploy has it
-  l. each file the deploy adds itself (the download) is still written by pages.yml
+  l. public downloads remain unavailable during the development preview
 
 This is a parse over one HTML file, not a browser: it does not fetch remote
 URLs, run scripts, or check that srcset candidates are the right size. It
@@ -59,11 +59,6 @@ REGISTER_STRINGS = [
     "Fujifilm X-Trans sensors",
     "Windows",
 ]
-
-# Files the Pages workflow adds to the site at deploy, which no checkout has: the
-# download button's disk image is the newest release's (#268). (a) and (k) skip
-# them, and (l) checks the workflow still writes each one.
-DEPLOY_ADDED = {"download/Orion.dmg"}
 
 VOID = {
     "area", "base", "br", "col", "embed", "hr", "img", "input",
@@ -160,7 +155,7 @@ def main():
     missing = []
     for attr, url in p.local_urls:
         clean = url.split("#")[0].split("?")[0]
-        if not clean or clean in DEPLOY_ADDED:
+        if not clean:
             continue
         candidate = (WEB / clean).resolve()
         if not candidate.exists():
@@ -265,18 +260,19 @@ def main():
     tracked = set(subprocess.run(["git", "ls-files", "-z", "web"], cwd=REPO,
                                  capture_output=True, text=True).stdout.split("\0"))
     untracked = sorted({url for _, url in p.local_urls
-                        if (clean := url.split("#")[0].split("?")[0]) and clean not in DEPLOY_ADDED
+                        if (clean := url.split("#")[0].split("?")[0])
                         and (WEB / clean).exists()
                         and str((WEB / clean).resolve().relative_to(REPO)) not in tracked})
     ok &= check(not untracked, "(k) every local file the page references is tracked by git",
                 f"(k) referenced but not tracked, so missing once deployed: {untracked}")
 
-    # (l) what the page links to but no checkout holds is only safe while the
-    # deploy still puts it there
+    # (l) the preview must not advertise or publish an installer.
     workflow = (REPO / ".github" / "workflows" / "pages.yml").read_text(encoding="utf-8")
-    unwritten = sorted(f for f in DEPLOY_ADDED if f"web/{f}" not in workflow)
-    ok &= check(not unwritten, f"(l) pages.yml still writes {', '.join(sorted(DEPLOY_ADDED))}",
-                f"(l) linked but no longer added by pages.yml: {unwritten}")
+    ok &= check(not any(word in src for word in ("downloadUrl", ".dmg", "right-click"))
+                and "gh release download" not in workflow
+                and not list(WEB.rglob("*.dmg")),
+                "(l) preview has no installer links, installation copy or disk image",
+                "(l) public download or installation copy has returned")
 
     if not ok:
         print("\ncheck-site.py: FAILED")
