@@ -18,10 +18,9 @@
 import AppKit
 import SwiftUI
 
-/// Hosts one `SwiftTerm.LocalProcessTerminalView` running `/bin/zsh -l -c
-/// <command>` in `workingDirectory`. A login shell so PATH resolves
-/// GUI-app-blind installs (nvm, a Homebrew shim set in .zprofile, ...) the
-/// way a real Terminal.app window would.
+/// Hosts one `SwiftTerm.LocalProcessTerminalView` running `/bin/zsh -l -i -c`
+/// in `workingDirectory`. Both .zprofile and .zshrc must load to find CLI
+/// installs (native installers, nvm, Homebrew) when Orion opens from Finder.
 ///
 /// That shell wrapper is also what keeps a missing `claude`/`codex` from
 /// crashing anything: `startProcess` always launches `/bin/zsh` itself, which
@@ -219,6 +218,14 @@ struct AssistantColumn: View {
             .foregroundStyle(Palette.dim)
             .help("Restart")
 
+            Button("Choose tools folder", systemImage: "folder.badge.gearshape") {
+                chooseToolsFolder()
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.plain)
+            .foregroundStyle(Palette.dim)
+            .help("Choose the assistant’s working folder (.mcp.json)")
+
             if let notice = model.notice {
                 Text(notice).font(.caption).foregroundStyle(Palette.dim)
             }
@@ -233,6 +240,21 @@ struct AssistantColumn: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 28)
+    }
+
+    private func chooseToolsFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = model.workingDirectory
+        panel.message = "Choose the folder containing Orion’s .mcp.json. The assistant will restart in this folder."
+        panel.prompt = "Choose"
+        panel.begin { response in
+            if response == .OK, let directory = panel.url {
+                model.setWorkingDirectory(directory)
+            }
+        }
     }
 }
 

@@ -1,0 +1,4 @@
+# Start Codex from the repository root. The server resolves the build locally.
+[mcp_servers.orion]
+command = "node"
+args = ["mcp/server.ts"]

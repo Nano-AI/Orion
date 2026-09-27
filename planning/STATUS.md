@@ -24,22 +24,22 @@ components folded per §6, optionally feathered onto the photograph's own edges,
 through the graph, the POD facade, the panel rows, the sidecar, undo and the
 bench.
 
-**Last updated:** 2026-09-15 — engine performance and desktop interaction audit (#271). Fusion strength runs 4 nodes instead of 35; paired daylight p95 36.548 → 25.903 ms and 35.587 → 25.463. Compare/autosave, cold preview, rotation undo, proposal review and export feedback fixes are uncommitted. All nine recorded gates pass; 12 targeted scenarios pass. Full 42 MP exposure still misses 16 ms; session retention reaches 9.51 GiB. See `feedback/2026-09-15-engine-ui-audit.md` for evidence and limits. Website #270 is published; downloads remain withdrawn (#268).
+**Last updated:** 2026-09-26 — repository public; website download buttons now lead to GitHub Releases, including alpha pre-releases (#273), with source and research links restored. Latest installer is `v0.5.0-alpha.5`; newer source fixes are not a new binary release. Assistant launch fix #272 and its recovery report are included in the requested publication. Prior audit limits remain: full 42 MP exposure misses 16 ms; session retention reaches 9.51 GiB (`feedback/2026-09-15-engine-ui-audit.md`).
 
 **Recent sessions** — audit reports in `feedback/`; older rows and write-ups in `HISTORY.md`:
 
-**Publication:** the developer requested committing and pushing the verified
-audit on 2026-09-15. Target branch: `fix/engine-ui-audit`. The uncommitted labels
-below describe the audit's original handoff, before this publication step.
+**Publication:** the developer requested committing and pushing all pending work
+to `main` on 2026-09-26. Historical uncommitted labels below describe the original
+handoffs. The local Codex configuration now uses a relative server path.
 
 | Date | What landed |
 |---|---|
+| 2026-09-26 | **Public repository and release downloads (#273).** Website CTAs and metadata use GitHub Releases; source and research links restored, preview-only copy removed. All nine gates pass: 1104 engine, 4215 viewport, 271 decision rows; gestures, screens, modes, wiring, agent and site green. Public release/research URLs return HTTP 200 without authentication. Build current; `git diff --check` clean. |
+| 2026-09-24 | **Assistant launch from Finder (#272).** Interactive login zsh loads the CLI PATH in `.zshrc`; both commands execute via quoted argv. Tools-folder picker persists the working directory and restarts; missing saved folders fall back with a notice. Five regression checks cover real shell launch/context and config detection. All nine gates pass, packaging/signature checks pass; installed in `/Applications` and Claude starts. Local tools folder set to this checkout. Uncommitted. |
 | 2026-09-15b | **Engine performance and desktop interaction audit (#271).** Fusion invalidation optimized with paired timings and GPU equivalence checks; Compare/autosave, cold preview, rotation undo, proposal locking/committed baseline, readability and export feedback fixed. Nine gates and 12 targeted scenarios pass; exposure budget, retained memory and broader UI coverage remain open. Uncommitted. `feedback/2026-09-15-engine-ui-audit.md`. |
 | 2026-09-15 | **Website audit and polish (#270).** Mobile fallback/menu dismissal, accurate static exposure demo, keyboard compare steps, 44 px exposure target, Firefox focus style, accessible paper-grid escape from the animated stack, hero tour action and development status. `feedback/2026-09-15-website-audit.md`; all nine gates pass. Chrome tested at 320–1440 px over localhost, including reduced motion and script failures. Committed as `ba5ebda`, fast-forwarded to `origin/main` at the developer's request; Pages deployment `35002361269` succeeded. |
 | 2026-09-14q | **Compare shows white balance (#269).** `captureOriginal` starts from `defaults` (the camera's as-shot reading) instead of copying the current temperature and tint; `repro/compare-shows-white-balance.txt` red before, green after; compare scenarios and the nine checks green. ⚠ 24 unrelated repro files fail or stop in this checkout (none uses compare). Not committed. |
 | 2026-09-14p | **Download and Contact (#268).** Pages workflow serves the newest release's `.dmg` as `download/Orion.dmg` (fails the deploy if none); nav Download, hero and close Download for macOS plus glass Contact, footer Research/Download/Contact; `check-site.py` (l). `v0.5.0-alpha.5` pre-release packaged clean from `a2eb517` and published. |
-| 2026-09-14o | **Published; MCP-driven workflow; leaked binaries gone (#267).** Heading and one line over a window up to 1680 px wide (16:9 photo, Claude pane 1:2.2), nav "MCP", Saturn behind Keep. Seven release DMGs verified leaking and deleted, `dist/` cleared. MX verified on Cloudflare; site committed and pushed to `main` for Pages. |
-| 2026-09-14n | **No PII (#266).** Site audited clean (text, images, inlined maps, deployed `main`). App binary had `/Users/<name>/` ×50: `strip -S` in packaging, engine resource paths now relative to the build dir found at runtime, SwiftTerm's dead dump path moved to the temp dir, packaging fails on any `/Users/<name>/`, `$HOME` or git email, `check-site.py` (i) image metadata and (j) home paths. Old release DMGs still carry it. Nothing committed. |
 
 ---
 

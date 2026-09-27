@@ -1,5 +1,17 @@
 # Orion — session history
 
+## Recent-session row archived 2026-09-26
+
+| Date | What landed |
+|---|---|
+| 2026-09-14o | **Published; MCP-driven workflow; leaked binaries gone (#267).** Heading and one line over a window up to 1680 px wide (16:9 photo, Claude pane 1:2.2), nav "MCP", Saturn behind Keep. Seven release DMGs verified leaking and deleted, `dist/` cleared. MX verified on Cloudflare; site committed and pushed to `main` for Pages. |
+
+## Recent-session row archived 2026-09-24
+
+| Date | What landed |
+|---|---|
+| 2026-09-14n | **No PII (#266).** Site audited clean (text, images, inlined maps, deployed `main`). App binary had `/Users/<name>/` ×50: `strip -S` in packaging, engine resource paths now relative to the build dir found at runtime, SwiftTerm's dead dump path moved to the temp dir, packaging fails on any `/Users/<name>/`, `$HOME` or git email, `check-site.py` (i) image metadata and (j) home paths. Old release DMGs still carry it. Nothing committed. |
+
 ## Recent-session rows archived 2026-09-15, #271
 
 Moved verbatim from `STATUS.md`; commit and follow-up claims describe their original sessions.

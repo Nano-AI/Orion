@@ -70,6 +70,49 @@ extension ViewportTests {
         let argvCodex = AssistantProcess.buildArgv(for: "codex")
         let hasAppendSystemPrompt = argvCodex.contains("--append-system-prompt")
         report(!hasAppendSystemPrompt,
-               "codex argv does not contain --append-system-prompt")
+                "codex argv does not contain --append-system-prompt")
+    }
+
+    /// Reproduce Finder's minimal PATH with commands installed only by .zshrc.
+    /// Execute the product argv so a regression to login-only actually fails.
+    static func testAssistantLaunchLoadsInteractivePath() {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("orion assistant ' \(UUID())")
+        do {
+            try fm.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? fm.removeItem(at: root) }
+            try "export PATH=\"$ZDOTDIR:$PATH\"\n".write(
+                to: root.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
+            for command in AssistantPanelModel.commands {
+                let stub = root.appendingPathComponent(command)
+                try "#!/bin/sh\nprintf '%s\\n' \"$0\" \"$@\"\n".write(
+                    to: stub, atomically: true, encoding: .utf8)
+                try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+                let process = Process()
+                let output = Pipe()
+                process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+                process.arguments = AssistantProcess.buildArgv(for: command)
+                process.environment = ["HOME": root.path, "ZDOTDIR": root.path,
+                                       "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TERM": "xterm-256color"]
+                process.standardOutput = output
+                process.standardError = FileHandle.nullDevice
+                try process.run()
+                let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                process.waitUntilExit()
+                report(process.terminationStatus == 0 && text.hasPrefix(stub.path + "\n"),
+                       "\(command) launches using .zshrc PATH from a GUI environment")
+                if command == "claude" {
+                    report(text.contains("--append-system-prompt\n" + AssistantProcess.orionContext + "\n"),
+                           "Claude receives the complete context as one literal argument")
+                }
+            }
+            report(AssistantPanelModel.configurationNotice(in: root) != nil,
+                   "missing MCP configuration reports how to choose a tools folder")
+            try "{}".write(to: root.appendingPathComponent(".mcp.json"), atomically: true, encoding: .utf8)
+            report(AssistantPanelModel.configurationNotice(in: root) == nil,
+                   "configured tools folder clears the notice")
+        } catch {
+            report(false, "assistant launch fixture", "\(error)")
+        }
     }
 }

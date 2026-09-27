@@ -39,11 +39,8 @@ final class AssistantPanelModel {
     static let maxFontSize: Double = 28
     static let defaultFontSize: Double = 13
 
-    /// Resolved once at launch (below) rather than on every SwiftUI body
-    /// evaluation: there is no in-app control that changes it, and
-    /// recomputing it from a view's `body` would mean writing `notice`, an
-    /// observed property, on every render.
-    let workingDirectory: URL
+    /// Resolved at launch or by the tools-folder picker, never during rendering.
+    private(set) var workingDirectory: URL
 
     /// Set while resolving `workingDirectory`, and shown as a one-line notice
     /// in the column header rather than silently starting the shell
@@ -72,7 +69,8 @@ final class AssistantPanelModel {
         // server to load. Falls back to the user's home, with `notice` set,
         // when neither checks out.
         let fm = FileManager.default
-        if let saved = defaults.string(forKey: Keys.workingDirectory) {
+        if let saved = defaults.string(forKey: Keys.workingDirectory),
+           (try? URL(fileURLWithPath: saved).resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
             workingDirectory = URL(fileURLWithPath: saved)
         } else {
             let repo = Bundle.main.bundleURL
@@ -82,9 +80,21 @@ final class AssistantPanelModel {
                 workingDirectory = repo
             } else {
                 workingDirectory = fm.homeDirectoryForCurrentUser
-                notice = "no .mcp.json here; the Orion tools will not load"
             }
         }
+        notice = Self.configurationNotice(in: workingDirectory)
+    }
+
+    static func configurationNotice(in directory: URL) -> String? {
+        FileManager.default.fileExists(atPath: directory.appendingPathComponent(".mcp.json").path)
+            ? nil : "Choose a tools folder containing .mcp.json"
+    }
+
+    func setWorkingDirectory(_ directory: URL) {
+        workingDirectory = directory
+        UserDefaults.standard.set(directory.path, forKey: Keys.workingDirectory)
+        notice = Self.configurationNotice(in: directory)
+        restart()
     }
 
     func toggle() { isOpen.toggle() }
@@ -98,16 +108,16 @@ final class AssistantPanelModel {
 enum AssistantProcess {
     static let orionContext = "Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one `current_photo` returns, and every tool's `path` defaults to it, so never ask which file. Start any edit with `describe_edits` and `get_stats`. All values are absolute, never deltas. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after `propose_edit` say what you changed and stop; do not call `approve_edit` unless asked. A 512 px proxy costs about 220 tokens; prefer `get_stats` when numbers will do."
 
-    /// Builds args array for the terminal command, adding --append-system-prompt for claude.
-    /// For claude, returns ["-l", "-c", "exec \"$0\" \"$@\"", "claude", "--append-system-prompt", "<context>"]
-    /// so the context is passed as a separate argv element and never interpolated into -c.
-    /// For other commands, returns ["-l", "-c", command].
+    /// Interactive + login matches Terminal.app: CLI installs commonly add PATH
+    /// in .zshrc, which a login-only shell skips when launched from Finder.
+    /// Pass every command and argument as data, never shell source.
     static func buildArgv(for command: String) -> [String] {
+        let shell = ["-l", "-i", "-c", "exec \"$0\" \"$@\"", command]
         switch command {
         case "claude":
-            return ["-l", "-c", "exec \"$0\" \"$@\"", "claude", "--append-system-prompt", orionContext]
+            return shell + ["--append-system-prompt", orionContext]
         default:
-            return ["-l", "-c", command]
+            return shell
         }
     }
 }

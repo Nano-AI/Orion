@@ -7,7 +7,7 @@ Defaults to web/index.html; pass a temp stitched copy while sections are still
 being built by separate agents. Checks, each printed as it runs:
 
   a. every local href/src/srcset points at a file that exists under web/
-  b. no github.com/Nano-AI URL anywhere (the repo is private, every one 404s)
+  b. public repository and research links are present
   c. the 22 register strings each appear exactly once as an <li>'s text
   d. at least one mailto: link exists, every mailto: is the same address, and
      that address is on bankoti.dev rather than a personal mailbox
@@ -18,7 +18,7 @@ being built by separate agents. Checks, each printed as it runs:
   i. no image under web/ (or inlined in its JS) carries EXIF, XMP or IPTC metadata
   j. no home-directory path (/Users/<name>/, /home/<name>/) in the page, CSS, JS or SVG
   k. every local file the page references is tracked by git, so the deploy has it
-  l. public downloads remain unavailable during the development preview
+  l. download actions and metadata use GitHub Releases, including pre-releases
 
 This is a parse over one HTML file, not a browser: it does not fetch remote
 URLs, run scripts, or check that srcset candidates are the right size. It
@@ -27,12 +27,15 @@ ship anyway.
 """
 import base64
 import html.parser
+import json
 import re
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 WEB = REPO / "web"
+SOURCE_URL = "https://github.com/Nano-AI/Orion"
+RELEASES_URL = SOURCE_URL + "/releases"
 
 REGISTER_STRINGS = [
     "Exposure, contrast, highlights, shadows, whites, blacks",
@@ -72,6 +75,7 @@ class PageParser(html.parser.HTMLParser):
         self.errors = []
         self.local_urls = []       # (attr, value)
         self.mailtos = []
+        self.links = []
         self.canonical = None
         self.aria_hidden_depth = 0
         self.stack = []            # (tag, whether this tag opened aria-hidden)
@@ -102,6 +106,8 @@ class PageParser(html.parser.HTMLParser):
 
         if tag == "img":
             self.imgs.append((d, hidden))
+        if tag == "a":
+            self.links.append(d)
 
         if tag == "link" and d.get("rel") == "canonical":
             self.canonical = d.get("href")
@@ -163,14 +169,12 @@ def main():
     ok &= check(not missing, f"(a) {len(p.local_urls)} local urls all exist under web/",
                 f"(a) missing local files: {missing}")
 
-    # (b) no github.com/Nano-AI anywhere it would 404
-    gh_hits = []
+    # (b) the repository is public again (#273).
     scan_files = [target] + sorted(WEB.glob("js/*.js")) + sorted(WEB.glob("css/*.css"))
-    for f in scan_files:
-        if f.exists() and "github.com/Nano-AI" in f.read_text(encoding="utf-8"):
-            gh_hits.append(str(f))
-    ok &= check(not gh_hits, "(b) no github.com/Nano-AI link anywhere",
-                f"(b) found github.com/Nano-AI in: {gh_hits}")
+    hrefs = {link.get("href") for link in p.links}
+    ok &= check({SOURCE_URL, SOURCE_URL + "/tree/main/research"} <= hrefs,
+                 "(b) public source and research links are present",
+                 "(b) missing public source or research link")
 
     # (c) the 22 register strings, each exactly once as an <li>'s text
     from collections import Counter
@@ -266,13 +270,22 @@ def main():
     ok &= check(not untracked, "(k) every local file the page references is tracked by git",
                 f"(k) referenced but not tracked, so missing once deployed: {untracked}")
 
-    # (l) the preview must not advertise or publish an installer.
+    # (l) /latest skips pre-releases and currently selects an older build.
+    # Keep visitors on the release list, with notes and installation guidance.
+    ctas = [link for link in p.links
+            if "btn" in link.get("class", "").split()
+            and "btn--ghost" not in link.get("class", "").split()]
+    metadata = [json.loads(block) for block in re.findall(
+        r'<script type="application/ld\+json">(.*?)</script>', src, re.S)]
     workflow = (REPO / ".github" / "workflows" / "pages.yml").read_text(encoding="utf-8")
-    ok &= check(not any(word in src for word in ("downloadUrl", ".dmg", "right-click"))
+    ok &= check(len(ctas) == 3 and all(link.get("href") == RELEASES_URL for link in ctas)
+                and any(item.get("downloadUrl") == RELEASES_URL for item in metadata)
+                and RELEASES_URL in hrefs
+                and not any(word in src for word in ("/releases/latest", ".dmg", "download/Orion", "Public download coming later"))
                 and "gh release download" not in workflow
                 and not list(WEB.rglob("*.dmg")),
-                "(l) preview has no installer links, installation copy or disk image",
-                "(l) public download or installation copy has returned")
+                 "(l) all three download buttons and metadata use GitHub Releases; no mirrored installer",
+                 "(l) download buttons/metadata must use the release list, without pinned or mirrored installers")
 
     if not ok:
         print("\ncheck-site.py: FAILED")
