@@ -172,10 +172,13 @@ struct Editor: View {
     /// pre-scanned library is the smallest seam that fixes that.
     init(engine: Engine, assistant: AssistantPanelModel = AssistantPanelModel(),
          startTab: ToolTab = .light, startLibrary: Library? = nil,
-         startSnapshots: SnapshotStore? = nil, startMode: EditorMode = .develop) {
+         startSnapshots: SnapshotStore? = nil, startMode: EditorMode = .develop,
+         startPresets: PresetStore? = nil, startWatermark: Watermark? = nil) {
         self.engine = engine
         self.assistant = assistant
         _tab = State(initialValue: startTab)
+        _presets = State(initialValue: startPresets ?? PresetStore())
+        _watermark = State(initialValue: startWatermark ?? Watermark())
         _library = State(initialValue: startLibrary ?? Library())
         // Same seam and same reason as `startLibrary`: the harness never calls
         // `load`, so a per-photograph list would be empty in every capture and
@@ -189,7 +192,7 @@ struct Editor: View {
     @State var band: HueBand = .blue
 
     /// Saved looks. research is not needed for these — see Presets.swift.
-    @State var presets = PresetStore()
+    @State var presets: PresetStore
     @State var presetName = ""
     @State var presetGroups: Set<PresetGroup> = PresetGroup.defaultSelection
 
@@ -239,9 +242,9 @@ struct Editor: View {
     @State var exportSettings = ExportSettings()
     /// The one saved watermark (#284). Read from Application Support at launch,
     /// so its switch in the Export panel survives a relaunch.
-    @State var watermark = Watermark()
+    @State var watermark: Watermark
     @State var showingExport = false
-    @State var library = Library()
+    @State var library: Library
     /// Not `private`: `findMatte` in `DevelopPanels+Mask.swift` needs it, because a
     /// matte is saved beside the photograph and so cannot be written without
     /// knowing which photograph is open.
@@ -279,13 +282,7 @@ struct Editor: View {
             toolbar.disabled(engine.batchExporting)
                 .allowsHitTesting(!engine.batchExporting)
             if let p = batchProgress {
-                HStack {
-                    Spacer()
-                    Text("Exporting \(p.done) of \(p.total)…")
-                    Button("Stop") { batchCancelled = true }
-                        .buttonStyle(.bordered).controlSize(.small)
-                    Spacer()
-                }.padding(8)
+                BatchExportProgress(done: p.done, total: p.total) { batchCancelled = true }
             }
             Rectangle().fill(Palette.line).frame(height: 1)
 
@@ -456,5 +453,23 @@ struct Editor: View {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
         }
+    }
+}
+
+/// Kept outside the locked editor surfaces, including when browsing the gallery.
+struct BatchExportProgress: View {
+    let done: Int
+    let total: Int
+    let stop: () -> Void
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Text("Exporting \(done) of \(total)…")
+            Button("Stop", action: stop)
+                .keyboardShortcut(.cancelAction)
+                .buttonStyle(.bordered).controlSize(.small)
+            Spacer()
+        }.padding(8)
     }
 }

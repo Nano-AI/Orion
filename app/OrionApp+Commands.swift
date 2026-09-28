@@ -474,7 +474,11 @@ extension Editor {
 
     private func handleKey(_ event: NSEvent) -> Bool {
         guard !event.modifierFlags.contains(.command) else { return false }
-        guard !engine.batchExporting else { return true }
+        if engine.batchExporting {
+            // Focus/activation belongs to AppKit's controls. Stop also has an
+            // Escape key equivalent; do not swallow it before the button sees it.
+            return ![48, 49, 36, 76, 53].contains(event.keyCode)
+        }
         let press = (characters: event.charactersIgnoringModifiers ?? "",
                      keyCode: event.keyCode)
 

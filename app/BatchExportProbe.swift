@@ -1,9 +1,12 @@
 import AppKit
+import SwiftUI
 
 /// Real GUI-used orchestration, with real autosave/render callbacks and tiny RAW copies.
 enum BatchExportProbe {
     @MainActor
     static func runCommandLine() -> Never {
+        // Mounting the real Editor later must not honor any --open argument.
+        guard CommandLine.arguments.count == 2 else { exit(2) }
         NSApplication.shared.setActivationPolicy(.accessory)
         Task { @MainActor in
             do { exit(try await check()) }
@@ -227,6 +230,43 @@ enum BatchExportProbe {
             expect(shouldWrite ? result.written.count == 1 : result.failed.count == 1,
                    "strict reader handles \(name)")
         }
+        for (name, json) in [
+            ("bad-adjustment", "{\"exposureEv\":\"broken\"}"),
+            ("bad-mask-list", "{\"maskComponents\":\"broken\"}"),
+            ("bad-mask-field", "{\"maskComponents\":[{\"kind\":2,\"radiusX\":\"broken\"}]}"),
+            ("bad-mask-object", "{\"maskComponents\":[42]}"),
+            ("bad-layer-field", "{\"layers\":[{\"exposureEv\":\"broken\"}]}"),
+            ("bad-grade-length", "{\"gradeShadow\":[1]}")
+        ] {
+            _ = Sidecar(develop: Data(json.utf8)).write(for: b)
+            let bad = BatchExport.run(jobs: [job(name)], engine: engine, settings: settings)
+            expect(bad.failed.count == 1 && bad.written.isEmpty
+                   && !fm.fileExists(atPath: job(name).destination.path), "driver refuses \(name)")
+        }
+        _ = Sidecar(develop: Data("{\"exposureEv\":0.4,\"maskComponents\":[{\"kind\":2}]}".utf8)).write(for: b)
+        let legacy = BatchExport.run(jobs: [job("legacy-defaults")], engine: engine, settings: settings)
+        expect(legacy.written.count == 1 && engine.exposureEv == 0.4
+               && engine.maskComponents.first?.radiusX == MaskComponentState().radiusX,
+               "strict export retains missing legacy field defaults")
+        let encoded = try JSONEncoder().encode(other).base64EncodedString()
+        _ = Sidecar(develop: try JSONEncoder().encode(other)).write(for: b)
+        let canonical = BatchExport.run(jobs: [job("canonical-xml")], engine: engine, settings: settings)
+        expect(canonical.written.count == 1, "canonical XML reference exports")
+        for (name, xml) in [
+            ("single-quote", "<x xmlns:orion='http://orion.photo/ns/1.0/' orion:Develop='\(encoded)'/>"),
+            ("alias-spaced", "<x xmlns:edit='http://orion.photo/ns/1.0/' edit:Develop = '\(encoded)'/>"),
+            ("alias-element", "<x xmlns:edit='http://orion.photo/ns/1.0/'><edit:Develop>\(encoded)</edit:Develop></x>")
+        ] {
+            try Data(xml.utf8).write(to: Sidecar.url(for: b))
+            let parsed = BatchExport.run(jobs: [job(name)], engine: engine, settings: settings)
+            expect(parsed.written.count == 1 && engine.exposureEv == other.exposureEv,
+                   "driver restores \(name) Develop")
+            if parsed.written.count == 1 {
+                expect(try Data(contentsOf: job(name).destination)
+                       == Data(contentsOf: job("canonical-xml").destination),
+                       "\(name) export matches intended edit pixels")
+            }
+        }
         var masked = other; masked.maskComponents = [matte]
         _ = Sidecar(develop: try JSONEncoder().encode(masked)).write(for: b)
         let missingMatte = BatchExport.run(jobs: [job("missing-matte")], engine: engine, settings: settings)
@@ -264,7 +304,55 @@ enum BatchExportProbe {
         expect(try Data(contentsOf: Sidecar.url(for: a)) == savedBytes, "restore failure cannot save B as A")
         try engine.open(path: b.path)
         expect(engine.isLoaded, "another photo opens after restore failure")
+        expect(try await checkStopKey(engine: engine), "real Editor key monitor lets Escape activate Stop")
         print("batch safety: \(failures) failures; 64x64 fixtures, one engine")
         return failures == 0 ? 0 : 1
     }
+    /// Runs through NSApplication event dispatch and the real Editor's installed
+    /// local monitor. Calling the Stop closure directly would miss this regression.
+    @MainActor
+    static func checkStopKey(engine: Engine) async throws -> Bool {
+        let oldOnEdit = engine.onEdit
+        let oldOpening = engine.isOpening
+        let oldLocked = engine.documentEditsLocked
+        engine.batchExporting = true
+        engine.documentEditsLocked = true
+        engine.isOpening = true
+        var startupCallbackSurvived = false
+        engine.onEdit = { _ in startupCallbackSurvived = true }
+        var stopped = false
+        let content = VStack {
+            Editor(engine: engine, startLibrary: Library(index: PhotoIndex(at: nil)),
+                   startPresets: PresetStore(url: nil), startWatermark: Watermark(url: nil))
+                .frame(width: 1100, height: 700)
+            BatchExportProgress(done: 1, total: 2) { stopped = true }
+        }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 750),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: content)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        // Wait for the actual view lifecycle to install its monitor/autosave.
+        try await Task.sleep(for: .milliseconds(30))
+        engine.onEdit?(engine.state)
+        let installed = !startupCallbackSurvived && window.isKeyWindow
+        if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53) {
+            NSApp.sendEvent(event)
+        }
+        try await Task.sleep(for: .milliseconds(30))
+        window.contentView = nil
+        window.close()
+        // onDisappear removes the real local monitor before other checks can run.
+        try await Task.sleep(for: .milliseconds(30))
+        engine.onEdit = oldOnEdit
+        engine.isOpening = oldOpening
+        engine.documentEditsLocked = oldLocked
+        engine.batchExporting = false
+        return installed && stopped
+    }
+
 }

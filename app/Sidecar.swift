@@ -50,15 +50,17 @@ struct Sidecar: Sendable {
     static func readDevelopForExport(for photo: URL) throws -> Data? {
         let path = url(for: photo)
         guard FileManager.default.fileExists(atPath: path.path) else { return nil }
-        let text = try String(contentsOf: path, encoding: .utf8)
-        let parser = XMLParser(data: Data(text.utf8))
-        parser.shouldResolveExternalEntities = false
-        guard parser.parse() else { throw CocoaError(.fileReadCorruptFile) }
-        guard let encoded = value(of: "orion:Develop", in: text) else { return nil }
-        guard let data = Data(base64Encoded: encoded),
-              (try JSONSerialization.jsonObject(with: data)) is [String: Any] else {
+        let xml = try XMLDocument(data: Data(contentsOf: path), options: .nodeLoadExternalEntitiesNever)
+        let owned = "namespace-uri()='http://orion.photo/ns/1.0/' and local-name()='Develop'"
+        let nodes = try xml.nodes(forXPath: "//@*[\(owned)] | //*[\(owned)]")
+        guard !nodes.isEmpty else { return nil }
+        guard nodes.count == 1, let encoded = nodes[0].stringValue,
+              let data = Data(base64Encoded: encoded.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw CocoaError(.fileReadCorruptFile)
         }
+        let decoder = JSONDecoder()
+        decoder.userInfo[.strictDevelop] = true
+        _ = try decoder.decode(DevelopState.self, from: data)
         return data
     }
 

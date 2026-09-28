@@ -1,5 +1,33 @@
 import Foundation
 
+extension CodingUserInfoKey {
+    static let strictDevelop = CodingUserInfoKey(rawValue: "orion.strictDevelop")!
+}
+
+extension Decoder {
+    /// Export opts in; ordinary legacy reads retain their existing tolerance.
+    func developContainer<K: CodingKey>(keyedBy type: K.Type) throws -> KeyedDecodingContainer<K>? {
+        do { return try container(keyedBy: type) }
+        catch {
+            if userInfo[.strictDevelop] as? Bool == true { throw error }
+            return nil
+        }
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// One typed read policy, using the existing field roster and nested decoders.
+    /// Missing old fields keep defaults; a present invalid value cannot become
+    /// a successful default export. Only genuinely optional fields allow null.
+    func developValue<T: Decodable>(_ type: T.Type, forKey key: Key,
+                                    strict: Bool, nullable: Bool = false) throws -> T? {
+        if !strict { return try? decodeIfPresent(type, forKey: key) }
+        guard contains(key) else { return nil }
+        if nullable { return try decodeIfPresent(type, forKey: key) }
+        return try decode(type, forKey: key)
+    }
+}
+
 /// Undo and redo for the develop settings.
 ///
 /// Snapshots the whole adjustment set rather than recording deltas. That is the
@@ -243,15 +271,16 @@ struct MaskComponentState: Equatable, Codable {
 
     init(from decoder: Decoder) throws {
         self.init()
-        guard let c = try? decoder.container(keyedBy: Key.self) else { return }
-        func float(_ key: Key) -> Float? {
-            (try? c.decodeIfPresent(Float.self, forKey: key)).flatMap { $0 }
+        let strict = decoder.userInfo[.strictDevelop] as? Bool == true
+        guard let c = try decoder.developContainer(keyedBy: Key.self) else { return }
+        func float(_ key: Key) throws -> Float? {
+            try c.developValue(Float.self, forKey: key, strict: strict)
         }
-        kind = (try? c.decodeIfPresent(Int32.self, forKey: .kind)).flatMap { $0 } ?? kind
-        compose = (try? c.decodeIfPresent(Int32.self, forKey: .compose)).flatMap { $0 } ?? compose
-        invert = (try? c.decodeIfPresent(Bool.self, forKey: .invert)).flatMap { $0 } ?? invert
-        hidden = (try? c.decodeIfPresent(Bool.self, forKey: .hidden)).flatMap { $0 } ?? hidden
-        startsLayer = (try? c.decodeIfPresent(Bool.self, forKey: .startsLayer)).flatMap { $0 } ?? startsLayer
+        kind = (try c.developValue(Int32.self, forKey: .kind, strict: strict)) ?? kind
+        compose = (try c.developValue(Int32.self, forKey: .compose, strict: strict)) ?? compose
+        invert = (try c.developValue(Bool.self, forKey: .invert, strict: strict)) ?? invert
+        hidden = (try c.developValue(Bool.self, forKey: .hidden, strict: strict)) ?? hidden
+        startsLayer = (try c.developValue(Bool.self, forKey: .startsLayer, strict: strict)) ?? startsLayer
         // ⚠ **The American key wins whenever it is present**, and the British
         // one is consulted only in its absence. Decision #112 states the rule
         // once for the whole sidecar, because a per-field rule is a per-field
@@ -262,30 +291,30 @@ struct MaskComponentState: Equatable, Codable {
         // key is the one this build wrote and the British one is the stale
         // half. It is the same rule `layers` already beats `localExposureEv`
         // with, and `maskComponents` already beats `maskKind` with.
-        centerX = float(.centerX) ?? float(.legacyCentreX) ?? centerX
-        centerY = float(.centerY) ?? float(.legacyCentreY) ?? centerY
-        angle = float(.angle) ?? angle
-        length = float(.length) ?? length
-        radiusX = float(.radiusX) ?? radiusX
-        radiusY = float(.radiusY) ?? radiusY
-        feather = float(.feather) ?? feather
-        roundness = float(.roundness) ?? roundness
-        rangeLo = float(.rangeLo) ?? rangeLo
-        rangeHi = float(.rangeHi) ?? rangeHi
-        rangeSoft = float(.rangeSoft) ?? rangeSoft
-        colorR = float(.colorR) ?? float(.legacyColourR) ?? colorR
-        colorG = float(.colorG) ?? float(.legacyColourG) ?? colorG
-        colorB = float(.colorB) ?? float(.legacyColourB) ?? colorB
-        colorTol = float(.colorTol) ?? float(.legacyColourTol) ?? colorTol
-        colorSoft = float(.colorSoft) ?? float(.legacyColourSoft) ?? colorSoft
-        brushRadius = float(.brushRadius) ?? brushRadius
-        brushFlow = float(.brushFlow) ?? brushFlow
-        brushHardness = float(.brushHardness) ?? brushHardness
-        brushStroke = (try? c.decode([Float].self, forKey: .brushStroke)) ?? brushStroke
-        brushErase = (try? c.decode([Float].self, forKey: .brushErase)) ?? brushErase
-        matteId = (try? c.decodeIfPresent(String.self, forKey: .matteId)).flatMap { $0 }
-        matteSource = (try? c.decodeIfPresent(String.self, forKey: .matteSource)).flatMap { $0 }
-        name = (try? c.decodeIfPresent(String.self, forKey: .name)).flatMap { $0 }
+        centerX = try float(.centerX) ?? float(.legacyCentreX) ?? centerX
+        centerY = try float(.centerY) ?? float(.legacyCentreY) ?? centerY
+        angle = try float(.angle) ?? angle
+        length = try float(.length) ?? length
+        radiusX = try float(.radiusX) ?? radiusX
+        radiusY = try float(.radiusY) ?? radiusY
+        feather = try float(.feather) ?? feather
+        roundness = try float(.roundness) ?? roundness
+        rangeLo = try float(.rangeLo) ?? rangeLo
+        rangeHi = try float(.rangeHi) ?? rangeHi
+        rangeSoft = try float(.rangeSoft) ?? rangeSoft
+        colorR = try float(.colorR) ?? float(.legacyColourR) ?? colorR
+        colorG = try float(.colorG) ?? float(.legacyColourG) ?? colorG
+        colorB = try float(.colorB) ?? float(.legacyColourB) ?? colorB
+        colorTol = try float(.colorTol) ?? float(.legacyColourTol) ?? colorTol
+        colorSoft = try float(.colorSoft) ?? float(.legacyColourSoft) ?? colorSoft
+        brushRadius = try float(.brushRadius) ?? brushRadius
+        brushFlow = try float(.brushFlow) ?? brushFlow
+        brushHardness = try float(.brushHardness) ?? brushHardness
+        brushStroke = (try c.developValue([Float].self, forKey: .brushStroke, strict: strict)) ?? brushStroke
+        brushErase = (try c.developValue([Float].self, forKey: .brushErase, strict: strict)) ?? brushErase
+        matteId = (try c.developValue(String.self, forKey: .matteId, strict: strict, nullable: true))
+        matteSource = (try c.developValue(String.self, forKey: .matteSource, strict: strict, nullable: true))
+        name = (try c.developValue(String.self, forKey: .name, strict: strict, nullable: true))
     }
 
     /// Every stored property's name, checked against reflection by
@@ -356,19 +385,20 @@ extension LocalAdjustState {
 
     init(from decoder: Decoder) throws {
         self.init()
-        guard let c = try? decoder.container(keyedBy: Key.self) else { return }
-        func float(_ key: Key) -> Float? {
-            (try? c.decodeIfPresent(Float.self, forKey: key)).flatMap { $0 }
+        let strict = decoder.userInfo[.strictDevelop] as? Bool == true
+        guard let c = try decoder.developContainer(keyedBy: Key.self) else { return }
+        func float(_ key: Key) throws -> Float? {
+            try c.developValue(Float.self, forKey: key, strict: strict)
         }
-        exposureEv = float(.exposureEv) ?? exposureEv
-        contrast = float(.contrast) ?? contrast
-        saturation = float(.saturation) ?? saturation
-        warmth = float(.warmth) ?? warmth
-        tint = float(.tint) ?? tint
-        highlights = float(.highlights) ?? highlights
-        shadows = float(.shadows) ?? shadows
-        whites = float(.whites) ?? whites
-        blacks = float(.blacks) ?? blacks
+        exposureEv = try float(.exposureEv) ?? exposureEv
+        contrast = try float(.contrast) ?? contrast
+        saturation = try float(.saturation) ?? saturation
+        warmth = try float(.warmth) ?? warmth
+        tint = try float(.tint) ?? tint
+        highlights = try float(.highlights) ?? highlights
+        shadows = try float(.shadows) ?? shadows
+        whites = try float(.whites) ?? whites
+        blacks = try float(.blacks) ?? blacks
     }
 }
 
@@ -650,64 +680,63 @@ extension DevelopState {
 
     init(from decoder: Decoder) throws {
         self.init()
-        guard let c = try? decoder.container(keyedBy: Key.self) else { return }
+        let strict = decoder.userInfo[.strictDevelop] as? Bool == true
+        guard let c = try decoder.developContainer(keyedBy: Key.self) else { return }
 
-        func float(_ key: Key) -> Float? {
-            (try? c.decodeIfPresent(Float.self, forKey: key)).flatMap { $0 }
+        func float(_ key: Key) throws -> Float? {
+            try c.developValue(Float.self, forKey: key, strict: strict)
         }
 
-        temperatureK = float(.temperatureK) ?? temperatureK
-        tint = float(.tint) ?? tint
-        exposureEv = float(.exposureEv) ?? exposureEv
-        highlights = float(.highlights) ?? highlights
-        shadows = float(.shadows) ?? shadows
-        whites = float(.whites) ?? whites
-        blacks = float(.blacks) ?? blacks
-        vibrance = float(.vibrance) ?? vibrance
-        saturation = float(.saturation) ?? saturation
-        contrast = float(.contrast) ?? contrast
+        temperatureK = try float(.temperatureK) ?? temperatureK
+        tint = try float(.tint) ?? tint
+        exposureEv = try float(.exposureEv) ?? exposureEv
+        highlights = try float(.highlights) ?? highlights
+        shadows = try float(.shadows) ?? shadows
+        whites = try float(.whites) ?? whites
+        blacks = try float(.blacks) ?? blacks
+        vibrance = try float(.vibrance) ?? vibrance
+        saturation = try float(.saturation) ?? saturation
+        contrast = try float(.contrast) ?? contrast
         rotateQuarters =
-            (try? c.decodeIfPresent(Int32.self, forKey: .rotateQuarters)).flatMap { $0 }
+            (try c.developValue(Int32.self, forKey: .rotateQuarters, strict: strict))
             ?? rotateQuarters
-        straightenDeg = float(.straightenDeg) ?? straightenDeg
-        perspectiveVertical = float(.perspectiveVertical) ?? perspectiveVertical
-        perspectiveHorizontal = float(.perspectiveHorizontal) ?? perspectiveHorizontal
-        perspectiveAspect = float(.perspectiveAspect) ?? perspectiveAspect
-        cropX = float(.cropX) ?? cropX
-        cropY = float(.cropY) ?? cropY
-        cropW = float(.cropW) ?? cropW
-        cropH = float(.cropH) ?? cropH
-        lensDistortion = float(.lensDistortion) ?? lensDistortion
-        lensVignette = float(.lensVignette) ?? lensVignette
-        lensCaRed = float(.lensCaRed) ?? lensCaRed
-        lensCaBlue = float(.lensCaBlue) ?? lensCaBlue
+        straightenDeg = try float(.straightenDeg) ?? straightenDeg
+        perspectiveVertical = try float(.perspectiveVertical) ?? perspectiveVertical
+        perspectiveHorizontal = try float(.perspectiveHorizontal) ?? perspectiveHorizontal
+        perspectiveAspect = try float(.perspectiveAspect) ?? perspectiveAspect
+        cropX = try float(.cropX) ?? cropX
+        cropY = try float(.cropY) ?? cropY
+        cropW = try float(.cropW) ?? cropW
+        cropH = try float(.cropH) ?? cropH
+        lensDistortion = try float(.lensDistortion) ?? lensDistortion
+        lensVignette = try float(.lensVignette) ?? lensVignette
+        lensCaRed = try float(.lensCaRed) ?? lensCaRed
+        lensCaBlue = try float(.lensCaBlue) ?? lensCaBlue
         // ⚠ Absent from every sidecar written before 2026-08-03, and that is
         // handled by the same rule as every other field here: decode if
         // present, keep the default otherwise. The default is "", meaning the
         // lens the file names.
-        lensChoice = (try? c.decodeIfPresent(String.self, forKey: .lensChoice))
-            .flatMap { $0 } ?? lensChoice
-        highlightRecovery = float(.highlightRecovery) ?? highlightRecovery
-        denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
-        denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
-        lutStrength = float(.lutStrength) ?? lutStrength
+        lensChoice = (try c.developValue(String.self, forKey: .lensChoice, strict: strict)) ?? lensChoice
+        highlightRecovery = try float(.highlightRecovery) ?? highlightRecovery
+        denoiseLuma = try float(.denoiseLuma) ?? denoiseLuma
+        denoiseColor = try float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
+        lutStrength = try float(.lutStrength) ?? lutStrength
         // ⚠ The new key wins when present, and the legacy scalars fill layer 1
         // when it is not. A sidecar written by a newer build carries both,
         // because the encoder is synthesised from the stored properties — and
         // preferring the scalars there would silently discard layers 2 and up.
-        if let ls = (try? c.decodeIfPresent([LocalAdjustState].self, forKey: .layers))
-                        .flatMap({ $0 }), !ls.isEmpty {
+        if let ls = (try c.developValue([LocalAdjustState].self, forKey: .layers, strict: strict)), !ls.isEmpty {
             layers = ls
         } else {
             var first = LocalAdjustState()
-            first.exposureEv = float(.localExposureEv) ?? first.exposureEv
-            first.contrast = float(.localContrast) ?? first.contrast
-            first.saturation = float(.localSaturation) ?? first.saturation
-            first.warmth = float(.localWarmth) ?? first.warmth
-            first.tint = float(.localTint) ?? first.tint
+            first.exposureEv = try float(.localExposureEv) ?? first.exposureEv
+            first.contrast = try float(.localContrast) ?? first.contrast
+            first.saturation = try float(.localSaturation) ?? first.saturation
+            first.warmth = try float(.localWarmth) ?? first.warmth
+            first.tint = try float(.localTint) ?? first.tint
             layers = [first]
         }
-        maskRefine = float(.maskRefine) ?? maskRefine
+        maskRefine = try float(.maskRefine) ?? maskRefine
 
         // ⚠ `spots` and `maskRefine` were written by the encoder and ignored
         // here for two sessions. Encoding is synthesised from the stored
@@ -716,8 +745,7 @@ extension DevelopState {
         // and guided feathering both silently vanished on reopen, and nothing
         // noticed because no test round-tripped a state with everything set.
         // `testEveryFieldSurvivesTheSidecar` is that test now.
-        if let list = (try? c.decodeIfPresent([SpotState].self, forKey: .spots))
-            .flatMap({ $0 }) {
+        if let list = (try c.developValue([SpotState].self, forKey: .spots, strict: strict)) {
             spots = list
         }
 
@@ -725,28 +753,25 @@ extension DevelopState {
         // one. A component list that is present wins outright: a file holding
         // both was written by a newer build, and its legacy keys are whatever
         // that build's first row happened to be.
-        if let list = (try? c.decodeIfPresent([MaskComponentState].self,
-                                              forKey: .maskComponents)).flatMap({ $0 }) {
+        if let list = (try c.developValue([MaskComponentState].self, forKey: .maskComponents, strict: strict)) {
             maskComponents = list.filter { $0.kind != 0 }
-        } else if let kind = (try? c.decodeIfPresent(Int32.self, forKey: .legacyMaskKind))
-                    .flatMap({ $0 }), kind != 0 {
+        } else if let kind = (try c.developValue(Int32.self, forKey: .legacyMaskKind, strict: strict)), kind != 0 {
             var m = MaskComponentState()
             m.kind = kind
             m.compose = 0          // the only op a single mask can have meant
-            m.invert = (try? c.decodeIfPresent(Bool.self, forKey: .legacyMaskInvert))
-                .flatMap { $0 } ?? m.invert
-            m.centerX = float(.legacyMaskCentreX) ?? m.centerX
-            m.centerY = float(.legacyMaskCentreY) ?? m.centerY
-            m.angle = float(.legacyMaskAngle) ?? m.angle
-            m.length = float(.legacyMaskLength) ?? m.length
-            m.radiusX = float(.legacyMaskRadiusX) ?? m.radiusX
-            m.radiusY = float(.legacyMaskRadiusY) ?? m.radiusY
-            m.feather = float(.legacyMaskFeather) ?? m.feather
-            m.roundness = float(.legacyMaskRoundness) ?? m.roundness
-            m.brushRadius = float(.legacyBrushRadius) ?? m.brushRadius
-            m.brushFlow = float(.legacyBrushFlow) ?? m.brushFlow
-            m.brushHardness = float(.legacyBrushHardness) ?? m.brushHardness
-            m.brushStroke = (try? c.decode([Float].self, forKey: .legacyBrushStroke)) ?? []
+            m.invert = (try c.developValue(Bool.self, forKey: .legacyMaskInvert, strict: strict)) ?? m.invert
+            m.centerX = try float(.legacyMaskCentreX) ?? m.centerX
+            m.centerY = try float(.legacyMaskCentreY) ?? m.centerY
+            m.angle = try float(.legacyMaskAngle) ?? m.angle
+            m.length = try float(.legacyMaskLength) ?? m.length
+            m.radiusX = try float(.legacyMaskRadiusX) ?? m.radiusX
+            m.radiusY = try float(.legacyMaskRadiusY) ?? m.radiusY
+            m.feather = try float(.legacyMaskFeather) ?? m.feather
+            m.roundness = try float(.legacyMaskRoundness) ?? m.roundness
+            m.brushRadius = try float(.legacyBrushRadius) ?? m.brushRadius
+            m.brushFlow = try float(.legacyBrushFlow) ?? m.brushFlow
+            m.brushHardness = try float(.legacyBrushHardness) ?? m.brushHardness
+            m.brushStroke = (try c.developValue([Float].self, forKey: .legacyBrushStroke, strict: strict)) ?? []
             maskComponents = [m]
         }
 
@@ -757,8 +782,7 @@ extension DevelopState {
         // sidecar with no masks decodes to the default 1, so an empty file is
         // still exactly `DevelopState()` and nothing downstream has to ask
         // which era a maskless state came from.
-        if let stated = (try? c.decodeIfPresent(Int32.self, forKey: .maskSpace))
-            .flatMap({ $0 }) {
+        if let stated = (try c.developValue(Int32.self, forKey: .maskSpace, strict: strict)) {
             maskSpace = stated
         } else if !maskComponents.isEmpty {
             maskSpace = 0
@@ -773,57 +797,61 @@ extension DevelopState {
         // still exactly `DevelopState()`. The moment such a photograph's
         // Highlights moves it moves under the newest bands, and nothing it
         // had finished changes.
-        if let stated = (try? c.decodeIfPresent(Int32.self, forKey: .process))
-            .flatMap({ $0 }) {
+        if let stated = (try c.developValue(Int32.self, forKey: .process, strict: strict)) {
             process = stated
         } else if usesToneBands {
             process = 1
         }
 
-        fusion = float(.fusion) ?? fusion
-        dehaze = float(.dehaze) ?? dehaze
-        clarity = float(.clarity) ?? clarity
+        fusion = try float(.fusion) ?? fusion
+        dehaze = try float(.dehaze) ?? dehaze
+        clarity = try float(.clarity) ?? clarity
         // ⚠ `?? grainAmount` keeps the default, so a sidecar written before
         // grain existed reopens with grain off rather than at some decoded
         // zero-ish value — and `grainSize` keeps its 1.5 rather than becoming
         // an out-of-range 0 the shader would clamp silently.
-        grainAmount = float(.grainAmount) ?? grainAmount
-        grainSize = float(.grainSize) ?? grainSize
+        grainAmount = try float(.grainAmount) ?? grainAmount
+        grainSize = try float(.grainSize) ?? grainSize
         // Same shape, same reason: a sidecar written before the creative
         // vignette existed must reopen with no vignette and a 45° field angle,
         // not with a 0° one that would make the falloff flat.
-        vignetteAmount = float(.vignetteAmount) ?? vignetteAmount
-        vignetteFieldAngle = float(.vignetteFieldAngle) ?? vignetteFieldAngle
-        sharpenAmount = float(.sharpenAmount) ?? sharpenAmount
-        sharpenRadius = float(.sharpenRadius) ?? sharpenRadius
-        sharpenMasking = float(.sharpenMasking) ?? sharpenMasking
-        curve = (try? c.decodeIfPresent(ToneCurve.self, forKey: .curve))
-            .flatMap { $0 } ?? curve
+        vignetteAmount = try float(.vignetteAmount) ?? vignetteAmount
+        vignetteFieldAngle = try float(.vignetteFieldAngle) ?? vignetteFieldAngle
+        sharpenAmount = try float(.sharpenAmount) ?? sharpenAmount
+        sharpenRadius = try float(.sharpenRadius) ?? sharpenRadius
+        sharpenMasking = try float(.sharpenMasking) ?? sharpenMasking
+        curve = (try c.developValue(ToneCurve.self, forKey: .curve, strict: strict)) ?? curve
 
         // A band array of the wrong length would index out of bounds in the
         // panel, so a malformed one is refused rather than trusted.
-        func band(_ key: Key) -> [Float]? {
-            guard let v = (try? c.decodeIfPresent([Float].self, forKey: key)).flatMap({ $0 }),
-                  v.count == 8 else { return nil }
+        func band(_ key: Key) throws -> [Float]? {
+            guard let v = try c.developValue([Float].self, forKey: key, strict: strict) else { return nil }
+            guard v.count == 8 else {
+                if strict { throw DecodingError.dataCorruptedError(forKey: key, in: c, debugDescription: "Expected eight bands") }
+                return nil
+            }
             return v
         }
         // Three, not eight — the grading wheels store x, y and luminance.
-        func triple(_ key: Key) -> [Float]? {
-            guard let v = (try? c.decodeIfPresent([Float].self, forKey: key)).flatMap({ $0 }),
-                  v.count == 3 else { return nil }
+        func triple(_ key: Key) throws -> [Float]? {
+            guard let v = try c.developValue([Float].self, forKey: key, strict: strict) else { return nil }
+            guard v.count == 3 else {
+                if strict { throw DecodingError.dataCorruptedError(forKey: key, in: c, debugDescription: "Expected three grading values") }
+                return nil
+            }
             return v
         }
-        gradeShadow = triple(.gradeShadow) ?? gradeShadow
-        gradeMidtone = triple(.gradeMidtone) ?? gradeMidtone
-        gradeHighlight = triple(.gradeHighlight) ?? gradeHighlight
+        gradeShadow = try triple(.gradeShadow) ?? gradeShadow
+        gradeMidtone = try triple(.gradeMidtone) ?? gradeMidtone
+        gradeHighlight = try triple(.gradeHighlight) ?? gradeHighlight
         // A scalar, not a triple. `?? gradeBalance` keeps the zero, so a
         // sidecar written before Balance existed reopens on the centres it was
         // graded with rather than on a decoded absence.
-        gradeBalance = float(.gradeBalance) ?? gradeBalance
+        gradeBalance = try float(.gradeBalance) ?? gradeBalance
 
-        hueShift = band(.hueShift) ?? hueShift
-        satShift = band(.satShift) ?? satShift
-        lumShift = band(.lumShift) ?? lumShift
+        hueShift = try band(.hueShift) ?? hueShift
+        satShift = try band(.satShift) ?? satShift
+        lumShift = try band(.lumShift) ?? lumShift
     }
 }
 
