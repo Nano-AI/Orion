@@ -14,20 +14,23 @@
 
 #include <cstdio>
 #include <exception>
+#include <filesystem>
 #include <string>
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "usage: orion-bench <raw-file> [output-prefix | --fusion-sweep]\n");
+        std::fprintf(stderr, "usage: orion-bench <raw-file> [output-prefix | --fusion-sweep | --memory-cycle]\n");
         return 2;
     }
     const std::string path = argv[1];
-    const std::string prefix = (argc > 2) ? argv[2] : "orion";
+    const std::string prefix = (argc > 2) ? argv[2] : "build/bench-output/orion";
 
     try {
+        if (prefix == "--memory-cycle") return bench::memoryCycle(path) ? 0 : 1;
         if (argc > 2 && std::string(argv[2]) == "--fusion-sweep") {
             return bench::fusionSweep(path) ? 0 : 1;
         }
+        if (argc <= 2) std::filesystem::create_directories("build/bench-output");
         using bench::Clock;
         using bench::msSince;
         // ── Decode ────────────────────────────────────────────────────────

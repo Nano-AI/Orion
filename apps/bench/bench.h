@@ -36,6 +36,8 @@ Stats summarise(std::vector<double> v);
 /// Frames in a drag sweep. The exposure gate and the curve drag both run one.
 constexpr int kIterations = 60;
 
+bool memoryCycle(const std::string& path);
+
 /// The developed output as 16-bit unsigned; see the definition for why it has
 /// to be format-aware.
 std::vector<std::uint16_t> output16(const orion::pipe::DevelopPipeline& d,

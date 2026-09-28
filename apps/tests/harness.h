@@ -77,6 +77,7 @@ orion::gpu::Texture& scratchAccum(orion::gpu::Device&, std::uint32_t w,
 // does not link; a test declared and not called is one that never runs, which is
 // why `main.cpp` is now short enough to read its call list at a glance.
 void testBindingCount();
+void testDisabledCacheReleaseGpu();
 void testPlanckianLocus();
 void testWhiteBalance();
 void testToneCurve();

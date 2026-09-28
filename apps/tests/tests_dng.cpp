@@ -511,6 +511,27 @@ void testLinearDngEngineOpen() {
         report(true, "openRaw takes the DNG");
         engine.render();
         report(true, "the full graph renders it");
+        const auto screenPixels = [&] {
+            const auto& d = engine.develop();
+            const auto row = d.outputWidth() * orion::gpu::bytesPerPixel(d.output().format());
+            std::vector<std::uint8_t> pixels(row * d.outputHeight());
+            d.output().download(pixels.data(), row, d.outputWidth(), d.outputHeight());
+            return pixels;
+        };
+        const auto beforeExport = screenPixels();
+        orion::util::ExportOptions options;
+        options.format = orion::util::ImageFormat::Png;
+        options.depth = orion::util::BitDepth::Sixteen;
+        (void)engine.exportedSize(options);
+        report(engine.develop().output().format() == orion::gpu::PixelFormat::RGBA8Unorm &&
+                   screenPixels() == beforeExport,
+               "size estimate restores actual screen pixels before returning");
+        const std::string exportPath = "/tmp/orion-dng-engine-export.png";
+        engine.exportImage(exportPath, options);
+        report(engine.develop().output().format() == orion::gpu::PixelFormat::RGBA8Unorm &&
+                   screenPixels() == beforeExport,
+               "wide export restores actual screen pixels before returning");
+        std::remove(exportPath.c_str());
         // The preview graph is the decimate + reload path in one: built from
         // the quarter-scale linear image at open.
         report(engine.renderPreview() >= 0.0, "the preview graph exists or reports zero");

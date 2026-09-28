@@ -370,19 +370,21 @@ namespace {
 struct WideOutputFor {
     pipe::DevelopPipeline& pipeline;
     const bool was;
+    const bool changed;
+    bool restored = false;
 
     WideOutputFor(pipe::DevelopPipeline& p, bool wide)
-        : pipeline(p), was(p.wideOutput()) {
-        pipeline.setWideOutput(wide);
+        : pipeline(p), was(p.wideOutput()), changed(wide != was) {
+        if (changed) pipeline.setWideOutput(wide);
+    }
+    void restore() {
+        if (!changed || restored) return;
+        if (pipeline.wideOutput() != was) pipeline.setWideOutput(was);
+        pipeline.render();
+        restored = true;
     }
     ~WideOutputFor() {
-        // Reallocates, so it can throw, and a throwing destructor during
-        // unwinding terminates the process. Failing to narrow again costs
-        // latency; terminating costs the user's work.
-        try {
-            pipeline.setWideOutput(was);
-        } catch (...) {
-        }
+        try { restore(); } catch (...) {} // preserve an earlier export error
     }
     WideOutputFor(const WideOutputFor&) = delete;
     WideOutputFor& operator=(const WideOutputFor&) = delete;
@@ -413,6 +415,7 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     const auto pixels = readOutput16(w, h);
     util::writeImage(path, pixels.data(), w, h,
                      static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t), o);
+    wide.restore();
 }
 
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {
@@ -427,9 +430,11 @@ std::size_t Engine::exportedSize(const util::ExportOptions& options) {
     const std::uint32_t h = develop_->outputHeight();
 
     const auto pixels = readOutput16(w, h);
-    return util::encodedSize(pixels.data(), w, h,
-                             static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t),
-                             options);
+    const auto size = util::encodedSize(pixels.data(), w, h,
+                                        static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t),
+                                        options);
+    wide.restore();
+    return size;
 }
 
 /// The output as 16-bit unsigned, which is what the image formats want.

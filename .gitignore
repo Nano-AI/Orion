@@ -14,14 +14,18 @@ test-images/
 samples/
 
 # --- Bench and harness output ----------------------------------------------
-# apps/bench writes full-resolution renders beside itself so you can look at
-# them. They are 45-70 MB each, and `git add -A` swept 190 MB of them into two
-# commits, which is why a push started dying mid-transfer.
+# Full-resolution benchmark renders can be tens of MB each. Keep explicit
+# output prefixes outside git, along with ImageIO's interrupted-write siblings.
 orion-*.png
 orion-*.jpg
 orion-*.jpeg
 orion-*.tif
 orion-*.tiff
+.orion-*.png-*
+.orion-*.jpg-*
+.orion-*.jpeg-*
+.orion-*.tif-*
+.orion-*.tiff-*
 
 # --- Build -----------------------------------------------------------------
 build/

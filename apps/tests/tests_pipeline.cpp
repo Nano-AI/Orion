@@ -127,3 +127,79 @@ void testBindingCount() {
         report(ok, "every node in the develop graph binds what its kernel uses", why);
     }
 }
+
+// Catches retaining disabled filter outputs, dropping active drag caches, and
+// recycling a mask/pinned texture into pixels another reader still needs.
+void testDisabledCacheReleaseGpu() {
+    section("Disabled graph caches release memory (GPU)");
+    using namespace orion;
+    try {
+        auto device = gpu::Device::create();
+        raw::BayerImage input;
+        input.width = 132; input.height = 100;
+        input.filters = 0x94949494u;
+        input.white = 4095;
+        input.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
+        input.camToXyz = {0.4124f, 0.3576f, 0.1805f,
+                          0.2126f, 0.7152f, 0.0722f,
+                          0.0193f, 0.1192f, 0.9505f};
+        input.samples.resize(input.pixelCount());
+        for (std::size_t i = 0; i < input.samples.size(); ++i)
+            input.samples[i] = std::uint16_t(80 + (i * 37) % 3000);
+        pipe::DevelopPipeline d(*device, ORION_SHADER_DIR, input);
+        pipe::Adjustments off;
+        off.wb = d.asShotWhiteBalance();
+        off.contrast = 1.45f;
+        auto on = off;
+        on.clarity = 0.4f; on.dehaze = 0.3f; on.fusion = 0.5f;
+        on.denoiseLuma = 0.5f; on.highlightRecovery = 0.5f;
+        on.maskCount = 1; on.maskComponents[0].kind = 2;
+        on.maskRefine = 0.5f; on.layers[0].exposureEv = 0.7f;
+        const auto pixels = [](const pipe::DevelopPipeline& p) {
+            const auto row = p.outputWidth() * gpu::bytesPerPixel(p.output().format());
+            std::vector<std::uint8_t> bytes(row * p.outputHeight());
+            p.output().download(bytes.data(), row, p.outputWidth(), p.outputHeight());
+            return bytes;
+        };
+        const auto render = [&](const pipe::Adjustments& a) {
+            d.apply(a); d.render();
+            return pixels(d);
+        };
+        const auto baseline = render(off);
+        const auto edited = render(on);
+        report(baseline != edited, "enabled filters change actual pixels");
+        for (int cycle = 0; cycle < 3; ++cycle) {
+            // An upstream edit warms intermediates that the first pass pooled.
+            auto warm = on;
+            warm.wb.temperatureK += 200;
+            render(warm);
+            report(render(on) == edited, "re-enabled filters reproduce the edited frame");
+            const auto activeBytes = d.graph().intermediateBytes();
+            const auto allocated = d.graph().allocatedBytes();
+            report(render(off) == baseline, "disabled filters reproduce the default frame");
+            report(d.graph().intermediateBytes() < activeBytes / 2,
+                   "turning filters off releases their cached textures",
+                   std::to_string(activeBytes) + " -> " +
+                   std::to_string(d.graph().intermediateBytes()));
+            report(d.graph().allocatedBytes() < allocated - activeBytes / 2,
+                   "released textures leave the pool, not only the node cache");
+            // Preserve the active cache: after one recovery tick, an exposure
+            // gesture must continue to touch only its three downstream nodes.
+            auto exposure = off;
+            exposure.exposureEv = 0.2f; render(exposure);
+            exposure.exposureEv = 0.3f; render(exposure);
+            std::set<std::string> ran;
+            for (const auto& node : d.graph().lastRun())
+                if (node.executed) ran.insert(node.name);
+            report(ran == std::set<std::string>{"develop:linear", "develop:display", "geometry"},
+                   "memory cleanup preserves warm exposure caching");
+            d.setWideOutput(true); render(off);
+            d.setWideOutput(false);
+            report(render(off) == baseline, "export format round trip preserves screen pixels");
+            d.reload(input);
+            report(render(off) == baseline, "reloaded graph preserves screen pixels");
+        }
+    } catch (const std::exception& e) {
+        report(false, "disabled cache fixture completes", e.what());
+    }
+}

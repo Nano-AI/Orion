@@ -28,7 +28,7 @@ std::unique_ptr<Texture> TexturePool::acquire(std::uint32_t width,
     return texture;
 }
 
-void TexturePool::release(std::unique_ptr<Texture> texture) {
+void TexturePool::release(std::unique_ptr<Texture> texture) noexcept {
     if (!texture) return;
 
     const std::size_t bytes = texture->sizeBytes();
@@ -41,7 +41,11 @@ void TexturePool::release(std::unique_ptr<Texture> texture) {
     liveBytes_ = (bytes > liveBytes_) ? 0 : liveBytes_ - bytes;
 
     const Shape shape{texture->width(), texture->height(), texture->format()};
-    free_[shape].push_back(std::move(texture));
+    try {
+        free_[shape].push_back(std::move(texture));
+    } catch (...) {
+        // The texture is discarded if free-list bookkeeping cannot allocate.
+    }
 }
 
 std::size_t TexturePool::idleBytes() const noexcept {

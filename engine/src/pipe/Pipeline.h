@@ -78,7 +78,7 @@ public:
     /// Enables or disables a node. Disabled nodes are skipped entirely.
     void setEnabled(int nodeId, bool enabled);
 
-    /// Changes a node's output format, reallocating its texture.
+    /// Changes a node's output format, reallocating on its next dispatch.
     ///
     /// Exists so the tail of the graph can be narrow for the screen — whose
     /// drawable is `bgra8Unorm`, so anything wider is bytes moved for
@@ -162,6 +162,9 @@ public:
 
     [[nodiscard]] std::size_t nodeCount() const noexcept { return nodes_.size(); }
     [[nodiscard]] std::size_t intermediateBytes() const noexcept;
+    /// All owned texture payloads, including idle pool entries and auxiliary
+    /// plates. Excludes driver overhead; use process footprint for total RAM.
+    [[nodiscard]] std::size_t allocatedBytes() const noexcept;
 
     /// The bytes a graph would need if a texture were reused the moment its
     /// last consumer had run, rather than held for the graph's lifetime.
@@ -336,6 +339,7 @@ private:
     std::uint32_t width_ = 0, height_ = 0;
     bool compiled_ = false;
     bool profiling_ = false;
+    bool trimPool_ = false; // a filter/format transition left disposable textures
 
     std::vector<NodeTiming> lastRun_;
 };

@@ -19,15 +19,9 @@
  *  when its last reader has run and the next node of the same shape gets that
  *  one instead of a new allocation.
  *
- *  ## What this file does NOT do yet
- *
- *  ⚠ **Nothing in the engine uses it.** It is built and tested on its own, and
- *  wiring it into `Pipeline` is a separate change — the swap is where the
- *  correctness risk lives, because a texture handed back while a later node
- *  still reads it renders a plausible picture made of another node's pixels,
- *  which is exactly the class of bug this repository has shipped before and
- *  caught only with a byte-for-byte test. A pool that is merely *probably*
- *  right is worse than 7 GiB that is definitely right.
+ *  Pipeline owns the pool (decision #219). Disabling a filter returns its
+ *  cached output; after that render, shrink() drops unused textures. Active
+ *  caches stay resident to preserve slider latency.
  */
 
 #pragma once
@@ -77,7 +71,7 @@ public:
     /// the question of *when* a texture dies, and that question is the whole
     /// point — `Pipeline` knows the answer exactly, from the execution order,
     /// and anything less precise gives back less memory than #153 measured.
-    void release(std::unique_ptr<Texture> texture);
+    void release(std::unique_ptr<Texture> texture) noexcept;
 
     /// Bytes currently held by free textures — the pool's own overhead.
     [[nodiscard]] std::size_t idleBytes() const noexcept;

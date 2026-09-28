@@ -165,6 +165,13 @@ void Pipeline::setEnabled(int nodeId, bool enabled) {
     if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return;
     if (nodes_[nodeId].enabled == enabled) return;
     nodes_[nodeId].enabled = enabled;
+    if (!enabled && compiled_) {
+        // A disabled node is bypassed by resolve(), including pinned reads.
+        // Keep active caches warm, but do not retain a filter the user removed.
+        outputs_[nodeId] = nullptr;
+        pool_.release(std::move(ownedOutputs_[nodeId]));
+        trimPool_ = true;
+    }
     markDownstreamDirty(nodeId);
 }
 
@@ -175,16 +182,11 @@ void Pipeline::setNodeFormat(int nodeId, gpu::PixelFormat format) {
     nodes_[nodeId].format = format;
     if (!compiled_) return;   // compile() will honour it
 
-    const auto& node = nodes_[nodeId];
-    const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;
-    const std::uint32_t h = node.outHeight ? node.outHeight : height_;
-    // ⚠ Replace the owner first, then re-point. The other order leaves
-    // `outputs_[nodeId]` dangling for the length of one statement, which is
-    // exactly long enough for a future reader to be added between them.
-    ownedOutputs_[static_cast<std::size_t>(nodeId)] =
-        gpu::Texture::create(device_, w, h, format);
-    outputs_[static_cast<std::size_t>(nodeId)] =
-        ownedOutputs_[static_cast<std::size_t>(nodeId)].get();
+    // Allocate the new format on dispatch, through the same pool as every
+    // other output. Eager allocation also paid for disabled grain on export.
+    outputs_[nodeId] = nullptr;
+    pool_.release(std::move(ownedOutputs_[nodeId]));
+    trimPool_ = true;
 
     // The old texture is gone, so whatever was cached in it is gone with it.
     dirty_[nodeId] = true;
@@ -335,6 +337,7 @@ void Pipeline::computeOne(int id, gpu::CommandBuffer* batch) {
     // Whatever this node held will never be read again: every consumer of a
     // node about to change is dirty too (`markDownstreamDirty`), so nothing
     // downstream is waiting on the value this write is about to replace.
+    outputs_[idx] = nullptr;
     if (ownedOutputs_[idx]) pool_.release(std::move(ownedOutputs_[idx]));
 
     // Dispatch over the node's own output, which may differ from the graph's
@@ -405,8 +408,8 @@ void Pipeline::maybeFree(int n, int reader) {
 
     auto& owned = ownedOutputs_[static_cast<std::size_t>(n)];
     if (!owned) return;
-    pool_.release(std::move(owned));
     outputs_[static_cast<std::size_t>(n)] = nullptr;
+    pool_.release(std::move(owned));
     everFreed_[static_cast<std::size_t>(n)] = true;
 }
 
@@ -446,6 +449,12 @@ double Pipeline::render() {
         for (const auto& t : lastRun_) total += t.ms;
     }
     std::fill(dirty_.begin(), dirty_.end(), false);
+    if (trimPool_) {
+        // Reuse released textures within this transition's render, then return
+        // the leftovers to Metal. Ordinary slider ticks never trim the pool.
+        pool_.shrink();
+        trimPool_ = false;
+    }
     return total;
 }
 
@@ -498,6 +507,12 @@ const gpu::Texture& Pipeline::sourceTexture() const {
 std::size_t Pipeline::intermediateBytes() const noexcept {
     std::size_t total = source_ ? source_->sizeBytes() : 0;
     for (const auto& t : ownedOutputs_) { if (t) total += t->sizeBytes(); }
+    return total;
+}
+
+std::size_t Pipeline::allocatedBytes() const noexcept {
+    std::size_t total = intermediateBytes() + pool_.idleBytes();
+    for (const auto& t : aux_) { if (t) total += t->sizeBytes(); }
     return total;
 }
 

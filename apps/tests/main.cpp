@@ -17,6 +17,7 @@ int main() {
     // First, because it is the one that catches a shader and a binary that
     // disagree — a state in which every other GPU test's result is a guess.
     testBindingCount();
+    testDisabledCacheReleaseGpu();
 
     testWhiteBalance();
     testPlanckianLocus();
