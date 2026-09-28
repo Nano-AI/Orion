@@ -33,6 +33,27 @@ not mean the same thing.
 **To fix:** derive centers from a published tone-mapping operator, or calibrate
 against reference renders of the same file.
 
+### 1b. Process 2 - the middle-grey anchor and σ 1.0, added 2026-09-14
+
+Decision #276.
+The bands are now versioned per photograph (`DevelopState.process`), so the
+constants above are **process 1** and stay exactly as they were for every
+sidecar finished under them.
+**Process 2** keeps the four centres, sets `sigma = 1.0` for every band, and
+adds a fifth Gaussian at 0 EV that no slider drives.
+Sourced: the partition-of-unity form, which is what makes an identity band a
+legal member (it takes weight and contributes no exponent), and the observation
+that drove it, measured on a face in
+[tone-and-local-contrast.md](tone-and-local-contrast.md).
+**Not sourced:** the anchor's width being the common σ, and σ = 1.0 itself,
+chosen from a model of the authority curve (Highlights 0.04 at middle grey,
+face compression 14% at `highlights -0.8`, sky at +2.5 EV pulled 1.03 EV) and
+one frame.
+darktable's tone equalizer at σ ≈ 1.0–1.4 is the nearest published analogue and
+is the reason 1.0 was the first value tried rather than the last.
+**To fix:** the same calibration as §1, now against process 2 only; process 1
+is frozen by construction.
+
 ---
 
 ### 1a. Whites at +3.674 EV — moved 2026-09-05, and still my formulation
@@ -1429,3 +1450,28 @@ comparison in decision #223 is apples to apples regardless of whether the
 rule that produced the ceiling is the only reasonable one; what is untested is
 whether a *different* placement would make one of the four operators look
 better or worse relative to the others.
+
+---
+
+## 19. The inspection verbs' constants - added 2026-09-14
+
+Decision #278, `app/RegionStats.swift` and `app/Scenario+Report.swift`.
+Three numbers are chosen, not sourced:
+- **`shading`'s block, a twelfth of the patch's shorter side.**
+  The measure is the standard deviation over the mean of block means, which is
+  the face's shading and not its pores; the twelfth reproduces the 6 px blur on
+  a 70 px patch that found the 40% loss in
+  [tone-and-local-contrast.md](tone-and-local-contrast.md), and nothing else
+  argues for it.
+- **`look`'s 768 px long edge.** Claude bills a 768 px preview at about 530
+  visual tokens ([agent-interaction.md](agent-interaction.md)); a bigger default
+  buys detail an agent should be asking `zoom` for, with a reason.
+- **`histogram`'s 16 bins.** Enough to read a tonal shape as text, few enough
+  to stay on one line per channel; the engine's own panel uses 128.
+**What is sourced:** the numbers-before-pixels ordering and the required reason
+on `zoom` (agent-interaction.md, arXiv 2608.09682); the face boxes are Vision's
+`VNDetectFaceRectanglesRequest`, on device, the same framework subject
+selection uses.
+**To fix:** nothing measurable; these are defaults an agent can override on
+every call.
+

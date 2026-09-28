@@ -91,6 +91,7 @@ int main() {
     testLensDatabase();
     testBlackLevels();
     testExportFormats();
+    testExportWatermark();
     testFloatToHalf();
     testDngRoundTrip();
     testLinearDngOpens();

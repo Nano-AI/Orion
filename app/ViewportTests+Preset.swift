@@ -21,6 +21,7 @@ extension ViewportTests {
         s.temperatureK = 4200; s.tint = 0.3
         s.exposureEv = 1.1; s.contrast = 1.7
         s.highlights = -0.4; s.shadows = 0.35; s.whites = 0.2; s.blacks = -0.15
+        s.process = 1
         s.highlightRecovery = 0.65
         s.vibrance = 0.4; s.saturation = -0.2
         s.hueShift[3] = 0.5; s.satShift[5] = -0.3; s.lumShift[1] = 0.25

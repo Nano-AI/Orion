@@ -162,6 +162,9 @@ final class Engine {
     /// answering). Fixing this needs a soft roll-off in the display
     /// transform, not a new number here — see research/color-pipeline.md.
     var contrast: Float = 1.45     { didSet { pushAndRender() } }
+    /// The tone bands' generation; see `DevelopState.process`. Fresh photographs
+    /// get 2, a sidecar brings its own.
+    var process: Int32 = 2         { didSet { pushAndRender() } }
 
     /// Extra quarter turns clockwise, on top of the camera's own orientation.
     var rotateQuarters: Int32 = 0  { didSet { constrainCrop(); pushAndRender() } }
@@ -539,6 +542,7 @@ final class Engine {
             temperatureK: temperatureK, tint: tint, exposureEv: exposureEv,
             highlights: highlights, shadows: shadows, whites: whites, blacks: blacks,
             vibrance: vibrance, saturation: saturation, contrast: contrast,
+            process: process,
             rotateQuarters: rotateQuarters, straightenDeg: straightenDeg,
             perspectiveVertical: perspectiveVertical,
             perspectiveHorizontal: perspectiveHorizontal,
@@ -578,6 +582,7 @@ final class Engine {
         highlights = s.highlights; shadows = s.shadows
         whites = s.whites; blacks = s.blacks
         vibrance = s.vibrance; saturation = s.saturation; contrast = s.contrast
+        process = s.process
         rotateQuarters = s.rotateQuarters; straightenDeg = s.straightenDeg
         perspectiveVertical = s.perspectiveVertical
         perspectiveHorizontal = s.perspectiveHorizontal
@@ -731,6 +736,7 @@ final class Engine {
         a.exposure_ev = exposureEv; a.highlights = highlights; a.shadows = shadows
         a.whites = whites; a.blacks = blacks
         a.vibrance = vibrance; a.saturation = saturation; a.contrast = contrast
+        a.process = process
         a.rotate_quarters = rotateQuarters; a.straighten_deg = straightenDeg
         a.perspective_vertical = perspectiveVertical
         a.perspective_horizontal = perspectiveHorizontal

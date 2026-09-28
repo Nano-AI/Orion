@@ -12,12 +12,14 @@ out=""
 edits=""
 max=""
 state=""
+region=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) out="$2"; shift 2 ;;
     --edits) edits="$2"; shift 2 ;;
     --state) state="$2"; shift 2 ;;
     --max) max="$2"; shift 2 ;;
+    --region) region="$2"; shift 2 ;;
     --rating) shift 2 ;;
     --reject) shift 2 ;;
     *) if [ -z "$raw" ]; then raw="$1"; fi; shift ;;
@@ -26,7 +28,23 @@ done
 
 case "$verb" in
   stats)
-    echo '{"path":"'"$raw"'","width":100,"height":80,"camera":"Fake","rating":0,"rejected":false,"clipLow":[0,0,0],"clipHigh":[0,0,0],"mean":[0.5,0.5,0.5],"temperatureK":5500,"tint":0}'
+    # Records the --state and --region this invocation received, under the
+    # system temp dir, so tests can verify get_stats passes both through
+    # rather than dropping them.
+    echo "${state:-<none>}" > "${TMPDIR:-/tmp}/orion-mcp-test-last-stats-state.txt"
+    echo "${region:-<none>}" > "${TMPDIR:-/tmp}/orion-mcp-test-last-stats-region.txt"
+    regionJSON=""
+    if [ -n "$region" ]; then
+      regionJSON=',"region":{"luma":0.42,"saturation":0.1,"hue":30,"hueStrength":0.8,"red":0.5,"green":0.4,"blue":0.3,"clippedHigh":0.01,"clippedLow":0,"shading":0.2}'
+    fi
+    echo '{"path":"'"$raw"'","width":100,"height":80,"camera":"Fake","rating":0,"rejected":false,"clipLow":[0,0,0],"clipHigh":[0,0,0],"mean":[0.5,0.5,0.5],"temperatureK":5500,"tint":0'"$regionJSON"'}'
+    ;;
+  faces)
+    # One face, in both spaces, so a test can prove detect_faces carries the
+    # shape through. An empty array is the other legal answer and the gate
+    # against the real binary covers that half.
+    echo "${state:-<none>}" > "${TMPDIR:-/tmp}/orion-mcp-test-last-faces-state.txt"
+    echo '{"path":"'"$raw"'","faces":[{"x":0.4,"y":0.2,"w":0.12,"h":0.16,"centerX":0.28,"centerY":0.46,"radiusX":0.08,"radiusY":0.06}]}'
     ;;
   keys)
     echo '{"keys":[{"name":"temperatureK","type":"number","unit":"kelvin","min":2000,"max":50000,"default":5500,"absolute":true,"note":"White balance in kelvin. Absolute, not a delta."},{"name":"tint","type":"number","unit":"magenta-green","min":-100,"max":100,"default":0,"absolute":true,"note":"Placeholder range for the fake binary; the real range comes from Orion --agent keys."},{"name":"exposureEv","type":"number","unit":"EV","min":-5,"max":5,"default":0,"absolute":true},{"name":"curve","type":"array","absolute":true,"example":[{"x":0,"y":0},{"x":1,"y":1}],"note":"Tone curve control points. Composite: send the whole array, partial elements are rejected."}]}'
@@ -39,6 +57,7 @@ case "$verb" in
     # not the repo tree), so tests can verify the server clamps maxPx before
     # it reaches the binary.
     echo "$max" > "${TMPDIR:-/tmp}/orion-mcp-test-last-maxpx.txt"
+    echo "${region:-<none>}" > "${TMPDIR:-/tmp}/orion-mcp-test-last-region.txt"
     bytes=$(wc -c < "$out" | tr -d ' ')
     echo '{"path":"'"$out"'","width":16,"height":12,"bytes":'"$bytes"'}'
     ;;

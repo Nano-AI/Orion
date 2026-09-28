@@ -64,7 +64,7 @@ extension ViewportTests {
                "and lands beside the sources")
 
         // Collisions walk -2, -3… and never overwrite — BatchExport's rule.
-        var taken: Set<String> = ["/shoot/_PIC8220-HDR.dng",
+        let taken: Set<String> = ["/shoot/_PIC8220-HDR.dng",
                                   "/shoot/_PIC8220-HDR-2.dng"]
         let third = HdrMergeFlow.outputURL(reference: ref,
                                            exists: { taken.contains($0.path) })

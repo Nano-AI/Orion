@@ -1,0 +1,50 @@
+# The tone bands' generation is the photograph's, and process 2 keeps a
+# midtone off the Highlights flank - decision #276.
+#
+# Under the bands as shipped (process 1) Shadows and Highlights each hold half
+# the authority at middle grey, so `highlights -0.8` pulls a midtone patch by
+# a tenth of its value and a face by half its shading. Process 2 puts an
+# identity band at middle grey: the same slider leaves the midtone within two
+# codes and still pulls the bright patch. Both generations render in one
+# build, and which one a photograph gets is `set process`.
+#
+# Readings are display luma at two patches of this sample: the overexposed
+# background top-left (0.544 as shot) and a midtone patch bottom-left (0.272).
+
+open samples/overexposed-background.ARW
+
+# A photograph without a sidecar opens under the newest generation.
+control process == 2
+
+measure 0.1,0.1,0.15,0.15 base_tl
+measure 0.2,0.7,0.15,0.15 base_bl
+
+set highlights -0.8
+measure 0.1,0.1,0.15,0.15 p2_tl
+measure 0.2,0.7,0.15,0.15 p2_bl
+# The bright patch is still pulled ...
+expect p2_tl < base_tl
+# ... and the midtone stays within two codes of where it was (0.268 vs 0.272).
+expect p2_bl > 0.26
+
+set process 1
+control process == 1
+measure 0.1,0.1,0.15,0.15 p1_tl
+measure 0.2,0.7,0.15,0.15 p1_bl
+# The bands as shipped pull the midtone twelve codes (0.225).
+expect p1_bl < p2_bl
+expect p1_bl < 0.24
+
+# Shadows under the two generations: process 2 still lifts the midtone patch
+# (0.400 against 0.272) and reaches the bright patch less (0.628 against 0.645).
+set highlights 0
+set shadows 0.8
+measure 0.1,0.1,0.15,0.15 s1_tl
+measure 0.2,0.7,0.15,0.15 s1_bl
+set process 2
+measure 0.1,0.1,0.15,0.15 s2_tl
+measure 0.2,0.7,0.15,0.15 s2_bl
+expect s2_bl > base_bl
+expect s2_tl < s1_tl
+
+minchecks 8

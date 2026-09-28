@@ -1,0 +1,34 @@
+# `select` adds a selection row; it never overwrites the shape you placed.
+#
+# Reported by the first agent to use the CLI (2026-09-13): "select subject
+# silently destroys the selected row" — a finished face radial was converted
+# into a Subject matte in place, because the verb set the *selected* row's
+# kind to 4. The panel's Add menu adds a row and fills it (`addDetected`);
+# the verb now does the same. Decision #275.
+#
+# Two readings pin it: the row count grows, and row 0 is still a radial.
+# `select` errors if the model finds nothing, which is a result in itself.
+
+open samples/overexposed-background.ARW
+mask radial
+set maskCentreX 0.30
+control maskRows == 1
+control maskKind == 2
+
+select subject
+control maskRows == 2
+maskrow 0
+control maskKind == 2
+
+# Asking again on a row that already is a selection re-fills it, no new row.
+maskrow 1
+control maskKind == 4
+select subject
+control maskRows == 2
+
+# And a shape made from a selection carries no matte reference: `state`
+# prints it as a plain `maskadd radial`, which the gate replays.
+maskkind 1 radial
+maskrow 1
+control maskKind == 2
+state

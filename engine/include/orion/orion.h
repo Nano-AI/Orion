@@ -330,6 +330,14 @@ typedef struct OrionAdjustments {
     OrionCurveChannel curve_red;
     OrionCurveChannel curve_green;
     OrionCurveChannel curve_blue;
+
+    /* Which generation of tone bands renders highlights, shadows, whites and
+     * blacks, global and local. 1 is the four bands as shipped; 2 adds an
+     * identity band at middle grey so a midtone face is no longer on the
+     * Highlights flank. The photograph's own, from its sidecar: a state
+     * finished under one generation keeps opening under it. 0 reads as 1, so
+     * a zeroed struct renders what it always rendered. */
+    int   process;
 } OrionAdjustments;
 
 /* Opens a raw file and builds the develop pipeline for it. */
@@ -637,6 +645,19 @@ typedef struct OrionExportOptions {
                               * caller's default — see OrionMetadata          */
     int32_t  bit_depth;      /* OrionBitDepth                                 */
     int32_t  sharpen;        /* OrionSharpen                                  */
+
+    /* A watermark, as a coverage mask over the whole output frame: 8-bit gray,
+     * row-major, tightly packed, 0 leaves the pixel and 255 replaces it with
+     * watermark_rgb. Opacity is already baked into the values.
+     *
+     * NULL means no watermark, so a caller that zeroes the struct gets none.
+     * The mask need not match the output size exactly: it is stretched over
+     * the frame after the resize, so a rounding pixel either way is invisible.
+     * watermark_rgb is sRGB, 0..1. See DECISIONS #284. */
+    const uint8_t* watermark_mask;
+    uint32_t watermark_width;
+    uint32_t watermark_height;
+    float    watermark_rgb[3];
 } OrionExportOptions;
 
 /* ── HDR merge ─────────────────────────────────────────────────────────────

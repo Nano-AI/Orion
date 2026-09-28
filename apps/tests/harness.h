@@ -63,6 +63,10 @@ void section(const char* name);
 
 #define CHECK(cond) report((cond), #cond)
 
+/// A written image read back whole, as 16-bit sRGB RGBA. In `tests_io.cpp`.
+bool decode16(const std::string& path, std::vector<std::uint16_t>& out,
+              std::size_t& width, std::size_t& height);
+
 /// A scratch brush accumulator, for the tests that dispatch `maskComponent`
 /// directly. Decision #108 gave that kernel a seventh binding — the persistent
 /// coverage it continues a stroke from — and an unbound slot in Metal is nil
@@ -86,6 +90,7 @@ void testOrientation();
 void testLensDatabase();
 void testBlackLevels();
 void testExportFormats();
+void testExportWatermark();
 void testFloatToHalf();
 void testDngRoundTrip();
 void testLinearDngOpens();

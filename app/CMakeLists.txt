@@ -52,7 +52,10 @@ set(SWIFT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergePanel.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentKeys.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentVocabulary.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLIDriver.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentInspect.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentFaces.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentComposite.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SubjectMatte.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
@@ -67,8 +70,12 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MaskLayers.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/DevelopDiff.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportPanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/Watermark.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/WatermarkRaster.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/WatermarkPanel.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ExportProbe.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CropOverlay.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MaskOverlay.swift
@@ -96,6 +103,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Scenes.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Checks.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Measure.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/RegionStats.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Screenshot+Render.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveEditor.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
@@ -245,6 +253,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Watermark.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/WatermarkRaster.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
@@ -256,7 +266,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MaskLayers.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
-    ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/DevelopDiff.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
@@ -265,12 +276,15 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentKeys.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentVocabulary.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentComposite.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Curve.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Stats.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/RegionStats.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Merge.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Canvas.swift
@@ -288,6 +302,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sky.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Index.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Export.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Watermark.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Agent.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Proposal.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AssistantProcess.swift
@@ -306,6 +321,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Merge.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ExportSettings.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/Watermark.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/WatermarkRaster.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveMath.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/CurveSupport.swift
@@ -317,7 +334,8 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/EditHistory.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MaskLayers.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
-    ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/InteractionLog.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/DevelopDiff.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
@@ -326,12 +344,15 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentKeys.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentVocabulary.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentComposite.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Curve.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sidecar.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Stats.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/RegionStats.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Matte.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Canvas.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Gallery.swift
@@ -348,6 +369,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sky.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Index.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Export.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Watermark.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Agent.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Proposal.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AssistantProcess.swift

@@ -239,10 +239,16 @@ extension Engine {
     /// eight renders the narrow, dithered graph and sixteen renders the wide
     /// one, so a JPEG asked for at sixteen would skip the dither and then be
     /// rounded to eight anyway. `ExportSettings.effectiveDepth` is that value.
+    ///
+    /// `watermark` is nil by default, and that default is load-bearing: the MCP
+    /// `get_proxy` render and every byte-identity repro call this without one
+    /// and must stay unmarked. Only the call sites that honour the
+    /// photographer's settings pass `WatermarkRaster.mask(for:settings:...)`.
     func export(to path: String, quality: Float = 0.92,
                 maxDimension: UInt32 = 0, space: Int32 = 0,
                 rating: Int32 = -1, metadata: Int32 = 1,
-                depth: Int32 = 0, sharpen: Int32 = 0) throws {
+                depth: Int32 = 0, sharpen: Int32 = 0,
+                watermark: WatermarkRaster.Mask? = nil) throws {
         // ⚠ Throws rather than returning. A bare `return` here is an export
         // that reports success and writes no file — and the person who finds
         // that out is whoever was sent the photograph. `isLoaded` is checked
@@ -259,11 +265,18 @@ extension Engine {
         if wasOverlay { maskOverlay = false }
         defer { if wasOverlay { maskOverlay = true } }
 
-        var options = OrionExportOptions(format: -1, quality: quality,
-                                         max_dimension: maxDimension, space: space,
-                                         rating: rating, metadata: metadata,
-                                         bit_depth: depth, sharpen: sharpen)
-        let status = orion_engine_export(handle, path, &options)
+        var options = OrionExportOptions()
+        options.format = -1
+        options.quality = quality
+        options.max_dimension = maxDimension
+        options.space = space
+        options.rating = rating
+        options.metadata = metadata
+        options.bit_depth = depth
+        options.sharpen = sharpen
+        let status = Engine.withWatermark(watermark, in: &options) {
+            orion_engine_export(handle, path, &$0)
+        }
         guard status == ORION_OK else { throw Failure.export(errorText(status)) }
     }
 
@@ -271,20 +284,46 @@ extension Engine {
     /// Real work — a 24 MP JPEG is about a sixth of a second — so callers
     /// debounce it.
     func exportedSize(format: Int32, quality: Float, maxDimension: UInt32,
-                      space: Int32 = 0, depth: Int32 = 0, sharpen: Int32 = 0) -> Int? {
+                      space: Int32 = 0, depth: Int32 = 0, sharpen: Int32 = 0,
+                      watermark: WatermarkRaster.Mask? = nil) -> Int? {
         guard let handle else { return nil }
         // No rating and no metadata source: the estimate measures the pixels,
         // and a few hundred bytes of EXIF is below its resolution anyway. The
-        // depth and the sharpening are not below its resolution and are passed.
-        var options = OrionExportOptions(format: format, quality: quality,
-                                         max_dimension: maxDimension, space: space,
-                                         rating: -1, metadata: 1,
-                                         bit_depth: depth, sharpen: sharpen)
+        // depth, the sharpening and the watermark are not below its resolution
+        // and are passed.
+        var options = OrionExportOptions()
+        options.format = format
+        options.quality = quality
+        options.max_dimension = maxDimension
+        options.space = space
+        options.rating = -1
+        options.metadata = 1
+        options.bit_depth = depth
+        options.sharpen = sharpen
         var bytes: UInt64 = 0
-        guard orion_engine_export_size(handle, &options, &bytes) == ORION_OK else {
-            return nil
+        let status = Engine.withWatermark(watermark, in: &options) {
+            orion_engine_export_size(handle, &$0, &bytes)
         }
-        return Int(bytes)
+        return status == ORION_OK ? Int(bytes) : nil
+    }
+
+    /// Points the options at the mask for exactly the length of one call. The
+    /// engine borrows the bytes and does not keep them, so the pointer never
+    /// has to outlive `body`. The color is the one fixed gray.
+    private static func withWatermark(
+        _ mask: WatermarkRaster.Mask?, in options: inout OrionExportOptions,
+        _ body: (inout OrionExportOptions) -> OrionStatus) -> OrionStatus {
+        guard let mask, mask.bytes.count == mask.width * mask.height else {
+            return body(&options)
+        }
+        return mask.bytes.withUnsafeBufferPointer { buffer in
+            options.watermark_mask = buffer.baseAddress
+            options.watermark_width = UInt32(mask.width)
+            options.watermark_height = UInt32(mask.height)
+            options.watermark_rgb = (Watermark.gray.0, Watermark.gray.1, Watermark.gray.2)
+            defer { options.watermark_mask = nil }
+            return body(&options)
+        }
     }
 }
 

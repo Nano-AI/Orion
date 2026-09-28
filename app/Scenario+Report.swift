@@ -20,6 +20,20 @@ extension Scenario {
             guard args.count >= 2 else { throw Bad(what: "measure needs a region and a name") }
             let r = args[0].split(separator: ",").compactMap { Double($0) }
             guard r.count == 4 else { throw Bad(what: "region is x,y,w,h") }
+            // A written file, read back - what an export put where (#284).
+            if args.count > 2, args[2].contains("/") {
+                guard let s = Screenshot.regionStats(
+                        ofFile: args[2], region: CGRect(x: r[0], y: r[1], width: r[2], height: r[3]))
+                else { throw Bad(what: "could not read \(args[2])") }
+                readings[args[1]] = Reading(luma: s.luma, saturation: s.saturation, hue: s.hue,
+                                            hueStrength: s.hueStrength, red: s.red, green: s.green,
+                                            blue: s.blue, clippedHigh: s.clippedHigh,
+                                            clippedLow: s.clippedLow, shading: s.shading)
+                say(String(format: "  %-22@ luma %.4f  sat %.4f  rgb %.3f/%.3f/%.3f  (%@)\n",
+                           args[1] as NSString, s.luma, s.saturation, s.red, s.green, s.blue,
+                           (args[2] as NSString).lastPathComponent as NSString))
+                return true
+            }
             let surface: Screenshot.Surface
             switch args.count > 2 ? args[2] : "output" {
             case "output": surface = .output
@@ -34,9 +48,118 @@ extension Scenario {
                                   CGRect(x: r[0], y: r[1], width: r[2], height: r[3]),
                                   through: surface)
             readings[args[1]] = reading
-            say(String(format: "  %-22@ luma %.4f  sat %.4f  (%@)\n",
-                       args[1] as NSString, reading.luma, reading.saturation,
+            // Everything the patch measures on one line (#278). The first two
+            // are where they always were, so a reader of an old transcript
+            // finds them in the same place.
+            say(String(format: "  %-22@ luma %.4f  sat %.4f  hue %.0f  rgb %.3f/%.3f/%.3f  "
+                             + "clip %.3f/%.3f  shading %.3f  (%@)\n",
+                       args[1] as NSString, reading.luma, reading.saturation, reading.hue,
+                       reading.red, reading.green, reading.blue,
+                       reading.clippedHigh, reading.clippedLow, reading.shading,
                        (surface == .canvas ? "canvas" : "output") as NSString))
+
+        case "zones":
+            // An n×n grid of the picture, luma and saturation each, for a first
+            // look at where the light is without rendering anything.
+            let n = args.isEmpty ? 3 : Int(try number(args, 0))
+            guard n >= 1, n <= 12 else { throw Bad(what: "zones takes 1..12") }
+            for row in 0..<n {
+                var line = "  "
+                for col in 0..<n {
+                    let rect = CGRect(x: Double(col) / Double(n), y: Double(row) / Double(n),
+                                      width: 1 / Double(n), height: 1 / Double(n))
+                    let s = try read(engine, rect, through: .output)
+                    line += String(format: "%.2f/%.2f ", s.luma, s.saturation)
+                }
+                say(line + "\n")
+            }
+
+        case "histogram":
+            // Integer bins straight from the engine, one line per channel -
+            // the picture's tonal shape as text, which is how an agent should
+            // read a histogram (never as a rendered chart, #272).
+            let bins = args.isEmpty ? 16 : Int(try number(args, 0))
+            guard bins >= 2, bins <= 256 else { throw Bad(what: "histogram takes 2..256 bins") }
+            guard let h = engine.histogram(bins: bins) else {
+                throw Bad(what: "no histogram - is a photo open?")
+            }
+            for (c, name) in ["R", "G", "B"].enumerated() {
+                let row = h[(c * bins)..<((c + 1) * bins)].map(String.init).joined(separator: " ")
+                say("  \(name) \(row)\n")
+            }
+
+        case "look":
+            // The developed picture, small, as a PNG for the agent to open.
+            // 768 px on the long edge by default: about 530 visual tokens.
+            guard let path = args.first else { throw Bad(what: "look needs a path") }
+            let long = args.count > 1 ? Int(try number(args, 1)) : 768
+            guard long >= 64, long <= 4096 else { throw Bad(what: "look size is 64..4096") }
+            let w = Int(engine.imageWidth), hgt = Int(engine.imageHeight)
+            guard w > 0, hgt > 0 else { throw Bad(what: "no photo open") }
+            let scale = Double(long) / Double(max(w, hgt))
+            let size = (width: max(1, Int(Double(w) * scale)),
+                        height: max(1, Int(Double(hgt) * scale)))
+            guard let image = Screenshot.developedCGImage(engine, fitting: size),
+                  let bytes = Screenshot.writePNG(image, to: path) else {
+                throw Bad(what: "could not write \(path)")
+            }
+            say("  wrote \((path as NSString).lastPathComponent) \(size.width)x\(size.height) (\(bytes) bytes)\n")
+
+        case "zoom":
+            // A region at native resolution, with a stated reason: an agent
+            // that has to say why it is looking asks for fewer pictures
+            // (research/agent-interaction.md).
+            guard args.count >= 2 else { throw Bad(what: "zoom needs a path, a region and a reason") }
+            let r = args[1].split(separator: ",").compactMap { Double($0) }
+            guard r.count == 4 else { throw Bad(what: "region is x,y,w,h") }
+            guard args.count >= 4, args[2] == "because" else {
+                throw Bad(what: "zoom needs a reason: zoom <path> <x,y,w,h> because <why>")
+            }
+            let w = Int(engine.imageWidth), hgt = Int(engine.imageHeight)
+            guard w > 0, hgt > 0 else { throw Bad(what: "no photo open") }
+            guard let full = Screenshot.developedCGImage(engine, fitting: (width: w, height: hgt)),
+                  let crop = full.cropping(to: CGRect(x: r[0] * Double(w), y: r[1] * Double(hgt),
+                                                      width: r[2] * Double(w), height: r[3] * Double(hgt))),
+                  let bytes = Screenshot.writePNG(crop, to: args[0]) else {
+                throw Bad(what: "could not write \(args[0])")
+            }
+            say("  wrote \((args[0] as NSString).lastPathComponent) \(crop.width)x\(crop.height) "
+              + "(\(bytes) bytes) because \(args[3...].joined(separator: " "))\n")
+
+        case "faces":
+            // Face boxes from Vision on the displayed picture, in display
+            // space for `crop` and `measure`, and the box's centre and half
+            // sizes carried into frame space through the engine's own map, so
+            // the numbers drop straight into `set maskCentreX` (#278).
+            //
+            // ⚠ The arithmetic lives in `AgentFaces`, which `Orion --agent
+            // faces` also calls: one detector, one carry into frame space,
+            // two printings of it.
+            let faces: [AgentFaces.Face]
+            do { faces = try AgentFaces.detect(engine: engine) }
+            catch let error as AgentFaces.Failure { throw Bad(what: error.description) }
+            if faces.isEmpty { say("  no faces\n") }
+            for (i, f) in faces.enumerated() {
+                say(String(format: "  face %d  display %.3f,%.3f,%.3f,%.3f  centre %.3f,%.3f  "
+                                 + "frame %.3f,%.3f  radius %.3f,%.3f\n",
+                           i + 1, f.display.minX, f.display.minY,
+                           f.display.width, f.display.height,
+                           f.display.midX, f.display.midY,
+                           f.centerX, f.centerY, f.radiusX, f.radiusY))
+            }
+
+        case "toframe", "todisplay":
+            // One point across the frame/display map, both ways printed, so a
+            // mask centre can be chosen where `measure` reads (#278).
+            guard let p = args.first else { throw Bad(what: "\(verb) needs x,y") }
+            let v = p.split(separator: ",").compactMap { Double($0) }
+            guard v.count == 2 else { throw Bad(what: "a point is x,y") }
+            let map = engine.frameDisplayMap
+            let q = verb == "toframe" ? map.frame(CGPoint(x: v[0], y: v[1]))
+                                      : map.display(CGPoint(x: v[0], y: v[1]))
+            say(String(format: "  %@ %.3f,%.3f is %@ %.3f,%.3f\n",
+                       (verb == "toframe" ? "display" : "frame") as NSString, v[0], v[1],
+                       (verb == "toframe" ? "frame" : "display") as NSString, q.x, q.y))
 
         case "expect":
             guard args.count >= 3 else { throw Bad(what: "expect needs name, op, value") }
@@ -79,6 +202,7 @@ extension Scenario {
             guard let path = args.first else { throw Bad(what: "export needs a path") }
             let settings = ExportSettings()
             var longestEdge: UInt32 = 0
+            var marked = false
             settings.format = path.hasSuffix(".png") ? .png
                             : (path.hasSuffix(".tif") || path.hasSuffix(".tiff")) ? .tiff
                             : .jpeg
@@ -99,6 +223,8 @@ extension Scenario {
                 case ("size", let v):
                     guard let px = UInt32(v) else { throw Bad(what: "size takes pixels") }
                     longestEdge = px
+                case ("watermark", "on"):     marked = true
+                case ("watermark", "off"):    marked = false
                 default: throw Bad(what: "unknown export option \(option)")
                 }
             }
@@ -108,8 +234,13 @@ extension Scenario {
                     maxDimension: longestEdge,
                     metadata: settings.metadata.rawValue,
                     depth: settings.effectiveDepth.rawValue,
-                    sharpen: settings.sharpening.rawValue)
+                    sharpen: settings.sharpening.rawValue,
+                    // Through the same `WatermarkRaster.mask` the panel's
+                    // export calls, so the size the mask is drawn at is the
+                    // one `ExportSettings` predicts.
+                    watermark: marked ? try scenarioMask(engine, longestEdge) : nil)
             }
+            catch let bad as Bad { throw bad }
             catch { throw Bad(what: "export failed — \(error.localizedDescription)") }
             let size = (try? FileManager.default
                 .attributesOfItem(atPath: path)[.size] as? Int) ?? nil
@@ -161,8 +292,37 @@ extension Scenario {
             guard let p = args.first else { throw Bad(what: "shot needs a path") }
             Screenshot.writeCanvas(engine, to: p)
 
+        case "state":
+            // The edit, as the lines that replay it. Against the camera's own
+            // settings by default - what *this photograph* has had done to it -
+            // so an untouched frame says so in one line instead of listing the
+            // white balance the file arrived with.
+            guard engine.isLoaded else { throw Bad(what: "no photo open") }
+            switch args.first {
+            case "masks":
+                for line in DevelopDiff.outline(engine.state) { say("  \(line)\n") }
+            case "full":
+                say("  # process \(engine.process)\n")
+                let lines = DevelopDiff.lines(from: DevelopState(), to: engine.state)
+                for line in lines { say("  \(line)\n") }
+            case nil:
+                // A comment, not a `set`: the diff below already emits `set
+                // process` when the photograph's differs from a fresh state's,
+                // and a reader auditing the edit wants to see it either way
+                // (#279) without a replay setting what it need not.
+                say("  # process \(engine.process)\n")
+                let lines = DevelopDiff.lines(from: engine.defaults, to: engine.state)
+                if lines.isEmpty { say("  as shot - nothing changed\n") }
+                for line in lines { say("  \(line)\n") }
+            default:
+                throw Bad(what: "state takes nothing, masks or full")
+            }
+
         case "print":
             say("  " + args.joined(separator: " ") + "\n")
+
+        case "watermark":
+            try configureWatermark(args)
 
         default:
             return false
@@ -170,17 +330,110 @@ extension Scenario {
         return true
     }
 
+    /// The scenario's own mark, set by the `watermark` verb. Never read from
+    /// or written to disk: a scenario that picked up the photographer's saved
+    /// mark would pass or fail by what is in their Application Support.
+    static var watermark: Watermark = {
+        let m = Watermark(url: nil)
+        m.enabled = true
+        return m
+    }()
+
+    private static func configureWatermark(_ args: [String]) throws {
+        guard let what = args.first else { throw Bad(what: "watermark needs a setting") }
+        let rest = Array(args.dropFirst())
+        func number() throws -> Double {
+            guard let v = rest.first.flatMap(Double.init) else {
+                throw Bad(what: "watermark \(what) takes a number")
+            }
+            return v
+        }
+        switch what {
+        case "text":
+            watermark.content = .text(rest.joined(separator: " "),
+                                      fontFamily: "Helvetica Neue", bold: false)
+        case "svg":
+            guard let path = rest.first,
+                  let data = FileManager.default.contents(atPath: path) else {
+                throw Bad(what: "watermark svg needs a readable file")
+            }
+            watermark.content = .svg(data, name: (path as NSString).lastPathComponent)
+        case "place":
+            if rest.first == "diagonal" { watermark.placement = .diagonal }
+            else if let a = rest.first.flatMap(Watermark.Anchor.init(rawValue:)) {
+                watermark.placement = .anchor(a)
+            } else { throw Bad(what: "watermark place takes an anchor or diagonal") }
+        case "opacity": watermark.opacity = try number()
+        case "size":    watermark.size = try number()
+        case "span":    watermark.span = try number()
+        case "margin":  watermark.margin = try number()
+        default: throw Bad(what: "watermark takes text, svg, place, opacity, size, span or margin")
+        }
+    }
+
+    /// The mask for a scenario export, sized the way the panel sizes one: a
+    /// `size=` is a custom longest edge, exactly as typed into the panel.
+    private static func scenarioMask(_ engine: Engine,
+                                     _ longestEdge: UInt32) throws -> WatermarkRaster.Mask {
+        let w = engine.imageWidth, h = engine.imageHeight
+        let settings = ExportSettings()
+        if longestEdge > 0, longestEdge < max(w, h) {
+            settings.size = .custom
+            if w >= h { settings.setCustom(width: longestEdge, sourceWidth: w, sourceHeight: h) }
+            else { settings.setCustom(height: longestEdge, sourceWidth: w, sourceHeight: h) }
+        }
+        guard let mask = WatermarkRaster.mask(for: watermark, settings: settings,
+                                              sourceWidth: w, sourceHeight: h) else {
+            throw Bad(what: "watermark=on, but the scenario's mark draws nothing")
+        }
+        return mask
+    }
+
     static func read(_ engine: Engine, _ region: CGRect,
                              through surface: Screenshot.Surface) throws -> Reading {
-        guard let stats = Screenshot.regionStats(engine, region: region,
-                                                 through: surface) else {
+        guard let s = Screenshot.regionStats(engine, region: region,
+                                             through: surface) else {
             throw Bad(what: "could not read the output — is a photo open?")
         }
-        return Reading(luma: stats.luma, saturation: stats.saturation)
+        return Reading(luma: s.luma, saturation: s.saturation, hue: s.hue,
+                       hueStrength: s.hueStrength,
+                       red: s.red, green: s.green, blue: s.blue,
+                       clippedHigh: s.clippedHigh, clippedLow: s.clippedLow,
+                       shading: s.shading)
     }
 
     private static func check(_ name: String, _ op: String, _ rhs: String) throws {
         checks += 1
+        // `name.field` asserts one of the other numbers a patch carries
+        // (#278): `cheek.shading > 0.1`, `sky.clippedHigh < 0.01`. The bare
+        // name keeps its two-number signature below.
+        if let dot = name.firstIndex(of: ".") {
+            let base = String(name[..<dot]), field = String(name[name.index(after: dot)...])
+            guard let reading = readings[base] else { throw Bad(what: "nothing recorded under \(base)") }
+            guard let got = reading.field(field) else {
+                throw Bad(what: "\(field) is not a field a reading carries")
+            }
+            let want: Double
+            if let other = rhs.firstIndex(of: "."), let o = readings[String(rhs[..<other])],
+               let v = o.field(String(rhs[rhs.index(after: other)...])) { want = v }
+            else if let v = Double(rhs) { want = v }
+            else { throw Bad(what: "\(rhs) is neither a number nor a recording's field") }
+            let eps = field == "hue" ? 1.0 : 1.0 / 255.0
+            let ok: Bool
+            switch op {
+            case "==": ok = abs(got - want) < eps
+            case "!=": ok = abs(got - want) >= eps
+            case ">":  ok = got > want
+            case "<":  ok = got < want
+            default: throw Bad(what: "expect takes ==, !=, > or <, got \(op)")
+            }
+            if ok { say(String(format: "  ok    %@ %@ %@  (got %.4f)\n", name as NSString, op as NSString, rhs as NSString, got)) }
+            else {
+                failures += 1
+                say(String(format: "  FAIL  %@ %@ %@  (got %.4f, wanted %.4f)\n", name as NSString, op as NSString, rhs as NSString, got, want))
+            }
+            return
+        }
         guard let got = readings[name] else {
             throw Bad(what: "nothing recorded under \(name)")
         }

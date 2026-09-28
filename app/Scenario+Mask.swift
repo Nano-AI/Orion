@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 
 /// The mask group and the tools that draw into it: the row list, the brush,
@@ -119,7 +120,21 @@ extension Scenario {
             case "sky":     which = .sky
             default: throw Bad(what: "select takes subject or person")
             }
-            if engine.maskComponents.isEmpty { engine.addMaskComponent(kind: 4) }
+            // A row of its own, as the panel's Add menu makes one (`addDetected`
+            // in DevelopPanels+Mask): the detector fills a *selection* row and
+            // never overwrites a shape somebody placed. ⚠ It used to convert
+            // the selected row in place, and an agent lost a finished face
+            // radial to it on the surface's first real use (2026-09-13). A row
+            // that is already a selection is re-filled, which is what pressing
+            // the button again on that row means.
+            if engine.maskComponents.isEmpty {
+                engine.addMaskComponent(kind: 4)
+            } else if engine.selected?.kind != 4 {
+                guard engine.addMaskComponent(kind: 4) else {
+                    throw Bad(what: "the group is full — select needs a row for the selection")
+                }
+                engine.commitMaskGroupEdit("Add mask")
+            }
             let m = try SubjectMatte.generateBlocking(engine: engine, kind: which)
             var covered = 0
             for v in m.alpha where v > 0.5 { covered += 1 }
@@ -255,6 +270,19 @@ extension Scenario {
                 engine.commitMaskGroupEdit("Add mask")
             }
 
+        case "maskrow":
+            // Selects a row, which is what `set maskCentreX` and the rest then
+            // address. `DevelopDiff` emits one before every row's fields so a
+            // replayed state lands on the row that moved.
+            guard let want = Int(args.first ?? "") else {
+                throw Bad(what: "maskrow needs a row index")
+            }
+            guard engine.maskComponents.indices.contains(want) else {
+                throw Bad(what: "no mask row \(want) - the group has "
+                              + "\(engine.maskComponents.count)")
+            }
+            engine.selectedMask = want
+
         case "masklayer":
             // Selects a layer by index, by selecting its first row. Layers are
             // runs of components, so there is no separate layer list to index.
@@ -305,6 +333,44 @@ extension Scenario {
                          "matte": 4, "range": 5, "color": 6, "colour": 6]
             guard let k = named[args[1]] else { throw Bad(what: "no kind \(args[1])") }
             engine.setMaskKind(k, at: i)
+
+        case "maskplace":
+            // The selected row's centre, and optionally its radii, given in
+            // DISPLAY space - where `measure`, `crop` and `faces` speak - and
+            // carried into the frame through the engine's own map (#278). The
+            // radii are the frame-space extent of a step of `rx` along display
+            // x and `ry` along display y, so under a quarter turn they swap as
+            // the mask kernel expects; exact under crops and turns, first
+            // order under a straighten or a keystone, like the migration.
+            guard let p = args.first else { throw Bad(what: "maskplace needs x,y [rx,ry] in display space") }
+            let v = p.split(separator: ",").compactMap { Float($0) }
+            guard v.count == 2 else { throw Bad(what: "a point is x,y") }
+            guard engine.selected != nil else { throw Bad(what: "no mask row to place; add one first") }
+            let map = engine.frameDisplayMap
+            let c = map.frame(CGPoint(x: Double(v[0]), y: Double(v[1])))
+            var radii: (Float, Float)?
+            if args.count > 1 {
+                let r = args[1].split(separator: ",").compactMap { Float($0) }
+                guard r.count == 2 else { throw Bad(what: "radii are rx,ry") }
+                let ex = map.frame(CGPoint(x: Double(v[0] + r[0]), y: Double(v[1])))
+                let ey = map.frame(CGPoint(x: Double(v[0]), y: Double(v[1] + r[1])))
+                radii = (Float(max(abs(ex.x - c.x), abs(ey.x - c.x))),
+                         Float(max(abs(ex.y - c.y), abs(ey.y - c.y))))
+            }
+            var thrown: Error?
+            engine.edit("maskplace") {
+                do {
+                    try apply(control: "maskCentreX", value: Float(c.x), to: engine)
+                    try apply(control: "maskCentreY", value: Float(c.y), to: engine)
+                    if let (rx, ry) = radii {
+                        try apply(control: "maskRadiusX", value: rx, to: engine)
+                        try apply(control: "maskRadiusY", value: ry, to: engine)
+                    }
+                } catch { thrown = error }
+            }
+            if let thrown { throw thrown }
+            say(String(format: "  placed at frame %.3f,%.3f%@\n", c.x, c.y,
+                       (radii.map { String(format: " radius %.3f,%.3f", $0.0, $0.1) } ?? "") as NSString))
 
         case "maskname":
             // Renames the mask whose run starts at the row — the card's rename
@@ -475,15 +541,17 @@ extension Scenario {
                     if batch.isEmpty { last = here; continue }
                 }
                 last = here
-                var fired = false
+                // A lock rather than a captured `var`: `onChange` is
+                // `@Sendable`, and it fires synchronously inside the append.
+                let fired = OSAllocatedUnfairLock(initialState: false)
                 withObservationTracking {
                     _ = engine.maskComponents
                 } onChange: {
-                    fired = true
+                    fired.withLock { $0 = true }
                 }
                 engine.appendBrushDabs(batch, erasing: engine.brushErasing)
                 laid += batch.count
-                if fired { invalidations += 1 }
+                if fired.withLock({ $0 }) { invalidations += 1 }
             }
             let elapsed = DispatchTime.now().uptimeNanoseconds - began
             quiet = false

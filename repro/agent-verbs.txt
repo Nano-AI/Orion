@@ -1,0 +1,72 @@
+# The three verbs the agent surface added, each pinned two-sided.
+#
+# `maskrow` addresses a row, `load` opens the editor's way, and `state` prints
+# the edit as lines. The runner cannot read its own output, so what this file
+# pins is that the verbs reach the engine, and that `maskrow` reaches the row
+# it names and not the one that happened to be selected.
+#
+# ⚠ Written for this sample's orientation. It is a portrait frame with quarter
+# turns, and a mask's centre is in *frame* coordinates (#202) while `measure`
+# reads the *display*: frame (0.30, 0.50) lands at display (0.50, 0.70) and
+# frame (0.70, 0.50) at display (0.50, 0.30), measured before this was written.
+# So the two discs are "bottom" and "top" on the screen, and the patches below
+# are placed where the discs actually are.
+
+open samples/overexposed-background.ARW
+
+# Two radial masks, each its own layer, at frame x 0.30 (display bottom) and
+# frame x 0.70 (display top).
+mask radial
+set maskCentreX 0.30
+set maskCentreY 0.50
+set maskRadiusX 0.14
+set maskRadiusY 0.14
+set maskFeather 0.2
+maskadd radial
+set maskCentreX 0.70
+set maskCentreY 0.50
+set maskRadiusX 0.14
+set maskRadiusY 0.14
+set maskFeather 0.2
+
+measure 0.47,0.67,0.06,0.06 leftBefore
+measure 0.47,0.27,0.06,0.06 rightBefore
+
+# Layer 0 darkens the first disc only (display bottom).
+masklayer 0
+set localExposure -2
+measure 0.47,0.67,0.06,0.06 leftDark
+measure 0.47,0.27,0.06,0.06 rightStill
+expect leftDark != leftBefore
+expect rightStill == rightBefore
+
+# `maskrow 1` then moving the disc away must move the *second* disc's row.
+# Row 0 is selected after `masklayer 0`; without maskrow the move would land
+# on the first disc and the second patch would keep its coverage. Moved rather
+# than shrunk: a 0.01 radius still feathers into a 0.06 patch, measured.
+masklayer 1
+set localExposure -2
+measure 0.47,0.27,0.06,0.06 rightDark
+expect rightDark != rightBefore
+maskrow 1
+set maskCentreY 0.05
+measure 0.47,0.27,0.06,0.06 rightFreed
+measure 0.47,0.67,0.06,0.06 leftHeld
+expect rightFreed == rightBefore
+expect leftHeld == leftDark
+
+# Back on row 0 the same move frees the first disc.
+maskrow 0
+set maskCentreY 0.05
+measure 0.47,0.67,0.06,0.06 leftFreed
+expect leftFreed == leftBefore
+
+# The outline and the replay lines print; nothing to assert on text here.
+state masks
+state
+
+# `load` without a sidecar is `open`: the same picture, as shot.
+measure 0.5,0.5,0.1,0.1 opened
+load samples/overexposed-background.ARW
+measure 0.5,0.5,0.1,0.1 loaded
+expect loaded == opened

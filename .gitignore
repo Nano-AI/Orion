@@ -113,7 +113,7 @@ hdrmerge/
 # `.claude/worktrees/` holds whole checkouts of this repository — which is also
 # why check-decisions.py and check-wiring.py skip that path. Session state, not
 # source. Anything here worth tracking (settings, skills) can be force-added.
-.claude/
+.claude/*
 
 # Python bytecode from tools/
 __pycache__/

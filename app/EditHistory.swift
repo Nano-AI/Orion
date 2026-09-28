@@ -53,6 +53,7 @@ final class EditHistory {
         }
 
         let now = Date()
+
         if let last = entries.last,
            last.label == label,
            now.timeIntervalSince(last.time) < coalesceWindow {
@@ -389,6 +390,17 @@ struct DevelopState: Equatable, Codable {
     var saturation: Float
     /// Orion's base rendering, not neutral. See Engine.contrast.
     var contrast: Float
+    /// Which generation of tone bands renders highlights, shadows, whites and
+    /// blacks: 1 is the four bands as shipped, 2 adds the identity band at
+    /// middle grey that keeps a face off the Highlights flank. Decision #276.
+    ///
+    /// ⚠ **The photograph's, not the user's, and absent means 1.** A sidecar
+    /// stores slider values and not results, so the bands a photograph was
+    /// finished under are the bands it has to keep opening under; every
+    /// sidecar written before this field existed was finished under the
+    /// first, and `init()` gives a fresh state the newest. Never copied by a
+    /// preset or a paste, for the same reason the crop is not.
+    var process: Int32
     var rotateQuarters: Int32
     var straightenDeg: Float
     /// Perspective correction, each -1..1. research/perspective.md.
@@ -502,6 +514,7 @@ extension DevelopState {
             vibrance: 0, saturation: 0,
             // Orion's base rendering, not neutral. See Engine.contrast.
             contrast: 1.45,
+            process: 2,
             rotateQuarters: 0, straightenDeg: 0,
             perspectiveVertical: 0, perspectiveHorizontal: 0, perspectiveAspect: 0,
             cropX: 0, cropY: 0, cropW: 1, cropH: 1,
@@ -540,7 +553,7 @@ extension DevelopState {
     /// and pointing at the four places it has to be listed.
     static let fieldRoster: Set<String> = [
         "temperatureK", "tint", "exposureEv", "highlights", "shadows",
-        "whites", "blacks", "vibrance", "saturation", "contrast",
+        "whites", "blacks", "vibrance", "saturation", "contrast", "process",
         "rotateQuarters", "straightenDeg",
         "perspectiveVertical", "perspectiveHorizontal", "perspectiveAspect",
         "cropX", "cropY", "cropW", "cropH",
@@ -577,7 +590,7 @@ extension DevelopState {
     /// synthesized; only reading is forgiving.
     private enum Key: String, CodingKey {
         case temperatureK, tint, exposureEv, highlights, shadows, whites, blacks
-        case vibrance, saturation, contrast, rotateQuarters, straightenDeg
+        case vibrance, saturation, contrast, process, rotateQuarters, straightenDeg
         case perspectiveVertical, perspectiveHorizontal, perspectiveAspect
         case cropX, cropY, cropW, cropH
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue, lensChoice
@@ -739,6 +752,22 @@ extension DevelopState {
             maskSpace = 0
         }
 
+        // ⚠ Absent means the FIRST generation, not the default, wherever there
+        // is a tone slider for it to gate - the `maskSpace` shape. `self.init()`
+        // set 2 for a fresh state, and every sidecar written before the field
+        // existed was finished under 1; but with the four sliders at zero on
+        // every layer the two generations render identically, so a legacy
+        // sidecar that never touched them keeps the 2 and an empty file is
+        // still exactly `DevelopState()`. The moment such a photograph's
+        // Highlights moves it moves under the newest bands, and nothing it
+        // had finished changes.
+        if let stated = (try? c.decodeIfPresent(Int32.self, forKey: .process))
+            .flatMap({ $0 }) {
+            process = stated
+        } else if usesToneBands {
+            process = 1
+        }
+
         fusion = float(.fusion) ?? fusion
         dehaze = float(.dehaze) ?? dehaze
         clarity = float(.clarity) ?? clarity
@@ -785,3 +814,17 @@ extension DevelopState {
         lumShift = band(.lumShift) ?? lumShift
     }
 }
+
+extension DevelopState {
+    /// Whether any of the four tone sliders is off zero, on the globals or on
+    /// any layer - the condition under which the tone bands' generation can
+    /// be seen at all, and so the only condition under which a sidecar that
+    /// does not state one has to be read as the first.
+    var usesToneBands: Bool {
+        if highlights != 0 || shadows != 0 || whites != 0 || blacks != 0 { return true }
+        return layers.contains {
+            $0.highlights != 0 || $0.shadows != 0 || $0.whites != 0 || $0.blacks != 0
+        }
+    }
+}
+

@@ -34,7 +34,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 ## 3. Global Adjustments
 | Feature | Status | Notes |
 |---|---|---|
-| Exposure, contrast, highlights/shadows, whites/blacks | M1 | All scene-linear |
+| Exposure, contrast, highlights/shadows, whites/blacks | M1 | All scene-linear. ⚠ The four tone bands are versioned per photograph since #276: `process` 1 is the bands as shipped, 2 adds an identity band at middle grey so a midtone face is off the Highlights flank; a fresh photograph gets 2, a sidecar keeps its own, and only `set process` moves it (no panel affordance yet) |
 | White balance (temp/tint, eyedropper, presets) | M1 | ⚠ **Corrected 2026-08-10, #211: only temp/tint shipped.** The eyedropper and the presets this row has claimed since scope lock exist nowhere in the tree — `DevelopPanels+Light.swift` is two sliders. Queued **M6, S6.1**; the click-a-neutral inversion needs a `research/` entry before code |
 | B&W conversion + per-band gray mix | M6 | S6.2 (#212) — the largest Lightroom parity hole: nothing in the tree maps color to gray per band. LUTs cover looks, not the mix control |
 | Vibrance / saturation | M1 | |
@@ -123,7 +123,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Full-res tiled render path | M1 | Separate from preview pipe |
 | Output sharpening, metadata options | M4 | |
 | Export presets + JPEG XL/AVIF probe | M6 | S6.11 (#212) — named export settings; verify ImageIO support before promising either format |
-| Watermark | M5 | Low priority |
+| Watermark | M5 | ✅ **Built 2026-09-27**, decision #284. One saved mark (text or an SVG's shape) in `~/Library/Application Support/Orion/watermark.json`, a switch in the Export panel, 3x3 anchor or diagonal, one neutral gray whose opacity is the only color control. Blended in the writer after the resize and sharpening, so it is crisp at every size; never on `get_proxy` or `--batch-export` |
 
 ## 14. Performance & UI
 | Feature | Status | Notes |
@@ -166,3 +166,16 @@ None gets code before a `DECISIONS.md` row settles it.
 | Reference view (pin a second image) | |
 | Second-monitor support | |
 | ISO-adaptive presets | Preset system is a patch model — adaptivity is a new axis |
+
+## 16. Automation and agents (added 2026-09-13, #272; the socket surface retired 2026-09-20, #280)
+| Feature | Status | Notes |
+|---|---|---|
+| Headless session `Orion --serve`, the `orion` CLI, the Claude Code skill, `tools/check-serve.py`, transactions and `--if-rev` | ❌ **retired 2026-09-20, #280** | Lost the bake-off to the MCP surface (§15) on two real frames; removed. Proposals (`.proposed.json`, approved in compare) are the transaction model now |
+| Process version - `DevelopState.process`, process 2 tone bands | ✅ 2026-09-14, #276 | Kept from the socket branch: an identity band at middle grey keeps a face off the Highlights flank; a sidecar records the generation it was finished under. ⚠ No Develop-panel affordance yet; `set process` and `describe_edits` reach it |
+| Edit-state readback `state`, the editor's open `load`, `maskrow` | ✅ 2026-09-13, #272 | Kept as scenario verbs for the repro sweep (`repro/agent-verbs.txt`); `DevelopDiff` is the session log's one diff |
+| Inspection mechanisms - `RegionStats` (luma, sat, hue, RGB, clipped fractions, shading), `faces`, `maskplace`, `toframe`/`todisplay`, `zones`, `histogram`, `look`, `zoom` | ✅ 2026-09-14, #278 | Kept; the MCP surface reaches them as `get_stats` with `state`/`region`, `get_proxy` with `region`, and `detect_faces` (#281) |
+| Mask fixes - `select` adds a row, a kind change drops its matte | ✅ 2026-09-13, #275 | Kept; `repro/select-adds-a-row.txt` |
+| Professional-standard `check` | M-A (S-A5) | Deterministic invariants, then deltas, on the MCP surface: `get_stats region` is the reading it builds on |
+| Subject and sky mattes through MCP | M-A queued (#280) | The MCP agent approximated a person with an ellipse; the editor's `select subject|sky` matte has no tool yet |
+| Aesthetic score, advisory | M-A (S-A9) | Vision on device; never an objective |
+| Library verbs | M-A (S-A10) | Triage and batch, through `list_folder` and `set_flag` |

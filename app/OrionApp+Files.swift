@@ -84,6 +84,7 @@ extension Editor {
         Task { @MainActor in
             let outcome = BatchExport.run(
                 jobs: jobs, engine: engine, settings: exportSettings,
+                watermark: watermark,
                 progress: { done, total in batchProgress = (done, total) },
                 isCanceled: { batchCancelled })
 
@@ -502,7 +503,11 @@ extension Editor {
                               rating: Int32(library.photos.first { $0.url == current }?.rating ?? 0),
                               metadata: exportSettings.metadata.rawValue,
                               depth: exportSettings.effectiveDepth.rawValue,
-                              sharpen: exportSettings.sharpening.rawValue)
+                              sharpen: exportSettings.sharpening.rawValue,
+                              watermark: WatermarkRaster.mask(
+                                  for: watermark, settings: exportSettings,
+                                  sourceWidth: engine.imageWidth,
+                                  sourceHeight: engine.imageHeight))
         } catch {
             message = error.localizedDescription
         }

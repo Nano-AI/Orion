@@ -243,6 +243,9 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         e.blacks     = std::clamp(adj->local_blacks[i], -1.0f, 1.0f);
     }
     a.maskRefine = std::clamp(adj->mask_refine, 0.0f, 1.0f);
+    // Zero is the bands as shipped, and anything newer than this build knows
+    // renders as the newest it does know - never as the legacy bands.
+    a.process = adj->process <= 1 ? 1 : 2;
 
     a.spotCount = std::clamp(adj->spot_count, 0, ORION_MAX_SPOTS);
     for (int i = 0; i < a.spotCount; ++i) {
@@ -652,6 +655,20 @@ orion::util::Sharpen toSharpen(int32_t s) {
         default:                   return orion::util::Sharpen::None;
     }
 }
+
+/// Borrowed straight through: the mask is the caller's until the call returns,
+/// which is as long as the writer needs it.
+orion::util::Watermark toWatermark(const OrionExportOptions& o) {
+    orion::util::Watermark w;
+    if (o.watermark_mask == nullptr || o.watermark_width == 0 || o.watermark_height == 0) {
+        return w;
+    }
+    w.mask = o.watermark_mask;
+    w.width = o.watermark_width;
+    w.height = o.watermark_height;
+    for (int i = 0; i < 3; ++i) w.rgb[i] = std::clamp(o.watermark_rgb[i], 0.0f, 1.0f);
+    return w;
+}
 }  // namespace
 
 OrionStatus orion_engine_hdr_merge(OrionEngine* engine,
@@ -704,6 +721,7 @@ OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
             opts.rating       = options->rating;
             opts.depth        = toBitDepth(options->bit_depth);
             opts.sharpen      = toSharpen(options->sharpen);
+            opts.watermark    = toWatermark(*options);
             switch (options->metadata) {
                 case ORION_METADATA_ALL:  opts.metadata = orion::util::Metadata::All;  break;
                 case ORION_METADATA_NONE: opts.metadata = orion::util::Metadata::None; break;
@@ -736,6 +754,8 @@ OrionStatus orion_engine_export_size(OrionEngine* engine,
         // the wrong file.
         o.depth = toBitDepth(options->bit_depth);
         o.sharpen = toSharpen(options->sharpen);
+        // And the watermark, which is detail the encoder has to spend bytes on.
+        o.watermark = toWatermark(*options);
         *out_bytes = static_cast<uint64_t>(engine->impl.exportedSize(o));
         return ORION_OK;
     });

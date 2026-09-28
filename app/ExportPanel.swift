@@ -6,11 +6,16 @@ import UniformTypeIdentifiers
 
 struct ExportPanel: View {
     @Bindable var settings: ExportSettings
+    /// The one saved mark (#284). Its switch lives here; the mark itself is
+    /// edited in `WatermarkPanel`.
+    @Bindable var watermark: Watermark
     let sourceWidth: UInt32
     let sourceHeight: UInt32
     /// Encodes with the current settings and returns the byte count. Real work,
     /// so the caller debounces it.
     let measure: () async -> Int?
+    /// The open photo, exported small with the mark - the editor's preview.
+    let preview: () async -> NSImage?
     let onExport: () -> Void
     let onCancel: () -> Void
 
@@ -22,6 +27,7 @@ struct ExportPanel: View {
     @State private var heightText = ""
     @State private var measuring = false
     @State private var measureToken = 0
+    @State private var editingWatermark = false
 
     private var dims: (UInt32, UInt32) {
         settings.dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
@@ -160,6 +166,27 @@ struct ExportPanel: View {
                 }
             }
 
+            // Last of the controls, because it is the one that changes what the
+            // picture says rather than how it is encoded.
+            row("Watermark") {
+                HStack(spacing: 8) {
+                    Toggle("", isOn: $watermark.enabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .tint(Palette.accent)
+                        .labelsHidden()
+                    Text(watermark.summary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(watermark.enabled && watermark.isDrawable
+                                         ? Palette.text : Palette.dim)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Edit…") { editingWatermark = true }
+                        .controlSize(.small)
+                }
+            }
+
             // The two numbers that make every control above legible.
             HStack(spacing: 8) {
                 Text("\(dims.0) × \(dims.1)")
@@ -223,6 +250,14 @@ struct ExportPanel: View {
         // follow them would be the measurement of a different file.
         .onChange(of: settings.depth) { _, _ in remeasure() }
         .onChange(of: settings.sharpening) { _, _ in remeasure() }
+        // The mark is detail the encoder spends bytes on, so it moves the size.
+        // Saved here as well as in the editor: the switch is a setting that
+        // outlives the session.
+        .onChange(of: watermark.enabled) { _, _ in watermark.save(); remeasure() }
+        .sheet(isPresented: $editingWatermark, onDismiss: remeasure) {
+            WatermarkPanel(mark: watermark, preview: preview,
+                           onDone: { editingWatermark = false })
+        }
     }
 
     /// Re-encodes after a pause. A full JPEG encode of a 24 MP frame is about a

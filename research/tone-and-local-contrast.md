@@ -236,3 +236,66 @@ already made — a photograph finished last week would open looking different,
 with nothing in the interface to explain it. That is a migration decision, not a
 tuning one, and it belongs to whoever is willing to accept it. The numbers above
 are recorded so the choice is made with them in hand.
+
+
+## The Highlights band on a face, measured - 2026-09-13
+
+What the 0.495 authority at middle grey does to a portrait, found when an agent's
+edit of a Sony ILCE-7RM3 frame (`DSC09700`, face in the midtones, blown sky) came
+out waxy.
+Ablated one slider at a time on a scratch copy; the global `highlights -0.8` is
+the whole cause.
+The measure is relative luminance variation (standard deviation over mean) of a
+70 px flat skin patch in a 2400 px export after a 6 px blur, which is the
+shading of the face and not its pores.
+
+| Variant | Cheek | Chin |
+|---|---|---|
+| As shot | 0.179 | 0.117 |
+| As shot, `highlights -0.8` alone | 0.124 | 0.085 |
+| Agent's full edit | 0.073 | 0.052 |
+| Full edit, `highlights 0` | 0.122 | 0.087 |
+| Full edit, `highlights -0.4` | 0.100 | 0.073 |
+| Full edit, `highlights 0`, sky row `localHighlights -0.8` | 0.122 | 0.087 |
+
+**The guide is not the cause.** Three experiments on the full edit, each a one
+constant change, each reverted, the baseline export byte-identical afterwards:
+
+| Change | Cheek |
+|---|---|
+| Guide radius ×5 (`/200` → `/40`) | 0.074 |
+| `kGuideEpsilon` 0.04 → 0.30 | 0.085 |
+| `kEvHighlights` +2.5 → +4.0 | 0.065 |
+
+None of them moved it, so the loss is the band's flank across the face's own
+exposure range, not the base/detail split.
+A face in the midtones sits where the Highlights Gaussian is steepest, so its
+brighter shading is pulled harder than its darker shading and the shading
+compresses; lifting the face afterwards (the agent used three layers, +0.71 EV)
+restores the brightness and not the shading.
+Lightroom's Highlights leaves a midtone face nearly alone; that is the difference
+a photographer's muscle memory trips over here.
+
+**Not changed, same reason as the section above:** moving the centre re-renders
+every sidecar.
+What this adds is the cost of leaving it, in a number a `check` verb can watch.
+
+**Resolved 2026-09-14 by versioning rather than retuning - decision #276.**
+Process 2 adds an identity Gaussian at 0 EV to the partition and narrows every
+band to σ 1.0; process 1 is the table above, frozen for every sidecar that
+states it or that moved a tone slider before the field existed.
+Rendered on the same frame with the agent's edit untouched:
+
+| Variant | Cheek | Chin | Sky |
+|---|---|---|---|
+| Agent's full edit, process 1 | 0.073 | 0.052 | 0.721 |
+| Agent's full edit, process 2 | 0.136 | 0.097 | 0.729 |
+| Full edit, `highlights 0` (process 1) | 0.122 | 0.087 | 0.802 |
+
+The face keeps its shading in full and the sky is pulled as far as before.
+Modelled authority of the Highlights band, process 1 → 2: 0.44 → 0.04 at
+middle grey, 0.66 → 0.34 at +1 EV, 0.61 → 0.70 at +2 EV; face compression at
+`highlights -0.8` over −1…+0.5 EV, 51% → 14%; Shadows at middle grey 0.44 →
+0.04, which closes the "Shadows +1 moves middle grey by a stop" finding above.
+`repro/process-version.txt` pins the two generations on a sample.
+

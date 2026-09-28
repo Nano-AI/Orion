@@ -286,6 +286,7 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         adj.satShift != lastAdj_.satShift ||
         adj.lumShift != lastAdj_.lumShift ||
         adj.exposureEv != lastAdj_.exposureEv ||
+        adj.process    != lastAdj_.process    ||
         adj.highlights != lastAdj_.highlights ||
         adj.shadows    != lastAdj_.shadows    ||
         adj.whites     != lastAdj_.whites     ||
@@ -309,6 +310,11 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
                                 {size[0], size[1]},
                                 {guideW_, guideH_},
                                 {}, {}, {}};
+        // The bands this photograph was finished under. Named rather than
+        // positional: the block above is an aggregate and these two sit at
+        // its end, where a transposed pair would compile.
+        la.toneSigma  = params::toneBands(adj.process).sigma;
+        la.toneAnchor   = params::toneBands(adj.process).anchor;
         // ⚠ Layers are runs of components, resolved here rather than stored:
         // a layer's coverage is the **last** component of its run, and which
         // component that is moves whenever a row is added, removed or

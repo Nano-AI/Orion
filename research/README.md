@@ -28,6 +28,7 @@ support what it is attached to.
 
 | File | Covers |
 |---|---|
+| [`agent-interaction.md`](agent-interaction.md) | How an agent drives Orion: reply format, CLI over a warm socket, no eval, and the sources behind `get_stats`, `get_proxy region` and `detect_faces`. ⚠ The socket/CLI surface it designed was retired by #280; the survey and the token arithmetic stand - #272-#274, #280 |
 | [`color-pipeline.md`](color-pipeline.md) | Scene-referred design, camera matrices, white balance, AgX display transform |
 | [`camera-profiles.md`](camera-profiles.md) | The rest of a DNG profile — BaselineExposure and HueSatMap |
 | [`demosaic.md`](demosaic.md) | CFA interpolation, and the gap between what we ship and RCD proper |
@@ -42,6 +43,7 @@ support what it is attached to.
 | [`color-grading.md`](color-grading.md) | Three-way grading wheels, as ASC CDL per tonal zone — and why split toning is not a second panel |
 | [`vignette.md`](vignette.md) | The **creative** vignette — cos⁴ natural falloff, post-crop. Not the lens correction |
 | [`detail.md`](detail.md) | Sharpening and denoising |
+| [`watermark.md`](watermark.md) | The export watermark - Porter & Duff's "over" through a one-color coverage mask - #284 |
 | [`denoise-learned.md`](denoise-learned.md) | M5's Core ML denoise — the domain question, the licences, and why it is not a graph node. **Research only; nothing built** |
 | [`lens-corrections.md`](lens-corrections.md) | Distortion, TCA and vignetting; the vendored lensfun database |
 | [`perspective.md`](perspective.md) | Keystone correction — the 4-point homography, the zoom, and why it is not its own node |

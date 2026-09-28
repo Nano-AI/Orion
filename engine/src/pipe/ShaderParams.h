@@ -101,8 +101,33 @@ struct LinearAdjust {
     float         maskOverlay;
     /// Which layer the overlay paints — the one being edited.
     std::int32_t  maskOverlayLayer;
+    /// The tone bands' generation: every band's width, and whether the
+    /// middle-grey anchor band is in the partition. `toneBands(process)`
+    /// below is the only place a process number turns into these, and zero
+    /// renders the bands as shipped - see `applyTone` in ops/tone_ops.slang.
+    float         toneSigma;
+    float         toneAnchor;
+    float         _tonePad[2];
 };
-static_assert(sizeof(LinearAdjust) == 480);
+static_assert(sizeof(LinearAdjust) == 496);
+
+/// The tone bands each process version renders with. A sidecar stores slider
+/// values and not results, so the bands a photograph was finished under have
+/// to be the bands it keeps opening under; the version is the photograph's,
+/// written into its sidecar, and this table is where a version becomes
+/// geometry (decision #276, the process-version shape Lightroom uses).
+///
+///   1  four bands, sigma 1.6 - the bands as shipped. Shadows and Highlights
+///      hold 0.495 each at middle grey; `highlights -0.8` halves the shading
+///      of a midtone face.
+///   2  five bands, sigma 1.0 - an identity band at middle grey. Highlights
+///      holds 0.04 at middle grey and the face keeps 86% of its shading; the
+///      sky at +2.5 EV is pulled 1.03 EV against process 1's 0.90.
+///      research/tone-and-local-contrast.md, "the Highlights band on a face".
+struct ToneBands { float sigma; float anchor; };
+inline constexpr ToneBands toneBands(int process) {
+    return process >= 2 ? ToneBands{1.0f, 1.0f} : ToneBands{1.6f, 0.0f};
+}
 
 struct GuidePrep {
     std::uint32_t size[2];

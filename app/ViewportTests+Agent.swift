@@ -12,10 +12,57 @@ extension ViewportTests {
         do {
             let command = try AgentCLI.parse(
                 ["--agent", "proxy", "/a.arw", "--max", "512", "--out", "/o.jpg"])
-            report(command == .proxy(raw: "/a.arw", max: 512, out: "/o.jpg", state: nil),
+            report(command == .proxy(raw: "/a.arw", max: 512, out: "/o.jpg",
+                                     state: nil, region: nil),
                    "parses proxy with --max and --out", "\(command)")
         } catch {
             report(false, "parse should not throw on a well-formed proxy command", "\(error)")
+        }
+    }
+
+    /// `--region x,y,w,h`. The rectangle is refused rather than clamped when
+    /// it leaves the picture or has no area, so a caller that asked for a
+    /// region off the frame is told rather than handed a different one.
+    static func testAgentParsesRegion() {
+        do {
+            let command = try AgentCLI.parse(
+                ["--agent", "stats", "/a.arw", "--region", "0.25,0.1,0.5,0.4"])
+            report(command == .stats(raw: "/a.arw", state: nil,
+                                     region: AgentCLI.Region(x: 0.25, y: 0.1, w: 0.5, h: 0.4)),
+                   "stats takes --region", "\(command)")
+        } catch {
+            report(false, "a well-formed --region should parse", "\(error)")
+        }
+
+        for bad in ["0.5,0.5,0.6,0.1", "-0.1,0,0.5,0.5", "0,0,0,0.5", "0,0,0.5"] {
+            do {
+                _ = try AgentCLI.parse(["--agent", "proxy", "/a.arw", "--max", "512",
+                                        "--out", "/o.jpg", "--region", bad])
+                report(false, "--region \(bad) should be refused")
+            } catch AgentCLI.Failure.usage {
+                report(true, "--region \(bad) is a usage error")
+            } catch {
+                report(false, "--region \(bad) threw the wrong error", "\(error)")
+            }
+        }
+    }
+
+    /// `faces` is a verb of its own, and takes only `--state`.
+    static func testAgentParsesFaces() {
+        do {
+            let command = try AgentCLI.parse(["--agent", "faces", "/a.arw", "--state", "/s.json"])
+            report(command == .faces(raw: "/a.arw", state: "/s.json"),
+                   "parses faces with --state", "\(command)")
+        } catch {
+            report(false, "faces should parse", "\(error)")
+        }
+        do {
+            _ = try AgentCLI.parse(["--agent", "faces", "/a.arw", "--max", "512"])
+            report(false, "faces should not take --max")
+        } catch AgentCLI.Failure.usage(let message) {
+            report(message.contains("max"), "names the bad flag", message)
+        } catch {
+            report(false, "wrong error", "\(error)")
         }
     }
 

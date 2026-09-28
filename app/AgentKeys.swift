@@ -62,6 +62,19 @@ enum AgentKeys {
         "blacks": Spec(unit: "unitless", range: -1...1),
         "highlightRecovery": Spec(unit: "unitless", range: 0...1),
 
+        // EditHistory.swift:391-402, decision #276. Not a slider: it is which
+        // generation of tone bands the photograph is rendered under, and a
+        // sidecar carries the one it was finished under.
+        "process": Spec(
+            unit: "generation", range: 1...2,
+            note: "which generation of tone bands renders highlights, shadows, "
+                + "whites and blacks: 2 is the current one - an identity band at "
+                + "middle grey, so a face survives a highlights pull - and 1 is "
+                + "the bands as shipped. A fresh photograph is 2; a sidecar "
+                + "written before the field existed reopens at 1 so it renders "
+                + "as it was finished. Leave it alone unless you mean to "
+                + "re-render an old edit under the new bands"),
+
         // MARK: Color — DevelopPanels+Color.swift:11, :13, :37
         "vibrance": Spec(unit: "unitless", range: -1...1),
         "saturation": Spec(unit: "unitless", range: -1...1),

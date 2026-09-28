@@ -242,6 +242,9 @@ extension Scenario {
         case "grainAmount":    return e.grainAmount
         case "grainSize":      return e.grainSize
         case "gradeBalance":   return e.gradeBalance
+        case "process":        return Float(e.process)
+        // Undo's shape, for a scenario to assert how many steps an edit took.
+        case "historyDepth":   return Float(e.history.entries.count)
         // The shadow wheel's two puck coordinates. Balance is only observable
         // in a render when some wheel is off centre — it moves the zones, and a
         // zone with nothing in it looks like every other zone with nothing in
@@ -262,6 +265,11 @@ extension Scenario {
         case "perspectiveAspect":     return e.perspectiveAspect
         case "vignetteAmount":     return e.vignetteAmount
         case "vignetteFieldAngle": return e.vignetteFieldAngle
+        // The group's shape, so a verb that is supposed to *add* a row can be
+        // told apart from one that converted the selected row — the failure
+        // `select` had on the agent surface's first real use (#275).
+        case "maskRows":  return Float(e.maskComponents.count)
+        case "maskKind":  return Float(e.maskKind)
         default:               return nil
         }
     }
@@ -302,7 +310,7 @@ extension Scenario {
         }
     }
 
-    private static func apply(control: String, value: Float, to e: Engine) throws {
+    static func apply(control: String, value: Float, to e: Engine) throws {
         switch control {
         case "exposure":    e.exposureEv = value
         case "contrast":    e.contrast = value
@@ -319,6 +327,13 @@ extension Scenario {
         case "grainAmount": e.grainAmount = value
         case "grainSize":   e.grainSize = value
         case "gradeBalance": e.gradeBalance = value
+        // The tone bands' generation, 1 or 2. Integral and closed: a 1.5 is a
+        // typo and a 3 is a build this one is not, and neither should render.
+        case "process":
+            guard value == 1 || value == 2 else {
+                throw Bad(what: "process is 1 (the bands as shipped) or 2, got \(value)")
+            }
+            e.process = Int32(value)
         // ⚠ Whole-array assignment, because `gradeShadow` is `[Float]` with a
         // `didSet` — mutating one element in place would still fire it, but
         // spelling it out keeps the push explicit.

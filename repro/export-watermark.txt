@@ -1,0 +1,72 @@
+# The export watermark lands where it was put, moves the picture toward gray,
+# and touches nothing else (#284).
+#
+# The mark is one gray blended through a coverage mask in the writer, after the
+# resize. So the checks are on written files, read back: the bottom-right patch
+# of a marked export against the same patch of a plain one, and a patch far
+# from the mark that must not have moved at all.
+#
+# ⚠ "Toward gray" is asserted from both sides. A dark frame's patch has to get
+# lighter and a bright frame's has to get darker; a mark that only brightened,
+# or only darkened, would pass either one alone.
+#
+# The mark is the scenario's own (`watermark ...`), never the photographer's
+# saved one, so this file means the same thing on every machine.
+
+minchecks 9
+
+open samples/overexposed-background.ARW
+watermark text Dhruv Arora
+watermark place bottomRight
+watermark opacity 0.6
+
+# ── A dark frame: the mark lifts it ────────────────────────────────────────
+set exposure -5
+export /tmp/orion-wm-dark-plain.jpg size=2048
+export /tmp/orion-wm-dark-marked.jpg size=2048 watermark=on
+measure 0.80,0.90,0.18,0.08 darkPlain /tmp/orion-wm-dark-plain.jpg
+measure 0.80,0.90,0.18,0.08 darkMarked /tmp/orion-wm-dark-marked.jpg
+expect darkMarked.luma > darkPlain.luma
+
+# Far from the mark, the two files are the same picture.
+measure 0.02,0.02,0.3,0.3 darkPlainTL /tmp/orion-wm-dark-plain.jpg
+measure 0.02,0.02,0.3,0.3 darkMarkedTL /tmp/orion-wm-dark-marked.jpg
+expect darkMarkedTL == darkPlainTL
+
+# ── A bright frame: the same mark darkens it ───────────────────────────────
+set exposure 5
+export /tmp/orion-wm-bright-plain.jpg size=2048
+export /tmp/orion-wm-bright-marked.jpg size=2048 watermark=on
+measure 0.80,0.90,0.18,0.08 brightPlain /tmp/orion-wm-bright-plain.jpg
+measure 0.80,0.90,0.18,0.08 brightMarked /tmp/orion-wm-bright-marked.jpg
+expect brightMarked.luma < brightPlain.luma
+
+# The mark is where it was put: the opposite corner did not move.
+measure 0.02,0.90,0.18,0.08 brightPlainBL /tmp/orion-wm-bright-plain.jpg
+measure 0.02,0.90,0.18,0.08 brightMarkedBL /tmp/orion-wm-bright-marked.jpg
+expect brightMarkedBL == brightPlainBL
+
+# And it is gray. A neutral blended over any color keeps that color's hue and
+# lowers its saturation - on a light patch and a dark one alike - while a
+# tinted mark would drag the hue toward its own. Relative to the plain file,
+# because the scene here is warm to begin with.
+expect brightMarked.sat < brightPlain.sat
+expect darkMarked.sat < darkPlain.sat
+expect darkMarked.hue == darkPlain.hue
+
+# ── Off is off ─────────────────────────────────────────────────────────────
+#
+# Byte for byte. `watermark=off` and saying nothing must write the same file
+# as each other, which is what keeps every other export repro unmarked.
+export /tmp/orion-wm-bright-off.jpg size=2048 watermark=off
+identical /tmp/orion-wm-bright-plain.jpg /tmp/orion-wm-bright-off.jpg
+
+# ── Full size ──────────────────────────────────────────────────────────────
+#
+# The mask is drawn at each export's own size, so the full-resolution file
+# carries the same mark in the same place.
+export /tmp/orion-wm-full-marked.jpg watermark=on
+export /tmp/orion-wm-full-plain.jpg
+measure 0.80,0.90,0.18,0.08 fullPlain /tmp/orion-wm-full-plain.jpg
+measure 0.80,0.90,0.18,0.08 fullMarked /tmp/orion-wm-full-marked.jpg
+expect fullMarked.luma < fullPlain.luma

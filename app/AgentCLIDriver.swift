@@ -37,10 +37,12 @@ extension AgentCLI {
     @MainActor
     private static func run(_ command: Command) throws -> [String: Any] {
         switch command {
-        case .stats(let raw):
-            return try runStats(raw: raw)
-        case .proxy(let raw, let max, let out, let state):
-            return try runProxy(raw: raw, max: max, out: out, state: state)
+        case .stats(let raw, let state, let region):
+            return try runStats(raw: raw, state: state, region: region)
+        case .proxy(let raw, let max, let out, let state, let region):
+            return try runProxy(raw: raw, max: max, out: out, state: state, region: region)
+        case .faces(let raw, let state):
+            return try runFaces(raw: raw, state: state)
         case .apply(let raw, let edits, let out, let state):
             return try runApply(raw: raw, edits: edits, out: out, state: state)
         case .commit(let raw, let state):
@@ -54,8 +56,13 @@ extension AgentCLI {
 
     // MARK: stats
 
+    /// `--state` restores a proposed edit before the histogram is read, the
+    /// same layering `proxy` does and through the same `openEngine`, so
+    /// "what would this proposal measure" is one call rather than a render a
+    /// caller has to eyeball. `--region` adds the patch's own numbers.
     @MainActor
-    private static func runStats(raw: String) throws -> [String: Any] {
+    private static func runStats(raw: String, state: String?, region: Region?)
+        throws -> [String: Any] {
         var info = OrionRawInfo()
         guard orion_read_info(raw, &info) == ORION_OK else {
             throw Failure.run("could not read \(raw)")
@@ -66,13 +73,13 @@ extension AgentCLI {
 
         let url = URL(fileURLWithPath: raw)
         let sidecar = Sidecar.read(for: url)
-        let engine = try openEngine(url: url, sidecarDevelop: sidecar?.develop, state: nil)
+        let engine = try openEngine(url: url, sidecarDevelop: sidecar?.develop, state: state)
         guard let histogram = engine.histogram(bins: 128) else {
             throw Failure.run("no histogram — is a photo actually open")
         }
         let stats = statsJSON(histogram: histogram, bins: 128)
 
-        return [
+        var out: [String: Any] = [
             "path": raw,
             "width": Int(info.width),
             "height": Int(info.height),
@@ -91,16 +98,27 @@ extension AgentCLI {
             "temperatureK": engine.temperatureK,
             "tint": engine.tint,
         ]
+        if let region {
+            out["region"] = try regionJSON(engine: engine, region: region)
+        }
+        return out
     }
 
     // MARK: proxy
 
     @MainActor
-    private static func runProxy(raw: String, max: UInt32, out: String, state: String?)
+    private static func runProxy(raw: String, max: UInt32, out: String,
+                                 state: String?, region: Region?)
         throws -> [String: Any] {
         let url = URL(fileURLWithPath: raw)
         let sidecar = Sidecar.read(for: url)
         let engine = try openEngine(url: url, sidecarDevelop: sidecar?.develop, state: state)
+
+        // A region is rendered at full size and cropped, so `--max` caps the
+        // crop rather than the frame - `AgentInspect.runProxyRegion`.
+        if let region {
+            return try runProxyRegion(engine: engine, region: region, max: max, out: out)
+        }
 
         try engine.export(to: out, quality: 0.85, maxDimension: max, depth: 8)
 
@@ -202,8 +220,11 @@ extension AgentCLI {
     /// failure OrionApp+Files.swift's loader guards against for the
     /// sidecar's own restore; here it also covers `--state`, which never
     /// existed at that call site.
+    ///
+    /// ⚠ Not private: `AgentInspect.swift`'s `faces` goes through this same
+    /// call, so "restore the sidecar, then the proposal" has one spelling.
     @MainActor
-    private static func openEngine(url: URL, sidecarDevelop: Data?, state: String?)
+    static func openEngine(url: URL, sidecarDevelop: Data?, state: String?)
         throws -> Engine {
         let engine = try Engine()
         try engine.open(path: url.path, restoring: sidecarDevelop != nil)
@@ -217,6 +238,22 @@ extension AgentCLI {
             let data = try Data(contentsOf: URL(fileURLWithPath: state))
             guard engine.restore(encoded: data) else {
                 throw Failure.run("the saved edits could not be read: \(state)")
+            }
+        }
+        // ⚠ Once, after the last restore: a subject or sky row is a file on
+        // disk, not a number in the state, and the app uploads it at every open
+        // it makes. Without this the tools rendered every kind-4 row as covering
+        // nothing - a subject layer left the subject as shot and an inverted one
+        // lit the whole frame, with no error anywhere. A file that cannot be
+        // read is refused by name rather than rendered as a mask selecting
+        // nothing, the rule `restoreMattes` states.
+        if sidecarDevelop != nil || state != nil {
+            engine.restoreMattes(photo: url)
+            if let i = engine.missingMattes.min() {
+                let id = engine.maskComponents[i].matteId ?? ""
+                throw Failure.run(
+                    "mask row \(i) names a matte that could not be read: "
+                    + MatteStore.url(photo: url, id: id).path)
             }
         }
         return engine

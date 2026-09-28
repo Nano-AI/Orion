@@ -522,8 +522,6 @@ final class Library {
                                            trashed: trashed, failures: failures)
     }
 
-    func index(of url: URL) -> Int? { visible.firstIndex { $0.url == url } }
-
     /// Next or previous photo passing the filter, for arrow-key navigation.
     func neighbor(of url: URL, offset: Int) -> URL? {
         let list = visible

@@ -24,37 +24,36 @@ components folded per §6, optionally feathered onto the photograph's own edges,
 through the graph, the POD facade, the panel rows, the sidecar, undo and the
 bench.
 
-**Last updated:** 2026-09-26 — repository public; website download buttons now lead to GitHub Releases, including alpha pre-releases (#273), with source and research links restored. Latest installer is `v0.5.0-alpha.5`; newer source fixes are not a new binary release. Assistant launch fix #272 and its recovery report are included in the requested publication. Prior audit limits remain: full 42 MP exposure misses 16 ms; session retention reaches 9.51 GiB (`feedback/2026-09-15-engine-ui-audit.md`).
+**Last updated:** 2026-09-27 - **the export watermark (#284).** One saved mark, text or an SVG's shape, switched on in the Export panel and edited in its own sheet whose preview is a real 1024 px export; 3x3 anchor or diagonal, one neutral gray, opacity the only color control. The engine takes an 8-bit coverage mask through `OrionExportOptions` and blends it in `ImageWriter` after the resize and sharpening, like #94; `get_proxy` and `--batch-export` are never marked. **Next:** S-A7, the editor's subject and sky mattes as a tool - the MCP agent's first wish. Also pulled `origin/main` (assistant launch from Finder #282, release downloads #283; renumbered from #272/#273 past the local ledger).
 
 **Recent sessions** — audit reports in `feedback/`; older rows and write-ups in `HISTORY.md`:
 
-**Publication:** the developer requested committing and pushing all pending work
-to `main` on 2026-09-26. Historical uncommitted labels below describe the original
-handoffs. The local Codex configuration now uses a relative server path.
-
 | Date | What landed |
 |---|---|
-| 2026-09-26 | **Public repository and release downloads (#273).** Website CTAs and metadata use GitHub Releases; source and research links restored, preview-only copy removed. All nine gates pass: 1104 engine, 4215 viewport, 271 decision rows; gestures, screens, modes, wiring, agent and site green. Public release/research URLs return HTTP 200 without authentication. Build current; `git diff --check` clean. |
-| 2026-09-24 | **Assistant launch from Finder (#272).** Interactive login zsh loads the CLI PATH in `.zshrc`; both commands execute via quoted argv. Tools-folder picker persists the working directory and restarts; missing saved folders fall back with a notice. Five regression checks cover real shell launch/context and config detection. All nine gates pass, packaging/signature checks pass; installed in `/Applications` and Claude starts. Local tools folder set to this checkout. Uncommitted. |
-| 2026-09-15b | **Engine performance and desktop interaction audit (#271).** Fusion invalidation optimized with paired timings and GPU equivalence checks; Compare/autosave, cold preview, rotation undo, proposal locking/committed baseline, readability and export feedback fixed. Nine gates and 12 targeted scenarios pass; exposure budget, retained memory and broader UI coverage remain open. Uncommitted. `feedback/2026-09-15-engine-ui-audit.md`. |
+| 2026-09-27b | **Agent tools see subject mattes (#285).** `openEngine` calls `restoreMattes`; a missing matte is refused by name. `check-agent` `mask_matte` and `mask_matte_missing` red before, green after (21/21). Refine measured on DSC00318 at 0/0.5/1.0: sufficient, `matteFeather` not built. Also: 27 unpushed commits squashed to one and rebased onto `origin/main`. |
+| 2026-09-27 | **Export watermark (#284).** `OrionExportOptions.watermark_*` and `drawWatermark` in the writer; `Watermark` (JSON in Application Support), `WatermarkLayout`/`WatermarkRaster`, the Export panel's switch and `WatermarkPanel`; scenario `watermark` verb, `watermark=on`, and `measure` on a written file. `repro/export-watermark.txt` 9, scenes `export-watermark`/`watermark-editor`. ⚠ The brand logo sheet has an opaque background, so as a mark it is a gray box. Gates 1119 / 4264 |
+| 2026-09-26 | **Public repository and release downloads (#283).** Website CTAs and metadata use GitHub Releases; source and research links restored, preview-only copy removed. All nine gates pass: 1104 engine, 4215 viewport, 271 decision rows; gestures, screens, modes, wiring, agent and site green. Public release/research URLs return HTTP 200 without authentication. Build current; `git diff --check` clean. |
+| 2026-09-24 | **Assistant launch from Finder (#282).** Interactive login zsh loads the CLI PATH in `.zshrc`; both commands execute via quoted argv. Tools-folder picker persists the working directory and restarts; missing saved folders fall back with a notice. Five regression checks cover real shell launch/context and config detection. All nine gates pass, packaging/signature checks pass; installed in `/Applications` and Claude starts. Local tools folder set to this checkout. Uncommitted. |
+| 2026-09-20c | **The socket surface retired, its inspection scavenged (#280, #281).** `AgentServer`, `orion`, the skill, transactions, `--if-rev` and `check-serve.py` removed (1517 lines); `get_stats state/region`, `get_proxy region`, `detect_faces`, composite docs from the code, `process` spec; `invert` measured working both ways. Gates 1107 / 4238 / agent 19/19 / mcp 27/27 |
+| 2026-09-20b | **The bake-off.** Opus edited DSC09841 and DSC09848 through each surface on copies; six 3000 px exports through one path; the developer judged the MCP versions significantly better and the socket versions unprofessional - #280. Found on the way: the as-shot `open` verb left a previous `load`'s autosave armed and clobbered a sidecar (`8e92004`, then removed with the surface) |
+| 2026-09-20 | **The two agent surfaces merged.** The socket branch (#272-#279, renumbered from #243-#250) and the MCP branch (#243-#271) met at `abf3a51`; five files conflicted by hand; `.mcp.json` made relative and Node 22 given its type-stripping flag |
+| 2026-09-15b | **Engine performance and desktop interaction audit (#271).** Fusion invalidation optimized with paired timings and GPU equivalence checks; Compare/autosave, cold preview, rotation undo, proposal locking/committed baseline, readability and export feedback fixed. Nine gates and 12 targeted scenarios pass; exposure budget, retained memory and broader UI coverage remain open. Committed as `4b91df0`. `feedback/2026-09-15-engine-ui-audit.md`. |
 | 2026-09-15 | **Website audit and polish (#270).** Mobile fallback/menu dismissal, accurate static exposure demo, keyboard compare steps, 44 px exposure target, Firefox focus style, accessible paper-grid escape from the animated stack, hero tour action and development status. `feedback/2026-09-15-website-audit.md`; all nine gates pass. Chrome tested at 320–1440 px over localhost, including reduced motion and script failures. Committed as `ba5ebda`, fast-forwarded to `origin/main` at the developer's request; Pages deployment `35002361269` succeeded. |
 | 2026-09-14q | **Compare shows white balance (#269).** `captureOriginal` starts from `defaults` (the camera's as-shot reading) instead of copying the current temperature and tint; `repro/compare-shows-white-balance.txt` red before, green after; compare scenarios and the nine checks green. ⚠ 24 unrelated repro files fail or stop in this checkout (none uses compare). Not committed. |
 | 2026-09-14p | **Download and Contact (#268).** Pages workflow serves the newest release's `.dmg` as `download/Orion.dmg` (fails the deploy if none); nav Download, hero and close Download for macOS plus glass Contact, footer Research/Download/Contact; `check-site.py` (l). `v0.5.0-alpha.5` pre-release packaged clean from `a2eb517` and published. |
+| 2026-09-14o | **Published; MCP-driven workflow; leaked binaries gone (#267).** Heading and one line over a window up to 1680 px wide (16:9 photo, Claude pane 1:2.2), nav "MCP", Saturn behind Keep. Seven release DMGs verified leaking and deleted, `dist/` cleared. MX verified on Cloudflare; site committed and pushed to `main` for Pages. |
+| 2026-09-14n | **No PII (#266).** Site audited clean (text, images, inlined maps, deployed `main`). App binary had `/Users/<name>/` ×50: `strip -S` in packaging, engine resource paths now relative to the build dir found at runtime, SwiftTerm's dead dump path moved to the temp dir, packaging fails on any `/Users/<name>/`, `$HOME` or git email, `check-site.py` (i) image metadata and (j) home paths. Old release DMGs still carry it. Nothing committed. |
+| 2026-09-14d | **Second real use.** Opus re-edited 09700 and 09723 with the new surface: both finished, no halo, cheek shading within 10% of as shot, 40 invocations for the pair. Twelve findings; the first is that `select sky`'s ~1024 px matte plus `maskRefine` prints a stair-step on a soft boundary that no number can see - top of the mask queue. `state` prints `# process`, `loaded` says `display`, help and skill fixed for six of the rest - #279 |
+| 2026-09-14c | **Inspection verbs, S-A4.** A `measure` reading carries hue, RGB, clipped fractions and `shading` (`expect name.field`); `zones`, `histogram`, `look`, `zoom because`; `faces` from Vision in both spaces; `maskplace` and `toframe`/`todisplay` through the engine's frame/display map. `RegionStats` is one pure arithmetic pinned by `testRegionStatsFields` 11; `repro/inspection.txt` 9 - #278 |
+| 2026-09-14b | **Transactions, S-A6.** `begin <label>` … `commit` is one `EditHistory` entry whatever moved; `rollback` restores the state at `begin` and leaves no step; the server rolls back a batch that fails inside a `begin` it opened; `--if-rev <n>` refuses a stale script without touching anything. `testHistoryGroupsATransaction` 10, `repro/transactions.txt` 12, check-serve step 2b - #277 |
+| 2026-09-14 | **Process 2.** `DevelopState.process` versions the four tone bands per photograph: 1 is the bands as shipped, 2 adds a fifth Gaussian at middle grey that no slider drives and sets σ 1.0. Highlights authority at middle grey 0.495 → 0.04; the agent's 09700 edit, untouched, keeps the cheek at 0.136 against 0.073 with the sky pulled as far. Absent means 1 wherever a tone slider is off zero (the `maskSpace` gate shape); presets and paste never copy it; `set process`, `control process`, `state` prints it first. `repro/process-version.txt` 8 checks; process 1 within 5/255 of the old build - #276 |
+| 2026-09-13b | **First real use**: an Opus agent edited four portraits through `orion` - 63 invocations, 14 image reads, two finished frames and two with a matte halo the queued `check` exists to catch. Three bugs fixed (`select` overwrote the selected row, a stale matte reference in `state`, hidden diffs in the CLI), seven findings queued and M-A reordered so the coordinate converter comes first - #275. Later: 09700's waxy face traced to global `highlights -0.8`, which removes 40% of a midtone face's shading (the band's 0.495 authority at middle grey, measured in July); the guide's radius, epsilon and band centre each ruled out by experiment |
 
 ---
 
 ## Open
 
-**The queue is empty.** Every item it carried is shipped. This is the **third**
-time it offered already-shipped work as the next story (#135 found two, #139
-found the third), and the third time the *decision that closed it* had never
-been written down, so a session that trusted this file would have re-run a
-schema migration over the photographer's sidecars. `tools/check-decisions.py`
-is what stops the fourth.
-
-**So there is no next story queued, and picking one is your call.** Uncosted,
-from `ROADMAP.md`: Core ML denoise (research landed under #111, explicitly not
-built), Windows port, DCP profiles. X-Trans is out of scope (#176).
+**Next story: S-A7, subject and sky mattes through MCP.** The MCP agent approximated a person with an ellipse because the editor's `select subject|sky` matte has no tool; a `select` tool that writes the matte PNG beside the RAW and returns a kind-4 component is half a session (`ROADMAP.md` § M-A). After it: S-A5 `check` on `get_stats region`, then S-A9 and S-A10. ⚠ A face sample in `samples/` would let `check-agent.py`'s `detect_faces` step prove more than the empty case (#281). ⚠ `check-screens.py` and `check-modes.py` still exit 2 on this machine for want of `_PIC` samples. ⚠ The 42 MP exposure budget (17.38 ms p95 against 16) and session retention at 9.51 GiB are open from #271.
 
 Gaussian splatting, Marigold and Qwen are discussion only (#271). Queueing or
 building any of them requires explicit scope.
@@ -102,14 +101,8 @@ archived in `HISTORY.md`. These gates do not include the full repro sweep or
 the wall-clock benchmark: full 42 MP exposure still fails at **17.38 ms p95**.
 After the documentation update, `check-decisions.py` passes with **269 rows,
 1–271**, three declared gaps and all references resolved; `git diff --check` passes.
-⚠ **`testCreativeVignetteGpu`'s corner-spread threshold moved 4.0 → 5.0,
-decision #232** — the fitted curve reaches a demosaic-edge color cast in
-that fixture's corners (hue ~330°, sat ~0.29) that both narrow regions
-before it missed; measured spread 4.333, still 1.7% of the 8-bit range.
-Confirmed by reverting only `HueSatMap.h`/`DevelopCapture.cpp` and
-re-running: the failure disappears, so it is this session's curve, not
-#233's concurrent Swift changes (which touch no engine code) or a
-pre-existing flake.
+
+**After #281, measured 2026-09-20:** `orion-tests` **1107** · `orion-viewport-tests` **4238** · both 0 failures · `check-agent` **19/19** in 15 s (stats for the proposed state and a region, proxy region, faces, invert both ways) · `mcp` **27/27** · decisions **279 rows, 1-281** · gestures 6 · wiring **479 swept, 8 harness-only** · site green · modes and screens exit 2 for want of `_PIC` samples (pre-existing). The socket branch's own numbers are in `HISTORY.md` with its sessions.
 
 ⚠ **Re-measure; never adjust these in place.** This block has carried up to
 *four* copies of itself at once with four different numbers, and the three most
@@ -193,4 +186,5 @@ candidate fixes in order.
 
 Session details: `feedback/2026-09-15-engine-ui-audit.md` (#271) and
 `feedback/2026-09-15-website-audit.md` (#270). The older website write-ups and
-15 recent-session rows moved verbatim to `HISTORY.md` on 2026-09-15.
+15 recent-session rows moved verbatim to `HISTORY.md` on 2026-09-15. The socket branch's six write-ups (#272-#279) moved
+verbatim to `HISTORY.md` at the 2026-09-20 merge.

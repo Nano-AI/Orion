@@ -1,0 +1,45 @@
+# The inspection verbs - decision #278.
+#
+# What an agent reads before it looks: a reading's other fields, the grid, the
+# bins, and the two coordinate spaces crossed through the engine's own map.
+#
+# ⚠ Written for this sample's orientation, like agent-verbs.txt: a portrait
+# frame with quarter turns, so display (0.47, 0.67) is frame (0.33, 0.47). The
+# point of `maskplace` is that the file below never has to know that.
+
+open samples/overexposed-background.ARW
+
+# The fields. The top patch is the blown background: some of it clips, and it
+# is yellow-ish; the bottom patch is the dark subject, warm and unclipped.
+measure 0.47,0.27,0.06,0.06 top
+measure 0.47,0.67,0.06,0.06 bottom
+expect top.clippedHigh > 0.02
+expect bottom.clippedHigh == 0
+expect top.luma > 0.6
+expect bottom.hue > 10
+expect bottom.hue < 60
+expect top.shading > 0.1
+expect top.red > top.blue
+
+# The grid and the bins print; nothing to assert but that they run.
+zones 3
+histogram 8
+toframe 0.47,0.67
+todisplay 0.33,0.47
+
+# A disc placed in display space lands where `measure` reads, and nowhere else.
+mask radial
+maskplace 0.47,0.67 0.08,0.08
+set maskFeather 0.2
+masklayer 0
+set localExposure -2
+measure 0.47,0.67,0.06,0.06 bottom_after
+measure 0.47,0.27,0.06,0.06 top_after
+expect bottom_after < bottom
+expect top_after == top
+
+# The pictures: small, and a region with a reason.
+look /tmp/orion-inspection-look.png 384
+zoom /tmp/orion-inspection-zoom.png 0.4,0.6,0.15,0.15 because the disc's edge is what maskplace is for
+
+minchecks 9

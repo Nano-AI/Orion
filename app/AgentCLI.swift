@@ -12,6 +12,11 @@ import Foundation
 /// the histogram arithmetic — and is compiled into `orion-viewport-tests`,
 /// which has no `Engine` and no GPU. `AgentCLIDriver.swift` is the part that
 /// opens a real photograph and only compiles into the app.
+///
+/// Two more pieces sit beside those, each for the reason this file is split at
+/// all - nothing here is allowed to grow past the size one person can hold in
+/// their head: `AgentVocabulary.swift` is the `keys` payload and its notes,
+/// and `AgentInspect.swift` is the region and face verbs.
 enum AgentCLI {
     enum Failure: Error {
         case usage(String)
@@ -20,30 +25,67 @@ enum AgentCLI {
     }
 
     enum Command: Equatable {
-        case stats(raw: String)
-        case proxy(raw: String, max: UInt32, out: String, state: String?)
+        case stats(raw: String, state: String?, region: Region?)
+        case proxy(raw: String, max: UInt32, out: String, state: String?, region: Region?)
         case apply(raw: String, edits: String, out: String, state: String?)
         case commit(raw: String, state: String)
         case flag(raw: String, rating: Int?, reject: Bool?)
+        /// Vision's face rectangles, in both spaces a caller needs them in.
+        /// See `AgentFaces`.
+        case faces(raw: String, state: String?)
         /// No photograph — just the edit vocabulary `apply` accepts, so a
         /// caller can learn units and ranges before proposing an edit rather
         /// than after `apply` rejects one.
         case keys
     }
 
+    /// A rectangle of the DISPLAYED picture - what `--region x,y,w,h` parses
+    /// to. Fractions of the displayed frame, origin top-left, the same space
+    /// `Screenshot.regionStats` reads in. ⚠ **Not** the frame space a mask's
+    /// `centerX`/`radiusX` live in; a crop or a turn separates the two.
+    struct Region: Equatable {
+        var x = 0.0, y = 0.0, w = 1.0, h = 1.0
+    }
+
     static let usageLine =
-        "usage: Orion --agent <stats|proxy|apply|commit|flag> <raw> [options]"
+        "usage: Orion --agent <stats|proxy|apply|commit|flag|faces> <raw> [options]"
             + "  |  Orion --agent keys"
+
+    /// `--region x,y,w,h`. Refuses a rectangle outside 0…1 or with no area
+    /// (exit 2) rather than clamping one: a caller that asked for a region off
+    /// the picture asked the wrong question, and a silently clamped answer
+    /// reads as the region it named.
+    static func parseRegion(_ text: String) throws -> Region {
+        let parts = text.split(separator: ",").map {
+            Double($0.trimmingCharacters(in: .whitespaces))
+        }
+        guard parts.count == 4, let x = parts[0], let y = parts[1],
+              let w = parts[2], let h = parts[3] else {
+            throw Failure.usage(
+                "--region takes x,y,w,h as four numbers, fractions of the "
+                    + "displayed picture from its top-left corner")
+        }
+        guard w > 0, h > 0 else {
+            throw Failure.usage("--region \(text) has no area - w and h must be above 0")
+        }
+        guard x >= 0, y >= 0, x + w <= 1.000001, y + h <= 1.000001 else {
+            throw Failure.usage(
+                "--region \(text) is outside 0…1 - x, y, x+w and y+h must all "
+                    + "land inside the picture")
+        }
+        return Region(x: x, y: y, w: min(w, 1 - x), h: min(h, 1 - y))
+    }
 
     /// Every verb's own option vocabulary. An option outside it is very
     /// likely a typo (`--sate` for `--state`) that would otherwise be parsed
     /// happily and then silently ignored.
     private static let allowedOptions: [String: Set<String>] = [
-        "stats": [],
-        "proxy": ["max", "out", "state"],
+        "stats": ["state", "region"],
+        "proxy": ["max", "out", "state", "region"],
         "apply": ["edits", "out", "state"],
         "commit": ["state"],
         "flag": ["rating", "reject"],
+        "faces": ["state"],
     ]
 
     /// Walks `--agent <verb> <raw> [--key value]…` out of the full process
@@ -81,9 +123,11 @@ enum AgentCLI {
             throw Failure.usage("\(verb) does not take --\(bad)")
         }
 
+        let region = try options["region"].map(parseRegion)
+
         switch verb {
         case "stats":
-            return .stats(raw: raw)
+            return .stats(raw: raw, state: options["state"], region: region)
         case "proxy":
             guard let maxText = options["max"], let max = UInt32(maxText) else {
                 throw Failure.usage("proxy needs --max <px>")
@@ -91,7 +135,10 @@ enum AgentCLI {
             guard let out = options["out"] else {
                 throw Failure.usage("proxy needs --out <jpg>")
             }
-            return .proxy(raw: raw, max: max, out: out, state: options["state"])
+            return .proxy(raw: raw, max: max, out: out,
+                          state: options["state"], region: region)
+        case "faces":
+            return .faces(raw: raw, state: options["state"])
         case "apply":
             guard let edits = options["edits"] else {
                 throw Failure.usage("apply needs --edits <json-file>")
@@ -188,116 +235,6 @@ enum AgentCLI {
         let state = try JSONDecoder().decode(DevelopState.self, from: mergedData)
         let reencoded = try JSONEncoder().encode(state)
         return (reencoded, editsObject.keys.sorted())
-    }
-
-    private static func isComposite(_ value: Any?) -> Bool {
-        value is [Any] || value is [String: Any]
-    }
-
-    /// The top-level `DevelopState` fields `apply` may actually edit —
-    /// scalars only. Derived from a fresh `DevelopState()` rather than
-    /// hand-listed, so it can never drift from what `mergeEdits` above
-    /// accepts.
-    static let scalarFieldNames: Set<String> = {
-        guard let data = try? JSONEncoder().encode(DevelopState()),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return [] }
-        return Set(object.keys.filter { !isComposite(object[$0]) })
-    }()
-
-    /// The `keys` verb's payload: one entry per editable field — scalar and
-    /// composite together, sorted by name — the same set `mergeEdits` allows,
-    /// since all three are built from `scalarFieldNames` /
-    /// `AgentComposite.fieldNames`. This is the contract `describe_edits`
-    /// (mcp/) reads, so a scalar entry's fields (name, type, unit, min, max,
-    /// default, absolute, note) and a composite entry's (name, type, absolute,
-    /// example, note) are both fixed.
-    static func keysJSON() -> [[String: Any]] {
-        guard let data = try? JSONEncoder().encode(DevelopState()),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return [] }
-
-        let scalars = scalarFieldNames.map { name -> [String: Any] in
-            var entry: [String: Any] = ["name": name, "absolute": true]
-            switch object[name] {
-            case let s as String:
-                entry["type"] = "string"
-                entry["default"] = s
-            case let n as NSNumber:
-                entry["type"] = "number"
-                entry["default"] = n.doubleValue
-            default:
-                entry["type"] = "number"
-            }
-            let spec = AgentKeys.specs[name]
-            entry["unit"] = spec?.unit ?? "unitless"
-            if let range = spec?.range {
-                entry["min"] = range.lowerBound
-                entry["max"] = range.upperBound
-            }
-            if let note = spec?.note { entry["note"] = note }
-            return entry
-        }
-        return (scalars + compositeKeysJSON()).sorted {
-            ($0["name"] as? String ?? "") < ($1["name"] as? String ?? "")
-        }
-    }
-
-    /// One `keys` entry per composite field — `AgentComposite.fieldNames` —
-    /// each carrying a complete, valid `example` (round-tripped through
-    /// `JSONEncoder`/`JSONSerialization` from a real default instance rather
-    /// than hand-typed, so it cannot drift from the structs above) and a
-    /// `note` that both states the rule and repeats the replace-semantics
-    /// reminder, since a composite has no `min`/`max`/`unit`/`default`.
-    private static func compositeKeysJSON() -> [[String: Any]] {
-        func json<T: Encodable>(_ value: T) -> Any {
-            (try? JSONEncoder().encode(value))
-                .flatMap { try? JSONSerialization.jsonObject(with: $0, options: [.fragmentsAllowed]) }
-                ?? NSNull()
-        }
-        let sendComplete = " Send the complete value; read the current one from apply.state first."
-        var radial = MaskComponentState()
-        radial.kind = 2   // 0 is "no mask", never a kind to send.
-
-        let entries: [(name: String, type: String, example: Any, note: String)] = [
-            ("curve", "object", json(ToneCurve()),
-             "Each channel (master, red, green, blue) needs at least 2 points, x and y "
-                 + "each 0…1, sorted strictly ascending by x." + sendComplete),
-            ("gradeShadow", "array", json([Float](repeating: 0, count: 3)),
-             "[x, y, luminance]: x²+y² ≤ 1 (the puck stays in the wheel), luminance "
-                 + "-0.5…0.5." + sendComplete),
-            ("gradeMidtone", "array", json([Float](repeating: 0, count: 3)),
-             "[x, y, luminance]: x²+y² ≤ 1 (the puck stays in the wheel), luminance "
-                 + "-0.5…0.5." + sendComplete),
-            ("gradeHighlight", "array", json([Float](repeating: 0, count: 3)),
-             "[x, y, luminance]: x²+y² ≤ 1 (the puck stays in the wheel), luminance "
-                 + "-0.5…0.5." + sendComplete),
-            ("hueShift", "array", json([Float](repeating: 0, count: 8)),
-             "Eight bands in HueBand order, each -1…1." + sendComplete),
-            ("satShift", "array", json([Float](repeating: 0, count: 8)),
-             "Eight bands in HueBand order, each -1…1." + sendComplete),
-            ("lumShift", "array", json([Float](repeating: 0, count: 8)),
-             "Eight bands in HueBand order, each -1…1." + sendComplete),
-            ("layers", "array", json([LocalAdjustState()]),
-             "Every element needs every LocalAdjustState field (exposureEv, contrast, "
-                 + "saturation, warmth, tint, highlights, shadows, whites, blacks), each "
-                 + "checked against the *local* panel's own range, not the global scalar "
-                 + "one." + sendComplete),
-            ("spots", "array", json([SpotState()]),
-             "Every element needs every SpotState field (destX, destY, srcX, srcY, "
-                 + "radius, feather, heal); positions 0…1, radius and feather in the "
-                 + "product's ranges." + sendComplete),
-            ("maskComponents", "array", json([radial]),
-             "Every element needs every MaskComponentState field except the optional "
-                 + "matteId/matteSource/name; kind must be 1…6; positional, feather, "
-                 + "roundness and range fields are checked against the product's own "
-                 + "sliders; kind 4 (raster matte) is accepted only if matteId names a "
-                 + "PNG already saved beside the photo — a model cannot paint one."
-                 + sendComplete),
-        ]
-        return entries.map {
-            ["name": $0.name, "type": $0.type, "absolute": true, "example": $0.example, "note": $0.note]
-        }
     }
 
     /// Per-channel clip shares and weighted mean of a `bins × 3`,
