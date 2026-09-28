@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 
 /// The mask group and the tools that draw into it: the row list, the brush,
@@ -540,15 +541,17 @@ extension Scenario {
                     if batch.isEmpty { last = here; continue }
                 }
                 last = here
-                var fired = false
+                // A lock rather than a captured `var`: `onChange` is
+                // `@Sendable`, and it fires synchronously inside the append.
+                let fired = OSAllocatedUnfairLock(initialState: false)
                 withObservationTracking {
                     _ = engine.maskComponents
                 } onChange: {
-                    fired = true
+                    fired.withLock { $0 = true }
                 }
                 engine.appendBrushDabs(batch, erasing: engine.brushErasing)
                 laid += batch.count
-                if fired { invalidations += 1 }
+                if fired.withLock({ $0 }) { invalidations += 1 }
             }
             let elapsed = DispatchTime.now().uptimeNanoseconds - began
             quiet = false
