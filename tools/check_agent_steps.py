@@ -21,6 +21,7 @@ import struct
 import shutil
 import subprocess
 import time
+import zlib
 from pathlib import Path
 
 TIMEOUT = 60
@@ -381,6 +382,75 @@ def mask_invert(s, ctx):
             f"unchanged); invert true {inverted[0]:.4f}/{inverted[1]:.4f} "
             f"(want the opposite)")
 
+def _write_matte(path: Path, width: int = 512, height: int = 512) -> None:
+    """A gray PNG, white in the middle 60% and black around it, the shape
+    `MatteStore` writes. Symmetric on purpose, so the frame's rotation cannot
+    move the covered patch out from under CENTRE or into CORNER."""
+    rows = bytearray()
+    for y in range(height):
+        rows.append(0)  # filter: none
+        inside_y = 0.2 * height <= y < 0.8 * height
+        for x in range(width):
+            rows.append(255 if inside_y and 0.2 * width <= x < 0.8 * width else 0)
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF))
+
+    path.write_bytes(b"\x89PNG\r\n\x1a\n"
+                     + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress(bytes(rows)))
+                     + chunk(b"IEND", b""))
+
+def _propose_matte(s, raw: Path, exposure: float) -> str:
+    """A kind-4 row naming a matte saved beside `raw`, under one layer at
+    `exposure`. Returns the matte's file name."""
+    matte_id = "check-agent-matte"
+    _write_matte(raw.with_name(f"{raw.stem}.orion-matte-{matte_id}.png"))
+    examples = {k["name"]: k.get("example") for k in s.ask("describe_edits").get("keys", [])}
+    component = dict(examples["maskComponents"][0])
+    component.update(kind=4, matteId=matte_id, matteSource="subject", compose=0,
+                     startsLayer=True, invert=False)
+    layer = dict(examples["layers"][0])
+    layer["exposureEv"] = exposure
+    s.ask("propose_edit", path=str(raw), reset=True,
+          edits={"maskComponents": [component], "layers": [layer]})
+    return f"{raw.stem}.orion-matte-{matte_id}.png"
+
+def mask_matte(s, ctx):
+    """A subject or sky row is a matte on disk, and the agent tools once
+    rendered it without ever uploading it: a +2 EV subject layer left the
+    subject exactly as shot, and an inverted one lit the whole frame.
+    `openEngine` now calls `restoreMattes` after each restore."""
+    raw = ctx.copy("matte")
+
+    def luma(state=None):
+        args = {"path": str(raw)}
+        if state:
+            args["state"] = state
+        return [s.ask("get_stats", region=r, **args)["region"]["luma"] for r in (CENTRE, CORNER)]
+
+    base = luma()
+    _propose_matte(s, raw, -3.0)
+    got = luma("proposed")
+    s.ask("reject_edit", path=str(raw))
+    if got[0] < base[0] * 0.5 and abs(got[1] - base[1]) < 1.0 / 255.0:
+        return None
+    return (f"as shot centre/corner {base[0]:.4f}/{base[1]:.4f}; a -3 EV layer through "
+            f"the matte {got[0]:.4f}/{got[1]:.4f} (want the centre dark, the corner "
+            f"unchanged) - the matte never reached the render")
+
+def mask_matte_missing(s, ctx):
+    """A row whose matte file has gone is refused by name rather than
+    rendered as a mask that selects nothing."""
+    raw = ctx.copy("matte-missing")
+    name = _propose_matte(s, raw, -3.0)
+    (raw.parent / name).unlink()
+    why = s.refusal("get_stats", path=str(raw), state="proposed")
+    s.ask("reject_edit", path=str(raw))
+    if name not in why:
+        return f"'{why}' does not name the missing {name}"
+
 # -- The two steps that need a server of their own -------------------------
 
 def _solo(ctx, current_json: Path, expect_photo: Path | None):
@@ -427,5 +497,5 @@ STEPS = [
     set_flag, reject_edit, describe_edits, propose_edit_rejected,
     propose_edit_reset, propose_composite, propose_composite_rejected,
     get_stats_proposed, get_stats_region, get_proxy_region, detect_faces,
-    mask_invert, current_photo_none, current_photo_set,
+    mask_invert, mask_matte, mask_matte_missing, current_photo_none, current_photo_set,
 ]

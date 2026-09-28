@@ -46,6 +46,12 @@ socket surface's mechanisms:
     that the mask is in FRAME space while a region is in DISPLAY space, and a
     turned frame makes those different axes - so a gradient aimed at the frame's
     top lands on the display's left.
+20. a subject matte, on a real render. Unlike 19, this one WAS broken: the
+    tools never uploaded a kind-4 row's PNG, so a subject layer covered
+    nothing (#285). A synthetic centre matte under a -3 EV layer must darken
+    CENTRE and leave the corner within one 8-bit code.
+21. a matte whose file is gone → refused, naming the PNG, not rendered as a
+    mask that selects nothing.
 """
 
 import shutil

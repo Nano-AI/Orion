@@ -240,6 +240,22 @@ extension AgentCLI {
                 throw Failure.run("the saved edits could not be read: \(state)")
             }
         }
+        // ⚠ Once, after the last restore: a subject or sky row is a file on
+        // disk, not a number in the state, and the app uploads it at every open
+        // it makes. Without this the tools rendered every kind-4 row as covering
+        // nothing - a subject layer left the subject as shot and an inverted one
+        // lit the whole frame, with no error anywhere. A file that cannot be
+        // read is refused by name rather than rendered as a mask selecting
+        // nothing, the rule `restoreMattes` states.
+        if sidecarDevelop != nil || state != nil {
+            engine.restoreMattes(photo: url)
+            if let i = engine.missingMattes.min() {
+                let id = engine.maskComponents[i].matteId ?? ""
+                throw Failure.run(
+                    "mask row \(i) names a matte that could not be read: "
+                    + MatteStore.url(photo: url, id: id).path)
+            }
+        }
         return engine
     }
 }
