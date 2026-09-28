@@ -131,15 +131,14 @@ extension Screenshot {
     /// covers, and that tinted frame went to a segmentation model.
     enum Surface { case output, canvas, preview, analysis }
 
-    /// A region's mean luma and saturation, as numbers.
+    /// A region's numbers.
     ///
     /// Factored out of `measure` so a scenario can assert against the same
     /// arithmetic the printed report uses. Two implementations of "what does this
     /// patch measure" would let a scenario pass while the report it is supposed
     /// to correspond to says something else.
     static func regionStats(_ engine: Engine, region: CGRect,
-                            through surface: Surface = .output)
-        -> (luma: Double, saturation: Double)? {
+                            through surface: Surface = .output) -> RegionStats.Stats? {
         if surface == .analysis {
             guard let (image, _) = engine.renderForAnalysis() else { return nil }
             return regionStats(of: image, region: region)
@@ -165,25 +164,20 @@ extension Screenshot {
         let rh = max(1, min(h - y0, Int(region.height * CGFloat(h))))
 
         let pixels = readNormalized(src, width: rw, height: rh, x: x0, y: y0)
-        var saturation = 0.0, luma = 0.0
+        var rgb = [Float](repeating: 0, count: rw * rh * 3)
         for i in 0..<(rw * rh) {
-            let r = Double(min(max(Float(pixels[i * 4 + 0]), 0), 1))
-            let g = Double(min(max(Float(pixels[i * 4 + 1]), 0), 1))
-            let b = Double(min(max(Float(pixels[i * 4 + 2]), 0), 1))
-            let mx = max(r, max(g, b)), mn = min(r, min(g, b))
-            saturation += mx > 0.001 ? (mx - mn) / mx : 0
-            luma += 0.2126 * r + 0.7152 * g + 0.0722 * b
+            rgb[i * 3] = Float(pixels[i * 4])
+            rgb[i * 3 + 1] = Float(pixels[i * 4 + 1])
+            rgb[i * 3 + 2] = Float(pixels[i * 4 + 2])
         }
-        let n = Double(rw * rh)
-        return (luma / n, saturation / n)
+        return RegionStats.stats(rgb: rgb, width: rw, height: rh)
     }
 
-    /// The same two numbers over a `CGImage`, which is what the analysis render
+    /// The same numbers over a `CGImage`, which is what the analysis render
     /// is. Drawn into an 8-bit RGBA context rather than read through
     /// `CGDataProvider`, so a source in any layout or color space arrives in
     /// one known one.
-    private static func regionStats(of image: CGImage, region: CGRect)
-        -> (luma: Double, saturation: Double)? {
+    private static func regionStats(of image: CGImage, region: CGRect) -> RegionStats.Stats? {
         let w = image.width, h = image.height
         guard w > 0, h > 0 else { return nil }
 
@@ -207,17 +201,22 @@ extension Screenshot {
         }
         guard ok else { return nil }
 
-        var saturation = 0.0, luma = 0.0
+        var rgb = [Float](repeating: 0, count: rw * rh * 3)
         for i in 0..<(rw * rh) {
-            let r = Double(bytes[i * 4 + 0]) / 255.0
-            let g = Double(bytes[i * 4 + 1]) / 255.0
-            let b = Double(bytes[i * 4 + 2]) / 255.0
-            let mx = max(r, max(g, b)), mn = min(r, min(g, b))
-            saturation += mx > 0.001 ? (mx - mn) / mx : 0
-            luma += 0.2126 * r + 0.7152 * g + 0.0722 * b
+            rgb[i * 3] = Float(bytes[i * 4]) / 255
+            rgb[i * 3 + 1] = Float(bytes[i * 4 + 1]) / 255
+            rgb[i * 3 + 2] = Float(bytes[i * 4 + 2]) / 255
         }
-        let n = Double(rw * rh)
-        return (luma / n, saturation / n)
+        return RegionStats.stats(rgb: rgb, width: rw, height: rh)
+    }
+
+    /// A `CGImage` as a PNG on disk, for `look` and `zoom`. Returns the byte
+    /// count, or nil when nothing was written.
+    static func writePNG(_ image: CGImage, to path: String) -> Int? {
+        let rep = NSBitmapImageRep(cgImage: image)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return nil }
+        do { try png.write(to: URL(fileURLWithPath: path)) } catch { return nil }
+        return png.count
     }
 
     /// The developed canvas as a PNG, for a scenario that wants to be looked at.

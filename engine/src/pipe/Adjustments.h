@@ -314,6 +314,15 @@ struct Adjustments {
     /// `maskOverlay` is false.
     int   maskOverlayLayer = 0;
 
+    /// Which generation of tone bands renders the four tone sliders, global
+    /// and local: 1 is the bands as shipped, 2 adds the middle-grey anchor.
+    /// `params::toneBands` is the table. The photograph's, not the user's:
+    /// it comes out of the sidecar and a fresh state gets the newest.
+    ///
+    /// ⚠ Defaults to 1 here so a caller that never states it - the bench,
+    /// a test building this struct by hand - renders what it always rendered.
+    int   process = 1;
+
     /// What the mask does. Scales the *parameter*, so alpha 0.5 with +1 EV is
     /// exactly 2^0.5 — not a blend between two rendered frames.
     /// One layer's local adjustments. Pointwise only — research/masking.md §2b

@@ -28,6 +28,7 @@ support what it is attached to.
 
 | File | Covers |
 |---|---|
+| [`agent-interaction.md`](agent-interaction.md) | How an agent drives Orion: reply format, CLI over a warm socket, no eval, and the sources behind `get_stats`, `get_proxy region` and `detect_faces`. ⚠ The socket/CLI surface it designed was retired by #280; the survey and the token arithmetic stand - #272-#274, #280 |
 | [`color-pipeline.md`](color-pipeline.md) | Scene-referred design, camera matrices, white balance, AgX display transform |
 | [`camera-profiles.md`](camera-profiles.md) | The rest of a DNG profile — BaselineExposure and HueSatMap |
 | [`demosaic.md`](demosaic.md) | CFA interpolation, and the gap between what we ship and RCD proper |

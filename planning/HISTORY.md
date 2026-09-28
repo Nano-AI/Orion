@@ -12,6 +12,242 @@
 |---|---|
 | 2026-09-14n | **No PII (#266).** Site audited clean (text, images, inlined maps, deployed `main`). App binary had `/Users/<name>/` ×50: `strip -S` in packaging, engine resource paths now relative to the build dir found at runtime, SwiftTerm's dead dump path moved to the temp dir, packaging fails on any `/Users/<name>/`, `$HOME` or git email, `check-site.py` (i) image metadata and (j) home paths. Old release DMGs still carry it. Nothing committed. |
 
+## Sessions archived at the 2026-09-20 merge - the socket surface branch, #272-#279
+
+These six write-ups were `STATUS.md`'s on the branch that built `Orion --serve` and the
+`orion` CLI. Their decisions were numbered #243-#250 when written and were renumbered
+#272-#279 at the merge, because `origin/main` had used #243-#271 for the MCP surface,
+the landing page and the audits in the meantime. Moved verbatim otherwise.
+
+## Session `2026-09-14` - the tone bands carry a process version, #276
+
+**Asked for:** work through the five actionable items from the 09700
+investigation, in order. This is the first.
+
+**What the face was.** The write-up under 2026-09-13b has the ablation; the
+short form is that `highlights -0.8` alone removes 40% of a midtone face's
+shading, and the guide's radius, epsilon and the band centre each ruled
+themselves out by experiment. The partition is the cause: at σ 1.6 Shadows
+and Highlights cross at middle grey with 0.495 each, so a face sits on the
+steepest part of the Highlights flank.
+
+**The shape.** Lightroom's process version, because a sidecar stores slider
+values and moving the bands re-renders every finished photograph - the
+reason the July note left them where they were. `DevelopState.process`:
+absent means 1 wherever a tone slider is off zero on any layer, so an empty
+sidecar is still `DevelopState()` and a legacy sidecar that never touched
+the four sliders picks up the newest bands the moment it does; `init()` gives
+2; a preset or a paste never copies it, like the crop. The engine maps the
+number to `{sigma, anchor}` in `params::toneBands`, the one table, and a
+zeroed parameter block renders the bands as shipped so every direct builder
+in the suite means what it did.
+
+**Process 2** is the same four centres, σ 1.0, and a fifth Gaussian at 0 EV
+that carries no slider - it sits in the partition's denominator and nowhere
+else. Modelled: Highlights 0.44 → 0.04 at middle grey, face compression at
+`highlights -0.8` 51% → 14%, sky at +2.5 EV pulled 1.03 EV against 0.90,
+Shadows at middle grey 0.44 → 0.04 (the note's other complaint). Rendered on
+09700 with the agent's edit untouched: cheek 0.136 (the no-highlights render
+is 0.122), sky 0.729 against 0.721. σ 1.0 and the anchor are chosen, not
+sourced, and `UNSOURCED.md` §1b says so.
+
+**Not bit-identical for process 1.** The recompiled kernel renders the
+legacy sidecar within 5/255 on isolated pixels of a JPEG (RMSE 4.6e-5),
+whether the width is stored as 1.6 or its reciprocal and whether the anchor
+term is branched or multiplied by zero - so the residual is fast-math
+arithmetic order in the rebuilt kernel, and it is recorded rather than chased.
+
+**Gates.** `orion-tests` 1037 (three new: process 2's closed form, the
+anchor taking authority, a zeroed block rendering as shipped) ·
+`orion-viewport-tests` 4124 (`testProcessVersionIsThePhotographs`, and
+`busyState` moves the field) · `check-serve` 26 verbs, 52 fields ·
+`repro/process-version.txt` 8 checks · decisions, wiring, gestures green.
+
+⚠ **Queued from it:** a Develop-panel affordance for the process version (a
+photograph finished under 1 can only move through the grammar today); the
+calibration §1 of `UNSOURCED.md` has always wanted, now against process 2 only.
+
+### Same day: transactions, S-A6, #277
+
+Pulled forward because the investigation above did to the agent's sidecar
+exactly what an agent trying things will do: every variant autosaved. The
+mechanism is one open group on `EditHistory` - its entry is always the last,
+under the transaction's label, outside the coalescing window and ahead of the
+label check so the edit before `begin` cannot absorb it. `Engine` keeps the
+state at `begin`; `rollback` drops the entry and restores through `apply`,
+undo's path. The server rolls back a batch that fails inside a `begin` it
+opened and says `rolledBack`; one begun by an earlier request is the agent's.
+`--if-rev` is RFC 6902's `test`, and its error hints `orion state`. The
+`check-wiring.py` rule the story named was not written; `control
+historyDepth` in the repro asserts the property directly, and
+`beginTransaction`/`commitTransaction` join `HARNESS_ONLY` with the reason
+that `Scenario+Frame.swift` is the agent's product path since #272.
+
+⚠ Found on the way: the CLI experiments in this session wrote a sidecar
+beside `samples/overexposed-background.ARW`, which made `repro/agent-verbs.txt`'s
+`load == open` check fail until it was deleted. The folder is gitignored, so
+`git status` cannot show it; the skill now says to try things inside a
+transaction, and the gate copies the sample for the same reason. And the
+first transaction did the same thing half way: autosave listened to every
+edit inside it, so `pushAndRender` now holds `onEdit` while a transaction is
+open and `commit` fires it once - a batch reaches the sidecar whole or not
+at all.
+
+### Same day: the inspection verbs, S-A4, #278
+
+The coordinate split that cost the agent 11 round trips is closed by the map
+the overlay already had: `maskplace` places the selected row from display
+coordinates, `faces` prints Vision's boxes in display space with the frame
+centre and radii beside them (on 09700 the detector lands where the agent's
+hand-placed facelift radial sat), `toframe`/`todisplay` print one point.
+`measure` now carries `hue rgb clip shading` on its line, `expect name.field`
+asserts one of them, and `RegionStats.stats` is the one arithmetic for every
+surface, SwiftUI-free so the suite pins each field on a synthetic patch.
+`zones`, `histogram`, `look` (768 px) and `zoom … because <why>` are the
+numbers-before-pixels set from the plan, and `reset` (back to as shot, one
+undo step) is what an agent starting a frame over needed and the grammar
+did not have. `stats` percentiles were not built;
+S-A5 takes them if a check needs one. `UNSOURCED.md` §19 has the three
+chosen constants.
+
+### Same day: the second real use, #279
+
+The fifth item: the two rejected frames again, with everything above. Both
+finished - the faces keep their modelling (cheek shading -9% and -8%
+against a 15% budget), the skies come back with cloud, the hair edge is
+clean at native size, 40 invocations for the pair against 63 for four the
+first time. Exports `09700-v4.jpg` and `09723-v4.jpg` beside the earlier
+ones, snapshots `v4` beside `final`.
+
+**The finding that matters:** `select sky` hands back a ~1024 px matte and
+`maskRefine` on a soft, out-of-focus boundary snaps to the matte's own
+pixel grid - a 4 px stair-step that `measure`, `zones` and `histogram` all
+read as clean. The agent dropped mattes on both frames for `maskplace`d
+gradients. That is the top of the mask queue: the matte's resolution, or a
+refine that declines where there is no edge, and an edge-residual reading
+in S-A5's `check`. The other eleven are in #279; six were fixed in the
+hour (`# process` in `state`, `display` on the `loaded` line, the
+`snapshot count` help, `shading` defined, the wheel and sky conventions in
+the skill, derived names explained) and the rest are S-A2's `describe`
+(`help <verb>` is a grep; `maskAngle` is undocumented; `lensCaRed/Blue`
+have no verb; `lens` cannot list profiles).
+
+⚠ Also seen: `repro/select-adds-a-row.txt` leaves two matte PNGs beside
+`samples/overexposed-background.ARW` on every run (the scenario runner
+writes mattes the way the app does), and the folder is gitignored so
+nothing shows it. Deleted by hand twice this session; the sweep on the
+next load is what is supposed to collect them.
+
+## Session `2026-09-13` - the agent surface, S-A1 of M-A, #272/#273/#274
+
+**Asked for directly:** a structured, token-efficient mechanism for LLM agents
+to edit photographs through Orion - masks, every slider, validation to a
+professional standard - researched first (axi.md, MCP vs CLI vs code mode,
+Blender/darktable/RawTherapee prior art, IQA and VLM-as-judge, image token
+costs, agent-safe state), planned as ten stories under a new `ROADMAP.md`
+milestone M-A, and the first story shipped: **the headless CLI end to end**,
+the developer's pick over the registry.
+
+**What the research settled** (`research/agent-interaction.md`): adopt axi's
+ergonomics, not TOON (independent agentic benchmarks: ~9 pp accuracy for 18%
+tokens, multi-turn parse cascades); CLI first over a warm session with MCP as
+a thin adapter later (sequential edit loops are where programmatic calling
+*loses* 8%); replies must carry the changed state, never a path to go read;
+no eval verb; numbers before pixels; no aesthetic scorer as an objective;
+validation as a deterministic cascade with the agent's eyes third and
+pairwise only.
+
+**Built.** `app/DevelopDiff.swift` - the session log's diff, pulled out and
+extended (all nine local fields, wheels, every mask row with `maskrow i`
+prefixes, honest `# … (no verb yet)` comments for the seven field groups the
+grammar cannot set). `app/AgentServer.swift` - POSIX `AF_UNIX` listener on
+`DispatchSource`, NDJSON in and out, `Scenario.step` per line with `sink`
+capturing what the verb printed, `rev` bumped per change, `Autosave` held so
+the sidecar is written the editor's way, idle exit, SIGTERM/SIGINT flush.
+`Orion --serve` is the fifth dispatch in `OrionApp.init`, and the spike
+question - can AppKit's loop run from inside `App.init` with no scene? -
+answered yes on the first try. Verbs: `load` (the editor's open), `state`
+(three forms), `maskrow`. `apps/orion-cli/main.swift` - a Foundation-only
+client: connect or spawn (`ORION_APP`, beside the binary, `/Applications`),
+text rendering with `→ changed` and `(no change)`, `--json`, exit 0/1/2,
+`help <verb>`. `.claude/skills/orion/SKILL.md` - the playbook; `.gitignore`
+gained `!.claude/skills/` for it.
+
+**Measured.** Cold `load` **658 ms** (42 MP), a ten-line script **54 ms**, a
+reply under **0.5 ms**, the CLI's spawn-to-first-reply **755 ms**.
+
+**Verified.** `tools/check-serve.py` (2.5 s) - `orion open`, 26 verbs, `state`,
+`stop`, the lines replayed through `--scenario` on a second copy, **51 sidecar
+fields identical**. Mutations: dispatch commented out → the CLI times out at
+10 s and the gate kills the window Orion opened instead; `f("exposure")`
+dropped from the diff → the gate names `exposureEv`. `repro/agent-verbs.txt`
+pins `maskrow` two-sided on the turned sample and records its frame→display
+mapping (frame x 0.30 lands at display y 0.70). ⚠ The first draft shrank the
+disc to free the patch and a 0.01 radius still feathered into a 0.06 patch;
+it moves the disc instead. Suites 1034 / 4114, 0 failures; decisions,
+gestures, wiring green; modes and screens exit 2 for `_PIC` samples
+(pre-existing). Rebased onto #241/#242 mid-session with no conflicts.
+
+**Owed.** S-A4 first (reordered by #275), then S-A2 - until the registry,
+seven field groups are comments in `state`. S-A3 wires the editor as host
+(#274 records the decision). The M0 bench was not re-run: nothing in the
+render path changed.
+
+### First real use, same day - four portraits by an Opus agent, #275
+
+The test the plan asked for. One Opus agent, the skill, the CLI, four ARWs
+from `/Volumes/wintermute/pictures/gaye_peak` and the developer's brief.
+**63 invocations, ~350 verb lines, 14 image reads, 11 round trips lost to
+tool discovery**, four sidecars written and four 2048 px exports in
+`gaye_peak/orion-agent-test/`. Judged by eye against the as-shot frames:
+09666 and 09743 are finished (intentional crops, skies recovered with cloud,
+skin natural, background back); 09700 and 09723 have a **light halo around
+the hair** where the lifted subject matte meets the sky, and 09700's greens
+run neon - the agent saw both, weakened the masks rather than fixing the
+edge, and said so. That halo is S-A5's whole reason to exist.
+
+**Three bugs found and fixed in-session** (`select` overwrote the selected
+row; a kind change kept a matte reference that `state` then replayed; the
+CLI hid a diff that echoed the command). **Seven findings queued, not
+fixed**: the frame/display coordinate split (top of the queue), no hue or
+clipping in `measure`, no face box, `select sky` on a bright overcast (27%,
+ragged), `auto` pushing whites up on a blown sky, `undo` stepping over the
+edit before a `select`, and the 104-byte socket path limit. The agent's
+verified mapping is in the skill. Gates re-run after the fixes: 1034 /
+4114 / check-serve green / `agent-verbs` 7 / `select-adds-a-row` 7.
+
+**Later the same night: 09700's face was the engine, not the matte.** The
+developer saw the subject in `09700-v3` as fake and asked whether the
+"facelift" radial was to blame.
+Ablated on a scratch copy, one slider at a time, the face is ruined by the
+global `highlights -0.8` alone and by nothing else: removing it restores the
+face, and adding it alone to the as-shot frame already takes 27-30% of the
+mid-scale shading out of the cheek and chin (relative luma variation after a
+6 px blur, 0.179 → 0.124 and 0.117 → 0.085).
+With the whole edit that loss is 40% (0.122 → 0.073), which the three face
+lifts (+0.71 EV) brought back in brightness and not in shading - that is the
+wax.
+The band is the cause, not the guide: a 5× radius, a 7× epsilon and a band
+centre moved from +2.5 to +4 EV each left the number where it was (0.074 /
+0.085 / 0.065), all three reverted and the baseline export byte-identical
+afterwards.
+`research/tone-and-local-contrast.md` already measured the Highlights band
+at **0.495 authority at middle grey** on 2026-07-29 and deferred the fix as a
+migration decision; this is what that number does to a portrait.
+The professional move renders clean: `highlights 0` and the pull on the sky
+row (`localHighlights -0.8`, `localExposure -0.6`) leaves the face identical
+to no-highlights and the sky at 0.747 against the agent's 0.721.
+Two findings from it: **the band breadth is now a product defect with a
+number** (the developer's call, per the research note), and `check` (S-A5)
+should carry a skin mid-scale contrast delta so an agent is told when it has
+flattened a face.
+And one from the investigation itself: my first ablation ran on the real
+photograph and autosave wrote every variant into the agent's sidecar, which
+the `final` snapshot restored; the skill now says to `snapshot save` before
+experimenting, and S-A6's `rollback` is the real answer.
+
+---
+
 ## Recent-session rows archived 2026-09-15, #271
 
 Moved verbatim from `STATUS.md`; commit and follow-up claims describe their original sessions.

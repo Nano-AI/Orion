@@ -119,7 +119,10 @@ extension Engine {
             if maskComponents.isEmpty {
                 addMaskComponent(kind: newValue)
             } else {
-                editSelected { $0.kind = newValue }
+                editSelected {
+                    $0.kind = newValue
+                    if newValue != 4 { $0.matteId = nil; $0.matteSource = nil }
+                }
             }
         }
     }
@@ -517,6 +520,14 @@ extension Engine {
         guard maskComponents.indices.contains(index) else { return }
         edit("Mask kind") {
             maskComponents[index].kind = kind
+            // A shape is not a selection: the matte reference belongs to kind 4
+            // and would otherwise ride along on a radial, name a file the row
+            // no longer draws, and print in `state` as a matte the replay
+            // would re-attach (found on the agent surface's first real use).
+            if kind != 4 {
+                maskComponents[index].matteId = nil
+                maskComponents[index].matteSource = nil
+            }
             pushAndRender()
         }
     }

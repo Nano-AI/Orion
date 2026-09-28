@@ -408,10 +408,16 @@ void testLocalAdjustments() {
         la.layerHighlights[0] = 0.4f;
         la.layerWhites[0]     = -0.3f;
         la.layerBlacks[0]     = 0.2f;
+        // ⚠ Stated, not left at zero: a zeroed block renders the bands as
+        // shipped, which is what this closed form was written against, and
+        // the second pass below re-derives the newer generation the same way.
+        auto bands = orion::pipe::params::toneBands(1);
+        la.toneSigma  = bands.sigma;
+        la.toneAnchor = bands.anchor;
         run();
         const double ev = std::log2(baseLuma / 0.18);
         const auto w = [&](double center) {
-            const double d = (ev - center) / 1.6;
+            const double d = (ev - center) / bands.sigma;
             return std::exp(-0.5 * d * d);
         };
         // ⚠ The whites center mirrors `kEvWhites` in ops/tone_ops.slang, which
@@ -460,6 +466,38 @@ void testLocalAdjustments() {
         report(std::abs(luma(mid) - half) / half < 0.03,
                "and half coverage halves the exponent",
                std::to_string(luma(mid)) + " against " + std::to_string(half));
+
+        // ── Process 2: the same partition with the middle-grey anchor in it ─
+        //
+        // The anchor is a fifth Gaussian at 0 EV that carries no slider, so
+        // it appears in the denominator and nowhere else. That is the whole
+        // mechanism (decision #276), and the closed form says so by having
+        // one more term below the line than above it.
+        bands = orion::pipe::params::toneBands(2);
+        la.toneSigma  = bands.sigma;
+        la.toneAnchor = bands.anchor;
+        run();
+        const double wB2 = w(-5.5), wS2 = w(-2.5), wH2 = w(2.5),
+                     wW2 = w(kEvWhitesMirror), wA2 = w(0.0);
+        const double total2 = wB2 + wS2 + wH2 + wW2 + wA2 + 1e-6;
+        const double delta2 = ((wB2 * 0.2) + (wS2 * 1.0) + (wH2 * 0.4)
+                               + (wW2 * -0.3)) * 2.0 / total2;
+        const double want2 = baseLuma * std::exp2(delta2);
+        report(std::abs(luma(int(kW) - 1) - want2) / want2 < 0.02,
+               "process 2 adds the anchor below the line and nothing above it",
+               std::to_string(luma(int(kW) - 1)) + " against "
+             + std::to_string(want2));
+        report(std::abs(delta2) < std::abs(delta),
+               "and the anchor takes authority away from every slider at this luma",
+               std::to_string(delta2) + " against " + std::to_string(delta));
+
+        // And a zeroed block is process 1, which is what every other block
+        // in this suite relies on without saying so.
+        la.toneSigma = 0.0f; la.toneAnchor = 0.0f;
+        run();
+        report(std::abs(luma(int(kW) - 1) - want) / want < 0.02,
+               "a zeroed toneSigma renders the bands as shipped",
+               std::to_string(luma(int(kW) - 1)) + " against " + std::to_string(want));
     }
 }
 

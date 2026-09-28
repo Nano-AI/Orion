@@ -243,6 +243,9 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         e.blacks     = std::clamp(adj->local_blacks[i], -1.0f, 1.0f);
     }
     a.maskRefine = std::clamp(adj->mask_refine, 0.0f, 1.0f);
+    // Zero is the bands as shipped, and anything newer than this build knows
+    // renders as the newest it does know - never as the legacy bands.
+    a.process = adj->process <= 1 ? 1 : 2;
 
     a.spotCount = std::clamp(adj->spot_count, 0, ORION_MAX_SPOTS);
     for (int i = 0; i < a.spotCount; ++i) {

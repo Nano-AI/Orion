@@ -98,6 +98,13 @@ struct LinearAdjustParams
     /// Which layer the overlay paints — the one being edited. Ignored when
     /// maskOverlay is zero.
     int   maskOverlayLayer;
+
+    /// The tone bands' generation, as two numbers rather than a version: the
+    /// width of every band and whether the middle-grey anchor is in the
+    /// partition. See `applyTone`. Zero means the bands as shipped.
+    float toneSigma;
+    float toneAnchor;
+    float _tonePad[2];
 };
 
 /// Bilinear lift of the guide coefficients from their subsampled grid.
@@ -186,7 +193,8 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
         guideEv = log2(max(luminance2020(c), 1e-6f));
     }
 
-    c = applyTone(c, guideEv, p.highlights, p.shadows, p.whites, p.blacks);
+    c = applyTone(c, guideEv, p.highlights, p.shadows, p.whites, p.blacks,
+                  p.toneSigma, p.toneAnchor);
     c = applyColor(c, p.vibrance, p.saturation);
     c = applyColorMixer(c, p.hueShift, p.satShift, p.lumShift);
 
@@ -226,7 +234,8 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
         {
             c = applyTone(c, guideEv,
                           a * p.layerHighlights[L], a * p.layerShadows[L],
-                          a * p.layerWhites[L], a * p.layerBlacks[L]);
+                          a * p.layerWhites[L], a * p.layerBlacks[L],
+                          p.toneSigma, p.toneAnchor);
         }
 
         // Contrast, as a gain on the pixel's distance from the pivot measured

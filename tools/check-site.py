@@ -169,7 +169,7 @@ def main():
     ok &= check(not missing, f"(a) {len(p.local_urls)} local urls all exist under web/",
                 f"(a) missing local files: {missing}")
 
-    # (b) the repository is public again (#273).
+    # (b) the repository is public again (#283).
     scan_files = [target] + sorted(WEB.glob("js/*.js")) + sorted(WEB.glob("css/*.css"))
     hrefs = {link.get("href") for link in p.links}
     ok &= check({SOURCE_URL, SOURCE_URL + "/tree/main/research"} <= hrefs,

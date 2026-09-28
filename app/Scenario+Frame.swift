@@ -20,6 +20,40 @@ extension Scenario {
             try engine.open(path: p)
             snapshots.open(photo: photo)
 
+        case "load":
+            // The editor's own open: `Editor.load` in sequence, minus the
+            // window. `open` above is as-shot on purpose - a repro that wants
+            // the camera's settings must not pick up a sidecar somebody left
+            // beside the sample - and an agent wants the opposite, so the two
+            // are two verbs rather than one verb with a mood.
+            guard let p = args.first else { throw Bad(what: "load needs a path") }
+            let url = URL(fileURLWithPath: p)
+            snapshots.open(photo: nil)
+            photo = url
+            engine.resetCrop()
+            try engine.open(path: p)
+            let saved = Sidecar.read(for: url)?.develop
+            var restored = false
+            if let saved {
+                restored = engine.restore(encoded: saved)
+                if restored { engine.restoreMattes(photo: url) }
+            }
+            snapshots.open(photo: url)
+            MatteStore.sweepAfterLoad(photo: url, blob: saved, restored: restored,
+                                      components: engine.maskComponents)
+            if MatteStore.SidecarState.of(blob: saved, restored: restored) == .unreadable {
+                // Say so rather than swallowing it: the file is left on disk
+                // untouched, exactly as the editor leaves it.
+                say("  \u{26A0} the sidecar's edits would not decode; left on disk "
+                    + "untouched\n")
+            }
+            // ⚠ `imageWidth` is the DISPLAYED picture - after the crop and the
+            // turns - so the same file prints two sizes when its sidecar
+            // carries a crop, and an agent read that as the decode changing
+            // under it (#279). Said as what it is.
+            say("  loaded \(url.lastPathComponent) display \(engine.imageWidth)x\(engine.imageHeight) "
+                + "\(engine.camera)" + (saved == nil ? " (no sidecar)" : "") + "\n")
+
         case "reopen":
             // Closes and opens the photograph again, through the same steps
             // `Editor.load` takes: decode, read the sidecar, restore the state,
@@ -352,6 +386,13 @@ extension Scenario {
 
         case "compare":
             engine.setCompare(split: try number(args, 0))
+
+        case "reset":
+            // Back to the camera's own settings, as one undo step. What an
+            // agent starting a frame over needs, and what the panel's Reset
+            // does: `defaults` is as-shot white balance and nothing else.
+            engine.edit("Reset") { engine.assign(engine.defaults) }
+            say("  reset to as shot\n")
 
         case "undo":
             engine.undo()

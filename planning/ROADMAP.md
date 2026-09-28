@@ -1132,6 +1132,45 @@ graph.
 
 ---
 
+## M-A - Agent-driven editing (added 2026-09-13, #272; on the MCP surface since 2026-09-20, #280)
+
+**Definition of done:** an agent reads a photograph as numbers and small
+proxies, proposes an edit that the photographer approves or rejects in the
+editor, and checks its own result against numbers before it asks - through
+one surface, the MCP server over `Orion --agent` (#244-#251).
+
+⚠ **The socket surface this milestone was written for is gone.** `Orion
+--serve`, the `orion` CLI and the skill (#272-#279) lost a bake-off on two
+real frames to the MCP surface and were removed (#280). What survived of that
+branch is in `FEATURES.md` § 16: process 2, the inspection mechanisms, two mask
+fixes and `DevelopDiff`.
+
+| Story | Status |
+|---|---|
+| S-A1 The surface end to end - `--agent` verbs, `mcp/server.ts`, proposals beside the RAW, `tools/check-agent.py` | ✅ **2026-09-13, #244-#247** (the socket version, #272-#274, retired #280) |
+| S-A2 The vocabulary - every editable `DevelopState` field with unit, range, default and an example, published by `describe_edits` | ✅ **#247, #250**; the composite notes (mask kinds, band order, wheel axes, frame space) and `process` land with #281 |
+| S-A3 The edit in the window - proposals shown in compare, Approve/Reject in the footer, panels locked while one is live; the assistant column running `claude` | ✅ **2026-09-14, #248, #251** |
+| S-A4 Inspection - `get_stats` for the proposed state and for a region (luma, sat, hue, RGB, clipped fractions, shading), `get_proxy region` at native resolution, `detect_faces` in display and frame space | ✅ mechanisms **#278**; reaching MCP **#281** |
+| S-A5 The `check` - deterministic invariants (EBU R 103 area gate, skin hue on the 123° axis, a face's shading within 15% of as shot, halo residual) and a before/after delta, on `get_stats region`; `research/agent-validation.md` | ~1-2 sessions |
+| S-A6 Transactions | superseded: a proposal is the batch, `reset: true` the rollback, `approve_edit` the commit (#246); the socket version (#277) removed |
+| S-A7 Subject and sky mattes through MCP - the editor's `select subject|sky` as a tool, so a portrait's background is a matte and not an ellipse | ~half a session (#280, the MCP agent's first wish) |
+| S-A8 Skill and docs - the playbook in the server instructions and `mcp/README.md` | ✅ with #281 |
+| S-A9 Aesthetic score, advisory - Vision's on-device request behind `#available(macOS 15)`, never an objective | ~half a session |
+| S-A10 Library verbs - a contact-sheet proxy, ratings in bulk over `list_folder` and `set_flag` | ~half a session |
+
+### ⚠ What must not be done along the way
+
+- **No eval verb.** The interface is the tools; a "run code" tool is the
+  one thing every surveyed integration regretted (`research/agent-interaction.md` §3).
+- **No aesthetic scorer as an objective.** CLIP-based scorers reward the
+  unedited original and drive saturation up when optimised against - the
+  purple-cast class of bug, again.
+- **No histograms rendered for the agent.** Hand it the bins.
+- **No second surface.** One protocol, one gate; the two-surface month cost a
+  merge, a renumbering and a bake-off to undo.
+
+---
+
 ## Where things actually stand
 
 **`planning/STATUS.md`.** There is no second copy here on purpose: this file

@@ -121,12 +121,23 @@ the `:A` modifier is for.
 `-n` starts a new instance each time: `open -a` on a running app activates it
 but drops `--args`, so the path would never arrive.
 
+
+### Driving Orion from an agent
+
+The agent surface is an MCP server over `Orion --agent`: it reads a photograph,
+proposes an edit as a `.proposed.json` beside the RAW, and the editor shows it
+for you to approve or reject.
+
+`mcp/README.md` is the whole of it - the tools, what each one takes, and how a
+proposal is approved. `.mcp.json` at the repo root wires it into Claude Code.
+
 ## Tests
 
 ```sh
 ./build/apps/tests/orion-tests      # engine maths, plus real GPU renders
 ./build/orion-viewport-tests        # canvas geometry
 ./build/apps/bench/orion-bench file.ARW   # latency gate and per-control checks
+./tools/check-agent.py              # the agent surface: a real render and a real approve
 ```
 
 889 engine checks, 3711 viewport checks, 42 recorded repro scenarios, and five lint gates.

@@ -28,12 +28,17 @@ import SwiftUI
 ///
 /// Grammar, one command per line, `#` comments and blank lines ignored:
 ///
-///     open <path>                       open a raw file
+///     open <path>                       open a raw file, as shot - no sidecar
+///     load <path>                       open it the way the editor does:
+///                                       sidecar restored, mattes uploaded,
+///                                       orphans swept. What an agent means
+///                                       by "open"
 ///     rotate <quarter-turns>            through Engine.rotate, as the button does
 ///     straighten <degrees>
 ///     crop <x> <y> <w> <h>              normalized
 ///     preview on | off                  the crop tool's context render
-///     set <control> <value>             any slider by name
+///     set <control> <value>             any slider by name; `process 1|2` is
+///                                       the tone bands' generation (#276)
 ///     wheel <name> <x> <y> [luma]       a whole grading wheel at once —
 ///                                       `gradeShadow`, `gradeMidtone` or
 ///                                       `gradeHighlight`. ⚠ **Added, not a
@@ -64,7 +69,10 @@ import SwiftUI
 ///                                       sidecar, restore, upload saved mattes,
 ///                                       sweep orphans
 ///     select subject | person | sky     runs the detector for real, and reports what
-///                                       fraction of the frame it covered
+///                                       fraction of the frame it covered. Into a
+///                                       selection row of its own — added unless
+///                                       the selected row already is one — as the
+///                                       panel's Add menu does
 ///     refuses subject | person | sky    asserts the detector declines this
 ///                                       photograph. A refusal is a result and
 ///                                       gets asserted like one — without this
@@ -75,6 +83,8 @@ import SwiftUI
 ///     maskadd <kind>                    add a *row* — `mask <kind>` changes
 ///                                       the selected row instead
 ///     masklayer <n>                     select layer n (by its first row)
+///     maskrow <n>                       select row n - what the `mask…`
+///                                       controls then address
 ///     masksplit <n>                     row n starts its own layer
 ///     masklink <n>                      row n folds into the layer above
 ///     maskhide <n>                      the eye button on a mask row
@@ -117,7 +127,22 @@ import SwiftUI
 ///                                       are no longer beside the photograph
 ///     compare <split>                   1 = off, lower reveals the original
 ///     undo / redo
+///     reset                             back to as shot, one undo step
+///     zones [n]                         an n×n grid of luma/sat (#278)
+///     histogram [bins]                  integer bins per channel, one line each
+///     look <path> [long-edge]           the picture as a small PNG (768)
+///     zoom <path> <x,y,w,h> because <why>  a region at native size; the reason
+///                                       is required and echoed
+///     faces                             Vision's face boxes: display box,
+///                                       centre, and frame centre + radii
+///     toframe <x,y> / todisplay <x,y>   one point across the frame/display map
+///     maskplace <x,y> [rx,ry]           the selected row's centre (and radii)
+///                                       given in DISPLAY space
 ///     measure <x,y,w,h> <name> [where]  record a value under a name.
+///                                       A reading carries luma, sat, hue,
+///                                       red/green/blue, clippedHigh/Low and
+///                                       shading (#278); `expect name.field`
+///                                       asserts one of them.
 ///                                       `where` is `output` (default, the
 ///                                       engine's edited render) or `canvas`
 ///                                       (the blit the screen actually shows,
@@ -170,6 +195,13 @@ import SwiftUI
 ///     identical <path> <path>           two files, byte for byte
 ///     shot <path>                       write a PNG
 ///     print <text>
+///     state [masks|full]                what this photograph's edit is, as
+///                                       the lines that replay it from the
+///                                       camera's own settings - the diff, in
+///                                       this grammar. `masks` is the outline,
+///                                       one line per mask; `full` is every
+///                                       line from Orion's defaults rather
+///                                       than from as-shot
 ///     workflowcheck                     isolated disk/GPU checks of preview,
 ///                                       Compare, undo and proposal review
 ///
@@ -187,6 +219,27 @@ enum Scenario {
     struct Reading {
         var luma: Double
         var saturation: Double
+        var hue = 0.0, hueStrength = 0.0
+        var red = 0.0, green = 0.0, blue = 0.0
+        var clippedHigh = 0.0, clippedLow = 0.0
+        var shading = 0.0
+
+        /// One field by name, for `expect <name>.<field>`.
+        func field(_ name: String) -> Double? {
+            switch name {
+            case "luma": return luma
+            case "sat", "saturation": return saturation
+            case "hue": return hue
+            case "hueStrength": return hueStrength
+            case "red", "r": return red
+            case "green", "g": return green
+            case "blue", "b": return blue
+            case "clippedHigh", "clipHi": return clippedHigh
+            case "clippedLow", "clipLo": return clippedLow
+            case "shading": return shading
+            default: return nil
+            }
+        }
     }
 
     static var readings: [String: Reading] = [:]

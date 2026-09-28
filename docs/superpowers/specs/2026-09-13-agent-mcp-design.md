@@ -1,5 +1,10 @@
 # Orion agent surface: `--agent` CLI and MCP server (POC)
 
+⚠ **Historical.** The POC as specified on 2026-09-13. The living description of the
+surface is `mcp/README.md`; since then `describe_edits`/`keys` (#247), `current_photo`
+(#249), composites (#250), and `get_stats` with `state`/`region`, `get_proxy region` and
+`detect_faces` (#281) were added, so the verb and tool tables below are incomplete.
+
 Date: 2026-09-13. Status: approved by the developer in chat; proprietary license
 chosen in the same conversation.
 

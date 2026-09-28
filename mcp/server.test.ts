@@ -30,13 +30,14 @@ after(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test("tools/list names exactly the nine tools", async () => {
+test("tools/list names exactly the ten tools", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "approve_edit",
     "current_photo",
     "describe_edits",
+    "detect_faces",
     "get_proxy",
     "get_stats",
     "list_folder",
@@ -175,13 +176,105 @@ test("propose_edit result text includes the merged state", async () => {
   assert.equal(typeof parsed.state, "object");
 });
 
-test("get_proxy clamps maxPx to 2048 before it ever reaches the binary", async () => {
+// ⚠ This used to be a silent clamp - Math.min(maxPx, 2048) inside the handler
+// - so a model asking for 4096 got 2048 back and no way to learn the cap
+// existed. The schema carries the cap now, so the refusal names it.
+test("get_proxy refuses a maxPx over 2048 at the schema rather than clamping it", async () => {
   const maxpxFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-maxpx.txt");
   await fs.rm(maxpxFile, { force: true });
-  const result = await client.callTool({ name: "get_proxy", arguments: { path: "/x.arw", maxPx: 3000 } });
+  const refused = await client.callTool({ name: "get_proxy", arguments: { path: "/x.arw", maxPx: 3000 } });
+  assert.equal(refused.isError, true);
+  const refusedContent = refused.content as Array<{ type: string; text?: string }>;
+  assert.match(refusedContent[0].text!, /2048/, "the refusal names the cap");
+  await assert.rejects(() => fs.access(maxpxFile), "the binary must never have been run");
+
+  const ok = await client.callTool({ name: "get_proxy", arguments: { path: "/x.arw", maxPx: 2048 } });
+  assert.equal(ok.isError, undefined);
+  assert.equal((await fs.readFile(maxpxFile, "utf8")).trim(), "2048");
+});
+
+test("get_proxy passes region through as --region x,y,w,h", async () => {
+  const regionFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-region.txt");
+  await fs.rm(regionFile, { force: true });
+
+  const plain = await client.callTool({ name: "get_proxy", arguments: { path: "/x.arw" } });
+  assert.equal(plain.isError, undefined);
+  assert.equal((await fs.readFile(regionFile, "utf8")).trim(), "<none>");
+
+  const cropped = await client.callTool({
+    name: "get_proxy",
+    arguments: { path: "/x.arw", region: [0.25, 0.1, 0.5, 0.4] },
+  });
+  assert.equal(cropped.isError, undefined);
+  assert.equal((await fs.readFile(regionFile, "utf8")).trim(), "0.25,0.1,0.5,0.4");
+});
+
+test("get_proxy rejects a region that is not four numbers", async () => {
+  const result = await client.callTool({
+    name: "get_proxy",
+    arguments: { path: "/x.arw", region: [0.1, 0.2, 0.3] },
+  });
+  assert.equal(result.isError, true);
+  const content = result.content as Array<{ type: string; text?: string }>;
+  assert.match(content[0].text!, /region/, "the refusal names the argument");
+});
+
+test("get_stats passes region through and returns the region object", async () => {
+  const regionFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-stats-region.txt");
+  await fs.rm(regionFile, { force: true });
+
+  const plain = await client.callTool({ name: "get_stats", arguments: { path: "/x.arw" } });
+  const plainContent = plain.content as Array<{ type: string; text?: string }>;
+  assert.equal((await fs.readFile(regionFile, "utf8")).trim(), "<none>");
+  assert.equal(JSON.parse(plainContent[0].text!).region, undefined);
+
+  const patch = await client.callTool({
+    name: "get_stats",
+    arguments: { path: "/x.arw", region: [0, 0, 0.5, 0.5] },
+  });
+  assert.equal(patch.isError, undefined);
+  assert.equal((await fs.readFile(regionFile, "utf8")).trim(), "0,0,0.5,0.5");
+  const content = patch.content as Array<{ type: string; text?: string }>;
+  const { region } = JSON.parse(content[0].text!);
+  for (const field of ["luma", "saturation", "hue", "hueStrength", "red", "green", "blue",
+                       "clippedHigh", "clippedLow", "shading"]) {
+    assert.equal(typeof region[field], "number", field);
+  }
+});
+
+test("get_stats state: proposed passes the proposed file as --state, and only when it exists", async () => {
+  const raw = path.join(tmpDir, "stats-state.arw");
+  await fs.writeFile(raw, "");
+  const stateFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-stats-state.txt");
+
+  await client.callTool({ name: "get_stats", arguments: { path: raw, state: "proposed" } });
+  assert.equal(
+    (await fs.readFile(stateFile, "utf8")).trim(),
+    "<none>",
+    "no proposal yet, so there is nothing to restore"
+  );
+
+  await client.callTool({ name: "propose_edit", arguments: { path: raw, edits: { exposureEv: 0.5 } } });
+  await client.callTool({ name: "get_stats", arguments: { path: raw, state: "proposed" } });
+  assert.equal(
+    (await fs.readFile(stateFile, "utf8")).trim(),
+    raw.replace(/\.[^.]+$/, ".proposed.json")
+  );
+
+  await client.callTool({ name: "get_stats", arguments: { path: raw } });
+  assert.equal((await fs.readFile(stateFile, "utf8")).trim(), "<none>", "default is current");
+  await client.callTool({ name: "reject_edit", arguments: { path: raw } });
+});
+
+test("detect_faces returns a face carrying both spaces", async () => {
+  const result = await client.callTool({ name: "detect_faces", arguments: { path: "/x.arw" } });
   assert.equal(result.isError, undefined);
-  const received = (await fs.readFile(maxpxFile, "utf8")).trim();
-  assert.equal(received, "2048");
+  const content = result.content as Array<{ type: string; text?: string }>;
+  const { faces } = JSON.parse(content[0].text!);
+  assert.equal(faces.length, 1);
+  for (const field of ["x", "y", "w", "h", "centerX", "centerY", "radiusX", "radiusY"]) {
+    assert.equal(typeof faces[0][field], "number", field);
+  }
 });
 
 test("current_photo returns the contents of current.json", async () => {
@@ -269,6 +362,7 @@ test("every optional-path tool gives the same isError when nothing is open and n
       ["approve_edit", {}],
       ["reject_edit", {}],
       ["set_flag", { rating: 3 }],
+      ["detect_faces", {}],
       ["list_folder", {}],
     ];
     for (const [name, args] of calls) {
@@ -317,6 +411,25 @@ test("server instructions mention current_photo and never ask which file", async
   assert.ok(instructions, "server should have instructions");
   assert.match(instructions, /current_photo/i, "instructions should mention current_photo");
   assert.match(instructions, /never ask which file/i, "instructions should say never ask which file");
+  assert.match(instructions, /region/i, "instructions should point at the region arguments");
+  assert.ok(
+    Buffer.byteLength(instructions, "utf8") < 1536,
+    `instructions are ${Buffer.byteLength(instructions, "utf8")} bytes; the budget is about 1.5 KB`
+  );
+});
+
+// The same words go into AssistantProcess.orionContext, which is what Orion's
+// own assistant panel appends to Claude's system prompt. Two copies that drift
+// are two different sets of editing advice depending on which door the model
+// came in by, so the Swift literal is compared here rather than by eye.
+test("the Swift orionContext literal is identical to these instructions", async () => {
+  const swift = await fs.readFile(
+    path.resolve(import.meta.dirname, "../app/AssistantProcess.swift"),
+    "utf8"
+  );
+  const match = swift.match(/static let orionContext = "([^"]*)"/);
+  assert.ok(match, "AssistantProcess.swift should hold a orionContext string literal");
+  assert.equal(match[1], client.getInstructions());
 });
 
 test("entry point runs when its own path contains a space", async () => {
@@ -325,7 +438,7 @@ test("entry point runs when its own path contains a space", async () => {
   const copiedServer = path.join(dir, "server.ts");
   await fs.copyFile(path.join(import.meta.dirname, "server.ts"), copiedServer);
   try {
-    const child = spawn("node", [copiedServer], {
+    const child = spawn("node", ["--experimental-strip-types", copiedServer], {
       env: { ...process.env, ORION_BIN: FAKE_BIN },
       stdio: ["pipe", "pipe", "pipe"],
     });

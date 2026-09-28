@@ -240,6 +240,8 @@ extension Engine {
         } else {
             render()
         }
+        // Not while Compare is capturing its own baseline: that renders twice
+        // with the state it was handed, and autosave listens here.
         if !capturingOriginal { onEdit?(state) }
     }
 

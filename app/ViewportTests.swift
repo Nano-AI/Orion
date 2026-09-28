@@ -75,6 +75,8 @@ enum ViewportTests {
         testSidecarSurvivesAMissingField()
         testMaskGroupSidecar()
         testMaskSpaceMarkerGatesTheLegacyRead()
+        testProcessVersionIsThePhotographs()
+        testRegionStatsFields()
         testAmericanKeyMigration()
         testSidecarEscapingDoesNotCompound()
         testEditsSurviveAQuit()
@@ -186,6 +188,8 @@ enum ViewportTests {
         testMergeOutputNaming()
 
         testAgentParsesProxy()
+        testAgentParsesRegion()
+        testAgentParsesFaces()
         testAgentRejectsAnOptionTheVerbDoesNotTake()
         testAgentMergeEdits()
         testAgentMergeEditsAcceptsAWellFormedGradeWheel()

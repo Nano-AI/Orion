@@ -98,6 +98,12 @@ EXPECTED = {
 # mechanism the product forgot to call. Nine were triaged when the sweep was
 # written; the ninth was not defensible and was deleted rather than listed.
 HARNESS_ONLY = {
+    # ⚠ `stats` was here, as a promise rather than a fact: RegionStats.stats
+    # had no product caller, only `measure`. It has one now - `Orion --agent
+    # stats --region` reaches it through AgentInspect.regionJSON, and
+    # `get_stats`'s `region` is what an agent reads a cheek's shading with -
+    # so the entry came out rather than being re-argued. If it comes back,
+    # something deleted that path.
     "escapeForTests":
         "named for what it is — reaches Sidecar's escaping without a file",
     "executeForTests":

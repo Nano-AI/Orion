@@ -195,6 +195,10 @@ struct Preset: Codable, Identifiable, Equatable {
         out.spots = base.spots
         out.maskComponents = base.maskComponents
         out.maskRefine = base.maskRefine
+        // The tone bands' generation is the photograph's: a preset made under
+        // the newest bands applied to a photograph finished under the first
+        // would re-render every slider that photograph already had.
+        out.process = base.process
         // ⚠ Layers travel with the mask, not with the look — a preset that
         // carried them would apply one photograph's local grade to another
         // photograph's subject.

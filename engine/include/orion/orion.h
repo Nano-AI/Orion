@@ -330,6 +330,14 @@ typedef struct OrionAdjustments {
     OrionCurveChannel curve_red;
     OrionCurveChannel curve_green;
     OrionCurveChannel curve_blue;
+
+    /* Which generation of tone bands renders highlights, shadows, whites and
+     * blacks, global and local. 1 is the four bands as shipped; 2 adds an
+     * identity band at middle grey so a midtone face is no longer on the
+     * Highlights flank. The photograph's own, from its sidecar: a state
+     * finished under one generation keeps opening under it. 0 reads as 1, so
+     * a zeroed struct renders what it always rendered. */
+    int   process;
 } OrionAdjustments;
 
 /* Opens a raw file and builds the develop pipeline for it. */

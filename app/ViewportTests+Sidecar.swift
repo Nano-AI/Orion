@@ -710,6 +710,43 @@ extension ViewportTests {
         }
     }
 
+    /// The tone bands' generation is the photograph's: a fresh state gets the
+    /// newest, a sidecar without the field was finished under the first, and
+    /// neither a preset nor a paste moves it. Decision #276.
+    static func testProcessVersionIsThePhotographs() {
+        func decode(_ json: String) -> DevelopState? {
+            guard let data = json.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode(DevelopState.self, from: data)
+        }
+        report(DevelopState().process == 2, "a fresh state renders under process 2")
+        report(decode("{}")?.process == 2,
+               "an empty sidecar has nothing for the field to gate and stays 2")
+        report(decode(#"{"exposureEv":1.0}"#)?.process == 2,
+               "and so does a legacy sidecar that never touched a tone slider")
+        report(decode(#"{"highlights":-0.8}"#)?.process == 1,
+               "a legacy sidecar with a tone slider moved was finished under process 1",
+               "process \(decode(#"{"highlights":-0.8}"#)?.process ?? -1)")
+        report(decode(#"{"layers":[{"shadows":0.2}]}"#)?.process == 1,
+               "and a tone slider on a layer gates it too")
+        report(decode(#"{"process":2}"#)?.process == 2, "and a stated 2 stays 2")
+        report(decode(#"{"process":1,"highlights":-0.8}"#)?.process == 1,
+               "and a stated 1 stays 1 whatever the sliders say")
+        if let data = try? JSONEncoder().encode(DevelopState()),
+           let back = try? JSONDecoder().decode(DevelopState.self, from: data) {
+            report(back.process == 2, "the encoder writes the field, so a round trip keeps 2")
+        } else {
+            report(false, "DevelopState round-trips through JSON")
+        }
+        var legacy = DevelopState()
+        legacy.process = 1
+        let preset = Preset(name: "newest", groups: Set(PresetGroup.allCases),
+                            state: DevelopState())
+        report(preset.applied(to: legacy).process == 1,
+               "a preset with every group leaves the photograph's process alone")
+        report(!SyncSettings.allSyncableKeys.contains("process"),
+               "and no sync group owns the key")
+    }
+
     /// The `maskSpace` marker gates which space a sidecar's mask numbers are
     /// read in — and absent means LEGACY, not the default, wherever there are
     /// masks for it to gate.

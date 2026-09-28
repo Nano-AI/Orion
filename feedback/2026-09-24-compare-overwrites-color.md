@@ -28,7 +28,7 @@ path notified autosave of that state; restoring the already-saved edit did not
 cancel the queued neutral write. The display retained the edit while the disk
 lost it. `Engine+Render.swift` now suppresses edit notifications during original
 capture, and `Autosave.note` cancels obsolete writes when returning to saved state.
-The reinstall for #272 delivers both fixes.
+The reinstall for #282 delivers both fixes.
 
 ## Recovery limits
 

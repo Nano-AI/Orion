@@ -52,6 +52,16 @@ const fail = (e: unknown) => {
 };
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v) }] });
 
+// `region: [x, y, w, h]`, display-space fractions from the top-left corner.
+// An array rather than an object so a model writes four numbers in the order
+// it already reads them in every other tool's output; the binary refuses one
+// outside 0..1 or with no area (exit 2), so there is no clamping here either.
+const REGION = z
+  .array(z.number())
+  .length(4)
+  .describe("[x, y, w, h] as fractions of the displayed picture, from its top-left corner");
+const regionArg = (r: number[] | undefined) => (r ? ["--region", r.join(",")] : []);
+
 // current.json is written atomically by Orion on every photo change:
 // {"photo": "/abs/path.ARW" | null, "folder": "/abs/dir" | null, "updated": "<ISO 8601>"}
 const currentPath = () =>
@@ -75,7 +85,7 @@ async function resolve(given: string | undefined, key: "photo" | "folder"): Prom
   return (await readCurrent())?.[key] ?? null;
 }
 
-const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`. All values are absolute, never deltas. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked. A 512 px proxy costs about 220 tokens; prefer \`get_stats\` when numbers will do.`;
+const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`. All values are absolute, never deltas. Local adjustments run three to four times a global's at the top of the scale: a blown sky near luma 0.98 barely moves under a small masked exposure pull, so probe strong and ease off. Numbers before pixels: \`get_stats\` with \`region\` reads a patch (luma, clippedHigh, shading) for a fraction of a proxy's cost, and \`detect_faces\` places a radial mask on a portrait. Judge sharpening, skin and mask edges with \`get_proxy\`'s \`region\`, never a whole 2048 px frame. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked.`;
 
 export function createServer() {
   const server = new McpServer(
@@ -138,15 +148,34 @@ export function createServer() {
       description:
         "Cheap: a histogram summary as JSON, about 60-80 tokens. Prefer this over get_proxy " +
         "to decide whether a photo needs a closer look — reach for get_proxy only after stats " +
-        "look interesting (blown highlights, empty shadows, an unrated keeper). path is " +
-        "optional; defaults to the photo open in Orion.",
-      inputSchema: { path: z.string().optional() },
+        "look interesting (blown highlights, empty shadows, an unrated keeper). state: " +
+        "'proposed' reads the numbers the PROPOSED edit would produce instead of the current " +
+        "ones, so 'did that pull actually work' is a number rather than a picture - read it " +
+        "before spending a proxy on the answer. region: [x, y, w, h] in display space adds a " +
+        "`region` object measuring just that patch: luma, saturation, hue (degrees, 0 red / " +
+        "120 green / 240 blue) with hueStrength (how much the patch agrees about it, 0..1), " +
+        "red/green/blue means, clippedHigh and clippedLow (the fraction of pixels at 254/255 " +
+        "and at 1/255 - a sky above about 0.01 clippedHigh is gone, not recoverable), and " +
+        "shading (the standard deviation over the mean of block means: how much modelling the " +
+        "patch has. Measure a cheek before and after and keep it within about 15% of as shot " +
+        "when you pull highlights or lift shadows over a face - that is the number that says " +
+        "whether a face went flat). path is optional; defaults to the photo open in Orion.",
+      inputSchema: {
+        path: z.string().optional(),
+        state: z.enum(["current", "proposed"]).default("current"),
+        region: REGION.optional(),
+      },
     },
-    async ({ path: raw }) => {
+    async ({ path: raw, state, region }) => {
       try {
         const p = await resolve(raw, "photo");
         if (!p) return noPhoto();
-        return text(await orion(["stats", p]));
+        const args = ["stats", p, ...regionArg(region)];
+        const proposed = proposedPath(p);
+        if (state === "proposed" && (await fs.access(proposed).then(() => true, () => false))) {
+          args.push("--state", proposed);
+        }
+        return text(await orion(args));
       } catch (e) {
         return fail(e);
       }
@@ -159,18 +188,30 @@ export function createServer() {
       description:
         "Expensive: a JPEG proxy as an image content block. A 512px proxy is about 220 tokens, " +
         "a 1024px proxy about 700-900, and cost grows with maxPx — get_stats first, and only " +
-        "call this when you need to actually see the photo. path is optional; defaults to the " +
-        "photo open in Orion.",
-      inputSchema: { path: z.string().optional(), maxPx: z.number().int().min(64).default(1024), state: z.enum(["current", "proposed"]).default("current") },
+        "call this when you need to actually see the photo. maxPx is capped at 2048, which on " +
+        "a 42 MP frame is a twentieth of its width: sharpening, skin texture, fringing and the " +
+        "edge of a mask are all finer than that, so a whole-frame proxy CANNOT show them and " +
+        "reading one as 'the sharpening looks fine' is reading a picture that does not contain " +
+        "the answer. region: [x, y, w, h] in display space is how to see them - it renders at " +
+        "full resolution, crops to that rectangle and only then scales down if the crop's long " +
+        "edge is over maxPx, so a small region comes back at native pixels. Use it on any mask " +
+        "edge you have proposed and on skin before approving. path is optional; defaults to " +
+        "the photo open in Orion.",
+      inputSchema: {
+        path: z.string().optional(),
+        maxPx: z.number().int().min(64).max(2048).default(1024),
+        state: z.enum(["current", "proposed"]).default("current"),
+        region: REGION.optional(),
+      },
     },
-    async ({ path: raw, maxPx, state }) => {
+    async ({ path: raw, maxPx, state, region }) => {
       let dir: string | undefined;
       try {
         const p = await resolve(raw, "photo");
         if (!p) return noPhoto();
         dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
         const out = path.join(dir, "proxy.jpg");
-        const args = ["proxy", p, "--max", String(Math.min(maxPx, 2048)), "--out", out];
+        const args = ["proxy", p, "--max", String(maxPx), "--out", out, ...regionArg(region)];
         const proposed = proposedPath(p);
         if (state === "proposed" && (await fs.access(proposed).then(() => true, () => false))) {
           args.push("--state", proposed);
@@ -287,6 +328,39 @@ export function createServer() {
       try {
         if (deleted) await fs.rm(proposed);
         return text({ deleted });
+      } catch (e) {
+        return fail(e);
+      }
+    }
+  );
+
+  server.registerTool(
+    "detect_faces",
+    {
+      description:
+        "Vision's face rectangles on the developed photo, about 30 tokens a face and far " +
+        "cheaper than looking. Each face carries the display box (x, y, w, h, the same space " +
+        "get_proxy and get_stats take a region in) AND centerX/centerY/radiusX/radiusY in " +
+        "FRAME space, which drop straight into a kind-2 radial in maskComponents with no " +
+        "conversion - those are two different spaces and a turned frame is not the identity " +
+        "between them, so never paste a display number into a mask. Call this FIRST on a " +
+        "portrait: it is how you put a mask on the face rather than guessing at the middle of " +
+        "the frame. Returns {faces: []} when there is no face, which is not an error. ⚠ Vision " +
+        "jitters by about 0.01 between calls on the same photograph, so do not read these to " +
+        "more than two decimals or expect two calls to agree exactly. path is optional; " +
+        "defaults to the photo open in Orion.",
+      inputSchema: { path: z.string().optional(), state: z.enum(["current", "proposed"]).default("current") },
+    },
+    async ({ path: raw, state }) => {
+      try {
+        const p = await resolve(raw, "photo");
+        if (!p) return noPhoto();
+        const args = ["faces", p];
+        const proposed = proposedPath(p);
+        if (state === "proposed" && (await fs.access(proposed).then(() => true, () => false))) {
+          args.push("--state", proposed);
+        }
+        return text(await orion(args));
       } catch (e) {
         return fail(e);
       }

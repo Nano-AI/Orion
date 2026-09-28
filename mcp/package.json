@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.ts",
-    "test": "node --test server.test.ts"
+    "start": "node --experimental-strip-types server.ts",
+    "test": "node --experimental-strip-types --test server.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

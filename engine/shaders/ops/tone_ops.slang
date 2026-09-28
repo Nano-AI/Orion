@@ -72,35 +72,61 @@ static const float kEvHighlights =  2.5f;
 // apps/bench/bench_controls.cpp is what notices if it does not.
 static const float kEvWhites     =  3.673931f;   // 1.2f + 2.473931f
 
-// Wide enough that adjacent bands overlap smoothly rather than stepping.
-static const float kBandSigma = 1.6f;
+// The band width as shipped: wide enough that adjacent bands overlap
+// smoothly rather than stepping, and wide enough that Shadows and Highlights
+// each hold half the authority at middle grey (research/tone-and-local-
+// contrast.md, "the four tone bands, measured"). Process 1.
+static const float kBandSigmaV1 = 1.6f;
 
 // A slider at full travel is worth two stops.
 static const float kEvPerUnit = 2.0f;
 
-float bandWeight(float ev, float center)
+float bandWeight(float ev, float center, float sigma)
 {
-    const float d = (ev - center) / kBandSigma;
+    const float d = (ev - center) / sigma;
     return exp(-0.5f * d * d);
 }
 
+/// `sigma` is the width of every band and `anchor` is 0 or 1: whether a fifth
+/// band, centred on middle grey and driven by no slider, sits in the partition.
+///
+/// The anchor is what keeps a face out of Highlights. With four bands at
+/// sigma 1.6 the Shadows and Highlights Gaussians cross exactly at middle
+/// grey, each holding half the authority there and both on their steepest
+/// flank - so `highlights -0.8` pulls the bright side of a midtone face a
+/// stop harder than its dark side and the shading compresses by half
+/// (research/tone-and-local-contrast.md, "the Highlights band on a face").
+/// An identity band at zero takes that authority and hands it to nothing, so
+/// the flanks move out to where the sky and the deep shadows are.
+///
+/// ⚠ `sigma <= 0` renders the bands as shipped (1.6, no anchor). A zeroed
+/// parameter block is what every direct builder of `LinearAdjust` in the test
+/// suite writes, and what it meant before these two fields existed.
 float3 applyTone(float3 c, float guideEv,
-                 float highlights, float shadows, float whites, float blacks)
+                 float highlights, float shadows, float whites, float blacks,
+                 float sigma, float anchor)
 {
     const float y = max(luminance2020(c), 1e-6f);
+
+    if (sigma <= 0.0f) { sigma = kBandSigmaV1; anchor = 0.0f; }
 
     // EV relative to middle gray, which is where the band centers are defined.
     const float ev      = log2(y / 0.18f);
     const float evLocal = guideEv - log2(0.18f);
 
     // Local bands read the neighborhood; endpoint bands read the pixel.
-    const float wShadows    = bandWeight(evLocal, kEvShadows);
-    const float wHighlights = bandWeight(evLocal, kEvHighlights);
-    const float wBlacks     = bandWeight(ev, kEvBlacks);
-    const float wWhites     = bandWeight(ev, kEvWhites);
+    const float wShadows    = bandWeight(evLocal, kEvShadows, sigma);
+    const float wHighlights = bandWeight(evLocal, kEvHighlights, sigma);
+    const float wBlacks     = bandWeight(ev, kEvBlacks, sigma);
+    const float wWhites     = bandWeight(ev, kEvWhites, sigma);
+    // The anchor reads the neighborhood like the two bands it sits between.
+    // Branched rather than multiplied by zero, so process 1's sum is the same
+    // four terms in the same order it always was.
+    const float wAnchor     = anchor > 0.0f ? bandWeight(evLocal, 0.0f, sigma) : 0.0f;
 
-    // Partition of unity: normalize so the weights sum to 1.
-    const float total = wBlacks + wShadows + wHighlights + wWhites + 1e-6f;
+    // Partition of unity: normalize so the weights sum to 1. The anchor is in
+    // the sum and contributes no exponent, which is the whole of what it does.
+    const float total = wBlacks + wShadows + wHighlights + wWhites + wAnchor + 1e-6f;
 
     const float deltaEv =
           (wBlacks     / total) * blacks     * kEvPerUnit
