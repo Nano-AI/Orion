@@ -14,6 +14,13 @@ how a defect got past every test — which is usually the more useful half.
 
 | File | What it is |
 |---|---|
+| `2026-09-28-verification.md` | Integrated post-merge build and nine passing gates, including the initial agent fixture failure, its correction, and memory limits. |
+| `2026-09-28-memory-retention.md` | Reduced-resolution controlled comparison of disabled GPU output release and idle pool shrink; export output regression and coverage. |
+| `2026-09-28-repository-cleanup.md` | Confirmed generated artifacts removed; originals, sidecars and website assets checked. |
+| `2026-09-28-masking-audit.md` | Eight ranked, source-traced mask correctness/performance findings and coverage limits. |
+| `2026-09-28-desktop-io-audit.md` | Nine ranked desktop, sidecar, batch and library findings; five pure Swift probes plus post-upstream source revalidation. |
+| `2026-09-28-engine-io-audit.md` | Engine file, HDR and C facade findings with evidence and untested failure paths. |
+| `2026-09-28-lightroom-baseline.md` | Source-backed comparison criteria and measurement plan; no invented Lightroom benchmark result. |
 | `2026-09-24-compare-overwrites-color.md` | Old installed app reproduced overwriting saved color edits when Compare opens; reinstalled #271 fix preserves them. Recovery limits recorded. |
 | `2026-09-15-engine-ui-audit.md` | Paired fusion optimization, desktop interaction fixes, nine-gate results and remaining exposure, memory and UI-coverage gaps (#271). |
 | `2026-09-15-website-audit.md` | Website interaction/fallback bugs, responsive polish and local browser verification on `web/site-audit-polish`. |
