@@ -1,5 +1,11 @@
 # Orion — session history
 
+## Recent-session row archived 2026-09-28 (batch safety checkpoint)
+
+| Date | What landed |
+|---|---|
+| 2026-09-20c | **The socket surface retired, its inspection scavenged (#280, #281).** `AgentServer`, `orion`, the skill, transactions, `--if-rev` and `check-serve.py` removed (1517 lines); `get_stats state/region`, `get_proxy region`, `detect_faces`, composite docs from the code, `process` spec; `invert` measured working both ways. Gates 1107 / 4238 / agent 19/19 / mcp 27/27 |
+
 ## Recent-session rows archived 2026-09-28
 
 | Date | What landed |

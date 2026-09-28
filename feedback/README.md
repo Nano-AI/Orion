@@ -21,6 +21,15 @@ how a defect got past every test — which is usually the more useful half.
 | `2026-09-28-desktop-io-audit.md` | Nine ranked desktop, sidecar, batch and library findings; five pure Swift probes plus post-upstream source revalidation. |
 | `2026-09-28-engine-io-audit.md` | Engine file, HDR and C facade findings with evidence and untested failure paths. |
 | `2026-09-28-lightroom-baseline.md` | Source-backed comparison criteria and measurement plan; no invented Lightroom benchmark result. |
+| `2026-09-28-audit-coverage.md` | Exact first-party source coverage and still-open performance, RAM, UX, masking, file and Lightroom verification. |
+| `2026-09-28-controls-audit.md` | Complete read of 17 develop controls/panels; lens state/undo, curve first-tick and keyboard findings. |
+| `2026-09-28-canvas-geometry-audit.md` | Complete read of ten canvas/geometry files; spot redo, Compare sampling and histogram findings. |
+| `2026-09-28-core-shader-audit.md` | Complete read of 13 core shaders; grading luminance and optional roll-off findings, source-only. |
+| `2026-09-28-gpu-resource-audit.md` | Complete read of ten GPU/resource and pipeline files; lifetime trace and measurement limits. |
+| `2026-09-28-engine-contracts-audit.md` | Complete read of ten engine API/merge/raw/writer contract files; CFA noise and early HDR Stop findings, source-only. |
+| `2026-09-28-filter-support-audit.md` | Complete read of 23 engine filter-support files; LUT input bounds/fidelity and developer override findings, source-only. |
+| `2026-09-28-assistant-agent-audit.md` | Eight complete assistant/agent reads, seven newly counted; proposed-edit type, commit, photo identity and state/flag contract findings, source-only. |
+| `2026-09-28-batch-export-safety.md` | Batch export safety implementation and verification-pending evidence; other file-handling gaps remain open. |
 | `2026-09-24-compare-overwrites-color.md` | Old installed app reproduced overwriting saved color edits when Compare opens; reinstalled #271 fix preserves them. Recovery limits recorded. |
 | `2026-09-15-engine-ui-audit.md` | Paired fusion optimization, desktop interaction fixes, nine-gate results and remaining exposure, memory and UI-coverage gaps (#271). |
 | `2026-09-15-website-audit.md` | Website interaction/fallback bugs, responsive polish and local browser verification on `web/site-audit-polish`. |
