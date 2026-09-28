@@ -92,7 +92,6 @@ enum BatchExportProbe {
 
         var heartbeat = false
         var heartbeatScheduled = false
-        let cancelStart = DispatchTime.now().uptimeNanoseconds
         var heartbeatMS = 0.0
         var cancel = false
         let second = job("never")
@@ -100,22 +99,23 @@ enum BatchExportProbe {
             engine: engine, autosave: autosave, settings: settings, progress: { done, _ in
                 if done == 1 && !heartbeatScheduled {
                     heartbeatScheduled = true
+                    let heartbeatScheduledAt = DispatchTime.now().uptimeNanoseconds
                     Timer.scheduledTimer(withTimeInterval: 0, repeats: false) { _ in
                         Task { @MainActor in
+                            heartbeatMS = Double(DispatchTime.now().uptimeNanoseconds - heartbeatScheduledAt) / 1e6
                             heartbeat = true; cancel = true
                             let borrowed = engine.state
                             engine.edit("Blocked") { engine.exposureEv = 4 }
                             engine.undo()
                             expect(engine.state == borrowed && engine.documentEditsLocked && engine.isOpening,
                                    "UI heartbeat cannot edit the borrowed engine")
-                            heartbeatMS = Double(DispatchTime.now().uptimeNanoseconds - cancelStart) / 1e6
                         }
                     }
                 }
             }, isCanceled: { cancel })
         expect(heartbeat && canceled.canceled && canceled.written.count == 1
                && !fm.fileExists(atPath: second.destination.path), "main heartbeat and Stop run before job two")
-        print("heartbeat after first job: \(heartbeatMS) ms (64x64 fixture)")
+        print("post-job-one timer scheduling to main-actor heartbeat: \(heartbeatMS) ms (64x64 fixture)")
         expect(engine.state == state && historyMatches(), "cancel restores A and history")
         expect(!autosave.isDirty && !engine.batchExporting && !engine.isOpening,
                "cancel releases engine and rearms saving")
