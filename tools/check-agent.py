@@ -46,6 +46,11 @@ socket surface's mechanisms:
     that the mask is in FRAME space while a region is in DISPLAY space, and a
     turned frame makes those different axes - so a gradient aimed at the frame's
     top lands on the display's left.
+    The gate now uses tools/fixtures/mask-invert.dng, a generated 64x64
+    non-dark frame: local sample aliases can point to night photographs whose
+    black corners cannot meaningfully satisfy a relative darkening assertion.
+    Both regions must start above 0.05 and below 0.95; the same four mask
+    assertions still run through the real MCP server and GPU render.
 20. a subject matte, on a real render. Unlike 19, this one WAS broken: the
     tools never uploaded a kind-4 row's PNG, so a subject layer covered
     nothing (#285). A synthetic centre matte under a -3 EV layer must darken

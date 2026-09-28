@@ -347,7 +347,12 @@ def mask_invert(s, ctx):
     """An agent editing two photographs through these tools reported `invert`
     as broken - a radial with it set "selecting nothing". It is not, and
     nothing but a GPU render could have said so."""
-    raw = _inspect_raw(ctx)
+    # A night photograph's corner can sit below one 8-bit code, where a
+    # relative darkening assertion is meaningless. Keep both regions bright
+    # with a tiny, reproducible DNG (generator beside it); still use the real
+    # MCP -> proposal -> LibRaw -> GPU -> region-stats path.
+    raw = ctx.tmpdir / "mask-invert.dng"
+    shutil.copy2(ctx.root / "tools" / "fixtures" / raw.name, raw)
     examples = {k["name"]: k.get("example") for k in s.ask("describe_edits").get("keys", [])}
 
     def luma(region, state=None):
@@ -368,6 +373,8 @@ def mask_invert(s, ctx):
         return [luma(r, "proposed") for r in (CENTRE, CORNER)]
 
     base = [luma(r) for r in (CENTRE, CORNER)]
+    if not all(0.05 < value < 0.95 for value in base):
+        return f"mask fixture must have measurable, unclipped regions: {base}"
     plain, inverted = lumas(False), lumas(True)
     s.ask("reject_edit", path=str(raw))
 
@@ -376,6 +383,7 @@ def mask_invert(s, ctx):
     eps = 1.0 / 255.0
     if (plain[0] < base[0] * 0.5 and abs(plain[1] - base[1]) < eps
             and inverted[1] < base[1] * 0.5 and abs(inverted[0] - base[0]) < eps):
+        ctx.note = f"64x64 DNG; centre {base[0]:.4f}->{plain[0]:.4f}, corner {base[1]:.4f}->{inverted[1]:.4f}"
         return None
     return (f"as shot centre/corner {base[0]:.4f}/{base[1]:.4f}; invert false "
             f"{plain[0]:.4f}/{plain[1]:.4f} (want the centre dark, the corner "
