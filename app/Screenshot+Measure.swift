@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import Metal
 
 /// Pixels out of the engine, as pictures and as numbers.
@@ -171,6 +172,13 @@ extension Screenshot {
             rgb[i * 3 + 2] = Float(pixels[i * 4 + 2])
         }
         return RegionStats.stats(rgb: rgb, width: rw, height: rh)
+    }
+
+    /// The same numbers over a written file, read back through ImageIO.
+    static func regionStats(ofFile path: String, region: CGRect) -> RegionStats.Stats? {
+        guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        return regionStats(of: image, region: region)
     }
 
     /// The same numbers over a `CGImage`, which is what the analysis render

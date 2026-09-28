@@ -101,7 +101,7 @@ enum HdrMergeCLI {
         FileHandle.standardError.write(Data(String(
             format: "orion: merged %d frames into %@ (%.1f MB) in %.0f ms\n",
             frames.count, (output as NSString).lastPathComponent,
-            Double(bytes ?? 0) / 1_048_576.0, ms).utf8))
+            Double(bytes) / 1_048_576.0, ms).utf8))
         exit(0)
     }
 }

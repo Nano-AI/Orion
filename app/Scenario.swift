@@ -152,7 +152,10 @@ import SwiftUI
 ///                                       `preview` (the quarter-linear graph a
 ///                                       drag renders on) or `analysis` (the
 ///                                       picture handed to Vision, which
-///                                       nothing on screen ever shows)
+///                                       nothing on screen ever shows).
+///                                       A path (anything with a `/`) reads
+///                                       that written file instead, so a
+///                                       region of an export can be asserted
 ///     control <name> <op> <value>       what a control *holds*, not what the
 ///                                       picture looks like. For buttons that
 ///                                       write several fields, where "the
@@ -188,7 +191,13 @@ import SwiftUI
 ///                                       Engine.export the panel calls.
 ///                                       depth=8|16, sharpen=none|screen|print,
 ///                                       metadata=all|nolocation|none,
-///                                       size=<longest edge in px>
+///                                       size=<longest edge in px>,
+///                                       watermark=on (the scenario's own mark,
+///                                       never the photographer's saved one)
+///     watermark text <words...>         the scenario's mark (#284): its text,
+///     watermark svg <path>              or an SVG file's shape;
+///     watermark place <anchor>|diagonal topLeft ... bottomRight, or diagonal;
+///     watermark opacity|size|span|margin <n>  and its tunables
 ///     probe <path> <property> <name>    read a written file back and record
 ///                                       depth, gps, iptclocation or acutance
 ///                                       under <name>, for `expect`

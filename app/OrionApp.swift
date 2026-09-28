@@ -234,6 +234,9 @@ struct Editor: View {
     /// the toolbar (`+Chrome`) and the Photo menu (`+Commands`), and the
     /// settings are read by both `exportFile` and `runBatchExport` (`+Files`).
     @State var exportSettings = ExportSettings()
+    /// The one saved watermark (#284). Read from Application Support at launch,
+    /// so its switch in the Export panel survives a relaunch.
+    @State var watermark = Watermark()
     @State var showingExport = false
     @State var library = Library()
     /// Not `private`: `findMatte` in `DevelopPanels+Mask.swift` needs it, because a
@@ -326,6 +329,7 @@ struct Editor: View {
         .onDisappear { teardown() }
         .sheet(isPresented: $showingExport) {
             ExportPanel(settings: exportSettings,
+                        watermark: watermark,
                         sourceWidth: engine.imageWidth,
                         sourceHeight: engine.imageHeight,
                         measure: {
@@ -337,8 +341,13 @@ struct Editor: View {
                                     sourceHeight: engine.imageHeight),
                                 space: exportSettings.space.code,
                                 depth: exportSettings.effectiveDepth.rawValue,
-                                sharpen: exportSettings.sharpening.rawValue)
+                                sharpen: exportSettings.sharpening.rawValue,
+                                watermark: WatermarkRaster.mask(
+                                    for: watermark, settings: exportSettings,
+                                    sourceWidth: engine.imageWidth,
+                                    sourceHeight: engine.imageHeight))
                         },
+                        preview: { engine.watermarkPreview(watermark) },
                         onExport: { showingExport = false; exportFile() },
                         onCancel: { showingExport = false })
         }

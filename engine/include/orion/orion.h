@@ -645,6 +645,19 @@ typedef struct OrionExportOptions {
                               * caller's default — see OrionMetadata          */
     int32_t  bit_depth;      /* OrionBitDepth                                 */
     int32_t  sharpen;        /* OrionSharpen                                  */
+
+    /* A watermark, as a coverage mask over the whole output frame: 8-bit gray,
+     * row-major, tightly packed, 0 leaves the pixel and 255 replaces it with
+     * watermark_rgb. Opacity is already baked into the values.
+     *
+     * NULL means no watermark, so a caller that zeroes the struct gets none.
+     * The mask need not match the output size exactly: it is stretched over
+     * the frame after the resize, so a rounding pixel either way is invisible.
+     * watermark_rgb is sRGB, 0..1. See DECISIONS #284. */
+    const uint8_t* watermark_mask;
+    uint32_t watermark_width;
+    uint32_t watermark_height;
+    float    watermark_rgb[3];
 } OrionExportOptions;
 
 /* ── HDR merge ─────────────────────────────────────────────────────────────

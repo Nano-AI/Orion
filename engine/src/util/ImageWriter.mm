@@ -285,20 +285,6 @@ CGImageRef makeImage(const std::uint16_t* rgba, std::uint32_t width,
     return image;
 }
 
-/// Resizes and converts, or returns nullptr when neither is needed.
-///
-/// Both in one pass, because both are a draw into a bitmap context and doing
-/// them separately would resample twice.
-///
-/// Sixteen bits per component, not eight. It used to be eight, which quietly
-/// undid the 16-bit output path for every export that asked for a smaller
-/// image — the depth survived exactly as far as the first resize.
-///
-/// Resampling happens in CoreGraphics rather than on the GPU: export is not on
-/// the interaction path, and a correctly filtered downscale matters more here
-/// than shaving milliseconds. The conversion is ColorSync's, for the reason
-/// CLAUDE.md gives — a mature implementation beats a hand-rolled one, and a
-/// chromatic adaptation typed in by hand is a cast waiting to happen.
 /// Quantises to eight bits per component, at the same size and in the same
 /// space. A straight redraw, no resampling.
 ///
@@ -327,7 +313,53 @@ CGImageRef quantiseToEight(CGImageRef source, ColorSpace target) {
     return out;
 }
 
-/// Resizes, converts and sharpens, or returns nullptr when none is needed.
+/// Blends the watermark's one color through its coverage mask, over the whole
+/// frame of `ctx`.
+///
+/// Porter and Duff's "over" with the mask as alpha: `ctx` clipped to the mask
+/// and filled, which is `m * rgb + (1 - m) * dst` in the file's own encoding.
+/// The mask is stretched over `(0, 0, nw, nh)`, so if the app rendered it a
+/// rounding pixel off the output size CoreGraphics resamples it invisibly and
+/// neither side has to know the other's arithmetic. The color is stated in
+/// sRGB and ColorSync puts it into the target space, so a neutral gray stays
+/// neutral in Display P3 and Adobe RGB as well. DECISIONS #284.
+///
+/// Returns false rather than throwing, so the caller can release its context
+/// before it throws.
+bool drawWatermark(CGContextRef ctx, std::size_t nw, std::size_t nh,
+                   const Watermark& wm) {
+    CFHolder<CFDataRef> bytes(CFDataCreate(
+        nullptr, wm.mask, static_cast<CFIndex>(std::size_t(wm.width) * wm.height)));
+    if (!bytes) return false;
+    CFHolder<CGDataProviderRef> provider(CGDataProviderCreateWithCFData(bytes.ref));
+
+    // DeviceGray with no alpha, not CGImageMaskCreate: a gray image used as a
+    // clip means 255 paints, where an image mask means the opposite.
+    CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
+    CFHolder<CGImageRef> mask(CGImageCreate(
+        wm.width, wm.height, 8, 8, wm.width, gray,
+        static_cast<CGBitmapInfo>(kCGImageAlphaNone), provider.ref, nullptr,
+        true, kCGRenderingIntentDefault));
+    CGColorSpaceRelease(gray);
+    if (!mask) return false;
+
+    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    const CGFloat components[4] = {wm.rgb[0], wm.rgb[1], wm.rgb[2], 1.0};
+    CFHolder<CGColorRef> color(CGColorCreate(srgb, components));
+    CGColorSpaceRelease(srgb);
+
+    const CGRect frame = CGRectMake(0, 0, static_cast<CGFloat>(nw), static_cast<CGFloat>(nh));
+    CGContextSaveGState(ctx);
+    CGContextSetInterpolationQuality(ctx, kCGInterpolationHigh);
+    CGContextClipToMask(ctx, frame, mask.ref);
+    CGContextSetFillColorWithColor(ctx, color.ref);
+    CGContextFillRect(ctx, frame);
+    CGContextRestoreGState(ctx);
+    return true;
+}
+
+/// Resizes, converts, sharpens and watermarks, or returns nullptr when none is
+/// needed.
 ///
 /// ⚠️ **The order is the feature.** Resample, then sharpen, then quantise.
 /// Fraser's multipass model puts output sharpening after the image reaches its
@@ -348,24 +380,34 @@ CGImageRef quantiseToEight(CGImageRef source, ColorSpace target) {
 /// than shaving milliseconds. The conversion is ColorSync's, for the reason
 /// CLAUDE.md gives — a mature implementation beats a hand-rolled one, and a
 /// chromatic adaptation typed in by hand is a cast waiting to happen.
-CGImageRef convert(CGImageRef source, std::uint32_t maxDimension, ColorSpace target,
-                   BitDepth depth, Sharpen sharpen) {
+///
+/// The watermark goes on after the sharpening, so the mark's own edge is never
+/// given a halo, and before the quantise, like everything else here.
+CGImageRef convert(CGImageRef source, const ExportOptions& options) {
+    const std::uint32_t maxDimension = options.maxDimension;
+    const ColorSpace target = options.space;
+    const BitDepth depth = options.depth;
+    const Sharpen sharpen = options.sharpen;
+
     const std::size_t w = CGImageGetWidth(source);
     const std::size_t h = CGImageGetHeight(source);
     const std::size_t longest = std::max(w, h);
     const bool resizing = maxDimension != 0 && longest > maxDimension;
     const bool sharpening = sharpen != Sharpen::None;
+    // Treated like sharpening: it needs the pixels in a context, so it takes
+    // neither of the two shortcuts below.
+    const bool marking = options.watermark.active();
 
-    // Nothing to resample, nothing to convert, nothing to sharpen and the depth
-    // is already what the caller asked for.
-    if (!resizing && !sharpening && target == ColorSpace::Srgb
+    // Nothing to resample, nothing to convert, nothing to sharpen or mark and
+    // the depth is already what the caller asked for.
+    if (!resizing && !sharpening && !marking && target == ColorSpace::Srgb
         && depth == BitDepth::Sixteen) {
         return nullptr;
     }
 
     // Eight bits and nothing else to do: quantise the source directly rather
     // than round-tripping it through a full-size sixteen-bit redraw.
-    if (!resizing && !sharpening && target == ColorSpace::Srgb) {
+    if (!resizing && !sharpening && !marking && target == ColorSpace::Srgb) {
         return quantiseToEight(source, target);
     }
 
@@ -395,6 +437,11 @@ CGImageRef convert(CGImageRef source, std::uint32_t maxDimension, ColorSpace tar
             unsharpMask(data, nw, nh, CGBitmapContextGetBytesPerRow(ctx),
                         unsharpFor(sharpen));
         }
+    }
+
+    if (marking && !drawWatermark(ctx, nw, nh, options.watermark)) {
+        CGContextRelease(ctx);
+        throw std::runtime_error("could not draw watermark");
     }
 
     CGImageRef scaled = CGBitmapContextCreateImage(ctx);
@@ -427,8 +474,7 @@ void writeImage(const std::string& path, const std::uint16_t* rgba,
                 const ExportOptions& options) {
     @autoreleasepool {
         CFHolder<CGImageRef> full(makeImage(rgba, width, height, bytesPerRow));
-        CFHolder<CGImageRef> scaled(convert(full.ref, options.maxDimension, options.space,
-                                            options.depth, options.sharpen));
+        CFHolder<CGImageRef> scaled(convert(full.ref, options));
         CGImageRef image = scaled ? scaled.ref : full.ref;
 
         NSURL* url = [NSURL fileURLWithPath:@(path.c_str())];
@@ -452,8 +498,7 @@ std::size_t encodedSize(const std::uint16_t* rgba,
                         std::size_t bytesPerRow, const ExportOptions& options) {
     @autoreleasepool {
         CFHolder<CGImageRef> full(makeImage(rgba, width, height, bytesPerRow));
-        CFHolder<CGImageRef> scaled(convert(full.ref, options.maxDimension, options.space,
-                                            options.depth, options.sharpen));
+        CFHolder<CGImageRef> scaled(convert(full.ref, options));
         CGImageRef image = scaled ? scaled.ref : full.ref;
 
         // To memory, not to a file. An estimate from bytes-per-pixel was off by

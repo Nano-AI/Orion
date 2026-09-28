@@ -233,7 +233,11 @@ enum Screenshot {
 
         // The export sheet is not reachable from the editor's own hierarchy in
         // a still, so it is rendered on its own.
-        if o.scene == "export" || o.scene == "export-tail" {
+        if o.scene == "watermark-editor" { renderWatermarkEditor(engine, o) }
+        if o.scene == "export" || o.scene == "export-tail" || o.scene == "export-watermark" {
+            // Never the photographer's saved mark: a still that changed with
+            // what is in Application Support would be no reference at all.
+            let mark = o.scene == "export-watermark" ? sampleWatermark() : Watermark(url: nil)
             let settings = ExportSettings()
             settings.quality = 0.82
             settings.size = .custom
@@ -242,7 +246,10 @@ enum Screenshot {
             let measured = engine.exportedSize(
                 format: settings.format.code, quality: Float(settings.quality),
                 maxDimension: settings.longestEdge(sourceWidth: engine.imageWidth,
-                                                   sourceHeight: engine.imageHeight))
+                                                   sourceHeight: engine.imageHeight),
+                watermark: WatermarkRaster.mask(for: mark, settings: settings,
+                                                sourceWidth: engine.imageWidth,
+                                                sourceHeight: engine.imageHeight))
             settings.measuredBytes = measured
 
             // Captured, not read back off the settings the panel is about to
@@ -253,15 +260,17 @@ enum Screenshot {
                 "orion: estimate \(estimate) bytes, measured \(measured ?? -1) bytes\n".utf8))
 
             let panel = ExportPanel(settings: settings,
+                                    watermark: mark,
                                     sourceWidth: engine.imageWidth,
                                     sourceHeight: engine.imageHeight,
                                     measure: { measured },
+                                    preview: { nil },
                                     onExport: {}, onCancel: {})
                 .preferredColorScheme(.dark)
 
             let sheetSize = CGSize(width: 380, height: 520)
             guard let sheet = render(panel, size: sheetSize,
-                                     scrolledToBottom: o.scene == "export-tail") else {
+                                     scrolledToBottom: o.scene != "export") else {
                 fail("the export panel produced no image")
             }
             do { try sheet.write(to: URL(fileURLWithPath: o.output)) }

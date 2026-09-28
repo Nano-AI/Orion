@@ -76,7 +76,7 @@ extension BatchExport {
             FileHandle.standardError.write(Data(String(
                 format: "  %-24@ %7.1f KB\n",
                 url.lastPathComponent as NSString,
-                Double(bytes ?? 0) / 1024.0).utf8))
+                Double(bytes) / 1024.0).utf8))
         }
         for (url, why) in outcome.failed {
             FileHandle.standardError.write(Data(
@@ -99,7 +99,11 @@ extension BatchExport {
     /// Both look plausible on a contact sheet, which is why the order is
     /// spelled out here rather than left to the caller.
     @MainActor
+    ///
+    /// `watermark` is nil from the command line, which exports with default
+    /// settings and never reads the photographer's saved mark (#284).
     static func run(jobs: [Job], engine: Engine, settings: ExportSettings,
+                    watermark: Watermark? = nil,
                     progress: @escaping (Int, Int) -> Void = { _, _ in },
                     isCanceled: @escaping () -> Bool = { false }) -> Outcome {
         run(jobs,
@@ -122,7 +126,14 @@ extension BatchExport {
                     space: settings.space.code,
                     metadata: settings.metadata.rawValue,
                     depth: settings.effectiveDepth.rawValue,
-                    sharpen: settings.sharpening.rawValue)
+                    sharpen: settings.sharpening.rawValue,
+                    // Per photograph: a batch mixes portrait and landscape,
+                    // and the mask is drawn at each one's own output size.
+                    watermark: watermark.flatMap {
+                        WatermarkRaster.mask(for: $0, settings: settings,
+                                             sourceWidth: engine.imageWidth,
+                                             sourceHeight: engine.imageHeight)
+                    })
             },
             progress: progress,
             isCanceled: isCanceled)

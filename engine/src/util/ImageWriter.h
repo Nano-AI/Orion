@@ -44,6 +44,21 @@ enum class BitDepth { Eight, Sixteen };
 /// Fraser's, the amounts are ours and are listed in `research/UNSOURCED.md`.
 enum class Sharpen { None, Screen, Print };
 
+/// A one-color mark, described entirely by where it covers.
+///
+/// The app lays the text or SVG out and renders it to this mask at the output
+/// size; the writer only blends `rgb` through it (Porter-Duff "over", see
+/// `research/watermark.md`). Borrowed, not owned: the pointer must outlive the
+/// write. A null `mask` is no watermark. DECISIONS #284.
+struct Watermark {
+    const std::uint8_t* mask = nullptr;  ///< 8-bit coverage, row-major, packed
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    float rgb[3] = {0.5f, 0.5f, 0.5f};   ///< sRGB, 0..1
+
+    [[nodiscard]] bool active() const { return mask != nullptr && width > 0 && height > 0; }
+};
+
 struct ExportOptions {
     ImageFormat format = ImageFormat::Jpeg;
     /// JPEG only, 0..1. Ignored by PNG and TIFF, which are lossless.
@@ -76,6 +91,11 @@ struct ExportOptions {
 
     /// XMP rating, 0-5, written as the EXIF user rating. Negative writes none.
     int rating = -1;
+
+    /// Drawn after the resize and the sharpening, so it is crisp at every size
+    /// and is never sharpened itself. Last in the struct so the designated
+    /// initializers elsewhere keep compiling.
+    Watermark watermark;
 };
 
 /// Writes 16-bit RGBA samples, whatever depth the file ends up at. Throws

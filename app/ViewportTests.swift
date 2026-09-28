@@ -182,6 +182,11 @@ enum ViewportTests {
         testExportEnumsMatchTheCFacade()
         testExportDefaults()
         testSizeEstimateFollowsTheDepth()
+        testWatermarkAnchorsInsideTheMargin()
+        testWatermarkDiagonalFollowsTheFrame()
+        testWatermarkWithNothingToDrawIsNoMask()
+        testWatermarkMaskCarriesOpacityAndPlace()
+        testWatermarkRoundTripsThroughItsFile()
 
         testMergeEligibility()
         testMergeDefaultReference()

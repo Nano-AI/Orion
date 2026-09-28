@@ -20,6 +20,20 @@ extension Scenario {
             guard args.count >= 2 else { throw Bad(what: "measure needs a region and a name") }
             let r = args[0].split(separator: ",").compactMap { Double($0) }
             guard r.count == 4 else { throw Bad(what: "region is x,y,w,h") }
+            // A written file, read back - what an export put where (#284).
+            if args.count > 2, args[2].contains("/") {
+                guard let s = Screenshot.regionStats(
+                        ofFile: args[2], region: CGRect(x: r[0], y: r[1], width: r[2], height: r[3]))
+                else { throw Bad(what: "could not read \(args[2])") }
+                readings[args[1]] = Reading(luma: s.luma, saturation: s.saturation, hue: s.hue,
+                                            hueStrength: s.hueStrength, red: s.red, green: s.green,
+                                            blue: s.blue, clippedHigh: s.clippedHigh,
+                                            clippedLow: s.clippedLow, shading: s.shading)
+                say(String(format: "  %-22@ luma %.4f  sat %.4f  rgb %.3f/%.3f/%.3f  (%@)\n",
+                           args[1] as NSString, s.luma, s.saturation, s.red, s.green, s.blue,
+                           (args[2] as NSString).lastPathComponent as NSString))
+                return true
+            }
             let surface: Screenshot.Surface
             switch args.count > 2 ? args[2] : "output" {
             case "output": surface = .output
@@ -188,6 +202,7 @@ extension Scenario {
             guard let path = args.first else { throw Bad(what: "export needs a path") }
             let settings = ExportSettings()
             var longestEdge: UInt32 = 0
+            var marked = false
             settings.format = path.hasSuffix(".png") ? .png
                             : (path.hasSuffix(".tif") || path.hasSuffix(".tiff")) ? .tiff
                             : .jpeg
@@ -208,6 +223,8 @@ extension Scenario {
                 case ("size", let v):
                     guard let px = UInt32(v) else { throw Bad(what: "size takes pixels") }
                     longestEdge = px
+                case ("watermark", "on"):     marked = true
+                case ("watermark", "off"):    marked = false
                 default: throw Bad(what: "unknown export option \(option)")
                 }
             }
@@ -217,8 +234,13 @@ extension Scenario {
                     maxDimension: longestEdge,
                     metadata: settings.metadata.rawValue,
                     depth: settings.effectiveDepth.rawValue,
-                    sharpen: settings.sharpening.rawValue)
+                    sharpen: settings.sharpening.rawValue,
+                    // Through the same `WatermarkRaster.mask` the panel's
+                    // export calls, so the size the mask is drawn at is the
+                    // one `ExportSettings` predicts.
+                    watermark: marked ? try scenarioMask(engine, longestEdge) : nil)
             }
+            catch let bad as Bad { throw bad }
             catch { throw Bad(what: "export failed — \(error.localizedDescription)") }
             let size = (try? FileManager.default
                 .attributesOfItem(atPath: path)[.size] as? Int) ?? nil
@@ -299,10 +321,72 @@ extension Scenario {
         case "print":
             say("  " + args.joined(separator: " ") + "\n")
 
+        case "watermark":
+            try configureWatermark(args)
+
         default:
             return false
         }
         return true
+    }
+
+    /// The scenario's own mark, set by the `watermark` verb. Never read from
+    /// or written to disk: a scenario that picked up the photographer's saved
+    /// mark would pass or fail by what is in their Application Support.
+    static var watermark: Watermark = {
+        let m = Watermark(url: nil)
+        m.enabled = true
+        return m
+    }()
+
+    private static func configureWatermark(_ args: [String]) throws {
+        guard let what = args.first else { throw Bad(what: "watermark needs a setting") }
+        let rest = Array(args.dropFirst())
+        func number() throws -> Double {
+            guard let v = rest.first.flatMap(Double.init) else {
+                throw Bad(what: "watermark \(what) takes a number")
+            }
+            return v
+        }
+        switch what {
+        case "text":
+            watermark.content = .text(rest.joined(separator: " "),
+                                      fontFamily: "Helvetica Neue", bold: false)
+        case "svg":
+            guard let path = rest.first,
+                  let data = FileManager.default.contents(atPath: path) else {
+                throw Bad(what: "watermark svg needs a readable file")
+            }
+            watermark.content = .svg(data, name: (path as NSString).lastPathComponent)
+        case "place":
+            if rest.first == "diagonal" { watermark.placement = .diagonal }
+            else if let a = rest.first.flatMap(Watermark.Anchor.init(rawValue:)) {
+                watermark.placement = .anchor(a)
+            } else { throw Bad(what: "watermark place takes an anchor or diagonal") }
+        case "opacity": watermark.opacity = try number()
+        case "size":    watermark.size = try number()
+        case "span":    watermark.span = try number()
+        case "margin":  watermark.margin = try number()
+        default: throw Bad(what: "watermark takes text, svg, place, opacity, size, span or margin")
+        }
+    }
+
+    /// The mask for a scenario export, sized the way the panel sizes one: a
+    /// `size=` is a custom longest edge, exactly as typed into the panel.
+    private static func scenarioMask(_ engine: Engine,
+                                     _ longestEdge: UInt32) throws -> WatermarkRaster.Mask {
+        let w = engine.imageWidth, h = engine.imageHeight
+        let settings = ExportSettings()
+        if longestEdge > 0, longestEdge < max(w, h) {
+            settings.size = .custom
+            if w >= h { settings.setCustom(width: longestEdge, sourceWidth: w, sourceHeight: h) }
+            else { settings.setCustom(height: longestEdge, sourceWidth: w, sourceHeight: h) }
+        }
+        guard let mask = WatermarkRaster.mask(for: watermark, settings: settings,
+                                              sourceWidth: w, sourceHeight: h) else {
+            throw Bad(what: "watermark=on, but the scenario's mark draws nothing")
+        }
+        return mask
     }
 
     static func read(_ engine: Engine, _ region: CGRect,

@@ -29,7 +29,7 @@ extension Screenshot {
         case "versions":
             return .presets
         case "mask", "local", "mask-linear", "mask-linear-feathered",
-             "mask-radial", "mask-off", "brush", "range", "color", "layers", "sky":
+             "mask-radial", "mask-off", "brush", "range", "layers", "sky":
             return .mask
         default:
             return .light
@@ -368,5 +368,32 @@ extension Screenshot {
         default:
             break
         }
+    }
+
+    // ── The watermark (#284) ────────────────────────────────────────────────
+
+    /// The mark both watermark scenes show: the developer's name, bottom right.
+    static func sampleWatermark() -> Watermark {
+        let m = Watermark(url: nil)
+        m.enabled = true
+        m.content = .text("Dhruv Arora", fontFamily: "Helvetica Neue", bold: false)
+        return m
+    }
+
+    /// The editor sheet, with its preview rendered before the still is taken:
+    /// the real one arrives on a debounce that a still never waits for.
+    static func renderWatermarkEditor(_ engine: Engine, _ o: Options) -> Never {
+        let mark = sampleWatermark()
+        let preview = engine.watermarkPreview(mark)
+        let panel = WatermarkPanel(mark: mark, preview: { preview },
+                                   initial: preview, onDone: {})
+            .preferredColorScheme(.dark)
+        guard let sheet = render(panel, size: CGSize(width: 400, height: 720)) else {
+            fail("the watermark editor produced no image")
+        }
+        do { try sheet.write(to: URL(fileURLWithPath: o.output)) }
+        catch { fail("could not write \(o.output)") }
+        FileHandle.standardError.write(Data("orion: wrote \(o.output) (watermark)\n".utf8))
+        exit(0)
     }
 }
