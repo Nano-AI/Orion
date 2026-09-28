@@ -69,6 +69,7 @@ one every Mac user already understands.
 | **Bit depth** | ✅ 8-bit · 16-bit, TIFF and PNG only, greyed out for JPEG *(2026-08-01)* |
 | **Metadata** | ✅ Keep all · Strip location · Strip everything |
 | **Output sharpening** | ✅ None · Screen · Print *(Fraser & Schewe; the amounts are in `UNSOURCED.md` §2)* |
+| **Watermark** | ✅ One saved mark, text or SVG, switched on here and edited in its own sheet: 3x3 anchor or diagonal, size, margin, opacity, one neutral gray *(2026-09-27, #284; Porter & Duff 1984, `research/watermark.md`)* |
 
 **Live estimate** matters more than it sounds: quality sliders are meaningless
 without one, which is exactly why Preview shows it.
