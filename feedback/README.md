@@ -29,6 +29,12 @@ how a defect got past every test — which is usually the more useful half.
 | `2026-09-28-engine-contracts-audit.md` | Complete read of ten engine API/merge/raw/writer contract files; CFA noise and early HDR Stop findings, source-only. |
 | `2026-09-28-filter-support-audit.md` | Complete read of 23 engine filter-support files; LUT input bounds/fidelity and developer override findings, source-only. |
 | `2026-09-28-assistant-agent-audit.md` | Eight complete assistant/agent reads, seven newly counted; proposed-edit type, commit, photo identity and state/flag contract findings, source-only. |
+| `2026-09-28-pyramid-shader-audit.md` | Complete read of 26 dehaze, local contrast and fusion shaders; two CPU reduction cache-invalidation findings, source-only. |
+| `2026-09-28-detail-shader-audit.md` | Complete read of 23 detail and imaging shaders; RCD Bayer border and saturated-grain findings, source-only. |
+| `2026-09-28-remaining-surface-audit.md` | Remaining app, generated-token and website source reads; replay, watermark, accessibility and stale-site findings, source-only. |
+| `2026-09-28-build-tooling-audit.md` | Twelve build/packaging files read separately from product counts; output deletion, sample link, macOS floor and shader dependency findings, source-only. |
+| `2026-09-28-app-complete-audit.md` | Complete read of the remaining 21 targeted app files; Trash, spot diff, menu count, preset deletion and failed selection findings, source-only. |
+| `2026-09-28-engine-complete-audit.md` | Complete read of the remaining 15 targeted engine files; LUT lifecycle, tone-curve input and writer lifetime findings, source-only. |
 | `2026-09-28-batch-export-safety.md` | Batch export safety implementation and verification-pending evidence; other file-handling gaps remain open. |
 | `2026-09-24-compare-overwrites-color.md` | Old installed app reproduced overwriting saved color edits when Compare opens; reinstalled #271 fix preserves them. Recovery limits recorded. |
 | `2026-09-15-engine-ui-audit.md` | Paired fusion optimization, desktop interaction fixes, nine-gate results and remaining exposure, memory and UI-coverage gaps (#271). |
