@@ -22,6 +22,18 @@ final class EditHistory {
     private(set) var entries: [Entry] = []
     private(set) var position = -1
 
+    struct Checkpoint {
+        let entries: [Entry]
+        let position: Int
+    }
+
+    var checkpoint: Checkpoint { Checkpoint(entries: entries, position: position) }
+
+    func restore(_ checkpoint: Checkpoint) {
+        entries = checkpoint.entries
+        position = checkpoint.position
+    }
+
     /// Drags within this window collapse into the previous entry.
     private let coalesceWindow: TimeInterval = 0.6
 

@@ -157,14 +157,7 @@ extension Editor {
                 // them — and differ only in whether the result is a sidecar or
                 // a file.
                 HStack(spacing: 6) {
-                    if let p = batchProgress {
-                        Text("Exporting \(p.done) of \(p.total)…")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Palette.dim)
-                        Button("Stop") { batchCancelled = true }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                    } else {
+                    if batchProgress == nil {
                         // ⚠ Guarded on `exportTargets`, not on `photos`. A
                         // folder of nothing but rejects has photographs in it
                         // and nothing this button would write, and an enabled

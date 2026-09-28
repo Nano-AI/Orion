@@ -686,6 +686,7 @@ final class Engine {
     /// Nil keeps ordinary Compare's as-shot baseline.
     var comparisonReference: DevelopState?
     var documentEditsLocked = false
+    var batchExporting = false
 
     /// `captureOriginal` renders twice, and every render asks whether the held
     /// original is still good. Without this it would ask itself, forever.

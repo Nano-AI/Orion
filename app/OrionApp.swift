@@ -53,6 +53,9 @@ struct OrionApp: App {
         if let options = Screenshot.options(CommandLine.arguments) {
             Screenshot.run(options)
         }
+        if CommandLine.arguments.contains("--batch-safety") {
+            BatchExportProbe.runCommandLine()
+        }
         // A real batch, so the feature is run rather than only unit-tested.
         if CommandLine.arguments.contains("--batch-export") {
             BatchExport.runCommandLine(CommandLine.arguments)
@@ -273,7 +276,17 @@ struct Editor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
+            toolbar.disabled(engine.batchExporting)
+                .allowsHitTesting(!engine.batchExporting)
+            if let p = batchProgress {
+                HStack {
+                    Spacer()
+                    Text("Exporting \(p.done) of \(p.total)…")
+                    Button("Stop") { batchCancelled = true }
+                        .buttonStyle(.bordered).controlSize(.small)
+                    Spacer()
+                }.padding(8)
+            }
             Rectangle().fill(Palette.line).frame(height: 1)
 
             if mode == .cull {
@@ -288,16 +301,21 @@ struct Editor: View {
                             onOpen: { openFromGallery($0) },
                             onTrash: { confirmTrash($0) },
                             onTrashRejected: { confirmTrashRejected() })
+                    .disabled(engine.batchExporting)
+                    .allowsHitTesting(!engine.batchExporting)
             } else {
                 HStack(spacing: 0) {
-                    canvas
+                    canvas.disabled(engine.batchExporting)
+                        .allowsHitTesting(!engine.batchExporting)
                     Rectangle().fill(Palette.line).frame(width: 1)
-                    tools.frame(width: 364)
+                    tools.frame(width: 364).allowsHitTesting(!engine.batchExporting)
                 }
 
                 if !library.photos.isEmpty {
                     Filmstrip(library: library, selected: current, onSelect: load,
                               onMerge: askHdrMerge)
+                        .disabled(engine.batchExporting)
+                        .allowsHitTesting(!engine.batchExporting)
                 }
             }
         }

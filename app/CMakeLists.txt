@@ -47,6 +47,8 @@ set(SWIFT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/SyncSettings.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/BatchExportDriver.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/BatchExportSession.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/BatchExportProbe.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeDriver.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergeFlow.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/HdrMergePanel.swift

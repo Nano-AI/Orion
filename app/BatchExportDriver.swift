@@ -108,9 +108,13 @@ extension BatchExport {
                     isCanceled: @escaping () -> Bool = { false }) -> Outcome {
         run(jobs,
             openAndRestore: { url in
-                try engine.open(path: url.path)
-                if let saved = Sidecar.read(for: url)?.develop {
-                    engine.restore(encoded: saved)
+                let saved = try Sidecar.readDevelopForExport(for: url)
+                try engine.open(path: url.path, restoring: saved != nil)
+                if let saved {
+                    guard engine.restore(encoded: saved) else {
+                        throw Engine.Failure.open("The saved edits could not be read: \(url.lastPathComponent)")
+                    }
+                    try restoreRequiredMattes(photo: url, engine: engine)
                 }
             },
             exportTo: { destination in
@@ -137,6 +141,19 @@ extension BatchExport {
             },
             progress: progress,
             isCanceled: isCanceled)
+    }
+
+    @MainActor
+    static func restoreRequiredMattes(photo: URL, engine: Engine) throws {
+        engine.restoreMattes(photo: photo)
+        if let i = engine.maskComponents.indices.first(where: {
+            engine.maskComponents[$0].kind == 4 &&
+            (engine.maskComponents[$0].matteId == nil || engine.missingMattes.contains($0))
+        }) {
+            let id = engine.maskComponents[i].matteId ?? "missing identifier"
+            throw Engine.Failure.open("Mask row \(i + 1) needs a matte that could not be read: \(id)")
+        }
+        if let why = engine.lastFailure { throw Engine.Failure.open(why) }
     }
 
 }

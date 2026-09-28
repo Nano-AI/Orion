@@ -39,7 +39,8 @@ extension Editor {
     /// off the main thread, and honest about it: the panel says "working" and
     /// the rest of the interface is disabled while it does.
     func runBatchExport() {
-        guard !engine.documentEditsLocked else { return }
+        guard !engine.documentEditsLocked, !engine.isOpening, !matteRunning,
+              !library.loading, mergeCandidates == nil, !showingExport, batchProgress == nil else { return }
         // ⚠ `exportTargets`, not `photos` and not `targets`. Two rounds of the
         // same bug: it first exported the whole folder regardless of the filter,
         // so culling to Rated and pressing Export all wrote every reject
@@ -70,31 +71,29 @@ extension Editor {
             : "Choose a folder for \(targets.count) exported photos.") + rejects
         guard panel.runModal() == .OK, let folder = panel.url else { return }
 
-        // Anything owed to the open photo is written first: batch reads
-        // sidecars, and the one on screen may have edits that have not settled.
-        autosave.flush()
-
-        let ext = exportSettings.format == .jpeg ? "jpg"
-                                                 : exportSettings.format.rawValue
-        let jobs = BatchExport.plan(sources: targets,
-                                    into: folder, extension: ext)
+        guard let current else { return }
+        let ext = exportSettings.format == .jpeg ? "jpg" : exportSettings.format.rawValue
+        let jobs = BatchExport.plan(sources: targets, into: folder, extension: ext)
         batchCancelled = false
         batchProgress = (0, jobs.count)
-
         Task { @MainActor in
-            let outcome = BatchExport.run(
-                jobs: jobs, engine: engine, settings: exportSettings,
-                watermark: watermark,
-                progress: { done, total in batchProgress = (done, total) },
-                isCanceled: { batchCancelled })
-
-            batchProgress = nil
-            if outcome.failed.isEmpty { notice = outcome.summary }
-            else { message = outcome.summary }
-            // The engine is now sitting on the last photo of the batch. Put the
-            // one the photographer was looking at back, or they return to a
-            // different picture than they left.
-            if let current { load(current) }
+            defer { batchProgress = nil }
+            do {
+                let outcome = try await BatchExport.runInteractive(
+                    jobs: jobs, current: current, engine: engine, autosave: autosave,
+                    settings: exportSettings, watermark: watermark,
+                    progress: { done, total in batchProgress = (done, total) },
+                    isCanceled: { batchCancelled })
+                if outcome.failed.isEmpty { notice = outcome.summary }
+                else { message = outcome.summary }
+            } catch {
+                message = error.localizedDescription
+                if !engine.isLoaded {
+                    self.current = nil
+                    snapshots.open(photo: nil)
+                    publishCurrentPhoto()
+                }
+            }
         }
     }
 
@@ -130,6 +129,7 @@ extension Editor {
     /// it has unsaved state in memory, so writing its sidecar behind its back
     /// would be undone by the next autosave.
     func runSync() {
+        guard !engine.batchExporting, batchProgress == nil else { return }
         guard let copied else { return }
         // Same correction as the batch export: this wrote the whole folder,
         // filter and selection alike ignored, under a warning that said "every
@@ -212,6 +212,7 @@ extension Editor {
     }
 
     func openFile() {
+        guard !engine.batchExporting, batchProgress == nil else { return }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -225,6 +226,7 @@ extension Editor {
     }
 
     func openFolder() {
+        guard !engine.batchExporting, batchProgress == nil else { return }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
@@ -239,6 +241,7 @@ extension Editor {
     }
 
     func load(_ url: URL) {
+        guard !engine.batchExporting, batchProgress == nil else { return }
         // The photo being left keeps its edits. Without this, going to the next
         // frame and back threw the work away — which is the whole difference
         // between an editor and a viewer.
@@ -396,6 +399,7 @@ extension Editor {
     /// Puts the confirmation up. Nothing moves until "Move to Trash" is
     /// pressed in the alert this arms - see `runTrash`.
     func confirmTrash(_ urls: [URL]) {
+        guard !engine.batchExporting, batchProgress == nil else { return }
         guard !urls.isEmpty else { return }
         pendingTrash = urls
     }
@@ -419,6 +423,7 @@ extension Editor {
     /// list order the photographer was looking at - afterwards the trashed
     /// photographs are no longer in it to measure from.
     func runTrash() {
+        guard !engine.batchExporting, batchProgress == nil else { return }
         guard let pending = pendingTrash, !pending.isEmpty else {
             pendingTrash = nil
             return
@@ -484,6 +489,7 @@ extension Editor {
     }
 
     func exportFile() {
+        guard !engine.batchExporting, batchProgress == nil else { return }
         let panel = NSSavePanel()
         // The photo's own name, not "export": a folder of files called
         // export-1.jpg is what happens when the dialog does not offer one.

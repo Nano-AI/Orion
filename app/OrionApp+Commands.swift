@@ -305,10 +305,12 @@ extension Editor {
             // frame from the menu and forty from the strip and cannot say which
             // rule they are under.
             toggleReject: {
+                guard !engine.batchExporting else { return }
                 guard let focused, let photo else { return }
                 library.setRejected(!photo.rejected, for: library.cullScope(focused))
             },
             rate: { stars in
+                guard !engine.batchExporting else { return }
                 guard let focused else { return }
                 library.setRating(stars, for: library.cullScope(focused))
             },
@@ -336,9 +338,10 @@ extension Editor {
             selectTab: { if !engine.documentEditsLocked { tab = $0 } },
             comparing: engine.comparing,
             toggleCompare: {
+                guard !engine.batchExporting else { return }
                 engine.comparing ? engine.clearCompare() : engine.setCompare(split: 0.5)
             },
-            export: { showingExport = true },
+            export: { if !engine.batchExporting { showingExport = true } },
             exportAll: { runBatchExport() },
             // ⚠ `exportTargets`, the same list `runBatchExport` writes. Counting
             // `targets` here would put the rejects back into the title and
@@ -358,6 +361,7 @@ extension Editor {
     // MARK: The gallery's comings and goings
 
     func enterGallery() {
+        guard !engine.batchExporting else { return }
         guard !library.photos.isEmpty else { return }
         galleryFocus = current ?? library.visible.first?.url
         if let galleryFocus { library.focus(galleryFocus) }
@@ -370,6 +374,7 @@ extension Editor {
     /// stepping out of the gallery then loads the focused photograph instead
     /// of presenting a picture that is in the Trash.
     func leaveGallery() {
+        guard !engine.batchExporting else { return }
         mode = .develop
         if current == nil, let next = galleryFocus ?? library.visible.first?.url {
             load(next)
@@ -469,6 +474,7 @@ extension Editor {
 
     private func handleKey(_ event: NSEvent) -> Bool {
         guard !event.modifierFlags.contains(.command) else { return false }
+        guard !engine.batchExporting else { return true }
         let press = (characters: event.charactersIgnoringModifiers ?? "",
                      keyCode: event.keyCode)
 

@@ -158,6 +158,8 @@ final class Autosave {
         if job.url == target { saved = job.state }
     }
 
+    func isActive(for url: URL) -> Bool { target == url }
+
     /// For tests and for the panel: whether a write is owed right now.
     var isDirty: Bool { pending != nil }
 }

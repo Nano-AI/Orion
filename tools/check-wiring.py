@@ -74,7 +74,7 @@ APP = ROOT / "app"
 
 # Files that are the harness rather than the product. A call from one of these
 # is exactly the evidence that misled everybody the first time.
-HARNESS = re.compile(r"^(Screenshot|Scenario|ViewportTests|LibraryProbe)")
+HARNESS = re.compile(r"^(Screenshot|Scenario|ViewportTests|LibraryProbe|BatchExportProbe)")
 
 # symbol -> why the product must go on calling it.
 EXPECTED = {

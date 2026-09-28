@@ -45,6 +45,23 @@ struct Sidecar: Sendable {
         return result
     }
 
+    /// Export must distinguish absent edits from an unreadable payload. Keep
+    /// the existing attribute/element compatibility without silently exporting defaults.
+    static func readDevelopForExport(for photo: URL) throws -> Data? {
+        let path = url(for: photo)
+        guard FileManager.default.fileExists(atPath: path.path) else { return nil }
+        let text = try String(contentsOf: path, encoding: .utf8)
+        let parser = XMLParser(data: Data(text.utf8))
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse() else { throw CocoaError(.fileReadCorruptFile) }
+        guard let encoded = value(of: "orion:Develop", in: text) else { return nil }
+        guard let data = Data(base64Encoded: encoded),
+              (try JSONSerialization.jsonObject(with: data)) is [String: Any] else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        return data
+    }
+
     /// Reads an attribute or an element with the same name. Editors write
     /// these interchangeably, so accepting both is what makes the sidecar
     /// actually interoperable rather than nominally so.

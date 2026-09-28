@@ -13,6 +13,7 @@ extension Editor {
 
     /// The filmstrip's context-menu entry point.
     func askHdrMerge(_ urls: [URL]) {
+        guard !engine.batchExporting, batchProgress == nil else { return }
         let candidates = urls.compactMap { url -> HdrMergeFlow.Candidate? in
             guard let photo = library.photos.first(where: { $0.url == url }) else {
                 return nil

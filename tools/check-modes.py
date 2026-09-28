@@ -94,7 +94,7 @@ def run(args, problems, what):
     """Run Orion with these arguments. None on a hang, which is reported here."""
     try:
         return subprocess.run([str(ORION)] + args, capture_output=True,
-                              text=True, timeout=TIMEOUT)
+                              text=True, timeout=TIMEOUT, cwd=ROOT)
     except subprocess.TimeoutExpired:
         problems.append(
             f"{what} did not finish in {TIMEOUT}s — it is likely waiting in a "
@@ -116,6 +116,15 @@ def main():
 
     problems = []
     notes = []
+
+    # Real GUI-used orchestration: autosave, live history and main-loop Stop.
+    r = run(["--batch-safety"], problems, "--batch-safety")
+    if r is not None:
+        out = (r.stderr or "") + (r.stdout or "")
+        if r.returncode != 0 or len(CHECK_LINE.findall(out)) < 15:
+            problems.append(f"--batch-safety failed or lost its checks:\n{out}")
+        else:
+            notes.append("GUI batch safety checks passed")
 
     # --library-open
     r = run(["--library-open", str(SAMPLES)], problems, "--library-open")
