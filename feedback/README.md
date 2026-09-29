@@ -22,6 +22,13 @@ how a defect got past every test — which is usually the more useful half.
 | `2026-09-28-engine-io-audit.md` | Engine file, HDR and C facade findings with evidence and untested failure paths. |
 | `2026-09-28-lightroom-baseline.md` | Source-backed comparison criteria and measurement plan; no invented Lightroom benchmark result. |
 | `2026-09-28-audit-coverage.md` | Exact first-party source coverage and still-open performance, RAM, UX, masking, file and Lightroom verification. |
+| `2026-09-28-app-harness-audit.md` | All 40 app scene/test files read; one product-used measurement file, 39 pure harness files, and source-only harness findings. |
+| `2026-09-28-core-tests-audit.md` | Complete core GPU/math test-harness read, including oracle and fixture-safety gaps. |
+| `2026-09-28-mask-io-tests-audit.md` | Complete mask/I/O test-harness read; fixed `/tmp` fixtures and blind HDR alignment pixels are open. |
+| `2026-09-28-bench-mcp-repro-audit.md` | Benchmark, MCP test, standalone diagnostic and repro-script reads; A/B benchmark and test-oracle gaps. |
+| `2026-09-28-checker-tools-audit.md` | Remaining checker/calibration tool reads; timeout, sample-preservation and calibration-evidence gaps. |
+| `2026-09-28-config-docs-audit.md` | Six configuration and entry-document reads; dependency, proxy guidance and stale-count findings. |
+| `2026-09-28-prototype-audit.md` | Complete 1,028-line design prototype read; findings apply to the prototype, not product UI. |
 | `2026-09-28-controls-audit.md` | Complete read of 17 develop controls/panels; lens state/undo, curve first-tick and keyboard findings. |
 | `2026-09-28-canvas-geometry-audit.md` | Complete read of ten canvas/geometry files; spot redo, Compare sampling and histogram findings. |
 | `2026-09-28-core-shader-audit.md` | Complete read of 13 core shaders; grading luminance and optional roll-off findings, source-only. |
@@ -35,7 +42,7 @@ how a defect got past every test — which is usually the more useful half.
 | `2026-09-28-build-tooling-audit.md` | Twelve build/packaging files read separately from product counts; output deletion, sample link, macOS floor and shader dependency findings, source-only. |
 | `2026-09-28-app-complete-audit.md` | Complete read of the remaining 21 targeted app files; Trash, spot diff, menu count, preset deletion and failed selection findings, source-only. |
 | `2026-09-28-engine-complete-audit.md` | Complete read of the remaining 15 targeted engine files; LUT lifecycle, tone-curve input and writer lifetime findings, source-only. |
-| `2026-09-28-batch-export-safety.md` | Batch export safety implementation and verification-pending evidence; other file-handling gaps remain open. |
+| `2026-09-28-batch-export-safety.md` | Batch export safety evidence: eight gates pass; the locked desktop blocks key-window Escape proof, and other file-handling gaps remain open. |
 | `2026-09-24-compare-overwrites-color.md` | Old installed app reproduced overwriting saved color edits when Compare opens; reinstalled #271 fix preserves them. Recovery limits recorded. |
 | `2026-09-15-engine-ui-audit.md` | Paired fusion optimization, desktop interaction fixes, nine-gate results and remaining exposure, memory and UI-coverage gaps (#271). |
 | `2026-09-15-website-audit.md` | Website interaction/fallback bugs, responsive polish and local browser verification on `web/site-audit-polish`. |

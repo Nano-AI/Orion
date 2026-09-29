@@ -1,22 +1,23 @@
 # Whole-repository audit coverage — 2026-09-28
 
-Inventory of **tracked first-party source at batch source checkpoint `dc02241`**, reconciled against the dated reports in `feedback/`, one new five-file read below, and a complete read of the new 117-line `app/BatchExportSession.swift`. The one new harness, `app/BatchExportProbe.swift`, is inventoried separately. This is a coverage map, **not a completed whole-codebase audit**. A finding or a passing gate does not turn a targeted read into a full-file review. The July senior review describes a whole-repository pass but does not supply a file-by-file read map; it is valuable prior evidence, not a basis for upgrading every file below. Counts use tracked files at that checkpoint, not ignored build output or installed dependencies.
+Inventory of **tracked first-party source at `3094212`**, reconciled against the dated reports in `feedback/`, the five-file read below, and the complete read of `app/BatchExportSession.swift`. Later batch product and probe diffs were separately source-reviewed. `app/Screenshot+Measure.swift` has live product callers and is counted as product-used source; the other 39 app scene/test files are harness. This is a source coverage map, **not a completed whole-codebase behavioral audit**. A finding or a passing gate does not turn a targeted read into a full-file review. Counts exclude ignored build output and installed dependencies.
 
 | Product source | Count | Full source/logic read documented | Targeted read documented | No documented full or targeted audit read |
 |---|---:|---:|---:|---:|
-| Desktop app and bridge (`app/*.swift`, `app/Bridge.h`; excluding test/scene harnesses and `BatchExportProbe.swift`) | 96 | 96 | 0 | 0 |
+| Desktop app and bridge (`app/*.swift`, `app/Bridge.h`; excluding 39 pure test/scene harness files) | 97 | 97 | 0 | 0 |
 | Engine C++/ObjC++/headers (`engine/src`, `engine/include`) | 59 | 59 | 0 | 0 |
 | First-party Slang shaders (`engine/shaders`, including `ops`) | 64 | 64 | 0 | 0 |
 | MCP product server | 1 | 1 | 0 | 0 |
 | Website HTML/CSS/JS, excluding vendored JS | 6 | 6 | 0 | 0 |
 | Generated design-token Swift source | 1 | 1 | 0 | 0 |
-| **Total** | **227** | **227** | **0** | **0** |
+| **Total** | **228** | **228** | **0** | **0** |
 
-“Full” means a prior report explicitly says complete/full source or logic read, or this report read the entire file; it does **not** mean every behavior was tested. The desktop report names 21 complete files, the mask report names seven complete app files plus three engine/shader files, this report adds five app files, and the controls, canvas/geometry, GPU/resource, core-shader, engine-contract, filter-support, assistant/agent, pyramid-shader, detail-shader, remaining-surface, app-complete and engine-complete reports add 17, ten, ten, 13, ten, 23, seven, 26, 23, 15, 21 and 15 unique files respectively. `mcp/server.ts` and `app/AgentCLIDriver.swift` are among the desktop report's 21; the assistant report read `AgentCLIDriver.swift` again without adding to the full count. Overlaps were counted once; `Pipeline.cpp` moved from targeted to full. “Targeted” means relevant sections, call sites, or specific findings. The batch checkpoint adds one new fully read product file, `BatchExportSession.swift` (117 lines). The app-complete and engine-complete reports fully read the last 36 targeted files, including earlier targeted callers; the canvas review had already promoted `Engine+Geometry.swift` to full. The changed `HdrMergePanel.swift` guard was first read as targeted code and then included in the complete app read. Engine I/O had no explicit whole-file roster by itself; the later engine-complete report supplies the complete reads for its remaining cited implementations. The 2026-09-15 website report checked interactions and fallback behavior; the new remaining-surface report read all six product web source files, except that the embedded base64 map bytes were not decoded or visually reviewed. The generated Swift tokens and two generator inputs were inspected, but generated-byte reproducibility was not run. More detail: the dated audit reports in this directory.
+“Full” means a prior report explicitly says complete/full source or logic read, or this report read the entire file; it does **not** mean every behavior was tested. The desktop and mask reports, the five-file read below, and the controls, canvas/geometry, GPU/resource, core-shader, engine-contract, filter-support, assistant/agent, pyramid-shader, detail-shader, remaining-surface, app-complete and engine-complete reports supply the 227-file product roster at `dc02241`. The app-harness report then establishes that `Screenshot+Measure.swift` (322 lines) has live calls from `Engine+Render.swift`, `AgentFaces.swift` and `AgentInspect.swift`, making the product-used total **228**. This reclassifies an existing file; it is not a new tracked file. Overlapping reads count once. The website's embedded base64 map bytes were not decoded or visually reviewed, and generated-token reproducibility was not run. More detail: the dated audit reports in this directory.
 
 | Objective | Evidence now | Status / missing proof |
 |---|---|---|
-| Whole first-party source audit | 227 full, 0 targeted-only, 0 unread at the batch source checkpoint | **Source-read inventory complete; objective still open.** Tests/tooling and behavioral, performance, RAM, UX and competitor proof remain incomplete. A full-file read is not a clean bill of health. |
+| Whole first-party product-used source audit | 228 full, 0 targeted-only, 0 unread at this checkpoint | **Source-read inventory complete; objective still open.** Harness and tool source reads are now also documented below, but behavioral, performance, RAM, UX and competitor proof remain incomplete. A full-file read is not a clean bill of health. |
+| Current repository gates | Full `-j2` build and all nine gates run at `3094212`; eight pass | **Open:** `check-modes.py` fails the batch Escape monitor check on the locked desktop (49/50 focused checks pass). See `2026-09-28-batch-export-safety.md`; this does not clear source-only findings in the other reports. |
 | Latency and physical interaction | #271 measured paired fusion sweeps and 42 MP exposure p95 17.38 ms against 16 ms; preview engine timings exist | **Open.** Physical gestures, focus, cancellation and end-to-end display latency were not exhaustively measured. |
 | RAM and capacity | Controlled 1992×1330 inactive texture payload 903.1→303.5 MiB after shrink; 42 MP earlier session reached 9.51 GiB. Source audits derive ~840 MB decimal transient histogram payload and ~42 MB full-frame watermark mask at 42 MP, neither measured RSS | **Open.** Measure histogram and enabled-watermark peaks, then full-resolution active-filter peak and long-session memory. |
 | Mask and spot correctness | Eight ranked mask findings and a P1 spot redo state loss from source trace; 21/21 agent checks after fixture correction | **Open.** Layer/raster/async mask cases need render reproductions; spot place-drag/undo/redo needs a state regression. Passing agent checks do not clear them. |
@@ -31,18 +32,36 @@ Inventory of **tracked first-party source at batch source checkpoint `dc02241`**
 
 ## Source-read boundary
 
-The twelve bounded reports plus the earlier desktop/mask audits and the five-file
-read below document a complete read of all **227 tracked first-party product
-files at this checkpoint**. The final app and engine passes each supply an exact
-roster for the former 21 and 15 targeted-only files. This is source coverage,
-not a passed review of every behavior: the reports contain open findings,
-none of their new paths was reproduced under the current memory pressure, and
+The bounded product reports and the complete app-harness read document **228
+product-used files fully read, zero targeted-only and zero unread**. The app and
+engine passes supply exact rosters for the former 21 and 15 targeted-only
+files. This is source coverage, not a passed review of every behavior: the
+reports contain open findings, many paths still lack focused runtime proof, and
 new source changes require a fresh inventory. The generated image payload in
 `web/js/planet-maps.js` was identified as data, not decoded or visually
 reviewed; `DesignTokens.swift` was read and its generator inspected, but byte
 reproducibility was not run.
 
-Tests and tooling are inventoried separately, **not counted as product review**: 39 app Swift files under `ViewportTests*`, `Scenario*`, `Screenshot*` plus the new `BatchExportProbe.swift` (358 lines at `dc02241`, partially read); 35 `apps/tests` C++ sources/headers; 12 `apps/bench` C++ sources/headers; `mcp/server.test.ts` and `mcp/test/*`; 14 tracked source files under `tools/` (`.py`, `.sh`, `.cpp`); plus `apps/{pixstat,probe,rawstat}` utilities, `design/build-tokens.py`, build definitions and `repro/` scripts. Twelve build/packaging files were fully read in `2026-09-28-build-tooling-audit.md` (1,265 lines), and `design/tokens.json` plus `design/build-tokens.py` were read in the remaining-surface audit; all remain separate from product counts. Other assertions/gates were inspected only where stated. Exclusions: `third_party/SwiftTerm/**` (65 tracked vendored files), `web/js/vendor/**` (three vendored scripts), binary website assets/fonts and sample/data fixtures, untracked/ignored build and package output. Exclusion means outside this first-party manual source count, not a claim of security or license review.
+| Separate read boundary | Documented full reads | Not double-counted with |
+|---|---:|---|
+| Pure app scene/test harness | 39 files, 12,352 lines at `3094212` | `Screenshot+Measure.swift` (322 lines), included once in the 228 product-used files; the 40-file app-harness roster totals 12,674 lines. The app-harness report's 12,654-line roster is dated before the final 20-line `BatchExportProbe.swift` diff (358→378), which was separately read/reviewed |
+| `apps/tests` core and mask/I/O harness | 35 files, 16,528 lines | Product source and the app harness |
+| Benchmark, standalone diagnostic, MCP test, repro scenarios/index | 79 files, 8,308 lines | Product MCP server, app scenario interpreter, and build definitions; 60 scenario `.txt` files are scripts, not compiled source |
+| `tools/` source | 14 files fully read: 12 checker/calibration/fixture files (2,490 lines) here, two packaging/worktree scripts in the prior build-tooling report | The separate 12-file build/packaging roster (1,265 lines) |
+| Configuration and entry documents | 6 files, 468 lines | Product source and `mcp/server.ts`; see `2026-09-28-config-docs-audit.md` |
+| Standalone darkroom design prototype | 1 HTML file, 1,028 lines | Shipped SwiftUI/AppKit product; see `2026-09-28-prototype-audit.md` |
+
+The two generator inputs (`design/tokens.json`, `design/build-tokens.py`) were
+also read, separately. This table counts documented reads, not successful
+oracles or executed checks; overlaps between reports appear once per boundary.
+Source-derived checker gaps include a benchmark A/B comparison that cannot
+fail its gate, nonfinite pixel reductions that can pass GPU tests, and fixed
+`/tmp` fixtures that can replace unrelated files. See the five new dated
+reports for precise triggers and missing proof. Exclusions remain explicit:
+`third_party/SwiftTerm/**` (65 tracked vendored files), `web/js/vendor/**`
+(three vendored scripts), binary website assets/fonts and sample/data
+fixtures, and untracked/ignored build and package output. No claim is made
+about their behavior, security or licenses.
 
 A separate streaming line-count sweep of 311 tracked first-party
 `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files found none at or above 1,000
