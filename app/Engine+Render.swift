@@ -353,7 +353,8 @@ extension Engine {
         generation &+= 1
     }
 
-    /// The histogram reads back the whole output texture — ~96 MB at 24 MP —
+    /// The histogram reads back the whole output texture — ~96 MB at 24 MP
+    /// in the screen's native eight-bit format —
     /// so recomputing it per render added tens of milliseconds to every slider
     /// tick. It is a readout nobody watches mid-drag, so it updates once the
     /// values settle instead.

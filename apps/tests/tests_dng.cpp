@@ -22,6 +22,7 @@
 
 #include <cstdio>
 #include <fstream>
+#include <numeric>
 
 namespace {
 
@@ -490,7 +491,7 @@ void testLinearDngEngineOpen() {
     section("the engine opens a linear DNG like any photo");
 
     const std::string path = "/tmp/orion-dng-engine-open.dng";
-    std::vector<float> rgb(std::size_t(kW) * kH * 3, 0.25f);
+    auto rgb = gradientFrame();
     orion::util::DngLinearImage img;
     img.width  = kW;
     img.height = kH;
@@ -507,6 +508,14 @@ void testLinearDngEngineOpen() {
 
     try {
         orion::Engine engine;
+        std::array<std::uint32_t, 3> unloaded{1, 1, 1};
+        engine.histogram(unloaded.data(), 1);
+        report(unloaded == std::array<std::uint32_t, 3>{0, 0, 0},
+               "unloaded histogram clears bins");
+        engine.histogram(nullptr, 1);
+        std::uint32_t untouched = 19;
+        engine.histogram(&untouched, 0);
+        report(untouched == 19, "zero bins and null output are harmless");
         engine.openRaw(path);
         report(true, "openRaw takes the DNG");
         engine.render();
@@ -519,6 +528,58 @@ void testLinearDngEngineOpen() {
             return pixels;
         };
         const auto beforeExport = screenPixels();
+        const auto checkHistogram = [&](bool wide) {
+            const auto& d = engine.develop();
+            const auto format = d.output().format();
+            report(format == (wide ? orion::gpu::PixelFormat::RGBA16Float
+                                   : orion::gpu::PixelFormat::RGBA8Unorm),
+                   wide ? "histogram wide texture format" : "histogram narrow texture format");
+            const auto pixels = screenPixels();
+            const auto count = std::size_t(d.outputWidth()) * d.outputHeight();
+            for (const std::uint32_t bins : {1u, 7u, 128u, 256u}) {
+                std::vector<std::uint32_t> expected(std::size_t(bins) * 3);
+                std::vector<std::uint32_t> actual(expected.size(), 999u);
+                for (std::size_t i = 0; i < count; i += 31) {
+                    for (std::size_t c = 0; c < 3; ++c) {
+                        float value;
+                        if (wide) {
+                            std::uint16_t half;
+                            std::memcpy(&half, pixels.data() + i * 8 + c * 2, sizeof half);
+                            value = halfToFloat(half);
+                        } else {
+                            value = pixels[i * 4 + c] / 255.0f;
+                        }
+                        const auto clamped = std::max(0.0f, std::min(1.0f, value));
+                        const auto bin = std::min(bins - 1, std::uint32_t(clamped * float(bins)));
+                        ++expected[c * bins + bin];
+                    }
+                }
+                engine.histogram(actual.data(), bins);
+                report(actual == expected,
+                       std::string(wide ? "wide" : "narrow") + " histogram matches native pixels, " +
+                           std::to_string(bins) + " bins");
+                for (std::size_t c = 0; c < 3; ++c) {
+                    const auto first = actual.begin() + c * bins;
+                    report(std::accumulate(first, first + bins, 0u) == (count + 30) / 31,
+                           "histogram channel count includes row crossings");
+                }
+                if (bins > 1) {
+                    report(!std::equal(actual.begin(), actual.begin() + bins,
+                                       actual.begin() + bins),
+                           "histogram red and green distributions differ");
+                    report(!std::equal(actual.begin() + bins, actual.begin() + 2 * bins,
+                                       actual.begin() + 2 * bins),
+                           "histogram green and blue distributions differ");
+                }
+            }
+        };
+        checkHistogram(false);
+        engine.developMutable().setWideOutput(true);
+        engine.render();
+        checkHistogram(true);
+        engine.developMutable().setWideOutput(false);
+        engine.render();
+        report(screenPixels() == beforeExport, "histogram wide test restores narrow pixels");
         orion::util::ExportOptions options;
         options.format = orion::util::ImageFormat::Png;
         options.depth = orion::util::BitDepth::Sixteen;
