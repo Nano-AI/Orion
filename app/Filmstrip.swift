@@ -206,7 +206,12 @@ struct Filmstrip: View {
         if flags.contains(.command) { modifiers.insert(.command) }
         if flags.contains(.shift)   { modifiers.insert(.shift) }
 
-        if let open = library.click(url, modifiers: modifiers) { onSelect(open) }
+        activate(url, modifiers: modifiers)
+    }
+
+    func activate(_ url: URL, modifiers: PhotoSelection.Modifiers) {
+        if modifiers.isEmpty { onSelect(url) }
+        else { _ = library.click(url, modifiers: modifiers) }
     }
 
     /// What a rating or a rejection from this cell applies to.

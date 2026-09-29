@@ -380,6 +380,7 @@ extension Editor {
 
     /// Return or a double-click: the one gallery gesture that costs a decode.
     func openFromGallery(_ url: URL) {
+        guard canLeavePhoto() else { return }
         mode = .develop
         load(url)
     }

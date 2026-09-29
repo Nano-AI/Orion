@@ -66,6 +66,7 @@ EXPORTS = ["_PIC8220.ARW", "_PIC8148.ARW"]
 # prints today, so adding a check does not break the gate and deleting most of
 # them does.
 MIN_LIBRARY_CHECKS = 10
+MIN_SAVE_CHECKS = 20
 
 # A JPEG of a 24 MP photograph is megabytes. A blank or single-colour frame
 # compresses to tens of kilobytes, which is the failure this catches — an export
@@ -116,6 +117,16 @@ def main():
 
     problems = []
     notes = []
+
+    r = run(["--save-safety"], problems, "--save-safety")
+    if r is not None:
+        out = (r.stderr or "") + (r.stdout or "")
+        checks = len(CHECK_LINE.findall(out))
+        if r.returncode != 0 or checks < MIN_SAVE_CHECKS:
+            problems.append(f"--save-safety exited {r.returncode} with {checks} "
+                            f"checks; required {MIN_SAVE_CHECKS}\n      {out[-1000:]}")
+        else:
+            notes.append(f"--save-safety {checks} checks")
 
     # --library-open
     r = run(["--library-open", str(SAMPLES)], problems, "--library-open")

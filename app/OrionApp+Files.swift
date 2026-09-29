@@ -14,6 +14,14 @@ import UniformTypeIdentifiers
 // culling to Rated and pressing Export all wrote every reject.
 
 extension Editor {
+    func canLeavePhoto() -> Bool {
+        guard autosave.flushBeforeLeaving() else {
+            message = autosave.lastFailure
+            return false
+        }
+        return true
+    }
+
     /// `~/Library/Application Support/Orion/current.json` — Orion publishes
     /// the photo it is on, so the MCP server
     /// (docs/superpowers/specs/2026-09-13-agent-mcp-design.md) can read which
@@ -21,6 +29,10 @@ extension Editor {
     /// at every place the photo on the canvas settles or closes — see
     /// `Proposal.currentJSON` for the pure encoding this wraps.
     func publishCurrentPhoto() {
+        if let currentFile {
+            try? Proposal.currentJSON(photo: current).write(to: currentFile, options: .atomic)
+            return
+        }
         guard let base = try? FileManager.default.url(
             for: .applicationSupportDirectory, in: .userDomainMask,
             appropriateFor: nil, create: true) else { return }
@@ -192,11 +204,14 @@ extension Editor {
         FileManager.default.fileExists(atPath: first.path, isDirectory: &isFolder)
         Task {
             if isFolder.boolValue {
-                await library.open(folder: first)
-                if let photo = library.visible.first?.url { load(photo) }
+                _ = await library.open(folder: first, beforeReplacing: canLeavePhoto) {
+                    if let photo = library.visible.first?.url { load(photo) }
+                }
                 return
             }
-            await library.open(folder: first.deletingLastPathComponent())
+            guard await library.open(folder: first.deletingLastPathComponent(),
+                                     beforeReplacing: canLeavePhoto,
+                                     didReplace: { load(first) }) else { return }
             // `load` finishes its decode in a task of its own, so the dwell is
             // the settling time a hand on the arrow key would give it. Three
             // seconds is a browse; `--dwell 200` is a photographer holding the
@@ -204,9 +219,10 @@ extension Editor {
             // when the next one starts is exactly the shape of fault a
             // reproduction has to be able to ask for.
             let dwell = Editor.wantedDwell(CommandLine.arguments)
-            for url in urls {
-                load(url)
+            for url in urls.dropFirst() {
                 try? await Task.sleep(for: .milliseconds(dwell))
+                guard canLeavePhoto() else { return }
+                load(url)
             }
         }
     }
@@ -220,8 +236,18 @@ extension Editor {
             .compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        Task { await library.open(folder: url.deletingLastPathComponent()) }
+        openPhoto(url)
+    }
+
+    /// A chosen photo can decode immediately; its folder listing follows later.
+    func openPhoto(_ url: URL) {
+        guard canLeavePhoto() else { return }
         load(url)
+        Task {
+            _ = await library.open(folder: url.deletingLastPathComponent(),
+                                   beforeReplacing: { current == url },
+                                   didReplace: { library.focus(url) })
+        }
     }
 
     func openFolder() {
@@ -233,12 +259,14 @@ extension Editor {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         Task {
-            await library.open(folder: url)
-            if let first = library.visible.first?.url { load(first) }
+            _ = await library.open(folder: url, beforeReplacing: canLeavePhoto) {
+                if let first = library.visible.first?.url { load(first) }
+            }
         }
     }
 
     func load(_ url: URL) {
+        guard canLeavePhoto() else { return }
         // The photo being left keeps its edits. Without this, going to the next
         // frame and back threw the work away — which is the whole difference
         // between an editor and a viewer.
@@ -422,6 +450,9 @@ extension Editor {
         guard let pending = pendingTrash, !pending.isEmpty else {
             pendingTrash = nil
             return
+        }
+        if current.map({ pending.contains($0) }) == true {
+            guard canLeavePhoto() else { return }
         }
         pendingTrash = nil
         let goes = Set(pending)

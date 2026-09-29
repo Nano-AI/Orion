@@ -82,6 +82,7 @@ enum ViewportTests {
         testEditsSurviveAQuit()
         testSidecarWriteReportsRefusal()
         testAFailedAutosaveIsNotForgotten()
+        testFailedSaveBlocksDepartureAndRetries()
 
         testMattePngRoundTripsItsMidTones()
         testMatteKeepsItsOrientation()

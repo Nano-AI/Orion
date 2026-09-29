@@ -88,6 +88,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Library.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/LibraryProbe.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/SaveDepartureProbe.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Filmstrip.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/GalleryView.swift

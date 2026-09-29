@@ -72,14 +72,19 @@ final class Library {
     /// A database that will not open changes how long an open takes and
     /// nothing else, which is the whole of decision #90.
     @ObservationIgnored let index: PhotoIndex
+    @ObservationIgnored private let moveToTrash: (URL) throws -> Void
 
     /// The background pass that fills metadata and thumbnails in behind the
     /// listing. Exposed because `loading` reports the *listing*, and a
     /// measurement of a folder open has to wait for the folder to be whole.
     @ObservationIgnored private(set) var loadTask: Task<Void, Never>?
 
-    init(index: PhotoIndex = PhotoIndex(at: PhotoIndex.defaultURL)) {
+    init(index: PhotoIndex = PhotoIndex(at: PhotoIndex.defaultURL),
+         moveToTrash: @escaping (URL) throws -> Void = {
+             try FileManager.default.trashItem(at: $0, resultingItemURL: nil)
+         }) {
         self.index = index
+        self.moveToTrash = moveToTrash
     }
 
     var filter: Filter = .all {
@@ -224,14 +229,10 @@ final class Library {
     /// itself. ⚠ The *listing itself* is still the filesystem's and only the
     /// filesystem's: `PhotoIndex.plan` is handed the directory contents and can
     /// only answer about files that are in it.
-    func open(folder url: URL) async {
-        folder = url
-        photos = []
-        // A selection is a set of URLs and nothing stops those URLs existing in
-        // the next folder too. Cleared outright rather than confined, because
-        // "the same filename in a different folder" is a photograph nobody
-        // picked.
-        selection = PhotoSelection()
+    @discardableResult
+    func open(folder url: URL,
+              beforeReplacing: () -> Bool = { true },
+              didReplace: () -> Void = {}) async -> Bool {
         loading = true
 
         // Directory listing off the main thread; the folder may be on a
@@ -241,7 +242,15 @@ final class Library {
             Self.scan(url, index: index)
         }.value
 
+        guard beforeReplacing() else {
+            loading = false
+            return false
+        }
+
+        folder = url
         photos = found
+        // The next folder may contain identical names; none was selected there.
+        selection = PhotoSelection()
         // ⚠ A folder that could not be listed is not a folder with no photos in
         // it, and the interface has to be able to tell them apart.
         lastFailure = failure
@@ -273,6 +282,8 @@ final class Library {
                 }
             }
         }
+        didReplace()
+        return true
     }
 
     /// What one file's background read produced. A nil half means the index
@@ -499,14 +510,14 @@ final class Library {
             let plan = TrashPlan.plan(for: url, directoryListing: listing)
 
             do {
-                try fm.trashItem(at: plan.photo, resultingItemURL: nil)
+                try moveToTrash(plan.photo)
             } catch {
                 failures.append((url.lastPathComponent, error.localizedDescription))
                 continue
             }
             trashed.append(url)
             for sibling in plan.siblings {
-                do { try fm.trashItem(at: sibling, resultingItemURL: nil) }
+                do { try moveToTrash(sibling) }
                 catch {
                     failures.append((sibling.lastPathComponent,
                                      error.localizedDescription))

@@ -158,6 +158,12 @@ final class Autosave {
         if job.url == target { saved = job.state }
     }
 
+    /// A failed write keeps the current document in hand for a later retry.
+    func flushBeforeLeaving() -> Bool {
+        flush()
+        return !isDirty
+    }
+
     /// For tests and for the panel: whether a write is owed right now.
     var isDirty: Bool { pending != nil }
 }

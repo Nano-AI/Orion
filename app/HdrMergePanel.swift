@@ -147,9 +147,12 @@ extension Editor {
             // The new DNG is a library photo like any other: rescan the
             // folder so it appears, then open it.
             if let folder = library.folder {
-                await library.open(folder: folder)
+                _ = await library.open(folder: folder, beforeReplacing: canLeavePhoto) {
+                    load(output)
+                }
+            } else {
+                load(output)
             }
-            load(output)
             notice = "Merged \(paths.count) exposures into "
                    + output.lastPathComponent
         }

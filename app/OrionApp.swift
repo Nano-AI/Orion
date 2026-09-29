@@ -72,6 +72,9 @@ struct OrionApp: App {
         if let folder = LibraryProbe.wanted(CommandLine.arguments) {
             LibraryProbe.run(folder)
         }
+        if CommandLine.arguments.contains("--save-safety") {
+            SaveDepartureProbe.run()
+        }
     }
 
     var body: some Scene {
@@ -169,11 +172,19 @@ struct Editor: View {
     /// pre-scanned library is the smallest seam that fixes that.
     init(engine: Engine, assistant: AssistantPanelModel = AssistantPanelModel(),
          startTab: ToolTab = .light, startLibrary: Library? = nil,
-         startSnapshots: SnapshotStore? = nil, startMode: EditorMode = .develop) {
+         startSnapshots: SnapshotStore? = nil, startMode: EditorMode = .develop,
+         startAutosave: Autosave? = nil, startPresets: PresetStore? = nil,
+         startWatermark: Watermark? = nil, currentFile: URL? = nil,
+         onReady: ((Editor) -> Void)? = nil) {
         self.engine = engine
         self.assistant = assistant
         _tab = State(initialValue: startTab)
         _library = State(initialValue: startLibrary ?? Library())
+        _autosave = State(initialValue: startAutosave ?? Autosave())
+        _presets = State(initialValue: startPresets ?? PresetStore())
+        _watermark = State(initialValue: startWatermark ?? Watermark())
+        self.currentFile = currentFile
+        self.onReady = onReady
         // Same seam and same reason as `startLibrary`: the harness never calls
         // `load`, so a per-photograph list would be empty in every capture and
         // the rows would be reviewed by reading them.
@@ -186,7 +197,7 @@ struct Editor: View {
     @State var band: HueBand = .blue
 
     /// Saved looks. research is not needed for these — see Presets.swift.
-    @State var presets = PresetStore()
+    @State var presets: PresetStore
     @State var presetName = ""
     @State var presetGroups: Set<PresetGroup> = PresetGroup.defaultSelection
 
@@ -236,9 +247,9 @@ struct Editor: View {
     @State var exportSettings = ExportSettings()
     /// The one saved watermark (#284). Read from Application Support at launch,
     /// so its switch in the Export panel survives a relaunch.
-    @State var watermark = Watermark()
+    @State var watermark: Watermark
     @State var showingExport = false
-    @State var library = Library()
+    @State var library: Library
     /// Not `private`: `findMatte` in `DevelopPanels+Mask.swift` needs it, because a
     /// matte is saved beside the photograph and so cannot be written without
     /// knowing which photograph is open.
@@ -249,7 +260,9 @@ struct Editor: View {
 
     /// Edits reach the sidecar on their own — see `Autosave`. Held here rather
     /// than in `Engine` because it is the shell that knows which file is open.
-    @State var autosave = Autosave()
+    @State var autosave: Autosave
+    let currentFile: URL?
+    let onReady: ((Editor) -> Void)?
     @State private var lifecycleObservers: [NSObjectProtocol] = []
 
     /// Which face the window shows - the develop editor or the culling
@@ -325,6 +338,7 @@ struct Editor: View {
             // `Orion --open <photo>`. See `Editor.wantedOpen` for why the real
             // window needs a way in from the command line.
             openFromCommandLine(Editor.wantedOpen(CommandLine.arguments))
+            onReady?(self)
         }
         .onDisappear { teardown() }
         .sheet(isPresented: $showingExport) {

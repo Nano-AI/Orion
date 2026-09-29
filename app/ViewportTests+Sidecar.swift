@@ -662,6 +662,46 @@ extension ViewportTests {
         report(save.lastFailure == nil, "a working disk is never complained about")
     }
 
+    static func testFailedSaveBlocksDepartureAndRetries() {
+        let a = URL(fileURLWithPath: "/tmp/orion-preflight-a.dng")
+        let b = URL(fileURLWithPath: "/tmp/orion-preflight-b.dng")
+        var accepting = false
+        var writes: [(URL, Float)] = []
+        let save = Autosave(deferral: { _ in }, write: { url, state in
+            guard accepting else { return false }
+            writes.append((url, state.exposureEv))
+            return true
+        })
+        func state(_ exposure: Float) -> DevelopState {
+            var value = DevelopState()
+            value.exposureEv = exposure
+            return value
+        }
+
+        save.begin(url: a, saved: state(0))
+        save.note(state(1))
+        report(!save.flushBeforeLeaving() && save.isDirty,
+               "failed preflight refuses departure and keeps A pending")
+        save.note(state(2))
+        report(!save.flushBeforeLeaving() && writes.isEmpty,
+               "another A edit replaces the refused pending value")
+        save.note(state(0))
+        report(save.flushBeforeLeaving() && !save.isDirty,
+               "returning A to saved clears the refusal")
+
+        save.note(state(3))
+        report(!save.flushBeforeLeaving(), "another failed A edit refuses departure")
+        accepting = true
+        report(save.flushBeforeLeaving() && writes.count == 1
+               && writes[0].0 == a && writes[0].1 == 3,
+               "recovered storage lands A before B may begin")
+        save.begin(url: b, saved: state(0))
+        save.note(state(4))
+        report(save.flushBeforeLeaving() && writes.count == 2
+               && writes[1].0 == b && writes[1].1 == 4,
+               "B's later edit lands separately under B")
+    }
+
     /// `Sidecar.write` reports rather than only logging.
     ///
     /// A directory that does not exist is the cheapest reachable failure, and it
