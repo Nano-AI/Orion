@@ -14,6 +14,7 @@ how a defect got past every test — which is usually the more useful half.
 
 | File | What it is |
 |---|---|
+| `2026-09-28-failed-save-safety.md` | Refuse photo/folder departures and current-photo Trash after a failed save; real-action probe, retry coverage and explicit remaining limits. |
 | `2026-09-28-histogram-memory.md` | Native readback allocation cleanup, real-GPU bin regression, reduced paired timing and explicit memory/fixture limits. |
 | `2026-09-28-verification.md` | Integrated post-merge build and nine passing gates, including the initial agent fixture failure, its correction, and memory limits. |
 | `2026-09-28-memory-retention.md` | Reduced-resolution controlled comparison of disabled GPU output release and idle pool shrink; export output regression and coverage. |
