@@ -17,9 +17,9 @@ Inventory of **tracked first-party source at `3094212`**, reconciled against the
 | Objective | Evidence now | Status / missing proof |
 |---|---|---|
 | Whole first-party product-used source audit | 228 full, 0 targeted-only, 0 unread at this checkpoint | **Source-read inventory complete; objective still open.** Harness and tool source reads are now also documented below, but behavioral, performance, RAM, UX and competitor proof remain incomplete. A full-file read is not a clean bill of health. |
-| Current repository gates | Full `-j2` build and all nine gates run at `3094212`; eight pass | **Open:** `check-modes.py` fails the batch Escape monitor check on the locked desktop (49/50 focused checks pass). See `2026-09-28-batch-export-safety.md`; this does not clear source-only findings in the other reports. |
+| Current repository gates | Fresh combined `203d116` build and eight independent gates pass; modes explicitly deferred | **Open:** actual key-window safe/mutation contrast is established, but the desktop relocked before restored-safe confirmation; that confirmation and modes remain pending. See `2026-09-28-batch-export-safety.md`; this does not clear source-only findings in the other reports. |
 | Latency and physical interaction | #271 measured paired fusion sweeps and 42 MP exposure p95 17.38 ms against 16 ms; preview engine timings exist | **Open.** Physical gestures, focus, cancellation and end-to-end display latency were not exhaustively measured. |
-| RAM and capacity | Controlled 1992×1330 inactive texture payload 903.1→303.5 MiB after shrink; 42 MP earlier session reached 9.51 GiB. Source audits derive ~840 MB decimal transient histogram payload and ~42 MB full-frame watermark mask at 42 MP, neither measured RSS | **Open.** Measure histogram and enabled-watermark peaks, then full-resolution active-filter peak and long-session memory. |
+| RAM and capacity | Controlled 1992×1330 inactive texture payload 903.1→303.5 MiB after shrink; 42 MP earlier session reached 9.51 GiB. Histogram float expansion was removed in #288 (reduced paired timing 0.695→0.363 ms; footprint polling inconclusive). The enabled watermark still has a source-derived ~42 MB full-frame mask at 42 MP, not measured RSS | **Open.** Measure histogram and enabled-watermark peaks, then full-resolution active-filter peak and long-session memory. |
 | Mask and spot correctness | Eight ranked mask findings and a P1 spot redo state loss from source trace; 21/21 agent checks after fixture correction | **Open.** Layer/raster/async mask cases need render reproductions; spot place-drag/undo/redo needs a state regression. Passing agent checks do not clear them. |
 | File and project handling | Desktop and engine I/O reports trace cross-photo autosave, dropped writes, foreign XMP erasure, HDR collisions and export finalization. Later source audits add CFA-phase noise sampling, early HDR Stop, `.cube` input/fidelity, session replay of spaced paths/edited photos, and watermark save dismissal | **Open.** Some pure Swift probes executed; product-level failure/race injection, phase-permutation noise, LUT parser/render, replay and failed-save UI checks remain missing. |
 | Agent proposal safety | Assistant/agent audit traces lenient proposed values and commits, same-stem RAW proposal collisions, silent proposed-state fallback and CLI rating coercion | **Open.** Source-only; add malformed-value, byte-preserving commit and two-photo identity checks before marking safe. |
@@ -57,11 +57,10 @@ oracles or executed checks; overlaps between reports appear once per boundary.
 Source-derived checker gaps include a benchmark A/B comparison that cannot
 fail its gate, nonfinite pixel reductions that can pass GPU tests, and fixed
 `/tmp` fixtures that can replace unrelated files. See the five new dated
-reports for precise triggers and missing proof. Exclusions remain explicit:
-`third_party/SwiftTerm/**` (65 tracked vendored files), `web/js/vendor/**`
-(three vendored scripts), binary website assets/fonts and sample/data
-fixtures, and untracked/ignored build and package output. No claim is made
-about their behavior, security or licenses.
+reports for precise triggers and missing proof. At that historical first-party checkpoint, vendor code remained excluded.
+The completed SwiftTerm and vendored web follow-ups are recorded below. Binary website assets/fonts, sample/data fixtures and
+untracked/ignored build or package output remain outside source review. Source
+coverage makes no statement about their behavior, security or licenses.
 
 A separate streaming line-count sweep of 311 tracked first-party
 `.swift/.cpp/.h/.hpp/.mm/.c/.m/.slang` files found none at or above 1,000
@@ -77,3 +76,44 @@ Read all lines of `app/AdjustmentCatalogue.swift` (238), `AdjustmentGroup.swift`
 | `GalleryLayout.swift:47-49` says Right at a row end stays in that row, but `:63-64` advances from index 3 to 4 in a four-column grid. `OrionApp+Commands.swift:387-396` calls this for gallery focus; `ViewportTests+Gallery.swift:33-35` explicitly expects the transition. | **Definite stale comment, not a proven navigation defect.** Test and implementation agree; intended UX would need a product decision before changing behavior. Fix the comment when this file is next edited. |
 
 No other finding is established from these five files alone. In particular, their static specs and arithmetic cannot prove the GPU output, panel accessibility, or interaction latency.
+
+## Vendor follow-up at `203d116`
+
+All **65 tracked SwiftTerm files (36,052 lines)** have now been read: 63 Swift
+source files (including one empty placeholder), plus `LICENSE` and `VERSION`.
+The five largest/core reads and three disjoint support rosters cover every
+tracked path exactly once in this count. Targeted caller excerpts are not
+counted again. This is source coverage, not runtime or security certification.
+
+| Report | Complete files | Lines |
+|---|---:|---:|
+| `2026-09-28-vendor-terminal-core-audit.md` | 1 | 8,102 |
+| `2026-09-28-vendor-terminal-views-audit.md` | 2 | 6,862 |
+| `2026-09-28-vendor-terminal-renderer-audit.md` | 2 | 4,075 |
+| `2026-09-28-vendor-support-audit-1.md` | 20 | 5,668 |
+| `2026-09-28-vendor-support-audit-2.md` | 19 | 5,670 |
+| `2026-09-28-vendor-support-audit-3.md` | 21 | 5,675 |
+| **Total** | **65** | **36,052** |
+
+An independent roster reconciliation found zero missing, extra or duplicated
+paths and zero per-file line-count mismatches against `git ls-files`.
+
+The reports identify source-traced terminal crash, input-expansion, retention,
+redraw, selection/search and process-directory risks. Optional terminal Metal
+is disabled in Orion, so its findings cannot explain current photo-engine RAM.
+The tiny OSC 104 reproduction was stopped at preflight because no reusable
+SwiftTerm build artifact exists; there is no runtime crash result. No vendor
+source changed and no terminal stress input was sent.
+
+The first-party inventory above remains the historical `3094212` roster; the
+histogram delta was separately reviewed and verified in #288. Vendored website
+JS and binary assets are not included in the SwiftTerm totals.
+
+All **three vendored website scripts (137,492 bytes)** were subsequently read in
+full byte ranges: GSAP 3.15.0, ScrollTrigger 3.15.0 and Lenis 1.3.26. Their exact
+versions, byte ranges and Orion callers are in `2026-09-28-vendor-web-audit.md`.
+The active motion page's idle frame cadence is a source-supported CPU/energy
+measurement candidate, not a measured performance defect. No browser, code
+execution, dependency update or vendor edit was performed. Together with
+SwiftTerm, this closes the tracked vendor source-read boundary at 68 files;
+binary assets and installed dependency implementations remain outside it.

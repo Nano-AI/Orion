@@ -14,6 +14,13 @@ how a defect got past every test — which is usually the more useful half.
 
 | File | What it is |
 |---|---|
+| `2026-09-28-vendor-web-audit.md` | All three minified vendor bundles read; idle frame cadence identified for bounded CPU/energy measurement. |
+| `2026-09-28-vendor-support-audit-1.md` | Twenty remaining SwiftTerm files; Kitty input/expansion bounds and caret-state findings. |
+| `2026-09-28-vendor-support-audit-2.md` | Nineteen remaining SwiftTerm files; whole-word search and resize/tab-stop findings. |
+| `2026-09-28-vendor-support-audit-3.md` | Twenty-one remaining SwiftTerm files; sixel bounds/overflow and failed working-directory change. |
+| `2026-09-28-vendor-terminal-views-audit.md` | Complete macOS/shared-view reads; redraw, selection and link routing findings, source-only. |
+| `2026-09-28-vendor-terminal-renderer-audit.md` | Complete BiDi/Metal renderer reads; active cache/work risks separated from inactive Metal paths. |
+| `2026-09-28-vendor-terminal-core-audit.md` | Complete terminal-core vendor read; negative palette index and output-driven memory-retention risks, not yet reproduced. |
 | `2026-09-28-histogram-memory.md` | Native readback allocation cleanup, real-GPU bin regression, reduced paired timing and explicit memory/fixture limits. |
 | `2026-09-28-verification.md` | Integrated post-merge build and nine passing gates, including the initial agent fixture failure, its correction, and memory limits. |
 | `2026-09-28-memory-retention.md` | Reduced-resolution controlled comparison of disabled GPU output release and idle pool shrink; export output regression and coverage. |

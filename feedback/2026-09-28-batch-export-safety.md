@@ -4,7 +4,9 @@
 until the keyboard check and final integration review are complete. The results
 below distinguish passing checks from the remaining verification gap.
 
-At `3094212`, the full `-j2` build and eight of nine repository gates pass.
+The current combined-tree evidence is in the follow-up section below.
+
+At the earlier `3094212` checkpoint, the full `-j2` build and eight of nine repository gates passed.
 `check-modes.py` exits 1 only on the `--batch-safety` Escape monitor check:
 49/50 focused checks pass, but the locked desktop gives the probe no key/active
 window (`lifecycle=true`, `key=false`, `active=false` after 2 s). The event
@@ -49,6 +51,30 @@ and a shared loader that could export as-shot after malformed saved edits. See
 `2026-09-28-desktop-io-audit.md` findings 1, 2, 6 and 9. Those probes did not
 exercise the real GUI and GPU path, so the new product regression must do so.
 
+## Combined-tree follow-up at `203d116`
+
+Verified histogram work from main `3dceaa0` merged without product-source
+conflicts. In an unlocked session, safe-before passed **50/0** with lifecycle,
+key window, monitor window and app active all true; Stop activated. The
+key-swallow mutation then failed **49/1**, exactly the Escape assertion, with
+the same true prerequisites and Stop inactive. This is the previously missing
+positive/mutation contrast. Safe Commands bytes were restored exactly and the
+safe build passed, but the desktop relocked before its final run: **49/1** only
+because the key/monitor/active prerequisites were false. Final restored-safe
+confirmation is therefore still pending; do not repeat the valid mutation or
+rebuild merely because the desktop is locked. Evidence:
+`/var/folders/n2/fp41fkxn2nz96bbnn693mlj00000gn/T/orion-batch-key-unlocked-r154zqx5/`.
+
+A fresh combined-tree `-j2` build and **eight independent gates pass**: engine
+1192/0, viewport 4269/0, decisions 286 rows, gestures 6, screens 3 asserting +
+1 byte-stable, wiring 497 swept/8 harness-only, agent 21/21, site green.
+**Modes was explicitly deferred and never launched**, pending the final safe
+keyboard check. All observed pressure readings stayed level 1. The 15-entry
+sample inventory matches the last histogram run and this run's before/after;
+all 23 protected temporary outputs were restored by hash/type/mtime. Logs:
+`/tmp/orion-batch-combined-gates-89x1xy48/run-ag1rpzms/`. Independent integration
+review found no new source blocker, but retains the final keyboard/gate condition.
+
 ## Closure evidence pending
 
 | Behavior | Required evidence | Result |
@@ -58,8 +84,8 @@ exercise the real GUI and GPU path, so the new product regression must do so.
 | Stop/progress can run before job two | Main-queue heartbeat and cancellation before the second export begins | Passed focused check; 0.037166 ms after first-progress scheduling on 64×64; old-path mutation red |
 | Malformed saved edits and missing mattes fail safely | Shared driver opens a small fixture, rejects invalid state and missing required matte without a successful as-shot export | Passed focused checks after the XML fix; first compiled probe's 12 failures are retained above |
 | A failed restore cannot label B's pixels as A | Inject restore failure and inspect the visible/document state and reported error | Passed focused 64×64 checks |
-| Nine repository gates on final tree | Serial runs with exit/status logs and memory observation | **8/9 pass at `3094212`; `check-modes.py` exits 1 on the Escape monitor proof only.** Engine 1,143/0; viewport 4,269/0; decisions, gestures, screens, wiring, agent and site green |
-| Escape routes through the Editor's local key monitor | Key/active-window positive control and key-swallow mutation causing Stop failure | **Open:** host screen locked; key-swallow mutation survives without a key/active window |
+| Nine repository gates on final tree | Serial runs with exit/status logs and memory observation | **Eight pass at combined `203d116`; modes explicitly deferred.** Engine 1,192/0; viewport 4,269/0; decisions, gestures, screens, wiring, agent and site green |
+| Escape routes through the Editor's local key monitor | Key/active-window positive control and key-swallow mutation causing Stop failure | **Contrast proved:** safe-before 50/0 and key-swallow 49/1 with the actual key window. **Final confirmation open:** restored-safe build passes, but macOS relocked before its last probe |
 
 Per-photo decode, render and export remain synchronous in this story, so a
 single photo can still block the main thread. An active creative LUT is refused
@@ -84,9 +110,9 @@ single pending tuple. The desktop audit's finding 2 remains open.
 | Refuse GUI batch with a live creative LUT until its identity and pixels can be restored | Prevents losing A's LUT or leaking it into B; this workflow remains unavailable. |
 | Allow scoped source review while memory pressure holds executable validation | It found source defects before compilation; later executable checks exposed the XML defect. Source review alone supplies no runtime proof. |
 | **Superseded:** count direct Escape dispatch to Stop without foreground focus | Direct dispatch can reach Stop while the local monitor is bypassed; the key-swallow mutation stayed green 50/50. This oracle cannot cover product keyboard handling. |
-| Require an actual key window for Escape coverage | The host GUI session reported `CGSSessionScreenIsLocked=True`; the harness could not establish `keyWindow` or app activation. Rerun safe and key-swallow probes in an unlocked session. Programmatic event delivery still does not establish physical keyboard focus/navigation. |
+| Require an actual key window for Escape coverage | The host GUI session reported `CGSSessionScreenIsLocked=True`; the harness could not establish `keyWindow` or app activation. The combined-tree safe/mutation contrast now proves that route; only restored-safe confirmation and modes remain. Programmatic event delivery still does not establish physical keyboard focus/navigation. |
 
-The final serial run passed `check-decisions.py` (285 rows, range 1–287,
+The earlier `3094212` serial run passed `check-decisions.py` (285 rows, range 1–287,
 three declared gaps) and seven other gates; `check-modes.py` is the one failure.
 `git diff --check` passed. The existing `/tmp` fixture outputs and all sample
 contents were preserved as described above.
