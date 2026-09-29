@@ -1,6 +1,7 @@
 # Failed-save departure safety — 2026-09-28
 
-Decision #289; base `3dceaa0`, product source `61b7e29`.
+Decision #289; base `3dceaa0`, current source checkpoint `0622da0` (unbuilt).
+Earlier focused and six-gate evidence below applies to `61b7e29`.
 
 ## Failure and correction
 
@@ -60,7 +61,7 @@ miss remains documented in its own report; these checks do not undo that miss.
 
 ## Delivery verification
 
-Task review and one scoped fix re-review are clear. Review required the
+Task review and the first scoped fix re-review are clear for `61b7e29`. Review required the
 pending-edit/no-second-load Open Photo check; the strengthened probe passes and
 catches the deliberately reintroduced reload. Its initial `/var` versus
 `/private/var` assertion was corrected to use the unique fixture filename.
@@ -92,7 +93,36 @@ Logs and machine-readable results are under
 `/var/folders/n2/fp41fkxn2nz96bbnn693mlj00000gn/T/orion-failed-save-gates-7urmxgav/`:
 `run-7bklaagu` (initial), `run-7it9nvvv` (screens retry), and `run-psixue9n`
 (lightweight checks). Keep the SDD workspace and branch for continuation.
-Final whole-branch source review is pending. Pending batch source is separate;
+Final whole-branch source review found two Important gaps: a canonical library
+URL could bypass the Trash guard for an alias-opened current photo, and Shift
+with no visible anchor lost its fallback navigation. Source checkpoint
+`0622da0` addresses these locally: Trash snapshots resolved path keys before
+moves for refusal, survivor choice and completion; document/save URLs stay as
+opened. A Library callback overload evaluates the existing selection policy
+once on a copy, routes navigation through the save guard, and commits only
+selection-only results. Added probe cases cover alias refusal/retry and missing
+or filtered Shift anchors; the alias retry explicitly restores develop mode.
+
+**These final edge-case changes are unbuilt and unexecuted.** The attempted
+pre-fix RED build was terminated at kernel pressure 2 (build exit -15, wrapper
+241; `/tmp/orion-save-final-review-red-build.log`). No behavioral RED probe ran.
+No further compiler/app/GPU/viewport runs were attempted. This also means the
+build artifact must be rebuilt before further app verification. Earlier 38/0
+and 4,275/0 results do not validate the final changes.
+
+The final four-file hash is
+`10e498fa78ec30624c3e17e7a7cbda333ce4b751c63624524d05f930ec105a6d`
+(path + NUL + bytes, ordered Filmstrip, Library, OrionApp+Files, SaveDepartureProbe).
+The post-stop 23-file/15-sample inventory is at
+`/tmp/orion-save-final-review-held-inventory.json`; it is a current inventory,
+not before/after proof for this source-only wave. No app or fixture runner ran
+in that wave. The one scoped static re-review found both issues addressed in source and no
+new breakage. It explicitly refused merge readiness because the final source
+is unbuilt and its checks are unrun. Keep this as a branch checkpoint until
+verification is complete. The final source/doc checkpoint also passes
+`check-decisions.py` (287 rows, 246 citations), `check-wiring.py` (501 swept,
+8 harness-only) and `git diff --check`; these are source checks, not substitutes
+for compilation or runtime verification. Pending batch source is separate;
 its gate evidence does not cover this branch.
 
 ## Rulings and limits
@@ -104,6 +134,8 @@ its gate evidence does not cover this branch.
 | Scope this story to photo/folder departure and Trash; preserve proposal stop/begin semantics | Quit/window-close veto is still absent; quitting despite a failed-save warning can lose the owed edit |
 | Keep immediate named-photo decode and accept its later listing only for the same current URL | URL identity is the guard; a mistake here could install stale selection/listing state, which the probe checks for its covered actions |
 | Permit one default-nil async hook to sequence the real Open Photo probe before its listing scan | A probe-only seam must not delay the default production path; the separate late scan-decision check still covers edits arriving at commit |
+| Normalize file identity locally in Trash, before any file moves, while retaining document/save URLs | A missed alias could evade refusal or leave a deleted photo active; global normalization could change existing sidecar locations, so actual alias refusal/retry checks cover the narrower change |
+| Stop heavy work after the later build also reaches warning pressure; push only a source checkpoint | Final alias/Shift changes remain unbuilt and unexecuted; they cannot merge until the build, focused checks and outstanding gates pass with adequate headroom |
 
 The focused checks cover the corrected failed-save departure paths. Full
 delivery remains gated; other file-handling findings also remain open. Foreign XMP preservation, malformed sync/proposal input, pending batch
