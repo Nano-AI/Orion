@@ -205,6 +205,87 @@ enum SaveDepartureProbe {
               "listing leaves A's pending edit off disk")
         check(opensOfA() == opensBefore + 1,
               "Open Photo decodes A exactly once across the listing")
+
+        // A filter can remove the shift anchor while the canvas still holds A.
+        guard let listedB = library.photos.first(where: { $0.name == b.lastPathComponent })?.url else {
+            check(false, "B remains in the listing"); return
+        }
+        library.setRating(1, for: listedB)
+        library.filter = .picks
+        let strip = Filmstrip(library: library, selected: a, onSelect: mounted.load)
+        check(library.selection.anchor == nil && library.visibleURLs == [listedB],
+              "filter leaves no visible shift anchor")
+        accepting = false
+        let missingAnchorSelection = library.selection
+        strip.activate(listedB, modifiers: .shift)
+        check(mounted.current == a && library.selection == missingAnchorSelection
+              && save.isDirty && engine.state.exposureEv == 7,
+              "missing-anchor Shift refusal preserves A and selection")
+
+        library.focus(a) // A is deliberately outside the Rated filter.
+        let hiddenAnchorSelection = library.selection
+        check(hiddenAnchorSelection.anchor == a && !library.visibleURLs.contains(a),
+              "shift anchor can name a filtered-out photo")
+        strip.activate(listedB, modifiers: .shift)
+        check(mounted.current == a && library.selection == hiddenAnchorSelection
+              && save.isDirty && engine.state.exposureEv == 7,
+              "filtered-anchor Shift refusal preserves A and selection")
+        accepting = true
+        library.focus(a)
+        strip.activate(listedB, modifiers: .shift)
+        check(await until { mounted.current == listedB && !engine.isOpening },
+              "filtered-anchor Shift retry opens B")
+        check(!save.isDirty && (try? JSONDecoder().decode(DevelopState.self,
+              from: Sidecar.read(for: a)?.develop ?? Data()))?.exposureEv == 7,
+              "Shift retry saves A before B")
+
+        // Open through a folder alias, then ask Trash to move the library URL.
+        mounted.mode = .develop
+        library.filter = .all
+        let alias = root.appendingPathComponent("alias", isDirectory: true)
+        do { try fm.createSymbolicLink(at: alias, withDestinationURL: folder) }
+        catch { check(false, "make private folder alias: \(error)"); return }
+        let aliasA = alias.appendingPathComponent(a.lastPathComponent)
+        mounted.openPhoto(aliasA)
+        check(await until { mounted.current == aliasA && !engine.isOpening
+                            && library.folder == alias && !library.loading },
+              "Open Photo settles alias A and its listing")
+        guard let listedA = library.photos.first(where: { $0.name == a.lastPathComponent })?.url,
+              let aliasListedB = library.photos.first(where: { $0.name == b.lastPathComponent })?.url else {
+            check(false, "alias listing includes A and B"); return
+        }
+        check(aliasA != listedA
+              && aliasA.resolvingSymlinksInPath() == listedA.resolvingSymlinksInPath(),
+              "alias current and library A name the same file")
+        let archiveBefore = (try? fm.contentsOfDirectory(atPath: archive.path).sorted()) ?? []
+        let aliasSidecarBefore = try? Data(contentsOf: Sidecar.url(for: aliasA))
+        accepting = false
+        engine.edit("Exposure") { engine.exposureEv = 8 }
+        mounted.confirmTrash([listedA, aliasListedB])
+        mounted.runTrash()
+        check(mounted.current == aliasA && save.isDirty && engine.state.exposureEv == 8
+              && library.selection.current == aliasA,
+              "failed alias-current Trash keeps the live document")
+        check(fm.fileExists(atPath: aliasA.path)
+              && fm.fileExists(atPath: aliasListedB.path)
+              && (try? Data(contentsOf: Sidecar.url(for: aliasA))) == aliasSidecarBefore
+              && ((try? fm.contentsOfDirectory(atPath: archive.path).sorted()) ?? []) == archiveBefore,
+              "failed alias-current Trash moves no member or sibling")
+        if fm.fileExists(atPath: aliasA.path) && fm.fileExists(atPath: aliasListedB.path) {
+            accepting = true
+            mounted.runTrash()
+            check(await until { mounted.current?.lastPathComponent == d.lastPathComponent
+                                && !engine.isOpening },
+                  "alias-current Trash retry opens the surviving D")
+            check(!fm.fileExists(atPath: aliasA.path)
+                  && !fm.fileExists(atPath: aliasListedB.path)
+                  && fm.fileExists(atPath: archive.appendingPathComponent(a.lastPathComponent).path)
+                  && fm.fileExists(atPath: archive.appendingPathComponent(b.lastPathComponent).path)
+                  && !save.isDirty,
+                  "alias-current Trash retry clears A and moves both requested photos")
+        } else {
+            check(false, "unsafe first Trash prevented retry")
+        }
         print("save-safety: \(failures) failure(s)")
     }
 }

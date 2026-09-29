@@ -453,26 +453,35 @@ extension Editor {
             pendingTrash = nil
             return
         }
-        if current.map({ pending.contains($0) }) == true {
+        // Snapshot identity while every path still exists: the canvas may
+        // have opened through an alias while the library lists canonical URLs.
+        func key(_ url: URL) -> URL {
+            url.resolvingSymlinksInPath().standardizedFileURL
+        }
+        var requestKeys: [URL: URL] = [:]
+        for url in pending { requestKeys[url] = key(url) }
+        let goes = Set(requestKeys.values)
+        let currentKey = current.map(key)
+        let currentGoes = currentKey.map(goes.contains) ?? false
+        if currentGoes {
             guard canLeavePhoto() else { return }
         }
         pendingTrash = nil
-        let goes = Set(pending)
 
         // The nearest photograph that stays: forward first, then backward,
-        // the way deleting from any list advances.
-        let list = library.visibleURLs
+        // the way deleting from any list advances. Keep original URLs for I/O.
+        let list = library.visibleURLs.map { (url: $0, key: key($0)) }
         func survivor(of url: URL?) -> URL? {
             guard let url else { return nil }
-            guard goes.contains(url) else { return url }
-            guard let i = list.firstIndex(of: url) else { return nil }
-            return list[(i + 1)...].first { !goes.contains($0) }
-                ?? list[..<i].reversed().first { !goes.contains($0) }
+            let identity = key(url)
+            guard goes.contains(identity) else { return url }
+            guard let i = list.firstIndex(where: { $0.key == identity }) else { return nil }
+            return (list[(i + 1)...].first { !goes.contains($0.key) }
+                ?? list[..<i].reversed().first { !goes.contains($0.key) })?.url
         }
         let canvasSurvivor = survivor(of: current)
         let focusSurvivor = survivor(of: galleryFocus)
 
-        let currentGoes = current.map(goes.contains) ?? false
         if currentGoes {
             autosave.stop()
             snapshots.open(photo: nil)
@@ -485,9 +494,9 @@ extension Editor {
 
         let outcome = library.trash(pending)
         if let complaint = outcome.complaint { message = complaint }
-        let gone = Set(outcome.trashed)
+        let gone = Set(outcome.trashed.compactMap { requestKeys[$0] })
 
-        if let cur = current, gone.contains(cur) {
+        if let currentKey, gone.contains(currentKey) {
             current = nil
             publishCurrentPhoto()
             if mode == .develop {

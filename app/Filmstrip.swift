@@ -211,7 +211,7 @@ struct Filmstrip: View {
 
     func activate(_ url: URL, modifiers: PhotoSelection.Modifiers) {
         if modifiers.isEmpty { onSelect(url) }
-        else { _ = library.click(url, modifiers: modifiers) }
+        else { library.click(url, modifiers: modifiers, onOpen: onSelect) }
     }
 
     /// What a rating or a rejection from this cell applies to.

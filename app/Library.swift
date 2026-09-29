@@ -179,6 +179,18 @@ final class Library {
         selection.click(url, modifiers: modifiers, in: visibleURLs)
     }
 
+    /// Navigation must save before changing selection; modified clicks can
+    /// fall back to navigation when their shift anchor is no longer visible.
+    func click(_ url: URL, modifiers: PhotoSelection.Modifiers,
+               onOpen: (URL) -> Void) {
+        var trial = selection
+        if let next = trial.click(url, modifiers: modifiers, in: visibleURLs) {
+            onOpen(next)
+        } else {
+            selection = trial
+        }
+    }
+
     /// What a rating or a rejection aimed at `url` should cover: the selection
     /// when `url` is part of a real one, and that photo alone otherwise.
     func cullScope(_ url: URL) -> [URL] {
