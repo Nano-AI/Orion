@@ -1,6 +1,6 @@
 # Histogram readback memory — 2026-09-28
 
-**Implementation:** `e269720`, scoped review approved; final branch review and nine-gate verification pending. This is a narrow readback allocation optimization, not a full-resolution capacity or Lightroom comparison result.
+**Implementation:** `e269720`, scoped and final source reviews approved; fresh build and all nine gates pass, with the pressure stop/recovery recorded below. This is a narrow readback allocation optimization, not a full-resolution capacity or Lightroom comparison result.
 
 ## Change
 
@@ -140,3 +140,19 @@ void runHistogramProbe() {
 - Scoped spec/quality review found no blocking issue. The rendered fixture does not explicitly assert that exact 0/1 endpoints survive the display pipeline; those endpoints are therefore not independently established by this test. The unchanged clamp/bin expression and full native-bin comparison are the compatibility evidence.
 - The implementation preflight missed 23 dynamically named generated `/tmp` exports. Their task-start bytes were not backed up, so no all-fixture preservation claim is made. The final verifier uses an explicit complete name roster and retains its runner and manifests. Original photo/sidecar/matte preservation is checked separately with streamed sample hashes.
 - Full-frame native readback and main-actor scheduling remain; this removes the unnecessary float copy without adding a shader or readback API. Full-size process peak, wide-output timing, physical interaction and a paired Lightroom measurement remain open.
+
+## Final source review
+
+Independent whole-branch review at `006000d` approved the source with no Critical/Important findings, conditional on nine-gate verification. It checked removed-helper references, auto-enhance/facade callers, native output formats and the test's independent half decoder. It accepted the endpoint-presence limitation and declined inherited nonfinite/extreme-bin behavior, full-size/wide timing, physical UX, separate batch defects and independent Adobe-page revalidation. Those remain outside this finite-pixel allocation change, with no broader correctness claim.
+
+The fresh full build passed with existing warnings: local LibRaw/OpenCV dylibs target macOS 26 despite the app's macOS 14 target; SwiftTerm has unused `withUnsafeBytes` results; `ViewportTests+Index.swift` captures and later mutates `now`. No histogram warning was emitted. This build does not validate the macOS 14 runtime floor.
+
+## Final verification
+
+At product source `e269720`, `cmake --build build -j2` passed. Engine **1192/0**, viewport **4269/0**, decisions **286 rows / 3 declared gaps**, gestures **6**, screens **3 asserting + 1 byte-stable**, modes **library 13 / batch 2 files / HDR DNG**, wiring **491 swept / 8 harness-only**, agent **21/21**, and site checks all passed.
+
+The first screenshot gate was stopped after 6 seconds when kernel pressure reached level 2; remaining heavy gates were not started. After seven normal readings over one minute, the remaining light gates passed and a single controlled retry passed screens, modes and agent, all at peak pressure 1. No pressure threshold was bypassed, no unrelated process was stopped and no reduced sample was substituted. This is a completed gate run with an interrupted first attempt, not uninterrupted normal pressure.
+
+Streamed hashes of 15 sample entries match the prior batch-gate inventory and the before/after manifests of both final-verification phases. All 23 files protected for these final phases were restored with identical hashes, types and mtimes. This does **not** undo the earlier implementation-run omission described above. A retained 64×48 generated watermark PNG was visually inspected: valid warm-orange fixture, too small/subtle to assess histogram UI, and no such UI claim is made.
+
+Reusable runner, retry script, logs, results and manifests: `/tmp/orion-histogram-gates-5_owyrmx/`. The final source review's nine-gate condition is satisfied. The separate batch branch still needs its actual key-window Escape proof; these main-based gates do not contain that unmerged probe.
