@@ -61,6 +61,8 @@
 
 - [x] Resolve current/request/survivor Trash membership consistently for symlinked folders, including successful-move completion. Snapshot canonical keys before moves while retaining document/save URLs. Actual-action probe must use a canonical URL from `library.photos` after opening through an alias; failed save moves none of the set, successful retry leaves no deleted current photo active.
 - [x] Preserve `PhotoSelection.click` as the selection policy. Try it on a value copy before committing: fallback navigation goes through guarded `onSelect`, selection-only results may commit. Probe missing and filtered/nonvisible Shift anchors, refusal and successful retry.
-- [ ] Build and run the extended tiny real-action probe with named RED/GREEN evidence; one scoped re-review of the combined final fix. Full-size screens/modes/agent remain held after two memory-pressure stops.
+- [x] Build and run the extended tiny real-action probe and full gates; record the available RED/GREEN evidence accurately. The one scoped re-review cleared the final fixes. On 2026-09-29 the final 50 checks and all nine gates pass; pre-fix alias/Shift RED remains unobserved because its earlier build was stopped.
 
-Final source review: both edge-case fixes addressed at `0622da0`, no new source findings. The two checked items denote source implementation only; their new probes are unexecuted. Build/RED/GREEN/viewport and the outstanding full gates remain open after the pressure hold.
+Source review checkpoint (2026-09-28): both edge-case fixes addressed at `0622da0`, no new source findings. At that checkpoint, implementation was complete but the new probes and full verification were held by memory pressure; delivery results follow.
+
+Delivery 2026-09-29: `-j1` build and all nine gates pass at `5495328`; packaged 50-check probe and strict installed signature pass. Normal installed app window observed. The earlier verification hold is resolved; original RED limitations remain documented in the evidence report.

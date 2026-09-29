@@ -1,5 +1,11 @@
 # Orion — session history
 
+## Recent-session row archived 2026-09-29
+
+| Date | What landed |
+|---|---|
+| 2026-09-27 | **Export watermark (#284).** `OrionExportOptions.watermark_*` and `drawWatermark` in the writer; `Watermark` (JSON in Application Support), `WatermarkLayout`/`WatermarkRaster`, the Export panel's switch and `WatermarkPanel`; scenario `watermark` verb, `watermark=on`, and `measure` on a written file. `repro/export-watermark.txt` 9, scenes `export-watermark`/`watermark-editor`. ⚠ The brand logo sheet has an opaque background, so as a mark it is a gray box. Gates 1119 / 4264 |
+
 ## Recent-session rows archived 2026-09-28
 
 | Date | What landed |

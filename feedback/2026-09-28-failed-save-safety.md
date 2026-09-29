@@ -1,7 +1,8 @@
 # Failed-save departure safety — 2026-09-28
 
-Decision #289; base `3dceaa0`, current source checkpoint `0622da0` (unbuilt).
-Earlier focused and six-gate evidence below applies to `61b7e29`.
+Decision #289; base `3dceaa0`, final source `0622da0`, verified at `5495328`.
+Verified and locally installed on 2026-09-29; main fast-forwards to this source.
+Earlier checkpoint evidence below remains as a record of the initial holds.
 
 ## Failure and correction
 
@@ -59,7 +60,7 @@ invalid build evidence, not a behavioral failure; the frozen source was then
 rebuilt successfully. The earlier histogram story's temporary-fixture protection
 miss remains documented in its own report; these checks do not undo that miss.
 
-## Delivery verification
+## Initial checkpoint verification (2026-09-28)
 
 Task review and the first scoped fix re-review are clear for `61b7e29`. Review required the
 pending-edit/no-second-load Open Photo check; the strengthened probe passes and
@@ -125,6 +126,44 @@ verification is complete. The final source/doc checkpoint also passes
 for compilation or runtime verification. Pending batch source is separate;
 its gate evidence does not cover this branch.
 
+## Delivery verification (2026-09-29)
+
+The final source now builds and passes all nine gates. `cmake --build build -j1`
+serializes the independent app and viewport Swift commands. It passed in 117.3
+seconds at peak kernel pressure 1. The first screenshot attempt still reached
+pressure 2 and its owned process group was stopped. After approved desktop apps
+and additional user-managed terminal sessions closed, pressure stayed normal;
+only the remaining gates were resumed, with no source changes.
+
+| Check | Final result |
+|---|---|
+| Engine / viewport | 1,192 / 4,275 checks, zero failures |
+| Decisions / gestures | 287 rows and 246 citations resolve / 6 checks |
+| Screens | 3 asserting scenes and 1 byte-stable scene pass |
+| Modes | Save safety 50; library 13; batch 2 files; HDR DNG succeeds |
+| Wiring / agent / site | 501 swept, 8 harness-only / 21 of 21 / all pass |
+| Packaged app probe | 50 save-safety checks, zero failures, pressure 1 |
+| Installation | Strict deep signature verifies; installed binary matches package; normal Orion window observed |
+
+The final alias refusal/retry and missing/filtered Shift-anchor cases pass.
+Their pre-fix behavioral RED remains unobserved because that earlier build was
+stopped; no RED claim is retroactively made. The original shared departure RED
+and the three-failure reload mutation remain separate valid evidence.
+
+Logs under `/var/folders/n2/fp41fkxn2nz96bbnn693mlj00000gn/T/orion-main-install-f0hniusp/`:
+`run-2rz53qrl` (build/first gates/guarded screenshot stop), `run-fg63qgvy`
+(remaining gates pass), `package-log`, and `packaged-save-probe`.
+Both gate phases restored all 23 temporary fixtures unchanged and kept all 15
+sample entries equal to both the previous baseline and before/after manifests.
+
+`tools/package-app.sh` used a fresh, task-owned output directory. Its bundled
+resources/dependencies, removed Homebrew search paths, privacy checks and ad-hoc
+signature all pass. The installed binary at `/Applications/Orion.app` has SHA-256
+`f2cd784b86c86d288c9c0e29d25b0d85bd45b72ef45b796c59193a2f93e34215`.
+The previous app is preserved as `previous-Orion.app` under the same log root;
+`installation.json` records the replacement and rollback paths. The app opened
+normally with no photograph loaded and pressure 1. No release was published.
+
 ## Rulings and limits
 
 | Ruling | Cost or limit |
@@ -135,10 +174,10 @@ its gate evidence does not cover this branch.
 | Keep immediate named-photo decode and accept its later listing only for the same current URL | URL identity is the guard; a mistake here could install stale selection/listing state, which the probe checks for its covered actions |
 | Permit one default-nil async hook to sequence the real Open Photo probe before its listing scan | A probe-only seam must not delay the default production path; the separate late scan-decision check still covers edits arriving at commit |
 | Normalize file identity locally in Trash, before any file moves, while retaining document/save URLs | A missed alias could evade refusal or leave a deleted photo active; global normalization could change existing sidecar locations, so actual alias refusal/retry checks cover the narrower change |
-| Stop heavy work after the later build also reaches warning pressure; push only a source checkpoint | Final alias/Shift changes remain unbuilt and unexecuted; they cannot merge until the build, focused checks and outstanding gates pass with adequate headroom |
+| Stop heavy work at warning pressure and initially push only a source checkpoint | Alias/Shift changes stayed unbuilt until adequate headroom became available; the build, focused checks and all nine gates passed on 2026-09-29 |
 
-The focused checks cover the corrected failed-save departure paths. Full
-delivery remains gated; other file-handling findings also remain open. Foreign XMP preservation, malformed sync/proposal input, pending batch
+The focused checks and full gates cover this failed-save departure story.
+Other file-handling findings remain open. Foreign XMP preservation, malformed sync/proposal input, pending batch
 safety and output destination hazards remain separate work. No physical input,
 VoiceOver, full-resolution RAM/latency or Lightroom comparison is proved by the
 tiny fixtures.
