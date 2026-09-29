@@ -169,10 +169,42 @@ enum SaveDepartureProbe {
         check(!fm.fileExists(atPath: c.path)
               && fm.fileExists(atPath: archive.appendingPathComponent(c.lastPathComponent).path)
               && mounted.current == b, "noncurrent Trash uses private archive")
-        mounted.openPhoto(a)
+
+        let d = folder.appendingPathComponent("D.dng")
+        do { try fm.copyItem(at: source, to: d) }
+        catch { check(false, "copy late listing fixture: \(error)"); return }
+        check(Library.scan(folder, index: library.index).photos.contains(where: { $0.name == d.lastPathComponent }),
+              "late D is visible to the existing scanner")
+        func opensOfA() -> Int {
+            let log = (try? String(contentsOf: InteractionLog.url, encoding: .utf8)) ?? ""
+            return log.split(separator: "\n").filter { $0 == "open \(a.path)" }.count
+        }
+        let opensBefore = opensOfA()
+        var editBeforeScan = false
+        mounted.openPhoto(a, beforeListingScan: {
+            let decoded = await until {
+                mounted.current == a && !engine.isOpening
+                && engine.history.position == 0
+            }
+            check(decoded, "chosen A finishes its first decode before scan")
+            guard decoded else { return }
+            engine.edit("Exposure") { engine.exposureEv = 7 }
+            editBeforeScan = save.isDirty && engine.state.exposureEv == 7
+        })
         check(mounted.current == a, "Open Photo changes current immediately after recovery")
-        check(await until { !engine.isOpening && library.selection.current == a },
-              "Open Photo's later listing follows the chosen photo")
+        check(await until { library.photos.contains(where: { $0.name == d.lastPathComponent }) },
+              "Open Photo commits the later listing")
+        check(await until { !engine.isOpening },
+              "Open Photo is settled after the listing")
+        check(editBeforeScan && save.isDirty && engine.state.exposureEv == 7
+              && engine.history.entries.last?.state.exposureEv == 7
+              && library.selection.current == a,
+              "edit made after A decode survives its listing commit")
+        check((try? JSONDecoder().decode(DevelopState.self,
+               from: Sidecar.read(for: a)?.develop ?? Data()))?.exposureEv == 5,
+              "listing leaves A's pending edit off disk")
+        check(opensOfA() == opensBefore + 1,
+              "Open Photo decodes A exactly once across the listing")
         print("save-safety: \(failures) failure(s)")
     }
 }

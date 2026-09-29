@@ -240,10 +240,12 @@ extension Editor {
     }
 
     /// A chosen photo can decode immediately; its folder listing follows later.
-    func openPhoto(_ url: URL) {
+    func openPhoto(_ url: URL, beforeListingScan: (() async -> Void)? = nil) {
         guard canLeavePhoto() else { return }
         load(url)
         Task {
+            // Probe sequencing only: production starts the scan immediately.
+            if let beforeListingScan { await beforeListingScan() }
             _ = await library.open(folder: url.deletingLastPathComponent(),
                                    beforeReplacing: { current == url },
                                    didReplace: { library.focus(url) })
