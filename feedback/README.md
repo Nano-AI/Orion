@@ -43,6 +43,7 @@ how a defect got past every test — which is usually the more useful half.
 | `2026-09-28-app-complete-audit.md` | Complete read of the remaining 21 targeted app files; Trash, spot diff, menu count, preset deletion and failed selection findings, source-only. |
 | `2026-09-28-engine-complete-audit.md` | Complete read of the remaining 15 targeted engine files; LUT lifecycle, tone-curve input and writer lifetime findings, source-only. |
 | `2026-09-28-batch-export-safety.md` | Batch export safety evidence: eight gates pass; the locked desktop blocks key-window Escape proof, and other file-handling gaps remain open. |
+| [Batch branch review](2026-09-28-batch-branch-review.md) | 2026-09-28 | Independent full-branch source review: no additional Critical/Important source defect; integration waits for actual key-window mutation proof. |
 | `2026-09-24-compare-overwrites-color.md` | Old installed app reproduced overwriting saved color edits when Compare opens; reinstalled #271 fix preserves them. Recovery limits recorded. |
 | `2026-09-15-engine-ui-audit.md` | Paired fusion optimization, desktop interaction fixes, nine-gate results and remaining exposure, memory and UI-coverage gaps (#271). |
 | `2026-09-15-website-audit.md` | Website interaction/fallback bugs, responsive polish and local browser verification on `web/site-audit-polish`. |

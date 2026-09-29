@@ -24,7 +24,7 @@ components folded per §6, optionally feathered onto the photograph's own edges,
 through the graph, the POD facade, the panel rows, the sidecar, undo and the
 bench.
 
-**Last updated:** 2026-09-28 — **GUI batch safety in flight (#287).** At `3094212`, the full `-j2` build and **eight of nine gates pass**; `check-modes.py` exits 1 only because the locked macOS desktop cannot give the probe a key/active window for its Escape monitor (`49/50` focused checks pass). The old-path mutation reddened preservation, Stop and save checks; the key-swallow mutation remains unproven because the monitor was bypassed. No batch closure or all-green claim. Kernel pressure stayed at level 1; sample hash inventory was unchanged. Source reports document 228 product-used files plus separate harness/tools; see `feedback/2026-09-28-audit-coverage.md`.
+**Last updated:** 2026-09-28 — **GUI batch safety in flight (#287).** At `3094212`, the full `-j2` build and **eight of nine gates pass**; `check-modes.py` exits 1 only because the locked macOS desktop cannot give the probe a key/active window for its Escape monitor (`49/50` focused checks pass). The old-path mutation reddened preservation, Stop and save checks; the key-swallow mutation remains unproven because the monitor was bypassed. Independent full-branch review found no additional Critical/Important source defect; integration still requires keyboard proof. No batch closure or all-green claim. Kernel pressure stayed at level 1; sample hash inventory was unchanged. Source reports document 228 product-used files plus separate harness/tools; see `feedback/2026-09-28-audit-coverage.md`.
 
 **Recent sessions** — audit reports in `feedback/`; older rows and write-ups in `HISTORY.md`:
 
