@@ -1,73 +1,29 @@
-# Lightroom comparison baseline
+# Adobe Lightroom comparison baseline
 
-2026-09-28. Read-only research for the whole-product audit. No Lightroom or Orion
-benchmark, app launch, GPU run, RAW decode, or memory stress test was performed.
-**No claim that Orion matches or beats Lightroom Classic is supported yet.**
+2026-09-28. Research protocol for **Adobe Lightroom desktop (Photos > Local)**, the user-named comparator. Lightroom Classic is a different product and supplies no evidence for this protocol. No Lightroom installation was found in `/Applications`, `~/Applications`, or the top-level Lightroom product folders checked in this session. No paired benchmark, app launch, RAW decode, GPU run, or memory stress was performed. **No claim that Orion matches or beats Lightroom is supported.**
 
-## Scope and measurement rule
+## Fair comparison
 
-Compare the *same photographer action* on the same Mac, display, RAWs, storage,
-power mode, and warm/cold state. Record macOS and app versions, display refresh,
-Lightroom's GPU and preview settings, XMP auto-write setting, Orion build, and
-whether the Adobe Camera Raw/preview caches are warm. Alternate app order and
-report median and p95 over repeated trials, with a screen recording for the
-visible result and Instruments traces for unexplained stalls. Report both time
-to first **correct edited** image and time to final settled image; an embedded
-camera JPEG or stale prior frame is not the former. Adobe explicitly says
-embedded previews may differ from processed previews [A1], so visual quality
-and speed must be judged at the same state.
+Lightroom's **Local** tab directly browses and edits folders on the device without import or cloud sync; **Cloud** is a separate path for imported and synced photos. Local edits are non-destructive and stored as metadata, inside some file types and in companion XMP for others. Adobe also says that copying a Local photo to Cloud creates separate copies that can later be updated. This makes Local the primary comparison for Orion's settled folder-first, XMP-source-of-truth design. Do not infer that either app can interpret the other's proprietary edit settings merely because both use XMP. [Adobe: Import and access photos](https://helpx.adobe.com/lightroom/desktop/add-import-and-capture-photos/access-photos.html)
 
-Lightroom Classic uses an import/catalog record even when **Add** leaves originals
-in place [A2]; Orion's settled design is folder-first, XMP as truth, SQLite as a
-disposable index (decision #9). Compare open-folder-to-useful-grid and subsequent
-browse behavior, but **do not require a catalog or a catalog migration**. Adobe
-documents standard/1:1 previews, a preview cache limit, Camera Raw cache and GPU
-preview generation [A1, A3, A4]. These explain benchmark controls, not Lightroom
-latency, RAM, or undocumented rendering internals.
+Run both apps on the **same Mac, display, source RAWs and drive**, in the same power and thermal conditions. Record macOS, app/build versions, display refresh, RAW default/profile, GPU mode, storage location, and cold/warm state. Lightroom has Auto/Off/Custom GPU modes; Custom separately controls display, processing, and export. Its Cache preferences describe managed originals/smart previews and a disk cache limit in the cloud-backed library context; **do not assume that limit bounds Local-tab thumbnails or RAM** without measuring. Record Local versus Cloud for every Lightroom run and whether any background upload, sync, AI analysis or cache fill occurred. Alternate app order; report median/p95 with trial counts and spread. Use screen timestamps for selection/input to **first correct edited pixel** and final settle, plus Instruments for hitches and process/Metal memory. An embedded preview, stale prior frame or wrong edit does not count as correct. [Adobe: Set preferences](https://helpx.adobe.com/lightroom/desktop/introduction/preferences.html); [Adobe: Edit photos](https://helpx.adobe.com/lightroom/desktop/edit-photos/edit-photos.html); [Apple: Improving app responsiveness](https://developer.apple.com/documentation/xcode/improving-app-responsiveness)
 
-| Workflow | Observable acceptance for Orion | Measure / present evidence |
-|---|---|---|
-| Continuous edit: exposure, WB, local mask, 100% pan | Each input produces the correct preview without a wrong-photo/wrong-look flash; settle agrees with full render. Retain Orion's existing **<16 ms preview-feedback target** as an internal target, and separately measure pointer event → displayed pixel. | Median/p95 input-to-photon, dropped frames/hitches, release → final settle, image hashes or pixel comparisons. Apple says one refresh interval is roughly 8–16 ms and main-thread continuous work should be shorter [P1, P2]. The current 42 MP exposure **17.38 ms p95** is render/work timing from #271, not an input-to-photon result. |
-| Cold/warm open and photo switch | First displayed image belongs to selected photo; edited state arrives correctly, and no main-thread freeze blocks another action. | Select → first correct edited frame, final settle, longest main-thread stall; 24 and 42 MP, cold and warm, sidecar/no sidecar. Existing **210.9 ms** cold open (#151) is historical, not a current paired Lightroom result. |
-| Folder browse, 5,000 RAWs | Correct listing/marks while switching folders or scrolling; abandoned folder work stops; memory reaches a repeatable plateau and falls to a bounded steady state after leaving. | Time to first useful grid, time until visible thumbnails complete, scroll hitch ratio, peak/steady **process footprint** and Metal texture bytes, after open/scroll/switch/close. No arbitrary GiB pass line before device and Lightroom measurements; current 9.51 GiB session retention (#271) and unbounded live thumbnails in the desktop audit make this a priority. Apple's Game Memory template separates VM footprint from Metal resource allocations [P3]. |
-| Masks: create, brush, hide, reorder, undo, reopen | Selection and local adjustments remain attached to the intended photo/region through every operation. Mask overlay follows edited geometry; canceled/stale AI completion cannot change another photo. | Record interaction/AI inference latency and settle separately, footprint before/after eight masks and long brush, plus before/after rendered pixels and reopened sidecar/matte files. Compare shared mask kinds and operations only. Adobe documents non-destructive local masking and mask overlays [A5]; the masking audit identifies correctness gaps that block a speed win. |
-| Edit/rate/sync across files | A saved edit is durable after restart; a failed save remains owed; changing one photo never changes another; foreign XMP fields survive. A malformed existing payload remains untouched with a visible failure. | Byte-check RAW, XMP and matte siblings before/after switch, batch, failed write/retry, rating, and external-metadata round trip. Adobe documents optional automatic XMP writes and newer ACR companions for heavy edits [A6, A7]. Orion need not copy that storage split; its own XMP-truth invariant and interoperability matter. |
-| Export and cancel | Exported pixels match the chosen saved edit; failed restore/export reports failure; Stop is actionable before the next photo and the UI keeps repainting. No partial destination is presented as a finished export. | Time per photo/whole batch, main-queue heartbeat and Stop → last new job, output validity, sidecar byte equality, failure/cancel counts. The desktop audit traces a synchronous batch loop and cross-photo autosave corruption; these are correctness gates before throughput ranking. |
+| Shared Local workflow | Correctness condition and measurement |
+|---|---|
+| Folder open, 5,000-RAW browse, photo switch | Correct listing, marks and selected photo; no stale image when switching folders. Measure first useful grid, visible thumbnails, select→correct edit, scrolling hitches, peak/steady process footprint and Metal texture bytes after open, scroll, switch and close. Lightroom Local's folder access is documented; neither its Local thumbnail memory policy nor Orion's full-scale footprint has been measured here. |
+| Continuous exposure/WB edit, 100% pan, brush | Input gives the correct preview and settles to a consistent full image. Measure input→displayed pixel, dropped frames, longest main-thread stall, release→settle, and pixels. Orion's `<16 ms` preview target is **internal**, not a published Lightroom target. The measured 42 MP exposure 17.38 ms p95 in #271 is engine work, not input-to-photon latency. [Apple: Understanding UI responsiveness](https://developer.apple.com/documentation/xcode/understanding-user-interface-responsiveness/) |
+| Local masks: create, brush, add/subtract, hide, undo, reopen | Coverage and adjustment stay with the intended image/region through each operation; overlay follows geometry. Compare only controls both apps expose; record Adobe's documented background selection and mask intersection as separate capability rows until Orion equivalents are verified. Measure manual interaction and AI inference separately, with rendered before/after pixels and reopened files. Orion's eight source-traced mask findings need render reproductions before speed ranking. [Adobe: Apply Masking](https://helpx.adobe.com/lightroom/desktop/edit-photos/masking.html) |
+| Local edit, rate, sidecar move/reopen, export | Saved edits survive restart; a failed write remains visible/owed; one photo's edit never changes another; foreign XMP fields survive Orion writes; outputs reflect the selected edit and incomplete outputs are rejected. Byte-check RAW/XMP siblings and output, plus failure/cancel counts. Test interoperability fields independently from visual edit compatibility. Lightroom Local may store metadata internally or in XMP, depending on file type; record which is observed for the RAW fixture. [Adobe: Import and access photos](https://helpx.adobe.com/lightroom/desktop/add-import-and-capture-photos/access-photos.html) |
+| Batch export and cancellation, where comparable in the installed version | Measure time per image, throughput, main-queue heartbeat, cancel→last new job, and output validity. Report differing controls/semantics explicitly. Orion's synchronous batch loop and cross-photo autosave path are correctness blockers in `2026-09-28-desktop-io-audit.md`, not speed results. |
 
-**Comparison threshold:** first fix the correctness failures in the masking and
-desktop-I/O audits. Then publish paired Orion/Lightroom Classic numbers for
-each applicable row, including confidence/spread and settings. “Better” means
-lower p95 input-to-correct-display and settle time on the shared workflow **with
-no worse correctness or materially higher peak/retained footprint**; do not
-collapse unlike workflows into one score. Apple places noticeable discrete
-interaction delay around 50–100 ms and advises keeping non-UI work off the main
-thread [P1, P2]. Those are platform guidance, not published Lightroom results.
+Use shared 24 and 42 MP photographs and a 5,000-file folder, with sidecar/no-sidecar variants. A 24 MP corpus and a pinned Lightroom installation/version are **missing**. Orion's earlier 9.51 GiB full-session retention (#271) and reduced-fixture post-fix texture result (`2026-09-28-memory-retention.md`) are different measurements; neither is a paired Lightroom result. [Apple: Analyzing Metal app memory](https://developer.apple.com/documentation/xcode/analyzing-the-memory-usage-of-your-metal-app); [Apple: Analyzing Metal app performance](https://developer.apple.com/documentation/xcode/analyzing-the-performance-of-your-metal-app)
 
-## Evidence still needed
+## Separate product coverage
 
-1. A pinned same-machine Lightroom Classic installation/version and Orion build,
-   shared 24/42 MP and 5,000-file fixtures, source-drive class, preview/cache/XMP
-   settings, display rate, and paired cold/warm run log. No such competitor run
-   appears in the current audits.
-2. Screen-timestamped input → **correct edited pixel** and settle traces, plus
-   Instruments Hangs/Hitches, CPU, Game Memory/VM Tracker, and Metal resource
-   captures. Existing engine timings and arithmetic thumbnail estimates are not
-   process footprint or end-to-end UX measurements [P1, P3, P4].
-3. Render/file regression evidence for every P1 in
-   `2026-09-28-masking-audit.md` and `2026-09-28-desktop-io-audit.md`, followed by
-   the same benchmark after fixes. No nine-gate or physical-gesture/VoiceOver
-   result is implied by this research note.
+Lightroom **Cloud** import, album sync, sharing across devices, cloud storage/cache and offline cloud albums require a separate workflow and network/account-state record. Adobe says adding photos copies originals into Lightroom and uploads full-resolution originals, whereas Local needs neither import nor sync. Orion has no equivalent cloud service, so label those capabilities **absent**, rather than awarding or withholding a Local performance score for them. Lightroom's Local folder management and XMP behavior are real shared-workflow comparators; Orion's folder-first design is settled and requires no catalog or cloud imitation. [Adobe: Add photos](https://helpx.adobe.com/lightroom/desktop/add-import-and-capture-photos/add-photos.html); [Adobe: Import and access photos](https://helpx.adobe.com/lightroom/desktop/add-import-and-capture-photos/access-photos.html)
 
-## Primary sources
+## Evidence needed before any result
 
-- [A1 Adobe: Optimize Lightroom performance](https://helpx.adobe.com/lightroom-classic/desktop/technical-support/performance-guidelines/optimize-performance-lightroom.html) — preview types, embedded/processed look differences, Camera Raw cache.
-- [A2 Adobe: Import photos from a folder](https://helpx.adobe.com/lightroom-classic/desktop/import-photos/import-photos-video-catalog.html) — catalog link and Add/Copy/Move behavior.
-- [A3 Adobe: Catalog and preview cache settings](https://helpx.adobe.com/lightroom-classic/desktop/manage-catalogs-and-files/create-catalogs.html) — standard and 1:1 previews, cache limit/discard.
-- [A4 Adobe: GPU preview generation](https://helpx.adobe.com/lightroom-classic/desktop/kb/gpu-preview-generation.html) — Auto/On/Off control.
-- [A5 Adobe: Masking tool](https://helpx.adobe.com/lightroom-classic/desktop/process-and-develop-photos/masking.html) — mask kinds, overlay, non-destructive local edits.
-- [A6 Adobe: Advanced metadata actions](https://helpx.adobe.com/lightroom-classic/desktop/organize-photos-in-lightroom-classic/advanced-metadata-actions.html) — XMP writes and automatic-write option.
-- [A7 Adobe: Save metadata to external sidecars](https://helpx.adobe.com/lightroom-classic/desktop/organize-photos-in-lightroom-classic/create-xmp-acr-files.html) — XMP and Lightroom Classic 15 ACR sidecars.
-- [P1 Apple: Improving app responsiveness](https://developer.apple.com/documentation/xcode/improving-app-responsiveness) — interaction, main-thread and frame guidance.
-- [P2 Apple: Understanding UI responsiveness](https://developer.apple.com/documentation/xcode/understanding-user-interface-responsiveness/) — hangs versus hitches.
-- [P3 Apple: Analyzing Metal app memory](https://developer.apple.com/documentation/xcode/analyzing-the-memory-usage-of-your-metal-app) — Game Memory, VM Tracker, resource events and footprint.
-- [P4 Apple: Analyzing Metal app performance](https://developer.apple.com/documentation/xcode/analyzing-the-performance-of-your-metal-app) — display-time and skipped-vsync evidence.
+1. Install and pin Adobe Lightroom desktop and its version, then capture actual Local-tab settings, 24/42 MP and 5,000-file fixtures, storage and thermal context. Document any Cloud-only case separately.
+2. Fix/reproduce the P1 file-safety and mask-correctness findings in `2026-09-28-desktop-io-audit.md`, `2026-09-28-engine-io-audit.md`, and `2026-09-28-masking-audit.md`; rerun after fixes. Nine green gates do not clear those cases.
+3. Collect paired screen/Instruments timings, process and Metal memory, output pixels, failure behavior, and physical keyboard/pointer/VoiceOver observations. Report shared workflows individually with settings and uncertainty. “Better” requires faster **correct** display/settle without worse data safety or materially higher peak/retained footprint; do not collapse unlike workflows into one score.
