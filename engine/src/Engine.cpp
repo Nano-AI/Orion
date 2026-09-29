@@ -334,21 +334,32 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
     const std::uint32_t h = develop_->outputHeight();
     if (w == 0 || h == 0) return;
 
-    // Format-aware: the tail is eight bits for the screen and sixteen only
-    // around an export, and the histogram is a screen reader.
-    const std::vector<float> pixels = readOutputFloat(w, h);
-
     // A prime stride decorrelates from any repeating structure in the image,
     // so a picket fence cannot alias into a false peak.
     constexpr std::size_t kStride = 31;
     const std::size_t count = std::size_t(w) * h;
+    const auto add = [&](std::uint32_t c, float pixel) {
+        const float v = std::clamp(pixel, 0.0f, 1.0f);
+        const std::uint32_t bin = std::min<std::uint32_t>(
+            bins - 1, static_cast<std::uint32_t>(v * float(bins)));
+        ++out[c * bins + bin];
+    };
 
-    for (std::size_t i = 0; i < count; i += kStride) {
-        for (std::uint32_t c = 0; c < 3; ++c) {
-            const float v = std::clamp(pixels[i * 4 + c], 0.0f, 1.0f);
-            const std::uint32_t bin = std::min<std::uint32_t>(
-                bins - 1, static_cast<std::uint32_t>(v * float(bins)));
-            ++out[c * bins + bin];
+    // Read only in the output's native format. Expanding every pixel to float
+    // used another 16 bytes per pixel even though only one in 31 is sampled.
+    if (develop_->output().format() == gpu::PixelFormat::RGBA16Float) {
+        std::vector<__fp16> pixels(count * 4);
+        develop_->output().download(pixels.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+        for (std::size_t i = 0; i < count; i += kStride) {
+            for (std::uint32_t c = 0; c < 3; ++c)
+                add(c, static_cast<float>(pixels[i * 4 + c]));
+        }
+    } else {
+        std::vector<std::uint8_t> pixels(count * 4);
+        develop_->output().download(pixels.data(), std::size_t(w) * 4, w, h);
+        for (std::size_t i = 0; i < count; i += kStride) {
+            for (std::uint32_t c = 0; c < 3; ++c)
+                add(c, pixels[i * 4 + c] / 255.0f);
         }
     }
 }
@@ -438,27 +449,7 @@ std::size_t Engine::exportedSize(const util::ExportOptions& options) {
 }
 
 /// The output as 16-bit unsigned, which is what the image formats want.
-///
-/// The graph ends in half float. Converting here rather than making the graph
-/// write integers keeps the pipeline in one numeric world, and half float is
-/// the format Metal guarantees is read-write.
-std::vector<float> Engine::readOutputFloat(std::uint32_t w, std::uint32_t h) const {
-    const std::size_t count = static_cast<std::size_t>(w) * h * 4;
-    std::vector<float> out(count);
-
-    if (develop_->output().format() == gpu::PixelFormat::RGBA16Float) {
-        std::vector<__fp16> half(count);
-        develop_->output().download(half.data(),
-                                    static_cast<std::size_t>(w) * 4 * sizeof(__fp16), w, h);
-        for (std::size_t i = 0; i < count; ++i) out[i] = static_cast<float>(half[i]);
-    } else {
-        std::vector<std::uint8_t> bytes(count);
-        develop_->output().download(bytes.data(), static_cast<std::size_t>(w) * 4, w, h);
-        for (std::size_t i = 0; i < count; ++i) out[i] = bytes[i] / 255.0f;
-    }
-    return out;
-}
-
+/// Wide export reads half float; narrow export widens screen bytes.
 std::vector<std::uint16_t> Engine::readOutput16(std::uint32_t w, std::uint32_t h) const {
     const std::size_t count = static_cast<std::size_t>(w) * h * 4;
     std::vector<std::uint16_t> out(count);

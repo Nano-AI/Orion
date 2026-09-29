@@ -113,12 +113,7 @@ public:
 
 private:
     /// The developed output as 16-bit unsigned, which is what the image
-    /// formats want. The graph ends in half float.
-    /// The output as normalized float, whichever format the tail is in.
-    /// Screen readers use this; only export widens the graph and reads 16.
-    [[nodiscard]] std::vector<float> readOutputFloat(std::uint32_t w,
-                                                     std::uint32_t h) const;
-
+    /// formats want. Wide export reads half float; narrow export reads bytes.
     [[nodiscard]] std::vector<std::uint16_t> readOutput16(std::uint32_t w,
                                                           std::uint32_t h) const;
 public:
