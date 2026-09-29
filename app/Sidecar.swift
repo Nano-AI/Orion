@@ -51,8 +51,10 @@ struct Sidecar: Sendable {
         let path = url(for: photo)
         guard FileManager.default.fileExists(atPath: path.path) else { return nil }
         let xml = try XMLDocument(data: Data(contentsOf: path), options: .nodeLoadExternalEntitiesNever)
-        let owned = "namespace-uri()='http://orion.photo/ns/1.0/' and local-name()='Develop'"
-        let nodes = try xml.nodes(forXPath: "//@*[\(owned)] | //*[\(owned)]")
+        // Foundation's XPath namespace-uri() misses namespaced attributes on
+        // macOS; XMLNode.uri resolves both attributes and elements correctly.
+        let candidates = try xml.nodes(forXPath: "//@*[local-name()='Develop'] | //*[local-name()='Develop']")
+        let nodes = candidates.filter { $0.uri == "http://orion.photo/ns/1.0/" }
         guard !nodes.isEmpty else { return nil }
         guard nodes.count == 1, let encoded = nodes[0].stringValue,
               let data = Data(base64Encoded: encoded.trimmingCharacters(in: .whitespacesAndNewlines)) else {

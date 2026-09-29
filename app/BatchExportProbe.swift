@@ -100,8 +100,7 @@ enum BatchExportProbe {
                 if done == 1 && !heartbeatScheduled {
                     heartbeatScheduled = true
                     let heartbeatScheduledAt = DispatchTime.now().uptimeNanoseconds
-                    Timer.scheduledTimer(withTimeInterval: 0, repeats: false) { _ in
-                        Task { @MainActor in
+                    let onHeartbeat: @MainActor @Sendable () -> Void = {
                             heartbeatMS = Double(DispatchTime.now().uptimeNanoseconds - heartbeatScheduledAt) / 1e6
                             heartbeat = true; cancel = true
                             let borrowed = engine.state
@@ -109,7 +108,9 @@ enum BatchExportProbe {
                             engine.undo()
                             expect(engine.state == borrowed && engine.documentEditsLocked && engine.isOpening,
                                    "UI heartbeat cannot edit the borrowed engine")
-                        }
+                    }
+                    Timer.scheduledTimer(withTimeInterval: 0, repeats: false) { _ in
+                        Task { @MainActor in onHeartbeat() }
                     }
                 }
             }, isCanceled: { cancel })
@@ -312,6 +313,9 @@ enum BatchExportProbe {
     /// local monitor. Calling the Stop closure directly would miss this regression.
     @MainActor
     static func checkStopKey(engine: Engine) async throws -> Bool {
+        let priorPolicy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy(.regular)
+        defer { NSApp.setActivationPolicy(priorPolicy) }
         let oldOnEdit = engine.onEdit
         let oldOpening = engine.isOpening
         let oldLocked = engine.documentEditsLocked
@@ -333,10 +337,25 @@ enum BatchExportProbe {
         window.contentView = NSHostingView(rootView: content)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        // Wait for the actual view lifecycle to install its monitor/autosave.
-        try await Task.sleep(for: .milliseconds(30))
+        // The real monitor requires NSApp.keyWindow. An explicit event target
+        // alone bypasses its guard when macOS denies this process focus.
+        // Require actual readiness; never count that bypass as keyboard coverage.
+        let readinessStart = ContinuousClock.now
+        let readinessDeadline = readinessStart + .seconds(2)
         engine.onEdit?(engine.state)
-        let installed = !startupCallbackSurvived && window.isKeyWindow
+        print("Stop dispatch initial: lifecycle=\(!startupCallbackSurvived) key=\(window.isKeyWindow) active=\(NSApp.isActive)")
+        while (startupCallbackSurvived || NSApp.keyWindow !== window)
+                && ContinuousClock.now < readinessDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+            startupCallbackSurvived = false
+            engine.onEdit?(engine.state)
+        }
+        let installed = !startupCallbackSurvived
+        let monitorWindowReady = NSApp.keyWindow === window
+        print("Stop dispatch readiness: lifecycle=\(installed) key=\(window.isKeyWindow) monitorWindow=\(monitorWindowReady) active=\(NSApp.isActive) wait=\(readinessStart.duration(to: .now))")
+        if !monitorWindowReady {
+            print("Stop dispatch unavailable: macOS did not grant the probe window key status; monitor routing cannot be verified.")
+        }
         if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
             context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
@@ -344,6 +363,7 @@ enum BatchExportProbe {
             NSApp.sendEvent(event)
         }
         try await Task.sleep(for: .milliseconds(30))
+        print("Stop dispatch activated: \(stopped)")
         window.contentView = nil
         window.close()
         // onDisappear removes the real local monitor before other checks can run.
@@ -352,7 +372,7 @@ enum BatchExportProbe {
         engine.isOpening = oldOpening
         engine.documentEditsLocked = oldLocked
         engine.batchExporting = false
-        return installed && stopped
+        return installed && monitorWindowReady && stopped
     }
 
 }
