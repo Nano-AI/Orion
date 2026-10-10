@@ -50,6 +50,10 @@ struct AnalogTrack: View {
     @State private var startValue: Float?
     @State private var startFraction: CGFloat = 0
 
+    /// Whether this gesture began on the detent. Such a drag is leaving neutral
+    /// and is never snapped back to it - see `AdjustmentMath.detented`.
+    @State private var departing = false
+
     private let height: CGFloat = 21
     private let thumbWidth: CGFloat = 19
     private let thumbHeight: CGFloat = 13
@@ -256,7 +260,16 @@ struct AnalogTrack: View {
                     let onThumb = abs(unit - thumbFraction) * travel < thumbWidth
                     startFraction = onThumb ? thumbFraction : min(max(unit, 0), 1)
                     startValue = range.lowerBound + Float(startFraction) * span
-                    if !onThumb { commit(startValue ?? value, snapping: true) }
+                    // A gesture that begins on the detent is a departure: the
+                    // thumb picked up where it rests on neutral, or a track
+                    // click that the detent caught. The click itself still
+                    // snaps, so a press near the index mark lands on it.
+                    departing = false
+                    if onThumb {
+                        departing = abs(value - base) <= span * 1e-6
+                    } else {
+                        departing = commit(startValue ?? value, snapping: true) == base
+                    }
                     return
                 }
 
@@ -269,21 +282,25 @@ struct AnalogTrack: View {
             }
             .onEnded { _ in
                 startValue = nil
+                departing = false
                 dragging = false
                 interacting(false)
             }
     }
 
-    /// Clamps, detents, and hands the value up.
+    /// Clamps, detents, and hands the value up. Returns the value it landed on.
     ///
     /// The detent is what makes the default findable by drag rather than by
     /// eye, and it snaps to the base *exactly* — so a control dragged back to
     /// neutral stops reporting itself as modified, instead of sitting at
-    /// 0.0004 and claiming an edit that is not visible in the picture.
-    private func commit(_ raw: Float, snapping: Bool) {
-        var v = min(max(raw, range.lowerBound), range.upperBound)
-        if snapping, abs(v - base) < span * 0.015 { v = base }
-        guard v != value else { return }
-        set(v)
+    /// 0.0004 and claiming an edit that is not visible in the picture. It
+    /// catches arrivals only: a drag that began on the base is never pulled
+    /// back to it, which is what let Straighten refuse every angle under 2.7°.
+    @discardableResult
+    private func commit(_ raw: Float, snapping: Bool) -> Float {
+        let v = AdjustmentMath.detented(raw, base: base, range: range,
+                                        departing: departing, snapping: snapping)
+        if v != value { set(v) }
+        return v
     }
 }

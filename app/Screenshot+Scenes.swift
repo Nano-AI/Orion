@@ -320,13 +320,17 @@ extension Screenshot {
             engine.exposureEv = 2.6
         case "asshot":
             break
-        case "reset", "reset-hover":
+        case "reset", "reset-hover", "reset-edit":
             // A mix of touched and untouched controls, so the accent readout
             // can be read against the plain one in the same frame.
             engine.exposureEv = 2.6
             engine.highlights = -0.4
             engine.shadows = 0.45
             AdjustmentSlider.previewHover = (scene == "reset-hover")
+            // `reset-edit` opens the typed-value editor on a moved control, to
+            // be compared against `reset`: the field must sit exactly where
+            // the number did, and nothing around it may move.
+            AdjustmentSlider.previewEditing = (scene == "reset-edit") ? "Highlights" : nil
         case "grade":
             engine.exposureEv = 2.6
             // Cool shadows, warm highlights — the split-tone every grading

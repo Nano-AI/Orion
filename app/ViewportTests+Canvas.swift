@@ -132,6 +132,92 @@ extension ViewportTests {
         }
     }
 
+    /// The detent catches a control coming back to neutral and never one
+    /// leaving it. Straighten's -90...90 makes the window 2.7° wide, and a drag
+    /// that began on 0 used to collapse every angle under that back to 0 - the
+    /// photographer could not set 1° by hand at all.
+    static func testDetentDoesNotFightADeparture() {
+        let angle: ClosedRange<Float> = -90...90
+
+        report(AdjustmentMath.detented(1.0, base: 0, range: angle,
+                                        departing: true, snapping: true) == 1.0,
+               "a drag that began on the detent keeps 1°")
+        report(AdjustmentMath.detented(-0.5, base: 0, range: angle,
+                                        departing: true, snapping: true) == -0.5,
+               "a drag that began on the detent keeps -0.5°")
+
+        // Arriving is what the detent is for: a drag that began elsewhere
+        // still lands exactly on the base, so the readout stops claiming an edit.
+        report(AdjustmentMath.detented(1.0, base: 0, range: angle,
+                                        departing: false, snapping: true) == 0,
+               "a drag arriving within the window lands on the base")
+        report(AdjustmentMath.detented(3.0, base: 0, range: angle,
+                                        departing: false, snapping: true) == 3.0,
+               "outside the window nothing snaps")
+        report(AdjustmentMath.detented(1.155, base: 1.15, range: 0...2,
+                                        departing: false, snapping: true) == 1.15,
+               "a base that is not zero detents too")
+
+        // The clamp holds whichever way the gesture began.
+        report(AdjustmentMath.detented(120, base: 0, range: angle,
+                                        departing: true, snapping: true) == 90,
+               "a departing drag clamps to the top of the range")
+        report(AdjustmentMath.detented(-120, base: 0, range: angle,
+                                        departing: false, snapping: true) == -90,
+               "an arriving drag clamps to the bottom of the range")
+
+        // Option's fine drag and the keyboard never detent.
+        report(AdjustmentMath.detented(1.0, base: 0, range: angle,
+                                        departing: false, snapping: false) == 1.0,
+               "snapping off never snaps")
+    }
+
+    /// What a photographer types into a readout. Forgiving about whitespace,
+    /// units and a comma decimal; clamped rather than refused; nil for anything
+    /// that is not a number, so the old value stays.
+    static func testTypedReadoutParses() {
+        let angle: ClosedRange<Float> = -90...90
+
+        report(AdjustmentMath.parsed("2.8", unit: "°", range: angle) == 2.8,
+               "2.8 is 2.8")
+        report(AdjustmentMath.parsed(" 1,5 ", unit: "°", range: angle) == 1.5,
+               "a comma decimal with spaces is 1.5")
+        report(AdjustmentMath.parsed("200°", unit: "°", range: angle) == 90,
+               "200° clamps to 90")
+        report(AdjustmentMath.parsed("-200", unit: "°", range: angle) == -90,
+               "-200 clamps to -90")
+        report(AdjustmentMath.parsed("abc", unit: "°", range: angle) == nil,
+               "abc is not a number")
+        report(AdjustmentMath.parsed("", unit: "°", range: angle) == nil,
+               "an empty field is not a number")
+        report(AdjustmentMath.parsed("°", unit: "°", range: angle) == nil,
+               "a unit alone is not a number")
+
+        // The panel's own units, typed back as they are printed.
+        report(AdjustmentMath.parsed("1.25 EV", unit: " EV", range: -5...5) == 1.25,
+               "the control's own unit is stripped")
+        report(AdjustmentMath.parsed("0.3ev", unit: " EV", range: -5...5) == 0.3,
+               "a unit in lower case is stripped")
+        report(AdjustmentMath.parsed("5200 K", unit: " K", range: 2000...50000) == 5200,
+               "kelvin is stripped")
+        report(AdjustmentMath.parsed("0.5rad", unit: "", range: -3...3) == 0.5,
+               "a bare rad suffix is stripped on a unitless control")
+
+        // The arrow keys move by one printed step, ten with Shift, clamped.
+        report(AdjustmentMath.nudged("2.8", steps: 1, unit: "°", decimals: 1,
+                                     range: angle) == 2.9,
+               "up nudges one printed step")
+        report(AdjustmentMath.nudged("2.8", steps: -10, unit: "°", decimals: 1,
+                                     range: angle) == 1.8,
+               "shift-down nudges ten steps")
+        report(AdjustmentMath.nudged("89.5", steps: 10, unit: "°", decimals: 1,
+                                     range: angle) == 90,
+               "a nudge clamps to the range")
+        report(AdjustmentMath.nudged("x", steps: 1, unit: "°", decimals: 1,
+                                     range: angle) == nil,
+               "a nudge over a non-number leaves it alone")
+    }
+
     /// The percentage in the toolbar is true magnification, not zoom.
     static func testPercent() {
         let v = Viewport()

@@ -68,6 +68,8 @@ enum ViewportTests {
         testCurveMatchesTheEngine()
         testCurvePointsStayOrdered()
         testModifiedTracksTheReadout()
+        testDetentDoesNotFightADeparture()
+        testTypedReadoutParses()
         testDrawnRectFollowsTheZoom()
         testCanvasReductionAverages()
         testExportSkipsRejects()

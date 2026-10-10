@@ -15,6 +15,11 @@ import SwiftUI
 /// One affordance rather than two: the color says which controls are modified
 /// *and* marks what is clickable, which a separate change dot in the margin
 /// would have said again in a smaller, harder-to-hit way.
+///
+/// Double-clicking the readout types a value instead, on any control, moved or
+/// not. A drag resolves a hundredth of the throw at best, and an exact angle
+/// or a round number of stops is something a photographer already knows
+/// rather than something to hunt for.
 struct AdjustmentSlider: View {
     let name: String
     @Binding var value: Float
@@ -43,12 +48,30 @@ struct AdjustmentSlider: View {
 
     private var hovering: Bool { pointerInside || Self.previewHover }
 
+    /// The value being typed, while the readout is an editor.
+    @State private var editing = false
+    @State private var draft = ""
+    @FocusState private var fieldFocused: Bool
+
+    /// Opens the editor on the control of this name, for the screenshot
+    /// harness - the same reason as `previewHover`: a double-click cannot be
+    /// staged offscreen, and whether the field sits exactly where the number
+    /// did is a question only a picture answers.
+    nonisolated(unsafe) static var previewEditing: String?
+
+    private var isEditing: Bool { editing || Self.previewEditing == name }
+
     private var modified: Bool {
         AdjustmentMath.isModified(value, from: base, decimals: decimals)
     }
 
     private func text(_ v: Float) -> String {
         String(format: "%.\(decimals)f%@", v, unit)
+    }
+
+    /// The number alone, as the editor shows it.
+    private func number(_ v: Float) -> String {
+        String(format: "%.\(decimals)f", v)
     }
 
     var body: some View {
@@ -98,19 +121,122 @@ struct AdjustmentSlider: View {
     /// accent and the window becomes a button; hovering adds the revert glyph
     /// to its left, growing into the gap the spacer already holds so nothing
     /// the eye is tracking moves.
+    ///
+    /// Double-click types a value. ⚠ The two taps are one exclusive gesture so
+    /// a double-click never resets first, and the price is that the single
+    /// click's reset waits out the system double-click interval before it
+    /// fires. A reset that lands a fraction of a second late is a far smaller
+    /// cost than a double-click that wipes the value it was about to edit.
     @ViewBuilder private var readout: some View {
-        if modified {
-            Button {
-                engine.edit("Reset \(name)") { value = base }
-            } label: {
-                window(accent: true)
-            }
-            .buttonStyle(.plain)
+        let accent = modified && !isEditing
+        window(accent: accent)
             .onHover { pointerInside = $0 }
-            .help("Reset \(name) to \(text(base))")
+            .gesture(
+                TapGesture(count: 2).onEnded { beginEditing() }
+                    .exclusively(before: TapGesture(count: 1).onEnded {
+                        guard modified, !isEditing else { return }
+                        engine.edit("Reset \(name)") { value = base }
+                    }),
+                // While the field is open its clicks belong to it: placing the
+                // caret must not be read as a reset or a second editor.
+                including: isEditing ? .subviews : .all
+            )
+            .help(modified
+                  ? "Reset \(name) to \(text(base)). Double-click to type a value"
+                  : "Double-click to type a value")
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(modified ? .isButton : [])
+            .accessibilityAction(named: Text("Type a value")) { beginEditing() }
+            .accessibilityAction(named: Text("Reset")) {
+                guard modified else { return }
+                engine.edit("Reset \(name)") { value = base }
+            }
+            // A drag on the track while the field is open makes what it holds
+            // stale; the track wins and the editor closes without committing.
+            .onChange(of: value) { _, _ in
+                if editing { closeEditor() }
+            }
+    }
+
+    /// The number, or a field holding it while it is being typed.
+    ///
+    /// ⚠ The field is laid over a hidden copy of the readout's own text, so the
+    /// window keeps exactly the width and height the number gave it: the label,
+    /// the track and the window's right edge cannot move when it opens. Typing
+    /// more than fits grows the window leftwards into the spacer, the same way
+    /// the revert glyph does.
+    @ViewBuilder private var content: some View {
+        if isEditing {
+            ZStack(alignment: .trailing) {
+                Text(text(value)).hidden()
+                Text(draft).hidden()
+            }
+            .font(.system(size: 11))
+            .monospacedDigit()
+            .overlay(alignment: .trailing) {
+                TextField("", text: $draft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .multilineTextAlignment(.trailing)
+                    // Measured, not guessed: at 11pt AppKit's field cell sets
+                    // its baseline one device pixel (half a point at 2x) below
+                    // where SwiftUI's Text puts it, so without this the number
+                    // visibly drops when the editor opens (`reset-edit`
+                    // against `reset`).
+                    .offset(y: -0.5)
+                    .focused($fieldFocused)
+                    // The harness opens the editor without `beginEditing`.
+                    .onAppear { if draft.isEmpty { draft = number(value) } }
+                    .onSubmit { commitEdit() }
+                    .onExitCommand { closeEditor() }
+                    .onKeyPress(keys: [.upArrow, .downArrow],
+                                phases: [.down, .repeat]) { press in
+                        let direction = press.key == .upArrow ? 1 : -1
+                        let steps = direction * (press.modifiers.contains(.shift) ? 10 : 1)
+                        if let v = AdjustmentMath.nudged(draft, steps: steps, unit: unit,
+                                                         decimals: decimals, range: range) {
+                            draft = number(v)
+                        }
+                        return .handled
+                    }
+                    .onChange(of: fieldFocused) { _, focused in
+                        // Clicking away commits, the way every inspector field
+                        // on this platform does.
+                        if !focused && editing { commitEdit() }
+                    }
+            }
         } else {
-            window(accent: false)
+            Text(text(value))
+                .font(.system(size: 11))
+                .monospacedDigit()
         }
+    }
+
+    private func beginEditing() {
+        guard !editing else { return }
+        draft = number(value)
+        editing = true
+        // Focused on the next turn, once the field exists. A text field given
+        // focus this way selects its whole contents, so the first keystroke
+        // replaces the number rather than appending to it.
+        DispatchQueue.main.async { fieldFocused = true }
+    }
+
+    /// One undo step for the typed value, through the same history as a drag.
+    /// Anything that is not a number leaves the old value where it was.
+    private func commitEdit() {
+        guard editing else { return }
+        let v = AdjustmentMath.parsed(draft, unit: unit, range: range)
+        closeEditor()
+        if let v, v != value {
+            engine.edit(name) { value = v }
+        }
+    }
+
+    private func closeEditor() {
+        editing = false
+        fieldFocused = false
     }
 
     private func window(accent: Bool) -> some View {
@@ -119,9 +245,7 @@ struct AdjustmentSlider: View {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 9, weight: .semibold))
             }
-            Text(text(value))
-                .font(.system(size: 11))
-                .monospacedDigit()
+            content
         }
         .foregroundStyle(accent ? Palette.accent : Palette.text)
         .padding(.horizontal, 5)
