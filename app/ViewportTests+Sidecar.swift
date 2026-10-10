@@ -62,8 +62,15 @@ extension ViewportTests {
         let busy = Mirror(reflecting: busyState()).children.map {
             ($0.label ?? "?", String(describing: $0.value))
         }
+        // ⚠ `localTintAxis` is exempt, and only it: its one off-default value,
+        // 0, is converted to 1 by the decoder that reads it, so no state can
+        // carry it through a round trip by design. Decision #290;
+        // `testLocalTintAxisGatesTheLegacySign` is its own check.
+        let roundTripExempt: Set<String> = ["localTintAxis"]
         var untouched: [String] = []
-        for (a, b) in zip(fresh, busy) where a.1 == b.1 { untouched.append(a.0) }
+        for (a, b) in zip(fresh, busy) where a.1 == b.1 && !roundTripExempt.contains(a.0) {
+            untouched.append(a.0)
+        }
         report(untouched.isEmpty,
                "busyState() moves every field off its default, so the sidecar "
                    + "round trip can actually see each one",
@@ -210,7 +217,12 @@ extension ViewportTests {
                 near(CGFloat(l.contrast), 0.4, 1e-6, "its contrast")
                 near(CGFloat(l.saturation), -0.7, 1e-6, "its saturation")
                 near(CGFloat(l.warmth), 0.25, 1e-6, "its warmth")
-                near(CGFloat(l.tint), -0.15, 1e-6, "and its tint")
+                // ⚠ Negated, not kept: the file has no `localTintAxis`, so its
+                // tint was set while a layer's positive tint was green, and the
+                // decoder turns it into the current magenta-positive axis on
+                // the way in so the photograph looks as it did. Decision #290.
+                near(CGFloat(l.tint), 0.15, 1e-6,
+                     "and its tint, negated onto the current axis")
             }
         } else {
             report(false, "a pre-layer sidecar decodes")
@@ -835,6 +847,64 @@ extension ViewportTests {
            let text = String(data: data, encoding: .utf8) {
             report(text.contains(#""maskSpace":1"#),
                    "the encoder writes the marker on every save")
+        }
+    }
+    /// The `localTintAxis` marker gates which way a sidecar's layer tints run,
+    /// and the decoder converts a legacy one on the way in. Decision #290.
+    ///
+    /// A layer's tint multiplied green *up* for as long as layers existed, the
+    /// opposite of the global Tint and of the slider's own green-to-magenta
+    /// track. 18 of the photographer's 228 sidecars carried a nonzero layer
+    /// tint approved by eye under that sign, so a file with no marker must
+    /// come in negated - or fixing the shader would have turned every one of
+    /// them the other way.
+    static func testLocalTintAxisGatesTheLegacySign() {
+        func decode(_ json: String) -> DevelopState? {
+            guard let data = json.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode(DevelopState.self, from: data)
+        }
+
+        // Layer tints and no marker: the legacy era, every layer negated.
+        let legacy = decode(#"{"layers":[{"tint":0.15},{"tint":0},{"tint":-0.45}]}"#)
+        report(legacy?.localTintAxis == 1,
+               "a marker-less sidecar with layer tints comes in on the current axis",
+               "localTintAxis \(legacy?.localTintAxis ?? -1)")
+        report(legacy?.layers.map(\.tint) == [-0.15, 0, 0.45],
+               "with every layer's tint negated, so it renders as it was approved",
+               "\(legacy?.layers.map(\.tint) ?? [])")
+        report(legacy?.layers[1].tint.sign == .plus,
+               "and an untouched layer keeps +0 rather than gaining a -0")
+
+        // A stated marker wins: a current sidecar is never touched.
+        let current = decode(#"{"localTintAxis":1,"layers":[{"tint":0.15},{"tint":-0.45}]}"#)
+        report(current?.localTintAxis == 1 && current?.layers.map(\.tint) == [0.15, -0.45],
+               "a sidecar stating the current axis decodes untouched",
+               "\(current?.layers.map(\.tint) ?? [])")
+        let stated = decode(#"{"localTintAxis":0,"layers":[{"tint":0.2}]}"#)
+        report(stated?.localTintAxis == 1 && stated?.layers.first?.tint == -0.2,
+               "and a stated legacy marker converts like an absent one")
+
+        // No layer tint, no marker: nothing to gate, so exactly the defaults.
+        report(decode("{}") == DevelopState(),
+               "an empty sidecar is exactly DevelopState()")
+        report(decode(#"{"layers":[{"exposureEv":0}]}"#) == DevelopState(),
+               "and so is a legacy one whose layers never moved the tint")
+
+        // The encoder always writes the current marker, so a fresh save is
+        // self-describing whatever build reads it next - and a round trip of a
+        // live state never negates anything.
+        var live = DevelopState()
+        live.layers = [LocalAdjustState(tint: 0.3)]
+        if let data = try? JSONEncoder().encode(live),
+           let text = String(data: data, encoding: .utf8) {
+            report(text.contains(#""localTintAxis":1"#),
+                   "the encoder writes the marker on every save")
+            let back = try? JSONDecoder().decode(DevelopState.self, from: data)
+            report(back?.layers.first?.tint == 0.3,
+                   "and a round trip keeps a current tint's sign",
+                   "\(back?.layers.first?.tint ?? .nan)")
+        } else {
+            report(false, "DevelopState encodes")
         }
     }
 }

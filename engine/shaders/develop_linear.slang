@@ -271,10 +271,16 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
             // color, so the ratio was one and the renormalisation did nothing.
             const float before = luminance2020(c);
 
+            // ⚠ Positive tint is MAGENTA, so it pulls green DOWN - the
+            // global Tint's direction (WhiteBalance.cpp's kTintScale) and the
+            // green-to-magenta track the slider is drawn on. This multiplied
+            // green *up* until decision #290, so every layer tint read the
+            // opposite way from its own label; sidecars written before then
+            // are negated on the way in (`DevelopState.localTintAxis`).
             const float w = a * p.layerWarmth[L];
             const float t = a * p.layerTint[L];
             c *= float3(1.0f + w * 0.30f,
-                        1.0f + t * 0.30f,
+                        1.0f - t * 0.30f,
                         1.0f - w * 0.30f);
 
             // Renormalized on luminance so a cast moves color without also

@@ -383,16 +383,36 @@ void testLocalAdjustments() {
         la.layerWarmth[0] = 0.0f;
     }
 
-    // ── Tint is the green axis, and independent of warmth ─────────────────
+    // ── Tint is the green-magenta axis, and independent of warmth ─────────
+    //
+    // ⚠ Positive is MAGENTA: green falls against red and blue, the global
+    // Tint's direction (WhiteBalance.cpp, kTintScale) and the green-to-magenta
+    // track the local slider is drawn on. This test pinned the opposite sign
+    // until decision #290 - it asserted that +1 *raised* green, so the shader
+    // contradicting its own label was green here for as long as it shipped.
     {
+        const double baseRatio = kG / (kR + kB);
+        const int x = int(kW) - 1;
+        auto greenRatio = [&] { return px(x, 1) / (px(x, 0) + px(x, 2)); };
+
         la.layerTint[0] = 1.0f;
         run();
-        const int x = int(kW) - 1;
-        report(px(x, 1) / (px(x, 0) + px(x, 2)) > (kG / (kR + kB)) * 1.15,
-               "tint moves green against the magenta axis",
-               std::to_string(px(x, 1) / (px(x, 0) + px(x, 2))));
+        report(greenRatio() < baseRatio * 0.85,
+               "positive tint pulls green down, toward magenta",
+               std::to_string(greenRatio()) + " against "
+             + std::to_string(baseRatio));
         report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
                "and holds the luminance too",
+               std::to_string(luma(x)));
+
+        la.layerTint[0] = -1.0f;
+        run();
+        report(greenRatio() > baseRatio * 1.15,
+               "and negative tint pushes green up",
+               std::to_string(greenRatio()) + " against "
+             + std::to_string(baseRatio));
+        report(std::abs(luma(x) - baseLuma) / baseLuma < 0.01,
+               "holding the luminance the other way as well",
                std::to_string(luma(x)));
         la.layerTint[0] = 0.0f;
     }

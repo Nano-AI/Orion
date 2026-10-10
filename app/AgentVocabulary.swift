@@ -130,7 +130,9 @@ extension AgentCLI {
         + "so on (MaskLayers.group). Every element needs every LocalAdjustState field "
         + "(exposureEv, contrast, saturation, warmth, tint, highlights, shadows, whites, "
         + "blacks), each checked against the *local* panel's own range, not the global "
-        + "scalar one - local exposure is -3…3 EV where global is -5…5."
+        + "scalar one - local exposure is -3…3 EV where global is -5…5. "
+        + "tint runs the same way as the global tint: positive is magenta, negative is "
+        + "green; warmth positive is warmer."
 
     /// The per-kind field map, checked against `engine/shaders/
     /// mask_component.slang` (the kind branches at :306, :326, :347, :477,
@@ -161,7 +163,12 @@ extension AgentCLI {
         + "it and probe both edges with get_stats' region before believing it. "
         + "2 radial - centerX, centerY, radiusX, radiusY, feather, roundness, and angle, "
         + "which rotates the ellipse; roundness 2 is an ellipse and higher walks toward "
-        + "a rounded rectangle; feather is how far inside the boundary the ramp starts. "
+        + "a rounded rectangle; feather is the share of the radius the ramp takes, "
+        + "measured inward from the boundary: coverage is full inside (1 - feather) of "
+        + "the radius and zero at the edge, so at feather 0.8 the ellipse is fully on "
+        + "only across its inner 20%, and a compose-1 subtract row at 0.8 protects far "
+        + "less than its outline suggests; size the ellipse to the subject plus the "
+        + "feather, or keep feather near 0.5 when the outline is the subject's own edge. "
         + "3 brush - brushStroke (interleaved x,y dabs), brushErase, brushRadius, "
         + "brushFlow, brushHardness. A model cannot paint one: send no dabs and it "
         + "covers nothing, so use 2, 5 or 6 instead. "

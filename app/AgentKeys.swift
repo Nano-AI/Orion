@@ -87,7 +87,18 @@ enum AgentKeys {
         "fusion": Spec(unit: "unitless", range: 0...1),                // :106
         "grainAmount": Spec(unit: "unitless", range: 0...0.06),        // :114
         "grainSize": Spec(unit: "pixels", range: 1.2...8),             // :116
-        "vignetteAmount": Spec(unit: "EV", range: -3...3),             // :126
+        // :126. Centred on the composition, not the sensor: decision #103,
+        // DevelopOutput.cpp:170-174 re-pushes the circle on any crop or
+        // straighten, tests_vignette.cpp testCompositionCircle pins it, and
+        // vignette_ops.slang's gain is exp2(amount * falloff), so negative
+        // darkens the corners.
+        "vignetteAmount": Spec(
+            unit: "EV", range: -3...3,
+            note: "the exposure change at the corners of the COMPOSITION, not the "
+                + "sensor frame: the circle is the crop's (decision #103), so it "
+                + "follows a crop or a straighten and its centre is the displayed "
+                + "picture's centre. Negative darkens the corners, positive "
+                + "brightens them; the centre is never touched"),
         "vignetteFieldAngle": Spec(unit: "degrees", range: 10...70),   // :128
         "dehaze": Spec(unit: "unitless", range: 0...1),                // :135
         "clarity": Spec(unit: "unitless", range: -1...1),              // :141
@@ -141,6 +152,13 @@ enum AgentKeys {
                 + "0 is legacy display-space, 1 is frame-space "
                 + "(EditHistory.swift:423-442, decision #112); apply accepts "
                 + "any integer but only 0 and 1 mean anything to the engine"),
+        "localTintAxis": Spec(
+            unit: "", range: nil,
+            note: "an internal marker, not a photographer-facing control - 0 is "
+                + "legacy (a layer's positive tint was green), 1 is current "
+                + "(positive is magenta, the global tint's direction), decision "
+                + "#290; a state is converted to 1 as it is read, so every state "
+                + "apply returns already says 1. apply should never send it"),
     ]
 
     /// `2000` rather than `2000.0`, `0.06` rather than `0.059999999…` —

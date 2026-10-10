@@ -76,6 +76,7 @@ enum ViewportTests {
         testMaskGroupSidecar()
         testMaskSpaceMarkerGatesTheLegacyRead()
         testProcessVersionIsThePhotographs()
+        testLocalTintAxisGatesTheLegacySign()
         testRegionStatsFields()
         testAmericanKeyMigration()
         testSidecarEscapingDoesNotCompound()

@@ -467,6 +467,36 @@ struct DevelopState: Equatable, Codable {
     /// written before layers existed carries exactly one set, and that set is
     /// what layer 1 means.
     var layers: [LocalAdjustState]
+    /// Which way `layers`' `tint` runs: 0 is legacy, where a positive layer
+    /// tint multiplied green *up*; 1 is current, where positive is magenta,
+    /// the global Tint's direction and the green-to-magenta track the local
+    /// slider has always been drawn on. Decision #290.
+    ///
+    /// ⚠ **The marker gates meaning, absent means legacy wherever there is a
+    /// layer tint for it to gate** - the #112 / #203 rule, the `maskSpace` and
+    /// `process` shape. The shader read the green channel the wrong way for
+    /// as long as layers existed, and the photographer's library already holds
+    /// finished edits made by eye under that sign: a scan of 228 sidecars on
+    /// 2026-10-10 found 18 carrying a nonzero layer tint, -0.45 to +0.35. A
+    /// bare sign flip in the shader would have turned every one of them the
+    /// other way.
+    ///
+    /// ⚠ **Unlike `maskSpace`, converted in the decoder, not at the restore
+    /// points.** The conversion is one negation with no geometry in it, so
+    /// `init(from:)` negates every layer's tint and sets 1 the moment it sees
+    /// 0, and a live state is always 1: nothing downstream - the engine, a
+    /// preset, a paste, an undo snapshot, the agent's merge - ever sees a
+    /// legacy sign. The cost is that a legacy file re-encoded without being
+    /// opened is rewritten in the current convention rather than kept as it
+    /// was, which is self-describing all the same, because the encoder writes
+    /// the 1 beside the negated numbers.
+    ///
+    /// ⚠ **The one field here with an inline default, deliberately.** It is
+    /// a constant of the live state, not a setting the engine holds, so
+    /// `Engine.state` has nothing to pass and omitting it is the right answer
+    /// rather than the #110 trap; `init()` still names it, and
+    /// `testDevelopStateRoster` knows it.
+    var localTintAxis: Int32 = 1
 
     var fusion: Float
     var dehaze: Float
@@ -530,6 +560,7 @@ extension DevelopState {
             maskRefine: 0,
             spots: [],
             layers: [LocalAdjustState()],
+            localTintAxis: 1,
             fusion: 0, dehaze: 0, clarity: 0,
             grainAmount: 0, grainSize: 1.5,
             // 45° half-diagonal field angle, not 0 — a 0° lens has a flat cos⁴
@@ -563,6 +594,7 @@ extension DevelopState {
         "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance",
         "denoiseLuma", "denoiseColor", "lutStrength",
         "maskSpace", "maskComponents", "maskRefine", "spots", "layers",
+        "localTintAxis",
         "fusion", "dehaze", "clarity",
         "grainAmount", "grainSize",
         "vignetteAmount", "vignetteFieldAngle",
@@ -599,7 +631,7 @@ extension DevelopState {
         case maskSpace
         case maskComponents, localExposureEv, maskRefine, spots
         case localContrast, localSaturation, localWarmth, localTint
-        case layers
+        case layers, localTintAxis
         case lutStrength, fusion, dehaze, clarity, sharpenAmount, sharpenRadius, sharpenMasking
         case grainAmount, grainSize
         case vignetteAmount, vignetteFieldAngle
@@ -766,6 +798,33 @@ extension DevelopState {
             process = stated
         } else if usesToneBands {
             process = 1
+        }
+
+        // ⚠ Absent means LEGACY wherever a layer carries a tint - the
+        // `maskSpace` shape, decision #290. `self.init()` set 1; a sidecar
+        // with a nonzero layer tint and no marker was written while the
+        // shader multiplied green up, and its numbers mean the opposite of
+        // what the slider now says. With every layer tint at zero the two
+        // axes render identically, so such a file keeps the 1 and an empty
+        // sidecar is still exactly `DevelopState()`.
+        //
+        // Then converted here, not at restore: one negation, no geometry, so
+        // the live state is always 1 and nothing downstream asks which era a
+        // tint came from. The legacy scalar `localTint` has already been
+        // lifted into `layers[0]` above, so it is converted with the rest.
+        if let stated = (try? c.decodeIfPresent(Int32.self, forKey: .localTintAxis))
+            .flatMap({ $0 }) {
+            localTintAxis = stated
+        } else if layers.contains(where: { $0.tint != 0 }) {
+            localTintAxis = 0
+        }
+        if localTintAxis == 0 {
+            // `!= 0` so an untouched layer keeps +0 rather than gaining a -0
+            // that would encode as "-0" in a sidecar nobody edited.
+            for i in layers.indices where layers[i].tint != 0 {
+                layers[i].tint = -layers[i].tint
+            }
+            localTintAxis = 1
         }
 
         fusion = float(.fusion) ?? fusion

@@ -151,6 +151,10 @@ the same operation, they do not have the same units, and calling them the same
 thing would be the kind of lie that is only discovered when someone tries to
 neutralise a colour cast with one and finds it cannot.
 
+⚠ **The direction is the global one's, though.** Positive Tint is magenta (green down), negative is green, and positive Warmth is warmer (red up, blue down), so a local slider moves colour the way the global slider with the same track does.
+Until decision #290 the shader multiplied green *up* for positive Tint, the opposite of its own green-to-magenta track, and nothing written down said which way it should run.
+Sidecars from before then carry no `localTintAxis` and are negated as they are read (`DevelopState.init(from:)`), so photographs finished under the old sign still render as approved.
+
 ### ⚠ And the pyramid operators cannot be local either
 
 Clarity, dehaze and exposure fusion are 16–32 node pyramids each. A per-layer
