@@ -37,19 +37,39 @@ main=$(dirname "$main")
 [ -d "$main" ] || fail "cannot locate the main worktree (got '$main')"
 [ "$main" != "$top" ] || fail "main worktree and this worktree are the same path — refusing"
 
-# third_party is read-only to a build, so one symlink to the whole directory is
-# right: the toolchain is large and nothing writes into it.
+# third_party is read-only to a build, so a symlink per entry is right: the
+# toolchain is large and nothing writes into it.
+#
+# ⚠ Per ENTRY, not one link to the whole directory. SwiftTerm has been checked
+# in under third_party since #266, so a fresh worktree already has a real
+# third_party directory holding it, and the whole-directory link this used to
+# make can no longer be made at all - the script refused every worktree from
+# that commit on (found 2026-10-10). Only the gitignored entries (the Slang
+# toolchain) need linking, and `git ls-files` is what says which those are.
 src="$main/third_party"
 dst="$top/third_party"
-if [ ! -e "$src" ]; then
+if [ ! -d "$src" ]; then
     printf 'worktree-setup: third_party missing in the main repo, skipping\n' >&2
 else
-    if [ -L "$dst" ]; then rm "$dst"
-    elif [ -e "$dst" ]; then
-        fail "third_party already exists here and is not a symlink — refusing to touch it"
+    if [ -L "$dst" ]; then
+        fail "third_party here is a whole-directory symlink from an older run - remove it and run 'git checkout -- third_party' first"
     fi
-    ln -s "$src" "$dst"
-    printf 'worktree-setup: third_party -> %s\n' "$src"
+    mkdir -p "$dst"
+    for entry in "$src"/*/; do
+        entry=${entry%/}
+        name=$(basename "$entry")
+        # A tracked entry came with the checkout and must not be shadowed.
+        if git -C "$main" ls-files --error-unmatch "third_party/$name" >/dev/null 2>&1; then
+            continue
+        fi
+        link="$dst/$name"
+        if [ -L "$link" ]; then rm "$link"
+        elif [ -e "$link" ]; then
+            fail "third_party/$name already exists here and is not a symlink - refusing to touch it"
+        fi
+        ln -s "$entry" "$link"
+        printf 'worktree-setup: third_party/%s -> %s\n' "$name" "$entry"
+    done
 fi
 
 # ⚠ samples is DIFFERENT, and symlinking the directory is a bug.
@@ -70,9 +90,12 @@ dst="$top/samples"
 if [ ! -d "$main/samples" ]; then
     printf 'worktree-setup: samples missing in the main repo, skipping\n' >&2
 else
+    # A symlink is the whole-directory link an older run made; a directory is
+    # this script's own previous run, whose links are refreshed in place so a
+    # rerun is harmless. Anything else is not ours and is left alone.
     if [ -L "$dst" ]; then rm "$dst"
-    elif [ -e "$dst" ]; then
-        fail "samples already exists here and is not a symlink — refusing to touch it"
+    elif [ -e "$dst" ] && [ ! -d "$dst" ]; then
+        fail "samples already exists here and is not a directory - refusing to touch it"
     fi
     mkdir -p "$dst"
     n=0

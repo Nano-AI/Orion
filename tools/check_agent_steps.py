@@ -305,14 +305,52 @@ def get_stats_proposed(s, ctx):
         return (f"a +2 EV proposal left the green mean at {after['mean'][1]:.4f} "
                 f"against {before['mean'][1]:.4f} - --state never reached the render")
 
+FRAME_FIELDS = ("centerX", "centerY", "radiusX", "radiusY")
+
+def _frame_ellipse(region: dict) -> dict | str:
+    """The region's `frame` object, or why it is not a usable ellipse."""
+    frame = region.get("frame")
+    if not isinstance(frame, dict):
+        return f"region has no frame object: {frame!r}"
+    missing = [f for f in FRAME_FIELDS if not isinstance(frame.get(f), (int, float))]
+    if missing:
+        return f"frame is missing {missing}"
+    if not (0.0 <= frame["centerX"] <= 1.0 and 0.0 <= frame["centerY"] <= 1.0):
+        return f"frame centre {frame['centerX']:.4f},{frame['centerY']:.4f} is outside 0..1"
+    if not (frame["radiusX"] > 0 and frame["radiusY"] > 0):
+        return f"frame radii {frame['radiusX']:.4f},{frame['radiusY']:.4f} are not both > 0"
+    return frame
+
 def get_stats_region(s, ctx):
-    region = s.ask("get_stats", path=str(_inspect_raw(ctx)),
-                   region=[0.3, 0.3, 0.4, 0.4]).get("region", {})
+    """Every RegionStats field, and the `frame` ellipse a mask can take. The
+    ellipse is checked without knowing the sample's orientation: a region
+    nested inside another must come back as a smaller ellipse on BOTH frame
+    axes - a turn swaps which display axis feeds which, but cannot make a
+    smaller box larger - with its centre inside the larger one's."""
+    raw = str(_inspect_raw(ctx))
+    region = s.ask("get_stats", path=raw, region=[0.3, 0.3, 0.4, 0.4]).get("region", {})
     missing = [f for f in REGION_FIELDS if not isinstance(region.get(f), (int, float))]
     if missing:
         return f"region is missing {missing}"
     if not 0.0 <= region["luma"] <= 1.0:
         return f"luma {region['luma']} is outside 0..1"
+
+    outer = _frame_ellipse(region)
+    if isinstance(outer, str):
+        return outer
+    inner = _frame_ellipse(s.ask("get_stats", path=raw, region=CENTRE).get("region", {}))
+    if isinstance(inner, str):
+        return f"nested region: {inner}"
+    if not (inner["radiusX"] < outer["radiusX"] and inner["radiusY"] < outer["radiusY"]):
+        return (f"nested region's radii {inner['radiusX']:.4f},{inner['radiusY']:.4f} are not "
+                f"both smaller than {outer['radiusX']:.4f},{outer['radiusY']:.4f}")
+    reach = (((inner["centerX"] - outer["centerX"]) / outer["radiusX"]) ** 2
+             + ((inner["centerY"] - outer["centerY"]) / outer["radiusY"]) ** 2)
+    if reach > 1.0:
+        return (f"nested region's centre {inner['centerX']:.4f},{inner['centerY']:.4f} is "
+                f"outside the larger region's ellipse (reach {reach:.3f})")
+    ctx.note = (f"frame {outer['centerX']:.3f},{outer['centerY']:.3f} "
+                f"r {outer['radiusX']:.3f},{outer['radiusY']:.3f}")
 
 def get_proxy_region(s, ctx):
     """A crop at native resolution: its aspect is the region's in PIXELS, not
@@ -459,6 +497,38 @@ def mask_matte_missing(s, ctx):
     if name not in why:
         return f"'{why}' does not name the missing {name}"
 
+def get_edits(s, ctx):
+    """The read-only way to see the settings. Before it, the only way was an
+    empty propose_edit, which wrote a proposal as a side effect of asking -
+    so the first half asserts nothing appears beside the RAW."""
+    raw = ctx.copy("edits")
+    proposed = ctx.proposed(raw)
+    before = s.ask("get_edits", path=str(raw))
+    if before.get("source") not in ("sidecar", "as-shot"):
+        return f"before any proposal, source={before.get('source')!r}"
+    if before.get("hasProposed") is not False:
+        return f"before any proposal, hasProposed={before.get('hasProposed')!r}"
+    if not isinstance(before.get("state"), dict) or "exposureEv" not in before["state"]:
+        return "state is not a full DevelopState object"
+    s.ask("get_edits", path=str(raw), state="proposed")
+    if proposed.exists():
+        return f"get_edits wrote {proposed}"
+
+    try:
+        s.ask("propose_edit", path=str(raw), edits={"exposureEv": 1.0})
+        after = s.ask("get_edits", path=str(raw), state="proposed")
+        if not (after.get("source") == "proposed" and after.get("hasProposed") is True
+                and after.get("state", {}).get("exposureEv") == 1):
+            return (f"after propose exposureEv 1: source={after.get('source')!r}, "
+                    f"hasProposed={after.get('hasProposed')!r}, "
+                    f"exposureEv={after.get('state', {}).get('exposureEv')!r}")
+        current = s.ask("get_edits", path=str(raw))
+        if current.get("source") == "proposed":
+            return "state: current read the proposal"
+        ctx.note = f"source {before['source']}"
+    finally:
+        s.ask("reject_edit", path=str(raw))
+
 # -- The two steps that need a server of their own -------------------------
 
 def _solo(ctx, current_json: Path, expect_photo: Path | None):
@@ -506,4 +576,5 @@ STEPS = [
     propose_edit_reset, propose_composite, propose_composite_rejected,
     get_stats_proposed, get_stats_region, get_proxy_region, detect_faces,
     mask_invert, mask_matte, mask_matte_missing, current_photo_none, current_photo_set,
+    get_edits,
 ]

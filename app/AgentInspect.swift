@@ -81,13 +81,23 @@ extension AgentCLI {
     /// given. The product caller `RegionStats.stats` did not have until now -
     /// see `tools/check-wiring.py`, whose allowlist entry for it was written
     /// as a promise that this would arrive.
+    ///
+    /// `frame` is the same rectangle carried into frame space as the ellipse
+    /// that covers it, through `FrameDisplayMap.frameEllipse` - the carry
+    /// `detect_faces` uses - so a caller can paste it into a kind-2 radial, or
+    /// aim a kind-1 gradient's centre at it, without converting by hand. A
+    /// reviewer editing a cropped photograph did that conversion by hand
+    /// because nothing else offered it.
     @MainActor
     static func regionJSON(engine: Engine, region: Region) throws -> [String: Any] {
         let rect = CGRect(x: region.x, y: region.y, width: region.w, height: region.h)
         guard let s = Screenshot.regionStats(engine, region: rect) else {
             throw Failure.run("could not read the region - is a photo open")
         }
+        let e = engine.frameDisplayMap.frameEllipse(of: rect)
         return [
+            "frame": ["centerX": e.centerX, "centerY": e.centerY,
+                      "radiusX": e.radiusX, "radiusY": e.radiusY],
             "x": region.x, "y": region.y, "w": region.w, "h": region.h,
             "luma": s.luma, "saturation": s.saturation,
             "hue": s.hue, "hueStrength": s.hueStrength,

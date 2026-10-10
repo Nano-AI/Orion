@@ -827,3 +827,39 @@ enum CanvasLayout {
         return out
     }
 }
+
+extension CanvasLayout.FrameDisplayMap {
+
+    /// A radial mask's four numbers, in frame space: what a kind-2 row's
+    /// `centerX`/`centerY`/`radiusX`/`radiusY` hold.
+    struct FrameEllipse: Equatable {
+        var centerX = 0.0, centerY = 0.0
+        var radiusX = 0.0, radiusY = 0.0
+    }
+
+    /// A display-space rectangle carried into frame space as the ellipse
+    /// that covers it: the box's midpoint through `frame(_:)`, and per frame
+    /// axis the larger extent of the box's right-edge and bottom-edge
+    /// midpoints from that centre.
+    ///
+    /// ⚠ **One implementation, two callers.** `AgentFaces.detect` puts a
+    /// face box through this and `AgentCLI.regionJSON` puts a `--region`
+    /// through it, so a face and a region of the same rectangle cannot come
+    /// back as two different ellipses (decision #278's rule). Before this,
+    /// only the face path had the arithmetic and a reviewer converting a
+    /// region by hand had nothing to check against.
+    ///
+    /// The larger of the two per axis because a turned or keystoned frame
+    /// sends the box's own edges off the frame's axes: under a quarter turn
+    /// the display's width becomes the frame's height, and a radius that read
+    /// only one edge would be zero on the other axis and under-cover the box.
+    func frameEllipse(of display: CGRect) -> FrameEllipse {
+        let c = frame(CGPoint(x: display.midX, y: display.midY))
+        let ex = frame(CGPoint(x: display.maxX, y: display.midY))
+        let ey = frame(CGPoint(x: display.midX, y: display.maxY))
+        return FrameEllipse(
+            centerX: Double(c.x), centerY: Double(c.y),
+            radiusX: Double(max(abs(ex.x - c.x), abs(ey.x - c.x))),
+            radiusY: Double(max(abs(ex.y - c.y), abs(ey.y - c.y))))
+    }
+}

@@ -4,6 +4,7 @@
 // (docs/superpowers/plans/2026-09-13-agent-mcp.md, Task 1 Step 7) since
 // nothing here can open a raw file.
 
+import CoreGraphics
 import Foundation
 
 extension ViewportTests {
@@ -64,6 +65,81 @@ extension ViewportTests {
         } catch {
             report(false, "wrong error", "\(error)")
         }
+    }
+
+    /// `state` reads the develop state and writes nothing; it takes only
+    /// `--state`, and an `--out` - which would suggest it writes one - is a
+    /// usage error naming the flag.
+    static func testAgentParsesState() {
+        do {
+            let bare = try AgentCLI.parse(["--agent", "state", "/a.arw"])
+            report(bare == .state(raw: "/a.arw", state: nil), "parses state with no options",
+                   "\(bare)")
+            let proposed = try AgentCLI.parse(
+                ["--agent", "state", "/a.arw", "--state", "/a.proposed.json"])
+            report(proposed == .state(raw: "/a.arw", state: "/a.proposed.json"),
+                   "parses state with --state", "\(proposed)")
+        } catch {
+            report(false, "state should parse", "\(error)")
+        }
+        do {
+            _ = try AgentCLI.parse(["--agent", "state", "/a.arw", "--out", "/o.json"])
+            report(false, "state should not take --out")
+        } catch AgentCLI.Failure.usage(let message) {
+            report(message.contains("out"), "names the bad flag", message)
+        } catch {
+            report(false, "wrong error", "\(error)")
+        }
+        do {
+            _ = try AgentCLI.parse(["--agent", "state"])
+            report(false, "state with no photograph should be refused")
+        } catch AgentCLI.Failure.usage {
+            report(true, "state with no photograph is a usage error")
+        } catch {
+            report(false, "wrong error", "\(error)")
+        }
+        report(AgentCLI.usageLine.contains("state"), "the usage line names state",
+               AgentCLI.usageLine)
+    }
+
+    /// The box-to-frame-ellipse carry `detect_faces` and `get_stats --region`
+    /// share. At identity frame and display are the same numbers, so the
+    /// ellipse is the rectangle's centre and half-extents.
+    static func testFrameEllipseAtIdentity() {
+        let e = CanvasLayout.FrameDisplayMap.identity.frameEllipse(
+            of: CGRect(x: 0.2, y: 0.3, width: 0.4, height: 0.1))
+        near(e.centerX, 0.4, 1e-9, "identity: centreX is the rect's midX")
+        near(e.centerY, 0.35, 1e-9, "identity: centreY is the rect's midY")
+        near(e.radiusX, 0.2, 1e-9, "identity: radiusX is half the width")
+        near(e.radiusY, 0.05, 1e-9, "identity: radiusY is half the height")
+    }
+
+    /// A clockwise quarter turn: frame (fx, fy) shows at display (1 - fy, fx),
+    /// so the display's width runs down the frame's y axis. The ellipse has
+    /// to swap its radii, which is the case the per-axis maximum exists for:
+    /// a radius read off one edge only would come back zero on one axis.
+    static func testFrameEllipseUnderAQuarterTurn() {
+        var map = CanvasLayout.FrameDisplayMap()
+        map.toDisplay = [0, -1, 1,
+                         1, 0, 0,
+                         0, 0, 1]
+        map.toFrame = [0, 1, 0,
+                       -1, 0, 1,
+                       0, 0, 1]
+        // The pair really is a pair, and really is the turn described.
+        let corner = map.display(CGPoint(x: 0, y: 0))
+        near(corner.x, 1, 1e-9, "the frame's top-left shows at the display's top-right (x)")
+        near(corner.y, 0, 1e-9, "the frame's top-left shows at the display's top-right (y)")
+        let back = map.frame(map.display(CGPoint(x: 0.3, y: 0.7)))
+        near(back.x, 0.3, 1e-9, "frame ∘ display is the identity (x)")
+        near(back.y, 0.7, 1e-9, "frame ∘ display is the identity (y)")
+
+        let e = map.frameEllipse(of: CGRect(x: 0.2, y: 0.3, width: 0.4, height: 0.1))
+        // Display centre (0.4, 0.35) is frame (0.35, 0.6).
+        near(e.centerX, 0.35, 1e-9, "turned: centreX is the display centre's frame x")
+        near(e.centerY, 0.6, 1e-9, "turned: centreY is the display centre's frame y")
+        near(e.radiusX, 0.05, 1e-9, "turned: radiusX is half the display HEIGHT")
+        near(e.radiusY, 0.2, 1e-9, "turned: radiusY is half the display WIDTH")
     }
 
     /// An option a verb does not consume — `--sate` for `--state` — is a
@@ -221,6 +297,122 @@ extension ViewportTests {
                    "got \(String(describing: state.layers.first))")
         } catch {
             report(false, "mergeEdits should accept a complete, in-range layer", "\(error)")
+        }
+    }
+
+    /// A base with no `localTintAxis` and a nonzero layer tint - a sidecar
+    /// or `.proposed.json` written before decision #290 - as a JSON object
+    /// with the marker removed. Shared by the four tests below.
+    private static func legacyTintBase(tint: Float, keepMarker: Bool = false,
+                                        drop: [String] = []) -> Data? {
+        var state = DevelopState()
+        var layer = LocalAdjustState()
+        layer.tint = tint
+        state.layers = [layer]
+        guard let data = try? JSONEncoder().encode(state),
+              var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        if !keepMarker { object["localTintAxis"] = nil }
+        for key in drop { object[key] = nil }
+        return try? JSONSerialization.data(withJSONObject: object)
+    }
+
+    /// The incident: an agent's `layers` with tint +0.05 (current
+    /// convention) merged onto a legacy base came back -0.05, because the
+    /// merged JSON had no marker and the decoder negated the agent's input.
+    /// The base is normalised first now, so the sent value lands exactly.
+    static func testAgentMergeEditsKeepsANewLayerTintOverALegacyBase() {
+        guard let base = legacyTintBase(tint: 0.2) else {
+            report(false, "the legacy base should encode")
+            return
+        }
+        var layer = LocalAdjustState()
+        layer.tint = 0.05
+        guard let layerData = try? JSONEncoder().encode([layer]),
+              let layerJSON = String(data: layerData, encoding: .utf8) else {
+            report(false, "the fixture layer should encode")
+            return
+        }
+        do {
+            let edits = Data(#"{"layers": \#(layerJSON)}"#.utf8)
+            let merged = try AgentCLI.mergeEdits(base: base, edits: edits)
+            let state = try JSONDecoder().decode(DevelopState.self, from: merged.state)
+            report(state.layers.first?.tint == 0.05,
+                   "the agent's +0.05 layer tint is not negated over a legacy base",
+                   "got \(String(describing: state.layers.first?.tint))")
+            report(state.localTintAxis == 1, "the merged state says axis 1",
+                   "got \(state.localTintAxis)")
+            report(merged.changed == ["layers"], "changed names only layers",
+                   "got \(merged.changed)")
+        } catch {
+            report(false, "mergeEdits should accept a layer over a legacy base", "\(error)")
+        }
+    }
+
+    /// The base's own legacy tint is still converted when the edit does not
+    /// touch `layers`: +0.2 written green-positive reads back -0.2.
+    static func testAgentMergeEditsConvertsTheLegacyBaseTint() {
+        guard let base = legacyTintBase(tint: 0.2) else {
+            report(false, "the legacy base should encode")
+            return
+        }
+        do {
+            let edits = Data(#"{"exposureEv": 0.3}"#.utf8)
+            let merged = try AgentCLI.mergeEdits(base: base, edits: edits)
+            let state = try JSONDecoder().decode(DevelopState.self, from: merged.state)
+            report(state.layers.first?.tint == -0.2,
+                   "a legacy base's layer tint is converted to the current sign",
+                   "got \(String(describing: state.layers.first?.tint))")
+            report(state.localTintAxis == 1, "the merged state says axis 1",
+                   "got \(state.localTintAxis)")
+            report(merged.changed == ["exposureEv"], "changed names only exposureEv",
+                   "got \(merged.changed)")
+        } catch {
+            report(false, "mergeEdits should accept a scalar over a legacy base", "\(error)")
+        }
+    }
+
+    /// A base that already states axis 1 is a no-op for the normalisation:
+    /// its +0.2 stays +0.2.
+    static func testAgentMergeEditsLeavesACurrentBaseTintAlone() {
+        guard let base = legacyTintBase(tint: 0.2, keepMarker: true) else {
+            report(false, "the current base should encode")
+            return
+        }
+        do {
+            let edits = Data(#"{"exposureEv": 0.3}"#.utf8)
+            let merged = try AgentCLI.mergeEdits(base: base, edits: edits)
+            let state = try JSONDecoder().decode(DevelopState.self, from: merged.state)
+            report(state.layers.first?.tint == 0.2,
+                   "a base stating axis 1 keeps its layer tint",
+                   "got \(String(describing: state.layers.first?.tint))")
+            report(state.localTintAxis == 1, "and still says axis 1",
+                   "got \(state.localTintAxis)")
+        } catch {
+            report(false, "mergeEdits should accept a scalar over a current base", "\(error)")
+        }
+    }
+
+    /// The unknown-key check runs against the full current roster, not the
+    /// keys an old sidecar happened to carry: `process` and `localTintAxis`
+    /// are absent from the old base but are real fields, so naming them is
+    /// accepted rather than rejected as invented vocabulary.
+    static func testAgentMergeEditsAcceptsAKeyAnOldBaseLacks() {
+        guard let base = legacyTintBase(tint: 0.2, drop: ["process"]) else {
+            report(false, "the old base should encode")
+            return
+        }
+        do {
+            let edits = Data(#"{"process": 2, "localTintAxis": 1}"#.utf8)
+            let merged = try AgentCLI.mergeEdits(base: base, edits: edits)
+            let state = try JSONDecoder().decode(DevelopState.self, from: merged.state)
+            report(state.process == 2, "process lands over an old base",
+                   "got \(state.process)")
+            report(merged.changed == ["localTintAxis", "process"],
+                   "changed names exactly the edit keys", "got \(merged.changed)")
+        } catch {
+            report(false, "a key absent from an old base but in the current roster "
+                       + "should be accepted", "\(error)")
         }
     }
 

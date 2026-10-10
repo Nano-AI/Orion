@@ -14,6 +14,7 @@ how a defect got past every test — which is usually the more useful half.
 
 | File | What it is |
 |---|---|
+| `2026-10-10-mcp-cropped-edit-review.md` | Five MCP findings from editing a cropped photograph: layer tint ran against the global axis (fixed with a legacy gate), regions now carry frame space, a read-only `get_edits`, and two vocabulary gaps; each verdict with its measurement. |
 | `2026-09-28-failed-save-safety.md` | Refuse photo/folder departures and current-photo Trash after a failed save; real-action probe, retry coverage and explicit remaining limits. |
 | `2026-09-28-histogram-memory.md` | Native readback allocation cleanup, real-GPU bin regression, reduced paired timing and explicit memory/fixture limits. |
 | `2026-09-28-verification.md` | Integrated post-merge build and nine passing gates, including the initial agent fixture failure, its correction, and memory limits. |

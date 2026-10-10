@@ -85,7 +85,7 @@ async function resolve(given: string | undefined, key: "photo" | "folder"): Prom
   return (await readCurrent())?.[key] ?? null;
 }
 
-const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`. All values are absolute, never deltas. Local adjustments run three to four times a global's at the top of the scale: a blown sky near luma 0.98 barely moves under a small masked exposure pull, so probe strong and ease off. Numbers before pixels: \`get_stats\` with \`region\` reads a patch (luma, clippedHigh, shading) for a fraction of a proxy's cost, and \`detect_faces\` places a radial mask on a portrait. Judge sharpening, skin and mask edges with \`get_proxy\`'s \`region\`, never a whole 2048 px frame. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked.`;
+const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`; \`get_edits\` reads the current or proposed settings without writing anything. All values are absolute, never deltas. Local adjustments run three to four times a global's at the top of the scale: a blown sky near luma 0.98 barely moves under a small masked exposure pull, so probe strong and ease off. Numbers before pixels: \`get_stats\` with \`region\` reads a patch (luma, clippedHigh, shading) for a fraction of a proxy's cost, and \`detect_faces\` places a radial mask on a portrait. Judge sharpening, skin and mask edges with \`get_proxy\`'s \`region\`, never a whole 2048 px frame. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked.`;
 
 export function createServer() {
   const server = new McpServer(
@@ -159,7 +159,11 @@ export function createServer() {
         "shading (the standard deviation over the mean of block means: how much modelling the " +
         "patch has. Measure a cheek before and after and keep it within about 15% of as shot " +
         "when you pull highlights or lift shadows over a face - that is the number that says " +
-        "whether a face went flat). path is optional; defaults to the photo open in Orion.",
+        "whether a face went flat). The region object also carries `frame`: {centerX, " +
+        "centerY, radiusX, radiusY}, the same rectangle in FRAME space (where masks live) as " +
+        "the ellipse covering it - paste it straight into a kind-2 radial, or aim a kind-1 " +
+        "gradient's centerX/centerY at it; never convert a display region to a mask by hand. " +
+        "path is optional; defaults to the photo open in Orion.",
       inputSchema: {
         path: z.string().optional(),
         state: z.enum(["current", "proposed"]).default("current"),
@@ -223,6 +227,38 @@ export function createServer() {
         return fail(e);
       } finally {
         if (dir) await fs.rm(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  server.registerTool(
+    "get_edits",
+    {
+      description:
+        "Cheap and read-only: the develop settings as JSON, about 40-100 tokens, and it never " +
+        "writes anything - no proposed file, no sidecar. The way to see the current settings " +
+        "(state: 'current', the default: the sidecar's, or as shot when there is none) or the " +
+        "proposal so far (state: 'proposed'; falls back to current when there is no proposal). " +
+        "Returns {path, source: 'proposed' | 'sidecar' | 'as-shot', state, hasProposed}; " +
+        "`state` is the same full object propose_edit returns, so composite fields (curve, " +
+        "layers, maskComponents, spots, the grade wheels) come back whole for read-modify-" +
+        "write. Do not send an empty propose_edit to read settings - that writes a proposal. " +
+        "path is optional; defaults to the photo open in Orion.",
+      inputSchema: { path: z.string().optional(), state: z.enum(["current", "proposed"]).default("current") },
+    },
+    async ({ path: raw, state }) => {
+      try {
+        const p = await resolve(raw, "photo");
+        if (!p) return noPhoto();
+        const args = ["state", p];
+        const proposed = proposedPath(p);
+        const hasProposed = await fs.access(proposed).then(() => true, () => false);
+        if (state === "proposed" && hasProposed) {
+          args.push("--state", proposed);
+        }
+        return text({ ...(await orion(args)), hasProposed });
+      } catch (e) {
+        return fail(e);
       }
     }
   );

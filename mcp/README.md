@@ -48,6 +48,14 @@ it otherwise. Given that:
 2. Call `get_stats` to read the photo's *current* `temperatureK`/`tint`
    before changing white balance, so an edit is relative to the real value,
    not a guess.
+   To read every setting, call `get_edits`: it is read-only and never writes
+   anything, returns `{path, source, state, hasProposed}` with `source` one
+   of `"proposed"`, `"sidecar"` or `"as-shot"`, and with `state: "proposed"`
+   reads the proposal so far instead of the current settings.
+   Its `state` is the same full object `propose_edit` returns, so composite
+   fields come back whole for a read-modify-write.
+   Do not send an empty `propose_edit` to find out the settings - that
+   writes a proposal the photographer then sees.
 3. `propose_edit` **accumulates**: a second call merges onto the existing
    proposed file, keeping everything the first call set. Pass `reset: true`
    to start over from the photo's current state instead.
@@ -111,9 +119,12 @@ They are not the same rectangle, and on a turned photograph they are not even th
 
 So:
 
+- `get_stats` with `region` gives both too: the region object carries `frame`, `{centerX, centerY, radiusX, radiusY}`, the same rectangle carried into frame space as the ellipse that covers it. Paste it straight into a kind-2 radial, or aim a kind-1 gradient's `centerX`/`centerY` at it; it is the same arithmetic `detect_faces` uses, so never convert a region to a mask by hand.
 - `detect_faces` gives both - the display box and the frame-space `centerX`/`centerY`/`radiusX`/`radiusY` that paste straight into a kind-2 radial. **Call it first on a portrait**; it is how a mask lands on the face rather than in the middle of the frame. Vision jitters by about 0.01 between calls, so do not read it to more than two decimals.
 - For a sky, a kind-1 **linear gradient** row is what you want: the ramp is centred on `centerX`/`centerY` and covers the side `angle` points to (0 the frame's right, +1.571 rad the frame's bottom, -1.571 rad the frame's top, y downward), and `length` is how far the transition runs. Because of the turn above, **propose it and then probe both edges with `get_stats`' `region`** before believing which way it went.
 - `invert` flips that component's own coverage before it folds into the group, so an inverted radial covers everything *outside* its ellipse. This is pinned on a real render in `tools/check-agent.py`: a radial with `invert: false` and a -3 EV layer darkens the centre and leaves the corner alone; `invert: true` does the exact opposite.
+- A radial's `feather` is the share of the radius the ramp takes, measured inward from the boundary: coverage is full inside (1 - feather) of the radius and zero at the edge, so at feather 0.8 the ellipse is fully on only across its inner 20%, and a compose-1 subtract row at 0.8 protects far less than its outline suggests. Size the ellipse to the subject plus the feather, or keep feather near 0.5 when the outline is the subject's own edge.
+- The global `vignetteAmount` is centred on the composition, not the sensor frame: its circle is the crop's (decision #103), so it follows a crop or a straighten and its centre is the displayed picture's centre.
 - `layers[i]` holds the adjustments for the i-th mask *layer*, not the i-th component. Row 0 always begins layer 0; every later component with `startsLayer` begins the next.
 
 `describe_edits` carries all of this per key, including which fields each `kind` actually reads - a linear gradient ignores `feather`, a radial does read `angle` - so read it rather than guessing from the field list.

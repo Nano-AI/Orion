@@ -35,7 +35,7 @@ case "$verb" in
     echo "${region:-<none>}" > "${TMPDIR:-/tmp}/orion-mcp-test-last-stats-region.txt"
     regionJSON=""
     if [ -n "$region" ]; then
-      regionJSON=',"region":{"luma":0.42,"saturation":0.1,"hue":30,"hueStrength":0.8,"red":0.5,"green":0.4,"blue":0.3,"clippedHigh":0.01,"clippedLow":0,"shading":0.2}'
+      regionJSON=',"region":{"luma":0.42,"saturation":0.1,"hue":30,"hueStrength":0.8,"red":0.5,"green":0.4,"blue":0.3,"clippedHigh":0.01,"clippedLow":0,"shading":0.2,"frame":{"centerX":0.6,"centerY":0.25,"radiusX":0.25,"radiusY":0.25}}'
     fi
     echo '{"path":"'"$raw"'","width":100,"height":80,"camera":"Fake","rating":0,"rejected":false,"clipLow":[0,0,0],"clipHigh":[0,0,0],"mean":[0.5,0.5,0.5],"temperatureK":5500,"tint":0'"$regionJSON"'}'
     ;;
@@ -45,6 +45,17 @@ case "$verb" in
     # against the real binary covers that half.
     echo "${state:-<none>}" > "${TMPDIR:-/tmp}/orion-mcp-test-last-faces-state.txt"
     echo '{"path":"'"$raw"'","faces":[{"x":0.4,"y":0.2,"w":0.12,"h":0.16,"centerX":0.28,"centerY":0.46,"radiusX":0.08,"radiusY":0.06}]}'
+    ;;
+  state)
+    # Records whether this invocation received --state, so tests can verify
+    # get_edits passes the proposed file only when asked AND it exists. Writes
+    # nothing beside the RAW: the real verb is read-only, and a test asserts
+    # no proposed file appears.
+    echo "${state:-<none>}" > "${TMPDIR:-/tmp}/orion-mcp-test-last-edits-state.txt"
+    source="as-shot"
+    exposure=0
+    if [ -n "$state" ]; then source="proposed"; exposure=1; fi
+    echo '{"path":"'"$raw"'","source":"'"$source"'","state":{"exposureEv":'"$exposure"',"tint":0,"temperatureK":5500,"curve":{"master":[{"x":0,"y":0},{"x":1,"y":1}]}}}'
     ;;
   keys)
     echo '{"keys":[{"name":"temperatureK","type":"number","unit":"kelvin","min":2000,"max":50000,"default":5500,"absolute":true,"note":"White balance in kelvin. Absolute, not a delta."},{"name":"tint","type":"number","unit":"magenta-green","min":-100,"max":100,"default":0,"absolute":true,"note":"Placeholder range for the fake binary; the real range comes from Orion --agent keys."},{"name":"exposureEv","type":"number","unit":"EV","min":-5,"max":5,"default":0,"absolute":true},{"name":"curve","type":"array","absolute":true,"example":[{"x":0,"y":0},{"x":1,"y":1}],"note":"Tone curve control points. Composite: send the whole array, partial elements are rejected."}]}'

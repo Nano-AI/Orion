@@ -11,7 +11,9 @@ import Vision
 /// returns them as JSON; a second copy of the Vision-box-to-frame-space
 /// arithmetic would let one of them agree with the mask panel while the other
 /// quietly did not. Decision #278's `measure`/`regionStats` rule, applied to
-/// the detector.
+/// the detector. The box-to-ellipse carry itself is
+/// `CanvasLayout.FrameDisplayMap.frameEllipse(of:)`, which `get_stats`'s
+/// `region` result goes through too.
 ///
 /// ⚠ Vision jitters: the same photograph detected twice moves a box by around
 /// 0.01, so nothing here should be asserted to more than two decimals.
@@ -63,16 +65,12 @@ enum AgentFaces {
             let b = result.boundingBox
             // Vision's origin is bottom-left; display space is top-left.
             let d = CGRect(x: b.minX, y: 1 - b.maxY, width: b.width, height: b.height)
-            let c = map.frame(CGPoint(x: d.midX, y: d.midY))
-            let ex = map.frame(CGPoint(x: d.maxX, y: d.midY))
-            let ey = map.frame(CGPoint(x: d.midX, y: d.maxY))
-            // The larger of the two, per axis: a turned or keystoned frame
-            // sends the box's own edges off the axes, and a radius that took
-            // only one of them would under-cover the face.
+            // The same carry `--region` gets in `AgentCLI.regionJSON`:
+            // `FrameDisplayMap.frameEllipse`, one implementation for both.
+            let e = map.frameEllipse(of: d)
             return Face(display: d,
-                        centerX: Double(c.x), centerY: Double(c.y),
-                        radiusX: Double(max(abs(ex.x - c.x), abs(ey.x - c.x))),
-                        radiusY: Double(max(abs(ex.y - c.y), abs(ey.y - c.y))))
+                        centerX: e.centerX, centerY: e.centerY,
+                        radiusX: e.radiusX, radiusY: e.radiusY)
         }
     }
 

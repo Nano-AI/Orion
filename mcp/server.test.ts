@@ -30,7 +30,7 @@ after(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test("tools/list names exactly the ten tools", async () => {
+test("tools/list names exactly the eleven tools", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
@@ -38,6 +38,7 @@ test("tools/list names exactly the ten tools", async () => {
     "current_photo",
     "describe_edits",
     "detect_faces",
+    "get_edits",
     "get_proxy",
     "get_stats",
     "list_folder",
@@ -240,6 +241,66 @@ test("get_stats passes region through and returns the region object", async () =
                        "clippedHigh", "clippedLow", "shading"]) {
     assert.equal(typeof region[field], "number", field);
   }
+  // The same rectangle as a frame-space ellipse, ready for a kind-2 radial.
+  for (const field of ["centerX", "centerY", "radiusX", "radiusY"]) {
+    assert.equal(typeof region.frame?.[field], "number", `frame.${field}`);
+  }
+});
+
+test("get_edits defaults to current: no --state, and hasProposed false with no proposal", async () => {
+  const raw = path.join(tmpDir, "edits-current.arw");
+  await fs.writeFile(raw, "");
+  const stateFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-edits-state.txt");
+  await fs.rm(stateFile, { force: true });
+
+  const result = await client.callTool({ name: "get_edits", arguments: { path: raw } });
+  assert.equal(result.isError, undefined);
+  assert.equal((await fs.readFile(stateFile, "utf8")).trim(), "<none>");
+  const content = result.content as Array<{ type: string; text?: string }>;
+  const body = JSON.parse(content[0].text!);
+  assert.equal(body.hasProposed, false);
+  assert.equal(body.source, "as-shot");
+  assert.equal(body.state.exposureEv, 0);
+  assert.deepEqual(body.state.curve.master, [{ x: 0, y: 0 }, { x: 1, y: 1 }], "composites come back whole");
+});
+
+test("get_edits state: proposed passes --state only when the proposed file exists", async () => {
+  const raw = path.join(tmpDir, "edits-proposed.arw");
+  await fs.writeFile(raw, "");
+  const stateFile = path.join(process.env.TMPDIR || "/tmp", "orion-mcp-test-last-edits-state.txt");
+  const proposed = raw.replace(/\.[^.]+$/, ".proposed.json");
+
+  const none = await client.callTool({ name: "get_edits", arguments: { path: raw, state: "proposed" } });
+  assert.equal((await fs.readFile(stateFile, "utf8")).trim(), "<none>", "no proposal, nothing to pass");
+  assert.equal(JSON.parse((none.content as Array<{ text?: string }>)[0].text!).hasProposed, false);
+
+  await client.callTool({ name: "propose_edit", arguments: { path: raw, edits: { exposureEv: 1.0 } } });
+  const got = await client.callTool({ name: "get_edits", arguments: { path: raw, state: "proposed" } });
+  assert.equal((await fs.readFile(stateFile, "utf8")).trim(), proposed);
+  const body = JSON.parse((got.content as Array<{ text?: string }>)[0].text!);
+  assert.equal(body.hasProposed, true);
+  assert.equal(body.source, "proposed");
+
+  const current = await client.callTool({ name: "get_edits", arguments: { path: raw } });
+  assert.equal((await fs.readFile(stateFile, "utf8")).trim(), "<none>", "current ignores the proposal");
+  assert.equal(
+    JSON.parse((current.content as Array<{ text?: string }>)[0].text!).hasProposed,
+    true,
+    "hasProposed says a proposal exists even when reading current"
+  );
+  await client.callTool({ name: "reject_edit", arguments: { path: raw } });
+});
+
+test("get_edits never creates a proposed file", async () => {
+  const raw = path.join(tmpDir, "edits-readonly.arw");
+  await fs.writeFile(raw, "");
+  const proposed = raw.replace(/\.[^.]+$/, ".proposed.json");
+  for (const state of ["current", "proposed"]) {
+    const result = await client.callTool({ name: "get_edits", arguments: { path: raw, state } });
+    assert.equal(result.isError, undefined);
+    await assert.rejects(() => fs.access(proposed), `get_edits state: ${state} wrote ${proposed}`);
+  }
+  assert.deepEqual((await fs.readdir(tmpDir)).filter((f) => f.startsWith("edits-readonly")), ["edits-readonly.arw"]);
 });
 
 test("get_stats state: proposed passes the proposed file as --state, and only when it exists", async () => {

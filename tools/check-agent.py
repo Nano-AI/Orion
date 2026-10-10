@@ -30,7 +30,10 @@ socket surface's mechanisms:
 
 15. get_stats state proposed → a real GPU render of the PROPOSAL, whose mean
     differs from the current one after an exposure proposal
-16. get_stats region → every RegionStats field present, luma in 0..1
+16. get_stats region → every RegionStats field present, luma in 0..1, and a
+    `frame` ellipse (centre inside 0..1, radii > 0) such that a region nested
+    inside it yields smaller radii on both axes and a centre inside its
+    ellipse - a check that holds whatever the sample's orientation
 17. get_proxy region → a JPEG whose aspect matches the region's and whose long
     edge is inside maxPx
 18. detect_faces → the shape, with an empty array allowed (neither sample has
@@ -57,6 +60,14 @@ socket surface's mechanisms:
     CENTRE and leave the corner within one 8-bit code.
 21. a matte whose file is gone → refused, naming the PNG, not rendered as a
     mask that selects nothing.
+
+...and the read-only settings read, last so no earlier step's proposed file
+is in play (it works on its own copy and rejects what it proposed):
+
+22. get_edits → before any proposal, source sidecar or as-shot, hasProposed
+    false and no `.proposed.json` written (an empty propose_edit was the only
+    way to read settings before, and it wrote one); after propose_edit
+    {exposureEv: 1.0}, state proposed → source "proposed", exposureEv == 1.
 """
 
 import shutil

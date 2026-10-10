@@ -33,6 +33,11 @@ enum AgentCLI {
         /// Vision's face rectangles, in both spaces a caller needs them in.
         /// See `AgentFaces`.
         case faces(raw: String, state: String?)
+        /// The develop state a caller would be editing, read and nothing
+        /// else: `--state` if given, else the sidecar's, else as shot. The
+        /// read-only twin of `apply`, which writes a file to answer the
+        /// same question.
+        case state(raw: String, state: String?)
         /// No photograph — just the edit vocabulary `apply` accepts, so a
         /// caller can learn units and ranges before proposing an edit rather
         /// than after `apply` rejects one.
@@ -43,12 +48,16 @@ enum AgentCLI {
     /// to. Fractions of the displayed frame, origin top-left, the same space
     /// `Screenshot.regionStats` reads in. ⚠ **Not** the frame space a mask's
     /// `centerX`/`radiusX` live in; a crop or a turn separates the two.
+    /// That is why `stats --region` answers with a `frame` object as well:
+    /// the rectangle carried into frame space as the ellipse covering it
+    /// (`FrameDisplayMap.frameEllipse`), ready for a kind-2 radial's four
+    /// numbers or a kind-1 gradient's centre, so nobody converts by hand.
     struct Region: Equatable {
         var x = 0.0, y = 0.0, w = 1.0, h = 1.0
     }
 
     static let usageLine =
-        "usage: Orion --agent <stats|proxy|apply|commit|flag|faces> <raw> [options]"
+        "usage: Orion --agent <stats|proxy|apply|commit|flag|faces|state> <raw> [options]"
             + "  |  Orion --agent keys"
 
     /// `--region x,y,w,h`. Refuses a rectangle outside 0…1 or with no area
@@ -86,6 +95,7 @@ enum AgentCLI {
         "commit": ["state"],
         "flag": ["rating", "reject"],
         "faces": ["state"],
+        "state": ["state"],
     ]
 
     /// Walks `--agent <verb> <raw> [--key value]…` out of the full process
@@ -139,6 +149,8 @@ enum AgentCLI {
                           state: options["state"], region: region)
         case "faces":
             return .faces(raw: raw, state: options["state"])
+        case "state":
+            return .state(raw: raw, state: options["state"])
         case "apply":
             guard let edits = options["edits"] else {
                 throw Failure.usage("apply needs --edits <json-file>")
@@ -179,9 +191,38 @@ enum AgentCLI {
     /// throwing) — exactly what let a partial edit zero its siblings before
     /// `AgentComposite` existed. `photo` threads through only for
     /// `maskComponents`' kind-4 matte-exists check.
+    ///
+    /// ⚠ **`base` is normalised through `DevelopState` BEFORE the overlay**,
+    /// so the caller's edits always merge onto a state in the current
+    /// convention. Overlaying raw JSON onto an un-normalised base let the
+    /// decoder's legacy conversions read the caller's values as legacy ones:
+    /// a sidecar or `.proposed.json` written before decision #290 has no
+    /// `localTintAxis`, so an agent's `layers` with tint +0.05 (current
+    /// convention, magenta) merged into an object with no marker and a nonzero
+    /// tint, and the final decode negated the agent's own input to -0.05. A
+    /// photographer's session hit exactly that on the first proposal of an
+    /// edit; later proposals merged onto a file that already said 1, so only
+    /// the first flipped. Decoding the base first performs every legacy
+    /// conversion on the BASE's values only (layer tint sign, `process`, the
+    /// `localTint`/`localExposureEv` scalars lifted into layer 1, the
+    /// `denoiseColour` spelling) and re-encoding it emits every current key,
+    /// so the unknown-key check below is against the full current roster
+    /// rather than whatever keys an old sidecar happened to carry, and the
+    /// final decode is a no-op conversion.
     static func mergeEdits(base: Data, edits: Data, photo: URL? = nil)
         throws -> (state: Data, changed: [String]) {
-        guard let baseObject = try JSONSerialization.jsonObject(with: base) as? [String: Any] else {
+        guard (try? JSONSerialization.jsonObject(with: base)) is [String: Any] else {
+            throw Failure.run("base state is not a JSON object")
+        }
+        let normalisedBase: Data
+        do {
+            normalisedBase = try JSONEncoder().encode(
+                JSONDecoder().decode(DevelopState.self, from: base))
+        } catch {
+            throw Failure.run("base state does not decode as a DevelopState: \(error)")
+        }
+        guard let baseObject = try JSONSerialization.jsonObject(with: normalisedBase)
+            as? [String: Any] else {
             throw Failure.run("base state is not a JSON object")
         }
         guard let editsObject = try JSONSerialization.jsonObject(with: edits) as? [String: Any] else {

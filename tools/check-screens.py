@@ -53,7 +53,16 @@ ORION = ROOT / "build" / "Orion.app" / "Contents" / "MacOS" / "Orion"
 # nothing without a photograph — the status line lives inside `if
 # engine.isLoaded` — so a scene run against an empty editor would be checking an
 # absent view, and the scene itself now refuses that case by name.
-PHOTO = ROOT / "samples" / "_PIC8220.ARW"
+#
+# The first of these that exists, the way `check-agent.py` discovers its
+# sample: `samples/` is not the same folder on every machine, and a gate that
+# names one file nobody has is a gate nobody runs (found 2026-10-10, when the
+# `_PIC` frames existed on no volume here and the gate exited 2 for everyone).
+PHOTO_CANDIDATES = ["_PIC8220.ARW", "overexposed-background.ARW",
+                    "underexposedsubject.ARW"]
+PHOTO = next((ROOT / "samples" / c for c in PHOTO_CANDIDATES
+              if (ROOT / "samples" / c).is_file()),
+             ROOT / "samples" / PHOTO_CANDIDATES[0])
 
 # Each scene, and what its red means. The reason is carried so a failure says
 # what the interface lost, not merely that a process exited 1.

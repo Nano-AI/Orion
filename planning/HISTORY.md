@@ -1,5 +1,11 @@
 # Orion — session history
 
+## Recent-session row archived 2026-10-10
+
+| Date | What landed |
+|---|---|
+| 2026-09-27b | **Agent tools see subject mattes (#285).** `openEngine` calls `restoreMattes`; a missing matte is refused by name. `check-agent` `mask_matte` and `mask_matte_missing` red before, green after (21/21). Refine measured on DSC00318 at 0/0.5/1.0: sufficient, `matteFeather` not built. Also: 27 unpushed commits squashed to one and rebased onto `origin/main`. |
+
 ## Recent-session row archived 2026-09-29
 
 | Date | What landed |

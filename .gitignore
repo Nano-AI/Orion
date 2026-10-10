@@ -66,7 +66,9 @@ thumbnail-cache/
 vendor/
 # ...except the landing page's vendored GSAP, ScrollTrigger and Lenis, which Pages deploys (#267)
 !web/js/vendor/
-third_party/*/
+# No trailing slash: a worktree links the toolchain in as a symlink to a
+# directory, which `third_party/*/` would not match (tools/worktree-setup.sh).
+third_party/*
 !third_party/CMakeLists.txt
 # SwiftTerm (MIT) backs the assistant drawer's terminal — vendored source,
 # not fetched at build time, so it is checked in. See third_party/SwiftTerm/VERSION.

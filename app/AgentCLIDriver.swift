@@ -43,6 +43,8 @@ extension AgentCLI {
             return try runProxy(raw: raw, max: max, out: out, state: state, region: region)
         case .faces(let raw, let state):
             return try runFaces(raw: raw, state: state)
+        case .state(let raw, let state):
+            return try runState(raw: raw, state: state)
         case .apply(let raw, let edits, let out, let state):
             return try runApply(raw: raw, edits: edits, out: out, state: state)
         case .commit(let raw, let state):
@@ -137,17 +139,7 @@ extension AgentCLI {
         throws -> [String: Any] {
         let url = URL(fileURLWithPath: raw)
         let editsData = try Data(contentsOf: URL(fileURLWithPath: edits))
-
-        let base: Data
-        if let state {
-            base = try Data(contentsOf: URL(fileURLWithPath: state))
-        } else if let saved = Sidecar.read(for: url)?.develop {
-            base = saved
-        } else {
-            let engine = try Engine()
-            try engine.open(path: raw)
-            base = try JSONEncoder().encode(engine.state)
-        }
+        let base = try baseState(url: url, state: state).data
 
         let merged = try mergeEdits(base: base, edits: editsData, photo: url)
         try merged.state.write(to: URL(fileURLWithPath: out), options: .atomic)
@@ -158,6 +150,29 @@ extension AgentCLI {
             throw Failure.run("state is not a JSON object")
         }
         return ["path": out, "changed": merged.changed, "state": state]
+    }
+
+    // MARK: state
+
+    /// `Orion --agent state <raw> [--state <json>]`: the develop state
+    /// `apply` would merge onto, returned and nothing written. Before it the
+    /// only way to read the current settings was an empty `propose_edit`,
+    /// which wrote a `.proposed.json` - and so put a proposal in front of the
+    /// photographer - as a side effect of asking.
+    ///
+    /// Round-tripped through `DevelopState` exactly as `apply`'s `state` is
+    /// (`mergeEdits` decodes and re-encodes), so the two verbs hand a caller
+    /// the same shape and a composite read here can be sent back whole.
+    @MainActor
+    private static func runState(raw: String, state: String?) throws -> [String: Any] {
+        let url = URL(fileURLWithPath: raw)
+        let base = try baseState(url: url, state: state)
+        let decoded = try JSONDecoder().decode(DevelopState.self, from: base.data)
+        let encoded = try JSONEncoder().encode(decoded)
+        guard let object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
+            throw Failure.run("state is not a JSON object")
+        }
+        return ["path": raw, "source": base.source, "state": object]
     }
 
     // MARK: commit
@@ -203,6 +218,28 @@ extension AgentCLI {
     }
 
     // MARK: shared
+
+    /// The develop state an edit starts from, and where it came from:
+    /// `--state` if the caller gave one ("proposed"), else the sidecar's
+    /// develop blob ("sidecar"), else a fresh engine's state after open
+    /// ("as-shot"). `apply` merges onto it and `state` returns it, through
+    /// this one function so the two verbs cannot disagree about what "the
+    /// current settings" are.
+    ///
+    /// ⚠ Only the as-shot branch opens an `Engine`: the other two are a file
+    /// read, and `apply` on a photograph with a sidecar never needed the GPU.
+    @MainActor
+    private static func baseState(url: URL, state: String?) throws -> (data: Data, source: String) {
+        if let state {
+            return (try Data(contentsOf: URL(fileURLWithPath: state)), "proposed")
+        }
+        if let saved = Sidecar.read(for: url)?.develop {
+            return (saved, "sidecar")
+        }
+        let engine = try Engine()
+        try engine.open(path: url.path)
+        return (try JSONEncoder().encode(engine.state), "as-shot")
+    }
 
     /// Opens the photograph, restores its sidecar's develop state if it has
     /// one, then layers `--state` on top if the caller gave one — the order

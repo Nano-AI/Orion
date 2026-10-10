@@ -57,7 +57,15 @@ SAMPLES = ROOT / "samples"
 # at its base, and while an export into a temporary directory is not a
 # publication, the simplest way to keep that frame out of anything shipped is
 # not to render it in a script somebody may later copy.
-EXPORTS = ["_PIC8220.ARW", "_PIC8148.ARW"]
+#
+# Two frames, the first two of these that exist: `samples/` is not the same
+# folder on every machine, and the `_PIC` names exist on no volume here
+# (2026-10-10), so the gate named files nobody had and exited 2 for everyone.
+EXPORT_CANDIDATES = ["_PIC8220.ARW", "_PIC8148.ARW",
+                     "overexposed-background.ARW", "underexposedsubject.ARW"]
+EXPORTS = [c for c in EXPORT_CANDIDATES if (SAMPLES / c).is_file()][:2]
+if len(EXPORTS) < 2:
+    EXPORTS = EXPORT_CANDIDATES[:2]
 
 # ⚠ **A floor, so a mode that stops asserting cannot pass by exiting 0.** This
 # is #124's lesson in another place: 39 of 40 repro scenarios once exited 0
