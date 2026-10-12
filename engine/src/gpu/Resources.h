@@ -21,6 +21,7 @@ enum class PixelFormat {
     R16Uint,      // raw sensor samples
     R16Float,     // single-channel pyramids — log luminance in a bounded window
     R32Float,     // linearised mosaic, green plane
+    RG16Float,    // the masked denoise's two per-pixel strengths
     RG32Float,    // guided-filter moments and coefficients
     RGBA16Float,  // the working format — scene-linear Rec.2020
     RGBA32Float,  // profile tables, where the entries are spec'd as 32-bit float

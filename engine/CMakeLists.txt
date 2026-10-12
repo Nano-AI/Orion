@@ -14,6 +14,7 @@ add_library(orion_engine STATIC
     src/pipe/DevelopPipeline.cpp
     src/pipe/DevelopCapture.cpp
     src/pipe/DevelopLocal.cpp
+    src/pipe/DevelopDenoiseLocal.cpp
     src/pipe/DevelopMask.cpp
     src/pipe/DevelopOutput.cpp
     src/pipe/CubeLut.cpp

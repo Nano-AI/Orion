@@ -892,16 +892,37 @@ struct AtrousBlur {
 static_assert(sizeof(AtrousBlur) == 16);
 
 /// Shrinkage at one scale. Mirrors ShrinkParams in denoise_accum.slang.
+/// research/denoise-masked.md §0.1 (two strengths) and §1 (`detail`).
 struct AtrousShrink {
     std::uint32_t size[2];
     float noiseA;
     float noiseB;
     float scaleNorm;
-    float strength;
-    float chromaBoost;
-    float _pad;
+    float strengthLuma;
+    float strengthChroma;
+    float detail;         // 0..1, the texture-adaptive factor's weight
+    std::int32_t  step;   // 2^j, the local energy window's spacing
+    /// 1: the two strengths are per pixel, from the shader's `field` input.
+    /// The masked chain's setting; the capture chain's is 0.
+    std::int32_t  useField;
+    std::int32_t  _pad0;
+    std::int32_t  _pad1;
 };
-static_assert(sizeof(AtrousShrink) == 32);
+static_assert(sizeof(AtrousShrink) == 48);
+
+/// The masked chain's per-pixel strengths. Mirrors DenoiseFieldParams in
+/// denoise_field.slang; research/denoise-masked.md §2.1.
+struct DenoiseField {
+    std::uint32_t size[2];
+    /// Which fold ends each layer — the same table develop:linear gets, from
+    /// the same `DevelopPipeline::layerTable`.
+    std::int32_t  layerMask[8];
+    std::int32_t  layerCount;
+    std::int32_t  _pad;
+    float         layerLuma[8];
+    float         layerChroma[8];
+};
+static_assert(sizeof(DenoiseField) == 112);
 
 /// What one unit of `Grain::amount` actually delivers as peak standard
 /// deviation, **measured** — `testGrainGpu` pins it.

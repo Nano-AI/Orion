@@ -64,6 +64,22 @@ void nodeProfiles(Bench& b) {
 
     profileDrag("Clarity", [](orion::pipe::Adjustments& a) { a.clarity = 1.0f; });
     profileDrag("Dehaze",  [](orion::pipe::Adjustments& a) { a.dehaze  = 1.0f; });
+    // The capture chain, then the masked one beside it: research/denoise-
+    // masked.md §2.2 says the second costs the first again, and this is the
+    // number that says whether it does.
+    profileDrag("Denoise", [](orion::pipe::Adjustments& a) { a.denoiseLuma = 2.0f; });
+    profileDrag("Denoise with Detail", [](orion::pipe::Adjustments& a) {
+        a.denoiseLuma = 2.0f;
+        a.denoiseDetail = 1.0f;
+    });
+    profileDrag("A radial local denoise", [](orion::pipe::Adjustments& a) {
+        auto& c = a.maskComponents[0];
+        c.kind = 2;
+        c.center[0] = 0.3f; c.center[1] = 0.5f;
+        c.radius[0] = 0.15f; c.radius[1] = 0.15f;
+        a.maskCount = 1;
+        a.layers[0].denoiseLuma = 3.0f;
+    });
 
     // ── What a radial mask costs, with and without a correction under it ─────
     //

@@ -561,6 +561,38 @@ void controlProbes(Bench& b) {
             {"clarity +1",     flat, [](auto& a) { a.clarity = 1.0f; }, Metric::Detail, 0.062},
             {"clarity -1",     flat, [](auto& a) { a.clarity = -1.0f; }, Metric::Detail, 0.055},
             {"denoise 2.0",    flat, [](auto& a) { a.denoiseLuma = 2.0f; }, Metric::Detail, 0.018},
+            // Detail measured against the same denoise without it, so what
+            // moves is the texture-adaptive factor alone and a dead `detail`
+            // cannot pass on the denoise's own effect.
+            // research/denoise-masked.md §1.
+            //
+            // ⚠ **Calibrated on two frames, not decision #47's three.** The
+            // `_PIC` frames exist on no volume here (see check-screens.py), so
+            // these are `overexposed-background` and `underexposedsubject`:
+            // 0.0073 and 0.0088 of the exposure reference. Half the smaller.
+            // Small because Detail can only *give back* what Luminance took,
+            // and on a low-ISO frame that is little. Refit when the `_PIC`
+            // frames are back.
+            {"denoise detail 1.0", [](orion::pipe::Adjustments& a) { a.denoiseLuma = 2.0f; },
+             [](auto& a) { a.denoiseDetail = 1.0f; }, Metric::Detail, 0.0036},
+            // A layer's denoise through a radial, against the same mask with
+            // the layer at zero — which is the chain disabled, so this is the
+            // whole chain arriving or not: nine nodes, plus the three below
+            // it. research/denoise-masked.md §2.
+            //
+            // Same two frames: 0.0042 and 0.0044 of the reference, half the
+            // smaller. ⚠ The radial is 7% of the frame, so on
+            // `underexposedsubject` the move (0.00027) sits only 1.4x over the
+            // bench's 2e-4 "moved at all" line, which binds before this floor
+            // does. That line is the gate here, stated rather than hidden.
+            {"local denoise 3.0", [](orion::pipe::Adjustments& a) {
+                 auto& c = a.maskComponents[0];
+                 c.kind = 2;
+                 c.center[0] = 0.3f; c.center[1] = 0.5f;
+                 c.radius[0] = 0.15f; c.radius[1] = 0.15f;
+                 a.maskCount = 1;
+             }, [](auto& a) { a.layers[0].denoiseLuma = 3.0f; }, Metric::Detail, 0.0021,
+             nullptr, nullptr, 12},
             // ⚠ **Detail, not luma.** Film grain is zero-mean by
             // construction — that is the property that keeps it from
             // shifting exposure — so a probe on mean brightness reads

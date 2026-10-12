@@ -13,6 +13,7 @@ MTLPixelFormat toMetal(PixelFormat f) {
         case PixelFormat::R16Uint:     return MTLPixelFormatR16Uint;
         case PixelFormat::R16Float:    return MTLPixelFormatR16Float;
         case PixelFormat::R32Float:    return MTLPixelFormatR32Float;
+        case PixelFormat::RG16Float:   return MTLPixelFormatRG16Float;
         case PixelFormat::RG32Float:   return MTLPixelFormatRG32Float;
         case PixelFormat::RGBA16Float: return MTLPixelFormatRGBA16Float;
         case PixelFormat::RGBA32Float: return MTLPixelFormatRGBA32Float;
@@ -30,6 +31,7 @@ std::size_t bytesPerPixel(PixelFormat f) noexcept {
         case PixelFormat::R16Uint:     return 2;
         case PixelFormat::R16Float:    return 2;
         case PixelFormat::R32Float:    return 4;
+        case PixelFormat::RG16Float:   return 4;
         case PixelFormat::RG32Float:   return 8;
         case PixelFormat::RGBA16Float: return 8;
         case PixelFormat::RGBA32Float: return 16;
@@ -43,6 +45,7 @@ const char* formatName(PixelFormat f) noexcept {
         case PixelFormat::R16Uint:     return "r16u";
         case PixelFormat::R16Float:    return "r16f";
         case PixelFormat::R32Float:    return "r32f";
+        case PixelFormat::RG16Float:   return "rg16f";
         case PixelFormat::RG32Float:   return "rg32f";
         case PixelFormat::RGBA16Float: return "rgba16f";
         case PixelFormat::RGBA32Float: return "rgba32f";

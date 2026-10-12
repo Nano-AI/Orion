@@ -136,16 +136,25 @@ void testDisabledCacheReleaseGpu() {
     try {
         auto device = gpu::Device::create();
         raw::BayerImage input;
-        input.width = 132; input.height = 100;
+        input.width = 272; input.height = 256;
         input.filters = 0x94949494u;
         input.white = 4095;
         input.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
         input.camToXyz = {0.4124f, 0.3576f, 0.1805f,
                           0.2126f, 0.7152f, 0.0722f,
                           0.0193f, 0.1192f, 0.9505f};
+        // ⚠ A ramp under fixed noise at 272 x 256, not the 132 x 100 sawtooth
+        // this was: `estimateNoise` fits neither a sawtooth nor fewer than 4000
+        // samples, so both denoise chains below were off in `on` and the cycle
+        // never released or rebuilt either of them.
         input.samples.resize(input.pixelCount());
-        for (std::size_t i = 0; i < input.samples.size(); ++i)
-            input.samples[i] = std::uint16_t(80 + (i * 37) % 3000);
+        std::mt19937 rng(132);
+        std::normal_distribution<double> g(0.0, 1.0);
+        for (std::size_t i = 0; i < input.samples.size(); ++i) {
+            const double v = 80.0 + 3000.0 * double(i % input.width) / input.width;
+            input.samples[i] = std::uint16_t(std::clamp(v + std::sqrt(0.5 * v + 20.0) * g(rng),
+                                                        0.0, 4095.0));
+        }
         pipe::DevelopPipeline d(*device, ORION_SHADER_DIR, input);
         pipe::Adjustments off;
         off.wb = d.asShotWhiteBalance();
@@ -155,6 +164,7 @@ void testDisabledCacheReleaseGpu() {
         on.denoiseLuma = 0.5f; on.highlightRecovery = 0.5f;
         on.maskCount = 1; on.maskComponents[0].kind = 2;
         on.maskRefine = 0.5f; on.layers[0].exposureEv = 0.7f;
+        on.layers[0].denoiseLuma = 1.5f;
         const auto pixels = [](const pipe::DevelopPipeline& p) {
             const auto row = p.outputWidth() * gpu::bytesPerPixel(p.output().format());
             std::vector<std::uint8_t> bytes(row * p.outputHeight());
@@ -167,6 +177,15 @@ void testDisabledCacheReleaseGpu() {
         };
         const auto baseline = render(off);
         const auto edited = render(on);
+        {
+            // Each chain moves the edited frame, so the cycle below covers both.
+            auto noCapture = on;
+            noCapture.denoiseLuma = 0.0f;
+            auto noLocal = on;
+            noLocal.layers[0].denoiseLuma = 0.0f;
+            report(render(noCapture) != edited && render(noLocal) != edited,
+                   "both denoise chains are live in the edited frame");
+        }
         report(baseline != edited, "enabled filters change actual pixels");
         for (int cycle = 0; cycle < 3; ++cycle) {
             // An upstream edit warms intermediates that the first pass pooled.

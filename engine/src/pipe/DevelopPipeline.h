@@ -282,9 +282,9 @@ public:
     [[nodiscard]] std::uint32_t height() const noexcept { return height_; }
 
 private:
-    // ── How this class is laid out across five files (decision #113) ───────
+    // ── How this class is laid out across six files (decision #113) ────────
     //
-    // The graph has four regions, and each one owns a `.cpp` that holds *both*
+    // The graph has five regions, and each one owns a `.cpp` that holds *both*
     // halves of it: the nodes it adds at construction and the parameters it
     // pushes per frame. That pairing is the whole point. Adding a node used to
     // mean editing the constructor and then `apply` twelve hundred lines
@@ -295,6 +295,7 @@ private:
     // | `DevelopCapture.cpp` | sensor to profile | linearize, demosaic, highlights, fill, denoise, lens, spots, sharpen, matrix, hue/sat | white balance, highlights, lens, denoise, spots, sharpen |
     // | `DevelopLocal.cpp`   | the multi-node operators | dehaze, clarity, fusion, guided filter | the same four, and their two frame reductions |
     // | `DevelopMask.cpp`    | the mask group | base, components, refine chains, the brush accumulator | components, strokes, feathering |
+    // | `DevelopDenoiseLocal.cpp` | masked denoise | field, a second blur/shrink chain after the profile | the field and both chains' blocks |
     // | `DevelopOutput.cpp`  | tone to the screen | develop:linear, grade, display, grain, geometry | tone, grade, display, grain, geometry |
     // | `DevelopPipeline.cpp`| the spine | the calls below, in order | `ApplyContext`, then the calls below, in order |
     //
@@ -352,14 +353,28 @@ private:
     /// read the pixel, not the neighborhood.
     [[nodiscard]] static bool guideNeeded(const Adjustments&);
 
-    // The four regions' constructors, called in this order and no other.
+    // The regions' constructors, called in the order the constructor lists
+    // and no other: each reads ids the ones before it made.
     void buildCaptureNodes();
     /// Spots, sharpening and the camera profile — the part of the capture
     /// region both kinds of source share, downstream of nLens_.
     void buildCaptureTail();
+    /// The guided filter, split from the local operators because the mask
+    /// group reads `guide:prep` and the masked denoise reads the mask group,
+    /// and dehaze reads the masked denoise. research/denoise-masked.md §2.2.
+    void buildGuideNodes();
     void buildLocalNodes();
     void buildMaskNodes();
+    /// The masked denoise chain (`DevelopDenoiseLocal.cpp`), after the mask
+    /// group it reads and before the dehaze chain that reads it.
+    void buildLocalDenoiseNodes();
     void buildOutputNodes();
+
+    /// Which component ends each layer, and how many layers there are. ⚠ The
+    /// one derivation: develop:linear and denoise:field both bind the eight
+    /// slots and pick per layer from this table, so a second copy of the
+    /// grouping is how the two would come to disagree about a layer.
+    static int layerTable(const Adjustments&, std::int32_t (&mask)[kMaxMaskComponents]);
 
     // The size- and image-derived blocks, pushed once per photograph rather
     // than per tick. ⚠ Decision #92: a block re-pushed for a value nothing
@@ -383,6 +398,7 @@ private:
     void applyGrade(const Adjustments&, const ApplyContext&);
     void applyLens(const Adjustments&, const ApplyContext&);
     void applyDenoise(const Adjustments&, const ApplyContext&);
+    void applyLocalDenoise(const Adjustments&, const ApplyContext&);
     void applyDehaze(const Adjustments&, const ApplyContext&);
     void applyFusion(const Adjustments&, const ApplyContext&);
     void applyClarity(const Adjustments&, const ApplyContext&);
@@ -450,9 +466,25 @@ private:
     float whiteLevel_ = 0.0f;
     float blackLevel_[3]{};
     static constexpr int kDenoiseScales = 4;
+    /// ‖W_j‖₂ for the 5x5 starlet. Noise falls away fast at coarse scales,
+    /// which is why one threshold across all of them over-smooths the fine
+    /// scales and under-smooths the coarse. Both chains read it.
+    static constexpr float kDenoiseScaleNorm[kDenoiseScales] = {0.8907f, 0.2007f,
+                                                                0.0855f, 0.0412f};
+    /// m_c: what linearize multiplies each camera channel by under this white
+    /// balance, which is what both chains scale the fitted variance by.
+    [[nodiscard]] std::array<float, 3> denoiseMultipliers(const Adjustments&) const;
     int nAtrousBlur_[kDenoiseScales]{-1, -1, -1, -1};
     int nAtrousShrink_[kDenoiseScales]{-1, -1, -1, -1};
     raw::NoiseProfile noise_{};
+
+    // ── Masked denoise, after the profile (research/denoise-masked.md §2) ─
+    int nDenoiseField_ = -1;
+    int nLocalBlur_[kDenoiseScales]{-1, -1, -1, -1};
+    int nLocalShrink_[kDenoiseScales]{-1, -1, -1, -1};
+    /// The normalised camera-to-working matrix `pushColorProfile` pushed,
+    /// kept because the masked chain carries the noise model through it.
+    std::array<float, 9> camToWorking_{};
     int nGuidePrep_ = -1, nGuideDown_ = -1, nGuideH1_ = -1, nGuideV1_ = -1;
 
     // ── Local Laplacian clarity ───────────────────────────────────────────

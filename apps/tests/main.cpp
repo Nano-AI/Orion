@@ -43,6 +43,10 @@ int main() {
     testNoiseEstimator();
     testLinearizeClipsToWhite();
     testDenoiseGpu();
+    testDenoiseColorOnlyGpu();
+    testDenoiseDetailGpu();
+    testDenoiseDetailZeroIsShippedGpu();
+    testDenoiseMaskedGpu();
     testHighlightRecoveryGpu();
     testGradeOffsets();
     testLensGpu();

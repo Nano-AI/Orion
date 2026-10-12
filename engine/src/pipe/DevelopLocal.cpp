@@ -41,19 +41,19 @@ void DevelopPipeline::buildLocalNodes() {
 
     // The dark channel of the image itself — A = (1,1,1) — which is what the
     // candidates for the atmospheric light are ranked by.
-    nDehazeChan_ = pipeline_.add({"dehaze:channel min", "dehazeChannelMin", {nHueSat_},
-                                  PixelFormat::R16Float, {}});
+    nDehazeChan_ = pipeline_.add({"dehaze:channel min", "dehazeChannelMin",
+                                  {nLocalShrink_[0]}, PixelFormat::R16Float, {}});
     nDarkH_ = pipeline_.add({"dehaze:dark h", "dehazeRank", {nDehazeChan_},
                              PixelFormat::R16Float, {}});
     nDarkV_ = pipeline_.add({"dehaze:dark v", "dehazeRank", {nDarkH_},
                              PixelFormat::R16Float, {}});
-    nPeak_  = pipeline_.add({"dehaze:candidates", "dehazePeak", {nDarkV_, nHueSat_},
+    nPeak_  = pipeline_.add({"dehaze:candidates", "dehazePeak", {nDarkV_, nLocalShrink_[0]},
                              PixelFormat::RGBA16Float, {}, {},
                              true, peakW_, peakH_});
 
     // The same minimum again, now normalized by A — Eq. (11)'s inner term.
-    nDehazeChanA_ = pipeline_.add({"dehaze:channel min/A", "dehazeChannelMin", {nHueSat_},
-                                   PixelFormat::R16Float, {}});
+    nDehazeChanA_ = pipeline_.add({"dehaze:channel min/A", "dehazeChannelMin",
+                                   {nLocalShrink_[0]}, PixelFormat::R16Float, {}});
     nMinH_ = pipeline_.add({"dehaze:min h", "dehazeRank", {nDehazeChanA_},
                             PixelFormat::R16Float, {}});
     nMinV_ = pipeline_.add({"dehaze:min v", "dehazeRank", {nMinH_},
@@ -71,7 +71,7 @@ void DevelopPipeline::buildLocalNodes() {
     // the input is the transmission. The authors' own replacement for the
     // matting Laplacian they used in 2009 — "visually similar", and about 40 ms
     // against 10 seconds.
-    nHazePrep_ = pipeline_.add({"dehaze:moments", "dehazePrep", {nHueSat_, nMaxV_},
+    nHazePrep_ = pipeline_.add({"dehaze:moments", "dehazePrep", {nLocalShrink_[0], nMaxV_},
                                 PixelFormat::RGBA32Float, {}, {},
                                 true, hazeW_, hazeH_});
     nHazeBlurH_ = pipeline_.add({"dehaze:blur h", "boxBlur4", {nHazePrep_},
@@ -85,9 +85,9 @@ void DevelopPipeline::buildLocalNodes() {
     nHazeBlurV2_ = pipeline_.add({"dehaze:blur v2", "boxBlur", {nHazeBlurH2_},
                                   PixelFormat::RG32Float, {}, {}, true, hazeW_, hazeH_});
 
-    // First input is the profile output, so a disabled chain resolves straight
-    // through and dehaze at zero costs nothing.
-    nDehaze_ = pipeline_.add({"dehaze", "dehazeRecover", {nHueSat_, nHazeBlurV2_},
+    // First input is the masked denoise's output (the profile's when that is
+    // off), so a disabled chain resolves straight through and costs nothing.
+    nDehaze_ = pipeline_.add({"dehaze", "dehazeRecover", {nLocalShrink_[0], nHazeBlurV2_},
                               PixelFormat::RGBA16Float, {}});
 
     // ── Local Laplacian clarity (Paris et al. 2011 / Aubry et al. 2014) ───
@@ -245,10 +245,10 @@ void DevelopPipeline::buildLocalNodes() {
     nFusion_ = pipeline_.add({"fusion", "fuseApply",
                               {nClarity_, nFuseOut_[0], nFuseProxy_},
                               PixelFormat::RGBA16Float, {}});
+}
 
-    // Every scene-linear adjustment fuses into one dispatch, and the display
-    // transform plus curve into another. They are all pointwise; separate
-    // passes only bought a 194 MB round trip each at 24 MP.
+void DevelopPipeline::buildGuideNodes() {
+    using gpu::PixelFormat;
     // ── Guided filter (He, Sun & Tang) ────────────────────────────────────
     // Sits before exposure on purpose: exposure is a multiply, so in log2 it is
     // an add the tone node applies for free — which keeps this whole six-pass

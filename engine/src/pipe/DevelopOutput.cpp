@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -73,6 +74,29 @@ bool sameCurve(const ToneCurveSpec& a, const ToneCurveSpec& b) {
 }
 
 }  // namespace
+
+int DevelopPipeline::layerTable(const Adjustments& adj,
+                                std::int32_t (&mask)[kMaxMaskComponents]) {
+    // ⚠ Layers are runs of components, resolved here rather than stored: a
+    // layer's coverage is the **last** component of its run, and which
+    // component that is moves whenever a row is added, removed or reordered.
+    // Storing the index would be a second copy of the grouping, and this file
+    // has been bitten by a second copy of a claim before.
+    std::fill(std::begin(mask), std::end(mask), 0);
+    int layer = -1;
+    for (int i = 0; i < adj.maskCount; ++i) {
+        const auto& c = adj.maskComponents[std::size_t(i)];
+        if (i == 0 || c.startsLayer) {
+            if (layer + 1 >= kMaxMaskComponents) break;
+            ++layer;
+        }
+        if (layer < 0) continue;
+        // Hidden components still end a run — hiding one must not silently
+        // merge its layer into the next.
+        mask[layer] = i;
+    }
+    return layer + 1;
+}
 
 void DevelopPipeline::buildOutputNodes() {
     using gpu::PixelFormat;
@@ -315,24 +339,7 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         // its end, where a transposed pair would compile.
         la.toneSigma  = params::toneBands(adj.process).sigma;
         la.toneAnchor   = params::toneBands(adj.process).anchor;
-        // ⚠ Layers are runs of components, resolved here rather than stored:
-        // a layer's coverage is the **last** component of its run, and which
-        // component that is moves whenever a row is added, removed or
-        // reordered. Storing the index would be a second copy of the grouping,
-        // and this file has been bitten by a second copy of a claim before.
-        int layer = -1;
-        for (int i = 0; i < adj.maskCount; ++i) {
-            const auto& c = adj.maskComponents[std::size_t(i)];
-            if (i == 0 || c.startsLayer) {
-                if (layer + 1 >= kMaxMaskComponents) break;
-                ++layer;
-            }
-            if (layer < 0) continue;
-            // Hidden components still end a run — hiding one must not silently
-            // merge its layer into the next.
-            la.layerMask[layer] = i;
-        }
-        la.layerCount = layer + 1;
+        la.layerCount = layerTable(adj, la.layerMask);
         for (int L = 0; L < kMaxMaskComponents; ++L) {
             const auto& e = adj.layers[std::size_t(L)];
             la.layerExposureEv[L] = e.exposureEv;

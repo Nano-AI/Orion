@@ -175,8 +175,9 @@ void testDenoiseGpu() {
         sp.noiseA = 0.0f;
         sp.noiseB = kSigma * kSigma;
         sp.scaleNorm = kScaleNorm[j];
-        sp.strength = 2.0f;
-        sp.chromaBoost = 1.0f;
+        sp.strengthLuma = 2.0f;
+        sp.strengthChroma = 2.0f;
+        sp.step = 1 << j;
 
         const orion::gpu::Texture* fine =
             (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
@@ -187,7 +188,7 @@ void testDenoiseGpu() {
 
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*shrinkKernel,
-                    {fine, coarse, accum, shrinks[std::size_t(j)].get()},
+                    {fine, coarse, accum, coarse, shrinks[std::size_t(j)].get()},
                     &sp, sizeof sp, kW, kH);
         cb.commitAndWait();
     }
@@ -242,7 +243,8 @@ void testDenoiseGpu() {
     for (int j = kScales - 1; j >= 0; --j) {
         orion::pipe::params::AtrousShrink sp{};
         sp.size[0] = kW; sp.size[1] = kH;
-        sp.strength = 0.0f;
+        sp.strengthLuma = 0.0f;
+        sp.strengthChroma = 0.0f;
         const orion::gpu::Texture* fine =
             (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
         const orion::gpu::Texture* accum =
@@ -251,7 +253,7 @@ void testDenoiseGpu() {
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*shrinkKernel,
                     {fine, blurs[std::size_t(j)].get(), accum,
-                     shrinks[std::size_t(j)].get()},
+                     blurs[std::size_t(j)].get(), shrinks[std::size_t(j)].get()},
                     &sp, sizeof sp, kW, kH);
         cb.commitAndWait();
     }

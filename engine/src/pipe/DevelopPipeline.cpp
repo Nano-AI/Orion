@@ -34,9 +34,14 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
         pipeline_.setSourceFormat(gpu::PixelFormat::RGBA16Float);
     }
 
+    // ⚠ The guide before the masks (they read `guide:prep`), the masks before
+    // the masked denoise (it reads their folds), and that before the local
+    // operators (dehaze reads it). research/denoise-masked.md §2.2.
     buildCaptureNodes();
-    buildLocalNodes();
+    buildGuideNodes();
     buildMaskNodes();
+    buildLocalDenoiseNodes();
+    buildLocalNodes();
     buildOutputNodes();
 
     pipeline_.compile(width_, height_);
@@ -480,6 +485,7 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     applyGrade(adj, ctx);
     applyLens(adj, ctx);
     applyDenoise(adj, ctx);
+    applyLocalDenoise(adj, ctx);
     applyDehaze(adj, ctx);
     applyFusion(adj, ctx);
     applyClarity(adj, ctx);

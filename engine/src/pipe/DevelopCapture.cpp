@@ -199,7 +199,11 @@ void DevelopPipeline::buildCaptureNodes() {
         const int accum  = (j == kDenoiseScales - 1) ? nAtrousBlur_[j]
                                                      : nAtrousShrink_[j + 1];
         nAtrousShrink_[j] = pipeline_.add({"denoise:shrink " + std::to_string(j),
-                                           "atrousShrink", {fine, coarse, accum},
+                                           "atrousShrink",
+                                           // The field slot is unread with
+                                           // useField 0; coarse is a harmless
+                                           // texture to fill it with.
+                                           {fine, coarse, accum, coarse},
                                            PixelFormat::RGBA16Float, {}});
     }
 
@@ -336,6 +340,7 @@ void DevelopPipeline::pushColorProfile(const std::array<float, 9>& camToXyzStore
     std::copy_n(xyzToCam, 9, xyzToCam_);
     multiply3x3(kXyzToRec2020, camToXyz, camToWorking);
     normalizeRows(camToWorking);
+    std::copy_n(camToWorking, 9, camToWorking_.begin());
 
     params::ColorMatrix mat{};
     for (int c = 0; c < 3; ++c) {
@@ -663,6 +668,7 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
         first ||
         adj.denoiseLuma != lastAdj_.denoiseLuma ||
         adj.denoiseColor != lastAdj_.denoiseColor ||
+        adj.denoiseDetail != lastAdj_.denoiseDetail ||
         adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
         adj.wb.tint != lastAdj_.wb.tint;
 
@@ -673,55 +679,56 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
         }
     }
 
-    if (denoising && denoiseMoved) {
-        // ‖W_j‖₂ for the 5x5 starlet. Noise falls away fast at coarse scales,
-        // which is why one threshold across all of them over-smooths the fine
-        // scales and under-smooths the coarse.
-        constexpr float kScaleNorm[kDenoiseScales] = {0.8907f, 0.2007f, 0.0855f, 0.0412f};
-
-        // The model was fitted on the mosaic, before white balance. Linearize
-        // multiplies channel c by m_c, so its variance is multiplied by m_c².
-        // Luminance is a weighted sum of independent channels, so its variance
-        // is the weight-squared sum of theirs.
-        const auto want = multipliersFor(adj.wb, xyzToCam_);
-        const float mR = asShotMul_[0] * want[0] / std::max(asShotRef_[0], 1e-6f);
-        const float mG = 1.0f;
-        const float mB = asShotMul_[2] * want[2] / std::max(asShotRef_[2], 1e-6f);
-
-        // Rec.2020 luminance weights, matching the shader.
-        constexpr float wR = 0.2627f, wG = 0.6780f, wB = 0.0593f;
-        const float aLum = noise_.a * (wR * wR * mR + wG * wG * mG + wB * wB * mB);
-        const float bLum = noise_.b * (wR * wR * mR * mR + wG * wG * mG * mG +
-                                       wB * wB * mB * mB);
-
+    // ⚠ The blurs read nothing but the frame's size, so they are pushed once
+    // per photograph: a re-push of a block nothing reads still dirties its
+    // node (decision #92), and four full-resolution blurs is what a Luminance
+    // or Detail drag would otherwise rerun for no change.
+    if (first) {
         for (int j = 0; j < kDenoiseScales; ++j) {
             params::AtrousBlur blur{};
             blur.size[0] = width_;
             blur.size[1] = height_;
             blur.step = 1 << j;
             pipeline_.setParams(nAtrousBlur_[j], &blur, sizeof blur);
+        }
+    }
 
+    if (denoising && denoiseMoved) {
+        // The model was fitted on the mosaic, before white balance. Linearize
+        // multiplies channel c by m_c, so its variance is multiplied by m_c².
+        // Luminance is a weighted sum of independent channels, so its variance
+        // is the weight-squared sum of theirs.
+        const auto m = denoiseMultipliers(adj);
+
+        // Rec.2020 luminance weights, matching the shader.
+        constexpr float wR = 0.2627f, wG = 0.6780f, wB = 0.0593f;
+        const float aLum = noise_.a * (wR * wR * m[0] + wG * wG * m[1] + wB * wB * m[2]);
+        const float bLum = noise_.b * (wR * wR * m[0] * m[0] + wG * wG * m[1] * m[1] +
+                                       wB * wB * m[2] * m[2]);
+
+        for (int j = 0; j < kDenoiseScales; ++j) {
             params::AtrousShrink shrink{};
             shrink.size[0] = width_;
             shrink.size[1] = height_;
             shrink.noiseA = aLum;
             shrink.noiseB = bLum;
-            shrink.scaleNorm = kScaleNorm[j];
-            shrink.strength = adj.denoiseLuma;
-            // Color is expressed relative to luma so that raising Color alone
-            // still does something when Luminance is zero.
-            shrink.chromaBoost = adj.denoiseLuma > 1e-6f
-                ? std::max(adj.denoiseColor / adj.denoiseLuma, 0.0f)
-                : 0.0f;
-            if (adj.denoiseLuma <= 1e-6f) {
-                // Color only: shrink chroma against the measured sigma and
-                // leave luma untouched.
-                shrink.strength = adj.denoiseColor;
-                shrink.chromaBoost = 1.0f;
-            }
+            shrink.scaleNorm = kDenoiseScaleNorm[j];
+            // Two strengths, nothing derived: research/denoise-masked.md §0.1.
+            shrink.strengthLuma = adj.denoiseLuma;
+            shrink.strengthChroma = adj.denoiseColor;
+            shrink.detail = adj.denoiseDetail;
+            shrink.step = 1 << j;
+            shrink.useField = 0;
             pipeline_.setParams(nAtrousShrink_[j], &shrink, sizeof shrink);
         }
     }
+}
+
+std::array<float, 3> DevelopPipeline::denoiseMultipliers(const Adjustments& adj) const {
+    const auto want = multipliersFor(adj.wb, xyzToCam_);
+    return {asShotMul_[0] * want[0] / std::max(asShotRef_[0], 1e-6f),
+            1.0f,
+            asShotMul_[2] * want[2] / std::max(asShotRef_[2], 1e-6f)};
 }
 
 void DevelopPipeline::applySpots(const Adjustments& adj,
