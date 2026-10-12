@@ -251,6 +251,11 @@ struct Adjustments {
     /// behave the same way on a clean frame and a very noisy one.
     float denoiseLuma   = 0.0f;   // 0..4, 0 disables the whole chain
     float denoiseColor = 0.0f;   // 0..4, applied on top of luma
+    /// How far the threshold backs off where the picture has more texture
+    /// than noise. 0 is the fixed threshold (bit-identical to every render
+    /// before it existed); 1 is BayesShrink's `sigma^2 / sigma_x` shape under
+    /// the same strength. research/denoise-masked.md §1.
+    float denoiseDetail = 0.0f;   // 0..1
 
     /// How much of the creative LUT to apply, 0..1. The LUT itself is not an
     /// adjustment — it is a file, set through `setCreativeLut`.
@@ -341,6 +346,11 @@ struct Adjustments {
         float shadows = 0.0f;
         float whites = 0.0f;
         float blacks = 0.0f;
+        /// Denoise through this layer's coverage, in the global sliders'
+        /// units, on top of the global chain. research/denoise-masked.md §2:
+        /// the threshold is the parameter, and it is scaled per pixel.
+        float denoiseLuma = 0.0f;   // 0..4
+        float denoiseColor = 0.0f;  // 0..4
         bool operator==(const LocalEdit&) const = default;
     };
     /// ⚠ One per layer, so the subject can be graded one way and the sky

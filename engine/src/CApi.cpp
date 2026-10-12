@@ -188,6 +188,7 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
                          ? adj->vignette_field_angle : 45.0f;
     a.denoiseLuma   = adj->denoise_luma;
     a.denoiseColor = adj->denoise_color;
+    a.denoiseDetail = std::clamp(adj->denoise_detail, 0.0f, 1.0f);
 
     a.curve.master = toChannel(adj->curve_master);
     a.curve.red    = toChannel(adj->curve_red);
@@ -241,6 +242,8 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         e.shadows    = std::clamp(adj->local_shadows[i], -1.0f, 1.0f);
         e.whites     = std::clamp(adj->local_whites[i], -1.0f, 1.0f);
         e.blacks     = std::clamp(adj->local_blacks[i], -1.0f, 1.0f);
+        e.denoiseLuma  = std::clamp(adj->local_denoise_luma[i], 0.0f, 4.0f);
+        e.denoiseColor = std::clamp(adj->local_denoise_color[i], 0.0f, 4.0f);
     }
     a.maskRefine = std::clamp(adj->mask_refine, 0.0f, 1.0f);
     // Zero is the bands as shipped, and anything newer than this build knows

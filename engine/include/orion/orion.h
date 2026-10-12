@@ -234,6 +234,11 @@ typedef struct OrionAdjustments {
      * clean frame and a very noisy one. Zero switches the chain off entirely. */
     float denoise_luma;     /* 0..4                       */
     float denoise_color;   /* 0..4                       */
+    /* How much the threshold backs off where the picture has more texture
+     * than noise: 0 is the fixed threshold every photograph before it was
+     * rendered with, 1 is BayesShrink's shape under the same strength.
+     * research/denoise-masked.md section 1. */
+    float denoise_detail;  /* 0..1, 0 is bit-identical to before */
 
     /* How much of the loaded creative LUT to apply, 0..1. The LUT itself is
      * not an adjustment — see orion_engine_load_lut. Zero is byte-identical to
@@ -279,6 +284,12 @@ typedef struct OrionAdjustments {
     float local_shadows[ORION_MAX_MASK_COMPONENTS];
     float local_whites[ORION_MAX_MASK_COMPONENTS];
     float local_blacks[ORION_MAX_MASK_COMPONENTS];
+    /* Denoise through the layer's coverage, in the global sliders' units and
+     * on top of the global chain: a second, short wavelet chain in working
+     * space whose threshold is scaled per pixel by the coverage.
+     * research/denoise-masked.md section 2. Zero everywhere costs nothing. */
+    float local_denoise_luma[ORION_MAX_MASK_COMPONENTS];   /* 0..4 */
+    float local_denoise_color[ORION_MAX_MASK_COMPONENTS];  /* 0..4 */
 
     /* Dust and blemishes. research/spot-removal.md. Applied between the lens
      * correction and sharpening, in scene-linear light. */
