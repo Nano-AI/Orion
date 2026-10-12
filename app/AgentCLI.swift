@@ -42,6 +42,13 @@ enum AgentCLI {
         /// caller can learn units and ranges before proposing an edit rather
         /// than after `apply` rejects one.
         case keys
+        /// A Subject, Person or Sky matte for the photograph, saved beside it,
+        /// and the kind-4 row that names it. See `AgentMatte`.
+        case matte(raw: String, kind: String, state: String?)
+        /// One photograph's groups onto many, as a proposal or straight into
+        /// each sidecar. See `AgentSync` - its parser builds this case.
+        case sync(source: String, targets: String, groups: [AgentSync.Group],
+                  state: String?, mode: AgentSync.Mode)
     }
 
     /// A rectangle of the DISPLAYED picture - what `--region x,y,w,h` parses
@@ -57,7 +64,7 @@ enum AgentCLI {
     }
 
     static let usageLine =
-        "usage: Orion --agent <stats|proxy|apply|commit|flag|faces|state> <raw> [options]"
+        "usage: Orion --agent <stats|proxy|apply|commit|flag|faces|state|matte|sync> <raw> [options]"
             + "  |  Orion --agent keys"
 
     /// `--region x,y,w,h`. Refuses a rectangle outside 0…1 or with no area
@@ -96,7 +103,14 @@ enum AgentCLI {
         "flag": ["rating", "reject"],
         "faces": ["state"],
         "state": ["state"],
+        "matte": ["kind", "state"],
+        "sync": ["targets", "groups", "state", "mode"],
     ]
+
+    /// `matte --kind`'s values - `SubjectMatte.Kind`'s three producers, by
+    /// the lower-cased form of their `label`. `AgentSync` reads a row's
+    /// `matteSource` back through the same list.
+    static let matteKinds = ["subject", "person", "sky"]
 
     /// Walks `--agent <verb> <raw> [--key value]…` out of the full process
     /// argument list, the same shape `--batch-export` and `--hdr-merge` read.
@@ -151,6 +165,14 @@ enum AgentCLI {
             return .faces(raw: raw, state: options["state"])
         case "state":
             return .state(raw: raw, state: options["state"])
+        case "matte":
+            guard let kind = options["kind"], matteKinds.contains(kind) else {
+                throw Failure.usage(
+                    "matte needs --kind \(matteKinds.joined(separator: "|"))")
+            }
+            return .matte(raw: raw, kind: kind, state: options["state"])
+        case "sync":
+            return try AgentSync.command(source: raw, options: options)
         case "apply":
             guard let edits = options["edits"] else {
                 throw Failure.usage("apply needs --edits <json-file>")

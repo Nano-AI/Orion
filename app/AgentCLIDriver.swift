@@ -51,6 +51,11 @@ extension AgentCLI {
             return try runCommit(raw: raw, state: state)
         case .flag(let raw, let rating, let reject):
             return try runFlag(raw: raw, rating: rating, reject: reject)
+        case .matte(let raw, let kind, let state):
+            return try runMatte(raw: raw, kind: kind, state: state)
+        case .sync(let source, let targets, let groups, let state, let mode):
+            return try runSync(source: source, targets: targets, groups: groups,
+                               state: state, mode: mode)
         case .keys:
             return ["keys": keysJSON()]
         }
@@ -228,8 +233,9 @@ extension AgentCLI {
     ///
     /// ⚠ Only the as-shot branch opens an `Engine`: the other two are a file
     /// read, and `apply` on a photograph with a sidecar never needed the GPU.
+    /// Not private: `AgentSyncDriver` reads every target's base through it.
     @MainActor
-    private static func baseState(url: URL, state: String?) throws -> (data: Data, source: String) {
+    static func baseState(url: URL, state: String?) throws -> (data: Data, source: String) {
         if let state {
             return (try Data(contentsOf: URL(fileURLWithPath: state)), "proposed")
         }

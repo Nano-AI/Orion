@@ -57,6 +57,9 @@ set(SWIFT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentInspect.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentFaces.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentComposite.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentMatte.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentSync.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentSyncDriver.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SubjectMatte.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/MatteStore.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/SkyDetector.swift
@@ -279,6 +282,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentKeys.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentVocabulary.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentComposite.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentSync.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
@@ -305,6 +309,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Export.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Watermark.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Agent.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+AgentSync.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Proposal.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AssistantProcess.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Assistant.swift
@@ -347,6 +352,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentKeys.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentVocabulary.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentComposite.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/AgentSync.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Viewport.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Crop.swift
@@ -372,6 +378,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Export.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Watermark.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Agent.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+AgentSync.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Proposal.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AssistantProcess.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Assistant.swift

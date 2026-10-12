@@ -79,23 +79,32 @@ enum SyncSettings {
               let sourceObj = try? JSONSerialization.jsonObject(with: sourceData)
                 as? [String: Any]
         else { return nil }
+        return patched(stored: stored, sourceObject: sourceObj,
+                       keys: groups.flatMap { keys(for: $0) })
+    }
 
+    /// The key-level patch itself, over an already-encoded source.
+    ///
+    /// ⚠ Split out so `AgentSync`'s commit mode writes a sidecar through the
+    /// SAME patch the product's sync does - it also carries the `masks` keys,
+    /// which are not a `PresetGroup` - rather than a second copy of the
+    /// white-balance rule in this file's header.
+    static func patched(stored: Data?, sourceObject sourceObj: [String: Any],
+                        keys: [String]) -> Data? {
         var target: [String: Any] = [:]
         if let stored,
            let obj = try? JSONSerialization.jsonObject(with: stored) as? [String: Any] {
             target = obj
         }
 
-        for group in groups {
-            for key in keys(for: group) {
-                // A key the *source* does not carry is skipped rather than
-                // written as null. Encoding a `DevelopState` always produces
-                // every key, so this only fires if the two drift — and writing
-                // null would put a value into the target that decodes to
-                // nothing and reads as corruption.
-                guard let v = sourceObj[key] else { continue }
-                target[key] = v
-            }
+        for key in keys {
+            // A key the *source* does not carry is skipped rather than
+            // written as null. Encoding a `DevelopState` always produces
+            // every key, so this only fires if the two drift — and writing
+            // null would put a value into the target that decodes to
+            // nothing and reads as corruption.
+            guard let v = sourceObj[key] else { continue }
+            target[key] = v
         }
 
         return try? JSONSerialization.data(withJSONObject: target,
