@@ -132,6 +132,19 @@ struct GalleryView: View {
                         proxy.scrollTo(url, anchor: nil)
                     }
                 }
+                // Opening the gallery lands on the photograph being edited,
+                // not on the top of the folder. `enterGallery` seeds `focused`
+                // before this view exists, so `onChange` never fires for it;
+                // the first scroll has to be asked for. Deferred one turn so
+                // the lazy grid has laid out enough to know where the cell is,
+                // and unanimated, because a jump from the top would read as
+                // the grid wandering off on its own.
+                .onAppear {
+                    guard let url = focused else { return }
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(url, anchor: .center)
+                    }
+                }
             }
             // Written from layout, read by `handleKey` for the up and down
             // arrows. `onChange` alone misses the first layout, so seed it
