@@ -200,9 +200,29 @@ enum SubjectMatte {
             // The threshold is a pixel count rather than a sum, because a
             // handful of stray low-confidence pixels is also nothing anyone
             // asked to select.
+            //
+            // ⚠ The floor was one part in 200 of the frame, and on 2026-10-17
+            // a competition frame with eleven detected faces came back "found
+            // nothing" through `detect_subject` while Subject found 31% of it:
+            // eleven small people are real people and were under half a
+            // percent of the picture. One part in 2000 is a 19x19 patch of the
+            // 1024-px analysis render, which is the smallest selection the
+            // guided refinement can still put an edge on. And the refusal now
+            // says what it measured, so the next one is a number rather than
+            // a guess.
             var lit = 0
-            for v in alpha where v > 0.5 { lit += 1 }
-            guard lit * 200 >= alpha.count else { throw Failure.nothingFound }
+            var peak: Float = 0
+            for v in alpha {
+                if v > 0.5 { lit += 1 }
+                if v > peak { peak = v }
+            }
+            guard lit * 2000 >= alpha.count else {
+                let percent = 100.0 * Double(lit) / Double(max(alpha.count, 1))
+                throw Failure.vision(String(
+                    format: "Nothing was found to select: the model lit %.3f%% of the "
+                        + "frame above half confidence (peak %.2f); the floor is 0.05%%.",
+                    percent, peak))
+            }
             return alpha
         }
     }
