@@ -395,6 +395,34 @@ extension ViewportTests {
     /// as the struct's defaults — 5500 K — and writing that back would
     /// rewhite-balance every untouched photograph in a selection to a number
     /// nobody chose. This is why sync patches keys and not structs.
+    /// The file keeps white balance absent; the restore has to keep it the
+    /// camera's. Before this a sidecar of `{"exposureEv": 0.5}` opened every
+    /// synced photograph at the decoder's 5500 K.
+    static func testRestoreFillsAbsentWhiteBalanceFromTheCamera() {
+        var asShot = DevelopState()
+        asShot.temperatureK = 7480
+        asShot.tint = 3
+
+        let synced = Data(#"{"exposureEv":0.5}"#.utf8)
+        guard var state = try? JSONDecoder().decode(DevelopState.self, from: synced) else {
+            report(false, "a one-key sidecar decodes"); return
+        }
+        SyncSettings.fillAbsentWhiteBalance(&state, stored: synced, asShot: asShot)
+        report(state.temperatureK == 7480 && state.tint == 3,
+               "an absent white balance restores as the camera's",
+               "\(state.temperatureK) K, tint \(state.tint)")
+        report(abs(state.exposureEv - 0.5) < 1e-6, "and the key the file carries is kept")
+
+        let chosen = Data(#"{"temperatureK":4000,"tint":null}"#.utf8)
+        guard var picked = try? JSONDecoder().decode(DevelopState.self, from: chosen) else {
+            report(false, "a sidecar with a null tint decodes"); return
+        }
+        SyncSettings.fillAbsentWhiteBalance(&picked, stored: chosen, asShot: asShot)
+        report(picked.temperatureK == 4000, "a temperature the file states is left alone",
+               "\(picked.temperatureK)")
+        report(picked.tint == 3, "a null tint counts as absent", "\(picked.tint)")
+    }
+
     static func testSyncLeavesUnknownWhiteBalanceAlone() {
         var source = DevelopState()
         source.temperatureK = 8000

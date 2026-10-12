@@ -106,6 +106,7 @@ enum ViewportTests {
         testPresetIsAPatch()
         testSyncKeysMatchTheStructPatch()
         testSyncLeavesUnknownWhiteBalanceAlone()
+        testRestoreFillsAbsentWhiteBalanceFromTheCamera()
         testSyncPatchesOnlyItsGroups()
         testPresetNeverCarriesTheFrame()
         testPresetStoreRoundTrip()

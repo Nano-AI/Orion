@@ -162,7 +162,11 @@ extension Engine {
         // its own persisted geometry. No rewrite pass: the file adopts frame
         // numbers and the marker on the next edit's save, and converts afresh
         // — deterministically — on every open until then.
-        let s = migratedToFrameSpace(decoded)
+        var s = migratedToFrameSpace(decoded)
+        // A sidecar Sync wrote onto an untouched photograph carries no white
+        // balance, and the decoder just invented one. `defaults` is this
+        // photograph's as-shot state, seated by `open` (line 124).
+        SyncSettings.fillAbsentWhiteBalance(&s, stored: encoded, asShot: defaults)
         suspended = true
         assign(s)
         suspended = false

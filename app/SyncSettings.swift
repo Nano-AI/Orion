@@ -63,6 +63,29 @@ enum SyncSettings {
         }
     }
 
+    /// The other half of the header's promise, at the point it was being
+    /// broken. A key the sync leaves absent stays absent in the FILE, but
+    /// `Engine.restore(encoded:)` decodes that file into a `DevelopState`, and
+    /// the decoder starts from `init()` - 5500 K, tint 0 (EditHistory.swift:679)
+    /// - so the photograph still opened at a number nobody chose.
+    ///
+    /// ⚠ Found 2026-10-17 by the agent `sync` verb's smoke, and the product's
+    /// own Sync has done the same since it shipped: a sidecar holding only
+    /// `{"exposureEv": 0.5}`, exactly what Sync writes onto an untouched
+    /// photograph, opened `underexposedsubject.ARW` at 5500 K against its
+    /// 7480 K as shot. Only the two white-balance keys are filled, and only
+    /// when the stored JSON does not carry them (absent or null): overlaying
+    /// the whole as-shot state would hand a legacy sidecar current-convention
+    /// markers it never had.
+    static func fillAbsentWhiteBalance(_ state: inout DevelopState, stored: Data,
+                                       asShot: DevelopState) {
+        guard let object = try? JSONSerialization.jsonObject(with: stored) as? [String: Any]
+        else { return }
+        func absent(_ key: String) -> Bool { object[key] == nil || object[key] is NSNull }
+        if absent("temperatureK") { state.temperatureK = asShot.temperatureK }
+        if absent("tint") { state.tint = asShot.tint }
+    }
+
     /// Every key any group owns — the ones a paste may ever write.
     static var allSyncableKeys: Set<String> {
         Set(PresetGroup.allCases.flatMap { keys(for: $0) })
