@@ -229,4 +229,49 @@ extension ViewportTests {
             report(actions.isEmpty, "\(event) on idle performs nothing", "\(actions)")
         }
     }
+
+    /// A matte only a proposal names survives the sweep on open - `agent
+    /// matte` and `agent sync` write exactly those - and an unreadable
+    /// proposal sweeps nothing, the version file's rule (MatteStore.swift,
+    /// `sweepAfterLoad(photo:parsed:)`).
+    static func testSweepKeepsWhatAProposalNames() {
+        let fm = FileManager.default
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("orion-sweep-proposed-\(UUID().uuidString)")
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        let photo = dir.appendingPathComponent("_PIC0001.ARW")
+        fm.createFile(atPath: photo.path, contents: Data([0]))
+
+        func matte() -> String {
+            (try? MatteStore.write([0, 1, 1, 0], width: 2, height: 2, photo: photo)) ?? ""
+        }
+        func exists(_ id: String) -> Bool {
+            fm.fileExists(atPath: MatteStore.url(photo: photo, id: id).path)
+        }
+
+        let proposed = matte(), orphan = matte()
+        var state = DevelopState()
+        var row = MaskComponentState()
+        row.kind = 4
+        row.matteId = proposed
+        state.maskComponents = [row]
+        try? JSONEncoder().encode(state).write(to: Proposal.proposedURL(for: photo))
+
+        MatteStore.sweepAfterLoad(photo: photo, parsed: [])
+        report(!proposed.isEmpty && exists(proposed),
+               "a matte only the proposal names survives the sweep")
+        report(!exists(orphan), "and one nothing names is still collected")
+
+        let unnamed = matte()
+        try? Data("not json".utf8).write(to: Proposal.proposedURL(for: photo))
+        report(Proposal.pinnedMattes(photo: photo) == nil,
+               "an unreadable proposal is nil, not an empty set")
+        MatteStore.sweepAfterLoad(photo: photo, parsed: [])
+        report(exists(proposed) && exists(unnamed),
+               "an unreadable proposal sweeps nothing")
+
+        try? fm.removeItem(at: Proposal.proposedURL(for: photo))
+        report(Proposal.pinnedMattes(photo: photo) == [], "an absent proposal pins nothing")
+    }
 }

@@ -31,6 +31,25 @@ enum Proposal {
                   .appendingPathComponent("\(stem).proposed.json")
     }
 
+    /// Every matte id the proposal names, for `MatteStore.sweepAfterLoad`'s
+    /// keep-set. `agent matte` and `agent sync` write a matte that only a
+    /// proposal names, and the sweep on the next open used to delete it.
+    ///
+    /// ⚠ The `SnapshotStore.pinnedMattes` contract: absent is `[]`, but
+    /// present and unreadable is **nil**, and nil means sweep NOTHING - an
+    /// empty set there would take a proposal's mattes on a file Orion only
+    /// failed to parse, #87's lesson in a third place.
+    static func pinnedMattes(photo: URL) -> Set<String>? {
+        let url = proposedURL(for: photo)
+        guard let data = try? Data(contentsOf: url) else {
+            return FileManager.default.fileExists(atPath: url.path) ? nil : []
+        }
+        guard let state = try? JSONDecoder().decode(DevelopState.self, from: data) else {
+            return nil
+        }
+        return Set(state.maskComponents.compactMap(\.matteId))
+    }
+
     // MARK: What changed
 
     /// The top-level `DevelopState` keys that differ between two encoded

@@ -308,8 +308,15 @@ enum MatteStore {
     /// than by the callers for the same reason the three-state rule is:
     /// a delete policy written twice is a delete policy that stops matching.
     /// Decision #99.
+    ///
+    /// ⚠ **So does a proposal** (`<stem>.proposed.json`), with the same three
+    /// states and the same unreadable-wins rule: `agent matte` and `agent
+    /// sync` write mattes only a proposal names, and an open before the
+    /// photographer approved used to delete them (`Proposal.pinnedMattes`).
     static func sweepAfterLoad(photo: URL, parsed: [MaskComponentState]?) {
-        guard let pinned = SnapshotStore.pinnedMattes(photo: photo) else { return }
+        guard let versions = SnapshotStore.pinnedMattes(photo: photo),
+              let proposed = Proposal.pinnedMattes(photo: photo) else { return }
+        let pinned = versions.union(proposed)
         if let parsed {
             sweep(photo: photo, keeping: referenced(parsed).union(pinned))
         } else if !FileManager.default.fileExists(

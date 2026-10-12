@@ -163,6 +163,15 @@ final class ProposalWatcher {
         for action in actions { perform(action, proposedData: proposedData) }
     }
 
+    /// ⚠ After every `engine.apply` of a whole state. A kind-4 row is a file
+    /// on disk, not a number in the state, and `apply` uploads numbers only -
+    /// so a proposed Subject layer previewed as covering nothing, and an
+    /// inverted one lit the whole frame. `Engine.restore(snapshot:photo:)`
+    /// does the same (Engine+Document.swift:220).
+    private func restoreMattes() {
+        if let photo { engine?.restoreMattes(photo: photo) }
+    }
+
     /// One action from `Proposal.transition`, turned into the real call.
     ///
     /// ⚠ **`.restoreProposed` uses `engine.apply(_:)`, not `engine.restore
@@ -188,6 +197,7 @@ final class ProposalWatcher {
                   let decoded = try? JSONDecoder().decode(DevelopState.self, from: proposedData)
             else { return }
             engine.apply(decoded)
+            restoreMattes()
         case .setCompare:
             engine.setCompare(split: 0.5)
         case .recordHistory(let label):
@@ -202,12 +212,16 @@ final class ProposalWatcher {
             if let url = proposedURL { try? FileManager.default.removeItem(at: url) }
             lastSeenProposed = nil
         case .restoreCommitted:
-            if let committedState { engine.apply(committedState) }
+            if let committedState {
+                engine.apply(committedState)
+                restoreMattes()
+            }
         case .restoreSidecar:
             guard let photo, let develop = Sidecar.read(for: photo)?.develop,
                   let decoded = try? JSONDecoder().decode(DevelopState.self, from: develop)
             else { return }
             engine.apply(decoded)
+            restoreMattes()
         case .clearCompare:
             engine.comparisonReference = nil
             engine.clearCompare()
