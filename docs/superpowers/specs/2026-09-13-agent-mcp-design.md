@@ -40,6 +40,8 @@ Paths are absolute. `<raw>` is a RAW file Orion can open.
 | `apply <raw> --edits <json-file> --out <json-file>` | base state = `--state` if given, else the sidecar's develop state, else the engine default after open | `--out`: the full `DevelopState` JSON-encoded exactly as `Autosave.toSidecar` encodes it | `{"path":out,"changed":[keys]}` |
 | `commit <raw> --state <json-file>` | the state file | the real sidecar via `Autosave.toSidecar(url, state)` | `{"sidecar":path}` |
 | `state <raw> [--state <json-file>]` | base state exactly as `apply` resolves it (one shared helper, `baseState`): `--state` if given, else the sidecar's develop state, else the engine default after open - the engine is opened only in that last case | nothing | `{"path","source":"proposed"\|"sidecar"\|"as-shot","state":{...}}`, `state` round-tripped through `DevelopState` like `apply`'s |
+| `matte <raw> --kind subject\|person\|sky [--state <json>]` | base state as `state` resolves it, then the panel's Vision matte for that kind on the developed photo | `<stem>.orion-matte-<id>.png` beside the RAW, nothing else | `{"path","found":true,"kind","matteId","matteSource","width","height","coverage","component":{...a complete kind-4 row}}`, or `{"path","found":false,"kind","reason"}`, both exit 0 |
+| `sync <raw> --targets <json-file> [--groups a,b,...] [--state <json>] [--mode propose\|commit]` | the source's base state, then each target's; groups are the six preset groups plus `masks` (default `light,color,curve,effects`), and every kind-4 row is re-detected per target | per target `<stem>.proposed.json` (propose, default) or the sidecar (commit) | `{"source","sourceState","mode","groups","keys","results":[{"path","wrote","file","mattes"}\|{"path","skipped"}\|{"path","error"}],"written","failed","skipped"}`, exit 0 even when a target fails |
 | `flag <raw> [--rating 0-5] [--reject 0\|1]` | | the real sidecar via `Sidecar.merge(into:)`; reject 1 also sets rating 0, rating > 0 clears reject (same rules as `Library.setRating` / `setRejected`) | `{"rating","rejected"}` |
 
 `apply` merges by round-tripping through JSON: encode the base `DevelopState`
@@ -68,6 +70,8 @@ file **beside the RAW**: `<raw stem>.proposed.json`, the output of `apply`.
 | `get_proxy` | `path`, `maxPx` (default 1024, max 2048), `state` (`"current"` default or `"proposed"`) | `proxy` into a temp file, `--state` when proposed and the file exists | one `image` content block, `image/jpeg`, base64 |
 | `propose_edit` | `path`, `edits` (object) | `apply` with `--state` = existing proposed file if present, writes the proposed file | the merged state JSON and `changed` |
 | `get_edits` | `path`, `state` (`"current"` default or `"proposed"`) | `state`, `--state` only when proposed and the file exists; read-only, never writes | the verb's JSON plus `hasProposed` |
+| `detect_subject` | `path`, `kind` (`"subject"` default, `"person"`, `"sky"`), `state` | `matte`, `--state` only when proposed and the file exists | the verb's JSON |
+| `sync_edits` | `source`, `targets` (min 1), `groups`, `sourceState`, `commit` (default false) | `sync` over a temp targets file; under `commit` the photo open in Orion goes in a second `propose` run | the verb's JSON, results and counts merged across both runs, plus `openPhotoProposed` |
 | `approve_edit` | `path` | `commit --state <proposed>` then deletes the proposed file | `{"sidecar"}` |
 | `reject_edit` | `path` | deletes the proposed file | `{"deleted": true\|false}` |
 | `set_flag` | `path`, `rating?`, `reject?` | `flag` | the flag JSON |

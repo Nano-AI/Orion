@@ -85,7 +85,11 @@ async function resolve(given: string | undefined, key: "photo" | "folder"): Prom
   return (await readCurrent())?.[key] ?? null;
 }
 
-const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`; \`get_edits\` reads the current or proposed settings without writing anything. All values are absolute, never deltas. Local adjustments run three to four times a global's at the top of the scale: a blown sky near luma 0.98 barely moves under a small masked exposure pull, so probe strong and ease off. Numbers before pixels: \`get_stats\` with \`region\` reads a patch (luma, clippedHigh, shading) for a fraction of a proxy's cost, and \`detect_faces\` places a radial mask on a portrait. Judge sharpening, skin and mask edges with \`get_proxy\`'s \`region\`, never a whole 2048 px frame. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked.`;
+// The product's six preset groups plus `masks` (maskComponents + layers),
+// the vocabulary `Orion --agent sync --groups` takes.
+const SYNC_GROUPS = ["whiteBalance", "light", "color", "curve", "detail", "effects", "masks"] as const;
+
+const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`; \`get_edits\` reads the current or proposed settings without writing anything. All values are absolute, never deltas. Local adjustments run three to four times a global's at the top of the scale: a blown sky near luma 0.98 barely moves under a small masked exposure pull, so probe strong and ease off. Numbers before pixels: \`get_stats\` with \`region\` reads a patch (luma, clippedHigh, shading) for a fraction of a proxy's cost, and \`detect_faces\` places a radial mask on a portrait. Judge sharpening, skin and mask edges with \`get_proxy\`'s \`region\`, never a whole 2048 px frame. \`detect_subject\` lifts the subject, a person or the sky into a matte for a kind-4 mask row, and \`sync_edits\` carries one approved photo's look onto the rest of a shoot as proposals. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked.`;
 
 export function createServer() {
   const server = new McpServer(
@@ -399,6 +403,137 @@ export function createServer() {
         return text(await orion(args));
       } catch (e) {
         return fail(e);
+      }
+    }
+  );
+
+  server.registerTool(
+    "detect_subject",
+    {
+      description:
+        "The panel's Subject / Person / Sky button: runs the same Vision model on the " +
+        "developed photo, writes the matte as a PNG beside it and returns a ready mask row, " +
+        "about 60 tokens plus one Vision inference (a second or two). kind 'subject' is " +
+        "class-agnostic foreground lifting (whatever stands out: a climber, a car, a dog), " +
+        "'person' is the person matte, 'sky' is the sky. The answer carries `component`, a " +
+        "COMPLETE kind-4 maskComponents row: APPEND it to maskComponents in propose_edit - " +
+        "read the current list with get_edits first and send the whole array back - together " +
+        "with a matching entry appended to `layers`, because its startsLayer: true begins a " +
+        "new layer. To subtract it from the previous layer instead ('everything but the " +
+        "climber'), set startsLayer: false and compose: 1 and add no layer. found: false is a " +
+        "real answer (the model found nothing to select), not an error. The matte is a PNG " +
+        "beside the photo, kept as long as a proposal, sidecar or version names it. coverage " +
+        "is the fraction of the frame selected: near 0 or near 1 means the model grabbed the " +
+        "wrong thing, so check an edge with get_proxy's region before approving. A local " +
+        "adjustment through a matte runs three to four times a global's at the top of the " +
+        "scale, so probe strong and ease off with get_stats state: 'proposed'. state: " +
+        "'proposed' runs the model on the proposal instead of the current settings. path is " +
+        "optional; defaults to the photo open in Orion.",
+      inputSchema: {
+        path: z.string().optional(),
+        kind: z.enum(["subject", "person", "sky"]).default("subject"),
+        state: z.enum(["current", "proposed"]).default("current"),
+      },
+    },
+    async ({ path: raw, kind, state }) => {
+      try {
+        const p = await resolve(raw, "photo");
+        if (!p) return noPhoto();
+        const args = ["matte", p, "--kind", kind];
+        const proposed = proposedPath(p);
+        if (state === "proposed" && (await fs.access(proposed).then(() => true, () => false))) {
+          args.push("--state", proposed);
+        }
+        return text(await orion(args));
+      } catch (e) {
+        return fail(e);
+      }
+    }
+  );
+
+  server.registerTool(
+    "sync_edits",
+    {
+      description:
+        "Carries one photograph's look onto others, the product's Sync. The workflow for a " +
+        "shoot is: edit one photograph with the photographer until they approve it, then " +
+        "sync_edits from it to the rest - one look across a set of frames of the same event " +
+        "and light, like a climbing competition shot from one spot. list_folder is how to get " +
+        "the target paths. groups default to light, color, curve and effects, which carry the " +
+        "look and leave whiteBalance and detail alone (those are properties of the camera " +
+        "and ISO, frame by frame); name them to include them. masks carries the layers: " +
+        "every Subject / Person / Sky matte row is re-detected on each target, while " +
+        "gradients and radials copy by position in frame space, so check one or two targets " +
+        "with get_stats' region or get_proxy before approving them. By default each target " +
+        "gets a proposal, which REPLACES any proposal already there (nothing accumulates); " +
+        "the photographer approves each in Orion or asks you to approve_edit it by path. " +
+        "commit: true writes the sidecars immediately and cannot be undone, so never pass it " +
+        "without the photographer's explicit say-so; the photo open in Orion still gets a " +
+        "proposal (named in openPhotoProposed), because Orion would overwrite a sidecar " +
+        "written behind its back. sourceState: 'proposed' syncs the source's proposal " +
+        "instead of its current settings. A target that fails comes back in `results` with " +
+        "an `error` and does not fail the call. About 30 tokens per target, plus a decode " +
+        "per target that has no sidecar, plus an inference per matte row per target. source " +
+        "is optional; defaults to the photo open in Orion.",
+      inputSchema: {
+        source: z.string().optional(),
+        targets: z.array(z.string()).min(1),
+        groups: z
+          .array(z.enum(SYNC_GROUPS))
+          .min(1)
+          .default(["light", "color", "curve", "effects"]),
+        sourceState: z.enum(["current", "proposed"]).default("current"),
+        commit: z.boolean().default(false),
+      },
+    },
+    async ({ source: given, targets, groups, sourceState, commit }) => {
+      let dir: string | undefined;
+      try {
+        const src = await resolve(given, "photo");
+        if (!src) return noPhoto();
+        dir = await fs.mkdtemp(path.join(os.tmpdir(), "orion-"));
+        const base = ["sync", src, "--groups", groups.join(",")];
+        const proposed = proposedPath(src);
+        if (sourceState === "proposed" && (await fs.access(proposed).then(() => true, () => false))) {
+          base.push("--state", proposed);
+        }
+        const run = async (list: string[], mode: "propose" | "commit") => {
+          const file = path.join(dir!, `targets-${mode}.json`);
+          await fs.writeFile(file, JSON.stringify(list));
+          return orion([...base, "--targets", file, "--mode", mode]);
+        };
+
+        // The open photo rule: Orion holds that photo's state in memory and
+        // its autosave would overwrite a sidecar written behind its back, so
+        // under commit it gets a proposal, which shows up live in compare.
+        const open = commit ? (await readCurrent())?.photo ?? null : null;
+        const isOpen = (t: string) =>
+          open !== null && path.resolve(t) === path.resolve(open) && path.resolve(t) !== path.resolve(src);
+        const openTargets = targets.filter(isOpen);
+        if (!commit) return text(await run(targets, "propose"));
+        if (openTargets.length === 0) return text(await run(targets, "commit"));
+
+        const others = targets.filter((t) => !isOpen(t));
+        const live = await run(openTargets, "propose");
+        if (others.length === 0) return text({ ...live, mode: "commit", openPhotoProposed: openTargets[0] });
+        const committed = await run(others, "commit");
+        const order = (r: { path?: string }) => {
+          const i = targets.indexOf(r.path ?? "");
+          return i === -1 ? targets.length : i;
+        };
+        const results = [...committed.results, ...live.results].sort((a, b) => order(a) - order(b));
+        return text({
+          ...committed,
+          results,
+          written: committed.written + live.written,
+          failed: committed.failed + live.failed,
+          skipped: committed.skipped + live.skipped,
+          openPhotoProposed: openTargets[0],
+        });
+      } catch (e) {
+        return fail(e);
+      } finally {
+        if (dir) await fs.rm(dir, { recursive: true, force: true });
       }
     }
   );

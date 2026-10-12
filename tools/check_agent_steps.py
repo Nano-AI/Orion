@@ -529,6 +529,69 @@ def get_edits(s, ctx):
     finally:
         s.ask("reject_edit", path=str(raw))
 
+def detect_subject(s, ctx):
+    """The panel's Subject button through the tools: the row it returns has to
+    validate in propose_edit and its matte has to reach a render. Whether the
+    model finds a subject on this sample is not asserted; the plumbing is."""
+    raw = ctx.copy("subject")
+    found = s.ask("detect_subject", path=str(raw), kind="subject")
+    if not found.get("found"):
+        if ctx.proposed(raw).exists():
+            return "found nothing, yet a proposal appeared"
+        ctx.note = "nothing was found on this sample"
+        return None
+    component = found.get("component", {})
+    if component.get("kind") != 4 or component.get("matteId") != found.get("matteId"):
+        return f"component kind={component.get('kind')}, matteId={component.get('matteId')!r}"
+    matte = raw.with_name(f"{raw.stem}.orion-matte-{found['matteId']}.png")
+    if not matte.exists():
+        return f"no matte at {matte}"
+    try:
+        layer = dict(next(k for k in s.ask("describe_edits").get("keys", [])
+                          if k.get("name") == "layers")["example"][0])
+        layer["exposureEv"] = -3.0
+        s.ask("propose_edit", path=str(raw), reset=True,
+              edits={"maskComponents": [component], "layers": [layer]})
+        s.ask("get_stats", path=str(raw), state="proposed", region=CENTRE)
+        ctx.note = f"coverage {found.get('coverage', 0):.3f}"
+    finally:
+        s.ask("reject_edit", path=str(raw))
+
+def _develop(sidecar: Path) -> dict:
+    match = re.search(r'orion:Develop="([^"]+)"', sidecar.read_text())
+    return json.loads(base64.b64decode(match.group(1)).decode("utf-8")) if match else {}
+
+def sync_edits(s, ctx):
+    """One approved photograph's look onto another: a proposal by default,
+    the sidecar itself under commit."""
+    a, b = ctx.copy("sync-a"), ctx.copy("sync-b")
+    s.ask("propose_edit", path=str(a), edits={"exposureEv": 1.0})
+    s.ask("approve_edit", path=str(a))
+    try:
+        out = s.ask("sync_edits", source=str(a), targets=[str(b)])
+        results = out.get("results", [{}])
+        if not (out.get("written") == 1 and results[0].get("wrote") == "proposed"):
+            return f"propose: written={out.get('written')}, results={results}"
+        proposed = ctx.proposed(b)
+        if not proposed.exists():
+            return f"no proposal at {proposed}"
+        got = json.loads(proposed.read_text()).get("exposureEv")
+        if got != 1:
+            return f"the proposal has exposureEv={got}, expected 1"
+
+        out = s.ask("sync_edits", source=str(a), targets=[str(b)], commit=True)
+        sidecar = b.with_name(f"{b.stem}.xmp")
+        if not (out.get("written") == 1 and sidecar.exists()):
+            return f"commit: written={out.get('written')}, sidecar exists={sidecar.exists()}"
+        edits = s.ask("get_edits", path=str(b))
+        if not (edits.get("source") == "sidecar" and edits.get("state", {}).get("exposureEv") == 1):
+            return (f"after commit, source={edits.get('source')!r}, "
+                    f"exposureEv={edits.get('state', {}).get('exposureEv')!r}")
+        if _develop(sidecar).get("exposureEv") != 1:
+            return "the committed sidecar does not hold exposureEv 1"
+    finally:
+        s.ask("reject_edit", path=str(b))
+
 # -- The two steps that need a server of their own -------------------------
 
 def _solo(ctx, current_json: Path, expect_photo: Path | None):
@@ -576,5 +639,5 @@ STEPS = [
     propose_edit_reset, propose_composite, propose_composite_rejected,
     get_stats_proposed, get_stats_region, get_proxy_region, detect_faces,
     mask_invert, mask_matte, mask_matte_missing, current_photo_none, current_photo_set,
-    get_edits,
+    get_edits, detect_subject, sync_edits,
 ]

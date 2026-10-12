@@ -68,6 +68,16 @@ is in play (it works on its own copy and rejects what it proposed):
     false and no `.proposed.json` written (an empty propose_edit was the only
     way to read settings before, and it wrote one); after propose_edit
     {exposureEv: 1.0}, state proposed → source "proposed", exposureEv == 1.
+
+...and the two verbs that act on more than the settings:
+
+23. detect_subject kind subject → when found, a kind-4 row whose matte PNG
+    exists beside the copy, which validates in propose_edit under a -3 EV
+    layer and renders in get_stats state proposed; then rejected. Found
+    nothing is a pass with a note: the plumbing is asserted, not the model.
+24. sync_edits → from an approved exposureEv 1.0 copy to another: a proposal
+    holding exposureEv 1 by default, and under commit a sidecar get_edits
+    reads back as source "sidecar", exposureEv 1.
 """
 
 import shutil

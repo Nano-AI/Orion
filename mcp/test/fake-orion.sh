@@ -13,6 +13,10 @@ edits=""
 max=""
 state=""
 region=""
+kind=""
+targets=""
+groups=""
+mode=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) out="$2"; shift 2 ;;
@@ -20,6 +24,10 @@ while [ $# -gt 0 ]; do
     --state) state="$2"; shift 2 ;;
     --max) max="$2"; shift 2 ;;
     --region) region="$2"; shift 2 ;;
+    --kind) kind="$2"; shift 2 ;;
+    --targets) targets="$2"; shift 2 ;;
+    --groups) groups="$2"; shift 2 ;;
+    --mode) mode="$2"; shift 2 ;;
     --rating) shift 2 ;;
     --reject) shift 2 ;;
     *) if [ -z "$raw" ]; then raw="$1"; fi; shift ;;
@@ -45,6 +53,63 @@ case "$verb" in
     # against the real binary covers that half.
     echo "${state:-<none>}" > "${TMPDIR:-/tmp}/orion-mcp-test-last-faces-state.txt"
     echo '{"path":"'"$raw"'","faces":[{"x":0.4,"y":0.2,"w":0.12,"h":0.16,"centerX":0.28,"centerY":0.46,"radiusX":0.08,"radiusY":0.06}]}'
+    ;;
+  matte)
+    # Records the --kind and --state it received, writes the matte PNG beside
+    # the RAW the way the real verb does, and answers found for subject and
+    # person but not for sky, so both branches are testable.
+    tmp="${TMPDIR:-/tmp}"
+    echo "${kind:-<none>}" > "$tmp/orion-mcp-test-last-matte-kind.txt"
+    echo "${state:-<none>}" > "$tmp/orion-mcp-test-last-matte-state.txt"
+    case "$kind" in
+      subject|person)
+        cp "$(dirname "$0")/fixture.jpg" "${raw%.*}.orion-matte-fake-id.png"
+        source="Subject"
+        if [ "$kind" = person ]; then source="Person"; fi
+        echo '{"path":"'"$raw"'","found":true,"kind":"'"$kind"'","matteId":"fake-id","matteSource":"'"$source"'","width":512,"height":341,"coverage":0.1234,"component":{"kind":4,"matteId":"fake-id","matteSource":"'"$source"'","startsLayer":true,"compose":0,"invert":false,"centerX":0.5,"centerY":0.5,"radiusX":0.25,"radiusY":0.25,"feather":0.5,"angle":0,"length":0.2,"roundness":2}}'
+        ;;
+      sky)
+        echo '{"path":"'"$raw"'","found":false,"kind":"sky","reason":"Nothing was found to select in this photograph."}'
+        ;;
+      *)
+        echo "usage: --kind must be subject, person or sky" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  sync)
+    # Records --mode, --groups, --state and the targets file's contents (the
+    # caller deletes that file), and appends one line per invocation to a log
+    # so a test can see the open-photo rule's two calls. Writes a proposal or
+    # touches a sidecar per target, like the real verb's two modes.
+    tmp="${TMPDIR:-/tmp}"
+    echo "${mode:-<none>}" > "$tmp/orion-mcp-test-last-sync-mode.txt"
+    echo "${groups:-<none>}" > "$tmp/orion-mcp-test-last-sync-groups.txt"
+    echo "${state:-<none>}" > "$tmp/orion-mcp-test-last-sync-state.txt"
+    cat "$targets" > "$tmp/orion-mcp-test-last-sync-targets.txt"
+    echo "${mode:-propose} $(cat "$targets")" >> "$tmp/orion-mcp-test-sync-calls.txt"
+    node -e '
+      const fs = require("fs");
+      const [source, targetsPath, mode, groups, state] = process.argv.slice(1);
+      const targets = JSON.parse(fs.readFileSync(targetsPath, "utf8"));
+      if (targets.length === 0) { console.error("usage: --targets is empty"); process.exit(2); }
+      const results = targets.map((t) => {
+        if (t === source) return { path: t, skipped: "source" };
+        const stem = t.replace(/\.[^.]+$/, "");
+        if (mode === "commit") {
+          fs.writeFileSync(stem + ".xmp", "");
+          return { path: t, wrote: "sidecar", file: stem + ".xmp", mattes: [] };
+        }
+        fs.writeFileSync(stem + ".proposed.json", JSON.stringify({ exposureEv: 1, tint: 0, temperatureK: 5500 }));
+        return { path: t, wrote: "proposed", file: stem + ".proposed.json", mattes: [] };
+      });
+      const count = (f) => results.filter(f).length;
+      console.log(JSON.stringify({
+        source, sourceState: state ? "proposed" : "sidecar", mode, groups: groups.split(","),
+        keys: ["exposureEv"], results,
+        written: count((r) => r.wrote), failed: count((r) => r.error), skipped: count((r) => r.skipped),
+      }));
+    ' "$raw" "$targets" "${mode:-propose}" "${groups:-light,color,curve,effects}" "$state"
     ;;
   state)
     # Records whether this invocation received --state, so tests can verify

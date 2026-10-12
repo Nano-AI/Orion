@@ -129,6 +129,32 @@ So:
 
 `describe_edits` carries all of this per key, including which fields each `kind` actually reads - a linear gradient ignores `feather`, a radial does read `angle` - so read it rather than guessing from the field list.
 
+## Selecting the subject
+
+`detect_subject` is the panel's Subject, Person and Sky button: the same Vision models, run on the photo as developed.
+`kind: "subject"` lifts whatever stands out from the background, `"person"` is the person matte and `"sky"` the sky.
+It writes the matte as a PNG beside the photo and returns `component`, a complete kind-4 `maskComponents` row.
+
+- **Append** it: read the current `maskComponents` and `layers` with `get_edits`, add the row and a matching layer, and send both arrays back whole in `propose_edit`.
+- The row's `startsLayer: true` begins a new layer. To take the subject *out* of the previous layer instead ("everything but the climber"), set `startsLayer: false` and `compose: 1` and add no layer.
+- `found: false` is an answer, not an error: the model found nothing to select.
+- `coverage` is the fraction of the frame selected. Near 0 or near 1 means the model grabbed the wrong thing, so look at an edge with `get_proxy`'s `region` before approving.
+- The matte runs strong, like any local adjustment: probe strong and ease off with `get_stats` `state: "proposed"`.
+- The PNG is kept as long as a proposal, sidecar or version names it.
+
+## Applying one photo's edit to a shoot
+
+The workflow for a shoot is to edit one photograph with the photographer until they approve it, then `sync_edits` from it to the rest.
+It suits a set of frames of the same event in the same light, a climbing competition shot from one spot being the shape it was built for.
+`list_folder` gives the target paths.
+
+- `groups` defaults to `light`, `color`, `curve` and `effects`: the look. `whiteBalance` and `detail` belong to the camera and ISO of each frame, so they stay unless named.
+- `masks` carries `maskComponents` and `layers`. Every Subject, Person and Sky row is re-detected on each target with a fresh matte, while gradients and radials copy by position in frame space, so check one or two targets with `get_stats`' `region` or `get_proxy` before approving.
+- By default each target gets a proposal, which **replaces** any proposal already there. The photographer approves each in Orion, or asks for `approve_edit` by path.
+- `commit: true` writes the sidecars directly and cannot be undone. Never pass it without the photographer saying so.
+- **The open photo rule:** under `commit`, the photo open in Orion is still written as a proposal and named in `openPhotoProposed`. Orion holds that photo's state in memory, and its autosave would overwrite a sidecar written behind its back; a proposal shows up live in its compare view instead.
+- A target that fails comes back in `results` with an `error`; the call itself still succeeds.
+
 ## Claude Code `.mcp.json`
 
 ```json

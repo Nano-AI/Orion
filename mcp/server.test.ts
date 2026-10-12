@@ -30,7 +30,7 @@ after(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test("tools/list names exactly the eleven tools", async () => {
+test("tools/list names exactly the thirteen tools", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
@@ -38,6 +38,7 @@ test("tools/list names exactly the eleven tools", async () => {
     "current_photo",
     "describe_edits",
     "detect_faces",
+    "detect_subject",
     "get_edits",
     "get_proxy",
     "get_stats",
@@ -45,6 +46,7 @@ test("tools/list names exactly the eleven tools", async () => {
     "propose_edit",
     "reject_edit",
     "set_flag",
+    "sync_edits",
   ]);
 });
 
@@ -338,6 +340,148 @@ test("detect_faces returns a face carrying both spaces", async () => {
   }
 });
 
+const TMP = process.env.TMPDIR || "/tmp";
+const recorded = async (name: string) => (await fs.readFile(path.join(TMP, `orion-mcp-test-${name}.txt`), "utf8")).trim();
+const body = (result: unknown) => JSON.parse(((result as { content: Array<{ text?: string }> }).content)[0].text!);
+const exists = (p: string) => fs.access(p).then(() => true, () => false);
+
+test("detect_subject passes --kind and returns a kind-4 row with its matte beside the photo", async () => {
+  const raw = path.join(tmpDir, "climber.arw");
+  await fs.writeFile(raw, "");
+  const result = await client.callTool({ name: "detect_subject", arguments: { path: raw, kind: "person" } });
+  assert.equal(result.isError, undefined);
+  assert.equal(await recorded("last-matte-kind"), "person");
+  assert.equal(await recorded("last-matte-state"), "<none>");
+  const answer = body(result);
+  assert.equal(answer.found, true);
+  assert.equal(answer.component.kind, 4);
+  assert.equal(answer.component.matteId, answer.matteId);
+  assert.equal(answer.component.startsLayer, true);
+  assert.ok(await exists(path.join(tmpDir, `climber.orion-matte-${answer.matteId}.png`)));
+
+  await client.callTool({ name: "detect_subject", arguments: { path: raw } });
+  assert.equal(await recorded("last-matte-kind"), "subject", "kind defaults to subject");
+});
+
+test("detect_subject state: proposed passes --state only when the proposed file exists", async () => {
+  const raw = path.join(tmpDir, "subject-state.arw");
+  await fs.writeFile(raw, "");
+  await client.callTool({ name: "detect_subject", arguments: { path: raw, state: "proposed" } });
+  assert.equal(await recorded("last-matte-state"), "<none>", "no proposal, nothing to pass");
+  await client.callTool({ name: "propose_edit", arguments: { path: raw, edits: { exposureEv: 0.5 } } });
+  await client.callTool({ name: "detect_subject", arguments: { path: raw, state: "proposed" } });
+  assert.equal(await recorded("last-matte-state"), raw.replace(/\.[^.]+$/, ".proposed.json"));
+  await client.callTool({ name: "detect_subject", arguments: { path: raw } });
+  assert.equal(await recorded("last-matte-state"), "<none>", "default is current");
+  await client.callTool({ name: "reject_edit", arguments: { path: raw } });
+});
+
+test("detect_subject finding nothing is an answer, not a tool error", async () => {
+  const result = await client.callTool({ name: "detect_subject", arguments: { path: "/x.arw", kind: "sky" } });
+  assert.equal(result.isError, undefined);
+  const answer = body(result);
+  assert.equal(answer.found, false);
+  assert.match(answer.reason, /Nothing was found/);
+});
+
+async function shoot(name: string, count: number): Promise<string[]> {
+  const dir = path.join(tmpDir, name);
+  await fs.mkdir(dir, { recursive: true });
+  const raws = [];
+  for (let i = 0; i < count; i++) {
+    const raw = path.join(dir, `frame${i}.arw`);
+    await fs.writeFile(raw, "");
+    raws.push(raw);
+  }
+  return raws;
+}
+
+test("sync_edits writes exactly the targets and passes the default groups in propose mode", async () => {
+  const [source, ...targets] = await shoot("sync-default", 3);
+  const result = await client.callTool({ name: "sync_edits", arguments: { source, targets } });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(JSON.parse(await recorded("last-sync-targets")), targets);
+  assert.equal(await recorded("last-sync-groups"), "light,color,curve,effects");
+  assert.equal(await recorded("last-sync-mode"), "propose");
+  assert.equal(await recorded("last-sync-state"), "<none>");
+  const answer = body(result);
+  assert.equal(answer.written, 2);
+  assert.deepEqual(answer.results.map((r: { wrote: string }) => r.wrote), ["proposed", "proposed"]);
+  for (const t of targets) assert.ok(await exists(t.replace(/\.[^.]+$/, ".proposed.json")), t);
+  assert.equal(answer.openPhotoProposed, undefined);
+});
+
+test("sync_edits passes a custom group list and commit: true as --mode commit", async () => {
+  const [source, target] = await shoot("sync-commit", 2);
+  const result = await client.callTool({
+    name: "sync_edits",
+    arguments: { source, targets: [target], groups: ["whiteBalance", "masks"], commit: true },
+  });
+  assert.equal(result.isError, undefined);
+  assert.equal(await recorded("last-sync-groups"), "whiteBalance,masks");
+  assert.equal(await recorded("last-sync-mode"), "commit");
+  assert.ok(await exists(target.replace(/\.[^.]+$/, ".xmp")));
+  assert.equal(body(result).results[0].wrote, "sidecar");
+});
+
+test("sync_edits commit: the photo open in Orion gets a proposal, the rest get sidecars", async () => {
+  const [source, a, open, b] = await shoot("sync-open", 4);
+  const current = path.join(tmpDir, "current-sync.json");
+  await fs.writeFile(current, JSON.stringify({ photo: open, folder: path.dirname(open), updated: "2026-10-17T00:00:00Z" }));
+  const calls = path.join(TMP, "orion-mcp-test-sync-calls.txt");
+  await fs.rm(calls, { force: true });
+  process.env.ORION_CURRENT = current;
+  try {
+    const result = await client.callTool({ name: "sync_edits", arguments: { source, targets: [a, open, b], commit: true } });
+    assert.equal(result.isError, undefined);
+    const lines = (await fs.readFile(calls, "utf8")).trim().split("\n");
+    const byMode = Object.fromEntries(lines.map((l) => [l.slice(0, l.indexOf(" ")), JSON.parse(l.slice(l.indexOf(" ") + 1))]));
+    assert.deepEqual(byMode.propose, [open]);
+    assert.deepEqual(byMode.commit, [a, b]);
+    assert.equal(lines.length, 2);
+
+    const answer = body(result);
+    assert.equal(answer.openPhotoProposed, open);
+    assert.equal(answer.written, 3);
+    assert.equal(answer.failed, 0);
+    assert.deepEqual(
+      answer.results.map((r: { path: string; wrote: string }) => [r.path, r.wrote]),
+      [[a, "sidecar"], [open, "proposed"], [b, "sidecar"]],
+      "results are merged in the order the targets were given"
+    );
+    assert.ok(await exists(open.replace(/\.[^.]+$/, ".proposed.json")));
+    assert.equal(await exists(open.replace(/\.[^.]+$/, ".xmp")), false, "the open photo's sidecar is never written");
+  } finally {
+    delete process.env.ORION_CURRENT;
+  }
+});
+
+test("sync_edits sourceState: proposed passes --state only when the source's proposal exists", async () => {
+  const [source, target] = await shoot("sync-state", 2);
+  await client.callTool({ name: "sync_edits", arguments: { source, targets: [target], sourceState: "proposed" } });
+  assert.equal(await recorded("last-sync-state"), "<none>", "no proposal, nothing to pass");
+  await client.callTool({ name: "propose_edit", arguments: { path: source, edits: { exposureEv: 1.0 } } });
+  await client.callTool({ name: "sync_edits", arguments: { source, targets: [target], sourceState: "proposed" } });
+  assert.equal(await recorded("last-sync-state"), source.replace(/\.[^.]+$/, ".proposed.json"));
+  await client.callTool({ name: "sync_edits", arguments: { source, targets: [target] } });
+  assert.equal(await recorded("last-sync-state"), "<none>", "default is current");
+});
+
+test("sync_edits refuses zero targets and an unknown group at the schema", async () => {
+  const modeFile = path.join(TMP, "orion-mcp-test-last-sync-mode.txt");
+  await fs.rm(modeFile, { force: true });
+  const empty = await client.callTool({ name: "sync_edits", arguments: { source: "/x.arw", targets: [] } });
+  assert.equal(empty.isError, true);
+  assert.match((empty.content as Array<{ text?: string }>)[0].text!, /targets/);
+  const unknown = await client.callTool({
+    name: "sync_edits",
+    arguments: { source: "/x.arw", targets: ["/y.arw"], groups: ["light", "sharpness"] },
+  });
+  assert.equal(unknown.isError, true);
+  assert.match((unknown.content as Array<{ text?: string }>)[0].text!, /groups/);
+  assert.equal(await exists(modeFile), false, "the binary must never have been run");
+});
+
 test("current_photo returns the contents of current.json", async () => {
   const file = path.join(tmpDir, "current-1.json");
   const current = { photo: "/shoot/a.arw", folder: "/shoot", updated: "2026-09-14T00:00:00Z" };
@@ -424,6 +568,8 @@ test("every optional-path tool gives the same isError when nothing is open and n
       ["reject_edit", {}],
       ["set_flag", { rating: 3 }],
       ["detect_faces", {}],
+      ["detect_subject", {}],
+      ["sync_edits", { targets: ["/shoot/b.arw"] }],
       ["list_folder", {}],
     ];
     for (const [name, args] of calls) {
