@@ -171,6 +171,10 @@ it, flagged, and wants a check by hand. It is no longer load-bearing:
 [`denoise-learned.md`](denoise-learned.md) §6 derives the same conclusion from
 NAFNet's own published MACs, which are checkable.
 
+➡ **Second pass, 2026-10-17 — [`denoise-masked.md`](denoise-masked.md).**
+Color-only denoising was also shrinking luminance (the shader had one strength and derived the other); the threshold now backs off where local texture exceeds the noise, under a new Detail control that is 0 and bit-identical by default (Chang, Yu & Vetterli 2000); and a second, short instance of this chain runs in working space after `profile:hue/sat`, where the mask fold can reach it, so a layer can denoise through its coverage.
+The measured table above is unchanged by any of it at Detail 0.
+
 ➡ **Investigated in full on 2026-08-01 —
 [`denoise-learned.md`](denoise-learned.md), decision #111, six pieces in
 `ROADMAP.md`. Nothing built, by design.** ⚠ **The one line to carry back here:**

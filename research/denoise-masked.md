@@ -18,7 +18,12 @@ A photographer who raised Color alone to kill chroma blotches was also softening
 
 **Fix:** the shader takes `strengthLuma` and `strengthChroma` as two numbers and derives nothing.
 `tauLuma = strengthLuma * sigma`, `tauChroma = strengthChroma * sigma`.
-Every render with Luminance above zero is unchanged by this: the old `chromaBoost = color / luma` made `tauChroma = color * sigma`, which is the new form exactly.
+Every render with Luminance above zero is unchanged by the two strengths themselves: the old `chromaBoost = color / luma` made `tauChroma = color * sigma`, which is the new form exactly.
+
+One more line was needed, found by the test rather than by reading.
+The three per-channel garrotes shrink the chroma components by different amounts, so their sum no longer has zero luminance, and Color alone still moved the luminance residual by 4% through that leak.
+The kept chroma is now projected back onto the zero-luminance plane, `keptChroma -= luminance2020(keptChroma)`, which is what "chroma" meant in the split to begin with.
+⚠ That line changes every render with Color above zero by a small amount (the leaked luminance), so a photograph finished with Color on does not re-render bit for bit; the suites' invariants hold and `detail.md`'s measured table is for Luminance and Color together, where the leak was already part of what was measured.
 
 ### 0.2 The threshold did not know texture from noise
 
