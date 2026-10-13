@@ -53,6 +53,8 @@ enum DevelopDiff {
             f("localShadows", x.shadows, y.shadows)
             f("localWhites", x.whites, y.whites)
             f("localBlacks", x.blacks, y.blacks)
+            f("localDenoiseLuma", x.denoiseLuma, y.denoiseLuma)
+            f("localDenoiseColor", x.denoiseColor, y.denoiseColor)
         }
 
         // ── The globals, in the panel's order. `maskRefine` is one of them:
@@ -94,6 +96,7 @@ enum DevelopDiff {
         unverbed("sharpenMasking", a.sharpenMasking, b.sharpenMasking)
         unverbed("denoiseLuma", a.denoiseLuma, b.denoiseLuma)
         unverbed("denoiseColor", a.denoiseColor, b.denoiseColor)
+        unverbed("denoiseDetail", a.denoiseDetail, b.denoiseDetail)
         unverbed("lensDistortion", a.lensDistortion, b.lensDistortion)
         unverbed("lensVignette", a.lensVignette, b.lensVignette)
         unverbed("lensCaRed", a.lensCaRed, b.lensCaRed)
@@ -249,7 +252,8 @@ enum DevelopDiff {
                            ("saturation", l.saturation), ("warmth", l.warmth),
                            ("tint", l.tint), ("highlights", l.highlights),
                            ("shadows", l.shadows), ("whites", l.whites),
-                           ("blacks", l.blacks)] where abs(v) > 1e-6 {
+                           ("blacks", l.blacks), ("denoise", l.denoiseLuma),
+                           ("color denoise", l.denoiseColor)] where abs(v) > 1e-6 {
                 local.append(String(format: "%@ %.2f", n, v))
             }
             out.append("mask \(li) \"\(name)\"  \(shapes)  "

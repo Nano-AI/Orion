@@ -29,7 +29,7 @@ extension ViewportTests {
         s.gradeMidtone = [-0.05, 0.15, 0.02]
         s.gradeHighlight = [0.2, 0.03, -0.12]
         s.sharpenAmount = 1.3; s.sharpenRadius = 2.2; s.sharpenMasking = 0.45
-        s.denoiseLuma = 2.0; s.denoiseColor = 1.4
+        s.denoiseLuma = 2.0; s.denoiseColor = 1.4; s.denoiseDetail = 0.35
         s.lensDistortion = 0.4; s.lensVignette = -0.35
         s.lensCaRed = 0.22; s.lensCaBlue = -0.18
         // A real name from the bundled database, so the round trip carries a
@@ -96,11 +96,13 @@ extension ViewportTests {
         s.layers = [LocalAdjustState(exposureEv: 1.5, contrast: 0.42,
                                      saturation: -0.33, warmth: 0.27, tint: -0.19,
                                      highlights: 0.55, shadows: -0.25,
-                                     whites: 0.15, blacks: -0.35),
+                                     whites: 0.15, blacks: -0.35,
+                                     denoiseLuma: 1.25, denoiseColor: 0.5),
                     LocalAdjustState(exposureEv: -0.8, contrast: -0.2,
                                      saturation: 0.66, warmth: -0.4, tint: 0.31,
                                      highlights: -0.45, shadows: 0.6,
-                                     whites: -0.1, blacks: 0.2)]
+                                     whites: -0.1, blacks: 0.2,
+                                     denoiseLuma: 0.75, denoiseColor: 2.5)]
         return s
     }
 
@@ -350,7 +352,7 @@ extension ViewportTests {
         source.gradeHighlight = [0.2, -0.2, 0.1]
         source.curve = ToneCurve()
         source.sharpenAmount = 1.9; source.sharpenRadius = 2.4; source.sharpenMasking = 0.8
-        source.denoiseLuma = 3.1; source.denoiseColor = 0.9
+        source.denoiseLuma = 3.1; source.denoiseColor = 0.9; source.denoiseDetail = 0.6
         source.lensDistortion = -0.6; source.lensVignette = 0.5
         source.lensCaRed = 0.3; source.lensCaBlue = -0.3
         source.clarity = -0.8; source.dehaze = 0.9; source.fusion = 0.4

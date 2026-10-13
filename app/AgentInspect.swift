@@ -103,7 +103,7 @@ extension AgentCLI {
             "hue": s.hue, "hueStrength": s.hueStrength,
             "red": s.red, "green": s.green, "blue": s.blue,
             "clippedHigh": s.clippedHigh, "clippedLow": s.clippedLow,
-            "shading": s.shading,
+            "shading": s.shading, "noise": s.noise,
         ]
     }
 

@@ -603,8 +603,11 @@ extension ViewportTests {
 
         // 4 KB of budget, 1.5 KB a thumbnail: three fit, the fourth does not.
         let index = PhotoIndex(at: db, budgetBytes: 4096)
-        nonisolated(unsafe) var now: Int64 = 0
-        index.setClock { now }
+        // A box, not a captured `var`: the clock closure is `@Sendable`, and a
+        // local mutated after a sendable closure captured it is a warning.
+        final class Clock: @unchecked Sendable { var now: Int64 = 0 }
+        let clock = Clock()
+        index.setClock { clock.now }
 
         var files: [String: URL] = [:]
         func put(_ name: String) {
@@ -619,17 +622,17 @@ extension ViewportTests {
             return index.thumbnail(for: url, stamp: .of(url)) != nil
         }
 
-        now = 0;      put("A")
-        now = 10_000; put("B")
+        clock.now = 0;      put("A")
+        clock.now = 10_000; put("B")
         report(index.heldBytes == 3000, "two thumbnails are 3000 bytes",
                "\(index.heldBytes)")
 
         // Reading A makes it the most recent. The gap is over an hour, which is
         // what the coarse touch requires — see `thumbnail(for:stamp:)`.
-        now = 20_000
+        clock.now = 20_000
         report(held("A"), "A is still there to be read")
 
-        now = 30_000; put("C")
+        clock.now = 30_000; put("C")
         report(held("A"), "⚠ A survives: it was read most recently")
         report(held("C"), "C survives: it was written most recently")
         report(!held("B"), "⚠ B is gone: written second, never read")
@@ -640,9 +643,9 @@ extension ViewportTests {
         // evicts again, and every one after it. Going to 90% frees three.
         let small = PhotoIndex(at: dir.appendingPathComponent("small.sqlite3"),
                                budgetBytes: 4096)
-        small.setClock { now }
+        small.setClock { clock.now }
         for i in 0..<21 {
-            now = Int64(i) * 10_000
+            clock.now = Int64(i) * 10_000
             let url = dir.appendingPathComponent("S\(i).ARW")
             fm.createFile(atPath: url.path, contents: Data(repeating: 1, count: 16))
             small.record(thumbnail: Data(repeating: 0, count: 200), for: url, stamp: .of(url))

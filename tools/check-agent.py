@@ -78,6 +78,15 @@ is in play (it works on its own copy and rejects what it proposed):
 24. sync_edits → from an approved exposureEv 1.0 copy to another: a proposal
     holding exposureEv 1 by default, and under commit a sidecar get_edits
     reads back as source "sidecar", exposureEv 1.
+
+...and denoise, run straight after get_edits:
+
+25. denoise_region → get_stats region carries `noise` >= 0; a proposal of
+    denoiseLuma 3, denoiseColor 3, denoiseDetail 0.5 reads `noise` under
+    state proposed no higher than as shot on the same patch (<=, because
+    the sample may already be clean; both numbers go in the note); and a
+    layer carrying denoiseLuma 2 under a kind-2 radial validates and comes
+    back in the proposal. research/denoise-masked.md sections 2.4 and 3.
 """
 
 import shutil

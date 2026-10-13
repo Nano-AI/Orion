@@ -19,18 +19,22 @@ import Foundation
 ///
 /// - Everything at `.capture` runs before the demosaic or before the mask node,
 ///   so it is already baked into what the mask sees.
-/// - `.local` is the mask node itself.
+/// - `.tone` is the mask node itself.
+/// - `.maskedDetail` reads the mask without being the mask node: the local
+///   denoise chain runs after the hue/sat map and before the effects, with its
+///   threshold scaled by the fold. research/denoise-masked.md §2.2.
 /// - Everything at `.display` runs after, on the combined result, so a mask
 ///   cannot reach it at all.
 ///
 /// `research/masking.md` §2b is the long form.
 enum AdjustmentStage: Int, CaseIterable, Sendable {
-    case capture, detail, effects, tone, display, geometry
+    case capture, detail, maskedDetail, effects, tone, display, geometry
 
     var title: String {
         switch self {
         case .capture:  "Capture"
         case .detail:   "Detail"
+        case .maskedDetail: "Masked detail"
         case .effects:  "Effects"
         case .tone:     "Tone and color"
         case .display:  "Display"
@@ -45,6 +49,8 @@ enum AdjustmentStage: Int, CaseIterable, Sendable {
             "Before the demosaic or before the mask — already baked into what a mask sees."
         case .detail:
             "Before the mask, on the whole frame."
+        case .maskedDetail:
+            "Through the mask's coverage, but ahead of the effects and the mask node."
         case .effects:
             "Before the mask. These are multi-pass filters and cannot be local."
         case .tone:
@@ -70,6 +76,7 @@ enum AdjustmentID: String, CaseIterable, Sendable {
     case gradeBalance
     case vignetteAmount, vignetteFieldAngle
     case lutStrength
+    case denoiseLuma, denoiseColor
 }
 
 /// What one adjustment is, in each scope it exists in.
@@ -172,6 +179,17 @@ enum AdjustmentCatalogue {
         .init(id: .fusion, title: "Lift",
               global: .init(lower: 0, upper: 1, stage: .effects), local: nil,
               localRefusal: "a 32-node pyramid over a plan measured from the whole frame"),
+
+        // Local-only in this table: the global denoise sliders are drawn by the
+        // Detail panel by hand. ⚠ `.maskedDetail`, not `.tone`: the chain is a
+        // second wavelet shrink after the hue/sat map whose threshold the fold
+        // scales per pixel, so it reads the mask and runs before dehaze and the
+        // mask node. It adds to the global chain and cannot take it back.
+        // research/denoise-masked.md §2.
+        .init(id: .denoiseLuma, title: "Noise",
+              global: nil, local: .init(lower: 0, upper: 4, stage: .maskedDetail)),
+        .init(id: .denoiseColor, title: "Color noise",
+              global: nil, local: .init(lower: 0, upper: 4, stage: .maskedDetail)),
 
         // After the mask, with the contrast: the creative LUT is applied by the
         // display node on the combined result.

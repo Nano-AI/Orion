@@ -50,10 +50,15 @@ extension ViewportTests {
     /// The shader's local set is exposure, contrast, saturation, warmth, tint
     /// and the four tone bands. Written out here rather than derived, because
     /// deriving it from the same table it is checking would prove nothing.
+    ///
+    /// The two denoise strengths are local through a different shader: the
+    /// local denoise chain after the hue/sat map, whose threshold the fold
+    /// scales per pixel (research/denoise-masked.md §2), not `develop_linear`.
     static func testCatalogueAgreesWithTheShaderAboutWhatIsLocal() {
         let expected: Set<String> = ["exposure", "contrast", "saturation",
                                      "warmth", "localTint",
-                                     "highlights", "shadows", "whites", "blacks"]
+                                     "highlights", "shadows", "whites", "blacks",
+                                     "denoiseLuma", "denoiseColor"]
         let offered = Set(AdjustmentCatalogue.localSet.map(\.id.rawValue))
         report(offered == expected,
                "the catalogue offers exactly the adjustments the shader applies locally",

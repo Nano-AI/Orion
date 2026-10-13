@@ -83,6 +83,15 @@ enum AgentKeys {
         // MARK: Detail/Effects — DevelopPanels+Detail.swift
         "denoiseLuma": Spec(unit: "unitless", range: 0...4),          // :14
         "denoiseColor": Spec(unit: "unitless", range: 0...4),         // :15
+        // :19. research/denoise-masked.md §1; luma only, chroma keeps the
+        // fixed threshold.
+        "denoiseDetail": Spec(
+            unit: "unitless", range: 0...1,
+            note: "how far the luminance threshold backs off where the picture has "
+                + "more texture than noise: 0 is the fixed threshold every photograph "
+                + "before it was rendered with, 1 is BayesShrink's shape under the same "
+                + "denoiseLuma strength. It only ever smooths less, never more. Try 0.5 "
+                + "on rock and fabric, then re-read noise on a flat patch"),
         "lutStrength": Spec(unit: "unitless", range: 0...1),          // :98
         "fusion": Spec(unit: "unitless", range: 0...1),                // :106
         "grainAmount": Spec(unit: "unitless", range: 0...0.06),        // :114

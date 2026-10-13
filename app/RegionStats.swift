@@ -23,6 +23,13 @@ enum RegionStats {
     ///   and 40% of it going missing is what `highlights -0.8` did to a face
     ///   under process 1 (research/tone-and-local-contrast.md). ⚠ The twelfth
     ///   is chosen, not sourced; `UNSOURCED.md` §19.
+    /// - `noise`: fine grain, the RMS of luma against its own 3x3 box mean
+    ///   (centre included) over interior pixels, in `luma`'s 0..1 units.
+    ///   research/denoise-masked.md §3. Flat on a smooth wall or a linear
+    ///   ramp, high on noise *and* on fine texture, so it is compared before
+    ///   and after on one patch, never across patches. ⚠ Not normalised:
+    ///   white noise of deviation s reads s * sqrt(8/9), about 0.94 s, because
+    ///   the box mean holds a ninth of the pixel it is subtracted from.
     struct Stats {
         var luma = 0.0, saturation = 0.0
         var red = 0.0, green = 0.0, blue = 0.0
@@ -34,6 +41,7 @@ enum RegionStats {
         var hueStrength = 0.0
         var clippedHigh = 0.0, clippedLow = 0.0
         var shading = 0.0
+        var noise = 0.0
     }
 
     /// The arithmetic, over interleaved RGB floats in 0..1. One function for
@@ -104,6 +112,24 @@ enum RegionStats {
                 let v = means.reduce(0) { $0 + ($1 - m) * ($1 - m) } / Double(means.count)
                 s.shading = v.squareRoot() / m
             }
+        }
+
+        // Noise: each interior pixel against its 3x3 neighbourhood. A border
+        // pixel has no full window, and padding one would read the patch's
+        // edge as grain.
+        if width >= 3 && height >= 3 {
+            var sum = 0.0
+            for y in 1..<(height - 1) {
+                for x in 1..<(width - 1) {
+                    var box = 0.0
+                    for dy in -1...1 {
+                        for dx in -1...1 { box += lumas[(y + dy) * width + x + dx] }
+                    }
+                    let d = lumas[y * width + x] - box / 9
+                    sum += d * d
+                }
+            }
+            s.noise = (sum / Double((width - 2) * (height - 2))).squareRoot()
         }
         return s
     }

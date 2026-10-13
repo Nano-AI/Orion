@@ -84,6 +84,16 @@ extension Engine {
         get { layer.blacks }
         set { editLayer { $0.blacks = newValue } }
     }
+    /// Denoise through the coverage, on top of the global chain - it can add
+    /// smoothing and never remove it. research/denoise-masked.md §2.4.
+    var localDenoiseLuma: Float {
+        get { layer.denoiseLuma }
+        set { editLayer { $0.denoiseLuma = newValue } }
+    }
+    var localDenoiseColor: Float {
+        get { layer.denoiseColor }
+        set { editLayer { $0.denoiseColor = newValue } }
+    }
 
     /// The selected component, or nil when the group is empty.
     var selected: MaskComponentState? {

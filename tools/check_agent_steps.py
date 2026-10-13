@@ -284,7 +284,7 @@ def propose_composite_rejected(s, ctx):
 # -- The inspection half ---------------------------------------------------
 
 REGION_FIELDS = ("luma", "saturation", "hue", "hueStrength", "red", "green", "blue",
-                 "clippedHigh", "clippedLow", "shading")
+                 "clippedHigh", "clippedLow", "shading", "noise")
 CENTRE = [0.4, 0.4, 0.2, 0.2]
 CORNER = [0.02, 0.02, 0.12, 0.12]
 
@@ -529,6 +529,49 @@ def get_edits(s, ctx):
     finally:
         s.ask("reject_edit", path=str(raw))
 
+def denoise_region(s, ctx):
+    """The denoise loop the README teaches: read `noise` on a patch, propose
+    the three globals, read it again under the proposal. research/
+    denoise-masked.md section 3. Then a layer carrying a denoise, which has to
+    validate like every other layer field (section 2.4).
+
+    ⚠ `<=`, not `<`: a sample shot at base ISO can be clean already, and a
+    patch with no grain to lose is not a failure of the chain. The two
+    numbers are in the note so a reader can tell "clean" from "did nothing"."""
+    raw = ctx.copy("denoise")
+    before = s.ask("get_stats", path=str(raw), region=CENTRE).get("region", {})
+    noise = before.get("noise")
+    if not isinstance(noise, (int, float)) or noise < 0:
+        return f"region noise is {noise!r}, expected a number >= 0"
+    try:
+        s.ask("propose_edit", path=str(raw),
+              edits={"denoiseLuma": 3, "denoiseColor": 3, "denoiseDetail": 0.5})
+        after = s.ask("get_stats", path=str(raw), state="proposed",
+                      region=CENTRE).get("region", {}).get("noise")
+        if not isinstance(after, (int, float)):
+            return f"proposed region noise is {after!r}"
+        if after > noise:
+            return (f"a luma 3 / color 3 / detail 0.5 proposal raised the patch's noise "
+                    f"from {noise:.5f} to {after:.5f}")
+
+        examples = {k["name"]: k.get("example") for k in s.ask("describe_edits").get("keys", [])}
+        component = dict(examples["maskComponents"][0])
+        component.update(kind=2, centerX=0.5, centerY=0.5, radiusX=0.25, radiusY=0.25,
+                         feather=0.3, roundness=2, angle=0.0, compose=0,
+                         startsLayer=True, invert=False)
+        layer = dict(examples["layers"][0])
+        if "denoiseLuma" not in layer:
+            return "describe_edits' layer example has no denoiseLuma field"
+        layer["denoiseLuma"] = 2.0
+        state = s.ask("propose_edit", path=str(raw), reset=True,
+                      edits={"maskComponents": [component], "layers": [layer]}).get("state", {})
+        got = (state.get("layers") or [{}])[0].get("denoiseLuma")
+        if got != 2:
+            return f"a layer proposed with denoiseLuma 2 came back with {got!r}"
+        ctx.note = f"noise {noise:.5f} -> {after:.5f}"
+    finally:
+        s.ask("reject_edit", path=str(raw))
+
 def detect_subject(s, ctx):
     """The panel's Subject button through the tools: the row it returns has to
     validate in propose_edit and its matte has to reach a render. Whether the
@@ -639,5 +682,5 @@ STEPS = [
     propose_edit_reset, propose_composite, propose_composite_rejected,
     get_stats_proposed, get_stats_region, get_proxy_region, detect_faces,
     mask_invert, mask_matte, mask_matte_missing, current_photo_none, current_photo_set,
-    get_edits, detect_subject, sync_edits,
+    get_edits, denoise_region, detect_subject, sync_edits,
 ]

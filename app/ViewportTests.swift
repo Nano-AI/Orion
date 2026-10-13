@@ -80,6 +80,7 @@ enum ViewportTests {
         testProcessVersionIsThePhotographs()
         testLocalTintAxisGatesTheLegacySign()
         testRegionStatsFields()
+        testRegionStatsNoise()
         testAmericanKeyMigration()
         testSidecarEscapingDoesNotCompound()
         testEditsSurviveAQuit()

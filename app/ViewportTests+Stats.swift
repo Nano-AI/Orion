@@ -57,5 +57,45 @@ extension ViewportTests {
         let tiny = RegionStats.stats(rgb: patch(3, 3) { x, _ in (Float(x) / 2, 0, 0) }, width: 3, height: 3)
         report(tiny.shading == 0, "a patch too small for blocks reports no shading")
     }
+
+    /// `noise` (research/denoise-masked.md §3) on three patches whose answer
+    /// is worked out by hand.
+    ///
+    /// The checkerboard is the exact case: at 0.5 ± a with the sign s of
+    /// (-1)^(x+y), a 3x3 window holds the centre (s), four edge neighbours
+    /// (-s) and four corners (+s), so its mean is 0.5 + a*s/9 and every
+    /// interior pixel sits a*s*8/9 from it. RMS a*8/9: 0.0444 for a = 0.05,
+    /// not 0.05, and a formula that forgot the centre is in the window
+    /// would read 0.05 * 10/9 here instead.
+    static func testRegionStatsNoise() {
+        func grey(_ w: Int, _ h: Int, _ f: (Int, Int) -> Float) -> [Float] {
+            var out = [Float](repeating: 0, count: w * h * 3)
+            for y in 0..<h { for x in 0..<w {
+                let v = f(x, y)
+                out[(y * w + x) * 3] = v; out[(y * w + x) * 3 + 1] = v; out[(y * w + x) * 3 + 2] = v
+            } }
+            return out
+        }
+        let flat = RegionStats.stats(rgb: grey(32, 32) { _, _ in 0.5 }, width: 32, height: 32)
+        report(flat.noise < 1e-9, "a flat patch has no noise", "\(flat.noise)")
+
+        let grain = RegionStats.stats(rgb: grey(32, 32) { x, y in (x + y) % 2 == 0 ? 0.55 : 0.45 },
+                                      width: 32, height: 32)
+        let expected = 0.05 * 8.0 / 9.0
+        report(abs(grain.noise - expected) < 1e-6,
+               "the same patch at ±0.05 alternating reads 0.05 * 8/9 against its 3x3 mean",
+               "\(grain.noise), expected \(expected)")
+        report(abs(grain.luma - flat.luma) < 1e-6, "and its luma is unmoved, so noise is a separate number")
+
+        // A linear ramp is its own 3x3 mean everywhere, so a gradient - the
+        // light falling across a wall - is not grain. The shading test above
+        // reads the same ramp as substantial; the two numbers part here.
+        let ramp = RegionStats.stats(rgb: grey(48, 48) { x, y in 0.2 + 0.006 * Float(x) + 0.004 * Float(y) },
+                                     width: 48, height: 48)
+        report(ramp.noise < 1e-6, "a smooth ramp reads as no noise", "\(ramp.noise)")
+
+        let tiny = RegionStats.stats(rgb: grey(2, 8) { x, _ in Float(x) }, width: 2, height: 8)
+        report(tiny.noise == 0, "a patch with no interior pixel reports no noise")
+    }
 }
 

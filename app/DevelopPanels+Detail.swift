@@ -10,9 +10,15 @@ extension Editor {
         Group {
         section("Noise Reduction", info: "Measured from this frame, so 1.00 means \"remove what is "
                  + "smaller than one standard deviation of its own noise\" "
-                 + "rather than a fixed amount.") {
+                 + "rather than a fixed amount. Detail backs the threshold off where "
+                 + "the picture has more texture than noise, so rock and fabric keep "
+                 + "their grain while flat areas still clean up; 0 is the threshold "
+                 + "every photograph so far was rendered with.") {
             slider("Luminance", $engine.denoiseLuma, 0...4, "", 2, resetsTo: engine.defaults.denoiseLuma)
             slider("Color", $engine.denoiseColor, 0...4, "", 2, resetsTo: engine.defaults.denoiseColor)
+            // research/denoise-masked.md §1. Luma only: chroma keeps the fixed
+            // threshold, so this sits under both but changes only the first.
+            slider("Detail", $engine.denoiseDetail, 0...1, "", 2, resetsTo: engine.defaults.denoiseDetail)
         }
         section("Spots", info: "Turn on Place spots, then drag on the photo: press where the "
                + "dust is and pull to choose what covers it. Drag either circle "

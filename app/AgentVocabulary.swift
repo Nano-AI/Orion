@@ -129,10 +129,14 @@ extension AgentCLI {
         + "layers[1] the run beginning at the next component with startsLayer true, and "
         + "so on (MaskLayers.group). Every element needs every LocalAdjustState field "
         + "(exposureEv, contrast, saturation, warmth, tint, highlights, shadows, whites, "
-        + "blacks), each checked against the *local* panel's own range, not the global "
+        + "blacks, denoiseLuma, denoiseColor), each checked against the *local* panel's own range, not the global "
         + "scalar one - local exposure is -3…3 EV where global is -5…5. "
         + "tint runs the same way as the global tint: positive is magenta, negative is "
-        + "green; warmth positive is warmer."
+        + "green; warmth positive is warmer. "
+        + "A layer's denoiseLuma and denoiseColor (0…4, the global sliders' units) run on "
+        + "top of the global chain through the coverage; a layer cannot un-denoise, so to "
+        + "clean the wall and keep the climber put the denoise on a layer with the subject "
+        + "subtracted (compose 1) or inverted, and leave the global low."
 
     /// The per-kind field map, checked against `engine/shaders/
     /// mask_component.slang` (the kind branches at :306, :326, :347, :477,

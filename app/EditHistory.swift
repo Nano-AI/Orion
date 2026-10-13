@@ -326,6 +326,11 @@ struct LocalAdjustState: Equatable, Codable {
     var shadows: Float = 0
     var whites: Float = 0
     var blacks: Float = 0
+    /// Denoise through the coverage, in the global sliders' 0..4 units and on
+    /// top of the global chain, which has already run - so a layer can add
+    /// denoise and never take it away. research/denoise-masked.md §2.4.
+    var denoiseLuma: Float = 0
+    var denoiseColor: Float = 0
 }
 
 /// ⚠ Hand-written and forgiving, like `MaskComponentState`'s. The synthesised
@@ -340,6 +345,7 @@ extension LocalAdjustState {
     private enum Key: String, CodingKey {
         case exposureEv, contrast, saturation, warmth, tint
         case highlights, shadows, whites, blacks
+        case denoiseLuma, denoiseColor
     }
 
     init(from decoder: Decoder) throws {
@@ -357,6 +363,8 @@ extension LocalAdjustState {
         shadows = float(.shadows) ?? shadows
         whites = float(.whites) ?? whites
         blacks = float(.blacks) ?? blacks
+        denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
+        denoiseColor = float(.denoiseColor) ?? denoiseColor
     }
 }
 
@@ -437,6 +445,10 @@ struct DevelopState: Equatable, Codable {
     var gradeBalance: Float
     var denoiseLuma: Float
     var denoiseColor: Float
+    /// How far the luma threshold backs off where texture exceeds noise, 0..1.
+    /// 0 is the fixed threshold every photograph before it was rendered with.
+    /// research/denoise-masked.md §1.
+    var denoiseDetail: Float
     var lutStrength: Float
     /// Which space `maskComponents`' spatial numbers are in: 0 is the legacy
     /// display convention (normalized against the crop this state also
@@ -553,7 +565,7 @@ extension DevelopState {
             highlightRecovery: 0,
             gradeShadow: [0, 0, 0], gradeMidtone: [0, 0, 0],
             gradeHighlight: [0, 0, 0], gradeBalance: 0,
-            denoiseLuma: 0, denoiseColor: 0,
+            denoiseLuma: 0, denoiseColor: 0, denoiseDetail: 0,
             lutStrength: 1,
             maskSpace: 1,
             maskComponents: [],
@@ -592,7 +604,7 @@ extension DevelopState {
         "lensChoice",
         "highlightRecovery",
         "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance",
-        "denoiseLuma", "denoiseColor", "lutStrength",
+        "denoiseLuma", "denoiseColor", "denoiseDetail", "lutStrength",
         "maskSpace", "maskComponents", "maskRefine", "spots", "layers",
         "localTintAxis",
         "fusion", "dehaze", "clarity",
@@ -626,7 +638,7 @@ extension DevelopState {
         case perspectiveVertical, perspectiveHorizontal, perspectiveAspect
         case cropX, cropY, cropW, cropH
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue, lensChoice
-        case highlightRecovery, denoiseLuma, denoiseColor
+        case highlightRecovery, denoiseLuma, denoiseColor, denoiseDetail
         case gradeShadow, gradeMidtone, gradeHighlight, gradeBalance
         case maskSpace
         case maskComponents, localExposureEv, maskRefine, spots
@@ -710,6 +722,9 @@ extension DevelopState {
         highlightRecovery = float(.highlightRecovery) ?? highlightRecovery
         denoiseLuma = float(.denoiseLuma) ?? denoiseLuma
         denoiseColor = float(.denoiseColor) ?? float(.legacyDenoiseColour) ?? denoiseColor
+        // Absent from every sidecar before 2026-10-17, and 0 is what those
+        // photographs were rendered with.
+        denoiseDetail = float(.denoiseDetail) ?? denoiseDetail
         lutStrength = float(.lutStrength) ?? lutStrength
         // ⚠ The new key wins when present, and the legacy scalars fill layer 1
         // when it is not. A sidecar written by a newer build carries both,

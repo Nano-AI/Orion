@@ -274,6 +274,9 @@ final class Engine {
     /// no strength.
     var denoiseLuma: Float = 0     { didSet { pushAndRender() } }
     var denoiseColor: Float = 0   { didSet { pushAndRender() } }
+    /// How far the luma threshold backs off where texture exceeds noise, 0..1.
+    /// 0 is the fixed threshold; research/denoise-masked.md §1.
+    var denoiseDetail: Float = 0  { didSet { pushAndRender() } }
 
     /// How much of the loaded creative LUT to apply. The LUT itself is a file,
     /// loaded through `loadLut`, not an adjustment.
@@ -555,6 +558,7 @@ final class Engine {
             gradeShadow: gradeShadow, gradeMidtone: gradeMidtone,
             gradeHighlight: gradeHighlight, gradeBalance: gradeBalance,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
+            denoiseDetail: denoiseDetail,
             lutStrength: lutStrength,
             // The live state is always frame-space; a legacy sidecar converts
             // on the way in, at the restore points, never here.
@@ -600,6 +604,7 @@ final class Engine {
         gradeHighlight = s.gradeHighlight
         gradeBalance = s.gradeBalance
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
+        denoiseDetail = s.denoiseDetail
         lutStrength = s.lutStrength
         grainAmount = s.grainAmount; grainSize = s.grainSize
         vignetteAmount = s.vignetteAmount
@@ -755,6 +760,7 @@ final class Engine {
         a.grade_highlight = (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2])
         a.grade_balance = gradeBalance
         a.denoise_luma = denoiseLuma; a.denoise_color = denoiseColor
+        a.denoise_detail = denoiseDetail
         a.lut_strength = lutStrength
         a.grain_amount = grainAmount; a.grain_size = grainSize
         a.vignette_amount = vignetteAmount
@@ -798,11 +804,13 @@ final class Engine {
         var ev = [Float](repeating: 0, count: Self.maxMaskComponents)
         var ct = ev, sa = ev, wa = ev, ti = ev
         var hi = ev, sh = ev, wh = ev, bl = ev
+        var dl = ev, dc = ev
         for (i, l) in layers.prefix(Self.maxMaskComponents).enumerated() {
             ev[i] = l.exposureEv; ct[i] = l.contrast; sa[i] = l.saturation
             wa[i] = l.warmth; ti[i] = l.tint
             hi[i] = l.highlights; sh[i] = l.shadows
             wh[i] = l.whites; bl[i] = l.blacks
+            dl[i] = l.denoiseLuma; dc[i] = l.denoiseColor
         }
         a.local_exposure_ev = toTuple8(ev)
         a.local_contrast = toTuple8(ct)
@@ -813,6 +821,8 @@ final class Engine {
         a.local_shadows = toTuple8(sh)
         a.local_whites = toTuple8(wh)
         a.local_blacks = toTuple8(bl)
+        a.local_denoise_luma = toTuple8(dl)
+        a.local_denoise_color = toTuple8(dc)
         a.mask_refine = maskRefine
 
         a.spot_count = Int32(min(spots.count, Self.maxSpots))

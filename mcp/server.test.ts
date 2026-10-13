@@ -240,9 +240,11 @@ test("get_stats passes region through and returns the region object", async () =
   const content = patch.content as Array<{ type: string; text?: string }>;
   const { region } = JSON.parse(content[0].text!);
   for (const field of ["luma", "saturation", "hue", "hueStrength", "red", "green", "blue",
-                       "clippedHigh", "clippedLow", "shading"]) {
+                       "clippedHigh", "clippedLow", "shading", "noise"]) {
     assert.equal(typeof region[field], "number", field);
   }
+  // Passed through as the binary measured it, not recomputed or dropped.
+  assert.equal(region.noise, 0.01);
   // The same rectangle as a frame-space ellipse, ready for a kind-2 radial.
   for (const field of ["centerX", "centerY", "radiusX", "radiusY"]) {
     assert.equal(typeof region.frame?.[field], "number", `frame.${field}`);

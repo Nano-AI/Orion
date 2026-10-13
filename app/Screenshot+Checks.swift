@@ -382,6 +382,12 @@ extension Screenshot {
     /// than the override ever bought, so the override is gone rather than
     /// retuned. ⚠ **Re-measure this the next time panel content moves** — the
     /// number that matters is the overlap, not the overflow.
+    ///
+    /// Re-measured 2026-10-17 after Noise Reduction's Detail slider: content
+    /// **1,256**, scroll view **675**, scrolled **581**, so the two frames
+    /// overlap by **94 points**. Still nothing between them, but the margin
+    /// has been shrinking with each panel addition; a scroll to the middle
+    /// is the next mechanism if it reaches zero.
     static func minimumHeight(_ scene: String) -> CGFloat? {
         nil   // see above: the panel no longer needs a taller window
     }

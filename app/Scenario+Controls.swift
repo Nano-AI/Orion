@@ -354,6 +354,8 @@ extension Scenario {
         case "localShadows": e.localShadows = value
         case "localWhites": e.localWhites = value
         case "localBlacks": e.localBlacks = value
+        case "localDenoiseLuma": e.localDenoiseLuma = value
+        case "localDenoiseColor": e.localDenoiseColor = value
         case "maskRefine": e.maskRefine = value
         case "brushRadius": e.brushRadius = value
         case "brushFlow":   e.brushFlow = value

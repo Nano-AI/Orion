@@ -105,6 +105,23 @@ A sky above about 0.01 `clippedHigh` is gone, not recoverable: there is no detai
 It is the number that says whether a face went flat.
 Measure a cheek before and after a strong Highlights pull or Shadows lift and **keep it within about 15% of as shot**; 40% of it going missing is what `highlights -0.8` did to a face under process 1 (`research/tone-and-local-contrast.md`).
 
+`noise` is fine grain: the RMS of luma against its own 3x3 mean, in `luma`'s units.
+It is flat on a smooth wall and high on noise, and also high on fine texture, so read it **before and after on the same patch**, never across patches.
+`shading` is the number a face keeps; `noise` is the number a wall loses.
+
+### Noise
+
+Measure `noise` on a flat patch - a wall, a sky, a backdrop - and `shading` on a face before proposing anything.
+Then propose `denoiseLuma` for the grain, `denoiseColor` for the colour blotches, and `denoiseDetail` (0..1) where there is texture to keep.
+Detail backs the threshold off where the picture has more texture than noise, and 0.5 is a fair start on rock and fabric.
+Re-measure both under `state: "proposed"`: `noise` should fall on the wall and `shading` should hold on the face.
+
+`denoiseColor` alone leaves luminance alone, so a colour-only pass to kill blotches no longer softens texture.
+
+A layer carries `denoiseLuma` and `denoiseColor` too, in the same 0..4 units, applied through its coverage **on top of** the global chain.
+A layer cannot un-denoise: the global chain has already run.
+So to clean the wall and keep the climber, keep the global low and put the denoise on a layer with the subject subtracted (`compose: 1`) or on an inverted subject layer.
+
 ### Local adjustments are not global ones at the same number
 
 A masked exposure runs about three to four times a global's at the top of the scale.

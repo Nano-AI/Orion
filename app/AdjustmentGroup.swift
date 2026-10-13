@@ -67,6 +67,8 @@ struct AdjustmentGroup: View {
         case (.gradeBalance, _):      $engine.gradeBalance
         case (.vignetteAmount, _):    $engine.vignetteAmount
         case (.vignetteFieldAngle, _): $engine.vignetteFieldAngle
+        case (.denoiseLuma, _):       $engine.localDenoiseLuma
+        case (.denoiseColor, _):      $engine.localDenoiseColor
         }
     }
 
@@ -108,6 +110,8 @@ struct AdjustmentGroup: View {
         case (.gradeBalance, _):      return d.gradeBalance
         case (.vignetteAmount, _):    return d.vignetteAmount
         case (.vignetteFieldAngle, _): return d.vignetteFieldAngle
+        case (.denoiseLuma, _):       return l.denoiseLuma
+        case (.denoiseColor, _):      return l.denoiseColor
         }
     }
 }

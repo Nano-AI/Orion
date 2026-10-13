@@ -124,22 +124,25 @@ enum AgentComposite {
     /// ⚠ Ranges come from `AdjustmentCatalogue`'s *local* scope, not
     /// `AgentKeys`' global one: local exposure is -3…3 EV where global is
     /// -5…5, and local contrast is an additive -1…1 gain where global is a
-    /// 0.5…2 multiplier (AdjustmentCatalogue.swift:108-120). Reusing the
+    /// 0.5…2 multiplier (AdjustmentCatalogue.swift:115-127). Reusing the
     /// global numbers would accept a local exposureEv the panel's own slider
     /// cannot produce.
     static func validateLayers(_ value: Any) throws {
         guard let arr = value as? [Any] else { throw Failure.rejected("layers must be an array") }
         let required = requiredKeys(LocalAdjustState())
         let fields: [(name: String, id: AdjustmentID, source: String)] = [
-            ("exposureEv", .exposure, "AdjustmentCatalogue.swift:108-110"),
-            ("contrast", .contrast, "AdjustmentCatalogue.swift:118-120"),
-            ("saturation", .saturation, "AdjustmentCatalogue.swift:143-145"),
-            ("warmth", .warmth, "AdjustmentCatalogue.swift:159-160"),
-            ("tint", .localTint, "AdjustmentCatalogue.swift:161-162"),
-            ("highlights", .highlights, "AdjustmentCatalogue.swift:127-129"),
-            ("shadows", .shadows, "AdjustmentCatalogue.swift:130-132"),
-            ("whites", .whites, "AdjustmentCatalogue.swift:133-135"),
-            ("blacks", .blacks, "AdjustmentCatalogue.swift:136-138")]
+            ("exposureEv", .exposure, "AdjustmentCatalogue.swift:115-117"),
+            ("contrast", .contrast, "AdjustmentCatalogue.swift:125-127"),
+            ("saturation", .saturation, "AdjustmentCatalogue.swift:150-152"),
+            ("warmth", .warmth, "AdjustmentCatalogue.swift:166-167"),
+            ("tint", .localTint, "AdjustmentCatalogue.swift:168-169"),
+            ("highlights", .highlights, "AdjustmentCatalogue.swift:134-136"),
+            ("shadows", .shadows, "AdjustmentCatalogue.swift:137-139"),
+            ("whites", .whites, "AdjustmentCatalogue.swift:140-142"),
+            ("blacks", .blacks, "AdjustmentCatalogue.swift:143-145"),
+            // research/denoise-masked.md §2.4: on top of the global chain.
+            ("denoiseLuma", .denoiseLuma, "AdjustmentCatalogue.swift:189-190"),
+            ("denoiseColor", .denoiseColor, "AdjustmentCatalogue.swift:191-192")]
         for (i, raw) in arr.enumerated() {
             guard let dict = raw as? [String: Any] else {
                 throw Failure.rejected("layers[\(i)] must be an object")
