@@ -20,6 +20,8 @@ struct Filmstrip: View {
     /// Offered on a multi-photo scope; nil hides the entry (the screenshot
     /// harness builds a strip with no editor behind it).
     var onMerge: (([URL]) -> Void)? = nil
+    /// Opens the Export sheet over the selection - group only, like the merge.
+    var onExport: (() -> Void)? = nil
 
     private let cellHeight: CGFloat = 58
 
@@ -327,6 +329,10 @@ struct Filmstrip: View {
             if let onMerge, urls.count > 1 {
                 Divider()
                 Button("Merge to HDR…" + suffix) { onMerge(urls) }
+            }
+            if let onExport, urls.count > 1 {
+                Divider()
+                Button("Export…" + suffix) { onExport() }
             }
         }
     }

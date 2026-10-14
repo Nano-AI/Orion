@@ -18,6 +18,12 @@ struct ExportPanel: View {
     let preview: () async -> NSImage?
     let onExport: () -> Void
     let onCancel: () -> Void
+    /// How many photographs the selection holds, 0 when there is no selection
+    /// and the sheet exports the open photograph. Above 0 the title counts
+    /// them, the button counts them, and `onExport` runs the batch. The
+    /// settings are the same either way; only the readout is the open
+    /// photograph's, because each of the others is sized by its own frame.
+    var selected: Int = 0
 
     /// Which dimension field holds focus, so leaving one commits it.
     enum Field { case width, height }
@@ -35,7 +41,7 @@ struct ExportPanel: View {
 
     private var options: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Export")
+            Text(BatchExport.sheetTitle(selected: selected))
                 .font(.system(size: 19, weight: .regular, design: .serif))
                 .foregroundStyle(Palette.text)
 
@@ -208,6 +214,9 @@ struct ExportPanel: View {
 
             Text(settings.measuredBytes == nil
                  ? "Measuring the encoded size…"
+                 : selected > 0
+                 ? "Measured on the open photo. Each of the \(selected) is sized by its "
+                   + "own frame and goes to a folder you choose; nothing there is overwritten."
                  : "Encoded size, measured. Color space is \(settings.space.title).")
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.dim)
@@ -225,7 +234,7 @@ struct ExportPanel: View {
             HStack(spacing: 8) {
                 Spacer()
                 Button("Cancel", action: onCancel)
-                Button("Export…", action: onExport)
+                Button(BatchExport.exportButton(selected: selected), action: onExport)
                     .keyboardShortcut(.defaultAction)
             }
         }

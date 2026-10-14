@@ -195,23 +195,43 @@ extension Editor {
             divider
 
             // ── Out ──────────────────────────────────────────────────────
-            Button {
-                showingExport = true
-            } label: {
-                Text("Export…")
-                    .font(.system(size: 11, weight: .medium))
-                    .padding(.horizontal, 11)
-                    .frame(height: Self.chipHeight)
-                    .contentShape(Rectangle())
+            // The button counts the selection, so a ring around twelve frames
+            // on the strip or in the gallery reads "Export 12…" here before
+            // the sheet says it again. While the batch runs, the readout and
+            // Stop take its place: the toolbar is the one piece of chrome
+            // both faces keep, so this is where a gallery-started batch can
+            // be watched and stopped.
+            if let p = batchProgress {
+                Text(BatchExport.progressLabel(done: p.done, total: p.total))
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(Palette.dim)
+                chip("Stop", enabled: true) { batchCancelled = true }
+                    .help("Stop after the photo being written")
+            } else {
+                let exportable = engine.isLoaded && !engine.documentEditsLocked
+                Button {
+                    showingExport = true
+                } label: {
+                    Text(BatchExport.exportButton(selected: exportSelected))
+                        .font(.system(size: 11, weight: .medium))
+                        .monospacedDigit()
+                        .padding(.horizontal, 11)
+                        .frame(height: Self.chipHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(exportable ? Palette.text : Palette.faint)
+                .background(exportable ? Palette.accent.opacity(0.18) : .clear,
+                            in: RoundedRectangle(cornerRadius: 5))
+                .overlay(RoundedRectangle(cornerRadius: 5)
+                    .stroke(exportable ? Palette.accent.opacity(0.55) : Palette.line,
+                            lineWidth: 1))
+                .disabled(!exportable)
+                .help(exportSelected > 0
+                      ? "Export the \(exportSelected) selected photos to a folder"
+                      : "Export this photo")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(engine.isLoaded ? Palette.text : Palette.faint)
-            .background(engine.isLoaded ? Palette.accent.opacity(0.18) : .clear,
-                        in: RoundedRectangle(cornerRadius: 5))
-            .overlay(RoundedRectangle(cornerRadius: 5)
-                .stroke(engine.isLoaded ? Palette.accent.opacity(0.55) : Palette.line,
-                        lineWidth: 1))
-            .disabled(!engine.isLoaded)
         }
         .padding(.horizontal, 14)
         .frame(height: 44)

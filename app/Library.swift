@@ -198,6 +198,15 @@ final class Library {
     }
 
     func selectAll() { selection.selectAll(in: visibleURLs) }
+
+    /// Puts a selection back after something that had to move the canvas -
+    /// the batch export reopens the photo it started from through `load`,
+    /// which collapses the selection the batch was made from. Confined to
+    /// what is visible, the way every other write to it is.
+    func restoreSelection(_ saved: PhotoSelection) {
+        selection = saved
+        selection.confine(to: visibleURLs)
+    }
     func collapseSelection() { selection.collapse() }
     func isSelected(_ url: URL) -> Bool { selection.contains(url) }
 

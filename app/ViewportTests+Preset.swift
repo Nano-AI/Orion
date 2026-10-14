@@ -740,4 +740,42 @@ extension ViewportTests {
         report(!BatchExport.exportable(u, rejected: everyOne, asked: true).isEmpty,
                "and exports them all when the Rejected filter is what is showing")
     }
+
+    /// The Export sheet is the one way in everybody finds, and until now it
+    /// exported the open photograph whatever was ringed on the strip. Now the
+    /// selection decides, and three labels say so before a file is written:
+    /// the toolbar button, the sheet's title and its action. All three take
+    /// the explicit count - 0 for one open photograph, which
+    /// `PhotoSelection.isExplicit` says is not a selection - so none of them
+    /// can read "Export 1" over a batch of forty, or "Export" over one of
+    /// twelve.
+    static func testExportLabelsCountTheSelection() {
+        report(BatchExport.sheetTitle(selected: 0) == "Export",
+               "no selection: the sheet is the plain Export sheet")
+        report(BatchExport.exportButton(selected: 0) == "Export…",
+               "no selection: the button exports the open photo")
+        report(BatchExport.sheetTitle(selected: 12) == "Export 12 photos",
+               "a selection: the title counts it",
+               BatchExport.sheetTitle(selected: 12))
+        report(BatchExport.exportButton(selected: 12) == "Export 12…",
+               "a selection: the button counts it",
+               BatchExport.exportButton(selected: 12))
+        report(BatchExport.progressLabel(done: 3, total: 12) == "Exporting 3 of 12…",
+               "the toolbar readout counts the batch",
+               BatchExport.progressLabel(done: 3, total: 12))
+
+        // The count the labels carry is the count the batch writes: an
+        // explicit selection is `asked`, so a reject inside it is exported,
+        // and the number on the button is the number of files.
+        let u = (0..<4).map { URL(fileURLWithPath: "/f/IMG_\($0).ARW") }
+        var sel = PhotoSelection()
+        sel.focus(u[0])
+        sel.click(u[2], modifiers: .command, in: u)
+        sel.click(u[3], modifiers: .command, in: u)
+        let targets = BatchExport.exportable(sel.targets(in: u), rejected: [u[3]],
+                                             asked: sel.isExplicit)
+        report(targets == [u[0], u[2], u[3]] && targets.count == 3,
+               "a hand-made selection exports exactly its members, rejects included",
+               "\(targets)")
+    }
 }

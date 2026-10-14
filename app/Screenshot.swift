@@ -234,7 +234,7 @@ enum Screenshot {
         // The export sheet is not reachable from the editor's own hierarchy in
         // a still, so it is rendered on its own.
         if o.scene == "watermark-editor" { renderWatermarkEditor(engine, o) }
-        if o.scene == "export" || o.scene == "export-tail" || o.scene == "export-watermark" {
+        if ["export", "export-tail", "export-watermark", "export-selected"].contains(o.scene) {
             // Never the photographer's saved mark: a still that changed with
             // what is in Application Support would be no reference at all.
             let mark = o.scene == "export-watermark" ? sampleWatermark() : Watermark(url: nil)
@@ -265,7 +265,11 @@ enum Screenshot {
                                     sourceHeight: engine.imageHeight,
                                     measure: { measured },
                                     preview: { nil },
-                                    onExport: {}, onCancel: {})
+                                    onExport: {}, onCancel: {},
+                                    // The sheet over a selection of twelve:
+                                    // counted title, counted button, the
+                                    // per-photo note under the readout.
+                                    selected: o.scene == "export-selected" ? 12 : 0)
                 .preferredColorScheme(.dark)
 
             let sheetSize = CGSize(width: 380, height: 520)

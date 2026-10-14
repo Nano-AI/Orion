@@ -41,6 +41,10 @@ struct GalleryView: View {
     /// only *ask*. See `Editor.confirmTrash`.
     let onTrash: ([URL]) -> Void
     let onTrashRejected: () -> Void
+    /// Opens the Export sheet over the selection. Offered only from a cell
+    /// that is part of one, so the menu never promises an export of a single
+    /// unopened photograph it cannot measure.
+    let onExportSelection: () -> Void
 
     @AppStorage("galleryCellSize") private var cellSize: Double
         = Double(GalleryLayout.defaultCell)
@@ -253,6 +257,10 @@ struct GalleryView: View {
             }
         }
         Button("No rating" + suffix) { library.setRating(0, for: urls) }
+        if urls.count > 1 {
+            Divider()
+            Button("Export…" + suffix) { onExportSelection() }
+        }
         Divider()
         Button("Move to Trash…" + suffix) { onTrash(urls) }
     }

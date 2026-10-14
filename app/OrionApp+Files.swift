@@ -42,6 +42,12 @@ extension Editor {
         try? Proposal.currentJSON(photo: current).write(to: url, options: .atomic)
     }
 
+    /// How many photographs the Export sheet will write as a batch: the
+    /// explicit selection's count, 0 when the sheet exports the open photo.
+    var exportSelected: Int {
+        library.hasExplicitSelection ? library.exportTargets.count : 0
+    }
+
     /// Exports every photo in view to a folder the photographer chooses.
     ///
     /// ⚠ Runs on the main actor because the engine does, so the interface would
@@ -106,7 +112,15 @@ extension Editor {
             // The engine is now sitting on the last photo of the batch. Put the
             // one the photographer was looking at back, or they return to a
             // different picture than they left.
+            //
+            // ⚠ `load` collapses the selection onto the photo it opens (the
+            // arrow-key rule), which here would throw away the twelve frames
+            // that were just chosen the moment their export finished - and the
+            // next thing after an export is often a second one at another
+            // size, or a sync. The selection is put back as it was.
+            let kept = library.selection
             if let current { load(current) }
+            library.restoreSelection(kept)
         }
     }
 

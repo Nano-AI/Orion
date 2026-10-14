@@ -300,7 +300,8 @@ struct Editor: View {
                             onFocus: { galleryFocus = $0 },
                             onOpen: { openFromGallery($0) },
                             onTrash: { confirmTrash($0) },
-                            onTrashRejected: { confirmTrashRejected() })
+                            onTrashRejected: { confirmTrashRejected() },
+                            onExportSelection: { showingExport = true })
             } else {
                 HStack(spacing: 0) {
                     canvas
@@ -310,7 +311,8 @@ struct Editor: View {
 
                 if !library.photos.isEmpty {
                     Filmstrip(library: library, selected: current, onSelect: load,
-                              onMerge: askHdrMerge)
+                              onMerge: askHdrMerge,
+                              onExport: { showingExport = true })
                 }
             }
         }
@@ -362,8 +364,18 @@ struct Editor: View {
                                     sourceHeight: engine.imageHeight))
                         },
                         preview: { engine.watermarkPreview(watermark) },
-                        onExport: { showingExport = false; exportFile() },
-                        onCancel: { showingExport = false })
+                        // ⚠ The selection decides, and the sheet's title has
+                        // already said which: two or more photographs ringed
+                        // on the strip or in the gallery and this is the
+                        // batch, else it is the open photograph. The File
+                        // menu's "Export All in View" is still the way to
+                        // write the whole folder without selecting it.
+                        onExport: {
+                            showingExport = false
+                            if exportSelected > 0 { runBatchExport() } else { exportFile() }
+                        },
+                        onCancel: { showingExport = false },
+                        selected: exportSelected)
         }
         .alert("Something went wrong",
                isPresented: Binding(get: { message != nil },

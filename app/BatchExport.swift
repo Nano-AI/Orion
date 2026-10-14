@@ -46,6 +46,30 @@ enum BatchExport {
         }
     }
 
+    /// What the Export sheet, the toolbar button and the context menus call
+    /// the export when a selection is up.
+    ///
+    /// `selected` is the explicit selection's count, 0 when there is none -
+    /// `PhotoSelection.isExplicit`'s rule, so one open photograph is never
+    /// "1 selected". Here because the toolbar's `Export…` was the one way in
+    /// everybody found, and it exported the open photograph whatever the
+    /// filmstrip had ringed: the batch lived on the File menu and the Presets
+    /// tab, and a selection made in the gallery had no button at all. Now the
+    /// same sheet exports the selection when there is one, and says so in its
+    /// title before the folder panel asks for a destination.
+    static func sheetTitle(selected: Int) -> String {
+        selected > 0 ? "Export \(selected) photos" : "Export"
+    }
+
+    static func exportButton(selected: Int) -> String {
+        selected > 0 ? "Export \(selected)…" : "Export…"
+    }
+
+    /// The toolbar's readout while a batch runs, where the Export button was.
+    static func progressLabel(done: Int, total: Int) -> String {
+        "Exporting \(done) of \(total)…"
+    }
+
     /// Works out where each photograph is going, before anything is written.
     ///
     /// ⚠ **Nothing is ever overwritten, and two sources never collide.** An

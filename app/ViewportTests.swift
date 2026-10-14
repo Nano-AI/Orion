@@ -73,6 +73,7 @@ enum ViewportTests {
         testDrawnRectFollowsTheZoom()
         testCanvasReductionAverages()
         testExportSkipsRejects()
+        testExportLabelsCountTheSelection()
         testDevelopStateRoster()
         testSidecarSurvivesAMissingField()
         testMaskGroupSidecar()
