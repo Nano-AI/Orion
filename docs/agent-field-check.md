@@ -32,6 +32,19 @@ Send whatever it reports back to the Orion development session.
 11. Try `sync_edits` with `commit: true` on two targets only after you are sure.
     Report whether the open photo got a proposal instead of a sidecar, as documented.
 
+## Noise, on a high-ISO frame
+
+12. Read `get_stats` with a `region` on a flat patch of wall and one on the climber's face; note `noise` and `shading`.
+    Propose `denoiseLuma` 2, `denoiseColor` 3, then the same with `denoiseDetail` 0.6.
+    Re-read both patches under `state: "proposed"` and report the four numbers.
+    Detail should give the wall back a little grain and the face back none of its shading.
+13. Propose `denoiseColor` 3 alone, with `denoiseLuma` 0.
+    `noise` on the wall should barely move and the colour blotches should go; before this session Color alone also softened luminance.
+14. Put `denoiseLuma` 3 on a layer whose mask is the subject subtracted (compose 1) or inverted, with the global at 0.
+    Report whether the wall cleans up and the climber keeps texture, with `noise` read on both patches.
+    A layer cannot un-denoise, so a layer on the climber with the global high does nothing useful; say if the tool descriptions made that clear.
+15. If `detect_subject` with `kind: "person"` returns `found: false` on a frame with people in it, paste the `reason` verbatim: it now reports the lit percentage and the peak confidence.
+
 ## What to send back
 
 - Every `error` string from any tool, verbatim.
