@@ -55,7 +55,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 ## 5. The "180°" Toolkit
 | Feature | Status | Notes |
 |---|---|---|
-| Local Laplacian clarity / texture | M3 | Halo-free local contrast — big visual payoff |
+| Local Laplacian clarity / texture | M3 | Halo-free local contrast — big visual payoff. ✅ Clarity built. **Texture built 2026-10-18 as noise-aware gain on the fine starlet scales, not in the LLF** (`research/high-iso.md` §2); Clarity's noise guard now reads the frame's measured σ (§3) |
 | Single-image exposure fusion (shadow lift) | M3 | The "phone photo pop" ingredient |
 | Dehaze (dark channel prior) | M3 | |
 | One-click auto-enhance | M3 | Combines the three above + percentile auto-levels |
@@ -67,7 +67,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | Sharpening (amount/radius/masking) | M2 | |
 | Denoise: profiled wavelet (à-trous) | M2 | Per-camera/ISO noise model |
-| Denoise: NLM luma option | M4 | |
+| Denoise: NLM luma option | M4 | ✅ **Built and measured 2026-10-18**, `research/high-iso.md` §4: profiled non-local means on luma ahead of the wavelet chain, `denoiseNlm` 0..1. Ships with the 11×11 / 3×3 window (19 ms preview, 0.34 s at 42 MP); the published 21×21 / 5×5 measured 3 s and stays bench-only. US patent lapsed 2020, EP withdrawn; FTO still not assessed |
 | Defringe (manual purple/green) | M6 | S6.7 (#212) — lensfun's CA correction ships (§7); manual fringe suppression does not, and needs its own `research/` citation |
 | Denoise: ML (NAFNet-class, Core ML) | M5 | **On-demand pass — not a graph node, not a slider.** Researched and costed 2026-08-01, **not built**: `research/denoise-learned.md`, decision #111, six pieces in `ROADMAP.md`. ⚠ The blocker is the *domain*, not the framework — Orion's denoise runs post-demosaic in linear camera RGB, which is neither the sRGB nor the Bayer domain any published checkpoint is trained for. ⚠ The ~12s/24MP figure is DxO's, carried over and **not re-verifiable** (their page 403s); NAFNet's own 65 GMAC works out to 48.1 TFLOP a frame, ≥1.6 s on optimistic hardware |
 
@@ -99,7 +99,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Feature | Status | Notes |
 |---|---|---|
 | Vignette (creative, post-crop) | M3 | ✅ **Built 2026-08-01**, `research/vignette.md`, decision #103. cos⁴ natural falloff *(Reiss 1945; Kingslake 1992)* as an exposure change in scene-linear light, centred on the crop. ⚠ Not the lens vignette **correction** in §6 — that removes a measured falloff, this adds one, and a photograph can carry both |
-| Film grain | M4 | |
+| Film grain | M4 | ✅ **Built 2026-07-31**, `research/film-grain.md` (Newson et al. 2017 statistics, AV1 plate). This row said M4 for eleven weeks after it shipped; corrected 2026-10-18 |
 
 ## 11. Presets & Batch
 | Feature | Status | Notes |

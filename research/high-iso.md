@@ -191,7 +191,7 @@ The `2σ²` subtraction is what makes `h` a multiple of `σ`: two patches of pur
 - **One node, `denoise:nlm`, between `hl:fill` and `denoise:blur 0`, luma only.** `out = in + (Ŷ − Y)`; chroma is untouched and stays the wavelet chain's business.
 - **Profiled.** `σ²(p) = aLum·Y + bLum` at the centre pixel's 3×3 mean, the capture chain's own luma model.
   The `2σ²` subtraction then holds at every tone, which the 8-bit table's constant `σ` cannot.
-- **Patch 5×5, search 21×21**, the table's row for moderate noise, because a high-ISO frame is the only reason to turn this on.
+- **Patch 3×3, search 11×11**, chosen by measurement below; the table's 21×21 / 5×5 row was the plan and is kept measurable.
 - **Control** `denoiseNlm` 0..1 is `k` in `h = k·σ`, so the table's 0.40 sits at mid-slider. Default 0, node off, byte-identical.
 - **With it on, the wavelet chain's luma threshold is overestimated** (its model describes the noise before NLM ran). The panel note and the agent vocabulary say so: NLM takes the grain, keep Luminance at 0 or low, Color and Smoothness still take the blotches.
 
@@ -209,8 +209,30 @@ The fallback, if they do not, is the plain gather at search 11×11 and patch 3×
 2. `orion-bench`, both windows, at 42 MP and at the preview scale, from `Pipeline::setProfiling`. The budget for a slider: preview ≤ 30 ms (it is upstream of every drag and the DAG caches it, so it reruns only when its own value or the white balance moves) and full ≤ 1 s on the settled render.
 3. Dhruv's eye, on frames at ISO ≥ 6400, the §5 recipe with and without `denoiseNlm`.
 
-The decision row then says one of three things: it ships as a slider; it ships with the 11×11 window; or it is removed and this section keeps the numbers.
-Nothing else in this file depends on which.
+### Measured, 2026-10-18
+
+`groupshared` came through Slang to Metal threadgroup memory on the first try, so the fallback was not needed; the kernel takes both windows at run time and the bench measures both on one build.
+
+**Synthetic card** (96×96, grey 0.25, σ 0.02, a period-4 ripple at 6σ in one half), `k = 0.4`:
+
+| Window | Flat noise, before → after | Ripple kept | Wavelet chain at matched removal keeps |
+|---|---|---|---|
+| 11×11 search, 3×3 patch | 0.01908 → 0.00444 | **99.9%** | 85.9% (β 2.0) |
+| 21×21 search, 5×5 patch | 0.01908 → 0.00250 | **99.7%** | 78.0% (β 2.5) |
+
+Both windows keep the texture the chain smooths, which is the whole claim; the large window removes more noise for the same `k`.
+⚠ A perfectly periodic ripple is non-local means' best case, since every period is an exact match; a real wall is not periodic, and the by-eye check in §5 is the honest one.
+
+**Cost**, the two 42.4 MP sample frames, Apple GPU, `Pipeline::setProfiling`:
+
+| Window | Full resolution | Preview graph (1/4 per axis) |
+|---|---|---|
+| 11×11 / 3×3 | 333-344 ms | 19 ms |
+| 21×21 / 5×5 | 2,907-3,143 ms | 149-168 ms |
+
+**Decision: it ships as a slider with the 11×11 / 3×3 window.**
+The published window misses both budgets by five to eight times; the small one meets both.
+`nlm::kPublishedRadius/kPublishedPatch` stay in the header and the bench prints both so the trade is re-measurable, and a background-pass form of the large window remains possible later without touching the kernel.
 
 ---
 
