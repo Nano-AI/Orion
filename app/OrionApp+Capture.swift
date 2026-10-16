@@ -100,7 +100,10 @@ struct CapturePopover: View {
     /// popover nobody opened.
     private var fileRow: [(String, String)] {
         guard let file else { return [] }
-        let bytes = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+        // Through any symlink: a linked shoot folder otherwise reports the
+        // link's own few dozen bytes as the size of a 40 MB raw.
+        let bytes = (try? file.resolvingSymlinksInPath()
+            .resourceValues(forKeys: [.fileSizeKey]))?.fileSize
         let size = bytes.map {
             ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file)
         }

@@ -637,7 +637,8 @@ def sync_edits(s, ctx):
 
 # -- The two steps that need a server of their own -------------------------
 
-def _solo(ctx, current_json: Path, expect_photo: Path | None):
+def _solo(ctx, current_json: Path, expect_photo: Path | None,
+          expect_capture: dict | None = None):
     """A second server with ORION_CURRENT pointed somewhere, because the
     variable is read at startup. `expect_photo` None is the nothing-is-open
     case, where get_stats with no path must fail by name."""
@@ -645,10 +646,14 @@ def _solo(ctx, current_json: Path, expect_photo: Path | None):
     try:
         s = Session(proc)
         s.handshake()
-        photo = s.ask("current_photo").get("photo")
+        current = s.ask("current_photo")
+        photo = current.get("photo")
         want = None if expect_photo is None else str(expect_photo)
         if photo != want:
             return f"current_photo returned {photo}, expected {want}"
+        if expect_capture is not None and current.get("capture") != expect_capture:
+            return (f"current_photo carried capture {current.get('capture')!r}, "
+                    f"expected {expect_capture!r} from current.json")
         if expect_photo is None:
             why = s.refusal("get_stats")
             if "no photo is open" not in why:
@@ -669,9 +674,32 @@ def current_photo_none(s, ctx):
 
 def current_photo_set(s, ctx):
     path = ctx.tmpdir / "current_test.json"
+    # The shape Orion writes since the toolbar learned the capture settings;
+    # the server must hand it through, not rebuild the object without it.
+    capture = {"camera": "Check Camera", "iso": 3200, "shutter": 0.01}
     path.write_text(json.dumps({"photo": str(ctx.raw), "folder": str(ctx.tmpdir),
-                                "updated": "2026-09-14T00:00:00Z"}))
-    return _solo(ctx, path, ctx.raw)
+                                "updated": "2026-09-14T00:00:00Z",
+                                "capture": capture}))
+    return _solo(ctx, path, ctx.raw, capture)
+
+def capture_fields(s, ctx):
+    """get_stats carries what the camera recorded, read through the open
+    engine's own facade call (`orion_engine_info`), not the file a second
+    time - so a red here is the facade, the Swift wrapper or the CLI."""
+    capture = s.ask("get_stats", path=str(ctx.raw)).get("capture")
+    if not isinstance(capture, dict):
+        return f"get_stats has no capture block: {capture!r}"
+    iso, shutter, camera = capture.get("iso"), capture.get("shutter"), capture.get("camera")
+    if not (isinstance(iso, (int, float)) and not isinstance(iso, bool) and iso >= 0):
+        return f"capture.iso={iso!r}, expected a number >= 0"
+    if not (isinstance(shutter, (int, float)) and shutter > 0):
+        return f"capture.shutter={shutter!r}, expected seconds > 0"
+    if not (isinstance(camera, str) and camera.strip()):
+        return f"capture.camera={camera!r}, expected a name"
+    for key, value in capture.items():
+        if value in (0, ""):
+            return f"capture.{key} is {value!r}; an unrecorded field must be absent"
+    ctx.note = f"{camera}, ISO {iso:g}, {shutter:g} s"
 
 # The gate's whole list, in order, and the order is load-bearing: the first
 # six walk one photograph through propose, approve and flag. Adding a step is
@@ -682,5 +710,5 @@ STEPS = [
     propose_edit_reset, propose_composite, propose_composite_rejected,
     get_stats_proposed, get_stats_region, get_proxy_region, detect_faces,
     mask_invert, mask_matte, mask_matte_missing, current_photo_none, current_photo_set,
-    get_edits, denoise_region, detect_subject, sync_edits,
+    get_edits, denoise_region, detect_subject, sync_edits, capture_fields,
 ]

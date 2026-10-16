@@ -314,6 +314,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Agent.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+AgentSync.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Proposal.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Capture.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AssistantProcess.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Assistant.swift
             ${CMAKE_CURRENT_BINARY_DIR}/main.swift
@@ -384,6 +385,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Agent.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+AgentSync.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Proposal.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Capture.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AssistantProcess.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Assistant.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTestsMain.swift

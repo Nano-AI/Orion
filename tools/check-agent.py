@@ -87,6 +87,13 @@ is in play (it works on its own copy and rejects what it proposed):
     the sample may already be clean; both numbers go in the note); and a
     layer carrying denoiseLuma 2 under a kind-2 radial validates and comes
     back in the proposal. research/denoise-masked.md sections 2.4 and 3.
+
+...and what the camera recorded:
+
+26. capture_fields → get_stats carries `capture` with `iso` a number >= 0,
+    `shutter` > 0 seconds and `camera` non-empty, and no field present as
+    0 or "". current_photo_set also writes a `capture` into current.json
+    and requires current_photo to hand it back unchanged.
 """
 
 import shutil

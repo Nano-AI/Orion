@@ -5,7 +5,7 @@ Run it with the other gates:
 
     ./tools/check-screens.py
 
-⚠ **Why this exists.** Three scenes in `app/Screenshot+Checks.swift` are checks
+⚠ **Why this exists.** The first three scenes in `app/Screenshot+Checks.swift` are checks
 rather than pictures — each was written against a named mutation that deleted
 shipped interface with every check in the repository green (decision #125). But
 `--screenshot` is not `--scenario`, and the 42-file sweep only drives
@@ -21,6 +21,8 @@ exited nonzero:
                 so the harness photographs the same thing scrolled as at rest
   render-failed the footer stops drawing `engine.lastFailure` — renders its own
                 control twice in-process and compares, no reference image
+  capture-line  the toolbar's capture slot stops drawing `engine.capture`, or
+                draws something for nil — two captures in-process must differ
 
 A fourth, `versions`, is rendered twice and required to come back byte-identical
 — see `STABLE`. That is a check on the *harness*, not on the panel.
@@ -76,6 +78,9 @@ SCENES = {
         "the footer no longer draws engine.lastFailure — either it renders the "
         "same with a failure planted as without one, or two different messages "
         "render the same frame",
+    "capture-line":
+        "the toolbar no longer draws engine.capture, or draws something when "
+        "there is none",
 }
 
 # Scenes rendered twice and required to come back byte-identical.

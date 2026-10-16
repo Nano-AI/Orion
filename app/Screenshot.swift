@@ -18,7 +18,7 @@ import SwiftUI
 /// than through `MTKView` — AppKit's `cacheDisplay` does not capture a Metal
 /// layer. Canvas-specific geometry stays the viewport suite's job.
 ///
-/// ## ⚠ Three scenes are checks rather than pictures
+/// ## ⚠ Four scenes are checks rather than pictures
 ///
 /// Each was written against a named mutation that deleted shipped interface with
 /// every check in the repository green (decision #125). Two of the three exit
@@ -30,6 +30,7 @@ import SwiftUI
 /// --scene detail-tail    --photo x.ARW   the Detail panel scrolled to its end
 /// --scene render-failed  --photo x.ARW   the status line's failure warning
 /// --scene menu                           the real menu bar, 26 commands
+/// --scene capture-line   --photo x.ARW   the toolbar's capture line (added later; asserts)
 /// ```
 ///
 /// | Scene | Fires when | Exits nonzero |
@@ -37,6 +38,7 @@ import SwiftUI
 /// | `detail-tail` | anything below the fold in Detail is deleted or moved | when nothing overflows the panel column |
 /// | `render-failed` | the footer stops drawing `engine.lastFailure` | no — the frame differs |
 /// | `menu` | a `PhotoCommands` item is deleted or renamed | when a command is missing |
+/// | `capture-line` | the toolbar stops drawing `engine.capture` | yes - see `Screenshot+Checks.swift` |
 ///
 /// ## Where the rest of it lives
 ///
@@ -334,6 +336,11 @@ enum Screenshot {
                           // the toolbar, which no capture can press - the same
                           // seam and reason as `startLibrary`.
                           startMode: o.scene == "gallery" ? .cull : .develop)
+            // `capture` poses the popover, which is a window of its own and
+            // so out of reach of a capture of this one - see `posedPopover`.
+            .overlay(alignment: .top) {
+                if o.scene == "capture" { posedPopover(engine, photo: o.photo) }
+            }
             .frame(width: o.size.width, height: o.size.height)
             .preferredColorScheme(.dark)
 
@@ -353,6 +360,9 @@ enum Screenshot {
         }
         if o.scene == "versions" {
             assertVersionsDoNotShowTheClock(versions)
+        }
+        if o.scene == "capture-line" {
+            assertCaptureLineDrawn(view: view, size: o.size, engine: engine)
         }
 
         let note = "orion: wrote \(o.output) "

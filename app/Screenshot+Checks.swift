@@ -14,8 +14,9 @@ import SwiftUI
 /// | `detail-tail` | anything below the fold in Detail is deleted or moved | when nothing overflows the panel column |
 /// | `render-failed` | the footer stops drawing `engine.lastFailure` | yes — it renders the control itself and compares |
 /// | `menu` | a `PhotoCommands` item is deleted or renamed | when a command is missing |
+/// | `capture-line` | the toolbar stops drawing `engine.capture`, or draws something for nil | yes - two captures must differ, nil must match an empty capture |
 ///
-/// **All three exit nonzero on their own mutation, so `tools/check-screens.py`
+/// **All of them exit nonzero on their own mutation, so `tools/check-screens.py`
 /// can run them as a gate.** `render-failed` was the exception until
 /// 2026-08-07: its oracle was two PNGs and a person, which is to say it ran
 /// nowhere. See `assertFailureLineDrawn`.
@@ -284,6 +285,85 @@ extension Screenshot {
             + "\(abs(failed.count - controlA.count)) bytes of frame against no "
             + "failure, and \(abs(failed.count - other.count)) against a "
             + "different message; two controls agreed at \(controlA.count)\n"
+        FileHandle.standardError.write(Data(note.utf8))
+    }
+
+    // MARK: The capture line
+
+    /// Two captures no sample photograph is likely to carry, differing in
+    /// every field the line prints.
+    static let captureA = CaptureInfo(camera: "Check Camera A", lens: "Check 35mm",
+                                      focalLength: 35, aperture: 1.8,
+                                      shutter: 0.004, iso: 100)
+    static let captureB = CaptureInfo(camera: "Check Camera B", lens: "Check 85mm",
+                                      focalLength: 85, aperture: 8,
+                                      shutter: 1.0 / 30, iso: 6400)
+
+    /// `capture-line`: the toolbar's middle slot draws what `engine.capture`
+    /// holds, and draws nothing - in the same frame - when it holds nothing.
+    ///
+    /// Five layouts of the whole editor, `render-failed`'s shape:
+    ///
+    /// 1. `captureA` twice, which must agree, so the harness is byte-stable on
+    ///    this run before any difference is allowed to mean something.
+    /// 2. `captureB`, which must differ from `captureA`. A toolbar that no
+    ///    longer reads `engine.capture` - the slot deleted, or put back to the
+    ///    camera name alone, which the two also differ in - draws the same.
+    /// 3. nil, which must equal an all-zero capture. Both are "nothing to say",
+    ///    and a slot that prints a placeholder, a dash or a zero for one of
+    ///    them moves bytes.
+    ///
+    /// ⚠ **What it does not pin:** the spelling (the viewport suite's table
+    /// does), which of the three widths `ViewThatFits` chose, that the
+    /// controls either side stay put between nil and a capture, or that the
+    /// popover opens - a popover is a window of its own and out of reach of a
+    /// capture of this one.
+    static func assertCaptureLineDrawn<V: View>(view: V, size: CGSize, engine: Engine) {
+        guard engine.isLoaded else {
+            fail("capture-line needs a photograph: the slot draws nothing "
+                 + "while no photo is open, so every frame would agree. "
+                 + "Pass --photo <file>")
+        }
+        let shipped = engine.capture
+        defer { engine.capture = shipped }
+
+        func frame(_ capture: CaptureInfo?, _ what: String) -> Data {
+            engine.capture = capture
+            guard let png = render(view, size: size) else {
+                fail("the \(what) frame for capture-line produced no image")
+            }
+            return png
+        }
+
+        let a1 = frame(captureA, "first A")
+        let a2 = frame(captureA, "second A")
+        guard a1 == a2 else {
+            fail("two frames with the same capture disagree (\(a1.count) bytes "
+                 + "against \(a2.count)), so this harness is not byte-stable on "
+                 + "this run and a frame-differs check would pass on the noise")
+        }
+
+        let b = frame(captureB, "B")
+        guard a1 != b else {
+            fail("two different captures render the same frame, so the toolbar "
+                 + "is not drawing engine.capture - see CaptureLine in "
+                 + "OrionApp+Capture.swift and the slot in OrionApp+Chrome's toolbar")
+        }
+
+        let none = frame(nil, "nil")
+        let empty = frame(CaptureInfo(), "empty")
+        guard none == empty else {
+            fail("a nil capture and an all-zero one render different frames, so "
+                 + "the slot draws something for one of them - it should draw "
+                 + "the empty label for both")
+        }
+        guard none != a1 else {
+            fail("a nil capture renders the same frame as a full one")
+        }
+
+        let note = "orion: the capture line moves \(abs(a1.count - b.count)) bytes "
+            + "between two captures and \(abs(a1.count - none.count)) against none; "
+            + "two controls agreed at \(a1.count)\n"
         FileHandle.standardError.write(Data(note.utf8))
     }
 

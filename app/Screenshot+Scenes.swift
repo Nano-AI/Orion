@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 /// Every state the interface can be photographed in.
 ///
@@ -134,6 +135,10 @@ extension Screenshot {
             engine.sharpenAmount = 1.2
             engine.sharpenRadius = 1.4
             engine.sharpenMasking = 0.35
+        case "capture", "capture-line":
+            // The toolbar's capture line, and in `capture` the popover behind
+            // it. Exposure only so the canvas under them is legible.
+            engine.exposureEv = 2.6
         case "render-failed":
             // The status line's failure branch. The value itself is planted
             // after the last render, in `run` — a scene applied here is applied
@@ -399,5 +404,27 @@ extension Screenshot {
         catch { fail("could not write \(o.output)") }
         FileHandle.standardError.write(Data("orion: wrote \(o.output) (watermark)\n".utf8))
         exit(0)
+    }
+
+    // ── The capture popover ─────────────────────────────────────────────────
+
+    /// The popover `CaptureLine` opens, drawn in place under the toolbar.
+    ///
+    /// ⚠ **A stand-in for the chrome, not the content.** AppKit puts a popover
+    /// in a window of its own, and `render` captures one window, so the real
+    /// popover cannot appear in this frame. The rows, type and spacing are the
+    /// shipping `CapturePopover`; the background, border and position are this
+    /// harness's approximation of what AppKit draws around it.
+    @ViewBuilder
+    static func posedPopover(_ engine: Engine, photo: String?) -> some View {
+        if let capture = engine.capture {
+            CapturePopover(capture: capture,
+                           file: photo.map { URL(fileURLWithPath: $0) })
+                .fixedSize()
+                .background(Palette.raised, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Palette.line, lineWidth: 1))
+                .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
+                .padding(.top, 50)
+        }
     }
 }
