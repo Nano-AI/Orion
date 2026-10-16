@@ -105,6 +105,12 @@ extension AgentCLI {
             "temperatureK": engine.temperatureK,
             "tint": engine.tint,
         ]
+        // The open engine's own read, not `info` above: this is the block
+        // `current.json` carries for the photograph on the canvas, through the
+        // same facade call, so the two cannot disagree about a field.
+        if let capture = engine.capture {
+            out["capture"] = capture.wireDictionary
+        }
         if let region {
             out["region"] = try regionJSON(engine: engine, region: region)
         }

@@ -45,7 +45,7 @@ case "$verb" in
     if [ -n "$region" ]; then
       regionJSON=',"region":{"luma":0.42,"saturation":0.1,"hue":30,"hueStrength":0.8,"red":0.5,"green":0.4,"blue":0.3,"clippedHigh":0.01,"clippedLow":0,"shading":0.2,"noise":0.01,"frame":{"centerX":0.6,"centerY":0.25,"radiusX":0.25,"radiusY":0.25}}'
     fi
-    echo '{"path":"'"$raw"'","width":100,"height":80,"camera":"Fake","rating":0,"rejected":false,"clipLow":[0,0,0],"clipHigh":[0,0,0],"mean":[0.5,0.5,0.5],"temperatureK":5500,"tint":0'"$regionJSON"'}'
+    echo '{"path":"'"$raw"'","width":100,"height":80,"camera":"Fake","rating":0,"rejected":false,"clipLow":[0,0,0],"clipHigh":[0,0,0],"mean":[0.5,0.5,0.5],"temperatureK":5500,"tint":0,"capture":{"camera":"Fake","lens":"Fake 35mm","focalLength":35,"aperture":1.8,"shutter":0.004,"iso":6400,"captured":"2026-09-14T00:00:00Z"}'"$regionJSON"'}'
     ;;
   faces)
     # One face, in both spaces, so a test can prove detect_faces carries the

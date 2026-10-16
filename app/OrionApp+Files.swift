@@ -30,7 +30,7 @@ extension Editor {
     /// `Proposal.currentJSON` for the pure encoding this wraps.
     func publishCurrentPhoto() {
         if let currentFile {
-            try? Proposal.currentJSON(photo: current).write(to: currentFile, options: .atomic)
+            try? Proposal.currentJSON(photo: current, capture: engine.capture).write(to: currentFile, options: .atomic)
             return
         }
         guard let base = try? FileManager.default.url(
@@ -39,7 +39,7 @@ extension Editor {
         let url = Proposal.currentFileURL(applicationSupport: base)
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? Proposal.currentJSON(photo: current).write(to: url, options: .atomic)
+        try? Proposal.currentJSON(photo: current, capture: engine.capture).write(to: url, options: .atomic)
     }
 
     /// How many photographs the Export sheet will write as a batch: the

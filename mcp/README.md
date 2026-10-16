@@ -23,7 +23,8 @@ cd mcp && npm test        # node --test against test/fake-orion.sh, no GPU neede
 
 `current_photo` reads `~/Library/Application Support/Orion/current.json`
 (path overridable with `ORION_CURRENT`, mainly for tests), which Orion
-writes atomically on every photo change: `{"photo", "folder", "updated"}`.
+writes atomically on every photo change: `{"photo", "folder", "updated",
+"capture"}`.
 Call it with no input to find out what the user has open before asking them
 for a path. If nothing is open, or the file doesn't exist yet, it still
 returns a normal (non-error) result: `{"photo":null,"hint":"open a photo in
@@ -56,6 +57,12 @@ it otherwise. Given that:
    fields come back whole for a read-modify-write.
    Do not send an empty `propose_edit` to find out the settings - that
    writes a proposal the photographer then sees.
+   `get_stats` (and `current_photo`) also carry `capture`, what the camera
+   recorded: `{camera, lens, focalLength, aperture, shutter, iso, captured}`.
+   `focalLength` is in mm, `aperture` the f-number, `shutter` in seconds
+   (`0.004` is 1/250), `captured` ISO 8601; a field the file does not record
+   is absent rather than zero.
+   Read `capture.iso` before deciding how hard to denoise.
 3. `propose_edit` **accumulates**: a second call merges onto the existing
    proposed file, keeping everything the first call set. Pass `reset: true`
    to start over from the photo's current state instead.

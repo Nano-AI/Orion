@@ -116,6 +116,10 @@ enum Proposal {
         var photo: String?
         var folder: String?
         var updated: String
+        /// What the camera recorded for `photo` - the same block `get_stats`
+        /// returns, so an agent can read the ISO before it decides how hard to
+        /// denoise without decoding anything. Absent with no photo.
+        var capture: CaptureInfo.Wire?
     }
 
     /// `~/Library/Application Support/Orion/current.json`'s content — see
@@ -123,10 +127,12 @@ enum Proposal {
     /// Application Support and calls this. `now` is a parameter so the
     /// encoding is testable without the clock moving between assertion and
     /// call.
-    static func currentJSON(photo: URL?, now: Date = Date()) -> Data {
+    static func currentJSON(photo: URL?, capture: CaptureInfo? = nil,
+                            now: Date = Date()) -> Data {
         let doc = CurrentPhoto(photo: photo?.path,
                                 folder: photo?.deletingLastPathComponent().path,
-                                updated: iso8601.string(from: now))
+                                updated: iso8601.string(from: now),
+                                capture: photo == nil ? nil : capture?.wire)
         return (try? JSONEncoder().encode(doc)) ?? Data()
     }
 

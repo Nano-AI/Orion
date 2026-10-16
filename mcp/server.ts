@@ -89,7 +89,7 @@ async function resolve(given: string | undefined, key: "photo" | "folder"): Prom
 // the vocabulary `Orion --agent sync --groups` takes.
 const SYNC_GROUPS = ["whiteBalance", "light", "color", "curve", "detail", "effects", "masks"] as const;
 
-const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`; \`get_edits\` reads the current or proposed settings without writing anything. All values are absolute, never deltas. Local adjustments run three to four times a global's at the top of the scale: a blown sky near luma 0.98 barely moves under a small masked exposure pull, so probe strong and ease off. Numbers before pixels: \`get_stats\` with \`region\` reads a patch (luma, clippedHigh, shading, noise) for a fraction of a proxy's cost, and \`detect_faces\` places a radial mask on a portrait. Judge sharpening, skin and mask edges with \`get_proxy\`'s \`region\`, never a whole 2048 px frame. \`detect_subject\` lifts the subject, a person or the sky into a matte for a kind-4 mask row, and \`sync_edits\` carries one approved photo's look onto the rest of a shoot as proposals. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked.`;
+const ORION_INSTRUCTIONS = `Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one \`current_photo\` returns, and every tool's \`path\` defaults to it, so never ask which file. Start any edit with \`describe_edits\` and \`get_stats\`; \`get_edits\` reads the current or proposed settings without writing anything. All values are absolute, never deltas. Local adjustments run three to four times a global's at the top of the scale: a blown sky near luma 0.98 barely moves under a small masked exposure pull, so probe strong and ease off. Numbers before pixels: \`get_stats\` with \`region\` reads a patch (luma, clippedHigh, shading, noise) for a fraction of a proxy's cost, and \`detect_faces\` places a radial mask on a portrait. Judge sharpening, skin and mask edges with \`get_proxy\`'s \`region\`, never a whole 2048 px frame. \`detect_subject\` lifts the subject, a person or the sky into a matte for a kind-4 mask row, and \`sync_edits\` carries one approved photo's look onto the rest of a shoot as proposals. Read \`capture.iso\` from \`get_stats\` or \`current_photo\` before deciding how hard to denoise. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after \`propose_edit\` say what you changed and stop; do not call \`approve_edit\` unless asked.`;
 
 export function createServer() {
   const server = new McpServer(
@@ -102,7 +102,9 @@ export function createServer() {
     {
       description:
         "Returns the photo currently open in Orion (from current.json): {photo, folder, " +
-        "updated}. Call this to find out what the user has open before asking them for a path " +
+        "updated, capture}. capture is what the camera recorded - {camera, lens, focalLength " +
+        "(mm), aperture (f-number), shutter (seconds, 0.004 = 1/250), iso, captured (ISO " +
+        "8601)} - with any field the file does not record left out. Call this to find out what the user has open before asking them for a path " +
         "— every other tool's path/folder argument already defaults to this. Cheap, about " +
         "20-30 tokens.",
       inputSchema: {},
@@ -170,6 +172,9 @@ export function createServer() {
         "centerY, radiusX, radiusY}, the same rectangle in FRAME space (where masks live) as " +
         "the ellipse covering it - paste it straight into a kind-2 radial, or aim a kind-1 " +
         "gradient's centerX/centerY at it; never convert a display region to a mask by hand. " +
+        "The answer also carries `capture`: {camera, lens, focalLength (mm), aperture " +
+        "(f-number), shutter (seconds, 0.004 = 1/250), iso, captured (ISO 8601)}, with any " +
+        "field the file does not record left out - read iso before choosing denoise strength. " +
         "path is optional; defaults to the photo open in Orion.",
       inputSchema: {
         path: z.string().optional(),

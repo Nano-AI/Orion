@@ -63,6 +63,40 @@ test("describe_edits returns keys containing temperatureK with absolute true", a
   assert.equal(temperatureK.max, 50000);
 });
 
+test("get_stats passes the capture block through untouched", async () => {
+  const result = await client.callTool({ name: "get_stats", arguments: { path: "/x.arw" } });
+  const content = result.content as Array<{ type: string; text?: string }>;
+  const stats = JSON.parse(content[0].text!);
+  assert.deepEqual(stats.capture, {
+    camera: "Fake",
+    lens: "Fake 35mm",
+    focalLength: 35,
+    aperture: 1.8,
+    shutter: 0.004,
+    iso: 6400,
+    captured: "2026-09-14T00:00:00Z",
+  });
+});
+
+test("current_photo carries capture from current.json", async () => {
+  const file = path.join(tmpDir, "current-capture.json");
+  const current = {
+    photo: "/shoot/a.arw",
+    folder: "/shoot",
+    updated: "2026-09-14T00:00:00Z",
+    capture: { camera: "Fake", iso: 3200, shutter: 0.01 },
+  };
+  await fs.writeFile(file, JSON.stringify(current));
+  process.env.ORION_CURRENT = file;
+  try {
+    const result = await client.callTool({ name: "current_photo", arguments: {} });
+    const content = result.content as Array<{ type: string; text?: string }>;
+    assert.deepEqual(JSON.parse(content[0].text!).capture, current.capture);
+  } finally {
+    delete process.env.ORION_CURRENT;
+  }
+});
+
 test("get_stats returns text whose JSON has width === 100", async () => {
   const result = await client.callTool({ name: "get_stats", arguments: { path: "/x.arw" } });
   const content = result.content as Array<{ type: string; text?: string }>;
