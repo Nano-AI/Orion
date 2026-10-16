@@ -728,6 +728,11 @@ const char* orion_engine_camera(const OrionEngine* engine);
  * at all — which is every manual lens — are different problems. */
 const char* orion_engine_lens(const OrionEngine* engine);
 
+/* Everything the open file's metadata records - the same fields
+ * orion_read_info returns, without reading the file again. Zeroed and empty
+ * when nothing is open. */
+OrionStatus orion_engine_info(const OrionEngine* engine, OrionRawInfo* out);
+
 /* The lens database, for a picker.
  *
  * Indices are stable for the life of the process: the database is parsed once

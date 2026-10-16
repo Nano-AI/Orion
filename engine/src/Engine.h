@@ -134,7 +134,12 @@ public:
     /// both to say anything useful: "no profile for the 24-70 your file names"
     /// and "your file names no lens at all, which every manual lens does" are
     /// different problems with different answers, and the panel said neither.
-    [[nodiscard]] const std::string& photoLens() const noexcept { return photoLens_; }
+    [[nodiscard]] const std::string& photoLens() const noexcept { return info_.lens; }
+
+    /// Everything the open file's metadata records - camera, lens, exposure,
+    /// focal length, capture time - read once on open. All zero and empty
+    /// before the first open.
+    [[nodiscard]] const raw::RawInfo& info() const noexcept { return info_; }
 
     /// Choose a lens profile **by hand**, from a name `LensDatabase::names()`
     /// offered. Empty restores the EXIF match, which may itself be nothing.
@@ -189,10 +194,11 @@ private:
     std::unique_ptr<pipe::DevelopPipeline> develop_;
     std::unique_ptr<pipe::DevelopPipeline> preview_;
     std::string                            camera_;
-    std::string                            photoLens_;
     std::string                            lensChoice_;
-    float                                  photoFocal_ = 0.0f;
-    float                                  photoAperture_ = 0.0f;
+    /// ⚠ Kept whole so a hand-chosen lens can be re-interpolated at this
+    /// shot's own focal length and aperture, and so the interface can show the
+    /// capture settings without reading the file a third time.
+    raw::RawInfo                           info_;
     /// The RAW this was opened from. Export lifts its EXIF, so the file
     /// written carries the exposure, lens and date the picture was taken with.
     std::string                            sourcePath_;

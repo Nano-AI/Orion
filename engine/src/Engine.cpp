@@ -34,16 +34,10 @@ void Engine::openRaw(const std::string& path) {
 
     // The lens name lives in the metadata rather than the mosaic, so it takes a
     // second read of the file — cheap next to the decode that just happened.
-    const auto info = raw::readInfo(path);
-    photoLens_ = info.lens;
-    // ⚠ Kept so a hand-chosen lens can be re-interpolated at this shot's own
-    // focal length and aperture. Re-reading the file to pick a lens would be a
-    // second decode for two numbers already in hand.
-    photoFocal_ = info.focalLength;
-    photoAperture_ = info.aperture;
+    info_ = raw::readInfo(path);
     // A choice belongs to the photograph that was open, not to the next one.
     lensChoice_.clear();
-    lensProfile_ = lensDatabase().lookup(info.lens, info.focalLength, info.aperture);
+    lensProfile_ = lensDatabase().lookup(info_.lens, info_.focalLength, info_.aperture);
 
     // One body for both kinds of source: every operation below — decimate,
     // canReload, reload, the pipeline constructor — is overloaded for the
@@ -115,11 +109,11 @@ bool Engine::setLensChoice(const std::string& makerModel) {
     if (makerModel.empty()) {
         // Back to what the file says, which may be nothing at all.
         lensChoice_.clear();
-        lensProfile_ = lensDatabase().lookup(photoLens_, photoFocal_, photoAperture_);
+        lensProfile_ = lensDatabase().lookup(info_.lens, info_.focalLength, info_.aperture);
         return true;
     }
 
-    const auto picked = lensDatabase().lookupExact(makerModel, photoFocal_, photoAperture_);
+    const auto picked = lensDatabase().lookupExact(makerModel, info_.focalLength, info_.aperture);
     if (!picked.found) return false;
 
     lensChoice_ = makerModel;

@@ -594,20 +594,28 @@ OrionStatus orion_engine_histogram(const OrionEngine* engine,
     });
 }
 
+namespace {
+/// One copy of the field mapping for both doors: the file on disk and the
+/// photograph already open.
+void fillInfo(const orion::raw::RawInfo& info, OrionRawInfo* out) noexcept {
+    *out = OrionRawInfo{};
+    out->width  = info.width;
+    out->height = info.height;
+    copyInto(out->camera, sizeof out->camera, info.camera);
+    copyInto(out->lens, sizeof out->lens, info.lens);
+    out->iso          = info.isoSpeed;
+    out->shutter      = info.shutter;
+    out->aperture     = info.aperture;
+    out->focal_length = info.focalLength;
+    out->timestamp    = info.timestamp;
+}
+}  // namespace
+
 OrionStatus orion_read_info(const char* path, OrionRawInfo* out) {
     if (path == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
     return guard(nullptr, [&]() -> OrionStatus {
         const auto info = orion::raw::readInfo(path);
-        *out = OrionRawInfo{};
-        out->width  = info.width;
-        out->height = info.height;
-        copyInto(out->camera, sizeof out->camera, info.camera);
-        copyInto(out->lens, sizeof out->lens, info.lens);
-        out->iso          = info.isoSpeed;
-        out->shutter      = info.shutter;
-        out->aperture     = info.aperture;
-        out->focal_length = info.focalLength;
-        out->timestamp    = info.timestamp;
+        fillInfo(info, out);
         return ORION_OK;
     });
 }
@@ -783,6 +791,14 @@ const char* orion_engine_camera(const OrionEngine* engine) {
 
 const char* orion_engine_lens(const OrionEngine* engine) {
     return engine ? engine->impl.photoLens().c_str() : "";
+}
+
+OrionStatus orion_engine_info(const OrionEngine* engine, OrionRawInfo* out) {
+    if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        fillInfo(engine->impl.info(), out);
+        return ORION_OK;
+    });
 }
 
 namespace {
