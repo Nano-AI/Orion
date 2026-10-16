@@ -256,6 +256,12 @@ struct Adjustments {
     /// before it existed); 1 is BayesShrink's `sigma^2 / sigma_x` shape under
     /// the same strength. research/denoise-masked.md §1.
     float denoiseDetail = 0.0f;   // 0..1
+    /// Non-local means on luminance, before the wavelet chain: `k` in
+    /// `h = k·sigma`, so 0.4 is the IPOL table's own value. 0 is off and
+    /// byte-identical. With it on, the wavelet chain's luma threshold is
+    /// overestimated (its model describes the noise before this ran), so
+    /// Luminance is usually left at zero. research/high-iso.md §4.
+    float denoiseNlm = 0.0f;      // 0..1
 
     /// How much of the creative LUT to apply, 0..1. The LUT itself is not an
     /// adjustment — it is a file, set through `setCreativeLut`.

@@ -239,6 +239,10 @@ typedef struct OrionAdjustments {
      * rendered with, 1 is BayesShrink's shape under the same strength.
      * research/denoise-masked.md section 1. */
     float denoise_detail;  /* 0..1, 0 is bit-identical to before */
+    /* Non-local means on luminance before the wavelet chain: k in h = k*sigma,
+     * 0.4 being the published value. 0 is off and byte-identical.
+     * research/high-iso.md section 4. */
+    float denoise_nlm;     /* 0..1 */
 
     /* How much of the loaded creative LUT to apply, 0..1. The LUT itself is
      * not an adjustment — see orion_engine_load_lut. Zero is byte-identical to

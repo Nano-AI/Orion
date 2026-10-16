@@ -47,6 +47,7 @@ int main() {
     testDenoiseDetailGpu();
     testDenoiseDetailZeroIsShippedGpu();
     testDenoiseMaskedGpu();
+    testNlmGpu();
     testHighlightRecoveryGpu();
     testGradeOffsets();
     testLensGpu();

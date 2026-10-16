@@ -127,6 +127,7 @@ void testDenoiseColorOnlyGpu();
 void testDenoiseDetailGpu();
 void testDenoiseDetailZeroIsShippedGpu();
 void testDenoiseMaskedGpu();
+void testNlmGpu();
 void testHighlightRecoveryGpu();
 void testLinearizeClipsToWhite();
 void testGradeOffsets();

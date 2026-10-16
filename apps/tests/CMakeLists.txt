@@ -15,6 +15,7 @@ add_executable(orion-tests
     tests_perspective.cpp
     tests_tone.cpp
     tests_denoise.cpp
+    tests_nlm.cpp
     tests_grade.cpp
     tests_linear.cpp
     tests_effects.cpp

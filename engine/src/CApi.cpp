@@ -189,6 +189,7 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.denoiseLuma   = adj->denoise_luma;
     a.denoiseColor = adj->denoise_color;
     a.denoiseDetail = std::clamp(adj->denoise_detail, 0.0f, 1.0f);
+    a.denoiseNlm    = std::clamp(adj->denoise_nlm, 0.0f, 1.0f);
 
     a.curve.master = toChannel(adj->curve_master);
     a.curve.red    = toChannel(adj->curve_red);

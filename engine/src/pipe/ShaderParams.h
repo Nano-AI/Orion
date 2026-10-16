@@ -910,6 +910,19 @@ struct AtrousShrink {
 };
 static_assert(sizeof(AtrousShrink) == 48);
 
+/// Non-local means on luminance — research/high-iso.md §4, the Slang
+/// `NlmParams`. The two windows are runtime so the bench can measure both.
+struct Nlm {
+    std::uint32_t size[2];
+    float noiseA;
+    float noiseB;
+    float k;              // h = k·σ
+    std::int32_t  radius; // search half-width, ≤ 10
+    std::int32_t  patch;  // patch half-width, ≤ 2
+    std::int32_t  _pad;
+};
+static_assert(sizeof(Nlm) == 32);
+
 /// The masked chain's per-pixel strengths. Mirrors DenoiseFieldParams in
 /// denoise_field.slang; research/denoise-masked.md §2.1.
 struct DenoiseField {

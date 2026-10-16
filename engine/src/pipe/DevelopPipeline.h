@@ -234,6 +234,14 @@ public:
     /// Switching reallocates two textures and re-renders them, so it belongs
     /// around an export and nowhere near a slider.
     void setWideOutput(bool wide);
+
+    /// The non-local means window: search half-width and patch half-width,
+    /// the published 10/2 by default. For the bench, which measures the
+    /// 11x11/3x3 variant beside it (research/high-iso.md §4); the next
+    /// `apply` re-pushes the node.
+    void setNlmWindow(int radius, int patch) noexcept {
+        nlmRadius_ = radius; nlmPatch_ = patch; nlmWindowMoved_ = true;
+    }
     [[nodiscard]] bool wideOutput() const noexcept { return wideOutput_; }
 
     /// Frame pixels per pixel of this graph: 1 for the full render, and the
@@ -474,6 +482,12 @@ private:
     /// m_c: what linearize multiplies each camera channel by under this white
     /// balance, which is what both chains scale the fitted variance by.
     [[nodiscard]] std::array<float, 3> denoiseMultipliers(const Adjustments&) const;
+    /// Non-local means on luminance, ahead of the wavelet chain
+    /// (research/high-iso.md §4). Window held here so the bench can measure
+    /// the published 21x21/5x5 against 11x11/3x3 on one build.
+    int nNlm_ = -1;
+    int nlmRadius_ = 10, nlmPatch_ = 2;
+    bool nlmWindowMoved_ = false;
     int nAtrousBlur_[kDenoiseScales]{-1, -1, -1, -1};
     int nAtrousShrink_[kDenoiseScales]{-1, -1, -1, -1};
     raw::NoiseProfile noise_{};

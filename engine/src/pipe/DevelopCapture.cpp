@@ -185,14 +185,21 @@ void DevelopPipeline::buildCaptureNodes() {
     // shrunk detail. Reconstruction is exact when nothing is shrunk:
     //
     //     I = c_J + Σ_j w_j,   w_j = c_j − c_{j+1}
+    // Non-local means on luminance ahead of the chain (research/high-iso.md
+    // §4): similar pixels rather than nearby ones, with the same per-pixel
+    // σ. First input is hl:fill, so disabled it resolves straight past and
+    // the chain below reads exactly what it always read.
+    nNlm_ = pipeline_.add({"denoise:nlm", "nlmLuma", {nHlFill_},
+                           PixelFormat::RGBA16Float, {}});
+
     for (int j = 0; j < kDenoiseScales; ++j) {
-        const int input = (j == 0) ? nHlFill_ : nAtrousBlur_[j - 1];
+        const int input = (j == 0) ? nNlm_ : nAtrousBlur_[j - 1];
         nAtrousBlur_[j] = pipeline_.add({"denoise:blur " + std::to_string(j),
                                          "atrousBlur", {input},
                                          PixelFormat::RGBA16Float, {}});
     }
     for (int j = kDenoiseScales - 1; j >= 0; --j) {
-        const int fine   = (j == 0) ? nHlFill_ : nAtrousBlur_[j - 1];
+        const int fine   = (j == 0) ? nNlm_ : nAtrousBlur_[j - 1];
         const int coarse = nAtrousBlur_[j];
         // The coarsest scale accumulates onto the residual itself; every finer
         // one accumulates onto the scale below it.
@@ -693,19 +700,41 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
         }
     }
 
+    // ── Non-local means, ahead of the chain (research/high-iso.md §4) ────
+    const bool wbMoved = first ||
+        adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
+        adj.wb.tint != lastAdj_.wb.tint;
+    const bool nlm = noise_.measured && adj.denoiseNlm > 0.0f;
+    const bool nlmMoved = first || nlmWindowMoved_ ||
+        adj.denoiseNlm != lastAdj_.denoiseNlm || wbMoved;
+    if (nlmMoved) pipeline_.setEnabled(nNlm_, nlm);
+
+    // The model was fitted on the mosaic, before white balance. Linearize
+    // multiplies channel c by m_c, so its variance is multiplied by m_c².
+    // Luminance is a weighted sum of independent channels, so its variance
+    // is the weight-squared sum of theirs. Both the chain and the non-local
+    // means read these two numbers.
+    const auto m = denoiseMultipliers(adj);
+    // Rec.2020 luminance weights, matching the shaders.
+    constexpr float wR = 0.2627f, wG = 0.6780f, wB = 0.0593f;
+    const float aLum = noise_.a * (wR * wR * m[0] + wG * wG * m[1] + wB * wB * m[2]);
+    const float bLum = noise_.b * (wR * wR * m[0] * m[0] + wG * wG * m[1] * m[1] +
+                                   wB * wB * m[2] * m[2]);
+
+    if (nlm && nlmMoved) {
+        params::Nlm np{};
+        np.size[0] = width_;
+        np.size[1] = height_;
+        np.noiseA = aLum;
+        np.noiseB = bLum;
+        np.k = adj.denoiseNlm;
+        np.radius = nlmRadius_;
+        np.patch = nlmPatch_;
+        pipeline_.setParams(nNlm_, &np, sizeof np);
+    }
+    nlmWindowMoved_ = false;
+
     if (denoising && denoiseMoved) {
-        // The model was fitted on the mosaic, before white balance. Linearize
-        // multiplies channel c by m_c, so its variance is multiplied by m_c².
-        // Luminance is a weighted sum of independent channels, so its variance
-        // is the weight-squared sum of theirs.
-        const auto m = denoiseMultipliers(adj);
-
-        // Rec.2020 luminance weights, matching the shader.
-        constexpr float wR = 0.2627f, wG = 0.6780f, wB = 0.0593f;
-        const float aLum = noise_.a * (wR * wR * m[0] + wG * wG * m[1] + wB * wB * m[2]);
-        const float bLum = noise_.b * (wR * wR * m[0] * m[0] + wG * wG * m[1] * m[1] +
-                                       wB * wB * m[2] * m[2]);
-
         for (int j = 0; j < kDenoiseScales; ++j) {
             params::AtrousShrink shrink{};
             shrink.size[0] = width_;
