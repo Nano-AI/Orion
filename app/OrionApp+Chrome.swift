@@ -100,10 +100,7 @@ extension Editor {
             .overlay(RoundedRectangle(cornerRadius: 5).stroke(Palette.line, lineWidth: 1))
             .help("Open a photo or a folder")
 
-            Text(engine.isLoaded ? engine.camera : "")
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.dim)
-                .frame(maxWidth: .infinity)
+            captureLine
 
             // ── Looking ──────────────────────────────────────────────────
             HStack(spacing: 7) {

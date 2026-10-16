@@ -204,7 +204,7 @@ struct GalleryView: View {
                 .lineLimit(1)
         }
         .contentShape(Rectangle())
-        .help(photo.name)
+        .help(photo.tooltip)
         // Two clicks before one: with the order reversed the double never
         // fires, because the single wins both rounds.
         .onTapGesture(count: 2) { onOpen(photo.url) }

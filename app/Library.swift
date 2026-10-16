@@ -41,6 +41,11 @@ final class Library {
         mutating func apply(_ marks: PhotoIndex.Marks) {
             rating = marks.rating; rejected = marks.rejected; colorLabel = marks.label
         }
+
+        /// The file name, and the exposure under it when the index knows one.
+        var tooltip: String {
+            CaptureInfo.tooltip(name: name, aperture: aperture, shutter: shutter, iso: iso)
+        }
     }
 
     enum Filter: String, CaseIterable, Identifiable {

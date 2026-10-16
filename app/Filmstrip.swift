@@ -307,7 +307,7 @@ struct Filmstrip: View {
         .frame(width: frameWidth)
         .background(Palette.filmBase)
         .contentShape(Rectangle())
-        .help(photo.name)
+        .help(photo.tooltip)
         .contextMenu {
             let urls = scope(photo.url)
             // Named with the count when it is a group, because "Reject" over a

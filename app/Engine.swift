@@ -69,6 +69,10 @@ final class Engine {
     /// had neither: the no-profile case had no `else` at all, so a photograph
     /// whose lens was not found showed bare sliders and no reason.
     var photoLensName = ""
+
+    /// What the camera recorded for the open photo - exposure, lens, time,
+    /// size. Nil until a photo opens.
+    var capture: CaptureInfo?
     var imageWidth: UInt32 = 0
     var imageHeight: UInt32 = 0
 

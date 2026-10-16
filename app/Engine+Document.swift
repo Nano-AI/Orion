@@ -82,6 +82,8 @@ extension Engine {
         imageHeight = h
         camera = String(cString: orion_engine_camera(handle))
         photoLensName = String(cString: orion_engine_lens(handle))
+        var info = OrionRawInfo()
+        capture = orion_engine_info(handle, &info) == ORION_OK ? CaptureInfo(info) : nil
         // An answer about the photograph being left. `MatteStore.restore` fills
         // it again for the one arriving.
         missingMattes = []
@@ -383,5 +385,25 @@ extension Engine {
         out.reserveCapacity(n)
         for i in 0..<n { out.append(String(cString: orion_lens_name_at(Int32(i)))) }
         return out
+    }
+}
+
+extension CaptureInfo {
+    /// The facade's fixed C buffers and seconds-since-1970 as the Swift value.
+    /// Here rather than in `CaptureInfo.swift` so that file stays free of the
+    /// bridging header and compiles into the viewport suite.
+    init(_ c: OrionRawInfo) {
+        func string<T>(_ tuple: T) -> String {
+            withUnsafeBytes(of: tuple) { bytes in
+                String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+            }
+        }
+        self.init(camera: string(c.camera).trimmingCharacters(in: .whitespaces),
+                  lens: string(c.lens).trimmingCharacters(in: .whitespaces),
+                  focalLength: c.focal_length, aperture: c.aperture,
+                  shutter: c.shutter, iso: c.iso,
+                  captured: c.timestamp > 0
+                      ? Date(timeIntervalSince1970: Double(c.timestamp)) : nil,
+                  width: c.width, height: c.height)
     }
 }

@@ -93,10 +93,8 @@ extension Editor {
 
     private func exposureLine(_ c: HdrMergeFlow.Candidate) -> String {
         guard c.shutter > 0, c.iso > 0 else { return "no exposure data" }
-        let shutter = c.shutter >= 1
-            ? String(format: "%.0fs", c.shutter)
-            : String(format: "1/%.0f", 1 / c.shutter)
-        return String(format: "%@  f/%.1f  ISO %.0f", shutter, c.aperture, c.iso)
+        return CaptureInfo(aperture: c.aperture, shutter: c.shutter, iso: c.iso)
+            .exposureLine
     }
 
     private func runHdrMerge(_ candidates: [HdrMergeFlow.Candidate]) {

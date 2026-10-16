@@ -18,6 +18,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Canvas.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Tools.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Files.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/OrionApp+Capture.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Light.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/DevelopPanels+Color.swift
@@ -86,6 +87,7 @@ set(SWIFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Sidecar.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/Proposal.swift
+    ${CMAKE_CURRENT_SOURCE_DIR}/CaptureInfo.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/ProposalWatcher.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/PhotoSelection.swift
     ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
@@ -276,6 +278,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Proposal.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CaptureInfo.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
@@ -346,6 +349,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/PhotoIndex.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Autosave.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/Proposal.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/CaptureInfo.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/GalleryLayout.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/TrashPlan.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/AgentCLI.swift
