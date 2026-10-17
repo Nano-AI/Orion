@@ -153,6 +153,7 @@ struct Preset: Codable, Identifiable, Equatable {
             out.denoiseLuma = state.denoiseLuma
             out.denoiseColor = state.denoiseColor
             out.denoiseDetail = state.denoiseDetail
+            out.denoiseNlm = state.denoiseNlm
             out.lensDistortion = state.lensDistortion
             out.lensVignette = state.lensVignette
             out.lensCaRed = state.lensCaRed

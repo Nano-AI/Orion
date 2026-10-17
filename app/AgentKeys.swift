@@ -92,6 +92,16 @@ enum AgentKeys {
                 + "before it was rendered with, 1 is BayesShrink's shape under the same "
                 + "denoiseLuma strength. It only ever smooths less, never more. Try 0.5 "
                 + "on rock and fabric, then re-read noise on a flat patch"),
+        // research/high-iso.md §4.
+        "denoiseNlm": Spec(
+            unit: "unitless", range: 0...1,
+            note: "non-local means on luminance, run before the wavelet chain: "
+                + "averages pixels whose 5x5 neighbourhoods match, so fine periodic "
+                + "texture survives a removal that denoiseLuma would smooth. k in "
+                + "h = k*sigma; 0.4 is the published value. With it on, keep "
+                + "denoiseLuma at 0 or low (the chain's threshold is overestimated "
+                + "behind it); denoiseColor still takes the colour blotches. A frame "
+                + "above ISO 3200 (capture.iso) is the reason to reach for it"),
         "lutStrength": Spec(unit: "unitless", range: 0...1),          // :98
         "fusion": Spec(unit: "unitless", range: 0...1),                // :106
         "grainAmount": Spec(unit: "unitless", range: 0...0.06),        // :114

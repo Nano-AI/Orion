@@ -95,7 +95,7 @@ enum Proposal {
             "hueShift": "Color mixer hue", "satShift": "Color mixer saturation",
             "lumShift": "Color mixer luminance", "curve": "Tone curve",
             "denoiseLuma": "Luminance noise", "denoiseColor": "Color noise",
-            "denoiseDetail": "Noise detail",
+            "denoiseDetail": "Noise detail", "denoiseNlm": "Non-local noise",
             "sharpenAmount": "Sharpening", "sharpenRadius": "Sharpening radius",
             "sharpenMasking": "Sharpening masking", "rotateQuarters": "Rotation",
             "straightenDeg": "Straighten", "cropX": "Crop", "cropY": "Crop",

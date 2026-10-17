@@ -97,6 +97,7 @@ enum DevelopDiff {
         unverbed("denoiseLuma", a.denoiseLuma, b.denoiseLuma)
         unverbed("denoiseColor", a.denoiseColor, b.denoiseColor)
         unverbed("denoiseDetail", a.denoiseDetail, b.denoiseDetail)
+        unverbed("denoiseNlm", a.denoiseNlm, b.denoiseNlm)
         unverbed("lensDistortion", a.lensDistortion, b.lensDistortion)
         unverbed("lensVignette", a.lensVignette, b.lensVignette)
         unverbed("lensCaRed", a.lensCaRed, b.lensCaRed)

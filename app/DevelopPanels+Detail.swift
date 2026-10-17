@@ -13,12 +13,19 @@ extension Editor {
                  + "rather than a fixed amount. Detail backs the threshold off where "
                  + "the picture has more texture than noise, so rock and fabric keep "
                  + "their grain while flat areas still clean up; 0 is the threshold "
-                 + "every photograph so far was rendered with.") {
+                 + "every photograph so far was rendered with. Non-local averages pixels "
+                 + "whose neighbourhoods match instead of pixels that are merely near, "
+                 + "so fabric and brick keep their weave through a removal Luminance "
+                 + "would smooth; 0.4 is the published strength, and with it on "
+                 + "Luminance is usually best left at zero.") {
             slider("Luminance", $engine.denoiseLuma, 0...4, "", 2, resetsTo: engine.defaults.denoiseLuma)
             slider("Color", $engine.denoiseColor, 0...4, "", 2, resetsTo: engine.defaults.denoiseColor)
             // research/denoise-masked.md §1. Luma only: chroma keeps the fixed
             // threshold, so this sits under both but changes only the first.
             slider("Detail", $engine.denoiseDetail, 0...1, "", 2, resetsTo: engine.defaults.denoiseDetail)
+            // research/high-iso.md §4. Similar pixels rather than nearby ones;
+            // with it on, Luminance is usually left at zero.
+            slider("Non-local", $engine.denoiseNlm, 0...1, "", 2, resetsTo: engine.defaults.denoiseNlm)
         }
         section("Spots", info: "Turn on Place spots, then drag on the photo: press where the "
                + "dust is and pull to choose what covers it. Drag either circle "

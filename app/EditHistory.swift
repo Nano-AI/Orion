@@ -449,6 +449,10 @@ struct DevelopState: Equatable, Codable {
     /// 0 is the fixed threshold every photograph before it was rendered with.
     /// research/denoise-masked.md §1.
     var denoiseDetail: Float
+    /// Non-local means on luminance, `k` in `h = k·σ`, 0..1; 0 is off and
+    /// what every sidecar before 2026-10-18 was rendered with.
+    /// research/high-iso.md §4.
+    var denoiseNlm: Float
     var lutStrength: Float
     /// Which space `maskComponents`' spatial numbers are in: 0 is the legacy
     /// display convention (normalized against the crop this state also
@@ -565,7 +569,7 @@ extension DevelopState {
             highlightRecovery: 0,
             gradeShadow: [0, 0, 0], gradeMidtone: [0, 0, 0],
             gradeHighlight: [0, 0, 0], gradeBalance: 0,
-            denoiseLuma: 0, denoiseColor: 0, denoiseDetail: 0,
+            denoiseLuma: 0, denoiseColor: 0, denoiseDetail: 0, denoiseNlm: 0,
             lutStrength: 1,
             maskSpace: 1,
             maskComponents: [],
@@ -604,7 +608,7 @@ extension DevelopState {
         "lensChoice",
         "highlightRecovery",
         "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance",
-        "denoiseLuma", "denoiseColor", "denoiseDetail", "lutStrength",
+        "denoiseLuma", "denoiseColor", "denoiseDetail", "denoiseNlm", "lutStrength",
         "maskSpace", "maskComponents", "maskRefine", "spots", "layers",
         "localTintAxis",
         "fusion", "dehaze", "clarity",
@@ -638,7 +642,7 @@ extension DevelopState {
         case perspectiveVertical, perspectiveHorizontal, perspectiveAspect
         case cropX, cropY, cropW, cropH
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue, lensChoice
-        case highlightRecovery, denoiseLuma, denoiseColor, denoiseDetail
+        case highlightRecovery, denoiseLuma, denoiseColor, denoiseDetail, denoiseNlm
         case gradeShadow, gradeMidtone, gradeHighlight, gradeBalance
         case maskSpace
         case maskComponents, localExposureEv, maskRefine, spots
@@ -725,6 +729,7 @@ extension DevelopState {
         // Absent from every sidecar before 2026-10-17, and 0 is what those
         // photographs were rendered with.
         denoiseDetail = float(.denoiseDetail) ?? denoiseDetail
+        denoiseNlm = float(.denoiseNlm) ?? denoiseNlm
         lutStrength = float(.lutStrength) ?? lutStrength
         // ⚠ The new key wins when present, and the legacy scalars fill layer 1
         // when it is not. A sidecar written by a newer build carries both,

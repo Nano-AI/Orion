@@ -281,6 +281,9 @@ final class Engine {
     /// How far the luma threshold backs off where texture exceeds noise, 0..1.
     /// 0 is the fixed threshold; research/denoise-masked.md §1.
     var denoiseDetail: Float = 0  { didSet { pushAndRender() } }
+    /// Non-local means on luminance ahead of the wavelet chain, `k` in
+    /// `h = k·σ`; 0.4 is the published value, 0 is off. research/high-iso.md §4.
+    var denoiseNlm: Float = 0     { didSet { pushAndRender() } }
 
     /// How much of the loaded creative LUT to apply. The LUT itself is a file,
     /// loaded through `loadLut`, not an adjustment.
@@ -562,7 +565,7 @@ final class Engine {
             gradeShadow: gradeShadow, gradeMidtone: gradeMidtone,
             gradeHighlight: gradeHighlight, gradeBalance: gradeBalance,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
-            denoiseDetail: denoiseDetail,
+            denoiseDetail: denoiseDetail, denoiseNlm: denoiseNlm,
             lutStrength: lutStrength,
             // The live state is always frame-space; a legacy sidecar converts
             // on the way in, at the restore points, never here.
@@ -608,7 +611,7 @@ final class Engine {
         gradeHighlight = s.gradeHighlight
         gradeBalance = s.gradeBalance
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
-        denoiseDetail = s.denoiseDetail
+        denoiseDetail = s.denoiseDetail; denoiseNlm = s.denoiseNlm
         lutStrength = s.lutStrength
         grainAmount = s.grainAmount; grainSize = s.grainSize
         vignetteAmount = s.vignetteAmount
@@ -764,7 +767,7 @@ final class Engine {
         a.grade_highlight = (gradeHighlight[0], gradeHighlight[1], gradeHighlight[2])
         a.grade_balance = gradeBalance
         a.denoise_luma = denoiseLuma; a.denoise_color = denoiseColor
-        a.denoise_detail = denoiseDetail
+        a.denoise_detail = denoiseDetail; a.denoise_nlm = denoiseNlm
         a.lut_strength = lutStrength
         a.grain_amount = grainAmount; a.grain_size = grainSize
         a.vignette_amount = vignetteAmount
