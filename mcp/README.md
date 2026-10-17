@@ -129,6 +129,21 @@ A layer carries `denoiseLuma` and `denoiseColor` too, in the same 0..4 units, ap
 A layer cannot un-denoise: the global chain has already run.
 So to clean the wall and keep the climber, keep the global low and put the denoise on a layer with the subject subtracted (`compose: 1`) or on an inverted subject layer.
 
+### A frame at very high ISO
+
+Read `capture.iso` first (`get_stats` or `current_photo` carry it).
+Above about ISO 3200 the wavelet chain alone leaves three things that still read as "high ISO", and each has its own key (`research/high-iso.md`):
+
+| What you still see | Key | Start at |
+|---|---|---|
+| Grain, and a waxy surface where `denoiseLuma` took the texture with it | `denoiseNlm` (0..1) with `denoiseLuma` 0 | 0.4, the published value. It averages pixels whose neighbourhoods match, so weave and brick survive a removal that `denoiseLuma` smooths |
+| Colour blotches in the shadows that `denoiseColor` alone leaves | `denoiseSmoothness` (0..1), multiplies `denoiseColor` at the coarse scales | 0.5-1 |
+| Fine texture gone flat | `texture` (-1..1), a gain on the fine scales that leaves anything under the noise floor alone | +0.2..0.4; negative smooths skin |
+| Clarity made the grain worse | nothing to set: Clarity's noise guard now reads the frame's own noise | - |
+| It reads as a smoothed picture rather than a photograph | `grainAmount` 0.01-0.02 at `grainSize` 2 | after everything else |
+
+Keep `denoiseDetail` around 0.5 where there is texture to keep, and re-read `noise` on the wall and `shading` on the face under `state: "proposed"` as before.
+
 ### Local adjustments are not global ones at the same number
 
 A masked exposure runs about three to four times a global's at the top of the scale.
