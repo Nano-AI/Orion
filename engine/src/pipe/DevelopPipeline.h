@@ -236,7 +236,7 @@ public:
     void setWideOutput(bool wide);
 
     /// The non-local means window: search half-width and patch half-width,
-    /// the published 10/2 by default. For the bench, which measures the
+    /// the shipped 5/1 by default. For the bench, which measures the
     /// 11x11/3x3 variant beside it (research/high-iso.md §4); the next
     /// `apply` re-pushes the node.
     void setNlmWindow(int radius, int patch) noexcept {
@@ -484,9 +484,10 @@ private:
     [[nodiscard]] std::array<float, 3> denoiseMultipliers(const Adjustments&) const;
     /// Non-local means on luminance, ahead of the wavelet chain
     /// (research/high-iso.md §4). Window held here so the bench can measure
-    /// the published 21x21/5x5 against 11x11/3x3 on one build.
+    /// the published 21x21/5x5 against the shipped 11x11/3x3 on one build;
+    /// the defaults mirror `nlm::kRadius`/`kPatch`.
     int nNlm_ = -1;
-    int nlmRadius_ = 10, nlmPatch_ = 2;
+    int nlmRadius_ = 5, nlmPatch_ = 1;
     bool nlmWindowMoved_ = false;
     int nAtrousBlur_[kDenoiseScales]{-1, -1, -1, -1};
     int nAtrousShrink_[kDenoiseScales]{-1, -1, -1, -1};

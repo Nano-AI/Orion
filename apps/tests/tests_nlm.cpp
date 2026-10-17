@@ -218,7 +218,8 @@ void testNlmGpu() {
     const float rippleBefore = card.rippleAmplitude(card.rgba);
     report(rippleBefore > 0.1f, "the card carries its ripple", std::to_string(rippleBefore));
 
-    // 1. The kernel is the paper's algorithm: agreement with the CPU reference.
+    // 1. The kernel is the paper's algorithm: agreement with the CPU reference,
+    //    at the shipped window.
     {
         const Frame got = gpu.runNlm(card, 0.4f, orion::pipe::nlm::kRadius, orion::pipe::nlm::kPatch);
         const auto want = orion::pipe::nlm::reference(card.lumaPlane(card.rgba),
@@ -232,17 +233,21 @@ void testNlmGpu() {
                                                   want.v[std::size_t(y) * card.w + x]));
         report(worst < 1e-3f, "GPU agrees with the CPU reference within 1e-3",
                "worst " + std::to_string(worst));
-
-        // 2. Removal and retention, against the wavelet chain at matched removal.
-        const float noiseAfter = card.rms3(got, 0, card.w / 2);
-        const float rippleAfter = card.rippleAmplitude(got);
-        const float keep = rippleAfter / rippleBefore;
-        report(noiseAfter <= 0.5f * noiseBefore, "flat noise falls by at least half at k = 0.4",
-               std::to_string(noiseBefore) + " -> " + std::to_string(noiseAfter));
-        report(keep >= 0.8f, "a 6-sigma period-4 ripple keeps at least 80% of its amplitude",
-               std::to_string(keep));
         report(std::fabs(card.mean(got) - card.mean(card.rgba)) < 1e-3f,
                "mean shift under 1e-3");
+    }
+
+    // 2. Removal and retention at both windows, against the wavelet chain at
+    //    matched removal. The shipped window is asserted; the published one
+    //    is printed beside it so the trade the research file records stays
+    //    measured.
+    const int windows[2][2] = {{orion::pipe::nlm::kRadius, orion::pipe::nlm::kPatch},
+                               {orion::pipe::nlm::kPublishedRadius, orion::pipe::nlm::kPublishedPatch}};
+    for (int wi = 0; wi < 2; ++wi) {
+        const int r = windows[wi][0], f = windows[wi][1];
+        const Frame got = gpu.runNlm(card, 0.4f, r, f);
+        const float noiseAfter = card.rms3(got, 0, card.w / 2);
+        const float keep = card.rippleAmplitude(got) / rippleBefore;
 
         float bestBeta = 0.0f, bestNoise = 1e9f, waveletKeep = 0.0f;
         for (float beta = 0.5f; beta <= 4.01f; beta += 0.5f) {
@@ -253,17 +258,18 @@ void testNlmGpu() {
                 waveletKeep = card.rippleAmplitude(w) / rippleBefore;
             }
         }
-        std::printf("  NLM k 0.4: flat noise %.5f -> %.5f, ripple keeps %.3f\n",
-                    double(noiseBefore), double(noiseAfter), double(keep));
-        std::printf("  wavelet at matched removal: beta %.1f, noise %.5f, ripple keeps %.3f\n",
+        std::printf("  %dx%d / %dx%d, k 0.4: flat noise %.5f -> %.5f, ripple keeps %.3f;"
+                    " wavelet at beta %.1f (noise %.5f) keeps %.3f\n",
+                    2 * r + 1, 2 * r + 1, 2 * f + 1, 2 * f + 1,
+                    double(noiseBefore), double(noiseAfter), double(keep),
                     double(bestBeta), double(bestNoise), double(waveletKeep));
-
-        // The smaller window the bench measures: still a denoiser.
-        const Frame small = gpu.runNlm(card, 0.4f, orion::pipe::nlm::kSmallRadius,
-                                       orion::pipe::nlm::kSmallPatch);
-        report(card.rms3(small, 0, card.w / 2) < noiseBefore,
-               "the 11x11 / 3x3 window also removes noise",
-               std::to_string(card.rms3(small, 0, card.w / 2)));
+        if (wi == 0) {
+            report(noiseAfter <= 0.5f * noiseBefore, "flat noise falls by at least half at k = 0.4",
+                   std::to_string(noiseBefore) + " -> " + std::to_string(noiseAfter));
+            report(keep >= 0.8f, "a 6-sigma period-4 ripple keeps at least 80% of its amplitude",
+                   std::to_string(keep));
+            report(keep > waveletKeep, "and more of it than the wavelet chain at matched removal");
+        }
     }
 
     // 3. Through the pipeline: zero is byte-identical and the node does not run.

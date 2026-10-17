@@ -6,6 +6,8 @@
  *  have consulted.
  */
 #include "bench.h"
+#include "pipe/NonLocalMeans.h"
+#include "Engine.h"
 
 #include "util/ImageWriter.h"
 
@@ -68,6 +70,53 @@ void nodeProfiles(Bench& b) {
     // masked.md §2.2 says the second costs the first again, and this is the
     // number that says whether it does.
     profileDrag("Denoise", [](orion::pipe::Adjustments& a) { a.denoiseLuma = 2.0f; });
+    // Non-local means, the shipped window and the published one beside it
+    // (research/high-iso.md §4). The window is pipeline state, so the second
+    // call brackets it and puts it back.
+    profileDrag("Non-local means 11x11 / 3x3 (shipped)", [](orion::pipe::Adjustments& a) {
+        a.denoiseNlm = 0.4f;
+    });
+    develop.setNlmWindow(orion::pipe::nlm::kPublishedRadius, orion::pipe::nlm::kPublishedPatch);
+    profileDrag("Non-local means 21x21 / 5x5 (published)", [](orion::pipe::Adjustments& a) {
+        a.denoiseNlm = 0.4f;
+    });
+    develop.setNlmWindow(orion::pipe::nlm::kRadius, orion::pipe::nlm::kPatch);
+
+    // The same two windows on the preview graph, which is the one a slider
+    // drag renders: the research file's budget for a slider is stated
+    // against this number, not the full-resolution one above.
+    {
+        std::printf("\nNon-local means on the preview graph (1/%d)\n", orion::Engine::kPreviewScale);
+        try {
+            orion::pipe::DevelopPipeline preview(
+                b.device, ORION_SHADER_DIR,
+                orion::raw::decimate(b.img, orion::Engine::kPreviewScale));
+            preview.setGridStep(float(orion::Engine::kPreviewScale));
+            const int windows[2][2] = {{orion::pipe::nlm::kRadius, orion::pipe::nlm::kPatch},
+                                       {orion::pipe::nlm::kPublishedRadius, orion::pipe::nlm::kPublishedPatch}};
+            for (const auto& w : windows) {
+                preview.setNlmWindow(w[0], w[1]);
+                orion::pipe::Adjustments base;
+                base.wb = preview.asShotWhiteBalance();
+                preview.apply(base);
+                preview.render();
+                orion::pipe::Adjustments moved = base;
+                moved.denoiseNlm = 0.4f;
+                preview.apply(moved);
+                preview.graph().setProfiling(true);
+                preview.render();
+                preview.graph().setProfiling(false);
+                for (const auto& t : preview.graph().lastRun()) {
+                    if (t.executed && t.name == "denoise:nlm")
+                        std::printf("    %dx%d / %dx%d   %6.2f ms\n", 2 * w[0] + 1, 2 * w[0] + 1,
+                                    2 * w[1] + 1, 2 * w[1] + 1, t.ms);
+                }
+            }
+        } catch (const std::exception& e) {
+            std::printf("    not measured: %s\n", e.what());
+        }
+    }
+
     profileDrag("Denoise with Detail", [](orion::pipe::Adjustments& a) {
         a.denoiseLuma = 2.0f;
         a.denoiseDetail = 1.0f;

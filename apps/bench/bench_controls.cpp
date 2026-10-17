@@ -561,6 +561,11 @@ void controlProbes(Bench& b) {
             {"clarity +1",     flat, [](auto& a) { a.clarity = 1.0f; }, Metric::Detail, 0.062},
             {"clarity -1",     flat, [](auto& a) { a.clarity = -1.0f; }, Metric::Detail, 0.055},
             {"denoise 2.0",    flat, [](auto& a) { a.denoiseLuma = 2.0f; }, Metric::Detail, 0.018},
+            // Non-local means on luminance, research/high-iso.md §4. Detail,
+            // like the chain: it is a denoiser and moves no mean. Floor
+            // provisional until measured on both sample frames (see the
+            // decision row).
+            {"nlm 0.4",        flat, [](auto& a) { a.denoiseNlm = 0.4f; }, Metric::Detail, 0.001},
             // Detail measured against the same denoise without it, so what
             // moves is the texture-adaptive factor alone and a dead `detail`
             // cannot pass on the denoise's own effect.

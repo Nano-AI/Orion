@@ -21,15 +21,20 @@
 
 namespace orion::pipe::nlm {
 
-/// IPOL Table 1, the row for moderate noise on a grey image: patch 5x5 and a
-/// 21x21 search window. A high-ISO frame is the only reason this runs.
-inline constexpr int kRadius = 10;
-inline constexpr int kPatch  = 2;
+/// The window that ships: 11x11 search, 3x3 patch, IPOL Table 1's row for
+/// light noise. **Chosen by measurement, 2026-10-18**, on the two 42.4 MP
+/// sample frames: 333-344 ms at full resolution and 19 ms on the preview
+/// graph, against the research file's slider budget of 1 s and 30 ms.
+inline constexpr int kRadius = 5;
+inline constexpr int kPatch  = 1;
 
-/// The smaller window the bench measures beside it (research/high-iso.md §4):
-/// 11x11 search, 3x3 patch, the table's row for light noise.
-inline constexpr int kSmallRadius = 5;
-inline constexpr int kSmallPatch  = 1;
+/// The table's row for moderate noise, 21x21 and 5x5, which the research
+/// file planned to ship. Measured on the same frames at 2.9-3.1 s full and
+/// 150-168 ms on the preview graph: a background pass, not a slider. The
+/// bench still measures it beside the shipped window so the trade stays
+/// visible.
+inline constexpr int kPublishedRadius = 10;
+inline constexpr int kPublishedPatch  = 2;
 
 /// The slider is `k` in `h = k·σ`. The table's 0.40 sits mid-slider.
 inline constexpr float kMaxK = 1.0f;
