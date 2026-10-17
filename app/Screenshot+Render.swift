@@ -5,8 +5,9 @@ import SwiftUI
 ///
 /// The window is real but off screen, because SwiftUI defers a good deal of
 /// work until a view is in one and a detached hierarchy renders empty. The
-/// scroll is real too — see `scrollToEnd`, which is `detail-tail`'s mechanism
-/// and lives here because it is a walk over `NSView`, not a scene.
+/// scroll is real too — see `scroll(_:fraction:)`, which is `detail-tail`'s
+/// and `detail-middle`'s mechanism and lives here because it is a walk over
+/// `NSView`, not a scene.
 extension Screenshot {
 
     // MARK: Rendering
@@ -31,7 +32,10 @@ extension Screenshot {
     /// diagnostic can say what fraction of the panel a frame accounts for.
     private static var panelClip: CGFloat = 0
 
-    private static func scrollToEnd(_ root: NSView) -> CGFloat? {
+    /// Scrolls the deepest-overflowing scroll view to `fraction` of its
+    /// overflow: 1 is the end, 0.5 the middle. Returns the overflow, or nil
+    /// when nothing in the hierarchy scrolls.
+    private static func scroll(_ root: NSView, fraction: CGFloat) -> CGFloat? {
         var best: (scroll: NSScrollView, overflow: CGFloat)?
         func walk(_ v: NSView) {
             if let s = v as? NSScrollView, let doc = s.documentView {
@@ -47,14 +51,18 @@ extension Screenshot {
         guard found.overflow > 1, let doc = found.scroll.documentView else { return 0 }
         // A flipped document counts down from the top, so its end is the
         // overflow; an unflipped one counts up from the bottom, so its end is 0.
-        found.scroll.contentView.scroll(to: NSPoint(x: 0,
-                                                    y: doc.isFlipped ? found.overflow : 0))
+        let f = min(max(fraction, 0), 1)
+        found.scroll.contentView.scroll(to: NSPoint(
+            x: 0, y: doc.isFlipped ? found.overflow * f : found.overflow * (1 - f)))
         found.scroll.reflectScrolledClipView(found.scroll.contentView)
         return found.overflow
     }
 
+    /// `scrollFraction` scrolls the panel column to that fraction of its
+    /// overflow before the capture; `scrolledToBottom` is the same thing at 1.
     static func render<V: View>(_ view: V, size: CGSize,
-                                        scrolledToBottom: Bool = false) -> Data? {
+                                        scrolledToBottom: Bool = false,
+                                        scrollFraction: CGFloat? = nil) -> Data? {
         let hosting = NSHostingView(rootView: view)
         hosting.frame = CGRect(origin: .zero, size: size)
 
@@ -76,8 +84,8 @@ extension Screenshot {
         hosting.layoutSubtreeIfNeeded()
         hosting.displayIfNeeded()
 
-        if scrolledToBottom {
-            guard let overflow = scrollToEnd(hosting) else {
+        if let fraction = scrollFraction ?? (scrolledToBottom ? 1 : nil) {
+            guard let overflow = scroll(hosting, fraction: fraction) else {
                 fail("no scrolling region in the interface — this scene "
                      + "photographs what is past the fold and there is no fold")
             }
@@ -89,7 +97,7 @@ extension Screenshot {
             FileHandle.standardError.write(Data(
                 String(format: "orion: scrolled the panel column %.1f points "
                        + "(%.1f of content past a %.1f-point window)\n",
-                       overflow, overflow + panelClip, panelClip).utf8))
+                       overflow * fraction, overflow + panelClip, panelClip).utf8))
             // The scroll is a layout change like any other: settle again before
             // the capture, or the frame is the interface mid-move.
             for _ in 0..<6 {

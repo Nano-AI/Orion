@@ -28,6 +28,7 @@ import SwiftUI
 ///
 /// ```
 /// --scene detail-tail    --photo x.ARW   the Detail panel scrolled to its end
+/// --scene detail-middle  --photo x.ARW   the Detail panel scrolled to its middle
 /// --scene render-failed  --photo x.ARW   the status line's failure warning
 /// --scene menu                           the real menu bar, 26 commands
 /// --scene capture-line   --photo x.ARW   the toolbar's capture line (added later; asserts)
@@ -36,6 +37,7 @@ import SwiftUI
 /// | Scene | Fires when | Exits nonzero |
 /// |---|---|---|
 /// | `detail-tail` | anything below the fold in Detail is deleted or moved | when nothing overflows the panel column |
+/// | `detail-middle` | the band between the frame at rest and the frame at the end, which neither sees since 2026-10-18 | when nothing overflows the panel column |
 /// | `render-failed` | the footer stops drawing `engine.lastFailure` | no — the frame differs |
 /// | `menu` | a `PhotoCommands` item is deleted or renamed | when a command is missing |
 /// | `capture-line` | the toolbar stops drawing `engine.capture` | yes - see `Screenshot+Checks.swift` |
@@ -345,7 +347,7 @@ enum Screenshot {
             .preferredColorScheme(.dark)
 
         guard let png = render(view, size: o.size,
-                               scrolledToBottom: scrolls(o.scene)) else {
+                               scrollFraction: scrollFraction(o.scene)) else {
             fail("the view produced no image")
         }
 

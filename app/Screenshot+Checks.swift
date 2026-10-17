@@ -12,6 +12,7 @@ import SwiftUI
 /// | Scene | Fires when | Exits nonzero |
 /// |---|---|---|
 /// | `detail-tail` | anything below the fold in Detail is deleted or moved | when nothing overflows the panel column |
+/// | `detail-middle` | the band between the frame at rest and the one at the end, seen by neither since the panel outgrew two frames | when nothing overflows the panel column |
 /// | `render-failed` | the footer stops drawing `engine.lastFailure` | yes — it renders the control itself and compares |
 /// | `menu` | a `PhotoCommands` item is deleted or renamed | when a command is missing |
 /// | `capture-line` | the toolbar stops drawing `engine.capture`, or draws something for nil | yes - two captures must differ, nil must match an empty capture |
@@ -423,7 +424,8 @@ extension Screenshot {
         FileHandle.standardError.write(Data(note.utf8))
     }
 
-    /// Scenes that capture the panel column scrolled to its end rather than at
+    /// How far the panel column is scrolled before the capture, as a fraction
+    /// of its overflow, for the scenes that capture it scrolled rather than at
     /// rest.
     ///
     /// ⚠ **This exists because the Detail panel is taller than the window and
@@ -433,8 +435,12 @@ extension Screenshot {
     /// repository green (decision #122, mutation M9), while deleting Noise
     /// Reduction eleven lines higher reddened six frames. The panel was covered
     /// exactly as far as it was tall.
-    static func scrolls(_ scene: String) -> Bool {
-        scene == "detail-tail"
+    static func scrollFraction(_ scene: String) -> CGFloat? {
+        switch scene {
+        case "detail-tail":   return 1
+        case "detail-middle": return 0.5
+        default:              return nil
+        }
     }
 
     /// The window a scene needs when the default one cannot hold what the scene
@@ -468,6 +474,14 @@ extension Screenshot {
     /// overlap by **94 points**. Still nothing between them, but the margin
     /// has been shrinking with each panel addition; a scroll to the middle
     /// is the next mechanism if it reaches zero.
+    ///
+    /// It reached zero on 2026-10-18. After the Non-local row alone: content
+    /// **1,308**, scrolled **633**, overlap **42 points**; Smoothness and
+    /// Texture land in the same session and take it negative. So the middle
+    /// frame exists now — `detail-middle`, `scrollFraction` 0.5 — and the
+    /// three frames together cover the column whatever its length, which is
+    /// what the two frames were only ever pretending to. Re-measure anyway:
+    /// three frames stop covering it at about 2,000 points of content.
     static func minimumHeight(_ scene: String) -> CGFloat? {
         nil   // see above: the panel no longer needs a taller window
     }

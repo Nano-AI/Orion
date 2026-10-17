@@ -19,6 +19,9 @@ exited nonzero:
                 `NSApp.mainMenu` after handing the process back to `OrionApp`
   detail-tail   anything below the fold in the Detail panel stops overflowing,
                 so the harness photographs the same thing scrolled as at rest
+  detail-middle the same fold, photographed at half scroll: the band the frame
+                at rest and the frame at the end both miss once the panel is
+                longer than two windows (it was, from 2026-10-18)
   render-failed the footer stops drawing `engine.lastFailure` — renders its own
                 control twice in-process and compares, no reference image
   capture-line  the toolbar's capture slot stops drawing `engine.capture`, or
@@ -74,6 +77,10 @@ SCENES = {
     "detail-tail":
         "nothing overflows the panel column, so the scrolled frame and the "
         "frame at rest cover the same controls",
+    "detail-middle":
+        "nothing overflows the panel column; this is the frame between rest "
+        "and the end, which neither of the other two has seen since the Detail "
+        "panel outgrew two windows (2026-10-18)",
     "render-failed":
         "the footer no longer draws engine.lastFailure — either it renders the "
         "same with a failure planted as without one, or two different messages "

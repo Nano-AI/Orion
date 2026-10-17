@@ -17,8 +17,8 @@ extension Screenshot {
         switch scene {
         case "color":
             return .color
-        case "detail", "detail-tail", "noisy", "denoise-off", "denoise-luma",
-             "denoise-both", "spots":
+        case "detail", "detail-tail", "detail-middle", "noisy", "denoise-off",
+             "denoise-luma", "denoise-both", "spots":
             return .detail
         case "optics":
             return .optics
@@ -120,6 +120,16 @@ extension Screenshot {
             engine.denoiseColor = 2.4
             engine.sharpenAmount = 0.8
             engine.sharpenMasking = 0.4
+        case "detail-middle":
+            // The band between the frame at rest and the frame at the end:
+            // Look, Shadow lift, Grain and the top of Vignette. Each off its
+            // default so the section reads by its readouts. Captured at half
+            // scroll — see `scrollFraction(_:)`.
+            engine.exposureEv = 2.6
+            engine.fusion = 0.6
+            engine.grainAmount = 0.028
+            engine.grainSize = 3.4
+            engine.vignetteAmount = -1.2
         case "detail-tail":
             // Every control the Detail panel keeps below the fold, each at a
             // value it does not hold by default, so the section is legible in
