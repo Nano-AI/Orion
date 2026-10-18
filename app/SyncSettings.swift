@@ -55,9 +55,10 @@ enum SyncSettings {
         case .detail:
             return ["sharpenAmount", "sharpenRadius", "sharpenMasking",
                     "denoiseLuma", "denoiseColor", "denoiseDetail", "denoiseNlm",
+                    "denoiseSmoothness",
                     "lensDistortion", "lensVignette", "lensCaRed", "lensCaBlue"]
         case .effects:
-            return ["clarity", "dehaze", "fusion", "lutStrength",
+            return ["clarity", "texture", "dehaze", "fusion", "lutStrength",
                     "grainAmount", "grainSize",
                     "vignetteAmount", "vignetteFieldAngle"]
         }

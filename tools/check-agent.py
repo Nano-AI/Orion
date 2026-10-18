@@ -94,6 +94,9 @@ is in play (it works on its own copy and rejects what it proposed):
     `shutter` > 0 seconds and `camera` non-empty, and no field present as
     0 or "". current_photo_set also writes a `capture` into current.json
     and requires current_photo to hand it back unchanged.
+27. high_iso_recipe → describe_edits carries denoiseNlm, denoiseSmoothness and
+    texture with their ranges; texture 1.5 is rejected; the research/high-iso.md
+    §5 recipe leaves a flat patch's `noise` no higher than it found it
 """
 
 import shutil

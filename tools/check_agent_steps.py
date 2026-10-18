@@ -572,6 +572,42 @@ def denoise_region(s, ctx):
     finally:
         s.ask("reject_edit", path=str(raw))
 
+def high_iso_recipe(s, ctx):
+    """The high-ISO recipe from research/high-iso.md section 5 through the
+    tools: the three keys this pass added validate with their ranges, and
+    the recipe as a whole leaves a flat patch no noisier than it found it.
+    Not asserted: that the sample is noisy enough for any of it to show; the
+    before and after are in the note so a reader can tell."""
+    raw = ctx.copy("highiso")
+    keys = {k["name"]: k for k in s.ask("describe_edits").get("keys", [])}
+    for name, lo, hi in (("denoiseNlm", 0, 1), ("denoiseSmoothness", 0, 1), ("texture", -1, 1)):
+        spec = keys.get(name)
+        if spec is None:
+            return f"describe_edits has no {name}"
+        if spec.get("min") != lo or spec.get("max") != hi:
+            return f"{name} range is {spec.get('min')}..{spec.get('max')}, expected {lo}..{hi}"
+    stats = s.ask("get_stats", path=str(raw), region=CENTRE)
+    iso = (stats.get("capture") or {}).get("iso")
+    before = stats.get("region", {}).get("noise")
+    if not isinstance(before, (int, float)):
+        return f"region noise is {before!r}"
+    try:
+        why = s.refusal("propose_edit", path=str(raw), edits={"texture": 1.5})
+        if not (why.startswith("REJECTED:") and "texture" in why):
+            return f"texture 1.5 was not rejected for its range: {why!r}"
+        s.ask("propose_edit", path=str(raw), reset=True,
+              edits={"denoiseNlm": 0.4, "denoiseLuma": 1.5, "denoiseColor": 3,
+                     "denoiseSmoothness": 0.7, "denoiseDetail": 0.5, "texture": 0.5})
+        after = s.ask("get_stats", path=str(raw), state="proposed",
+                      region=CENTRE).get("region", {}).get("noise")
+        if not isinstance(after, (int, float)):
+            return f"proposed region noise is {after!r}"
+        if after > before:
+            return f"the recipe raised the patch's noise from {before:.5f} to {after:.5f}"
+        ctx.note = f"ISO {iso}, noise {before:.5f} -> {after:.5f}"
+    finally:
+        s.ask("reject_edit", path=str(raw))
+
 def detect_subject(s, ctx):
     """The panel's Subject button through the tools: the row it returns has to
     validate in propose_edit and its matte has to reach a render. Whether the
@@ -710,5 +746,5 @@ STEPS = [
     propose_edit_reset, propose_composite, propose_composite_rejected,
     get_stats_proposed, get_stats_region, get_proxy_region, detect_faces,
     mask_invert, mask_matte, mask_matte_missing, current_photo_none, current_photo_set,
-    get_edits, denoise_region, detect_subject, sync_edits, capture_fields,
+    get_edits, denoise_region, high_iso_recipe, detect_subject, sync_edits, capture_fields,
 ]

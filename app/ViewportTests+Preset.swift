@@ -30,6 +30,7 @@ extension ViewportTests {
         s.gradeHighlight = [0.2, 0.03, -0.12]
         s.sharpenAmount = 1.3; s.sharpenRadius = 2.2; s.sharpenMasking = 0.45
         s.denoiseLuma = 2.0; s.denoiseColor = 1.4; s.denoiseDetail = 0.35; s.denoiseNlm = 0.3
+        s.denoiseSmoothness = 0.6; s.texture = 0.25
         s.lensDistortion = 0.4; s.lensVignette = -0.35
         s.lensCaRed = 0.22; s.lensCaBlue = -0.18
         // A real name from the bundled database, so the round trip carries a
@@ -353,6 +354,7 @@ extension ViewportTests {
         source.curve = ToneCurve()
         source.sharpenAmount = 1.9; source.sharpenRadius = 2.4; source.sharpenMasking = 0.8
         source.denoiseLuma = 3.1; source.denoiseColor = 0.9; source.denoiseDetail = 0.6; source.denoiseNlm = 0.45
+        source.denoiseSmoothness = 0.8; source.texture = -0.4
         source.lensDistortion = -0.6; source.lensVignette = 0.5
         source.lensCaRed = 0.3; source.lensCaBlue = -0.3
         source.clarity = -0.8; source.dehaze = 0.9; source.fusion = 0.4

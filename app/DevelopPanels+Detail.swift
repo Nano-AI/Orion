@@ -17,15 +17,20 @@ extension Editor {
                  + "whose neighbourhoods match instead of pixels that are merely near, "
                  + "so fabric and brick keep their weave through a removal Luminance "
                  + "would smooth; 0.4 is the published strength, and with it on "
-                 + "Luminance is usually best left at zero.") {
+                 + "Luminance is usually best left at zero. Smoothness reaches the "
+                 + "large colour blotches Color leaves in the shadows of a high-ISO "
+                 + "frame: two coarser scales on the colour alone, at Color times "
+                 + "Smoothness, so it does nothing while Color is zero.") {
             slider("Luminance", $engine.denoiseLuma, 0...4, "", 2, resetsTo: engine.defaults.denoiseLuma)
-            slider("Color", $engine.denoiseColor, 0...4, "", 2, resetsTo: engine.defaults.denoiseColor)
-            // research/denoise-masked.md §1. Luma only: chroma keeps the fixed
-            // threshold, so this sits under both but changes only the first.
-            slider("Detail", $engine.denoiseDetail, 0...1, "", 2, resetsTo: engine.defaults.denoiseDetail)
             // research/high-iso.md §4. Similar pixels rather than nearby ones;
             // with it on, Luminance is usually left at zero.
             slider("Non-local", $engine.denoiseNlm, 0...1, "", 2, resetsTo: engine.defaults.denoiseNlm)
+            // research/denoise-masked.md §1. Luma only: chroma keeps the fixed
+            // threshold, so this sits under the luminance pair and changes only them.
+            slider("Detail", $engine.denoiseDetail, 0...1, "", 2, resetsTo: engine.defaults.denoiseDetail)
+            slider("Color", $engine.denoiseColor, 0...4, "", 2, resetsTo: engine.defaults.denoiseColor)
+            // research/high-iso.md §1. A multiple of Color, so Color 0 runs nothing.
+            slider("Smoothness", $engine.denoiseSmoothness, 0...1, "", 2, resetsTo: engine.defaults.denoiseSmoothness)
         }
         section("Spots", info: "Turn on Place spots, then drag on the photo: press where the "
                + "dust is and pull to choose what covers it. Drag either circle "
@@ -150,9 +155,16 @@ extension Editor {
         }
         section("Clarity", info: "Local contrast, edge by edge rather than everywhere at once — "
                + "a large edge keeps its shape while the texture inside it "
-               + "gains or loses contrast. Negative smooths.") {
+               + "gains or loses contrast. Negative smooths. Both read the "
+               + "frame's own measured noise: Clarity declines to amplify grain "
+               + "that sits under it, and Texture lifts the two finest scales "
+               + "only where they stand above it, so a surface comes back after "
+               + "a hard denoise without the grain. Negative Texture smooths "
+               + "weak texture such as skin and leaves edges alone.") {
             slider("Clarity", $engine.clarity, -1...1, "", 2,
                    resetsTo: engine.defaults.clarity)
+            slider("Texture", $engine.texture, -1...1, "", 2,
+                   resetsTo: engine.defaults.texture)
         }
         section("Sharpening", info: "Masking protects flat areas, where noise lives and detail does not.") {
             slider("Amount", $engine.sharpenAmount, 0...2, "", 2, resetsTo: engine.defaults.sharpenAmount)

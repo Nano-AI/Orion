@@ -154,6 +154,7 @@ struct Preset: Codable, Identifiable, Equatable {
             out.denoiseColor = state.denoiseColor
             out.denoiseDetail = state.denoiseDetail
             out.denoiseNlm = state.denoiseNlm
+            out.denoiseSmoothness = state.denoiseSmoothness
             out.lensDistortion = state.lensDistortion
             out.lensVignette = state.lensVignette
             out.lensCaRed = state.lensCaRed
@@ -161,6 +162,7 @@ struct Preset: Codable, Identifiable, Equatable {
         }
         if groups.contains(.effects) {
             out.clarity = state.clarity
+            out.texture = state.texture
             out.dehaze = state.dehaze
             out.fusion = state.fusion
             out.lutStrength = state.lutStrength

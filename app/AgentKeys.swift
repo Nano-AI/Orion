@@ -98,10 +98,29 @@ enum AgentKeys {
             note: "non-local means on luminance, run before the wavelet chain: "
                 + "averages pixels whose 5x5 neighbourhoods match, so fine periodic "
                 + "texture survives a removal that denoiseLuma would smooth. k in "
-                + "h = k*sigma; 0.4 is the published value. With it on, keep "
-                + "denoiseLuma at 0 or low (the chain's threshold is overestimated "
-                + "behind it); denoiseColor still takes the colour blotches. A frame "
-                + "above ISO 3200 (capture.iso) is the reason to reach for it"),
+                + "h = k*sigma; 0.4 is the published value. Pair it with denoiseLuma "
+                + "1-1.5: alone it leaves 1.6-1.8x the grain of denoiseLuma 2.5 at ISO "
+                + "8000-16000 and reads wormy, paired it measured half. denoiseColor "
+                + "still takes the colour blotches. A frame above ISO 3200 "
+                + "(capture.iso) is the reason to reach for it"),
+        // research/high-iso.md §1.
+        "denoiseSmoothness": Spec(
+            unit: "unitless", range: 0...1,
+            note: "coarse-scale colour noise: two more wavelet scales on the chroma, "
+                + "at strength denoiseColor * denoiseSmoothness, so it does nothing "
+                + "while denoiseColor is 0. For the 20-60 px colour blotches in the "
+                + "shadows of a high-ISO frame that denoiseColor alone leaves; 0.5-1. "
+                + "Strong values desaturate small colourful objects, so check one"),
+        // research/high-iso.md §2.
+        "texture": Spec(
+            unit: "unitless", range: -1...1,
+            note: "micro-contrast on the two finest scales, gated by the frame's "
+                + "measured noise so grain under three deviations is never boosted. "
+                + "Positive lifts texture that stands above the noise (+0.5 and up "
+                + "to see it; where the fine scales are all noise, as on ISO 8000+ "
+                + "walls, it has nothing to lift), negative smooths weak texture such "
+                + "as skin and leaves edges. Different from sharpenAmount, which is "
+                + "an unsharp mask on edges"),
         "lutStrength": Spec(unit: "unitless", range: 0...1),          // :98
         "fusion": Spec(unit: "unitless", range: 0...1),                // :106
         "grainAmount": Spec(unit: "unitless", range: 0...0.06),        // :114

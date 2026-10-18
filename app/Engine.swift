@@ -284,6 +284,11 @@ final class Engine {
     /// Non-local means on luminance ahead of the wavelet chain, `k` in
     /// `h = k·σ`; 0.4 is the published value, 0 is off. research/high-iso.md §4.
     var denoiseNlm: Float = 0     { didSet { pushAndRender() } }
+    /// Coarse-scale chroma, as a multiple of Color: 0 is the four shipped
+    /// scales, 1 runs two more on the colour blotches. research/high-iso.md §1.
+    var denoiseSmoothness: Float = 0 { didSet { pushAndRender() } }
+    /// Noise-aware gain on the two finest scales, -1..1. research/high-iso.md §2.
+    var texture: Float = 0        { didSet { pushAndRender() } }
 
     /// How much of the loaded creative LUT to apply. The LUT itself is a file,
     /// loaded through `loadLut`, not an adjustment.
@@ -566,6 +571,7 @@ final class Engine {
             gradeHighlight: gradeHighlight, gradeBalance: gradeBalance,
             denoiseLuma: denoiseLuma, denoiseColor: denoiseColor,
             denoiseDetail: denoiseDetail, denoiseNlm: denoiseNlm,
+            denoiseSmoothness: denoiseSmoothness, texture: texture,
             lutStrength: lutStrength,
             // The live state is always frame-space; a legacy sidecar converts
             // on the way in, at the restore points, never here.
@@ -612,6 +618,7 @@ final class Engine {
         gradeBalance = s.gradeBalance
         denoiseLuma = s.denoiseLuma; denoiseColor = s.denoiseColor
         denoiseDetail = s.denoiseDetail; denoiseNlm = s.denoiseNlm
+        denoiseSmoothness = s.denoiseSmoothness; texture = s.texture
         lutStrength = s.lutStrength
         grainAmount = s.grainAmount; grainSize = s.grainSize
         vignetteAmount = s.vignetteAmount
@@ -768,6 +775,7 @@ final class Engine {
         a.grade_balance = gradeBalance
         a.denoise_luma = denoiseLuma; a.denoise_color = denoiseColor
         a.denoise_detail = denoiseDetail; a.denoise_nlm = denoiseNlm
+        a.denoise_smoothness = denoiseSmoothness; a.texture = texture
         a.lut_strength = lutStrength
         a.grain_amount = grainAmount; a.grain_size = grainSize
         a.vignette_amount = vignetteAmount

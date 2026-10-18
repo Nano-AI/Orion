@@ -453,6 +453,12 @@ struct DevelopState: Equatable, Codable {
     /// what every sidecar before 2026-10-18 was rendered with.
     /// research/high-iso.md §4.
     var denoiseNlm: Float
+    /// Coarse-scale chroma as a multiple of `denoiseColor`, 0..1; 0 is the
+    /// four scales every sidecar before 2026-10-18 was rendered with.
+    var denoiseSmoothness: Float
+    /// Fine-scale texture gain, -1..1, gated by the measured noise; 0 is
+    /// bit-identical to before it existed. research/high-iso.md §2.
+    var texture: Float
     var lutStrength: Float
     /// Which space `maskComponents`' spatial numbers are in: 0 is the legacy
     /// display convention (normalized against the crop this state also
@@ -570,6 +576,7 @@ extension DevelopState {
             gradeShadow: [0, 0, 0], gradeMidtone: [0, 0, 0],
             gradeHighlight: [0, 0, 0], gradeBalance: 0,
             denoiseLuma: 0, denoiseColor: 0, denoiseDetail: 0, denoiseNlm: 0,
+            denoiseSmoothness: 0, texture: 0,
             lutStrength: 1,
             maskSpace: 1,
             maskComponents: [],
@@ -608,7 +615,8 @@ extension DevelopState {
         "lensChoice",
         "highlightRecovery",
         "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance",
-        "denoiseLuma", "denoiseColor", "denoiseDetail", "denoiseNlm", "lutStrength",
+        "denoiseLuma", "denoiseColor", "denoiseDetail", "denoiseNlm",
+        "denoiseSmoothness", "texture", "lutStrength",
         "maskSpace", "maskComponents", "maskRefine", "spots", "layers",
         "localTintAxis",
         "fusion", "dehaze", "clarity",
@@ -643,6 +651,7 @@ extension DevelopState {
         case cropX, cropY, cropW, cropH
         case lensDistortion, lensVignette, lensCaRed, lensCaBlue, lensChoice
         case highlightRecovery, denoiseLuma, denoiseColor, denoiseDetail, denoiseNlm
+        case denoiseSmoothness, texture
         case gradeShadow, gradeMidtone, gradeHighlight, gradeBalance
         case maskSpace
         case maskComponents, localExposureEv, maskRefine, spots
@@ -730,6 +739,8 @@ extension DevelopState {
         // photographs were rendered with.
         denoiseDetail = float(.denoiseDetail) ?? denoiseDetail
         denoiseNlm = float(.denoiseNlm) ?? denoiseNlm
+        denoiseSmoothness = float(.denoiseSmoothness) ?? denoiseSmoothness
+        texture = float(.texture) ?? texture
         lutStrength = float(.lutStrength) ?? lutStrength
         // ⚠ The new key wins when present, and the legacy scalars fill layer 1
         // when it is not. A sidecar written by a newer build carries both,
