@@ -2,6 +2,12 @@
 """Drive the Orion MCP server end-to-end against a copied sample RAW.
 
     ./tools/check-agent.py
+    ./tools/check-agent.py --server dist/Orion.app/Contents/MacOS/orion-mcp
+
+⚠ **`--server` runs the same steps against a compiled `orion-mcp`**, the one a
+downloaded Orion.app carries, and with ORION_BIN unset, so the server has to
+find the `Orion` beside it on its own. `tools/package-app.sh` runs it on every
+bundle it builds: the `.ts` passing says nothing about what esbuild bundled.
 
 ⚠ **Why this exists.** The eighth gate validates that the MCP server correctly
 shells to the `--agent` verbs, that proposed edits round-trip JSON, and that
@@ -99,6 +105,7 @@ is in play (it works on its own copy and rejects what it proposed):
     §5 recipe leaves a flat patch's `noise` no higher than it found it
 """
 
+import argparse
 import shutil
 import subprocess
 import sys
@@ -118,10 +125,11 @@ SAMPLE_CANDIDATES = ["_PIC8095.ARW", "overexposed-background.ARW", "_PIC8220.ARW
 SAMPLE_RAW = next((c for c in SAMPLE_CANDIDATES if (SAMPLES / c).is_file()), SAMPLE_CANDIDATES[0])
 
 
-def run_steps(ctx: Context, problems: list) -> int:
+def run_steps(ctx: Context, problems: list, server: Path | None) -> int:
     """Every step against one warm server, in order. A step that raises is a
     failure like any other - the gate never dies on one bad call."""
-    proc = spawn(ROOT, {"ORION_BIN": str(ORION)})
+    env = {} if server else {"ORION_BIN": str(ctx.orion)}
+    proc = spawn(ROOT, env, server)
     passed = 0
     try:
         session = Session(proc)
@@ -149,8 +157,18 @@ def run_steps(ctx: Context, problems: list) -> int:
 
 
 def main():
-    if not ORION.is_file():
-        print(f"check-agent: no binary at {ORION}\n"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--server", type=Path,
+                        help="a compiled orion-mcp; its sibling Orion is the binary")
+    args = parser.parse_args()
+    server = args.server.resolve() if args.server else None
+    if server and not server.is_file():
+        print(f"check-agent: no server at {server}", file=sys.stderr)
+        return 2
+    orion = server.parent / "Orion" if server else ORION
+
+    if not orion.is_file():
+        print(f"check-agent: no binary at {orion}\n"
               f"  Build first: cmake --build build", file=sys.stderr)
         return 2
     if not (SAMPLES / SAMPLE_RAW).is_file():
@@ -167,8 +185,9 @@ def main():
         if sidecar.exists():
             shutil.copy2(sidecar, tmpdir / sidecar.name)
 
-        ctx = Context(ROOT, ORION, SAMPLES, SAMPLE_RAW, tmpdir)
-        passed = run_steps(ctx, problems)
+        ctx = Context(ROOT, orion, SAMPLES, SAMPLE_RAW, tmpdir)
+        ctx.server = server
+        passed = run_steps(ctx, problems, server)
 
     # ...and that copying is asserted rather than trusted.
     status = subprocess.run(["git", "status", "--porcelain", str(SAMPLES)],

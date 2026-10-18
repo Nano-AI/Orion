@@ -70,10 +70,13 @@ def call(proc, method: str, params: dict, req_id: int, timeout: float = TIMEOUT)
         except json.JSONDecodeError:
             continue
 
-def spawn(root: Path, env_extra: dict):
-    """`node mcp/server.ts` on stdio, with ORION_BIN and friends."""
+def spawn(root: Path, env_extra: dict, server: Path | None = None):
+    """`node mcp/server.ts` on stdio, with ORION_BIN and friends - or, given
+    `server`, that compiled executable instead (a packaged `orion-mcp`)."""
+    argv = [str(server)] if server else \
+        ["node", "--experimental-strip-types", str(root / "mcp" / "server.ts")]
     return subprocess.Popen(
-        ["node", "--experimental-strip-types", str(root / "mcp" / "server.ts")],
+        argv,
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, env={**os.environ, **env_extra})
 
@@ -153,6 +156,9 @@ class Context:
         self.sample, self.tmpdir = sample, tmpdir
         self.raw = tmpdir / sample
         self.note: str | None = None
+        # A compiled orion-mcp under `check-agent.py --server`, else None
+        # for `node mcp/server.ts`; any step that spawns its own server uses it.
+        self.server: Path | None = None
         self._inspect: Path | None = None
 
     def copy(self, suffix: str, of: Path | None = None) -> Path:
@@ -678,7 +684,8 @@ def _solo(ctx, current_json: Path, expect_photo: Path | None,
     """A second server with ORION_CURRENT pointed somewhere, because the
     variable is read at startup. `expect_photo` None is the nothing-is-open
     case, where get_stats with no path must fail by name."""
-    proc = spawn(ctx.root, {"ORION_BIN": str(ctx.orion), "ORION_CURRENT": str(current_json)})
+    proc = spawn(ctx.root, {"ORION_BIN": str(ctx.orion), "ORION_CURRENT": str(current_json)},
+                 ctx.server)
     try:
         s = Session(proc)
         s.handshake()

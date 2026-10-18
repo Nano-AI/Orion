@@ -131,6 +131,12 @@ for you to approve or reject.
 `mcp/README.md` is the whole of it - the tools, what each one takes, and how a
 proposal is approved. `.mcp.json` at the repo root wires it into Claude Code.
 
+A packaged Orion.app carries the same server as `Contents/MacOS/orion-mcp`, a
+Node single executable that needs no checkout and no Node, so a downloaded app
+registers it with
+`claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp`
+after clearing the download's quarantine (#310).
+
 ## Tests
 
 ```sh

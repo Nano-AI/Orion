@@ -5,14 +5,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { execFile } from "node:child_process";
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 const RAW_EXT = new Set([".arw", ".nef", ".cr2", ".cr3", ".dng", ".raf", ".orf", ".rw2"]);
+// ORION_BIN wins; then the `Orion` beside this executable, which is where the
+// compiled `orion-mcp` sits inside a packaged Orion.app (Contents/MacOS/), so a
+// downloaded app needs no configuration; then the development build. Under
+// node, execPath is node itself and the sibling never exists.
+const sibling = path.join(path.dirname(process.execPath), "Orion");
 const bin = () =>
-  process.env.ORION_BIN ?? path.resolve(import.meta.dirname, "../build/Orion.app/Contents/MacOS/Orion");
+  process.env.ORION_BIN ??
+  (existsSync(sibling) ? sibling : path.resolve(import.meta.dirname, "../build/Orion.app/Contents/MacOS/Orion"));
 const proposedPath = (raw: string) => raw.replace(/\.[^.]+$/, ".proposed.json");
 
 // One execFile of the binary; stdout is one JSON object per the spec's verb
@@ -572,6 +578,9 @@ export function createServer() {
   return server;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await createServer().connect(new StdioServerTransport());
+// `node server.ts`. The packaged executable enters through sea.ts instead: it
+// is bundled to CommonJS, where import.meta.url is empty and top-level await
+// does not exist, so neither may appear unguarded here.
+if (import.meta.url && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  createServer().connect(new StdioServerTransport());
 }

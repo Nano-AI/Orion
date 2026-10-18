@@ -11,7 +11,23 @@ cd mcp && npm install
 ORION_BIN=/path/to/Orion.app/Contents/MacOS/Orion node server.ts
 ```
 
-`ORION_BIN` defaults to `<repo>/build/Orion.app/Contents/MacOS/Orion`.
+`ORION_BIN` wins when set.
+Otherwise the server uses the `Orion` beside its own executable, which exists only in the compiled one, and then `<repo>/build/Orion.app/Contents/MacOS/Orion`.
+
+## In a downloaded Orion
+
+A packaged Orion.app carries the server as a Node single-executable application, `Contents/MacOS/orion-mcp`, so a downloaded app needs neither Node nor this folder (#310).
+It is the official Node build with the bundled server injected, not Bun: Bun statically links LGPL code (JavaScriptCore, tinycc).
+It finds the `Orion` next to it, so it needs no configuration either:
+
+```bash
+claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp
+```
+
+Claude Desktop takes `"orion": {"command": "/Applications/Orion.app/Contents/MacOS/orion-mcp"}` under `mcpServers`.
+The Assistant menu's **Copy MCP Setup Command** puts the `claude mcp add` line on the clipboard, and Orion's own Assistant panel passes the bundled server to `claude` or `codex` on its command line when its working folder has no `.mcp.json`.
+
+`tools/package-app.sh` builds it from the lockfile (`npm ci`), signs it with the app, scans it for home paths like every other file in the bundle, and runs all of `tools/check-agent.py --server` against it before it makes the disk image.
 
 ## Test
 

@@ -16,6 +16,10 @@
 #   3. Rewriting a Mach-O invalidates its signature. On Apple silicon an
 #      unsigned binary does not launch at all, so it has to be re-signed after
 #      install_name_tool, not before.
+#   4. The MCP server is TypeScript in mcp/, run by node from the checkout. A
+#      downloaded app has neither, so it ships as a Node single-executable
+#      application, Contents/MacOS/orion-mcp, which finds the Orion beside it
+#      (#310). Fetches the pinned official Node build on first run.
 #
 # Usage:  tools/package-app.sh [output-dir] [version-label]
 #
@@ -237,6 +241,70 @@ echo "  rpaths    Homebrew search paths removed"
 strip -S "$BIN"
 echo "  stripped  debug map"
 
+# ── The MCP server ──────────────────────────────────────────────────────────
+#
+# A Node single-executable application: esbuild bundles mcp/sea.ts and
+# everything it imports into one CommonJS file, Node turns that into a blob, and
+# postject injects the blob into a copy of the Node binary.
+#
+# ⚠ **Node, not Bun, and for the license.** Bun's `--compile` was the first
+# version and worked, but Bun statically links JavaScriptCore (LGPL-2) and tinycc
+# (LGPL-2.1), and CLAUDE.md allows LGPL in proprietary Orion only when it is
+# dynamically linked or relinkable. Node and everything it links are permissive.
+#
+# ⚠ **nodejs.org's build, never Homebrew's.** Homebrew's node links libuv, ICU
+# and OpenSSL out of /opt/homebrew, so a copy of it runs only where Homebrew
+# does. The official one links system frameworks alone. Pinned by version and
+# SHA-256 - the hash nodejs.org publishes in SHASUMS256.txt - so the bytes that
+# ship are the bytes that were checked.
+#
+# `npm ci`, not whatever node_modules happens to hold: the lockfile is what was
+# tested. ⚠ Never `strip` this one: the blob lives in a segment of its own.
+NODE_VERSION="v24.22.0"
+NODE_SHA256="6a9724d9b50a5f22b4816cded441b5a8d9ddae546191a5e5b7efa5a5e2ee26d5"
+NODE_CACHE="$BUILD/node-sea"
+NODE_TGZ="$NODE_CACHE/node-$NODE_VERSION-darwin-arm64.tar.gz"
+NODE="$NODE_CACHE/node-$NODE_VERSION-darwin-arm64/bin/node"
+mkdir -p "$NODE_CACHE"
+if [[ ! -f "$NODE_TGZ" ]]; then
+    curl -sfL -o "$NODE_TGZ.part" \
+        "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-darwin-arm64.tar.gz"
+    mv "$NODE_TGZ.part" "$NODE_TGZ"
+fi
+echo "$NODE_SHA256  $NODE_TGZ" | shasum -a 256 -c --status \
+    || { echo "error: $NODE_TGZ does not match its pinned SHA-256" >&2; exit 1; }
+rm -rf "$NODE_CACHE/node-$NODE_VERSION-darwin-arm64"
+tar -xzf "$NODE_TGZ" -C "$NODE_CACHE"
+
+MCP="$APP/Contents/MacOS/orion-mcp"
+SEA="$NODE_CACHE/sea"
+rm -rf "$SEA" && mkdir -p "$SEA"
+(cd "$ROOT/mcp" && npm ci --silent --no-audit --no-fund)
+# import.meta is empty in CommonJS: dirname becomes the CommonJS one, and url
+# undefined, which turns off server.ts's own `node server.ts` entry.
+# From mcp/, because the metafile's paths are relative to where esbuild ran and
+# tools/mcp-licenses.py reads them against mcp/.
+(cd "$ROOT/mcp" && node_modules/.bin/esbuild sea.ts --bundle --platform=node \
+    --format=cjs --target=node24 --log-level=warning \
+    --define:import.meta.dirname=__dirname --define:import.meta.url=undefined \
+    --metafile="$SEA/meta.json" --outfile="$SEA/orion-mcp.cjs")
+# ⚠ **Relative paths, run from inside $SEA.** The blob records `main` as
+# written, and an absolute one put this checkout's path, home directory and
+# all, into every orion-mcp; the scan below is what said so.
+cat > "$SEA/sea-config.json" <<JSON
+{ "main": "orion-mcp.cjs", "output": "orion-mcp.blob",
+  "disableExperimentalSEAWarning": true, "useCodeCache": true }
+JSON
+(cd "$SEA" && "$NODE" --experimental-sea-config sea-config.json >/dev/null 2>&1) \
+    || { echo "error: node could not make the SEA blob" >&2; exit 1; }
+cp "$NODE" "$MCP"
+chmod u+w "$MCP"
+codesign --remove-signature "$MCP"
+"$ROOT/mcp/node_modules/.bin/postject" "$MCP" NODE_SEA_BLOB "$SEA/orion-mcp.blob" \
+    --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+    --macho-segment-name NODE_SEA >/dev/null
+echo "  mcp       orion-mcp $(du -h "$MCP" | cut -f1), node $NODE_VERSION"
+
 # ── Licenses ────────────────────────────────────────────────────────────────
 #
 # Copied verbatim from the installed packages, never retyped: LibRaw is
@@ -263,12 +331,16 @@ do
     src="$(ls -d /opt/homebrew/Cellar/"$pkg"/*/"$file" 2>/dev/null | tail -1 || true)"
     copy_license "$out" "${src:-/nonexistent}"
 done
+# orion-mcp is Node, and carries the MCP SDK's npm tree inside its bundle.
+cp "$NODE_CACHE/node-$NODE_VERSION-darwin-arm64/LICENSE" "$RES/licenses/node-MIT-and-bundled.txt"
+"$ROOT/tools/mcp-licenses.py" "$SEA/meta.json" "$ROOT/mcp" "$RES/licenses/orion-mcp-npm-packages.txt"
 cp "$ROOT/NOTICE" "$RES/licenses/NOTICE.txt"
 echo "  licenses  $(ls "$RES/licenses" | wc -l | tr -d ' ') files"
 
 # ── Sign, after rewriting ───────────────────────────────────────────────────
 codesign --remove-signature "$BIN" 2>/dev/null || true
 for lib in "$FW"/*.dylib; do codesign --force --sign - "$lib"; done
+codesign --force --sign - "$MCP"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep "$APP"
 echo "  signed    ad-hoc"
@@ -279,7 +351,7 @@ echo "  signed    ad-hoc"
 # absolute path behind, and the symptom is an app that launches for the person
 # who built it and nobody else.
 leftover=0
-for target in "$BIN" "$FW"/*.dylib; do
+for target in "$BIN" "$MCP" "$FW"/*.dylib; do
     while read -r dep; do
         case "$dep" in
             /opt/homebrew/*|/usr/local/*)
@@ -316,16 +388,35 @@ echo "  verified  no paths outside the bundle, and none searched"
 # ⚠ **Anyone's home directory, not only the builder's.** Vendored SwiftTerm
 # carried its author's /Users/<name>/Downloads/Logs, which a check for this
 # machine's user name passes without a word.
+#
+# ⚠ **orion-mcp is held to the same rule with one name excused**, and only
+# that one. The Node binary inside it carries /Users/admin/ some three thousand
+# times, nodejs.org's release machine's paths, which name a build account, not
+# a person, and are in every official macOS Node. The builder's home and git
+# email are still searched in it like anywhere else.
 literal=( -e "$HOME/" )
 email="$(git -C "$ROOT" config user.email 2>/dev/null || true)"
 if [[ -n "$email" ]]; then literal+=( -e "$email" ); fi
-leaks="$( { grep -rlaE '/Users/[^/[:space:]]+/' "$APP"; grep -rlaF "${literal[@]}" "$APP"; } | sort -u || true)"
+leaks="$( { grep -rlaE --exclude=orion-mcp '/Users/[^/[:space:]]+/' "$APP"
+            grep -aoE '/Users/[^/[:space:]]+/' "$MCP" \
+                | grep -vxF '/Users/admin/' | sed "s|.*|$MCP|"
+            grep -rlaF "${literal[@]}" "$APP"; } | sort -u || true)"
 if [[ -n "$leaks" ]]; then
     echo "error: the bundle names a person, in:" >&2
     echo "$leaks" | sed "s|^$APP/|    |" >&2
     exit 1
 fi
 echo "  verified  no home directory, user name or git email inside"
+
+# ── Verify the packaged MCP server drives the packaged binary ───────────────
+#
+# Every step of check-agent, against this bundle's orion-mcp with ORION_BIN
+# unset: a real render, a real approve, and the sibling lookup that makes a
+# downloaded app need no configuration. The `.ts` passing in the checkout says
+# nothing about what was bundled.
+"$ROOT/tools/check-agent.py" --server "$MCP" >/dev/null \
+    || { echo "error: check-agent --server failed on the packaged orion-mcp" >&2; exit 1; }
+echo "  verified  check-agent green against the packaged orion-mcp"
 
 # ── The disk image ──────────────────────────────────────────────────────────
 STAGE="$(mktemp -d)"
@@ -352,6 +443,26 @@ Requires an Apple silicon Mac running macOS 14 or later. Intel is not built.
 This is an alpha. It opens Sony ARW files; other Bayer cameras via LibRaw are
 less tested. Edits are saved to XMP sidecars beside your photos and never modify
 the raw file.
+
+Claude and other AI agents can edit through Orion's MCP server, which is inside
+the app. Nothing is saved to your photos until you approve it in Orion.
+
+macOS will not run the server for an agent while the download's quarantine is
+on it, even after you have opened Orion, so with Orion in Applications run:
+
+    xattr -dr com.apple.quarantine /Applications/Orion.app
+
+Then, for Claude Code:
+
+    claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp
+
+For Claude Desktop, add this under "mcpServers" in its config file:
+
+    "orion": { "command": "/Applications/Orion.app/Contents/MacOS/orion-mcp" }
+
+Orion's own Assistant panel (Assistant menu) loads it with no setup, and offers
+an Allow button if the quarantine is still on. Assistant > Copy MCP Setup
+Command copies both lines above.
 
 Third-party licenses are inside the app, at
 Orion.app/Contents/Resources/licenses.
