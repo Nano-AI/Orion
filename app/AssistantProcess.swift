@@ -82,18 +82,65 @@ final class AssistantPanelModel {
                 workingDirectory = fm.homeDirectoryForCurrentUser
             }
         }
-        notice = Self.configurationNotice(in: workingDirectory)
+        refreshQuarantine()
     }
 
-    static func configurationNotice(in directory: URL) -> String? {
+    /// The `orion-mcp` a packaged app carries beside its own executable
+    /// (tools/package-app.sh, #310). nil in a development build, which has
+    /// the repo's `.mcp.json` instead.
+    static let bundledServer: URL? = {
+        guard let dir = Bundle.main.executableURL?.deletingLastPathComponent() else { return nil }
+        let server = dir.appendingPathComponent("orion-mcp")
+        return FileManager.default.isExecutableFile(atPath: server.path) ? server : nil
+    }()
+
+    /// The server to hand the agent on its command line: the bundled one,
+    /// unless the working directory registers its own through `.mcp.json`,
+    /// where passing both would load two servers named `orion`.
+    static func launchServer(in directory: URL, bundled: URL? = bundledServer) -> URL? {
+        hasMCPConfig(directory) ? nil : bundled
+    }
+
+    var launchServer: URL? { Self.launchServer(in: workingDirectory) }
+
+    static func configurationNotice(in directory: URL, bundled: URL? = bundledServer,
+                                    quarantined: Bool = false) -> String? {
+        if hasMCPConfig(directory) { return nil }
+        if bundled == nil { return "Choose a tools folder containing .mcp.json" }
+        return quarantined ? "macOS is blocking Orion’s tools" : nil
+    }
+
+    /// The bundled server still carries the download's quarantine flag, so
+    /// Gatekeeper will refuse to run it for the agent (#310). Shown with an
+    /// Allow button rather than cleared at launch: clearing it is the
+    /// photographer's decision, the same one as README-FIRST's `xattr` line.
+    private(set) var toolsQuarantined = false
+
+    /// What the Allow button does: `xattr -dr com.apple.quarantine` on this
+    /// app. Fails, and says so, where the bundle is read-only - a disk image
+    /// opened in place.
+    func allowTools() {
+        if !Quarantine.clear(Bundle.main.bundleURL) {
+            notice = "Move Orion to Applications, then Allow"
+            return
+        }
+        refreshQuarantine()
+        restart()
+    }
+
+    private func refreshQuarantine() {
+        toolsQuarantined = Self.bundledServer.map { Quarantine.isSet($0) } ?? false
+        notice = Self.configurationNotice(in: workingDirectory, quarantined: toolsQuarantined)
+    }
+
+    private static func hasMCPConfig(_ directory: URL) -> Bool {
         FileManager.default.fileExists(atPath: directory.appendingPathComponent(".mcp.json").path)
-            ? nil : "Choose a tools folder containing .mcp.json"
     }
 
     func setWorkingDirectory(_ directory: URL) {
         workingDirectory = directory
         UserDefaults.standard.set(directory.path, forKey: Keys.workingDirectory)
-        notice = Self.configurationNotice(in: directory)
+        refreshQuarantine()
         restart()
     }
 
@@ -111,14 +158,70 @@ enum AssistantProcess {
     /// Interactive + login matches Terminal.app: CLI installs commonly add PATH
     /// in .zshrc, which a login-only shell skips when launched from Finder.
     /// Pass every command and argument as data, never shell source.
-    static func buildArgv(for command: String) -> [String] {
+    ///
+    /// `server`, when given, registers Orion's MCP server for this session
+    /// only, so a downloaded app's assistant has its tools without the
+    /// photographer writing any configuration: Claude Code takes the JSON
+    /// itself, Codex a TOML-valued `-c` override of its config.
+    static func buildArgv(for command: String, server: URL? = nil) -> [String] {
         let shell = ["-l", "-i", "-c", "exec \"$0\" \"$@\"", command]
         switch command {
         case "claude":
-            return shell + ["--append-system-prompt", orionContext]
+            return shell + (server.map { ["--mcp-config", claudeConfig($0)] } ?? [])
+                + ["--append-system-prompt", orionContext]
+        case "codex":
+            return shell + (server.map { ["-c", "mcp_servers.orion.command=" + tomlString($0.path)] } ?? [])
         default:
             return shell
         }
+    }
+
+    /// `claude mcp add`, single-quoted for a shell, for pasting into a
+    /// terminal outside Orion - after clearing the download's quarantine
+    /// from the app, without which Gatekeeper refuses the server (#310).
+    static func claudeAddCommand(_ server: URL, app: URL) -> String {
+        "xattr -dr com.apple.quarantine " + shellQuoted(app.path)
+            + " && claude mcp add orion -- " + shellQuoted(server.path)
+    }
+
+    private static func shellQuoted(_ text: String) -> String {
+        "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    static func claudeConfig(_ server: URL) -> String {
+        let config = ["mcpServers": ["orion": ["command": server.path]]]
+        let data = (try? JSONSerialization.data(withJSONObject: config, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func tomlString(_ text: String) -> String {
+        "\"" + text.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+}
+
+/// The download's quarantine flag. Orion is signed ad hoc and not notarized,
+/// so Gatekeeper refuses a quarantined executable launched from a terminal:
+/// measured on alpha.6, `spctl` rejects `orion-mcp` and it never answers
+/// `initialize`. Approving Orion.app in Finder is about the app, not about a
+/// helper an agent spawns.
+enum Quarantine {
+    static let attribute = "com.apple.quarantine"
+
+    static func isSet(_ url: URL, attribute: String = attribute) -> Bool {
+        getxattr(url.path, attribute, nil, 0, 0, XATTR_NOFOLLOW) >= 0
+    }
+
+    /// From `root` and everything under it, as `xattr -dr` does. False if any
+    /// file that carries it could not be cleared.
+    static func clear(_ root: URL, attribute: String = attribute) -> Bool {
+        let inside = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? []
+        var cleared = true
+        for url in [root] + inside where removexattr(url.path, attribute, XATTR_NOFOLLOW) != 0 && errno != ENOATTR {
+            cleared = false
+        }
+        return cleared
     }
 }
 

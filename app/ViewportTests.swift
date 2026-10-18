@@ -272,6 +272,8 @@ enum ViewportTests {
         testAssistantFontSizeClampsAtBothEnds()
         testAssistantArgvBuilderAppendsClaude()
         testAssistantArgvBuilderOmitsCodex()
+        testAssistantArgvRegistersBundledServer()
+        testQuarantineClearsEveryFileAndReports()
         testAssistantLaunchLoadsInteractivePath()
 
         print("\n\(checks) checks, \(failures) failures")

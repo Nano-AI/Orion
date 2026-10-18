@@ -30,6 +30,10 @@ import SwiftUI
 struct AssistantTerminalView: NSViewRepresentable {
     let command: String
     let workingDirectory: URL
+    /// The bundled `orion-mcp` to register on the command line, or nil when
+    /// the working directory's `.mcp.json` does it. Derived from
+    /// `workingDirectory`, so a change to it always comes with a relaunch.
+    let server: URL?
     /// Changes on every tap of the header's restart button, so a relaunch can
     /// be forced even when neither `command` nor `workingDirectory` changed.
     let restartToken: UUID
@@ -112,7 +116,7 @@ struct AssistantTerminalView: NSViewRepresentable {
         context.coordinator.launchedCommand = command
         context.coordinator.launchedDirectory = workingDirectory
         context.coordinator.launchedToken = restartToken
-        let args = AssistantProcess.buildArgv(for: command)
+        let args = AssistantProcess.buildArgv(for: command, server: server)
         view.startProcess(executable: "/bin/zsh",
                            args: args,
                            currentDirectory: workingDirectory.path)
@@ -150,6 +154,7 @@ struct AssistantColumn: View {
                 Rectangle().fill(Palette.line).frame(height: 1)
                 AssistantTerminalView(command: model.command,
                                       workingDirectory: workingDirectory,
+                                      server: model.launchServer,
                                       restartToken: model.restartToken,
                                       fontSize: model.fontSize)
             }
@@ -228,6 +233,13 @@ struct AssistantColumn: View {
 
             if let notice = model.notice {
                 Text(notice).font(.caption).foregroundStyle(Palette.dim)
+                    .lineLimit(1).truncationMode(.tail)
+            }
+
+            if model.toolsQuarantined {
+                Button("Allow") { model.allowTools() }
+                    .controlSize(.small)
+                    .help("Clear the download’s quarantine from Orion so the assistant can run its tools")
             }
 
             Spacer()
@@ -273,6 +285,17 @@ struct AssistantCommands: Commands {
             // ⌘⇧A is already "Deselect" on the Photo menu (OrionApp+Commands
             // .swift) — ⌘⌥A instead.
             .keyboardShortcut("a", modifiers: [.command, .option])
+
+            // For an agent outside Orion: the one line that registers this
+            // app's bundled server with Claude Code. Disabled in a development
+            // build, which has no orion-mcp and registers through .mcp.json.
+            Button("Copy MCP Setup Command") {
+                guard let server = AssistantPanelModel.bundledServer else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(
+                    AssistantProcess.claudeAddCommand(server, app: Bundle.main.bundleURL), forType: .string)
+            }
+            .disabled(AssistantPanelModel.bundledServer == nil)
         }
     }
 }
