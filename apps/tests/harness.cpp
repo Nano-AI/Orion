@@ -40,3 +40,31 @@ void checkNear(double got, double want, double tol, const std::string& what) {
 }
 
 void section(const char* name) { std::printf("%s\n", name); }
+
+orion::raw::BayerImage noisyGrey(std::uint32_t w, std::uint32_t h, double signal,
+                                 double a, double b, unsigned seed) {
+    constexpr float kWhite = 16383.0f;
+    orion::raw::BayerImage img;
+    img.width = w; img.height = h;
+    img.filters = 0x94949494u;             // RGGB
+    img.white = std::uint16_t(kWhite);
+    img.black = {0, 0, 0, 0};
+    img.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
+    img.camToXyz = {0.4124f, 0.3576f, 0.1805f,
+                    0.2126f, 0.7152f, 0.0722f,
+                    0.0193f, 0.1192f, 0.9505f};
+    img.samples.resize(std::size_t(w) * h);
+    std::mt19937 rng(seed);
+    std::normal_distribution<double> g(0.0, 1.0);
+    const double sigma = std::sqrt(a * signal + b);
+    for (auto& s : img.samples)
+        s = std::uint16_t(std::clamp(signal + sigma * g(rng), 0.0, 1.0) * kWhite);
+    return img;
+}
+
+std::vector<std::uint8_t> pixels(const orion::pipe::DevelopPipeline& p) {
+    const auto row = p.outputWidth() * orion::gpu::bytesPerPixel(p.output().format());
+    std::vector<std::uint8_t> bytes(row * p.outputHeight());
+    p.output().download(bytes.data(), row, p.outputWidth(), p.outputHeight());
+    return bytes;
+}

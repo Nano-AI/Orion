@@ -262,6 +262,17 @@ struct Adjustments {
     /// overestimated (its model describes the noise before this ran), so
     /// Luminance is usually left at zero. research/high-iso.md §4.
     float denoiseNlm = 0.0f;      // 0..1
+    /// Micro-contrast on the two finest starlet scales, gated by the measured
+    /// noise: Starck et al. 2003's gain leaves every coefficient under 3σ at
+    /// exactly one, so it lifts texture without regrowing grain. Negative
+    /// attenuates weak texture and leaves edges. Runs the capture chain on
+    /// its own. 0 is bit-identical. research/high-iso.md §2.
+    float texture = 0.0f;         // -1..1
+    /// Chroma at the two starlet scales past the chain's four (16 and 32 px),
+    /// at quarter resolution, where demosaicing puts the colour blotches. The
+    /// coarse strength is `denoiseColor × denoiseSmoothness`, so Color 0 runs
+    /// nothing. 0 is bit-identical. research/high-iso.md §1.
+    float denoiseSmoothness = 0.0f;   // 0..1
 
     /// How much of the creative LUT to apply, 0..1. The LUT itself is not an
     /// adjustment — it is a file, set through `setCreativeLut`.

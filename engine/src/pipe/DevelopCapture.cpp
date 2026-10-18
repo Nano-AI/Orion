@@ -214,11 +214,46 @@ void DevelopPipeline::buildCaptureNodes() {
                                            PixelFormat::RGBA16Float, {}});
     }
 
+    // ── Smoothness: chroma at j = 4, 5, quarter resolution ──────────────
+    //
+    // research/high-iso.md §1. c_4 is everything the four scales did not
+    // reach, so its block mean continues the same transform at a sixteenth of
+    // the pixels: blurs at quarter-resolution steps 4 and 8 are taps 16 and 32
+    // full-resolution pixels. The shrinks run chroma only and accumulate
+    // coarse to fine exactly as above, and the up node adds `shrunk − c_4q`
+    // to the picture. Its first input is the picture, so disabled it resolves
+    // straight back to `denoise:shrink 0`.
+    chromaW_ = (width_ + kChromaScale - 1) / kChromaScale;
+    chromaH_ = (height_ + kChromaScale - 1) / kChromaScale;
+    nChromaDown_ = pipeline_.add({"denoise:chroma down", "denoiseChromaDown",
+                                  {nAtrousBlur_[kDenoiseScales - 1]},
+                                  PixelFormat::RGBA16Float, {}, {},
+                                  true, chromaW_, chromaH_});
+    for (int j = 0; j < kChromaScales; ++j) {
+        const int input = (j == 0) ? nChromaDown_ : nChromaBlur_[j - 1];
+        nChromaBlur_[j] = pipeline_.add({"denoise:chroma blur " + std::to_string(j + 4),
+                                         "atrousBlur", {input},
+                                         PixelFormat::RGBA16Float, {}, {},
+                                         true, chromaW_, chromaH_});
+    }
+    for (int j = kChromaScales - 1; j >= 0; --j) {
+        const int fine   = (j == 0) ? nChromaDown_ : nChromaBlur_[j - 1];
+        const int coarse = nChromaBlur_[j];
+        const int accum  = (j == kChromaScales - 1) ? coarse : nChromaShrink_[j + 1];
+        nChromaShrink_[j] = pipeline_.add({"denoise:chroma shrink " + std::to_string(j + 4),
+                                           "atrousShrink", {fine, coarse, accum, coarse},
+                                           PixelFormat::RGBA16Float, {}, {},
+                                           true, chromaW_, chromaH_});
+    }
+    nChromaUp_ = pipeline_.add({"denoise:chroma up", "denoiseChromaUp",
+                                {nAtrousShrink_[0], nChromaShrink_[0], nChromaDown_},
+                                PixelFormat::RGBA16Float, {}});
+
     // ── Lens corrections ──────────────────────────────────────────────────
     //
     // After denoise so it is not resampling noise, before sharpening so the
     // sharpening answers for the softening a resample costs.
-    nLens_ = pipeline_.add({"lens", "lensCorrect", {nAtrousShrink_[0]},
+    nLens_ = pipeline_.add({"lens", "lensCorrect", {nChromaUp_},
                             PixelFormat::RGBA16Float, {}});
 
     buildCaptureTail();
@@ -669,13 +704,19 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
     // unused rather than run at zero strength. Unlike the guided filter it also
     // has to be re-pushed when white balance moves: linearize scales each
     // channel by its multiplier, and a variance scales by the square of that.
+    //
+    // Texture rides on the same shrinks (research/high-iso.md §2), so it
+    // switches the chain on by itself: with both strengths at zero the garrote
+    // passes everything and only the gain moves.
     const bool denoising = noise_.measured &&
-                           (adj.denoiseLuma > 0.0f || adj.denoiseColor > 0.0f);
+                           (adj.denoiseLuma > 0.0f || adj.denoiseColor > 0.0f ||
+                            std::fabs(adj.texture) > 1e-4f);
     const bool denoiseMoved =
         first ||
         adj.denoiseLuma != lastAdj_.denoiseLuma ||
         adj.denoiseColor != lastAdj_.denoiseColor ||
         adj.denoiseDetail != lastAdj_.denoiseDetail ||
+        adj.texture != lastAdj_.texture ||
         adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
         adj.wb.tint != lastAdj_.wb.tint;
 
@@ -709,17 +750,9 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
         adj.denoiseNlm != lastAdj_.denoiseNlm || wbMoved;
     if (nlmMoved) pipeline_.setEnabled(nNlm_, nlm);
 
-    // The model was fitted on the mosaic, before white balance. Linearize
-    // multiplies channel c by m_c, so its variance is multiplied by m_c².
-    // Luminance is a weighted sum of independent channels, so its variance
-    // is the weight-squared sum of theirs. Both the chain and the non-local
-    // means read these two numbers.
-    const auto m = denoiseMultipliers(adj);
-    // Rec.2020 luminance weights, matching the shaders.
-    constexpr float wR = 0.2627f, wG = 0.6780f, wB = 0.0593f;
-    const float aLum = noise_.a * (wR * wR * m[0] + wG * wG * m[1] + wB * wB * m[2]);
-    const float bLum = noise_.b * (wR * wR * m[0] * m[0] + wG * wG * m[1] * m[1] +
-                                   wB * wB * m[2] * m[2]);
+    // The luma model after white balance; the chain, the non-local means and
+    // Smoothness all read these two numbers.
+    const auto [aLum, bLum] = captureLumaNoise(adj);
 
     if (nlm && nlmMoved) {
         params::Nlm np{};
@@ -733,6 +766,32 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
         pipeline_.setParams(nNlm_, &np, sizeof np);
     }
     nlmWindowMoved_ = false;
+
+    // Smoothness's six nodes: the coarse strength is Color × Smoothness, so
+    // either at zero switches them off (research/high-iso.md §1).
+    const bool smoothing = denoising && adj.denoiseColor > 0.0f &&
+                           adj.denoiseSmoothness > 0.0f;
+    const bool smoothMoved = denoiseMoved ||
+                             adj.denoiseSmoothness != lastAdj_.denoiseSmoothness;
+    if (smoothMoved) {
+        for (int n : {nChromaDown_, nChromaUp_, nChromaBlur_[0], nChromaBlur_[1],
+                      nChromaShrink_[0], nChromaShrink_[1]}) {
+            pipeline_.setEnabled(n, smoothing);
+        }
+    }
+    if (first) {
+        params::ChromaResample down{{chromaW_, chromaH_}, {width_, height_}};
+        pipeline_.setParams(nChromaDown_, &down, sizeof down);
+        params::ChromaResample up{{width_, height_}, {chromaW_, chromaH_}};
+        pipeline_.setParams(nChromaUp_, &up, sizeof up);
+        for (int j = 0; j < kChromaScales; ++j) {
+            params::AtrousBlur blur{};
+            blur.size[0] = chromaW_;
+            blur.size[1] = chromaH_;
+            blur.step = 4 << j;   // 16 and 32 full-resolution pixels
+            pipeline_.setParams(nChromaBlur_[j], &blur, sizeof blur);
+        }
+    }
 
     if (denoising && denoiseMoved) {
         for (int j = 0; j < kDenoiseScales; ++j) {
@@ -748,9 +807,73 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
             shrink.detail = adj.denoiseDetail;
             shrink.step = 1 << j;
             shrink.useField = 0;
+            // The shader picks the scales it applies at from `step`.
+            shrink.texture = std::fabs(adj.texture) > 1e-4f ? adj.texture : 0.0f;
             pipeline_.setParams(nAtrousShrink_[j], &shrink, sizeof shrink);
         }
     }
+
+    if (smoothing && smoothMoved) {
+        // ⚠ The chroma model, not the luma one (a deviation from high-iso.md
+        // §1, which reused the luma model): see `coarseChromaNoise`. The block
+        // keeps its full colour, so the shrink reads its brightness from it
+        // exactly as the full-resolution one does.
+        const auto noise = coarseChromaNoise(adj);
+        for (int j = 0; j < kChromaScales; ++j) {
+            params::AtrousShrink shrink{};
+            shrink.size[0] = chromaW_;
+            shrink.size[1] = chromaH_;
+            shrink.noiseA = noise[0];
+            shrink.noiseB = noise[1];
+            shrink.scaleNorm = kChromaScaleNorm[j];
+            shrink.strengthLuma = 0.0f;
+            shrink.strengthChroma = adj.denoiseColor * adj.denoiseSmoothness;
+            shrink.step = 4 << j;
+            shrink.useField = 0;
+            pipeline_.setParams(nChromaShrink_[j], &shrink, sizeof shrink);
+        }
+    }
+}
+
+std::array<float, 2> DevelopPipeline::captureLumaNoise(const Adjustments& adj) const {
+    // The model was fitted on the mosaic, before white balance. Linearize
+    // multiplies channel c by m_c, so its variance is multiplied by m_c².
+    // Luminance is a weighted sum of independent channels, so its variance
+    // is the weight-squared sum of theirs.
+    const auto m = denoiseMultipliers(adj);
+
+    // Rec.2020 luminance weights, matching the shader.
+    constexpr float wR = 0.2627f, wG = 0.6780f, wB = 0.0593f;
+    const float aLum = noise_.a * (wR * wR * m[0] + wG * wG * m[1] + wB * wB * m[2]);
+    const float bLum = noise_.b * (wR * wR * m[0] * m[0] + wG * wG * m[1] * m[1] +
+                                   wB * wB * m[2] * m[2]);
+    return {aLum, bLum};
+}
+
+std::array<float, 2> DevelopPipeline::coarseChromaNoise(const Adjustments& adj) const {
+    // The same fit, carried through the chroma split instead of the luma sum,
+    // and through the mosaic's sampling. Chroma channel ch is x_ch − wᵀx, so
+    // its variance is Σ_c (δ_ch,c − w_c)² var(x_c). At scales far coarser than
+    // the CFA period a demosaiced channel is an interpolation of samples at
+    // density ρ_c (a quarter for R and B, half for G; Alleysson et al. 2005),
+    // so its coarse coefficients carry var/ρ_c rather than var. The shrink
+    // takes one σ for all three chroma channels: their mean variance.
+    //
+    // Measured, not argued: on `testDenoiseSmoothnessGpu`'s card this is 3.0x
+    // the luma model's deviation, and the luma model at Color 3 removed 37%
+    // of the coarse chroma energy against a 67% plateau that 4x reaches.
+    const auto m = denoiseMultipliers(adj);
+    constexpr float w[3] = {0.2627f, 0.6780f, 0.0593f};
+    constexpr float rho[3] = {0.25f, 0.5f, 0.25f};
+    float sumA = 0.0f, sumB = 0.0f;
+    for (int ch = 0; ch < 3; ++ch) {
+        for (int c = 0; c < 3; ++c) {
+            const float d = (ch == c ? 1.0f : 0.0f) - w[c];
+            sumA += d * d * m[std::size_t(c)] / rho[c];
+            sumB += d * d * m[std::size_t(c)] * m[std::size_t(c)] / rho[c];
+        }
+    }
+    return {noise_.a * sumA / 3.0f, noise_.b * sumB / 3.0f};
 }
 
 std::array<float, 3> DevelopPipeline::denoiseMultipliers(const Adjustments& adj) const {

@@ -22,7 +22,12 @@ struct LlfRemapHParams
     float alpha;
     float noiseLo;
     float noiseHi;
-    float _pad[2];
+    float noiseA;      // the measured model in working luminance,
+    float noiseB;      //   research/high-iso.md §3; zero is the paper's guard
+    float floorK;      // deviations the guard starts at
+    float windowLoEv;
+    float windowEv;
+    float _pad;
 };
 
 [shader("compute")]
@@ -43,11 +48,14 @@ void llfRemapH(uint3 tid : SV_DispatchThreadID,
     {
         const float w = kBurt[dx + 2];
         const float i = src[int2(clamp(cx + dx, 0, hi), y)];
+        float lo, up;
+        llfNoiseBand(i, p.noiseA, p.noiseB, p.floorK, p.windowLoEv, p.windowEv,
+                     p.noiseLo, p.noiseHi, lo, up);
 
         for (int k = 0; k < 4; ++k)
         {
             const float g = p.gamma0 + float(k) * p.gammaStep;
-            sum[k] += w * llfRemap(i, g, p.sigmaR, p.alpha, p.noiseLo, p.noiseHi);
+            sum[k] += w * llfRemap(i, g, p.sigmaR, p.alpha, lo, up);
         }
     }
 

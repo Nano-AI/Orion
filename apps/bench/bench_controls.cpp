@@ -598,6 +598,24 @@ void controlProbes(Bench& b) {
                  a.maskCount = 1;
              }, [](auto& a) { a.layers[0].denoiseLuma = 3.0f; }, Metric::Detail, 0.0021,
              nullptr, nullptr, 12},
+            // Texture alone: the whole capture chain switches on for it, so
+            // the node floor is the chain's eight. research/high-iso.md §2.
+            //
+            // ⚠ Waived, and the reason is the design, not a regression:
+            // 0.0001 and 0.0002 moved on the two low-ISO frames here. The
+            // gain lives between 3σ and m = 30σ, and on a clean frame σ is so
+            // small that nearly all real texture stands above m and passes
+            // at gain one. Pinned by `testTextureGpu` on a noisy card; see
+            // research/UNSOURCED.md §20 for what would settle `m`.
+            {"texture +1",     flat, [](auto& a) { a.texture = 1.0f; }, Metric::Detail, 0.0,
+             "m = 30σ: on a low-ISO frame texture sits above m (UNSOURCED §20)",
+             nullptr, 8},
+            // Smoothness against the same Color without it: the six quarter
+            // nodes and the full-resolution add. research/high-iso.md §1.
+            // Two frames, 0.022 and 0.017 of the reference; half the smaller.
+            {"smoothness 1.0", [](orion::pipe::Adjustments& a) { a.denoiseColor = 3.0f; },
+             [](auto& a) { a.denoiseSmoothness = 1.0f; }, Metric::Chroma, 0.0085,
+             nullptr, nullptr, 6},
             // ⚠ **Detail, not luma.** Film grain is zero-mean by
             // construction — that is the property that keeps it from
             // shifting exposure — so a probe on mean brightness reads

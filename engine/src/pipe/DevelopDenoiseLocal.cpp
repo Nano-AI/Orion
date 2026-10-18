@@ -110,6 +110,25 @@ void DevelopPipeline::applyLocalDenoise(const Adjustments& adj,
     }
     pipeline_.setParams(nDenoiseField_, &field, sizeof field);
 
+    const auto noise = workingLumaNoise(adj);
+
+    for (int j = 0; j < kDenoiseScales; ++j) {
+        params::AtrousShrink shrink{};
+        shrink.size[0] = width_;
+        shrink.size[1] = height_;
+        shrink.noiseA = noise[0];
+        shrink.noiseB = noise[1];
+        shrink.scaleNorm = kDenoiseScaleNorm[j];
+        shrink.detail = adj.denoiseDetail;
+        shrink.step = 1 << j;
+        // The strengths come from the field; the two scalars are unread.
+        shrink.useField = 1;
+        pipeline_.setParams(nLocalShrink_[j], &shrink, sizeof shrink);
+    }
+}
+
+std::array<float, 2> DevelopPipeline::workingLumaNoise(const Adjustments& adj) const {
+    if (!noise_.measured) return {0.0f, 0.0f};
     // The model through the matrix (§2.3): Y = wᵀM x, so with k = Mᵀw the
     // capture chain's two sums carry over with k in place of w.
     constexpr float w[3] = {0.2627f, 0.6780f, 0.0593f};
@@ -122,20 +141,7 @@ void DevelopPipeline::applyLocalDenoise(const Adjustments& adj,
         sumA += k[c] * k[c] * m[std::size_t(c)];
         sumB += k[c] * k[c] * m[std::size_t(c)] * m[std::size_t(c)];
     }
-
-    for (int j = 0; j < kDenoiseScales; ++j) {
-        params::AtrousShrink shrink{};
-        shrink.size[0] = width_;
-        shrink.size[1] = height_;
-        shrink.noiseA = noise_.a * sumA;
-        shrink.noiseB = noise_.b * sumB;
-        shrink.scaleNorm = kDenoiseScaleNorm[j];
-        shrink.detail = adj.denoiseDetail;
-        shrink.step = 1 << j;
-        // The strengths come from the field; the two scalars are unread.
-        shrink.useField = 1;
-        pipeline_.setParams(nLocalShrink_[j], &shrink, sizeof shrink);
-    }
+    return {noise_.a * sumA, noise_.b * sumB};
 }
 
 }  // namespace orion::pipe

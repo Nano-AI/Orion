@@ -489,6 +489,11 @@ void DevelopPipeline::applyFusion(const Adjustments& adj,
     }
 }
 
+void DevelopPipeline::setClarityNoiseFloor(float k) {
+    clarityFloorMoved_ = clarityFloorMoved_ || k != clarityFloor_;
+    clarityFloor_ = k;
+}
+
 void DevelopPipeline::applyClarity(const Adjustments& adj,
                                    const ApplyContext& ctx) {
     const bool first = ctx.first;
@@ -515,8 +520,27 @@ void DevelopPipeline::applyClarity(const Adjustments& adj,
         }
     }
 
-    if (clarifying && clarityMoved) {
+    // The guard reads the frame's noise (research/high-iso.md §3), and the
+    // model moves with white balance the way the denoise chain's does: the
+    // multipliers scale the variance. Only the two blocks that remap read it.
+    const bool noiseMoved =
+        clarityFloorMoved_ ||
+        (noise_.measured && (adj.wb.temperatureK != lastAdj_.wb.temperatureK ||
+                             adj.wb.tint != lastAdj_.wb.tint));
+    clarityFloorMoved_ = false;
+
+    if (clarifying && (clarityMoved || noiseMoved)) {
         const float alpha = llf::alphaForClarity(adj.clarity);
+        const auto noise = workingLumaNoise(adj);
+        const auto guard = [&](auto& r) {
+            r.noiseLo    = llf::kNoiseLo;
+            r.noiseHi    = llf::kNoiseHi;
+            r.noiseA     = noise[0];
+            r.noiseB     = noise[1];
+            r.floorK     = clarityFloor_;
+            r.windowLoEv = llf::kWindowLoEv;
+            r.windowEv   = llf::kWindowEv;
+        };
 
         params::LlfLuma lum{{width_, height_}, llf::kWindowLoEv,
                             1.0f / llf::kWindowEv};
@@ -537,8 +561,7 @@ void DevelopPipeline::applyClarity(const Adjustments& adj,
                     r.gammaStep = llf::kGammaStep;
                     r.sigmaR    = llf::kSigmaR;
                     r.alpha     = alpha;
-                    r.noiseLo   = llf::kNoiseLo;
-                    r.noiseHi   = llf::kNoiseHi;
+                    guard(r);
                     pipeline_.setParams(nLlfRemapH_[st], &r, sizeof r);
 
                     params::LlfDown v{{llfW_[1], llfH_[1]}, {llfW_[1], height_}};
@@ -565,8 +588,7 @@ void DevelopPipeline::applyClarity(const Adjustments& adj,
         c0.gammaCount = llf::kGammaLevels;
         c0.sigmaR     = llf::kSigmaR;
         c0.alpha      = alpha;
-        c0.noiseLo    = llf::kNoiseLo;
-        c0.noiseHi    = llf::kNoiseHi;
+        guard(c0);
         pipeline_.setParams(nLlfOut_[0], &c0, sizeof c0);
 
         params::LlfApply ap{{width_, height_}, llf::kWindowEv,

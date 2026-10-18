@@ -12,7 +12,7 @@
 //     σ_j   = ‖W_j‖₂ · sqrt(a·x + b)
 //     τ_j   = β · σ_j
 //
-// ‖W_j‖₂ for the 5x5 starlet is [0.8907, 0.2007, 0.0855, 0.0412, 0.0202] —
+// ‖W_j‖₂ for the 5x5 starlet is [0.8907, 0.2007, 0.0855, 0.0412, 0.0204] —
 // noise falls away fast at coarse scales, which is why a single threshold
 // across scales over-smooths the fine ones and under-smooths the coarse.
 //
@@ -22,6 +22,7 @@
 // like soft and asymptotically unbiased like hard.
 
 #include "cfa.slang"
+#include "ops/denoise_ops.slang"
 
 // Two refinements, research/denoise-masked.md:
 //
@@ -46,45 +47,9 @@ struct ShrinkParams
     float detail;          // 0..1, how much of the BayesShrink factor applies
     int   step;            // 2^j: the local energy window's spacing
     int   useField;        // 1: β per pixel from `field`, strengths ignored
-    int   _pad0;
+    float texture;         // -1..1, Starck et al. 2003's gain on j = 0, 1
     int   _pad1;
 };
-
-float luminance2020(float3 c)
-{
-    return dot(c, float3(0.2627f, 0.6780f, 0.0593f));
-}
-
-float garrote(float w, float tau)
-{
-    const float a = abs(w);
-    if (a <= tau || a < 1e-8f) return 0.0f;
-    return w - (tau * tau) / w;
-}
-
-/// σ_n / max(σ_x, σ_n) at this pixel, from the luma detail energy over a 5x5
-/// window spaced like the transform itself — the support this coefficient was
-/// formed over. research/denoise-masked.md §1. In (0, 1], so it can only ever
-/// lower the threshold.
-float textureFactor(Texture2D<float4> fine, Texture2D<float4> coarse,
-                    int2 c, int step, uint2 size, float sigma)
-{
-    float energy = 0.0f;
-    [unroll]
-    for (int j = 0; j < 5; ++j)
-    {
-        [unroll]
-        for (int i = 0; i < 5; ++i)
-        {
-            const int2 q = clampToImage(c + int2((i - 2) * step, (j - 2) * step), size);
-            const float d = luminance2020(fine[q].rgb - coarse[q].rgb);
-            energy += d * d;
-        }
-    }
-    energy *= 1.0f / 25.0f;
-    const float sigmaX = sqrt(max(energy - sigma * sigma, 0.0f));
-    return sigma / max(max(sigmaX, sigma), 1e-12f);
-}
 
 [shader("compute")]
 [numthreads(16, 16, 1)]
@@ -113,7 +78,7 @@ void atrousShrink(uint3 tid : SV_DispatchThreadID,
         betaLuma = b.x;
         betaChroma = b.y;
     }
-    else if (betaLuma <= 0.0f && betaChroma <= 0.0f)
+    else if (betaLuma <= 0.0f && betaChroma <= 0.0f && p.texture == 0.0f)
     {
         dst[tid.xy] = float4(accum[tid.xy].rgb + detail, 1.0f);
         return;
@@ -140,7 +105,20 @@ void atrousShrink(uint3 tid : SV_DispatchThreadID,
         tauLuma *= lerp(1.0f, f, p.detail);
     }
 
-    const float keptLuma = garrote(dLuma, tauLuma);
+    float keptLuma = garrote(dLuma, tauLuma);
+
+    // Texture (research/high-iso.md §2): the two finest scales, the second at
+    // half weight. The gain reads the coefficient as measured, because σ is
+    // the deviation of *that*, and multiplies what the garrote kept.
+    //
+    // `m`, where the boost has faded to one, is 30σ or a quarter of the local
+    // brightness, whichever is larger. 30σ alone made this a high-ISO-only
+    // control: on a clean frame σ is so small that every real coefficient sat
+    // above 30σ and passed untouched. A quarter of the local level is an edge
+    // on any frame; texture is under it.
+    const float level = (p.step == 1) ? 1.0f : (p.step == 2) ? 0.5f : 0.0f;
+    const float m = max(30.0f * sigma, 0.25f * y);
+    keptLuma *= textureGain(dLuma, sigma, m, p.texture * 0.5f * level);
     float3 keptChroma = float3(garrote(dChroma.r, tauChroma),
                                garrote(dChroma.g, tauChroma),
                                garrote(dChroma.b, tauChroma));

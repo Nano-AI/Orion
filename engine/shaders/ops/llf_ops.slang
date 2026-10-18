@@ -44,6 +44,28 @@ float llfRemap(float i, float g, float sigmaR, float alpha,
     return g + sign(d) * sigmaR * fd;
 }
 
+/// The noise guard's bounds at this pixel, from the frame's own noise.
+/// research/high-iso.md §3; the CPU mirror is `llf::noiseBand`.
+///
+/// `i` is normalized log luminance over the window, so Y = 2^(i·ev + lo)
+/// recovers linear luminance, σ_Y² = a·Y + b is the measured model there, and
+/// σ_Y / (Y ln 2) is the same deviation in stops. The guard starts at `k` of
+/// those deviations, or at the paper's constant where that is larger, so a
+/// clean frame (a = b = 0) gets the paper's bounds exactly.
+void llfNoiseBand(float i, float noiseA, float noiseB, float k,
+                  float windowLoEv, float windowEv,
+                  float noiseLo, float noiseHi, out float lo, out float hi)
+{
+    const float y = exp2(i * windowEv + windowLoEv);
+    const float sigmaY = sqrt(max(noiseA * y + noiseB, 0.0f));
+    const float sigmaEv = sigmaY / (y * 0.69314718f);
+    // ⚠ Guarded: a block that leaves the window zeroed must read as the
+    // paper's guard, not as 0/0.
+    const float t = k * sigmaEv / max(windowEv, 1e-6f);
+    lo = max(noiseLo, t);
+    hi = max(noiseHi, 2.0f * t);
+}
+
 /// Which of the eight gamma levels bracket `v`, and how far between them it
 /// sits. Aubry et al. step 4(ii): g = (1 - a)*gamma_j + a*gamma_{j+1}.
 void llfBracket(float v, float gammaStep, int count, out int j, out float a)

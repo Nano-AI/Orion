@@ -51,7 +51,9 @@ void testLocalLaplacianGpu() {
     };
 
     auto kDown     = kernelNamed("llfDown");
-    auto kRemap    = kernelNamed("llfRemapDown");
+    // The shipped level one: remap and halve horizontally, then vertically.
+    auto kRemapH   = kernelNamed("llfRemapH");
+    auto kDownV    = kernelNamed("llfDownV");
     auto kDown4    = kernelNamed("llfDownPacked");
     auto kColl     = kernelNamed("llfCollapse");
     auto kColl0    = kernelNamed("llfCollapse0");
@@ -95,10 +97,22 @@ void testLocalLaplacianGpu() {
     for (int l = 0; l < kLevels - 1; ++l) {
         out[l] = orion::gpu::Texture::create(*device, lw[l], lh[l], PixelFormat::R16Float);
     }
+    std::array<std::unique_ptr<orion::gpu::Texture>, kStacks> half1;
+    for (auto& t : half1)
+        t = orion::gpu::Texture::create(*device, lw[1], kH, PixelFormat::RGBA16Float);
 
     std::vector<float> gpu(std::size_t(kW) * kH);
 
-    const auto runChain = [&](float alpha) {
+    const auto runChain = [&](float alpha, llf::NoiseFloor floor = {}) {
+        const auto guard = [&](auto& r) {
+            r.noiseLo    = llf::kNoiseLo;
+            r.noiseHi    = llf::kNoiseHi;
+            r.noiseA     = floor.a;
+            r.noiseB     = floor.b;
+            r.floorK     = floor.k;
+            r.windowLoEv = llf::kWindowLoEv;
+            r.windowEv   = llf::kWindowEv;
+        };
         orion::gpu::CommandBuffer cb(*device);
 
         for (int l = 1; l < kLevels; ++l) {
@@ -112,17 +126,21 @@ void testLocalLaplacianGpu() {
         for (int l = 1; l < kLevels; ++l) {
             for (int st = 0; st < kStacks; ++st) {
                 if (l == 1) {
-                    orion::pipe::params::LlfRemap r{};
-                    r.outSize[0] = std::uint32_t(lw[1]); r.outSize[1] = std::uint32_t(lh[1]);
+                    orion::pipe::params::LlfRemapH r{};
+                    r.outSize[0] = std::uint32_t(lw[1]); r.outSize[1] = kH;
                     r.inSize[0]  = kW;                   r.inSize[1]  = kH;
                     r.gamma0    = float(st * 4) * llf::kGammaStep;
                     r.gammaStep = llf::kGammaStep;
                     r.sigmaR    = llf::kSigmaR;
                     r.alpha     = alpha;
-                    r.noiseLo   = llf::kNoiseLo;
-                    r.noiseHi   = llf::kNoiseHi;
-                    cb.dispatch(*kRemap.second, {luma.get(), pack[1][st].get()},
-                                &r, sizeof r, lw[1], lh[1]);
+                    guard(r);
+                    cb.dispatch(*kRemapH.second, {luma.get(), half1[st].get()},
+                                &r, sizeof r, lw[1], kH);
+                    orion::pipe::params::LlfDown v{
+                        {std::uint32_t(lw[1]), std::uint32_t(lh[1])},
+                        {std::uint32_t(lw[1]), kH}};
+                    cb.dispatch(*kDownV.second, {half1[st].get(), pack[1][st].get()},
+                                &v, sizeof v, lw[1], lh[1]);
                 } else {
                     orion::pipe::params::LlfDown d{
                         {std::uint32_t(lw[l]), std::uint32_t(lh[l])},
@@ -160,8 +178,7 @@ void testLocalLaplacianGpu() {
         c0.gammaCount = llf::kGammaLevels;
         c0.sigmaR     = llf::kSigmaR;
         c0.alpha      = alpha;
-        c0.noiseLo    = llf::kNoiseLo;
-        c0.noiseHi    = llf::kNoiseHi;
+        guard(c0);
         cb.dispatch(*kColl0.second,
                     {luma.get(),
                      pack[1][0].get(), pack[1][1].get(),
@@ -345,6 +362,57 @@ void testLocalLaplacianGpu() {
     }
     report(worstRemap < 1e-6, "alpha = 1 is the identity remapping",
            "worst " + std::to_string(worstRemap));
+
+    // ── The guard from the frame's own noise (research/high-iso.md §3) ────
+    //
+    // A model whose deviation is 0.5 EV at the plane's darkest pixel and
+    // under the paper's 0.12 EV at its brightest, so the ramp crosses the
+    // `max()` in noiseBand: the measured branch on the left, the constant on
+    // the right. The kernels and the CPU must still be one function there.
+    const llf::NoiseFloor noisy{1.0e-3f, 2.0e-7f, 1.0f};
+    {
+        float loDark = 0.0f, hiDark = 0.0f, loBright = 0.0f, hiBright = 0.0f;
+        llf::noiseBand(0.25f, noisy, loDark, hiDark);
+        llf::noiseBand(0.85f, noisy, loBright, hiBright);
+        std::printf("  measured guard: lo %.4f at i = 0.25, %.4f at i = 0.85 (paper %.4f)\n",
+                    loDark, loBright, llf::kNoiseLo);
+        report(loDark > llf::kNoiseLo * 2.0f && loBright == llf::kNoiseLo &&
+                   hiDark == 2.0f * loDark,
+               "the fixture crosses the measured guard's branch point",
+               std::to_string(loDark) + " / " + std::to_string(loBright));
+
+        const float a = llf::alphaForClarity(1.0f);
+        runChain(a, noisy);
+        const llf::Plane same = llf::referenceFast(input, kLevels, llf::kGammaLevels,
+                                                   llf::kSigmaR, a, llf::kNoiseLo,
+                                                   llf::kNoiseHi, noisy);
+        double worstNoisy = 0.0;
+        for (std::size_t i = 0; i < gpu.size(); ++i)
+            worstNoisy = std::max(worstNoisy, std::abs(double(gpu[i]) - double(same.v[i])));
+        report(worstNoisy < 5e-3, "with a measured floor the shaders and the CPU agree",
+               "worst " + std::to_string(worstNoisy));
+
+        const std::vector<float> withFloor = gpu;
+        runChain(a, {noisy.a, noisy.b, 0.0f});
+        double moved = 0.0;
+        for (std::size_t i = 0; i < gpu.size(); ++i)
+            moved = std::max(moved, std::abs(double(gpu[i]) - double(withFloor[i])));
+        report(moved > 1e-3, "and the floor changes the render where it binds",
+               "max |floor - none| " + std::to_string(moved));
+
+        // Point-wise: a ripple in the dark is declined, the same ripple in the
+        // bright half still gets the paper's treatment.
+        const float dark = llf::remap(0.254f, 0.25f, llf::kSigmaR, a, noisy) - 0.25f;
+        const float darkPaper = llf::remap(0.254f, 0.25f, llf::kSigmaR, a,
+                                           llf::kNoiseLo, llf::kNoiseHi) - 0.25f;
+        const float bright = llf::remap(0.88f, 0.85f, llf::kSigmaR, a, noisy) - 0.85f;
+        const float brightPaper = llf::remap(0.88f, 0.85f, llf::kSigmaR, a,
+                                             llf::kNoiseLo, llf::kNoiseHi) - 0.85f;
+        report(dark <= darkPaper && std::abs(dark - 0.004f) < 1e-6f &&
+                   bright == brightPaper,
+               "a ripple under the floor passes at gain one; above it, the paper's curve",
+               std::to_string(dark) + " / " + std::to_string(bright));
+    }
 }
 
 /// Dehaze — the three claims that are not obvious by reading.
@@ -553,3 +621,121 @@ void testDehazeGpu() {
 }
 
 /// Simulated exposure fusion — the maths, before any of it reaches a shader.
+
+/// Clarity's noise guard from the frame's measured noise, end to end through
+/// the develop graph. research/high-iso.md §3.
+///
+/// A mosaic at a 30% deviation, which is a 12800 frame's lower midtones: the
+/// grain sits well above Paris et al.'s 0.12 EV guard, so the shipped filter
+/// boosts it. The right half also carries a period-32 ripple at twice the
+/// per-channel deviation: texture just above the floor, which is what any
+/// guard trades the grain against. The floor is swept through
+/// `setClarityNoiseFloor` (0 is the shipped guard) and the table is the
+/// evidence for `llf::kFloor`.
+void testClarityNoiseFloorGpu() {
+    section("Clarity: the noise guard from the measured profile (GPU)");
+    namespace llf = orion::pipe::llf;
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    constexpr std::uint32_t kN = 256;
+    constexpr double kSignal = 0.05, kSigma = 0.3 * kSignal;
+    auto img = noisyGrey(kN, kN, kSignal, 0.0, kSigma * kSigma);
+    for (std::uint32_t y = 0; y < kN; ++y)
+        for (std::uint32_t x = kN / 2; x < kN; ++x) {
+            auto& s = img.samples[std::size_t(y) * kN + x];
+            const double r = 0.6 * kSignal * std::sin(2.0 * M_PI * double(x) / 32.0);
+            s = std::uint16_t(std::clamp(double(s) + r * 16383.0, 0.0, 16383.0));
+        }
+    report(orion::raw::estimateNoise(img).measured, "the noisy card's noise is measured");
+
+    orion::pipe::DevelopPipeline d(*device, ORION_SHADER_DIR, img);
+    d.setWideOutput(true);
+    orion::pipe::Adjustments off;
+    off.wb = d.asShotWhiteBalance();
+    auto on = off;
+    on.clarity = 1.0f;
+
+    const std::uint32_t W = d.outputWidth();
+    const auto Y = [&](const std::vector<std::uint8_t>& p, std::uint32_t x, std::uint32_t y) {
+        __fp16 v[3];
+        std::memcpy(v, p.data() + (std::size_t(y) * W + x) * 8, 6);
+        return 0.2627 * double(v[0]) + 0.6780 * double(v[1]) + 0.0593 * double(v[2]);
+    };
+    // Luma's RMS deviation from its own 3x3 box mean: the grain, on the flat half.
+    const auto grain = [&](const std::vector<std::uint8_t>& p) {
+        double s = 0.0; int n = 0;
+        for (std::uint32_t y = 16; y < kN - 16; ++y)
+            for (std::uint32_t x = 16; x < kN / 2 - 16; ++x) {
+                double box = 0.0;
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx)
+                        box += Y(p, x + std::uint32_t(dx), y + std::uint32_t(dy));
+                const double e = Y(p, x, y) - box / 9.0;
+                s += e * e; ++n;
+            }
+        return std::sqrt(s / n);
+    };
+    // The ripple's amplitude on the other half, by projection onto its sine.
+    const auto ripple = [&](const std::vector<std::uint8_t>& p) {
+        double s = 0.0; int n = 0;
+        for (std::uint32_t y = 16; y < kN - 16; ++y)
+            for (std::uint32_t x = kN / 2 + 16; x < kN - 16; ++x) {
+                s += Y(p, x, y) * std::sin(2.0 * M_PI * double(x) / 32.0); ++n;
+            }
+        return 2.0 * s / n;
+    };
+
+    d.apply(off); d.render();
+    const auto pOff = pixels(d);
+    const double gOff = grain(pOff), rOff = ripple(pOff);
+
+    constexpr int kSweep = 7;
+    double rise[kSweep] = {}, gain[kSweep] = {};
+    const float floors[kSweep] = {0.0f, 0.25f, 0.35f, 0.5f, 0.75f, 1.0f, 2.0f};
+    std::vector<std::uint8_t> atFloor[kSweep];
+    for (int i = 0; i < kSweep; ++i) {
+        d.setClarityNoiseFloor(floors[i]);
+        d.apply(on); d.render();
+        atFloor[i] = pixels(d);
+        rise[i] = grain(atFloor[i]) - gOff;
+        gain[i] = ripple(atFloor[i]) / rOff;
+        std::printf("  floor %.2f: grain %.5f -> %.5f (rise %.5f, %.0f%% of the "
+                    "shipped guard's); ripple x%.3f\n",
+                    floors[i], gOff, gOff + rise[i], rise[i],
+                    100.0 * rise[i] / std::max(rise[0], 1e-12), gain[i]);
+    }
+    d.setClarityNoiseFloor(llf::kFloor);
+
+    report(rise[0] > 0.0, "the shipped guard lets Clarity raise the grain",
+           "rise " + std::to_string(rise[0]));
+    int k = -1;
+    for (int i = 0; i < kSweep; ++i)
+        if (floors[i] == llf::kFloor) k = i;
+    report(k >= 0 && rise[k] < 0.5 * rise[0],
+           "at kFloor the grain rises by less than half what the shipped guard allows",
+           std::to_string(rise[k]) + " against " + std::to_string(rise[0]));
+    report(gain[k] > 1.0 + 0.2 * (gain[0] - 1.0),
+           "and the ripple just above the noise keeps a fifth of its boost",
+           "x" + std::to_string(gain[k]) + " against x" + std::to_string(gain[0]));
+
+    // A clean card: the measured deviation is far under the paper's constant,
+    // so the max() picks the constant and nothing moves a bit.
+    const auto clean = noisyGrey(kN, kN, 0.25, 0.0, 0.003 * 0.003);
+    report(orion::raw::estimateNoise(clean).measured, "the clean card's noise is measured");
+    orion::pipe::DevelopPipeline c(*device, ORION_SHADER_DIR, clean);
+    c.setWideOutput(true);
+    auto cleanOn = on;
+    cleanOn.wb = c.asShotWhiteBalance();
+    c.apply(cleanOn); c.render();
+    const auto measured = pixels(c);
+    c.setClarityNoiseFloor(0.0f);
+    c.apply(cleanOn); c.render();
+    report(pixels(c) == measured, "a clean frame renders byte-identical to the shipped guard");
+}

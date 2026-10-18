@@ -243,6 +243,15 @@ typedef struct OrionAdjustments {
      * 0.4 being the published value. 0 is off and byte-identical.
      * research/high-iso.md section 4. */
     float denoise_nlm;     /* 0..1 */
+    /* Fine-scale texture gain inside the denoise chain, gated by the measured
+     * noise so grain under three deviations is never boosted; negative
+     * smooths weak texture. Runs the chain even with both strengths at zero.
+     * research/high-iso.md section 2. */
+    float texture;         /* -1..1, 0 is bit-identical to before */
+    /* Chroma denoise at the coarse scales where colour blotches live, 16 and
+     * 32 px, at quarter resolution; its strength is denoise_color times this,
+     * so it does nothing at Color 0. research/high-iso.md section 1. */
+    float denoise_smoothness;  /* 0..1, 0 is bit-identical to before */
 
     /* How much of the loaded creative LUT to apply, 0..1. The LUT itself is
      * not an adjustment — see orion_engine_load_lut. Zero is byte-identical to

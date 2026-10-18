@@ -77,6 +77,18 @@ bool decode16(const std::string& path, std::vector<std::uint16_t>& out,
 orion::gpu::Texture& scratchAccum(orion::gpu::Device&, std::uint32_t w,
                                   std::uint32_t h);
 
+/// A flat grey mosaic `estimateNoise` measures: RGGB, Gaussian noise of
+/// variance `a·signal + b` in normalized units. The defaults are the denoise
+/// tests' card (`testNoiseEstimator`'s night frame, brighter and noisier so it
+/// survives to eight bits); Clarity's floor test asks for a far noisier one.
+/// In `harness.cpp`.
+orion::raw::BayerImage noisyGrey(std::uint32_t w, std::uint32_t h,
+                                 double signal = 0.25, double a = 4.0e-4,
+                                 double b = 4.0e-5, unsigned seed = 31337);
+
+/// The develop graph's output, downloaded whole in its own format.
+std::vector<std::uint8_t> pixels(const orion::pipe::DevelopPipeline&);
+
 // Every test, in one list. ⚠ A test defined and not declared here is a test that
 // does not link; a test declared and not called is one that never runs, which is
 // why `main.cpp` is now short enough to read its call list at a glance.
@@ -128,6 +140,8 @@ void testDenoiseDetailGpu();
 void testDenoiseDetailZeroIsShippedGpu();
 void testDenoiseMaskedGpu();
 void testNlmGpu();
+void testTextureGpu();
+void testDenoiseSmoothnessGpu();
 void testHighlightRecoveryGpu();
 void testLinearizeClipsToWhite();
 void testGradeOffsets();
@@ -144,6 +158,7 @@ void testHighlightHaloGpu();
 void testHighlightFillGpu();
 void testHighlightFillWiring();
 void testLocalLaplacianGpu();
+void testClarityNoiseFloorGpu();
 void testDehazeGpu();
 void testCreativeLut();
 void testExposureFusionMath();

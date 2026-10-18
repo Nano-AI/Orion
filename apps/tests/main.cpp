@@ -48,6 +48,8 @@ int main() {
     testDenoiseDetailZeroIsShippedGpu();
     testDenoiseMaskedGpu();
     testNlmGpu();
+    testTextureGpu();
+    testDenoiseSmoothnessGpu();
     testHighlightRecoveryGpu();
     testGradeOffsets();
     testLensGpu();
@@ -56,6 +58,7 @@ int main() {
     testHueSatMapGpu();
     testColorGradeGpu();
     testLocalLaplacianGpu();
+    testClarityNoiseFloorGpu();
     testDehazeGpu();
     testCreativeLut();
     testExposureFusionMath();

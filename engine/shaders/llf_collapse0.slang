@@ -20,7 +20,12 @@ struct LlfCollapse0Params
     float alpha;
     float noiseLo;
     float noiseHi;
-    float _pad[2];
+    float noiseA;      // research/high-iso.md §3, as llf_remap_h.slang
+    float noiseB;
+    float floorK;
+    float windowLoEv;
+    float windowEv;
+    float _pad;
 };
 
 [shader("compute")]
@@ -75,12 +80,16 @@ void llfCollapse0(uint3 tid : SV_DispatchThreadID,
     float frac;
     llfBracket(v, p.gammaStep, p.gammaCount, j, frac);
 
+    float lo, up;
+    llfNoiseBand(v, p.noiseA, p.noiseB, p.floorK, p.windowLoEv, p.windowEv,
+                 p.noiseLo, p.noiseHi, lo, up);
+
     const float ga = float(j)     * p.gammaStep;
     const float gb = float(j + 1) * p.gammaStep;
 
-    const float l0 = llfRemap(v, ga, p.sigmaR, p.alpha, p.noiseLo, p.noiseHi)
+    const float l0 = llfRemap(v, ga, p.sigmaR, p.alpha, lo, up)
                    - llfPick(j,     up0, up1, up2, up3);
-    const float l1 = llfRemap(v, gb, p.sigmaR, p.alpha, p.noiseLo, p.noiseHi)
+    const float l1 = llfRemap(v, gb, p.sigmaR, p.alpha, lo, up)
                    - llfPick(j + 1, up0, up1, up2, up3);
 
     dst[tid.xy] = lerp(l0, l1, frac) + upOut;

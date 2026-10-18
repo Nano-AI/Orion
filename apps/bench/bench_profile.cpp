@@ -32,7 +32,8 @@ void nodeProfiles(Bench& b) {
     // One command buffer per node, so these do not sum to the batched
     // figure above — they rank, they do not total.
     const auto profileDrag = [&](const char* label,
-                                 void (*set)(orion::pipe::Adjustments&)) {
+                                 void (*set)(orion::pipe::Adjustments&),
+                                 std::size_t rows = 8) {
         std::printf("\n%s, node by node\n", label);
         orion::pipe::Adjustments base;
         base.wb = develop.asShotWhiteBalance();
@@ -58,7 +59,7 @@ void nodeProfiles(Bench& b) {
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
         std::printf("  %zu nodes ran, %.2f ms serialized\n", ran.size(), sum);
-        for (std::size_t i = 0; i < ran.size() && i < 8; ++i) {
+        for (std::size_t i = 0; i < ran.size() && i < rows; ++i) {
             std::printf("    %-22s %6.2f ms  %4.1f%%\n", ran[i].second.c_str(),
                         ran[i].first, 100.0 * ran[i].first / std::max(sum, 1e-9));
         }
@@ -121,6 +122,35 @@ void nodeProfiles(Bench& b) {
         a.denoiseLuma = 2.0f;
         a.denoiseDetail = 1.0f;
     });
+    // research/high-iso.md: Texture runs the capture chain on its own, and
+    // Smoothness adds six quarter-resolution nodes and one full-resolution
+    // add beside it.
+    profileDrag("Texture alone", [](orion::pipe::Adjustments& a) { a.texture = 1.0f; });
+    // Every row: the quarter nodes are the point and they rank last.
+    profileDrag("Color 3 with Smoothness", [](orion::pipe::Adjustments& a) {
+        a.denoiseColor = 3.0f;
+        a.denoiseSmoothness = 1.0f;
+    }, 32);
+
+    // Clarity's guard from the measured noise (§3) costs no nodes; what is
+    // worth printing is whether it binds on this frame at all.
+    {
+        orion::pipe::Adjustments a;
+        a.wb = develop.asShotWhiteBalance();
+        a.clarity = 1.0f;
+        develop.setClarityNoiseFloor(0.0f);
+        develop.apply(a);
+        develop.render();
+        const auto shipped = output16(develop, develop.outputWidth(), develop.outputHeight());
+        develop.setClarityNoiseFloor(orion::pipe::llf::kFloor);
+        develop.apply(a);
+        develop.render();
+        const auto measured = output16(develop, develop.outputWidth(), develop.outputHeight());
+        std::printf("\nClarity +1 on this frame's noise: the measured floor moves it %.5f "
+                    "(mean |diff| against the paper's constant guard)\n",
+                    meanAbsDiff(shipped, measured));
+    }
+
     profileDrag("A radial local denoise", [](orion::pipe::Adjustments& a) {
         auto& c = a.maskComponents[0];
         c.kind = 2;

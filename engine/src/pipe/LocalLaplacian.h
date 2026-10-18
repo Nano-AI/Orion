@@ -75,6 +75,59 @@ inline constexpr int kPyramidLevels = 6;
 inline constexpr float kNoiseLo = 0.01f;
 inline constexpr float kNoiseHi = 0.02f;
 
+/// The guard's floor from the frame's own noise, as a multiple of one
+/// deviation. research/high-iso.md §3.
+///
+/// Paris et al.'s constant above is 0.12 EV, and a frame at ISO 12800 carries
+/// 0.3-0.6 EV of luma noise in the lower midtones, so everything the denoise
+/// left sits above it and Clarity boosts the grain hardest of anything in the
+/// picture. Per pixel, the measured model gives the deviation in stops at that
+/// pixel's own luminance, and the guard starts there instead when it is larger:
+///
+///     σ_Y²  = a·Y + b                 the capture model in working luminance
+///     σ_EV  = σ_Y / (Y·ln 2)
+///     lo    = max(kNoiseLo, kFloor·σ_EV / kWindowEv),   hi = 2·lo
+///
+/// **Half a deviation, chosen by measurement.** `testClarityNoiseFloorGpu`
+/// sweeps the multiple on a card at a 30% deviation with a ripple at twice it,
+/// Clarity +1, and prints the 3x3 grain rise over Clarity off and the ripple's
+/// gain (the shipped guard: +0.0235 and x1.278):
+///
+///     kFloor   grain rise (of shipped)   ripple gain
+///     0.25     69%                       x1.211
+///     0.35     37%                       x1.137
+///     0.5      15%                       x1.072
+///     1.0       1%                       x1.005
+///
+/// One deviation, where the plan started, removes the grain and the texture
+/// with it: a ripple at 2σ keeps 2% of its boost, so Clarity on a noisy frame
+/// would do nothing. Half a deviation is the knee: the rise falls to under a
+/// sixth and texture just above the floor keeps a quarter of its boost.
+/// Chosen, not sourced: research/UNSOURCED.md.
+///
+/// ⚠ The model is the *capture* noise. With Luminance up the chain has removed
+/// some of it, so on a denoised frame this guard is conservative, never loose.
+inline constexpr float kFloor = 0.5f;
+
+/// The capture noise model carried into working luminance, and the multiple
+/// of it the guard starts at. All zero is the paper's constant guard.
+struct NoiseFloor {
+    float a = 0.0f;
+    float b = 0.0f;
+    float k = 0.0f;
+};
+
+/// The guard's two thresholds at a pixel whose normalized log luminance is
+/// `i`. Must stay identical to `llfNoiseBand` in shaders/ops/llf_ops.slang.
+inline void noiseBand(float i, NoiseFloor n, float& lo, float& hi) noexcept {
+    const float y = std::exp2(i * kWindowEv + kWindowLoEv);
+    const float sigmaY = std::sqrt(std::max(n.a * y + n.b, 0.0f));
+    const float sigmaEv = sigmaY / (y * 0.69314718f);
+    const float t = n.k * sigmaEv / kWindowEv;
+    lo = std::max(kNoiseLo, t);
+    hi = std::max(kNoiseHi, 2.0f * t);
+}
+
 /// A cap on what one pixel's luminance may be moved by, in stops. Not part of
 /// the paper — a guard, so that a pathological frame cannot produce a value
 /// the rest of the pipeline has to cope with.
@@ -111,6 +164,15 @@ inline constexpr float kMaxCorrectionEv = 4.0f;
     }
 
     return g + (d < 0.0f ? -1.0f : 1.0f) * sigmaR * fd;
+}
+
+/// The remapping with the guard read from the frame's noise at this pixel.
+/// With `n` all zero it is `remap` with the paper's constants, to the bit.
+[[nodiscard]] inline float remap(float i, float g, float sigmaR, float alpha,
+                                 NoiseFloor n) noexcept {
+    float lo = 0.0f, hi = 0.0f;
+    noiseBand(i, n, lo, hi);
+    return remap(i, g, sigmaR, alpha, lo, hi);
 }
 
 // The pyramid itself lives in Pyramid.h — exposure fusion blends over the same
@@ -172,9 +234,13 @@ using pyr::gaussianPyramid;
 /// it has to shrink when `gammaCount` grows.
 [[nodiscard]] inline Plane referenceFast(const Plane& img, int levels, int gammaCount,
                                          float sigmaR, float alpha,
-                                         float noiseLo, float noiseHi) {
+                                         float noiseLo, float noiseHi,
+                                         NoiseFloor floor = {}) {
     const std::vector<Plane> gin = gaussianPyramid(img, levels);
     const float step = 1.0f / float(gammaCount - 1);
+    // The guard per pixel when a floor is given (research/high-iso.md §3);
+    // otherwise the two constants as passed.
+    const bool measured = floor.k != 0.0f;
 
     std::vector<std::vector<Plane>> gr;
     gr.reserve(static_cast<std::size_t>(gammaCount));
@@ -182,8 +248,10 @@ using pyr::gaussianPyramid;
         Plane r{img.width, img.height, {}};
         r.v.resize(img.v.size());
         const float g = float(j) * step;
-        for (std::size_t i = 0; i < img.v.size(); ++i)
-            r.v[i] = remap(img.v[i], g, sigmaR, alpha, noiseLo, noiseHi);
+        for (std::size_t i = 0; i < img.v.size(); ++i) {
+            r.v[i] = measured ? remap(img.v[i], g, sigmaR, alpha, floor)
+                              : remap(img.v[i], g, sigmaR, alpha, noiseLo, noiseHi);
+        }
         gr.push_back(gaussianPyramid(r, levels));
     }
 

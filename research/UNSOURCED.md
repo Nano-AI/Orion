@@ -1475,3 +1475,38 @@ selection uses.
 **To fix:** nothing measurable; these are defaults an agent can override on
 every call.
 
+
+---
+
+## 20. High ISO's chosen constants - added 2026-10-18
+
+[high-iso.md](high-iso.md) §1-§3.
+The shapes are sourced; the numbers that set how hard each one bites are chosen.
+
+**Clarity's `kFloor = 0.5`** (`pipe/LocalLaplacian.h`, §3).
+- **Sourced:** the guard's shape, a smoothstep back to the identity between two thresholds (Paris, Hasinoff & Kautz 2011 §5.2), and the model that feeds it, `var = a·x + b` fitted on the mosaic (Foi et al. 2008) and carried through the matrix as the masked chain does (#300).
+- **Chosen:** where the guard starts, as a multiple of the measured deviation in stops at the pixel's own luminance.
+  The plan said one deviation; the sweep in `testClarityNoiseFloorGpu` moved it to half.
+  On a card at a 30% deviation with a ripple at twice it, Clarity +1: the grain's 3x3 rise is 69% / 37% / 15% / 1% of the shipped guard's at 0.25 / 0.35 / 0.5 / 1.0, and the ripple's gain is x1.211 / x1.137 / x1.072 / x1.005 against x1.278.
+  One deviation removes the texture with the grain; half is the knee.
+- **What would settle it:** the same sweep on real 6400-25600 frames judged by eye at 100%, Clarity +0.5 and +1, with and without Luminance; the card's ripple is one texture at one SNR and one period.
+
+**Texture's `c = 3`, `m = 30σ`, `p = texture × 0.5`, level weights 1 and 0.5** (`ops/denoise_ops.slang` `textureGain`, §2).
+- **Sourced:** the gain's shape, Starck, Murtagh, Candès & Donoho 2003 eq. (1), with its noise floor as an input: below `c·σ` the gain is exactly one.
+  `σ` is the chain's own per-pixel, per-scale deviation from the fitted model.
+- **Chosen:** all four numbers; they are free parameters in the paper too (its `m` is an image quantile, replaced by a fixed multiple so the gain is per pixel with no reduction pass).
+  `c = 3` is the conventional "surely signal" line; `p`'s scale makes +1 lift a 6σ period-4 ripple x2.07 and -1 take it to x0.48 in `testTextureGpu`, with flat grain +0.08%; the weights put the effect on the two scales that carry texture at any sensor pitch.
+- **One deviation from the printed equation:** its middle branch ends at `(m/cσ)^p` where the third begins at `(m/2cσ)^p`, a jump of `2^p` that makes the transfer non-monotone; Orion's blend ends at the third branch's value.
+- **Measured cost of `m = 30σ`:** on the two low-ISO bench frames Texture +1 moves the picture 0.0001 and 0.0002 (the bench's "moved at all" line is 0.0002).
+  On a clean frame σ is so small that nearly all real texture stands above `m` and passes at gain one, so the control as built is a high-ISO control.
+  The paper's `m` is a quantile of the coefficients, which would reach texture at any ISO; the fixed multiple was chosen to avoid a reduction pass.
+- **What would settle it:** a side by side with Lightroom's Texture on high-ISO portraits and foliage at matched strengths, a sweep of `c` in 2.5-4 on real frames for grain regrowth at 100%, and a decision on `m` (fixed multiple against a per-frame quantile) from low-ISO frames.
+
+**Smoothness's strength product `denoiseColor × denoiseSmoothness`, and its chroma noise model** (`DevelopCapture.cpp` `coarseChromaNoise`, §1).
+- **Sourced:** the transform (the same starlet, Starck, Fadili & Murtagh 2007, two more scales at quarter resolution), the garrote, the reason chroma noise is coarse (Alleysson et al. 2005, Dubois 2005), and `‖W_4‖₂ = 0.0204`, `‖W_5‖₂ = 0.0102`, recomputed from the B3 taps in `testDenoiseSmoothnessGpu` (detail.md's `0.0202` is off in the third figure).
+- **Chosen:** the product, so Color 0 runs nothing and the two never disagree about whether chroma is being denoised; Smoothness 1 means the coarse scales get Color's own `β`.
+- **Derived, then measured, not sourced as a formula:** the coarse shrinks' `σ` is the fit carried through the chroma split (`Σ_c (δ − w_c)² var_c`) and divided by each channel's Bayer sampling density (R, B a quarter, G a half), averaged over the three chroma channels.
+  The plan reused the luma model; on the test's card that removed 37% of the coarse chroma energy at Color 3 against a 67% plateau, and the derived model, 3.0x the luma deviation there, removes 66%.
+  The density argument assumes a demosaic that interpolates each channel from its own samples at coarse scales, which RCD approximately does.
+- **What would settle it:** the quarter chain's own coefficients on a real 12800 frame (a MAD of `w_4` chroma over flat regions) against this model.
+  Real sensors add low-frequency read noise the Poisson-Gaussian fit does not see, so the truth is at or above this, and a per-frame MAD would replace the formula outright.

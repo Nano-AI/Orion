@@ -37,6 +37,8 @@ set(ORION_SHADERS
     denoise_accum:atrousShrink
     denoise_field:denoiseField
     denoise_nlm:nlmLuma
+    denoise_chroma_down:denoiseChromaDown
+    denoise_chroma_up:denoiseChromaUp
     lens:lensCorrect
     color_grade:colorGrade
     sharpen:sharpen

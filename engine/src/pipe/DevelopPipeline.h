@@ -255,6 +255,12 @@ public:
     /// previews. See research/film-grain.md and decision #81.
     void setGridStep(float step);
 
+    /// The multiple of the measured deviation Clarity's noise guard starts at,
+    /// `llf::kFloor` unless set. ⚠ A measurement hook, not a control: the
+    /// test and the bench set 0 to render the paper's constant guard on the
+    /// same frame and compare. research/high-iso.md §3.
+    void setClarityNoiseFloor(float k);
+
     /// The image after white balance and the camera matrix, but before any user
     /// adjustment. This is what the color picker must sample: reading the
     /// edited result would mean adjusting a band changes which band you would
@@ -285,6 +291,13 @@ public:
         float gamma = 0.0f;                     ///< fraction of it that counts as clipped
     };
     [[nodiscard]] HighlightStages highlightStages() const;
+
+    /// ‖W_j‖₂ for j = 0..5: the four the chains shrink at full resolution
+    /// and Smoothness's two. For the test that recomputes them from the taps.
+    [[nodiscard]] static constexpr std::array<float, 6> starletScaleNorms() noexcept {
+        return {kDenoiseScaleNorm[0], kDenoiseScaleNorm[1], kDenoiseScaleNorm[2],
+                kDenoiseScaleNorm[3], kChromaScaleNorm[0], kChromaScaleNorm[1]};
+    }
 
     [[nodiscard]] std::uint32_t width()  const noexcept { return width_; }
     [[nodiscard]] std::uint32_t height() const noexcept { return height_; }
@@ -489,9 +502,36 @@ private:
     int nNlm_ = -1;
     int nlmRadius_ = 5, nlmPatch_ = 1;
     bool nlmWindowMoved_ = false;
+    /// The capture model carried through the matrix into working luminance,
+    /// `{a, b}` with `var(Y) = a·Y + b`: k = Mᵀw, so the two sums take k in
+    /// place of w (research/denoise-masked.md §2.3). Zero when the fit failed.
+    /// The masked chain and Clarity's guard (research/high-iso.md §3) read it.
+    [[nodiscard]] std::array<float, 2> workingLumaNoise(const Adjustments&) const;
+    /// The same model in the capture chain's own luminance, camera RGB after
+    /// white balance: `{a, b}` for both of its shrink chains.
+    [[nodiscard]] std::array<float, 2> captureLumaNoise(const Adjustments&) const;
+    /// The same model for *chroma* at scales far coarser than the mosaic:
+    /// through the chroma split and the CFA's sampling density. Smoothness's
+    /// two shrinks read it. research/high-iso.md §1, and its deviation.
+    [[nodiscard]] std::array<float, 2> coarseChromaNoise(const Adjustments&) const;
     int nAtrousBlur_[kDenoiseScales]{-1, -1, -1, -1};
     int nAtrousShrink_[kDenoiseScales]{-1, -1, -1, -1};
+
+    // ── Smoothness: chroma at j = 4, 5, quarter resolution (high-iso.md §1) ─
+    static constexpr int kChromaScales = 2;
+    static constexpr std::uint32_t kChromaScale = 4;
+    /// ‖W_4‖₂, ‖W_5‖₂ of the same starlet, continuing kDenoiseScaleNorm.
+    /// ⚠ 0.0204, not detail.md's 0.0202: `testDenoiseSmoothnessGpu` computes
+    /// all six from the B3 taps and asserts them to three figures.
+    static constexpr float kChromaScaleNorm[kChromaScales] = {0.0204f, 0.0102f};
+    int nChromaDown_ = -1;
+    int nChromaBlur_[kChromaScales]{-1, -1};
+    int nChromaShrink_[kChromaScales]{-1, -1};
+    int nChromaUp_ = -1;
+    std::uint32_t chromaW_ = 0, chromaH_ = 0;
     raw::NoiseProfile noise_{};
+    float clarityFloor_ = llf::kFloor;
+    bool  clarityFloorMoved_ = false;
 
     // ── Masked denoise, after the profile (research/denoise-masked.md §2) ─
     int nDenoiseField_ = -1;
