@@ -1,5 +1,15 @@
 # Orion — session history
 
+## Recent-session rows archived 2026-10-18
+
+| Date | What landed |
+|---|---|
+| 2026-09-29 | **Failed-save delivery (#289).** Final alias/Shift source builds; 50 actual-action checks, engine 1192/0, viewport 4275/0 and all nine gates pass after freeing memory. Signed package verified, installed and opened; samples and all 23 protected temporary fixtures preserved. |
+| 2026-09-28d | **Failed-save departures (#289), separate checkpoint.** At core source `61b7e29`: safe 38/38, reload mutation fails 3, engine 1192/0, viewport 4275/0, build and six gates pass. Screens stopped twice at warning pressure. Final alias/Shift review fixes `0622da0` are unbuilt after a later build pressure stop; new probes and full verification remain pending. |
+| 2026-09-28c | **Histogram readback (#288).** Removed full float expansion; native-format value checks pass, stride mutation fails 32. At 1024×768, equal bins and 0.695→0.363 ms median; payload 15→3 MiB is arithmetic, footprint polling inconclusive. Independent reviews, build and all nine gates pass after one pressure-guarded retry. Original sample hashes match; an earlier generated `/tmp` fixture-protection miss is recorded in the evidence report. |
+| 2026-09-28b | **Batch safety (#287), separate branch.** `origin/codex/batch-export-safety` at `059c873` preserves the implementation and complete first-party/vendor source audits. Eight combined gates pass; a real key-window safe/mutation contrast is valid. Restored-safe confirmation and modes remain pending after desktop relock; no batch integration or closure. |
+| 2026-09-28 | **Performance cleanup and audits (#286).** Inactive GPU outputs are returned and idle pool textures shrink; reduced-fixture payload 903.1→303.5 MiB against a controlled no-shrink mutation, without a 42 MP claim. Generated artifacts cleaned. Desktop, engine, mask and Lightroom-baseline audits filed. Fresh post-merge build and all nine gates pass after a 64×64 DNG fixture replaced the agent inversion check's near-black corner; both forced inversion mutations fail. See `feedback/2026-09-28-*.md`. |
+
 ## Recent-session row archived 2026-10-10
 
 | Date | What landed |

@@ -45,9 +45,9 @@ Send whatever it reports back to the Orion development session.
     A layer cannot un-denoise, so a layer on the climber with the global high does nothing useful; say if the tool descriptions made that clear.
 15. If `detect_subject` with `kind: "person"` returns `found: false` on a frame with people in it, paste the `reason` verbatim: it now reports the lit percentage and the peak confidence.
 16. Read `capture.iso` from `get_stats` (or `current_photo`) before any of the above and say whether it was there.
-    On a frame above ISO 3200, run the high-ISO recipe from `research/high-iso.md` §5: `denoiseNlm` 0.4 with `denoiseLuma` 0, `denoiseColor` 3, `denoiseSmoothness` 0.7, `denoiseDetail` 0.5, `texture` 0.3.
+    On a frame above ISO 3200, run the high-ISO recipe from `research/high-iso.md` §5: `denoiseNlm` 0.4 with `denoiseLuma` 1.5, `denoiseColor` 3, `denoiseSmoothness` 0.7, `denoiseDetail` 0.5, `texture` 0.5.
     Re-read `noise` on the wall and `shading` on the face under `state: "proposed"` and report both pairs.
-17. Then the same without `denoiseNlm` and with `denoiseLuma` 2.5 instead.
+17. Then the same without `denoiseNlm` and with `denoiseLuma` 2.5 instead; the bake-off of 2026-10-18 found `denoiseNlm` alone at `denoiseLuma` 0 the noisiest of the three, so do not test that pairing again.
     Say which of the two the wall's texture survives better in `get_proxy`'s `region`, and whether the colour blotches in the shadows went with `denoiseSmoothness` where `denoiseColor` alone left them.
 18. Add `grainAmount` 0.015 at `grainSize` 2 on top of the better one and say whether the result reads as a photograph rather than a smoothed one.
     This is a judgement for the photographer; report what you see, do not approve it.

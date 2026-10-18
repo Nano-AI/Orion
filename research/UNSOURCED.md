@@ -1491,15 +1491,16 @@ The shapes are sourced; the numbers that set how hard each one bites are chosen.
   One deviation removes the texture with the grain; half is the knee.
 - **What would settle it:** the same sweep on real 6400-25600 frames judged by eye at 100%, Clarity +0.5 and +1, with and without Luminance; the card's ripple is one texture at one SNR and one period.
 
-**Texture's `c = 3`, `m = 30σ`, `p = texture × 0.5`, level weights 1 and 0.5** (`ops/denoise_ops.slang` `textureGain`, §2).
+**Texture's `c = 3`, `m = max(30σ, 0.25·Y)`, `p = texture × 0.5`, level weights 1 and 0.5** (`ops/denoise_ops.slang` `textureGain`, §2).
 - **Sourced:** the gain's shape, Starck, Murtagh, Candès & Donoho 2003 eq. (1), with its noise floor as an input: below `c·σ` the gain is exactly one.
   `σ` is the chain's own per-pixel, per-scale deviation from the fitted model.
 - **Chosen:** all four numbers; they are free parameters in the paper too (its `m` is an image quantile, replaced by a fixed multiple so the gain is per pixel with no reduction pass).
   `c = 3` is the conventional "surely signal" line; `p`'s scale makes +1 lift a 6σ period-4 ripple x2.07 and -1 take it to x0.48 in `testTextureGpu`, with flat grain +0.08%; the weights put the effect on the two scales that carry texture at any sensor pitch.
 - **One deviation from the printed equation:** its middle branch ends at `(m/cσ)^p` where the third begins at `(m/2cσ)^p`, a jump of `2^p` that makes the transfer non-monotone; Orion's blend ends at the third branch's value.
-- **Measured cost of `m = 30σ`:** on the two low-ISO bench frames Texture +1 moves the picture 0.0001 and 0.0002 (the bench's "moved at all" line is 0.0002).
-  On a clean frame σ is so small that nearly all real texture stands above `m` and passes at gain one, so the control as built is a high-ISO control.
-  The paper's `m` is a quantile of the coefficients, which would reach texture at any ISO; the fixed multiple was chosen to avoid a reduction pass.
+- **Measured cost of `m = 30σ` alone, and the ceiling that replaced it:** on the two low-ISO bench frames Texture +1 moved the picture 0.0001 and 0.0002 (the bench's "moved at all" line is 0.0002), because on a clean frame σ is so small that nearly all real texture stood above `m` and passed at gain one.
+  The paper's `m` is a quantile of the coefficients, which would reach texture at any ISO but needs a reduction pass; `m` is now the larger of 30σ and a quarter of the local coarse luminance `Y`, per pixel.
+  The 0.25 is chosen: a fine-scale swing of a quarter of the local level is an edge on any frame, and texture is under it.
+  Measured in `testTextureGpu`: a clean card's eighth-deep ripple lifts x2.49 at +1 and x0.30 at −1 with the flat mean held, and the noisy card's numbers do not move (30σ is the larger there).
 - **What would settle it:** a side by side with Lightroom's Texture on high-ISO portraits and foliage at matched strengths, a sweep of `c` in 2.5-4 on real frames for grain regrowth at 100%, and a decision on `m` (fixed multiple against a per-frame quantile) from low-ISO frames.
 
 **Smoothness's strength product `denoiseColor × denoiseSmoothness`, and its chroma noise model** (`DevelopCapture.cpp` `coarseChromaNoise`, §1).
@@ -1510,3 +1511,9 @@ The shapes are sourced; the numbers that set how hard each one bites are chosen.
   The density argument assumes a demosaic that interpolates each channel from its own samples at coarse scales, which RCD approximately does.
 - **What would settle it:** the quarter chain's own coefficients on a real 12800 frame (a MAD of `w_4` chroma over flat regions) against this model.
   Real sensors add low-frequency read noise the Poisson-Gaussian fit does not see, so the truth is at or above this, and a per-frame MAD would replace the formula outright.
+
+**Non-local means' slider mapping and window** (`pipe/NonLocalMeans.h`, `shaders/denoise_nlm.slang`, [high-iso.md](high-iso.md) §4).
+- **Sourced:** the filter, its weight `exp(−max(d² − 2σ², 0)/h²)`, the reference pixel's weight as the neighbourhood maximum, and the parameter table (Buades, Coll & Morel, IPOL 2011); the per-pixel `σ` from the capture model (Foi et al. 2008).
+- **Chosen:** `denoiseNlm` is `k` in `h = k·σ` on 0..1, so the table's 0.40 sits mid-slider; the 3×3 mean of luma under `σ(p)`; and the window, 11×11 search with a 3×3 patch, which is the table's row for *light* noise taken for every noise level because the moderate-noise row (21×21, 5×5) measured 2.9-3.1 s at 42.4 MP and 150-168 ms on the preview graph against 333-344 ms and 19 ms.
+- **What would settle it:** the by-eye comparison on ISO 8000-16000 frames in high-iso.md §5, and a background-pass form of the large window if the small one leaves the wavelet's residual visible; the kernel already takes both windows at run time and the bench prints both.
+

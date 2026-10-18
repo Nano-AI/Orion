@@ -136,9 +136,9 @@ Above about ISO 3200 the wavelet chain alone leaves three things that still read
 
 | What you still see | Key | Start at |
 |---|---|---|
-| Grain, and a waxy surface where `denoiseLuma` took the texture with it | `denoiseNlm` (0..1) with `denoiseLuma` 0 | 0.4, the published value. It averages pixels whose neighbourhoods match, so weave and brick survive a removal that `denoiseLuma` smooths |
+| Grain, and a waxy surface where `denoiseLuma` took the texture with it | `denoiseNlm` (0..1) **with `denoiseLuma` 1-1.5** | 0.4, the published value. It averages pixels whose neighbourhoods match, so relief survives a removal that `denoiseLuma` smooths. ⚠ Alone (`denoiseLuma` 0) at ISO 8000-16000 it leaves 1.6-1.8x the grain of `denoiseLuma` 2.5 and it reads wormy; paired with `denoiseLuma` 1.5 the same wall measured half of `denoiseLuma` 2.5's grain (0.0049 against 0.0094 at ISO 16000) |
 | Colour blotches in the shadows that `denoiseColor` alone leaves | `denoiseSmoothness` (0..1), multiplies `denoiseColor` at the coarse scales | 0.5-1 |
-| Fine texture gone flat | `texture` (-1..1), a gain on the fine scales that leaves anything under the noise floor alone | +0.2..0.4; negative smooths skin |
+| Fine texture gone flat | `texture` (-1..1), a gain on the fine scales that leaves anything under the noise floor alone | +0.5 or more where there is texture standing above the noise; negative smooths skin. ⚠ On a frame whose fine scales are all noise (ISO 8000-16000 walls and fabric) it has nothing to lift and measures as inert at 0.3 |
 | Clarity made the grain worse | nothing to set: Clarity's noise guard now reads the frame's own noise | - |
 | It reads as a smoothed picture rather than a photograph | `grainAmount` 0.01-0.02 at `grainSize` 2 | after everything else |
 

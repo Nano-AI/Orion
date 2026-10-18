@@ -130,7 +130,10 @@ the strength adapt correctly across the tonal range.
   the fit was abandoned, and the denoiser silently did nothing on exactly the
   frames that needed it most.
 - **Four scales, not five.** Each scale is two full-resolution `rgba16f`
-  textures — 388 MB a scale at 24 MP. The fifth scale's norm is 0.0202, a
+  textures — 388 MB a scale at 24 MP. The fifth scale's norm is 0.0204 (⚠ this
+  line said 0.0202 until `testDenoiseSmoothnessGpu` recomputed it from the taps
+  on 2026-10-18; `research/high-iso.md` §1 runs it and a sixth at quarter
+  resolution, chroma only), a
   fifth of the fourth's, so it removes very little for another 388 MB.
 - **Luminance/chroma split with Rec.2020 weights, applied to camera RGB.** The
   denoise runs before the color matrix, because the noise model only holds in

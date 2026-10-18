@@ -44,12 +44,24 @@ That is the whole reason the colour blotches on a high-ISO frame are large while
 Two more starlet scales, **chroma only, at quarter resolution**.
 The starlet is the same transform (`detail.md`, Starck, Fadili & Murtagh 2007), so nothing new is being cited for the decomposition; the scales are `j = 4, 5`, tap spacing 16 and 32 full-resolution pixels.
 
-- `denoise:chroma down` takes `denoise:shrink 0`'s output, averages 4x4 blocks, and writes the chroma vector (the Rec.2020 zero-luminance component, the same split the shrink uses) in `.rgb` and the block's luma in `.a`, so the shrink's `σ(x)` still reads a brightness.
+- `denoise:chroma down` takes **`c_4`, the full-resolution chain's coarsest blur**, averages 4x4 blocks, and keeps the block's full colour in `.rgb` with its luma in `.a`; the shrink splits luma from chroma itself.
+  ⚠ The plan said `denoise:shrink 0`'s output. `c_4` is right: by definition it holds only the scales the chain did not reach, so the quarter chain continues the same transform, where the shrunk picture would have mixed already-handled scales into scale 4.
 - Two `atrousBlur` and two `atrousShrink` nodes run unchanged on that texture with `strengthLuma = 0` and steps 4 and 8, which at quarter resolution are 16 and 32 full-resolution pixels.
-- `denoise:chroma up` bilinearly expands `shrunk − unshrunk` and adds it to the full-resolution picture.
+- `denoise:chroma up` bilinearly expands `shrunk − unshrunk` and adds it to `denoise:shrink 0`'s output (its first input, so a disabled chain resolves straight past).
   The difference is what is expanded, not the picture, so the full-resolution luma and fine chroma are untouched to the bit; only the coarse chroma correction is resampled, and it is smooth by construction.
 
-Scale norms: `‖W_4‖₂ = 0.0202` is `detail.md`'s own fifth term; `‖W_5‖₂` is computed from the B3 taps in the test and asserted, so the constant in the header is checked rather than typed.
+Scale norms: `‖W_4‖₂ = 0.0204` and `‖W_5‖₂ = 0.0102`, recomputed from the B3 taps in `testDenoiseSmoothnessGpu` and asserted.
+⚠ `detail.md` printed the fifth term as 0.0202, off in the third figure; the constant in the header is checked rather than typed.
+
+**The coarse shrinks read a chroma noise model, not the luma one.**
+The plan reused `aLum`/`bLum`; on the test's card that removed 37% of the coarse chroma energy at Color 3 against a 67% plateau.
+`coarseChromaNoise` carries the same fit through the chroma split (`Σ_c (δ − w_c)² var_c`) and divides by each channel's Bayer sampling density (R and B a quarter, G a half), which on that card is 3.0x the luma deviation and removes 66%.
+It is derived, then measured, not sourced as a formula; `UNSOURCED.md` §20 says what would settle it (a MAD of the quarter chain's own `w_4` chroma over flat regions of a real 12800 frame).
+
+**Measured (`testDenoiseSmoothnessGpu`):** coarse chroma energy 8.63e-7 → 2.94e-7 (66% removed) at Color 3, Smoothness 1; worst output luma move 0.0025 against 0.035 for Color's own full-resolution shrink; Smoothness 0 byte-identical; Color 0 runs nothing.
+Six quarter-resolution nodes, about **5 ms** at 42.4 MP (`chroma up` 1.9-2.4 ms is the largest).
+⚠ The garrote keeps anything well above `τ`: a blotch field ten times the model's coarse chroma deviation loses only 36%.
+Real sensors add low-frequency read noise the Poisson-Gaussian fit does not see, so on a real 12800 frame the model may sit under the blotches; §5's by-eye step is where that shows.
 
 **Control.** `denoiseSmoothness` 0..1, default 0.
 The coarse strength is `smoothness × denoiseColor`, so Color 0 means nothing runs and the two never disagree about whether chroma is being denoised.
@@ -97,12 +109,20 @@ The gain multiplies the **kept luma coefficient after the garrote** in `atrousSh
 | Constant | Value | Why |
 |---|---|---|
 | `c` | 3 | Three deviations: the conventional "surely signal" line; the garrote's own `τ = β·σ` sits below it for every `β` the slider reaches |
-| `m` | 30·σ | Where the boost has faded to one; a fixed multiple of `σ` rather than the paper's image quantile, so no reduction pass is needed and the gain is per pixel |
+| `m` | max(30·σ, 0.25·Y) | Where the boost has faded to one. 30σ alone made this a high-ISO-only control (measured below); a quarter of the local coarse luminance is an edge on any frame, and texture sits under it. Per pixel, no reduction pass, where the paper's `m` is an image quantile |
 | `p` | `texture × 0.5` | Signed. Negative `p` gives `(m/|w|)^p < 1`, which attenuates weak fine texture and leaves edges at `m` alone: the skin-smoothing direction |
 | level weights | 1, 0.5 | The two scales that carry "texture" at any sensor pitch; the third would be Clarity's territory |
 
-These four are chosen, not sourced, and are entered in `UNSOURCED.md`.
+These four are chosen, not sourced, and are entered in `UNSOURCED.md` §20.
 The paper's `c`, `p` and `m` are free parameters there as well; what is sourced is the shape of the function and the floor.
+⚠ One deviation from the printed equation: its middle branch ends at `(m/cσ)^p` where the third begins at `(m/2cσ)^p`, a jump of `2^p` that makes the transfer `w·y(w)` non-monotone; Orion's ramp ends at the third branch's value instead, which is continuous.
+
+**Measured (`testTextureGpu`).**
+Noisy card (the fitted model recovers the fixture's true `a`, `b`): Texture +1 lifts a 6σ period-4 ripple **x2.07** and −1 takes it to **x0.48**; flat grain rises **0.08%** at +1 and 0.01% at +0.5; mean shift 3.7e-6; a step away from its edge moves 6.8e-6; 0 is byte-identical; Texture 0.5 alone runs the chain.
+Clean card (σ ≈ 7e-4, a ripple an eighth of the level deep): with `m = 30σ` alone the bench measured Texture +1 moving the two low-ISO sample frames by 0.0001-0.0002, under its "moved at all" line, because every real coefficient sat above `m` and passed at gain one.
+With `m = max(30σ, 0.25·Y)` the same ripple lifts **x2.49** at +1 and **x0.30** at −1 with the flat mean held, and the noisy card's numbers are unchanged (there 30σ is the larger).
+Cost: Texture alone runs the capture chain, about **46-48 ms** at 42.4 MP; with Luminance or Color already on it costs nothing more.
+⚠ Texture −1 is non-monotone in the 3σ-6σ band (the gain falls from 1 to 0.45 while `|w|` doubles); that is inherent to eq. (1) with negative `p`.
 
 **The chain runs when Texture is non-zero even with both strengths at zero.**
 The garrote then passes every coefficient (`τ = 0`), the gain leaves everything under `3σ` at exactly one, and so Texture alone does not regrow grain.
@@ -142,7 +162,23 @@ hi(i)     = 2 · lo(i)
 The pixel's own `i` is in hand at both places the remapping runs (`llf_remap_h.slang` and `llf_collapse0.slang`), so this is two parameters on each, the CPU mirror in `llf::remap`, and `testLocalLaplacianRemap` still agreeing at the branch points.
 The `max()` keeps a clean frame byte-identical: where the measured noise is under the paper's constant, the paper's constant stands.
 
-`kFloor` is a chosen multiple, entered in `UNSOURCED.md` beside §11; the two things that are sourced are the guard's shape (Paris et al.) and the model that feeds it (Foi et al. 2008, through the matrix as in #300).
+`kFloor` is a chosen multiple, entered in `UNSOURCED.md` §20; the two things that are sourced are the guard's shape (Paris et al.) and the model that feeds it (Foi et al. 2008, through the matrix as in #300).
+
+**Measured (`testClarityNoiseFloorGpu`), and `kFloor` is 0.5, not the plan's 1.0.**
+A card at a 30% deviation with a ripple at twice it, Clarity +1; the shipped guard raises the 3x3 grain RMS 0.0352 → 0.0587 and gives the ripple x1.278.
+
+| `kFloor` | Grain rise, as a share of the shipped guard's | Ripple gain |
+|---|---|---|
+| 0.25 | 69% | x1.211 |
+| 0.35 | 37% | x1.137 |
+| **0.5** | **15%** | **x1.072** |
+| 0.75 | 5% | x1.022 |
+| 1.0 | 1% | x1.005 |
+
+At one deviation the ripple keeps 2% of its boost, so Clarity on a noisy frame would do nothing; half is the knee.
+A clean card renders byte-identical to the shipped guard; the CPU and GPU agree across the guard's branch point.
+⚠ The floor binds on ordinary frames too: on `underexposedsubject` it changes the Clarity +1 render by 0.0024 mean |diff| against Clarity's own 0.0102, because Clarity reads pre-exposure values and a lifted shadow has a large deviation in stops.
+That is the guard doing what the paper says it is for, on a frame the paper's constant could not see; it is also a render change on finished edits that carried Clarity on a noisy frame, stated here rather than hidden.
 
 Zero nodes, zero cost, and it is the one piece in this file that changes a render with nothing new on the panel.
 Only frames whose measured noise exceeds the constant move; the test renders one that does and one that does not.
@@ -244,12 +280,31 @@ The recipe lives where an agent and a photographer both read it: `mcp/README.md`
 On a frame above ISO 3200:
 
 1. Read `capture.iso` (new in `get_stats` and `current_photo`, see the decision rows) and `noise` on a flat patch, `shading` on a face.
-2. `denoiseNlm` 0.4 for the grain if it shipped, otherwise `denoiseLuma` 2-3.
+2. `denoiseNlm` 0.4 **with `denoiseLuma` 1-1.5** for the grain (the bake-off below: alone it is the noisiest option; paired it is the cleanest).
 3. `denoiseColor` 3; add `denoiseSmoothness` 0.5-1 if blotches remain in the shadows.
 4. `denoiseDetail` 0.5 where there is texture to keep.
-5. `texture` +0.2..0.4 to put the surface back.
+5. `texture` +0.5 or more to put the surface back where there is texture above the noise; on a wall that is all grain it has nothing to lift (bake-off, point 2).
 6. `grainAmount` 0.01-0.02 at `grainSize` 2 if the result reads as plastic: fine, monochrome, midtone-weighted grain is what a clean photograph has and what a denoised one lacks.
 7. Re-read `noise` and `shading` under `state: "proposed"`.
+
+### Bake-off, 2026-10-18: four frames, four variants, Dhruv's eye pending
+
+Four `climbing` frames found through the new `capture.iso` (DSC00709 at ISO 16000, DSC01157 at 10000, DSC00806 and DSC01261 at 8000), copied four times each; an Opus agent edited A, B and C through the MCP on one base look per frame (as-shot WB, contrast 1.5, highlights −0.2, shadows 0.1, vibrance 0.05, sharpen 0.3 / masking 0.85, Clarity 0, no masks or grain), and D was added after its report.
+All read under `state: "proposed"`, flat patch `noise`; exports at full resolution in `highiso-bakeoff/exports/`.
+
+| Variant | Denoise keys | 00709 wall (as shot 0.0463) | 01157 wall (0.0296) | 00806 mat (0.0308) | 01261 wall (0.0272) | At native resolution |
+|---|---|---|---|---|---|---|
+| A, today's controls | luma 2.5, color 4, detail 0.5 | 0.0094 | 0.0056 | 0.0052 | 0.0055 | soft; coarse green/magenta mottle on every wall and mat |
+| B, recipe without NLM | A + smoothness 0.7, texture 0.3 | 0.0098 | 0.0058 | 0.0054 | 0.0058 | mottle gone, neutral walls, fine speckle remains; no colour lost (jersey saturation 0.823 both ways, pink hold 0.368 vs 0.370) |
+| C, NLM alone | nlm 0.4, luma 0, color 4, smoothness 0.7, detail 0.5, texture 0.3 | 0.0172 | 0.0092 | 0.0087 | 0.0090 | crunchy, wormy luminance grain; plaster scratches and logo text a touch crisper |
+| D, NLM paired | C + luma 1.5 | **0.0049** | **0.0036** | **0.0031** | **0.0027** | the cleanest by the number on every frame, 0.5-0.6 of A; the eye has not judged it |
+
+Three findings, all measured, none yet judged by Dhruv:
+
+1. **Smoothness does what §1 said**, on every frame, and desaturated nothing measurable.
+2. **Texture at 0.3 is inert on these frames**: toggling it on 00709-C moved wall noise 0.01725 → 0.01723. The fine scales of an ISO 8000-16000 wall or jersey are noise to the model, so there is nothing above `3σ` to lift; the recipe now says +0.5 and up, where there is texture above the noise, and the clean-card test is where the control shows.
+3. **NLM alone is the wrong pairing and NLM with Luminance 1.5 is the right one.** At `k = 0.4` with a 3×3 patch the small window removes less than Luminance 2.5 on its own and leaves a structured residual; behind it the wavelet chain at 1.5 takes that residual to half of A's grain. The research file said "keep Luminance at 0 or low" because the chain's threshold is overestimated behind NLM; "low" is right, "0" was not.
+   ⚠ The overestimate is still there: the chain's `σ` describes the noise before NLM ran. A measured residual factor per `k` (the synthetic card gives 0.23 at 0.4) would let the chain's threshold follow; not built, a decision for after the eye has judged D.
 
 ---
 
@@ -274,3 +329,4 @@ That is provenance, not clearance.
 | Date | What |
 |---|---|
 | 2026-10-18 | Written. §1 coarse chroma, §2 noise-aware texture gain, §3 Clarity's measured floor, §4 NL-means with its patent status and measurement protocol, §5 the recipe |
+| 2026-10-18 | Implemented, same day. §1 reads `c_4` with a chroma model; §2's `m` gained the brightness ceiling after the bench found 30σ alone reached nothing on a clean frame; §3's `kFloor` 0.5 from the sweep; §4 ships with the 11×11 window. Decisions #303-#308 |
