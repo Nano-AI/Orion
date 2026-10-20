@@ -4,11 +4,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { execFile } from "node:child_process";
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { agentRunner, installProcessGuards, type OrionError } from "./limits.ts";
 
 const RAW_EXT = new Set([".arw", ".nef", ".cr2", ".cr3", ".dng", ".raf", ".orf", ".rw2"]);
 // ORION_BIN wins; then the `Orion` beside this executable, which is where the
@@ -21,30 +21,8 @@ const bin = () =>
   (existsSync(sibling) ? sibling : path.resolve(import.meta.dirname, "../build/Orion.app/Contents/MacOS/Orion"));
 const proposedPath = (raw: string) => raw.replace(/\.[^.]+$/, ".proposed.json");
 
-// One execFile of the binary; stdout is one JSON object per the spec's verb
-// table. A non-zero exit throws with the stderr line (or the exit code) so
-// tool handlers can turn it into an MCP tool error.
-class OrionError extends Error {
-  exitCode?: number;
-  constructor(message: string, exitCode?: number) {
-    super(message);
-    this.exitCode = exitCode;
-  }
-}
-
-async function orion(args: string[]): Promise<any> {
-  const stdout = await new Promise<string>((resolve, reject) => {
-    execFile(bin(), ["--agent", ...args], (err, stdout, stderr) => {
-      if (err) {
-        const code = typeof (err as NodeJS.ErrnoException).code === "number" ? (err as any).code : undefined;
-        reject(new OrionError(stderr.trim() || err.message, code));
-      } else {
-        resolve(stdout);
-      }
-    });
-  });
-  return JSON.parse(stdout);
-}
+// `orion()` lives in limits.ts with the concurrency cap, the timeout and the
+// children that must die with the server (#311); createServer() builds one.
 
 // Exit 2 is the binary's "rejected" contract (out-of-range value, unknown
 // key). Prefixing REJECTED: is the whole fix for the incident this server
@@ -102,6 +80,7 @@ export function createServer() {
     { name: "orion", version: "0.1.0" },
     { instructions: ORION_INSTRUCTIONS }
   );
+  const orion = agentRunner(bin);
 
   server.registerTool(
     "current_photo",
@@ -582,5 +561,6 @@ export function createServer() {
 // is bundled to CommonJS, where import.meta.url is empty and top-level await
 // does not exist, so neither may appear unguarded here.
 if (import.meta.url && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  installProcessGuards();
   createServer().connect(new StdioServerTransport());
 }

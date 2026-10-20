@@ -680,6 +680,7 @@ test("entry point runs when its own path contains a space", async () => {
   await fs.mkdir(dir, { recursive: true });
   const copiedServer = path.join(dir, "server.ts");
   await fs.copyFile(path.join(import.meta.dirname, "server.ts"), copiedServer);
+  await fs.copyFile(path.join(import.meta.dirname, "limits.ts"), path.join(dir, "limits.ts"));
   try {
     const child = spawn("node", ["--experimental-strip-types", copiedServer], {
       env: { ...process.env, ORION_BIN: FAKE_BIN },

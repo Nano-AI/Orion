@@ -14,6 +14,15 @@ ORION_BIN=/path/to/Orion.app/Contents/MacOS/Orion node server.ts
 `ORION_BIN` wins when set.
 Otherwise the server uses the `Orion` beside its own executable, which exists only in the compiled one, and then `<repo>/build/Orion.app/Contents/MacOS/Orion`.
 
+`ORION_MCP_CONCURRENCY` caps how many `Orion --agent` processes the server runs at once; every other tool call waits its turn in order (#311).
+Each one decodes a 42 MP RAW and renders it on the GPU at 4 to 14 GB, and about ten agents driving one server in parallel once took a 36 GB Mac to about 70 GB and froze it.
+The default is one per 16 GiB of physical memory, between 1 and 4: a 16 GB Mac runs one, a 36 GB Mac two.
+
+`ORION_MCP_TIMEOUT_MS` (default 300000, five minutes) is how long one process may run before it is killed with SIGKILL, so a hung render cannot hold a slot forever.
+The tool call then fails with an error starting `TIMED OUT:`, which says it is not a rendering result.
+Both are read once, when the server starts, and a value that is not a positive integer falls back to the default with a warning on stderr.
+When the server is stopped (SIGTERM, SIGINT, SIGHUP) or its client goes away, it kills every render still running before it exits.
+
 ## In a downloaded Orion
 
 A packaged Orion.app carries the server as a Node single-executable application, `Contents/MacOS/orion-mcp`, so a downloaded app needs neither Node nor this folder (#310).

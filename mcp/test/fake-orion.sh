@@ -34,6 +34,21 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Opt-in slowness for the limits tests (#311): with ORION_FAKE_SLEEP_MS set,
+# every verb appends "start <ms> <pid>" and "end <ms> <pid>" around a sleep to
+# orion-mcp-test-overlap.txt under $TMPDIR, so a test can count how many ran at
+# once and check that a timed-out one is really gone. $$ is this shell, the
+# process the server spawned and must kill. ⚠ The sleep's stdio goes to
+# /dev/null: it outlives a SIGKILLed shell, and holding our stdout would keep
+# the server's execFile from closing until it woke.
+if [ -n "${ORION_FAKE_SLEEP_MS:-}" ]; then
+  log="${TMPDIR:-/tmp}/orion-mcp-test-overlap.txt"
+  now() { node -e 'console.log(Date.now())'; }
+  echo "start $(now) $$" >> "$log"
+  sleep "$(awk "BEGIN { print $ORION_FAKE_SLEEP_MS / 1000 }")" </dev/null >/dev/null 2>&1
+  echo "end $(now) $$" >> "$log"
+fi
+
 case "$verb" in
   stats)
     # Records the --state and --region this invocation received, under the
