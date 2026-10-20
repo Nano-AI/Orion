@@ -248,62 +248,71 @@ extension AgentCLI {
         if let saved = Sidecar.read(for: url)?.develop {
             return (saved, "sidecar")
         }
-        let engine = try Engine()
-        try engine.open(path: url.path)
+        // ⚠ `restoring: true` with no restore behind it, on purpose: this
+        // engine exists to read `engine.state`, which `open` seats from
+        // `asShotState()` before the render it would otherwise end with. That
+        // render is a full develop of a picture nobody looks at (#312).
+        let engine = try Engine(headless: true)
+        try engine.open(path: url.path, restoring: true)
         return (try JSONEncoder().encode(engine.state), "as-shot")
     }
 
-    /// Opens the photograph, restores its sidecar's develop state if it has
-    /// one, then layers `--state` on top if the caller gave one — the order
-    /// the spec's `proxy` row spells out. `open(restoring:)` skips the
-    /// as-shot render whenever a restore is coming right behind it, so a
-    /// photo with both a sidecar and a `--state` override still renders once
-    /// per restore rather than three times running.
+    /// Opens the photograph and restores exactly one develop state: `--state`
+    /// if the caller gave one, else the sidecar's blob, else none (as shot).
+    /// One render, whichever it is (#312).
     ///
-    /// ⚠ **Both restores' `Bool` is checked.** `Engine.restore(encoded:)`
-    /// returns false rather than throwing when the blob will not decode —
-    /// see its doc comment — and renders nothing in that case, so a caller
+    /// ⚠ **Not the sidecar and then the proposal.** A `--state` file is a whole
+    /// `DevelopState` - `apply` and `sync` write every field - so restoring the
+    /// sidecar first was a full render whose every value the second restore
+    /// overwrote. That, the per-matte renders behind it, and a pipeline that
+    /// kept what each later render rebuilt took one call on a 42 MP frame to
+    /// 13.7 GB. `open(restoring:)` skips the as-shot render whenever a restore
+    /// follows, and the mattes upload inside the restore's suspended window
+    /// (`restore(encoded:mattesFrom:)`), so the restore's render is the only
+    /// one. The engine is headless: no preview graph, and every render hands
+    /// its intermediates back.
+    ///
+    /// ⚠ **The restore's `Bool` is checked.** `Engine.restore(encoded:)`
+    /// returns false rather than throwing when the blob will not decode -
+    /// see its doc comment - and renders nothing in that case, so a caller
     /// that ignored it would go on to read a histogram or export a JPEG off
     /// whatever the engine last rendered, silently: black pixels for a cold
-    /// open, or the *previous* photograph's frame for a warm one. Same
-    /// failure OrionApp+Files.swift's loader guards against for the
-    /// sidecar's own restore; here it also covers `--state`, which never
-    /// existed at that call site.
+    /// open. The error names whichever file was actually restored. Same
+    /// failure OrionApp+Files.swift's loader guards against.
     ///
-    /// ⚠ Not private: `AgentInspect.swift`'s `faces` goes through this same
-    /// call, so "restore the sidecar, then the proposal" has one spelling.
+    /// ⚠ Not private: `AgentInspect.swift`'s `faces`, `AgentMatte` and
+    /// `AgentSyncDriver` go through this same call, so "which state is the
+    /// current one" has one spelling.
     @MainActor
     static func openEngine(url: URL, sidecarDevelop: Data?, state: String?)
         throws -> Engine {
-        let engine = try Engine()
-        try engine.open(path: url.path, restoring: sidecarDevelop != nil)
-        if let sidecarDevelop {
-            guard engine.restore(encoded: sidecarDevelop) else {
-                throw Failure.run(
-                    "the saved edits could not be read: \(Sidecar.url(for: url).path)")
-            }
-        }
+        let engine = try Engine(headless: true)
+        let blob: (data: Data, file: String)?
         if let state {
-            let data = try Data(contentsOf: URL(fileURLWithPath: state))
-            guard engine.restore(encoded: data) else {
-                throw Failure.run("the saved edits could not be read: \(state)")
-            }
+            blob = (try Data(contentsOf: URL(fileURLWithPath: state)), state)
+        } else if let sidecarDevelop {
+            blob = (sidecarDevelop, Sidecar.url(for: url).path)
+        } else {
+            blob = nil
         }
-        // ⚠ Once, after the last restore: a subject or sky row is a file on
-        // disk, not a number in the state, and the app uploads it at every open
-        // it makes. Without this the tools rendered every kind-4 row as covering
-        // nothing - a subject layer left the subject as shot and an inverted one
-        // lit the whole frame, with no error anywhere. A file that cannot be
-        // read is refused by name rather than rendered as a mask selecting
-        // nothing, the rule `restoreMattes` states.
-        if sidecarDevelop != nil || state != nil {
-            engine.restoreMattes(photo: url)
-            if let i = engine.missingMattes.min() {
-                let id = engine.maskComponents[i].matteId ?? ""
-                throw Failure.run(
-                    "mask row \(i) names a matte that could not be read: "
-                    + MatteStore.url(photo: url, id: id).path)
-            }
+        try engine.open(path: url.path, restoring: blob != nil)
+        guard let blob else { return engine }
+
+        // ⚠ The mattes ride inside the restore: a subject or sky row is a file
+        // on disk, not a number in the state, and the app uploads it at every
+        // open it makes. Without it the tools rendered every kind-4 row as
+        // covering nothing - a subject layer left the subject as shot and an
+        // inverted one lit the whole frame, with no error anywhere.
+        guard engine.restore(encoded: blob.data, mattesFrom: url) else {
+            throw Failure.run("the saved edits could not be read: \(blob.file)")
+        }
+        // A file that cannot be read is refused by name rather than rendered
+        // as a mask selecting nothing, the rule `restoreMattes` states.
+        if let i = engine.missingMattes.min() {
+            let id = engine.maskComponents[i].matteId ?? ""
+            throw Failure.run(
+                "mask row \(i) names a matte that could not be read: "
+                + MatteStore.url(photo: url, id: id).path)
         }
         return engine
     }

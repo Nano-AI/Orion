@@ -222,3 +222,102 @@ void testDisabledCacheReleaseGpu() {
         report(false, "disabled cache fixture completes", e.what());
     }
 }
+
+// Decision #312: a headless engine releases every intermediate on every
+// render rather than once ever. The bytes have to go down and the pixels must
+// not move - not across an upstream edit, and not across a downstream one that
+// makes `ensure()` rebuild inputs the pool took back.
+void testReleaseEveryRenderGpu() {
+    section("Release every render: headless graphs keep nothing they rebuilt (GPU)");
+    using namespace orion;
+    try {
+        auto device = gpu::Device::create();
+        raw::BayerImage input;
+        input.width = 272; input.height = 256;
+        input.filters = 0x94949494u;
+        input.white = 4095;
+        input.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
+        input.camToXyz = {0.4124f, 0.3576f, 0.1805f,
+                          0.2126f, 0.7152f, 0.0722f,
+                          0.0193f, 0.1192f, 0.9505f};
+        // The fixture above's noisy ramp, so both denoise chains are live.
+        input.samples.resize(input.pixelCount());
+        std::mt19937 rng(132);
+        std::normal_distribution<double> g(0.0, 1.0);
+        for (std::size_t i = 0; i < input.samples.size(); ++i) {
+            const double v = 80.0 + 3000.0 * double(i % input.width) / input.width;
+            input.samples[i] = std::uint16_t(std::clamp(v + std::sqrt(0.5 * v + 20.0) * g(rng),
+                                                        0.0, 4095.0));
+        }
+        // ⚠ Two graphs over one input, side by side: the interactive policy is
+        // the reference for every pixel, and its residency is the number the
+        // headless one has to beat. A ratio against a constant would pass on a
+        // graph that simply got smaller.
+        pipe::DevelopPipeline once(*device, ORION_SHADER_DIR, input);
+        pipe::DevelopPipeline every(*device, ORION_SHADER_DIR, input);
+        every.graph().setReleaseEveryRender(true);
+
+        // Dehaze and fusion on: `DevelopPipeline::render` renders twice for
+        // them, which is the "even a single restore" case.
+        pipe::Adjustments on;
+        on.wb = once.asShotWhiteBalance();
+        on.contrast = 1.45f;
+        on.clarity = 0.4f; on.dehaze = 0.3f; on.fusion = 0.5f;
+        on.denoiseLuma = 0.5f; on.highlightRecovery = 0.5f;
+        on.maskCount = 1; on.maskComponents[0].kind = 2;
+        on.maskRefine = 0.5f; on.layers[0].exposureEv = 0.7f;
+        on.layers[0].denoiseLuma = 1.5f;
+        auto warm = on;
+        warm.wb.temperatureK += 200;
+        auto brighter = on;
+        brighter.exposureEv = 0.3f;
+
+        const auto pixels = [](const pipe::DevelopPipeline& p) {
+            const auto row = p.outputWidth() * gpu::bytesPerPixel(p.output().format());
+            std::vector<std::uint8_t> bytes(row * p.outputHeight());
+            p.output().download(bytes.data(), row, p.outputWidth(), p.outputHeight());
+            return bytes;
+        };
+        const auto render = [&](pipe::DevelopPipeline& p, const pipe::Adjustments& a) {
+            p.apply(a); p.render();
+            return pixels(p);
+        };
+
+        report(render(every, on) == render(once, on),
+               "the first render is the same picture under either policy");
+        report(render(every, warm) == render(once, warm),
+               "an upstream white balance edit is the same picture");
+        const auto edited = render(once, on);
+        report(render(every, on) == edited,
+               "and the edited state again, byte for byte");
+
+        const auto keptOnce  = once.graph().intermediateBytes();
+        const auto keptEvery = every.graph().intermediateBytes();
+        report(keptEvery * 2 < keptOnce,
+               "after the third render the headless graph holds under half",
+               std::to_string(keptEvery) + " vs once-ever " + std::to_string(keptOnce));
+        // The pool, not only the node cache: once-ever cannot reuse what it
+        // kept, so it allocated past what every-render's pool settled at.
+        report(every.graph().allocatedBytes() < once.graph().allocatedBytes(),
+               "and allocates less in all, idle pool included",
+               std::to_string(every.graph().allocatedBytes()) + " vs " +
+               std::to_string(once.graph().allocatedBytes()));
+
+        // ⚠ The rebuild path. Exposure dirties only the tail, so its first node
+        // reads an input the pool took back on the last render - nothing
+        // upstream is dirty, and `ensure()` alone brings it back. Wrong here
+        // is the right size, the right format and someone else's pixels.
+        report(render(every, brighter) == render(once, brighter),
+               "a downstream edit rebuilds released inputs to the same picture");
+        report(render(every, on) == edited, "and back to the edited state");
+        bool rebuilt = false;
+        render(every, brighter);
+        for (const auto& node : every.graph().lastRun())
+            if (node.executed && node.name != "develop:linear" &&
+                node.name != "develop:display" && node.name != "geometry")
+                rebuilt = true;
+        report(rebuilt, "the headless graph really did rebuild something upstream");
+    } catch (const std::exception& e) {
+        report(false, "release-every-render fixture completes", e.what());
+    }
+}

@@ -18,6 +18,7 @@ int main() {
     // disagree — a state in which every other GPU test's result is a guess.
     testBindingCount();
     testDisabledCacheReleaseGpu();
+    testReleaseEveryRenderGpu();
 
     testWhiteBalance();
     testPlanckianLocus();

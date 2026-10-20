@@ -58,8 +58,8 @@ extension AgentCLI {
             throw Failure.usage("matte needs --kind \(matteKinds.joined(separator: "|"))")
         }
         let url = URL(fileURLWithPath: raw)
-        // The same open `faces` makes: sidecar, then `--state`, then the
-        // mattes they name - so the producer sees the picture being edited.
+        // The same open `faces` makes: `--state`, else the sidecar, with the
+        // mattes it names - so the producer sees the picture being edited.
         let engine = try openEngine(url: url, sidecarDevelop: Sidecar.read(for: url)?.develop,
                                     state: state)
         let matte: (alpha: [Float], width: Int, height: Int)

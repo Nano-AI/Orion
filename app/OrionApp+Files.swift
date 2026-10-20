@@ -379,17 +379,17 @@ extension Editor {
                 // both read the wrong one. See `Engine.restore`.
                 var restored = false
                 if let saved {
-                    restored = engine.restore(encoded: saved)
+                    // The mattes ride inside the restore's one render (#312),
+                    // and only on a successful parse: a sidecar that failed
+                    // yields no components, and restoring from that would
+                    // discard the photograph's edits.
+                    restored = engine.restore(encoded: saved, mattesFrom: url)
                     // ⚠ The failure path the suppressed render above hands us.
                     // `restore` renders only when it succeeds, so a sidecar
                     // that does not decode would leave the canvas showing the
                     // *previous* photograph — the #151/#181 shape exactly, and
                     // this time we would have caused it.
                     if !restored { engine.pushAndRender() }
-                    // ⚠ Inside the successful-parse branch, because a sidecar
-                    // that failed to parse yields no components and restoring
-                    // from that would discard the photograph's edits.
-                    if restored { engine.restoreMattes(photo: url) }
                 }
                 // ⚠ Outside it, and that is the fix. The sweep's policy has
                 // three cases, not two, and it lives in `MatteStore` so the

@@ -536,6 +536,15 @@ OrionStatus orion_engine_set_wide_output(OrionEngine* engine, int wide) {
     });
 }
 
+OrionStatus orion_engine_set_headless(OrionEngine* engine, int headless) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        // No photograph needed: it is a policy the next open reads (#312).
+        engine->impl.setHeadless(headless != 0);
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_frame_size(const OrionEngine* engine,
                                     uint32_t* out_width, uint32_t* out_height) {
     if (engine == nullptr || out_width == nullptr || out_height == nullptr) {

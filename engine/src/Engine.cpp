@@ -26,6 +26,13 @@ const pipe::LensDatabase& Engine::lensDatabase() {
     return db;
 }
 
+void Engine::setHeadless(bool on) noexcept {
+    headless_ = on;
+    // The release policy can follow an open graph; the preview cannot be
+    // unbuilt, which is why the header asks for this before `openRaw`.
+    if (develop_) develop_->graph().setReleaseEveryRender(on);
+}
+
 void Engine::openRaw(const std::string& path) {
     // Either a mosaic or a demosaiced linear DNG — a merged HDR frame comes
     // back through this same door, which is the point of writing one.
@@ -48,13 +55,16 @@ void Engine::openRaw(const std::string& path) {
         // Rebuilding recompiles sixteen shaders and reallocates roughly 2.5 GiB
         // of textures — for a folder of frames from one camera, all of that is
         // identical work repeated per photo.
-        // The preview image. Decimated once here rather than per render: it is
-        // the same pixels every time, and at 24 MP the decimation is not free.
-        const auto small = raw::decimate(image, kPreviewScale);
-
         if (develop_ && develop_->canReload(image)) {
             develop_->reload(image);
-            if (preview_ && preview_->canReload(small)) preview_->reload(small);
+            // ⚠ Headless never built a preview, and never decimates for one:
+            // the decimation is a second, smaller copy of the mosaic nobody
+            // would render (#312).
+            if (preview_ && !headless_) {
+                const auto small = raw::decimate(image, kPreviewScale);
+                if (preview_->canReload(small)) preview_->reload(small);
+            }
+            develop_->graph().setReleaseEveryRender(headless_);
             camera_ = image.camera;
             return;
         }
@@ -62,6 +72,17 @@ void Engine::openRaw(const std::string& path) {
         // Replace only once decode and construction have both succeeded, so a
         // failed open leaves the previously open image intact.
         auto next = std::make_unique<pipe::DevelopPipeline>(*device_, res::shaderDir(), image);
+        next->graph().setReleaseEveryRender(headless_);
+        if (headless_) {
+            develop_ = std::move(next);
+            preview_.reset();
+            camera_  = image.camera;
+            return;
+        }
+
+        // The preview image. Decimated once here rather than per render: it is
+        // the same pixels every time, and at 24 MP the decimation is not free.
+        const auto small = raw::decimate(image, kPreviewScale);
 
         // ⚠ Built after the full graph and allowed to fail. A machine that cannot
         // find room for the preview's intermediates should still be able to edit

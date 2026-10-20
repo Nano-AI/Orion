@@ -69,7 +69,9 @@ enum HdrMergeCLI {
         let output = arguments[i + 1]
         let frames = Array(arguments[(i + 2)...])
 
-        guard let engine = try? Engine() else {
+        // Headless: the merge runs its own graph, and the oracle below develops
+        // the result once and exits - no canvas, no preview to build (#312).
+        guard let engine = try? Engine(headless: true) else {
             FileHandle.standardError.write(Data("orion: no engine\n".utf8))
             exit(2)
         }

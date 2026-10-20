@@ -152,8 +152,15 @@ extension Engine {
     ///   had only failed to *parse*. An hour's work, gone on a keystroke.
     ///
     /// Both callers now branch on the answer, and both say so out loud.
+    ///
+    /// `mattesFrom`: the photograph whose saved mattes the restored rows name,
+    /// uploaded inside the same suspended window so the one render below
+    /// covers them (#312). Calling `restoreMattes` afterwards costs a second
+    /// full render, and on a one-shot agent call that second render was most
+    /// of the peak. Uploaded only when the blob decoded - a state that failed
+    /// to parse names no rows, and its mattes are not this edit's.
     @discardableResult
-    func restore(encoded: Data) -> Bool {
+    func restore(encoded: Data, mattesFrom photo: URL? = nil) -> Bool {
         guard let decoded = try? JSONDecoder().decode(DevelopState.self, from: encoded) else {
             let why = "the saved edits could not be read"
             lastFailure = why
@@ -171,6 +178,8 @@ extension Engine {
         SyncSettings.fillAbsentWhiteBalance(&s, stored: encoded, asShot: defaults)
         suspended = true
         assign(s)
+        // After `assign`, because it walks the rows `assign` just put there.
+        if let photo { restoreMattes(photo: photo) }
         suspended = false
         history.reset(to: s)
         pushAndRender()
@@ -221,9 +230,10 @@ extension Engine {
         let restored = migratedToFrameSpace(snapshot.state)
         suspended = true
         assign(restored)
+        // Inside the window: one render for the state and its mattes (#312).
+        if let photo { restoreMattes(photo: photo) }
         suspended = false
         pushAndRender()
-        if let photo { restoreMattes(photo: photo) }
         history.record(state, label: "Version \(snapshot.name)")
         log.record("snapshot restore \(snapshot.name)")
         log.committed(state, label: "Version \(snapshot.name)")

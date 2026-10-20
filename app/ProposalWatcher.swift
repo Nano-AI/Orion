@@ -167,7 +167,7 @@ final class ProposalWatcher {
     /// on disk, not a number in the state, and `apply` uploads numbers only -
     /// so a proposed Subject layer previewed as covering nothing, and an
     /// inverted one lit the whole frame. `Engine.restore(snapshot:photo:)`
-    /// does the same (Engine+Document.swift:220).
+    /// does the same.
     private func restoreMattes() {
         if let photo { engine?.restoreMattes(photo: photo) }
     }

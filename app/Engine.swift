@@ -508,7 +508,13 @@ final class Engine {
 
     var handle: OpaquePointer?
 
-    init() throws {
+    /// `headless`: a process that develops and exits - `Orion --agent`, the
+    /// `--batch-export` driver - and never shows a canvas. No preview graph,
+    /// and every render hands its intermediates back to the pool rather than
+    /// keeping what it rebuilt (`orion_engine_set_headless`, decision #312).
+    /// ⚠ Never on the app's engine: the drag path renders the preview graph
+    /// this skips, and slider latency is what the release policy protects.
+    init(headless: Bool = false) throws {
         // The C pair is static_asserted in CApi.cpp; Swift has no static
         // assert, so the third copy of the cap is pinned here — every gate
         // that launches Orion runs through this line. A mismatch scatters
@@ -521,6 +527,9 @@ final class Engine {
             throw Failure.create(String(cString: orion_status_string(status)))
         }
         handle = h
+        // Here rather than a setter on the instance: it must land before the
+        // first `open`, and a constructor argument cannot arrive late.
+        if headless { _ = orion_engine_set_headless(h, 1) }
     }
 
     deinit {

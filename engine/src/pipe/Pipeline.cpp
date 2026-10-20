@@ -403,7 +403,9 @@ void Pipeline::maybeFree(int n, int reader) {
     // `compile()`. Not done because enabled-ness moves per frame and the
     // headline was 13861 -> 1560 MiB without it (#219).
     if (lastReader_[static_cast<std::size_t>(n)] != reader) return;
-    if (everFreed_[static_cast<std::size_t>(n)]) return;   // once, ever — see the header
+    // Once, ever - see the header - unless a headless caller asked for every
+    // render to give its textures back (#312).
+    if (everFreed_[static_cast<std::size_t>(n)] && !releaseEveryRender_) return;
     if (isPinnedOrTerminal(n)) return;
 
     auto& owned = ownedOutputs_[static_cast<std::size_t>(n)];

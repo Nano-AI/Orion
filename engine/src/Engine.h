@@ -39,6 +39,25 @@ public:
     /// silently stopped measuring the graph the app runs.
     static constexpr int kPreviewScale = 4;
 
+    /// A process that develops and exits rather than one a person drags
+    /// sliders in: `Orion --agent`, `--batch-export`. Decision #312.
+    ///
+    /// Two things change, both only worth doing when nothing is interactive.
+    /// No preview graph is built, so the quarter-scale mosaic and its
+    /// intermediates (~400 MiB on a 24 MP frame, more at 42) are never
+    /// allocated and `setAdjustments` and the matte calls stop feeding a
+    /// graph nobody renders. And the full graph releases every intermediate
+    /// at its last reader on every render (`Pipeline::setReleaseEveryRender`)
+    /// rather than once ever, which is what made a restore, a matte and an
+    /// export peak at 13.7 GB.
+    ///
+    /// ⚠ **Set before `openRaw`.** The preview is decided at open; a call
+    /// after it changes the release policy of the open graph but cannot
+    /// unbuild a preview that already exists. Never on the app's engine -
+    /// the canvas needs both things this turns off.
+    void setHeadless(bool on) noexcept;
+    [[nodiscard]] bool headless() const noexcept { return headless_; }
+
     void openRaw(const std::string& path);
     void setAdjustments(const pipe::Adjustments&);
     double render();
@@ -203,6 +222,8 @@ private:
     /// written carries the exposure, lens and date the picture was taken with.
     std::string                            sourcePath_;
     std::string                            lastError_;
+    /// `setHeadless`. Read at every `openRaw`, so it outlives a reload.
+    bool                                   headless_ = false;
 
     /// One copy for the process. Five megabytes of XML, parsed once — a
     /// per-photo parse would put a tenth of a second in front of every open.

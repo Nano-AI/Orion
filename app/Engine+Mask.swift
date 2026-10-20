@@ -326,19 +326,33 @@ extension Engine {
     /// has paid for. The panel reads `missingMattes` and says so.
     ///
     /// Called after `restore`, because it walks the components that call put
-    /// there.
+    /// there - or from inside it, `restore(encoded:mattesFrom:)`.
+    ///
+    /// ⚠ **One render for every matte, not one each** (#312). `setMaskMatte`
+    /// renders, and a state with four subject rows rendered the full graph
+    /// four times to show one picture. The uploads run suspended and the
+    /// picture renders once at the end - unless the caller was already
+    /// suspended, in which case its own render covers them, which is how
+    /// `restore` folds the mattes into the restore's single render.
     func restoreMattes(photo: URL) {
         var missing: Set<Int> = []
+        var uploaded = false
+        let wasSuspended = suspended
+        suspended = true
         for (i, c) in maskComponents.enumerated() {
             guard c.kind == 4, let id = c.matteId else { continue }
             guard let m = MatteStore.read(photo: photo, id: id) else {
                 missing.insert(i); continue
             }
-            if !setMaskMatte(m.alpha, width: m.width, height: m.height, at: i) {
+            if setMaskMatte(m.alpha, width: m.width, height: m.height, at: i) {
+                uploaded = true
+            } else {
                 missing.insert(i)
             }
         }
+        suspended = wasSuspended
         missingMattes = missing
+        if uploaded && !wasSuspended { pushAndRender() }
     }
 
     /// The label to describe the selected row's matte, if it has one.

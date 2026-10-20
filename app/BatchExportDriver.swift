@@ -56,7 +56,12 @@ extension BatchExport {
 
         try? FileManager.default.createDirectory(at: folder,
                                                  withIntermediateDirectories: true)
-        guard let engine = try? Engine() else {
+        // ⚠ Headless here and only here: the in-app batch shares `run` below
+        // with the canvas's engine, which must keep its preview graph and its
+        // once-ever release policy. A command-line batch has neither to keep,
+        // and a folder of 42 MP frames through one engine is where keeping
+        // every rebuilt texture would add up (#312).
+        guard let engine = try? Engine(headless: true) else {
             FileHandle.standardError.write(Data("orion: no engine\n".utf8))
             exit(2)
         }
@@ -108,9 +113,18 @@ extension BatchExport {
                     isCanceled: @escaping () -> Bool = { false }) -> Outcome {
         run(jobs,
             openAndRestore: { url in
-                try engine.open(path: url.path)
-                if let saved = Sidecar.read(for: url)?.develop {
-                    engine.restore(encoded: saved)
+                // ⚠ One render per photograph before the export's own, not
+                // two - `open(restoring:)` - and the saved mattes with it. Batch
+                // export used to restore the state alone, so a subject or sky
+                // row exported covering nothing: the picture the photographer
+                // approved with its subject lifted came out as shot (#312).
+                let saved = Sidecar.read(for: url)?.develop
+                try engine.open(path: url.path, restoring: saved != nil)
+                if let saved, !engine.restore(encoded: saved, mattesFrom: url) {
+                    // A blob that does not decode exports as shot, as it always
+                    // did - but it has to be pushed: `restoring: true` left the
+                    // previous photograph's adjustments in the engine.
+                    engine.pushAndRender()
                 }
             },
             exportTo: { destination in

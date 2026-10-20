@@ -144,6 +144,29 @@ public:
     /// optimizing the wrong kernel.
     void setProfiling(bool on) noexcept { profiling_ = on; }
 
+    /// Return every intermediate to the pool at its last reader on *every*
+    /// render, not once for the pipeline's life - `maybeFree`'s
+    /// `everFreed_` guard switched off. Decision #312.
+    ///
+    /// ⚠ **For headless, one-shot users only: `Orion --agent`, the
+    /// `--batch-export` driver, a test.** The guard exists to protect slider
+    /// latency (#161): with it off, a drag tick that dirties one node
+    /// rebuilds every clean intermediate the pool reclaimed last tick, and a
+    /// tick becomes a full render. A process that renders a handful of
+    /// times and exits has no tick to protect, and pays for the guard in
+    /// the opposite currency: every render after the first keeps every
+    /// texture it rebuilds, because a node already freed once is never
+    /// freed again, so the pool cannot hand those bytes to the next node and
+    /// allocates fresh ones instead. One agent call with a sidecar, a
+    /// proposal and a matte peaked at 13.7 GB that way, and ten of them in
+    /// parallel froze a 36 GB Mac. Must stay off in the interactive app.
+    ///
+    /// Correctness does not depend on it either way: a node whose texture
+    /// went back to the pool is null in `outputs_`, and `ensure()` rebuilds
+    /// any null input before a dispatch reads it - the same path the
+    /// once-ever free already relies on, taken more often.
+    void setReleaseEveryRender(bool on) noexcept { releaseEveryRender_ = on; }
+
     /// Executes every dirty node in one command buffer.
     /// Returns the GPU-side duration in milliseconds.
     double render();
@@ -275,7 +298,8 @@ private:
     /// Returns `n`'s texture to the pool if `reader` is its last static
     /// reader, it has never been freed before, and it is not pinned.
     ///
-    /// ⚠ **Once, ever, per node — not once per render.** `lastReader_[n]`
+    /// ⚠ **Once, ever, per node - not once per render** - unless
+    /// `setReleaseEveryRender` turned the guard off for a headless caller. `lastReader_[n]`
     /// does not change, so without the "never freed before" guard this would
     /// fire again on *every* future render that dispatches `reader`: free it,
     /// let `ensure()` rebuild it for the next tick, free it again. That is
@@ -339,6 +363,9 @@ private:
     std::uint32_t width_ = 0, height_ = 0;
     bool compiled_ = false;
     bool profiling_ = false;
+    /// `setReleaseEveryRender`. Survives `compile()` and `setSource()`, so a
+    /// headless engine that reloads the graph for the next frame keeps it.
+    bool releaseEveryRender_ = false;
     bool trimPool_ = false; // a filter/format transition left disposable textures
 
     std::vector<NodeTiming> lastRun_;

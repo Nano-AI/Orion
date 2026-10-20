@@ -551,6 +551,15 @@ OrionStatus orion_engine_lut_title(const OrionEngine* engine, char* out, int cap
 
 OrionStatus orion_engine_set_wide_output(OrionEngine* engine, int wide);
 
+/* Nonzero for a process that develops and exits - `Orion --agent`, the
+ * `--batch-export` driver - rather than the app's canvas. Builds no preview
+ * graph and returns every intermediate to the pool after each render, so a
+ * one-shot render peaks at one render's worth of textures rather than
+ * keeping what each later render rebuilds (decision #312). Call before
+ * orion_engine_open; never on the interactive app's engine, whose slider
+ * latency depends on both things this turns off. */
+OrionStatus orion_engine_set_headless(OrionEngine* engine, int headless);
+
 OrionStatus orion_engine_frame_size(const OrionEngine* engine,
                                     uint32_t* out_width, uint32_t* out_height);
 
