@@ -115,8 +115,13 @@ void DevelopPipeline::buildMaskNodes() {
     //
     // The second input binding §4 asks for, and it hangs off the *group* rather
     // than off each component: what a photographer wants snapped to an edge is
-    // the coverage they can see, which is the fold. Six nodes once, not six per
-    // component.
+    // the coverage they can see, which is the fold.
+    //
+    // ⚠ Built per slot because the graph is static and a layer can end at any
+    // slot, but only a slot that **ends a layer** runs them: a layer's
+    // coverage is the last component of its run (`layerTable`), and nothing
+    // reads a refined fold anywhere else. A layer of three components costs
+    // one chain, not three (#313). See `applyMaskRefine`.
     //
     // Every one of them is disabled when the strength is zero, so a photograph
     // with no refinement pays for their textures and none of their time — and
@@ -561,12 +566,33 @@ void DevelopPipeline::applyMaskRefine(const Adjustments& adj,
         pipeline_.setEnabled(nGuidePrep_, needsGuide || refining);
     }
 
-    if (first || refining != wasRefining) {
+    // ⚠ **Only the slots that end a layer** (#313). `develop:linear` and the
+    // local denoise read `mask[layerMask[L]]` and nothing else, so a chain on
+    // a slot inside a run, or past `maskCount`, filtered a full-resolution
+    // fold nobody read: seven nodes and about a gigabyte at 42 MP for a
+    // proposal with three layers, all eight slots running whenever the
+    // strength was above zero. A disabled refine resolves to its component,
+    // which is what an unread binding of `develop:linear` should cost.
+    //
+    // Re-evaluated whenever the set of layer ends moves, not only when
+    // `refining` flips: adding a row, or turning one into a layer start,
+    // moves the end without touching the strength. `visibilityMoved` does not
+    // cover `startsLayer`, so the set is compared directly.
+    const auto layerEnds = [](const Adjustments& a) {
+        std::int32_t mask[kMaxMaskComponents];
+        const int layers = layerTable(a, mask);
+        unsigned bits = 0;
+        for (int l = 0; l < layers; ++l) bits |= 1u << unsigned(mask[l]);
+        return bits;
+    };
+    const unsigned ends = layerEnds(adj);
+    if (first || refining != wasRefining || ends != layerEnds(lastAdj_)) {
         for (int i = 0; i < kMaxMaskComponents; ++i) {
+            const bool on = refining && (ends & (1u << unsigned(i))) != 0;
             for (int n : {nMaskGuidePrep_[i], nMaskGuideH1_[i], nMaskGuideV1_[i],
                           nMaskGuideAb_[i], nMaskGuideH2_[i], nMaskGuideV2_[i],
                           nMaskRefine_[i]}) {
-                pipeline_.setEnabled(n, refining);
+                pipeline_.setEnabled(n, on);
             }
         }
     }
