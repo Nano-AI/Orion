@@ -14,6 +14,7 @@ how a defect got past every test — which is usually the more useful half.
 
 | File | What it is |
 |---|---|
+| `2026-10-19-mcp-batch-edit-findings.md` | Parallel MCP agents froze a 36 GB Mac at ~70 GB: no concurrency cap in the server, 4-14 GB peak per 42 MP agent call, 2-3 renders per call with once-ever freeing; plus 13 earlier, unverified MCP quirks. Status section: the cap, the timeout and the child kill (#311), one headless render per call (#312) and refine on layer ends only (#313) took the worst case 13.74 → 6.88 GB; A5, A6 and B open. |
 | `2026-10-10-mcp-cropped-edit-review.md` | Five MCP findings from editing a cropped photograph: layer tint ran against the global axis (fixed with a legacy gate), regions now carry frame space, a read-only `get_edits`, and two vocabulary gaps; each verdict with its measurement. |
 | `2026-09-28-failed-save-safety.md` | Refuse photo/folder departures and current-photo Trash after a failed save; real-action probe, retry coverage and explicit remaining limits. |
 | `2026-09-28-histogram-memory.md` | Native readback allocation cleanup, real-GPU bin regression, reduced paired timing and explicit memory/fixture limits. |

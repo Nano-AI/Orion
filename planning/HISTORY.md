@@ -1,5 +1,11 @@
 # Orion — session history
 
+## Recent-session row archived 2026-10-19
+
+| Date | What landed |
+|---|---|
+| 2026-10-10 | **Five MCP findings from a cropped edit (#290-#294).** Layer Tint now runs the global axis (positive magenta) with `localTintAxis` negating legacy sidecars on read; 18 of 228 real sidecars carried a layer tint and a pre-fix proposed file re-renders bit-identically. `get_stats` `region` carries a frame-space `frame` ellipse through the one carry `detect_faces` uses; `get_edits` / `--agent state` read settings without writing. The photographer's first proposal after the build still flipped a +0.05 layer tint: `mergeEdits` overlaid edits onto an un-normalised legacy base; it now decodes the base first (#293). `vignetteAmount`, radial `feather` and `layers` tint axis documented in the vocabulary. `tools/worktree-setup.sh` had refused every worktree since SwiftTerm was checked in; it now links per untracked entry and reruns cleanly. `check-screens`/`check-modes` named `_PIC` samples that exist on no volume here and exited 2 for everyone; both now discover a present sample like `check-agent`. Engine 1194/0, viewport 4311/0, mcp 30/30, agent 22/22, screens 3+1, modes 50/13/2/DNG, all nine gates green. Same day, #294: Straighten could not go under 2.8° because the detent window is 1.5% of a 180° span; a drag that begins on the detent no longer snaps, and double-clicking any readout opens a typed field (Return commits, Escape cancels, Up/Down nudge). Viewport 4334/0. Live double-click behaviour awaits a hands-on check. Write-up: `feedback/2026-10-10-mcp-cropped-edit-review.md`. |
+
 ## Recent-session rows archived 2026-10-18
 
 | Date | What landed |
