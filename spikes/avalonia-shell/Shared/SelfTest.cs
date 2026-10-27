@@ -55,11 +55,16 @@ static class SelfTest {
         Check(AdjustmentMath.Detented(0.01f, 0, -1, 1, departing: false) == 0 &&
               AdjustmentMath.Detented(0.01f, 0, -1, 1, departing: true) == 0.01f, "the detent snaps unless departing");
 
-        // Every SF Symbol the Swift UI names has a drawing here.
+        // Every SF Symbol the Swift UI names has a drawing here: every literal in a
+        // systemName:/systemImage: expression (ternaries too), and iconChip's first argument.
         var swift = Path.Combine(Directory.GetCurrentDirectory(), "..", "app");
-        var symbols = Directory.EnumerateFiles(swift, "*.swift")
-            .SelectMany(f => System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f),
-                "(?:systemName|systemImage|icon|armedIcon):\\s*\"([a-z0-9.]+)\"").Select(m => m.Groups[1].Value))
+        static IEnumerable<string> Literals(string s, string pattern) =>
+            System.Text.RegularExpressions.Regex.Matches(s, pattern).SelectMany(m =>
+                System.Text.RegularExpressions.Regex.Matches(m.Groups[1].Value, "\"([a-z0-9.]+)\"").Select(l => l.Groups[1].Value));
+        var symbols = Directory.EnumerateFiles(swift, "*.swift").Select(File.ReadAllText)
+            .SelectMany(s => Literals(s, "(?:systemName|systemImage):([^)]*)")
+                .Concat(Literals(s, "(?:icon|armedIcon):\\s*(\"[a-z0-9.]+\")"))
+                .Concat(Literals(s, "iconChip\\((\"[a-z0-9.]+\")")))
             .Distinct().ToList();
         var missing = symbols.Where(s => !Icons.Has(s)).ToList();
         Check(symbols.Count > 10 && missing.Count == 0,

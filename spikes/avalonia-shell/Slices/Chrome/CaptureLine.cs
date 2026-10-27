@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Chrome;
 
 /// A port of app/OrionApp+Capture.swift: the toolbar's middle slot, one dim
 /// line of what the camera recorded, that opens the full list. With nothing

@@ -4,7 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// A port of app/CurveEditor.swift: the tone curve as a graph you draw on.
 /// Click the line to add a point, drag one, drag it well clear to remove it,

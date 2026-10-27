@@ -1,4 +1,4 @@
-namespace OrionShell;
+namespace OrionShell.Masks;
 
 /// One row of the mask group: MaskComponentState (EditHistory.swift), same
 /// defaults. A plain bag of numbers the panel's shape sliders write directly.

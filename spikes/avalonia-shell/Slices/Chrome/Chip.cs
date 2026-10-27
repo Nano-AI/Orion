@@ -7,7 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
-namespace OrionShell;
+namespace OrionShell.Chrome;
 
 /// OrionApp+Chrome.swift's `chip` and `iconChip`: a plain button one height
 /// for the whole toolbar, outlined in the hairline, dim ink or faint when off.

@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Chrome;
 
 /// A port of OrionApp+Chrome.swift's `toolbar`. It reads left to right in the
 /// order the work happens: what you open, what you are looking at, what you do

@@ -23,7 +23,7 @@
             BorderBrush="{x:Static local:Palette.Line}" BorderThickness="1,0,0,0">
       <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
       <DockPanel>
-        <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top"/>
+        <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top" Margin="14,0"/>
         <Grid x:Name="TabBar" DockPanel.Dock="Top" Margin="4,0" Height="30"/>
         <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
         <ScrollViewer>

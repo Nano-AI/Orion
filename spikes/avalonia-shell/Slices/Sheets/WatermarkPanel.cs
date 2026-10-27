@@ -4,7 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// A port of app/WatermarkPanel.swift: the watermark editor, a sheet over the
 /// Export sheet. The controls are a fixed set and are not scrolled: a fold

@@ -1,6 +1,6 @@
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// A port of app/TargetedAdjust.swift: the colour mixer's eight bands, in the
 /// order the engine's hue_shift/sat_shift/lum_shift arrays expect.

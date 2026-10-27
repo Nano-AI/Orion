@@ -4,7 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// A port of app/ColorWheel.swift: one grading wheel bound to a float[3]
 /// field (grade_shadow, grade_midtone, grade_highlight) — the puck's x and y

@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// The orion_* calls the sheets need that EngineModel does not wrap (SLICES.md
 /// rule 10). Layouts mirror engine/include/orion/orion.h field for field.

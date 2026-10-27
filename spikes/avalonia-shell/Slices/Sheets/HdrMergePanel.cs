@@ -4,7 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// A port of app/HdrMergePanel.swift's sheet. It exists for the one decision
 /// the software cannot make: which frame's framing wins.

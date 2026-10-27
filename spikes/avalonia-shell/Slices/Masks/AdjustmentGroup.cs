@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Masks;
 
 /// A port of app/AdjustmentGroup.swift, local scope: the adjustments a mask
 /// carries, one slider each, bound to the selected layer's slot of the

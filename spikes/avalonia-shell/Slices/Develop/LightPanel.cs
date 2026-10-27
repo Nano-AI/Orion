@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// A port of app/DevelopPanels+Light.swift: white balance, the tone sliders,
 /// highlight recovery and the curve. Ranges and decimals from that file;

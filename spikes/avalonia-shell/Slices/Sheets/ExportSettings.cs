@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// A port of the parts of app/ExportSettings.swift the export sheet reads:
 /// the choices with their titles and notes, the output dimensions, and the

@@ -5,7 +5,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 
-namespace OrionShell;
+namespace OrionShell.Masks;
 
 /// AdjustmentSlider's look for a number that is not an OrionAdjustments field:
 /// a mask shape's own geometry, which lives in MaskGroup (see there for why).

@@ -28,6 +28,22 @@ public static class Icons {
         ["bandage"] = "M4,14 L14,4 A3,3 0 0 1 20,10 L10,20 A3,3 0 0 1 4,14 Z M10.5,10.5 L13.5,13.5",
         ["eyedropper"] = "M14,8 L5,17 L4,20 L7,19 L16,10 M13,7 L17,11 M15,5 A2.8,2.8 0 0 1 19,9 L17,11 L13,7 Z",
         ["scope"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M12,1 L12,6 M12,18 L12,23 M1,12 L6,12 M18,12 L23,12",
+        ["arrow.uturn.forward"] = "M15,14 L20,9 L15,4 M20,9 L9,9 A5,5 0 0 0 9,19 L13,19",
+        ["arrow.left.and.right"] = "M3,12 L21,12 M7,8 L3,12 L7,16 M17,8 L21,12 L17,16",
+        ["arrow.up.and.down"] = "M12,3 L12,21 M8,7 L12,3 L16,7 M8,17 L12,21 L16,17",
+        ["eye"] = "M2,12 C5,6 19,6 22,12 C19,18 5,18 2,12 Z M9,12 A3,3 0 1 0 15,12 A3,3 0 1 0 9,12 Z",
+        ["eye.slash"] = "M2,12 C5,6 19,6 22,12 C19,18 5,18 2,12 Z M9,12 A3,3 0 1 0 15,12 A3,3 0 1 0 9,12 Z M4,4 L20,20",
+        ["circle"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z",
+        ["plus.circle"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M12,8 L12,16 M8,12 L16,12",
+        // Twelve round-capped dots on the circle.
+        ["circle.dotted"] = "M21,12 l0,0.01 M19.8,16.5 l0,0.01 M16.5,19.8 l0,0.01 M12,21 l0,0.01 M7.5,19.8 l0,0.01 M4.2,16.5 l0,0.01 " +
+                            "M3,12 l0,0.01 M4.2,7.5 l0,0.01 M7.5,4.2 l0,0.01 M12,3 l0,0.01 M16.5,4.2 l0,0.01 M19.8,7.5 l0,0.01",
+        // Stroked, so the filled half is hatched.
+        ["circle.lefthalf.filled"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M12,3 L12,21 M12,6 L6.5,6 M12,9 L4,9 M12,12 L3,12 M12,15 L4,15 M12,18 L6.5,18",
+        ["largecircle.fill.circle"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M9.5,12 A2.5,2.5 0 1 0 14.5,12 A2.5,2.5 0 1 0 9.5,12 Z M11,12 A1,1 0 1 0 13,12 A1,1 0 1 0 11,12 Z",
+        ["star"] = "M12,2 L15,9 L22,9 L16.5,13.5 L18.5,21 L12,16.8 L5.5,21 L7.5,13.5 L2,9 L9,9 Z",
+        ["rectangle.split.2x1"] = "M3,5 H21 V19 H3 Z M12,5 L12,19",
+        ["rectangle.split.1x2"] = "M3,5 H21 V19 H3 Z M3,12 L21,12",
     };
 
     public static bool Has(string sfName) => Paths.ContainsKey(sfName);

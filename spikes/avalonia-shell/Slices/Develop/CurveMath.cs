@@ -1,4 +1,4 @@
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// A port of app/CurveMath.swift: the curve the panel draws, evaluated the way
 /// pipe/ToneCurve.cpp does — Fritsch–Carlson monotone cubic Hermite, so no

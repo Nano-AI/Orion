@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace OrionShell;
+namespace OrionShell.Chrome;
 
 /// A port of app/CaptureInfo.swift: what the camera recorded, in the spellings
 /// a photographer reads. Zero means "the file does not say", and every

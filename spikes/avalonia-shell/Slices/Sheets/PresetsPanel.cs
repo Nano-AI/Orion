@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// The saved looks. Built-ins only: the photographer's own live in presets.json.
 // stub(#315): Presets.swift owns this until the logic moves below the facade

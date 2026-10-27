@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// The orion_* calls the develop panels make that EngineModel does not
 /// (engine/include/orion/orion.h), against EngineModel.Handle. 0 is ORION_OK.

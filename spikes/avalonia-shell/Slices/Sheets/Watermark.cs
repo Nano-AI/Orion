@@ -1,4 +1,4 @@
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// A port of the parts of app/Watermark.swift the two sheets read: what the
 /// mark is, where it goes, how big and how present. One gray, always (#284).

@@ -23,6 +23,7 @@ cannot reach.
 | 10 | A facade call not on `EngineModel` (`orion_*` in `orion.h`): add your own `[LibraryImport("orion_shim")]` in your folder. `liborion_shim.dylib` exports all 48. |
 | 11 | No new NuGet packages, no `unsafe` outside a P/Invoke, no files over ~300 lines (CLAUDE.md: one file, one job). |
 | 12 | Run headless (`--screenshot`, `--selftest`, `--bench`). Never launch an interactive window; the macOS backend fails with RenderTimer -6661 when the display sleeps. |
+| 13 | Namespace `OrionShell.<Folder>` (Canvas: `OrionShell.CanvasSlice`, since `Canvas` is an Avalonia type). Folders keep files apart; namespaces keep type names apart: the first swarm's develop and sheets slices each defined `Segmented`. |
 
 ## Done means
 

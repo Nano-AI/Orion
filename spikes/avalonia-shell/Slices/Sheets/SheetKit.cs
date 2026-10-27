@@ -5,7 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// The pieces the sheets and the Presets tab share: the `row` helper the
 /// Export and Watermark sheets both declare, small bordered buttons, rounded

@@ -4,7 +4,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// A port of app/DevelopPanels+Color.swift: presence, the three grading wheels
 /// with their balance, and the eight-band mixer with its targeted picker.

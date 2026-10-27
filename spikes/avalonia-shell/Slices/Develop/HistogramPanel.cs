@@ -7,7 +7,7 @@ using Avalonia.Platform;
 using System.Runtime.InteropServices;
 using Path = Avalonia.Controls.Shapes.Path;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// The engine's per-channel histogram of the full render, 128 bins each, red
 /// then green then blue (Engine.histogram). Not refreshed mid-drag: it reads

@@ -2,7 +2,7 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// A port of app/DevelopPanels+Detail.swift: noise reduction, dust spots, the
 /// creative LUT, and the finishing controls.

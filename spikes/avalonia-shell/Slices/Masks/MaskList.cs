@@ -4,9 +4,9 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
-using static OrionShell.MaskControls;
+using static OrionShell.Masks.MaskControls;
 
-namespace OrionShell;
+namespace OrionShell.Masks;
 
 /// A port of app/DevelopPanels+MaskList.swift: one card per mask, its shapes
 /// as rows beneath, and the count with the cap said out loud. Its own control

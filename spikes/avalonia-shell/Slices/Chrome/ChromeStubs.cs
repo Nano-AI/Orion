@@ -1,4 +1,4 @@
-namespace OrionShell;
+namespace OrionShell.Chrome;
 
 /// Every piece of state the toolbar and footer read that Swift keeps above the
 /// facade, in one place so the integrator can see what is not wired yet. Each

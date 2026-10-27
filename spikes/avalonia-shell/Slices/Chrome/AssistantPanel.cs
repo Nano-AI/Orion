@@ -4,7 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Chrome;
 
 /// A port of AssistantPanel.swift's AssistantColumn: the photographer's coding
 /// agent in a column at the window's leading edge. A header (which agent,

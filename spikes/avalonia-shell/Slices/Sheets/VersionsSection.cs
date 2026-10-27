@@ -4,7 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// The saved versions of the open photo, as the Presets tab shows them.
 // stub(#315): Snapshots.swift owns this until the logic moves below the facade

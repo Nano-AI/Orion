@@ -6,7 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 
-namespace OrionShell;
+namespace OrionShell.Develop;
 
 /// A port of app/DevelopPanels.swift: furniture more than one develop tab needs.
 static class Develop {

@@ -4,7 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace OrionShell;
+namespace OrionShell.Chrome;
 
 /// A port of OrionApp+Chrome.swift's `footer`, under the tool column: what the
 /// next click does (or, worst first, what went wrong), which photograph this

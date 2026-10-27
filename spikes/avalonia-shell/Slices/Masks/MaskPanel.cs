@@ -2,9 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using static OrionShell.MaskControls;
+using static OrionShell.Masks.MaskControls;
 
-namespace OrionShell;
+namespace OrionShell.Masks;
 
 /// A port of app/DevelopPanels+Mask.swift, the Mask tab: the mask cards, the
 /// Add menu, the controls the selected shape's kind needs, and the local

@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Threading;
 
-namespace OrionShell;
+namespace OrionShell.Sheets;
 
 /// A port of app/ExportPanel.swift: the export sheet. Every control moves the
 /// byte count, so each one re-measures through a real encode after a pause.
