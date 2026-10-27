@@ -1,0 +1,84 @@
+using Avalonia;
+
+namespace OrionShell.CanvasSlice;
+
+/// The Engine+Geometry.swift calls the crop tools make. Unlike masks and spots,
+/// every number they touch is an OrionAdjustments field EngineModel reaches, so
+/// these are ports, not stubs; only the history entries are.
+static class CropEdit {
+    static EngineModel Engine => EngineModel.Shared;
+    static float Get(string field) => Engine.Handle == 0 ? 0 : Engine.Get(field);
+
+    /// The crop, normalized against the turned frame.
+    public static Rect Crop => new(Get("crop_x"), Get("crop_y"), Get("crop_w"), Get("crop_h"));
+    public static bool Previewing => Get("crop_preview") != 0;
+    static double Angle => Get("straighten_deg");
+
+    /// `previewCanvas`: the region the crop preview renders, in crop coordinates.
+    public static (Point Origin, double Size) Canvas =>
+        Previewing ? CanvasLayout.PreviewCanvas(CanvasNative.FrameAspect, Angle) : (default, 1);
+
+    static (double Angle, double Aspect) _seen = (double.NaN, double.NaN);
+    static bool _following;
+
+    static CropEdit() {
+        Engine.Rendered += Follow;
+        Engine.Opened += () => _seen = (double.NaN, double.NaN);
+    }
+
+    /// Engine.swift's `straightenDeg` didSet and the quarter turn's frame swap:
+    /// the crop is pulled back inside the turned frame and the preview canvas
+    /// regrows to cover it. Runs after any render, so a slider is enough to trip it.
+    static void Follow() {
+        if (_following || Engine.Handle == 0) return;
+        var now = (Angle, CanvasNative.FrameAspect);
+        if (now == _seen) return;
+        _seen = now;
+        _following = true;
+        try {
+            SetCrop(Crop);
+            if (Previewing) Preview(true);
+        } finally {
+            _following = false;
+        }
+    }
+
+    /// `setCrop`: constrained to the turned frame, then written in one batch.
+    public static void SetCrop(Rect r) {
+        var c = CanvasLayout.ConstrainedCrop(r, CanvasNative.FrameAspect, Angle);
+        CanvasState.Write(("crop_w", c.Width), ("crop_h", c.Height), ("crop_x", c.X), ("crop_y", c.Y));
+    }
+
+    /// `cropPreview`: the whole turned frame with the crop as context, while the crop tab is open.
+    public static void Preview(bool on) {
+        var (origin, size) = on ? CanvasLayout.PreviewCanvas(CanvasNative.FrameAspect, Angle) : (default(Point), 1.0);
+        CanvasState.Write(("preview_x", origin.X), ("preview_y", origin.Y), ("preview_size", size), ("crop_preview", on ? 1 : 0));
+    }
+
+    /// `setAspect`: the largest centered rectangle of that ratio; nil is `resetCrop`.
+    public static void SetAspect(double? ratio) {
+        if (ratio is not { } r) { Reset(); return; }
+        double frame = CanvasNative.FrameAspect, w = 1, h = 1;
+        if (r > frame) h = frame / r; else w = r / frame;
+        CanvasState.Write(("crop_w", w), ("crop_h", h), ("crop_x", (1 - w) / 2), ("crop_y", (1 - h) / 2));
+        Commit("Aspect");
+    }
+
+    /// `resetCrop`: the whole frame, upright.
+    public static void Reset() {
+        CanvasState.Write(("crop_x", 0), ("crop_y", 0), ("crop_w", 1), ("crop_h", 1), ("straighten_deg", 0));
+        Commit("Crop");
+    }
+
+    /// `rotate`: a quarter turn swaps the frame, so the crop resets rather than
+    /// silently reframing the picture.
+    public static void Rotate(int turns) {
+        int quarters = (((int)Get("rotate_quarters") + turns) % 4 + 4) % 4;
+        CanvasState.Write(("crop_x", 0), ("crop_y", 0), ("crop_w", 1), ("crop_h", 1), ("rotate_quarters", quarters));
+        CanvasState.Viewport.Reset();
+        Commit("Rotate");
+    }
+
+    // stub(#315): EditHistory.swift owns this until the logic moves below the facade
+    public static void Commit(string label) { }
+}
