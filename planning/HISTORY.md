@@ -1,5 +1,14 @@
 # Orion — session history
 
+## Recent-session row archived 2026-10-27
+
+The 2026-10-06 row was recovered from an uncommitted stash left on a vibesys branch; it never reached `STATUS.md` on main.
+
+| Date | What landed |
+|---|---|
+| 2026-10-17 | **Subject masks and shoot-wide sync through the MCP (#295-#298).** `Orion --agent matte` + `detect_subject` run the same Vision producers as the panel, save the PNG through `MatteStore`, and hand back a complete kind-4 row; `--agent sync` + `sync_edits` carry chosen groups (the six product groups via `SyncSettings.keys(for:)`, plus `masks` with its markers) onto a list of targets as proposals, or sidecars under `commit`, with the open photo always a proposal and every Subject/Person/Sky row re-detected per target. Two latent bugs fixed on the way: the open-time sweep deleted a matte only a proposal named, and the compare view never uploaded a proposed matte. The gallery now opens scrolled to the focused photograph (hands-on check pending). The sync smoke found the product's own Sync opening untouched photographs at 5500 K: `restore` now fills an absent white balance from the camera (#298). Viewport 4384/0, engine 1194/0, mcp 38/38, agent 24/24, all nine gates green. ⚠ Unverified by hand: the compare-view preview of a proposed kind-4 row, the gallery scroll, and `found: false` from the real model |
+| 2026-10-06 | **Develop-graph explainer, `docs/pipeline-graph/`.** Interactive page: 21 real stage outputs with before/after compare, the 205-shader graph replayed from the `pipeline_.add()` calls, per-control dirty sets with full-res per-node GPU ms. Then `docs/presentation/index.html`: a self-contained six-slide deck (revised 2026-10-06 for an AWS ML-performance interview: authorship, measured per-control node counts, Aug 31 bench numbers, per-node profiling, gates + MCP, job-description table). Node count reconciled: 173 on 2026-08-31 was a 4-mask-slot build; 205 with 8 slots (59897c7); exposure runs 3 nodes in both. Intermediates 12,567 MiB (Aug 31) → 1,803 MiB resident (Oct 6, after #219); exposure marks 5 of 205 dirty. New `orion-bench --stages [dir] [--demo]` (default = the app's look, contrast 1.45) pins every node, reads back one per stage from a 2×2-binned mosaic, profiles at full res, writes JPEGs + `manifest.js`; `Pipeline::nodeName()` added for it. Page warns if the engine reports a node `graph.js` lacks. **Observed, not fixed:** on `_PIC8220` (moon on black) dehaze ≥0.35 draws a dark ring and the shadows/highlights guided filter adds concentric rings (visible in `guide:blur v2`); highlight recovery 1.0 leaves flat patches on the clipped disc. All nine gates passed on the vibesys branch at the time; reapplied uncommitted onto `642caed` on 2026-10-27 and not rebuilt there. |
+
 ## Recent-session row archived 2026-10-19
 
 | Date | What landed |

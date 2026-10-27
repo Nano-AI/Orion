@@ -1,0 +1,30 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:OrionShell"
+        x:Class="OrionShell.Theme">
+  <!-- Shared text and cell styles. Application-wide, so a panel looks the same
+       in the window and alone in a panel screenshot. -->
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{x:Static local:Palette.Text}"/>
+    <Setter Property="FontSize" Value="{x:Static local:TypeSize.Base}"/>
+  </Style>
+  <Style Selector="TextBlock.section">
+    <Setter Property="Foreground" Value="{x:Static local:Palette.Dim}"/>
+    <Setter Property="FontSize" Value="{x:Static local:TypeSize.Xs}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="LetterSpacing" Value="1.4"/>
+    <Setter Property="Margin" Value="0,18,0,8"/>
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="Foreground" Value="{x:Static local:Palette.Dim}"/>
+    <Setter Property="FontSize" Value="{x:Static local:TypeSize.Sm}"/>
+  </Style>
+  <Style Selector="TextBlock.tnum">
+    <Setter Property="FontFeatures" Value="+tnum"/>
+  </Style>
+  <Style Selector="TextBlock.readout">
+    <Setter Property="FontSize" Value="{x:Static local:TypeSize.Sm}"/>
+    <Setter Property="FontFeatures" Value="+tnum"/>
+    <Setter Property="HorizontalAlignment" Value="Right"/>
+  </Style>
+</Styles>

@@ -4,6 +4,7 @@
 Writes:
   design/mockup-darkroom.html   CSS custom properties, between TOKENS markers
   ../Sources/OrionUI/DesignTokens.swift   Swift constants for the app
+  ../spikes/avalonia-shell/Shared/Palette.g.cs   C# constants for the Avalonia shell (#315)
 
 Run after any edit to tokens.json.  Never hand-edit the generated regions.
 """
@@ -17,6 +18,7 @@ HERE = pathlib.Path(__file__).parent
 TOKENS = HERE / "tokens.json"
 MOCKUP = HERE / "mockup-darkroom.html"
 SWIFT = HERE.parent / "Sources" / "OrionUI" / "DesignTokens.swift"
+CSHARP = HERE.parent / "spikes" / "avalonia-shell" / "Shared" / "Palette.g.cs"
 
 START = "/* TOKENS:START — generated from tokens.json, do not edit by hand */"
 END = "/* TOKENS:END */"
@@ -153,6 +155,35 @@ def swift_file(t):
     return "\n".join(out)
 
 
+def csharp_file(t):
+    """The same tokens for the Avalonia shell (#315), same names as Swift."""
+    out = [
+        "// GENERATED from design/tokens.json by design/build-tokens.py.",
+        "// Do not edit by hand — your changes will be overwritten.",
+        "",
+        "using Avalonia.Media;",
+        "using Avalonia.Media.Immutable;",
+        "",
+        "namespace OrionShell;",
+        "",
+        "public static class Palette {",
+    ]
+    for name, spec in strip_comments(t["color"]).items():
+        r, g, b = (int(spec["hex"][i:i + 2], 16) for i in (1, 3, 5))
+        out.append(f"    /// {spec['use']}")
+        out.append(f"    public static readonly IBrush {name[0].upper() + name[1:]} = "
+                   f"new ImmutableSolidColorBrush(Color.FromRgb({r}, {g}, {b}));")
+    out.append("}")
+    for group, cls in (("space", "Space"), ("radius", "Radius"),
+                       ("type", "TypeSize"), ("layout", "Layout")):
+        out += ["", f"public static class {cls} {{"]
+        for name, v in strip_comments(t[group]).items():
+            if isinstance(v, (int, float)):
+                out.append(f"    public const double {name[0].upper() + name[1:]} = {v};")
+        out.append("}")
+    return "\n".join(out) + "\n"
+
+
 def main():
     t = load()
 
@@ -169,6 +200,10 @@ def main():
     SWIFT.parent.mkdir(parents=True, exist_ok=True)
     SWIFT.write_text(swift_file(t))
     print(f"wrote Swift tokens -> {SWIFT.relative_to(HERE.parent)}")
+
+    CSHARP.parent.mkdir(parents=True, exist_ok=True)
+    CSHARP.write_text(csharp_file(t))
+    print(f"wrote C# tokens -> {CSHARP.relative_to(HERE.parent)}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,91 @@
+{
+  "$comment": "The swarm's contract (#315). Each slice ports its Swift files into Slices/<Folder>/ and registers exactly these panels. scenes are Orion --screenshot scene names its panels are compared against. compare.py and SLICES.md read this file.",
+  "slices": {
+    "develop": {
+      "folder": "Develop",
+      "swift": ["DevelopPanels.swift", "DevelopPanels+Light.swift", "DevelopPanels+Color.swift",
+                "DevelopPanels+Detail.swift", "DevelopPanels+Optics.swift", "CurveEditor.swift",
+                "ColorWheel.swift", "Histogram.swift", "TargetedAdjust.swift"],
+      "panels": [
+        {"name": "develop-histogram", "region": "Tools"},
+        {"name": "develop-light", "region": "Tools", "tab": "Light"},
+        {"name": "develop-color", "region": "Tools", "tab": "Color"},
+        {"name": "develop-detail", "region": "Tools", "tab": "Detail"},
+        {"name": "develop-optics", "region": "Tools", "tab": "Optics"}
+      ],
+      "replaces": ["develop-basic"],
+      "scenes": ["light", "tone", "curve", "recover", "color", "grade", "grade-shadow-only", "detail",
+                 "detail-middle", "detail-tail", "noisy", "denoise-luma", "optics", "lens-barrel"]
+    },
+    "canvas": {
+      "folder": "Canvas",
+      "swift": ["ImageCanvas.swift", "OrionApp+Canvas.swift", "CropOverlay.swift", "MaskOverlay.swift",
+                "SpotOverlay.swift", "CompareOverlay.swift", "Navigator.swift", "ColorLoupe.swift",
+                "OrionApp+Tools.swift (the .crop tab only)"],
+      "panels": [
+        {"name": "canvas", "region": "Canvas"},
+        {"name": "canvas-crop", "region": "Canvas"},
+        {"name": "canvas-mask", "region": "Canvas"},
+        {"name": "canvas-spots", "region": "Canvas"},
+        {"name": "canvas-compare", "region": "Canvas"},
+        {"name": "canvas-navigator", "region": "Canvas"},
+        {"name": "canvas-loupe", "region": "Canvas"},
+        {"name": "tools-crop", "region": "Tools", "tab": "Crop"}
+      ],
+      "replaces": [],
+      "scenes": ["crop", "crop-angle", "spots", "compare", "mask-overlay", "mask-radial-overlay", "brush"]
+    },
+    "library": {
+      "folder": "Library",
+      "swift": ["Filmstrip.swift", "GalleryView.swift", "RatingBar.swift"],
+      "panels": [
+        {"name": "filmstrip", "region": "Filmstrip"},
+        {"name": "gallery", "region": "Sheet"},
+        {"name": "rating-bar", "region": "Canvas"}
+      ],
+      "replaces": [],
+      "scenes": ["gallery", "light"]
+    },
+    "masks": {
+      "folder": "Masks",
+      "swift": ["DevelopPanels+Mask.swift", "DevelopPanels+MaskList.swift", "AdjustmentGroup.swift"],
+      "panels": [
+        {"name": "masks", "region": "Tools", "tab": "Mask"}
+      ],
+      "replaces": [],
+      "scenes": ["mask", "local", "layers", "sky", "mask-off", "mask-linear", "mask-linear-feathered",
+                 "mask-radial", "mask-range", "mask-square"]
+    },
+    "sheets": {
+      "folder": "Sheets",
+      "swift": ["ExportPanel.swift", "WatermarkPanel.swift", "WatermarkRaster.swift", "HdrMergePanel.swift",
+                "DevelopPanels+Presets.swift"],
+      "panels": [
+        {"name": "presets", "region": "Tools", "tab": "Presets"},
+        {"name": "sheet-export", "region": "Sheet"},
+        {"name": "sheet-watermark", "region": "Sheet"},
+        {"name": "sheet-hdr-merge", "region": "Sheet"}
+      ],
+      "replaces": [],
+      "scenes": ["presets", "versions"]
+    },
+    "chrome": {
+      "folder": "Chrome",
+      "swift": ["OrionApp+Chrome.swift (not tabBar: the shell owns it)", "OrionApp+Tools.swift (footer only)",
+                "OrionApp+Capture.swift", "AssistantPanel.swift"],
+      "panels": [
+        {"name": "toolbar", "region": "Toolbar"},
+        {"name": "status", "region": "Status"},
+        {"name": "assistant", "region": "Sheet"}
+      ],
+      "replaces": [],
+      "scenes": ["capture", "capture-line", "render-failed", "reset-edit"]
+    }
+  },
+  "shared": ["AnalogTrack.swift", "TrackTint.swift", "AdjustmentSlider.swift", "AdjustmentMath.swift",
+             "Engraved.swift", "ToolButton.swift", "OrionApp+Chrome.swift (tabBar only)", "design/tokens.json"],
+  "not_ported": ["Engine*.swift", "OrionApp.swift", "OrionApp+Commands.swift", "OrionApp+Files.swift",
+                 "Library.swift", "LibraryProbe.swift", "SaveDepartureProbe.swift", "SubjectMatte.swift",
+                 "Agent*.swift", "BatchExportDriver.swift", "HdrMergeDriver.swift", "Screenshot*.swift",
+                 "Scenario*.swift", "ViewportTests*.swift"]
+}

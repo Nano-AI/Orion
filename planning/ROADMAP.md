@@ -872,7 +872,7 @@ demosaic-first, camera-native RGB, an fp16 LinearRaw DNG beside the sources.
 - User-loadable DCP profiles
 - X-Trans support (Markesteijn)
 - Customizable tool panels / saved workspaces
-- Windows port (engine already portable; UI is the work)
+- Windows/Linux port (#315). Shell: Avalonia, spiked in `spikes/avalonia-shell/`. ⚠ The engine is *not* already portable: it also needs a non-Metal GPU backend (Dawn spike) and an export writer to replace ImageIO. Order: shared Swift logic moves below the C facade first, then Windows, then Linux
 
 ---
 

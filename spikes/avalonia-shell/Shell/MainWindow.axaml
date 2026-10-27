@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:OrionShell"
+        x:Class="OrionShell.MainWindow"
+        Title="Orion — Avalonia shell" Width="1440" Height="900"
+        Background="{x:Static local:Palette.Ground}"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="44">
+  <!-- Regions only. What goes in them is whatever Slices/ registers with [Panel]. -->
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Height="{x:Static local:Layout.Toolbar}"
+            Background="{x:Static local:Palette.Panel}"
+            BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,0,0,1">
+      <Grid x:Name="ToolbarHost"/>
+    </Border>
+    <Border DockPanel.Dock="Bottom" Height="{x:Static local:Layout.Filmstrip}"
+            Background="{x:Static local:Palette.FilmBase}"
+            BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1,0,0">
+      <Grid x:Name="FilmstripHost"/>
+    </Border>
+    <Border DockPanel.Dock="Right" Width="{x:Static local:Layout.ToolCol}"
+            Background="{x:Static local:Palette.Panel}"
+            BorderBrush="{x:Static local:Palette.Line}" BorderThickness="1,0,0,0">
+      <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
+      <DockPanel>
+        <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top"/>
+        <Grid x:Name="TabBar" DockPanel.Dock="Top" Margin="4,0" Height="30"/>
+        <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
+        <ScrollViewer>
+          <StackPanel x:Name="ToolsHost" Margin="14" Spacing="{x:Static local:Space.Xl}"/>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+    <Border Background="{x:Static local:Palette.Surround}">
+      <Grid x:Name="CanvasHost"/>
+    </Border>
+  </DockPanel>
+</Window>
