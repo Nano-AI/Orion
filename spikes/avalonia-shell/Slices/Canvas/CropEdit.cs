@@ -30,8 +30,11 @@ static class CropEdit {
             // showed its crop with the tool's rectangle drawn over the wrong picture.
             // Straight into the session, not through Write: the open renders next, at
             // preview size (#324), and a Write here added a full render to every swap.
-            if (Engine.Session is { } s)
-                foreach (var (field, value) in PreviewFields(CanvasState.Tab == "Crop")) s.Set(field, (float)value);
+            // Only when it must turn on or off: compare keys its kept original on these
+            // fields, and rewriting them on every open threw that original away.
+            bool on = CanvasState.Tab == "Crop";
+            if (Engine.Session is { } s && (s.Get("crop_preview") != 0) != on)
+                foreach (var (field, value) in PreviewFields(on)) s.Set(field, (float)value);
         };
     }
 

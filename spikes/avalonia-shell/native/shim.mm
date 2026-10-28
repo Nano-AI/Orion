@@ -300,10 +300,6 @@ void shim_mask_overlay(Shim* s, int on, int layer) {
     s->overlay_layer = layer;
 }
 
-// macOS's Reduce Motion, which Avalonia 12 does not expose.
-int shim_reduce_motion(void) {
-    return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion ? 1 : 0;
-}
 
 // Rows [0, count) are live; the rest are zeroed, as Engine.swift sends them.
 int shim_mask_commit(Shim* s, int count) {

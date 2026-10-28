@@ -37,14 +37,14 @@ static partial class SelfTest {
     }
 
     static void SpringChecks() {
-        var s = new Spring(0);
+        var s = new CanvasSlice.Spring(0);
         double peak = 0, before = 0;
         bool monotone = true;
         int frames = 0;
         while (s.Step(1, 1 / 60.0, 0.35, 1e-4) && frames < 600) { frames++; monotone &= s.Value >= before; before = s.Value; peak = Math.Max(peak, s.Value); }
         Check(monotone && peak <= 1 && s.Value == 1 && frames is > 10 and < 90,
               $"the spring is critically damped: no overshoot, lands exactly, in {frames} frames at 60 Hz");
-        var t = new Spring(0);
+        var t = new CanvasSlice.Spring(0);
         for (int i = 0; i < 6; i++) t.Step(1, 1 / 60.0, 0.35, 1e-4);
         double at = t.Value, v = t.Velocity;
         t.Step(-1, 1e-6, 0.35, 1e-4);   // retargeted mid-flight: no jump, and it keeps its velocity

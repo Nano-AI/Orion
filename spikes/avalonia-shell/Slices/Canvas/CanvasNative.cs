@@ -86,7 +86,4 @@ static partial class CanvasNative {
         return (phase & (Ended | Cancelled)) != 0 && momentum == 0 || (momentum & (Ended | Cancelled)) != 0;
     }
 
-    /// System Settings › Accessibility › Display › Reduce motion. Avalonia 12 exposes none (#320).
-    public static bool ReduceMotion =>
-        Cocoa && SendBool(Shared("NSWorkspace", "sharedWorkspace"), sel_registerName("accessibilityDisplayShouldReduceMotion"));
 }

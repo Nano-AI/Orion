@@ -86,7 +86,4 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial void shim_mask_overlay(nint shim, int on, int layer);
 
-    /// macOS's Reduce Motion.
-    [LibraryImport(Lib)]
-    public static partial int shim_reduce_motion();
 }

@@ -159,6 +159,8 @@ sealed class Viewport {
     }
 }
 
+// ponytail: three springs live in the shell: this stepper and its keyed frame clock (Motion, below), u5's
+// owner-bound OrionShell.Spring (Shared/Design), and u4's closed-form SpringBack (MaskLayout). Fold onto u5's.
 /// Apple's spring with damping 1 (Designing Fluid Interfaces): no overshoot
 /// from rest, described by its response in seconds. It starts from the value on
 /// screen with the velocity it already has, so a new target never jumps.
@@ -188,7 +190,7 @@ static class Motion {
     static TimeSpan? _last;
     static bool _asked;
 
-    public static bool Reduced => CanvasNative.ReduceMotion;
+    public static bool Reduced => OrionShell.Motion.Reduced;   // the shell's one reader (u5): macOS and Windows
     public static bool IsRunning(object key) => Running.ContainsKey(key);
     public static void Stop(object key) => Running.Remove(key);
 

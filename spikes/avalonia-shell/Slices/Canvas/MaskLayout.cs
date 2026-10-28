@@ -83,7 +83,7 @@ enum MaskHandle { Center, ZeroEnd, FullEnd, PlusX, MinusX, PlusY, MinusY, Rotate
 /// A critically damped spring from 1 to 0 (Apple's damping 1.0), started with
 /// a velocity in units of the gap per second. Interruptible by construction: the
 /// caller reads Value when it is interrupted and starts the next motion from there.
-readonly record struct Spring(double Velocity, double Response = 0.3) {
+readonly record struct SpringBack(double Velocity, double Response = 0.3) {
     double Omega => 2 * Math.PI / Response;
     /// x(t) = (1 + (v + ω) t) e^(−ωt): starts at 1 with slope v, settles at 0 without overshoot.
     public double Value(double t) => (1 + (Velocity + Omega) * t) * Math.Exp(-Omega * t);

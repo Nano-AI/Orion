@@ -81,7 +81,7 @@ static partial class SelfTest {
         for (int i = 0; i < 3; i++) CanvasState.Touch();   // repaints must not move the labels
         window.UpdateLayout();
         var frame = CanvasState.DrawnFrame(overlay.Bounds.Size);
-        double Centre(string text) => overlay.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == text).Parent is Border b
+        double Centre(string text) => overlay.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Text == text)?.Parent is Border b
             ? b.Bounds.Center.X : double.NaN;
         Check(Math.Abs(Centre("Original") - (frame.X + frame.Width * 0.25)) < 2 && Math.Abs(Centre("Edited") - (frame.X + frame.Width * 0.75)) < 2,
               $"the compare labels stay centred in their halves ({Centre("Original"):0}, {Centre("Edited"):0} in {frame})");

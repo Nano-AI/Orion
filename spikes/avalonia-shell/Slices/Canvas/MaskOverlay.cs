@@ -34,7 +34,7 @@ static class MaskModel {
 public sealed class MaskOverlay : Panel, ICustomHitTest {
     enum Gesture { None, Handle, Draw, Paint }
 
-    static readonly bool ReduceMotion = Native.shim_reduce_motion() != 0;
+    static bool ReduceMotion => OrionShell.Motion.Reduced;
     static readonly Cursor Hand = new(StandardCursorType.Hand), Cross = new(StandardCursorType.Cross), NoCursor = new(StandardCursorType.None);
     readonly Control _rotateIcon = Icons.Create("arrow.clockwise", 7, Ink.Black(0.75));
     readonly Drawn _layer;
@@ -48,7 +48,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
     Point _grab, _drawFrom, _last;
     MaskPlacement? _start, _shown;         // _shown: the outline when it is not the model (banded, springing)
     MaskPlacement? _springFrom;
-    Spring _spring;
+    SpringBack _spring;
     DateTime _springAt;
     bool _erasing, _pillShown, _hovering;
     double _carry;
@@ -362,7 +362,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
             double dt = (_trail[^1].At - _trail[0].At).TotalSeconds;
             if (dt > 0) v = (_trail[^1].Over - _trail[0].Over) / dt / over;
         }
-        (_springFrom, _spring, _springAt) = (_shown, new Spring(v), DateTime.Now);
+        (_springFrom, _spring, _springAt) = (_shown, new SpringBack(v), DateTime.Now);
         _tick.Start();
     }
 
