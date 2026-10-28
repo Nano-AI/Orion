@@ -34,8 +34,9 @@
   const q = (s, r = document) => [...r.querySelectorAll(s)];
   const guard = (name, fn) => { try { fn(); } catch (e) { console.warn('[orion motion]', name, e); } };
   // The sky's presence and warp, set by the hero's lift-off and the close's re-entry. vis 0 is no
-  // sky (over both photographs, and nothing is drawn); warp 1 is the stars rushing past.
-  const sky = { vis: 0, warp: 1 };
+  // sky (over both photographs, and nothing is drawn); warp 1 is the stars rushing past. x is
+  // where Orion's belt stands across the screen.
+  const sky = { vis: 0, warp: 1, x: 0.5 };
 
   // Moves a slider figure the same way a hand does, unless a hand already has.
   const drive = (fig, value) => {
@@ -177,7 +178,7 @@
       const below = Math.max(0, closeTop - sy) * 0.3;
       const e = fade(gsap.utils.clamp(0, 1, 1 - below / (h / 2 + 11.5 * k)));   // 0 while its top is still below the screen
       if (e < 0.01) return;
-      const z = 1 + sky.warp * 3, cx = w / 2, cy = h / 2 + below;
+      const z = 1 + sky.warp * 3, cx = w * sky.x, cy = h / 2 + below;
       const pts = ORION.map(st => [cx - (st.ra - 84.0534) * Math.cos(1.2 * D2R) * k * z, cy - (st.dec + 1.2019) * k * z]);   // Alnilam at the centre; east is left
       const core = st => Math.max(0.9, 2.6 - 0.5 * st.mag);   // brighter is bigger
       ctx.save();
@@ -324,7 +325,9 @@
     ScrollTrigger.addEventListener('refresh', anchor);
     anchor();
     // the maps are data: URLs (js/planet-maps.js), which a canvas may read back even from file://
+    // a planet belongs to a section of the landing page, so a page without those sections has none
     const loadPlanets = () => {
+      if (!PLANETS.some(cfg => document.querySelector(cfg.anchor))) return;
       const script = document.createElement('script');
       script.src = 'js/planet-maps.js';
       script.onload = () => PLANETS.forEach((cfg, order) => {
@@ -423,6 +426,13 @@
       intro.to(s, { pos: 42, duration: 1.8, onUpdate: move }, 0.9);
       liftOff(gsap.timeline({ scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: 0.6 } }), 0, 1);
     });
+  });
+
+  // ---------- download: the sky lifts off as the page opens, Orion where the photograph was ----------
+  guard('download', () => {
+    if (!document.querySelector('.dl')) return;
+    mm.add('(min-width: 901px)', () => { sky.x = 0.74; return () => { sky.x = 0.5; }; });
+    gsap.fromTo(sky, { vis: 0, warp: 1 }, { vis: 1, warp: 0, duration: 1.8, ease: 'power2.out' });
   });
 
   // ---------- entrances: once, then still ----------

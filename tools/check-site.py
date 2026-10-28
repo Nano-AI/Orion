@@ -18,7 +18,10 @@ being built by separate agents. Checks, each printed as it runs:
   i. no image under web/ (or inlined in its JS) carries EXIF, XMP or IPTC metadata
   j. no home-directory path (/Users/<name>/, /home/<name>/) in the page, CSS, JS or SVG
   k. every local file the page references is tracked by git, so the deploy has it
-  l. download actions and metadata use GitHub Releases, including pre-releases
+  l. the download buttons and metadata go to the download page; no pinned or mirrored installer
+  m. the download page: its files exist and are tracked, canonical, alt text and
+     no em-dash, its buttons work without scripts, and its script reads the
+     whole release list
 
 This is a parse over one HTML file, not a browser: it does not fetch remote
 URLs, run scripts, or check that srcset candidates are the right size. It
@@ -36,6 +39,7 @@ REPO = Path(__file__).resolve().parent.parent
 WEB = REPO / "web"
 SOURCE_URL = "https://github.com/Nano-AI/Orion"
 RELEASES_URL = SOURCE_URL + "/releases"
+DOWNLOAD_URL = "https://bankoti.dev/Orion/download/"
 
 REGISTER_STRINGS = [
     "Exposure, contrast, highlights, shadows, whites, blacks",
@@ -140,6 +144,12 @@ class PageParser(html.parser.HTMLParser):
         self.text_chunks.append(data)
 
 
+def local_file(base, url):
+    """The file a local href/src names: a folder means its index.html."""
+    path = (base / url.split("#")[0].split("?")[0]).resolve()
+    return path / "index.html" if path.is_dir() else path
+
+
 def check(condition, ok_msg, fail_msg):
     print(("  ok  " if condition else " FAIL ") + (ok_msg if condition else fail_msg))
     return condition
@@ -158,14 +168,8 @@ def main():
     # file's own directory: the page's paths ("css/base.css", "img/...") are
     # always relative to web/, even when the target is a stitched temp copy
     # built somewhere else for pre-integration testing.
-    missing = []
-    for attr, url in p.local_urls:
-        clean = url.split("#")[0].split("?")[0]
-        if not clean:
-            continue
-        candidate = (WEB / clean).resolve()
-        if not candidate.exists():
-            missing.append(f"{attr}={url!r}")
+    missing = [f"{attr}={url!r}" for attr, url in p.local_urls
+               if url.split("#")[0].split("?")[0] and not local_file(WEB, url).exists()]
     ok &= check(not missing, f"(a) {len(p.local_urls)} local urls all exist under web/",
                 f"(a) missing local files: {missing}")
 
@@ -264,33 +268,73 @@ def main():
     tracked = set(subprocess.run(["git", "ls-files", "-z", "web"], cwd=REPO,
                                  capture_output=True, text=True).stdout.split("\0"))
     untracked = sorted({url for _, url in p.local_urls
-                        if (clean := url.split("#")[0].split("?")[0])
-                        and (WEB / clean).exists()
-                        and str((WEB / clean).resolve().relative_to(REPO)) not in tracked})
+                        if url.split("#")[0].split("?")[0]
+                        and (f := local_file(WEB, url)).exists()
+                        and str(f.relative_to(REPO)) not in tracked})
     ok &= check(not untracked, "(k) every local file the page references is tracked by git",
                 f"(k) referenced but not tracked, so missing once deployed: {untracked}")
 
-    # (l) /latest skips pre-releases and currently selects an older build.
-    # Keep visitors on the release list, with notes and installation guidance.
+    # (l) The buttons go to the download page, which picks the visitor's system
+    # and the newest build. It replaced sending everyone to the release list
+    # (#283), which stays the fallback. /latest skips pre-releases and selects
+    # an older build, and a pinned or mirrored .dmg goes stale with the next one.
     ctas = [link for link in p.links
             if "btn" in link.get("class", "").split()
             and "btn--ghost" not in link.get("class", "").split()]
     metadata = [json.loads(block) for block in re.findall(
         r'<script type="application/ld\+json">(.*?)</script>', src, re.S)]
     workflow = (REPO / ".github" / "workflows" / "pages.yml").read_text(encoding="utf-8")
-    ok &= check(len(ctas) == 3 and all(link.get("href") == RELEASES_URL for link in ctas)
-                and any(item.get("downloadUrl") == RELEASES_URL for item in metadata)
+    ok &= check(len(ctas) == 3 and all(link.get("href") == "download/" for link in ctas)
+                and any(item.get("downloadUrl") == DOWNLOAD_URL for item in metadata)
                 and RELEASES_URL in hrefs
                 and not any(word in src for word in ("/releases/latest", ".dmg", "download/Orion", "Public download coming later"))
                 and "gh release download" not in workflow
                 and not list(WEB.rglob("*.dmg")),
-                 "(l) all three download buttons and metadata use GitHub Releases; no mirrored installer",
-                 "(l) download buttons/metadata must use the release list, without pinned or mirrored installers")
+                 "(l) all three download buttons and the metadata go to the download page; no pinned or mirrored installer",
+                 "(l) download buttons/metadata must go to download/, without pinned or mirrored installers")
+
+    ok &= check_download_page(tracked)
 
     if not ok:
         print("\ncheck-site.py: FAILED")
         sys.exit(1)
     print("\ncheck-site.py: all checks passed")
+
+
+def check_download_page(tracked):
+    """(m) What (a), (e), (f), (g) and (k) ask of the landing page, plus the
+    download's own rules: without scripts every download button opens the
+    release list, and the script reads the whole list, pre-releases included."""
+    page = WEB / "download" / "index.html"
+    if not page.exists():
+        return check(False, "", "(m) web/download/index.html is missing")
+    src = page.read_text(encoding="utf-8")
+    script = (WEB / "js" / "download.js").read_text(encoding="utf-8")
+    p = PageParser()
+    p.feed(src)
+    files = [(url, local_file(page.parent, url)) for _, url in p.local_urls
+             if url.split("#")[0].split("?")[0]]
+    buttons = [link for link in p.links if "data-file" in link]
+    problems = [f"missing {url}" for url, f in files if not f.exists()]
+    problems += [f"untracked {url}" for url, f in files
+                 if f.exists() and str(f.relative_to(REPO)) not in tracked]
+    problems += [f"bad alt on {d.get('src')}" for d, hidden in p.imgs
+                 if d.get("alt") is None or (d.get("alt") == "" and not hidden)]
+    if p.canonical != DOWNLOAD_URL:
+        problems.append(f"canonical is {p.canonical!r}")
+    if "—" in "".join(p.text_chunks):
+        problems.append("an em-dash in visible text")
+    if not buttons or any(link.get("href") != RELEASES_URL for link in buttons):
+        problems.append("a download button does not open the release list without scripts")
+    if any(word in src + script for word in ("/releases/latest", "releases/download/")):
+        problems.append("a pinned installer or /releases/latest")
+    if "api.github.com/repos/Nano-AI/Orion/releases?" not in script:
+        problems.append("download.js does not read the release list")
+    if not all(m[len("mailto:"):].split("?")[0].lower().endswith("@bankoti.dev") for m in p.mailtos):
+        problems.append("a mailto: address not on bankoti.dev")
+    return check(not problems, f"(m) the download page: {len(files)} local urls, "
+                 f"{len(buttons)} download buttons on the release list without scripts",
+                 "(m) the download page: " + "; ".join(problems))
 
 
 if __name__ == "__main__":
