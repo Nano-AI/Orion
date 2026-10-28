@@ -1,5 +1,11 @@
 # Orion — session history
 
+## Recent-session row archived 2026-10-28
+
+| Date | What landed |
+|---|---|
+| 2026-10-17 | **Export the selection from the Export sheet (#302).** The sheet, the toolbar button and both context menus now act on the explicit selection: `Export 12 photos` / `Export 12…` through `ExportPanel.selected`, the folder panel and `BatchExport.plan` as before; the toolbar shows `Exporting 3 of 12…` with Stop while it runs, so a gallery-started batch can be watched; the selection survives the reload at the end (`Library.restoreSelection`). `Export All N in View…` unchanged. Viewport 4395/0, engine 1210/0, agent 25/25, screens 3+1, modes, wiring (535 swept / 7 harness-only), gestures, decisions, site green. ⚠ Unverified by hand: the live sheet over a selection and the mid-batch toolbar readout |
+
 ## Recent-session row archived 2026-10-27
 
 The 2026-10-06 row was recovered from an uncommitted stash left on a vibesys branch; it never reached `STATUS.md` on main.
