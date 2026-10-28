@@ -19,10 +19,14 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `--bench` | 60-tick exposure drag, prints engine and copy timings |
 | `--selftest` | the shell's invariants (needs a photo) |
 | `--list` | registered panels: name, region, tab |
+| `--commands` | every command: name, built or stub, Swift owner, keys |
+| `--command NAME` | run one command in the headless window and print what happened (exit 1 unless it ran) |
 
 | Path | What |
 |---|---|
-| `Shared/` | building blocks every slice uses: engine model, slider, plates, icons, tokens |
+| `Shared/` | building blocks every slice uses: slider, plates, icons, tokens, commands |
+| `Shared/Engine/` | the engine model and its pieces: session, photo list, session source, shown picture |
+| `STREAMS.md` | stage 1's three parallel streams: who owns which file, which contracts they consume |
 | `Shell/` | the window: regions and the tool tab bar |
 | `Slices/<Folder>/` | one per slice in `slices.json`; seeds only, until the swarm |
 | `SLICES.md` | the brief a slice agent works from |

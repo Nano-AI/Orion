@@ -29,25 +29,5 @@ static class ChromeStubs {
     // stub(#315): OrionApp.swift owns this until the logic moves below the facade
     public static bool CropTab => false;                         // the shell keeps the selected tab private
 
-    // What the toolbar's buttons do. Each is one call into a Swift object.
-    // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-    public static void ToggleGallery() { }                       // enterGallery / leaveGallery
-    // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-    public static void StopBatch() { }                           // batchCancelled = true
-    // stub(#315): OrionApp+Files.swift owns this until the logic moves below the facade
-    public static void OpenPhoto() { }                           // NSOpenPanel, then Library
-    // stub(#315): OrionApp+Files.swift owns this until the logic moves below the facade
-    public static void OpenFolder() { }
-    // stub(#315): Engine+Compare.swift owns this until the logic moves below the facade
-    public static void ToggleCompare() { }                       // setCompare(split: 0.5) / clearCompare
-    // stub(#315): Engine+Compare.swift owns this until the logic moves below the facade
-    public static void SwapSplit() { }                           // compareVertical.toggle()
-    // stub(#315): EditHistory.swift owns this until the logic moves below the facade
-    public static void Undo() { }
-    // stub(#315): EditHistory.swift owns this until the logic moves below the facade
-    public static void Redo() { }
-    // stub(#315): Engine.swift owns this until the logic moves below the facade
-    public static void Rotate(int quarters) { }                  // then viewport.reset()
-    // stub(#315): Engine.swift owns this until the logic moves below the facade
-    public static void ResetEdits() { }
+    // What the toolbar's buttons do is a command each (Shared/CommandTable.cs).
 }

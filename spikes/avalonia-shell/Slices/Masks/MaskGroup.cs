@@ -1,26 +1,12 @@
 namespace OrionShell.Masks;
 
-/// One row of the mask group: MaskComponentState (EditHistory.swift), same
-/// defaults. A plain bag of numbers the panel's shape sliders write directly.
-public sealed class MaskShape {
-    public int Kind, Compose;              // kind: 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 color
-    public bool Invert, Hidden, StartsLayer;
-    public float CenterX = 0.5f, CenterY = 0.5f, Angle, Length = 0.5f;
-    public float RadiusX = 0.3f, RadiusY = 0.3f, Feather = 0.5f, Roundness = 2;
-    public float RangeLo = -2, RangeHi = 2, RangeSoft = 1;
-    public float ColorR = 0.18f, ColorG = 0.18f, ColorB = 0.18f, ColorTol = 0.10f, ColorSoft = 0.05f;
-    public float BrushRadius = 0.08f, BrushFlow = 0.5f, BrushHardness = 0.5f;
-    public List<float> BrushStroke { get; } = [];   // interleaved x, y
-    public string? MatteId, MatteSource, Name;
-}
-
-/// The mask group the Mask tab edits: the row list, which row is selected, and
-/// the grouping into layers (MaskLayers.swift, ported whole: pure functions).
+/// The mask group the Mask tab edits: the row list (MaskShape, in Shared), which
+/// row is selected, and the grouping into layers (MaskLayers.swift, ported
+/// whole: pure functions).
 ///
-/// The rows never reach the engine. OrionAdjustments.mask_components is a
-/// struct array the shim's field table skips, and the shim keeps its own copy
-/// of the struct, so a slice cannot write it without forking native/.
-/// stub(#315): Engine+Mask.swift owns this until the logic moves below the facade
+/// Every edit pushes the rows through Session.SetMaskGroup, which stage 1b
+/// builds: OrionAdjustments.mask_components is a struct array the shim's field
+/// table skips. Until then the push puts "not built yet" on the status line.
 public sealed class MaskGroup {
     public static MaskGroup Shared { get; } = new();
     public const int Max = 8;                       // ORION_MAX_MASK_COMPONENTS
@@ -98,7 +84,7 @@ public sealed class MaskGroup {
         if (Shapes.Count >= Max) return false;
         Shapes.Add(new MaskShape { Kind = kind, StartsLayer = Shapes.Count > 0 });
         _selected = Shapes.Count - 1;
-        Changed?.Invoke();
+        Commit();
         return true;
     }
 
@@ -108,7 +94,7 @@ public sealed class MaskGroup {
         int at = Runs()[LayerOf(_selected)][^1] + 1;
         Shapes.Insert(at, new MaskShape { Kind = kind });
         _selected = at;
-        Changed?.Invoke();
+        Commit();
         return true;
     }
 
@@ -116,7 +102,7 @@ public sealed class MaskGroup {
         if (index < 0 || index >= Shapes.Count) return;
         Shapes.RemoveAt(index);
         _selected = Shapes.Count == 0 ? 0 : Math.Min(index, Shapes.Count - 1);
-        Changed?.Invoke();
+        Commit();
     }
 
     public void Move(int index, int by) {
@@ -124,7 +110,7 @@ public sealed class MaskGroup {
         if (index < 0 || index >= Shapes.Count || to < 0 || to >= Shapes.Count) return;
         (Shapes[index], Shapes[to]) = (Shapes[to], Shapes[index]);
         _selected = to;
-        Changed?.Invoke();
+        Commit();
     }
 
     /// "This row is a radial now": keeps everything else, drops a matte reference.
@@ -153,12 +139,23 @@ public sealed class MaskGroup {
         if (layer < 0 || layer >= runs.Count) return;
         bool hide = !LayerHidden(layer);
         foreach (int i in runs[layer]) Shapes[i].Hidden = hide;
-        Changed?.Invoke();
+        Commit();
     }
 
     void Edit(int index, Action<MaskShape> change) {
         if (index < 0 || index >= Shapes.Count) return;
         change(Shapes[index]);
+        Commit();
+    }
+
+    /// The rows to the engine, then the structural Changed.
+    void Commit() {
+        Push();
         Changed?.Invoke();
     }
+
+    /// Engine+Mask.swift's write: every row, in order, through Session.SetMaskGroup
+    /// (stage 1b's; until then the status line says so). The panel's shape
+    /// sliders call this after moving a number.
+    public void Push() => EngineModel.Shared.Apply(s => s.SetMaskGroup(Shapes));
 }

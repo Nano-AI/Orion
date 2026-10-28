@@ -45,10 +45,12 @@ public sealed partial class StatusPanel : Border {
         // Worst first: a complaint costs the session, a failed render costs a
         // redraw, a flat frame is a success that shows nothing. Outside
         // `loaded` for the complaint: it is what explains an empty window.
+        // Last, a stub that was asked for: "not built yet: undo (EditHistory.swift)".
         string? warning = ChromeStubs.Complaint
             ?? (!loaded ? null
               : failure != null ? $"Render failed — {failure}"
-              : ChromeStubs.FlatFrame is { } flat ? $"Not a photograph — {flat}" : null);
+              : ChromeStubs.FlatFrame is { } flat ? $"Not a photograph — {flat}" : null)
+            ?? (engine.Status.Length > 0 ? engine.Status : null);
         IsVisible = loaded || warning != null;
         if (warning != null) Engrave(_message, warning, Palette.Star);
         else { _message.Text = Hint(engine); _message.FontSize = TypeSize.Xs; _message.FontWeight = FontWeight.Normal;
