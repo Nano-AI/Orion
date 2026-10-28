@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -18,18 +19,14 @@ static class LibraryUi {
         OffsetX = 0, OffsetY = 1, BlurRadius = 2, Opacity = 0.8, Color = ((ISolidColorBrush)Palette.FilmBase).Color,
     };
 
-    /// `.buttonStyle(.plain)`: a real button (focus, keyboard, screen reader)
-    /// with none of Fluent's chrome or hover fill.
-    public static Button Plain(Control content, Action click, string help = "") {
-        var button = new Button {
-            Content = content, Padding = new Thickness(0), BorderThickness = new Thickness(0), MinHeight = 0, MinWidth = 0,
-            Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center,
-        };
-        foreach (var key in new[] { "ButtonBackgroundPointerOver", "ButtonBackgroundPressed", "ButtonBackgroundDisabled" })
-            button.Resources[key] = Brushes.Transparent;
-        button.Click += (_, _) => click();
-        if (help.Length > 0) ToolTip.SetTip(button, help);
-        return button;
+    /// "3 photos, 1 rejected" with the counts in the numeral face (Library.summary, minus its middle dot).
+    public static InlineCollection Summary() {
+        var library = LibraryModel.Shared;
+        var runs = new InlineCollection();
+        if (library.Photos.Count == 0) return runs;
+        runs.AddRange([Faces.Num($"{library.Photos.Count}"), new Run(library.Photos.Count == 1 ? " photo" : " photos")]);
+        if (library.RejectedCount > 0) runs.AddRange([new Run(", "), Faces.Num($"{library.RejectedCount}"), new Run(" rejected")]);
+        return runs;
     }
 
     /// The menu-style filter picker, 84 wide, bound to LibraryModel.Current.

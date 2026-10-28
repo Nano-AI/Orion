@@ -22,6 +22,11 @@ public static class Engraved {
     /// A number: Faces.Figure, the numeral face with tabular figures.
     public static TextBlock Readout(string text, IBrush? color = null, double size = Faces.Mark) => Faces.Figure(text, size, color);
 
+    /// A sentence under a control, as Main.dc.html sets its notes: label size, dim, room between lines.
+    public static TextBlock Note(string text, IBrush? color = null) => new() {
+        Text = text, FontSize = Faces.Label, LineHeight = 18, Foreground = color ?? Palette.Dim, TextWrapping = TextWrapping.Wrap,
+    };
+
     /// The info mark at a nameplate's right edge; the text shows on hover.
     public static Control Info(string text) {
         var icon = Icons.Create("info.circle", 10, Palette.Faint);
@@ -34,15 +39,20 @@ public static class Engraved {
 }
 
 /// Engraved.Plate + SectionPlate: the title, a star-coloured dot when anything
-/// inside is off its default, a hairline, the info mark; then the rows.
-/// 14 between the plate and its rows and between rows (Main.dc.html).
+/// inside is off its default, a hairline, the info mark, the section's one
+/// action (With); then the rows. 14 between the plate and its rows and between
+/// rows, `Gap` between sections (Main.dc.html).
 public sealed class SectionPlate : StackPanel {
+    /// Between one section and the next in a tool tab.
+    public const double Gap = 24;
+
     readonly Ellipse _dot = new() { Width = 5, Height = 5, Fill = Palette.Star, Opacity = 0, VerticalAlignment = VerticalAlignment.Center };
+    readonly DockPanel _plate = new() { MinHeight = 22 };
     public StackPanel Rows { get; } = new() { Spacing = 14 };
 
     public SectionPlate(string title, string? info = null, params Control[] rows) {
         Spacing = 14;
-        var plate = new DockPanel { MinHeight = 22 };
+        var plate = _plate;
         var name = Engraved.Label(title, Palette.Text, Faces.Body);
         name.FontWeight = FontWeight.SemiBold;
         DockPanel.SetDock(name, Dock.Left);
@@ -62,6 +72,15 @@ public sealed class SectionPlate : StackPanel {
         Rows.Children.AddRange(rows);
         AddHandler(AdjustmentSlider.ModifiedChangedEvent, (_, _) => Refresh());
         Refresh();
+    }
+
+    /// The section's action after the hairline (Light's Auto), 24 high to keep the target size.
+    public SectionPlate With(Control action) {
+        action.Margin = new Thickness(8, 0, 0, 0);
+        action.Height = 24;
+        DockPanel.SetDock(action, Dock.Right);
+        _plate.Children.Insert(_plate.Children.Count - 1, action);   // before the hairline, which fills
+        return this;
     }
 
     void Refresh() => _dot.Opacity = this.GetLogicalDescendants().OfType<AdjustmentSlider>().Any(s => s.Modified) ? 1 : 0;

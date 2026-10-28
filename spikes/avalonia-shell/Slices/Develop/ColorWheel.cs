@@ -24,14 +24,14 @@ sealed class ColorWheel : StackPanel {
     public ColorWheel(string title, string field) {
         (_title, _field) = (title, field);
         Spacing = 6;
-        _name = new TextBlock { Text = title.ToUpperInvariant(), FontSize = 9, FontWeight = FontWeight.SemiBold, LetterSpacing = 0.7 };
+        _name = new TextBlock { Text = title, FontSize = Faces.Mark, VerticalAlignment = VerticalAlignment.Center };
         // stub(#315): EditHistory.swift owns this until the logic moves below the facade
-        var reset = Develop.TextButton("", Palette.Accent, () => { for (int i = 0; i < 3; i++) Engine.Set(_field, 0, i); Reload(); });
-        reset.Content = Icons.Create("arrow.uturn.backward", 8, Palette.Accent);
+        var reset = StateButton.Glyph("arrow.uturn.backward", $"Reset {title}",
+                                      () => { for (int i = 0; i < 3; i++) Engine.Set(_field, 0, i); Reload(); }, size: 9);
+        (reset.Ink, reset.Width, reset.Height, reset.MinWidth, reset.MinHeight) = (Palette.Accent, 18, 18, 0, 0);
         _reset = reset;
-        ToolTip.SetTip(_reset, $"Reset {title}");
-        Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center,
-                                      Height = 12, Children = { _name, _reset } });
+        Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center,
+                                      Height = 18, Children = { _name, _reset } });
         _disc = new Disc(this);
         Children.Add(_disc);
         // The track arms the preview graph like every AdjustmentSlider does.

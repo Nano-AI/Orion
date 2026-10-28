@@ -13,7 +13,7 @@ namespace OrionShell.Masks;
 /// ponytail: no typed entry, no plate dot. Both come free once AdjustmentSlider
 /// takes a getter and setter instead of a field name (report, Shared change).
 sealed class MaskSlider : StackPanel {
-    readonly TextBlock _readout = new() { FontSize = TypeSize.Sm, Classes = { "tnum" } };
+    readonly TextBlock _readout = Faces.Figure("");
     readonly AnalogTrack _track;
     readonly Action<float> _set;
     readonly string _unit;
@@ -22,12 +22,13 @@ sealed class MaskSlider : StackPanel {
     public MaskSlider(string name, Func<float> get, Action<float> set, float min, float max,
                       string unit, int decimals, float baseValue) {
         (_set, _unit, _decimals) = (set, unit, decimals);
-        Spacing = 3;
+        Spacing = 5;
         _track = new AnalogTrack { Min = min, Max = max, Base = baseValue };
         _track.Changed += Apply;
+        _readout.HorizontalAlignment = HorizontalAlignment.Right;
         var window = new Border {
-            Padding = new Thickness(5, 1.5), CornerRadius = new CornerRadius(Radius.Sm), Margin = new Thickness(0, 0, -5, 0),
-            Background = Palette.Ground, BorderBrush = Palette.Line, BorderThickness = new Thickness(0.5), Child = _readout,
+            MinWidth = 54, Height = 21, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(Radius.Sm),
+            Background = Palette.Ground, BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Child = _readout,
         };
         window.Tapped += (_, _) => Apply(baseValue);
         DockPanel.SetDock(window, Dock.Right);
@@ -51,38 +52,30 @@ sealed class MaskSlider : StackPanel {
 
 /// The small controls the Mask tab draws in system style on macOS.
 static class MaskControls {
-    public static TextBlock Caption(string text, double size = TypeSize.Xs) => new() {
-        Text = text, FontSize = size, Foreground = Palette.Faint, TextWrapping = TextWrapping.Wrap,
-    };
+    public static TextBlock Caption(string text) => Engraved.Note(text);
 
-    /// A bordered small button: Remove, Clear stroke, the reorder chevrons.
+    /// A small standard button: Remove, Clear stroke, the reorder chevrons.
     /// Like the menus, the click runs after the event, since it may rebuild the panel.
     public static Button Push(object content, Action click, bool enabled = true, double padX = Space.Md) {
-        var b = new Button {
-            Content = content, IsEnabled = enabled, FontSize = TypeSize.Md, MinHeight = 22,
-            Padding = new Thickness(padX, Space.Xs), CornerRadius = new CornerRadius(Radius.Md),
-            Background = Palette.Raised, Foreground = Palette.Text,
-            VerticalAlignment = VerticalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
+        var b = new StateButton {
+            Content = content is string s ? new TextBlock { Text = s } : content, IsEnabled = enabled,
+            Padding = new Thickness(padX, 0), VerticalAlignment = VerticalAlignment.Center,
         };
-        b.Resources["ButtonBackgroundDisabled"] = Palette.Raised;   // dimmed, not Fluent's light grey
-        b.Resources["ButtonForegroundDisabled"] = Palette.Faint;
         b.Click += (_, _) => Dispatcher.UIThread.Post(click);
         return b;
     }
 
-    /// A borderless pull-down: "+ Add ⌄", "Radial ⌄". Items run after the menu
-    /// closes, because most of them rebuild the panel this button sits in.
+    /// A pull-down with no frame until hovered: "+ Add ⌄", "Radial ⌄". Items run
+    /// after the menu closes, because most of them rebuild the panel this button sits in.
     public static Button Menu(string? icon, string title, IEnumerable<Control> items, bool enabled = true) {
         var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         if (icon != null) label.Children.Add(Icons.Create(icon, 11, Palette.Text));
-        label.Children.Add(new TextBlock { Text = title, FontSize = TypeSize.Md, VerticalAlignment = VerticalAlignment.Center });
+        label.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
         label.Children.Add(Icons.Create("chevron.down", 7, Palette.Text));
         var flyout = new MenuFlyout();
         foreach (var item in items) flyout.Items.Add(item);
-        return new Button {
-            Content = label, Flyout = flyout, IsEnabled = enabled, Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0), Padding = new Thickness(Space.Xs, Space.Xs), MinHeight = 0,
-        };
+        return new StateButton { Kind = ButtonKind.Bare, Content = label, Flyout = flyout, IsEnabled = enabled, Ink = Palette.Text,
+                                 Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center };
     }
 
     public static MenuItem Item(string header, Action act) {
@@ -100,24 +93,11 @@ static class MaskControls {
         return item;
     }
 
-    /// A segmented picker: equal cells, the chosen one raised.
+    /// A segmented picker (the shared one); the pick runs after the event, since it rebuilds the panel.
     public static Control Segmented(string[] labels, int chosen, Action<int> pick) {
-        var cells = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1 };
-        for (int i = 0; i < labels.Length; i++) {
-            int index = i;
-            var cell = new Border {
-                CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(0, Space.Xs),
-                Background = i == chosen ? Palette.Rail : Brushes.Transparent,
-                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
-                Child = new TextBlock { Text = labels[i], FontSize = TypeSize.Sm, HorizontalAlignment = HorizontalAlignment.Center },
-            };
-            cell.Tapped += (_, _) => { if (index != chosen) Dispatcher.UIThread.Post(() => pick(index)); };
-            cells.Children.Add(cell);
-        }
-        return new Border {
-            Background = Palette.Raised, BorderBrush = Palette.Line, BorderThickness = new Thickness(0.5),
-            CornerRadius = new CornerRadius(Radius.Md), Padding = new Thickness(1), Child = cells,
-        };
+        var picker = new OrionShell.Segmented(labels, chosen) { CellPadding = new Thickness(4, 0) };
+        picker.Changed += i => Dispatcher.UIThread.Post(() => pick(i));
+        return picker;
     }
 
     /// The mini switch beside an engraved label ("Show mask"): Fluent's,

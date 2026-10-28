@@ -119,24 +119,15 @@ public sealed class WatermarkPanel : Border {
         return grid;
     }
 
-    static Control Chip(string title, bool on, Action click) {
-        var chip = new Border {
-            Padding = new Thickness(Space.Md, 4), CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Center,
-            Background = on ? new SolidColorBrush(((ISolidColorBrush)Palette.Accent).Color, 0.25) : Palette.Raised,
-            Child = new TextBlock { Text = title, FontSize = TypeSize.Sm, Foreground = on ? Palette.Text : Palette.Dim },
-            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
-        };
-        chip.PointerPressed += (_, _) => click();
-        return chip;
-    }
+    /// A toggle that is on while its placement is chosen.
+    static Control Chip(string title, bool on, Action click) =>
+        new StateButton(null, title, click) { On = on, VerticalAlignment = VerticalAlignment.Center };
 
     /// A labelled slider with its value as a whole percentage.
     static Control Percent(string label, double min, double max, Func<double> get, Action<double> set) {
         var slider = new Slider { Minimum = min, Maximum = max, Value = get(), Foreground = Palette.Accent, MinHeight = 0 };
-        var value = new TextBlock {
-            FontSize = TypeSize.Xs, Foreground = Palette.Dim, Width = 34, TextAlignment = TextAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center, Classes = { "tnum" },
-        };
+        var value = Faces.Figure("", Faces.Mark, Palette.Dim);
+        (value.Width, value.TextAlignment) = (34, TextAlignment.Right);
         void Show() => value.Text = $"{(int)Math.Round(get() * 100)}%";
         slider.ValueChanged += (_, e) => { set(e.NewValue); Show(); };
         Show();

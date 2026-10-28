@@ -67,8 +67,7 @@ public sealed class AssistantPanel : DockPanel {
     }
 
     /// An icon-only `.plain` button in dim ink.
-    static Chip Glyph(string symbol, string help, Action action) =>
-        new(Icons.Create(symbol, 13, Palette.Dim), help, action) { BorderThickness = new Thickness(0), Padding = new Thickness(2, 0) };
+    static StateButton Glyph(string symbol, string help, Action action) => StateButton.Glyph(symbol, help, action, size: 13);
 
     /// Wider than the line it draws, for an easier drag target.
     Control Handle() {

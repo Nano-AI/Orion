@@ -12,8 +12,8 @@ public sealed class ExportPanel : Border {
     readonly ExportSettings _s = ExportSettings.Shared;
     readonly Watermark _mark = Watermark.Shared;
     readonly StackPanel _options = new() { Spacing = Space.Lg };
-    readonly TextBlock _dims = new() { FontSize = TypeSize.Sm, Foreground = Palette.Dim, Classes = { "tnum" } };
-    readonly TextBlock _size = new() { FontSize = TypeSize.Sm, Classes = { "tnum" }, HorizontalAlignment = HorizontalAlignment.Right };
+    readonly TextBlock _dims = Faces.Figure("", Faces.Label, Palette.Dim);
+    readonly TextBlock _size = Faces.Figure("", Faces.Label);
     readonly TextBlock _sizeNote = SheetKit.Note("", Palette.Dim);
     readonly ProgressBar _measuring = new() { IsIndeterminate = true, Width = 40, MinHeight = 0, Height = 3, VerticalAlignment = VerticalAlignment.Center };
     IDisposable? _pending;
@@ -100,13 +100,13 @@ public sealed class ExportPanel : Border {
 
     Control QualityControl() {
         var slider = new Slider { Minimum = 0.3, Maximum = 1, Value = _s.Quality, Foreground = Palette.Accent, MinHeight = 0 };
-        var value = new TextBlock { FontSize = TypeSize.Xs, Foreground = Palette.Dim, Classes = { "tnum" } };
+        var value = Faces.Figure("", Faces.Mark, Palette.Dim);
         void Show() => value.Text = ((int)(_s.Quality * 100)).ToString();
         slider.ValueChanged += (_, e) => { _s.Quality = e.NewValue; Show(); Remeasure(); };
         Show();
         var scale = new Grid { ColumnDefinitions = new("Auto,*,Auto,*,Auto") };
-        var smaller = new TextBlock { Text = "smaller file", FontSize = TypeSize.Xs, Foreground = Palette.Dim };
-        var better = new TextBlock { Text = "better detail", FontSize = TypeSize.Xs, Foreground = Palette.Dim };
+        var smaller = new TextBlock { Text = "Smaller file", FontSize = Faces.Mark, Foreground = Palette.Dim };
+        var better = new TextBlock { Text = "Better detail", FontSize = Faces.Mark, Foreground = Palette.Dim };
         Grid.SetColumn(smaller, 2);
         Grid.SetColumn(better, 4);
         scale.Children.AddRange([value, smaller, better]);
@@ -129,7 +129,7 @@ public sealed class ExportPanel : Border {
             var box = SheetKit.Field(label);
             box.Width = 74;
             box.Text = value.ToString();
-            box.Classes.Add("tnum");
+            (box.FontFamily, box.FontWeight, box.FontFeatures) = (Faces.Numeral, Avalonia.Media.FontWeight.Medium, Faces.Tabular);
             void Commit() { if (uint.TryParse(box.Text, out uint v) && v > 0) { commit(v); Build(); Remeasure(); } }
             box.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) Commit(); };
             box.LostFocus += (_, _) => Commit();
@@ -142,7 +142,7 @@ public sealed class ExportPanel : Border {
                 Field("Width", w, v => _s.SetCustomWidth(v, _sw, _sh)),
                 new TextBlock { Text = "×", Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center },
                 Field("Height", h, v => _s.SetCustomHeight(v, _sw, _sh)),
-                new TextBlock { Text = "px", FontSize = TypeSize.Xs, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "px", FontSize = Faces.Mark, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center },
             },
         };
     }

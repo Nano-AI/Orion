@@ -8,12 +8,12 @@ namespace OrionShell.Develop;
 /// creative LUT, and the finishing controls.
 [Panel("develop-detail", Region.Tools, 10, Tab = "Detail")]
 public sealed class DetailPanel : StackPanel {
-    readonly TextBlock _spotCount = new() { FontSize = TypeSize.Xs, Foreground = Palette.Faint,
-                                            FontFamily = new Avalonia.Media.FontFamily("Menlo, Consolas, monospace") };
+    /// How many spots the photo has: a number, so the numeral face.
+    readonly TextBlock _spotCount = Faces.Figure("", Faces.Readout, Palette.Dim);
     readonly Button _undoSpot, _clearSpots;
     readonly ContentControl _lutButton = new();
     readonly Button _lutRemove;
-    readonly TextBlock _lutError = new() { FontSize = TypeSize.Xs, Foreground = Palette.Star, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+    readonly TextBlock _lutError = Engraved.Note("", Palette.Star);
     readonly AdjustmentSlider _lutStrength = new("Strength", "lut_strength", 0, 1, baseValue: 1);
     // stub(#315): Engine.swift owns this until the logic moves below the facade
     //   (Engine.lutName: the facade knows a LUT's TITLE, not the file the person picked)
@@ -22,8 +22,8 @@ public sealed class DetailPanel : StackPanel {
     static EngineModel Engine => EngineModel.Shared;
 
     public DetailPanel() {
-        Spacing = Space.Xl;
-        Children.Add(new SectionPlate("Noise Reduction",
+        Spacing = SectionPlate.Gap;
+        Children.Add(new SectionPlate("Noise reduction",
             "Measured from this frame, so 1.00 means \"remove what is smaller than one standard deviation of its own noise\" " +
             "rather than a fixed amount. Detail backs the threshold off where the picture has more texture than noise, so " +
             "rock and fabric keep their grain while flat areas still clean up; 0 is the threshold every photograph so far " +
@@ -40,7 +40,7 @@ public sealed class DetailPanel : StackPanel {
 
         // stub(#315): Engine.swift owns this until the logic moves below the facade
         //   (spotHeal, spotRadius and spotFeather are what the next spot is placed with; the canvas places it)
-        var heal = new Segmented(0, "Heal", "Clone") { Width = 130 };
+        var heal = new Segmented(["Heal", "Clone"], 0);
         // Undo spot and Clear shorten spot_count, which is what removeLastSpot and clearSpots leave the engine with.
         // stub(#315): EditHistory.swift owns this until the logic moves below the facade
         _undoSpot = Develop.SmallButton("Undo spot", () => Engine.Set("spot_count", SpotCount - 1));

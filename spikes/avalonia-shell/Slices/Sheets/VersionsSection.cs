@@ -94,7 +94,7 @@ sealed class VersionsSection {
         };
         DockPanel.SetDock(stamp, Dock.Right);
         head.Children.AddRange([stamp, new TextBlock {
-            Text = v.Name, FontSize = TypeSize.Sm, TextTrimming = TextTrimming.CharacterEllipsis,
+            Text = v.Name, FontSize = Faces.Label, TextTrimming = TextTrimming.CharacterEllipsis,
         }]);
         var body = new StackPanel { Spacing = 1, Children = { head } };
         if (v.Missing is { Length: > 0 } missing)
@@ -102,10 +102,10 @@ sealed class VersionsSection {
             // quietly restores an empty mask is the defect this line refuses.
             body.Children.Add(new TextBlock {
                 Text = $"{missing.Length} selection{(missing.Length == 1 ? "" : "s")} missing — {string.Join(", ", missing)}",
-                FontSize = 9, Foreground = Palette.Star,
+                FontSize = Faces.Mark, Foreground = Palette.Star,
             });
         else if (v.Automatic)
-            body.Children.Add(new TextBlock { Text = "kept automatically · rename to keep it", FontSize = 9, Foreground = Palette.Faint });
+            body.Children.Add(new TextBlock { Text = "Kept automatically. Rename it to keep it.", FontSize = Faces.Mark, Foreground = Palette.Dim });
 
         var restore = new Border {
             Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(Space.Sm, 3),

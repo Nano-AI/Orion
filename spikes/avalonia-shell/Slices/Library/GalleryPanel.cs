@@ -1,48 +1,44 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using OrionShell.Chrome;
 
 namespace OrionShell.Library;
 
-/// A port of app/GalleryView.swift: every photograph in the folder at once,
-/// for culling. A contact sheet, not a second editor: a click moves focus
-/// without decoding, and only a double-click opens a raw. Cells are 3:2 and
-/// the picture is letterboxed inside, never cropped, because the question
+/// A port of app/GalleryView.swift, laid out as Library.dc.html: a filter bar,
+/// the contact sheet, and an info column for the photo in focus. A click moves
+/// focus without decoding, and only a double-click opens a raw. Cells are 3:2
+/// and the picture is letterboxed inside, never cropped, because the question
 /// this view answers is framing.
 [Panel("gallery", Region.Sheet)]
 public sealed class GalleryPanel : DockPanel {
     readonly GalleryGrid _grid = new();
-    readonly TextBlock _summary = new() { FontSize = TypeSize.Sm, Foreground = Palette.Faint, Classes = { "tnum" }, VerticalAlignment = VerticalAlignment.Center };
-    readonly TextBlock _deleteLabel = new() { Text = "Delete Rejected…", FontSize = TypeSize.Sm };
-    readonly Button _delete;
+    readonly Segmented _filter = new(LibraryModel.FilterTitles, (int)LibraryModel.Shared.Current);
     readonly Dictionary<LibraryModel.Photo, (Control Cell, Border Ring, TextBlock Name)> _cells = new();
     readonly List<Border> _pictures = new();
+    readonly InfoColumn _info = new();
     /// The ring last drawn: GalleryMode.Focus, the photo the keys act on (not
     /// necessarily the one decoded on the canvas).
     LibraryModel.Photo? _ringed;
 
     public GalleryPanel() {
         Background = Palette.Ground;
-        _delete = LibraryUi.Plain(_deleteLabel, () => Commands.Run("delete-rejected"));
+        _filter.Changed += i => LibraryModel.Shared.Current = (LibraryModel.Filter)i;
+        _filter.HorizontalAlignment = HorizontalAlignment.Left;
 
-        var header = new DockPanel { Height = 34, Background = Palette.Panel };
-        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, Margin = new Thickness(12, 0, 0, 0),
-                                    Children = { LibraryUi.FilterPicker(), _summary } };
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, Margin = new Thickness(0, 0, 12, 0),
-                                     Children = { _delete, SizeSlider() } };
-        SetDock(right, Dock.Right);
-        header.Children.Add(right);
-        header.Children.Add(left);
+        SetDock(_info, Dock.Right);
+        Children.Add(_info);
+        var bar = new DockPanel { Margin = new Thickness(18, 12) };
+        var size = SizeSlider();
+        SetDock(size, Dock.Right);
+        bar.Children.AddRange([size, _filter]);
+        var header = new Border { BorderBrush = Palette.Line, BorderThickness = new Thickness(0, 0, 0, 1), Child = bar };
         SetDock(header, Dock.Top);
         Children.Add(header);
-        var line = new Border { Height = 1, Background = Palette.Line };
-        SetDock(line, Dock.Top);
-        Children.Add(line);
-        Children.Add(new ScrollViewer { Content = _grid, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        Children.Add(new ScrollViewer { Content = _grid, Padding = new Thickness(8), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
 
         LibraryModel.Shared.Changed += Rebuild;
         EngineModel.Shared.Opened += Rebuild;
@@ -57,61 +53,55 @@ public sealed class GalleryPanel : DockPanel {
         if (GalleryMode.Focus is { } f && _cells.TryGetValue(f, out var cell)) cell.Cell.BringIntoView();
     }
 
-    /// The focus moved: two rings change, not the grid.
+    /// The focus moved: two rings and the info column change, not the grid.
     void Ring() {
         if (_ringed != GalleryMode.Focus) {
             Paint(_ringed, false);
             Paint(_ringed = GalleryMode.Focus, true);
+            _info.Show(GalleryMode.Focus);
         }
         if (GalleryMode.On) Dispatcher.UIThread.Post(Reveal);
     }
 
     void Paint(LibraryModel.Photo? photo, bool focused) {
         if (photo == null || !_cells.TryGetValue(photo, out var c)) return;
-        c.Ring.BorderBrush = focused ? Palette.Accent : LibraryUi.Ink(Palette.Text, 0.08);
-        c.Ring.BorderThickness = new Thickness(focused ? 2 : 1);
+        c.Ring.BorderBrush = focused ? Palette.Accent : Brushes.Transparent;
         c.Name.Foreground = focused ? Palette.Text : Palette.Dim;
     }
 
     /// Trades photos per screen against the detail a framing judgement needs.
-    /// Unlabelled but for the two glyphs. The size is not remembered: Swift keeps it in @AppStorage("galleryCellSize").
+    /// The size is not remembered: Swift keeps it in @AppStorage("galleryCellSize").
     // stub(#315): GalleryView.swift owns this until the logic moves below the facade
     Control SizeSlider() {
         var slider = new Slider {
             Minimum = GalleryGrid.MinCell, Maximum = GalleryGrid.MaxCell, Value = GalleryGrid.DefaultCell,
-            Width = 110, VerticalAlignment = VerticalAlignment.Center,
+            Width = 120, VerticalAlignment = VerticalAlignment.Center,
         };
-        // .controlSize(.mini) in the Palette: a slim groove and a small pill.
         var r = slider.Resources;
         r["SliderHorizontalHeight"] = 16.0;
-        r["SliderTrackThemeHeight"] = 4.0;
-        r["SliderHorizontalThumbWidth"] = 16.0;
-        r["SliderHorizontalThumbHeight"] = 12.0;
-        r["SliderThumbCornerRadius"] = new CornerRadius(6);
+        r["SliderTrackThemeHeight"] = 3.0;
+        r["SliderHorizontalThumbWidth"] = 12.0;
+        r["SliderHorizontalThumbHeight"] = 15.0;
+        r["SliderThumbCornerRadius"] = new CornerRadius(Radius.Sm);
         foreach (var state in new[] { "", "PointerOver", "Pressed" }) {
-            r["SliderTrackFill" + state] = Palette.Raised;
-            r["SliderTrackValueFill" + state] = Palette.Faint;
+            r["SliderTrackFill" + state] = Palette.Ground;
+            r["SliderTrackValueFill" + state] = Palette.Accent;
             r["SliderThumbBackground" + state] = Palette.Text;
         }
         slider.PropertyChanged += (_, e) => { if (e.Property != RangeBase.ValueProperty) return;
             _grid.Cell = slider.Value;
             foreach (var picture in _pictures) picture.Height = _grid.Cell / GalleryGrid.CellAspect;
         };
-        var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Icons.Create("square.grid.3x3", 9, Palette.Faint), slider, Icons.Create("square.grid.2x2", 12, Palette.Faint) } };
-        ToolTip.SetTip(group, "Cell size");
-        return group;
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
+            Children = { new TextBlock { Text = "Size", Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center }, slider } };
     }
 
     void Rebuild() {
         var library = LibraryModel.Shared;
-        _summary.Text = library.Summary;
-        int rejected = library.RejectedCount;
-        _deleteLabel.Foreground = rejected > 0 ? Palette.Reject : Palette.Faint;
-        _delete.IsEnabled = rejected > 0;
-        ToolTip.SetTip(_delete, rejected > 0
-            ? $"Move the {rejected} rejected photo{(rejected == 1 ? "" : "s")} to the Trash" : "No rejected photos");
-
+        var photos = library.Photos;
+        _filter.Selected = (int)library.Current;
+        _filter.Figures($"{photos.Count}", $"{photos.Count(p => p.Rating >= 1 && !p.Rejected)}",
+                        $"{photos.Count(p => p.Rating == 0 && !p.Rejected)}", $"{library.RejectedCount}");
         _grid.Children.Clear();
         _cells.Clear();
         _pictures.Clear();
@@ -121,29 +111,27 @@ public sealed class GalleryPanel : DockPanel {
             _grid.Children.Add(cell.Cell);
         }
         _ringed = GalleryMode.Focus;
+        _info.Show(_ringed);
     }
 
     (Control Cell, Border Ring, TextBlock Name) Cell(LibraryModel.Photo photo) {
         bool isFocused = photo == GalleryMode.Focus;
         var picture = new Border {
-            Height = _grid.Cell / GalleryGrid.CellAspect, Background = Palette.FilmBase, Opacity = photo.Rejected ? 0.35 : 1,
-            Child = photo.Thumbnail is { } image ? new Image { Source = image, Stretch = Stretch.Uniform }
-                : new Border { Background = Palette.Raised, Width = _grid.Cell, HorizontalAlignment = HorizontalAlignment.Center },
+            Height = _grid.Cell / GalleryGrid.CellAspect, Opacity = photo.Rejected ? 0.35 : 1,
+            Child = photo.Thumbnail is { } image ? new Image { Source = image, Stretch = Stretch.Uniform } : null,
         };
         _pictures.Add(picture);
         var ring = new Border {
-            CornerRadius = new CornerRadius(Radius.Sm),
-            BorderBrush = isFocused ? Palette.Accent : LibraryUi.Ink(Palette.Text, 0.08),
-            BorderThickness = new Thickness(isFocused ? 2 : 1),
+            CornerRadius = new CornerRadius(Radius.Md), Background = Palette.Raised, ClipToBounds = true, BorderThickness = new Thickness(2),
+            BorderBrush = isFocused ? Palette.Accent : Brushes.Transparent, Child = picture,
         };
-        var name = new TextBlock {
-            Text = photo.Name, FontSize = TypeSize.Xs, Foreground = isFocused ? Palette.Text : Palette.Dim,
-            HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var cell = new StackPanel {
-            Spacing = 4, Background = Brushes.Transparent, Focusable = true,
-            Children = { new Panel { Children = { picture, Marks(photo), ring } }, name },
-        };
+        var name = new TextBlock { Text = photo.Name, Foreground = isFocused ? Palette.Text : Palette.Dim,
+                                   TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var caption = new DockPanel();
+        var marks = Marks(photo);
+        SetDock(marks, Dock.Right);
+        caption.Children.AddRange([marks, name]);
+        var cell = new StackPanel { Spacing = 8, Background = Brushes.Transparent, Focusable = true, Children = { ring, caption } };
         ToolTip.SetTip(cell, photo.Tooltip);
         Avalonia.Automation.AutomationProperties.SetName(cell, LibraryUi.Spoken(photo));
         // A plain click focuses; it never decodes. Opening is the double-click's job.
@@ -157,7 +145,7 @@ public sealed class GalleryPanel : DockPanel {
     }
 
     static List<Control> Menu(LibraryModel.Photo photo) {
-        var items = new List<Control> { LibraryUi.Item("Open in Editor", () => GalleryMode.Open(photo)), new Separator() };
+        var items = new List<Control> { LibraryUi.Item("Open in Develop", () => GalleryMode.Open(photo)), new Separator() };
         items.AddRange(LibraryUi.CullItems(photo));
         items.Add(new Separator());
         // Editor.confirmTrash over the photo right-clicked, which takes the focus first.
@@ -165,18 +153,52 @@ public sealed class GalleryPanel : DockPanel {
         return items;
     }
 
-    /// Stars here, not the strip's dots: at gallery size a star is legible.
+    /// Five stars, the rating's in the star colour; a rejected photo says so instead.
     static Control Marks(LibraryModel.Photo photo) {
-        var marks = new StackPanel {
-            Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Thickness(6, 0, 0, 5),
-            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
-            Effect = LibraryUi.MarkShadow,
-        };
-        if (photo.Rejected)
-            marks.Children.Add(Icons.Create("xmark", 11, Palette.Reject));
-        else
-            for (int i = 0; i < photo.Rating; i++)
-                marks.Children.Add(Icons.Create("star.fill", 9, Palette.Star));
-        return marks;
+        if (photo.Rejected) return new TextBlock { Text = "Rejected", Foreground = Palette.Reject, VerticalAlignment = VerticalAlignment.Center };
+        var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        for (int i = 1; i <= 5; i++) stars.Children.Add(Icons.Create("star.fill", 11, i <= photo.Rating ? Palette.Star : Palette.Faint));
+        Avalonia.Automation.AutomationProperties.SetName(stars, photo.Rating == 0 ? "Unrated" : $"{photo.Rating} stars");
+        return stars;
+    }
+
+    /// Library.dc.html's aside: the focused photo larger, its name and size,
+    /// what the camera recorded (read from the file, not decoded), and the way into Develop.
+    sealed class InfoColumn : Border {
+        readonly Image _preview = new() { Stretch = Stretch.Uniform, MaxHeight = 220 };
+        readonly TextBlock _name = new() { FontWeight = FontWeight.Medium, TextTrimming = TextTrimming.CharacterEllipsis };
+        readonly TextBlock _size = new() { Foreground = Palette.Dim };
+        readonly ContentControl _capture = new();
+        readonly Dictionary<string, CaptureInfo?> _read = new();
+        LibraryModel.Photo? _shown;
+
+        public InfoColumn() {
+            Width = 280;
+            Background = Palette.Panel;
+            BorderBrush = Palette.Line;
+            BorderThickness = new Thickness(1, 0, 0, 0);
+            Padding = new Thickness(14, 18);
+            var open = new StateButton(null, "Open in Develop", () => { if (_shown != null) GalleryMode.Open(_shown); }) {
+                Height = 32, HorizontalAlignment = HorizontalAlignment.Stretch,
+            };
+            Child = new StackPanel { Spacing = 18, Children = {
+                new Border { Background = Palette.Raised, CornerRadius = new CornerRadius(4), ClipToBounds = true, Child = _preview },
+                new StackPanel { Spacing = 4, Children = { _name, _size } },
+                _capture, open,
+            } };
+        }
+
+        public void Show(LibraryModel.Photo? photo) {
+            _shown = photo;
+            IsVisible = photo != null;
+            if (photo == null) return;
+            _preview.Source = photo.Thumbnail;
+            _name.Text = photo.Name;
+            if (!_read.TryGetValue(photo.Path, out var info)) _read[photo.Path] = info = CaptureInfo.ReadFile(photo.Path);
+            _size.Inlines = info is { Width: > 0, Height: > 0 }
+                ? [Faces.Num($"{info.Width} × {info.Height}"), new Avalonia.Controls.Documents.Run(" pixels")] : [];
+            var rows = info?.Rows.Where(r => r.Item1 != "Dimensions").ToList() ?? [];
+            _capture.Content = rows.Count == 0 ? null : new SectionPlate("Capture", null, CapturePopover.Grid(rows));
+        }
     }
 }

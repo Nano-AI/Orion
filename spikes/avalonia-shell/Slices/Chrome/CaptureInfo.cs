@@ -10,8 +10,6 @@ namespace OrionShell.Chrome;
 /// formatter answers null for it rather than "ISO 0".
 public sealed partial record CaptureInfo(string Camera, string Lens, float FocalLength, float Aperture,
                                          float Shutter, float Iso, DateTime? Captured, uint Width, uint Height) {
-    public const string Separator = " · ";
-
     static float Round(float x) => MathF.Round(x, MidpointRounding.AwayFromZero);   // Swift's .rounded()
     static readonly CultureInfo C = CultureInfo.InvariantCulture;
 
@@ -36,13 +34,11 @@ public sealed partial record CaptureInfo(string Camera, string Lens, float Focal
 
     public static string? IsoText(float iso) => !(iso > 0) || !float.IsFinite(iso) ? null : "ISO " + iso.ToString("0", C);
 
-    string?[] ExposureParts(bool focal) => [focal ? FocalText(FocalLength) : null, ApertureText(Aperture), ShutterText(Shutter), IsoText(Iso)];
-    static string Join(IEnumerable<string?> parts) => string.Join(Separator, parts.Where(p => !string.IsNullOrEmpty(p)));
-
-    /// Camera first, then the exposure in the order a viewfinder reads it.
-    public string Line => Join(ExposureParts(true).Prepend(Camera));
-    public string CompactLine => Join(ExposureParts(true));
-    public string ExposureLine => Join(ExposureParts(false));
+    /// The exposure in the order a viewfinder prints it, then the focal length;
+    /// what the file does not record is left out. Separate figures, no separator.
+    public IReadOnlyList<string> Viewfinder =>
+        new[] { ShutterText(Shutter), ApertureText(Aperture), IsoText(Iso), FocalText(FocalLength) }
+            .Where(p => !string.IsNullOrEmpty(p)).Select(p => p!).ToList();
 
     /// The popover: label and value, a row the file does not record left out.
     public IEnumerable<(string, string)> Rows {
@@ -53,19 +49,22 @@ public sealed partial record CaptureInfo(string Camera, string Lens, float Focal
                 ("ISO", Iso > 0 ? Iso.ToString("0", C) : null),
                 ("Captured", Captured is { } d ? $"{d:MMM d, yyyy} at {d:h:mm tt}" : null),
                 ("Dimensions", Width > 0 && Height > 0
-                    ? $"{Width} × {Height}{Separator}{Width * (double)Height / 1e6:0.0} MP" : null),
+                    ? $"{Width} × {Height}, {(Width * (double)Height / 1e6).ToString("0.0", C)} MP" : null),
             ];
             return all.Where(r => !string.IsNullOrEmpty(r.Item2)).Select(r => (r.Item1, r.Item2!));
         }
     }
 
     /// The open photo's, or null with nothing open (Engine+Document.swift).
-    public static CaptureInfo? Read(nint engine) {
-        if (engine == 0 || orion_engine_info(engine, out var c) != 0) return null;
-        return new(Text(c.Camera), Text(c.Lens), c.FocalLength, c.Aperture, c.Shutter, c.Iso,
-                   c.Timestamp > 0 ? DateTimeOffset.FromUnixTimeSeconds(c.Timestamp).LocalDateTime : null,
-                   c.Width, c.Height);
-    }
+    public static CaptureInfo? Read(nint engine) =>
+        engine != 0 && orion_engine_info(engine, out var c) == 0 ? From(c) : null;
+
+    /// A photo's from its file, without decoding it (the gallery's info column). Null when unreadable.
+    public static CaptureInfo? ReadFile(string path) => orion_read_info(path, out var c) == 0 ? From(c) : null;
+
+    static CaptureInfo From(OrionRawInfo c) =>
+        new(Text(c.Camera), Text(c.Lens), c.FocalLength, c.Aperture, c.Shutter, c.Iso,
+            c.Timestamp > 0 ? DateTimeOffset.FromUnixTimeSeconds(c.Timestamp).LocalDateTime : null, c.Width, c.Height);
 
     static string Text(ReadOnlySpan<byte> s) {
         int end = s.IndexOf((byte)0);
@@ -85,4 +84,7 @@ public sealed partial record CaptureInfo(string Camera, string Lens, float Focal
 
     [LibraryImport(Native.Lib)]
     private static partial int orion_engine_info(nint engine, out OrionRawInfo info);
+
+    [LibraryImport(Native.Lib, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int orion_read_info(string path, out OrionRawInfo info);
 }

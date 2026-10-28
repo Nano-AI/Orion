@@ -69,12 +69,12 @@ static partial class SelfTest {
         Grid.SetRow(canvas, 1);
         Grid.SetRow(overlay, 1);
         var window = Show(new Grid { RowDefinitions = new("Auto,*"), Children = { toolbar, canvas, overlay } });
-        Chip Compare() => toolbar.GetVisualDescendants().OfType<Chip>().First(ch => ch.Content is TextBlock { Text: "Compare" });
+        StateButton Compare() => toolbar.GetVisualDescendants().OfType<StateButton>().First(b => b.Label == "Compare");
 
         var edited = Halves(window, canvas);
         Commands.Run("compare");
         var (left, right) = Halves(window, canvas);
-        Check(CompareState.Comparing && Compare().BorderBrush == Palette.Accent && Commands.CanRun("swap-split")
+        Check(CompareState.Comparing && Compare().On && Commands.CanRun("swap-split")
               && left < edited.Left - 10 && Math.Abs(right - edited.Right) < 2,
               $"compare on: the toolbar says so and the canvas shows the original on the left ({edited.Left:0} → {left:0}, right {right:0})");
         for (int i = 0; i < 3; i++) CanvasState.Touch();   // repaints must not move the labels
@@ -82,15 +82,15 @@ static partial class SelfTest {
         var frame = CanvasState.DrawnFrame(overlay.Bounds.Size);
         double Centre(string text) => overlay.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == text).Parent is Border b
             ? b.Bounds.Center.X : double.NaN;
-        Check(Math.Abs(Centre("ORIGINAL") - (frame.X + frame.Width * 0.25)) < 2 && Math.Abs(Centre("EDITED") - (frame.X + frame.Width * 0.75)) < 2,
-              $"the compare labels stay centred in their halves ({Centre("ORIGINAL"):0}, {Centre("EDITED"):0} in {frame})");
+        Check(Math.Abs(Centre("Original") - (frame.X + frame.Width * 0.25)) < 2 && Math.Abs(Centre("Edited") - (frame.X + frame.Width * 0.75)) < 2,
+              $"the compare labels stay centred in their halves ({Centre("Original"):0}, {Centre("Edited"):0} in {frame})");
         Commands.Run("compare");
         (left, right) = Halves(window, canvas);
-        Check(!CompareState.Comparing && Compare().BorderBrush != Palette.Accent && Math.Abs(left - edited.Left) < 2,
+        Check(!CompareState.Comparing && !Compare().On && Math.Abs(left - edited.Left) < 2,
               $"compare off: the toolbar and the canvas both say so (left {left:0})");
         CompareState.SetSplit(0.5);   // any other route in (the overlay's drag) reaches the toolbar too
         Dispatcher.UIThread.RunJobs();
-        Check(Compare().BorderBrush == Palette.Accent, "a split set without the button still lights the button");
+        Check(Compare().On, "a split set without the button still lights the button");
         CompareState.Clear();
         window.Close();
         engine.Set("exposure_ev", ev);
@@ -149,7 +149,7 @@ static partial class SelfTest {
         var open = LibraryModel.Shared.Open!;
         var moved = new List<string>();
         var dialog = Trash.Dialog([open], p => { moved.Add(p); return null; });
-        Button Pressing(string title) => dialog.GetLogicalDescendants().OfType<Button>().First(b => b.Content as string == title);
+        Button Pressing(string title) => dialog.GetLogicalDescendants().OfType<StateButton>().First(b => b.Label == title);
         Check(dialog.Title == $"Move {open.Name} to the Trash?" && Trash.Question([open, open]) == "Move 2 photos to the Trash?",
               "the trash asks the counted question");
         Pressing("Cancel").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

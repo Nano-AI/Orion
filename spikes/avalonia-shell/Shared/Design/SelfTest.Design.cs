@@ -1,5 +1,12 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using OrionShell.CanvasSlice;
 
 namespace OrionShell;
 
@@ -31,5 +38,61 @@ static partial class SelfTest {
         Check(Scale.For(" px", 0, 1) == Scale.Plain && Scale.Plain.Marks(0, 1).Count() == 5 && !Scale.Plain.Numbered,
               "a unitless slider gets five plain ticks");
         Check(AdjustmentMath.Parsed("−0.5", "", -1, 1) == -0.5f, "a typed true minus parses");
+        RestyleChecks();
+    }
+
+    /// Stage 2b: the boards adopted across the shell, checked on the real window per tab.
+    static void RestyleChecks() {
+        var window = new MainWindow();
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var words = new TextBlock();
+        ((Panel)window.FindControl<Grid>("ToolbarHost")!).Children.Add(words);
+        window.UpdateLayout();
+        Check(FontManager.Current.TryGetGlyphTypeface(new Typeface(words.FontFamily), out var face) && !face.FamilyName.Contains("Inter")
+              && (!OperatingSystem.IsMacOS() || face.FamilyName == "System Font"),
+              $"words are the platform's face, not Inter (got {face?.FamilyName ?? "nothing"})");
+
+        var found = new List<string>();
+        foreach (var tab in Panels.Tabs) {
+            window.Select(tab);
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            var visuals = window.GetVisualDescendants().Where(v => v.IsEffectivelyVisible).ToList();
+            // A raw Button is Fluent's look; RepeatButton and ToggleButton belong to sliders, scrollbars and switches.
+            found.AddRange(visuals.Where(v => v.GetType() == typeof(Button)).Select(v => $"{tab}: Fluent button"));
+            foreach (var t in visuals.OfType<TextBlock>()) {
+                string text = t.Text ?? "";
+                if (Regex.IsMatch(text, @"^[−+\-]?[\d.,:%×/ ]*\d[\d.,:%×/ ]*(K|EV|px|ms|°|%|k)?$") && t.FontFamily != Faces.Numeral)
+                    found.Add($"{tab}: number '{text}' in the words face");
+                if (Regex.Matches(text, @"\p{L}{4,}").Any(m => m.Value == m.Value.ToUpperInvariant()))
+                    found.Add($"{tab}: capitals '{text}'");
+                if (text.Contains(" · ")) found.Add($"{tab}: middle-dot string '{text}'");
+            }
+        }
+        Check(found.Count == 0, "every tab: no Fluent button, numbers in the numeral face, no caps, no middle dots"
+                                + (found.Count > 0 ? ": " + string.Join("; ", found.Distinct().Take(8)) : ""));
+
+        // Tabs: the chosen one differs in colour only, and its bar is a transform there that eases out under 200 ms.
+        window.Select("Detail");
+        window.UpdateLayout();
+        var tabs = window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().ToList();
+        var names = tabs.Select(b => (TextBlock)b.Content!).ToList();
+        var bar = window.FindControl<Border>("TabIndicator")!;
+        double x = bar.RenderTransform?.Value.M31 ?? double.NaN;
+        var slide = bar.Transitions?.OfType<TransformOperationsTransition>().FirstOrDefault();
+        Check(names.Select(n => n.FontWeight).Distinct().Count() == 1 && names[2].Foreground == Palette.Text
+              && names.Where((_, i) => i != 2).All(n => n.Foreground == Palette.Dim)
+              && Math.Abs(x - 2 * bar.Width) < 0.5 && slide is { Duration.TotalMilliseconds: < 200, Easing: SplineEasing },
+              $"the chosen tab changes colour only; its bar sits under it as a transform (x {x:0.0}, width {bar.Width:0.0}) and slides in {slide?.Duration.TotalMilliseconds} ms");
+        Check(Commands.All.All(c => !Regex.IsMatch(c.Title, @" (?!Finder|Trash)\p{Lu}")), "command titles are sentence case");
+        window.Close();
+
+        // The canvas: a picture made for another photo is never this photo's; no session is a failure only when opening said so.
+        static CanvasState.Scene S(int current, nint handle, int shownFor, string timing) => CanvasState.SceneFor(3, current, handle, shownFor, timing);
+        Check(CanvasState.SceneFor(0, -1, 0, -1, "") == CanvasState.Scene.Welcome && S(1, 7, 1, "full") == CanvasState.Scene.Picture
+              && S(1, 7, 0, "full") == CanvasState.Scene.Loading && S(1, 0, 0, "") == CanvasState.Scene.Loading
+              && S(1, 0, 0, "could not open") == CanvasState.Scene.Failed && S(1, 7, 0, "render failed: x") == CanvasState.Scene.Failed,
+              "the canvas shows this photo's picture, a calm blank while it decodes, or what failed");
     }
 }

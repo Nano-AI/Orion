@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -9,8 +10,11 @@ namespace OrionShell;
 /// column of values reads like a dial and five-digit Kelvin fits a 54 px box.
 /// (Not `Type`: that would hide System.Type across the namespace.)
 public static class Faces {
-    /// Words: whatever the platform gives (SF Pro, Segoe UI).
-    public static readonly FontFamily Words = FontFamily.Default;
+    /// Words: the platform's own face, SF Pro on macOS and Segoe UI on Windows. Not
+    /// FontFamily.Default: under Skia that is Helvetica on a Mac, and Fluent's
+    /// theme puts Inter in front of it. Theme.axaml.cs makes this the window's face.
+    public static readonly FontFamily Words = new(OperatingSystem.IsMacOS() ? ".AppleSystemUIFont"
+                                                  : OperatingSystem.IsWindows() ? "Segoe UI" : "$Default");
     /// Numbers: bundled in Assets/Fonts under SIL OFL 1.1 (NOTICE).
     public static readonly FontFamily Numeral = new("avares://OrionShell/Assets/Fonts#" + TypeSize.Numeral);
     public static readonly Typeface NumeralFace = new(Numeral, FontStyle.Normal, FontWeight.Medium);
@@ -26,6 +30,11 @@ public static class Faces {
     public static TextBlock Figure(string text, double size = Readout, IBrush? color = null) => new() {
         Text = text, FontFamily = Numeral, FontWeight = FontWeight.Medium, FontFeatures = Tabular,
         FontSize = Math.Max(size, Mark), Foreground = color ?? Palette.Text, VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// A number inside a sentence ("3 photos"): a run in the numeral face.
+    public static Run Num(string text) => new(text) {
+        FontFamily = Numeral, FontWeight = FontWeight.Medium, FontFeatures = Tabular,
     };
 
     /// A signed figure with a true minus, as a meter prints it: −4, 0, +2.

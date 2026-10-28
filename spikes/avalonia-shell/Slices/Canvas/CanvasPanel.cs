@@ -14,6 +14,10 @@ namespace OrionShell.CanvasSlice;
 [Panel("canvas", Region.Canvas, 0)]
 public sealed class CanvasPanel : Panel {
     readonly StackPanel _welcome = Welcome();
+    readonly TextBlock _note = new() { FontSize = Faces.Label, Foreground = Palette.Dim, TextAlignment = TextAlignment.Center,
+                                       TextWrapping = TextWrapping.Wrap, MaxWidth = 360 };
+    readonly StackPanel _choices = new() { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+    readonly StackPanel _state;
     readonly Drawn _picture;
     Point? _anchor;
     int? _band;
@@ -22,16 +26,44 @@ public sealed class CanvasPanel : Panel {
         Margin = new Thickness(CanvasState.Inset);
         Background = Brushes.Transparent;   // the whole canvas takes a press, as the MTKView does
         _picture = new Drawn(Draw);
-        Children.AddRange([_picture, _welcome]);
+        // Try again reopens this photo; Skip moves on. Neither takes the arrow keys, which keep browsing.
+        _choices.Children.AddRange([
+            new StateButton(null, "Try again", () => { var e = EngineModel.Shared; if (e.Current >= 0) e.Open(e.Current); }) { Focusable = false },
+            new StateButton(null, "Skip", () => Commands.Run(EngineModel.Shared.Current < EngineModel.Shared.Photos.Count - 1
+                                                             ? "next-photo" : "previous-photo"), ButtonKind.Quiet) { Focusable = false },
+        ]);
+        _state = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                                  Children = { _note, _choices } };
+        Children.AddRange([_picture, _welcome, _state]);
         CanvasState.Changed += Refresh;
         EngineModel.Shared.Shown.Changed += Refresh;   // the picture: only through this seam
+        EngineModel.Shared.PropertyChanged += (_, e) => {
+            if (e.PropertyName is nameof(EngineModel.Current) or nameof(EngineModel.Timing)) Refresh();
+        };
         if (CanvasState.Alone("canvas")) CanvasScenes.Canvas();
         Refresh();
     }
 
     void Refresh() {
-        _welcome.IsVisible = EngineModel.Shared.Handle == 0;
+        var scene = CanvasState.Now;
+        _welcome.IsVisible = scene == CanvasState.Scene.Welcome;
+        _state.IsVisible = scene is CanvasState.Scene.Loading or CanvasState.Scene.Failed;
+        _choices.IsVisible = scene == CanvasState.Scene.Failed;
+        var engine = EngineModel.Shared;
+        if (_state.IsVisible) {
+            _note.Text = scene == CanvasState.Scene.Loading ? $"Decoding {engine.CurrentName}" : Failure(engine);
+            _note.Foreground = scene == CanvasState.Scene.Loading ? Palette.Dim : Palette.Text;
+        }
         _picture.InvalidateVisual();   // same bitmap, new pixels
+    }
+
+    /// What failed, as far as the shell can tell without the engine's word for it.
+    static string Failure(EngineModel engine) {
+        string path = engine.Photos[engine.Current], name = engine.CurrentName;
+        if (engine.Timing.StartsWith("render failed: ")) return $"Couldn't render {name}: {engine.Timing["render failed: ".Length..]}";
+        if (!File.Exists(path)) return $"Couldn't find {name}: it was moved or deleted.";
+        if (Chrome.CaptureInfo.ReadFile(path) == null) return $"Couldn't read {name}: it isn't a raw file the decoder understands.";
+        return $"Couldn't open {name}: the engine could not decode it.";
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
@@ -43,7 +75,8 @@ public sealed class CanvasPanel : Panel {
         var engine = EngineModel.Shared;
         double a = CanvasState.ImageAspect;
         var size = Bounds.Size;
-        if (engine.Handle == 0 || engine.Shown.Bitmap is not { } picture || a <= 0 || size.Width <= 0 || size.Height <= 0) return;
+        if (CanvasState.Now != CanvasState.Scene.Picture || engine.Shown.Bitmap is not { } picture || a <= 0
+            || size.Width <= 0 || size.Height <= 0) return;
 
         var vp = CanvasState.Viewport;
         double va = size.Width / size.Height;
@@ -160,26 +193,17 @@ public sealed class CanvasPanel : Panel {
         e.Handled = true;
     }
 
-    /// Nothing open yet: the title, one line, and the way in.
-    static StackPanel Welcome() {
-        var serif = new FontFamily("New York, Georgia, Times New Roman, serif");
-        var open = new Button {
-            Content = "Open a raw file", FontSize = TypeSize.Base, Foreground = Palette.Accent, Background = Brushes.Transparent,
-            Padding = new Thickness(16, 7), CornerRadius = new CornerRadius(Radius.Md), Margin = new Thickness(0, 28, 0, 0),
-            BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center,
-            BorderBrush = new SolidColorBrush(((ISolidColorBrush)Palette.Accent).Color, 0.5),
-        };
-        open.Click += (_, _) => Commands.Run("open-photo");
-        return new StackPanel {
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Children = {
-                new TextBlock { Text = "Orion", FontFamily = serif, FontSize = 52, HorizontalAlignment = HorizontalAlignment.Center },
-                new TextBlock { Text = "A darkroom for raw files.", FontFamily = serif, FontSize = TypeSize.Md, FontStyle = FontStyle.Italic,
-                                Foreground = Palette.Dim, Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center },
-                open,
-                new TextBlock { Text = "ARW, DNG, NEF, CR2, CR3, RAF, ORF, RW2 — Sony is the tested one.", FontSize = TypeSize.Xs,
-                                Foreground = Palette.Faint, Margin = new Thickness(0, 14, 0, 0), HorizontalAlignment = HorizontalAlignment.Center },
+    /// Nothing open yet: the name, one line, and the way in.
+    static StackPanel Welcome() => new() {
+        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 6,
+        Children = {
+            new TextBlock { Text = "Orion", FontSize = 28, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center },
+            new TextBlock { Text = "A darkroom for raw files.", Foreground = Palette.Dim, HorizontalAlignment = HorizontalAlignment.Center },
+            new StateButton("folder", "Open a raw file", () => Commands.Run("open-photo")) {
+                Height = 28, Margin = new Thickness(0, 18, 0, 0), HorizontalAlignment = HorizontalAlignment.Center,
             },
-        };
-    }
+            new TextBlock { Text = "ARW, DNG, NEF, CR2, CR3, RAF, ORF, RW2. Sony is the tested one.", FontSize = Faces.Mark,
+                            Foreground = Palette.Faint, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Center },
+        },
+    };
 }
