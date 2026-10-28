@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Interactivity;
@@ -17,9 +18,21 @@ public partial class MainWindow : Window {
 
     public MainWindow() : this("Light") { }
 
+    /// The tool column's range: the boards' 322 is the floor every panel is laid
+    /// out for (seven tabs side by side); past 560 a slider is longer than any
+    /// hand needs, and the photo pays for it.
+    public const double ToolColMax = 560, CanvasMin = 360;
+
     public MainWindow(string tab) {
         InitializeComponent();
         if (OperatingSystem.IsMacOS()) ToolbarHost.Margin = new Thickness(80, 0, Space.Pad, 0); // traffic lights
+        // ponytail: the width is not remembered across launches (Swift keeps it in @AppStorage); add with a settings file.
+        Body.ColumnDefinitions = [
+            new ColumnDefinition(GridLength.Star) { MinWidth = CanvasMin },
+            new ColumnDefinition(1, GridUnitType.Pixel),
+            new ColumnDefinition(Layout.ToolCol, GridUnitType.Pixel) { MinWidth = Layout.ToolCol, MaxWidth = ToolColMax },
+        ];
+        DressSplitter();
         foreach (var entry in Panels.All) {
             var panel = Panels.Create(entry.Type);
             if (entry.Tab is { } t) _tabs[t].Add(panel);
@@ -32,6 +45,31 @@ public partial class MainWindow : Window {
         // local monitor does: the grid's ScrollViewer would take the arrows.
         AddHandler(KeyDownEvent, (_, e) => { if (GalleryMode.Handle(e)) e.Handled = true; }, RoutingStrategies.Tunnel);
         ShowFace();
+    }
+
+    /// The splitter is 9 px of grab over a 1 px hairline. Under the pointer a
+    /// 3 px grip fades in on the hairline (dim; the accent while dragging or
+    /// focused from the keyboard), so the edge says it moves before it is
+    /// pressed. Opacity only, 120 ms ease-out; the resize cursor does the rest.
+    void DressSplitter() {
+        var grip = new Border { Width = 3, CornerRadius = new CornerRadius(1.5), Opacity = 0, IsHitTestVisible = false,
+                                Background = Palette.Dim, Margin = new Thickness(0, 4),
+                                Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(120), Easing = new CubicEaseOut() }] };
+        Splitter.Template = new FuncControlTemplate<GridSplitter>((_, _) => new Panel { Background = Brushes.Transparent, Children = { grip } });
+        Splitter.Cursor = new Cursor(StandardCursorType.SizeWestEast);
+        Avalonia.Automation.AutomationProperties.SetName(Splitter, "Tool column width");
+        ToolTip.SetTip(Splitter, "Drag to widen the tools");
+        ToolTip.SetShowDelay(Splitter, 1200);
+        bool dragging = false, keyboard = false;
+        void Paint() {
+            grip.Background = dragging || keyboard ? Palette.Accent : Palette.Dim;
+            grip.Opacity = dragging || keyboard || Splitter.IsPointerOver ? 1 : 0;
+        }
+        Splitter.PropertyChanged += (_, e) => { if (e.Property == IsPointerOverProperty) Paint(); };
+        Splitter.DragStarted += (_, _) => { dragging = true; Paint(); };
+        Splitter.DragCompleted += (_, _) => { dragging = false; Paint(); };
+        Splitter.GotFocus += (_, e) => { keyboard = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional; Paint(); };
+        Splitter.LostFocus += (_, _) => { keyboard = false; Paint(); };
     }
 
     /// `mode`: the develop face or the gallery, built the first time it is asked for.

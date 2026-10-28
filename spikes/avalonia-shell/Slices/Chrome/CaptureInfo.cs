@@ -13,17 +13,19 @@ public sealed partial record CaptureInfo(string Camera, string Lens, float Focal
     static float Round(float x) => MathF.Round(x, MidpointRounding.AwayFromZero);   // Swift's .rounded()
     static readonly CultureInfo C = CultureInfo.InvariantCulture;
 
-    /// 1/250, 1/3, 0.5 s, 1.3 s, 2 s: a fraction up to a third of a second.
+    /// 1/250 s, 1/3 s, 0.5 s, 1.3 s, 2 s: a fraction up to a third of a second,
+    /// and the unit on every one, so a time reads as a time beside an f-number.
     public static string? ShutterText(float s) {
         if (!(s > 0) || !float.IsFinite(s)) return null;
-        if (s < 0.35f) return $"1/{(int)Round(1 / s)}";
+        if (s < 0.35f) return $"1/{(int)Round(1 / s)} s";
         float tenths = Round(s * 10) / 10;
         return tenths == Round(tenths) ? $"{(int)tenths} s" : tenths.ToString("0.0", C) + " s";
     }
 
-    /// f/1.8, f/4.0, f/11.
+    /// f/1.8, f/4, f/5.6, f/11: one decimal below ten when there is one (the
+    /// developer's spelling, 2026-10-28, over Swift's f/4.0).
     public static string? ApertureText(float f) =>
-        !(f > 0) || !float.IsFinite(f) ? null : "f/" + f.ToString(f < 9.95f ? "0.0" : "0", C);
+        !(f > 0) || !float.IsFinite(f) ? null : "f/" + f.ToString(f < 9.95f ? "0.#" : "0", C);
 
     /// 35 mm; a compact's 4.3 mm keeps its decimal.
     public static string? FocalText(float mm) {
@@ -34,8 +36,9 @@ public sealed partial record CaptureInfo(string Camera, string Lens, float Focal
 
     public static string? IsoText(float iso) => !(iso > 0) || !float.IsFinite(iso) ? null : "ISO " + iso.ToString("0", C);
 
-    /// The exposure in the order a viewfinder prints it, then the focal length;
-    /// what the file does not record is left out. Separate figures, no separator.
+    /// The exposure in the order a viewfinder prints it, then the focal length:
+    /// 1/640 s, f/4, ISO 800, 24 mm. What the file does not record is left out.
+    /// Separate figures, no separator.
     public IReadOnlyList<string> Viewfinder =>
         new[] { ShutterText(Shutter), ApertureText(Aperture), IsoText(Iso), FocalText(FocalLength) }
             .Where(p => !string.IsNullOrEmpty(p)).Select(p => p!).ToList();

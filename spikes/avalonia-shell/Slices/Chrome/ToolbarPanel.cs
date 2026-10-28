@@ -95,9 +95,12 @@ public sealed class ToolbarPanel : Grid {
             _actions.Children.Add(Button(null, "Delete rejected…", () => Commands.Run("delete-rejected"), Commands.CanRun("delete-rejected"), ButtonKind.Quiet, "Move every rejected photo to the Trash"));
         } else {
             _actions.Children.Add(Group(
-                Glyph("arrow.uturn.backward", EditHistory.UndoLabel is { } u ? $"Undo {u}" : "Undo", () => Commands.Run("undo"), Commands.CanRun("undo")),
-                Glyph("arrow.uturn.forward", EditHistory.RedoLabel is { } r ? $"Redo {r}" : "Redo", () => Commands.Run("redo"), Commands.CanRun("redo"))));
-            _actions.Children.Add(Group(Glyph("rotate.left", "Rotate left", () => Commands.Run("rotate-left"), Commands.CanRun("rotate-left")), Glyph("rotate.right", "Rotate right", () => Commands.Run("rotate-right"), Commands.CanRun("rotate-right"))));
+                Glyph("arrow.uturn.backward", Keyed(EditHistory.UndoLabel is { } u ? $"Undo {u}" : "Undo", "undo"), () => Commands.Run("undo"), Commands.CanRun("undo")),
+                Glyph("arrow.uturn.forward", Keyed(EditHistory.RedoLabel is { } r ? $"Redo {r}" : "Redo", "redo"), () => Commands.Run("redo"), Commands.CanRun("redo"))));
+            // History and geometry are different kinds of thing with look-alike curved arrows: a divider keeps them apart.
+            _actions.Children.Add(new Border { Width = 1, Height = 16, Background = Palette.Line, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center });
+            _actions.Children.Add(Group(Glyph("rotate.left", Keyed("Rotate left", "rotate-left"), () => Commands.Run("rotate-left"), Commands.CanRun("rotate-left")),
+                                        Glyph("rotate.right", Keyed("Rotate right", "rotate-right"), () => Commands.Run("rotate-right"), Commands.CanRun("rotate-right"))));
             var compare = Button("rectangle.split.2x1", "Compare", () => Commands.Run("compare"), Commands.CanRun("compare"), ButtonKind.Standard, "Split the view against the original (\\)");
             compare.On = CompareState.Comparing;
             _actions.Children.Add(compare);
@@ -117,6 +120,14 @@ public sealed class ToolbarPanel : Grid {
             _actions.Children.Add(Button("square.and.arrow.up", selected > 0 ? $"Export {selected}" : "Export", () => Commands.Run("export"), Commands.CanRun("export"), ButtonKind.Primary,
                                          selected > 0 ? $"Export the {selected} selected photos to a folder" : "Export this photo (⌘E)"));
         }
+    }
+
+    /// A tooltip that names the command's key, read from the command table: "Rotate left ([)", "Undo (⌘Z)".
+    static string Keyed(string help, string command) {
+        if (Commands.Find(command)?.Keys.FirstOrDefault() is not { } key) return help;
+        string text = key.ToString("p", null);
+        if (OperatingSystem.IsMacOS()) text = text.Replace("Shift+", "⇧").Replace("Alt+", "⌥").Replace("Ctrl+", "⌃").Replace("Cmd+", "⌘");
+        return $"{help} ({text})";
     }
 
     static StateButton Button(string? icon, string title, Action run, bool enabled, ButtonKind kind, string help) =>
