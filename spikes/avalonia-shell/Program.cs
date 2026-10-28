@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -82,7 +83,7 @@ sealed class App : Application {
             window.Show();
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
-            if (Run.Bench) Bench();
+            if (Run.Bench) Bench(window);
             if (Run.Screenshot != null) {
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
@@ -156,9 +157,17 @@ sealed class App : Application {
     }
 
     /// A 60-tick exposure drag through the same path a hand takes.
-    static void Bench() {
+    static void Bench(Window window) {
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;
+        // Swapping photos, laid out: what a click on the filmstrip costs.
+        for (int i = 1; i <= Math.Min(engine.Photos.Count, 4); i++) {
+            var sw = Stopwatch.StartNew();
+            engine.Open(i % engine.Photos.Count);
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            Console.WriteLine($"bench open {engine.CurrentName}: {sw.Elapsed.TotalMilliseconds:0} ms to laid out, footer engine {engine.Last.Render:0.0} ms");
+        }
         float start = engine.Get("exposure_ev");
         foreach (bool preview in new[] { true, false }) {
             var renders = new List<double>();
