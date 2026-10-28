@@ -3,6 +3,7 @@ using OrionShell.CanvasSlice;
 using OrionShell.Chrome;
 using OrionShell.Develop;
 using OrionShell.Library;
+using OrionShell.Masks;
 using OrionShell.Sheets;
 
 namespace OrionShell;
@@ -25,6 +26,8 @@ static class CommandTable {
     static bool Editable => Loaded && Develop && !Locked;
     static MainWindow? Shell => App.Window as MainWindow;
     static bool Cropping => Develop && Shell?.Tab == "Crop" && !Locked;
+    static bool Masking => Develop && CanvasState.Tab == "Mask" && !Locked;
+    static MaskGroup Mask => MaskGroup.Shared;
     /// What the culling keys act on: the gallery's focus while it is up, else the
     /// photo on the canvas (cullActions), so the grid and the keys never disagree.
     static LibraryModel.Photo? Focused => GalleryMode.On ? GalleryMode.Focus : LibraryModel.Shared.Open;
@@ -55,8 +58,8 @@ static class CommandTable {
         Built("undo", "Undo", "Cmd+Z", "EditHistory.swift", () => ChromeStubs.CanUndo && Develop && !Locked, EditHistory.Undo),
         Built("redo", "Redo", "Cmd+Shift+Z", "EditHistory.swift", () => ChromeStubs.CanRedo && Develop && !Locked, EditHistory.Redo),
         Built("reset-adjustments", "Reset adjustments", "Cmd+R", "Engine+Document.swift", () => Editable, EditHistory.ResetEdits),
-        Built("rotate-left", "Rotate left", "OemOpenBrackets", "Engine+Geometry.swift", () => Editable, () => CropEdit.Rotate(-1)),
-        Built("rotate-right", "Rotate right", "OemCloseBrackets", "Engine+Geometry.swift", () => Editable, () => CropEdit.Rotate(1)),
+        Built("rotate-left", "Rotate left", "OemOpenBrackets", "Engine+Geometry.swift", () => Editable, () => Bracket(-1)),
+        Built("rotate-right", "Rotate right", "OemCloseBrackets", "Engine+Geometry.swift", () => Editable, () => Bracket(1)),
 
         // Photo
         Built("reject", "Reject", "R", "Library.swift", () => Focused != null, () => LibraryModel.Shared.ToggleRejected(Focused!)),
@@ -77,7 +80,12 @@ static class CommandTable {
         Built("delete-rejected", "Delete rejected photos…", null, "OrionApp+Files.swift", () => LibraryModel.Shared.RejectedCount > 0,
               () => Trash.Confirm(LibraryModel.Shared.Photos.Where(p => p.Rejected).ToList())),
         Built("apply-crop", "Apply crop", "Enter", "OrionApp+Commands.swift", () => Cropping, () => Shell?.Select("Light")),
-        Built("cancel-crop", "Cancel crop", "Escape", "OrionApp+Commands.swift", () => E.Tool != CanvasTool.None || Cropping, Escape),
+        Built("cancel-crop", "Cancel crop", "Escape", "OrionApp+Commands.swift", () => E.Tool != CanvasTool.None || Mask.Drawing != 0 || Cropping, Escape),
+        // The Mask tab's keys (u4); `[` `]` and Escape are folded into the rows above, which own those keys.
+        Built("mask-overlay", "Show mask overlay", "O", "DevelopPanels+Mask.swift", () => Masking, () => Mask.Overlay ^= true),
+        Built("mask-feather-less", "Less mask feather", "Shift+OemOpenBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(-0.1f)),
+        Built("mask-feather-more", "More mask feather", "Shift+OemCloseBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(0.1f)),
+        Built("delete-mask-shape", "Delete mask shape", "Delete", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Mask.Remove(Mask.Selected)),
     ];
 
     static Command Built(string name, string title, string? keys, string owner, Func<bool> canRun, Action run) =>
@@ -90,9 +98,27 @@ static class CommandTable {
     /// handleKey's Escape: an armed tool first, from any tab; then the crop,
     /// reset to the whole frame, and back to Light.
     static void Escape() {
+        if (Mask.Drawing != 0) { Mask.Arm(0, null); return; }
         if (E.Tool != CanvasTool.None) { E.Tool = CanvasTool.None; return; }
         CropEdit.Reset();
         Shell?.Select("Light");
+    }
+
+    /// `[` and `]` size the brush being painted on the Mask tab, as Lightroom's do; elsewhere they turn the photo.
+    static void Bracket(int step) {
+        if (Masking && Mask.Current is { Kind: 3 } brush) {
+            brush.BrushRadius = Math.Clamp(brush.BrushRadius * (step > 0 ? 1.2f : 1 / 1.2f), 0.01f, 0.4f);
+            Mask.BrushPreview = true;
+            Mask.Push("Mask size");
+        } else CropEdit.Rotate(step);
+    }
+
+    /// A brush softens by losing hardness; every other shape by its feather.
+    static void Feather(float step) {
+        if (Mask.Current is not { } m) return;
+        if (m.Kind == 3) m.BrushHardness = Math.Clamp(m.BrushHardness - step, 0, 1);
+        else m.Feather = Math.Clamp(m.Feather + step, 0, 1);
+        Mask.Push("Mask feather");
     }
 
     /// `showingExport = true`: a registered sheet panel as a dialog over the window.

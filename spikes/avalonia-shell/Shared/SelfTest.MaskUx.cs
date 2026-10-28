@@ -110,6 +110,22 @@ static partial class SelfTest {
         Check(group.Shapes.Count == 1 && engine.Get("local_exposure_ev", 0) == 1.5f && engine.Get("local_exposure_ev", 1) == 0,
               "deleting a mask carries every later mask's adjustments down with it");
 
+        // The Mask tab's keys (CommandTable): `]` sizes the brush instead of turning the photo, O toggles the overlay, Escape disarms a draw.
+        float r0 = group.Current!.BrushRadius, turn = engine.Get("rotate_quarters");
+        bool overlay0 = group.Overlay;   // the exposure check above turned it off
+        var ran = new List<string> { Commands.Run("rotate-right") };
+        float r1 = group.Current!.BrushRadius, turned = engine.Get("rotate_quarters");
+        ran.Add(Commands.Run("rotate-left"));
+        ran.Add(Commands.Run("mask-overlay"));
+        bool flipped = group.Overlay != overlay0;
+        ran.Add(Commands.Run("mask-overlay"));
+        group.Drawing = 2;
+        ran.Add(Commands.Run("cancel-crop"));
+        Check(r1 > r0 && turned == turn && Math.Abs(group.Current!.BrushRadius - r0) < 1e-5 && flipped && group.Overlay == overlay0 && group.Drawing == 0,
+              $"on the Mask tab ] grows the brush and leaves the photo's turn alone, O toggles the overlay, Escape disarms a draw " +
+              $"(kind {group.Current.Kind}, radius {r0:0.000} → {r1:0.000} → {group.Current.BrushRadius:0.000}, turn {turn} → {turned}, " +
+              $"overlay {overlay0} → flipped {flipped} → {group.Overlay}, drawing {group.Drawing}, tab {CanvasState.Tab}; {string.Join(", ", ran)})");
+
         group.Clear();
         for (int l = 0; l < MaskGroup.Max; l++) engine.Session!.Set("local_exposure_ev", 0, l);
         group.Overlay = true;

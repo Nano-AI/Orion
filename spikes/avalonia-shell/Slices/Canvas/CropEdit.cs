@@ -28,7 +28,10 @@ static class CropEdit {
             // crop_preview lives in the session, and sessions are kept (#318): a photo left
             // on the Crop tab came back showing the whole frame, and one arriving on it
             // showed its crop with the tool's rectangle drawn over the wrong picture.
-            Preview(CanvasState.Tab == "Crop");
+            // Straight into the session, not through Write: the open renders next, at
+            // preview size (#324), and a Write here added a full render to every swap.
+            if (Engine.Session is { } s)
+                foreach (var (field, value) in PreviewFields(CanvasState.Tab == "Crop")) s.Set(field, (float)value);
         };
     }
 
@@ -56,9 +59,11 @@ static class CropEdit {
     }
 
     /// `cropPreview`: the whole turned frame with the crop as context, while the crop tab is open.
-    public static void Preview(bool on) {
+    public static void Preview(bool on) => CanvasState.Write(PreviewFields(on));
+
+    static (string Field, double Value)[] PreviewFields(bool on) {
         var (origin, size) = on ? CanvasLayout.PreviewCanvas(CanvasNative.FrameAspect, Angle) : (default(Point), 1.0);
-        CanvasState.Write(("preview_x", origin.X), ("preview_y", origin.Y), ("preview_size", size), ("crop_preview", on ? 1 : 0));
+        return [("preview_x", origin.X), ("preview_y", origin.Y), ("preview_size", size), ("crop_preview", on ? 1 : 0)];
     }
 
     /// `setAspect`: the largest centered rectangle of that ratio; nil is `resetCrop`.
