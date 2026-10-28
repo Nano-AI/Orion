@@ -58,12 +58,22 @@ public sealed partial class Session : IDisposable {
         return graph;
     }
 
-    /// Has rendered the full graph: its intermediates (1.35 GB, #318) stay
-    /// allocated until ReleaseRenderMemory.
+    /// Has rendered the full graph since it was last lightened: its
+    /// intermediates (1.35 GB, #318) are allocated and the preview picture may
+    /// be older than the last edit.
     public bool RenderedFull { get; private set; }
 
     /// The last preview read: the screen-sized picture a cache keeps for this photo.
     public WriteableBitmap? Picture => _pictures.GetValueOrDefault(Graph.Preview);
+
+    /// What a cache does to a session it keeps but is not showing: the graphs'
+    /// textures go (ReleaseRenderMemory) and so does the full-size bitmap
+    /// (~97 MB at 24 MP); the decoded photo and the preview picture stay.
+    public void Lighten() {
+        ReleaseRenderMemory();
+        _pictures.Remove(Graph.Full);
+        RenderedFull = false;
+    }
 
     /// The last render of `graph`, copied into this session's bitmap for it.
     /// Null when there is nothing to read. The copy is the spike's cost, not

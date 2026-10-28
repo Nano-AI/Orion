@@ -87,6 +87,25 @@ public sealed class EngineModel : INotifyPropertyChanged {
         Changed(nameof(Photos), nameof(Current));
     }
 
+    /// Takes photos out of the list (a move to the Trash). The photo on screen,
+    /// if it stays, stays open: same session, same edits, at its new index. If
+    /// it goes, it closes and nothing is current.
+    public void Remove(IEnumerable<string> paths) {
+        var gone = paths.ToHashSet();
+        int at = Current;
+        if (at >= 0 && gone.Contains(Photos[at])) {
+            Close();
+            Shown.Clear();
+            at = -1;
+        }
+        var left = Photos.Select((path, i) => (path, i)).Where(p => !gone.Contains(p.path)).ToList();
+        _list.Load(left.Select(p => p.path));
+        _source.Clear();   // every index moved; the session on screen closes when it is left
+        Opening = false;
+        if (at >= 0 && _list.Go(left.FindIndex(p => p.i == at))) _source.Hint(Current, 0);
+        Changed(nameof(Photos), nameof(Current), nameof(CurrentName), nameof(Picture));
+    }
+
     public bool Open(int index) {
         int from = Current;
         if (!_list.Go(index)) throw new ArgumentOutOfRangeException(nameof(index), index, $"{Photos.Count} photos");
@@ -148,13 +167,15 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     /// A write through one of the session's own calls (curve, auto-enhance,
     /// the mask group), then the render Set would do. A call stage 1b has not
-    /// built yet goes to the status line, not up a pointer handler. `reread`
+    /// built yet, or one that refuses its input (the mask group's
+    /// ArgumentException and InvalidOperationException), goes to the status
+    /// line, not up a pointer handler. `reread`
     /// tells the panels the values moved under them. False when nothing ran.
     public bool Apply(Action<Session> write, bool reread = false) {
         if (_session == null) return false;
         try {
             write(_session);
-        } catch (NotBuiltException e) {
+        } catch (Exception e) when (e is NotBuiltException or ArgumentException or InvalidOperationException) {
             Say(e.Message);
             return false;
         }

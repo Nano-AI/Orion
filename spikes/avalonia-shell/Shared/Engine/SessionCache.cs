@@ -64,7 +64,7 @@ public sealed class SessionCache : ISessionSource {
         // Edited since its last preview: render one so the kept picture shows the edit.
         if (s.RenderedFull && s.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);
         if (s.Picture is { } p) _pictures[index] = p;
-        if (!_kept.ContainsKey(index) && Light(s)) _kept[index] = s;
+        if (_kept.TryAdd(index, s)) s.Lighten();
         else Close(s);
         Evict();
         Pump();
@@ -101,17 +101,6 @@ public sealed class SessionCache : ISessionSource {
         foreach (int i in _plan.Over(Decoded.ToList(), _plan.SessionSlots))
             if (_kept.Remove(i, out var s)) Close(s);
         foreach (int i in _plan.Over(_pictures.Keys.ToList(), _plan.PictureSlots)) _pictures.Remove(i);
-    }
-
-    /// Drops the graphs' intermediates (stage 1b). Until that is built, a
-    /// session that rendered full holds 1.35 GB more (#318): not worth keeping.
-    static bool Light(Session s) {
-        try {
-            s.ReleaseRenderMemory();
-            return true;
-        } catch (NotBuiltException) {
-            return !s.RenderedFull;
-        }
     }
 
     /// The photo asked for starts at once, beside at most one other decode; a
@@ -154,8 +143,10 @@ public sealed class SessionCache : ISessionSource {
         else {
             _plan.Decoded(index);
             if (s.Picture is { } p && _plan.Wants(_pictures.Keys.ToList(), index, _plan.PictureSlots)) _pictures[index] = p;
-            if (_plan.Wants(Decoded.ToList(), index, _plan.SessionSlots) && Light(s)) _kept[index] = s;
-            else Close(s);
+            if (_plan.Wants(Decoded.ToList(), index, _plan.SessionSlots)) {
+                s.Lighten();
+                _kept[index] = s;
+            } else Close(s);
         }
         Evict();
         Pump();

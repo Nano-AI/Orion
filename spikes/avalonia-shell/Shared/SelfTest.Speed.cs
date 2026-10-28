@@ -101,9 +101,11 @@ static partial class SelfTest {
         cache.Drain();
         Check(cache.Sessions == 0 && lent.Handle == 0 && again.Handle == 0, "sessions lent before Clear close when they come back");
 
-        // Through EngineModel: a kept neighbour opens at once, a kept picture shows while its session decodes.
+        // Through EngineModel, over five spellings of the selftest photo (dir/./name...) so paths differ.
+        string photo = EngineModel.Shared.Photos[0];
+        var spelt = Enumerable.Range(0, 5).Select(k => Path.Combine([Path.GetDirectoryName(photo)!, .. Enumerable.Repeat(".", k), Path.GetFileName(photo)])).ToList();
         var model = new EngineModel();
-        model.Load(Enumerable.Repeat(EngineModel.Shared.Photos[0], 5));
+        model.Load(spelt);
         model.Open(0);
         Settle(() => !model.Opening && !model.Cache.Busy);
         model.Next();
@@ -112,8 +114,20 @@ static partial class SelfTest {
         model.Open(4);
         Check(model.Opening && model.Session == null && model.Shown.Bitmap != null,
               "a photo with a kept picture and no session shows the picture while it decodes");
-        model.Load([EngineModel.Shared.Photos[0]]);
-        Check(!model.Opening, "a new list ends Opening, whose request it dropped");
+        Settle(() => !model.Opening);
+        var onScreen = model.Session!;
+        Check(!model.Apply(_ => throw new ArgumentException("probe: refused")) && model.Status == "probe: refused",
+              "Apply puts an ArgumentException on the status line");
+        model.Remove([spelt[0], spelt[1]]);
+        Check(onScreen.Handle != 0 && ReferenceEquals(model.Session, onScreen) && model.Current == 2 && model.Photos.Count == 3,
+              "Remove keeps the photo on screen open, same session, at its new index");
+        model.Remove([spelt[4]]);
+        Check(model.Session == null && model.Current == -1 && model.Photos.Count == 2, "Remove closes the photo on screen when it goes");
+        model.Open(0);
+        bool opening = model.Opening;
+        model.Load([photo]);
+        Check(opening && !model.Opening, "a new list ends Opening, whose request it dropped");
         model.Cache.Drain();
+        Check(onScreen.Handle == 0, "the removed photo's session closed");
     }
 }

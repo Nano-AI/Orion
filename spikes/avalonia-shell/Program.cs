@@ -14,7 +14,9 @@ namespace OrionShell;
 /// OrionShell <photos or folders> [--panel NAME | --tab NAME] [--command NAME] [--screenshot OUT.png] [--bench] [--selftest]
 ///            [--list | --commands]
 static class Program {
-    static readonly string[] RawExtensions = [".arw", ".nef", ".cr2", ".cr3", ".dng", ".raf", ".orf", ".rw2", ".pef"];
+    /// Library.rawExtensions (Library.swift): what counts as a raw, without the dot.
+    public static readonly string[] RawExtensions = ["arw", "srf", "sr2", "dng", "nef", "nrw", "cr2", "cr3", "crw", "raf", "orf", "rw2",
+                                                     "pef", "srw", "erf", "3fr", "fff", "iiq", "mrw", "raw", "rwl"];
 
     [STAThread]
     static int Main(string[] args) {
@@ -49,16 +51,16 @@ static class Program {
         // backend cannot start while the display sleeps (RenderTimer -6661),
         // and swarm agents run unattended. Same Skia renderer, no window server.
         if (shot != null || App.Run.Bench || App.Run.SelfTest || App.Run.Command != null) {
-            AppBuilder.Configure<App>().UseSkia().WithInterFont()
+            AppBuilder.Configure<App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
             return App.RunUnattended();
         }
-        return AppBuilder.Configure<App>().UsePlatformDetect().WithInterFont().StartWithClassicDesktopLifetime(args);
+        return AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime(args);
     }
 
     static IEnumerable<string> Expand(string path) => Directory.Exists(path)
-        ? Directory.EnumerateFiles(path).Where(f => RawExtensions.Contains(Path.GetExtension(f).ToLowerInvariant())).Order()
+        ? Directory.EnumerateFiles(path).Where(f => RawExtensions.Contains(Path.GetExtension(f).TrimStart('.').ToLowerInvariant())).Order()
         : [path];
 }
 
