@@ -59,7 +59,7 @@ steps.
 - **Maintainability is a hard requirement.** One node = one small shader (50–150 lines). Adding a feature should be a repeatable 3-file change. No 1000-line anything. The developer must be able to hand-edit any file later.
 - **Prefer mature libraries** over hand-rolled code, even at some performance cost.
 - **Avoid GPL libraries** (notably exiv2). ⚠ Orion is source-available, not open
-  source (decision #358: use and contribute, never redistribute or sell). A work
+  source (decision #359: PolyForm Internal Use plus personal use and pull requests; never redistribute or sell). A work
   under that licence cannot incorporate GPL code at all. LGPL code like LibRaw
   may be used only when dynamically linked or relinkable. Publishing any revision
   under an open licence is a one-way door: it happened once by mistake (#358).

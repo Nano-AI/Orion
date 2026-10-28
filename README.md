@@ -294,7 +294,7 @@ records the choices already settled.
 4. Push the branch (`git push origin feature/your-change`)
 5. Open a pull request
 
-Forks exist to send pull requests back; [`LICENSE`](LICENSE) §2 forbids distributing your own version. By contributing you grant the project the rights in its §3.
+Forks exist to send pull requests back; [`LICENSE`](LICENSE) forbids distributing your own version. By contributing you grant the project the rights its additional permissions describe.
 
 ### Top contributors
 
@@ -308,7 +308,7 @@ Forks exist to send pull requests back; [`LICENSE`](LICENSE) §2 forbids distrib
 
 **Source-available, not open source. See [`LICENSE`](LICENSE).**
 
-Use Orion for anything, including paid work, and help improve it through pull requests. You may not redistribute it, in source or binary form, or sell it or your own version of it. Revisions through commit abf3a51, and commits 82ec298 and 4005930, were published under Apache-2.0 and remain available under it.
+[PolyForm Internal Use 1.0.0](https://polyformproject.org/licenses/internal-use/1.0.0), plus permission for personal use and pull requests. Use Orion for your own work or your company's, paid or not, and help improve it through pull requests. You may not redistribute it, in source or binary form, or sell it or your own version of it. Revisions through commit abf3a51, and commits 82ec298 and 4005930, were published under Apache-2.0 and remain available under it.
 
 ⚠ **[`NOTICE`](NOTICE) carries third-party licenses and obligations**:
 
