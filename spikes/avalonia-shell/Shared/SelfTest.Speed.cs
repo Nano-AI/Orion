@@ -74,5 +74,20 @@ static partial class SelfTest {
         cache.Release(again);
         cache.Drain();
         Check(cache.Sessions == 0 && lent.Handle == 0 && again.Handle == 0, "sessions lent before Clear close when they come back");
+
+        // Through EngineModel: a kept neighbour opens at once, a kept picture shows while its session decodes.
+        var model = new EngineModel();
+        model.Load(Enumerable.Repeat(EngineModel.Shared.Photos[0], 5));
+        model.Open(0);
+        Settle(() => !model.Opening && !model.Cache.Busy);
+        model.Next();
+        Check(model.Session != null && !model.Opening && model.Shown.Graph == Graph.Preview,
+              "a kept neighbour is open before Next returns, rendered at preview size");
+        model.Open(4);
+        Check(model.Opening && model.Session == null && model.Shown.Bitmap != null,
+              "a photo with a kept picture and no session shows the picture while it decodes");
+        model.Load([EngineModel.Shared.Photos[0]]);
+        Check(!model.Opening, "a new list ends Opening, whose request it dropped");
+        model.Cache.Drain();
     }
 }

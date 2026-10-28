@@ -82,7 +82,8 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     public void Load(IEnumerable<string> photos) {
         _list.Load(photos);
-        _source.Clear();
+        _source.Clear();   // drops an unanswered Request too
+        Opening = false;
         Changed(nameof(Photos), nameof(Current));
     }
 
