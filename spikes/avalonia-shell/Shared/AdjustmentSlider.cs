@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -10,29 +11,27 @@ namespace OrionShell;
 
 /// A port of app/AdjustmentSlider.swift bound to one OrionAdjustments field:
 /// a name, a boxed readout in the numeral face that turns accent when the value
-/// is off its default, and an AnalogTrack marked in the slider's unit. Hover the
-/// readout of an edited slider for its reset; a click takes it. Double-click,
-/// or Tab to it and press Return, to type (Return commits, Escape cancels,
-/// Up/Down nudge, Shift for ten).
-/// stub(#315): no undo history — Engine.edit's EditHistory is Swift-only.
+/// is off its default, and an AnalogTrack marked in the slider's unit. Click the
+/// readout, or Tab to it and press Return, to type (Return commits, Escape
+/// cancels, Up/Down nudge, Shift for ten). Double-click the track to reset.
+/// A value that moves from outside a drag (Auto, undo, a preset, a reset, a
+/// typed value) glides there; a photo opening shows its values at once.
 public sealed class AdjustmentSlider : StackPanel {
     /// Bubbles when Modified flips, so a SectionPlate can light its dot.
     public static readonly RoutedEvent<RoutedEventArgs> ModifiedChangedEvent =
         RoutedEvent.Register<AdjustmentSlider, RoutedEventArgs>("ModifiedChanged", RoutingStrategies.Bubble);
 
+    /// The readout's box at its narrowest (Controls.dc.html).
+    const double ReadoutWidth = 54, ReadoutPad = 6;
+
     readonly string _name, _field, _unit;
     readonly int _index, _decimals;
     readonly float? _fixedBase;
     readonly AnalogTrack _track;
-    readonly Readout _window = new() {
-        MinWidth = 54, Height = 21, Padding = new Thickness(6, 0), Focusable = true,
-    };
-    readonly StackPanel _windowRow = new() { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right };
+    readonly Readout _window = new() { Height = 21, Padding = new Thickness(ReadoutPad, 0), Focusable = true };
     readonly TextBlock _text = Faces.Figure("");
-    readonly Control _reset = Icons.Create("arrow.uturn.backward", 9, Palette.Accent);
     TextBox? _editor;
     bool _hovering, _modified, _keyboardFocus;
-    IDisposable? _pendingReset;
 
     public float Value { get; private set; }
     public float Base { get; private set; }
@@ -48,21 +47,29 @@ public sealed class AdjustmentSlider : StackPanel {
         _track.Changed += v => Apply(v);
         _track.Interacting += on => { if (on) EngineModel.Shared.BeginInteraction(); else EngineModel.Shared.EndInteraction(); };
 
-        _window.Child = _windowRow;
+        // As wide as the widest value it can show, so the box never moves while the value is dragged.
+        _window.MinWidth = Math.Max(ReadoutWidth, Math.Ceiling(Math.Max(FigureWidth(Text(min)), FigureWidth(Text(max)))) + 2 * ReadoutPad);
+        _text.HorizontalAlignment = HorizontalAlignment.Right;
+        _window.Child = _text;
         _window.PointerEntered += (_, _) => { _hovering = true; Paint(); };
         _window.PointerExited += (_, _) => { _hovering = false; Paint(); };
-        _window.Tapped += (_, _) => {
-            // Wait out a double-click before treating this as a reset click.
-            _pendingReset?.Dispose();
-            _pendingReset = DispatcherTimer.RunOnce(() => { if (_modified && _editor == null) Apply(Base); },
-                                                    TimeSpan.FromMilliseconds(250));
-        };
-        _window.DoubleTapped += (_, _) => { _pendingReset?.Dispose(); BeginEditing(); };
+        // A click types at once: the reset is the track's double-click, so nothing waits out a double-click here.
+        _window.Tapped += (_, _) => BeginEditing();
         _window.KeyDown += (_, e) => {
             if (e.Key is Key.Enter or Key.Space && _editor == null) { BeginEditing(); e.Handled = true; }
         };
-        _window.GotFocus += (_, e) => { _keyboardFocus = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional; Paint(); };
-        _window.LostFocus += (_, _) => { _keyboardFocus = false; Paint(); };
+        // The box's own focus only: the field inside it bubbles its focus here too, and
+        // repainting on that, mid-swap, put one TextBlock in two parents (u3's crash report).
+        _window.GotFocus += (_, e) => {
+            if (e.Source != _window) return;
+            _keyboardFocus = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional;
+            Paint();
+        };
+        _window.LostFocus += (_, e) => {
+            if (e.Source != _window) return;
+            _keyboardFocus = false;
+            Paint();
+        };
 
         var head = new DockPanel();
         DockPanel.SetDock(_window, Dock.Right);
@@ -76,60 +83,71 @@ public sealed class AdjustmentSlider : StackPanel {
         Reload();
     }
 
-    /// The value moved under the slider (auto-enhance): follow it, keep the detent.
+    static double FigureWidth(string figure) {
+        var text = new FormattedText(figure, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Faces.NumeralFace, Faces.Readout, Brushes.White);
+        text.SetFontFeatures(Faces.Tabular);
+        return text.WidthIncludingTrailingWhitespace;
+    }
+
+    /// The value moved under the slider (Auto, undo, a preset): follow it, keep the detent.
     void Reread() {
         Value = EngineModel.Shared.Get(_field, _index);
-        _track.Set(Value);
+        _track.Glide(Value);
         Paint();
     }
 
+    /// A photo opened: its values, shown at once (the arrow-key path).
     void Reload() {
         Value = EngineModel.Shared.Get(_field, _index);
         Base = _fixedBase ?? Value;
         _track.Base = Base;
         _track.Set(Value);
-        Paint();
+        Paint(opened: true);
     }
 
-    void Apply(float v) {
+    /// A drag's value lands at once; one set from outside the drag glides.
+    void Apply(float v, bool glide = false) {
         Value = v;
-        _track.Set(v);
+        if (glide) _track.Glide(v);
+        else _track.Set(v);
         EngineModel.Shared.Set(_field, v, _index);
         Paint();
     }
 
     /// As the meter prints it: a true minus, and none on a value that shows as zero.
     string Text(float v) {
-        string digits = MathF.Abs(v).ToString("F" + _decimals, System.Globalization.CultureInfo.InvariantCulture);
-        return (v < 0 && digits.Any(d => d is >= '1' and <= '9') ? "\u2212" : "") + digits + _unit;
+        string digits = MathF.Abs(v).ToString("F" + _decimals, CultureInfo.InvariantCulture);
+        return (v < 0 && digits.Any(d => d is >= '1' and <= '9') ? "−" : "") + digits + _unit;
     }
 
     /// The readout's states (Controls.dc.html): at rest the box is engraved in
-    /// ground; hover lifts it; hovering an edit offers the reset; typing rings it
-    /// in the accent; keyboard focus gets the two-ring halo.
-    void Paint() {
-        bool modified = AdjustmentMath.IsModified(Value, Base, _decimals);
-        bool editing = _editor != null, offer = modified && _hovering && !editing;
-        _windowRow.Children.Clear();
-        if (offer) _windowRow.Children.Add(_reset);
-        _windowRow.Children.Add((Control?)_editor ?? _text);
+    /// ground; hover lifts its edge; typing rings it in the accent; keyboard
+    /// focus gets the two-ring halo. Runs on every drag tick, so it touches only
+    /// what changed.
+    void Paint(bool opened = false) {
+        bool modified = AdjustmentMath.IsModified(Value, Base, _decimals), editing = _editor != null;
+        Control content = (Control?)_editor ?? _text;
+        if (_window.Child != content) _window.Child = content;
         _text.Text = Text(Value);
         _text.Foreground = modified && !editing ? Palette.Accent : Palette.Text;
-        _window.Fill = offer ? Palette.Raised : Palette.Ground;
-        _window.Edge = editing ? Palette.Accent : _hovering ? Palette.Rail : Palette.Line;
-        _window.Ring = _keyboardFocus && !editing;
-        _window.InvalidateVisual();
-        ToolTip.SetTip(_window, modified ? $"Reset {_name} to {Text(Base)}. Double-click to type a value" : "Double-click to type a value");
-        if (modified != _modified) {
-            _modified = modified;
-            RaiseEvent(new RoutedEventArgs(ModifiedChangedEvent));
+        var edge = editing ? Palette.Accent : _hovering ? Palette.Rail : Palette.Line;
+        bool ring = _keyboardFocus && !editing;
+        if (_window.Edge != edge || _window.Ring != ring) {
+            (_window.Edge, _window.Ring) = (edge, ring);
+            _window.InvalidateVisual();
         }
+        if (modified == _modified && !opened) return;
+        ToolTip.SetTip(_window, modified ? $"Click to type a value. Double-click the track to reset {_name} to {Text(Base)}"
+                                         : "Click to type a value");
+        if (modified == _modified) return;
+        _modified = modified;
+        RaiseEvent(new ModifiedChangedEventArgs(opened));
     }
 
     void BeginEditing() {
         if (_editor != null) return;
         _editor = new TextBox {
-            Text = Value.ToString("F" + _decimals, System.Globalization.CultureInfo.InvariantCulture),
+            Text = Value.ToString("F" + _decimals, CultureInfo.InvariantCulture),
             FontFamily = Faces.Numeral, FontWeight = FontWeight.Medium, FontFeatures = Faces.Tabular, FontSize = Faces.Readout,
             MinWidth = 40, Padding = new Thickness(0), BorderThickness = new Thickness(0), Background = Brushes.Transparent,
             TextAlignment = TextAlignment.Right, MinHeight = 0, VerticalAlignment = VerticalAlignment.Center,
@@ -142,7 +160,7 @@ public sealed class AdjustmentSlider : StackPanel {
                 case Key.Up or Key.Down:
                     int steps = (e.Key == Key.Up ? 1 : -1) * (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 10 : 1);
                     if (AdjustmentMath.Nudged(_editor!.Text ?? "", steps, _unit, _decimals, _track.Min, _track.Max) is { } n)
-                        _editor.Text = n.ToString("F" + _decimals, System.Globalization.CultureInfo.InvariantCulture);
+                        _editor.Text = n.ToString("F" + _decimals, CultureInfo.InvariantCulture);
                     e.Handled = true;
                     break;
             }
@@ -156,7 +174,7 @@ public sealed class AdjustmentSlider : StackPanel {
         if (_editor == null) return;
         var parsed = AdjustmentMath.Parsed(_editor.Text ?? "", _unit, _track.Min, _track.Max);
         Close();
-        if (parsed is { } v && v != Value) Apply(v);
+        if (parsed is { } v && v != Value) Apply(v, glide: true);
     }
 
     void Close() {
@@ -168,12 +186,18 @@ public sealed class AdjustmentSlider : StackPanel {
     /// Drawn rather than a Border, whose Render is sealed and whose BoxShadow
     /// clips to it in Avalonia 12.
     sealed class Readout : Decorator {
-        public IBrush Fill = Palette.Ground, Edge = Palette.Line;
+        public IBrush Edge = Palette.Line;
         public bool Ring;
         public override void Render(DrawingContext c) {
             var r = new Rect(Bounds.Size);
-            c.DrawRectangle(Fill, new Pen(Edge, 1), r.Deflate(0.5), Radius.Sm, Radius.Sm);
+            c.DrawRectangle(Palette.Ground, new Pen(Edge, 1), r.Deflate(0.5), Radius.Sm, Radius.Sm);
             if (Ring) StateButton.DrawFocusRing(c, r, Radius.Sm);
         }
     }
+}
+
+/// ModifiedChanged's arguments. Opened: the change came with a photo opening,
+/// the arrow-key path, where nothing animates.
+public sealed class ModifiedChangedEventArgs(bool opened) : RoutedEventArgs(AdjustmentSlider.ModifiedChangedEvent) {
+    public bool Opened { get; } = opened;
 }

@@ -65,7 +65,9 @@ static partial class SelfTest {
                 string text = t.Text ?? "";
                 if (Regex.IsMatch(text, @"^[−+\-]?[\d.,:%×/ ]*\d[\d.,:%×/ ]*(K|EV|px|ms|°|%|k)?$") && t.FontFamily != Faces.Numeral)
                     found.Add($"{tab}: number '{text}' in the words face");
-                if (Regex.Matches(text, @"\p{L}{4,}").Any(m => m.Value == m.Value.ToUpperInvariant()))
+                // A camera or lens model on the capture line is the file's own spelling ("ILCE-7M3"), not a label.
+                if (Regex.Matches(text, @"\p{L}{4,}").Any(m => m.Value == m.Value.ToUpperInvariant())
+                    && t.FindAncestorOfType<OrionShell.Chrome.CaptureLine>() == null)
                     found.Add($"{tab}: capitals '{text}'");
                 if (text.Contains(" · ")) found.Add($"{tab}: middle-dot string '{text}'");
             }
