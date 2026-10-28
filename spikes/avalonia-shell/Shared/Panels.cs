@@ -27,8 +27,8 @@ public static class Panels {
 
     /// ToolTab in OrionApp+Chrome.swift, in its order.
     public static readonly string[] Tabs = ["Light", "Color", "Detail", "Optics", "Mask", "Crop", "Presets"];
-    /// Each tab's icon, drawn over its name (#350).
-    public static readonly string[] TabIcons = ["sun.max", "circle.3", "magnifyingglass", "camera.aperture", "circle.dotted", "crop", "square.stack"];
+    /// Each tab's icon (#350): beside its name on the chosen tab, alone on the rest.
+    public static readonly string[] TabIcons = ["sun.max", "circle.3", "magnifyingglass", "camera.aperture", "theatermasks.fill", "crop", "square.stack"];
 
     /// Every registered panel in this assembly, by region then order.
     public static IReadOnlyList<Entry> All { get; } = Index(

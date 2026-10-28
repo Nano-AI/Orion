@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -75,18 +76,58 @@ static partial class SelfTest {
         Check(found.Count == 0, "every tab: no Fluent button, numbers in the numeral face, no caps, no middle dots"
                                 + (found.Count > 0 ? ": " + string.Join("; ", found.Distinct().Take(8)) : ""));
 
-        // Tabs: the chosen one differs in colour only, and its bar is a transform there that eases out under 200 ms.
+        // Tabs: one segmented well. The chosen tab alone shows its name, in text colour and never heavier, on the
+        // pill; the rest are icons of one size, named by a tooltip with the key and to a screen reader.
         window.Select("Detail");
         window.UpdateLayout();
         var tabs = window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().ToList();
-        var names = tabs.Select(b => b.GetVisualDescendants().OfType<TextBlock>().Single()).ToList();   // under its icon (#350)
-        var bar = window.FindControl<Border>("TabIndicator")!;
-        double x = bar.RenderTransform?.Value.M31 ?? double.NaN;
-        var slide = bar.Transitions?.OfType<TransformOperationsTransition>().FirstOrDefault();
+        var names = tabs.Select(b => b.GetVisualDescendants().OfType<TextBlock>().Single()).ToList();
+        var pill = window.FindControl<Border>("TabPill")!;
+        static string Spoken(Control c) => Avalonia.Automation.AutomationProperties.GetName(c) ?? "";
         Check(names.Select(n => n.FontWeight).Distinct().Count() == 1 && names[2].Foreground == Palette.Text
-              && names.Where((_, i) => i != 2).All(n => n.Foreground == Palette.Dim)
-              && Math.Abs(x - 2 * bar.Width) < 0.5 && slide is { Duration.TotalMilliseconds: < 200, Easing: SplineEasing },
-              $"the chosen tab changes colour only; its bar sits under it as a transform (x {x:0.0}, width {bar.Width:0.0}) and slides in {slide?.Duration.TotalMilliseconds} ms");
+              && names.Select((n, i) => n.IsVisible == (i == 2)).All(b => b) && pill.Bounds == tabs[2].Bounds
+              && tabs.All(b => b.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single().Width == 14)
+              && tabs.Select((b, i) => ToolTip.GetTip(b) as string == $"{Panels.Tabs[i]} (⌘{i + 1})" && Spoken(b) == Panels.Tabs[i]).All(b => b),
+              $"the chosen tab alone shows its name, on the pill ({pill.Bounds} under {tabs[2].Bounds}); the rest are 14 pt icons named by tooltip and screen reader");
+
+        // At the column's narrowest and widest, whichever tab is chosen, every cell holds its content with 8 to spare
+        // each side; at the widest the seven cells are equal, as a segmented control's are.
+        var column = window.FindControl<Grid>("Body")!.ColumnDefinitions[2];
+        var cramped = new List<string>();
+        foreach (double width in new[] { Layout.ToolCol, MainWindow.ToolColMax }) {
+            column.Width = new GridLength(width);
+            foreach (var tab in Panels.Tabs) {
+                window.Select(tab);
+                window.UpdateLayout();
+                cramped.AddRange(tabs.Where(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width < 15.5)
+                                     .Select(b => $"{Spoken(b)} at {width} with {tab} chosen ({b.Bounds.Width:0.#} pt)"));
+                if (width == MainWindow.ToolColMax && tabs.Max(b => b.Bounds.Width) - tabs.Min(b => b.Bounds.Width) > 1)
+                    cramped.Add($"unequal cells at {width} with {tab} chosen");
+            }
+        }
+        column.Width = new GridLength(Layout.ToolCol);
+        Check(cramped.Count == 0, "the tabs fit 322 and 560 with room in every cell, and are equal at 560" + (cramped.Count > 0 ? ": " + string.Join("; ", cramped.Take(4)) : ""));
+
+        // A click: the pill's first frame is exactly where the old tab's was, it lands under the new one, and it gets
+        // there by transform, easing out under 200 ms, as the name fades in. Under reduced motion it is there at once.
+        // (The headless clock does not carry a transition on, so the first frame and the base value stand for the ends.)
+        window.Select("Detail");
+        window.UpdateLayout();
+        double from = tabs[2].Bounds.X - tabs[0].Bounds.X;
+        window.Select("Light", animate: true);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        double start = pill.RenderTransform?.Value.M31 ?? 0, fade = names[0].Opacity;
+        double lands = pill.GetBaseValue(Control.RenderTransformProperty).GetValueOrDefault()?.Value.M31 ?? double.NaN;
+        var slide = pill.Transitions?.OfType<TransformOperationsTransition>().SingleOrDefault();
+        Motion.Forced = true;
+        window.Select("Detail", animate: true);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        bool jumped = !pill.IsAnimating(Control.RenderTransformProperty) && pill.RenderTransform?.Value.M31 == 0 && names[2].Opacity == 1;
+        Motion.Forced = null;
+        Check(Math.Abs(start - from) < 0.5 && lands == 0 && fade < 0.1 && jumped
+              && slide is { Duration.TotalMilliseconds: < 200, Easing: SplineEasing },
+              $"a click eases the pill from the old tab ({start:0.#} pt over at the first frame, the tab {from:0.#} away; lands at {lands:0.#}) " +
+              $"in {slide?.Duration.TotalMilliseconds} ms as the name fades in (from {fade:0.##}); reduced motion jumps ({jumped})");
         Check(Commands.All.All(c => !Regex.IsMatch(c.Title, @" (?!Finder|Trash)\p{Lu}")), "command titles are sentence case");
         window.Close();
 

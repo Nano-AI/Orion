@@ -36,13 +36,15 @@
             <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
             <DockPanel x:Name="ToolColumn">
               <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top" Margin="14,0"/>
-              <!-- Main.dc.html: hairlines above and below, 6 in from each edge, 34 high. -->
+              <!-- The tool tabs: one segmented well, Segmented.cs's look (ground, no edge, a raised
+                   pill inset 2), lined up with the panels' 14. The pill slides by transform. -->
               <Border DockPanel.Dock="Top" BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1">
-                <Panel Margin="6,0" Height="34">
-                  <Grid x:Name="TabBar"/>
-                  <Border x:Name="TabIndicator" Height="2" Margin="0,0,0,-1" VerticalAlignment="Bottom"
-                          HorizontalAlignment="Left" Background="{x:Static local:Palette.Accent}" IsHitTestVisible="False"/>
-                </Panel>
+                <Border Margin="14,8" Padding="2" CornerRadius="6" Background="{x:Static local:Palette.Ground}">
+                  <Grid x:Name="TabBar">
+                    <Border x:Name="TabPill" CornerRadius="4" Background="{x:Static local:Palette.Raised}"
+                            IsHitTestVisible="False" RenderTransformOrigin="0%,50%"/>
+                  </Grid>
+                </Border>
               </Border>
               <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
               <ScrollViewer>

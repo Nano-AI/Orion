@@ -159,7 +159,7 @@ public class StateButton : Button {
             _ when !enabled && _kind == ButtonKind.Primary => (Palette.Raised, Palette.Line, Palette.Faint),
             ButtonKind.Primary => (lit ? AccentLift : Palette.Accent, lit ? AccentLift : Palette.Accent, Palette.Ground),
             ButtonKind.Segment => (_on ? Palette.Raised : lit ? Palette.Panel : Brushes.Transparent, Brushes.Transparent,
-                                   _on ? _ink ?? Palette.Text : lit ? Palette.Text : Palette.Dim),
+                                   _on ? _ink ?? Palette.Text : lit ? Palette.Text : _ink ?? Palette.Dim),
             _ when _on => (Wash, Palette.Accent, Palette.Accent),
             ButtonKind.Quiet => (lit ? Palette.Raised : Brushes.Transparent, lit ? Palette.Rail : Palette.Line,
                                  lit ? Palette.Text : _ink ?? Palette.Dim),

@@ -379,8 +379,9 @@ static partial class SelfTest {
         return window;
     }
 
+    /// A tool tab by its spoken name: the unchosen ones show only their icon.
     static StateButton TabButton(MainWindow window, string tab) =>
-        window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().First(b => b.Label == tab);
+        window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().First(b => Avalonia.Automation.AutomationProperties.GetName(b) == tab);
 
     /// Layout, the queue, and a frame: a button's release hit-tests the last rendered
     /// scene, so a click before the first frame of a new layout focused the button and

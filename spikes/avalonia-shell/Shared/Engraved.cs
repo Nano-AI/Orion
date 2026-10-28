@@ -59,7 +59,7 @@ public sealed class SectionPlate : StackPanel {
         ["Color mixer"] = "circle.3", ["Color grading"] = "dial", ["Look"] = "wand.and.stars",
         ["Sharpening"] = "triangle", ["Noise reduction"] = "waveform", ["Grain"] = "grain", ["Vignette"] = "vignette",
         ["Lens"] = "camera.aperture", ["Perspective"] = "perspective", ["Capture"] = "camera",
-        ["Masks"] = "circle.dotted", ["Spots"] = "bandage", ["Aspect"] = "aspectratio", ["Rotate"] = "rotate.right",
+        ["Masks"] = "theatermasks.fill", ["Spots"] = "bandage", ["Aspect"] = "aspectratio", ["Rotate"] = "rotate.right",
     };
 
     public SectionPlate(string title, string? info = null, params Control[] rows) {

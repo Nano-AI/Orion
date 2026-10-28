@@ -18,14 +18,15 @@ public static class Icons {
         // A frame under a quarter-turn arrow, as SF Symbols draws them: Reset's bare arrow is a different thing.
         ["rotate.left"] = "M4,11 H14 V21 H4 Z M19,15 A8,8 0 0 0 10,6 M13,3 L10,6 L13,9",
         ["rotate.right"] = "M20,11 H10 V21 H20 Z M5,15 A8,8 0 0 1 14,6 M11,3 L14,6 L11,9",
-        // The tool tabs and section headers (#350). Drawn on the 24 grid, one 1.6 stroke, round ends.
-        ["sun.max"] = "M12,8.5 A3.5,3.5 0 1 0 12,15.5 A3.5,3.5 0 1 0 12,8.5 M12,2.5 V4.5 M12,19.5 V21.5 M2.5,12 H4.5 M19.5,12 H21.5 " +
-                      "M5.3,5.3 L6.7,6.7 M17.3,17.3 L18.7,18.7 M5.3,18.7 L6.7,17.3 M17.3,6.7 L18.7,5.3",
+        // The tool tabs and section headers (#350). Drawn on the 24 grid, one 1.6 stroke, round ends, and
+        // one weight at the tabs' 14 pt: about 19 units across, rays and handles long enough to read.
+        ["sun.max"] = "M12,8 A4,4 0 1 0 12,16 A4,4 0 1 0 12,8 M12,2.5 V5 M12,19 V21.5 M2.5,12 H5 M19,12 H21.5 " +
+                      "M5.3,5.3 L7.05,7.05 M16.95,16.95 L18.7,18.7 M5.3,18.7 L7.05,16.95 M16.95,7.05 L18.7,5.3",
         ["circle.3"] = "M12,3.5 A4.5,4.5 0 1 0 12,12.5 A4.5,4.5 0 1 0 12,3.5 M8.5,10 A4.5,4.5 0 1 0 8.5,19 A4.5,4.5 0 1 0 8.5,10 " +
                        "M15.5,10 A4.5,4.5 0 1 0 15.5,19 A4.5,4.5 0 1 0 15.5,10",
-        ["magnifyingglass"] = "M10.5,4 A6.5,6.5 0 1 0 10.5,17 A6.5,6.5 0 1 0 10.5,4 M15.3,15.3 L20,20",
-        ["camera.aperture"] = "M12,3 A9,9 0 1 0 12,21 A9,9 0 1 0 12,3 M16.5,12 L14.25,15.9 L9.75,15.9 L7.5,12 L9.75,8.1 L14.25,8.1 Z " +
-                              "M14.25,8.1 L16.5,4.2 M16.5,12 L21,12 M14.25,15.9 L16.5,19.8 M9.75,15.9 L7.5,19.8 M7.5,12 L3,12 M9.75,8.1 L7.5,4.2",
+        ["magnifyingglass"] = "M10.5,3.5 A7,7 0 1 0 10.5,17.5 A7,7 0 1 0 10.5,3.5 M15.5,15.5 L20.5,20.5",
+        // The iris's opening in the barrel: two shapes, where six blades as well were a knot at 14 pt.
+        ["camera.aperture"] = "M12,3 A9,9 0 1 0 12,21 A9,9 0 1 0 12,3 M12,7.5 L15.9,9.75 L15.9,14.25 L12,16.5 L8.1,14.25 L8.1,9.75 Z",
         ["crop"] = "M6,2.5 V18 H21.5 M2.5,6 H18 V21.5",
         ["square.stack"] = "M8,8 H20 V20 H8 Z M5,16 V5 H16",
         ["wand.and.stars"] = "M4,20 L14,10 M12.5,8.5 L15.5,11.5 M18,3 V7 M16,5 H20 M20.5,10 V12.5 M19.25,11.25 H21.75 M9,3.5 V6 M7.75,4.75 H10.25",
@@ -69,6 +70,11 @@ public static class Icons {
         ["eye.slash"] = "M2,12 C5,6 19,6 22,12 C19,18 5,18 2,12 Z M9,12 A3,3 0 1 0 15,12 A3,3 0 1 0 9,12 Z M4,4 L20,20",
         ["circle"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z",
         ["plus.circle"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M12,8 L12,16 M8,12 L16,12",
+        // The Mask tab and section (Swift's ToolTab symbol). Two faces do not read at 14 pt, and the dotted
+        // circle it replaced was too faint to: a ring with its lower half filled on the diagonal, the
+        // inside of a selection. Filled, so the ring is two circles wound opposite ways.
+        ["theatermasks.fill"] = "M12,2.2 A9.8,9.8 0 1 0 12,21.8 A9.8,9.8 0 1 0 12,2.2 Z M12,3.8 A8.2,8.2 0 1 1 12,20.2 A8.2,8.2 0 1 1 12,3.8 Z " +
+                                "M17.8,6.2 A8.2,8.2 0 0 1 6.2,17.8 Z",
         // Twelve round-capped dots on the circle.
         ["circle.dotted"] = "M21,12 l0,0.01 M19.8,16.5 l0,0.01 M16.5,19.8 l0,0.01 M12,21 l0,0.01 M7.5,19.8 l0,0.01 M4.2,16.5 l0,0.01 " +
                             "M3,12 l0,0.01 M4.2,7.5 l0,0.01 M7.5,4.2 l0,0.01 M12,3 l0,0.01 M16.5,4.2 l0,0.01 M19.8,7.5 l0,0.01",
