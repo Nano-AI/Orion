@@ -17,6 +17,6 @@ clang++ -std=c++20 -fobjc-arc -dynamiclib -O2 \
     "$here/shim.mm" -Wl,-force_load,"$engine" \
     /opt/homebrew/opt/libraw/lib/libraw_r.dylib \
     /opt/homebrew/opt/opencv/lib/libopencv_{core,imgproc,features,geometry,video}.dylib \
-    -framework Metal -framework Foundation -framework CoreGraphics -framework ImageIO \
+    -framework AppKit -framework Metal -framework Foundation -framework CoreGraphics -framework ImageIO \
     -o "$out/liborion_shim.dylib"
 echo "$out/liborion_shim.dylib (engine: ${engine:A})"

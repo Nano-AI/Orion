@@ -65,18 +65,49 @@ static class MaskControls {
         return b;
     }
 
-    /// A pull-down with no frame until hovered: "+ Add ⌄", "Radial ⌄". Items run
-    /// after the menu closes, because most of them rebuild the panel this button sits in.
-    public static Button Menu(string? icon, string title, IEnumerable<Control> items, bool enabled = true) {
+    /// A pull-down with no frame until hovered: "More ⌄", the card's "+" and "−".
+    /// `icon` is an SF Symbol name or a drawn glyph. Items run after the menu
+    /// closes, because most of them rebuild the panel this button sits in.
+    public static Button Menu(object? icon, string? title, IEnumerable<Control> items, bool enabled = true,
+                              string help = "", bool chevron = true) {
         var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        if (icon != null) label.Children.Add(Icons.Create(icon, 11, Palette.Text));
-        label.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
-        label.Children.Add(Icons.Create("chevron.down", 7, Palette.Text));
+        if (icon is string name) label.Children.Add(Icons.Create(name, 11, Palette.Text));
+        else if (icon is Control glyph) label.Children.Add(glyph);
+        if (title != null) label.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
+        if (chevron) label.Children.Add(Icons.Create("chevron.down", 7, Palette.Text));
         var flyout = new MenuFlyout();
         foreach (var item in items) flyout.Items.Add(item);
-        return new StateButton { Kind = ButtonKind.Bare, Content = label, Flyout = flyout, IsEnabled = enabled, Ink = Palette.Text,
-                                 Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+        var b = new StateButton { Kind = ButtonKind.Bare, Content = label, Flyout = flyout, IsEnabled = enabled, Ink = Palette.Text,
+                                  Padding = new Thickness(title == null ? 4 : 6, 0), MinWidth = 0, Height = title == null ? 20 : 24,
+                                  VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+        return b.Help(help);
     }
+
+    // Glyphs the shared icon table has no drawing for, on its 24-unit grid.
+    public const string Plus = "M12,5 L12,19 M5,12 L19,12", Minus = "M5,12 L19,12", Cross = "M6,6 L18,18 M18,6 L6,18",
+                        Ellipsis = "M5,12 L5.01,12 M12,12 L12.01,12 M19,12 L19.01,12";
+
+    /// Drawn on the whole 24-unit grid and scaled as a box, so a flat mark (−, ⋯)
+    /// keeps its proportions instead of being stretched to fill; the stroke is
+    /// thickened to come out at the icon table's 1.6 points.
+    public static Control Glyph(string data, double size, IBrush brush) => new Viewbox {
+        Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center,
+        Child = new Avalonia.Controls.Shapes.Path {
+            Data = Geometry.Parse(data), Width = 24, Height = 24, Stretch = Stretch.None, Stroke = brush,
+            StrokeThickness = (data == Ellipsis ? 2.6 : 1.6) * 24 / size, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round,
+        },
+    };
+
+    /// A mask kind's mark: a ring in a ring for a radial (not an eye: the eye is
+    /// visibility), ramp lines for a linear, the pencil for a brush.
+    public static Control KindGlyph(int kind, double size = 12) => kind switch {
+        2 => Glyph("M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M8.5,12 A3.5,3.5 0 1 0 15.5,12 A3.5,3.5 0 1 0 8.5,12 Z", size, Palette.Text),
+        1 => Glyph("M4,5 L20,5 M4,12 L20,12 M4,19 L20,19", size, Palette.Text),
+        3 => Icons.Create("pencil", size, Palette.Text),
+        5 => Glyph("M3,18 L9,18 L12,6 L15,18 L21,18", size, Palette.Text),
+        6 => Icons.Create("eyedropper", size, Palette.Text),
+        _ => Icons.Create("circle", size, Palette.Text),
+    };
 
     public static MenuItem Item(string header, Action act) {
         var item = new MenuItem { Header = header };

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Avalonia;
 
@@ -39,39 +40,75 @@ public sealed partial class Session {
     public void AutoEnhance() => Native.shim_auto_enhance(Shim);
 
     /// Each MaskShape number by its OrionMaskComponent name: Engine.swift's
-    /// cAdjustments row. The selftest holds this to shim_mask_field_count.
-    internal static readonly (string Name, Func<MaskShape, float> Value)[] MaskFields = [
-        ("kind", m => m.Kind), ("compose", m => m.Compose), ("invert", m => m.Invert ? 1 : 0),
-        ("hidden", m => m.Hidden ? 1 : 0), ("starts_layer", m => m.StartsLayer ? 1 : 0),
-        ("center_x", m => m.CenterX), ("center_y", m => m.CenterY), ("angle", m => m.Angle), ("length", m => m.Length),
-        ("radius_x", m => m.RadiusX), ("radius_y", m => m.RadiusY), ("feather", m => m.Feather), ("roundness", m => m.Roundness),
-        ("range_lo", m => m.RangeLo), ("range_hi", m => m.RangeHi), ("range_soft", m => m.RangeSoft),
-        ("color_r", m => m.ColorR), ("color_g", m => m.ColorG), ("color_b", m => m.ColorB),
-        ("color_tol", m => m.ColorTol), ("color_soft", m => m.ColorSoft),
-        ("brush_radius", m => m.BrushRadius), ("brush_flow", m => m.BrushFlow), ("brush_hardness", m => m.BrushHardness),
+    /// cAdjustments row, both ways. The selftest holds this to shim_mask_field_count.
+    internal static readonly (string Name, Func<MaskShape, float> Value, Action<MaskShape, float> Put)[] MaskFields = [
+        ("kind", m => m.Kind, (m, v) => m.Kind = (int)v), ("compose", m => m.Compose, (m, v) => m.Compose = (int)v),
+        ("invert", m => m.Invert ? 1 : 0, (m, v) => m.Invert = v != 0), ("hidden", m => m.Hidden ? 1 : 0, (m, v) => m.Hidden = v != 0),
+        ("starts_layer", m => m.StartsLayer ? 1 : 0, (m, v) => m.StartsLayer = v != 0),
+        ("center_x", m => m.CenterX, (m, v) => m.CenterX = v), ("center_y", m => m.CenterY, (m, v) => m.CenterY = v),
+        ("angle", m => m.Angle, (m, v) => m.Angle = v), ("length", m => m.Length, (m, v) => m.Length = v),
+        ("radius_x", m => m.RadiusX, (m, v) => m.RadiusX = v), ("radius_y", m => m.RadiusY, (m, v) => m.RadiusY = v),
+        ("feather", m => m.Feather, (m, v) => m.Feather = v), ("roundness", m => m.Roundness, (m, v) => m.Roundness = v),
+        ("range_lo", m => m.RangeLo, (m, v) => m.RangeLo = v), ("range_hi", m => m.RangeHi, (m, v) => m.RangeHi = v),
+        ("range_soft", m => m.RangeSoft, (m, v) => m.RangeSoft = v),
+        ("color_r", m => m.ColorR, (m, v) => m.ColorR = v), ("color_g", m => m.ColorG, (m, v) => m.ColorG = v),
+        ("color_b", m => m.ColorB, (m, v) => m.ColorB = v), ("color_tol", m => m.ColorTol, (m, v) => m.ColorTol = v),
+        ("color_soft", m => m.ColorSoft, (m, v) => m.ColorSoft = v),
+        ("brush_radius", m => m.BrushRadius, (m, v) => m.BrushRadius = v), ("brush_flow", m => m.BrushFlow, (m, v) => m.BrushFlow = v),
+        ("brush_hardness", m => m.BrushHardness, (m, v) => m.BrushHardness = v),
     ];
 
     /// The mask group, rows in order: mask_components and mask_count, and each
-    /// brush row's dabs (orion_engine_set_brush_stroke, bumping brush_revision
-    /// only when the dabs changed). At most ORION_MAX_MASK_COMPONENTS (8) rows.
-    /// Mattes (kind 4) stay with SubjectMatte.swift. Does not render.
+    /// brush row's dabs with their erase flags (orion_engine_set_brush_stroke,
+    /// a new brush_revision only when the dabs changed). At most
+    /// ORION_MAX_MASK_COMPONENTS (8) rows. Mattes (kind 4) stay with
+    /// SubjectMatte.swift. Does not render.
     public unsafe void SetMaskGroup(IReadOnlyList<MaskShape> shapes) {
         if (shapes.Count > MaxMaskComponents)
             throw new ArgumentException($"at most {MaxMaskComponents} mask rows, not {shapes.Count}", nameof(shapes));
         for (int i = 0; i < MaxMaskComponents; i++) {
             if (i < shapes.Count)
-                foreach (var (name, value) in MaskFields)
+                foreach (var (name, value, _) in MaskFields)
                     if (Native.shim_mask_set(Shim, i, name, value(shapes[i])) == 0)
                         throw new InvalidOperationException($"OrionMaskComponent has no field '{name}'");
             // Rows past the group are cleared too (Engine+Brush.swift's pushStrokes),
             // or the next row added there would inherit their paint.
             var dabs = i < shapes.Count ? CollectionsMarshal.AsSpan(shapes[i].BrushStroke) : default;
+            // Padded rather than trusted, as pushStroke pads: short means "paints".
+            var erase = i < shapes.Count ? shapes[i].BrushErase : [];
+            while (erase.Count < dabs.Length / 2) erase.Add(0);
             fixed (float* xy = dabs)
-                if (Native.shim_mask_stroke(Shim, i, xy, dabs.Length / 2) == 0)
+            fixed (float* e = CollectionsMarshal.AsSpan(erase))
+                if (Native.shim_mask_stroke(Shim, i, xy, e, dabs.Length / 2) == 0)
                     throw new InvalidOperationException($"brush stroke for mask row {i}: {LastError}");
         }
         Native.shim_mask_commit(Shim, shapes.Count);
     }
+
+    /// The mask group as the engine holds it: mask_count rows, every number and
+    /// each brush row's dabs and erase flags. Names and matte ids never cross
+    /// the facade (#207), so they come back null. What undo restores is read here.
+    public unsafe List<MaskShape> ReadMaskGroup() {
+        int count = Math.Clamp((int)Get("mask_count"), 0, MaxMaskComponents);
+        var rows = new List<MaskShape>(count);
+        for (int i = 0; i < count; i++) {
+            var m = new MaskShape();
+            foreach (var (name, _, put) in MaskFields) put(m, Get("mask_components." + name, i));
+            int dabs = Native.shim_mask_stroke_get(Shim, i, null, null, 0);
+            var xy = new float[dabs * 2];
+            var erase = new float[dabs];
+            fixed (float* p = xy) fixed (float* e = erase) Native.shim_mask_stroke_get(Shim, i, p, e, dabs);
+            m.BrushStroke.AddRange(xy);
+            m.BrushErase.AddRange(erase);
+            rows.Add(m);
+        }
+        return rows;
+    }
+
+    /// Paints mask `layer`'s coverage over the renders that follow, or stops.
+    /// A way of looking, not an edit (#57): the shim applies it inside each
+    /// render only, so no snapshot or export sees it. Does not render.
+    public void SetMaskOverlay(bool on, int layer) => Native.shim_mask_overlay(Shim, on ? 1 : 0, layer);
 
     /// Keeps the decoded photo and drops both graphs' render textures: what a
     /// cache does to a photo it keeps but is not showing (decision #318: 115 MB
@@ -87,5 +124,17 @@ public sealed partial class Session {
 
     static void CheckChannel(int channel) {
         if (channel is < 0 or > 3) throw new ArgumentOutOfRangeException(nameof(channel), channel, "curve channel: 0 master, 1-3 R G B");
+    }
+}
+
+/// A brush row's per-dab polarity, 1 erases (MaskComponentState.brushErase in
+/// Swift), read as if MaskShape had the member.
+/// ponytail: a side table because MaskShape.cs is frozen; once it gains
+/// `public List<float> BrushErase { get; } = [];` this class is deleted and no caller changes.
+public static class MaskShapeErase {
+    static readonly ConditionalWeakTable<MaskShape, List<float>> Erase = new();
+
+    extension(MaskShape m) {
+        public List<float> BrushErase => Erase.GetValue(m, _ => []);
     }
 }

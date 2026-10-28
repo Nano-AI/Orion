@@ -8,7 +8,10 @@ One line per member C# may read or write by name:
     A(name, N)                     float name[N]
 fields.inc is OrionAdjustments, mask_fields.inc is OrionMaskComponent (one row
 of the mask group). Struct members (masks, spots, curves) and unsigned ones
-(brush_revision, which the shim owns) are skipped: they need real types.
+(brush_revision, which the shim owns) are skipped: they need real types. So
+are the overlay's two fields, a way of looking and not an edit (#57): the shim
+turns them on for one render at a time (shim_mask_overlay), so no history,
+copy or export ever sees them.
 Regenerated on every native build so the tables cannot drift from the header.
 """
 import re
@@ -17,6 +20,9 @@ import sys
 header, out, mask_out = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(header).read()
 defines = dict(re.findall(r"#define\s+(\w+)\s+\(?(\d+)\)?", text))
+
+
+VIEW_ONLY = {"mask_overlay", "mask_overlay_layer"}
 
 
 def members(struct):
@@ -37,7 +43,7 @@ def members(struct):
                 if not size.isdigit():
                     sys.exit(f"gen_fields: cannot size {name}")
                 lines.append(f"A({array.group(1)}, {size})")
-            elif re.fullmatch(r"\w+", name):
+            elif re.fullmatch(r"\w+", name) and name not in VIEW_ONLY:
                 lines.append(f"F({name}, {kind})")
                 scalars += 1
     return lines, scalars
