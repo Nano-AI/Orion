@@ -82,8 +82,8 @@ public sealed partial class Session : IDisposable {
     }
 
     /// The last render of `graph`, copied into this session's bitmap for it.
-    /// Null when there is nothing to read. The copy is the spike's cost, not
-    /// the design's: #317 replaces it with a shared texture.
+    /// Null when there is nothing to read. The fallback where the canvas has no
+    /// GPU interop (headless, OpenGL, a failed import); SharedPicture is the rest.
     public unsafe WriteableBitmap? Read(Graph graph) {
         if (graph == Graph.None || Native.shim_read(Shim, (int)graph, null, 0, out int w, out int h) == 0) return null;
         if (!_pictures.TryGetValue(graph, out var bitmap) || bitmap.PixelSize != new PixelSize(w, h)) {
@@ -113,6 +113,16 @@ public sealed partial class Session : IDisposable {
             for (int y = 0; y < h; y++) Marshal.Copy(tmp, y * w * 4, fb.Address + y * fb.RowBytes, w * 4);
         }
     }
+
+    /// The size of the last render of `graph`, without copying it. Default when there is nothing to read.
+    public unsafe PixelSize Size(Graph graph) =>
+        graph != Graph.None && Native.shim_read(Shim, (int)graph, null, 0, out int w, out int h) != 0 ? new PixelSize(w, h) : default;
+
+    /// Copies the last render of `graph` into `presenter`'s shared surface, on the
+    /// GPU (native/present.mm, SharedPicture). 0 when there is nothing to hand over.
+    public int Present(nint presenter, Graph graph, int level, out nint surface, out int generation, out int w, out int h,
+                       out ulong value) =>
+        Native.present_frame(presenter, Shim, (int)graph, level, out surface, out generation, out w, out h, out value);
 
     /// The full-resolution output size (crop preview included).
     public PixelSize ImageSize =>

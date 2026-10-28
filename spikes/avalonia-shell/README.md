@@ -21,7 +21,8 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `--panel NAME` / `--tab NAME` | one registered panel, or the window on that tool tab |
 | `--screenshot OUT.png` | render headless and exit |
 | `--bench` | 60-tick exposure drag, prints engine and copy timings |
-| `--selftest` | the shell's invariants (needs a photo) |
+| `--selftest` | the shell's invariants (needs a photo); headless, so the canvas takes the CPU copy |
+| `--proof DIR` | ⚠ **opens one window** for about 5 s: the canvas on the shared surface, then on the CPU copy; CPU per frame and a `screencapture -l` of each into `DIR` |
 | `--list` | registered panels: name, region, tab |
 | `--commands` | every command: name, built or stub, Swift owner, keys |
 | `--command NAME` | run one command in the headless window and print what happened (exit 1 unless it ran) |
@@ -35,6 +36,15 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `Slices/<Folder>/` | one per slice in `slices.json`; seeds only, until the swarm |
 | `SLICES.md` | the brief a slice agent works from |
 | `compare.py` | `check` file ownership, `swift`/`avalonia` screenshots, `page` side by side |
+| `native/present.mm` | the picture to Avalonia on the GPU: an IOSurface per graph, handed over on `MTLSharedEvent`s |
+| `bin-native/present_test RAW` | its headless check: surface against CPU readback, the GPU wait, timings. No window |
 
 Spike-only, not product code: `native/shim.mm` repeats the default look from
-`Engine.swift` and copies pixels off the GPU. A real port removes both (#315).
+`Engine.swift`; a real port moves it below the facade (#315).
+
+The picture reaches the canvas with no CPU copy (#317, decision #354): on
+Avalonia's Metal renderer, `native/present.mm` copies each render on the GPU
+into an IOSurface that `Slices/Canvas/SharedPicture.cs` imports, and the two
+take turns over `MTLSharedEvent`s. Wherever that is not available (headless,
+the OpenGL renderer, which refuses an RGBA surface, or a failed import) the
+render is copied through the CPU into a `WriteableBitmap`, as before.

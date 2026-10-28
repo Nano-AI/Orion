@@ -22,6 +22,7 @@ public sealed class CanvasPanel : Panel {
     readonly StackPanel _choices = new() { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
     readonly StackPanel _state;
     readonly Drawn _picture;
+    readonly SharedPicture _shared = new();   // under _picture: the canvas draws over it
     readonly Halvings _shown = new(), _original = new();
     int _version;   // the shown bitmap is reused render after render: same object, new pixels
     Point? _anchor;
@@ -41,7 +42,8 @@ public sealed class CanvasPanel : Panel {
         ]);
         _state = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                                   Children = { _note, _choices } };
-        Children.AddRange([_picture, _welcome, _state]);
+        Children.AddRange([_shared, _picture, _welcome, _state]);
+        _shared.Arrived += _picture.InvalidateVisual;
         CanvasState.Changed += Refresh;
         CompareState.Moved += _picture.InvalidateVisual;   // a divider drag repaints the picture and nothing else
         EngineModel.Shared.Shown.Changed += () => { _version++; Refresh(); };   // the picture: only through this seam
@@ -99,8 +101,10 @@ public sealed class CanvasPanel : Panel {
         var engine = EngineModel.Shared;
         double a = CanvasState.ImageAspect;
         var size = Bounds.Size;
-        if (CanvasState.Now != CanvasState.Scene.Picture || engine.Shown.Bitmap is not { } picture || a <= 0
-            || size.Width <= 0 || size.Height <= 0) return;
+        if (CanvasState.Now != CanvasState.Scene.Picture || !engine.Shown.Any || a <= 0 || size.Width <= 0 || size.Height <= 0) {
+            _shared.Place(null, default, default, 0);
+            return;
+        }
 
         var vp = CanvasState.Viewport;
         vp.Measure(a, size.Width / size.Height);
@@ -110,13 +114,18 @@ public sealed class CanvasPanel : Panel {
         // Past 4× a pixel is a square, not a blur; below it, filtered.
         var mode = vp.FitScale * vp.Zoom > 4 ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality;
         double pixels = whole.Width * scaling;   // the whole picture's width on screen, in device pixels
+        // The render straight from the GPU when the shared surface holds it (#317), else the CPU copy.
+        // ponytail: the crop tool's turned clip takes the CPU copy (CompositionVisual.Clip is internal); a mask over the visual lifts that.
+        bool shared = _shared.Place(CropEdit.Previewing ? null : engine.Shown, whole, mode, pixels);
 
         // The whole picture into its place, clipped to the view (a rubber band shows
         // the surround past its edge), or to the turned frame while the crop tool previews.
         using var clip = c.PushGeometryClip(CropEdit.Previewing ? TurnedFrame(whole) : new RectangleGeometry(new Rect(size)));
         using (c.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = mode })) {
-            var shown = _shown.For(picture, _version, pixels);
-            c.DrawImage(shown, new Rect(shown.Size), whole);
+            if (!shared && engine.Shown.Bitmap is { } picture) {
+                var shown = _shown.For(picture, _version, pixels);
+                c.DrawImage(shown, new Rect(shown.Size), whole);
+            }
             if (CompareState.Showing && CompareState.Original is { } original) {
                 // The split lives in view space: it holds still while the picture pans under it.
                 var held = _original.For(original, 0, pixels);

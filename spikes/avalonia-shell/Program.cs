@@ -12,7 +12,7 @@ using Avalonia.Threading;
 namespace OrionShell;
 
 /// OrionShell <photos or folders> [--panel NAME | --tab NAME] [--command NAME] [--screenshot OUT.png] [--bench] [--selftest]
-///            [--list | --commands]
+///            [--list | --commands] [--proof DIR]
 static class Program {
     /// Library.rawExtensions (Library.swift): what counts as a raw, without the dot.
     public static readonly string[] RawExtensions = ["arw", "srf", "sr2", "dng", "nef", "nrw", "cr2", "cr3", "crw", "raf", "orf", "rw2",
@@ -24,7 +24,8 @@ static class Program {
         string? Value(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         var panel = Value("--panel");
         var shot = Value("--screenshot") is { } s ? Path.GetFullPath(s) : null;
-        var photos = args.Where((a, i) => !a.StartsWith("--") && (i == 0 || args[i - 1] is not ("--panel" or "--screenshot" or "--tab" or "--command")))
+        var proof = Value("--proof") is { } d ? Path.GetFullPath(d) : null;
+        var photos = args.Where((a, i) => !a.StartsWith("--") && (i == 0 || args[i - 1] is not ("--panel" or "--screenshot" or "--tab" or "--command" or "--proof")))
                          .Select(Path.GetFullPath).SelectMany(Expand).ToArray();
 
         // The engine finds its compiled shaders relative to the CMake build
@@ -45,7 +46,7 @@ static class Program {
             return 0;
         }
         App.Run = new App.Options(photos, panel, Value("--tab") ?? "Light", shot, args.Contains("--bench"), args.Contains("--selftest"),
-                                  Value("--command"));
+                                  Value("--command"), proof);
 
         // Anything that is not a person at the window runs headless: the macOS
         // backend cannot start while the display sleeps (RenderTimer -6661),
@@ -56,7 +57,13 @@ static class Program {
                 .SetupWithoutStarting();
             return App.RunUnattended();
         }
-        return AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime(args);
+        // Metal first: Skia on Metal waits for the shared picture on the GPU, where
+        // OpenGL waits on the CPU and cannot import it at all (SharedPicture, #354).
+        return AppBuilder.Configure<App>().UsePlatformDetect()
+            .With(new AvaloniaNativePlatformOptions {
+                RenderingMode = [AvaloniaNativeRenderingMode.Metal, AvaloniaNativeRenderingMode.OpenGl, AvaloniaNativeRenderingMode.Software],
+            })
+            .StartWithClassicDesktopLifetime(args);
     }
 
     static IEnumerable<string> Expand(string path) => Directory.Exists(path)
@@ -66,7 +73,7 @@ static class Program {
 
 sealed class App : Application {
     public sealed record Options(string[] Photos, string? Panel, string Tab, string? Screenshot, bool Bench, bool SelfTest,
-                                 string? Command);
+                                 string? Command, string? Proof = null);
     public static Options Run = new([], null, "Light", null, false, false, null);
 
     /// The window MakeWindow built: what a command's dialog sits over.
@@ -83,6 +90,7 @@ sealed class App : Application {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
             OpenPhotos();   // the first photo arrives from a background decode
             desktop.MainWindow = MakeWindow() ?? throw new ArgumentException($"no panel '{Run.Panel}'");
+            if (Run.Proof is { } dir) CanvasSlice.SharedProof.Start(desktop.MainWindow, dir);
             desktop.Exit += (_, _) => Drain();
         }
         base.OnFrameworkInitializationCompleted();
