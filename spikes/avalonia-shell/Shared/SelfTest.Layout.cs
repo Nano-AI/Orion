@@ -194,13 +194,13 @@ static partial class SelfTest {
     /// A mouse's vertical wheel scrolls the strip sideways.
     static void StripWheelCheck() {
         var strip = new FilmstripPanel();
-        var window = Show(new Border { Width = 520, Height = Layout.Filmstrip, Child = strip });
+        var window = Show(new Border { Width = 420, Height = Layout.Filmstrip, Child = strip });   // three frames overflow it
         var film = strip.GetVisualDescendants().OfType<ScrollViewer>().Single();
         var at = film.TranslatePoint(new Point(film.Bounds.Width / 2, film.Bounds.Height / 2), window)!.Value;
         window.MouseWheel(at, new Vector(0, -1));
         Dispatcher.UIThread.RunJobs();
         Check(film.Extent.Width > film.Viewport.Width && film.Offset.X > 0,
-              $"a mouse wheel scrolls the filmstrip sideways (offset {film.Offset.X:0} of {film.Extent.Width - film.Viewport.Width:0})");
+              $"a mouse wheel scrolls the filmstrip sideways (offset {film.Offset.X:0} of {film.Extent.Width - film.Viewport.Width:0}))");
         window.Close();
     }
 
@@ -248,11 +248,13 @@ static partial class SelfTest {
         // The rebates: each picture's own dark frame; the base between two of them is the gap.
         var rebates = cells.Select(c => c.GetVisualDescendants().OfType<Border>().Single(b => b.Background == Palette.FilmBase)).ToList();
         var rings = strip.GetVisualDescendants().OfType<Border>().Where(b => b.BorderBrush == Palette.Accent).ToList();
-        var gaps = rebates.Zip(rebates.Skip(1), (a, b) => Math.Round(b.TranslatePoint(default, strip)!.Value.X - a.TranslatePoint(new Point(a.Bounds.Width, 0), strip)!.Value.X))
-                          .Distinct().ToList();
+        var gaps = rebates.Zip(rebates.Skip(1), (a, b) => b.TranslatePoint(default, strip)!.Value.X - a.TranslatePoint(new Point(a.Bounds.Width, 0), strip)!.Value.X).ToList();
+        var film = strip.GetVisualDescendants().OfType<ScrollViewer>().Single();
         Check(cells.Count == LibraryModel.Shared.Visible.Count() && rings.Count == 1 && !rings[0].IsHitTestVisible
-              && gaps.Count <= 1 && (gaps.Count == 0 || gaps[0] >= 8) && strip.Background == Palette.Panel,
-              $"the strip is film: every frame in a rebate of its own, one even gap of base ({string.Join(",", gaps)} px), one accent ring that takes no clicks");
+              && gaps.All(g => Math.Abs(g - 2 * Layout.ThumbW / 36) < 1) && strip.Background == Palette.Panel
+              && film.Content is Panel { Background: var filmBase } roll && filmBase == Palette.FilmBase && roll.Bounds.Width >= film.Viewport.Width,
+              $"the strip is 135 film to scale: a gate per frame, 2 mm of base between ({string.Join(",", gaps.Select(g => g.ToString("0.0")))} px), " +
+              "the base running the strip's whole width, one accent ring that takes no clicks");
         var numbers = cells.Select(c => c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).FirstOrDefault(t => t != null && t.All(char.IsDigit))).ToList();
         Check(numbers.SequenceEqual(LibraryModel.Shared.Visible.Select(p => $"{p.Index + 1}")),
               $"each frame prints its number on the film's edge ({string.Join(",", numbers)})");

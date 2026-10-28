@@ -10,23 +10,30 @@ using Avalonia.Media;
 namespace OrionShell.Library;
 
 /// A port of app/Filmstrip.swift: the filter and the order on the left, a
-/// hairline, then the film. Film, as the developer asked to keep it, minus what
-/// made it hard to read: the base is `ground`, not the near-black film base that
-/// swallowed night frames; every picture has a rebate edge, so a dark frame
-/// still ends somewhere; and the gap between frames is the base itself.
+/// hairline, then the film: 135 film to scale (#347). The picture is the 36 mm
+/// gate, so a millimetre is ThumbW / 36 points; frames sit 38 mm apart (ISO 1007),
+/// and eight KS-1870 perforations run along each edge of every frame, on past the
+/// last one as on a roll's tail. The base is film black and the holes show the
+/// light through; a hairline gate edge keeps a night frame from ending nowhere.
+/// The edge print, under the lower holes where 135 film carries it, is the frame
+/// number and, only when there are any, its marks. The one liberty is the print's
+/// height: true to scale it would be 3 pt type.
 ///
-/// Each frame carries its own perforations, four per frame as on 35 mm film, so
-/// they travel with the pictures (app/Filmstrip.swift `sprockets`), and its
-/// edge print: the frame number and its marks. The accent ring is the photo on
-/// the canvas, drawn just outside the rebate so lighting it moves nothing.
+/// The accent ring is the photo on the canvas, drawn just outside the gate so
+/// lighting it moves nothing.
 [Panel("filmstrip", Region.Filmstrip)]
 public sealed class FilmstripPanel : Grid {
-    /// A frame and the base after it, which is the gap to the next one.
-    const double CellWidth = Layout.ThumbW + Gap, Gap = 10, Perfs = 7, PrintHeight = 12;
+    const double Mm = Layout.ThumbW / 36;
+    /// One frame and the 2 mm of base before the next: eight perforations exactly.
+    const double Pitch = 38 * Mm, Gate = 24 * Mm;
+    /// KS-1870: 4.75 mm pitch, a 2.794 x 1.981 mm hole with 0.5 mm corners.
+    const double PerfPitch = 4.75 * Mm, PerfW = 2.794 * Mm, PerfH = 1.981 * Mm, PerfR = 0.5 * Mm;
+    /// The film's edge to the holes, and the holes to the picture. The edge print takes what is left.
+    const double Edge = 2.5, Clear = 3;
     /// A mouse wheel's notch, in pixels along the strip.
     const double WheelStep = 48;
 
-    readonly StackPanel _frames = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+    readonly StackPanel _frames = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
     readonly ScrollViewer _film;
     readonly Dictionary<LibraryModel.Photo, Control> _cells = new();
 
@@ -42,7 +49,8 @@ public sealed class FilmstripPanel : Grid {
         SetColumn(line, 1);
         Children.Add(line);
         _film = new ScrollViewer {
-            Content = _frames, Background = Palette.Ground,
+            // The film: its base and holes under the frames, stretched to the viewport by the scroller.
+            Content = new Panel { Background = Palette.FilmBase, Children = { new Holes(), _frames } }, Background = Palette.FilmBase,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
         // A mouse has only a vertical wheel: here it scrolls along the strip. A trackpad's sideways swipe passes through.
@@ -77,23 +85,24 @@ public sealed class FilmstripPanel : Grid {
     /// One frame of film: perforations, the picture in its rebate, the edge print, perforations.
     static Control Cell(LibraryModel.Photo photo, bool isCurrent) {
         var picture = new Image { Source = photo.Thumbnail, Stretch = Stretch.Uniform, Opacity = photo.Rejected ? LibraryUi.RejectedOpacity : 1 };
-        var number = Faces.Figure($"{photo.Index + 1}", Faces.Mark, Palette.Faint);
-        var marks = LibraryUi.Marks(photo, Faces.Mark);
-        marks.HorizontalAlignment = HorizontalAlignment.Right;
-        var print = new Panel { Height = PrintHeight, Children = { number, marks } };
+        var number = Faces.Figure($"{photo.Index + 1}", Faces.Mark, Palette.Dim);
+        var marks = LibraryUi.Marks(photo, Faces.Mark, unearned: false);
+        // The marks follow their own number: at the frame's right they read as the next frame's.
+        var print = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { number, marks } };
         var frame = new Frame { Child = picture };
         // The open photo's ring: an outline just outside the rebate, by a negative margin so lighting it
         // moves nothing. Not a BoxShadow on the frame: with one, the frame's picture did not draw.
         var held = new Panel { Children = { frame } };
-        if (isCurrent) held.Children.Add(new Border { Margin = new Thickness(-3), BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(4),
+        if (isCurrent) held.Children.Add(new Border { Margin = new Thickness(-2.5), BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(3.5),
                                                        BorderBrush = Palette.Accent, IsHitTestVisible = false });
-        var column = new Grid {
-            RowDefinitions = new RowDefinitions($"{Perfs},*,{PrintHeight},{Perfs}"), RowSpacing = 2,
-            Children = { new Perforations(), held, print, new Perforations() },
-        };
-        for (int row = 0; row < 4; row++) SetRow(column.Children[row], row);
+        // Rows: over the upper holes, the picture, over the lower holes, the edge print.
+        var column = new Grid { Children = { held, print } };
+        foreach (double h in (double[])[Edge + PerfH + Clear, Gate, Clear + PerfH]) column.RowDefinitions.Add(new RowDefinition(h, GridUnitType.Pixel));
+        column.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+        SetRow(held, 1);
+        SetRow(print, 3);
         var cell = new Border {
-            Width = CellWidth, Padding = new Thickness(Gap / 2, 3), Background = Brushes.Transparent, Child = column,
+            Width = Pitch, Padding = new Thickness((Pitch - Layout.ThumbW) / 2, 0), Background = Brushes.Transparent, Child = column,
             Focusable = true, Cursor = new Cursor(StandardCursorType.Hand),
             FocusAdorner = new FuncTemplate<Control>(() => new FocusRing()),   // shown for keyboard focus only
         };
@@ -129,16 +138,17 @@ public sealed class FilmstripPanel : Grid {
         void Paint() => BorderBrush = _hot ? Palette.Rail : Palette.Line;
     }
 
-    /// One frame's perforations: four holes, the KS-1870 proportions, centred in
-    /// each quarter so they line up with the frame line (app/Filmstrip.swift).
-    sealed class Perforations : Control {
-        public Perforations() => IsHitTestVisible = false;
+    /// Both rows of holes along the film's whole length, so they travel with the
+    /// frames when it scrolls and a short roll runs on to the strip's end.
+    sealed class Holes : Control {
+        public Holes() => IsHitTestVisible = false;
 
         public override void Render(DrawingContext c) {
-            double pitch = (Bounds.Width + Gap) / 4, w = Math.Min(pitch * 0.42, 8), h = w * 0.78;
-            for (int i = 0; i < 4; i++)
-                c.DrawRectangle(Palette.Surround, null,
-                                new Rect((i + 0.5) * pitch - Gap / 2 - w / 2, (Bounds.Height - h) / 2, w, h), 1.5, 1.5);
+            double lower = Edge + PerfH + Clear + Gate + Clear;
+            for (double x = (PerfPitch - PerfW) / 2; x < Bounds.Width; x += PerfPitch) {
+                c.DrawRectangle(Palette.FilmHole, null, new Rect(x, Edge, PerfW, PerfH), PerfR, PerfR);
+                c.DrawRectangle(Palette.FilmHole, null, new Rect(x, lower, PerfW, PerfH), PerfR, PerfR);
+            }
         }
     }
 
