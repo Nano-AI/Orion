@@ -54,7 +54,8 @@ steps.
 ## Hard constraints — do not violate
 
 - **No Rust.** The developer cannot debug it. Propose C++ alternatives even when Rust is the popular answer. This rules out Tauri, wgpu, egui, iced.
-- **No Vulkan.** Too much boilerplate for a solo maintainer. Metal on macOS; shaders authored in Slang for later portability.
+- **No Vulkan.** Too much boilerplate for a solo maintainer. Metal on macOS; shaders authored in Slang for later portability. One exception (#355): on Linux, one small file may allocate the
+  exportable memory and semaphore that Dawn and Avalonia share. Dawn (#317) does all the rendering; nothing else may call Vulkan.
 - **Maintainability is a hard requirement.** One node = one small shader (50–150 lines). Adding a feature should be a repeatable 3-file change. No 1000-line anything. The developer must be able to hand-edit any file later.
 - **Prefer mature libraries** over hand-rolled code, even at some performance cost.
 - **Avoid GPL libraries** (notably exiv2). ⚠ Orion is proprietary (decision #243,
