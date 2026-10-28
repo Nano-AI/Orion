@@ -16,7 +16,6 @@ namespace OrionShell;
 /// cancels, Up/Down nudge, Shift for ten). Double-click the track to reset.
 /// A value that moves from outside a drag (Auto, undo, a preset, a reset, a
 /// typed value) glides there; a photo opening shows its values at once.
-/// stub(#315): no undo history — Engine.edit's EditHistory is Swift-only.
 public sealed class AdjustmentSlider : StackPanel {
     /// Bubbles when Modified flips, so a SectionPlate can light its dot.
     public static readonly RoutedEvent<RoutedEventArgs> ModifiedChangedEvent =
@@ -59,8 +58,18 @@ public sealed class AdjustmentSlider : StackPanel {
         _window.KeyDown += (_, e) => {
             if (e.Key is Key.Enter or Key.Space && _editor == null) { BeginEditing(); e.Handled = true; }
         };
-        _window.GotFocus += (_, e) => { _keyboardFocus = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional; Paint(); };
-        _window.LostFocus += (_, _) => { _keyboardFocus = false; Paint(); };
+        // The box's own focus only: the field inside it bubbles its focus here too, and
+        // repainting on that, mid-swap, put one TextBlock in two parents (u3's crash report).
+        _window.GotFocus += (_, e) => {
+            if (e.Source != _window) return;
+            _keyboardFocus = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional;
+            Paint();
+        };
+        _window.LostFocus += (_, e) => {
+            if (e.Source != _window) return;
+            _keyboardFocus = false;
+            Paint();
+        };
 
         var head = new DockPanel();
         DockPanel.SetDock(_window, Dock.Right);

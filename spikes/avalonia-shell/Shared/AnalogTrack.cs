@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Rendering;
 
 namespace OrionShell;
 
@@ -52,8 +53,8 @@ public sealed record Scale(float Step = 0, int LabelEvery = 2, Func<float, strin
 /// the thumb is on screen. Hovering the row (the track's parent) lifts the thumb
 /// and lights the marks near it; a grab presses it. Past an end the thumb
 /// stretches against a rubber band and springs back at the hand's speed.
-/// Double-click resets to the detent.
-sealed class AnalogTrack : Control {
+/// Double-click resets to the detent. The whole band takes a press, not only what it draws.
+sealed class AnalogTrack : Control, ICustomHitTest {
     const double ThumbW = 12, ThumbH = 15, GrooveH = 4, GrooveY = 9.5, TickBottom = 6, NumeralY = 20;
     const double PlainHeight = 19, NumberedHeight = 34;
     /// Hover grows the thumb; a grab presses half of that back (the boards' pressed state).
@@ -255,12 +256,24 @@ sealed class AnalogTrack : Control {
         Changed?.Invoke(v);
     }
 
+    public bool HitTest(Point p) => new Rect(Bounds.Size).Contains(p);
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e) {
         if (!_dragging) return;
-        _dragging = false;
-        e.Pointer.Capture(null);
         // Back to the end at the speed the hand let go with; a hand that had stopped hands over none.
-        _band.To(0, e.Timestamp - _lastMove > 50 ? 0 : _bandSpeed);
+        Drop(e.Timestamp - _lastMove > 50 ? 0 : _bandSpeed);
+        e.Pointer.Capture(null);
+    }
+
+    /// A dialog or lost focus took the pointer mid-drag: the drag still ends, so the full render runs.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) {
+        base.OnPointerCaptureLost(e);
+        if (_dragging) Drop(0);
+    }
+
+    void Drop(double speed) {
+        _dragging = false;
+        _band.To(0, speed);
         if (_shown.Value != Value) _shown.To(Value);   // a grab that caught a glide and never moved lets it finish
         _press.To(0);
         Hot();

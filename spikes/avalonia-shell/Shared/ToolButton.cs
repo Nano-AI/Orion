@@ -57,8 +57,8 @@ public class StateButton : Button {
         [!ContentPresenter.BorderThicknessProperty] = b[!BorderThicknessProperty],
         [!ContentPresenter.CornerRadiusProperty] = b[!CornerRadiusProperty],
         [!ContentPresenter.PaddingProperty] = b[!PaddingProperty],
-        HorizontalContentAlignment = HorizontalAlignment.Center,
-        VerticalContentAlignment = VerticalAlignment.Center,
+        [!ContentPresenter.HorizontalContentAlignmentProperty] = b[!HorizontalContentAlignmentProperty],
+        [!ContentPresenter.VerticalContentAlignmentProperty] = b[!VerticalContentAlignmentProperty],
     });
 
     bool _on, _keyboardFocus;
@@ -114,6 +114,9 @@ public class StateButton : Button {
 
     public StateButton() {
         Template = Plain;
+        // Centred unless a caller says otherwise (LensPicker's left-aligned list button).
+        HorizontalContentAlignment = HorizontalAlignment.Center;
+        VerticalContentAlignment = VerticalAlignment.Center;
         Height = MinSize;
         MinWidth = MinSize;
         Padding = new Thickness(10, 0);

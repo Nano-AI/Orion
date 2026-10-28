@@ -40,6 +40,7 @@ static partial class SelfTest {
             BrowseChecks(window, engine, track);
             ReducedChecks(window, engine, track);
             ReadoutChecks(window, engine, slider);
+            ControlChecks(window, engine, slider, track);
             engine.Set("exposure_ev", start);
             DragCost("in the window", window, slider, track);
         } finally {
@@ -275,6 +276,45 @@ static partial class SelfTest {
         Shoot(temperature, "6-tint-edited");
         engine.Apply(s => s.Set("temperature_k", k), reread: true);
         Run(tint);
+    }
+
+    /// u3's reports against these controls: typing into a readout from the keyboard, a press
+    /// between the groove and the numerals, a drag that loses the pointer, a left-aligned button.
+    static void ControlChecks(Window window, EngineModel engine, AdjustmentSlider slider, AnalogTrack track) {
+        var readout = slider.GetVisualDescendants().OfType<Decorator>().First(d => d.GetType().Name == "Readout");
+        string? thrown = null;
+        int opened = 0;
+        try {
+            foreach (var (key, physical) in new[] { (Key.Enter, PhysicalKey.Enter), (Key.Space, PhysicalKey.Space) }) {
+                readout.Focus(NavigationMethod.Tab);
+                window.KeyPress(key, RawInputModifiers.None, physical, null);
+                Dispatcher.UIThread.RunJobs();   // the field takes the focus
+                if (readout.Child is TextBox { IsFocused: true }) opened++;
+                window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                Dispatcher.UIThread.RunJobs();
+            }
+        } catch (Exception e) {
+            thrown = $"{e.GetType().Name}: {e.Message}";
+        }
+        Check(thrown == null && opened == 2 && readout.Child is TextBlock,
+              $"Tab to a readout: Return and Space each open the focused field ({opened} of 2) and Return commits, nothing thrown"
+              + (thrown == null ? "" : $" ({thrown})"));
+
+        var gap = track.TranslatePoint(new Point(track.Bounds.Width * 0.15, 16.5), window)!.Value;   // under the groove, above the numerals
+        Check(window.InputHitTest(gap) == track, $"the track takes a press anywhere in its band (hit {window.InputHitTest(gap)?.GetType().Name ?? "nothing"})");
+
+        Press(track);
+        bool armed = engine.Interacting;
+        Hand.Capture(null);   // a dialog or lost focus takes the pointer mid-drag
+        Check(armed && !engine.Interacting, "a drag that loses the pointer still ends: the preview graph disarms and the full render runs");
+        track.Advance(1);
+
+        var left = new StateButton(null, "24mm F1.4 DG DN", () => { }) { HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Left, Width = 240 };
+        var centred = new StateButton(null, "Open", () => { }) { Width = 240 };
+        var host = Show(new StackPanel { Children = { left, centred } });
+        double X(StateButton b) => ((Control)b.Content!).TranslatePoint(default, b)!.Value.X;
+        Check(X(left) < 16 && X(centred) > 80, $"a button's content alignment is its own: left {X(left):0} px in, centred {X(centred):0} px in");
+        host.Close();
     }
 
     /// ORION_MOTION_SHOTS=dir saves the states these checks pass through, at 2×, to look at.
