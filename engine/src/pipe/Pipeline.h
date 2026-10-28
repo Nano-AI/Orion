@@ -167,6 +167,13 @@ public:
     /// once-ever free already relies on, taken more often.
     void setReleaseEveryRender(bool on) noexcept { releaseEveryRender_ = on; }
 
+    /// Gives every node's texture back to Metal, pinned and terminal ones
+    /// included, and marks the whole graph dirty: the state `compile()` left
+    /// it in. The source, the aux plates and the kernels stay. For a photo
+    /// kept decoded but not shown (decision #318); the next render rebuilds
+    /// everything, through the same path a first render takes.
+    void releaseOutputs() noexcept;
+
     /// Executes every dirty node in one command buffer.
     /// Returns the GPU-side duration in milliseconds.
     double render();

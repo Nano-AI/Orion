@@ -20,6 +20,11 @@
 struct Shim {
     OrionEngine* engine = nullptr;
     OrionAdjustments adj{};
+    // What each mask row's brush holds in the engine, and its revision: bumped
+    // only when the stroke changes, never reset (Engine+Brush.swift's
+    // brushRevisions), so a re-added row cannot repeat a revision the engine saw.
+    std::vector<float> strokes[ORION_MAX_MASK_COMPONENTS];
+    unsigned revisions[ORION_MAX_MASK_COMPONENTS]{};
 };
 
 static void defaults(OrionAdjustments& a) {
@@ -44,10 +49,35 @@ static const Field kFields[] = {
 };
 #undef F
 #undef A
+// One row of the mask group (OrionMaskComponent), the same way.
+#define F(n, k) {#n, 1, k##_kind, offsetof(OrionMaskComponent, n)},
+static const Field kMaskFields[] = {
+#include "mask_fields.inc"
+};
+#undef F
 
-static const Field* find(const char* name) {
-    for (auto& f : kFields) if (std::strcmp(f.name, name) == 0) return &f;
+template <size_t N>
+static const Field* find(const Field (&table)[N], const char* name) {
+    for (auto& f : table) if (std::strcmp(f.name, name) == 0) return &f;
     return nullptr;
+}
+static const Field* find(const char* name) { return find(kFields, name); }
+
+// Writes a 4-byte field, int or float as the table says.
+static void put(void* p, const Field* f, float value) {
+    if (f->isInt) *static_cast<int32_t*>(p) = int32_t(std::lround(value));
+    else *static_cast<float*>(p) = value;
+}
+
+// The four OrionCurveChannels by Session.Curve's numbering: master, R, G, B.
+static OrionCurveChannel* channel(OrionAdjustments& a, int c) {
+    switch (c) {
+        case 0: return &a.curve_master;
+        case 1: return &a.curve_red;
+        case 2: return &a.curve_green;
+        case 3: return &a.curve_blue;
+        default: return nullptr;
+    }
 }
 
 // 4-byte slot for field[index], or null when the name or index is wrong.
@@ -105,8 +135,77 @@ int shim_set(Shim* s, const char* name, int index, float value) {
     const Field* f = nullptr;
     void* p = slot(s->adj, name, index, &f);
     if (!p) return 0;
-    if (f->isInt) *static_cast<int32_t*>(p) = int32_t(std::lround(value));
-    else *static_cast<float*>(p) = value;
+    put(p, f, value);
+    return orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
+}
+
+// One tone-curve channel into `xy` (interleaved x, y; room for `capacity`
+// points). Returns the point count; a channel the engine reads as identity
+// (count 0 or 1) comes back as Engine.swift's ToneCurve.identity, two points.
+int shim_curve(Shim* s, int c, float* xy, int capacity) {
+    const OrionCurveChannel* ch = channel(s->adj, c);
+    if (!ch || capacity < 2) return 0;
+    if (ch->count < 2) {
+        const float identity[] = {0, 0, 1, 1};
+        std::memcpy(xy, identity, sizeof identity);
+        return 2;
+    }
+    const int n = std::min<int>(ch->count, capacity);
+    for (int i = 0; i < n; ++i) { xy[2 * i] = ch->x[i]; xy[2 * i + 1] = ch->y[i]; }
+    return n;
+}
+
+// Writes one channel and pushes it, as Engine.swift's curveChannel: points past
+// ORION_CURVE_MAX_POINTS are dropped, and the engine reads anything malformed
+// as identity. 0 for a channel outside 0-3.
+int shim_set_curve(Shim* s, int c, const float* xy, int count) {
+    OrionCurveChannel* ch = channel(s->adj, c);
+    if (!ch || count < 0 || (count > 0 && !xy)) return 0;
+    *ch = OrionCurveChannel{};
+    ch->count = std::min(count, ORION_CURVE_MAX_POINTS);
+    for (int i = 0; i < ch->count; ++i) { ch->x[i] = xy[2 * i]; ch->y[i] = xy[2 * i + 1]; }
+    return orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
+}
+
+// Engine.swift's autoEnhance: the engine measures and writes exposure, whites,
+// blacks, fusion (lift) and clarity into the block; the rest stays as sent.
+int shim_auto_enhance(Shim* s) {
+    return orion_engine_auto_enhance(s->engine, &s->adj) == ORION_OK &&
+           orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
+}
+
+// The mask group, Engine.swift's cAdjustments + Engine+Brush.swift's
+// pushStrokes, in three calls: shim_mask_set each row's fields by C name
+// (no push), shim_mask_stroke each row's dabs, then shim_mask_commit.
+int shim_mask_field_count(void) { return int(std::size(kMaskFields)); }
+
+int shim_mask_set(Shim* s, int row, const char* name, float value) {
+    const Field* f = find(kMaskFields, name);
+    if (!f || row < 0 || row >= ORION_MAX_MASK_COMPONENTS) return 0;
+    put(reinterpret_cast<char*>(&s->adj.mask_components[row]) + f->offset, f, value);
+    return 1;
+}
+
+// `dabs` interleaved x, y pairs. Sent to the engine, and the row's revision
+// bumped, only when they differ from what the engine already holds: a slider
+// tick on a brush row must not re-lay its whole stroke. Every dab paints
+// (null erase), as a sidecar without brushErase means.
+int shim_mask_stroke(Shim* s, int row, const float* xy, int dabs) {
+    if (row < 0 || row >= ORION_MAX_MASK_COMPONENTS || dabs < 0 || (dabs > 0 && !xy)) return 0;
+    auto& held = s->strokes[row];
+    if (held.size() == size_t(dabs) * 2 && std::equal(held.begin(), held.end(), xy)) return 1;
+    if (orion_engine_set_brush_stroke(s->engine, row, dabs ? xy : nullptr, nullptr, dabs) != ORION_OK) return 0;
+    held.assign(xy, xy + size_t(dabs) * 2);
+    ++s->revisions[row];
+    return 1;
+}
+
+// Rows [0, count) are live; the rest are zeroed, as Engine.swift sends them.
+int shim_mask_commit(Shim* s, int count) {
+    if (count < 0 || count > ORION_MAX_MASK_COMPONENTS) return 0;
+    for (int i = count; i < ORION_MAX_MASK_COMPONENTS; ++i) s->adj.mask_components[i] = OrionMaskComponent{};
+    for (int i = 0; i < ORION_MAX_MASK_COMPONENTS; ++i) s->adj.mask_components[i].brush_revision = s->revisions[i];
+    s->adj.mask_count = count;
     return orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
 }
 
@@ -125,15 +224,14 @@ int shim_read(Shim* s, int which, uint8_t* dst, int capacity, int* w, int* h) {
     if (!raw) return 0;
     id<MTLTexture> t = (__bridge id<MTLTexture>)raw;
     // The texture is square so a straightened frame fits; only the top-left
-    // image_size region holds the picture (Engine+Render.swift:286). The
-    // preview graph holds the same region at its own scale.
-    uint32_t iw = 0, ih = 0;
-    orion_engine_image_size(s->engine, &iw, &ih);
-    const double scale = which == 1
-        ? double(t.width) / double(((__bridge id<MTLTexture>)orion_engine_output_texture(s->engine)).width)
-        : 1.0;
-    const NSUInteger rw = std::min<NSUInteger>(t.width, NSUInteger(iw * scale + 0.5));
-    const NSUInteger rh = std::min<NSUInteger>(t.height, NSUInteger(ih * scale + 0.5));
+    // region holds the picture (Engine+Render.swift:286): image_size for the
+    // full graph, preview_size for the preview, each its own graph's answer.
+    unsigned iw = 0, ih = 0;
+    if (which == 1) orion_engine_preview_size(s->engine, &iw, &ih);
+    else orion_engine_image_size(s->engine, &iw, &ih);
+    const NSUInteger rw = std::min<NSUInteger>(t.width, iw);
+    const NSUInteger rh = std::min<NSUInteger>(t.height, ih);
+    if (rw == 0 || rh == 0) return 0;
     *w = int(rw); *h = int(rh);
     if (!dst) return 1;
     if (capacity < *w * *h * 4) return 0;

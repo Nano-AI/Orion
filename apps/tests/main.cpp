@@ -108,6 +108,7 @@ int main() {
     testDngEmbeddedPreview();
     testLinearDngBaselineExposure();
     testLinearDngEngineOpen();
+    testFacadeSessionSeams();
     testMergeExposureMaths();
     testMergeReconstruction();
     testMergeDeghostAndCoverage();

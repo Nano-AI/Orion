@@ -511,6 +511,12 @@ OrionStatus orion_engine_preview_size(const OrionEngine* engine,
 /* Renders dirty nodes. *out_ms receives GPU-side milliseconds (may be NULL). */
 OrionStatus orion_engine_render(OrionEngine* engine, double* out_ms);
 
+/* Gives both graphs' render textures back to the system and keeps the decoded
+ * photo, its adjustments, strokes, mattes and LUT: for a photo a browser keeps
+ * open but is not showing (decision #318). The output and preview textures are
+ * NULL until the next render, which rebuilds them. Safe with nothing open. */
+OrionStatus orion_engine_release_render_memory(OrionEngine* engine);
+
 /* Dimensions of the open image, as rendered — so the crop and the crop tool's
  * preview canvas both change this. */
 OrionStatus orion_engine_image_size(const OrionEngine* engine,
