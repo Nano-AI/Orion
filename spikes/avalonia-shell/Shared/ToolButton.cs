@@ -14,7 +14,8 @@ using Avalonia.Media.Transformation;
 namespace OrionShell;
 
 /// app/ToolButton.swift's CanvasTool: what a click on the canvas does.
-public enum CanvasTool { None, Targeted, MaskColor, Spot }
+/// MaskDraw: a mask shape being drawn on the photo, one armed tool among the rest (#211).
+public enum CanvasTool { None, Targeted, MaskColor, Spot, MaskDraw }
 
 /// The buttons of Controls.dc.html, ranked by importance rather than coloured by meaning.
 public enum ButtonKind {
@@ -120,7 +121,7 @@ public class StateButton : Button {
         BorderThickness = new Thickness(1);
         FocusAdorner = null;
         ClipToBounds = false;   // the halo is drawn outside the bounds
-        // ponytail: no reduced-motion check; Avalonia 12 exposes none. A 3% scale is the only motion here.
+        // Kept under reduced motion (Motion.Reduced): a 3% press in place is feedback, not travel.
         Transitions = [new TransformOperationsTransition {
             Property = RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(100), Easing = new CubicEaseOut(),
         }];

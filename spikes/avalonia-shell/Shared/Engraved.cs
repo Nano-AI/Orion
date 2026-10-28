@@ -1,10 +1,12 @@
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 
 namespace OrionShell;
 
@@ -70,9 +72,25 @@ public sealed class SectionPlate : StackPanel {
         Children.Add(plate);
         Children.Add(Rows);
         Rows.Children.AddRange(rows);
-        AddHandler(AdjustmentSlider.ModifiedChangedEvent, (_, _) => Refresh());
-        Refresh();
+        AddHandler(AdjustmentSlider.ModifiedChangedEvent, (_, e) => Refresh(animate: e is not ModifiedChangedEventArgs { Opened: true }));
+        Refresh(animate: false);
     }
+
+    /// The dot arrives from half size as it fades in, and leaves faster than it came
+    /// (DESIGN.md, Motion): a section has just been edited, or just reset. A photo
+    /// opening sets it at once; under reduced motion it only fades.
+    void Refresh(bool animate) {
+        bool on = this.GetLogicalDescendants().OfType<AdjustmentSlider>().Any(s => s.Modified);
+        var time = on ? Motion.Enter : Motion.Exit;
+        _dot.Transitions = !animate ? null : [
+            new DoubleTransition { Property = OpacityProperty, Duration = time, Easing = Motion.EaseOut },
+            new TransformOperationsTransition { Property = RenderTransformProperty, Duration = time, Easing = Motion.EaseOut },
+        ];
+        _dot.Opacity = on ? 1 : 0;
+        _dot.RenderTransform = on || Motion.Reduced ? Whole : Half;
+    }
+
+    static readonly ITransform Whole = TransformOperations.Parse("scale(1)"), Half = TransformOperations.Parse("scale(0.5)");
 
     /// The section's action after the hairline (Light's Auto), 24 high to keep the target size.
     public SectionPlate With(Control action) {
@@ -82,6 +100,4 @@ public sealed class SectionPlate : StackPanel {
         _plate.Children.Insert(_plate.Children.Count - 1, action);   // before the hairline, which fills
         return this;
     }
-
-    void Refresh() => _dot.Opacity = this.GetLogicalDescendants().OfType<AdjustmentSlider>().Any(s => s.Modified) ? 1 : 0;
 }

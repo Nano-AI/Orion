@@ -31,6 +31,19 @@ public static class TrackTint {
     public static IBrush Luminance(double centre) =>
         Ramp((0, Swatch(centre, LabelSaturation, 0.18)), (1, Swatch(centre, LabelSaturation, 0.92)));
 
+    /// The same ramp deeper and brighter: a tinted track's edited span (AnalogTrack),
+    /// so the signature's fill-from-the-detent reads on a colour track too.
+    public static IBrush Vivid(IBrush tint) => tint is LinearGradientBrush ramp
+        ? Ramp(ramp.GradientStops.Select(s => (s.Offset, Deepen(s.Color))).ToArray())
+        : tint;
+
+    static Color Deepen(Color c) {
+        var hsv = c.ToHsv();
+        return HsvColor.ToRgb(hsv.H, Math.Min(1, hsv.S * VividSaturation), Math.Min(1, hsv.V * VividBrightness));
+    }
+
+    const double VividSaturation = 1.35, VividBrightness = 1.25;
+
     static Color Swatch(double degrees, double saturation = LabelSaturation, double brightness = LabelBrightness) =>
         HsvColor.ToRgb(((degrees % 360) + 360) % 360, saturation, brightness);
 
