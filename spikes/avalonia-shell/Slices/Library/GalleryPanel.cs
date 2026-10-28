@@ -19,17 +19,15 @@ public sealed class GalleryPanel : DockPanel {
     readonly TextBlock _summary = new() { FontSize = TypeSize.Sm, Foreground = Palette.Faint, Classes = { "tnum" }, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock _deleteLabel = new() { Text = "Delete Rejected…", FontSize = TypeSize.Sm };
     readonly Button _delete;
-    readonly Dictionary<LibraryModel.Photo, Control> _cells = new();
+    readonly Dictionary<LibraryModel.Photo, (Control Cell, Border Ring, TextBlock Name)> _cells = new();
     readonly List<Border> _pictures = new();
-    /// The photo the keys act on: Editor.focused in Swift, distinct from the
-    /// one decoded on the canvas. Starts on the photograph being edited.
-    LibraryModel.Photo? _focused = LibraryModel.Shared.Open;
+    /// The ring last drawn: GalleryMode.Focus, the photo the keys act on (not
+    /// necessarily the one decoded on the canvas).
+    LibraryModel.Photo? _ringed;
 
     public GalleryPanel() {
         Background = Palette.Ground;
-        // Editor.confirmTrash, then moveToTrash.
-        // stub(#315): Library.swift owns this until the logic moves below the facade
-        _delete = LibraryUi.Plain(_deleteLabel, () => { });
+        _delete = LibraryUi.Plain(_deleteLabel, () => Commands.Run("delete-rejected"));
 
         var header = new DockPanel { Height = 34, Background = Palette.Panel };
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, Margin = new Thickness(12, 0, 0, 0),
@@ -48,12 +46,31 @@ public sealed class GalleryPanel : DockPanel {
 
         LibraryModel.Shared.Changed += Rebuild;
         EngineModel.Shared.Opened += Rebuild;
+        GalleryMode.Changed += Ring;
         Rebuild();
         // Opening the gallery lands on the photograph being edited, once the
         // grid has laid out enough to know where its cell is.
-        AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => {
-            if (_focused != null && _cells.TryGetValue(_focused, out var cell)) cell.BringIntoView();
-        });
+        AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(Reveal);
+    }
+
+    void Reveal() {
+        if (GalleryMode.Focus is { } f && _cells.TryGetValue(f, out var cell)) cell.Cell.BringIntoView();
+    }
+
+    /// The focus moved: two rings change, not the grid.
+    void Ring() {
+        if (_ringed != GalleryMode.Focus) {
+            Paint(_ringed, false);
+            Paint(_ringed = GalleryMode.Focus, true);
+        }
+        if (GalleryMode.On) Dispatcher.UIThread.Post(Reveal);
+    }
+
+    void Paint(LibraryModel.Photo? photo, bool focused) {
+        if (photo == null || !_cells.TryGetValue(photo, out var c)) return;
+        c.Ring.BorderBrush = focused ? Palette.Accent : LibraryUi.Ink(Palette.Text, 0.08);
+        c.Ring.BorderThickness = new Thickness(focused ? 2 : 1);
+        c.Name.Foreground = focused ? Palette.Text : Palette.Dim;
     }
 
     /// Trades photos per screen against the detail a framing judgement needs.
@@ -101,12 +118,13 @@ public sealed class GalleryPanel : DockPanel {
         foreach (var photo in library.Visible) {
             var cell = Cell(photo);
             _cells[photo] = cell;
-            _grid.Children.Add(cell);
+            _grid.Children.Add(cell.Cell);
         }
+        _ringed = GalleryMode.Focus;
     }
 
-    Control Cell(LibraryModel.Photo photo) {
-        bool isFocused = photo == _focused;
+    (Control Cell, Border Ring, TextBlock Name) Cell(LibraryModel.Photo photo) {
+        bool isFocused = photo == GalleryMode.Focus;
         var picture = new Border {
             Height = _grid.Cell / GalleryGrid.CellAspect, Background = Palette.FilmBase, Opacity = photo.Rejected ? 0.35 : 1,
             Child = photo.Thumbnail is { } image ? new Image { Source = image, Stretch = Stretch.Uniform }
@@ -131,22 +149,19 @@ public sealed class GalleryPanel : DockPanel {
         // A plain click focuses; it never decodes. Opening is the double-click's job.
         // Command/shift-click selection, PhotoSelection.
         // stub(#315): Library.swift owns this until the logic moves below the facade
-        cell.Tapped += (_, _) => { _focused = photo; Rebuild(); };
-        // onOpen also leaves the gallery for develop (EditorMode).
-        // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-        cell.DoubleTapped += (_, _) => EngineModel.Shared.Open(photo.Index);
-        cell.KeyDown += (_, e) => { if (e.Key == Key.Enter) { EngineModel.Shared.Open(photo.Index); e.Handled = true; } };
+        cell.Tapped += (_, _) => GalleryMode.SetFocus(photo);
+        // Return is the gallery's key map (GalleryMode.Handle), wherever focus is.
+        cell.DoubleTapped += (_, _) => GalleryMode.Open(photo);
         cell.ContextMenu = new ContextMenu { ItemsSource = Menu(photo) };
-        return cell;
+        return (cell, ring, name);
     }
 
     static List<Control> Menu(LibraryModel.Photo photo) {
-        var items = new List<Control> { LibraryUi.Item("Open in Editor", () => EngineModel.Shared.Open(photo.Index)), new Separator() };
+        var items = new List<Control> { LibraryUi.Item("Open in Editor", () => GalleryMode.Open(photo)), new Separator() };
         items.AddRange(LibraryUi.CullItems(photo));
         items.Add(new Separator());
-        // Editor.confirmTrash, then moveToTrash.
-        // stub(#315): Library.swift owns this until the logic moves below the facade
-        items.Add(LibraryUi.Item("Move to Trash…", () => { }));
+        // Editor.confirmTrash over the photo right-clicked, which takes the focus first.
+        items.Add(LibraryUi.Item("Move to Trash…", () => { GalleryMode.SetFocus(photo); Commands.Run("trash"); }));
         return items;
     }
 

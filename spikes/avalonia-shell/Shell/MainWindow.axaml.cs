@@ -2,7 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Interactivity;
 using Avalonia.Media;
+using OrionShell.Library;
 
 namespace OrionShell;
 
@@ -22,6 +24,19 @@ public partial class MainWindow : Window {
         }
         BuildTabBar();
         Select(Panels.Tabs.Contains(tab) ? tab : "Light");
+        GalleryMode.Changed += ShowFace;
+        // The gallery's key map sees a key before any control does, as Swift's
+        // local monitor does: the grid's ScrollViewer would take the arrows.
+        AddHandler(KeyDownEvent, (_, e) => { if (GalleryMode.Handle(e)) e.Handled = true; }, RoutingStrategies.Tunnel);
+        ShowFace();
+    }
+
+    /// `mode`: the develop face or the gallery, built the first time it is asked for.
+    void ShowFace() {
+        if (GalleryMode.On && GalleryHost.Children.Count == 0 && Panels.Find("gallery") is { } gallery)
+            GalleryHost.Children.Add(Panels.Create(gallery.Type));
+        GalleryHost.IsVisible = GalleryMode.On;
+        DevelopFace.IsVisible = !GalleryMode.On;
     }
 
     Panel? Host(Region region) => region switch {

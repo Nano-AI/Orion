@@ -183,6 +183,15 @@ static class CanvasState {
 sealed class Drawn(Action<DrawingContext> draw) : Control {
     public override void Render(DrawingContext c) => draw(c);
 
+    /// A child's own size, to centre it with At. Not DesiredSize after an At: that
+    /// counts the Margin At placed it by, so a label re-centred on every repaint
+    /// walked left by half its last offset (the compare labels left the picture).
+    public static Size Measured(Control child) {
+        child.Margin = default;
+        child.Measure(Size.Infinity);
+        return child.DesiredSize;
+    }
+
     public static void At(Control child, double x, double y) {
         child.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
         child.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;

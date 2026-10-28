@@ -23,7 +23,7 @@ public sealed class LibraryModel {
     public sealed class Photo(string path, int index) {
         public string Path { get; } = path;
         /// Its position in EngineModel.Photos, which is what Open takes.
-        public int Index { get; } = index;
+        public int Index { get; internal set; } = index;
         public string Name { get; } = System.IO.Path.GetFileName(path);
         public int Rating { get; internal set; }
         public bool Rejected { get; internal set; }
@@ -42,6 +42,11 @@ public sealed class LibraryModel {
         }
     }
 
+    /// A new list (a folder opened, photos trashed) is a change every view shows.
+    LibraryModel() => EngineModel.Shared.PropertyChanged += (_, e) => {
+        if (e.PropertyName == nameof(EngineModel.Photos)) Changed?.Invoke();
+    };
+
     readonly Dictionary<string, Photo> _byPath = new();
     IReadOnlyList<string>? _source;
     List<Photo> _photos = [];
@@ -56,8 +61,13 @@ public sealed class LibraryModel {
             var source = EngineModel.Shared.Photos;
             if (!ReferenceEquals(source, _source)) {
                 _source = source;
-                _photos = source.Select((p, i) => _byPath.TryGetValue(p, out var known) && known.Index == i
-                    ? known : _byPath[p] = new Photo(p, i)).ToList();
+                // A photo keeps its marks when the list around it changes (a trash
+                // shifts every index after it); only its position moves.
+                _photos = source.Select((p, i) => {
+                    if (!_byPath.TryGetValue(p, out var photo)) _byPath[p] = photo = new Photo(p, i);
+                    photo.Index = i;
+                    return photo;
+                }).ToList();
             }
             return _photos;
         }

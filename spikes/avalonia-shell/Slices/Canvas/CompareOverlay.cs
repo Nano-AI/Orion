@@ -163,8 +163,7 @@ public sealed class CompareOverlay : Panel, ICustomHitTest {
     // stub(#315): Proposal.swift owns this until the logic moves below the facade ("Current edit"/"Proposed")
     void Put(Border label, string text, Point at, double share) {
         ((TextBlock)label.Child!).Text = text.ToUpperInvariant();
-        label.Measure(Size.Infinity);
-        var size = label.DesiredSize;
+        var size = Drawn.Measured(label);
         label.CornerRadius = new CornerRadius(size.Height / 2);
         Drawn.At(label, at.X - size.Width / 2, at.Y - size.Height / 2);
         // Hidden once its half is too narrow to hold it.
