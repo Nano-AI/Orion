@@ -39,7 +39,7 @@ Controls and states boards). Committed 2026-10-27.
 
 | Area | Decision |
 |---|---|
-| Layout | Tool column 322 px fixed; canvas never wraps under it (a wrapping row made the photo 1506 px tall); single column under 760 px |
+| Layout | Tool column 322–560 px, resizable by a splitter on the hairline (canvas keeps 360); canvas never wraps under it (a wrapping row made the photo 1506 px tall); single column under 760 px |
 | Overlays | Zoom and rating float over the photo as translucent pills; solid under reduced transparency |
 | Tabs | Selected tab changes color only, never weight; a sliding indicator moves under it |
 | States | Every control drawn at rest, hover, pressed (scale .97, 100 ms), focus, disabled, edited; canvas has loading, not-cached and couldn't-open states |

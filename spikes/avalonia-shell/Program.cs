@@ -159,7 +159,7 @@ sealed class App : Application {
             Title = entry.Name,
             Background = entry.Region switch {
                 Region.Tools or Region.Status or Region.Toolbar or Region.Sheet => Palette.Panel,
-                Region.Filmstrip => Palette.FilmBase,
+                Region.Filmstrip => Palette.Panel,
                 _ => Palette.Surround,
             },
         };
