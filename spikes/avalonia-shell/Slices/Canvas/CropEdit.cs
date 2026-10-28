@@ -60,25 +60,26 @@ static class CropEdit {
         if (ratio is not { } r) { Reset(); return; }
         double frame = CanvasNative.FrameAspect, w = 1, h = 1;
         if (r > frame) h = frame / r; else w = r / frame;
-        CanvasState.Write(("crop_w", w), ("crop_h", h), ("crop_x", (1 - w) / 2), ("crop_y", (1 - h) / 2));
         Commit("Aspect");
+        CanvasState.Write(("crop_w", w), ("crop_h", h), ("crop_x", (1 - w) / 2), ("crop_y", (1 - h) / 2));
     }
 
     /// `resetCrop`: the whole frame, upright.
     public static void Reset() {
-        CanvasState.Write(("crop_x", 0), ("crop_y", 0), ("crop_w", 1), ("crop_h", 1), ("straighten_deg", 0));
         Commit("Crop");
+        CanvasState.Write(("crop_x", 0), ("crop_y", 0), ("crop_w", 1), ("crop_h", 1), ("straighten_deg", 0));
     }
 
     /// `rotate`: a quarter turn swaps the frame, so the crop resets rather than
     /// silently reframing the picture.
     public static void Rotate(int turns) {
         int quarters = (((int)Get("rotate_quarters") + turns) % 4 + 4) % 4;
+        Commit("Rotate");
         CanvasState.Write(("crop_x", 0), ("crop_y", 0), ("crop_w", 1), ("crop_h", 1), ("rotate_quarters", quarters));
         CanvasState.Viewport.Reset();
-        Commit("Rotate");
     }
 
-    // stub(#315): EditHistory.swift owns this until the logic moves below the facade
-    public static void Commit(string label) { }
+    /// `engine.edit(label)`: names the history step the next settled render records.
+    /// Called before the writes, as Swift's closure wraps them.
+    public static void Commit(string label) => Develop.EditHistory.Label(label);
 }

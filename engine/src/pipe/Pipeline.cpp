@@ -66,7 +66,10 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
 
     // The source: a 16-bit mosaic sample per pixel unless the graph said
     // otherwise — a linear DNG's graph reads demosaiced RGBA half data.
-    source_ = gpu::Texture::create(device_, width_, height_, sourceFormat_);
+    // Linear, because the CPU writes it whole on every open and one node reads
+    // it once a render: the tiled layout's upload was ~17% of a RAW open (#319).
+    source_ = gpu::Texture::create(device_, width_, height_, sourceFormat_,
+                                   /*linear=*/true);
 
     aux_.clear();
     aux_.reserve(auxSpecs_.size());
@@ -413,6 +416,17 @@ void Pipeline::maybeFree(int n, int reader) {
     outputs_[static_cast<std::size_t>(n)] = nullptr;
     pool_.release(std::move(owned));
     everFreed_[static_cast<std::size_t>(n)] = true;
+}
+
+void Pipeline::releaseOutputs() noexcept {
+    for (std::size_t i = 0; i < ownedOutputs_.size(); ++i) {
+        outputs_[i] = nullptr;
+        pool_.release(std::move(ownedOutputs_[i]));
+    }
+    pool_.shrink();
+    std::fill(dirty_.begin(), dirty_.end(), true);
+    // A first render again, so it frees at last readers as a first render does.
+    std::fill(everFreed_.begin(), everFreed_.end(), false);
 }
 
 double Pipeline::render() {

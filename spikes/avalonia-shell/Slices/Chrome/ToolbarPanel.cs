@@ -2,6 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using OrionShell.CanvasSlice;
+using OrionShell.Develop;
+using OrionShell.Library;
+using OrionShell.Sheets;
 
 namespace OrionShell.Chrome;
 
@@ -29,8 +33,22 @@ public sealed class ToolbarPanel : Grid {
         for (int i = 0; i < columns.Length; i++) { SetColumn(columns[i], i); Children.Add(columns[i]); }
 
         EngineModel.Shared.Opened += Refresh;
+        EngineModel.Shared.PropertyChanged += (_, _) => RefreshIfChanged();
+        CanvasState.Changed += RefreshIfChanged;   // compare on, off, swapped
+        EditHistory.Changed += RefreshIfChanged;
+        GalleryMode.Changed += RefreshIfChanged;
+        ExportRun.Changed += RefreshIfChanged;
+        LibraryModel.Shared.Changed += RefreshIfChanged;
         Refresh();
     }
+
+    /// Everything the chips show, so a pan or a render does not rebuild them.
+    static string State => string.Join("|", EngineModel.Shared.Handle, EngineModel.Shared.Current, CompareState.Comparing,
+        CompareState.Vertical, EditHistory.UndoLabel, EditHistory.RedoLabel, GalleryMode.On, ExportRun.Progress,
+        string.Join(",", Commands.All.Select(c => c.CanRun() ? 1 : 0)));
+    string _shown = "";
+
+    void RefreshIfChanged() { if (State != _shown) Refresh(); }
 
     static StackPanel Group() => new() { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center };
 
@@ -56,6 +74,7 @@ public sealed class ToolbarPanel : Grid {
     /// Every button runs a command by name, and is greyed by that command's
     /// CanRun (Swift's `.disabled`), so the keys and the buttons cannot disagree.
     void Refresh() {
+        _shown = State;
         var engine = EngineModel.Shared;
         bool loaded = engine.Handle != 0, develop = !ChromeStubs.Culling;
         _capture.Show(loaded ? CaptureInfo.Read(engine.Handle) : null, engine.Current >= 0 ? engine.Photos[engine.Current] : null);
@@ -67,18 +86,19 @@ public sealed class ToolbarPanel : Grid {
         if (loaded && develop && ChromeStubs.Percent is { } percent)
             _looking.Children.Add(new TextBlock { Text = $"{percent}%", FontSize = TypeSize.Sm, Foreground = Palette.Dim, Width = 42,
                                                   TextAlignment = TextAlignment.Right, Classes = { "tnum" }, VerticalAlignment = VerticalAlignment.Center });
-        _looking.Children.Add(Toggle("Compare", ChromeStubs.Comparing, Commands.CanRun("compare"), "Split the view against the original",
+        _looking.Children.Add(Toggle("Compare", CompareState.Comparing, Commands.CanRun("compare"), "Split the view against the original",
             () => Commands.Run("compare")));
-        if (ChromeStubs.Comparing)
-            _looking.Children.Add(Chip.Icon("rectangle.split.2x1", "Swap between a vertical and horizontal split",
-                Commands.CanRun("swap-split"), () => Commands.Run("swap-split")));
+        if (CompareState.Comparing)
+            _looking.Children.Add(Chip.Icon(CompareState.Vertical ? "rectangle.split.2x1" : "rectangle.split.1x2",
+                "Swap between a vertical and horizontal split", Commands.CanRun("swap-split"), () => Commands.Run("swap-split")));
 
-        // ── Editing: greyed as a group in the gallery. Swift names the undo
-        // chips after the step ("Undo Exposure"); the history is not here.
+        // ── Editing: greyed as a group in the gallery, named after the step.
         _editing.Children.Clear();
         _editing.Children.AddRange([
-            Chip.Icon("arrow.uturn.backward", "Undo", Commands.CanRun("undo"), () => Commands.Run("undo")),
-            Chip.Icon("arrow.uturn.forward", "Redo", Commands.CanRun("redo"), () => Commands.Run("redo")),
+            Chip.Icon("arrow.uturn.backward", EditHistory.UndoLabel is { } u ? $"Undo {u}" : "Undo", Commands.CanRun("undo"),
+                      () => Commands.Run("undo")),
+            Chip.Icon("arrow.uturn.forward", EditHistory.RedoLabel is { } r ? $"Redo {r}" : "Redo", Commands.CanRun("redo"),
+                      () => Commands.Run("redo")),
             Chip.Icon("rotate.left", "Rotate left", Commands.CanRun("rotate-left"), () => Commands.Run("rotate-left")),
             Chip.Icon("rotate.right", "Rotate right", Commands.CanRun("rotate-right"), () => Commands.Run("rotate-right")),
             Chip.Text("Reset", Commands.CanRun("reset-adjustments"), () => Commands.Run("reset-adjustments"), "Put every adjustment back"),

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orion controls and states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#4DB6C4}a:hover{color:#7fd0db}
+.num{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:0.01em}
+kbd{display:inline-block;min-width:15px;padding:0 4px;border:1px solid #3A3A3E;border-bottom-width:2px;border-radius:3px;background:#232326;color:#E8E8EA;font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-size:11px;line-height:16px;text-align:center}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1120px; height: 900px; box-sizing: border-box; padding: 40px; background: #141416; color: #E8E8EA; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 40px; align-content: start">
+
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Buttons</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+      <button style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: #232326; border: 1px solid #313135; border-radius: 5px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z"></path></svg>Open</button>
+      <button style="height: 28px; padding: 0 10px; background: #2E2E32; border: 1px solid #3A3A3E; border-radius: 5px">Hovered</button>
+      <button style="height: 28px; padding: 0 10px; background: #2E2E32; border: 1px solid #3A3A3E; border-radius: 5px; transform: scale(0.97)">Pressed</button>
+      <button style="height: 28px; padding: 0 10px; background: transparent; border: 1px solid #313135; border-radius: 5px; color: #8A8A90">Quiet</button>
+      <button style="height: 28px; padding: 0 12px; background: #4DB6C4; border: 0; border-radius: 5px; color: #0E1416; font-weight: 600">Export</button>
+      <button disabled style="height: 28px; padding: 0 10px; background: #232326; border: 1px solid #313135; border-radius: 5px; color: #5A5A60">Unavailable</button>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+      <button aria-pressed="false" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: #232326; border: 1px solid #313135; border-radius: 5px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18v14H3zM12 5v14"></path></svg>Compare</button>
+      <button aria-pressed="true" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: rgba(77,182,196,0.12); border: 1px solid #4DB6C4; border-radius: 5px; color: #4DB6C4">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18v14H3zM12 5v14"></path></svg>Compare</button>
+      <button style="height: 28px; padding: 0 10px; background: #232326; border: 1px solid #313135; border-radius: 5px; box-shadow: 0 0 0 2px #141416, 0 0 0 4px #4DB6C4">Keyboard focus</button>
+    </div>
+    <p style="margin: 0; color: #8A8A90; line-height: 1.5">The press shows on pointer-down, not on release. One filled button per screen. A toggle that is on borrows the accent; nothing decorative does.</p>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Section headers</h2>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="font-size: 13px; font-weight: 600">Light</span>
+      <span style="flex: 1; height: 1px; background: #313135"></span>
+      <button style="height: 22px; padding: 0 9px; background: #232326; border: 1px solid #313135; border-radius: 4px; font-size: 12px">Auto</button>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="font-size: 13px; font-weight: 600">Light</span>
+      <span style="width: 5px; height: 5px; border-radius: 50%; background: #F0C674" aria-label="Edited"></span>
+      <span style="flex: 1; height: 1px; background: #313135"></span>
+      <span style="color: #8A8A90; font-size: 12px">edited</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; color: #8A8A90">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+      <span style="font-size: 13px; font-weight: 600">Curve</span>
+      <span style="flex: 1; height: 1px; background: #313135"></span>
+      <span style="font-size: 12px">collapsed</span>
+    </div>
+    <h2 style="margin: 8px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Tool tabs</h2>
+    <div style="position: relative; display: flex; border-top: 1px solid #313135; border-bottom: 1px solid #313135; background: #1B1B1D">
+      <span style="flex: 1; text-align: center; padding: 9px 0; font-size: 12px; font-weight: 500">Light</span>
+      <span style="flex: 1; text-align: center; padding: 9px 0; font-size: 12px; font-weight: 500; color: #8A8A90">Color</span>
+      <span style="flex: 1; text-align: center; padding: 9px 0; font-size: 12px; font-weight: 500; color: #8A8A90; background: #232326">Detail</span>
+      <span style="flex: 1; text-align: center; padding: 9px 0; font-size: 12px; font-weight: 500; color: #8A8A90">Optics<span style="display: inline-block; width: 4px; height: 4px; margin-left: 4px; border-radius: 50%; background: #F0C674; vertical-align: 2px" aria-label="Edited"></span></span>
+      <span style="position: absolute; left: 0; bottom: -1px; width: 25%; height: 2px; background: #4DB6C4"></span>
+    </div>
+    <p style="margin: 0; color: #8A8A90; line-height: 1.5">The underline slides to the chosen tab and starts from wherever it is if you switch again mid-move. A tab holding an edit carries the section's amber dot.</p>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 14px; grid-column: 1 / -1">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Sliders read like a light meter</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 32px">
+      <div style="display: flex; flex-direction: column; gap: 5px">
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 12px; color: #A0A0A6">Exposure</span><span class="num" style="min-width: 54px; text-align: right; padding: 1px 6px; border: 1px solid #313135; border-radius: 3px; background: #141416; font-size: 13px; color: #4DB6C4">0.35 EV</span></div>
+        <div style="position: relative; height: 34px">
+          <div style="position: absolute; left: 6px; right: 6px; top: 0; height: 6px">
+            <span style="position: absolute; left: 0%; bottom: 0; width: 1px; height: 3px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 10%; bottom: 0; width: 1px; height: 6px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 20%; bottom: 0; width: 1px; height: 3px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 30%; bottom: 0; width: 1px; height: 6px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 40%; bottom: 0; width: 1px; height: 3px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 50%; bottom: 0; width: 1px; height: 6px; background: #4DB6C4"></span>
+            <span style="position: absolute; left: 60%; bottom: 0; width: 1px; height: 3px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 70%; bottom: 0; width: 1px; height: 6px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 80%; bottom: 0; width: 1px; height: 3px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 90%; bottom: 0; width: 1px; height: 6px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 100%; bottom: 0; width: 1px; height: 3px; background: #5A5A60"></span>
+          </div>
+          <div style="position: absolute; left: 0; right: 0; top: 8px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #141416 50%, #4DB6C4 50%, #4DB6C4 53.5%, #141416 53.5%)"></div>
+          <div style="position: absolute; left: calc(53.5% - 6px); top: 2px; width: 12px; height: 15px; border-radius: 3px; background: #E8E8EA; box-shadow: 0 1px 3px rgba(0,0,0,.7)"></div>
+          <div class="num" style="position: absolute; left: 6px; right: 6px; top: 20px; height: 13px; font-size: 11px; color: #8A8A90">
+            <span style="position: absolute; left: 10%; transform: translateX(-50%)">−4</span><span style="position: absolute; left: 30%; transform: translateX(-50%)">−2</span><span style="position: absolute; left: 50%; transform: translateX(-50%)">0</span><span style="position: absolute; left: 70%; transform: translateX(-50%)">+2</span><span style="position: absolute; left: 90%; transform: translateX(-50%)">+4</span>
+          </div>
+        </div>
+        <span style="color: #8A8A90; font-size: 12px; line-height: 1.5">Stops, marked like the meter in a viewfinder. The edit fills from 0 in the accent.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 5px">
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 12px; color: #A0A0A6">Temperature</span><span class="num" style="min-width: 54px; text-align: right; padding: 1px 6px; border: 1px solid #313135; border-radius: 3px; background: #141416; font-size: 13px">5165 K</span></div>
+        <div style="position: relative; height: 34px">
+          <div style="position: absolute; left: 6px; right: 6px; top: 0; height: 6px">
+            <span style="position: absolute; left: 10%; bottom: 0; width: 1px; height: 6px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 20%; bottom: 0; width: 1px; height: 3px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 30%; bottom: 0; width: 1px; height: 6px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 31.65%; bottom: 0; width: 1px; height: 6px; background: #4DB6C4"></span>
+            <span style="position: absolute; left: 40%; bottom: 0; width: 1px; height: 3px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 55%; bottom: 0; width: 1px; height: 6px; background: #5A5A60"></span>
+            <span style="position: absolute; left: 80%; bottom: 0; width: 1px; height: 6px; background: #5A5A60"></span>
+          </div>
+          <div style="position: absolute; left: 0; right: 0; top: 8px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #4A78B0, #4A4A50 50%, #C9A24A)"></div>
+          <div style="position: absolute; left: calc(31.65% - 6px); top: 2px; width: 12px; height: 15px; border-radius: 3px; background: #E8E8EA; box-shadow: 0 1px 3px rgba(0,0,0,.7)"></div>
+          <div class="num" style="position: absolute; left: 6px; right: 6px; top: 20px; height: 13px; font-size: 11px; color: #8A8A90">
+            <span style="position: absolute; left: 10%; transform: translateX(-50%)">3k</span><span style="position: absolute; left: 30%; transform: translateX(-50%)">5k</span><span style="position: absolute; left: 55%; transform: translateX(-50%)">7.5k</span><span style="position: absolute; left: 80%; transform: translateX(-50%)">10k</span>
+          </div>
+        </div>
+        <span style="color: #8A8A90; font-size: 12px; line-height: 1.5">Kelvin, with the track tinted for what each end does. The detent is the camera's as-shot value.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 5px">
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 12px; color: #A0A0A6">Clarity</span><span class="num" style="display: flex; align-items: center; gap: 4px; justify-content: flex-end; min-width: 54px; padding: 1px 6px; border: 1px solid #3A3A3E; border-radius: 3px; background: #232326; font-size: 13px; color: #4DB6C4"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4"></path></svg>0.20</span></div>
+        <div style="position: relative; height: 34px">
+          <div style="position: absolute; left: 6px; right: 6px; top: 0; height: 6px">
+            <span style="position: absolute; left: 0; bottom: 0; width: 1px; height: 4px; background: #5A5A60"></span><span style="position: absolute; left: 25%; bottom: 0; width: 1px; height: 4px; background: #5A5A60"></span><span style="position: absolute; left: 50%; bottom: 0; width: 1px; height: 6px; background: #4DB6C4"></span><span style="position: absolute; left: 75%; bottom: 0; width: 1px; height: 4px; background: #5A5A60"></span><span style="position: absolute; left: 100%; bottom: 0; width: 1px; height: 4px; background: #5A5A60"></span>
+          </div>
+          <div style="position: absolute; left: 0; right: 0; top: 8px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #141416 50%, #4DB6C4 50%, #4DB6C4 60%, #141416 60%)"></div>
+          <div style="position: absolute; left: calc(60% - 6px); top: 2px; width: 12px; height: 15px; border-radius: 3px; background: #E8E8EA; box-shadow: 0 1px 3px rgba(0,0,0,.7)"></div>
+        </div>
+        <span style="color: #8A8A90; font-size: 12px; line-height: 1.5">Unitless sliders keep five plain ticks. Hovering the value offers the reset; a click takes it.</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; color: #8A8A90; font-size: 12px">
+      Typing a value: <span class="num" style="min-width: 54px; text-align: right; padding: 1px 6px; border: 1px solid #4DB6C4; border-radius: 3px; background: #141416; font-size: 13px; color: #E8E8EA">0.5|</span>
+      <kbd>Return</kbd> sets <span style="width: 4px"></span><kbd>Esc</kbd> cancels <span style="width: 4px"></span><kbd>↑</kbd><kbd>↓</kbd> nudge, with <kbd>Shift</kbd> for ten
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 14px; grid-column: 1 / -1">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Browsing: what you see before the photo is ready</h2>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px">
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px">
+        <div style="position: relative; height: 150px; background: #2A2A2C; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden">
+          <img src="/_blob/dc394ea5edc9680ae145409fd3374730" alt="" style="height: 120px; filter: blur(1.5px)">
+        </div>
+        <figcaption style="color: #8A8A90; line-height: 1.5"><span style="color: #E8E8EA">From the cache.</span> The small rendered picture is on screen the instant the arrow goes down.</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px">
+        <div style="position: relative; height: 150px; background: #2A2A2C; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden">
+          <img src="/_blob/dc394ea5edc9680ae145409fd3374730" alt="" style="height: 120px">
+          <span style="position: absolute; left: 0; bottom: 0; height: 2px; width: 62%; background: #4DB6C4"></span>
+        </div>
+        <figcaption style="color: #8A8A90; line-height: 1.5"><span style="color: #E8E8EA">Sharp at screen size.</span> If you zoom in, a hairline runs along the bottom while full size renders.</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px">
+        <div style="height: 150px; background: #2A2A2C; border-radius: 4px; display: flex; align-items: center; justify-content: center">
+          <span style="color: #8A8A90; font-size: 12px">Decoding _PIC8148.ARW</span>
+        </div>
+        <figcaption style="color: #8A8A90; line-height: 1.5"><span style="color: #E8E8EA">Not cached yet.</span> A calm blank with the file name, never the previous photo.</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px">
+        <div style="height: 150px; background: #2A2A2C; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 14px; text-align: center">
+          <span style="font-size: 12px; line-height: 1.45">Couldn't read _PIC8148.ARW: the file ends before its image data.</span>
+          <span style="display: flex; gap: 6px">
+            <button style="height: 26px; padding: 0 10px; background: #232326; border: 1px solid #313135; border-radius: 5px">Try again</button>
+            <button style="height: 26px; padding: 0 10px; background: transparent; border: 1px solid #313135; border-radius: 5px; color: #8A8A90">Skip</button>
+          </span>
+        </div>
+        <figcaption style="color: #8A8A90; line-height: 1.5"><span style="color: #E8E8EA">Couldn't open.</span> Says what failed and offers the two things you can do. Arrows keep browsing.</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px">
+        <div style="height: 150px; background: #090807; border-radius: 4px; display: flex; align-items: center; gap: 8px; padding: 0 12px">
+          <span style="width: 74px; height: 50px; border: 2px solid #4DB6C4; border-radius: 3px; overflow: hidden"><img src="/_blob/b3184c52635dba7e94640c9e527d0517" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block"></span>
+          <span style="width: 74px; height: 50px; border-radius: 3px; overflow: hidden; position: relative"><img src="/_blob/dc394ea5edc9680ae145409fd3374730" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block"><span style="position: absolute; right: 4px; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; background: #E8E8EA; box-shadow: 0 0 0 1px rgba(0,0,0,0.6)"></span></span>
+          <span style="width: 74px; height: 50px; border-radius: 3px; overflow: hidden; opacity: 0.4; position: relative"><img src="/_blob/2559d1f9cf1b4a62f179687b2d52743b" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block"><svg style="position: absolute; left: 4px; top: 4px" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#C4574D" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></span>
+        </div>
+        <figcaption style="color: #8A8A90; line-height: 1.5"><span style="color: #E8E8EA">Filmstrip.</span> Current, ready in the cache (the white dot), and rejected.</figcaption>
+      </figure>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1120,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

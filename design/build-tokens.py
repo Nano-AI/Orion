@@ -180,6 +180,8 @@ def csharp_file(t):
         for name, v in strip_comments(t[group]).items():
             if isinstance(v, (int, float)):
                 out.append(f"    public const double {name[0].upper() + name[1:]} = {v};")
+            else:   # a font family, say: Shared/Design/Type.cs loads `numeral` by this name
+                out.append(f'    public const string {name[0].upper() + name[1:]} = "{v}";')
         out.append("}")
     return "\n".join(out) + "\n"
 

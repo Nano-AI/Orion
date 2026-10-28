@@ -36,6 +36,7 @@ sealed class GalleryGrid : Panel {
     protected override Size MeasureOverride(Size available) {
         double width = double.IsFinite(available.Width) ? available.Width : Cell * 4 + Spacing * 5;
         ColumnCount = Columns(width - Spacing * 2, Cell);
+        GalleryMode.Columns = ColumnCount;
         _columnWidth = Math.Max(0, (width - Spacing * (ColumnCount + 1)) / ColumnCount);
         _rows.Clear();
         double height = Spacing;

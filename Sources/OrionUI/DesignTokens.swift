@@ -16,6 +16,8 @@ public enum Orion {
         public static let panel = Color(hex: 0x1B1B1D)
         /// Controls, cells, inset wells
         public static let raised = Color(hex: 0x232326)
+        /// A hovered or pressed control's fill
+        public static let hover = Color(hex: 0x2E2E32)
         /// Canvas surround — what the photo is judged against
         public static let surround = Color(hex: 0x2A2A2C)
         /// Hairlines, borders, dividers
@@ -26,6 +28,8 @@ public enum Orion {
         public static let text = Color(hex: 0xE8E8EA)
         /// Labels, secondary text
         public static let dim = Color(hex: 0x8A8A90)
+        /// A control's name (slider and field labels): a step above dim notes
+        public static let label = Color(hex: 0xA0A0A6)
         /// Tertiary text, inactive icons, detents
         public static let faint = Color(hex: 0x5A5A60)
         /// Interactive and active states ONLY. Never decorative.
@@ -52,11 +56,13 @@ public enum Orion {
         public static let ground = SIMD3<Float>(0.0784, 0.0784, 0.0863)
         public static let panel = SIMD3<Float>(0.1059, 0.1059, 0.1137)
         public static let raised = SIMD3<Float>(0.1373, 0.1373, 0.1490)
+        public static let hover = SIMD3<Float>(0.1804, 0.1804, 0.1961)
         public static let surround = SIMD3<Float>(0.1647, 0.1647, 0.1725)
         public static let line = SIMD3<Float>(0.1922, 0.1922, 0.2078)
         public static let rail = SIMD3<Float>(0.2275, 0.2275, 0.2431)
         public static let text = SIMD3<Float>(0.9098, 0.9098, 0.9176)
         public static let dim = SIMD3<Float>(0.5412, 0.5412, 0.5647)
+        public static let label = SIMD3<Float>(0.6275, 0.6275, 0.6510)
         public static let faint = SIMD3<Float>(0.3529, 0.3529, 0.3765)
         public static let accent = SIMD3<Float>(0.3020, 0.7137, 0.7686)
         public static let reject = SIMD3<Float>(0.7686, 0.3412, 0.3020)

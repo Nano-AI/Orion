@@ -83,6 +83,11 @@ public:
     /// Renders the preview graph. Returns GPU milliseconds.
     double renderPreview();
 
+    /// Both graphs give their render textures back to Metal and keep the
+    /// decoded photo: what a cache does to a photo it holds but is not
+    /// showing (decision #318). The next render of either rebuilds it.
+    void releaseRenderMemory() noexcept;
+
     // ── State that is not an adjustment ───────────────────────────────────
     //
     // ⚠ A brush stroke, a raster matte and a creative LUT are all graph state

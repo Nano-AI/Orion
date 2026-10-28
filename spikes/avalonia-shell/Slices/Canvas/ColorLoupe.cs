@@ -34,8 +34,7 @@ public sealed class ColorLoupe : Panel {
         _swatchLayer.InvalidateVisual();
         if (CanvasState.HoverPoint is not { } p || !Showing) return;
         ((TextBlock)_label.Child!).Text = CanvasState.HoverCaption;
-        _label.Measure(Size.Infinity);
-        var label = _label.DesiredSize;
+        var label = Drawn.Measured(_label);
         // A VStack of swatch, 5, caption, centered on (x, y − diameter).
         double top = p.Y - Diameter - (Diameter + 5 + label.Height) / 2;
         _swatch = new Point(p.X, top + Diameter / 2);

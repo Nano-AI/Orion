@@ -155,6 +155,11 @@ double Engine::renderPreview() {
     return preview_->render();
 }
 
+void Engine::releaseRenderMemory() noexcept {
+    if (develop_) develop_->graph().releaseOutputs();
+    if (preview_) preview_->graph().releaseOutputs();
+}
+
 void Engine::setBrushStroke(int component, const float* xy,
                             const float* erase, int count) {
     if (!develop_) throw std::runtime_error("no image open");

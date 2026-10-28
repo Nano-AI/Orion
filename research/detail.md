@@ -113,6 +113,7 @@ the strength adapt correctly across the tonal range.
 | Per-scale norms ‖W_j‖₂ = 0.8907, 0.2007, 0.0855, 0.0412 | `deep-research-2026-07-27.md` §2 | `DevelopPipeline.cpp` |
 | MAD → σ, constant 1.4826 | Donoho & Johnstone (1994), *Ideal Spatial Adaptation by Wavelet Shrinkage*, Biometrika 81(3) | `raw/NoiseProfile.cpp` |
 | Poisson–Gaussian model `var = a·x + b`, fitted per frame | Foi, Trimeche, Katkovnik & Egiazarian (2008), *Practical Poissonian-Gaussian Noise Modeling and Fitting for Single-Image Raw-Data*, IEEE TIP 17(10), 1737–1754 | `raw/NoiseProfile.cpp` |
+| Quantile binning and each bin's median by counting, on integer keys (#319) | Counting sort: Cormen, Leiserson, Rivest & Stein (2009), *Introduction to Algorithms*, 3rd ed., MIT Press, §8.2. A median is an order statistic (§9), read off the same cumulative counts | `raw/NoiseProfile.cpp` |
 
 **Deliberate deviations, and why.**
 
@@ -129,6 +130,18 @@ the strength adapt correctly across the tonal range.
   bottom twelfth of the range. With equal-width bins eleven came back empty,
   the fit was abandoned, and the denoiser silently did nothing on exactly the
   frames that needed it most.
+- **Counted, not sorted (#319).** The brightness `p + q + r` and the second
+  difference are integers in raw counts (black cancels out of the difference),
+  so the bins come from a counting sort and each bin's median from a
+  histogram. That is the same estimator, not an approximation of it: the
+  sampling grid (every fourth row and column, same-colour stride 2) is
+  untouched and nothing is subsampled, so no sampling argument is needed. The
+  only change is ties at a bin edge, which `std::sort` ordered arbitrarily
+  (unstable) and a counting sort keeps in scan order. On the three ILCE-7M3
+  samples `a` and `b` agree within 2e-5 relative, except `b` on the dark 8148 frame
+  (−0.19%, preview +0.58%), each inside that frame's own spread between
+  disjoint same-phase grids (±0.3% full frame, ±1.9% preview). The function
+  went from 80 ms to 5 ms.
 - **Four scales, not five.** Each scale is two full-resolution `rgba16f`
   textures — 388 MB a scale at 24 MP. The fifth scale's norm is 0.0204 (⚠ this
   line said 0.0202 until `testDenoiseSmoothnessGpu` recomputed it from the taps

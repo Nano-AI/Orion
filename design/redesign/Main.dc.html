@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orion Develop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&amp;display=swap">
+<style>
+body{margin:0;background:#141416}
+a{color:#4DB6C4}a:hover{color:#7fd0db}
+.num{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:0.01em}
+kbd{display:inline-block;min-width:15px;padding:0 4px;border:1px solid #3A3A3E;border-bottom-width:2px;border-radius:3px;background:#232326;color:#E8E8EA;font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-size:11px;line-height:16px;text-align:center}
+button{font:inherit;color:inherit;cursor:pointer;transition:transform 100ms ease-out}
+button:active{transform:scale(0.97)}
+button:focus-visible,select:focus-visible,a:focus-visible{outline:none;box-shadow:0 0 0 2px #141416,0 0 0 4px #4DB6C4}
+input.track{-webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;margin:0;cursor:pointer}
+input.track::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:15px;border-radius:3px;background:#E8E8EA;border:0;box-shadow:0 1px 3px rgba(0,0,0,.7)}
+input.track::-moz-range-thumb{width:12px;height:15px;border-radius:3px;background:#E8E8EA;border:0;box-shadow:0 1px 3px rgba(0,0,0,.7)}
+input.track:focus-visible{outline:2px solid #4DB6C4;outline-offset:7px}
+.ind{transition:transform 340ms cubic-bezier(0.22,1,0.36,1)}
+@media (prefers-reduced-motion: reduce){.ind{transition:none}button:active{transform:none}}
+@media (max-width: 760px){.workspace{flex-direction:column!important}.tools{flex:0 0 auto!important;border-left:0!important;border-top:1px solid #313135}}
+@media (prefers-reduced-transparency: reduce){.float{backdrop-filter:none!important;background:#1B1B1D!important}}
+</style>
+</helmet>
+<div style="height: 100vh; min-height: 760px; display: flex; flex-direction: column; overflow: auto; background: #141416; color: #E8E8EA; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 14px; min-height: 48px; box-sizing: border-box; background: #1B1B1D; border-bottom: 1px solid #313135">
+    <div style="display: flex; align-items: center; gap: 12px; flex: 1 1 260px; min-width: 0">
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em">Orion</span>
+      <button style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: #232326; border: 1px solid #313135; border-radius: 5px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z"></path></svg>
+        Open
+      </button>
+      <span style="color: #8A8A90; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">samples <span style="color: #5A5A60" aria-hidden="true">/</span> <span style="color: #E8E8EA">_PIC8095.ARW</span></span>
+    </div>
+
+    <div style="display: flex; padding: 2px; background: #141416; border: 1px solid #313135; border-radius: 6px" role="group" aria-label="Mode">
+      <a href="Library.dc.html" style="display: flex; align-items: center; height: 24px; padding: 0 14px; border-radius: 4px; color: #8A8A90; text-decoration: none">Library</a>
+      <button aria-pressed="true" style="height: 24px; padding: 0 14px; border: 0; border-radius: 4px; background: #232326; color: #E8E8EA">Develop</button>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; flex: 1 1 260px; justify-content: flex-end; flex-wrap: wrap">
+      <div style="display: flex; background: #232326; border: 1px solid #313135; border-radius: 5px" role="group" aria-label="History">
+        <button aria-label="Undo" style="width: 30px; height: 26px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4"></path></svg></button>
+        <span style="width: 1px; background: #313135" aria-hidden="true"></span>
+        <button aria-label="Redo" disabled style="width: 30px; height: 26px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: #5A5A60"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h4"></path></svg></button>
+      </div>
+      <div style="display: flex; background: #232326; border: 1px solid #313135; border-radius: 5px" role="group" aria-label="Rotate">
+        <button aria-label="Rotate left" style="width: 30px; height: 26px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7M6 2v5h5"></path></svg></button>
+        <span style="width: 1px; background: #313135" aria-hidden="true"></span>
+        <button aria-label="Rotate right" style="width: 30px; height: 26px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M18 2v5h-5"></path></svg></button>
+      </div>
+      <button aria-pressed="{{compareOn}}" onClick="{{toggleCompare}}" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: {{compareBg}}; border: 1px solid {{compareLine}}; border-radius: 5px; color: {{compareInk}}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3zM12 5v14"></path></svg>
+        Compare
+      </button>
+      <button style="height: 28px; padding: 0 10px; background: transparent; border: 1px solid #313135; border-radius: 5px; color: #8A8A90">Reset</button>
+      <button style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; background: {{accent}}; border: 0; border-radius: 5px; color: #0E1416; font-weight: 600">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M4 15v5h16v-5"></path></svg>
+        Export
+      </button>
+    </div>
+  </header>
+
+  <div class="workspace" style="flex: 1 1 auto; min-height: 0; display: flex">
+    <main style="flex: 1 1 auto; min-width: 0; min-height: 420px; position: relative; background: #2A2A2C">
+      <img src="/_blob/c7eb276d97f448575153d6cfcdc639d6" alt="Space Needle against a clear blue sky, with trees and a playground sign below" style="position: absolute; left: 24px; top: 20px; width: calc(100% - 48px); height: calc(100% - 76px); object-fit: contain; filter: drop-shadow(0 2px 14px rgba(0,0,0,0.45))">
+
+      <sc-if value="{{compareOn}}" hint-placeholder-val="{{false}}">
+        <div style="position: absolute; top: 20px; bottom: 56px; left: 50%; width: 1px; background: rgba(232,232,234,0.85)" aria-hidden="true"></div>
+        <span class="float" style="position: absolute; top: 34px; left: calc(50% - 72px); padding: 3px 8px; border-radius: 4px; background: rgba(20,20,22,0.72); backdrop-filter: blur(16px); color: #E8E8EA; font-size: 11px">Before</span>
+        <span class="float" style="position: absolute; top: 34px; left: calc(50% + 12px); padding: 3px 8px; border-radius: 4px; background: rgba(20,20,22,0.72); backdrop-filter: blur(16px); color: #E8E8EA; font-size: 11px">After</span>
+      </sc-if>
+
+      <div class="float" style="position: absolute; left: 16px; bottom: 16px; display: flex; align-items: center; gap: 2px; padding: 3px; background: rgba(20,20,22,0.72); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px" role="group" aria-label="Zoom">
+        <button aria-pressed="true" style="height: 24px; padding: 0 10px; border: 0; border-radius: 4px; background: rgba(255,255,255,0.1)">Fit</button>
+        <button aria-pressed="false" class="num" style="height: 24px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #B4B4BA; font-size: 13px">100%</button>
+      </div>
+
+      <div class="float" style="position: absolute; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 2px; padding: 3px 4px; background: rgba(20,20,22,0.72); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px" role="group" aria-label="Rating">
+        <sc-for list="{{stars}}" as="st" hint-placeholder-count="5">
+          <button aria-label="{{st.label}}" aria-pressed="{{st.on}}" onClick="{{st.pick}}" style="width: 26px; height: 24px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: {{st.color}}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="{{st.fill}}" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l2.9 6.2 6.6.7-5 4.5 1.5 6.6L12 17.1l-6 3.4 1.5-6.6-5-4.5 6.6-.7z"></path></svg>
+          </button>
+        </sc-for>
+        <span style="width: 1px; height: 16px; background: rgba(255,255,255,0.12); margin: 0 4px" aria-hidden="true"></span>
+        <button style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #B4B4BA">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+          Reject
+        </button>
+      </div>
+    </main>
+
+    <aside class="tools" style="flex: 0 0 322px; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #1B1B1D; border-left: 1px solid #313135" aria-label="Develop tools">
+      <section style="padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 6px" aria-label="Histogram">
+        <svg viewBox="0 0 294 92" style="width: 100%; height: 92px; background: #090807; border: 1px solid #313135; border-radius: 3px" role="img" aria-label="Histogram: most tones in the upper midtones and highlights, with a blue-sky peak near white">
+          <g style="mix-blend-mode: screen">
+            <path d="M0 92 L0 60 C10 40 20 58 40 70 C70 80 110 78 140 76 C160 74 170 40 180 30 C200 26 220 24 240 22 C260 20 270 8 280 4 C286 30 290 80 294 92 Z" fill="#3A6FC4" opacity="0.9"></path>
+            <path d="M0 92 L0 66 C12 50 24 66 50 74 C80 82 110 74 130 46 C150 38 170 36 190 40 C210 44 230 40 250 46 C266 50 278 60 294 92 Z" fill="#3AA84F" opacity="0.85"></path>
+            <path d="M0 92 L0 70 C14 58 30 72 60 78 C90 84 100 60 112 40 C126 34 140 36 150 44 C170 60 200 70 230 74 C260 78 280 84 294 92 Z" fill="#C4433A" opacity="0.85"></path>
+          </g>
+          <line x1="98" y1="0" x2="98" y2="92" stroke="#313135" stroke-width="1"></line>
+          <line x1="196" y1="0" x2="196" y2="92" stroke="#313135" stroke-width="1"></line>
+        </svg>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <button aria-label="Shadow clipping: 1.13% of pixels. Show on photo" class="num" style="display: flex; align-items: center; gap: 4px; border: 0; background: transparent; padding: 0; color: #F0C674; font-size: 12px"><svg width="7" height="8" viewBox="0 0 7 8" aria-hidden="true"><path d="M7 0v8L0 4z" fill="currentColor"></path></svg>1.13%</button>
+          <span class="num" style="display: flex; gap: 12px; font-size: 13px; color: #E8E8EA" aria-label="Captured at 1/640 second, f/4.0, ISO 800, 24 millimetres">
+            <span>1/640</span><span>f/4.0</span><span>ISO 800</span><span>24mm</span>
+          </span>
+          <button aria-label="Highlight clipping: none. Show on photo" class="num" style="display: flex; align-items: center; gap: 4px; border: 0; background: transparent; padding: 0; color: #8A8A90; font-size: 12px">0%<svg width="7" height="8" viewBox="0 0 7 8" aria-hidden="true"><path d="M0 0v8l7-4z" fill="currentColor"></path></svg></button>
+        </div>
+      </section>
+
+      <nav style="position: relative; display: flex; padding: 0 6px; border-top: 1px solid #313135; border-bottom: 1px solid #313135" aria-label="Tool tabs">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="7">
+          <button aria-pressed="{{t.selected}}" onClick="{{t.pick}}" style="flex: 1 1 0; min-width: 0; height: 34px; padding: 0 1px; border: 0; background: transparent; color: {{t.color}}; font-size: 12px; font-weight: 500">{{t.name}}</button>
+        </sc-for>
+        <span class="ind" style="position: absolute; left: 6px; bottom: -1px; width: calc((100% - 12px) / 7); height: 2px; background: {{accent}}; transform: translateX({{indX}})" aria-hidden="true"></span>
+      </nav>
+
+      <div style="flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 18px 14px 24px; display: flex; flex-direction: column; gap: 24px">
+        <sc-for list="{{plates}}" as="p" hint-placeholder-count="3">
+          <section style="display: flex; flex-direction: column; gap: 14px">
+            <div style="display: flex; align-items: center; gap: 8px; min-height: 22px">
+              <h2 style="margin: 0; font-size: 13px; font-weight: 600">{{p.title}}</h2>
+              <sc-if value="{{p.modified}}" hint-placeholder-val="{{false}}">
+                <span style="width: 5px; height: 5px; border-radius: 50%; background: #F0C674" title="Edited" aria-label="Edited"></span>
+              </sc-if>
+              <span style="flex: 1; height: 1px; background: #313135" aria-hidden="true"></span>
+              <sc-if value="{{p.isAuto}}" hint-placeholder-val="{{false}}">
+                <button style="height: 22px; padding: 0 9px; background: #232326; border: 1px solid #313135; border-radius: 4px; font-size: 12px">Auto</button>
+              </sc-if>
+              <sc-if value="{{p.isPick}}" hint-placeholder-val="{{false}}">
+                <button aria-label="Pick white balance from a neutral in the photo" title="Pick white balance from the photo" style="width: 26px; height: 22px; background: #232326; border: 1px solid #313135; border-radius: 4px; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8 5 17l-1 3 3-1 9-9M13 7l4 4M15 5a2.8 2.8 0 0 1 4 4l-2 2-4-4z"></path></svg></button>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{p.hasNote}}" hint-placeholder-val="{{false}}">
+              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #8A8A90">{{p.note}}</p>
+            </sc-if>
+
+            <sc-if value="{{p.wheels}}" hint-placeholder-val="{{false}}">
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+                <sc-for list="{{wheels}}" as="w" hint-placeholder-count="3">
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+                    <div style="width: 78px; height: 78px; border-radius: 50%; position: relative; background: radial-gradient(circle, #1B1B1D 0 14%, rgba(27,27,29,0) 72%), conic-gradient(from 90deg, #C4433A, #B04AB0, #3A6FC4, #3AB0C4, #3AA84F, #C4B23A, #C4433A); box-shadow: inset 0 0 0 1px #313135" role="img" aria-label="{{w.label}}">
+                      <span style="position: absolute; width: 9px; height: 9px; border-radius: 50%; border: 2px solid #E8E8EA; left: {{w.x}}; top: {{w.y}}; transform: translate(-50%, -50%)" aria-hidden="true"></span>
+                    </div>
+                    <span style="font-size: 11px; color: #8A8A90">{{w.name}}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{p.aspect}}" hint-placeholder-val="{{false}}">
+              <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px" role="group" aria-label="Aspect ratio">
+                <sc-for list="{{aspects}}" as="a" hint-placeholder-count="5">
+                  <button aria-pressed="{{a.selected}}" class="{{a.cls}}" style="height: 26px; border: 1px solid #313135; border-radius: 4px; background: {{a.bg}}; color: {{a.color}}; font-size: {{a.size}}">{{a.name}}</button>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{p.rotate}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; gap: 6px">
+                <button style="flex: 1; height: 28px; background: #232326; border: 1px solid #313135; border-radius: 5px">Rotate left</button>
+                <button style="flex: 1; height: 28px; background: #232326; border: 1px solid #313135; border-radius: 5px">Rotate right</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{p.masks}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #8A8A90">No masks on this photo. Add one to edit part of the frame.</p>
+                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px">
+                  <button style="height: 30px; background: #232326; border: 1px solid #313135; border-radius: 5px">Brush</button>
+                  <button style="height: 30px; background: #232326; border: 1px solid #313135; border-radius: 5px">Linear gradient</button>
+                  <button style="height: 30px; background: #232326; border: 1px solid #313135; border-radius: 5px">Radial gradient</button>
+                  <button style="height: 30px; background: #232326; border: 1px solid #313135; border-radius: 5px">Color range</button>
+                </div>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8A8A90"><input type="checkbox" style="accent-color: #4DB6C4; margin: 0"> Show mask overlay</label>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{p.presets}}" hint-placeholder-val="{{false}}">
+              <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+                <sc-for list="{{presets}}" as="pr" hint-placeholder-count="4">
+                  <li><button style="width: 100%; display: flex; justify-content: space-between; align-items: center; height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: #232326; text-align: left"><span>{{pr.name}}</span><span style="color: #8A8A90; font-size: 11px">{{pr.groups}}</span></button></li>
+                </sc-for>
+              </ul>
+            </sc-if>
+
+            <sc-for list="{{p.sliders}}" as="s" hint-placeholder-count="2">
+              <div style="display: flex; flex-direction: column; gap: 5px">
+                <div style="display: flex; justify-content: space-between; align-items: center">
+                  <label for="{{s.id}}" style="font-size: 12px; color: #A0A0A6">{{s.name}}</label>
+                  <button onClick="{{s.reset}}" aria-label="{{s.label}}" title="{{s.label}}" class="num" style="min-width: 54px; height: 21px; padding: 0 6px; border: 1px solid #313135; border-radius: 3px; background: #141416; color: {{s.valueColor}}; font-size: 13px; text-align: right">{{s.value}}</button>
+                </div>
+                <div style="position: relative; padding-top: 7px">
+                  <div style="position: absolute; left: 6px; right: 6px; top: 0; height: 6px" aria-hidden="true">
+                    <sc-for list="{{s.marks}}" as="m" hint-placeholder-count="5">
+                      <span style="position: absolute; left: {{m.left}}; bottom: 0; width: 1px; height: {{m.h}}; background: #5A5A60"></span>
+                    </sc-for>
+                    <span style="position: absolute; left: {{s.basePct}}; bottom: 0; width: 1px; height: 6px; background: {{accent}}"></span>
+                  </div>
+                  <input class="track" type="range" id="{{s.id}}" min="{{s.min}}" max="{{s.max}}" step="{{s.step}}" value="{{s.v}}" onChange="{{s.change}}" style="background: {{s.track}}">
+                  <sc-if value="{{s.hasScale}}" hint-placeholder-val="{{false}}">
+                    <div style="position: relative; height: 13px; margin: 5px 6px 0" aria-hidden="true">
+                      <sc-for list="{{s.nums}}" as="n" hint-placeholder-count="5">
+                        <span class="num" style="position: absolute; left: {{n.left}}; transform: translateX(-50%); font-size: 11px; line-height: 13px; color: #8A8A90">{{n.text}}</span>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </section>
+        </sc-for>
+      </div>
+
+      <footer style="display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid #313135; font-size: 12px; color: #8A8A90">
+        <span style="display: flex; align-items: center; gap: 4px; white-space: nowrap"><kbd>←</kbd><kbd>→</kbd> Browse</span>
+        <span style="display: flex; align-items: center; gap: 4px; white-space: nowrap"><kbd>1</kbd>–<kbd>5</kbd> Rate</span>
+        <span style="display: flex; align-items: center; gap: 4px; white-space: nowrap"><kbd>X</kbd> Reject</span>
+      </footer>
+    </aside>
+  </div>
+
+  <div style="flex: 0 0 98px; display: flex; align-items: stretch; background: #090807; border-top: 1px solid #313135">
+    <div style="flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 0 14px; border-right: 1px solid #313135; background: #1B1B1D">
+      <label style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #8A8A90">Show
+        <select style="height: 24px; background: #232326; color: #E8E8EA; border: 1px solid #313135; border-radius: 4px; font: inherit; font-size: 12px">
+          <option>All</option><option>Rated</option><option>Rejected</option>
+        </select>
+      </label>
+      <span style="font-size: 11px; color: #8A8A90"><span class="num" style="font-size: 12px; color: #B4B4BA">3</span> photos</span>
+    </div>
+    <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 6px 0; overflow-x: auto">
+      <div style="height: 6px; background: repeating-linear-gradient(90deg, #4C4A47 0 7px, transparent 7px 16px)" aria-hidden="true"></div>
+      <div style="display: flex; gap: 8px; padding: 0 12px">
+        <sc-for list="{{film}}" as="f" hint-placeholder-count="3">
+          <button aria-label="{{f.label}}" aria-current="{{f.current}}" style="flex: 0 0 auto; position: relative; width: 96px; height: 62px; padding: 0; border: 2px solid {{f.ring}}; border-radius: 3px; background: #141416; overflow: hidden">
+            <img src="{{f.src}}" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block">
+            <sc-if value="{{f.cached}}" hint-placeholder-val="{{false}}">
+              <span style="position: absolute; right: 4px; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; background: #E8E8EA; box-shadow: 0 0 0 1px rgba(0,0,0,0.6)" title="Ready in the cache"></span>
+            </sc-if>
+          </button>
+        </sc-for>
+      </div>
+      <div style="height: 6px; background: repeating-linear-gradient(90deg, #4C4A47 0 7px, transparent 7px 16px)" aria-hidden="true"></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#4DB6C4","options":["#4DB6C4","#E0A458","#9AA7FF"]},"$preview":{"width":1440,"height":900}}'>
+const TRACK = {
+  temp: 'linear-gradient(90deg, #4A78B0, #4A4A50 50%, #C9A24A)',
+  tint: 'linear-gradient(90deg, #4F9C5C, #4A4A50 50%, #B25AA0)',
+  presence: 'linear-gradient(90deg, #6A6A70, #4A4A50 50%, #C0566A)',
+  fringeRC: 'linear-gradient(90deg, #B5524A, #4A4A50 50%, #4AA7B5)',
+  fringeBY: 'linear-gradient(90deg, #4A6FB5, #4A4A50 50%, #C2B24A)',
+};
+// Sliders with a physical unit print their scale like a light meter: marks at
+// every step, numerals at the labelled ones. Unitless sliders get five ticks.
+const SCALES = {
+  exposure: { marks: [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5], labels: [-4, -2, 0, 2, 4], text: (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v) },
+  temperature: { marks: [3000, 4000, 5000, 6000, 7500, 10000], labels: [3000, 5000, 7500, 10000], text: (v) => (v / 1000) + 'k' },
+  angle: { marks: [-45, -30, -15, 0, 15, 30, 45], labels: [-30, 0, 30], text: (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v) + '°' },
+};
+function S(id, name, min, max, base, dec, unit, tint, start) {
+  return { id: id, name: name, min: min, max: max, base: base, dec: dec, unit: unit || '', tint: tint || null, start: start === undefined ? base : start };
+}
+const TABS = ['Light', 'Color', 'Detail', 'Optics', 'Mask', 'Crop', 'Presets'];
+const PLATES = {
+  Light: [
+    { title: 'White balance', action: 'Pick', sliders: [S('temperature', 'Temperature', 2000, 12000, 5165, 0, ' K', TRACK.temp), S('tint', 'Tint', -1, 1, 0.03, 2, '', TRACK.tint)] },
+    { title: 'Light', action: 'Auto', sliders: [S('exposure', 'Exposure', -5, 5, 0, 2, ' EV', null, 0.35), S('contrast', 'Contrast', 0.5, 2, 1.45, 2), S('highlights', 'Highlights', -1, 1, 0, 2, '', null, -0.4), S('shadows', 'Shadows', -1, 1, 0, 2, '', null, 0.45), S('whites', 'Whites', -1, 1, 0, 2), S('blacks', 'Blacks', -1, 1, 0, 2)] },
+    { title: 'Presence', sliders: [S('clarity', 'Clarity', -1, 1, 0, 2), S('dehaze', 'Dehaze', 0, 1, 0, 2)] },
+  ],
+  Color: [
+    { title: 'Presence', sliders: [S('vibrance', 'Vibrance', -1, 1, 0, 2, '', TRACK.presence, 0.3), S('saturation', 'Saturation', -1, 1, 0, 2, '', TRACK.presence)] },
+    { title: 'Color grading', wheels: true, sliders: [S('balance', 'Balance', -1, 1, 0, 2)] },
+  ],
+  Detail: [
+    { title: 'Noise reduction', sliders: [S('nr_luma', 'Luminance', 0, 4, 0, 2), S('nr_nonlocal', 'Non-local', 0, 1, 0, 2), S('nr_detail', 'Detail', 0, 1, 0, 2), S('nr_color', 'Color', 0, 4, 0, 2), S('nr_smooth', 'Smoothness', 0, 1, 0, 2)] },
+    { title: 'Sharpening', sliders: [S('sharpen', 'Amount', 0, 2, 0, 2), S('sharpen_radius', 'Radius', 0.5, 3, 1, 1)] },
+  ],
+  Optics: [
+    { title: 'Lens', note: 'No profile for this lens in the lensfun database, so distortion and vignetting are corrected by hand.', sliders: [S('distortion', 'Distortion', -1, 1, 0, 2), S('vignetting', 'Vignetting', -1, 1, 0, 2), S('fringe_rc', 'Fringe red/cyan', -1, 1, 0, 2, '', TRACK.fringeRC), S('fringe_by', 'Fringe blue/yellow', -1, 1, 0, 2, '', TRACK.fringeBY)] },
+  ],
+  Mask: [{ title: 'Local adjustments', masks: true }],
+  Crop: [
+    { title: 'Aspect', aspect: true },
+    { title: 'Straighten', sliders: [S('angle', 'Angle', -45, 45, 0, 1, '°')] },
+    { title: 'Rotate', rotate: true },
+    { title: 'Perspective', sliders: [S('vertical', 'Vertical', -1, 1, 0, 2), S('horizontal', 'Horizontal', -1, 1, 0, 2)] },
+  ],
+  Presets: [{ title: 'Presets', presets: true }],
+};
+const FILM = [
+  { name: '_PIC8095.ARW', src: '/_blob/b3184c52635dba7e94640c9e527d0517', cached: false },
+  { name: '_PIC8148.ARW', src: '/_blob/2559d1f9cf1b4a62f179687b2d52743b', cached: true },
+  { name: '_PIC8220.ARW', src: '/_blob/dc394ea5edc9680ae145409fd3374730', cached: true },
+];
+const pct = (v, s) => ((v - s.min) / (s.max - s.min) * 100);
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'Light', vals: {}, rating: 3, compare: false };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#4DB6C4';
+    const st = this.state || {};
+    const tab = st.tab || 'Light';
+    const vals = st.vals || {};
+    const fmt = (v, s) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(s.dec) + s.unit;
+    const plates = (PLATES[tab] || []).map((p) => {
+      const sliders = (p.sliders || []).map((s) => {
+        const v = vals[s.id] ?? s.start;
+        const modified = Math.abs(v - s.base) >= 0.5 * Math.pow(10, -s.dec);
+        const a = Math.min(pct(v, s), pct(s.base, s)).toFixed(2), b = Math.max(pct(v, s), pct(s.base, s)).toFixed(2);
+        const scale = SCALES[s.id];
+        const marks = scale
+          ? scale.marks.map((m) => ({ left: pct(m, s).toFixed(2) + '%', h: scale.labels.indexOf(m) >= 0 ? '6px' : '3px' }))
+          : [0, 25, 50, 75, 100].map((m) => ({ left: m + '%', h: '4px' }));
+        return {
+          id: s.id, name: s.name, min: s.min, max: s.max, v: v,
+          step: Math.pow(10, -s.dec),
+          value: fmt(v, s),
+          valueColor: modified ? accent : '#E8E8EA',
+          basePct: pct(s.base, s).toFixed(2) + '%',
+          track: s.tint || (modified ? 'linear-gradient(90deg, #141416 ' + a + '%, ' + accent + ' ' + a + '%, ' + accent + ' ' + b + '%, #141416 ' + b + '%)' : '#141416'),
+          marks: marks,
+          hasScale: !!scale,
+          nums: scale ? scale.labels.map((m) => ({ left: pct(m, s).toFixed(2) + '%', text: scale.text(m) })) : [],
+          label: 'Reset ' + s.name + ' to ' + fmt(s.base, s),
+          modified: modified,
+          change: (e) => { const x = parseFloat(e.target.value); this.setState((o) => ({ vals: Object.assign({}, o.vals, { [s.id]: x }) })); },
+          reset: () => this.setState((o) => ({ vals: Object.assign({}, o.vals, { [s.id]: s.base }) })),
+        };
+      });
+      return {
+        title: p.title, note: p.note || '', hasNote: !!p.note,
+        isAuto: p.action === 'Auto', isPick: p.action === 'Pick',
+        wheels: !!p.wheels, aspect: !!p.aspect, rotate: !!p.rotate, masks: !!p.masks, presets: !!p.presets,
+        sliders: sliders, modified: sliders.some((s) => s.modified),
+      };
+    });
+    const i = TABS.indexOf(tab);
+    const tabs = TABS.map((name) => ({
+      name: name, selected: name === tab,
+      color: name === tab ? '#E8E8EA' : '#8A8A90',
+      pick: () => this.setState({ tab: name }),
+    }));
+    const rating = st.rating || 0;
+    const stars = [1, 2, 3, 4, 5].map((n) => ({
+      label: 'Rate ' + n + (n === 1 ? ' star' : ' stars'), on: n <= rating,
+      fill: n <= rating ? 'currentColor' : 'none',
+      color: n <= rating ? '#F0C674' : '#B4B4BA',
+      pick: () => this.setState({ rating: rating === n ? 0 : n }),
+    }));
+    const film = FILM.map((f, k) => ({ src: f.src, label: f.name, cached: f.cached, current: k === 0 ? 'true' : 'false', ring: k === 0 ? accent : 'transparent' }));
+    const wheels = [
+      { name: 'Shadows', label: 'Shadows wheel, neutral', x: '50%', y: '50%' },
+      { name: 'Midtones', label: 'Midtones wheel, slightly warm', x: '58%', y: '44%' },
+      { name: 'Highlights', label: 'Highlights wheel, slightly cool', x: '44%', y: '56%' },
+    ];
+    const aspects = ['Original', '1:1', '4:5', '3:2', '16:9'].map((name, k) => ({
+      name: name, selected: k === 0, cls: k === 0 ? '' : 'num', size: k === 0 ? '11px' : '13px',
+      bg: k === 0 ? '#3A3A3E' : '#232326', color: k === 0 ? '#E8E8EA' : '#A0A0A6',
+    }));
+    const presets = [
+      { name: 'Punch', groups: '4 groups' }, { name: 'Soft', groups: '4 groups' },
+      { name: 'Monochrome', groups: '4 groups' }, { name: 'Lift the shadows', groups: '4 groups' },
+    ];
+    const compare = !!st.compare;
+    return {
+      accent: accent, plates: plates, tabs: tabs, indX: (i * 100) + '%', stars: stars, film: film,
+      wheels: wheels, aspects: aspects, presets: presets,
+      compareOn: compare, toggleCompare: () => this.setState((o) => ({ compare: !o.compare })),
+      compareBg: compare ? 'rgba(77,182,196,0.12)' : '#232326', compareLine: compare ? accent : '#313135', compareInk: compare ? accent : '#E8E8EA',
+    };
+  }
+}
+</script>
+</body>
+</html>
