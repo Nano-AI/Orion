@@ -13,6 +13,8 @@ public static class Palette {
     public static readonly IBrush Panel = new ImmutableSolidColorBrush(Color.FromRgb(27, 27, 29));
     /// Controls, cells, inset wells
     public static readonly IBrush Raised = new ImmutableSolidColorBrush(Color.FromRgb(35, 35, 38));
+    /// A hovered or pressed control's fill
+    public static readonly IBrush Hover = new ImmutableSolidColorBrush(Color.FromRgb(46, 46, 50));
     /// Canvas surround — what the photo is judged against
     public static readonly IBrush Surround = new ImmutableSolidColorBrush(Color.FromRgb(42, 42, 44));
     /// Hairlines, borders, dividers
@@ -23,6 +25,8 @@ public static class Palette {
     public static readonly IBrush Text = new ImmutableSolidColorBrush(Color.FromRgb(232, 232, 234));
     /// Labels, secondary text
     public static readonly IBrush Dim = new ImmutableSolidColorBrush(Color.FromRgb(138, 138, 144));
+    /// A control's name (slider and field labels): a step above dim notes
+    public static readonly IBrush Label = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 166));
     /// Tertiary text, inactive icons, detents
     public static readonly IBrush Faint = new ImmutableSolidColorBrush(Color.FromRgb(90, 90, 96));
     /// Interactive and active states ONLY. Never decorative.
@@ -62,6 +66,9 @@ public static class TypeSize {
     public const double Sm = 11;
     public const double Base = 12;
     public const double Md = 13;
+    public const string Numeral = "Barlow Semi Condensed";
+    public const string TrackingWide = "0.14em";
+    public const string TrackingLabel = "0.07em";
 }
 
 public static class Layout {

@@ -126,6 +126,19 @@ https://github.com/phosphor-icons/core), MIT License, Copyright (c) 2023 Phospho
 Self-hosted rather than loaded from a font service, so the page makes no
 third-party request.
 
+## Numeral typeface in the Avalonia shell
+
+`spikes/avalonia-shell/Assets/Fonts/BarlowSemiCondensed-Medium.ttf` is Barlow
+Semi Condensed Medium, unmodified from github.com/google/fonts
+(`ofl/barlowsemicondensed/`). The shell sets every number in it. It is under
+the **SIL Open Font License 1.1**, which permits bundling it with proprietary
+software so long as the font is not sold by itself and each copy carries its
+copyright notice and the licence. Both are in `Assets/Fonts/OFL.txt`, which is
+embedded in the application beside the font. The licence names no Reserved Font
+Name.
+
+  Barlow Semi Condensed — Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+
 ## Planets on the landing site
 
 `web/img/planets/` holds planet maps from Solar System Scope
