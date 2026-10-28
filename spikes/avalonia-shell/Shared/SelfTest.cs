@@ -6,7 +6,7 @@ namespace OrionShell;
 /// `--selftest`: the contract every slice relies on, checked in one process.
 /// The integrator runs it after each merge; a slice that breaks a shared
 /// assumption fails here rather than in a screenshot nobody reads.
-static class SelfTest {
+static partial class SelfTest {
     static int _passed, _failed;
 
     static void Check(bool ok, string what) {
@@ -70,6 +70,9 @@ static class SelfTest {
         Check(symbols.Count > 10 && missing.Count == 0,
               $"Icons draws all {symbols.Count} SF Symbols the Swift UI uses" + (missing.Count > 0 ? $"; missing {string.Join(", ", missing)}" : ""));
 
+        CommandChecks();
+        PhotoListNavigation();
+
         // The field table came from orion.h.
         Check(EngineModel.Fields.Count(f => f.Length == 1) >= 50, "at least 50 scalar fields from orion.h");
 
@@ -101,7 +104,12 @@ static class SelfTest {
             double bright = MeanLuma(engine.Picture);
             engine.Set("exposure_ev", start);
             Check(bright > dark * 1.2, $"+1 EV brightens the picture ({dark:0.0} → {bright:0.0})");
+            SessionContracts(engine);
         }
+        SpeedChecks();
+        NativeChecks();
+        WiringChecks();
+        if (_stubs.Count > 0) Console.WriteLine($"selftest: session seams not built yet (stage 1b): {string.Join(", ", _stubs)}");
 
         Console.WriteLine($"selftest: {_passed} checks passed, {_failed} failed");
         return _failed;

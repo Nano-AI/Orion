@@ -24,6 +24,7 @@ public sealed class CanvasPanel : Panel {
         _picture = new Drawn(Draw);
         Children.AddRange([_picture, _welcome]);
         CanvasState.Changed += Refresh;
+        EngineModel.Shared.Shown.Changed += Refresh;   // the picture: only through this seam
         if (CanvasState.Alone("canvas")) CanvasScenes.Canvas();
         Refresh();
     }
@@ -42,7 +43,7 @@ public sealed class CanvasPanel : Panel {
         var engine = EngineModel.Shared;
         double a = CanvasState.ImageAspect;
         var size = Bounds.Size;
-        if (engine.Handle == 0 || engine.Picture is not { } picture || a <= 0 || size.Width <= 0 || size.Height <= 0) return;
+        if (engine.Handle == 0 || engine.Shown.Bitmap is not { } picture || a <= 0 || size.Width <= 0 || size.Height <= 0) return;
 
         var vp = CanvasState.Viewport;
         double va = size.Width / size.Height;
@@ -168,8 +169,7 @@ public sealed class CanvasPanel : Panel {
             BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center,
             BorderBrush = new SolidColorBrush(((ISolidColorBrush)Palette.Accent).Color, 0.5),
         };
-        // stub(#315): OrionApp+Files.swift owns this until the logic moves below the facade (openFile)
-        open.Click += (_, _) => { };
+        open.Click += (_, _) => Commands.Run("open-photo");
         return new StackPanel {
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Children = {

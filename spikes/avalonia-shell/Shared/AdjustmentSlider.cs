@@ -68,7 +68,15 @@ public sealed class AdjustmentSlider : StackPanel {
         Children.Add(_track);
 
         EngineModel.Shared.Opened += Reload;
+        EngineModel.Shared.ValuesChanged += Reread;
         Reload();
+    }
+
+    /// The value moved under the slider (auto-enhance): follow it, keep the detent.
+    void Reread() {
+        Value = EngineModel.Shared.Get(_field, _index);
+        _track.Set(Value);
+        Paint();
     }
 
     void Reload() {

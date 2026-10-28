@@ -15,9 +15,9 @@ public sealed class LightPanel : StackPanel {
 
         // Auto writes Exposure, Whites and Blacks (three of the sliders below
         // it) plus Lift and Clarity, so it sits with the controls it moves.
-        // stub(#315): Engine.swift owns this until the logic moves below the facade
-        //   (orion_engine_auto_enhance writes a whole OrionAdjustments, which the shim keeps private)
-        var auto = Develop.Row(8, [Develop.PanelButton("Auto", () => { }),
+        // Session.AutoEnhance is stage 1b's (the shim keeps OrionAdjustments
+        // private); until then the status line says so. `reread` moves the sliders.
+        var auto = Develop.Row(8, [Develop.PanelButton("Auto", () => EngineModel.Shared.Apply(s => s.AutoEnhance(), reread: true)),
                                    Engraved.Label("Exp · Wht · Blk · Lift · Clarity", Palette.Faint)]);
         Children.Add(new SectionPlate("Light", null,
             auto,

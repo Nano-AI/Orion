@@ -13,9 +13,9 @@ namespace OrionShell.Develop;
 sealed class CurveEditor : StackPanel {
     static readonly string[] Titles = ["RGB", "R", "G", "B"];
 
-    /// RGB, R, G, B. The curve is not an OrionAdjustments scalar, and the shim
-    /// exposes no way to write curve_master..curve_blue, so edits stay here.
-    // stub(#315): Engine.swift owns this until the logic moves below the facade
+    /// RGB, R, G, B: the channels Session.Curve/SetCurve number 0-3. Edits are
+    /// written through Session.SetCurve, which stage 1b builds; until then the
+    /// status line says so and the drawn curve stays here.
     internal readonly List<(float X, float Y)>[] Curves = Titles.Select(_ => CurveMath.Identity.ToList()).ToArray();
     internal int Channel;
 
@@ -27,7 +27,10 @@ sealed class CurveEditor : StackPanel {
     public CurveEditor() {
         Spacing = 9;
         _graph = new CurveGraph(this);
-        _reset = Develop.TextButton("Reset", Palette.Dim, ResetAll);
+        _reset = Develop.TextButton("Reset", Palette.Dim, () => {
+            foreach (var c in Curves) { c.Clear(); c.AddRange(CurveMath.Identity); }
+            Edited(all: true);
+        });
         var header = new DockPanel();
         DockPanel.SetDock(_reset, Dock.Right);
         header.Children.Add(_reset);
@@ -35,13 +38,27 @@ sealed class CurveEditor : StackPanel {
         Children.Add(header);
         Children.Add(_graph);
         Children.Add(_footnote);
-        EngineModel.Shared.Opened += ResetAll;
+        EngineModel.Shared.Opened += Reload;
         Levels.Updated += _graph.InvalidateVisual;
         Changed();
     }
 
-    void ResetAll() {
-        foreach (var c in Curves) { c.Clear(); c.AddRange(CurveMath.Identity); }
+    /// A photo opened: its curves, or identity while Session.Curve is not built.
+    /// Quietly: an open is not something the photographer asked of the curve.
+    void Reload() {
+        for (int i = 0; i < Curves.Length; i++) {
+            Curves[i].Clear();
+            try { Curves[i].AddRange(EngineModel.Shared.Session?.Curve(i) ?? CurveMath.Identity); }
+            catch (NotBuiltException) { Curves[i].AddRange(CurveMath.Identity); }
+        }
+        Changed();
+    }
+
+    /// After an edit: the channel (or all four) to the engine, then a repaint.
+    internal void Edited(bool all = false) {
+        EngineModel.Shared.Apply(s => {
+            for (int i = all ? 0 : Channel; i <= (all ? 3 : Channel); i++) s.SetCurve(i, Curves[i]);
+        });
         Changed();
     }
 
@@ -49,7 +66,7 @@ sealed class CurveEditor : StackPanel {
         1 => Palette.ChanR, 2 => Palette.ChanG, 3 => Palette.ChanB, _ => Palette.Accent,
     };
 
-    /// Repaint after any edit. The engine write is the stub above.
+    /// Repaint: after an edit (through Edited), a channel switch or an open.
     internal void Changed() {
         _channels.Children.Clear();
         for (int i = 0; i < Titles.Length; i++) {
@@ -89,7 +106,7 @@ sealed class CurveGraph : Control {
     public CurveGraph(CurveEditor editor) {
         _editor = editor;
         Focusable = true;
-        DoubleTapped += (_, _) => { Points.Clear(); Points.AddRange(CurveMath.Identity); _editor.Changed(); };
+        DoubleTapped += (_, _) => { Points.Clear(); Points.AddRange(CurveMath.Identity); _editor.Edited(); };
     }
 
     List<(float X, float Y)> Points => _editor.Curves[_editor.Channel];
@@ -183,17 +200,18 @@ sealed class CurveGraph : Control {
         float x = end ? Points[i].X
                       : Math.Clamp((float)(at.X / Size), Points[i - 1].X + 0.005f, Points[i + 1].X - 0.005f);
         Points[i] = (x, Math.Clamp((float)(1 - at.Y / Size), 0, 1));
-        _editor.Changed();
+        _editor.Edited();
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e) {
         if (_dragging is not { } i) return;
         // Dragged well clear of the graph: that is how a point is deleted.
         double y = e.GetPosition(this).Y;
-        if (i > 0 && i < Points.Count - 1 && Points.Count > 2 && (y < -GrabRadius || y > Size + GrabRadius))
-            Points.RemoveAt(i);
+        bool removed = i > 0 && i < Points.Count - 1 && Points.Count > 2 && (y < -GrabRadius || y > Size + GrabRadius);
+        if (removed) Points.RemoveAt(i);
         _dragging = null;
         e.Pointer.Capture(null);
+        if (removed) _editor.Edited();   // before the release's full render, so it is the one that shows it
         // stub(#315): EditHistory.swift owns this until the logic moves below the facade
         EngineModel.Shared.EndInteraction();
         _editor.Changed();
@@ -214,6 +232,6 @@ sealed class CurveGraph : Control {
             default: return;
         }
         e.Handled = true;
-        _editor.Changed();
+        if (e.Key is Key.Left or Key.Right) _editor.Changed(); else _editor.Edited();
     }
 }

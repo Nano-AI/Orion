@@ -43,4 +43,7 @@ public static unsafe partial class Native {
 
     [LibraryImport(Lib)]
     public static partial nint orion_last_error(nint engine);
+
+    [LibraryImport(Lib)]
+    public static partial int orion_engine_image_size(nint engine, out uint width, out uint height);
 }

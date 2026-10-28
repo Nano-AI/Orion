@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -54,7 +55,17 @@ public partial class MainWindow : Window {
         }
     }
 
-    void Select(string tab) {
+    /// The tool tab on show (ToolTab in Swift); commands read and set it.
+    public string Tab { get; private set; } = "Light";
+
+    /// A key nothing in the window took: maybe a command's (Commands.Key).
+    protected override void OnKeyDown(KeyEventArgs e) {
+        base.OnKeyDown(e);
+        Commands.Key(e);
+    }
+
+    public void Select(string tab) {
+        Tab = tab;
         ToolsHost.Children.Clear();
         ToolsHost.Children.AddRange(_tabs[tab]);
         for (int i = 0; i < _tabButtons.Count; i++) {

@@ -47,40 +47,41 @@ public sealed class ToolbarPanel : Grid {
             Background = Palette.Raised, Height = 16, Padding = new Thickness(Space.Sm, 0),
         };
         open.Flyout = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft, Items = {
-            Item("Open Photo…", ChromeStubs.OpenPhoto),
-            Item("Open Folder…", ChromeStubs.OpenFolder),
+            Item("Open Photo…", () => Commands.Run("open-photo")),
+            Item("Open Folder…", () => Commands.Run("open-folder")),
         } };
         return open;
     }
 
+    /// Every button runs a command by name, and is greyed by that command's
+    /// CanRun (Swift's `.disabled`), so the keys and the buttons cannot disagree.
     void Refresh() {
         var engine = EngineModel.Shared;
-        bool loaded = engine.Handle != 0, develop = !ChromeStubs.Culling, locked = ChromeStubs.DocumentEditsLocked;
-        bool editable = loaded && develop && !locked;
+        bool loaded = engine.Handle != 0, develop = !ChromeStubs.Culling;
         _capture.Show(loaded ? CaptureInfo.Read(engine.Handle) : null, engine.Current >= 0 ? engine.Photos[engine.Current] : null);
 
         // ── Looking: accented while up, because both answer "what am I looking at".
         _looking.Children.Clear();
-        _looking.Children.Add(Toggle("Gallery", ChromeStubs.Culling, engine.Photos.Count > 0,
-            "Every photo in the folder at once, for culling (G)", ChromeStubs.ToggleGallery));
+        _looking.Children.Add(Toggle("Gallery", ChromeStubs.Culling, Commands.CanRun("gallery"),
+            "Every photo in the folder at once, for culling (G)", () => Commands.Run("gallery")));
         if (loaded && develop && ChromeStubs.Percent is { } percent)
             _looking.Children.Add(new TextBlock { Text = $"{percent}%", FontSize = TypeSize.Sm, Foreground = Palette.Dim, Width = 42,
                                                   TextAlignment = TextAlignment.Right, Classes = { "tnum" }, VerticalAlignment = VerticalAlignment.Center });
-        _looking.Children.Add(Toggle("Compare", ChromeStubs.Comparing, loaded && develop, "Split the view against the original",
-            ChromeStubs.ToggleCompare));
+        _looking.Children.Add(Toggle("Compare", ChromeStubs.Comparing, Commands.CanRun("compare"), "Split the view against the original",
+            () => Commands.Run("compare")));
         if (ChromeStubs.Comparing)
-            _looking.Children.Add(Chip.Icon("rectangle.split.2x1", "Swap between a vertical and horizontal split", true,
-                ChromeStubs.SwapSplit));
+            _looking.Children.Add(Chip.Icon("rectangle.split.2x1", "Swap between a vertical and horizontal split",
+                Commands.CanRun("swap-split"), () => Commands.Run("swap-split")));
 
         // ── Editing: greyed as a group in the gallery. Swift names the undo
         // chips after the step ("Undo Exposure"); the history is not here.
         _editing.Children.Clear();
         _editing.Children.AddRange([
-            Chip.Icon("arrow.uturn.backward", "Undo", ChromeStubs.CanUndo && develop && !locked, ChromeStubs.Undo),
-            Chip.Icon("arrow.uturn.forward", "Redo", ChromeStubs.CanRedo && develop && !locked, ChromeStubs.Redo),
-            Chip.Icon("rotate.left", "Rotate left", editable, () => ChromeStubs.Rotate(-1)),
-            Chip.Icon("rotate.right", "Rotate right", editable, () => ChromeStubs.Rotate(1)),
-            Chip.Text("Reset", editable, ChromeStubs.ResetEdits, "Put every adjustment back"),
+            Chip.Icon("arrow.uturn.backward", "Undo", Commands.CanRun("undo"), () => Commands.Run("undo")),
+            Chip.Icon("arrow.uturn.forward", "Redo", Commands.CanRun("redo"), () => Commands.Run("redo")),
+            Chip.Icon("rotate.left", "Rotate left", Commands.CanRun("rotate-left"), () => Commands.Run("rotate-left")),
+            Chip.Icon("rotate.right", "Rotate right", Commands.CanRun("rotate-right"), () => Commands.Run("rotate-right")),
+            Chip.Text("Reset", Commands.CanRun("reset-adjustments"), () => Commands.Run("reset-adjustments"), "Put every adjustment back"),
         ]);
 
         // ── Out: the button counts the selection; while a batch runs, the
@@ -88,15 +89,16 @@ public sealed class ToolbarPanel : Grid {
         _out.Children.Clear();
         if (ChromeStubs.BatchProgress is { } p) {
             _out.Children.Add(Chip.Ink($"Exporting {p.Done} of {p.Total}…", Palette.Dim));
-            _out.Children.Add(Chip.Text("Stop", true, ChromeStubs.StopBatch, "Stop after the photo being written"));
+            _out.Children.Add(Chip.Text("Stop", Commands.CanRun("stop-batch"), () => Commands.Run("stop-batch"),
+                                        "Stop after the photo being written"));
         } else {
-            bool exportable = loaded && !locked;
+            bool exportable = Commands.CanRun("export");
             int selected = ChromeStubs.ExportSelected;
             var text = Chip.Ink(selected > 0 ? $"Export {selected}…" : "Export…", exportable ? Palette.Text : Palette.Faint);
             text.FontWeight = FontWeight.Medium;
             text.Classes.Add("tnum");
             _out.Children.Add(new Chip(text, selected > 0 ? $"Export the {selected} selected photos to a folder" : "Export this photo",
-                                       OpenExport, exportable) {
+                                       () => Commands.Run("export"), exportable) {
                 Padding = new Thickness(11, 0),
                 Background = exportable ? Chip.Faded(Palette.Accent, 0.18) : Brushes.Transparent,
                 BorderBrush = exportable ? Chip.Faded(Palette.Accent, 0.55) : Palette.Line,
@@ -114,11 +116,4 @@ public sealed class ToolbarPanel : Grid {
         new(Chip.Ink(title, on ? Palette.Accent : enabled ? Palette.Dim : Palette.Faint), help, action, enabled) {
             BorderBrush = on ? Palette.Accent : Palette.Line,
         };
-
-    /// `showingExport = true`: the sheets slice's export panel, by its registered name.
-    void OpenExport() {
-        if (Panels.Find("sheet-export") is not { } sheet || TopLevel.GetTopLevel(this) is not Window owner) return;
-        new Window { Content = Panels.Create(sheet.Type), Background = Palette.Panel, SizeToContent = SizeToContent.WidthAndHeight,
-                     Title = "Export" }.ShowDialog(owner);
-    }
 }

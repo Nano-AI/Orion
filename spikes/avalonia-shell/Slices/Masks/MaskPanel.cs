@@ -73,8 +73,7 @@ public sealed class MaskPanel : Border {
 
         foreach (var row in KindControls(m)) yield return row;
 
-        // stub(#315): Engine+Mask.swift owns this until the logic moves below the facade
-        yield return Check("Invert", m.Invert, on => m.Invert = on);
+        yield return Check("Invert", m.Invert, on => { m.Invert = on; _group.Push(); });
     }
 
     /// The placement controls each kind reads, and only those: a slider the
@@ -113,7 +112,7 @@ public sealed class MaskPanel : Border {
                 yield return new StackPanel {
                     Orientation = Orientation.Horizontal, Spacing = Space.Md,
                     Children = {
-                        Push("Clear stroke", () => { m.BrushStroke.Clear(); Rebuild(); }, m.BrushStroke.Count > 0),
+                        Push("Clear stroke", () => { m.BrushStroke.Clear(); _group.Push(); Rebuild(); }, m.BrushStroke.Count > 0),
                         Caption(m.BrushStroke.Count == 0 ? "drag on the photo to paint" : $"{m.BrushStroke.Count} dabs"),
                     },
                 };
@@ -139,7 +138,7 @@ public sealed class MaskPanel : Border {
     Control Shape(string name, float min, float max, string unit, int decimals,
                   Func<MaskShape, float> get, Action<MaskShape, float> set) {
         var m = _group.Current!;
-        return new MaskSlider(name, () => get(m), v => set(m, v), min, max, unit, decimals, get(MaskGroup.Defaults));
+        return new MaskSlider(name, () => get(m), v => { set(m, v); _group.Push(); }, min, max, unit, decimals, get(MaskGroup.Defaults));
     }
 
     Control ListButtons() {

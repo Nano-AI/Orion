@@ -10,7 +10,8 @@ using Avalonia.Threading;
 
 namespace OrionShell;
 
-/// OrionShell <photos or folders> [--panel NAME | --tab NAME] [--screenshot OUT.png] [--bench] [--selftest] [--list]
+/// OrionShell <photos or folders> [--panel NAME | --tab NAME] [--command NAME] [--screenshot OUT.png] [--bench] [--selftest]
+///            [--list | --commands]
 static class Program {
     static readonly string[] RawExtensions = [".arw", ".nef", ".cr2", ".cr3", ".dng", ".raf", ".orf", ".rw2", ".pef"];
 
@@ -20,7 +21,7 @@ static class Program {
         string? Value(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         var panel = Value("--panel");
         var shot = Value("--screenshot") is { } s ? Path.GetFullPath(s) : null;
-        var photos = args.Where((a, i) => !a.StartsWith("--") && (i == 0 || args[i - 1] is not ("--panel" or "--screenshot" or "--tab")))
+        var photos = args.Where((a, i) => !a.StartsWith("--") && (i == 0 || args[i - 1] is not ("--panel" or "--screenshot" or "--tab" or "--command")))
                          .Select(Path.GetFullPath).SelectMany(Expand).ToArray();
 
         // The engine finds its compiled shaders relative to the CMake build
@@ -35,12 +36,18 @@ static class Program {
             foreach (var e in Panels.All) Console.WriteLine($"{e.Name}\t{e.Region}\t{e.Type.Name}");
             return 0;
         }
-        App.Run = new App.Options(photos, panel, Value("--tab") ?? "Light", shot, args.Contains("--bench"), args.Contains("--selftest"));
+        if (args.Contains("--commands")) {
+            foreach (var c in Commands.All)
+                Console.WriteLine($"{c.Name}\t{(c.Built ? "built" : "stub")}\t{c.Owner}\t{c.Shortcut}");
+            return 0;
+        }
+        App.Run = new App.Options(photos, panel, Value("--tab") ?? "Light", shot, args.Contains("--bench"), args.Contains("--selftest"),
+                                  Value("--command"));
 
         // Anything that is not a person at the window runs headless: the macOS
         // backend cannot start while the display sleeps (RenderTimer -6661),
         // and swarm agents run unattended. Same Skia renderer, no window server.
-        if (shot != null || App.Run.Bench || App.Run.SelfTest) {
+        if (shot != null || App.Run.Bench || App.Run.SelfTest || App.Run.Command != null) {
             AppBuilder.Configure<App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
@@ -55,8 +62,12 @@ static class Program {
 }
 
 sealed class App : Application {
-    public sealed record Options(string[] Photos, string? Panel, string Tab, string? Screenshot, bool Bench, bool SelfTest);
-    public static Options Run = new([], null, "Light", null, false, false);
+    public sealed record Options(string[] Photos, string? Panel, string Tab, string? Screenshot, bool Bench, bool SelfTest,
+                                 string? Command);
+    public static Options Run = new([], null, "Light", null, false, false, null);
+
+    /// The window MakeWindow built: what a command's dialog sits over.
+    public static Window? Window { get; private set; }
 
     public override void Initialize() {
         Styles.Add(new FluentTheme());
@@ -73,7 +84,7 @@ sealed class App : Application {
         base.OnFrameworkInitializationCompleted();
     }
 
-    /// Headless: --selftest, --bench, --screenshot. Returns the exit code.
+    /// Headless: --selftest, --bench, --command, --screenshot. Returns the exit code.
     public static int RunUnattended() {
         OpenPhotos();
         try {
@@ -84,13 +95,21 @@ sealed class App : Application {
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
             if (Run.Bench) Bench(window);
+            int exit = 0;
+            if (Run.Command is { } command) {
+                // Inside the laid-out window, so a command that needs it (a tab, a sheet) has one.
+                string said = Commands.Run(command);
+                Dispatcher.UIThread.RunJobs();
+                Console.WriteLine(said + (said.StartsWith("ran ") ? $" · photo {EngineModel.Shared.CurrentName}" : ""));
+                exit = said.StartsWith("ran ") ? 0 : 1;
+            }
             if (Run.Screenshot != null) {
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
                 Shoot(window, Run.Screenshot);
             }
             window.Close();
-            return 0;
+            return exit;
         } finally {
             EngineModel.Shared.Close();
         }
@@ -102,8 +121,8 @@ sealed class App : Application {
     }
 
     static Window? MakeWindow() {
-        if (Run.Panel is not { } name) return new MainWindow(Run.Tab);
-        if (Panels.Find(name) is { } entry) return PanelWindow(entry);
+        if (Run.Panel is not { } name) return Window = new MainWindow(Run.Tab);
+        if (Panels.Find(name) is { } entry) return Window = PanelWindow(entry);
         Console.Error.WriteLine($"no panel '{name}'. Registered: {string.Join(", ", Panels.All.Select(e => e.Name))}");
         return null;
     }
