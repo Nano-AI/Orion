@@ -16,7 +16,7 @@ namespace OrionShell.Library;
 [Panel("gallery", Region.Sheet)]
 public sealed class GalleryPanel : DockPanel {
     readonly GalleryGrid _grid = new();
-    readonly Segmented _filter = new(LibraryModel.FilterTitles, (int)LibraryModel.Shared.Current);
+    readonly Segmented _filter = LibraryUi.Filter();
     readonly Dictionary<LibraryModel.Photo, (Control Cell, Border Ring, TextBlock Name)> _cells = new();
     readonly List<Border> _pictures = new();
     readonly InfoColumn _info = new();
@@ -26,7 +26,6 @@ public sealed class GalleryPanel : DockPanel {
 
     public GalleryPanel() {
         Background = Palette.Ground;
-        _filter.Changed += i => LibraryModel.Shared.Current = (LibraryModel.Filter)i;
         _filter.HorizontalAlignment = HorizontalAlignment.Left;
 
         SetDock(_info, Dock.Right);
@@ -35,7 +34,8 @@ public sealed class GalleryPanel : DockPanel {
         var size = SizeSlider();
         SetDock(size, Dock.Right);
         bar.Children.AddRange([size, _filter]);
-        var header = new Border { BorderBrush = Palette.Line, BorderThickness = new Thickness(0, 0, 0, 1), Child = bar };
+        // On the panel tone, as the toolbar above it, so the filter's ground well reads as a well.
+        var header = new Border { Background = Palette.Panel, BorderBrush = Palette.Line, BorderThickness = new Thickness(0, 0, 0, 1), Child = bar };
         SetDock(header, Dock.Top);
         Children.Add(header);
         Children.Add(new ScrollViewer { Content = _grid, Padding = new Thickness(8), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
@@ -98,10 +98,6 @@ public sealed class GalleryPanel : DockPanel {
 
     void Rebuild() {
         var library = LibraryModel.Shared;
-        var photos = library.Photos;
-        _filter.Selected = (int)library.Current;
-        _filter.Figures($"{photos.Count}", $"{photos.Count(p => p.Rating >= 1 && !p.Rejected)}",
-                        $"{photos.Count(p => p.Rating == 0 && !p.Rejected)}", $"{library.RejectedCount}");
         _grid.Children.Clear();
         _cells.Clear();
         _pictures.Clear();
@@ -117,7 +113,7 @@ public sealed class GalleryPanel : DockPanel {
     (Control Cell, Border Ring, TextBlock Name) Cell(LibraryModel.Photo photo) {
         bool isFocused = photo == GalleryMode.Focus;
         var picture = new Border {
-            Height = _grid.Cell / GalleryGrid.CellAspect, Opacity = photo.Rejected ? 0.35 : 1,
+            Height = _grid.Cell / GalleryGrid.CellAspect, Opacity = photo.Rejected ? LibraryUi.RejectedOpacity : 1,
             Child = photo.Thumbnail is { } image ? new Image { Source = image, Stretch = Stretch.Uniform } : null,
         };
         _pictures.Add(picture);
@@ -128,7 +124,7 @@ public sealed class GalleryPanel : DockPanel {
         var name = new TextBlock { Text = photo.Name, Foreground = isFocused ? Palette.Text : Palette.Dim,
                                    TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         var caption = new DockPanel();
-        var marks = Marks(photo);
+        var marks = LibraryUi.Marks(photo, Faces.Body);
         SetDock(marks, Dock.Right);
         caption.Children.AddRange([marks, name]);
         var cell = new StackPanel { Spacing = 8, Background = Brushes.Transparent, Focusable = true, Children = { ring, caption } };
@@ -151,15 +147,6 @@ public sealed class GalleryPanel : DockPanel {
         // Editor.confirmTrash over the photo right-clicked, which takes the focus first.
         items.Add(LibraryUi.Item("Move to Trash…", () => { GalleryMode.SetFocus(photo); Commands.Run("trash"); }));
         return items;
-    }
-
-    /// Five stars, the rating's in the star colour; a rejected photo says so instead.
-    static Control Marks(LibraryModel.Photo photo) {
-        if (photo.Rejected) return new TextBlock { Text = "Rejected", Foreground = Palette.Reject, VerticalAlignment = VerticalAlignment.Center };
-        var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        for (int i = 1; i <= 5; i++) stars.Children.Add(Icons.Create("star.fill", 11, i <= photo.Rating ? Palette.Star : Palette.Faint));
-        Avalonia.Automation.AutomationProperties.SetName(stars, photo.Rating == 0 ? "Unrated" : $"{photo.Rating} stars");
-        return stars;
     }
 
     /// Library.dc.html's aside: the focused photo larger, its name and size,

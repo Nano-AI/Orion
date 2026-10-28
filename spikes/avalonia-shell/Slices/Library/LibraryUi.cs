@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -9,42 +8,36 @@ namespace OrionShell.Library;
 /// The pieces the strip, the gallery and the rating bar share, so a filter
 /// menu or a cull menu cannot drift between them.
 static class LibraryUi {
-    /// A Palette colour at an opacity: Swift's `.white.opacity(x)` and
-    /// `.black.opacity(x)` become Palette.Text and Palette.FilmBase (rule 5).
-    public static IBrush Ink(IBrush palette, double opacity) =>
-        new SolidColorBrush(((ISolidColorBrush)palette).Color, opacity);
-
-    /// `.shadow(color: .black.opacity(0.8), radius: 1, y: 1)` under the marks.
-    public static IEffect MarkShadow => new DropShadowEffect {
-        OffsetX = 0, OffsetY = 1, BlurRadius = 2, Opacity = 0.8, Color = ((ISolidColorBrush)Palette.FilmBase).Color,
-    };
-
-    /// "3 photos, 1 rejected" with the counts in the numeral face (Library.summary, minus its middle dot).
-    public static InlineCollection Summary() {
+    /// The library filter, one control wherever it appears (the strip and the
+    /// gallery): a segmented choice, each cell counting what it would show, so
+    /// every option is in view and none has to be remembered behind a menu.
+    public static Segmented Filter() {
         var library = LibraryModel.Shared;
-        var runs = new InlineCollection();
-        if (library.Photos.Count == 0) return runs;
-        runs.AddRange([Faces.Num($"{library.Photos.Count}"), new Run(library.Photos.Count == 1 ? " photo" : " photos")]);
-        if (library.RejectedCount > 0) runs.AddRange([new Run(", "), Faces.Num($"{library.RejectedCount}"), new Run(" rejected")]);
-        return runs;
+        var filter = new Segmented(LibraryModel.FilterTitles, (int)library.Current);
+        void Count() {
+            var photos = library.Photos;
+            filter.Selected = (int)library.Current;
+            filter.Figures($"{photos.Count}", $"{photos.Count(p => p.Rating >= 1 && !p.Rejected)}",
+                           $"{photos.Count(p => p.Rating == 0 && !p.Rejected)}", $"{library.RejectedCount}");
+        }
+        filter.Changed += i => library.Current = (LibraryModel.Filter)i;
+        library.Changed += Count;
+        Count();
+        return filter;
     }
 
-    /// The menu-style filter picker, 84 wide, bound to LibraryModel.Current.
-    public static ComboBox FilterPicker() {
-        var library = LibraryModel.Shared;
-        var picker = new ComboBox {
-            ItemsSource = LibraryModel.FilterTitles, SelectedIndex = (int)library.Current,
-            Width = 84, Height = 24, MinHeight = 0, FontSize = TypeSize.Md, Padding = new Thickness(Space.Md, 0, 0, 0),
-            Background = Palette.Raised, Foreground = Palette.Text, BorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(Radius.Md), VerticalAlignment = VerticalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
-        };
-        foreach (var key in new[] { "ComboBoxBackgroundPointerOver", "ComboBoxBackgroundPressed" })
-            picker.Resources[key] = Palette.Raised;
-        picker.Resources["ComboBoxDropDownGlyphForeground"] = Palette.Text;
-        picker.SelectionChanged += (_, _) => library.Current = (LibraryModel.Filter)Math.Max(picker.SelectedIndex, 0);
-        library.Changed += () => picker.SelectedIndex = (int)library.Current;
-        return picker;
+    /// How far a rejected photo's picture fades, in the strip and the gallery alike.
+    public const double RejectedOpacity = 0.35;
+
+    /// A photo's marks at a text size: five stars, the rating's in the star
+    /// colour and the rest faint, so "unrated" is shown rather than inferred;
+    /// a rejected photo says so in words instead.
+    public static Control Marks(LibraryModel.Photo photo, double size) {
+        if (photo.Rejected) return new TextBlock { Text = "Rejected", FontSize = size, Foreground = Palette.Reject, VerticalAlignment = VerticalAlignment.Center };
+        var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = size > Faces.Mark ? 2 : 1, VerticalAlignment = VerticalAlignment.Center };
+        for (int i = 1; i <= 5; i++) stars.Children.Add(Icons.Create("star.fill", size - 2, i <= photo.Rating ? Palette.Star : Palette.Faint));
+        Avalonia.Automation.AutomationProperties.SetName(stars, photo.Rating == 0 ? "Unrated" : $"{photo.Rating} stars");
+        return stars;
     }
 
     /// The cull entries both context menus share: Reject or Keep, then the

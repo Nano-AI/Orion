@@ -6,13 +6,21 @@ using Avalonia.Media;
 
 namespace OrionShell;
 
-/// One choice of a few, side by side (Main.dc.html's Library/Develop switch):
-/// equal cells in a ground well, the chosen one raised. Each cell is a
-/// StateButton, so hover, press, focus and disabled come with it. A cell may
-/// carry a count in the numeral face (the gallery's All 3 · Rated 1).
+/// One choice of a few, side by side, as macOS draws a segmented control: a
+/// ground well with no edge, the cells sharing it evenly, the chosen one a
+/// filled pill inset by the well's padding, and a short hairline between two
+/// cells that are both unchosen. Each cell is a StateButton, so hover, press,
+/// focus and disabled come with it. A cell may carry a count in the numeral
+/// face (the library filter's All 3, Rated 1).
 public sealed class Segmented : Border {
+    /// A cell's height; the well is this plus its padding and never stretches,
+    /// so the pill always fills it (a stretched well left the pill floating).
+    const double CellHeight = 24, Inset = 2;
+    static readonly IPen Separator = new Pen(Palette.Line, 1);
+
     readonly UniformGrid _cells = new() { Rows = 1 };
     readonly List<TextBlock> _figures = new();
+    readonly Hairlines? _hairlines;
     int _selected;
 
     /// A cell was picked by hand (not by setting Selected).
@@ -20,11 +28,12 @@ public sealed class Segmented : Border {
 
     public Segmented(IReadOnlyList<string> titles, int selected) {
         Background = Palette.Ground;
-        BorderBrush = Palette.Line;
-        BorderThickness = new Thickness(1);
-        CornerRadius = new CornerRadius(Radius.Md + 1);
-        Padding = new Thickness(2);
-        Child = _cells;
+        CornerRadius = new CornerRadius(Radius.Md + 1);   // concentric: the pill's radius plus the inset
+        Padding = new Thickness(Inset);
+        Height = CellHeight + 2 * Inset;
+        VerticalAlignment = VerticalAlignment.Center;
+        _hairlines = new Hairlines(this);
+        Child = new Panel { Children = { _hairlines, _cells } };
         for (int i = 0; i < titles.Count; i++) {
             int index = i;
             var figure = Faces.Figure("", Faces.Body, Palette.Dim);
@@ -35,9 +44,10 @@ public sealed class Segmented : Border {
             var title = char.IsDigit(titles[i][0]) ? Faces.Figure(titles[i], Faces.Body)
                 : new TextBlock { Text = titles[i], FontSize = Faces.Body, VerticalAlignment = VerticalAlignment.Center };
             var cell = new StateButton {
-                Kind = ButtonKind.Segment, Height = 24, MinWidth = 0, Padding = new Thickness(12, 0),
+                Kind = ButtonKind.Segment, Height = CellHeight, MinWidth = 0, Padding = new Thickness(12, 0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 CornerRadius = new CornerRadius(Radius.Md - 1),
-                Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { title, figure } },
+                Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { title, figure } },
             };
             cell.Click += (_, _) => { if (index != _selected) { Selected = index; Changed?.Invoke(index); } };
             _cells.Children.Add(cell);
@@ -50,6 +60,7 @@ public sealed class Segmented : Border {
         set {
             _selected = value;
             for (int i = 0; i < _cells.Children.Count; i++) ((StateButton)_cells.Children[i]).On = i == value;
+            _hairlines?.InvalidateVisual();   // the hairlines either side of the pill go
         }
     }
 
@@ -61,6 +72,20 @@ public sealed class Segmented : Border {
         for (int i = 0; i < _figures.Count; i++) {
             _figures[i].Text = i < figures.Length ? figures[i] : null;
             _figures[i].IsVisible = !string.IsNullOrEmpty(_figures[i].Text);
+        }
+        _hairlines?.InvalidateVisual();
+    }
+
+    /// A hairline between each pair of unchosen neighbours, under the cells, so
+    /// a hovered cell's fill covers its own edges. (Border.Render is sealed.)
+    sealed class Hairlines(Segmented owner) : Control {
+        public override void Render(DrawingContext context) {
+            var cells = owner._cells.Children;
+            for (int i = 1; i < cells.Count; i++) {
+                if (i == owner._selected || i - 1 == owner._selected) continue;
+                double x = Math.Round(cells[i].Bounds.X) + 0.5, mid = Bounds.Height / 2;
+                context.DrawLine(Separator, new Point(x, mid - 6), new Point(x, mid + 6));
+            }
         }
     }
 }
