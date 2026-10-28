@@ -41,8 +41,8 @@ public sealed class OpticsPanel : StackPanel {
             var toggle = new ToggleSwitch {
                 IsChecked = _profileEnabled, OnContent = null, OffContent = null,
                 Content = new StackPanel { Spacing = 1, Children = {
-                    new TextBlock { Text = "Lens profile", FontSize = TypeSize.Sm },
-                    new TextBlock { Text = name, FontSize = TypeSize.Xs, Foreground = Palette.Dim, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxLines = 2 },
+                    new TextBlock { Text = "Lens profile", FontSize = Faces.Label },
+                    new TextBlock { Text = name, FontSize = Faces.Mark, Foreground = Palette.Dim, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxLines = 2 },
                 } },
             };
             toggle.IsCheckedChanged += (_, _) => { _profileEnabled = toggle.IsChecked == true; Refresh(render: true); };
@@ -86,7 +86,7 @@ public sealed class OpticsPanel : StackPanel {
     sealed class LensPicker : StackPanel {
         readonly OpticsPanel _panel;
         readonly TextBox _query = new() {
-            PlaceholderText = "Find a lens…", FontSize = TypeSize.Sm, MinHeight = 0, Padding = new Thickness(6, 3),
+            PlaceholderText = "Find a lens…", FontSize = Faces.Label, MinHeight = 0, Padding = new Thickness(6, 3),
             Background = Palette.Panel, BorderBrush = Palette.Raised, CornerRadius = new CornerRadius(Radius.Md),
         };
         readonly StackPanel _results = new() { Spacing = 6 };

@@ -56,7 +56,7 @@ sealed class MaskList : StackPanel {
         DockPanel.SetDock(eye, Dock.Left);
         row.Children.Add(eye);
         if (run.Count > 1) {
-            var count = Caption($"{run.Count} shapes", TypeSize.Xs);
+            var count = Caption($"{run.Count} shapes");
             DockPanel.SetDock(count, Dock.Right);
             row.Children.Add(count);
         }
@@ -116,7 +116,7 @@ sealed class MaskList : StackPanel {
         var label = new DockPanel { Children = { glyph } };
         DockPanel.SetDock(glyph, Dock.Left);
         if (m.Kind == 3 && m.BrushStroke.Count > 0) {
-            var dabs = Caption($"{m.BrushStroke.Count / 2} dabs", TypeSize.Sm);
+            var dabs = Caption($"{m.BrushStroke.Count / 2} dabs");
             DockPanel.SetDock(dabs, Dock.Right);
             label.Children.Add(dabs);
         }

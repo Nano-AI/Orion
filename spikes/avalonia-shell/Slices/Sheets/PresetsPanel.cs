@@ -12,7 +12,7 @@ static class PresetStub {
 
     /// PresetGroup: title and what it covers, in its declared order.
     public static readonly (string Title, string Covers)[] Groups = [
-        ("White Balance", "temperature, tint"),
+        ("White balance", "temperature, tint"),
         ("Light", "exposure, contrast, highlights, shadows, whites, blacks"),
         ("Color", "vibrance, saturation, the mixer, color grading"),
         ("Curve", "the tone curve"),
@@ -50,7 +50,7 @@ public sealed class PresetsPanel : StackPanel {
     static int RejectedInView => 0;
 
     public PresetsPanel() {
-        Spacing = Space.Xl;
+        Spacing = SectionPlate.Gap;
         SheetKit.Restyle(this);
         // what Copy holds is engine.state:
         // stub(#315): Engine.swift owns this until the logic moves below the facade
@@ -144,8 +144,8 @@ public sealed class PresetsPanel : StackPanel {
             Content = new StackPanel {
                 Orientation = Orientation.Horizontal, Spacing = 4,
                 Children = {
-                    new TextBlock { Text = title, FontSize = TypeSize.Xs },
-                    new TextBlock { Text = covers, FontSize = 9, Foreground = Palette.Faint, TextTrimming = TextTrimming.CharacterEllipsis },
+                    new TextBlock { Text = title, FontSize = Faces.Label },
+                    new TextBlock { Text = covers, FontSize = Faces.Mark, Foreground = Palette.Dim, TextTrimming = TextTrimming.CharacterEllipsis },
                 },
             },
         };

@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using System.Runtime.InteropServices;
+using OrionShell.Chrome;
 using Path = Avalonia.Controls.Shapes.Path;
 
 namespace OrionShell.Develop;
@@ -48,41 +49,39 @@ static class Levels {
     }
 }
 
-/// A port of app/Histogram.swift: the instrument above the tab bar. Flags that
-/// fly only when a channel clips, the curves in a recessed plate, and an
-/// engraved rail marked in quarters of the display range (not stops: see the
-/// Swift header).
+/// A port of app/Histogram.swift as Main.dc.html draws it: the curves in a
+/// recessed plate, then one line under it: shadow clipping, the exposure as a
+/// viewfinder prints it, highlight clipping. A clip reading turns star-coloured
+/// only when a channel really clips.
 [Panel("develop-histogram", Region.Tools, 0)]
 public sealed class HistogramPanel : StackPanel {
     /// Below this share of the frame a flag is reporting noise (UNSOURCED.md §19).
     const double ClipThreshold = 0.001;
-    const double PlateHeight = 84;
+    const double PlateHeight = 92;
 
-    readonly Grid _flags = new() { ColumnDefinitions = new("Auto,*,Auto") };
     readonly HistogramPlate _plate = new() { Height = PlateHeight };
+    readonly Border _shadows = new(), _highlights = new() { HorizontalAlignment = HorizontalAlignment.Right };
+    readonly CaptureLine _capture = new();
 
     public HistogramPanel() {
-        Spacing = 4;
-        Margin = new Thickness(0, 12, 0, 10);   // Swift: .padding(.top, 12) .padding(.bottom, 10)
-        var levels = Engraved.Label("Levels", Palette.Faint, 9);
-        levels.HorizontalAlignment = HorizontalAlignment.Center;
-        Grid.SetColumn(levels, 1);
-        _flags.Children.Add(levels);
-        Children.Add(_flags);
+        Spacing = 6;
+        Margin = new Thickness(0, 12, 0, 10);   // Main.dc.html: 12 above, 10 below
         Children.Add(new Border { BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Background = Palette.FilmBase,
-                                  Padding = new Thickness(1), Child = _plate });
-        Children.Add(new Rail());
-        var names = new Grid { ColumnDefinitions = new("*,*,*") };
-        string[] words = ["Black", "Mid", "White"];
-        for (int i = 0; i < 3; i++) {
-            var label = Engraved.Label(words[i], Palette.Faint, 9);
-            label.HorizontalAlignment = new[] { HorizontalAlignment.Left, HorizontalAlignment.Center, HorizontalAlignment.Right }[i];
-            Grid.SetColumn(label, i);
-            names.Children.Add(label);
-        }
-        Children.Add(names);
+                                  CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(1), Child = _plate });
+        var line = new Grid { ColumnDefinitions = new("Auto,*,Auto"), Height = 24 };
+        Grid.SetColumn(_capture, 1);
+        Grid.SetColumn(_highlights, 2);
+        line.Children.AddRange([_shadows, _capture, _highlights]);
+        Children.Add(line);
         Levels.Updated += Refresh;
+        EngineModel.Shared.Opened += ShowCapture;
+        ShowCapture();
         Refresh();
+    }
+
+    void ShowCapture() {
+        var engine = EngineModel.Shared;
+        _capture.Show(CaptureInfo.Read(engine.Handle), engine.Current >= 0 ? engine.Photos[engine.Current] : null);
     }
 
     void Refresh() {
@@ -90,45 +89,28 @@ public sealed class HistogramPanel : StackPanel {
         IsVisible = bins.Length > 0;   // Swift: only once the engine has a histogram
         _plate.Bins = bins;
         _plate.InvalidateVisual();
-        _flags.Children.RemoveAll(_flags.Children.OfType<Border>().ToList());
-        AddFlag(Levels.Clipped(bins, true), true);
-        AddFlag(Levels.Clipped(bins, false), false);
+        _shadows.Child = Flag(Levels.Clipped(bins, true), true);
+        _highlights.Child = Flag(Levels.Clipped(bins, false), false);
     }
 
-    /// A flag holds its 44 pt slot lit or not, so the row does not reflow.
-    void AddFlag(double share, bool pointsLeft) {
+    /// The share at one end, with a triangle pointing off that end. A reading,
+    /// not a button: the engine has no clipping overlay to show on the photo.
+    static Control Flag(double share, bool pointsLeft) {
         bool lit = share >= ClipThreshold;
-        var flag = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3,
+        var ink = lit ? Palette.Star : Palette.Dim;
+        var flag = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, MinWidth = 44,
                                     HorizontalAlignment = pointsLeft ? HorizontalAlignment.Left : HorizontalAlignment.Right };
-        var triangle = new Path {
-            Data = Geometry.Parse(pointsLeft ? "M4,0 L0,3.5 L4,7 Z" : "M0,0 L4,3.5 L0,7 Z"),
-            Fill = lit ? Palette.Star : Palette.Faint, Opacity = lit ? 1 : 0.35, VerticalAlignment = VerticalAlignment.Center,
-        };
-        var percent = Engraved.Readout(PercentText(share), Palette.Star, 9);
-        if (!pointsLeft && lit) flag.Children.Add(percent);
-        flag.Children.Add(triangle);
-        if (pointsLeft && lit) flag.Children.Add(percent);
+        var triangle = new Path { Data = Geometry.Parse(pointsLeft ? "M7,0 L7,8 L0,4 Z" : "M0,0 L0,8 L7,4 Z"), Fill = ink,
+                                  VerticalAlignment = VerticalAlignment.Center };
+        var percent = Faces.Figure(PercentText(share), Faces.Label, ink);
+        flag.Children.AddRange(pointsLeft ? [triangle, percent] : [percent, triangle]);
         ToolTip.SetTip(flag, pointsLeft ? $"Shadow clipping: {PercentText(share)} of pixels at black"
                                         : $"Highlight clipping: {PercentText(share)} of pixels at white");
-        var slot = new Border { MinWidth = 44, Child = flag };
-        Grid.SetColumn(slot, pointsLeft ? 0 : 2);
-        _flags.Children.Add(slot);
+        return flag;
     }
 
     static string PercentText(double share) =>
         share <= 0 ? "0%" : share < 0.0001 ? "<0.01%" : (share * 100).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "%";
-
-    /// Index marks at the quarters: the named ones (ends, middle) longer and dimmer-than-text,
-    /// the two between shorter and fainter. Inset half a line at the ends.
-    sealed class Rail : Control {
-        public Rail() => Height = 6;
-        public override void Render(DrawingContext c) {
-            for (int i = 0; i <= 4; i++) {
-                double x = 0.5 + (Bounds.Width - 1) * i / 4;
-                c.DrawLine(new Pen(i % 2 == 0 ? Palette.Dim : Palette.Faint, 1), new Point(x, 0), new Point(x, i % 2 == 0 ? 6 : 3));
-            }
-        }
-    }
 }
 
 /// The curves in their recess: filled channels with screen blending over film

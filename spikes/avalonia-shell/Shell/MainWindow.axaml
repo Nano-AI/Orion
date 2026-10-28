@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:OrionShell"
         x:Class="OrionShell.MainWindow"
-        Title="Orion — Avalonia shell" Width="1440" Height="900"
+        Title="Orion" Width="1440" Height="900"
         Background="{x:Static local:Palette.Ground}"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="44">
@@ -29,10 +29,18 @@
           <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
           <DockPanel>
             <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top" Margin="14,0"/>
-            <Grid x:Name="TabBar" DockPanel.Dock="Top" Margin="4,0" Height="30"/>
+            <!-- Main.dc.html: hairlines above and below, 6 in from each edge, 34 high. -->
+            <Border DockPanel.Dock="Top" BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1">
+              <Panel Margin="6,0" Height="34">
+                <Grid x:Name="TabBar"/>
+                <Border x:Name="TabIndicator" Height="2" Margin="0,0,0,-1" VerticalAlignment="Bottom"
+                        HorizontalAlignment="Left" Background="{x:Static local:Palette.Accent}" IsHitTestVisible="False"/>
+              </Panel>
+            </Border>
             <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
             <ScrollViewer>
-              <StackPanel x:Name="ToolsHost" Margin="14" Spacing="{x:Static local:Space.Xl}"/>
+              <!-- Main.dc.html's panel rhythm: 18 above, 14 at the sides, 24 below. -->
+              <StackPanel x:Name="ToolsHost" Margin="14,18,14,24" Spacing="{x:Static local:SectionPlate.Gap}"/>
             </ScrollViewer>
           </DockPanel>
         </Border>

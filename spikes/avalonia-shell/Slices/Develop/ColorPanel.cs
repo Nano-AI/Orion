@@ -15,10 +15,10 @@ public sealed class ColorPanel : StackPanel {
     readonly StackPanel _swatches = new() { Orientation = Orientation.Horizontal };
     readonly ContentControl _bandName = new() { VerticalAlignment = VerticalAlignment.Center };
     readonly Panel _bandSliders = new();
-    readonly Segmented _mode = new((int)TargetedAdjust.Current, "Hue", "Saturation", "Luminance");
+    readonly Segmented _mode = new(["Hue", "Saturation", "Luminance"], (int)TargetedAdjust.Current);
 
     public ColorPanel() {
-        Spacing = Space.Xl;
+        Spacing = SectionPlate.Gap;
         Children.Add(new SectionPlate("Presence", null,
             new AdjustmentSlider("Vibrance", "vibrance", -1, 1, tint: TrackTint.Presence),
             new AdjustmentSlider("Saturation", "saturation", -1, 1, tint: TrackTint.Presence)));
@@ -31,7 +31,7 @@ public sealed class ColorPanel : StackPanel {
             Grid.SetColumn(wheel, i * 2);
             wheels.Children.Add(wheel);
         }
-        Children.Add(new SectionPlate("Color Grading",
+        Children.Add(new SectionPlate("Color grading",
             "Angle picks the hue, distance picks how far. The wheels only change color — the slider under each one " +
             "is what changes that zone's brightness. Balance slides where the three zones sit: right hands more of " +
             "the picture to the highlight wheel, left to the shadow wheel.",
@@ -41,18 +41,17 @@ public sealed class ColorPanel : StackPanel {
 
         var target = new ToolButton(CanvasTool.Targeted, "eyedropper", "Target", "Drag on the photo", "scope",
                                     "Targeted adjustment — drag on the photo");
-        _mode.Picked += i => TargetedAdjust.Current = (TargetedAdjust.Mode)i;
-        _mode.Height = 22;
-        var tools = Develop.Row(6, [target, _mode]);
+        _mode.Changed += i => TargetedAdjust.Current = (TargetedAdjust.Mode)i;
+        var tools = Develop.Row(6, [target]);
         var rail = new DockPanel();
         DockPanel.SetDock(_swatches, Dock.Left);
         rail.Children.Add(_swatches);
         _bandName.HorizontalAlignment = HorizontalAlignment.Right;
         rail.Children.Add(_bandName);
-        Children.Add(new SectionPlate("Color Mixer",
+        Children.Add(new SectionPlate("Color mixer",
             "Pick a band below, or press Target and drag on the photograph itself — that finds which band the pixel " +
             "under the pointer belongs to, which beats guessing which of eight swatches the sky falls into.",
-            tools, rail, _bandSliders));
+            tools, _mode, rail, _bandSliders));
 
         EngineModel.Shared.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(EngineModel.Tool)) ShowMode(); };
         // A pick on the photo moves the panel to the band it landed in.

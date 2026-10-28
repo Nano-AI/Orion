@@ -24,12 +24,9 @@ static partial class Trash {
             Title = Question(photos), SizeToContent = SizeToContent.WidthAndHeight, CanResize = false,
             Background = Palette.Panel, Tag = "trash-confirmation",
         };
-        Button Choice(string title, bool destructive, Action act) {
-            var b = new Button { Content = title, MinWidth = 96, HorizontalContentAlignment = HorizontalAlignment.Center };
-            if (destructive) b.Foreground = Palette.Reject;
-            b.Click += (_, _) => { window.Close(); act(); };
-            return b;
-        }
+        StateButton Choice(string title, bool destructive, Action act) => new(null, title, () => { window.Close(); act(); }) {
+            MinWidth = 96, Height = 28, Ink = destructive ? Palette.Reject : null,
+        };
         window.Content = new StackPanel {
             Width = 320, Margin = new Thickness(22), Spacing = Space.Md,
             Children = {

@@ -119,8 +119,8 @@ public sealed class CompareOverlay : Panel, ICustomHitTest {
     }
 
     static Border Label() => new() {
-        Background = Ink.Black(0.6), Padding = new Thickness(7, 3), IsHitTestVisible = false,
-        Child = new TextBlock { FontSize = TypeSize.Xs, FontWeight = FontWeight.SemiBold, LetterSpacing = 0.9, Foreground = Ink.White() },
+        Background = Pill.Ground, Padding = new Thickness(8, 3), CornerRadius = new CornerRadius(4), IsHitTestVisible = false,
+        Child = new TextBlock { FontSize = Faces.Mark, Foreground = Palette.Text },
     };
 
     Rect Frame => CanvasState.DrawnFrame(Bounds.Size);
@@ -162,9 +162,8 @@ public sealed class CompareOverlay : Panel, ICustomHitTest {
 
     // stub(#315): Proposal.swift owns this until the logic moves below the facade ("Current edit"/"Proposed")
     void Put(Border label, string text, Point at, double share) {
-        ((TextBlock)label.Child!).Text = text.ToUpperInvariant();
+        ((TextBlock)label.Child!).Text = text;
         var size = Drawn.Measured(label);
-        label.CornerRadius = new CornerRadius(size.Height / 2);
         Drawn.At(label, at.X - size.Width / 2, at.Y - size.Height / 2);
         // Hidden once its half is too narrow to hold it.
         label.Opacity = (CompareState.Vertical ? Frame.Width : Frame.Height) * share > 110 ? 1 : 0;

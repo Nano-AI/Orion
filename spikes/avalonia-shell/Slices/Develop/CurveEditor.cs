@@ -72,23 +72,17 @@ sealed class CurveEditor : StackPanel {
         for (int i = 0; i < Titles.Length; i++) {
             int c = i;
             bool on = c == Channel;
-            var button = new Border {
-                Width = 30, Height = 20, CornerRadius = new CornerRadius(4), Background = on ? Palette.Raised : Brushes.Transparent,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                Child = new TextBlock {
-                    Text = Titles[c], FontSize = TypeSize.Xs, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal,
-                    Foreground = on ? Tint(c) : Palette.Dim,
-                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                },
+            // The chosen channel changes colour (its own), never weight.
+            var button = new StateButton(null, Titles[c], () => { Channel = c; Changed(); }, ButtonKind.Segment,
+                                         c == 0 ? "All three channels" : $"The {Titles[c]} channel alone") {
+                Width = 34, Height = 24, Padding = default, On = on, Ink = on ? Tint(c) : null,
             };
-            ToolTip.SetTip(button, c == 0 ? "All three channels" : $"The {Titles[c]} channel alone");
-            button.PointerPressed += (_, _) => { Channel = c; Changed(); };
             _channels.Children.Add(button);
         }
         _reset.IsVisible = Curves.Any(c => !c.SequenceEqual(CurveMath.Identity));
         _footnote.Text = Curves[Channel].Count > 2
-            ? "drag a point · double-click the graph to reset this channel"
-            : "click the line to add a point";
+            ? "Drag a point. Double-click the graph to reset this channel."
+            : "Click the line to add a point.";
         _graph.InvalidateVisual();
     }
 }

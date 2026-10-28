@@ -87,7 +87,7 @@ static partial class SelfTest {
         cache.Hint(4, 0);
         cache.Request(4, _ => { });
         cache.Clear();
-        Check(cache.Sessions == 0 && cache.Pictures == 0 && lent.Handle != 0 && again.Handle != 0,
+        Check(cache.Sessions == 0 && cache.Pictures == 0 && lent!.Handle != 0 && again.Handle != 0,
               "Clear drops both tiers and closes no lent session");
         list.Load(Enumerable.Repeat("no-such-photo.arw", 5));
         Session? stale = lent;
@@ -96,7 +96,7 @@ static partial class SelfTest {
         cache.Request(4, s => (stale, answered) = (s, true));
         Settle(() => answered && !cache.Busy);
         Check(answered && stale == null, "a decode in flight across Clear is not handed to the next list; a photo that will not open answers null");
-        cache.Release(lent);
+        cache.Release(lent!);
         cache.Release(again);
         cache.Drain();
         Check(cache.Sessions == 0 && lent.Handle == 0 && again.Handle == 0, "sessions lent before Clear close when they come back");

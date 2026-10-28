@@ -25,7 +25,7 @@ public sealed class MaskPanel : Border {
     void Rebuild() {
         (_list.Parent as Panel)?.Children.Remove(_list);
         _list.Refresh();
-        Child = new SectionPlate("Local", null, Rows().ToArray());
+        Child = new SectionPlate("Local adjustments", null, Rows().ToArray());
         _message = null;
         var engine = EngineModel.Shared;
         if (engine.Get("mask_overlay") != 0 && engine.Get("mask_overlay_layer") != _group.SelectedLayer)
@@ -57,7 +57,7 @@ public sealed class MaskPanel : Border {
             engine.Set("mask_overlay_layer", _group.SelectedLayer);
             engine.Set("mask_overlay", on ? 1 : 0);
         });
-        if (_message != null) yield return Caption(_message, TypeSize.Sm);
+        if (_message != null) yield return Caption(_message);
         if (_group.Current is not { } m) yield break;
         if (m.Kind == 4) yield return Caption(MatteCaption(m));
 
@@ -113,7 +113,7 @@ public sealed class MaskPanel : Border {
                     Orientation = Orientation.Horizontal, Spacing = Space.Md,
                     Children = {
                         Push("Clear stroke", () => { m.BrushStroke.Clear(); _group.Push(); Rebuild(); }, m.BrushStroke.Count > 0),
-                        Caption(m.BrushStroke.Count == 0 ? "drag on the photo to paint" : $"{m.BrushStroke.Count} dabs"),
+                        Caption(m.BrushStroke.Count == 0 ? "Drag on the photo to paint." : $"{m.BrushStroke.Count} dabs"),
                     },
                 };
                 break;
