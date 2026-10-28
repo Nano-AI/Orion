@@ -53,10 +53,16 @@ public sealed partial class Session : IDisposable {
     /// Renders the quarter-resolution preview graph or the full one. The shim
     /// falls back to the full graph when there is no preview graph.
     public Graph Render(bool preview) {
+        Interlocked.Increment(ref _renders);
         var graph = (Graph)Native.shim_render(Shim, preview ? 1 : 0, out _);
         if (graph == Graph.Full) RenderedFull = true;
         return graph;
     }
+
+    /// Every engine render in the process, on any session: what a gesture that
+    /// must cost none (the compare divider's drag) is measured by.
+    public static int Renders => _renders;
+    static int _renders;
 
     /// Has rendered the full graph since it was last lightened: its
     /// intermediates (1.35 GB, #318) are allocated and the preview picture may
@@ -84,6 +90,20 @@ public sealed partial class Session : IDisposable {
             bitmap = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Rgba8888, AlphaFormat.Opaque);
             _pictures[graph] = bitmap;
         }
+        Fill(bitmap, graph, w, h);
+        return bitmap;
+    }
+
+    /// The last render of `graph` in a bitmap of its own, which no later render
+    /// overwrites: compare's held original.
+    public unsafe WriteableBitmap? Copy(Graph graph) {
+        if (graph == Graph.None || Native.shim_read(Shim, (int)graph, null, 0, out int w, out int h) == 0) return null;
+        var bitmap = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Rgba8888, AlphaFormat.Opaque);
+        Fill(bitmap, graph, w, h);
+        return bitmap;
+    }
+
+    unsafe void Fill(WriteableBitmap bitmap, Graph graph, int w, int h) {
         using var fb = bitmap.Lock();
         if (fb.RowBytes == w * 4) {
             Native.shim_read(_shim, (int)graph, (byte*)fb.Address, fb.RowBytes * h, out _, out _);
@@ -92,7 +112,6 @@ public sealed partial class Session : IDisposable {
             fixed (byte* p = tmp) Native.shim_read(_shim, (int)graph, p, tmp.Length, out _, out _);
             for (int y = 0; y < h; y++) Marshal.Copy(tmp, y * w * 4, fb.Address + y * fb.RowBytes, w * 4);
         }
-        return bitmap;
     }
 
     /// The full-resolution output size (crop preview included).

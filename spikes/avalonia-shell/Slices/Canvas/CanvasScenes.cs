@@ -54,7 +54,7 @@ static class CanvasScenes {
     }
 
     /// No Swift scene: 3× about the upper right, so the navigator has a region to show.
-    public static void Navigator() => CanvasState.Viewport.ZoomBy(3, new Point(0.62, 0.3), new Size(1, 1));
+    public static void Navigator() => CanvasState.Viewport.ZoomBy(3, new Point(0.62, 0.3));
 
     /// No Swift scene: the targeted tool armed, the pointer on the sky.
     public static void Loupe(Control loupe) {

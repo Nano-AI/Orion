@@ -6,43 +6,141 @@ using Avalonia.Threading;
 namespace OrionShell.CanvasSlice;
 
 /// A port of app/Viewport.swift: zoom as a multiple of fit, center in
-/// normalized image coordinates so it survives a resize.
+/// normalized image coordinates so it survives a resize. Past Swift, after
+/// Apple's Designing Fluid Interfaces (WWDC 2018): a hand moves a raw zoom and
+/// center, what shows is the raw state rubber-banded at the limits (§9), and a
+/// release springs it back inside carrying the hand's velocity (§4–6).
 sealed class Viewport {
+    const double MaxZoom = 64;
+    double _log;                    // ln of the raw zoom
+    Point _raw = new(0.5, 0.5);     // the raw center
+    bool _locked, _hand;
+
+    /// What is on screen: the raw state, banded.
     public double Zoom { get; private set; } = 1;
     public Point Center { get; private set; } = new(0.5, 0.5);
     /// Drawable pixels per image pixel at zoom 1; the canvas sets it as it draws.
     public double FitScale = 1;
-    bool _locked;
+    /// How much of the view the frame covers at fit, per axis; the canvas sets it (Measure).
+    public Size Coverage { get; private set; } = new(1, 1);
 
     /// Held at fit while the crop tool is open, so the crop handles stay on the pixels.
     public bool Locked { get => _locked; set { _locked = value; if (value) Reset(); } }
     public bool IsFit => Math.Abs(Zoom - 1) < 0.001;
+    public bool PastFit => Zoom > 1.001;
     public int Percent => (int)Math.Round(FitScale * Zoom * 100);
+    /// A hand or a spring is moving it: the full-size render waits for rest (#318).
+    public bool Live => _hand || Motion.IsRunning(this);
+    /// Where the hand has put the center, before the rubber band.
+    public Point Raw => _raw;
+    /// Visible fraction of the image on each axis, at the zoom on screen.
+    public Size Visible => VisibleAt(Zoom);
+    Size VisibleAt(double zoom) => new(Math.Min(1, 1 / (zoom * Coverage.Width)), Math.Min(1, 1 / (zoom * Coverage.Height)));
 
-    public void Reset() { (Zoom, Center) = (1, new Point(0.5, 0.5)); CanvasState.Touch(); }
+    /// Apple's projection: where a flick at `v` units a second comes to rest, decelerating 0.998 a millisecond.
+    public static double Projected(double v) => v / 1000 * 0.998 / (1 - 0.998);
+    /// Apple's rubber band: `over` past a limit shows as this, never more than `dim`.
+    public static double Band(double over, double dim) => over * dim * 0.55 / (dim + 0.55 * Math.Abs(over));
+    static double Axis(double c, double visible, bool band) {
+        double lo = visible >= 1 ? 0.5 : visible / 2, hi = visible >= 1 ? 0.5 : 1 - visible / 2;
+        return !band ? Math.Clamp(c, lo, hi) : c < lo ? lo + Band(c - lo, visible) : c > hi ? hi + Band(c - hi, visible) : c;
+    }
+    /// Below fit the picture shrinks to half at most; past 64× it grows by as much.
+    static double Shown(double log) => log < 0 ? Band(log, Math.Log(2)) : log > Math.Log(MaxZoom) ? Math.Log(MaxZoom) + Band(log - Math.Log(MaxZoom), Math.Log(2)) : log;
 
+    void Show() {
+        Zoom = Math.Exp(Shown(_log));
+        var v = Visible;
+        Center = new Point(Axis(_raw.X, v.Width, true), Axis(_raw.Y, v.Height, true));
+        CanvasState.Touch();
+    }
+
+    void Jump(double log, Point center) {
+        Motion.Stop(this);
+        _hand = false;
+        _log = log;
+        var v = VisibleAt(Math.Exp(log));
+        _raw = new Point(Axis(center.X, v.Width, false), Axis(center.Y, v.Height, false));
+        Show();
+    }
+
+    public void Reset() => Jump(0, new Point(0.5, 0.5));
+
+    /// The keys' 0 and 9: a jump, never animated (a keyboard action, many times a day).
     public void ToggleFitAndActual() {
         if (_locked) return;
-        if (IsFit) Zoom = Math.Max(1, 1 / Math.Max(FitScale, 0.0001)); else Reset();
-        ClampCenter();
+        if (IsFit) Jump(Math.Log(Math.Max(1, 1 / Math.Max(FitScale, 0.0001))), Center); else Reset();
     }
 
-    /// Zooms about a normalized view point, keeping the pixel under it still.
-    public void ZoomBy(double factor, Point anchor, Size visible) {
-        if (_locked) return;
-        double old = Zoom;
-        Zoom = Math.Clamp(Zoom * factor, 1, 64);
-        if (Zoom == old) return;
-        double shrink = 1 - old / Zoom;
-        Center = new Point(Center.X + (anchor.X - 0.5) * visible.Width * shrink, Center.Y + (anchor.Y - 0.5) * visible.Height * shrink);
-        ClampCenter();
+    /// A hand takes hold: a spring in flight stops where it is, and the hand carries on from there.
+    public void Begin() { if (_locked) return; Motion.Stop(this); _hand = true; }
+
+    /// Zooms about a normalized view point, keeping the image point under it still
+    /// wherever the picture fills that axis: Swift's formula, solved from the
+    /// picture map so that it also holds from a letterboxed start.
+    public void ZoomBy(double factor, Point anchor) {
+        if (_locked || factor <= 0) return;
+        var b = Coverage;
+        static double Unit(double c, double a, double bz) {
+            double q = Math.Min(1, bz), v = Math.Min(1, 1 / bz);
+            return c - v / 2 + (a - (1 - q) / 2) * v / q;
+        }
+        var u = new Point(Unit(Center.X, anchor.X, b.Width * Zoom), Unit(Center.Y, anchor.Y, b.Height * Zoom));
+        _log += Math.Log(factor);
+        double z = Math.Exp(Shown(_log)), bx = b.Width * z, by = b.Height * z;
+        var v1 = VisibleAt(z);
+        // A zoom never rubber-bands the pan; only a hand dragging past an edge does.
+        _raw = new Point(Axis(bx >= 1 ? u.X - (anchor.X - 0.5) / bx : 0.5, v1.Width, false),
+                         Axis(by >= 1 ? u.Y - (anchor.Y - 0.5) / by : 0.5, v1.Height, false));
+        Show();
     }
 
-    /// Pans by a delta in normalized view coordinates.
-    public void Pan(Vector delta, Size visible) {
+    /// Pans by a delta in normalized view coordinates; past an edge it rubber-bands.
+    public void Pan(Vector delta) {
         if (_locked) return;
-        Center = new Point(Center.X - delta.X * visible.Width, Center.Y - delta.Y * visible.Height);
-        ClampCenter();
+        var v = Visible;
+        _raw = new Point(_raw.X - delta.X * v.Width, _raw.Y - delta.Y * v.Height);
+        Show();
+    }
+
+    /// The hand let go: springs back inside the limits, critically damped, from
+    /// where it is and at the hand's speed; a flick (`velocity`, center units a
+    /// second) travels on to where it would have come to rest.
+    public void Settle(Vector velocity = default) {
+        _hand = false;
+        if (_locked) return;
+        if (Motion.Reduced) velocity = default;   // Reduce Motion: no throw, only the way back inside
+        double toLog = Math.Clamp(_log, 0, Math.Log(MaxZoom));
+        var v = VisibleAt(Math.Exp(toLog));
+        var to = new Point(Axis(_raw.X + Projected(velocity.X), v.Width, false), Axis(_raw.Y + Projected(velocity.Y), v.Height, false));
+        Spring log = new(_log), x = new(_raw.X, velocity.X), y = new(_raw.Y, velocity.Y);
+        Motion.Run(this, dt => {
+            bool moving = log.Step(toLog, dt, 0.35, 1e-4) | x.Step(to.X, dt, 0.35, 1e-5) | y.Step(to.Y, dt, 0.35, 1e-5);
+            (_log, _raw) = (log.Value, new Point(x.Value, y.Value));
+            if (!moving) Motion.Stop(this);   // so the last Touch sees it at rest
+            Show();
+            return moving;
+        });
+    }
+
+    /// Fit or 1:1 from a click (the navigator's pills, a double-click): a spring
+    /// about `anchor` (normalized view), so the point clicked stays put.
+    public void AnimateZoom(double zoom, Point anchor) {
+        if (_locked) return;
+        Motion.Stop(this);
+        double to = Math.Log(Math.Clamp(zoom, 1, MaxZoom));
+        Spring log = new(_log);
+        Motion.Run(this, dt => {
+            bool moving = log.Step(to, dt, 0.35, 1e-4);
+            if (!moving) Motion.Stop(this);
+            ZoomBy(Math.Exp(log.Value - _log), anchor);
+            return moving;
+        });
+    }
+
+    /// Sets Coverage for a view of this aspect.
+    public void Measure(double imageAspect, double viewAspect) {
+        if (imageAspect > 0 && viewAspect > 0) Coverage = FitCoverage(imageAspect, viewAspect);
     }
 
     static Size FitCoverage(double imageAspect, double viewAspect) =>
@@ -59,14 +157,85 @@ sealed class Viewport {
         var b = FitCoverage(imageAspect, viewAspect);
         return new Size(Math.Min(1, 1 / (Zoom * b.Width)), Math.Min(1, 1 / (Zoom * b.Height)));
     }
+}
 
-    void ClampCenter() { Center = new Point(Math.Clamp(Center.X, 0, 1), Math.Clamp(Center.Y, 0, 1)); CanvasState.Touch(); }
+/// Apple's spring with damping 1 (Designing Fluid Interfaces): no overshoot
+/// from rest, described by its response in seconds. It starts from the value on
+/// screen with the velocity it already has, so a new target never jumps.
+sealed class Spring(double value, double velocity = 0) {
+    public double Value = value, Velocity = velocity;
 
-    /// Final clamp so the viewport never shows outside the frame.
-    public void Clamp(Size visible) {
-        Center = new Point(visible.Width >= 1 ? 0.5 : Math.Clamp(Center.X, visible.Width / 2, 1 - visible.Width / 2),
-                           visible.Height >= 1 ? 0.5 : Math.Clamp(Center.Y, visible.Height / 2, 1 - visible.Height / 2));
-        CanvasState.Touch();
+    /// One frame of x(t) = (x₀ + (v₀ + ωx₀)t)·e^(−ωt) about `target`, ω = 2π/response.
+    /// False once within `eps` and still, landing exactly on the target.
+    public bool Step(double target, double dt, double response, double eps) {
+        double w = 2 * Math.PI / response, x0 = Value - target, b = Velocity + w * x0, e = Math.Exp(-w * dt);
+        Value = target + (x0 + b * dt) * e;
+        Velocity = (Velocity - w * b * dt) * e;
+        if (Math.Abs(Value - target) > eps || Math.Abs(Velocity) > eps * 10) return true;
+        (Value, Velocity) = (target, 0);
+        return false;
+    }
+}
+
+/// The display's frame clock (TopLevel.RequestAnimationFrame, Avalonia's
+/// CADisplayLink): steps each running motion once a frame until it settles.
+/// One motion per key; running a key again replaces it, which is how a new
+/// gesture interrupts a spring. With no window, or Reduce Motion on, a motion
+/// runs to its end at once.
+static class Motion {
+    static readonly Dictionary<object, Func<double, bool>> Running = new();
+    static TopLevel? _clock;
+    static TimeSpan? _last;
+    static bool _asked;
+
+    public static bool Reduced => CanvasNative.ReduceMotion;
+    public static bool IsRunning(object key) => Running.ContainsKey(key);
+    public static void Stop(object key) => Running.Remove(key);
+
+    /// The canvas's window, once it has one.
+    public static void Attach(TopLevel? clock) {
+        (_clock, _asked, _last) = (clock, false, null);
+        if (Running.Count > 0) Ask();
+    }
+
+    /// That window closed: what was running finishes at once rather than waiting on a dead clock.
+    public static void Detach(TopLevel? clock) { if (clock == _clock) Attach(null); }
+
+    /// Units a second over the last 80 ms of a hand's samples, as a release hands
+    /// over to a spring; zero once the hand has rested 50 ms before letting go.
+    public static double Velocity(List<(ulong T, double V)> samples, ulong now) {
+        if (samples.Count < 2 || now - samples[^1].T > 50) return 0;
+        var first = samples.LastOrDefault(s => samples[^1].T - s.T >= 80, samples[0]);
+        double dt = (samples[^1].T - first.T) / 1000.0;
+        return dt > 0 ? (samples[^1].V - first.V) / dt : 0;
+    }
+
+    public static void Run(object key, Func<double, bool> frame) {
+        Running[key] = frame;
+        Ask();
+    }
+
+    static bool Current(object key, Func<double, bool> frame) => Running.GetValueOrDefault(key) == frame;
+
+    static void Ask() {
+        if (_clock == null || Reduced) {   // a second a frame: done in one or two
+            foreach (var (key, frame) in Running.ToArray())
+                for (int i = 0; i < 10 && Current(key, frame) && frame(1); i++) { }
+            Running.Clear();
+            return;
+        }
+        if (_asked) return;
+        _asked = true;
+        _clock.RequestAnimationFrame(Tick);
+    }
+
+    static void Tick(TimeSpan now) {
+        _asked = false;
+        double dt = _last is { } last ? Math.Clamp((now - last).TotalSeconds, 0, 1 / 30.0) : 1 / 60.0;
+        _last = now;
+        foreach (var (key, frame) in Running.ToArray())
+            if (Current(key, frame) && !frame(dt) && Current(key, frame)) Running.Remove(key);
+        if (Running.Count > 0) Ask(); else _last = null;
     }
 }
 
@@ -79,7 +248,9 @@ static class CanvasState {
     public static readonly Viewport Viewport = new();
     public static event Action? Changed;
     public static void Touch() {
-        EngineModel.Shared.ZoomedPastFit = !Viewport.IsFit;   // past fit the photo renders full size (#318)
+        // Past fit the photo renders full size (#318), once the hand rests: a
+        // full render inside a pinch would hold the fingers still.
+        if (!Viewport.Live) EngineModel.Shared.ZoomedPastFit = Viewport.PastFit;
         Changed?.Invoke();
     }
 
@@ -191,9 +362,15 @@ static class CanvasState {
     /// `photoFrame`: the picture at fit, which is where the crop overlay draws.
     public static Rect PhotoFrame(Size size) => CanvasLayout.FrameRect(ImageAspect, size);
 
-    /// `drawnFrame`: where the picture is right now, zoom included.
-    public static Rect DrawnFrame(Size size) => ImageAspect > 0 && size.Height > 0
-        ? CanvasLayout.DrawnRect(Viewport.QuadScale(ImageAspect, size.Width / size.Height), size) : default;
+    /// `drawnFrame`: where the picture is on screen right now, zoom, pan and a
+    /// rubber band included.
+    public static Rect DrawnFrame(Size size) => ImageAspect > 0 && size.Height > 0 ? Whole(size).Intersect(new Rect(size)) : default;
+
+    /// The whole picture's rectangle in the view: past fit, mostly off screen.
+    public static Rect Whole(Size size) {
+        var map = Map(size);
+        return new Rect(map.ToView(new Point(0, 0)), map.ToView(new Point(1, 1)));
+    }
 
     /// `pictureMap`: normalized picture ↔ view, zoom, pan and the frame map included.
     public static PictureMap Map(Size size) {

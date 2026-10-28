@@ -19,10 +19,13 @@ public sealed class Navigator : StackPanel {
         VerticalAlignment = VerticalAlignment.Bottom;
         Margin = new Thickness(16);
         Spacing = 8;
-        _fit = Pill.Button("Fit", () => Commands.Run("fit"), "Fit in window (0)");
-        // Actual size from wherever the zoom is: the command toggles, so come back to fit first.
-        _actual = Pill.Button("100%", () => { if (!CanvasState.Viewport.IsFit) CanvasState.Viewport.Reset(); Commands.Run("actual-size"); },
-                              "Actual size (9)", numeral: true);
+        // A click springs about the view's centre; the keys (0, 9) jump, as keys should.
+        var vp = CanvasState.Viewport;
+        _fit = Pill.Button("Fit", () => { if (Commands.CanRun("fit")) vp.AnimateZoom(1, new Point(0.5, 0.5)); }, "Fit in window (0)");
+        // Actual size from wherever the zoom is.
+        _actual = Pill.Button("100%", () => {
+            if (Commands.CanRun("actual-size")) vp.AnimateZoom(1 / Math.Max(vp.FitScale, 0.0001), new Point(0.5, 0.5));
+        }, "Actual size (9)", numeral: true);
         _pill = Pill.Of(_fit, _actual);
         _pill.HorizontalAlignment = HorizontalAlignment.Left;
         Children.AddRange([_map, _pill]);
@@ -46,7 +49,7 @@ public sealed class Navigator : StackPanel {
 
         public Map() => IsHitTestVisible = false;
 
-        static bool Showing => !CanvasState.Viewport.IsFit && CanvasState.ImageAspect > 0;
+        static bool Showing => CanvasState.Viewport.PastFit && CanvasState.ImageAspect > 0;
 
         protected override Size MeasureOverride(Size available) =>
             Showing ? new Size(BoxWidth, BoxWidth / Math.Max(CanvasState.ImageAspect, 0.01)) : default;

@@ -1,15 +1,18 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 
 namespace OrionShell.CanvasSlice;
 
 /// A port of app/ImageCanvas.swift and the picture slot of OrionApp+Canvas.swift:
 /// the photograph at the viewport's zoom and pan, the compare split, and what a
-/// press on the picture does — pan, the targeted tool's drag, the loupe's hover.
+/// press on the picture does — pan, the targeted tool's drag, the loupe's hover —
+/// and what the wheel and the trackpad do: zoom about the pointer, pan.
 /// Order 0, so the overlays (crop, mask, spots, compare) stack over it.
 [Panel("canvas", Region.Canvas, 0)]
 public sealed class CanvasPanel : Panel {
@@ -19,8 +22,12 @@ public sealed class CanvasPanel : Panel {
     readonly StackPanel _choices = new() { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
     readonly StackPanel _state;
     readonly Drawn _picture;
+    readonly Halvings _shown = new(), _original = new();
+    int _version;   // the shown bitmap is reused render after render: same object, new pixels
     Point? _anchor;
     int? _band;
+    readonly List<(ulong T, double V)> _x = [], _y = [];
+    Interactive? _host;
 
     public CanvasPanel() {
         Margin = new Thickness(CanvasState.Inset);
@@ -36,7 +43,8 @@ public sealed class CanvasPanel : Panel {
                                   Children = { _note, _choices } };
         Children.AddRange([_picture, _welcome, _state]);
         CanvasState.Changed += Refresh;
-        EngineModel.Shared.Shown.Changed += Refresh;   // the picture: only through this seam
+        CompareState.Moved += _picture.InvalidateVisual;   // a divider drag repaints the picture and nothing else
+        EngineModel.Shared.Shown.Changed += () => { _version++; Refresh(); };   // the picture: only through this seam
         EngineModel.Shared.PropertyChanged += (_, e) => {
             if (e.PropertyName is nameof(EngineModel.Current) or nameof(EngineModel.Timing)) Refresh();
         };
@@ -68,7 +76,23 @@ public sealed class CanvasPanel : Panel {
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
         base.OnAttachedToVisualTree(e);
-        CanvasState.FollowShell(TopLevel.GetTopLevel(this));
+        var top = TopLevel.GetTopLevel(this);
+        CanvasState.FollowShell(top);
+        Motion.Attach(top);
+        // The wheel and the pinch work wherever the pointer is on the canvas, the
+        // compare divider and the mask handles included: those are this panel's
+        // siblings, so their events bubble to the region and never through here.
+        _host = Parent as Interactive ?? this;
+        _host.AddHandler(PointerWheelChangedEvent, Wheel);
+        _host.AddHandler(PointerTouchPadGestureMagnifyEvent, Magnify);
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) {
+        base.OnDetachedFromVisualTree(e);
+        _host?.RemoveHandler(PointerWheelChangedEvent, Wheel);
+        _host?.RemoveHandler(PointerTouchPadGestureMagnifyEvent, Magnify);
+        _host = null;
+        Motion.Detach(e.RootVisual as TopLevel);
     }
 
     void Draw(DrawingContext c) {
@@ -79,23 +103,25 @@ public sealed class CanvasPanel : Panel {
             || size.Width <= 0 || size.Height <= 0) return;
 
         var vp = CanvasState.Viewport;
-        double va = size.Width / size.Height;
-        var visible = vp.VisibleFraction(a, va);
-        var dest = CanvasLayout.DrawnRect(vp.QuadScale(a, va), size);
+        vp.Measure(a, size.Width / size.Height);
+        var whole = CanvasState.Whole(size);
         double scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
         vp.FitScale = CanvasLayout.FrameRect(a, size).Width * scaling / Math.Max(CanvasNative.ImageSize.Width, 1);
         // Past 4× a pixel is a square, not a blur; below it, filtered.
         var mode = vp.FitScale * vp.Zoom > 4 ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality;
+        double pixels = whole.Width * scaling;   // the whole picture's width on screen, in device pixels
 
-        using var turned = c.PushGeometryClip(TurnedFrame(dest));
+        // The whole picture into its place, clipped to the view (a rubber band shows
+        // the surround past its edge), or to the turned frame while the crop tool previews.
+        using var clip = c.PushGeometryClip(CropEdit.Previewing ? TurnedFrame(whole) : new RectangleGeometry(new Rect(size)));
         using (c.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = mode })) {
-            c.DrawImage(picture, Source(picture, visible, vp.Center), dest);
-            if (CompareState.Comparing && CompareState.Original is { } original) {
+            var shown = _shown.For(picture, _version, pixels);
+            c.DrawImage(shown, new Rect(shown.Size), whole);
+            if (CompareState.Showing && CompareState.Original is { } original) {
                 // The split lives in view space: it holds still while the picture pans under it.
-                double s = CompareState.Split;
-                var before = CompareState.Vertical ? new Rect(dest.X, dest.Y, dest.Width * s, dest.Height)
-                                                   : new Rect(dest.X, dest.Y, dest.Width, dest.Height * s);
-                using (c.PushClip(before)) c.DrawImage(original, Source(original, visible, vp.Center), dest);
+                var held = _original.For(original, 0, pixels);
+                using (c.PushGeometryClip(CompareState.OriginalSide(CanvasState.DrawnFrame(size))))
+                    c.DrawImage(held, new Rect(held.Size), whole);
             }
         }
     }
@@ -103,31 +129,68 @@ public sealed class CanvasPanel : Panel {
     /// While the crop tool previews, the turned frame on the canvas: outside it the
     /// engine's canvas is empty, and the surround shows there as it does in Swift.
     static Geometry TurnedFrame(Rect dest) {
-        if (!CropEdit.Previewing) return new RectangleGeometry(dest);
         var (origin, size) = CropEdit.Canvas;
         var corners = CanvasLayout.TurnedFrame(CanvasNative.FrameAspect, EngineModel.Shared.Get("straighten_deg"))
             .Select(p => new Point(dest.X + (p.X - origin.X) / size * dest.Width, dest.Y + (p.Y - origin.Y) / size * dest.Height));
         return new PolylineGeometry(corners.ToList(), true);
     }
 
-    /// The visible window about the viewport's center, in the bitmap's own pixels.
-    static Rect Source(Bitmap b, Size visible, Point center) {
-        var s = b.Size;
-        return new Rect((center.X - visible.Width / 2) * s.Width, (center.Y - visible.Height / 2) * s.Height,
-                        visible.Width * s.Width, visible.Height * s.Height);
-    }
-
-    Size Visible {
-        get {
-            double a = CanvasState.ImageAspect, va = Bounds.Width / Math.Max(Bounds.Height, 1);
-            return a > 0 ? CanvasState.Viewport.VisibleFraction(a, va) : new Size(1, 1);
-        }
-    }
-
     /// `imageUV`: the displayed-picture point under `p`, or null off the picture.
     Point? Uv(Point p) {
         var u = CanvasState.Map(Bounds.Size).ToUnit(p);
         return u.X is >= 0 and <= 1 && u.Y is >= 0 and <= 1 ? u : null;
+    }
+
+    /// A view point as a fraction of the view: what zoom keeps still.
+    Point Anchor(Point p) => new(p.X / Math.Max(Bounds.Width, 1), p.Y / Math.Max(Bounds.Height, 1));
+
+    /// A hand on the viewport, which first learns this view's shape.
+    Viewport Hold() {
+        Motion.Stop(this);   // a wheel's pending rest: the new hand outlives it
+        var vp = CanvasState.Viewport;
+        vp.Measure(CanvasState.ImageAspect, Bounds.Width / Math.Max(Bounds.Height, 1));
+        vp.Begin();
+        return vp;
+    }
+
+    /// After a wheel or pinch event: settle now if AppKit says the fingers are off
+    /// (no latency on the way back), else 80 ms of frames after the last event,
+    /// which is how long a pinch's or a scroll's events can pause and still be one gesture.
+    void Rest() {
+        if (CanvasNative.GestureEnded() == true) { CanvasState.Viewport.Settle(); return; }
+        double waited = 0;
+        Motion.Run(this, dt => {
+            if ((waited += dt) < 0.08) return true;
+            CanvasState.Viewport.Settle();
+            return false;
+        });
+    }
+
+    /// ImageCanvas.swift `handleScroll`: ⌘ (Ctrl) or a mouse wheel zooms about
+    /// the pointer; a trackpad's two fingers pan, the content under them 1:1.
+    void Wheel(object? sender, PointerWheelEventArgs e) {
+        var d = e.Delta;
+        // Avalonia's AppKit view hands over NSEvent.scrollingDelta ÷ 50 from a trackpad
+        // and ÷ 5 from a wheel (libAvaloniaNative, AvnView mouseEvent); undone, Swift's
+        // 0.01 a point applies as it is. Elsewhere a notch is 1.0, read as 10 points,
+        // and a fraction or a sideways delta means a precision touchpad.
+        bool precise = CanvasNative.PreciseScroll() ?? (d.X != 0 || d.Y != Math.Round(d.Y));
+        double points = precise ? 50 : OperatingSystem.IsMacOS() ? 5 : 10;
+        var vp = Hold();
+        if (!precise || e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            vp.ZoomBy(Math.Exp(0.01 * d.Y * points), Anchor(e.GetPosition(this)));
+        else
+            vp.Pan(new Vector(d.X * points / Math.Max(Bounds.Width, 1), d.Y * points / Math.Max(Bounds.Height, 1)));
+        Rest();
+        e.Handled = true;
+    }
+
+    /// ImageCanvas.swift `handleMagnify`: the trackpad pinch (NSEvent magnify,
+    /// raised by Avalonia as PointerTouchPadGestureMagnify), 1:1 about the pointer.
+    void Magnify(object? sender, PointerDeltaEventArgs e) {
+        Hold().ZoomBy(1 + Math.Max(e.Delta.X, -0.9), Anchor(e.GetPosition(this)));
+        Rest();
+        e.Handled = true;
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e) {
@@ -145,6 +208,15 @@ public sealed class CanvasPanel : Panel {
             && ColorLoupe.Hue(s.Scene) is { } hue) {
             _band = ColorLoupe.Band(hue);
             engine.BeginInteraction();
+        } else if (e.ClickCount == 2) {
+            // A double-click: 1:1 about the point clicked, or back to fit, by spring.
+            var vp = CanvasState.Viewport;
+            vp.AnimateZoom(vp.PastFit ? 1 : 1 / Math.Max(vp.FitScale, 0.0001), Anchor(p));
+            return;
+        } else {
+            Hold();
+            _x.Clear();
+            _y.Clear();
         }
         _anchor = p;
         e.Pointer.Capture(this);
@@ -164,34 +236,32 @@ public sealed class CanvasPanel : Panel {
             engine.Set("sat_shift", Math.Clamp(engine.Get("sat_shift", band) - (float)dy * 2, -1, 1), band);
             return;
         }
-        var visible = Visible;
-        CanvasState.Viewport.Pan(new Vector(dx, dy), visible);
-        CanvasState.Viewport.Clamp(Visible);
+        // The picture follows the hand 1:1, and past an edge with growing resistance.
+        var vp = CanvasState.Viewport;
+        vp.Pan(new Vector(dx, dy));
+        _x.Add((e.Timestamp, vp.Raw.X));
+        _y.Add((e.Timestamp, vp.Raw.Y));
     }
 
-    protected override void OnPointerReleased(PointerReleasedEventArgs e) {
+    protected override void OnPointerReleased(PointerReleasedEventArgs e) => Let(e.Timestamp, e.Pointer);
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) => Let(0, null);
+
+    /// The hand let go: a flick carries on at its speed (Apple's projection), a
+    /// placed drag stays, and past an edge it springs back.
+    void Let(ulong now, IPointer? pointer) {
+        if (_anchor == null) return;
         _anchor = null;
-        e.Pointer.Capture(null);
-        if (_band == null) return;
-        _band = null;
-        EngineModel.Shared.EndInteraction();
+        pointer?.Capture(null);
+        if (_band != null) {
+            _band = null;
+            EngineModel.Shared.EndInteraction();
+            return;
+        }
+        CanvasState.Viewport.Settle(now == 0 ? default : new Vector(Motion.Velocity(_x, now), Motion.Velocity(_y, now)));
     }
 
     protected override void OnPointerExited(PointerEventArgs e) => CanvasState.ClearHover();
-
-    /// A mouse notch or ⌘-scroll zooms about the cursor; a trackpad scroll pans.
-    /// ponytail: Avalonia reports no precise-delta flag, so a whole-line delta reads as a mouse.
-    protected override void OnPointerWheelChanged(PointerWheelEventArgs e) {
-        var d = e.Delta;
-        var p = e.GetPosition(this);
-        var vp = CanvasState.Viewport;
-        bool zoom = e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)
-                    || (d.X == 0 && d.Y == Math.Round(d.Y));
-        if (zoom) vp.ZoomBy(1 + d.Y * 0.1, new Point(p.X / Math.Max(Bounds.Width, 1), p.Y / Math.Max(Bounds.Height, 1)), Visible);
-        else vp.Pan(new Vector(d.X * 10 / Math.Max(Bounds.Width, 1), d.Y * 10 / Math.Max(Bounds.Height, 1)), Visible);
-        vp.Clamp(Visible);
-        e.Handled = true;
-    }
 
     /// Nothing open yet: the name, one line, and the way in.
     static StackPanel Welcome() => new() {
@@ -206,4 +276,46 @@ public sealed class CanvasPanel : Panel {
                             Foreground = Palette.Faint, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Center },
         },
     };
+}
+
+/// CanvasReduce.swift's chain, on the CPU: a picture halved by 2 × 2 boxes as
+/// many times as the screen allows, once per picture, never per frame. Measured
+/// in the window with compare on over a 24 MP render: drawn from the render
+/// itself a divider frame took 33 ms, Skia sampling two 24 MP bitmaps down every
+/// frame; drawn from the halvings, 16.7 ms, the display's own rate.
+/// ponytail: halved on the UI thread, ~40 ms once per full render; a worker if that shows.
+sealed class Halvings {
+    Bitmap? _source;
+    int _version;
+    readonly List<WriteableBitmap> _levels = [];
+
+    /// `source`, or its smallest halving still at least `pixels` wide.
+    public Bitmap For(Bitmap source, int version, double pixels) {
+        if (source != _source || version != _version) {
+            foreach (var level in _levels) level.Dispose();   // 6 MB and less each, freed now rather than by a finalizer
+            _levels.Clear();
+            (_source, _version) = (source, version);
+        }
+        Bitmap b = source;
+        for (int i = 0; b.PixelSize.Width / 2 >= pixels && b is WriteableBitmap w; i++) {
+            if (i == _levels.Count) _levels.Add(Halve(w));
+            b = _levels[i];
+        }
+        return b;
+    }
+
+    static unsafe WriteableBitmap Halve(WriteableBitmap source) {
+        using var s = source.Lock();
+        int w = s.Size.Width / 2, h = s.Size.Height / 2, ss = s.RowBytes;
+        var half = new WriteableBitmap(new PixelSize(w, h), s.Dpi, s.Format, AlphaFormat.Opaque);
+        using var d = half.Lock();
+        nint from = s.Address, to = d.Address;
+        int ds = d.RowBytes;
+        Parallel.For(0, h, y => {
+            byte* a = (byte*)from + 2L * y * ss, b = a + ss, o = (byte*)to + (long)y * ds;
+            for (int x = 0; x < w; x++, a += 8, b += 8, o += 4)
+                for (int k = 0; k < 4; k++) o[k] = (byte)((a[k] + a[k + 4] + b[k] + b[k + 4] + 2) >> 2);
+        });
+        return half;
+    }
 }
