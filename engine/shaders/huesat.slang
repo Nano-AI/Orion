@@ -107,6 +107,13 @@ void hueSatMap(uint3 tid : SV_DispatchThreadID,
     // HSV is undefined on negatives, and a color outside ProPhoto is rare
     // enough that clamping it here costs nothing a later stage can see. The
     // DNG SDK does the same before its own table lookup.
+    //
+    // ⚠ Not rare in a shadow: the mosaic keeps its noise below black now
+    // (linearize.slang), and 23% of a night sky's values reach this node
+    // negative. This clamp lifts that sky's scene-linear mean by a fifth, and
+    // moves its rendered color by under a level, because the display clamps the
+    // same pixels anyway. Passing negatives through was tried and measured
+    // (research/black-level.md); the spec's clamp stays.
     pro = max(pro, 0.0f);
 
     float3 hsv = rgbToHsv(pro);

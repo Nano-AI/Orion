@@ -54,6 +54,11 @@ correctly where an additive term overshoots it. And the directional estimates
 are combined with **opposing** weights: `N_Est` is weighted by `S_Grad`, so an
 estimate coming from the calmer direction is trusted more.
 
+⚠ **Orion's mosaic is signed below black** ([`black-level.md`](black-level.md),
+2026-10-28), which RCD's description does not anticipate. The ratio reads its
+low-passes at `max(lpf, 0)`, and no step clamps its output below zero, where the
+port used to clamp to [0, 1]. The guard is `UNSOURCED.md` §21.
+
 **4 — Red and blue.** Both interpolate the color difference C − G. At a red or
 blue site the missing channel sits on the diagonals, and a P/Q discrimination —
 the same statistic, sampled diagonally — chooses which diagonal to favor. At a

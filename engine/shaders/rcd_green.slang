@@ -76,11 +76,17 @@ void rcdGreen(uint3 tid : SV_DispatchThreadID,
     const float eGrad = kRcdEps + abs(e1 - w1) + abs(c0 - e2) + abs(e1 - e3) + abs(e2 - e4);
 
     // Ratio-corrected estimates. The lpf ratio is the correction.
-    const float lc = lpf[tid.xy];
-    const float ln = tapClamped(lpf, c + int2(0, -2), sz);
-    const float ls = tapClamped(lpf, c + int2(0,  2), sz);
-    const float lw = tapClamped(lpf, c + int2(-2, 0), sz);
-    const float le = tapClamped(lpf, c + int2( 2, 0), sz);
+    //
+    // ⚠ Read at zero or above. The mosaic is signed below black now
+    // (linearize.slang), and a ratio of two low-passes of noise around zero
+    // divides by a sum that can be zero itself; clamped, it is RCD's own
+    // [0, 2] factor and is exactly 1 where both sides are dark. Only the
+    // correction is clamped - the neighbour it scales keeps its sign.
+    const float lc = max(lpf[tid.xy], 0.0f);
+    const float ln = max(tapClamped(lpf, c + int2(0, -2), sz), 0.0f);
+    const float ls = max(tapClamped(lpf, c + int2(0,  2), sz), 0.0f);
+    const float lw = max(tapClamped(lpf, c + int2(-2, 0), sz), 0.0f);
+    const float le = max(tapClamped(lpf, c + int2( 2, 0), sz), 0.0f);
 
     const float nEst = n1 * (1.0f + (lc - ln) / (kRcdEps + lc + ln));
     const float sEst = s1 * (1.0f + (lc - ls) / (kRcdEps + lc + ls));
@@ -92,5 +98,5 @@ void rcdGreen(uint3 tid : SV_DispatchThreadID,
     const float hEst = (wGrad * eEst + eGrad * wEst) / (eGrad + wGrad);
 
     const float vhDisc = dirs[tid.xy];
-    green[tid.xy] = clamp(vhDisc * hEst + (1.0f - vhDisc) * vEst, 0.0f, 1.0f);
+    green[tid.xy] = min(vhDisc * hEst + (1.0f - vhDisc) * vEst, 1.0f);
 }

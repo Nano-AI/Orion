@@ -167,8 +167,8 @@ using DecodedImage = std::variant<BayerImage, LinearImage>;
 
 /// A smaller mosaic, for a preview that has to be rendered while a slider moves.
 ///
-/// research: none needed — this is decimation, not a filter. What it has to get
-/// right is the one thing decimating a *mosaic* can get wrong.
+/// research/black-level.md §7 says why it point-samples. What it has to get
+/// right besides is the one thing decimating a *mosaic* can get wrong.
 ///
 /// ⚠ **The CFA phase must survive.** A Bayer mosaic is only meaningful with its
 /// pattern: sample it on any stride that is not a multiple of the 2x2 cell and
@@ -176,16 +176,22 @@ using DecodedImage = std::variant<BayerImage, LinearImage>;
 /// look soft, it looks like a color-swapped nightmare — and `filters` would
 /// still say the pattern was intact, so nothing downstream would notice.
 ///
-/// So the output is built cell by cell: output cell (I, J) averages the input
-/// cells in the `scale/2` square starting at (I*scale/2, J*scale/2), channel by
-/// channel. Averaging rather than point-sampling because a mosaic point-sampled
-/// at stride four moires badly on fabric and foliage, and a preview that
-/// shimmers while a slider moves is worse than one that is soft.
+/// So the output is built cell by cell: output cell (I, J) takes, channel by
+/// channel, the sample at the middle of the `scale` x `scale` block of input
+/// cells it stands for.
 ///
-/// ⚠ It averages what `linearize` will see, not the raw counts: each sample is
-/// clamped at its channel's black first, as that node clamps it, and the mean
-/// is rounded. No new maths — the full graph's own first step, done before the
-/// average instead of after it, because a clamp does not commute with one.
+/// ⚠ **Point-sampled, not averaged — and averaging was the first choice.** It
+/// was picked because a mosaic sampled at stride four moires on fabric and
+/// foliage. What averaging also does is cut the noise fourfold, and the
+/// display transform is not linear: on a night frame the release renders the
+/// noise it has through a curve that lifts it, and a preview with a quarter
+/// of that noise rendered the sky ten levels darker and bluer than the frame
+/// it settles on (`_PIC8148` at +1 EV: mean |16x16 block luma| 5.6 levels
+/// averaged, 0.4 point-sampled; daylight `_PIC8095` 1.2 against 0.3, because
+/// the curve does the same to fine texture). A real sample per pixel carries
+/// the release's own distribution, so every pointwise stage downstream agrees
+/// in expectation. The price is that moire, and twice the per-pixel
+/// deviation from the release while a slider moves.
 ///
 /// `scale` must be even and at least 2; anything else returns the image
 /// unchanged rather than guessing.

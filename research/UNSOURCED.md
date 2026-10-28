@@ -1517,3 +1517,14 @@ The shapes are sourced; the numbers that set how hard each one bites are chosen.
 - **Chosen:** `denoiseNlm` is `k` in `h = k·σ` on 0..1, so the table's 0.40 sits mid-slider; the 3×3 mean of luma under `σ(p)`; and the window, 11×11 search with a 3×3 patch, which is the table's row for *light* noise taken for every noise level because the moderate-noise row (21×21, 5×5) measured 2.9-3.1 s at 42.4 MP and 150-168 ms on the preview graph against 333-344 ms and 19 ms.
 - **What would settle it:** the by-eye comparison on ISO 8000-16000 frames in high-iso.md §5, and a background-pass form of the large window if the small one leaves the wavelet's residual visible; the kernel already takes both windows at run time and the bench prints both.
 
+
+---
+
+## 21. A signed mosaic through RCD - added 2026-10-28
+
+[black-level.md](black-level.md) §2, `engine/shaders/rcd_green.slang`.
+
+- **Sourced:** keeping noise below black instead of clamping it (EMVA 1288 Release 4.0 §2.7; Foi 2009, *Signal Processing* 89(12)); RCD itself ([demosaic.md](demosaic.md)).
+- **Not sourced:** what RCD's ratio correction `1 + (lc - ln) / (eps + lc + ln)` should do with signed low-passes. RCD is described for non-negative data, where the factor is bounded to [0, 2]; around zero its denominator can vanish. The low-passes inside the ratio are read at `max(lpf, 0)`, which keeps the published bound and makes the factor exactly 1 where both sides are dark. The neighbour it scales keeps its sign, and RCD's output is no longer clamped below.
+- **Cost:** on `_PIC8148`'s sky the demosaiced green reads 1.5% under the 4x4-averaged reference (red and blue within 0.5%); `testPreviewShadowsMatchGpu` holds the demosaic's noisy-field mean within 10% of the clean field's, and measured 1%.
+- **What would settle it:** a published demosaic evaluated on signed data (none found), or a comparison of this guard against reading the ratio on a black-offset copy of the mosaic, on night frames at 100%.
