@@ -10,6 +10,12 @@ static partial class SelfTest {
     static partial void SpeedChecks();
     static partial void NativeChecks();
     static partial void WiringChecks();
+    // Round 2 (the developer's UI pass): one hook per stream, each in its own file.
+    static partial void LayoutChecks();
+    static partial void CanvasUxChecks();
+    static partial void ToolsChecks();
+    static partial void MaskUxChecks();
+    static partial void MotionChecks();
 
     static void CommandChecks() {
         // Every name a control binds to (Commands.Run/CanRun("…") in this tree) is registered.

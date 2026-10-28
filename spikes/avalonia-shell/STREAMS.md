@@ -47,3 +47,15 @@ already calls all three, and an unimplemented one compiles away.
   −4…+1.5 EV with lens correction on, so look at how `CanvasPanel.Draw` scales and filters the
   quarter-size preview bitmap (its `FitScale` is computed against the full image size). Fluent's
   accent: a `SystemAccentColor` resource in `Theme.axaml`, which loads after `FluentTheme`.
+
+## Round 2: the developer's UI pass (2026-10-28)
+
+| Stream | Owns (writes only these) | Selftest hook (own file) |
+|---|---|---|
+| **u1 layout** | `Shell/MainWindow.axaml(.cs)` · `Shared/Theme.axaml(.cs)` · `Shared/Segmented.cs` · `Slices/Develop/HistogramPanel.cs` · `Slices/Library/{FilmstripPanel,GalleryPanel,LibraryUi,RatingBarPanel}.cs` · `Slices/Chrome/**` | `LayoutChecks` in `Shared/SelfTest.Layout.cs` |
+| **u2 canvas** | `Slices/Canvas/{CanvasPanel,CanvasState,CanvasLayout,CanvasScenes,CanvasNative,CompareOverlay,Navigator,ColorLoupe}.cs` · `Shared/Engine/**` | `CanvasUxChecks` in `Shared/SelfTest.CanvasUx.cs` |
+| **u3 tools** | `Slices/Canvas/{CropEdit,CropOverlay,CropTools}.cs` · `Slices/Develop/**` except `HistogramPanel.cs` · `Slices/Sheets/**` · `Shared/CommandTable.cs` | `ToolsChecks` in `Shared/SelfTest.Tools.cs` |
+| **u4 masks** | `Slices/Masks/**` · `Slices/Canvas/{MaskOverlay,MaskLayout,SpotOverlay}.cs` · `native/*` · `Shared/Native.cs` · `Shared/Engine/SessionSeams.cs` · a design doc under `design/masks/` | `MaskUxChecks` in `Shared/SelfTest.MaskUx.cs` |
+| **u5 motion** | `Shared/{AnalogTrack,AdjustmentSlider,AdjustmentMath,Engraved,ToolButton,TrackTint}.cs` · `Shared/Design/**` · `design/DESIGN.md` (motion section) | `MotionChecks` in `Shared/SelfTest.Motion.cs` |
+
+Everything else is frozen; put the diff you need in your report.
