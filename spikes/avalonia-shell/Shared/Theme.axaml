@@ -23,4 +23,56 @@
     <Setter Property="Foreground" Value="{x:Static local:Palette.Text}"/>
     <Setter Property="FontSize" Value="{x:Static local:Faces.Body}"/>
   </Style>
+
+  <!-- Every scroll bar in the shell: a 4 px rail-grey pill in a 10 px lane over
+       the content's edge, brighter under the pointer and while dragged, and never
+       wider. Fluent's bar grew to 12 px with arrows on hover and covered the
+       controls beside it. No line or page buttons: the wheel and the trackpad
+       scroll, the pill drags. -->
+  <Style Selector="ScrollBar">
+    <Setter Property="MinWidth" Value="0"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="ScrollBar:vertical">
+    <Setter Property="Width" Value="10"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Track Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+               Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}"
+               Orientation="Vertical" IsDirectionReversed="True">
+          <Thumb Classes="lane"/>
+        </Track>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ScrollBar:horizontal">
+    <Setter Property="Height" Value="10"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Track Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+               Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}"
+               Orientation="Horizontal">
+          <Thumb Classes="lane"/>
+        </Track>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Thumb.lane">
+    <Setter Property="Background" Value="{x:Static local:Palette.Rail}"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <!-- The whole lane takes the pointer; only the pill is drawn. -->
+        <Panel Background="Transparent">
+          <Border Background="{TemplateBinding Background}" CornerRadius="2" Margin="3"/>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Thumb.lane:pointerover">
+    <Setter Property="Background" Value="{x:Static local:Palette.Faint}"/>
+  </Style>
+  <Style Selector="Thumb.lane:pressed">
+    <Setter Property="Background" Value="{x:Static local:Palette.Dim}"/>
+  </Style>
 </Styles>

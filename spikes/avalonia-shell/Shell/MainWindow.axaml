@@ -19,34 +19,41 @@
     <Grid>
       <DockPanel x:Name="DevelopFace">
         <Border DockPanel.Dock="Bottom" Height="{x:Static local:Layout.Filmstrip}"
-                Background="{x:Static local:Palette.FilmBase}"
+                Background="{x:Static local:Palette.Panel}"
                 BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1,0,0">
           <Grid x:Name="FilmstripHost"/>
         </Border>
-        <Border DockPanel.Dock="Right" Width="{x:Static local:Layout.ToolCol}"
-                Background="{x:Static local:Palette.Panel}"
-                BorderBrush="{x:Static local:Palette.Line}" BorderThickness="1,0,0,0">
-          <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
-          <DockPanel>
-            <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top" Margin="14,0"/>
-            <!-- Main.dc.html: hairlines above and below, 6 in from each edge, 34 high. -->
-            <Border DockPanel.Dock="Top" BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1">
-              <Panel Margin="6,0" Height="34">
-                <Grid x:Name="TabBar"/>
-                <Border x:Name="TabIndicator" Height="2" Margin="0,0,0,-1" VerticalAlignment="Bottom"
-                        HorizontalAlignment="Left" Background="{x:Static local:Palette.Accent}" IsHitTestVisible="False"/>
-              </Panel>
-            </Border>
-            <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
-            <ScrollViewer>
-              <!-- Main.dc.html's panel rhythm: 18 above, 14 at the sides, 24 below. -->
-              <StackPanel x:Name="ToolsHost" Margin="14,18,14,24" Spacing="{x:Static local:SectionPlate.Gap}"/>
-            </ScrollViewer>
-          </DockPanel>
-        </Border>
-        <Border Background="{x:Static local:Palette.Surround}">
-          <Grid x:Name="CanvasHost"/>
-        </Border>
+        <!-- The canvas, a hairline, the tool column. The hairline carries a
+             splitter wider than itself: drag it (or focus it and press the
+             arrows) and the canvas refits while the sliders lengthen. Widths
+             are set in MainWindow.axaml.cs. -->
+        <Grid x:Name="Body">
+          <Border Background="{x:Static local:Palette.Surround}">
+            <Grid x:Name="CanvasHost"/>
+          </Border>
+          <Border Grid.Column="1" Background="{x:Static local:Palette.Line}"/>
+          <Border Grid.Column="2" Background="{x:Static local:Palette.Panel}">
+            <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
+            <DockPanel x:Name="ToolColumn">
+              <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top" Margin="14,0"/>
+              <!-- Main.dc.html: hairlines above and below, 6 in from each edge, 34 high. -->
+              <Border DockPanel.Dock="Top" BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1">
+                <Panel Margin="6,0" Height="34">
+                  <Grid x:Name="TabBar"/>
+                  <Border x:Name="TabIndicator" Height="2" Margin="0,0,0,-1" VerticalAlignment="Bottom"
+                          HorizontalAlignment="Left" Background="{x:Static local:Palette.Accent}" IsHitTestVisible="False"/>
+                </Panel>
+              </Border>
+              <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
+              <ScrollViewer>
+                <!-- Main.dc.html's panel rhythm: 18 above, 14 at the sides, 24 below. -->
+                <StackPanel x:Name="ToolsHost" Margin="14,18,14,24" Spacing="{x:Static local:SectionPlate.Gap}"/>
+              </ScrollViewer>
+            </DockPanel>
+          </Border>
+          <GridSplitter x:Name="Splitter" Grid.Column="1" Margin="-4,0" ZIndex="1" Focusable="True"
+                        ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" KeyboardIncrement="16"/>
+        </Grid>
       </DockPanel>
       <Grid x:Name="GalleryHost" IsVisible="False"/>
     </Grid>
