@@ -98,8 +98,8 @@ public partial class MainWindow : Window {
             var button = new StateButton {
                 Kind = ButtonKind.Bare, Height = 46, MinWidth = 0, Padding = new Thickness(1, 0), CornerRadius = default,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Content = new StackPanel { Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = {
-                    Icons.Create(Panels.TabIcons[i], 16, Palette.Text),
+                Content = new StackPanel { Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = {
+                    Icons.Create(Panels.TabIcons[i], 13, Palette.Text),
                     new TextBlock { Text = tab, FontSize = Faces.Mark, FontWeight = FontWeight.Medium, HorizontalAlignment = HorizontalAlignment.Center },
                 } },
             };
