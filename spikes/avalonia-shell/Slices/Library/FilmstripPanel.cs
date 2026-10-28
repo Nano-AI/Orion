@@ -13,16 +13,18 @@ namespace OrionShell.Library;
 /// hairline, then the film: 135 film to scale (#347). The picture is the 36 mm
 /// gate, so a millimetre is ThumbW / 36 points; frames sit 38 mm apart (ISO 1007),
 /// and eight KS-1870 perforations run along each edge of every frame, on past the
-/// last one as on a roll's tail. The base is film black and the holes show the
-/// light through; a hairline gate edge keeps a night frame from ending nowhere.
+/// last one as on a roll's tail. The film is 35 mm wide to scale, so its edges
+/// show the panel above and below it, and the holes show the same panel through
+/// them: a cut-out, not a dashed border (#350). A hairline gate edge keeps a
+/// night frame from ending nowhere.
 /// The edge print, under the lower holes where 135 film carries it, is the frame
 /// number and, only when there are any, its marks. The one liberty is the print's
 /// height: true to scale it would be 3 pt type.
 ///
-/// The open photo sits in the middle of the strip, as film sits in a viewer's
-/// gate, ringed in the accent; opening another glides the roll under it on the
-/// shared spring (#349). A leader and a tail of blank film let the first and
-/// last frames reach the middle. A rejected frame is crossed out in red, as a
+/// The roll starts at the strip's left. The open photo is ringed in the accent,
+/// and opening one out of view glides the roll on the shared spring just far
+/// enough to show it with a frame of room (#350; centring it, #349, left a
+/// short roll stranded mid-strip). A rejected frame is crossed out in red, as a
 /// grease pencil marks a contact sheet.
 [Panel("filmstrip", Region.Filmstrip)]
 public sealed class FilmstripPanel : Grid {
@@ -31,8 +33,9 @@ public sealed class FilmstripPanel : Grid {
     const double Pitch = 38 * Mm, Gate = 24 * Mm;
     /// KS-1870: 4.75 mm pitch, a 2.794 x 1.981 mm hole with 0.5 mm corners.
     const double PerfPitch = 4.75 * Mm, PerfW = 2.794 * Mm, PerfH = 1.981 * Mm, PerfR = 0.5 * Mm;
-    /// The film's edge to the holes, and the holes to the picture. The edge print takes what is left.
-    const double Edge = 2.5, Clear = 3;
+    /// The panel above and below the film, the film's edge to the holes, and the holes to the
+    /// picture. The film is the strip's height less `Inset` twice: 94 pt, 35 mm. The edge print takes what is left.
+    const double Inset = 2, Edge = 1.5, Clear = 2.5;
     /// A mouse wheel's notch, in pixels along the strip.
     const double WheelStep = 48;
 
@@ -60,7 +63,7 @@ public sealed class FilmstripPanel : Grid {
         Children.Add(line);
         _film = new ScrollViewer {
             // The film: its base and holes under the frames, stretched to the viewport by the scroller.
-            Content = new Panel { Background = Palette.FilmBase, Children = { new Holes(), _frames } }, Background = Palette.FilmBase,
+            Content = new Panel { Background = Palette.FilmBase, Margin = new Thickness(0, Inset), Children = { new Holes(), _frames } },
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
         // Apple's reposition spring: damping 1, response 0.4 (Shared/Design/Spring.cs).
@@ -74,14 +77,14 @@ public sealed class FilmstripPanel : Grid {
         }, RoutingStrategies.Tunnel);
         SetColumn(_film, 2);
         Children.Add(_film);
-        // A new width moves the middle: the leader regrows and the open frame snaps back to it.
+        // A narrower strip can hide the open frame: show it again, at once.
         _film.PropertyChanged += (_, e) => {
-            if (e.Property == ScrollViewer.ViewportProperty) Centre(glide: false);
+            if (e.Property == ScrollViewer.ViewportProperty) Reveal(glide: false);
         };
 
         var library = LibraryModel.Shared;
-        library.Changed += () => { Rebuild(); Centre(glide: false); };
-        EngineModel.Shared.Opened += () => { Ring(); Centre(glide: true); };
+        library.Changed += () => { Rebuild(); Reveal(glide: false); };
+        EngineModel.Shared.Opened += () => { Ring(); Reveal(glide: true); };
         Rebuild();
     }
 
@@ -112,18 +115,18 @@ public sealed class FilmstripPanel : Grid {
         Avalonia.Automation.AutomationProperties.SetName(_cells[_ringed], LibraryUi.Spoken(_ringed) + ", open");
     }
 
-    /// The leader that lets the first frame reach the middle, a whole number of
-    /// perforations so the holes stay on the frames' pitch; the tail matches it.
-    double Leader => Math.Ceiling(Math.Max(0, _film.Viewport.Width - Pitch) / 2 / PerfPitch) * PerfPitch;
-
-    /// The open frame to the middle of the strip: by the spring when a photo
-    /// opens, at once when the strip itself changed under it.
-    void Centre(bool glide) {
-        double lead = Leader;
-        _frames.Margin = new Thickness(lead, 0);
+    /// The open frame into view with a frame of room beside it, moving the roll
+    /// no further than that and not at all when it already shows: by the spring
+    /// when a photo opens, at once when the strip changed under it.
+    void Reveal(bool glide) {
         int at = _ringed == null ? -1 : _frames.Children.IndexOf(_cells[_ringed]);
-        if (at < 0) return;
-        double x = lead + (at + 0.5) * Pitch - _film.Viewport.Width / 2;
+        // From where the roll is headed, or where a trackpad left it.
+        double view = _film.Viewport.Width, from = _glide.Moving ? _glide.Target : _film.Offset.X;
+        if (at < 0 || view <= 0) return;
+        double left = at * Pitch, room = Math.Min(Pitch, Math.Max(0, (view - Pitch) / 2));
+        double x = left - room < from ? left - room : left + Pitch + room > from + view ? left + Pitch + room - view : from;
+        x = Math.Clamp(x, 0, Math.Max(0, _frames.Children.Count * Pitch - view));
+        if (x == from) return;
         if (glide) _glide.To(x); else _glide.Snap(x);
     }
 
@@ -135,18 +138,14 @@ public sealed class FilmstripPanel : Grid {
         var marks = photo.Rejected ? new Panel() : LibraryUi.Marks(photo, Faces.Mark, unearned: false);
         // The marks follow their own number: at the frame's right they read as the next frame's.
         var print = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { number, marks } };
-        // 135 film's half-frame number, "1A", at the frame line: the one thing real edge print has that this needs nothing for.
-        var half = Faces.Figure($"▸{photo.Index + 1}A", Faces.Mark, Palette.Faint);
-        half.HorizontalAlignment = HorizontalAlignment.Right;
         var frame = new Frame { Child = picture };
         var held = new Panel { Children = { frame } };
         if (photo.Rejected) held.Children.Add(new Crossed());
         // Rows: over the upper holes, the picture, over the lower holes, the edge print.
-        var column = new Grid { Children = { held, half, print } };
+        var column = new Grid { Children = { held, print } };
         foreach (double h in (double[])[Edge + PerfH + Clear, Gate, Clear + PerfH]) column.RowDefinitions.Add(new RowDefinition(h, GridUnitType.Pixel));
         column.RowDefinitions.Add(new RowDefinition(GridLength.Star));
         SetRow(held, 1);
-        SetRow(half, 3);
         SetRow(print, 3);
         var cell = new Border {
             Width = Pitch, Padding = new Thickness((Pitch - Layout.ThumbW) / 2, 0), Background = Brushes.Transparent, Child = column,
@@ -206,8 +205,8 @@ public sealed class FilmstripPanel : Grid {
         public override void Render(DrawingContext c) {
             double lower = Edge + PerfH + Clear + Gate + Clear;
             for (double x = (PerfPitch - PerfW) / 2; x < Bounds.Width; x += PerfPitch) {
-                c.DrawRectangle(Palette.FilmHole, null, new Rect(x, Edge, PerfW, PerfH), PerfR, PerfR);
-                c.DrawRectangle(Palette.FilmHole, null, new Rect(x, lower, PerfW, PerfH), PerfR, PerfR);
+                c.DrawRectangle(Palette.Panel, null, new Rect(x, Edge, PerfW, PerfH), PerfR, PerfR);
+                c.DrawRectangle(Palette.Panel, null, new Rect(x, lower, PerfW, PerfH), PerfR, PerfR);
             }
         }
     }

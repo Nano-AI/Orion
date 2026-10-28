@@ -380,7 +380,7 @@ static partial class SelfTest {
     }
 
     static StateButton TabButton(MainWindow window, string tab) =>
-        window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().First(b => b.Content is TextBlock { Text: var t } && t == tab);
+        window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().First(b => b.Label == tab);
 
     /// Layout, the queue, and a frame: a button's release hit-tests the last rendered
     /// scene, so a click before the first frame of a new layout focused the button and

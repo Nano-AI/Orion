@@ -79,7 +79,7 @@ static partial class SelfTest {
         window.Select("Detail");
         window.UpdateLayout();
         var tabs = window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().ToList();
-        var names = tabs.Select(b => (TextBlock)b.Content!).ToList();
+        var names = tabs.Select(b => b.GetVisualDescendants().OfType<TextBlock>().Single()).ToList();   // under its icon (#350)
         var bar = window.FindControl<Border>("TabIndicator")!;
         double x = bar.RenderTransform?.Value.M31 ?? double.NaN;
         var slide = bar.Transitions?.OfType<TransformOperationsTransition>().FirstOrDefault();

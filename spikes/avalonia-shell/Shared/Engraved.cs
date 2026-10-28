@@ -52,11 +52,28 @@ public sealed class SectionPlate : StackPanel {
     readonly DockPanel _plate = new() { MinHeight = 22 };
     public StackPanel Rows { get; } = new() { Spacing = 14 };
 
+    /// A section's icon, beside its name, as Capture One heads its tools (#350). A title missing here has none.
+    static readonly Dictionary<string, string> IconFor = new() {
+        ["White balance"] = "thermometer", ["Light"] = "sun.max", ["Highlight recovery"] = "sun.horizon", ["Shadow lift"] = "moon",
+        ["Curve"] = "curve", ["Presence"] = "drop", ["Clarity"] = "circle.lefthalf.filled", ["Dehaze"] = "sun.haze",
+        ["Color mixer"] = "circle.3", ["Color grading"] = "dial", ["Look"] = "wand.and.stars",
+        ["Sharpening"] = "triangle", ["Noise reduction"] = "waveform", ["Grain"] = "grain", ["Vignette"] = "vignette",
+        ["Lens"] = "camera.aperture", ["Perspective"] = "perspective", ["Capture"] = "camera",
+        ["Masks"] = "circle.dotted", ["Spots"] = "bandage", ["Aspect"] = "aspectratio", ["Rotate"] = "rotate.right",
+    };
+
     public SectionPlate(string title, string? info = null, params Control[] rows) {
         Spacing = 14;
         var plate = _plate;
         var name = Engraved.Label(title, Palette.Text, Faces.Body);
         name.FontWeight = FontWeight.SemiBold;
+        if (IconFor.TryGetValue(title, out var icon)) {
+            var glyph = Icons.Create(icon, 14, Palette.Dim);
+            glyph.Margin = new Thickness(0, 0, 7, 0);
+            glyph.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(glyph, Dock.Left);
+            plate.Children.Add(glyph);
+        }
         DockPanel.SetDock(name, Dock.Left);
         _dot.Margin = new Thickness(8, 0);
         DockPanel.SetDock(_dot, Dock.Left);

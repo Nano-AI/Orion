@@ -16,7 +16,7 @@ public sealed class LightPanel : StackPanel {
         // Auto heads the section whose sliders it moves (Exposure, Whites,
         // Blacks; Lift and Clarity live in Detail). Session.AutoEnhance is stage
         // 1b's; until then the status line says so. `reread` moves the sliders.
-        var auto = new StateButton(null, "Auto", () => EngineModel.Shared.Apply(s => s.AutoEnhance(), reread: true),
+        var auto = new StateButton("wand.and.stars", "Auto", () => EngineModel.Shared.Apply(s => s.AutoEnhance(), reread: true),
                                    help: "Set exposure, whites, blacks, lift and clarity from this photo") {
             Padding = new Avalonia.Thickness(9, 0),
         };

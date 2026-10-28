@@ -94,10 +94,14 @@ public partial class MainWindow : Window {
         for (int i = 0; i < Panels.Tabs.Length; i++) {
             string tab = Panels.Tabs[i];
             TabBar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            // The icon over the name, as a macOS toolbar's icon-and-text: seven names and seven icons side by side do not fit.
             var button = new StateButton {
-                Kind = ButtonKind.Bare, Height = 34, MinWidth = 0, Padding = new Thickness(1, 0), CornerRadius = default,
+                Kind = ButtonKind.Bare, Height = 46, MinWidth = 0, Padding = new Thickness(1, 0), CornerRadius = default,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Content = new TextBlock { Text = tab, FontSize = Faces.Label, FontWeight = FontWeight.Medium },
+                Content = new StackPanel { Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = {
+                    Icons.Create(Panels.TabIcons[i], 16, Palette.Text),
+                    new TextBlock { Text = tab, FontSize = Faces.Mark, FontWeight = FontWeight.Medium, HorizontalAlignment = HorizontalAlignment.Center },
+                } },
             };
             button.Click += (_, _) => Select(tab, animate: true);
             Grid.SetColumn(button, i);

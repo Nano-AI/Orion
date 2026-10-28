@@ -255,11 +255,11 @@ static partial class SelfTest {
               && film.Content is Panel { Background: var filmBase } roll && filmBase == Palette.FilmBase && roll.Bounds.Width >= film.Viewport.Width,
               $"the strip is 135 film to scale: a gate per frame, 2 mm of base between ({string.Join(",", gaps.Select(g => g.ToString("0.0")))} px), " +
               "the base running the strip's whole width, one accent ring that takes no clicks");
-        // The open frame sits in the middle of the strip, a viewer's gate, with leader before the first.
+        // The roll starts at the left, and the open frame shows.
         var ringed = rings[0].GetVisualAncestors().OfType<Border>().First(b => b.Focusable);
-        double middle = ringed.TranslatePoint(new Point(ringed.Bounds.Width / 2, 0), film)!.Value.X;
-        Check(Math.Abs(middle - film.Viewport.Width / 2) < 1,
-              $"the open frame sits in the middle of the strip ({middle:0.0} of {film.Viewport.Width:0.0})");
+        double left = ringed.TranslatePoint(default, film)!.Value.X, first = cells[0].TranslatePoint(default, film)!.Value.X;
+        Check(left >= 0 && left + ringed.Bounds.Width <= film.Viewport.Width && Math.Abs(first + film.Offset.X) < 0.5,
+              $"the roll starts at the strip's left and the open frame shows ({left:0.0}, first at {first:0.0})");
         var numbers = cells.Select(c => c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).FirstOrDefault(t => t != null && t.All(char.IsDigit))).ToList();
         Check(numbers.SequenceEqual(LibraryModel.Shared.Visible.Select(p => $"{p.Index + 1}")),
               $"each frame prints its number on the film's edge ({string.Join(",", numbers)})");
