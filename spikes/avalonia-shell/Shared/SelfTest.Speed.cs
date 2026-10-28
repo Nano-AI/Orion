@@ -3,16 +3,42 @@ using Avalonia.Threading;
 
 namespace OrionShell;
 
-/// Stage 1a (#318): the cache's window and steering, and that it never hands
-/// out, or keeps, a session it closed. Runs real decodes of the selftest photo.
+/// Stage 1a (#318): the cache's prediction, steering and eviction, and that it
+/// never hands out, or keeps, a session it closed. Runs real decodes of the selftest photo.
 static partial class SelfTest {
     static partial void SpeedChecks() {
-        // The window: `slots` neighbours, leaning with the bias, inside the list.
-        Check(SessionCache.Window(15, 30, 20, 0) == (5, 25), "cache window: unbiased, ±10");
-        Check(SessionCache.Window(15, 30, 20, -0.5) == (0, 20), "cache window: leaning back, 15 behind and 5 ahead");
-        Check(SessionCache.Window(5, 30, 4, 1) == (4, 8), "cache window: leaning hard, the photo just left is still kept");
-        Check(SessionCache.Window(0, 30, 20, -1) == (0, 20) && SessionCache.Window(29, 30, 20, 1) == (9, 29)
-              && SessionCache.Window(1, 3, 20, 0) == (0, 2), "cache window: clamps at the list ends, keeping its size where it can");
+        // Prediction: `slots` neighbours, nearest first, leaning with the bias, inside the list.
+        static List<int> At(int index, int direction, int slots, int count = 30, int presses = 1) {
+            var plan = new CachePlan(() => count);
+            for (int k = 0; k < presses; k++) plan.Hint(index, direction, k);   // a second apart: no speed
+            return plan.Predicted(slots).Order().ToList();
+        }
+        Check(At(15, 0, 20).SequenceEqual(Enumerable.Range(5, 21)), "prediction: unbiased, ±10");
+        var leaning = At(15, 1, 20, count: 100, presses: 3);
+        Check(leaning.Count(i => i > 15) == 15 && leaning.Count(i => i < 15) == 5,
+              $"prediction: three presses ahead lean it 15 ahead, 5 behind ({leaning.Count(i => i > 15)}, {leaning.Count(i => i < 15)})");
+        Check(At(0, -1, 20, presses: 3).SequenceEqual(Enumerable.Range(0, 21)) && At(29, 1, 20, presses: 3).SequenceEqual(Enumerable.Range(9, 21))
+              && At(1, 0, 20, count: 3).SequenceEqual([0, 1, 2]), "prediction: clamps at the list ends, keeping its size where it can");
+
+        // Eviction: lowest score leaves first. Photo 10 on screen after a press right; 7 behind, 11 and 12 ahead.
+        static int Drops(Eviction policy, params int[] visits) {
+            var plan = new CachePlan(() => 30, policy);
+            double t = 0;
+            foreach (int v in visits) plan.Hint(v, 0, t += 5);
+            plan.Hint(10, 1, t + 5);
+            return plan.Over([7, 11, 12], 2).Single();
+        }
+        Check(Drops(Eviction.Ahead, 7, 11, 12) == 7, "Ahead drops the photo furthest against the way the hand is going");
+        Check(Drops(Eviction.Recent, 11, 7, 12) == 11, "Recent drops the least recently visited");
+        Check(Drops(Eviction.Frequent, 12, 7, 12, 7, 11) == 11, "Frequent drops the least visited");
+        static int Reference(Eviction policy) {   // compared with 60, now at 100
+            var plan = new CachePlan(() => 200, policy);
+            plan.Hint(60, 0, 1);
+            plan.Hint(100, 0, 2);
+            return plan.Over([60, 85, 112], 2).Single();
+        }
+        Check(Reference(Eviction.Ahead) == 60 && Reference(Eviction.AheadRecent) == 85,
+              "AheadRecent (the default) keeps a photo visited moments ago however far it is; Ahead drops it");
 
         if (EngineModel.Shared.Photos.Count == 0) return;
         // Runs the UI thread's queue, where background decodes land, until `done`.

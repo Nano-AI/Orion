@@ -104,8 +104,8 @@ public sealed class EngineModel : INotifyPropertyChanged {
     /// will not open, as far as is known by then.
     bool Show(int from) {
         Close();
-        int index = Current;
-        _source.Hint(index, Math.Sign(index - from));
+        int index = Current, step = index - from;
+        _source.Hint(index, from >= 0 && Math.Abs(step) == 1 ? step : 0);   // a jump has no direction
         Status = "";
         if (_source.Picture(index) is { } picture) Shown.Show(picture, Graph.Preview);
         else Shown.Clear();

@@ -199,14 +199,18 @@ sealed class App : Application {
     /// the same RAWs several times for a list long enough to cache), then a
     /// 60-tick exposure drag through the same path a hand takes.
     static void Bench(Window window) {
+        CacheReplay.Print();
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;
         int n = engine.Photos.Count;
         void Settle() => Pump(() => !Opening && !Busy);
         // To laid out: the session active, its picture rendered, the window laid out.
+        // `returned` collects how long the step itself took: the engine and the panels' Opened, no layout.
+        var returned = new List<double>();
         double Swap(Func<bool> step) {
             var sw = Stopwatch.StartNew();
             step();
+            returned.Add(sw.Elapsed.TotalMilliseconds);
             Pump(() => !Opening);
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
@@ -219,7 +223,8 @@ sealed class App : Application {
         // A neighbour after a pause long enough for the cache to fill: the arrow key at reading speed.
         var neighbour = new List<double>();
         for (int i = 0; i < Math.Min(5, n - 1); i++) { neighbour.Add(Swap(engine.Next)); Settle(); }
-        Console.WriteLine($"bench neighbour swap (cached): {Ms(neighbour)} to laid out, last engine {engine.Last.Render:0.0} ms + copy {engine.Last.Copy:0.0} ms");
+        Console.WriteLine($"bench neighbour swap (cached): {Ms(neighbour)} to laid out; Next returned in {Ms(returned)}; " +
+                          $"last engine {engine.Last.Render:0.0} ms + copy {engine.Last.Copy:0.0} ms");
 
         // A jump past both tiers: nothing kept there.
         var cold = new List<double>();
