@@ -23,7 +23,13 @@ static class CropEdit {
 
     static CropEdit() {
         Engine.Rendered += Follow;
-        Engine.Opened += () => _seen = (double.NaN, double.NaN);
+        Engine.Opened += () => {
+            _seen = (double.NaN, double.NaN);
+            // crop_preview lives in the session, and sessions are kept (#318): a photo left
+            // on the Crop tab came back showing the whole frame, and one arriving on it
+            // showed its crop with the tool's rectangle drawn over the wrong picture.
+            Preview(CanvasState.Tab == "Crop");
+        };
     }
 
     /// Engine.swift's `straightenDeg` didSet and the quarter turn's frame swap:

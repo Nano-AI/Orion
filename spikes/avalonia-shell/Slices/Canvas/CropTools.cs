@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 
 namespace OrionShell.CanvasSlice;
@@ -41,6 +43,30 @@ public sealed class CropTools : StackPanel {
             Children[1] = Straighten();
         }, ButtonKind.Quiet) { HorizontalAlignment = HorizontalAlignment.Left });
         // stub(#315): ProposalWatcher.swift owns this until the logic moves below the facade (documentEditsLocked disables the panel)
+    }
+
+    /// handleKey's Return and Escape while the crop tab is up. Swift's key monitor
+    /// sees a key before any control; the window's command keys arrive last, after
+    /// the focused control. The Crop tab button the person just clicked keeps focus,
+    /// and a Button takes Return as its own click, so Return re-opened the tab and
+    /// never reached apply-crop. Tunnelling, the crop hears it first, from any
+    /// control but a text box, which keeps its own Return and Escape (NSTextView).
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
+        base.OnAttachedToVisualTree(e);
+        TopLevel.GetTopLevel(this)?.AddHandler(KeyDownEvent, CropKey, RoutingStrategies.Tunnel);
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) {
+        TopLevel.GetTopLevel(this)?.RemoveHandler(KeyDownEvent, CropKey);
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    static void CropKey(object? sender, KeyEventArgs e) {
+        if (e.Handled || e.Source is TextBox || e.KeyModifiers != KeyModifiers.None) return;
+        string? command = e.Key switch { Key.Enter => "apply-crop", Key.Escape => "cancel-crop", _ => null };
+        if (command == null || !Commands.CanRun(command)) return;
+        Commands.Run(command);
+        e.Handled = true;
     }
 
     /// The ratio the crop has now: the whole frame is Original; a ratio within

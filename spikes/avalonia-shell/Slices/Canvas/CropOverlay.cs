@@ -30,7 +30,7 @@ public sealed class CropOverlay : Control, ICustomHitTest {
     Rect Frame => CanvasState.PhotoFrame(Bounds.Size);
 
     /// The crop in view coordinates: frame-normalized, placed on the preview canvas, placed in the view.
-    Rect CropRect {
+    internal Rect CropRect {
         get {
             var (origin, size) = CropEdit.Canvas;
             return CanvasLayout.InView(CanvasLayout.OnCanvas(CropEdit.Crop, origin, size), Frame);
