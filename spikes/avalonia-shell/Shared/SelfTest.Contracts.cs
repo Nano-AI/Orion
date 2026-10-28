@@ -71,7 +71,9 @@ static partial class SelfTest {
         NotBuiltOr("curve", () => {
             (float, float)[] drawn = [(0, 0), (0.25f, 0.2f), (0.75f, 0.85f), (1, 1)];
             session.SetCurve(2, drawn);
-            return session.Curve(2).SequenceEqual(drawn) && session.Curve(0).Count >= 2;
+            bool ok = session.Curve(2).SequenceEqual(drawn) && session.Curve(0).Count >= 2;
+            session.SetCurve(2, [(0, 0), (1, 1)]);   // later checks expect an untouched photo
+            return ok;
         });
         Check(Throws<ArgumentOutOfRangeException>(() => session.Curve(4), "channel"), "Session: curve channel 4 is out of range");
         NotBuiltOr("preview size", () => session.PreviewSize is { Width: > 0, Height: > 0 } p
@@ -79,10 +81,11 @@ static partial class SelfTest {
         NotBuiltOr("release render memory", () => { session.ReleaseRenderMemory(); return engine.Render(false).Render > 0; });
         NotBuiltOr("mask group", () => { session.SetMaskGroup([]); return true; });
         NotBuiltOr("auto-enhance", () => {
-            float before = session.Get("exposure_ev");
+            string[] auto = ["exposure_ev", "whites", "blacks", "fusion", "clarity"];
+            var before = auto.Select(f => session.Get(f)).ToArray();
             session.AutoEnhance();
-            bool moved = session.Get("exposure_ev") != before || session.Get("whites") != 0;
-            session.Set("exposure_ev", before);
+            bool moved = auto.Where((f, i) => session.Get(f) != before[i]).Any();
+            for (int i = 0; i < auto.Length; i++) session.Set(auto[i], before[i]);
             return moved;
         });
 

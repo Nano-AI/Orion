@@ -40,6 +40,7 @@ static partial class SelfTest {
     }
 
     static void UndoChecks(EngineModel engine) {
+        engine.Open(engine.Current);   // a clean history: earlier checks' settled renders are steps too
         float ev = engine.Get("exposure_ev"), contrast = engine.Get("contrast");
         engine.Set("exposure_ev", ev + 1);
         engine.Set("exposure_ev", ev + 1.5f);   // the same control inside 0.6 s: one step
