@@ -71,9 +71,22 @@ public static unsafe partial class Native {
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int shim_mask_set(nint shim, int row, string field, float value);
 
+    /// `erase` one value per dab (nonzero takes coverage away), or null: every dab paints.
     [LibraryImport(Lib)]
-    public static partial int shim_mask_stroke(nint shim, int row, float* xy, int dabs);
+    public static partial int shim_mask_stroke(nint shim, int row, float* xy, float* erase, int dabs);
+
+    /// One row's stroke as the engine holds it; returns the dab count, copies at most `capacity`.
+    [LibraryImport(Lib)]
+    public static partial int shim_mask_stroke_get(nint shim, int row, float* xy, float* erase, int capacity);
 
     [LibraryImport(Lib)]
     public static partial int shim_mask_commit(nint shim, int count);
+
+    /// The overlay for the renders that follow, applied inside each one only.
+    [LibraryImport(Lib)]
+    public static partial void shim_mask_overlay(nint shim, int on, int layer);
+
+    /// macOS's Reduce Motion.
+    [LibraryImport(Lib)]
+    public static partial int shim_reduce_motion();
 }

@@ -7,6 +7,7 @@
 //  - CPU pixels. The facade hands out an id<MTLTexture> for zero-copy display;
 //    C# can't draw that on macOS, so we copy it out. On Windows the real path
 //    would be a shared D3D texture, not this copy.
+#import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
 #include <cstdio>
 #include <algorithm>
@@ -14,17 +15,33 @@
 #include <cstddef>
 #include <cstring>
 #include <iterator>
+#include <memory>
+#include <unordered_map>
 #include <vector>
 #include "orion/orion.h"
+
+// A brush stroke as the engine was given it: interleaved x, y and one erase
+// flag per dab. The buffers are shared: a stroke that only grew (every pointer
+// event of a drag) points into its predecessor's buffers with a larger count,
+// so keeping every revision costs the dabs once, not once per event.
+struct Stroke {
+    std::shared_ptr<std::vector<float>> xy, erase;
+    int dabs = 0;
+};
 
 struct Shim {
     OrionEngine* engine = nullptr;
     OrionAdjustments adj{};
-    // What each mask row's brush holds in the engine, and its revision: bumped
-    // only when the stroke changes, never reset (Engine+Brush.swift's
-    // brushRevisions), so a re-added row cannot repeat a revision the engine saw.
-    std::vector<float> strokes[ORION_MAX_MASK_COMPONENTS];
+    // What each mask row's brush holds in the engine, and its revision.
+    // Revisions are global and never reused (Engine+Brush.swift's
+    // brushRevisions), and every stroke is kept by its revision, so undo can
+    // write an old revision back through shim_set and get its dabs with it.
+    Stroke held[ORION_MAX_MASK_COMPONENTS];
     unsigned revisions[ORION_MAX_MASK_COMPONENTS]{};
+    std::unordered_map<unsigned, Stroke> kept;
+    unsigned last_revision = 0;
+    // The overlay, applied for one render at a time (shim_render).
+    int overlay = 0, overlay_layer = 0;
 };
 
 static void defaults(OrionAdjustments& a) {
@@ -38,19 +55,30 @@ static void defaults(OrionAdjustments& a) {
     a.sharpen_radius = 1;
 }
 
-// Every scalar and float[N] member of OrionAdjustments, by its C name.
-// fields.inc is generated from orion.h on each build (gen_fields.py).
-struct Field { const char* name; int length; bool isInt; size_t offset; };
+// Every scalar and float[N] member of OrionAdjustments, by its C name, then
+// every OrionMaskComponent member as mask_components.<name>[row]. fields.inc
+// and mask_fields.inc are generated from orion.h on each build (gen_fields.py).
+// The mask rows are in the table so a snapshot of the table is a snapshot of
+// the mask group: EditHistory undoes a mask edit without knowing masks exist.
+struct Field { const char* name; int length; bool isInt; size_t offset; size_t stride; };
 constexpr bool float_kind = false, int_kind = true;
-#define F(n, k) {#n, 1, k##_kind, offsetof(OrionAdjustments, n)},
-#define A(n, len) {#n, len, false, offsetof(OrionAdjustments, n)},
+#define F(n, k) {#n, 1, k##_kind, offsetof(OrionAdjustments, n), 4},
+#define A(n, len) {#n, len, false, offsetof(OrionAdjustments, n), 4},
 static const Field kFields[] = {
 #include "fields.inc"
+#undef F
+#define F(n, k) {"mask_components." #n, ORION_MAX_MASK_COMPONENTS, k##_kind,                    \
+                 offsetof(OrionAdjustments, mask_components) + offsetof(OrionMaskComponent, n), \
+                 sizeof(OrionMaskComponent)},
+#include "mask_fields.inc"
+    // The shim's own: shim_set lays the stroke kept for the revision it is given.
+    F(brush_revision, int)
 };
 #undef F
 #undef A
-// One row of the mask group (OrionMaskComponent), the same way.
-#define F(n, k) {#n, 1, k##_kind, offsetof(OrionMaskComponent, n)},
+static const char kRevision[] = "mask_components.brush_revision";
+// One row of the mask group by its short name, for shim_mask_set.
+#define F(n, k) {#n, 1, k##_kind, offsetof(OrionMaskComponent, n), 4},
 static const Field kMaskFields[] = {
 #include "mask_fields.inc"
 };
@@ -85,7 +113,55 @@ static void* slot(OrionAdjustments& a, const char* name, int index, const Field*
     const Field* f = find(name);
     if (!f || index < 0 || index >= f->length) return nullptr;
     *out = f;
-    return reinterpret_cast<char*>(&a) + f->offset + size_t(index) * 4;
+    return reinterpret_cast<char*>(&a) + f->offset + size_t(index) * f->stride;
+}
+
+// Hands one row's stroke to the engine. Does not bump the revision.
+static bool lay(Shim* s, int row, const Stroke& st) {
+    const bool any = st.dabs > 0;
+    return orion_engine_set_brush_stroke(s->engine, row, any ? st.xy->data() : nullptr,
+                                         any ? st.erase->data() : nullptr, st.dabs) == ORION_OK;
+}
+
+// Whether `st` holds exactly these dabs (`erase` null means none erases).
+static bool holds(const Stroke& st, const float* xy, const float* erase, int dabs, int upTo) {
+    if (upTo > st.dabs || upTo > dabs) return false;
+    for (int i = 0; i < upTo; ++i)
+        if ((*st.xy)[2 * i] != xy[2 * i] || (*st.xy)[2 * i + 1] != xy[2 * i + 1] ||
+            (*st.erase)[i] != (erase ? erase[i] : 0.0f)) return false;
+    return true;
+}
+
+// The stroke for these dabs: the held one grown in place when it is a prefix
+// and nothing kept later dabs in its buffers, else a fresh copy.
+static Stroke grown(const Stroke& held, const float* xy, const float* erase, int dabs) {
+    Stroke st;
+    const bool grows = held.dabs > 0 && dabs > held.dabs && held.xy->size() == size_t(held.dabs) * 2 &&
+                       holds(held, xy, erase, dabs, held.dabs);
+    st.xy = grows ? held.xy : std::make_shared<std::vector<float>>();
+    st.erase = grows ? held.erase : std::make_shared<std::vector<float>>();
+    for (int i = grows ? held.dabs : 0; i < dabs; ++i) {
+        st.xy->push_back(xy[2 * i]);
+        st.xy->push_back(xy[2 * i + 1]);
+        st.erase->push_back(erase ? erase[i] : 0.0f);
+    }
+    st.dabs = dabs;
+    return st;
+}
+
+// Undo wrote a revision back: lay the stroke it names. 0 is the empty stroke.
+static bool restore(Shim* s, int row, unsigned revision) {
+    if (revision == s->revisions[row]) return true;
+    Stroke st;
+    if (revision != 0) {
+        auto it = s->kept.find(revision);
+        if (it == s->kept.end()) return false;
+        st = it->second;
+    }
+    if (!lay(s, row, st)) return false;
+    s->held[row] = st;
+    s->revisions[row] = revision;
+    return true;
 }
 
 extern "C" {
@@ -135,6 +211,8 @@ int shim_set(Shim* s, const char* name, int index, float value) {
     const Field* f = nullptr;
     void* p = slot(s->adj, name, index, &f);
     if (!p) return 0;
+    if (std::strcmp(name, kRevision) == 0 && !restore(s, index, unsigned(std::lround(std::max(value, 0.0f)))))
+        return 0;
     put(p, f, value);
     return orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
 }
@@ -186,18 +264,45 @@ int shim_mask_set(Shim* s, int row, const char* name, float value) {
     return 1;
 }
 
-// `dabs` interleaved x, y pairs. Sent to the engine, and the row's revision
-// bumped, only when they differ from what the engine already holds: a slider
-// tick on a brush row must not re-lay its whole stroke. Every dab paints
-// (null erase), as a sidecar without brushErase means.
-int shim_mask_stroke(Shim* s, int row, const float* xy, int dabs) {
+// `xy` interleaved x, y pairs; `erase` one value per dab, nonzero takes coverage
+// away (null: every dab paints, as a sidecar without brushErase means). Sent to
+// the engine, and the row given a new revision, only when they differ from
+// what the engine already holds: a slider tick on a brush row must not re-lay
+// its whole stroke.
+int shim_mask_stroke(Shim* s, int row, const float* xy, const float* erase, int dabs) {
     if (row < 0 || row >= ORION_MAX_MASK_COMPONENTS || dabs < 0 || (dabs > 0 && !xy)) return 0;
-    auto& held = s->strokes[row];
-    if (held.size() == size_t(dabs) * 2 && std::equal(held.begin(), held.end(), xy)) return 1;
-    if (orion_engine_set_brush_stroke(s->engine, row, dabs ? xy : nullptr, nullptr, dabs) != ORION_OK) return 0;
-    held.assign(xy, xy + size_t(dabs) * 2);
-    ++s->revisions[row];
+    Stroke& held = s->held[row];
+    if (held.dabs == dabs && holds(held, xy, erase, dabs, dabs)) return 1;
+    Stroke st = grown(held, xy, erase, dabs);
+    if (!lay(s, row, st)) return 0;
+    held = st;
+    s->revisions[row] = ++s->last_revision;
+    s->kept[s->last_revision] = st;   // an emptied stroke too: undo may write its revision back
     return 1;
+}
+
+// One row's stroke as the engine holds it, into `xy` (2 per dab) and `erase`
+// (1 per dab, either may be null). Returns the dab count, copying at most `capacity`.
+int shim_mask_stroke_get(Shim* s, int row, float* xy, float* erase, int capacity) {
+    if (row < 0 || row >= ORION_MAX_MASK_COMPONENTS) return 0;
+    const Stroke& st = s->held[row];
+    for (int i = 0; i < std::min(st.dabs, capacity); ++i) {
+        if (xy) { xy[2 * i] = (*st.xy)[2 * i]; xy[2 * i + 1] = (*st.xy)[2 * i + 1]; }
+        if (erase) erase[i] = (*st.erase)[i];
+    }
+    return st.dabs;
+}
+
+// Paint the coverage of mask `layer` over the picture, or stop. Takes effect
+// at the next render, and only for it: see shim_render.
+void shim_mask_overlay(Shim* s, int on, int layer) {
+    s->overlay = on != 0;
+    s->overlay_layer = layer;
+}
+
+// macOS's Reduce Motion, which Avalonia 12 does not expose.
+int shim_reduce_motion(void) {
+    return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion ? 1 : 0;
 }
 
 // Rows [0, count) are live; the rest are zeroed, as Engine.swift sends them.
@@ -211,9 +316,28 @@ int shim_mask_commit(Shim* s, int count) {
 
 // preview != 0 renders the quarter-resolution graph a slider drag uses.
 // Falls back to the full graph when there is no preview graph.
+//
+// The mask overlay is switched on for this render alone and off again after
+// it, so the adjustment block at rest never carries it: an export, a history
+// snapshot or a second reader of this engine cannot bake a red tint into a
+// photograph (#57, which Swift guards around export by hand).
+// ponytail: costs a develop_linear pass per render while the overlay is up,
+// since the toggle back dirties it; a display-only flag in the engine removes that.
 int shim_render(Shim* s, int preview, double* gpu_ms) {
-    if (preview && orion_engine_render_preview(s->engine, gpu_ms) == ORION_OK) return 1;
-    return orion_engine_render(s->engine, gpu_ms) == ORION_OK ? 2 : 0;
+    const bool overlay = s->overlay && s->adj.mask_count > 0;
+    if (overlay) {
+        s->adj.mask_overlay = 1;
+        s->adj.mask_overlay_layer = s->overlay_layer;
+        orion_engine_set_adjustments(s->engine, &s->adj);
+    }
+    int graph = 0;
+    if (preview && orion_engine_render_preview(s->engine, gpu_ms) == ORION_OK) graph = 1;
+    else graph = orion_engine_render(s->engine, gpu_ms) == ORION_OK ? 2 : 0;
+    if (overlay) {
+        s->adj.mask_overlay = s->adj.mask_overlay_layer = 0;
+        orion_engine_set_adjustments(s->engine, &s->adj);
+    }
+    return graph;
 }
 
 // Copies the last render into `dst` as RGBA8. Call with dst == NULL to get the
