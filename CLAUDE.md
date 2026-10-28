@@ -1,6 +1,6 @@
 # Orion
 
-Fast, subscription-free desktop RAW photo editor for macOS. Modern minimal UI, capable of dramatic edits. Built by a solo developer.
+Fast, subscription-free desktop RAW photo editor. Ships on macOS; Windows and Linux are in progress through the Avalonia shell. Modern minimal UI, capable of dramatic edits. Built by a solo developer. Source-available, never redistributed (#359).
 
 ## Read these first
 Everything lives in `planning/`. On a fresh session, read in this order:
@@ -17,6 +17,13 @@ Everything lives in `planning/`. On a fresh session, read in this order:
 10. `feedback/` — **outside review and self-assessment.** Every critique of this
     repository, and the investigations that came out of them, kept together so
     the criticism is as findable as the plan. Read `feedback/README.md` first.
+
+**Work to do is tracked as [GitHub issues](https://github.com/Nano-AI/Orion/issues)**,
+not in the docs: issue 23 parity (the Avalonia shell catching up with the Swift
+app, then the Swift app retired), issue 24 Windows and Linux builds, issue 22
+region-of-interest rendering, issue 5 lens correction, issue 6 JPEG XL export.
+`STATUS.md` points at them. Write them as "issue N": a bare `#N` is a decision.
+One parent issue per piece of work, with a checklist; no sub-issue per item.
 
 ## Algorithm sourcing — non-negotiable
 
@@ -53,8 +60,7 @@ steps.
 
 ## Hard constraints — do not violate
 
-- **No Rust.** The developer cannot debug it. Propose C++ alternatives even when Rust is the popular answer. This rules out Tauri, wgpu, egui, iced.
-- **No Vulkan.** Too much boilerplate for a solo maintainer. Metal on macOS; shaders authored in Slang for later portability. One exception (#355): on Linux, one small file may allocate the
+- **No Vulkan.** Too much boilerplate for a solo maintainer. Metal on macOS today; Dawn (WebGPU in C++, #317, #354) is the cross-platform GPU layer. Shaders authored in Slang. One exception (#355): on Linux, one small file may allocate the
   exportable memory and semaphore that Dawn and Avalonia share. Dawn (#317) does all the rendering; nothing else may call Vulkan.
 - **Maintainability is a hard requirement.** One node = one small shader (50–150 lines). Adding a feature should be a repeatable 3-file change. No 1000-line anything. The developer must be able to hand-edit any file later.
 - **Prefer mature libraries** over hand-rolled code, even at some performance cost.
@@ -65,9 +71,16 @@ steps.
   under an open licence is a one-way door: it happened once by mistake (#358).
 
 ## Stack
-C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · LibRaw decode · OpenColorIO + lcms2 color · SQLite index · XMP sidecars as source of truth.
+C++20 engine · Metal GPU compute (Dawn next, #317) · Slang shaders · LibRaw decode · OpenColorIO + lcms2 color · SQLite index · XMP sidecars as source of truth.
 
-**UI rules:** view models are plain `@Observable` objects with zero SwiftUI types inside, so any panel can be re-hosted in AppKit. Canvas is `MTKView` in `NSViewRepresentable`, zero-copy. The C++↔Swift boundary is a narrow hand-written POD facade — no templates, no move-only types, and **no C++ exception may escape it (it would terminate the process)**. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
+Two front ends over one engine:
+
+| | Where | State |
+|---|---|---|
+| **Avalonia 12 / .NET 10** (#315, #316) | `spikes/avalonia-shell/` | the future of the app on all three systems; Mac DMG via `tools/package-avalonia.sh` (#353); about 44 commands still `stub(#315)`, waiting on their Swift code to be ported (issue 23) |
+| SwiftUI/AppKit | `app/` | the shipping Mac app (`tools/package-app.sh`); retired once issue 23 lands |
+
+**UI rules:** the engine is reached only through the hand-written C facade `engine/include/orion/orion.h` (the shell via `native/` → `liborion_shim.dylib`): POD only, no templates, no move-only types, and **no C++ exception may escape it (it would terminate the process)**. The canvas gets the engine's picture with no CPU copy — an IOSurface on `MTLSharedEvent`s into Avalonia's Metal renderer (#357) — and falls back to a CPU copy headless. Every command is registered with a name (`--commands`), so it can be driven without the UI. In the Swift app, view models are plain `@Observable` objects with zero SwiftUI types inside. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
 
 ## Tests
 
@@ -83,7 +96,15 @@ C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · L
 ./tools/check-site.py              the landing page: links resolve, register unchanged, no dead GitHub URLs, no personal data
 ```
 
-Run all nine before claiming anything works. The GPU tests matter most: pure
+For the Avalonia shell (`spikes/avalonia-shell/README.md` has the build):
+
+```
+dotnet run -c Release --project spikes/avalonia-shell -- --selftest RAW   the shell's invariants, headless
+spikes/avalonia-shell/bin-native/present_test RAW                          zero-copy surface vs CPU readback
+python3 spikes/avalonia-shell/compare.py check                             slice file ownership
+```
+
+Run all of them before claiming anything works. The GPU tests matter most: pure
 maths tests pass happily on code that renders garbage, because they never touch
 a texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
 inspection and obvious to a five-line assertion.
@@ -138,3 +159,5 @@ invisible to it, so triage by hand before believing it.
 - Log any new decision in `DECISIONS.md` with its reason.
 - Benchmark every milestone. Latency regressions block new features.
 - Planning docs stay concise. Dense tables over prose.
+- **Nothing pops up.** The developer tiles windows with AeroSpace: tests run headless (`--selftest`, `--screenshot`, `--command`, headless Chrome for `web/`), never `open` or a visible browser tab. `--proof` and `check-screens.py` open windows; say so and ask first.
+- **Guard heavy runs.** A bench, gate or build that eats memory has crashed the laptop: one heavy run at a time, ≥30% memory free, load under ~8, `nice`d.
