@@ -415,6 +415,17 @@ void Pipeline::maybeFree(int n, int reader) {
     everFreed_[static_cast<std::size_t>(n)] = true;
 }
 
+void Pipeline::releaseOutputs() noexcept {
+    for (std::size_t i = 0; i < ownedOutputs_.size(); ++i) {
+        outputs_[i] = nullptr;
+        pool_.release(std::move(ownedOutputs_[i]));
+    }
+    pool_.shrink();
+    std::fill(dirty_.begin(), dirty_.end(), true);
+    // A first render again, so it frees at last readers as a first render does.
+    std::fill(everFreed_.begin(), everFreed_.end(), false);
+}
+
 double Pipeline::render() {
     if (!compiled_) throw std::runtime_error("render before compile()");
 

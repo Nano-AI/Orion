@@ -336,6 +336,12 @@ OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms) {
     });
 }
 
+OrionStatus orion_engine_release_render_memory(OrionEngine* engine) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    engine->impl.releaseRenderMemory();   // noexcept: nothing to guard
+    return ORION_OK;
+}
+
 OrionStatus orion_engine_preview_size(const OrionEngine* engine,
                                       unsigned* out_w, unsigned* out_h) {
     if (engine == nullptr || out_w == nullptr || out_h == nullptr)
