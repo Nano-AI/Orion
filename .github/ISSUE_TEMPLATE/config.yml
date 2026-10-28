@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Download Orion
+    url: https://bankoti.dev/Orion/download/
+    about: The newest alpha for your computer.
+  - name: Report a security problem
+    url: https://github.com/Nano-AI/Orion/security/advisories/new
+    about: Privately, not as a public issue.

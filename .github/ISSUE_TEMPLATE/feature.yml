@@ -1,0 +1,16 @@
+name: Feature
+description: Something Orion should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What you want to do
+      description: The task, in your words. What you do today instead, if anything.
+    validations:
+      required: true
+  - type: textarea
+    id: elsewhere
+    attributes:
+      label: How another editor does it
+      description: Optional. Lightroom, Capture One, darktable, anything.

@@ -1,0 +1,28 @@
+name: Camera or lens support
+description: A camera's files don't open or look wrong, or a lens has no correction profile.
+labels: [camera support]
+body:
+  - type: input
+    id: camera
+    attributes:
+      label: Camera
+      placeholder: DJI Mini 4 Pro
+    validations:
+      required: true
+  - type: input
+    id: lens
+    attributes:
+      label: Lens, exactly as Orion's lens panel names it
+      placeholder: 24mm F1.4 DG DN | Art 022
+  - type: textarea
+    id: what
+    attributes:
+      label: What's wrong
+      description: Won't open, wrong colours, no lens profile, something else.
+    validations:
+      required: true
+  - type: input
+    id: sample
+    attributes:
+      label: Link to a sample RAW
+      description: One unedited file from this camera (Google Drive, Dropbox, raw.pixls.us). Most fixes are impossible without one.

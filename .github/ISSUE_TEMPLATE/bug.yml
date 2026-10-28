@@ -1,0 +1,30 @@
+name: Bug
+description: Something is broken or looks wrong.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got. Screenshots help.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Orion version
+      description: From the DMG name or About Orion.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Computer
+      placeholder: macOS 15.3, MacBook Air M2
+    validations:
+      required: true
+  - type: input
+    id: camera
+    attributes:
+      label: Camera and file type, if it's about a photo
+      placeholder: Sony A7 IV, .ARW

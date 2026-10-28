@@ -283,9 +283,9 @@ See [`planning/ROADMAP.md`](planning/ROADMAP.md) for the milestones and
 
 ## Contributing
 
-Contributions are welcome. Read [`CLAUDE.md`](CLAUDE.md) first: its hard
-constraints (no Rust, no GPL code, every non-trivial filter cited in
-`research/`) apply to every change, and [`planning/DECISIONS.md`](planning/DECISIONS.md)
+Contributions are welcome. Read [`CONTRIBUTING.md`](.github/CONTRIBUTING.md)
+and [`CLAUDE.md`](CLAUDE.md) first: its hard constraints (no GPL code, every
+non-trivial filter cited in `research/`) apply to every change, and [`planning/DECISIONS.md`](planning/DECISIONS.md)
 records the choices already settled.
 
 1. Fork the project
