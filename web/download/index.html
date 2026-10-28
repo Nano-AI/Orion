@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Download Orion</title>
+<meta name="description" content="Download Orion, a RAW photo editor for Macs with Apple silicon. The newest alpha build, how to open it the first time, and where Windows and Linux stand.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0b0c">
+<meta property="og:title" content="Download Orion">
+<meta property="og:description" content="The newest alpha of Orion, a RAW editor for Macs with Apple silicon.">
+<meta property="og:image" content="https://bankoti.dev/Orion/img/og-stacks.jpg">
+<meta property="og:image:alt" content="Sea stacks in cold blue surf, developed in Orion.">
+<meta property="og:url" content="https://bankoti.dev/Orion/download/">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://bankoti.dev/Orion/download/">
+<link rel="icon" type="image/svg+xml" href="../img/orion-icon.svg">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../fonts/Archivo-var.woff2">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/download.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav is-solid">
+  <div class="nav__in">
+    <a class="nav__mark" href="../" aria-label="Orion, home"><img src="../img/orion-mark.svg" width="32" height="30" alt="" aria-hidden="true">Orion</a>
+    <nav class="nav__nav" aria-label="Sections">
+      <ul class="nav__links" id="nav-links">
+        <li><a href="../#speed">Speed</a></li>
+        <li><a href="../#register">Build</a></li>
+        <li><a href="../#keep">Keep</a></li>
+        <li><a href="../#research">Research</a></li>
+        <li><a href="../#assistant">MCP</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn--ghost nav__cta" href="./" aria-current="page">Download</a>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span></button>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- Without scripts this is the Mac page, its buttons on the release list.
+     download.js picks the visitor's system and fills in the newest build. -->
+<section class="wrap dl" aria-labelledby="dl-title">
+  <div class="dl__copy">
+    <h1 class="display" id="dl-title" data-title>Orion for macOS</h1>
+
+    <div class="dl__branch" data-for="ready">
+      <p class="lede" data-lede>The alpha for Macs with Apple silicon. Free to download, with no account to make.</p>
+      <p class="dl__cta">
+        <a class="btn btn--lg" data-file="visitor" href="https://github.com/Nano-AI/Orion/releases"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg><span data-label>Download for macOS</span></a>
+        <a class="btn btn--lg btn--ghost" data-notes href="https://github.com/Nano-AI/Orion/releases">Release notes</a>
+      </p>
+      <p class="small" data-for="ready" hidden>Chosen for <span data-name>macOS</span> from what your browser reports. Other systems are <a class="link" href="#platforms">listed below</a>.</p>
+    </div>
+
+    <div class="dl__branch" data-for="intel" hidden>
+      <div class="dl__note">
+        <p><strong>This looks like an Intel Mac.</strong></p>
+        <p class="small">Orion is built only for Apple silicon (M1 and later), so it won't open here. There is no Intel build.</p>
+      </div>
+      <p class="dl__cta"><a class="btn btn--lg btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>Download for Apple silicon</a></p>
+      <p class="small">Downloading for another Mac? That button is the right file.</p>
+    </div>
+
+    <div class="dl__branch" data-for="soon" hidden>
+      <p class="lede">Not yet. Orion runs on Macs today. The <span data-name>Windows</span> version is in progress and has no download.</p>
+      <p class="dl__cta">
+        <a class="btn btn--lg" href="https://github.com/Nano-AI/Orion">Watch Orion on GitHub</a>
+        <a class="btn btn--lg btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases">Download for macOS</a>
+      </p>
+      <p class="small">On GitHub, choose Watch, then Custom, then Releases, to hear when a <span data-name>Windows</span> build ships.</p>
+    </div>
+
+    <div class="dl__branch" data-for="phone" hidden>
+      <p class="lede" data-phone>It runs on Macs with Apple silicon. Open this page on your Mac to download it, or share the link to send it there.</p>
+      <p class="dl__cta"><button class="btn btn--lg" type="button" data-share>Share link</button></p>
+    </div>
+
+    <dl class="dl__facts">
+      <div data-fact="file" hidden><dt>File</dt><dd></dd></div>
+      <div data-fact="size" hidden><dt>Size</dt><dd></dd></div>
+      <div data-fact="date" hidden><dt>Released</dt><dd></dd></div>
+      <div data-fact="runs"><dt>Runs on</dt><dd>macOS 14 or later, Apple silicon</dd></div>
+      <div data-fact="sha" hidden><dt>SHA-256</dt><dd></dd></div>
+    </dl>
+  </div>
+
+  <figure class="dl__photo">
+    <img src="../img/hero-edit-1200.jpg" srcset="../img/hero-edit-1200.jpg 1200w, ../img/hero-edit-2400.jpg 2400w"
+         sizes="(max-width: 900px) 100vw, 42vw" width="2400" height="1987" decoding="async"
+         alt="Fir trees and a cliff face under low fog, the firs and the rock lifted out of the shadow in Orion.">
+    <figcaption class="caption">Finished in Orion: the firs and the rock face lifted out of the shadow under the fog.</figcaption>
+  </figure>
+</section>
+
+<section class="band" aria-labelledby="first-title" data-steps>
+  <div class="wrap band__in">
+    <div data-reveal>
+      <h2 class="h2" id="first-title">Opening it the first time</h2>
+      <p class="small band__sub">macOS stops the first launch because this alpha is signed ad hoc and isn't notarized. The app is the same either way; the warning is about who vouched for it.</p>
+    </div>
+    <ol class="steps" data-reveal>
+      <li><div>
+        <p class="h3">Drag Orion to Applications</p>
+        <p class="small">Open the downloaded disk image and drag Orion onto the Applications folder beside it.</p>
+      </div></li>
+      <li><div>
+        <p class="h3">Open it from the right-click menu</p>
+        <p class="small">Right-click Orion in Applications, choose Open, then Open again. You do this once.</p>
+      </div></li>
+      <li><div>
+        <p class="h3">No Open button? Use Terminal</p>
+        <p class="small">This clears the download flag macOS put on the app. It also lets Claude and other agents start Orion's MCP server.</p>
+        <div class="cmd">
+          <code>xattr -dr com.apple.quarantine /Applications/Orion.app</code>
+          <button class="btn btn--ghost" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Orion.app" hidden>Copy</button>
+        </div>
+      </div></li>
+    </ol>
+  </div>
+</section>
+
+<section class="band" id="platforms" aria-labelledby="platforms-title">
+  <div class="wrap band__in band__in--wide">
+    <div class="band__head" data-reveal>
+      <h2 class="h2" id="platforms-title">Every platform</h2>
+      <p class="small" data-only>Orion is Mac only today.</p>
+    </div>
+    <ul class="platforms" data-reveal>
+      <li data-row="mac">
+        <p class="h3">macOS<span class="dl__here" hidden>This computer</span></p>
+        <p class="needs">Apple silicon (M1 or later), macOS 14 Sonoma or later</p>
+        <p class="status is-ready">Alpha, available now</p>
+        <a class="btn btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases">Download</a>
+      </li>
+      <li data-row="windows">
+        <p class="h3">Windows<span class="dl__here" hidden>This computer</span></p>
+        <p class="needs">Requirements not announced</p>
+        <p class="status">In progress: the interface is being ported</p>
+        <a class="btn btn--ghost" data-file="windows" href="https://github.com/Nano-AI/Orion/releases" hidden>Download</a>
+      </li>
+      <li data-row="linux">
+        <p class="h3">Linux<span class="dl__here" hidden>This computer</span></p>
+        <p class="needs">Requirements not announced</p>
+        <p class="status">In progress, with the Windows port</p>
+        <a class="btn btn--ghost" data-file="linux" href="https://github.com/Nano-AI/Orion/releases" hidden>Download</a>
+      </li>
+      <li data-row="intel">
+        <p class="h3">Intel Macs<span class="dl__here" hidden>This computer</span></p>
+        <p class="needs">x86-64</p>
+        <p class="status">Not built</p>
+      </li>
+      <li data-row="phone">
+        <p class="h3">iPhone, iPad, Android<span class="dl__here" hidden>This computer</span></p>
+        <p class="needs">Phones and tablets</p>
+        <p class="status">No app: Orion is a desktop editor</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="band" aria-label="Other downloads and help">
+  <div class="wrap more">
+    <div data-reveal>
+      <h2 class="h3">Older versions</h2>
+      <p class="small">Every build, its notes and its files are on <a class="link" href="https://github.com/Nano-AI/Orion/releases">GitHub Releases</a>.</p>
+    </div>
+    <div data-reveal>
+      <h2 class="h3">Editing with Claude</h2>
+      <p class="small">The MCP server ships inside the app. <a class="link" href="../#assistant">How agents use it</a>.</p>
+    </div>
+    <div data-reveal>
+      <h2 class="h3">Something broke</h2>
+      <p class="small">Write to <a class="link" href="mailto:alpha@bankoti.dev?subject=Orion">alpha@bankoti.dev</a> with the photo's camera and what you did.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__in">
+    <div>
+      <span class="footer__mark"><img src="../img/orion-mark.svg" width="26" height="24" alt="" aria-hidden="true">Orion</span>
+      <p class="small">A RAW editor for macOS. &copy; 2026 Nano-AI</p>
+    </div>
+    <ul class="footer__links">
+      <li><a href="https://github.com/Nano-AI/Orion">Source</a></li>
+      <li><a href="https://github.com/Nano-AI/Orion/releases">Releases</a></li>
+      <li><a href="https://github.com/Nano-AI/Orion/tree/main/research">Research</a></li>
+      <li><a href="mailto:alpha@bankoti.dev?subject=Orion">Contact</a></li>
+    </ul>
+  </div>
+</footer>
+
+<!-- ?v= is each library's version, as on the landing page (#267) -->
+<script src="../js/vendor/gsap.js?v=3.15.0" defer></script>
+<script src="../js/vendor/ScrollTrigger.js?v=3.15.0" defer></script>
+<script src="../js/vendor/lenis.js?v=1.3.26" defer></script>
+<script src="../js/site.js" defer></script>
+<script src="../js/motion.js" defer></script>
+<script src="../js/download.js" defer></script>
+</body>
+</html>
