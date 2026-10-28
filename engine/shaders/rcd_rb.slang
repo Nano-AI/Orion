@@ -111,5 +111,5 @@ void rcdRedBlue(uint3 tid : SV_DispatchThreadID,
         else           { b = cfa[tid.xy]; r = other; }
     }
 
-    rgb[tid.xy] = float4(max(r, 0.0f), max(g, 0.0f), max(b, 0.0f), 1.0f);
+    rgb[tid.xy] = float4(r, g, b, 1.0f);
 }

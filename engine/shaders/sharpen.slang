@@ -81,5 +81,5 @@ void sharpen(uint3 tid : SV_DispatchThreadID,
         ? 1.0f
         : smoothstep(threshold * 0.25f, threshold, localContrast);
 
-    dst[tid.xy] = float4(max(center + detail * p.amount * mask, 0.0f), 1.0f);
+    dst[tid.xy] = float4(center + detail * p.amount * mask, 1.0f);
 }

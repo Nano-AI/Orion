@@ -90,6 +90,7 @@ int main() {
     testMaskRangeGpu();
     testMaskColorGpu();
     testBayerDecimation();
+    testPreviewShadowsMatchGpu();
     testSpotRemovalGpu();
     testBrushDabsFollowTheFrame();
     testHighlightHaloGpu();

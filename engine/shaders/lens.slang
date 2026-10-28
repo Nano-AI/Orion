@@ -115,5 +115,5 @@ void lensCorrect(uint3 tid : SV_DispatchThreadID,
         c /= max(v, 0.05f);
     }
 
-    dst[tid.xy] = float4(max(c, 0.0f), 1.0f);
+    dst[tid.xy] = float4(c, 1.0f);
 }

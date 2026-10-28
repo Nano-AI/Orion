@@ -5,6 +5,14 @@
 // Output is still a mosaic — one channel per pixel — but now scene-linear
 // float.
 //
+// ⚠ Clipped above, never below. Read noise is zero-mean, so a deep shadow puts
+// a third of its samples under black, and clamping them at zero lifted every
+// noisy shadow by the half of the noise it threw away — most in the channel
+// with the least light, which is red in a night sky: a grey-purple cast that
+// no later stage could take back out (research/black-level.md; EMVA 1288 §2.7;
+// Foi 2009). The sign survives to the camera profile, whose hue/sat map clamps
+// as the DNG SDK does (huesat.slang).
+//
 // The clip is the part that matters. A sensor saturates at one count for every
 // channel, so a blown highlight arrives as (S, S, S). White balance then
 // multiplies each channel by its own gain — for a warm scene something like
@@ -56,5 +64,5 @@ void linearize(uint3 tid : SV_DispatchThreadID,
     float v = (raw - p.black[c]) * p.invRange;
     v *= p.whiteBalance[c];
 
-    dst[tid.xy] = clamp(v, 0.0f, p.whiteClip);
+    dst[tid.xy] = min(v, p.whiteClip);
 }

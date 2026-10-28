@@ -32,6 +32,7 @@ support what it is attached to.
 | [`color-pipeline.md`](color-pipeline.md) | Scene-referred design, camera matrices, white balance, AgX display transform |
 | [`camera-profiles.md`](camera-profiles.md) | The rest of a DNG profile — BaselineExposure and HueSatMap |
 | [`demosaic.md`](demosaic.md) | CFA interpolation, and the gap between what we ship and RCD proper |
+| [`black-level.md`](black-level.md) | Noise below black: why the mosaic keeps its sign to the camera profile (EMVA 1288 §2.7, Foi 2009), why the display's lift is noise and not bias, the point-sampled preview, and the patent search |
 | [`demosaic-xtrans.md`](demosaic-xtrans.md) | M5's X-Trans line — why Markesteijn has no published description, why that stopped mattering, and what decision #29 charges for it. **Research only; nothing built** |
 | [`tone-and-local-contrast.md`](tone-and-local-contrast.md) | Guided filter, local shadows/highlights, curves |
 | [`highlight-reconstruction.md`](highlight-reconstruction.md) | Clipped highlights beyond the window fit — why the segmentation pass is not needed, and the Dirichlet solver that replaces it |

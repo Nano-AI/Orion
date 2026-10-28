@@ -327,32 +327,30 @@ void testBayerDecimation() {
                + ": every sample keeps its CFA channel", firstBad);
     }
 
-    // Averaging, not point sampling: a ramp within one output cell's footprint
-    // comes back as its mean.
+    // Point sampling, not averaging (`RawImage.h` says why): an output sample is
+    // one real sensor sample, not a mean that has lost three quarters of the
+    // noise the release will render.
     {
         orion::raw::BayerImage ramp;
         ramp.width = 8; ramp.height = 8;
         ramp.filters = 0x94949494u;
         ramp.samples.resize(64);
-        // Same value for every pixel of a given phase within the block, except
-        // one that is raised — the mean must move by exactly its share.
         for (auto& v : ramp.samples) v = 100;
-        ramp.samples[0] = 500;     // (0,0), one of four same-phase samples at scale 4
+        ramp.samples[0]  = 900;    // (0,0), a corner of output cell (0,0)'s block
+        ramp.samples[36] = 500;    // (4,4), the middle of it at scale 4
         const auto out = orion::raw::decimate(ramp, 4);
         report(out.width == 2 && out.height == 2, "a 8x8 mosaic decimates to 2x2",
                std::to_string(out.width) + "x" + std::to_string(out.height));
-        // One output cell covers 4x4 input cells at scale 4, so sixteen
-        // same-phase inputs: (100*15 + 500)/16 = 125.
-        report(out.samples[0] == 125,
-               "and an output sample is the mean of its same-phase inputs",
+        report(out.samples[0] == 500,
+               "and an output sample is the middle same-phase input, not a mean",
                std::to_string(out.samples[0]));
     }
 
     // Every output sample against the definition, on a mosaic whose values all
     // differ and whose size is not a multiple of the stride. The checks above
-    // cannot see a sample averaged from the wrong block — every same-phase
-    // input in them is equal — and a rewrite for speed (#319) could do exactly
-    // that while keeping every phase.
+    // cannot see a sample taken from the wrong block — every same-phase input
+    // in them is equal — and a rewrite for speed (#319) could do exactly that
+    // while keeping every phase.
     {
         orion::raw::BayerImage mixed;
         mixed.width = 38; mixed.height = 22;
@@ -369,23 +367,20 @@ void testBayerDecimation() {
             std::string firstBad;
             for (std::uint32_t y = 0; y < out.height && exact; ++y) {
                 for (std::uint32_t x = 0; x < out.width && exact; ++x) {
-                    std::uint32_t sum = 0;
-                    for (std::uint32_t cy = 0; cy < s; ++cy)
-                        for (std::uint32_t cx = 0; cx < s; ++cx)
-                            sum += mixed.samples[std::size_t(((y / 2) * s + cy) * 2 + y % 2) *
-                                                     mixed.width +
-                                                 ((x / 2) * s + cx) * 2 + x % 2];
                     const auto got = out.samples[std::size_t(y) * out.width + x];
-                    if (got != sum / (s * s)) {
+                    const auto want =
+                        mixed.samples[std::size_t(((y / 2) * s + s / 2) * 2 + y % 2) * mixed.width +
+                                      ((x / 2) * s + s / 2) * 2 + x % 2];
+                    if (got != want) {
                         exact = false;
                         firstBad = "at " + std::to_string(x) + "," + std::to_string(y) +
                                    " got " + std::to_string(got) + " want " +
-                                   std::to_string(sum / (s * s));
+                                   std::to_string(want);
                     }
                 }
             }
             report(exact, "scale " + std::to_string(scale) +
-                          ": every sample is the mean of its own block", firstBad);
+                          ": every sample is its own block's middle", firstBad);
         }
     }
 
@@ -397,6 +392,128 @@ void testBayerDecimation() {
                "and so does a scale of one");
         report(orion::raw::decimate(src, 64).width == src.width,
                "a scale larger than the mosaic returns it unchanged too");
+    }
+}
+
+/// A noisy shadow: the release renders it without a lift, and the preview
+/// renders it as the release does.
+///
+/// ⚠ Two claims, because they fail to different mutations. Read noise is
+/// zero-mean, so a night frame's deep shadows put a third of their samples
+/// below black, and a clamp at zero anywhere on the mosaic's way to the camera
+/// profile throws that half of the noise away and lifts the shadow — most in
+/// the channel with the least light, which made `_PIC8148`'s sky grey-purple
+/// (research/black-level.md). That is read against a *clean* frame of the same
+/// level, in camera RGB after the demosaic, where nothing has a reason to move
+/// the mean. And the display transform is not linear, so how a noisy shadow
+/// looks depends on how much noise it carries as well as on its mean: the
+/// preview has to carry the release's own noise to look like it, which is why
+/// `decimate` point-samples. That is read at the 8-bit output. The first cannot
+/// see a preview that averages; the second cannot see a clamp both graphs share.
+///
+/// The fixture is that sky: 20 counts above a black point per channel, a sigma
+/// of 80, at +1 EV. ⚠ Its camera is linear sRGB (`camToXyz` is LibRaw's
+/// XYZ->camera, so this is sRGB's inverse), not the forward matrix the other
+/// fixtures carry: that one makes their grey an imaginary color, whose noise
+/// renders at 70 levels a pixel, which is enough to drown a one-level claim.
+void testPreviewShadowsMatchGpu() {
+    section("A noisy shadow: no lift, and the preview renders it as the release does");
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    constexpr std::uint32_t kN = 1024;
+    const auto field = [&](double sigma) {
+        orion::raw::BayerImage img;
+        img.width = kN; img.height = kN;
+        img.filters = 0x94949494u;                 // RGGB
+        img.black = {500, 512, 530, 512};          // a wrong channel's black shows
+        img.white = 16383;
+        img.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
+        img.camToXyz = {3.2406f, -1.5372f, -0.4986f,
+                        -0.9689f, 1.8758f, 0.0415f,
+                        0.0557f, -0.2040f, 1.0570f};
+        img.samples.resize(std::size_t(kN) * kN);
+        std::mt19937 rng(8148);
+        std::normal_distribution<double> noise(0.0, 1.0);
+        for (std::uint32_t y = 0; y < kN; ++y)
+            for (std::uint32_t x = 0; x < kN; ++x)
+                img.samples[std::size_t(y) * kN + x] = std::uint16_t(std::lround(
+                    img.black[std::size_t(img.channelAt(x, y))] + 20.0 + sigma * noise(rng)));
+        return img;
+    };
+
+    // Per-channel means away from the border.
+    struct Means { std::array<double, 3> linear{}, display{}; };
+    const auto render = [&](const orion::raw::BayerImage& mosaic) {
+        orion::pipe::DevelopPipeline dev(*device, std::string(ORION_SHADER_DIR), mosaic);
+        orion::pipe::Adjustments adj;
+        adj.wb = dev.asShotWhiteBalance();
+        adj.exposureEv = 1.0f;
+        dev.apply(adj);
+        dev.render();
+        Means m;
+        const std::uint32_t w = dev.width(), h = dev.height(), e = w / 32;
+        std::vector<__fp16> lin(std::size_t(w) * h * 4);
+        dev.highlightStages().input->download(lin.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+        const std::uint32_t ow = dev.outputWidth(), oh = dev.outputHeight();
+        std::vector<std::uint8_t> out(std::size_t(ow) * oh * 4);
+        dev.output().download(out.data(), std::size_t(ow) * 4, ow, oh);
+        double n = 0, on = 0;
+        for (std::uint32_t y = e; y < h - e; ++y)
+            for (std::uint32_t x = e; x < w - e; ++x, ++n)
+                for (std::size_t c = 0; c < 3; ++c)
+                    m.linear[c] += double(lin[(std::size_t(y) * w + x) * 4 + c]);
+        for (std::uint32_t y = e; y < oh - e; ++y)
+            for (std::uint32_t x = e; x < ow - e; ++x, ++on)
+                for (std::size_t c = 0; c < 3; ++c)
+                    m.display[c] += double(out[(std::size_t(y) * ow + x) * 4 + c]);
+        for (std::size_t c = 0; c < 3; ++c) { m.linear[c] /= n; m.display[c] /= on; }
+        return m;
+    };
+
+    Means clean, full, preview;
+    try {
+        const auto noisy = field(80.0);
+        clean = render(field(0.0));
+        full = render(noisy);
+        preview = render(orion::raw::decimate(noisy, 4));   // Engine::kPreviewScale
+    } catch (const std::exception& e) {
+        report(false, "all three graphs render", e.what());
+        return;
+    }
+    std::printf("  camera RGB clean (%.5f %.5f %.5f) noisy (%.5f %.5f %.5f)\n"
+                "  8-bit full (%.2f %.2f %.2f) preview (%.2f %.2f %.2f) clean (%.2f %.2f %.2f)\n",
+                clean.linear[0], clean.linear[1], clean.linear[2],
+                full.linear[0], full.linear[1], full.linear[2],
+                full.display[0], full.display[1], full.display[2],
+                preview.display[0], preview.display[1], preview.display[2],
+                clean.display[0], clean.display[1], clean.display[2]);
+
+    // A clamp at zero roughly doubles this level — the mean of max(X, 0) for a
+    // mean of 20 and a sigma of 80 is 43 — and 262k samples a channel put the
+    // standard error near 1%.
+    const char* names[3] = {"red", "green", "blue"};
+    for (std::size_t c = 0; c < 3; ++c) {
+        const double ratio = full.linear[c] / clean.linear[c];
+        report(std::abs(ratio - 1.0) < 0.10,
+               std::string("the noisy shadow's ") + names[c] + " is the clean one's, within 10%",
+               "noisy " + std::to_string(full.linear[c]) + " clean " +
+                   std::to_string(clean.linear[c]) + " ratio " + std::to_string(ratio));
+    }
+    // The preview's mean stands on 57k pixels of a 27-level spread: a tenth of
+    // a level of standard error. Averaging was five levels off on the real sky.
+    for (std::size_t c = 0; c < 3; ++c) {
+        const double gap = preview.display[c] - full.display[c];
+        report(std::abs(gap) < 1.0,
+               std::string("the preview's ") + names[c] + " shadow is the release's, within a level",
+               "preview " + std::to_string(preview.display[c]) + " full " +
+                   std::to_string(full.display[c]));
     }
 }
 
