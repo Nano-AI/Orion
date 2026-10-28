@@ -129,9 +129,15 @@ sealed class ColorWheel : StackPanel {
         }
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e) {
+            if (_dragging) e.Pointer.Capture(null);   // ends the drag, below
+        }
+
+        /// Every drag ends here, a release or capture taken mid-drag (focus lost, a dialog):
+        /// otherwise the engine stayed on the preview graph until the next drag anywhere.
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) {
+            base.OnPointerCaptureLost(e);
             if (!_dragging) return;
             _dragging = false;
-            e.Pointer.Capture(null);
             EngineModel.Shared.EndInteraction();
             InvalidateVisual();
         }

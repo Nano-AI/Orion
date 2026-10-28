@@ -50,7 +50,30 @@ static class EditHistory {
     /// Names the next settled edit, as `engine.edit("Crop") { … }` does.
     public static void Label(string label) => _label = label;
 
-    public static float[] Snapshot() => Slots.Select(s => E.Get(s.Name, s.Index)).ToArray();
+    /// Every field slot, then the tone curve: it is not an OrionAdjustments field
+    /// the table reaches, so without it a curve edit, or a preset's, never undid.
+    public static float[] Snapshot() => [.. Slots.Select(s => E.Get(s.Name, s.Index)), .. Curves()];
+
+    /// Four channels, each its point count then up to sixteen x, y pairs.
+    const int CurveChannels = 4, CurveRow = 1 + 16 * 2;
+
+    static float[] Curves() {
+        var row = new float[CurveChannels * CurveRow];
+        for (int c = 0; c < CurveChannels; c++) {
+            IReadOnlyList<(float X, float Y)> points;
+            try { points = E.Session?.Curve(c) ?? CurveMath.Identity; } catch (NotBuiltException) { points = CurveMath.Identity; }
+            row[c * CurveRow] = points.Count;
+            for (int i = 0; i < points.Count && i < 16; i++) (row[c * CurveRow + 1 + 2 * i], row[c * CurveRow + 2 + 2 * i]) = points[i];
+        }
+        return row;
+    }
+
+    static List<(float X, float Y)> Curve(float[] state, int channel) {
+        int at = Slots.Length + channel * CurveRow;
+        return Enumerable.Range(0, (int)state[at]).Select(i => (state[at + 1 + 2 * i], state[at + 2 + 2 * i])).ToList();
+    }
+
+    static string Name(int slot) => slot < Slots.Length ? Slots[slot].Name : "curve";
 
     public static void Undo() { if (CanUndo) Restore(_entries[--_position].State); }
     public static void Redo() { if (CanRedo) Restore(_entries[++_position].State); }
@@ -68,6 +91,8 @@ static class EditHistory {
         E.Apply(s => {
             for (int i = 0; i < Slots.Length; i++)
                 if (s.Get(Slots[i].Name, Slots[i].Index) != state[i]) s.Set(Slots[i].Name, state[i], Slots[i].Index);
+            for (int c = 0; c < CurveChannels; c++)
+                if (!s.Curve(c).SequenceEqual(Curve(state, c))) s.SetCurve(c, Curve(state, c));
         }, reread: true);
         Changed?.Invoke();
     }
@@ -86,11 +111,13 @@ static class EditHistory {
         var state = Snapshot();
         if (_position < 0) { Reset(state); return; }
         var here = _entries[_position].State;
-        var moved = Enumerable.Range(0, Slots.Length).Where(i => here[i] != state[i]).ToList();
-        if (moved.Count == 0) return;
-        string label = _label ?? string.Join(", ", moved.Select(i => Slots[i].Name).Distinct());
+        var moved = Enumerable.Range(0, state.Length).Where(i => here[i] != state[i]).ToList();
+        // Taken either way: a named act that changed nothing (a click on the crop, a
+        // preset already in effect) must not name the next, unrelated, step.
+        string? named = _label;
         _label = null;
-        Record(state, label);
+        if (moved.Count == 0) return;
+        Record(state, named ?? string.Join(", ", moved.Select(Name).Distinct()));
     }
 
     static void Record(float[] state, string label) {

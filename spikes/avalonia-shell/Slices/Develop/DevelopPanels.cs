@@ -32,9 +32,8 @@ static class Develop {
 
     /// A slider on a value Engine.swift keeps outside OrionAdjustments (the
     /// spot tool's next radius and feather), which AdjustmentSlider cannot bind.
-    /// Its readout is AdjustmentSlider's box, in the numeral face.
-    // stub(#315): Engine.swift owns this until the logic moves below the facade
-    public static Control LocalSlider(string name, float min, float max, float baseValue, int decimals) {
+    /// Its readout is AdjustmentSlider's box, in the numeral face. `changed` gets each value.
+    public static Control LocalSlider(string name, float min, float max, float baseValue, int decimals, Action<float>? changed = null) {
         var text = Faces.Figure("");
         text.HorizontalAlignment = HorizontalAlignment.Right;
         var window = new Border { MinWidth = 54, Height = 21, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(Radius.Sm),
@@ -44,7 +43,7 @@ static class Develop {
             text.Text = v.ToString("F" + decimals, CultureInfo.InvariantCulture);
             text.Foreground = AdjustmentMath.IsModified(v, baseValue, decimals) ? Palette.Accent : Palette.Text;
         }
-        track.Changed += Show;
+        track.Changed += v => { Show(v); changed?.Invoke(v); };
         track.Set(baseValue);
         Show(baseValue);
         var head = new DockPanel();
