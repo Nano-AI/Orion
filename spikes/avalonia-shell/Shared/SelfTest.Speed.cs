@@ -99,7 +99,7 @@ static partial class SelfTest {
         cache.Release(lent!);
         cache.Release(again);
         cache.Drain();
-        Check(cache.Sessions == 0 && lent.Handle == 0 && again.Handle == 0, "sessions lent before Clear close when they come back");
+        Check(cache.Sessions == 0 && lent!.Handle == 0 && again.Handle == 0, "sessions lent before Clear close when they come back");
 
         // Through EngineModel, over five spellings of the selftest photo (dir/./name...) so paths differ.
         string photo = EngineModel.Shared.Photos[0];
