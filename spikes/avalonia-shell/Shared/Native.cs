@@ -46,4 +46,34 @@ public static unsafe partial class Native {
 
     [LibraryImport(Lib)]
     public static partial int orion_engine_image_size(nint engine, out uint width, out uint height);
+
+    /// The preview graph's picture region; nonzero status when there is no preview graph.
+    [LibraryImport(Lib)]
+    public static partial int orion_engine_preview_size(nint engine, out uint width, out uint height);
+
+    [LibraryImport(Lib)]
+    public static partial int orion_engine_release_render_memory(nint engine);
+
+    /// One tone-curve channel (0 master, 1-3 R G B) as interleaved x, y; returns the point count.
+    [LibraryImport(Lib)]
+    public static partial int shim_curve(nint shim, int channel, float* xy, int capacity);
+
+    [LibraryImport(Lib)]
+    public static partial int shim_set_curve(nint shim, int channel, float* xy, int count);
+
+    [LibraryImport(Lib)]
+    public static partial int shim_auto_enhance(nint shim);
+
+    /// How many OrionMaskComponent fields shim_mask_set knows by name.
+    [LibraryImport(Lib)]
+    public static partial int shim_mask_field_count();
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int shim_mask_set(nint shim, int row, string field, float value);
+
+    [LibraryImport(Lib)]
+    public static partial int shim_mask_stroke(nint shim, int row, float* xy, int dabs);
+
+    [LibraryImport(Lib)]
+    public static partial int shim_mask_commit(nint shim, int count);
 }

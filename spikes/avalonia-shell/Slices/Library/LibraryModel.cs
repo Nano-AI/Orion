@@ -91,16 +91,6 @@ public sealed class LibraryModel {
 
     public int RejectedCount => Photos.Count(p => p.Rejected);
 
-    /// Library.summary, word for word ("1 photos" included).
-    public string Summary {
-        get {
-            if (Photos.Count == 0) return "";
-            var parts = new List<string> { $"{Photos.Count} photos" };
-            if (RejectedCount > 0) parts.Add($"{RejectedCount} rejected");
-            return string.Join(" · ", parts);
-        }
-    }
-
     public void SetRating(Photo photo, int stars) {
         photo.Rating = Math.Clamp(stars, 0, 5);
         Changed?.Invoke();

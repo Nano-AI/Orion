@@ -10,6 +10,12 @@ namespace OrionShell;
 /// No events and no UI state: EngineModel decides when to render and what to
 /// show, and a cache may hold several of these at once (decision #318).
 /// The calls stage 1b builds natively are in SessionSeams.cs.
+///
+/// One thread at a time: the shim is not thread-safe per handle. Separate
+/// sessions are independent (each engine has its own command queue and LibRaw
+/// instance; they share only the Metal device, which is thread-safe, and
+/// read-only statics: engine/src/Engine.cpp, gpu/MetalDevice.mm), so a cache
+/// may open and render one on a worker and then hand it to the UI thread.
 public sealed partial class Session : IDisposable {
     nint _shim;
     /// One bitmap per graph, reused render after render: same bitmap, new pixels.
@@ -46,7 +52,28 @@ public sealed partial class Session : IDisposable {
 
     /// Renders the quarter-resolution preview graph or the full one. The shim
     /// falls back to the full graph when there is no preview graph.
-    public Graph Render(bool preview) => (Graph)Native.shim_render(Shim, preview ? 1 : 0, out _);
+    public Graph Render(bool preview) {
+        var graph = (Graph)Native.shim_render(Shim, preview ? 1 : 0, out _);
+        if (graph == Graph.Full) RenderedFull = true;
+        return graph;
+    }
+
+    /// Has rendered the full graph since it was last lightened: its
+    /// intermediates (1.35 GB, #318) are allocated and the preview picture may
+    /// be older than the last edit.
+    public bool RenderedFull { get; private set; }
+
+    /// The last preview read: the screen-sized picture a cache keeps for this photo.
+    public WriteableBitmap? Picture => _pictures.GetValueOrDefault(Graph.Preview);
+
+    /// What a cache does to a session it keeps but is not showing: the graphs'
+    /// textures go (ReleaseRenderMemory) and so does the full-size bitmap
+    /// (~97 MB at 24 MP); the decoded photo and the preview picture stay.
+    public void Lighten() {
+        ReleaseRenderMemory();
+        _pictures.Remove(Graph.Full);
+        RenderedFull = false;
+    }
 
     /// The last render of `graph`, copied into this session's bitmap for it.
     /// Null when there is nothing to read. The copy is the spike's cost, not

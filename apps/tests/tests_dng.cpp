@@ -15,6 +15,7 @@
 
 #include "harness.h"
 #include "Engine.h"
+#include "orion/orion.h"
 #include "util/DngWriter.h"
 #include "util/Half.h"
 
@@ -605,5 +606,157 @@ void testLinearDngEngineOpen() {
         report(false, "engine opens and renders the linear DNG", e.what());
     }
 
+    std::remove(path.c_str());
+}
+
+// The facade calls the Avalonia shell's session seams stand on (#315): a curve
+// and Auto must reach the pixels through OrionAdjustments, and releasing render
+// memory must drop both graphs' textures without moving a pixel of the next
+// render or turning the next slider tick into a full render.
+void testFacadeSessionSeams() {
+    section("facade: curve, auto-enhance, release render memory (GPU)");
+
+    const std::string path = "/tmp/orion-facade-seams.dng";
+    auto rgb = gradientFrame();
+    for (auto& v : rgb) v *= 0.2f;   // dim, so Auto has a stop or two to find
+    orion::util::DngLinearImage img;
+    img.width = kW; img.height = kH; img.rgb = rgb.data();
+    img.xyzToCam = kXyzToCam; img.asShotNeutral = kNeutral;
+    img.camera = "SONY ILCE-7RM3";
+    try {
+        orion::util::writeDngLinear(path, img);
+    } catch (const std::exception& e) {
+        report(false, "facade fixture DNG written", e.what());
+        return;
+    }
+
+    // ── Release, against the engine's own byte counts ─────────────────────
+    try {
+        orion::Engine engine;
+        engine.openRaw(path);
+        orion::pipe::Adjustments a;
+        a.wb = engine.develop().asShotWhiteBalance();
+        a.contrast = 1.45f; a.clarity = 0.3f;
+        engine.setAdjustments(a);
+        // Before any render: source and aux plates only. On this small frame
+        // the fixed-size plates outweigh every intermediate, so a ratio against
+        // `held` would prove nothing; the opened footprint is the exact target.
+        const auto opened = engine.develop().graph().allocatedBytes();
+        engine.render();
+        engine.renderPreview();
+        const auto shot = [](const orion::pipe::DevelopPipeline& d) {
+            const auto row = d.outputWidth() * orion::gpu::bytesPerPixel(d.output().format());
+            std::vector<std::uint8_t> px(row * d.outputHeight());
+            d.output().download(px.data(), row, d.outputWidth(), d.outputHeight());
+            return px;
+        };
+        const auto full = shot(engine.develop());
+        const auto small = shot(engine.previewDevelop());
+        const auto held = engine.develop().graph().allocatedBytes();
+        const auto source = engine.develop().graph().sourceTexture().sizeBytes();
+
+        engine.releaseRenderMemory();
+        const auto& g = engine.develop().graph();
+        report(g.intermediateBytes() == source,
+               "release leaves the full graph holding only its source",
+               std::to_string(g.intermediateBytes()) + " vs source " + std::to_string(source));
+        report(held > opened && g.allocatedBytes() == opened,
+               "and the pool's idle textures: back to what the open held",
+               std::to_string(opened) + " -> " + std::to_string(held) + " -> " +
+                   std::to_string(g.allocatedBytes()));
+        const auto& pg = engine.previewDevelop().graph();
+        report(pg.intermediateBytes() == pg.sourceTexture().sizeBytes(),
+               "the preview graph is released with it");
+        bool gone = false;
+        try { (void)engine.develop().output(); } catch (const std::exception&) { gone = true; }
+        report(gone, "the full output is gone until the next render");
+
+        engine.renderPreview();
+        report(shot(engine.previewDevelop()) == small, "the preview rebuilds to the same picture");
+        engine.render();
+        report(shot(engine.develop()) == full, "the full render rebuilds to the same picture");
+        a.exposureEv = 0.2f; engine.setAdjustments(a); engine.render();
+        a.exposureEv = 0.3f; engine.setAdjustments(a); engine.render();
+        std::set<std::string> ran;
+        for (const auto& n : engine.develop().graph().lastRun())
+            if (n.executed) ran.insert(n.name);
+        report(ran == std::set<std::string>{"develop:linear", "develop:display", "geometry"},
+               "after a release, a slider tick still runs only the tail",
+               std::to_string(ran.size()) + " nodes ran");
+    } catch (const std::exception& e) {
+        report(false, "release fixture completes", e.what());
+    }
+
+    // ── Through the C facade, as the shim calls it ────────────────────────
+    OrionEngine* e = nullptr;
+    if (orion_engine_create(&e) != ORION_OK || orion_engine_open_raw(e, path.c_str()) != ORION_OK) {
+        report(false, "facade engine opens the fixture", e ? orion_last_error(e) : "");
+        orion_engine_destroy(e);
+        std::remove(path.c_str());
+        return;
+    }
+    OrionAdjustments adj{};
+    orion_engine_as_shot(e, &adj);
+    adj.contrast = 1.45f; adj.process = 2; adj.crop_w = adj.crop_h = 1;
+    constexpr std::uint32_t kBins = 64;
+    const auto histogram = [&] {
+        std::vector<std::uint32_t> h(kBins * 3);
+        orion_engine_set_adjustments(e, &adj);
+        orion_engine_render(e, nullptr);
+        orion_engine_histogram(e, h.data(), kBins);
+        return h;
+    };
+    const auto mean = [](const std::vector<std::uint32_t>& h) {
+        double sum = 0, n = 0;
+        for (std::size_t i = 0; i < h.size(); ++i) { sum += double(i % kBins) * h[i]; n += h[i]; }
+        return n > 0 ? sum / n : 0.0;
+    };
+    const auto base = histogram();
+
+    // Master curve: a lift through the middle.
+    adj.curve_master.count = 3;
+    adj.curve_master.x[0] = 0; adj.curve_master.x[1] = 0.4f; adj.curve_master.x[2] = 1;
+    adj.curve_master.y[0] = 0; adj.curve_master.y[1] = 0.7f; adj.curve_master.y[2] = 1;
+    const auto lifted = histogram();
+    report(mean(lifted) > mean(base) + 2, "a master curve lift brightens the render",
+           std::to_string(mean(base)) + " -> " + std::to_string(mean(lifted)));
+    // Blue alone: the blue channel moves, red does not.
+    adj.curve_master.count = 0;
+    adj.curve_blue.count = 2;
+    adj.curve_blue.x[0] = 0; adj.curve_blue.x[1] = 1;
+    adj.curve_blue.y[0] = 0.3f; adj.curve_blue.y[1] = 1;
+    const auto blue = histogram();
+    report(std::equal(blue.begin(), blue.begin() + kBins, base.begin()) &&
+               !std::equal(blue.begin() + 2 * kBins, blue.end(), base.begin() + 2 * kBins),
+           "a blue curve moves blue and leaves red alone");
+    adj.curve_blue.count = 0;
+    report(histogram() == base, "an identity curve is the render it started from");
+
+    // Auto: writes the tone controls it owns, and what it wrote changes the
+    // render. Which way is testAutoEnhanceStats's question, not the wiring's.
+    const OrionAdjustments before = adj;
+    report(orion_engine_auto_enhance(e, &adj) == ORION_OK &&
+               (adj.exposure_ev != 0 || adj.whites != 0 || adj.blacks != 0 ||
+                adj.fusion != 0 || adj.clarity != 0),
+           "auto-enhance writes the tone controls it owns",
+           "exposure_ev " + std::to_string(adj.exposure_ev) + ", whites " +
+               std::to_string(adj.whites) + ", blacks " + std::to_string(adj.blacks));
+    report(adj.contrast == before.contrast && adj.temperature_k == before.temperature_k,
+           "and leaves the controls it does not own alone");
+    report(histogram() != base, "the auto look changes the render");
+    adj = before;
+    const auto again = histogram();
+
+    // Release through the facade: textures go, the next render is the same.
+    report(orion_engine_release_render_memory(e) == ORION_OK &&
+               orion_engine_output_texture(e) == nullptr &&
+               orion_engine_preview_texture(e) == nullptr,
+           "release drops the output and preview textures");
+    report(histogram() == again && orion_engine_output_texture(e) != nullptr,
+           "the next render brings the same picture back");
+    report(orion_engine_release_render_memory(nullptr) == ORION_ERR_BAD_ARG,
+           "release refuses a null engine");
+
+    orion_engine_destroy(e);
     std::remove(path.c_str());
 }

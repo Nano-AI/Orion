@@ -5,7 +5,8 @@
   <!-- Fluent's controls take their accent from these (a checked box, a focus
        ring, a slider's fill): Palette.Accent, not the platform's blue. The dark
        theme reads the Light shades, so every shade is the one colour. A colour
-       resource cannot point at a brush; the selftest holds the two together. -->
+       resource cannot point at a brush; the selftest holds the two together.
+       The words face (Faces.Words) is set in Theme.axaml.cs: it differs per platform. -->
 
   <Styles.Resources>
     <Color x:Key="SystemAccentColor">#4DB6C4</Color>
@@ -16,29 +17,10 @@
     <Color x:Key="SystemAccentColorDark2">#4DB6C4</Color>
     <Color x:Key="SystemAccentColorDark3">#4DB6C4</Color>
   </Styles.Resources>
-  <!-- Shared text and cell styles. Application-wide, so a panel looks the same
-       in the window and alone in a panel screenshot. -->
+  <!-- Application-wide, so a panel looks the same in the window and alone in a
+       panel screenshot. Numbers are Faces.Figure, not a style class. -->
   <Style Selector="TextBlock">
     <Setter Property="Foreground" Value="{x:Static local:Palette.Text}"/>
-    <Setter Property="FontSize" Value="{x:Static local:TypeSize.Base}"/>
-  </Style>
-  <Style Selector="TextBlock.section">
-    <Setter Property="Foreground" Value="{x:Static local:Palette.Dim}"/>
-    <Setter Property="FontSize" Value="{x:Static local:TypeSize.Xs}"/>
-    <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="LetterSpacing" Value="1.4"/>
-    <Setter Property="Margin" Value="0,18,0,8"/>
-  </Style>
-  <Style Selector="TextBlock.label">
-    <Setter Property="Foreground" Value="{x:Static local:Palette.Dim}"/>
-    <Setter Property="FontSize" Value="{x:Static local:TypeSize.Sm}"/>
-  </Style>
-  <Style Selector="TextBlock.tnum">
-    <Setter Property="FontFeatures" Value="+tnum"/>
-  </Style>
-  <Style Selector="TextBlock.readout">
-    <Setter Property="FontSize" Value="{x:Static local:TypeSize.Sm}"/>
-    <Setter Property="FontFeatures" Value="+tnum"/>
-    <Setter Property="HorizontalAlignment" Value="Right"/>
+    <Setter Property="FontSize" Value="{x:Static local:Faces.Body}"/>
   </Style>
 </Styles>

@@ -110,6 +110,7 @@ void testLinearDngOpens();
 void testDngEmbeddedPreview();
 void testLinearDngBaselineExposure();
 void testLinearDngEngineOpen();
+void testFacadeSessionSeams();
 void testMergeExposureMaths();
 void testMergeReconstruction();
 void testMergeDeghostAndCoverage();

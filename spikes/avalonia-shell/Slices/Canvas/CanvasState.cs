@@ -78,7 +78,10 @@ static class CanvasState {
     public const double Inset = 20;
     public static readonly Viewport Viewport = new();
     public static event Action? Changed;
-    public static void Touch() => Changed?.Invoke();
+    public static void Touch() {
+        EngineModel.Shared.ZoomedPastFit = !Viewport.IsFit;   // past fit the photo renders full size (#318)
+        Changed?.Invoke();
+    }
 
     /// The tool tab the shell is showing. Overlays belong to theirs (the crop
     /// overlay to Crop, spots to Detail, the mask to Mask).
@@ -89,8 +92,33 @@ static class CanvasState {
     public static Color HoverColor { get; private set; }
     public static string HoverCaption { get; private set; } = "";
 
+    /// What the canvas has to show (Controls.dc.html's browsing states).
+    public enum Scene { Welcome, Picture, Loading, Failed }
+
+    /// The photo the shown picture was made for: Current at the moment it was
+    /// shown. A picture always arrives after the list has moved to its photo, so
+    /// a picture left over from the previous photo never counts as this one's.
+    public static int ShownFor { get; private set; } = -1;
+
+    /// Nothing to open; a picture for this photo; this photo still decoding (a
+    /// calm blank, never the previous photo); or this photo failed to open or render.
+    public static Scene SceneFor(int count, int current, nint handle, int shownFor, string timing) =>
+        count == 0 || current < 0 ? Scene.Welcome
+        : shownFor == current ? Scene.Picture   // this photo's kept picture draws while its session decodes (#318)
+        : handle == 0 ? (timing == CouldNotOpen ? Scene.Failed : Scene.Loading)
+        : timing.StartsWith("render failed") ? Scene.Failed : Scene.Loading;
+
+    /// EngineModel.Show's Timing when the session source returned no session.
+    const string CouldNotOpen = "could not open";
+
+    public static Scene Now {
+        get { var e = EngineModel.Shared; return SceneFor(e.Photos.Count, e.Current, e.Handle, ShownFor, e.Timing); }
+    }
+
     static CanvasState() {
         var engine = EngineModel.Shared;
+        ShownFor = engine.Shown.Bitmap != null ? engine.Current : -1;
+        engine.Shown.Changed += () => ShownFor = engine.Shown.Bitmap != null ? engine.Current : -1;
         engine.Opened += () => { Viewport.Reset(); ClearHover(); };
         engine.Rendered += Touch;
         engine.PropertyChanged += (_, e) => {
@@ -157,7 +185,8 @@ static class CanvasState {
     }
 
     /// The open image's width over height as rendered (crop preview included).
-    public static double ImageAspect => CanvasNative.ImageSize is { Width: > 0, Height: > 0 } s ? (double)s.Width / s.Height : 0;
+    public static double ImageAspect => CanvasNative.ImageSize is { Width: > 0, Height: > 0 } s ? (double)s.Width / s.Height
+        : EngineModel.Shared.Shown.Bitmap is { } b ? b.Size.Width / b.Size.Height : 0;   // a kept picture while its session decodes
 
     /// `photoFrame`: the picture at fit, which is where the crop overlay draws.
     public static Rect PhotoFrame(Size size) => CanvasLayout.FrameRect(ImageAspect, size);

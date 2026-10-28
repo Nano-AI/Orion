@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 
 namespace OrionShell;
 
@@ -17,16 +18,23 @@ public sealed class EngineModel : INotifyPropertyChanged {
     public static EngineModel Shared { get; } = new();
 
     readonly PhotoList _list = new();
-    readonly ISessionSource _source;
+    readonly SessionCache _source;
     Session? _session;
 
-    public EngineModel() => _source = new FreshSessions(_list);
+    public EngineModel() => _source = new SessionCache(_list);
+
+    /// Where sessions come from: the two-tier cache of decision #318.
+    public SessionCache Cache => _source;
 
     public IReadOnlyList<string> Photos => _list.Paths;
     public int Current => _list.Current;
     public string CurrentName => Current >= 0 ? Path.GetFileName(Photos[Current]) : "";
-    /// The session for the photo on screen; null when nothing is open.
+    /// The session for the photo on screen; null when nothing is open, and
+    /// while Opening.
     public Session? Session => _session;
+    /// From an open until its session arrives from a background decode. The
+    /// photo's kept picture, if any, is on screen meanwhile; Opened fires after.
+    public bool Opening { get; private set; }
     /// What the canvas shows, and which graph made it.
     public ShownPicture Shown { get; } = new();
     public Bitmap? Picture => Shown.Bitmap;
@@ -34,6 +42,20 @@ public sealed class EngineModel : INotifyPropertyChanged {
     /// Milliseconds the last render spent in the engine and in the copy.
     public (double Render, double Copy) Last { get; private set; }
     public bool Interacting { get; private set; }
+
+    /// Set by the canvas. Zoomed past fit, the photo on screen renders full
+    /// size; at fit the preview graph's picture is already screen-sized, so
+    /// opening a photo renders only that (#318).
+    public bool ZoomedPastFit {
+        get => _zoomed;
+        set {
+            if (_zoomed == value) return;
+            _zoomed = value;
+            if (value && Shown.Graph != Graph.Full) Render(preview: false);
+        }
+    }
+    bool _zoomed;
+    static readonly TimeSpan Rest = TimeSpan.FromMilliseconds(300);
     /// The status line's message: a stub saying it is not built, until the next open.
     public string Status { get; private set; } = "";
 
@@ -62,8 +84,28 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     public void Load(IEnumerable<string> photos) {
         _list.Load(photos);
-        _source.Clear();
+        _source.Clear();   // drops an unanswered Request too
+        Opening = false;
         Changed(nameof(Photos), nameof(Current));
+    }
+
+    /// Takes photos out of the list (a move to the Trash). The photo on screen,
+    /// if it stays, stays open: same session, same edits, at its new index. If
+    /// it goes, it closes and nothing is current.
+    public void Remove(IEnumerable<string> paths) {
+        var gone = paths.ToHashSet();
+        int at = Current;
+        if (at >= 0 && gone.Contains(Photos[at])) {
+            Close();
+            Shown.Clear();
+            at = -1;
+        }
+        var left = Photos.Select((path, i) => (path, i)).Where(p => !gone.Contains(p.path)).ToList();
+        _list.Load(left.Select(p => p.path));
+        _source.Clear();   // every index moved; the session on screen closes when it is left
+        Opening = false;
+        if (at >= 0 && _list.Go(left.FindIndex(p => p.i == at))) _source.Hint(Current, 0);
+        Changed(nameof(Photos), nameof(Current), nameof(CurrentName), nameof(Picture));
     }
 
     public bool Open(int index) {
@@ -73,18 +115,44 @@ public sealed class EngineModel : INotifyPropertyChanged {
     }
 
     /// The arrow keys (Library.neighbor): false at either end, where nothing reopens.
+    /// A held key coalesces: each press shows the kept picture, and only the
+    /// photo it stops on waits for a session (ISessionSource.Request).
     public bool Next() { int from = Current; return _list.Next() && Show(from); }
     public bool Previous() { int from = Current; return _list.Previous() && Show(from); }
 
+    /// Preview-first: the kept picture now, the session when it is ready,
+    /// which for a kept session is before this returns. False when the photo
+    /// will not open, as far as is known by then.
     bool Show(int from) {
         Close();
-        _session = _source.Acquire(Current);
-        _source.Hint(Current, Math.Sign(Current - from));
+        int index = Current, step = index - from;
+        _source.Hint(index, from >= 0 && Math.Abs(step) == 1 ? step : 0);   // a jump has no direction
         Status = "";
-        Changed(nameof(Current), nameof(CurrentName), nameof(Status));
-        if (_session == null) { SetTiming("could not open"); return false; }
+        if (_source.Picture(index) is { } picture) Shown.Show(picture, Graph.Preview);
+        else Shown.Clear();
+        Changed(nameof(Current), nameof(CurrentName), nameof(Status), nameof(Picture));
+        Opening = true;
+        bool opened = true;
+        _source.Request(index, s => opened = Arrive(index, s));
+        if (Opening) SetTiming("decoding…");
+        return opened;
+    }
+
+    /// Photo `index`'s session is ready, or will not open.
+    bool Arrive(int index, Session? s) {
+        Opening = false;
+        if (index != Current || _session != null) {   // not asked for: never happens, never leaks
+            if (s != null) _source.Release(s);
+            return false;
+        }
+        if ((_session = s) == null) { SetTiming("could not open"); return false; }
         Opened?.Invoke();
-        Render(preview: false);
+        Render(preview: !ZoomedPastFit);
+        // The histogram and eyedropper read the full graph (orion.h), which a swap
+        // at fit skips: once the hand rests, render it, off the browse path.
+        Task.Delay(Rest).ContinueWith(_ => Dispatcher.UIThread.Post(() => {
+            if (Current == index && _session == s && !Interacting && Shown.Graph != Graph.Full) Render(preview: false);
+        }));
         return true;
     }
 
@@ -106,13 +174,15 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     /// A write through one of the session's own calls (curve, auto-enhance,
     /// the mask group), then the render Set would do. A call stage 1b has not
-    /// built yet goes to the status line, not up a pointer handler. `reread`
+    /// built yet, or one that refuses its input (the mask group's
+    /// ArgumentException and InvalidOperationException), goes to the status
+    /// line, not up a pointer handler. `reread`
     /// tells the panels the values moved under them. False when nothing ran.
     public bool Apply(Action<Session> write, bool reread = false) {
         if (_session == null) return false;
         try {
             write(_session);
-        } catch (NotBuiltException e) {
+        } catch (Exception e) when (e is NotBuiltException or ArgumentException or InvalidOperationException) {
             Say(e.Message);
             return false;
         }

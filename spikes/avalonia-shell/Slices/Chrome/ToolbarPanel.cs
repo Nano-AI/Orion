@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 using OrionShell.CanvasSlice;
@@ -9,28 +10,39 @@ using OrionShell.Sheets;
 
 namespace OrionShell.Chrome;
 
-/// A port of OrionApp+Chrome.swift's `toolbar`. It reads left to right in the
-/// order the work happens: what you open, what you are looking at, what you do
-/// to it, and what comes out. Rebuilt on every open; a render changes nothing here.
+/// Main.dc.html's toolbar, from OrionApp+Chrome.swift's `toolbar`: what is
+/// open on the left, the Library/Develop switch in the middle, and what you do
+/// to it on the right, ending in Export, the one filled button. Rebuilt on
+/// every open; a render changes nothing here.
 [Panel("toolbar", Region.Toolbar)]
 public sealed class ToolbarPanel : Grid {
-    readonly CaptureLine _capture = new();
-    readonly StackPanel _looking = Group(), _editing = Group(), _out = Group();
+    const double ButtonHeight = 28;
+
+    readonly TextBlock _crumb = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    readonly Segmented _mode = new(["Library", "Develop"], 1);
+    readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right,
+                                           VerticalAlignment = VerticalAlignment.Center };
 
     public ToolbarPanel() {
-        ColumnDefinitions = new("Auto,Auto,*,Auto,Auto,Auto,Auto,Auto");
+        ColumnDefinitions = new("*,Auto,*");
         ColumnSpacing = 12;
         Margin = new Thickness(Space.Pad, 0);
         Height = Layout.Toolbar;
 
-        // Serif wordmark against a sans interface: the instrument is read at a
-        // glance, the name is read once.
-        var wordmark = new TextBlock {
-            Text = "Orion", FontSize = 17, LetterSpacing = 0.5, Foreground = Palette.Text,
-            FontFamily = new FontFamily("New York, Georgia, Times New Roman, serif"), VerticalAlignment = VerticalAlignment.Center,
-        };
-        Control[] columns = [wordmark, OpenMenu(), _capture, _looking, Chip.Divider(), _editing, Chip.Divider(), _out];
-        for (int i = 0; i < columns.Length; i++) { SetColumn(columns[i], i); Children.Add(columns[i]); }
+        var wordmark = new TextBlock { Text = "Orion", FontSize = 14, FontWeight = FontWeight.SemiBold, LetterSpacing = -0.14,
+                                       VerticalAlignment = VerticalAlignment.Center };
+        var left = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
+        foreach (var c in new Control[] { wordmark, OpenMenu() }) {
+            c.Margin = new Thickness(0, 0, 12, 0);
+            DockPanel.SetDock(c, Dock.Left);
+            left.Children.Add(c);
+        }
+        left.Children.Add(_crumb);
+        _mode.VerticalAlignment = VerticalAlignment.Center;
+        _mode.Changed += i => { if ((i == 0) != GalleryMode.On) Commands.Run("gallery"); };
+        SetColumn(_mode, 1);
+        SetColumn(_actions, 2);
+        Children.AddRange([left, _mode, _actions]);
 
         EngineModel.Shared.Opened += Refresh;
         EngineModel.Shared.PropertyChanged += (_, _) => RefreshIfChanged();
@@ -42,7 +54,7 @@ public sealed class ToolbarPanel : Grid {
         Refresh();
     }
 
-    /// Everything the chips show, so a pan or a render does not rebuild them.
+    /// Everything the buttons show, so a pan or a render does not rebuild them.
     static string State => string.Join("|", EngineModel.Shared.Handle, EngineModel.Shared.Current, CompareState.Comparing,
         CompareState.Vertical, EditHistory.UndoLabel, EditHistory.RedoLabel, GalleryMode.On, ExportRun.Progress,
         string.Join(",", Commands.All.Select(c => c.CanRun() ? 1 : 0)));
@@ -50,23 +62,12 @@ public sealed class ToolbarPanel : Grid {
 
     void RefreshIfChanged() { if (State != _shown) Refresh(); }
 
-    static StackPanel Group() => new() { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center };
-
-    /// The Open menu, as the reference shots draw it rather than as the Swift
-    /// asks: a borderless menu button on macOS keeps the title and the first
-    /// image, drops the chevron, and ignores the 23-point frame, so it sits
-    /// 16 high with tight padding beside 23-high chips.
+    /// Open, with the choice of a photo or a folder under it.
     static Control OpenMenu() {
-        var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = {
-            Icons.Create("folder", 11, Palette.Text),
-            new TextBlock { Text = "Open", FontSize = TypeSize.Sm, FontWeight = FontWeight.Medium, Foreground = Palette.Text },
-        } };
-        var open = new Chip(label, "Open a photo or a folder", () => { }) {
-            Background = Palette.Raised, Height = 16, Padding = new Thickness(Space.Sm, 0),
-        };
+        var open = new StateButton("folder", "Open", () => { }, help: "Open a photo or a folder") { Height = ButtonHeight };
         open.Flyout = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft, Items = {
-            Item("Open Photo…", () => Commands.Run("open-photo")),
-            Item("Open Folder…", () => Commands.Run("open-folder")),
+            Item("Open photo…", () => Commands.Run("open-photo")),
+            Item("Open folder…", () => Commands.Run("open-folder")),
         } };
         return open;
     }
@@ -76,54 +77,66 @@ public sealed class ToolbarPanel : Grid {
     void Refresh() {
         _shown = State;
         var engine = EngineModel.Shared;
-        bool loaded = engine.Handle != 0, develop = !ChromeStubs.Culling;
-        _capture.Show(loaded ? CaptureInfo.Read(engine.Handle) : null, engine.Current >= 0 ? engine.Photos[engine.Current] : null);
+        bool gallery = ChromeStubs.Culling;
 
-        // ── Looking: accented while up, because both answer "what am I looking at".
-        _looking.Children.Clear();
-        _looking.Children.Add(Toggle("Gallery", ChromeStubs.Culling, Commands.CanRun("gallery"),
-            "Every photo in the folder at once, for culling (G)", () => Commands.Run("gallery")));
-        if (loaded && develop && ChromeStubs.Percent is { } percent)
-            _looking.Children.Add(new TextBlock { Text = $"{percent}%", FontSize = TypeSize.Sm, Foreground = Palette.Dim, Width = 42,
-                                                  TextAlignment = TextAlignment.Right, Classes = { "tnum" }, VerticalAlignment = VerticalAlignment.Center });
-        _looking.Children.Add(Toggle("Compare", CompareState.Comparing, Commands.CanRun("compare"), "Split the view against the original",
-            () => Commands.Run("compare")));
-        if (CompareState.Comparing)
-            _looking.Children.Add(Chip.Icon(CompareState.Vertical ? "rectangle.split.2x1" : "rectangle.split.1x2",
-                "Swap between a vertical and horizontal split", Commands.CanRun("swap-split"), () => Commands.Run("swap-split")));
-
-        // ── Editing: greyed as a group in the gallery, named after the step.
-        _editing.Children.Clear();
-        _editing.Children.AddRange([
-            Chip.Icon("arrow.uturn.backward", EditHistory.UndoLabel is { } u ? $"Undo {u}" : "Undo", Commands.CanRun("undo"),
-                      () => Commands.Run("undo")),
-            Chip.Icon("arrow.uturn.forward", EditHistory.RedoLabel is { } r ? $"Redo {r}" : "Redo", Commands.CanRun("redo"),
-                      () => Commands.Run("redo")),
-            Chip.Icon("rotate.left", "Rotate left", Commands.CanRun("rotate-left"), () => Commands.Run("rotate-left")),
-            Chip.Icon("rotate.right", "Rotate right", Commands.CanRun("rotate-right"), () => Commands.Run("rotate-right")),
-            Chip.Text("Reset", Commands.CanRun("reset-adjustments"), () => Commands.Run("reset-adjustments"), "Put every adjustment back"),
-        ]);
-
-        // ── Out: the button counts the selection; while a batch runs, the
-        // readout and Stop take its place.
-        _out.Children.Clear();
-        if (ChromeStubs.BatchProgress is { } p) {
-            _out.Children.Add(Chip.Ink($"Exporting {p.Done} of {p.Total}…", Palette.Dim));
-            _out.Children.Add(Chip.Text("Stop", Commands.CanRun("stop-batch"), () => Commands.Run("stop-batch"),
-                                        "Stop after the photo being written"));
-        } else {
-            bool exportable = Commands.CanRun("export");
-            int selected = ChromeStubs.ExportSelected;
-            var text = Chip.Ink(selected > 0 ? $"Export {selected}…" : "Export…", exportable ? Palette.Text : Palette.Faint);
-            text.FontWeight = FontWeight.Medium;
-            text.Classes.Add("tnum");
-            _out.Children.Add(new Chip(text, selected > 0 ? $"Export the {selected} selected photos to a folder" : "Export this photo",
-                                       () => Commands.Run("export"), exportable) {
-                Padding = new Thickness(11, 0),
-                Background = exportable ? Chip.Faded(Palette.Accent, 0.18) : Brushes.Transparent,
-                BorderBrush = exportable ? Chip.Faded(Palette.Accent, 0.55) : Palette.Line,
-            });
+        // The folder, then the photo; the gallery is the folder's, so it names only that.
+        var crumb = new InlineCollection();
+        if (engine.Current >= 0) {
+            string path = engine.Photos[engine.Current];
+            crumb.Add(new Run(Path.GetFileName(Path.GetDirectoryName(path)) ?? "") { Foreground = Palette.Dim });
+            if (!gallery) crumb.AddRange([new Run("  /  ") { Foreground = Palette.Faint }, new Run(Path.GetFileName(path))]);
         }
+        _crumb.Inlines = crumb;
+        _mode.Selected = gallery ? 0 : 1;
+        _mode.IsEnabled = Commands.CanRun("gallery");
+
+        _actions.Children.Clear();
+        if (gallery) {
+            _actions.Children.Add(Button(null, "Delete rejected…", () => Commands.Run("delete-rejected"), Commands.CanRun("delete-rejected"), ButtonKind.Quiet, "Move every rejected photo to the Trash"));
+        } else {
+            _actions.Children.Add(Group(
+                Glyph("arrow.uturn.backward", EditHistory.UndoLabel is { } u ? $"Undo {u}" : "Undo", () => Commands.Run("undo"), Commands.CanRun("undo")),
+                Glyph("arrow.uturn.forward", EditHistory.RedoLabel is { } r ? $"Redo {r}" : "Redo", () => Commands.Run("redo"), Commands.CanRun("redo"))));
+            _actions.Children.Add(Group(Glyph("rotate.left", "Rotate left", () => Commands.Run("rotate-left"), Commands.CanRun("rotate-left")), Glyph("rotate.right", "Rotate right", () => Commands.Run("rotate-right"), Commands.CanRun("rotate-right"))));
+            var compare = Button("rectangle.split.2x1", "Compare", () => Commands.Run("compare"), Commands.CanRun("compare"), ButtonKind.Standard, "Split the view against the original (\\)");
+            compare.On = CompareState.Comparing;
+            _actions.Children.Add(compare);
+            if (CompareState.Comparing)
+                _actions.Children.Add(Group(Glyph(CompareState.Vertical ? "rectangle.split.2x1" : "rectangle.split.1x2",
+                                                  "Swap between a vertical and horizontal split", () => Commands.Run("swap-split"), Commands.CanRun("swap-split"))));
+            _actions.Children.Add(Button(null, "Reset", () => Commands.Run("reset-adjustments"), Commands.CanRun("reset-adjustments"), ButtonKind.Quiet, "Put every adjustment back"));
+        }
+
+        // While a batch runs, its count and Stop take Export's place.
+        if (ChromeStubs.BatchProgress is { } p) {
+            _actions.Children.Add(new TextBlock { VerticalAlignment = VerticalAlignment.Center, Foreground = Palette.Dim,
+                Inlines = new InlineCollection { new Run("Exporting "), Faces.Num($"{p.Done}"), new Run(" of "), Faces.Num($"{p.Total}") } });
+            _actions.Children.Add(Button(null, "Stop", () => Commands.Run("stop-batch"), Commands.CanRun("stop-batch"), ButtonKind.Quiet, "Stop after the photo being written"));
+        } else {
+            int selected = ChromeStubs.ExportSelected;
+            _actions.Children.Add(Button("square.and.arrow.up", selected > 0 ? $"Export {selected}" : "Export", () => Commands.Run("export"), Commands.CanRun("export"), ButtonKind.Primary,
+                                         selected > 0 ? $"Export the {selected} selected photos to a folder" : "Export this photo (⌘E)"));
+        }
+    }
+
+    static StateButton Button(string? icon, string title, Action run, bool enabled, ButtonKind kind, string help) =>
+        new(icon, title, run, kind, help) { Height = ButtonHeight, IsEnabled = enabled };
+
+    static StateButton Glyph(string icon, string help, Action run, bool enabled) {
+        var b = StateButton.Glyph(icon, help, run);
+        (b.Height, b.CornerRadius, b.IsEnabled, b.Ink) = (ButtonHeight - 2, default, enabled, Palette.Text);
+        return b;
+    }
+
+    /// Related icon buttons in one raised well, a hairline between them.
+    static Border Group(params StateButton[] buttons) {
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        for (int i = 0; i < buttons.Length; i++) {
+            if (i > 0) row.Children.Add(new Border { Width = 1, Background = Palette.Line });
+            row.Children.Add(buttons[i]);
+        }
+        return new Border { Background = Palette.Raised, BorderBrush = Palette.Line, BorderThickness = new Thickness(1), ClipToBounds = true,
+                            CornerRadius = new CornerRadius(Radius.Md), VerticalAlignment = VerticalAlignment.Center, Child = row };
     }
 
     static MenuItem Item(string header, Action action) {
@@ -131,9 +144,4 @@ public sealed class ToolbarPanel : Grid {
         item.Click += (_, _) => action();
         return item;
     }
-
-    static Chip Toggle(string title, bool on, bool enabled, string help, Action action) =>
-        new(Chip.Ink(title, on ? Palette.Accent : enabled ? Palette.Dim : Palette.Faint), help, action, enabled) {
-            BorderBrush = on ? Palette.Accent : Palette.Line,
-        };
 }

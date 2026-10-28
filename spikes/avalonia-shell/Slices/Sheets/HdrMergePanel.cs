@@ -56,15 +56,15 @@ public sealed class HdrMergePanel : Border {
         for (int i = 0; i < _candidates.Count; i++) {
             int index = i;
             var c = _candidates[i];
-            var line = new TextBlock { Text = ExposureLine(c), FontSize = TypeSize.Xs, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center };
+            var line = Faces.Figure(ExposureLine(c), Faces.Label, Palette.Dim);
             var row = new DockPanel { Background = Brushes.Transparent, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
-            var mark = Icons.Create(i == _reference ? "largecircle.fill.circle" : "circle", TypeSize.Xs, Palette.Text);
+            var mark = Icons.Create(i == _reference ? "largecircle.fill.circle" : "circle", Faces.Mark, Palette.Text);
             mark.Margin = new Thickness(0, 0, Space.Sm + 2, 0);
             DockPanel.SetDock(mark, Dock.Left);
             DockPanel.SetDock(line, Dock.Right);
             row.Children.AddRange([mark, line, new TextBlock {
-                Text = System.IO.Path.GetFileName(c.Path), FontSize = TypeSize.Sm, VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = new FontFamily("Menlo, Consolas, monospace"),
+                Text = System.IO.Path.GetFileName(c.Path), FontSize = Faces.Label, VerticalAlignment = VerticalAlignment.Center,
+                FontFamily = Faces.Numeral, FontWeight = FontWeight.Medium, FontFeatures = Faces.Tabular,
             }]);
             row.PointerPressed += (_, _) => { _reference = index; Paint(); };
             _rows.Children.Add(row);
@@ -85,7 +85,7 @@ public sealed class HdrMergePanel : Border {
         return order[order.Count / 2];
     }
 
-    /// CaptureInfo.exposureLine: aperture · shutter · ISO.
+    /// CaptureInfo.exposureLine: aperture, shutter, ISO, spaced rather than dotted.
     static string ExposureLine(Candidate c) {
         if (c.Shutter <= 0 || c.Iso <= 0) return "no exposure data";
         var inv = CultureInfo.InvariantCulture;
@@ -97,6 +97,6 @@ public sealed class HdrMergePanel : Border {
             double tenths = Math.Round(c.Shutter * 10) / 10;
             shutter = tenths == Math.Round(tenths) ? $"{(int)tenths} s" : tenths.ToString("0.0", inv) + " s";
         }
-        return string.Join(" · ", new[] { aperture, shutter, "ISO " + c.Iso.ToString("0", inv) }.Where(s => s != null));
+        return string.Join("   ", new[] { aperture, shutter, "ISO " + c.Iso.ToString("0", inv) }.Where(s => s != null));
     }
 }

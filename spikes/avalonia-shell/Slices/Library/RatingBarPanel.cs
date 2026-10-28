@@ -2,12 +2,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
-using Avalonia.Media;
+using OrionShell.CanvasSlice;
 
 namespace OrionShell.Library;
 
 /// A port of app/RatingBar.swift: rating and rejection over the photo, in the
-/// canvas's lower-right corner (OrionApp+Canvas.swift pads it 14). Culling
+/// canvas's lower-right corner, as Main.dc.html's translucent pill. Culling
 /// happens while looking at the picture, so the mark being set belongs there,
 /// not only as four-pixel dots on a thumbnail nobody is looking at.
 ///
@@ -15,62 +15,54 @@ namespace OrionShell.Library;
 /// already set clears it. A rejected photo cannot be rated until it is kept.
 [Panel("rating-bar", Region.Canvas, 50)]
 public sealed class RatingBarPanel : Border {
-    readonly StackPanel _stars = new() { Orientation = Orientation.Horizontal, Spacing = 3 };
-    readonly StackPanel _reject = new() { Orientation = Orientation.Horizontal, Spacing = 4, Height = 18, Margin = new Thickness(6, 0) };
-    readonly Button _rejectButton;
-    readonly Border[] _faces = new Border[5];
-    readonly Button[] _starButtons = new Button[5];
+    readonly StateButton[] _stars = new StateButton[5];
+    readonly StateButton _reject;
     int? _hovered;
 
     public RatingBarPanel() {
         HorizontalAlignment = HorizontalAlignment.Right;
         VerticalAlignment = VerticalAlignment.Bottom;
-        Margin = new Thickness(Space.Pad);
-        Padding = new Thickness(Space.Md, 5);
-        Height = 28;
-        CornerRadius = new CornerRadius(14);   // a capsule
-        Background = LibraryUi.Ink(Palette.FilmBase, 0.5);
-        BorderBrush = LibraryUi.Ink(Palette.Text, 0.1);
-        BorderThickness = new Thickness(1);
-
+        Margin = new Thickness(16);
         for (int i = 0; i < 5; i++) {
             int n = i + 1;
-            _faces[i] = new Border { Width = 16, Height = 18, Background = Brushes.Transparent };
-            _starButtons[i] = LibraryUi.Plain(_faces[i], () => {
-                if (LibraryModel.Shared.Open is { } p) LibraryModel.Shared.SetRating(p, n == p.Rating ? 0 : n);
-            });
-            _starButtons[i].PointerEntered += (_, _) => { _hovered = n; Refresh(); };
-            _starButtons[i].PointerExited += (_, _) => { if (_hovered == n) { _hovered = null; Refresh(); } };
-            _stars.Children.Add(_starButtons[i]);
+            _stars[i] = new StateButton { Kind = ButtonKind.Bare, Width = 26, Height = 24, MinWidth = 0, Padding = default,
+                                          CornerRadius = new CornerRadius(4) };
+            _stars[i].Click += (_, _) => { if (LibraryModel.Shared.Open is { } p) LibraryModel.Shared.SetRating(p, n == p.Rating ? 0 : n); };
+            _stars[i].PointerEntered += (_, _) => { _hovered = n; Refresh(); };
+            _stars[i].PointerExited += (_, _) => { if (_hovered == n) { _hovered = null; Refresh(); } };
         }
-        _rejectButton = LibraryUi.Plain(_reject, () => { if (LibraryModel.Shared.Open is { } p) LibraryModel.Shared.ToggleRejected(p); });
-        Child = new StackPanel {
-            Orientation = Orientation.Horizontal, Spacing = Space.Md,
-            Children = { _stars, new Rectangle { Width = 1, Height = 14, Fill = LibraryUi.Ink(Palette.Text, 0.18) }, _rejectButton },
-        };
+        _reject = new StateButton { Kind = ButtonKind.Bare, Height = 24, MinWidth = 0, Padding = new Thickness(8, 0), CornerRadius = new CornerRadius(4) };
+        _reject.Click += (_, _) => { if (LibraryModel.Shared.Open is { } p) LibraryModel.Shared.ToggleRejected(p); };
+        var pill = Pill.Of([.. _stars, new Rectangle { Width = 1, Height = 16, Fill = Ink.White(0.12), Margin = new Thickness(4, 0) }, _reject]);
+        pill.Padding = new Thickness(4, 3);
+        Child = pill;
         LibraryModel.Shared.Changed += Refresh;
         EngineModel.Shared.Opened += Refresh;
+        CanvasState.Changed += Place;   // every render: only whether to show, not the contents
         Refresh();
     }
 
+    void Place() => IsVisible = LibraryModel.Shared.Open != null && CanvasState.Now == CanvasState.Scene.Picture;
+
     void Refresh() {
         var photo = LibraryModel.Shared.Open;
-        IsVisible = photo != null;
+        Place();
         if (photo == null) return;
 
         for (int n = 1; n <= 5; n++) {
             bool filled = n <= (_hovered ?? photo.Rating) && !photo.Rejected;
-            var ink = photo.Rejected ? LibraryUi.Ink(Palette.Text, 0.25) : filled ? Palette.Star : LibraryUi.Ink(Palette.Text, 0.4);
-            _faces[n - 1].Child = Icons.Create(filled ? "star.fill" : "star", 12, ink);
-            _starButtons[n - 1].IsEnabled = !photo.Rejected;
-            ToolTip.SetTip(_starButtons[n - 1], n == photo.Rating ? "Clear the rating" : $"{n} star{(n == 1 ? "" : "s")}  ({n})");
+            var star = _stars[n - 1];
+            star.Content = Icons.Create(filled ? "star.fill" : "star", 15, Palette.Text);
+            star.Ink = filled ? Palette.Star : Palette.Label;
+            star.IsEnabled = !photo.Rejected;
+            star.Help(n == photo.Rating ? "Clear the rating" : $"{n} star{(n == 1 ? "" : "s")} ({n})");
         }
 
-        var mark = photo.Rejected ? Palette.Reject : LibraryUi.Ink(Palette.Text, 0.75);
-        _reject.Children.Clear();
-        _reject.Children.Add(Icons.Create(photo.Rejected ? "arrow.uturn.backward" : "xmark", 9, mark));
-        _reject.Children.Add(new TextBlock { Text = photo.Rejected ? "Keep" : "Reject", FontSize = TypeSize.Xs,
-                                             Foreground = mark, VerticalAlignment = VerticalAlignment.Center });
-        ToolTip.SetTip(_rejectButton, photo.Rejected ? "Keep this photo (R)" : "Reject this photo (R)");
+        _reject.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = {
+            Icons.Create(photo.Rejected ? "arrow.uturn.backward" : "xmark", 12, Palette.Text),
+            new TextBlock { Text = photo.Rejected ? "Keep" : "Reject", VerticalAlignment = VerticalAlignment.Center },
+        } };
+        _reject.Ink = photo.Rejected ? Palette.Reject : Palette.Label;
+        _reject.Help(photo.Rejected ? "Keep this photo (R)" : "Reject this photo (R)");
     }
 }
