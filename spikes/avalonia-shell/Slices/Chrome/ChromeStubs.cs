@@ -1,21 +1,21 @@
+using OrionShell.Develop;
+using OrionShell.Library;
+using OrionShell.Sheets;
+
 namespace OrionShell.Chrome;
 
 /// Every piece of state the toolbar and footer read that Swift keeps above the
-/// facade, in one place so the integrator can see what is not wired yet. Each
-/// answers what an ordinary session with one photo open would.
+/// facade, in one place so the integrator can see what is wired and what is
+/// not. A stub answers what an ordinary session with one photo open would.
+/// Compare is not here: the toolbar and the canvas both read CompareState, so
+/// the button and the split cannot disagree.
 static class ChromeStubs {
-    // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-    public static bool Culling => false;                         // mode == .cull
-    // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-    public static (int Done, int Total)? BatchProgress => null;
+    public static bool Culling => GalleryMode.On;                // mode == .cull
+    public static (int Done, int Total)? BatchProgress => ExportRun.Progress;
     // stub(#315): OrionApp+Files.swift owns this until the logic moves below the facade
     public static int ExportSelected => 0;
-    // stub(#315): Engine+Compare.swift owns this until the logic moves below the facade
-    public static bool Comparing => false;
-    // stub(#315): EditHistory.swift owns this until the logic moves below the facade
-    public static bool CanUndo => false;
-    // stub(#315): EditHistory.swift owns this until the logic moves below the facade
-    public static bool CanRedo => false;
+    public static bool CanUndo => EditHistory.CanUndo;
+    public static bool CanRedo => EditHistory.CanRedo;
     // stub(#315): Engine.swift owns this until the logic moves below the facade
     public static bool DocumentEditsLocked => false;
     // stub(#315): Engine.swift owns this until the logic moves below the facade

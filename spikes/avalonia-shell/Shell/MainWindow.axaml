@@ -13,26 +13,34 @@
             BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,0,0,1">
       <Grid x:Name="ToolbarHost"/>
     </Border>
-    <Border DockPanel.Dock="Bottom" Height="{x:Static local:Layout.Filmstrip}"
-            Background="{x:Static local:Palette.FilmBase}"
-            BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1,0,0">
-      <Grid x:Name="FilmstripHost"/>
-    </Border>
-    <Border DockPanel.Dock="Right" Width="{x:Static local:Layout.ToolCol}"
-            Background="{x:Static local:Palette.Panel}"
-            BorderBrush="{x:Static local:Palette.Line}" BorderThickness="1,0,0,0">
-      <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
-      <DockPanel>
-        <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top" Margin="14,0"/>
-        <Grid x:Name="TabBar" DockPanel.Dock="Top" Margin="4,0" Height="30"/>
-        <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
-        <ScrollViewer>
-          <StackPanel x:Name="ToolsHost" Margin="14" Spacing="{x:Static local:Space.Xl}"/>
-        </ScrollViewer>
+    <!-- OrionApp.swift: the gallery replaces the canvas, the tools and the strip
+         in one piece; the toolbar stays. The develop face is hidden, not torn
+         down, so leaving the gallery is free and never decodes. -->
+    <Grid>
+      <DockPanel x:Name="DevelopFace">
+        <Border DockPanel.Dock="Bottom" Height="{x:Static local:Layout.Filmstrip}"
+                Background="{x:Static local:Palette.FilmBase}"
+                BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1,0,0">
+          <Grid x:Name="FilmstripHost"/>
+        </Border>
+        <Border DockPanel.Dock="Right" Width="{x:Static local:Layout.ToolCol}"
+                Background="{x:Static local:Palette.Panel}"
+                BorderBrush="{x:Static local:Palette.Line}" BorderThickness="1,0,0,0">
+          <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
+          <DockPanel>
+            <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top" Margin="14,0"/>
+            <Grid x:Name="TabBar" DockPanel.Dock="Top" Margin="4,0" Height="30"/>
+            <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
+            <ScrollViewer>
+              <StackPanel x:Name="ToolsHost" Margin="14" Spacing="{x:Static local:Space.Xl}"/>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+        <Border Background="{x:Static local:Palette.Surround}">
+          <Grid x:Name="CanvasHost"/>
+        </Border>
       </DockPanel>
-    </Border>
-    <Border Background="{x:Static local:Palette.Surround}">
-      <Grid x:Name="CanvasHost"/>
-    </Border>
+      <Grid x:Name="GalleryHost" IsVisible="False"/>
+    </Grid>
   </DockPanel>
 </Window>

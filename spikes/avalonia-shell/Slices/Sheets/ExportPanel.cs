@@ -49,10 +49,9 @@ public sealed class ExportPanel : Border {
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm + 2, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
-        // exportFile, runBatchExport:
-        // stub(#315): OrionApp.swift owns this until the logic moves below the facade
+        // exportFile; runBatchExport needs a selection, which is not ported.
         actions.Children.Add(SheetKit.Button(Selected > 0 ? $"Export {Selected}…" : "Export…",
-            () => Console.Error.WriteLine("sheet-export: export is OrionApp.swift's"), prominent: true));
+            () => { Dismiss?.Invoke(); ExportRun.ExportOpen(); }, prominent: true));
         Child = new StackPanel {
             Spacing = Space.Lg,
             // The options scroll on a small window; Cancel and Export stay put.

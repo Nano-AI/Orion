@@ -2,6 +2,20 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:OrionShell"
         x:Class="OrionShell.Theme">
+  <!-- Fluent's controls take their accent from these (a checked box, a focus
+       ring, a slider's fill): Palette.Accent, not the platform's blue. The dark
+       theme reads the Light shades, so every shade is the one colour. A colour
+       resource cannot point at a brush; the selftest holds the two together. -->
+
+  <Styles.Resources>
+    <Color x:Key="SystemAccentColor">#4DB6C4</Color>
+    <Color x:Key="SystemAccentColorLight1">#4DB6C4</Color>
+    <Color x:Key="SystemAccentColorLight2">#4DB6C4</Color>
+    <Color x:Key="SystemAccentColorLight3">#4DB6C4</Color>
+    <Color x:Key="SystemAccentColorDark1">#4DB6C4</Color>
+    <Color x:Key="SystemAccentColorDark2">#4DB6C4</Color>
+    <Color x:Key="SystemAccentColorDark3">#4DB6C4</Color>
+  </Styles.Resources>
   <!-- Shared text and cell styles. Application-wide, so a panel looks the same
        in the window and alone in a panel screenshot. -->
   <Style Selector="TextBlock">
