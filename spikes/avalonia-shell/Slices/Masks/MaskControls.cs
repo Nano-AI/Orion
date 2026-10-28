@@ -30,7 +30,7 @@ sealed class MaskSlider : StackPanel {
             MinWidth = 54, Height = 21, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(Radius.Sm),
             Background = Palette.Ground, BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Child = _readout,
         };
-        window.Tapped += (_, _) => Apply(baseValue);
+        window.Tapped += (_, _) => { _set(baseValue); _track.Glide(baseValue); Paint(); };
         DockPanel.SetDock(window, Dock.Right);
         Children.Add(new DockPanel { Children = { window, Engraved.Label(name) } });
         Children.Add(_track);

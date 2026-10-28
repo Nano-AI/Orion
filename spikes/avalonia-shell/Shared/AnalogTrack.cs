@@ -84,7 +84,8 @@ sealed class AnalogTrack : Control, ICustomHitTest {
     double _startX, _bandSpeed;
     float _startValue;
     ulong _lastMove;
-    bool _dragging, _departing, _rowOver;
+    ulong? _clickedAt;   // when this track last let go of a press that never moved
+    bool _dragging, _departing, _rowOver, _dragged;
     InputElement? _row;
     List<(float At, FormattedText Dim, FormattedText Lit)>? _numerals;
     (float, float) _numeralsFor;
@@ -221,7 +222,12 @@ sealed class AnalogTrack : Control, ICustomHitTest {
     void Hot() => _lift.To(_rowOver || _dragging ? 1 : 0);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e) {
-        if (e.ClickCount == 2) { Reset(); e.Handled = true; return; }
+        // A double-click is two clicks on this track. ClickCount counts any two quick presses at one spot, a
+        // drag's included, or the next slider scrolled under the same spot: those were resetting what they nudged.
+        bool second = e.ClickCount == 2 && e.Timestamp - _clickedAt < 600;
+        _clickedAt = null;
+        if (second) { Reset(); e.Handled = true; return; }
+        _dragged = false;
         // A grab catches the thumb where it is on screen, mid-glide too, and drags from there.
         _startValue = (float)Shown;
         _shown.Snap(_startValue);
@@ -241,6 +247,7 @@ sealed class AnalogTrack : Control, ICustomHitTest {
         if (!_dragging) return;
         bool fine = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
         double moved = (e.GetPosition(this).X - _startX) / Travel * (fine ? 0.2 : 1);
+        _dragged |= Math.Abs(e.GetPosition(this).X - _startX) > 2;
         float raw = _startValue + (float)moved * (Max - Min);
         float v = AdjustmentMath.Detented(raw, Base, Min, Max, _departing);
         if (v != Base) _departing = false;
@@ -260,6 +267,7 @@ sealed class AnalogTrack : Control, ICustomHitTest {
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e) {
         if (!_dragging) return;
+        _clickedAt = _dragged ? null : e.Timestamp;
         // Back to the end at the speed the hand let go with; a hand that had stopped hands over none.
         Drop(e.Timestamp - _lastMove > 50 ? 0 : _bandSpeed);
         e.Pointer.Capture(null);

@@ -194,6 +194,23 @@ static partial class SelfTest {
         Check(gliding && track.Value == track.Base && engine.Get("exposure_ev") == track.Base && track.Shown == track.Base,
               "a double-click on the track resets to the detent, and the thumb glides there");
 
+        // Two quick nudges from one spot are not a double-click: Avalonia counts the second press as
+        // ClickCount 2, which reset what the first drag had just set.
+        var grip = Thumb();
+        window.MouseMove(grip);
+        window.MouseDown(grip, MouseButton.Left);
+        window.MouseMove(grip + new Point(30, 0));
+        window.MouseUp(grip + new Point(30, 0), MouseButton.Left);
+        float nudged = track.Value;
+        window.MouseDown(grip, MouseButton.Left);
+        bool kept = track.Value == nudged && nudged != track.Base;
+        window.MouseUp(grip, MouseButton.Left);
+        Run(track);
+        Check(kept, $"a press right after a drag, at the drag's start, does not reset it ({track.Base} → {nudged:0.00})");
+        engine.Set("exposure_ev", track.Base);
+        Dispatcher.UIThread.RunJobs();
+        Run(track);
+
         // A click on the readout types at once: no wait for a double-click.
         var readout = slider.GetVisualDescendants().OfType<Decorator>().First(d => d.GetType().Name == "Readout");
         var box = readout.TranslatePoint(new Point(readout.Bounds.Width / 2, readout.Bounds.Height / 2), window)!.Value;

@@ -27,7 +27,7 @@ sealed class ColorWheel : StackPanel {
         _name = new TextBlock { Text = title, FontSize = Faces.Mark, VerticalAlignment = VerticalAlignment.Center };
         // stub(#315): EditHistory.swift owns this until the logic moves below the facade
         var reset = StateButton.Glyph("arrow.uturn.backward", $"Reset {title}",
-                                      () => { for (int i = 0; i < 3; i++) Engine.Set(_field, 0, i); Reload(); }, size: 9);
+                                      () => { for (int i = 0; i < 3; i++) Engine.Set(_field, 0, i); _luma.Glide(0); Paint(); }, size: 9);
         (reset.Ink, reset.Width, reset.Height, reset.MinWidth, reset.MinHeight) = (Palette.Accent, 18, 18, 0, 0);
         _reset = reset;
         Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center,
@@ -39,6 +39,7 @@ sealed class ColorWheel : StackPanel {
         _luma.Interacting += on => { if (on) Engine.BeginInteraction(); else Engine.EndInteraction(); };
         Children.Add(_luma);
         Engine.Opened += Reload;
+        Engine.ValuesChanged += () => { _luma.Glide(Engine.Get(_field, 2)); Paint(); };   // undo, a preset
         Reload();
     }
 

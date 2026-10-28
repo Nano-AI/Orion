@@ -80,8 +80,8 @@ static class CommandTable {
         Built("delete-rejected", "Delete rejected photos…", null, "OrionApp+Files.swift", () => LibraryModel.Shared.RejectedCount > 0,
               () => Trash.Confirm(LibraryModel.Shared.Photos.Where(p => p.Rejected).ToList())),
         Built("apply-crop", "Apply crop", "Enter", "OrionApp+Commands.swift", () => Cropping, () => Shell?.Select("Light")),
-        Built("cancel-crop", "Cancel crop", "Escape", "OrionApp+Commands.swift", () => E.Tool != CanvasTool.None || Mask.Drawing != 0 || Cropping, Escape),
-        // The Mask tab's keys (u4); `[` `]` and Escape are folded into the rows above, which own those keys.
+        Built("cancel-crop", "Cancel crop", "Escape", "OrionApp+Commands.swift", () => E.Tool != CanvasTool.None || Cropping, Escape),
+        // The Mask tab's keys (u4); `[` `]` fold into the rotate rows, which own those keys, and Escape's armed-tool step disarms a draw.
         Built("mask-overlay", "Show mask overlay", "O", "DevelopPanels+Mask.swift", () => Masking, () => Mask.Overlay ^= true),
         Built("mask-feather-less", "Less mask feather", "Shift+OemOpenBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(-0.1f)),
         Built("mask-feather-more", "More mask feather", "Shift+OemCloseBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(0.1f)),
@@ -98,7 +98,6 @@ static class CommandTable {
     /// handleKey's Escape: an armed tool first, from any tab; then the crop,
     /// reset to the whole frame, and back to Light.
     static void Escape() {
-        if (Mask.Drawing != 0) { Mask.Arm(0, null); return; }
         if (E.Tool != CanvasTool.None) { E.Tool = CanvasTool.None; return; }
         CropEdit.Reset();
         Shell?.Select("Light");

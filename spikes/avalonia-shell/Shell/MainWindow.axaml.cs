@@ -134,8 +134,9 @@ public partial class MainWindow : Window {
         double width = TabBar.Bounds.Width / Panels.Tabs.Length, x = width * Array.IndexOf(Panels.Tabs, Tab);
         TabIndicator.Width = width;
         var transitions = TabIndicator.Transitions;
-        if (!animate) TabIndicator.Transitions = null;
+        bool snap = !animate || Motion.Reduced;
+        if (snap) TabIndicator.Transitions = null;
         TabIndicator.RenderTransform = TransformOperations.Parse($"translateX({x.ToString(System.Globalization.CultureInfo.InvariantCulture)}px)");
-        if (!animate) TabIndicator.Transitions = transitions;
+        if (snap) TabIndicator.Transitions = transitions;
     }
 }

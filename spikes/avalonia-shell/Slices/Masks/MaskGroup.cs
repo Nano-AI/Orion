@@ -40,9 +40,10 @@ public sealed class MaskGroup {
             Changed?.Invoke();
         };
         engine.ValuesChanged += Reload;
-        // One armed tool at a time (#211): arming the color picker or spots disarms drawing.
+        // One armed tool at a time (#211): a draw is CanvasTool.MaskDraw, so arming the color
+        // picker or spots, or Escape clearing the tool, disarms it.
         engine.PropertyChanged += (_, e) => {
-            if (e.PropertyName == nameof(EngineModel.Tool) && engine.Tool != CanvasTool.None) Drawing = 0;
+            if (e.PropertyName == nameof(EngineModel.Tool) && engine.Tool != CanvasTool.MaskDraw) Drawing = 0;
         };
     }
 
@@ -94,7 +95,9 @@ public sealed class MaskGroup {
     public void Arm(int kind, int? into) {
         if (_drawing == kind && DrawInto == into) return;
         (_drawing, DrawInto) = (kind, kind == 0 || Shapes.Count == 0 ? null : into);
-        if (kind != 0) EngineModel.Shared.Tool = CanvasTool.None;
+        var engine = EngineModel.Shared;
+        if (kind != 0) engine.Tool = CanvasTool.MaskDraw;
+        else if (engine.Tool == CanvasTool.MaskDraw) engine.Tool = CanvasTool.None;
         Changed?.Invoke();
     }
 
