@@ -60,6 +60,7 @@ steps.
 
 ## Hard constraints — do not violate
 
+- **No language is required or banned.** Pick a language or library on maintainability and speed, and write the reason in `DECISIONS.md` (#360). What exists stays put unless moving it wins on those two.
 - **No Vulkan.** Too much boilerplate for a solo maintainer. Metal on macOS today; Dawn (WebGPU in C++, #317, #354) is the cross-platform GPU layer. Shaders authored in Slang. One exception (#355): on Linux, one small file may allocate the
   exportable memory and semaphore that Dawn and Avalonia share. Dawn (#317) does all the rendering; nothing else may call Vulkan.
 - **Maintainability is a hard requirement.** One node = one small shader (50–150 lines). Adding a feature should be a repeatable 3-file change. No 1000-line anything. The developer must be able to hand-edit any file later.
