@@ -274,7 +274,7 @@ def main():
     ok &= check(not untracked, "(k) every local file the page references is tracked by git",
                 f"(k) referenced but not tracked, so missing once deployed: {untracked}")
 
-    # (l) The buttons go to the download page, which picks the visitor's system
+    # (l) The buttons go to the download page (#352), which picks the visitor's system
     # and the newest build. It replaced sending everyone to the release list
     # (#283), which stays the fallback. /latest skips pre-releases and selects
     # an older build, and a pinned or mirrored .dmg goes stale with the next one.
