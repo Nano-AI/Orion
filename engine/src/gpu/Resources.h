@@ -33,8 +33,13 @@ const char* formatName(PixelFormat) noexcept;
 
 class Texture {
 public:
+    /// `linear` backs the texture with a plain row-major buffer, so `upload` is
+    /// a copy instead of a CPU swizzle into the GPU's tiled layout: 2 ms
+    /// against 17 for a 24 MP mosaic (#319). For a texture the CPU writes whole
+    /// and the GPU reads once, like the source; tiled stays the default.
     static std::unique_ptr<Texture> create(Device&, std::uint32_t width,
-                                           std::uint32_t height, PixelFormat);
+                                           std::uint32_t height, PixelFormat,
+                                           bool linear = false);
     ~Texture();
     Texture(const Texture&)            = delete;
     Texture& operator=(const Texture&) = delete;
