@@ -1,9 +1,13 @@
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Threading;
 using System.Runtime.InteropServices;
 using OrionShell.Chrome;
 using Path = Avalonia.Controls.Shapes.Path;
@@ -13,7 +17,9 @@ namespace OrionShell.Develop;
 /// The engine's per-channel histogram of the full render, 128 bins each, red
 /// then green then blue (Engine.histogram). Not refreshed mid-drag: it reads
 /// the whole output texture, and it is a readout nobody watches while a slider
-/// moves (Engine+Render.swift scheduleHistogram).
+/// moves (Engine+Render.swift scheduleHistogram). Empty from the moment the
+/// photo changes until the full graph has rendered it: a swap at fit renders
+/// only the preview graph, and the full one follows once the hand rests (#324).
 static class Levels {
     public const int BinCount = 128;
     public static uint[] Bins { get; private set; } = [];
@@ -21,6 +27,10 @@ static class Levels {
 
     static Levels() {
         EngineModel.Shared.Rendered += Refresh;
+        // The last photo's curve is not this one's: say nothing until it is measured.
+        EngineModel.Shared.PropertyChanged += (_, e) => {
+            if (e.PropertyName == nameof(EngineModel.Current) && Bins.Length > 0) { Bins = []; Updated?.Invoke(); }
+        };
         Refresh();
     }
 
@@ -50,34 +60,67 @@ static class Levels {
 }
 
 /// A port of app/Histogram.swift as Main.dc.html draws it: the curves in a
-/// recessed plate, then one line under it: shadow clipping, the exposure as a
-/// viewfinder prints it, highlight clipping. A clip reading turns star-coloured
-/// only when a channel really clips.
+/// recessed plate; under it the clipping at each end, the shadow share on the
+/// left and the highlight share on the right, star-coloured only when a channel
+/// really clips; then what the camera recorded (CaptureLine).
+///
+/// Every part keeps its height whether or not there is anything to show, so a
+/// photo swap never moves the tabs and sliders below. While the plate waits
+/// for the full render it stays empty; if that takes longer than a swap
+/// usually does, a quiet pulse says it is coming. The curves fade in.
 [Panel("develop-histogram", Region.Tools, 0)]
 public sealed class HistogramPanel : StackPanel {
     /// Below this share of the frame a flag is reporting noise (UNSOURCED.md §19).
     const double ClipThreshold = 0.001;
-    const double PlateHeight = 92;
+    const double PlateHeight = 92, FlagsHeight = 18;
+    /// Most swaps fill the plate in about 300 ms (#324); a pulse for those would flash on every arrow press.
+    static readonly TimeSpan PulseAfter = TimeSpan.FromMilliseconds(500);
+    /// Opacity only; a little under one cycle a second, nowhere near a slow sway.
+    // ponytail: runs under Reduce Motion too (opacity is the kind it keeps); hold it still once u5's Motion.Reduced lands.
+    static readonly Animation Pulse = new() {
+        Duration = TimeSpan.FromMilliseconds(650), IterationCount = IterationCount.Infinite,
+        PlaybackDirection = PlaybackDirection.Alternate, Easing = new SineEaseInOut(),
+        Children = {
+            new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 0.3) } },
+            new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 0.75) } },
+        },
+    };
 
     readonly HistogramPlate _plate = new() { Height = PlateHeight };
+    /// What the plate shows while it waits: a flat fill, never a made-up curve.
+    readonly Border _waiting = new() { Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm - 1), IsVisible = false };
     readonly Border _shadows = new(), _highlights = new() { HorizontalAlignment = HorizontalAlignment.Right };
     readonly CaptureLine _capture = new();
+    /// Bumped by each emptying, so only the latest one's wait can start the pulse.
+    int _emptied;
+    bool _arrived;
+    CancellationTokenSource? _pulsing;
 
     public HistogramPanel() {
-        Spacing = 6;
+        Spacing = 4;
         Margin = new Thickness(0, 12, 0, 10);   // Main.dc.html: 12 above, 10 below
-        Children.Add(new Border { BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Background = Palette.FilmBase,
-                                  CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(1), Child = _plate });
-        var line = new Grid { ColumnDefinitions = new("Auto,*,Auto"), Height = 24 };
-        Grid.SetColumn(_capture, 1);
+        _plate.Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(100), Easing = new CubicEaseOut() }];
+        var plate = new Border { BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Background = Palette.FilmBase,
+                                 CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(1), Child = new Panel { Children = { _waiting, _plate } } };
+        Avalonia.Automation.AutomationProperties.SetName(plate, "Histogram");
+        Children.Add(plate);
+        var flags = new Grid { ColumnDefinitions = new("Auto,*,Auto"), Height = FlagsHeight };
         Grid.SetColumn(_highlights, 2);
-        line.Children.AddRange([_shadows, _capture, _highlights]);
-        Children.Add(line);
+        flags.Children.AddRange([_shadows, _highlights]);
+        Children.Add(flags);
+        Children.Add(_capture);
         Levels.Updated += Refresh;
+        EngineModel.Shared.PropertyChanged += (_, _) => { if (_pulsing != null && !Waiting) StopPulse(); };   // a photo that would not open
         EngineModel.Shared.Opened += ShowCapture;
         ShowCapture();
         Refresh();
     }
+
+    /// The waiting pulse is running (the selftest's handle on it).
+    public bool Pulsing => _pulsing != null;
+
+    /// A photo is open or opening and its histogram has not been measured yet.
+    static bool Waiting => Levels.Bins.Length == 0 && (EngineModel.Shared.Handle != 0 || EngineModel.Shared.Opening);
 
     void ShowCapture() {
         var engine = EngineModel.Shared;
@@ -86,11 +129,43 @@ public sealed class HistogramPanel : StackPanel {
 
     void Refresh() {
         var bins = Levels.Bins;
-        IsVisible = bins.Length > 0;   // Swift: only once the engine has a histogram
+        bool had = _plate.Bins.Length > 0, has = bins.Length > 0;
         _plate.Bins = bins;
         _plate.InvalidateVisual();
-        _shadows.Child = Flag(Levels.Clipped(bins, true), true);
-        _highlights.Child = Flag(Levels.Clipped(bins, false), false);
+        // Gone at once; an arrival after a swap fades in. The panel's first curve (a new
+        // window, a --screenshot) is simply there.
+        if (!has) Fade(0, animate: false);
+        else if (!had) Fade(1, animate: _arrived);
+        _arrived |= has;
+        _shadows.Child = has ? Flag(Levels.Clipped(bins, true), true) : null;
+        _highlights.Child = has ? Flag(Levels.Clipped(bins, false), false) : null;
+        // The 500 ms count from the latest swap, so browsing at speed never pulses; the tick decides whether anything is coming.
+        // A task, not a DispatcherTimer: the headless selftest pumps jobs but no timers (as EngineModel's rest render).
+        int emptied = ++_emptied;
+        if (has) StopPulse();
+        else if (_pulsing == null) Task.Delay(PulseAfter).ContinueWith(_ => Dispatcher.UIThread.Post(() => {
+            if (emptied == _emptied && Waiting && _pulsing == null) StartPulse();
+        }));
+    }
+
+    void Fade(double opacity, bool animate) {
+        var fade = _plate.Transitions;
+        if (!animate) _plate.Transitions = null;
+        _plate.Opacity = opacity;
+        _plate.Transitions = fade;
+    }
+
+    void StartPulse() {
+        _waiting.IsVisible = true;
+        Avalonia.Automation.AutomationProperties.SetName(_waiting, "Measuring the histogram");
+        _pulsing = new CancellationTokenSource();
+        _ = Pulse.RunAsync(_waiting, _pulsing.Token);
+    }
+
+    void StopPulse() {
+        _pulsing?.Cancel();
+        _pulsing = null;
+        _waiting.IsVisible = false;
     }
 
     /// The share at one end, with a triangle pointing off that end. A reading,
@@ -98,14 +173,16 @@ public sealed class HistogramPanel : StackPanel {
     static Control Flag(double share, bool pointsLeft) {
         bool lit = share >= ClipThreshold;
         var ink = lit ? Palette.Star : Palette.Dim;
-        var flag = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, MinWidth = 44,
+        var flag = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, MinWidth = 44, Background = Brushes.Transparent,
                                     HorizontalAlignment = pointsLeft ? HorizontalAlignment.Left : HorizontalAlignment.Right };
         var triangle = new Path { Data = Geometry.Parse(pointsLeft ? "M7,0 L7,8 L0,4 Z" : "M0,0 L0,8 L7,4 Z"), Fill = ink,
                                   VerticalAlignment = VerticalAlignment.Center };
         var percent = Faces.Figure(PercentText(share), Faces.Label, ink);
         flag.Children.AddRange(pointsLeft ? [triangle, percent] : [percent, triangle]);
-        ToolTip.SetTip(flag, pointsLeft ? $"Shadow clipping: {PercentText(share)} of pixels at black"
-                                        : $"Highlight clipping: {PercentText(share)} of pixels at white");
+        string said = pointsLeft ? $"Shadows clipped: {PercentText(share)} of pixels at black"
+                                 : $"Highlights clipped: {PercentText(share)} of pixels at white";
+        ToolTip.SetTip(flag, said);
+        Avalonia.Automation.AutomationProperties.SetName(flag, said);
         return flag;
     }
 

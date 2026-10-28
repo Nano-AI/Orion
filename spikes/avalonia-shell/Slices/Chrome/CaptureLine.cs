@@ -6,28 +6,50 @@ using Avalonia.Media;
 namespace OrionShell.Chrome;
 
 /// A port of app/OrionApp+Capture.swift, moved under the histogram as
-/// Main.dc.html draws it: the exposure as a viewfinder prints it, in numerals,
-/// that opens the full list. With nothing open it is empty, and the clip
-/// buttons either side stay where they are.
+/// Main.dc.html draws it, and read as a caption: the camera and the lens,
+/// then the exposure as a viewfinder prints it, in numerals (1/640 s  f/4
+/// ISO 800  24 mm). One button that opens the full list. Always its full
+/// height, empty with nothing open, so the tools under it never move.
 public sealed class CaptureLine : Border {
+    /// Two lines and the button's room around them.
+    public const double LineHeight = 42;
+
+    readonly TextBlock _camera = Words(Palette.Label), _lens = Words(Palette.Dim);
     readonly StackPanel _figures = new() { Orientation = Orientation.Horizontal, Spacing = 12 };
     readonly StateButton _button;
 
     public CaptureLine() {
-        _button = new StateButton { Kind = ButtonKind.Bare, Content = _figures, Padding = new Thickness(6, 0), Height = 24, Ink = Palette.Text };
+        Height = LineHeight;
+        _camera.MaxWidth = 150;
+        var gear = new Grid { ColumnDefinitions = new("Auto,*"), ColumnSpacing = 8, Children = { _camera, _lens } };
+        Grid.SetColumn(_lens, 1);
+        // The button's padding hangs into the column's margin, so the words line up with the plate's edge.
+        _button = new StateButton { Kind = ButtonKind.Bare, Height = LineHeight, Padding = new Thickness(6, 3), Margin = new Thickness(-6, 0),
+                                    HorizontalAlignment = HorizontalAlignment.Left,
+                                    Content = new StackPanel { Spacing = 3, Children = { gear, _figures } } };
         _button.Help("Capture settings");
-        VerticalAlignment = VerticalAlignment.Center;
-        HorizontalAlignment = HorizontalAlignment.Center;
     }
+
+    static TextBlock Words(IBrush ink) => new() {
+        FontSize = Faces.Label, Foreground = ink, Tag = StateButton.Keep, TextTrimming = TextTrimming.CharacterEllipsis,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
 
     /// Re-read on every open. A file that records none of it draws nothing.
     public void Show(CaptureInfo? capture, string? path) {
         _figures.Children.Clear();
         Child = null;
-        if (capture == null || capture.Viewfinder.Count == 0) return;
-        foreach (var text in capture.Viewfinder) _figures.Children.Add(Faces.Figure(text, Faces.Body));
+        if (capture == null || capture.Viewfinder.Count == 0 && capture.Camera.Length == 0 && capture.Lens.Length == 0) return;
+        _camera.Text = capture.Camera;
+        _lens.Text = capture.Lens;
+        ToolTip.SetTip(_lens, capture.Lens.Length > 0 ? capture.Lens : null);   // the whole name when it is cut short
+        foreach (var text in capture.Viewfinder) {
+            var figure = Faces.Figure(text, Faces.Body);
+            figure.Tag = StateButton.Keep;
+            _figures.Children.Add(figure);
+        }
         // Built when somebody asks: a stat per open is a cost paid for a popover nobody opened.
-        var flyout = new Flyout { Placement = PlacementMode.Bottom };
+        var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
         flyout.Opening += (_, _) => flyout.Content ??= CapturePopover.Build(capture, path);
         _button.Flyout = flyout;
         Child = _button;
