@@ -18,4 +18,11 @@ public sealed class ShownPicture {
         (Bitmap, Graph) = (bitmap, graph);
         Changed?.Invoke();
     }
+
+    /// Nothing to show: a photo opening with no kept picture, so the canvas
+    /// does not hold the previous photograph under the new one's name.
+    public void Clear() {
+        (Bitmap, Graph) = (null, Graph.None);
+        Changed?.Invoke();
+    }
 }

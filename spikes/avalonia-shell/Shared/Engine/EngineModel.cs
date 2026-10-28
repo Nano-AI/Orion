@@ -17,16 +17,23 @@ public sealed class EngineModel : INotifyPropertyChanged {
     public static EngineModel Shared { get; } = new();
 
     readonly PhotoList _list = new();
-    readonly ISessionSource _source;
+    readonly SessionCache _source;
     Session? _session;
 
-    public EngineModel() => _source = new FreshSessions(_list);
+    public EngineModel() => _source = new SessionCache(_list);
+
+    /// Where sessions come from: the two-tier cache of decision #318.
+    public SessionCache Cache => _source;
 
     public IReadOnlyList<string> Photos => _list.Paths;
     public int Current => _list.Current;
     public string CurrentName => Current >= 0 ? Path.GetFileName(Photos[Current]) : "";
-    /// The session for the photo on screen; null when nothing is open.
+    /// The session for the photo on screen; null when nothing is open, and
+    /// while Opening.
     public Session? Session => _session;
+    /// From an open until its session arrives from a background decode. The
+    /// photo's kept picture, if any, is on screen meanwhile; Opened fires after.
+    public bool Opening { get; private set; }
     /// What the canvas shows, and which graph made it.
     public ShownPicture Shown { get; } = new();
     public Bitmap? Picture => Shown.Bitmap;
@@ -34,6 +41,19 @@ public sealed class EngineModel : INotifyPropertyChanged {
     /// Milliseconds the last render spent in the engine and in the copy.
     public (double Render, double Copy) Last { get; private set; }
     public bool Interacting { get; private set; }
+
+    /// Set by the canvas. Zoomed past fit, the photo on screen renders full
+    /// size; at fit the preview graph's picture is already screen-sized, so
+    /// opening a photo renders only that (#318).
+    public bool ZoomedPastFit {
+        get => _zoomed;
+        set {
+            if (_zoomed == value) return;
+            _zoomed = value;
+            if (value && Shown.Graph != Graph.Full) Render(preview: false);
+        }
+    }
+    bool _zoomed;
     /// The status line's message: a stub saying it is not built, until the next open.
     public string Status { get; private set; } = "";
 
@@ -73,18 +93,39 @@ public sealed class EngineModel : INotifyPropertyChanged {
     }
 
     /// The arrow keys (Library.neighbor): false at either end, where nothing reopens.
+    /// A held key coalesces: each press shows the kept picture, and only the
+    /// photo it stops on waits for a session (ISessionSource.Request).
     public bool Next() { int from = Current; return _list.Next() && Show(from); }
     public bool Previous() { int from = Current; return _list.Previous() && Show(from); }
 
+    /// Preview-first: the kept picture now, the session when it is ready,
+    /// which for a kept session is before this returns. False when the photo
+    /// will not open, as far as is known by then.
     bool Show(int from) {
         Close();
-        _session = _source.Acquire(Current);
-        _source.Hint(Current, Math.Sign(Current - from));
+        int index = Current;
+        _source.Hint(index, Math.Sign(index - from));
         Status = "";
-        Changed(nameof(Current), nameof(CurrentName), nameof(Status));
-        if (_session == null) { SetTiming("could not open"); return false; }
+        if (_source.Picture(index) is { } picture) Shown.Show(picture, Graph.Preview);
+        else Shown.Clear();
+        Changed(nameof(Current), nameof(CurrentName), nameof(Status), nameof(Picture));
+        Opening = true;
+        bool opened = true;
+        _source.Request(index, s => opened = Arrive(index, s));
+        if (Opening) SetTiming("decoding…");
+        return opened;
+    }
+
+    /// Photo `index`'s session is ready, or will not open.
+    bool Arrive(int index, Session? s) {
+        Opening = false;
+        if (index != Current || _session != null) {   // not asked for: never happens, never leaks
+            if (s != null) _source.Release(s);
+            return false;
+        }
+        if ((_session = s) == null) { SetTiming("could not open"); return false; }
         Opened?.Invoke();
-        Render(preview: false);
+        Render(preview: !ZoomedPastFit);
         return true;
     }
 
