@@ -8,20 +8,19 @@ using Avalonia.Media;
 
 namespace OrionShell;
 
-/// A port of app/Engraved.swift: the type that names controls the way a camera
-/// engraves its dials, and the nameplate that heads a section.
+/// A port of app/Engraved.swift: the type that names controls, and the
+/// nameplate that heads a section. Redrawn for DESIGN.md: sentence case in the
+/// platform face (text is shown as given, never upper-cased), numbers in the
+/// numeral face, nothing under 11 px.
 public static class Engraved {
-    /// Upper case, tracked, medium weight, never under 10 pt.
-    public static TextBlock Label(string text, IBrush? color = null, double size = 10, double tracking = 1.0) => new() {
-        Text = text.ToUpperInvariant(), FontSize = Math.Max(size, 10), FontWeight = FontWeight.Medium,
-        LetterSpacing = tracking, Foreground = color ?? Palette.Dim, VerticalAlignment = VerticalAlignment.Center,
+    /// A control's name. `tracking` stays for old callers; DESIGN.md drops it with the caps.
+    public static TextBlock Label(string text, IBrush? color = null, double size = Faces.Label, double tracking = 0) => new() {
+        Text = text, FontSize = Math.Max(size, Faces.Mark), LetterSpacing = tracking,
+        Foreground = color ?? Palette.Label, VerticalAlignment = VerticalAlignment.Center,
     };
 
-    /// A number: monospaced digits.
-    public static TextBlock Readout(string text, IBrush? color = null, double size = 10) => new() {
-        Text = text, FontSize = size, FontWeight = FontWeight.Medium, Foreground = color ?? Palette.Text,
-        FontFamily = new FontFamily("Menlo, Consolas, monospace"),
-    };
+    /// A number: Faces.Figure, the numeral face with tabular figures.
+    public static TextBlock Readout(string text, IBrush? color = null, double size = Faces.Mark) => Faces.Figure(text, size, color);
 
     /// The info mark at a nameplate's right edge; the text shows on hover.
     public static Control Info(string text) {
@@ -36,15 +35,16 @@ public static class Engraved {
 
 /// Engraved.Plate + SectionPlate: the title, a star-coloured dot when anything
 /// inside is off its default, a hairline, the info mark; then the rows.
-/// 9 between the plate and its rows, 11 between rows (Engraved.swift).
+/// 14 between the plate and its rows and between rows (Main.dc.html).
 public sealed class SectionPlate : StackPanel {
-    readonly Ellipse _dot = new() { Width = 3, Height = 3, Fill = Palette.Star, Opacity = 0, VerticalAlignment = VerticalAlignment.Center };
-    public StackPanel Rows { get; } = new() { Spacing = 11 };
+    readonly Ellipse _dot = new() { Width = 5, Height = 5, Fill = Palette.Star, Opacity = 0, VerticalAlignment = VerticalAlignment.Center };
+    public StackPanel Rows { get; } = new() { Spacing = 14 };
 
     public SectionPlate(string title, string? info = null, params Control[] rows) {
-        Spacing = 9;
-        var plate = new DockPanel();
-        var name = Engraved.Label(title, Palette.Text);
+        Spacing = 14;
+        var plate = new DockPanel { MinHeight = 22 };
+        var name = Engraved.Label(title, Palette.Text, Faces.Body);
+        name.FontWeight = FontWeight.SemiBold;
         DockPanel.SetDock(name, Dock.Left);
         _dot.Margin = new Thickness(8, 0);
         DockPanel.SetDock(_dot, Dock.Left);
