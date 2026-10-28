@@ -41,7 +41,7 @@ public static class Commands {
         if (Find(name) is not { } c) return $"no command '{name}'";
         if (!c.CanRun()) return $"{name}: not available now";
         if (c.Run is not { } run) {
-            string said = $"not built yet: {name} ({c.Owner})";
+            string said = NotBuilt.Text(c.Title, c.Owner);
             EngineModel.Shared.Say(said);
             return said;
         }

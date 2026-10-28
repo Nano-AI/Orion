@@ -171,7 +171,7 @@ public sealed class PresetsPanel : StackPanel {
         _paste = SheetKit.Button("Paste", () => { if (_copied != null) PresetStore.Apply(_copied with { Name = "Paste", Groups = [.. _groups] }); });
         // SyncSettings.sync writes every photo's sidecar; the shell keeps no sidecars to write.
         // stub(#315): SyncSettings.swift owns this until the logic moves below the facade
-        _sync = SheetKit.Button("Sync all…", () => EngineModel.Shared.Say("not built yet: sync writes every photo's sidecar (SyncSettings.swift)"));
+        _sync = SheetKit.Button("Sync all…", () => NotBuilt.Say("syncing to every photo", "SyncSettings.swift"));
         _export = SheetKit.Button("Export all…", () => Commands.Run("export-all"));
         _name.TextChanged += (_, _) => Enable();
         Children.Add(new VersionsSection().Plate);

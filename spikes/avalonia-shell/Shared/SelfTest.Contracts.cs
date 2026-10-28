@@ -41,8 +41,8 @@ static partial class SelfTest {
         // A stub says what it is on the status line instead of doing nothing.
         var stub = Commands.All.First(c => !c.Built);
         string said = Commands.Run(stub.Name);
-        Check(said == $"not built yet: {stub.Name} ({stub.Owner})" && EngineModel.Shared.Status == said,
-              $"a stub command puts its owner on the status line ('{said}')");
+        Check(said == $"{stub.Title} isn't in this version yet." && !said.Contains(".swift") && EngineModel.Shared.Status == said,
+              $"a stub command says what is missing in the user's words, with no Swift file on screen ('{said}')");
         Check(Commands.Run("no-such-command").StartsWith("no command"), "an unknown command is refused by name");
     }
 
@@ -97,7 +97,7 @@ static partial class SelfTest {
 
         // A seam that is not built reaches the status line through Apply, not a crash.
         Check(!engine.Apply(_ => throw new NotBuiltException("probe", "Engine.swift")) &&
-              engine.Status == "not built yet: probe (Engine.swift)", "Apply turns NotBuiltException into the status line");
+              engine.Status == "Probe isn't in this version yet.", "Apply turns NotBuiltException into the status line");
 
         // The picture seam carries the graph a picture came from.
         int shown = 0;
@@ -124,7 +124,7 @@ static partial class SelfTest {
         try {
             Check(builtAndRight(), $"Session seam '{what}' is built and right");
         } catch (NotBuiltException e) {
-            Check(e.Message.StartsWith("not built yet: "), $"Session seam '{what}' says it is not built");
+            Check(e.Message.EndsWith("isn't in this version yet."), $"Session seam '{what}' says it is not built");
             _stubs.Add(what);
         }
     }

@@ -162,7 +162,7 @@ public sealed class MaskPanel : Border {
     /// than leave an empty matte that looks like a broken feature.
     // stub(#315): SubjectMatte.swift owns this until the logic moves below the facade
     void Detect(string what) {
-        _message = $"{what} detection is not ported: SubjectMatte.swift runs it.";
+        _message = NotBuilt.Text($"{what} detection", "SubjectMatte.swift") + " Radial, Linear, Brush and the range masks work now.";
         Rebuild();
     }
 

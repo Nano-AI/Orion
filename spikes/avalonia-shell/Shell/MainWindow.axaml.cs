@@ -58,8 +58,7 @@ public partial class MainWindow : Window {
         Splitter.Template = new FuncControlTemplate<GridSplitter>((_, _) => new Panel { Background = Brushes.Transparent, Children = { grip } });
         Splitter.Cursor = new Cursor(StandardCursorType.SizeWestEast);
         Avalonia.Automation.AutomationProperties.SetName(Splitter, "Tool column width");
-        ToolTip.SetTip(Splitter, "Drag to widen the tools");
-        ToolTip.SetShowDelay(Splitter, 1200);
+        // No tooltip: the grip and the resize cursor say it, as on macOS, and a tip covered the panel's text.
         bool dragging = false, keyboard = false;
         void Paint() {
             grip.Background = dragging || keyboard ? Palette.Accent : Palette.Dim;

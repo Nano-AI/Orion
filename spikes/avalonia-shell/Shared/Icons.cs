@@ -15,8 +15,16 @@ public static class Icons {
         ["chevron.up"] = "M6,15 L12,9 L18,15",
         ["arrow.uturn.backward"] = "M9,14 L4,9 L9,4 M4,9 L15,9 A5,5 0 0 1 15,19 L11,19",
         ["arrow.clockwise"] = "M20,12 A8,8 0 1 1 17.7,6.3 M18,2 L18,7 L13,7",
-        ["rotate.left"] = "M4,12 A8,8 0 1 0 6.3,6.3 M6,2 L6,7 L11,7",
-        ["rotate.right"] = "M20,12 A8,8 0 1 1 17.7,6.3 M18,2 L18,7 L13,7",
+        // A frame under a quarter-turn arrow, as SF Symbols draws them: Reset's bare arrow is a different thing.
+        ["rotate.left"] = "M4,11 H14 V21 H4 Z M19,15 A8,8 0 0 0 10,6 M13,3 L10,6 L13,9",
+        ["rotate.right"] = "M20,11 H10 V21 H20 Z M5,15 A8,8 0 0 1 14,6 M11,3 L14,6 L11,9",
+        ["arrow.counterclockwise"] = "M4,12 A8,8 0 1 0 6.3,6.3 M6,2 L6,7 L11,7",
+        ["arrow.up.arrow.down"] = "M7,20 V4 M3,8 L7,4 L11,8 M17,4 V20 M13,16 L17,20 L21,16",
+        ["chevron.up.chevron.down"] = "M8,9 L12,5 L16,9 M8,15 L12,19 L16,15",
+        ["trash"] = "M4,7 H20 M9,7 V4 H15 V7 M6,7 L7,21 H17 L18,7 M10,11 V17 M14,11 V17",
+        ["slider.horizontal.3"] = "M3,6 H12.5 M17.5,6 H21 M12.5,6 A2.5,2.5 0 1 0 17.5,6 A2.5,2.5 0 1 0 12.5,6 " +
+                                  "M3,12 H5.5 M10.5,12 H21 M5.5,12 A2.5,2.5 0 1 0 10.5,12 A2.5,2.5 0 1 0 5.5,12 " +
+                                  "M3,18 H13.5 M18.5,18 H21 M13.5,18 A2.5,2.5 0 1 0 18.5,18 A2.5,2.5 0 1 0 13.5,18",
         ["star.fill"] = "M12,2 L15,9 L22,9 L16.5,13.5 L18.5,21 L12,16.8 L5.5,21 L7.5,13.5 L2,9 L9,9 Z",
         ["square.grid.2x2"] = "M4,4 H10 V10 H4 Z M14,4 H20 V10 H14 Z M4,14 H10 V20 H4 Z M14,14 H20 V20 H14 Z",
         ["square.grid.3x3"] = "M3,3 h5 v5 h-5 Z M9.5,3 h5 v5 h-5 Z M16,3 h5 v5 h-5 Z M3,9.5 h5 v5 h-5 Z M9.5,9.5 h5 v5 h-5 Z " +

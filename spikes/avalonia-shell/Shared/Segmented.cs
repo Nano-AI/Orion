@@ -27,8 +27,9 @@ public sealed class Segmented : Border {
     public event Action<int>? Changed;
 
     /// `icons`: an SF Symbol name per cell, or null for its words. An icon cell
-    /// shows the icon (and its count), and keeps its title as tooltip and spoken name.
-    public Segmented(IReadOnlyList<string> titles, int selected, IReadOnlyList<string?>? icons = null) {
+    /// shows the icon (and its count), and keeps its title as tooltip and spoken name;
+    /// with `words`, it shows the icon beside its title instead (Library, Develop).
+    public Segmented(IReadOnlyList<string> titles, int selected, IReadOnlyList<string?>? icons = null, bool words = false) {
         Background = Palette.Ground;
         CornerRadius = new CornerRadius(Radius.Md + 1);   // concentric: the pill's radius plus the inset
         Padding = new Thickness(Inset);
@@ -44,16 +45,18 @@ public sealed class Segmented : Border {
             _figures.Add(figure);
             // A title that is a number (1:1, 16:9) is set in the numeral face.
             string? icon = icons != null && i < icons.Count ? icons[i] : null;
-            Control title = icon != null ? Icons.Create(icon, 11, Palette.Text)
-                : char.IsDigit(titles[i][0]) ? Faces.Figure(titles[i], Faces.Body)
+            Control text = char.IsDigit(titles[i][0]) ? Faces.Figure(titles[i], Faces.Body)
                 : new TextBlock { Text = titles[i], FontSize = Faces.Body, VerticalAlignment = VerticalAlignment.Center };
+            Control title = icon == null ? text
+                : words ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Icons.Create(icon, 13, Palette.Text), text } }
+                : Icons.Create(icon, 11, Palette.Text);
             var cell = new StateButton {
                 Kind = ButtonKind.Segment, Height = CellHeight, MinWidth = 0, Padding = new Thickness(12, 0),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 CornerRadius = new CornerRadius(Radius.Md - 1),
                 Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { title, figure } },
             };
-            if (icon != null) {
+            if (icon != null && !words) {
                 ToolTip.SetTip(cell, titles[i]);
                 Avalonia.Automation.AutomationProperties.SetName(cell, titles[i]);
             }

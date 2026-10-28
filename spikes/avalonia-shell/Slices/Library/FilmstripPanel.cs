@@ -19,8 +19,11 @@ namespace OrionShell.Library;
 /// number and, only when there are any, its marks. The one liberty is the print's
 /// height: true to scale it would be 3 pt type.
 ///
-/// The accent ring is the photo on the canvas, drawn just outside the gate so
-/// lighting it moves nothing.
+/// The open photo sits in the middle of the strip, as film sits in a viewer's
+/// gate, ringed in the accent; opening another glides the roll under it on the
+/// shared spring (#349). A leader and a tail of blank film let the first and
+/// last frames reach the middle. A rejected frame is crossed out in red, as a
+/// grease pencil marks a contact sheet.
 [Panel("filmstrip", Region.Filmstrip)]
 public sealed class FilmstripPanel : Grid {
     const double Mm = Layout.ThumbW / 36;
@@ -35,7 +38,14 @@ public sealed class FilmstripPanel : Grid {
 
     readonly StackPanel _frames = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
     readonly ScrollViewer _film;
-    readonly Dictionary<LibraryModel.Photo, Control> _cells = new();
+    readonly Spring _glide;
+    readonly Dictionary<LibraryModel.Photo, Border> _cells = new();
+    readonly Dictionary<LibraryModel.Photo, Panel> _gates = new();
+    /// The one accent ring, moved to the open frame: an outline just outside the gate, by a negative
+    /// margin so lighting it moves nothing. Not a BoxShadow on the frame: with one, its picture did not draw.
+    readonly Border _ring = new() { Margin = new Thickness(-2.5), BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(3.5),
+                                    BorderBrush = Palette.Accent, IsHitTestVisible = false };
+    LibraryModel.Photo? _ringed;
 
     public FilmstripPanel() {
         ColumnDefinitions = new ColumnDefinitions("Auto,1,*");
@@ -53,21 +63,25 @@ public sealed class FilmstripPanel : Grid {
             Content = new Panel { Background = Palette.FilmBase, Children = { new Holes(), _frames } }, Background = Palette.FilmBase,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        // Apple's reposition spring: damping 1, response 0.4 (Shared/Design/Spring.cs).
+        _glide = new Spring(_film, 0.4) { Precision = 0.5 };
+        _glide.Moved += () => _film.Offset = _film.Offset.WithX(_glide.Value);
         // A mouse has only a vertical wheel: here it scrolls along the strip. A trackpad's sideways swipe passes through.
         _film.AddHandler(PointerWheelChangedEvent, (_, e) => {
             if (e.Delta.X != 0 || e.Delta.Y == 0) return;
-            _film.Offset = _film.Offset.WithX(Math.Max(0, _film.Offset.X - e.Delta.Y * WheelStep));
+            _glide.Snap(Math.Max(0, _film.Offset.X - e.Delta.Y * WheelStep));   // the hand takes over from a glide
             e.Handled = true;
         }, RoutingStrategies.Tunnel);
         SetColumn(_film, 2);
         Children.Add(_film);
+        // A new width moves the middle: the leader regrows and the open frame snaps back to it.
+        _film.PropertyChanged += (_, e) => {
+            if (e.Property == ScrollViewer.ViewportProperty) Centre(glide: false);
+        };
 
         var library = LibraryModel.Shared;
-        library.Changed += Rebuild;
-        EngineModel.Shared.Opened += () => {
-            Rebuild();
-            if (library.Open is { } open && _cells.TryGetValue(open, out var cell)) cell.BringIntoView();
-        };
+        library.Changed += () => { Rebuild(); Centre(glide: false); };
+        EngineModel.Shared.Opened += () => { Ring(); Centre(glide: true); };
         Rebuild();
     }
 
@@ -75,31 +89,64 @@ public sealed class FilmstripPanel : Grid {
         var library = LibraryModel.Shared;
         _frames.Children.Clear();
         _cells.Clear();
+        _gates.Clear();
+        _ringed = null;
         foreach (var photo in library.Visible) {
-            var cell = Cell(photo, photo == library.Open);
+            var (cell, gate) = Cell(photo);
             _cells[photo] = cell;
+            _gates[photo] = gate;
             _frames.Children.Add(cell);
         }
+        Ring();
     }
 
-    /// One frame of film: perforations, the picture in its rebate, the edge print, perforations.
-    static Control Cell(LibraryModel.Photo photo, bool isCurrent) {
+    /// The ring onto the open frame, and its spoken name with it.
+    void Ring() {
+        var open = LibraryModel.Shared.Open;
+        if (_ring.Parent is Panel had) had.Children.Remove(_ring);
+        if (_ringed != null && _cells.TryGetValue(_ringed, out var was))
+            Avalonia.Automation.AutomationProperties.SetName(was, LibraryUi.Spoken(_ringed));
+        _ringed = open != null && _gates.TryGetValue(open, out var gate) ? open : null;
+        if (_ringed == null) return;
+        _gates[_ringed].Children.Add(_ring);
+        Avalonia.Automation.AutomationProperties.SetName(_cells[_ringed], LibraryUi.Spoken(_ringed) + ", open");
+    }
+
+    /// The leader that lets the first frame reach the middle, a whole number of
+    /// perforations so the holes stay on the frames' pitch; the tail matches it.
+    double Leader => Math.Ceiling(Math.Max(0, _film.Viewport.Width - Pitch) / 2 / PerfPitch) * PerfPitch;
+
+    /// The open frame to the middle of the strip: by the spring when a photo
+    /// opens, at once when the strip itself changed under it.
+    void Centre(bool glide) {
+        double lead = Leader;
+        _frames.Margin = new Thickness(lead, 0);
+        int at = _ringed == null ? -1 : _frames.Children.IndexOf(_cells[_ringed]);
+        if (at < 0) return;
+        double x = lead + (at + 0.5) * Pitch - _film.Viewport.Width / 2;
+        if (glide) _glide.To(x); else _glide.Snap(x);
+    }
+
+    /// One frame of film: the picture in its gate over the holes, the edge print under them.
+    static (Border Cell, Panel Gate) Cell(LibraryModel.Photo photo) {
         var picture = new Image { Source = photo.Thumbnail, Stretch = Stretch.Uniform, Opacity = photo.Rejected ? LibraryUi.RejectedOpacity : 1 };
         var number = Faces.Figure($"{photo.Index + 1}", Faces.Mark, Palette.Dim);
-        var marks = LibraryUi.Marks(photo, Faces.Mark, unearned: false);
+        // A rejected frame's mark is the cross over it, so the print carries stars only.
+        var marks = photo.Rejected ? new Panel() : LibraryUi.Marks(photo, Faces.Mark, unearned: false);
         // The marks follow their own number: at the frame's right they read as the next frame's.
         var print = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { number, marks } };
+        // 135 film's half-frame number, "1A", at the frame line: the one thing real edge print has that this needs nothing for.
+        var half = Faces.Figure($"▸{photo.Index + 1}A", Faces.Mark, Palette.Faint);
+        half.HorizontalAlignment = HorizontalAlignment.Right;
         var frame = new Frame { Child = picture };
-        // The open photo's ring: an outline just outside the rebate, by a negative margin so lighting it
-        // moves nothing. Not a BoxShadow on the frame: with one, the frame's picture did not draw.
         var held = new Panel { Children = { frame } };
-        if (isCurrent) held.Children.Add(new Border { Margin = new Thickness(-2.5), BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(3.5),
-                                                       BorderBrush = Palette.Accent, IsHitTestVisible = false });
+        if (photo.Rejected) held.Children.Add(new Crossed());
         // Rows: over the upper holes, the picture, over the lower holes, the edge print.
-        var column = new Grid { Children = { held, print } };
+        var column = new Grid { Children = { held, half, print } };
         foreach (double h in (double[])[Edge + PerfH + Clear, Gate, Clear + PerfH]) column.RowDefinitions.Add(new RowDefinition(h, GridUnitType.Pixel));
         column.RowDefinitions.Add(new RowDefinition(GridLength.Star));
         SetRow(held, 1);
+        SetRow(half, 3);
         SetRow(print, 3);
         var cell = new Border {
             Width = Pitch, Padding = new Thickness((Pitch - Layout.ThumbW) / 2, 0), Background = Brushes.Transparent, Child = column,
@@ -109,7 +156,7 @@ public sealed class FilmstripPanel : Grid {
         cell.PointerEntered += (_, _) => frame.Hot = true;
         cell.PointerExited += (_, _) => frame.Hot = false;
         ToolTip.SetTip(cell, photo.Tooltip);
-        Avalonia.Automation.AutomationProperties.SetName(cell, LibraryUi.Spoken(photo) + (isCurrent ? ", open" : ""));
+        Avalonia.Automation.AutomationProperties.SetName(cell, LibraryUi.Spoken(photo));
         // Command/shift-click selection, PhotoSelection.
         // stub(#315): Library.swift owns this until the logic moves below the facade
         cell.Tapped += (_, _) => EngineModel.Shared.Open(photo.Index);
@@ -119,7 +166,20 @@ public sealed class FilmstripPanel : Grid {
         // Merge to HDR… and Export… need a group selection.
         // stub(#315): OrionApp.swift owns this until the logic moves below the facade
         cell.ContextMenu = new ContextMenu { ItemsSource = LibraryUi.CullItems(photo) };
-        return cell;
+        return (cell, held);
+    }
+
+    /// A rejected frame, crossed out corner to corner in the reject red.
+    sealed class Crossed : Control {
+        static readonly IPen Pencil = new Pen(Palette.Reject, 2, lineCap: PenLineCap.Round);
+
+        public Crossed() => IsHitTestVisible = false;
+
+        public override void Render(DrawingContext c) {
+            var r = new Rect(Bounds.Size).Deflate(6);
+            c.DrawLine(Pencil, r.TopLeft, r.BottomRight);
+            c.DrawLine(Pencil, r.TopRight, r.BottomLeft);
+        }
     }
 
     /// The picture's rebate: a hairline edge that brightens under the pointer.

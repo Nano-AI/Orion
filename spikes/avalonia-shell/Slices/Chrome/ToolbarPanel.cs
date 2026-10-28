@@ -19,7 +19,7 @@ public sealed class ToolbarPanel : Grid {
     const double ButtonHeight = 28;
 
     readonly TextBlock _crumb = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-    readonly Segmented _mode = new(["Library", "Develop"], 1);
+    readonly Segmented _mode = new(["Library", "Develop"], 1, ["square.grid.2x2", "slider.horizontal.3"], words: true);
     readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right,
                                            VerticalAlignment = VerticalAlignment.Center };
 
@@ -92,7 +92,7 @@ public sealed class ToolbarPanel : Grid {
 
         _actions.Children.Clear();
         if (gallery) {
-            _actions.Children.Add(Button(null, "Delete rejected…", () => Commands.Run("delete-rejected"), Commands.CanRun("delete-rejected"), ButtonKind.Quiet, "Move every rejected photo to the Trash"));
+            _actions.Children.Add(Button("trash", "Delete rejected…", () => Commands.Run("delete-rejected"), Commands.CanRun("delete-rejected"), ButtonKind.Quiet, "Move every rejected photo to the Trash"));
         } else {
             _actions.Children.Add(Group(
                 Glyph("arrow.uturn.backward", Keyed(EditHistory.UndoLabel is { } u ? $"Undo {u}" : "Undo", "undo"), () => Commands.Run("undo"), Commands.CanRun("undo")),
@@ -107,14 +107,14 @@ public sealed class ToolbarPanel : Grid {
             if (CompareState.Comparing)
                 _actions.Children.Add(Group(Glyph(CompareState.Vertical ? "rectangle.split.2x1" : "rectangle.split.1x2",
                                                   "Swap between a vertical and horizontal split", () => Commands.Run("swap-split"), Commands.CanRun("swap-split"))));
-            _actions.Children.Add(Button(null, "Reset", () => Commands.Run("reset-adjustments"), Commands.CanRun("reset-adjustments"), ButtonKind.Quiet, "Put every adjustment back"));
+            _actions.Children.Add(Button("arrow.counterclockwise", "Reset", () => Commands.Run("reset-adjustments"), Commands.CanRun("reset-adjustments"), ButtonKind.Quiet, "Put every adjustment back"));
         }
 
         // While a batch runs, its count and Stop take Export's place.
         if (ChromeStubs.BatchProgress is { } p) {
             _actions.Children.Add(new TextBlock { VerticalAlignment = VerticalAlignment.Center, Foreground = Palette.Dim,
                 Inlines = new InlineCollection { new Run("Exporting "), Faces.Num($"{p.Done}"), new Run(" of "), Faces.Num($"{p.Total}") } });
-            _actions.Children.Add(Button(null, "Stop", () => Commands.Run("stop-batch"), Commands.CanRun("stop-batch"), ButtonKind.Quiet, "Stop after the photo being written"));
+            _actions.Children.Add(Button("xmark", "Stop", () => Commands.Run("stop-batch"), Commands.CanRun("stop-batch"), ButtonKind.Quiet, "Stop after the photo being written"));
         } else {
             int selected = ChromeStubs.ExportSelected;
             _actions.Children.Add(Button("square.and.arrow.up", selected > 0 ? $"Export {selected}" : "Export", () => Commands.Run("export"), Commands.CanRun("export"), ButtonKind.Primary,

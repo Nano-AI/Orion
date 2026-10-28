@@ -90,7 +90,7 @@ public sealed class WatermarkPanel : Border {
         }
         // NSOpenPanel for the SVG:
         // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-        var choose = SheetKit.Button("Choose SVG…", () => EngineModel.Shared.Say("not built yet: an SVG watermark (WatermarkRaster.swift)"));
+        var choose = SheetKit.Button("Choose SVG…", () => NotBuilt.Say("an SVG watermark", "WatermarkRaster.swift"));
         var name = new TextBlock {
             Text = _mark.SvgName.Length == 0 ? "No file chosen" : _mark.SvgName, FontSize = TypeSize.Sm,
             Foreground = _mark.SvgName.Length == 0 ? Palette.Dim : Palette.Text,

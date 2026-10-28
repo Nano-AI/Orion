@@ -27,6 +27,26 @@ static partial class SelfTest {
         Arrived(engine);
         SliderSweep(engine);
         FixedControlChecks(engine);
+        LensChecks(engine);
+    }
+
+    /// The developer: the lens correction "was literally working in the original run of orion".
+    /// The bundled database has no 24mm F1.4 DG DN, here or in Swift; what worked was choosing
+    /// a lens by hand, so the picker is driven as a person drives it: typed into, then clicked.
+    static void LensChecks(EngineModel engine) {
+        var window = Shell();
+        Click(window, TabButton(window, "Optics"));
+        var query = window.GetVisualDescendants().OfType<TextBox>().First(t => t.PlaceholderText == "Find a lens…");
+        query.Text = "sigma 24mm 1.4 hsm";
+        Dispatcher.UIThread.RunJobs();
+        var pick = window.GetVisualDescendants().OfType<StateButton>().FirstOrDefault(b => b.Label?.StartsWith("Sigma 24mm F1.4 DG HSM") == true);
+        if (pick != null) Click(window, pick);
+        var (name, _) = DevelopFacade.LensProfile();
+        Check(pick != null && name.Contains("24mm F1.4 DG HSM") && engine.Get("lens_profile") == 1,
+              $"typing in Find a lens… lists the Sigma, and a click applies its profile ({DevelopFacade.LensCatalogue.Value.Length} lenses, " +
+              $"chose {pick?.Label ?? "nothing"}, profile \"{name}\")");
+        DevelopFacade.orion_engine_set_lens_choice(engine.Handle, "");
+        window.Close();
     }
 
     /// The audit's sweep: every enabled slider on the five develop tabs, dragged by the
@@ -159,7 +179,8 @@ static partial class SelfTest {
         Click(window, TabButton(window, "Presets"));
         Click(window, Labelled(window, "Copy"));
         Click(window, Labelled(window, "Sync all…"));
-        Check(engine.Status.StartsWith("not built yet: sync"), $"Sync all… says it is not built, on the status line ('{engine.Status}')");
+        Check(engine.Status.StartsWith("Syncing") && engine.Status.EndsWith("isn't in this version yet."),
+              $"Sync all… says it is not built, on the status line ('{engine.Status}')");
         Click(window, TabButton(window, "Light"));
         window.Close();
     }

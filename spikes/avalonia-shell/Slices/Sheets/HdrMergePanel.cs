@@ -37,7 +37,7 @@ public sealed class HdrMergePanel : Border {
         actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
         // engine.hdrMerge, progress, cancel, then Library rescans:
         // stub(#315): Engine.swift owns this until the logic moves below the facade
-        actions.Children.Add(SheetKit.Button("Merge", () => EngineModel.Shared.Say("not built yet: the HDR merge (Engine.swift)"), prominent: true));
+        actions.Children.Add(SheetKit.Button("Merge", () => NotBuilt.Say("the HDR merge", "Engine.swift"), prominent: true));
 
         Child = new StackPanel {
             Spacing = Space.Md + 2,

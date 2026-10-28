@@ -41,19 +41,22 @@ static class LibraryUi {
             return item;
         }).ToList();
         void Show() {
-            label.Text = library.Sorted == LibraryModel.Order.Rating ? "By rating" : "By name";
+            label.Text = library.Sorted == LibraryModel.Order.Rating ? "Rating" : "Name";
             for (int i = 0; i < items.Count; i++) items[i].IsChecked = (int)library.Sorted == i;
         }
         library.Changed += Show;
         Show();
+        // A macOS pop-up button: what it does, the current choice, and the up-down chevrons
+        // that say a menu opens in place (a lone down chevron reads as a disclosure).
         var button = new StateButton {
-            Kind = ButtonKind.Bare, Ink = Palette.Text, Flyout = flyout, MinWidth = 0, Height = 24, Padding = new Thickness(6, 0),
+            Kind = ButtonKind.Standard, Flyout = flyout, MinWidth = 0, Height = 24, Padding = new Thickness(8, 0, 6, 0),
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4,
-                                       Children = { label, Icons.Create("chevron.down", 7, Palette.Text) } },
+            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = {
+                Icons.Create("arrow.up.arrow.down", 12, Palette.Dim), label, Icons.Create("chevron.up.chevron.down", 10, Palette.Dim),
+            } },
         };
-        ToolTip.SetTip(button, "Order the photos");
-        Avalonia.Automation.AutomationProperties.SetName(button, "Order");
+        ToolTip.SetTip(button, "Sort the photos");
+        Avalonia.Automation.AutomationProperties.SetName(button, "Sort by");
         return button;
     }
 

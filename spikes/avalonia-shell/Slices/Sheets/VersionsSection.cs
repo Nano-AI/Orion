@@ -29,7 +29,7 @@ static class SnapshotStub {
     }
 
     /// A click on a control that is not built says so on the status line, not on stderr nobody reads.
-    public static void Act(string what) => EngineModel.Shared.Say($"not built yet: {what} (Snapshots.swift)");
+    public static void Act(string what) => NotBuilt.Say(what, "Snapshots.swift");
 }
 
 /// A port of `versionsPanel` in app/DevelopPanels+Presets.swift. First in the
