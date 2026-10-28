@@ -38,6 +38,29 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial int shim_read(nint shim, int which, byte* dst, int capacity, out int w, out int h);
 
+    // native/present.mm: the picture handed to Avalonia on the GPU (SharedPicture).
+    [LibraryImport(Lib)]
+    public static partial nint present_create();
+
+    [LibraryImport(Lib)]
+    public static partial void present_destroy(nint presenter);
+
+    /// The MTLSharedEvent the shim signals once a surface holds a frame.
+    [LibraryImport(Lib)]
+    public static partial nint present_producer(nint presenter);
+
+    /// The MTLSharedEvent Avalonia signals once it has read one.
+    [LibraryImport(Lib)]
+    public static partial nint present_consumer(nint presenter);
+
+    [LibraryImport(Lib)]
+    public static partial int present_frame(nint presenter, nint shim, int which, int level, out nint surface, out int generation,
+                                            out int w, out int h, out ulong value);
+
+    /// A hand-off Avalonia will never signal: frees its surface for the next.
+    [LibraryImport(Lib)]
+    public static partial void present_release(nint presenter, ulong value);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int shim_thumbnail(string path, byte* dst, int capacity, out int turns);
 

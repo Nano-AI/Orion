@@ -222,22 +222,26 @@ public sealed class EngineModel : INotifyPropertyChanged {
         if (_session != null) Render(preview: false);
     }
 
-    /// Engine render, then a CPU copy into the session's bitmap, shown.
+    /// Engine render, then shown: left on the GPU for the canvas to take with no
+    /// copy (Shown.OnGpu, #317), else copied into the session's bitmap.
     public (double Render, double Copy) Render(bool preview) {
         if (_session is not { } s) return (0, 0);
         var sw = Stopwatch.StartNew();
         var graph = s.Render(preview);
         double render = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
-        if (s.Read(graph) is not { } bitmap) {
+        var bitmap = Shown.OnGpu ? null : s.Read(graph);
+        var size = bitmap?.PixelSize ?? s.Size(graph);
+        if (size == default) {
             SetTiming("render failed: " + s.LastError);
             return (render, 0);
         }
         double copy = sw.Elapsed.TotalMilliseconds;
         Last = (render, copy);
-        Shown.Show(bitmap, graph);
-        var size = bitmap.PixelSize;
-        SetTiming($"{(graph == Graph.Preview ? "preview" : "full")} {size.Width}×{size.Height} · engine {render:0.0} ms · copy {copy:0.0} ms");
+        if (bitmap != null) Shown.Show(bitmap, graph);
+        else Shown.ShowLive(s, graph);
+        SetTiming($"{(graph == Graph.Preview ? "preview" : "full")} {size.Width}×{size.Height} · engine {render:0.0} ms · " +
+                  (bitmap != null ? $"copy {copy:0.0} ms" : "on the GPU"));
         Changed(nameof(Picture));
         Rendered?.Invoke();
         return (render, copy);

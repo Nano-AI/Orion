@@ -4,9 +4,10 @@
 //  - the default look. contrast 1.45 and friends live in Engine.swift, so this
 //    file has to repeat them. That duplication is the case for moving shared
 //    state below the facade before a real port.
-//  - CPU pixels. The facade hands out an id<MTLTexture> for zero-copy display;
-//    C# can't draw that on macOS, so we copy it out. On Windows the real path
-//    would be a shared D3D texture, not this copy.
+//  - a picture Avalonia can composite. The facade hands out an id<MTLTexture>;
+//    present.mm copies it on the GPU into an IOSurface that Avalonia's Metal
+//    renderer imports (#317, decision #354), and shim_read copies it to the CPU
+//    for everything that has no GPU interop: headless, OpenGL, a failed import.
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
 #include <cstdio>
@@ -42,7 +43,20 @@ struct Shim {
     unsigned last_revision = 0;
     // The overlay, applied for one render at a time (shim_render).
     int overlay = 0, overlay_layer = 0;
+    // present.mm's last copy out of this engine's textures, which may still be
+    // waiting on the GPU for Avalonia: the engine must not render over them first.
+    id<MTLCommandBuffer> reader = nil;
 };
+
+// Waits until present.mm has read this engine's picture. Its copy waits on the
+// GPU only for a hand-off Avalonia has already submitted (SharedPicture keeps
+// one in flight), so this returns within a frame; in practice it is long done.
+// ponytail: an export through orion_engine_export directly does not settle; a
+// copy lands within a frame of its hand-off, long before a click. Route it here if that changes.
+static void settle(Shim* s) {
+    [s->reader waitUntilCompleted];
+    s->reader = nil;
+}
 
 static void defaults(OrionAdjustments& a) {
     // Mirrors Engine.swift's non-zero initial values (lines 132-475).
@@ -184,6 +198,7 @@ Shim* shim_open(const char* path) {
 
 void shim_close(Shim* s) {
     if (!s) return;
+    settle(s);
     orion_engine_destroy(s->engine);
     delete s;
 }
@@ -248,6 +263,7 @@ int shim_set_curve(Shim* s, int c, const float* xy, int count) {
 // Engine.swift's autoEnhance: the engine measures and writes exposure, whites,
 // blacks, fusion (lift) and clarity into the block; the rest stays as sent.
 int shim_auto_enhance(Shim* s) {
+    settle(s);
     return orion_engine_auto_enhance(s->engine, &s->adj) == ORION_OK &&
            orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
 }
@@ -320,6 +336,7 @@ int shim_mask_commit(Shim* s, int count) {
 // ponytail: costs a develop_linear pass per render while the overlay is up,
 // since the toggle back dirties it; a display-only flag in the engine removes that.
 int shim_render(Shim* s, int preview, double* gpu_ms) {
+    settle(s);
     const bool overlay = s->overlay && s->adj.mask_count > 0;
     if (overlay) {
         s->adj.mask_overlay = 1;
@@ -336,25 +353,36 @@ int shim_render(Shim* s, int preview, double* gpu_ms) {
     return graph;
 }
 
-// Copies the last render into `dst` as RGBA8. Call with dst == NULL to get the
-// size. `which` is what shim_render returned.
-int shim_read(Shim* s, int which, uint8_t* dst, int capacity, int* w, int* h) {
+// The last render of `which` (what shim_render returned) and the region of it
+// that holds the picture. The texture is square so a straightened frame fits;
+// only the top-left region holds the picture (Engine+Render.swift:286):
+// image_size for the full graph, preview_size for the preview, each its own
+// graph's answer. Null when there is nothing to read. present.mm reads it too.
+void* shim_picture(Shim* s, int which, int* w, int* h) {
     void* raw = which == 1 ? orion_engine_preview_texture(s->engine)
                            : orion_engine_output_texture(s->engine);
-    if (!raw) return 0;
+    if (!raw) return nullptr;
     id<MTLTexture> t = (__bridge id<MTLTexture>)raw;
-    // The texture is square so a straightened frame fits; only the top-left
-    // region holds the picture (Engine+Render.swift:286): image_size for the
-    // full graph, preview_size for the preview, each its own graph's answer.
     unsigned iw = 0, ih = 0;
     if (which == 1) orion_engine_preview_size(s->engine, &iw, &ih);
     else orion_engine_image_size(s->engine, &iw, &ih);
-    const NSUInteger rw = std::min<NSUInteger>(t.width, iw);
-    const NSUInteger rh = std::min<NSUInteger>(t.height, ih);
-    if (rw == 0 || rh == 0) return 0;
-    *w = int(rw); *h = int(rh);
+    *w = int(std::min<NSUInteger>(t.width, iw));
+    *h = int(std::min<NSUInteger>(t.height, ih));
+    return *w > 0 && *h > 0 ? raw : nullptr;
+}
+
+// present.mm hands over the command buffer that reads this engine's picture.
+void shim_hold(Shim* s, void* commandBuffer) { s->reader = (__bridge id<MTLCommandBuffer>)commandBuffer; }
+
+// Copies the last render into `dst` as RGBA8. Call with dst == NULL to get the
+// size. `which` is what shim_render returned.
+int shim_read(Shim* s, int which, uint8_t* dst, int capacity, int* w, int* h) {
+    void* raw = shim_picture(s, which, w, h);
+    if (!raw) return 0;
     if (!dst) return 1;
     if (capacity < *w * *h * 4) return 0;
+    id<MTLTexture> t = (__bridge id<MTLTexture>)raw;
+    const NSUInteger rw = NSUInteger(*w), rh = NSUInteger(*h);
     const MTLRegion all = MTLRegionMake2D(0, 0, rw, rh);
     switch (t.pixelFormat) {
         case MTLPixelFormatRGBA8Unorm:

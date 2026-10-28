@@ -290,8 +290,8 @@ static class CanvasState {
 
     static CanvasState() {
         var engine = EngineModel.Shared;
-        ShownFor = engine.Shown.Bitmap != null ? engine.Current : -1;
-        engine.Shown.Changed += () => ShownFor = engine.Shown.Bitmap != null ? engine.Current : -1;
+        ShownFor = engine.Shown.Any ? engine.Current : -1;
+        engine.Shown.Changed += () => ShownFor = engine.Shown.Any ? engine.Current : -1;
         engine.Opened += () => { Viewport.Reset(); ClearHover(); };
         engine.Rendered += Touch;
         engine.PropertyChanged += (_, e) => {
