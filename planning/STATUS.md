@@ -41,6 +41,8 @@ bench.
 
 ## Open
 
+**Next, the developer's priority (2026-10-28): parity, then a Windows build.** Ahead of the queue below. (1) Port the shell's 44 `stub(#315)` features, sidecars first, so the Avalonia app can replace the Swift one and `app/` plus `third_party/SwiftTerm` (~75k lines) can go. (2) Build Dawn from source at macOS 14 (#354), move the engine's GPU layer from Metal to Dawn, and add Windows and Linux CI runners; there is no Windows machine here. Linux's one Vulkan allocator is #355.
+
 **Queued from a user's question, 2026-10-28** (DJI Mini 4 Pro owner):
 - **Read the lens correction DJI embeds in its DNGs.** Neither the bundled nor upstream lensfun has the Mini 4 Pro (`FC8482`); its DNGs carry the correction as DNG `OpcodeList` entries (`WarpRectilinear`, vignette `FixVignetteRadial`), which Orion ignores. Published in Adobe's DNG specification, so it is a cited algorithm; covers every DJI drone and many phones at once. Lensfun stays the fallback. Also read Adobe `.lcp` profiles the user already has installed (developer's go-ahead, 2026-10-28), never bundled (Adobe's licence); RawTherapee does this and is cited as precedent, but its code is GPL and must not be read to write ours (CLAUDE.md): implement from Adobe's published lens-profile format.
 - **JPEG XL export**, beside JPEG, PNG and TIFF, metadata and colour profile kept as today. libjxl is BSD-3. 8- and 16-bit, lossy and lossless.
