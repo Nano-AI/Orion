@@ -17,9 +17,10 @@ public static class AdjustmentMath {
         return MathF.Abs(v - baseValue) < span * 0.015f ? baseValue : v;
     }
 
-    /// What a person typed, forgiving the unit, a comma decimal and spaces; clamped.
+    /// What a person typed, forgiving the unit, a comma decimal, a true minus
+    /// (the readout prints one) and spaces; clamped.
     public static float? Parsed(string text, string unit, float min, float max) {
-        string t = text.Trim();
+        string t = text.Trim().Replace('−', '-');
         foreach (var suffix in new[] { unit, "°", "rad", "EV", "K" }.Select(s => s.Trim()).Where(s => s.Length > 0)) {
             if (t.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) {
                 t = t[..^suffix.Length].Trim();

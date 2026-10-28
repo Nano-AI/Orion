@@ -10,6 +10,8 @@
   <ItemGroup>
     <!-- Built by native/build.sh from the engine's static library. -->
     <None Include="bin-native/liborion_shim.dylib" Link="liborion_shim.dylib" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The numeral face (Shared/Design/Type.cs) and the SIL OFL 1.1 it travels with. -->
+    <AvaloniaResource Include="Assets/Fonts/**" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
