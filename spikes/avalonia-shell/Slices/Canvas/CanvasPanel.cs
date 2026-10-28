@@ -30,7 +30,7 @@ public sealed class CanvasPanel : Panel {
         _choices.Children.AddRange([
             new StateButton(null, "Try again", () => { var e = EngineModel.Shared; if (e.Current >= 0) e.Open(e.Current); }) { Focusable = false },
             new StateButton(null, "Skip", () => Commands.Run(EngineModel.Shared.Current < EngineModel.Shared.Photos.Count - 1
-                                                             ? "next-photo" : "previous-photo"), ButtonKind.Quiet) { Focusable = false },
+                                                             ? "next-photo" : "previous-photo")) { Focusable = false },
         ]);
         _state = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                                   Children = { _note, _choices } };

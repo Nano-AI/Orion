@@ -75,7 +75,7 @@ static class MaskControls {
         var flyout = new MenuFlyout();
         foreach (var item in items) flyout.Items.Add(item);
         return new StateButton { Kind = ButtonKind.Bare, Content = label, Flyout = flyout, IsEnabled = enabled, Ink = Palette.Text,
-                                 Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center };
+                                 Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
     }
 
     public static MenuItem Item(string header, Action act) {

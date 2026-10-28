@@ -12,7 +12,7 @@ static class PresetStub {
 
     /// PresetGroup: title and what it covers, in its declared order.
     public static readonly (string Title, string Covers)[] Groups = [
-        ("White Balance", "temperature, tint"),
+        ("White balance", "temperature, tint"),
         ("Light", "exposure, contrast, highlights, shadows, whites, blacks"),
         ("Color", "vibrance, saturation, the mixer, color grading"),
         ("Curve", "the tone curve"),

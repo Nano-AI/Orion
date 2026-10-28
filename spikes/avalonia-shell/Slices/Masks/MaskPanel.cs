@@ -113,7 +113,7 @@ public sealed class MaskPanel : Border {
                     Orientation = Orientation.Horizontal, Spacing = Space.Md,
                     Children = {
                         Push("Clear stroke", () => { m.BrushStroke.Clear(); _group.Push(); Rebuild(); }, m.BrushStroke.Count > 0),
-                        Caption(m.BrushStroke.Count == 0 ? "drag on the photo to paint" : $"{m.BrushStroke.Count} dabs"),
+                        Caption(m.BrushStroke.Count == 0 ? "Drag on the photo to paint." : $"{m.BrushStroke.Count} dabs"),
                     },
                 };
                 break;

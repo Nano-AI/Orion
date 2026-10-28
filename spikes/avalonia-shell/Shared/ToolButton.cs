@@ -20,9 +20,9 @@ public enum CanvasTool { None, Targeted, MaskColor, Spot }
 public enum ButtonKind {
     /// Raised fill in a hairline: Open, Auto, Rotate left.
     Standard,
-    /// No fill, a hairline, dim ink: Reset, Skip, Delete rejected….
+    /// No fill, a hairline, dim ink: Reset, Reset crop, Delete rejected….
     Quiet,
-    /// The accent, filled: Export. One per screen.
+    /// The accent, filled, in the regular weight as macOS draws a default button: Export. One per screen.
     Primary,
     /// A cell of a segmented control: no edge, raised while `On`.
     Segment,
@@ -68,7 +68,6 @@ public class StateButton : Button {
     public StateButton(string? icon, string title, Action click, ButtonKind kind = ButtonKind.Standard, string help = "") : this() {
         Kind = kind;
         var text = new TextBlock { Text = title, FontSize = Faces.Body, VerticalAlignment = VerticalAlignment.Center };
-        if (kind == ButtonKind.Primary) text.FontWeight = FontWeight.SemiBold;
         Content = icon == null ? text : new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6,
             Children = { Icons.Create(icon, 14, Palette.Text), text } };
         Help(help);

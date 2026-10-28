@@ -11,7 +11,7 @@ namespace OrionShell.Sheets;
 public sealed class ExportPanel : Border {
     readonly ExportSettings _s = ExportSettings.Shared;
     readonly Watermark _mark = Watermark.Shared;
-    readonly StackPanel _options = new() { Spacing = Space.Lg };
+    readonly StackPanel _options = new() { Spacing = Space.Lg, Margin = new Thickness(0, 0, 14, 0) };   // clear of the overlay scrollbar
     readonly TextBlock _dims = Faces.Figure("", Faces.Label, Palette.Dim);
     readonly TextBlock _size = Faces.Figure("", Faces.Label);
     readonly TextBlock _sizeNote = SheetKit.Note("", Palette.Dim);
