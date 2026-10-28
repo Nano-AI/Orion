@@ -177,6 +177,7 @@ void testBrushDabsFollowTheFrame();
 void testMaskGeometry();
 void testMaskGeometryInverse();
 void testBayerDecimation();
+void testPreviewShadowsMatchGpu();
 void testSpotRemovalGpu();
 void testDabBlockRejection();
 void testLongBrushStroke();

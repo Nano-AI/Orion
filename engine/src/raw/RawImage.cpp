@@ -372,6 +372,18 @@ BayerImage decimate(const BayerImage& image, int scale) {
     // ⚠ The widths are copied to locals on purpose: a store to `sums` (a
     // uint32_t) may alias `out.width`, so a bound read through `out` is
     // reloaded every iteration.
+    //
+    // ⚠ **Each sample is clamped at its channel's black before it is summed**,
+    // because `linearize` clamps every sample there and the full graph's
+    // shadow is the mean of what survives that. Read noise puts a third of a
+    // night sky's samples below black; clamping the *average* instead, whose
+    // noise is a quarter as wide, kept the preview's sky dark blue while the
+    // release settled on a lifted grey-purple (`_PIC8148` at +1 EV: red 7
+    // against 19; 14 with this). The rest of that gap is the hue/sat map's and
+    // the display's own clamps at zero, which no mosaic can do in advance.
+    // Black only: the white clip moves with white balance, which a mosaic
+    // decimated once at open cannot know.
+    // And rounded, not floored: a floor is half a count dark everywhere.
     const std::uint32_t inW = image.width, outW = out.width;
     std::vector<std::uint32_t> sums(outW);
     for (std::uint32_t oy = 0; oy < out.height; ++oy) {
@@ -379,12 +391,14 @@ BayerImage decimate(const BayerImage& image, int scale) {
         for (std::uint32_t cy = 0; cy < cell; ++cy) {
             const std::uint32_t sy = ((oy / 2) * cell + cy) * 2 + (oy & 1);
             const std::uint16_t* row = image.samples.data() + std::size_t(sy) * inW;
+            const std::uint16_t blackEven = image.black[std::size_t(image.channelAt(0, sy))];
+            const std::uint16_t blackOdd  = image.black[std::size_t(image.channelAt(1, sy))];
             for (std::uint32_t I = 0; I < outCellsX; ++I) {
                 const std::uint16_t* p = row + std::size_t(I) * 2 * cell;
                 std::uint32_t even = 0, odd = 0;
                 for (std::uint32_t k = 0; k < 2 * cell; k += 2) {
-                    even += p[k];
-                    odd  += p[k + 1];
+                    even += std::max(p[k], blackEven);
+                    odd  += std::max(p[k + 1], blackOdd);
                 }
                 sums[2 * I]     += even;
                 sums[2 * I + 1] += odd;
@@ -392,7 +406,7 @@ BayerImage decimate(const BayerImage& image, int scale) {
         }
         std::uint16_t* dst = out.samples.data() + std::size_t(oy) * outW;
         for (std::uint32_t ox = 0; ox < outW; ++ox) {
-            dst[ox] = static_cast<std::uint16_t>(sums[ox] / (cell * cell));
+            dst[ox] = static_cast<std::uint16_t>((sums[ox] + cell * cell / 2) / (cell * cell));
         }
     }
 

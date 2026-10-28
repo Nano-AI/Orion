@@ -376,11 +376,15 @@ void testBayerDecimation() {
                                                      mixed.width +
                                                  ((x / 2) * s + cx) * 2 + x % 2];
                     const auto got = out.samples[std::size_t(y) * out.width + x];
-                    if (got != sum / (s * s)) {
+                    // Rounded, not truncated: a floor is half a count dark on
+                    // average, and in a night sky 30 counts above black that is
+                    // a visible share of the signal.
+                    const std::uint32_t want = (sum + s * s / 2) / (s * s);
+                    if (got != want) {
                         exact = false;
                         firstBad = "at " + std::to_string(x) + "," + std::to_string(y) +
                                    " got " + std::to_string(got) + " want " +
-                                   std::to_string(sum / (s * s));
+                                   std::to_string(want);
                     }
                 }
             }
@@ -397,6 +401,95 @@ void testBayerDecimation() {
                "and so does a scale of one");
         report(orion::raw::decimate(src, 64).width == src.width,
                "a scale larger than the mosaic returns it unchanged too");
+    }
+}
+
+/// The preview graph and the full graph agree on a noisy shadow's level.
+///
+/// ⚠ Read noise is zero-mean, so the deep shadows of a night frame put a third
+/// of their samples below black, and `linearize` clamps every one of them to
+/// zero: the full graph's shadow is the mean of the *clamped* samples, lifted
+/// by the half of the noise it threw away. The preview's mosaic is averaged
+/// first, which shrinks the noise fourfold, so almost nothing clamps and its
+/// shadow came out darker and of another hue than the one the release settles
+/// on (`_PIC8148`'s sky: red 7 against 19 at +1 EV). The fixture is that sky:
+/// 20 counts above black, a sigma of 80, a black point per channel.
+///
+/// Read in camera RGB after the demosaic, at each pixel's own CFA channel only:
+/// RCD passes those through untouched, so they are `linearize`'s output. ⚠ Not
+/// the interpolated ones — RCD's gradient weights are not linear in noise and
+/// read the full graph's green 6% low here, a gap this does not close; nor the
+/// two later ones, the hue/sat map's and the display's own clamps at zero. It
+/// asserts nothing past this stage.
+void testPreviewShadowsMatchGpu() {
+    section("Preview graph: a noisy shadow's level");
+
+    std::unique_ptr<orion::gpu::Device> device;
+    try {
+        device = orion::gpu::Device::create();
+    } catch (const std::exception& e) {
+        report(false, "Metal device available", e.what());
+        return;
+    }
+
+    constexpr std::uint32_t kN = 256;
+    orion::raw::BayerImage img;
+    img.width = kN; img.height = kN;
+    img.filters = 0x94949494u;                 // RGGB
+    img.black = {500, 512, 530, 512};          // a wrong channel's black shows
+    img.white = 16383;
+    img.camMul = {2.0f, 1.0f, 1.5f, 1.0f};
+    img.camToXyz = {0.4124f, 0.3576f, 0.1805f,
+                    0.2126f, 0.7152f, 0.0722f,
+                    0.0193f, 0.1192f, 0.9505f};
+    img.samples.resize(std::size_t(kN) * kN);
+    std::mt19937 rng(8148);
+    std::normal_distribution<double> noise(0.0, 80.0);
+    for (std::uint32_t y = 0; y < kN; ++y)
+        for (std::uint32_t x = 0; x < kN; ++x)
+            img.samples[std::size_t(y) * kN + x] = std::uint16_t(std::lround(
+                img.black[std::size_t(img.channelAt(x, y))] + 20.0 + noise(rng)));
+
+    // Mean of each channel at its own CFA sites.
+    const auto shadow = [&](const orion::raw::BayerImage& mosaic, std::array<double, 3>& rgb) {
+        orion::pipe::DevelopPipeline dev(*device, std::string(ORION_SHADER_DIR), mosaic);
+        orion::pipe::Adjustments adj;
+        adj.wb = dev.asShotWhiteBalance();
+        dev.apply(adj);
+        dev.render();
+        const std::uint32_t w = dev.width(), h = dev.height();
+        std::vector<__fp16> px(std::size_t(w) * h * 4);
+        dev.highlightStages().input->download(px.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+        std::array<double, 3> n{};
+        rgb = {0, 0, 0};
+        for (std::uint32_t y = 0; y < h; ++y)
+            for (std::uint32_t x = 0; x < w; ++x) {
+                int c = int(mosaic.channelAt(x, y));
+                if (c == 3) c = 1;   // the second green
+                rgb[std::size_t(c)] += double(px[(std::size_t(y) * w + x) * 4 + std::size_t(c)]);
+                n[std::size_t(c)] += 1;
+            }
+        for (int c = 0; c < 3; ++c) rgb[std::size_t(c)] /= n[std::size_t(c)];
+    };
+
+    std::array<double, 3> full{}, preview{};
+    try {
+        shadow(img, full);
+        shadow(orion::raw::decimate(img, 4), preview);   // Engine::kPreviewScale
+    } catch (const std::exception& e) {
+        report(false, "both graphs render", e.what());
+        return;
+    }
+
+    // Each mean stands on 1k-16k samples of a sigma-53 clamped spread: about 1%
+    // of standard error apiece. Clamping after the average was 50% short.
+    const char* names[3] = {"red", "green", "blue"};
+    for (int c = 0; c < 3; ++c) {
+        const double ratio = preview[c] / full[c];
+        report(std::abs(ratio - 1.0) < 0.05,
+               std::string("the preview's ") + names[c] + " shadow is the full graph's, within 5%",
+               "preview " + std::to_string(preview[c]) + " full " + std::to_string(full[c]) +
+                   " ratio " + std::to_string(ratio));
     }
 }
 

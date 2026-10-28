@@ -182,6 +182,11 @@ using DecodedImage = std::variant<BayerImage, LinearImage>;
 /// at stride four moires badly on fabric and foliage, and a preview that
 /// shimmers while a slider moves is worse than one that is soft.
 ///
+/// ⚠ It averages what `linearize` will see, not the raw counts: each sample is
+/// clamped at its channel's black first, as that node clamps it, and the mean
+/// is rounded. No new maths — the full graph's own first step, done before the
+/// average instead of after it, because a clamp does not commute with one.
+///
 /// `scale` must be even and at least 2; anything else returns the image
 /// unchanged rather than guessing.
 [[nodiscard]] BayerImage decimate(const BayerImage& image, int scale);
