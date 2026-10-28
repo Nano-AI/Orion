@@ -44,4 +44,49 @@ static partial class CanvasNative {
         if (Engine == 0 || orion_engine_sample(Engine, (float)uv.X, (float)uv.Y, display, scene) != 0) return null;
         return (display, scene);
     }
+
+    // Two things Avalonia's events drop that ImageCanvas.swift reads from AppKit:
+    // whether a scroll came from a trackpad, and the Reduce Motion setting.
+    const string ObjC = "/usr/lib/libobjc.A.dylib";
+    [LibraryImport(ObjC, StringMarshalling = StringMarshalling.Utf8)] private static partial nint objc_getClass(string name);
+    [LibraryImport(ObjC, StringMarshalling = StringMarshalling.Utf8)] private static partial nint sel_registerName(string name);
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")] private static partial nint Send(nint receiver, nint selector);
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")] private static partial ulong SendWord(nint receiver, nint selector);
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")] [return: MarshalAs(UnmanagedType.U1)] private static partial bool SendBool(nint receiver, nint selector);
+
+    /// A window on AppKit (not --selftest's headless one), where NSApp exists.
+    static bool Cocoa => OperatingSystem.IsMacOS()
+        && Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+
+    static nint Shared(string cls, string getter) => Send(objc_getClass(cls), sel_registerName(getter));
+
+    /// `NSEvent.hasPreciseScrollingDeltas` of the scroll being handled, which
+    /// Avalonia's native view divides away (by 50 or 5) before C# sees it. Read
+    /// from `NSApp.currentEvent`: Avalonia dispatches the wheel event while
+    /// AppKit is still handling it. Null off AppKit or if it is not a scroll.
+    public static bool? PreciseScroll() =>
+        Current() is var (e, type) && type == ScrollWheel ? SendBool(e, sel_registerName("hasPreciseScrollingDeltas")) : null;
+
+    const ulong ScrollWheel = 22, Magnify = 30, Ended = 8, Cancelled = 16;   // NSEventType, NSEventPhase
+
+    static (nint Event, ulong Type)? Current() {
+        if (!Cocoa) return null;
+        nint e = Send(Shared("NSApplication", "sharedApplication"), sel_registerName("currentEvent"));
+        return e == 0 ? null : (e, SendWord(e, sel_registerName("type")));
+    }
+
+    /// The trackpad gesture being handled has ended: the fingers lifted with no
+    /// momentum to follow, or the momentum ran out. A mouse wheel's notch has no
+    /// phase, and off AppKit there is none: null, and the caller waits instead.
+    /// (`momentumPhase` is asked of scroll events only: AppKit throws on others.)
+    public static bool? GestureEnded() {
+        if (Current() is not var (e, type) || type is not (ScrollWheel or Magnify)) return null;
+        ulong phase = SendWord(e, sel_registerName("phase")), momentum = type == ScrollWheel ? SendWord(e, sel_registerName("momentumPhase")) : 0;
+        if (phase == 0 && momentum == 0) return null;
+        return (phase & (Ended | Cancelled)) != 0 && momentum == 0 || (momentum & (Ended | Cancelled)) != 0;
+    }
+
+    /// System Settings › Accessibility › Display › Reduce motion. Avalonia 12 exposes none (#320).
+    public static bool ReduceMotion =>
+        Cocoa && SendBool(Shared("NSWorkspace", "sharedWorkspace"), sel_registerName("accessibilityDisplayShouldReduceMotion"));
 }
