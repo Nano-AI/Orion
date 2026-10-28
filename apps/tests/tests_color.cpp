@@ -348,6 +348,47 @@ void testBayerDecimation() {
                std::to_string(out.samples[0]));
     }
 
+    // Every output sample against the definition, on a mosaic whose values all
+    // differ and whose size is not a multiple of the stride. The checks above
+    // cannot see a sample averaged from the wrong block — every same-phase
+    // input in them is equal — and a rewrite for speed (#319) could do exactly
+    // that while keeping every phase.
+    {
+        orion::raw::BayerImage mixed;
+        mixed.width = 38; mixed.height = 22;
+        mixed.filters = 0x94949494u;
+        mixed.samples.resize(std::size_t(mixed.width) * mixed.height);
+        for (std::size_t i = 0; i < mixed.samples.size(); ++i)
+            mixed.samples[i] = std::uint16_t(((i * 2654435761u) >> 7) & 0x3fff);
+
+        for (int scale : {2, 4}) {
+            const auto out = orion::raw::decimate(mixed, scale);
+            const std::uint32_t s = std::uint32_t(scale);
+            bool exact = out.width == mixed.width / (2 * s) * 2 &&
+                         out.height == mixed.height / (2 * s) * 2;
+            std::string firstBad;
+            for (std::uint32_t y = 0; y < out.height && exact; ++y) {
+                for (std::uint32_t x = 0; x < out.width && exact; ++x) {
+                    std::uint32_t sum = 0;
+                    for (std::uint32_t cy = 0; cy < s; ++cy)
+                        for (std::uint32_t cx = 0; cx < s; ++cx)
+                            sum += mixed.samples[std::size_t(((y / 2) * s + cy) * 2 + y % 2) *
+                                                     mixed.width +
+                                                 ((x / 2) * s + cx) * 2 + x % 2];
+                    const auto got = out.samples[std::size_t(y) * out.width + x];
+                    if (got != sum / (s * s)) {
+                        exact = false;
+                        firstBad = "at " + std::to_string(x) + "," + std::to_string(y) +
+                                   " got " + std::to_string(got) + " want " +
+                                   std::to_string(sum / (s * s));
+                    }
+                }
+            }
+            report(exact, "scale " + std::to_string(scale) +
+                          ": every sample is the mean of its own block", firstBad);
+        }
+    }
+
     // Odd or too-small scales are refused rather than guessed at.
     {
         report(orion::raw::decimate(src, 3).width == src.width,

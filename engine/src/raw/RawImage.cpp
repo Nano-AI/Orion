@@ -4,6 +4,7 @@
 
 #include <libraw/libraw.h>
 
+#include <algorithm>
 #include <cmath>
 
 #include <memory>
@@ -350,9 +351,9 @@ BayerImage decimate(const BayerImage& image, int scale) {
     // `scale` input cells. Getting this ratio wrong is how the first version
     // produced a mosaic twice the intended size while every phase check still
     // passed.
-    const int cell = scale;
-    const std::uint32_t outCellsX = image.width  / std::uint32_t(2 * scale);
-    const std::uint32_t outCellsY = image.height / std::uint32_t(2 * scale);
+    const std::uint32_t cell = std::uint32_t(scale);
+    const std::uint32_t outCellsX = image.width  / (2 * cell);
+    const std::uint32_t outCellsY = image.height / (2 * cell);
     if (outCellsX == 0 || outCellsY == 0) return image;
 
     BayerImage out = image;
@@ -360,33 +361,38 @@ BayerImage decimate(const BayerImage& image, int scale) {
     out.height = outCellsY * 2;
     out.samples.assign(std::size_t(out.width) * out.height, 0);
 
-    for (std::uint32_t J = 0; J < outCellsY; ++J) {
-        for (std::uint32_t I = 0; I < outCellsX; ++I) {
-            // The four positions within a CFA cell, each averaged over the
-            // cell x cell block of input cells this output cell stands for.
-            for (int dy = 0; dy < 2; ++dy) {
-                for (int dx = 0; dx < 2; ++dx) {
-                    std::uint32_t sum = 0;
-                    std::uint32_t n = 0;
-                    for (int cy = 0; cy < cell; ++cy) {
-                        for (int cx = 0; cx < cell; ++cx) {
-                            const std::uint32_t sx =
-                                (I * std::uint32_t(cell) + std::uint32_t(cx)) * 2
-                                + std::uint32_t(dx);
-                            const std::uint32_t sy =
-                                (J * std::uint32_t(cell) + std::uint32_t(cy)) * 2
-                                + std::uint32_t(dy);
-                            if (sx >= image.width || sy >= image.height) continue;
-                            sum += image.samples[std::size_t(sy) * image.width + sx];
-                            ++n;
-                        }
-                    }
-                    const std::uint32_t ox = I * 2 + std::uint32_t(dx);
-                    const std::uint32_t oy = J * 2 + std::uint32_t(dy);
-                    out.samples[std::size_t(oy) * out.width + ox] =
-                        static_cast<std::uint16_t>(n ? sum / n : 0);
+    // Output pixel (ox, oy) has phase (ox & 1, oy & 1) and averages the
+    // cell x cell same-phase inputs of output cell (ox / 2, oy / 2). Walked an
+    // input row at a time, one contiguous run of 2·cell samples per output
+    // cell, its even and odd positions summed apart — the cell-at-a-time walk
+    // this replaced jumped rows on every sample and was ~16% of a RAW open
+    // (#319). Whole cells only, so every block is complete and the divisor is
+    // always cell².
+    //
+    // ⚠ The widths are copied to locals on purpose: a store to `sums` (a
+    // uint32_t) may alias `out.width`, so a bound read through `out` is
+    // reloaded every iteration.
+    const std::uint32_t inW = image.width, outW = out.width;
+    std::vector<std::uint32_t> sums(outW);
+    for (std::uint32_t oy = 0; oy < out.height; ++oy) {
+        std::fill(sums.begin(), sums.end(), 0u);
+        for (std::uint32_t cy = 0; cy < cell; ++cy) {
+            const std::uint32_t sy = ((oy / 2) * cell + cy) * 2 + (oy & 1);
+            const std::uint16_t* row = image.samples.data() + std::size_t(sy) * inW;
+            for (std::uint32_t I = 0; I < outCellsX; ++I) {
+                const std::uint16_t* p = row + std::size_t(I) * 2 * cell;
+                std::uint32_t even = 0, odd = 0;
+                for (std::uint32_t k = 0; k < 2 * cell; k += 2) {
+                    even += p[k];
+                    odd  += p[k + 1];
                 }
+                sums[2 * I]     += even;
+                sums[2 * I + 1] += odd;
             }
+        }
+        std::uint16_t* dst = out.samples.data() + std::size_t(oy) * outW;
+        for (std::uint32_t ox = 0; ox < outW; ++ox) {
+            dst[ox] = static_cast<std::uint16_t>(sums[ox] / (cell * cell));
         }
     }
 
