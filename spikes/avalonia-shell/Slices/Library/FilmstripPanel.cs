@@ -9,23 +9,24 @@ using Avalonia.Media;
 
 namespace OrionShell.Library;
 
-/// A port of app/Filmstrip.swift: the library filter on the left, a hairline,
-/// then the frames. On the panel tone, not film base: the board's near-black
-/// base and perforations swallowed dark frames and the gaps between them.
+/// A port of app/Filmstrip.swift: the filter and the order on the left, a
+/// hairline, then the film. Film, as the developer asked to keep it, minus what
+/// made it hard to read: the base is `ground`, not the near-black film base that
+/// swallowed night frames; every picture has a rebate edge, so a dark frame
+/// still ends somewhere; and the gap between frames is the base itself.
 ///
-/// Each frame is a raised mat with the picture letterboxed in it (never
-/// cropped, as in the gallery) and a row under it for its marks, so a night
-/// shot still has an edge and a rating never sits on the picture. The accent
-/// ring is the photograph on the canvas.
+/// Each frame carries its own perforations, four per frame as on 35 mm film, so
+/// they travel with the pictures (app/Filmstrip.swift `sprockets`), and its
+/// edge print: the frame number and its marks. The accent ring is the photo on
+/// the canvas, drawn just outside the rebate so lighting it moves nothing.
 [Panel("filmstrip", Region.Filmstrip)]
 public sealed class FilmstripPanel : Grid {
-    /// Layout.ThumbW wide; the row of marks under the picture takes the height a 3:2 picture leaves.
-    const double CellWidth = Layout.ThumbW, MarksHeight = 12;
+    /// A frame and the base after it, which is the gap to the next one.
+    const double CellWidth = Layout.ThumbW + Gap, Gap = 10, Perfs = 7, PrintHeight = 12;
     /// A mouse wheel's notch, in pixels along the strip.
     const double WheelStep = 48;
 
-    readonly StackPanel _frames = new() { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(12, 0),
-                                          HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+    readonly StackPanel _frames = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
     readonly ScrollViewer _film;
     readonly Dictionary<LibraryModel.Photo, Control> _cells = new();
 
@@ -33,14 +34,15 @@ public sealed class FilmstripPanel : Grid {
         ColumnDefinitions = new ColumnDefinitions("Auto,1,*");
         Background = Palette.Panel;
         var filter = LibraryUi.Filter();
-        filter.Margin = new Thickness(Space.Pad, 0);
-        filter.CellPadding = new Thickness(8, 0);   // the strip is short of width, not of words
-        Children.Add(filter);
+        filter.CellPadding = new Thickness(8, 0);
+        var order = LibraryUi.SortMenu();
+        Children.Add(new StackPanel { Spacing = 6, Margin = new Thickness(Space.Pad, 0), VerticalAlignment = VerticalAlignment.Center,
+                                      Children = { filter, order } });
         var line = new Border { Background = Palette.Line };
         SetColumn(line, 1);
         Children.Add(line);
         _film = new ScrollViewer {
-            Content = _frames,
+            Content = _frames, Background = Palette.Ground,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
         // A mouse has only a vertical wheel: here it scrolls along the strip. A trackpad's sideways swipe passes through.
@@ -72,16 +74,31 @@ public sealed class FilmstripPanel : Grid {
         }
     }
 
-    /// One frame: the picture letterboxed on its mat, the marks under it.
+    /// One frame of film: perforations, the picture in its rebate, the edge print, perforations.
     static Control Cell(LibraryModel.Photo photo, bool isCurrent) {
         var picture = new Image { Source = photo.Thumbnail, Stretch = Stretch.Uniform, Opacity = photo.Rejected ? LibraryUi.RejectedOpacity : 1 };
+        var number = Faces.Figure($"{photo.Index + 1}", Faces.Mark, Palette.Faint);
         var marks = LibraryUi.Marks(photo, Faces.Mark);
-        marks.HorizontalAlignment = HorizontalAlignment.Left;
-        Grid.SetRow(marks, 1);
-        var cell = new Frame(isCurrent) {
-            Width = CellWidth,
-            Child = new Grid { RowDefinitions = new RowDefinitions($"*,{MarksHeight}"), RowSpacing = 3, Children = { picture, marks } },
+        marks.HorizontalAlignment = HorizontalAlignment.Right;
+        var print = new Panel { Height = PrintHeight, Children = { number, marks } };
+        var frame = new Frame { Child = picture };
+        // The open photo's ring: an outline just outside the rebate, by a negative margin so lighting it
+        // moves nothing. Not a BoxShadow on the frame: with one, the frame's picture did not draw.
+        var held = new Panel { Children = { frame } };
+        if (isCurrent) held.Children.Add(new Border { Margin = new Thickness(-3), BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(4),
+                                                       BorderBrush = Palette.Accent, IsHitTestVisible = false });
+        var column = new Grid {
+            RowDefinitions = new RowDefinitions($"{Perfs},*,{PrintHeight},{Perfs}"), RowSpacing = 2,
+            Children = { new Perforations(), held, print, new Perforations() },
         };
+        for (int row = 0; row < 4; row++) SetRow(column.Children[row], row);
+        var cell = new Border {
+            Width = CellWidth, Padding = new Thickness(Gap / 2, 3), Background = Brushes.Transparent, Child = column,
+            Focusable = true, Cursor = new Cursor(StandardCursorType.Hand),
+            FocusAdorner = new FuncTemplate<Control>(() => new FocusRing()),   // shown for keyboard focus only
+        };
+        cell.PointerEntered += (_, _) => frame.Hot = true;
+        cell.PointerExited += (_, _) => frame.Hot = false;
         ToolTip.SetTip(cell, photo.Tooltip);
         Avalonia.Automation.AutomationProperties.SetName(cell, LibraryUi.Spoken(photo) + (isCurrent ? ", open" : ""));
         // Command/shift-click selection, PhotoSelection.
@@ -96,34 +113,32 @@ public sealed class FilmstripPanel : Grid {
         return cell;
     }
 
-    /// A frame's mat: raised at rest, the hover fill under the pointer, the
-    /// accent ring when it is the open photo, and the buttons' two-ring halo
-    /// when the keyboard brings focus to it. The ring is always 2 px, clear
-    /// when off, so nothing moves when it lights.
+    /// The picture's rebate: a hairline edge that brightens under the pointer.
     sealed class Frame : Border {
-        readonly bool _current;
+        bool _hot;
 
-        public Frame(bool current) {
-            _current = current;
-            Focusable = true;
-            FocusAdorner = new FuncTemplate<Control>(() => new FocusRing());   // shown for keyboard focus only
-            Cursor = new Cursor(StandardCursorType.Hand);
-            CornerRadius = new CornerRadius(Radius.Md);
-            BorderThickness = new Thickness(2);
-            Padding = new Thickness(3);
-            VerticalAlignment = VerticalAlignment.Center;
-            Height = Layout.Filmstrip - 18;
+        public Frame() {
+            BorderThickness = new Thickness(1);
+            Background = Palette.FilmBase;   // what shows around a letterboxed picture: the frame's own dark
+            CornerRadius = new CornerRadius(2);
             Paint();
         }
 
-        void Paint() {
-            BorderBrush = _current ? Palette.Accent : Brushes.Transparent;
-            Background = IsPointerOver ? Palette.Hover : Palette.Raised;
-        }
+        public bool Hot { set { _hot = value; Paint(); } }
 
-        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change) {
-            base.OnPropertyChanged(change);
-            if (change.Property == IsPointerOverProperty) Paint();
+        void Paint() => BorderBrush = _hot ? Palette.Rail : Palette.Line;
+    }
+
+    /// One frame's perforations: four holes, the KS-1870 proportions, centred in
+    /// each quarter so they line up with the frame line (app/Filmstrip.swift).
+    sealed class Perforations : Control {
+        public Perforations() => IsHitTestVisible = false;
+
+        public override void Render(DrawingContext c) {
+            double pitch = (Bounds.Width + Gap) / 4, w = Math.Min(pitch * 0.42, 8), h = w * 0.78;
+            for (int i = 0; i < 4; i++)
+                c.DrawRectangle(Palette.Surround, null,
+                                new Rect((i + 0.5) * pitch - Gap / 2 - w / 2, (Bounds.Height - h) / 2, w, h), 1.5, 1.5);
         }
     }
 

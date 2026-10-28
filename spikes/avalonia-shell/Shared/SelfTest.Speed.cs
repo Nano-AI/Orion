@@ -118,11 +118,18 @@ static partial class SelfTest {
         var onScreen = model.Session!;
         Check(!model.Apply(_ => throw new ArgumentException("probe: refused")) && model.Status == "probe: refused",
               "Apply puts an ArgumentException on the status line");
+        Settle(() => !model.Cache.Busy);
+        int warm = model.Cache.Sessions;
+        model.Reorder(spelt.AsEnumerable().Reverse().ToList());
+        Check(warm > 0 && model.Cache.Sessions == warm && ReferenceEquals(model.Session, onScreen) && model.Current == 0,
+              $"a sort keeps the photo on screen open and every kept neighbour warm ({warm} kept)");
+        model.Reorder(spelt);
         model.Remove([spelt[0], spelt[1]]);
         Check(onScreen.Handle != 0 && ReferenceEquals(model.Session, onScreen) && model.Current == 2 && model.Photos.Count == 3,
               "Remove keeps the photo on screen open, same session, at its new index");
         model.Remove([spelt[4]]);
         Check(model.Session == null && model.Current == -1 && model.Photos.Count == 2, "Remove closes the photo on screen when it goes");
+        model.Cache.Clear();   // a trash keeps the cache warm; cold, so this open is a request in flight
         model.Open(0);
         bool opening = model.Opening;
         model.Load([photo]);

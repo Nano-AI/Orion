@@ -11,6 +11,8 @@ public static class Palette {
     public static readonly IBrush Ground = new ImmutableSolidColorBrush(Color.FromRgb(20, 20, 22));
     /// Tool panels, toolbar, filmstrip
     public static readonly IBrush Panel = new ImmutableSolidColorBrush(Color.FromRgb(27, 27, 29));
+    /// A slider's engraved channel. Darker than ground so a horizontal track stands off the panel it lies on; ground alone was seven levels from the panel and the track vanished (2026-10-28)
+    public static readonly IBrush Groove = new ImmutableSolidColorBrush(Color.FromRgb(12, 12, 14));
     /// Controls, cells, inset wells
     public static readonly IBrush Raised = new ImmutableSolidColorBrush(Color.FromRgb(35, 35, 38));
     /// A hovered or pressed control's fill
@@ -19,7 +21,7 @@ public static class Palette {
     public static readonly IBrush Surround = new ImmutableSolidColorBrush(Color.FromRgb(42, 42, 44));
     /// Hairlines, borders, dividers
     public static readonly IBrush Line = new ImmutableSolidColorBrush(Color.FromRgb(49, 49, 53));
-    /// Scrollbar thumbs. Not slider tracks: AnalogTrack engraves its groove in `ground` deliberately, and tinted tracks draw their own label gradient (TrackTint)
+    /// Scrollbar thumbs, and the lit lower lip of a slider's groove (AnalogTrack); tinted tracks draw their own label gradient (TrackTint)
     public static readonly IBrush Rail = new ImmutableSolidColorBrush(Color.FromRgb(58, 58, 62));
     /// Primary text, slider thumbs
     public static readonly IBrush Text = new ImmutableSolidColorBrush(Color.FromRgb(232, 232, 234));

@@ -11,9 +11,11 @@ static class LibraryUi {
     /// The library filter, one control wherever it appears (the strip and the
     /// gallery): a segmented choice, each cell counting what it would show, so
     /// every option is in view and none has to be remembered behind a menu.
+    /// Marks as icons (★ rated, ☆ unrated, ✕ rejected), each named in its tooltip:
+    /// in words the four took 430 px of the strip.
     public static Segmented Filter() {
         var library = LibraryModel.Shared;
-        var filter = new Segmented(LibraryModel.FilterTitles, (int)library.Current);
+        var filter = new Segmented(LibraryModel.FilterTitles, (int)library.Current, [null, "star.fill", "star", "xmark"]);
         void Count() {
             var photos = library.Photos;
             filter.Selected = (int)library.Current;
@@ -26,14 +28,48 @@ static class LibraryUi {
         return filter;
     }
 
+    /// The order, one pull-down wherever the filter is. Picking an order applies
+    /// it now, picking it again re-sorts after new marks (LibraryModel.Sort).
+    public static Button SortMenu() {
+        var library = LibraryModel.Shared;
+        var label = new TextBlock { FontSize = Faces.Body, VerticalAlignment = VerticalAlignment.Center };
+        var flyout = new MenuFlyout();
+        var items = LibraryModel.OrderTitles.Select((title, i) => {
+            var item = new MenuItem { Header = title, ToggleType = MenuItemToggleType.Radio };
+            item.Click += (_, _) => library.Sort((LibraryModel.Order)i);
+            flyout.Items.Add(item);
+            return item;
+        }).ToList();
+        void Show() {
+            label.Text = library.Sorted == LibraryModel.Order.Rating ? "By rating" : "By name";
+            for (int i = 0; i < items.Count; i++) items[i].IsChecked = (int)library.Sorted == i;
+        }
+        library.Changed += Show;
+        Show();
+        var button = new StateButton {
+            Kind = ButtonKind.Bare, Ink = Palette.Text, Flyout = flyout, MinWidth = 0, Height = 24, Padding = new Thickness(6, 0),
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
+            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4,
+                                       Children = { label, Icons.Create("chevron.down", 7, Palette.Text) } },
+        };
+        ToolTip.SetTip(button, "Order the photos");
+        Avalonia.Automation.AutomationProperties.SetName(button, "Order");
+        return button;
+    }
+
     /// How far a rejected photo's picture fades, in the strip and the gallery alike.
     public const double RejectedOpacity = 0.35;
 
     /// A photo's marks at a text size: five stars, the rating's in the star
     /// colour and the rest faint, so "unrated" is shown rather than inferred;
-    /// a rejected photo says so in words instead.
+    /// a rejected photo shows the reject ✕ alone, in the reject colour.
     public static Control Marks(LibraryModel.Photo photo, double size) {
-        if (photo.Rejected) return new TextBlock { Text = "Rejected", FontSize = size, Foreground = Palette.Reject, VerticalAlignment = VerticalAlignment.Center };
+        if (photo.Rejected) {
+            var x = Icons.Create("xmark", size - 2, Palette.Reject);
+            x.VerticalAlignment = VerticalAlignment.Center;
+            Avalonia.Automation.AutomationProperties.SetName(x, "Rejected");
+            return x;
+        }
         var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = size > Faces.Mark ? 2 : 1, VerticalAlignment = VerticalAlignment.Center };
         for (int i = 1; i <= 5; i++) stars.Children.Add(Icons.Create("star.fill", size - 2, i <= photo.Rating ? Palette.Star : Palette.Faint));
         Avalonia.Automation.AutomationProperties.SetName(stars, photo.Rating == 0 ? "Unrated" : $"{photo.Rating} stars");

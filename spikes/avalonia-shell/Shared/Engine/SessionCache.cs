@@ -87,6 +87,22 @@ public sealed class SessionCache : ISessionSource {
         _plan = _newPlan();
     }
 
+    /// Same photos, new indices: both tiers follow their photos, so a sort or a
+    /// trash keeps the cache warm and a kept session's edits. Only a photo that
+    /// left the list closes. A decode in flight was for an old index: dropped.
+    public void Moved(IReadOnlyList<int> to) {
+        _generation++;
+        _request = null;
+        CachePlan.Rekey(_kept, to, Close);
+        CachePlan.Rekey(_pictures, to);
+        foreach (var s in _lent.Keys.ToList())
+            if (to[_lent[s]] is var n and >= 0) _lent[s] = n; else _lent.Remove(s);   // closes when it comes back
+        var failed = _failed.Where(i => to[i] >= 0).Select(i => to[i]).ToList();
+        _failed.Clear();
+        _failed.UnionWith(failed);
+        _plan.Moved(to);
+    }
+
     /// Waits for the decodes and closes in flight, so none is inside the engine
     /// when the process exits. Never throws: it runs on the way out.
     public void Drain() => Task.WhenAll([.. _decoding.Values, _closing]).ContinueWith(_ => { }).Wait();

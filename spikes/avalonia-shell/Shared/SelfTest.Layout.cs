@@ -244,30 +244,61 @@ static partial class SelfTest {
     static void StripChecks(Window window, EngineModel engine) {
         var strip = window.GetVisualDescendants().OfType<FilmstripPanel>().Single();
         window.UpdateLayout();
-        var frames = strip.GetVisualDescendants().OfType<Border>().Where(b => b.Focusable && b.Cursor != null).ToList();
-        bool rings = frames.All(f => f.BorderThickness == new Thickness(2))
-                     && frames.Count(f => f.BorderBrush == Palette.Accent) == 1
-                     && frames.All(f => f.Background != Palette.FilmBase && f.Background != strip.Background);
-        var gaps = frames.Zip(frames.Skip(1), (a, b) => b.Bounds.X - a.Bounds.Right).Distinct().ToList();
-        Check(frames.Count == LibraryModel.Shared.Visible.Count() && rings && gaps.Count == 1 && gaps[0] >= 8 && strip.Background == Palette.Panel,
-              $"the strip's frames sit on mats of their own with one even gap ({string.Join(",", gaps)} px), one accent ring, all rings the same width");
+        var cells = strip.GetVisualDescendants().OfType<Border>().Where(b => b.Focusable && b.Cursor != null).ToList();
+        // The rebates: each picture's own dark frame; the base between two of them is the gap.
+        var rebates = cells.Select(c => c.GetVisualDescendants().OfType<Border>().Single(b => b.Background == Palette.FilmBase)).ToList();
+        var rings = strip.GetVisualDescendants().OfType<Border>().Where(b => b.BorderBrush == Palette.Accent).ToList();
+        var gaps = rebates.Zip(rebates.Skip(1), (a, b) => Math.Round(b.TranslatePoint(default, strip)!.Value.X - a.TranslatePoint(new Point(a.Bounds.Width, 0), strip)!.Value.X))
+                          .Distinct().ToList();
+        Check(cells.Count == LibraryModel.Shared.Visible.Count() && rings.Count == 1 && !rings[0].IsHitTestVisible
+              && gaps.Count <= 1 && (gaps.Count == 0 || gaps[0] >= 8) && strip.Background == Palette.Panel,
+              $"the strip is film: every frame in a rebate of its own, one even gap of base ({string.Join(",", gaps)} px), one accent ring that takes no clicks");
+        var numbers = cells.Select(c => c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).FirstOrDefault(t => t != null && t.All(char.IsDigit))).ToList();
+        Check(numbers.SequenceEqual(LibraryModel.Shared.Visible.Select(p => $"{p.Index + 1}")),
+              $"each frame prints its number on the film's edge ({string.Join(",", numbers)})");
 
         // One filter, one look: the strip and the gallery show the same control, and either drives both.
         Commands.Run("gallery");
         Dispatcher.UIThread.RunJobs();
         var filters = window.GetVisualDescendants().OfType<Segmented>()
-            .Where(s => s.GetVisualDescendants().OfType<StateButton>().Select(b => b.Label).SequenceEqual(LibraryModel.FilterTitles)).ToList();
+            .Where(s => s.GetVisualDescendants().OfType<StateButton>().Select(Spoken).SequenceEqual(LibraryModel.FilterTitles)).ToList();
         var stripFilter = strip.GetVisualDescendants().OfType<Segmented>().SingleOrDefault();
         var galleryFilter = filters.FirstOrDefault(f => f != stripFilter);
         var was = LibraryModel.Shared.Current;
-        galleryFilter?.GetVisualDescendants().OfType<StateButton>().First(b => b.Label == "Unrated")
+        galleryFilter?.GetVisualDescendants().OfType<StateButton>().First(b => Spoken(b) == "Unrated")
             .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Check(stripFilter != null && galleryFilter != null && LibraryModel.Shared.Current == LibraryModel.Filter.Unrated && stripFilter.Selected == 2,
               "the strip and the gallery filter with one control, and picking in one moves the other");
         LibraryModel.Shared.Current = was;
         Commands.Run("gallery");
         Dispatcher.UIThread.RunJobs();
+
+        // Rejected is a mark of its own: an ✕, never five grey stars beside a dimmed picture.
+        var library = LibraryModel.Shared;
+        var photo = library.Photos[0];
+        library.SetRejected(photo, true);
+        var marks = LibraryUi.Marks(photo, Faces.Mark);
+        Check(marks is Avalonia.Controls.Shapes.Path && Avalonia.Automation.AutomationProperties.GetName(marks) == "Rejected",
+              "a rejected photo's mark is an ✕, named Rejected");
+        library.SetRejected(photo, false);
+
+        // Rating, best first: the engine's own list follows, so ←/→ walk the new order, and the open photo stays open.
+        string open = engine.Photos[engine.Current];
+        var last = library.Photos[^1];
+        library.SetRating(last, 4);
+        library.SetRejected(library.Photos[0], true);
+        library.Sort(LibraryModel.Order.Rating);
+        bool rated = engine.Photos[0] == last.Path && engine.Photos[^1] == library.Photos[^1].Path && library.Photos[^1].Rejected
+                     && engine.Photos[engine.Current] == open;
+        library.SetRating(last, 0);
+        library.SetRejected(library.Photos[^1], false);
+        library.Sort(LibraryModel.Order.Name);
+        Check(rated && engine.Photos.SequenceEqual(engine.Photos.OrderBy(p => p, StringComparer.OrdinalIgnoreCase)) && engine.Photos[engine.Current] == open,
+              "sorting by rating puts the best first and the rejected last in the engine's own order, by name puts it back, and the open photo stays open");
     }
+
+    /// A cell's title: its words, or the name an icon cell is spoken by.
+    static string? Spoken(StateButton b) => Avalonia.Automation.AutomationProperties.GetName(b) is { Length: > 0 } name ? name : b.Label;
 
     static void ToolbarChecks(Window window) {
         var tips = window.GetVisualDescendants().OfType<ToolbarPanel>().Single().GetVisualDescendants().OfType<StateButton>()

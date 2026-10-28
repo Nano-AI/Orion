@@ -100,11 +100,25 @@ public sealed class EngineModel : INotifyPropertyChanged {
             Shown.Clear();
             at = -1;
         }
-        var left = Photos.Select((path, i) => (path, i)).Where(p => !gone.Contains(p.path)).ToList();
-        _list.Load(left.Select(p => p.path));
-        _source.Clear();   // every index moved; the session on screen closes when it is left
+        Relist(Photos.Where(p => !gone.Contains(p)).ToList(), at);
+    }
+
+    /// The same photos in a new order (a sort). The photo on screen stays open,
+    /// same session, same edits, at its new index.
+    public void Reorder(IReadOnlyList<string> order) => Relist(order, Current);
+
+    /// The list became `paths`, the same photos or fewer: the photo at `at`
+    /// stays current at its new index, and the cache follows every photo to its
+    /// new index (ISessionSource.Moved) rather than starting cold.
+    void Relist(IReadOnlyList<string> paths, int at) {
+        string? open = at >= 0 ? Photos[at] : null;
+        var index = new Dictionary<string, int>();
+        for (int i = 0; i < paths.Count; i++) index.TryAdd(paths[i], i);
+        var to = Photos.Select(p => index.GetValueOrDefault(p, -1)).ToList();
+        _list.Load(paths);
+        _source.Moved(to);
         Opening = false;
-        if (at >= 0 && _list.Go(left.FindIndex(p => p.i == at))) _source.Hint(Current, 0);
+        if (open != null && index.TryGetValue(open, out int now) && _list.Go(now)) _source.Hint(Current, 0);
         Changed(nameof(Photos), nameof(Current), nameof(CurrentName), nameof(Picture));
     }
 

@@ -14,6 +14,8 @@ public enum Orion {
         public static let ground = Color(hex: 0x141416)
         /// Tool panels, toolbar, filmstrip
         public static let panel = Color(hex: 0x1B1B1D)
+        /// A slider's engraved channel. Darker than ground so a horizontal track stands off the panel it lies on; ground alone was seven levels from the panel and the track vanished (2026-10-28)
+        public static let groove = Color(hex: 0x0C0C0E)
         /// Controls, cells, inset wells
         public static let raised = Color(hex: 0x232326)
         /// A hovered or pressed control's fill
@@ -22,7 +24,7 @@ public enum Orion {
         public static let surround = Color(hex: 0x2A2A2C)
         /// Hairlines, borders, dividers
         public static let line = Color(hex: 0x313135)
-        /// Scrollbar thumbs. Not slider tracks: AnalogTrack engraves its groove in `ground` deliberately, and tinted tracks draw their own label gradient (TrackTint)
+        /// Scrollbar thumbs, and the lit lower lip of a slider's groove (AnalogTrack); tinted tracks draw their own label gradient (TrackTint)
         public static let rail = Color(hex: 0x3A3A3E)
         /// Primary text, slider thumbs
         public static let text = Color(hex: 0xE8E8EA)
@@ -55,6 +57,7 @@ public enum Orion {
     public enum Components {
         public static let ground = SIMD3<Float>(0.0784, 0.0784, 0.0863)
         public static let panel = SIMD3<Float>(0.1059, 0.1059, 0.1137)
+        public static let groove = SIMD3<Float>(0.0471, 0.0471, 0.0549)
         public static let raised = SIMD3<Float>(0.1373, 0.1373, 0.1490)
         public static let hover = SIMD3<Float>(0.1804, 0.1804, 0.1961)
         public static let surround = SIMD3<Float>(0.1647, 0.1647, 0.1725)

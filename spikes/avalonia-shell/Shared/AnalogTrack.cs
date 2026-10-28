@@ -44,7 +44,7 @@ public sealed record Scale(float Step = 0, int LabelEvery = 2, Func<float, strin
 }
 
 /// A port of app/AnalogTrack.swift, redrawn as a meter scale: ticks in the
-/// slider's unit with numerals under them, the groove engraved in `ground`,
+/// slider's unit with numerals under them, the groove engraved in `groove`,
 /// the edit filled in the accent from the default (the detent) to the value,
 /// and a flat thumb. A tinted track shows its tint, and its edited span deeper.
 ///
@@ -92,7 +92,7 @@ sealed class AnalogTrack : Control, ICustomHitTest {
 
     static readonly IPen Tick = new Pen(Palette.Faint, 1), TickLit = new Pen(Palette.Label, 1);
     static readonly IPen Detent = new Pen(Palette.Accent, 1);
-    static readonly IPen Engraving = new Pen(Palette.Line, 0.5), EngravingLit = new Pen(Palette.Rail, 0.5);
+    static readonly IPen Engraving = new Pen(Palette.Line, 1), EngravingLit = new Pen(Palette.Rail, 1), Lip = new Pen(Palette.Rail, 1);
     static readonly Color Shade = Color.FromArgb(179, 0, 0, 0);
 
     public AnalogTrack() {
@@ -162,7 +162,10 @@ sealed class AnalogTrack : Control, ICustomHitTest {
         c.DrawLine(Detent, new Point(Crisp(bx), 0), new Point(Crisp(bx), TickBottom));
 
         var groove = new Rect(0, GrooveY - GrooveH / 2, w, GrooveH);
-        c.DrawRectangle(Palette.Ground, Engraving, groove, GrooveH / 2, GrooveH / 2);
+        // Cut into the panel: a channel darker than ground, edged, its lower lip catching the light. In ground
+        // with a half-point edge it sat seven levels off the panel and a horizontal track vanished.
+        c.DrawRectangle(Palette.Groove, Engraving, groove, GrooveH / 2, GrooveH / 2);
+        c.DrawLine(Lip, new Point(GrooveH / 2, groove.Bottom + 0.5), new Point(w - GrooveH / 2, groove.Bottom + 0.5));
         if (hot > 0.01) using (c.PushOpacity(hot)) c.DrawRectangle(null, EngravingLit, groove, GrooveH / 2, GrooveH / 2);
         if (_tint != null) c.DrawRectangle(_tint, null, groove.Deflate(0.5), GrooveH / 2, GrooveH / 2);
 

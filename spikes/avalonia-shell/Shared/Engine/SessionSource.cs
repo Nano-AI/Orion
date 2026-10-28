@@ -30,6 +30,10 @@ public interface ISessionSource {
 
     /// The list changed: drop everything kept, never the session acquired.
     void Clear();
+
+    /// The same photos moved (a sort) or some left (a trash): `to[old]` is each
+    /// one's new index, -1 when it left. What is kept follows its photo.
+    void Moved(IReadOnlyList<int> to);
 }
 
 /// Before the cache: every photo decodes afresh and closes when it is left.
@@ -40,4 +44,5 @@ public sealed class FreshSessions(PhotoList photos) : ISessionSource {
     public void Release(Session session) => session.Dispose();
     public void Hint(int index, int direction) { }
     public void Clear() { }
+    public void Moved(IReadOnlyList<int> to) { }
 }

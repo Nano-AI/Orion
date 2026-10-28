@@ -56,6 +56,20 @@ public sealed class CachePlan(Func<int> count, Eviction policy = Eviction.AheadR
     /// A photo was decoded: recent, for Recent.
     public void Decoded(int index) => _used[index] = ++_tick;
 
+    /// The list was reordered or shortened: each photo's history follows it.
+    /// `to[old]` is its new index, -1 when it left the list.
+    public void Moved(IReadOnlyList<int> to) {
+        Rekey(_used, to); Rekey(_visits, to); Rekey(_visited, to);
+        Current = Current >= 0 ? to[Current] : -1;
+    }
+
+    /// Moves each entry to its new index; `gone` gets those whose photo left the list.
+    public static void Rekey<T>(Dictionary<int, T> d, IReadOnlyList<int> to, Action<T>? gone = null) {
+        var old = d.ToList();
+        d.Clear();
+        foreach (var (i, v) in old) if (to[i] >= 0) d[to[i]] = v; else gone?.Invoke(v);
+    }
+
     /// The `slots` neighbours a tier should hold, and the photo on screen:
     /// nearest first, cheaper along the bias, inside the list.
     public IEnumerable<int> Predicted(int slots) {

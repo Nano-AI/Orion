@@ -20,6 +20,9 @@ public sealed class LibraryModel {
     /// Library.Filter.title, in allCases order.
     public static readonly string[] FilterTitles = ["All", "Rated", "Unrated", "Rejected"];
 
+    public enum Order { Name, Rating }
+    public static readonly string[] OrderTitles = ["File name", "Rating, best first"];
+
     public sealed class Photo(string path, int index) {
         public string Path { get; } = path;
         /// Its position in EngineModel.Photos, which is what Open takes.
@@ -90,6 +93,23 @@ public sealed class LibraryModel {
     });
 
     public int RejectedCount => Photos.Count(p => p.Rejected);
+
+    public Order Sorted { get; private set; }
+
+    /// Puts the photos in `order`, and browsing with them: the engine's own list
+    /// is reordered (EngineModel.Reorder), so ←/→, the strip, the gallery and
+    /// the cache's prediction follow one order. Applied when chosen, never live:
+    /// re-sorting as each photo is rated would pull it out from under the hand.
+    /// Choosing it again re-sorts after new marks.
+    public void Sort(Order order) {
+        Sorted = order;
+        var byName = StringComparer.OrdinalIgnoreCase;   // a folder's own order (LibraryFiles)
+        var sorted = order == Order.Rating
+            ? Photos.OrderBy(p => p.Rejected).ThenByDescending(p => p.Rating).ThenBy(p => p.Path, byName)
+            : Photos.OrderBy(p => p.Path, byName);
+        EngineModel.Shared.Reorder(sorted.Select(p => p.Path).ToList());
+        Changed?.Invoke();
+    }
 
     public void SetRating(Photo photo, int stars) {
         photo.Rating = Math.Clamp(stars, 0, 5);
