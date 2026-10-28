@@ -12,6 +12,10 @@ export DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec
 dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 ```
 
+`tools/package-avalonia.sh` builds all of that from a clean tree into
+`dist-avalonia/Orion Avalonia.app` (`com.nanoai.orion.avalonia`, beside the Swift
+`Orion.app`) and `Orion-<git describe>-avalonia.dmg`, ad-hoc signed.
+
 | Flag | Does |
 |---|---|
 | `--panel NAME` / `--tab NAME` | one registered panel, or the window on that tool tab |
