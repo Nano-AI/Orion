@@ -923,4 +923,20 @@ void testTexturePool() {
                "releasing a texture it never issued clamps rather than wrapping",
                std::to_string(p.liveBytes()));
     }
+
+    // ⚠ The linear (buffer-backed) texture the source uses (#319): its rows
+    // are padded to the device's alignment, so a width whose row is not a
+    // multiple of it is the case that can go wrong. 38 x 2 bytes is 76.
+    section("Linear texture");
+    for (const PixelFormat f : {PixelFormat::R16Uint, PixelFormat::RGBA16Float}) {
+        constexpr std::uint32_t kW = 38, kH = 7;
+        const std::size_t row = kW * orion::gpu::bytesPerPixel(f);
+        std::vector<std::uint8_t> in(row * kH), out(row * kH, 0);
+        for (std::size_t i = 0; i < in.size(); ++i) in[i] = std::uint8_t(i * 37 + 11);
+        auto t = orion::gpu::Texture::create(*device, kW, kH, f, /*linear=*/true);
+        t->upload(in.data(), row);
+        t->download(out.data(), row);
+        report(in == out, std::string("a linear ") + orion::gpu::formatName(f) +
+                          " texture round-trips at a padded pitch");
+    }
 }

@@ -56,12 +56,16 @@ const char* formatName(PixelFormat f) noexcept {
 
 // ── Texture ────────────────────────────────────────────────────────────────
 
-struct Texture::Impl { id<MTLTexture> tex = nil; };
+struct Texture::Impl {
+    id<MTLTexture> tex = nil;
+    id<MTLBuffer>  buffer = nil;   // the storage of a linear texture, else nil
+};
 
 Texture::~Texture() = default;
 
 std::unique_ptr<Texture> Texture::create(Device& device, std::uint32_t width,
-                                         std::uint32_t height, PixelFormat format) {
+                                         std::uint32_t height, PixelFormat format,
+                                         bool linear) {
     if (width == 0 || height == 0) throw std::runtime_error("zero-sized texture");
 
     auto t = std::unique_ptr<Texture>(new Texture());
@@ -98,7 +102,20 @@ std::unique_ptr<Texture> Texture::create(Device& device, std::uint32_t width,
     // results back without a blit. Revisit only if a discrete GPU ever matters.
     desc.storageMode = MTLStorageModeShared;
 
-    t->impl_->tex = [dev(device) newTextureWithDescriptor:desc];
+    if (linear) {
+        // Rows padded to what the device requires of a buffer-backed texture.
+        const NSUInteger align =
+            [dev(device) minimumLinearTextureAlignmentForPixelFormat:desc.pixelFormat];
+        const NSUInteger row = width * bytesPerPixel(format);
+        const NSUInteger pitch = (row + align - 1) / align * align;
+        t->impl_->buffer = [dev(device) newBufferWithLength:pitch * height
+                                                    options:MTLResourceStorageModeShared];
+        t->impl_->tex = [t->impl_->buffer newTextureWithDescriptor:desc
+                                                            offset:0
+                                                       bytesPerRow:pitch];
+    } else {
+        t->impl_->tex = [dev(device) newTextureWithDescriptor:desc];
+    }
     }
     if (t->impl_->tex == nil) throw std::runtime_error("texture allocation failed");
 
