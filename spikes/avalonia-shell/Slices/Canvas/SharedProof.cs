@@ -14,16 +14,19 @@ namespace OrionShell.CanvasSlice;
 /// ⚠ Opens one window. Once the photo is on the shared surface, it drags exposure
 /// for 45 frames through the shared surface, then 45 through the CPU copy; each
 /// phase prints process CPU per frame (all threads) and the UI thread's time per
-/// tick, then screenshots the window (screencapture -l) at the starting exposure.
-/// The two shots' canvas centres must agree. Exits by itself: 0 when the shared
-/// surface held every frame and the shots agree; 2 at 6 s, and 3 at 8 s if the UI thread is stuck.
+/// tick, then screenshots the window (screencapture -l) at the starting exposure,
+/// once the shared surface has taken that last render (the hand-off is
+/// asynchronous: a fixed wait once shot the drag's last frame, #317). The two
+/// shots' canvas centres must agree. Exits by itself: 0 when the shared surface
+/// held every frame, took the last render and the shots agree; 2 at 7 s, and 3
+/// at 9 s if the UI thread is stuck.
 static partial class SharedProof {
     const int Warmup = 5, Frames = 45;
 
     public static void Start(Window window, string dir) {
-        DispatcherTimer.RunOnce(() => Quit(2, "timed out after 6 s"), TimeSpan.FromSeconds(6));
+        DispatcherTimer.RunOnce(() => Quit(2, $"timed out after 7 s; hand-off {SharedPicture.Stage}, {SharedPicture.Behind} behind"), TimeSpan.FromSeconds(7));
         // And off the UI thread, in case a GPU wait has it stuck: the window must never outstay.
-        new Thread(() => { Thread.Sleep(8000); Console.Error.WriteLine("proof: killed after 8 s"); Environment.Exit(3); }) { IsBackground = true }.Start();
+        new Thread(() => { Thread.Sleep(9000); Console.Error.WriteLine("proof: killed after 9 s"); Environment.Exit(3); }) { IsBackground = true }.Start();
         window.Opened += async (_, _) => {
             int code = 1;
             try { code = await Run(window, dir); } catch (Exception x) { Console.Error.WriteLine(x); }
@@ -49,14 +52,14 @@ static partial class SharedProof {
         engine.Shown.OnGpu = true;
         double diff = Difference(window, shared.Shot, copy.Shot);
         Console.WriteLine($"proof: canvas centre, shared shot against copy shot: mean difference {diff:0.00} of 255 · {SharedPicture.Presented} hand-offs");
-        return shared.Held == Frames && copy.Held == 0 && diff < 3 ? 0 : 1;
+        return shared.Held == Frames && shared.Took && copy.Held == 0 && diff < 3 ? 0 : 1;
     }
 
-    static async Task<(int Held, string Shot)> Phase(Window window, string dir, string name) {
+    static async Task<(int Held, bool Took, string Shot)> Phase(Window window, string dir, string name) {
         var engine = EngineModel.Shared;
         float start = engine.Get("exposure_ev");
         var ticks = new List<double>();
-        int held = 0;
+        int held = 0, behind = 0, behindMax = 0, presented = SharedPicture.Presented, taken = SharedPicture.Taken;
         TimeSpan cpu0 = default;
         var clock = new Stopwatch();
         engine.BeginInteraction();
@@ -68,19 +71,30 @@ static partial class SharedProof {
             if (i < Warmup) continue;
             ticks.Add(tick.Elapsed.TotalMilliseconds);
             if (SharedPicture.Showing) held++;
+            behind += SharedPicture.Behind;
+            behindMax = Math.Max(behindMax, SharedPicture.Behind);
         }
         await Frame(window);
         double cpu = (Process.GetCurrentProcess().TotalProcessorTime - cpu0).TotalMilliseconds;
         double seconds = clock.Elapsed.TotalSeconds;
         engine.Set("exposure_ev", start);   // both shots show the same picture
+        var ended = Stopwatch.StartNew();
         engine.EndInteraction();
-        for (int i = 0; i < 8; i++) await Frame(window);
+        // The shared surface takes the last render a few hand-offs later; the copy has it already.
+        bool gpu = engine.Shown.OnGpu;
+        if (gpu) await Until(() => SharedPicture.Behind == 0 && SharedPicture.Stage == "idle", 1.5);
+        bool took = gpu && SharedPicture.Behind == 0;
+        string last = !gpu ? "copied at once" : took ? $"taken {ended.Elapsed.TotalMilliseconds:0} ms after the drag ended"
+                                                    : $"NOT taken after 1.5 s: hand-off {SharedPicture.Stage}, {SharedPicture.Behind} renders behind";
+        for (int i = 0; i < 3; i++) await Frame(window);   // and composited
         string shot = Shot(window, dir, name);
         ticks.Sort();
         Console.WriteLine($"proof {name,-6}: {Frames} frames in {seconds:0.00} s · process CPU {cpu / Frames:0.00} ms per frame, all threads · " +
                           $"Set() on the UI thread median {ticks[Frames / 2]:0.00} ms, p95 {ticks[Frames * 95 / 100]:0.00} · " +
-                          $"shared surface held {held}/{Frames} · {shot}");
-        return (held, shot);
+                          $"shared surface held {held}/{Frames}");
+        Console.WriteLine($"proof {name,-6}: hand-offs made {SharedPicture.Presented - presented}, taken {SharedPicture.Taken - taken} · " +
+                          $"renders behind during the drag: mean {(double)behind / Frames:0.0}, max {behindMax} · last render {last} · {shot}");
+        return (held, took, shot);
     }
 
     static Task Frame(TopLevel top) {

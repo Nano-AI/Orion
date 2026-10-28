@@ -35,14 +35,19 @@ sealed class SharedPicture : Control {
     readonly Dictionary<Graph, (int Generation, ICompositionImportedGpuImage Image)> _images = [];
     /// The last hand-off: whose render, which graph, how many halvings, after which Shown change, its shape.
     (Session? Session, Graph Graph, int Level, int Version, double Aspect) _holds;
-    int _version;
+    int _version, _taken;   // Shown changes, and the one whose hand-off Avalonia last took
     double _pixels = double.PositiveInfinity;   // the picture's width on screen; full size until the canvas says
     bool _starting, _busy, _again;
 
     /// A hand-off was made: the canvas redraws, without its CPU copy if this now holds the picture.
     public event Action? Arrived;
-    /// For the windowed proof: hand-offs made, whether the last placement held the shown picture, a fallback.
+    /// For the windowed proof: hand-offs made and taken, how many renders the visual is
+    /// behind, what the hand-off is waiting for, whether the last placement held the
+    /// shown photo, a fallback.
     public static int Presented { get; private set; }
+    public static int Taken { get; private set; }
+    public static int Behind { get; private set; }
+    public static string Stage { get; private set; } = "idle";
     public static bool Showing { get; private set; }
     public static bool Failed { get; private set; }
 
@@ -110,7 +115,7 @@ sealed class SharedPicture : Control {
     }
 
     void Changed() {
-        _version++;
+        Behind = ++_version - _taken;
         Present();
     }
 
@@ -134,11 +139,15 @@ sealed class SharedPicture : Control {
                     throw new InvalidOperationException($"the shim has no RGBA8 {graph} render to hand over");
                 Presented++;
                 try {
+                    Stage = "importing";
                     var image = await Image(graph, io, generation, w, h);
                     var update = _surface!.UpdateWithTimelineSemaphoresAsync(image, _producer!, n, _consumer!, n);
                     _holds = (s, graph, level, version, (double)w / h);
                     Arrived?.Invoke();
+                    Stage = "updating";
                     await update;   // snapshotted, and the consumer signal is on the GPU: the next may follow
+                    Taken++;
+                    Behind = _version - (_taken = version);
                 } catch {
                     Native.present_release(_presenter, n);
                     throw;
@@ -148,6 +157,7 @@ sealed class SharedPicture : Control {
             Fail(x);
         } finally {
             _busy = false;
+            Stage = "idle";
         }
     }
 
