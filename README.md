@@ -294,7 +294,7 @@ records the choices already settled.
 4. Push the branch (`git push origin feature/your-change`)
 5. Open a pull request
 
-By contributing, you agree your work is licensed under Apache-2.0 (its §5).
+Contributions are accepted under terms the license will set out; ask before sending a large one.
 
 ### Top contributors
 
