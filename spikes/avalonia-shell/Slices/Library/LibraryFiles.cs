@@ -6,8 +6,7 @@ namespace OrionShell.Library;
 /// confirmed move to the Trash. The confirmation is Trash.cs's.
 static class LibraryFiles {
     /// Library.rawExtensions, Swift's list (Program's own is shorter).
-    static readonly string[] Raw = ["arw", "srf", "sr2", "dng", "nef", "nrw", "cr2", "cr3", "crw", "raf", "orf", "rw2",
-                                    "pef", "srw", "erf", "3fr", "fff", "iiq", "mrw", "raw", "rwl"];
+    static readonly string[] Raw = Program.RawExtensions;
 
     static EngineModel E => EngineModel.Shared;
     static LibraryModel L => LibraryModel.Shared;
@@ -95,19 +94,9 @@ static class LibraryFiles {
         if (trashed.Count > 0) {
             var gone = trashed.ToHashSet();
             bool currentGone = current != null && gone.Contains(current);
-            // ponytail: EngineModel cannot drop a photo from its list without reopening the
-            // one on screen, so its edits are carried across by value (undo history is not);
-            // a list edit that keeps the session removes this.
-            float[]? kept = current != null && !currentGone ? Develop.EditHistory.Snapshot() : null;
-            if (currentGone) E.Close();
-            E.Load(E.Photos.Where(p => !gone.Contains(p)).ToList());
-            string? show = currentGone ? (GalleryMode.On ? null : canvasSurvivor) : current;
-            if (show != null) {
-                E.Open(E.Photos.ToList().IndexOf(show));
-                if (kept != null) Develop.EditHistory.Restore(kept);
-            } else if (!GalleryMode.On) {
-                GalleryMode.Enter();   // nothing left for the canvas: the empty gallery is the honest face
-            }
+            E.Remove(gone);   // the photo on screen, if it stays, keeps its session, edits and undo
+            if (currentGone && !GalleryMode.On && canvasSurvivor != null) E.Open(E.Photos.ToList().IndexOf(canvasSurvivor));
+            else if ((current == null || currentGone) && !GalleryMode.On) GalleryMode.Enter();   // nothing left for the canvas: the empty gallery is the honest face
             if (GalleryMode.On) GalleryMode.SetFocus(L.Photos.FirstOrDefault(p => p.Path == focusSurvivor) ?? L.Visible.FirstOrDefault());
             CanvasSlice.CanvasState.Touch();   // a canvas left with nothing open says so
         }

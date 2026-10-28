@@ -30,7 +30,7 @@ public sealed class CanvasPanel : Panel {
     }
 
     void Refresh() {
-        _welcome.IsVisible = EngineModel.Shared.Handle == 0;
+        _welcome.IsVisible = EngineModel.Shared.Handle == 0 && EngineModel.Shared.Shown.Bitmap == null;
         _picture.InvalidateVisual();   // same bitmap, new pixels
     }
 
@@ -43,7 +43,8 @@ public sealed class CanvasPanel : Panel {
         var engine = EngineModel.Shared;
         double a = CanvasState.ImageAspect;
         var size = Bounds.Size;
-        if (engine.Handle == 0 || engine.Shown.Bitmap is not { } picture || a <= 0 || size.Width <= 0 || size.Height <= 0) return;
+        if (engine.Shown.Bitmap is not { } picture ||   // a kept picture draws while its session decodes
+            a <= 0 || size.Width <= 0 || size.Height <= 0) return;
 
         var vp = CanvasState.Viewport;
         double va = size.Width / size.Height;

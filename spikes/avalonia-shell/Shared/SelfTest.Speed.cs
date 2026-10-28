@@ -127,6 +127,16 @@ static partial class SelfTest {
         bool opening = model.Opening;
         model.Load([photo]);
         Check(opening && !model.Opening, "a new list ends Opening, whose request it dropped");
+
+        // Resting on a photo renders the full graph, which the histogram and eyedropper read (orion.h).
+        model.Open(0);
+        Settle(() => model.Session != null);
+        bool previewFirst = model.Shown.Graph == Graph.Preview;
+        Settle(() => model.Shown.Graph == Graph.Full);
+        var bins = new uint[64 * 3];   // red, green, blue (orion.h)
+        Check(previewFirst && model.Shown.Graph == Graph.Full && Develop.DevelopFacade.orion_engine_histogram(model.Handle, bins, 64) == 0,
+              "a swap shows the preview graph, and a rest renders the full one the histogram reads");
+        model.Close();
         model.Cache.Drain();
         Check(onScreen.Handle == 0, "the removed photo's session closed");
     }

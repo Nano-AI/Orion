@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 
 namespace OrionShell;
 
@@ -54,6 +55,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
         }
     }
     bool _zoomed;
+    static readonly TimeSpan Rest = TimeSpan.FromMilliseconds(300);
     /// The status line's message: a stub saying it is not built, until the next open.
     public string Status { get; private set; } = "";
 
@@ -146,6 +148,11 @@ public sealed class EngineModel : INotifyPropertyChanged {
         if ((_session = s) == null) { SetTiming("could not open"); return false; }
         Opened?.Invoke();
         Render(preview: !ZoomedPastFit);
+        // The histogram and eyedropper read the full graph (orion.h), which a swap
+        // at fit skips: once the hand rests, render it, off the browse path.
+        Task.Delay(Rest).ContinueWith(_ => Dispatcher.UIThread.Post(() => {
+            if (Current == index && _session == s && !Interacting && Shown.Graph != Graph.Full) Render(preview: false);
+        }));
         return true;
     }
 

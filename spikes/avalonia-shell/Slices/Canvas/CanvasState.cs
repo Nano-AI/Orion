@@ -78,7 +78,10 @@ static class CanvasState {
     public const double Inset = 20;
     public static readonly Viewport Viewport = new();
     public static event Action? Changed;
-    public static void Touch() => Changed?.Invoke();
+    public static void Touch() {
+        EngineModel.Shared.ZoomedPastFit = !Viewport.IsFit;   // past fit the photo renders full size (#318)
+        Changed?.Invoke();
+    }
 
     /// The tool tab the shell is showing. Overlays belong to theirs (the crop
     /// overlay to Crop, spots to Detail, the mask to Mask).
@@ -157,7 +160,8 @@ static class CanvasState {
     }
 
     /// The open image's width over height as rendered (crop preview included).
-    public static double ImageAspect => CanvasNative.ImageSize is { Width: > 0, Height: > 0 } s ? (double)s.Width / s.Height : 0;
+    public static double ImageAspect => CanvasNative.ImageSize is { Width: > 0, Height: > 0 } s ? (double)s.Width / s.Height
+        : EngineModel.Shared.Shown.Bitmap is { } b ? b.Size.Width / b.Size.Height : 0;   // a kept picture while its session decodes
 
     /// `photoFrame`: the picture at fit, which is where the crop overlay draws.
     public static Rect PhotoFrame(Size size) => CanvasLayout.FrameRect(ImageAspect, size);
