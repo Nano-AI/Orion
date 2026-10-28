@@ -33,8 +33,9 @@ static partial class SelfTest {
         Check(Commands.All.Count >= 35, $"{Commands.All.Count} commands registered");
 
         // A stub says what it is on the status line instead of doing nothing.
-        string said = Commands.Run("open-photo");
-        Check(said == "not built yet: open-photo (OrionApp+Files.swift)" && EngineModel.Shared.Status == said,
+        var stub = Commands.All.First(c => !c.Built);
+        string said = Commands.Run(stub.Name);
+        Check(said == $"not built yet: {stub.Name} ({stub.Owner})" && EngineModel.Shared.Status == said,
               $"a stub command puts its owner on the status line ('{said}')");
         Check(Commands.Run("no-such-command").StartsWith("no command"), "an unknown command is refused by name");
     }
