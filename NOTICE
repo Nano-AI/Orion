@@ -3,7 +3,7 @@ Copyright 2026 Orion contributors
 
 This product includes software developed by the Orion project.
 
-Orion is proprietary. See `LICENSE` for licensing details. Revisions up to commit abf3a51 remain available under the Apache License, Version 2.0.
+Orion is licensed under the Apache License, Version 2.0; see `LICENSE`. It was proprietary from the revision after abf3a51 until 2026-10-28 (#243, #356); every revision is now offered under Apache-2.0.
 
 ⚠ **This file is required to travel with the software.** Apache-2.0 §4(d) says
 that a redistribution of a work carrying a NOTICE file must include a readable
