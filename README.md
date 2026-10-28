@@ -270,7 +270,7 @@ limits are recorded in `planning/STATUS.md` rather than left to be rediscovered.
 - [x] M0–M4: library, culling, develop, crop, masks, healing, export
 - [x] An MCP server so agents can propose edits for you to approve
 - [x] The cross-platform interface (Avalonia) beside the Swift app
-- [ ] The Avalonia canvas fed from the GPU with no CPU copy
+- [x] The Avalonia canvas fed from the GPU with no CPU copy
 - [ ] Region-of-interest rendering: only what is on screen, at screen resolution
 - [ ] Dawn as the GPU backend, for Windows and Linux builds
 - [ ] X-Trans sensors
