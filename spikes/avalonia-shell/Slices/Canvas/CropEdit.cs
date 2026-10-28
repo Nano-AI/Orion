@@ -72,8 +72,14 @@ static class CropEdit {
 
     /// `resetCrop`: the whole frame, upright.
     public static void Reset() {
+        if (Engine.Handle == 0 || (Crop == new Rect(0, 0, 1, 1) && Angle == 0)) return;
         Commit("Crop");
-        CanvasState.Write(("crop_x", 0), ("crop_y", 0), ("crop_w", 1), ("crop_h", 1), ("straighten_deg", 0));
+        // Through Apply, which tells the sliders their values moved: after an Escape the
+        // Angle slider went on showing the old angle and the next drag started from it.
+        Engine.Apply(s => {
+            foreach (var (field, value) in (ReadOnlySpan<(string, float)>)[("crop_x", 0), ("crop_y", 0), ("crop_w", 1), ("crop_h", 1), ("straighten_deg", 0)])
+                s.Set(field, value);
+        }, reread: true);
     }
 
     /// `rotate`: a quarter turn swaps the frame, so the crop resets rather than

@@ -37,11 +37,8 @@ public sealed class CropTools : StackPanel {
             new AdjustmentSlider("Vertical", "perspective_vertical", -1, 1, baseValue: 0),
             new AdjustmentSlider("Horizontal", "perspective_horizontal", -1, 1, baseValue: 0),
             new AdjustmentSlider("Aspect", "perspective_aspect", -1, 1, baseValue: 0)));
-        Children.Add(new StateButton(null, "Reset crop", () => {
-            CropEdit.Reset();
-            // AdjustmentSlider re-reads its field only when a photo opens: rebuild the one Reset moved.
-            Children[1] = Straighten();
-        }, ButtonKind.Quiet) { HorizontalAlignment = HorizontalAlignment.Left });
+        // Reset tells the sliders (ValuesChanged), so the Angle slider follows it, from here or from Escape.
+        Children.Add(new StateButton(null, "Reset crop", CropEdit.Reset, ButtonKind.Quiet) { HorizontalAlignment = HorizontalAlignment.Left });
         // stub(#315): ProposalWatcher.swift owns this until the logic moves below the facade (documentEditsLocked disables the panel)
     }
 

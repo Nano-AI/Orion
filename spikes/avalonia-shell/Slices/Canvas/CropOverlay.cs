@@ -10,10 +10,21 @@ namespace OrionShell.CanvasSlice;
 /// A port of app/CropOverlay.swift: on the Crop tab, everything outside the
 /// crop is darkened rather than hidden, thirds always on, an outline, and four
 /// L-shaped corners. Corners resize (Shift holds the ratio), the interior pans.
+/// Beyond Swift, the developer's ask: each edge moves its one side, marked by a
+/// short bar at its middle, and the pointer shows what a press there will move.
 [Panel("canvas-crop", Region.Canvas, 10)]
 public sealed class CropOverlay : Control, ICustomHitTest {
-    const double ArmLength = 26, HandleBox = ArmLength + 18;
-    Handle? _dragging;
+    const double ArmLength = 26, HandleBox = ArmLength + 18, EdgeBar = 16;
+
+    /// What a press holds: a corner, an edge (a corner that moves along one axis only), or the interior.
+    internal readonly record struct Grip(Handle Handle, StandardCursorType Cursor, bool X = true, bool Y = true);
+
+    static readonly Grip[] Edges = [
+        new(Handle.TopLeft, StandardCursorType.TopSide, X: false), new(Handle.BottomRight, StandardCursorType.BottomSide, X: false),
+        new(Handle.TopLeft, StandardCursorType.LeftSide, Y: false), new(Handle.BottomRight, StandardCursorType.RightSide, Y: false)];
+    static readonly Dictionary<StandardCursorType, Cursor> Cursors = new();
+
+    Grip? _dragging;
     Rect _start;
     Point _press;
 
@@ -68,6 +79,14 @@ public sealed class CropOverlay : Control, ICustomHitTest {
             c.DrawGeometry(null, shadow, l);
             c.DrawGeometry(null, arm, l);
         }
+        // A short bar at the middle of each edge: an edge moves too.
+        var (mx, my, b) = (r.Center.X, r.Center.Y, EdgeBar / 2);
+        foreach (var (p0, p1) in new[] {
+                     (new Point(mx - b, r.Top), new Point(mx + b, r.Top)), (new Point(mx - b, r.Bottom), new Point(mx + b, r.Bottom)),
+                     (new Point(r.Left, my - b), new Point(r.Left, my + b)), (new Point(r.Right, my - b), new Point(r.Right, my + b)) }) {
+            c.DrawLine(shadow, p0, p1);
+            c.DrawLine(arm, p0, p1);
+        }
     }
 
     static PathFigure Figure(Rect r) => new() {
@@ -75,44 +94,69 @@ public sealed class CropOverlay : Control, ICustomHitTest {
         Segments = [new LineSegment { Point = r.TopRight }, new LineSegment { Point = r.BottomRight }, new LineSegment { Point = r.BottomLeft }],
     };
 
-    /// Corner boxes win over the interior, which is the rectangle less half a box each side.
-    Handle? HandleAt(Point p) {
+    /// Corners win over edges, edges over the interior: each a band half a box either side of its line.
+    internal Grip? GripAt(Point p) {
         if (!Showing) return null;
         var r = CropRect;
+        const double t = HandleBox / 2;
         foreach (var (h, corner) in Corners(r))
-            if (Math.Abs(p.X - corner.X) <= HandleBox / 2 && Math.Abs(p.Y - corner.Y) <= HandleBox / 2) return h;
-        var inner = new Rect(r.X + HandleBox / 2, r.Y + HandleBox / 2, Math.Max(r.Width - HandleBox, 1), Math.Max(r.Height - HandleBox, 1));
-        return inner.Contains(p) ? Handle.Move : null;
+            if (Math.Abs(p.X - corner.X) <= t && Math.Abs(p.Y - corner.Y) <= t)
+                return new Grip(h, h switch {
+                    Handle.TopLeft => StandardCursorType.TopLeftCorner, Handle.TopRight => StandardCursorType.TopRightCorner,
+                    Handle.BottomLeft => StandardCursorType.BottomLeftCorner, _ => StandardCursorType.BottomRightCorner,
+                });
+        bool acrossX = p.X > r.Left && p.X < r.Right, acrossY = p.Y > r.Top && p.Y < r.Bottom;
+        if (acrossX && Math.Abs(p.Y - r.Top) <= t) return Edges[0];
+        if (acrossX && Math.Abs(p.Y - r.Bottom) <= t) return Edges[1];
+        if (acrossY && Math.Abs(p.X - r.Left) <= t) return Edges[2];
+        if (acrossY && Math.Abs(p.X - r.Right) <= t) return Edges[3];
+        return r.Contains(p) ? new Grip(Handle.Move, StandardCursorType.SizeAll) : null;
     }
 
-    public bool HitTest(Point point) => HandleAt(point) != null;
+    public bool HitTest(Point point) => GripAt(point) != null;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e) {
-        if (HandleAt(e.GetPosition(this)) is not { } h) return;
-        (_dragging, _start, _press) = (h, CropEdit.Crop, e.GetPosition(this));
+        if (GripAt(e.GetPosition(this)) is not { } g) return;
+        (_dragging, _start, _press) = (g, CropEdit.Crop, e.GetPosition(this));
         // A drag on the picture arms the preview graph, as every slider does (decision #84).
         EngineModel.Shared.BeginInteraction();
         e.Pointer.Capture(this);
         e.Handled = true;
+        InvalidateVisual();   // the thirds brighten on the press, not on the first move
     }
 
     protected override void OnPointerMoved(PointerEventArgs e) {
+        if (_dragging is not { } g) {
+            // Hovering: the pointer names what a press here would move.
+            Cursor = GripAt(e.GetPosition(this))?.Cursor is { } type
+                ? Cursors.TryGetValue(type, out var made) ? made : Cursors[type] = new Cursor(type) : null;
+            return;
+        }
         var frame = Frame;
-        if (_dragging is not { } h || frame.Width <= 0 || frame.Height <= 0) return;
+        if (frame.Width <= 0 || frame.Height <= 0) return;
         // View points to crop coordinates: the canvas is wider than the frame.
         double size = CropEdit.Canvas.Size;
         var p = e.GetPosition(this);
-        double dx = (p.X - _press.X) / frame.Width * size, dy = (p.Y - _press.Y) / frame.Height * size;
-        // Polled every tick, so Shift pressed mid-drag takes effect on the next move.
-        bool lockAspect = h != Handle.Move && e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        CropEdit.SetCrop(CanvasLayout.CropDrag(h, _start, dx, dy, lockAspect));
+        double dx = g.X ? (p.X - _press.X) / frame.Width * size : 0, dy = g.Y ? (p.Y - _press.Y) / frame.Height * size : 0;
+        // Polled every tick, so Shift pressed mid-drag takes effect on the next move. Corners only:
+        // holding the ratio from an edge would move a second side the pointer is not on.
+        bool lockAspect = g.Handle != Handle.Move && g.X && g.Y && e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        CropEdit.SetCrop(CanvasLayout.CropDrag(g.Handle, _start, dx, dy, lockAspect));
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e) {
+        if (_dragging != null) e.Pointer.Capture(null);   // ends the drag, below
+    }
+
+    /// Every drag ends here: a release, or capture taken mid-drag (the window lost
+    /// focus, a dialog opened). One history step and one full render either way;
+    /// a drag that ended without them left the engine on the preview graph.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) {
+        base.OnPointerCaptureLost(e);
         if (_dragging == null) return;
         _dragging = null;
-        e.Pointer.Capture(null);
         CropEdit.Commit("Crop");
         EngineModel.Shared.EndInteraction();   // after the commit: one full render
+        InvalidateVisual();
     }
 }
