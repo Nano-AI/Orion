@@ -22,7 +22,7 @@ Controls and states boards). Committed 2026-10-27.
 | Neutrals | `tokens.json` greys unchanged, near-perfectly neutral | A tinted grey is a color cast in a raw editor (tokens.json's own rule) |
 | Accent | `accent` #4DB6C4, **interaction only**: edited fill, pressed toggle, focus ring, primary action | Cyan sits outside the indigo band and away from skin and sky hues |
 | Words | System face (SF Pro on macOS, Segoe UI on Windows) | Native controls read as native; Apple HIG. Deliberate override of the deslop skill's ban on system type |
-| Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle with the app |
+| Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle in a proprietary app |
 | Case | Sentence case everywhere; no tracked all-caps labels | Removes the most common generated-UI tell |
 | Signature move | **Light-meter scale sliders**: tracks marked in real units (stops, Kelvin, degrees), the edit fills from the default rather than from the left end | Says what a slider does in the photographer's units, and shows at a glance what has been edited |
 

@@ -306,9 +306,9 @@ By contributing, you agree your work is licensed under Apache-2.0 (its §5).
 
 ## License
 
-**Apache License 2.0. See [`LICENSE`](LICENSE).**
+**Proprietary. See [`LICENSE`](LICENSE).**
 
-Use, modify and redistribute it, commercially or not, keeping the license and [`NOTICE`](NOTICE) with it. Apache-2.0 also grants a license to any patents a contributor holds on their contribution.
+All rights reserved; no use, copying or redistribution without written permission. Revisions through commit abf3a51 were published under Apache-2.0 and remain available under it.
 
 ⚠ **[`NOTICE`](NOTICE) carries third-party licenses and obligations**:
 
