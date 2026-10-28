@@ -58,11 +58,11 @@ steps.
   exportable memory and semaphore that Dawn and Avalonia share. Dawn (#317) does all the rendering; nothing else may call Vulkan.
 - **Maintainability is a hard requirement.** One node = one small shader (50–150 lines). Adding a feature should be a repeatable 3-file change. No 1000-line anything. The developer must be able to hand-edit any file later.
 - **Prefer mature libraries** over hand-rolled code, even at some performance cost.
-- **Avoid GPL libraries** (notably exiv2). ⚠ Orion is proprietary (decision #243,
-  2026-09-13). A proprietary work cannot incorporate GPL code at all. LGPL code
-  like LibRaw may be used only when dynamically linked or relinkable. Going
-  "more open source" does not lift this restriction; only relicensing Orion
-  itself would, and that is a one-way door.
+- **Avoid GPL libraries** (notably exiv2). ⚠ Orion is source-available, not open
+  source (decision #358: use and contribute, never redistribute or sell). A work
+  under that licence cannot incorporate GPL code at all. LGPL code like LibRaw
+  may be used only when dynamically linked or relinkable. Publishing any revision
+  under an open licence is a one-way door: it happened once by mistake (#358).
 
 ## Stack
 C++20 engine · Metal GPU compute · Slang shaders · **SwiftUI/AppKit UI** · LibRaw decode · OpenColorIO + lcms2 color · SQLite index · XMP sidecars as source of truth.

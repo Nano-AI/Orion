@@ -1,7 +1,64 @@
-Copyright (c) 2026 Nano-AI. All rights reserved.
+Orion Source-Available License
 
-This software and its source code are proprietary and confidential. No license is granted to use, copy, modify, distribute, or sublicense this software, in whole or in part, without prior written permission from the copyright holder.
+Copyright (c) 2026 Nano-AI. All rights reserved except as granted below.
 
-Revisions of this repository up to and including commit abf3a51 were published under the Apache License, Version 2.0, and remain available under that license from that revision. This notice applies to all later revisions.
+Orion's source code is public so that people can read it, run it and help
+improve it. It is not open source. You may use Orion; you may not redistribute
+it, sell it, or ship your own version of it.
 
-Third-party components retain their own licenses; see NOTICE.
+1. What you may do
+
+   a. Use. You may download Orion from its official releases, or build it from
+      this source, and use it on any number of your own computers, for any
+      purpose, including commercial work. Photographs and other files you make
+      with Orion are yours; this license claims nothing in them.
+
+   b. Read and modify. You may read, study and change the source code to run it
+      yourself and to prepare contributions to this project.
+
+   c. Contribute. You may fork this repository on GitHub, as GitHub's terms
+      allow, solely to propose changes back to it through pull requests.
+
+2. What you may not do
+
+   a. Distribute Orion, or any modified version or part of it, in source or
+      binary form, to anyone else, whether free or paid. This includes
+      publishing your own builds, installers or app-store listings, and
+      bundling Orion with other software.
+
+   b. Sell, rent, sublicense or charge for Orion or any version of it, or offer
+      it as part of a paid product or service.
+
+   c. Remove or change this license, or the copyright and third-party notices.
+
+   Written permission from the copyright holder can allow any of these.
+
+3. Contributions
+
+   By submitting a contribution (a pull request, patch, or similar), you grant
+   the copyright holder a perpetual, worldwide, irrevocable, royalty-free
+   license to use, modify, relicense and distribute it as part of Orion, and
+   you confirm you have the right to grant it.
+
+4. Third-party components
+
+   Components by others keep their own licenses; see NOTICE. Nothing here
+   limits the rights those licenses give you over those components.
+
+5. Earlier revisions
+
+   Revisions up to and including commit abf3a51, and commits 82ec298 and
+   4005930, were published under the Apache License, Version 2.0, and remain
+   available under it. This license applies to every other revision.
+
+6. No warranty
+
+   Orion is provided "as is", without warranty of any kind, express or
+   implied, including merchantability, fitness for a particular purpose and
+   non-infringement. The copyright holder is not liable for any claim, damages
+   or other liability arising from its use.
+
+7. Ending
+
+   This license ends automatically for anyone who breaks it. The rights in
+   section 1 return only with written permission from the copyright holder.

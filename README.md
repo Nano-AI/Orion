@@ -294,7 +294,7 @@ records the choices already settled.
 4. Push the branch (`git push origin feature/your-change`)
 5. Open a pull request
 
-Contributions are accepted under terms the license will set out; ask before sending a large one.
+Forks exist to send pull requests back; [`LICENSE`](LICENSE) §2 forbids distributing your own version. By contributing you grant the project the rights in its §3.
 
 ### Top contributors
 
@@ -306,9 +306,9 @@ Contributions are accepted under terms the license will set out; ask before send
 
 ## License
 
-**Proprietary. See [`LICENSE`](LICENSE).**
+**Source-available, not open source. See [`LICENSE`](LICENSE).**
 
-All rights reserved; no use, copying or redistribution without written permission. Revisions through commit abf3a51 were published under Apache-2.0 and remain available under it.
+Use Orion for anything, including paid work, and help improve it through pull requests. You may not redistribute it, in source or binary form, or sell it or your own version of it. Revisions through commit abf3a51, and commits 82ec298 and 4005930, were published under Apache-2.0 and remain available under it.
 
 ⚠ **[`NOTICE`](NOTICE) carries third-party licenses and obligations**:
 
