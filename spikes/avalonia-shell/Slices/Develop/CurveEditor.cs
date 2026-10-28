@@ -39,6 +39,7 @@ sealed class CurveEditor : StackPanel {
         Children.Add(_graph);
         Children.Add(_footnote);
         EngineModel.Shared.Opened += Reload;
+        EngineModel.Shared.ValuesChanged += Reload;   // undo, reset, a preset: the graph follows the engine
         Levels.Updated += _graph.InvalidateVisual;
         Changed();
     }
@@ -206,7 +207,16 @@ sealed class CurveGraph : Control {
         _dragging = null;
         e.Pointer.Capture(null);
         if (removed) _editor.Edited();   // before the release's full render, so it is the one that shows it
-        // stub(#315): EditHistory.swift owns this until the logic moves below the facade
+        EngineModel.Shared.EndInteraction();
+        _editor.Changed();
+    }
+
+    /// Capture taken mid-drag (focus lost, a dialog): end the drag, or the engine stayed
+    /// on the preview graph until the next drag anywhere. A release has already ended it.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) {
+        base.OnPointerCaptureLost(e);
+        if (_dragging == null) return;
+        _dragging = null;
         EngineModel.Shared.EndInteraction();
         _editor.Changed();
     }

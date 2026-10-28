@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
+using OrionShell.CanvasSlice;
 
 namespace OrionShell.Develop;
 
@@ -38,13 +39,17 @@ public sealed class DetailPanel : StackPanel {
             new AdjustmentSlider("Color", "denoise_color", 0, 4),
             new AdjustmentSlider("Smoothness", "denoise_smoothness", 0, 1)));
 
-        // stub(#315): Engine.swift owns this until the logic moves below the facade
-        //   (spotHeal, spotRadius and spotFeather are what the next spot is placed with; the canvas places it)
-        var heal = new Segmented(["Heal", "Clone"], 0);
-        // Undo spot and Clear shorten spot_count, which is what removeLastSpot and clearSpots leave the engine with.
-        // stub(#315): EditHistory.swift owns this until the logic moves below the facade
-        _undoSpot = Develop.SmallButton("Undo spot", () => Engine.Set("spot_count", SpotCount - 1));
-        _clearSpots = Develop.SmallButton("Clear", () => Engine.Set("spot_count", 0));
+        // spotHeal and spotRadius are what the next spot is placed with: the canvas's SpotModel holds both.
+        // The spots themselves are the overlay's alone: none reaches the engine until the shim writes
+        // OrionSpot (native, u4), so these keep the panel and the overlay in step, not the render.
+        var heal = new Segmented(["Heal", "Clone"], SpotModel.Heal ? 0 : 1);
+        heal.Changed += i => SpotModel.Heal = i == 0;
+        _undoSpot = Develop.SmallButton("Undo spot", () => {
+            SpotModel.Spots.RemoveAt(SpotModel.Spots.Count - 1);
+            SpotModel.Selected = Math.Min(SpotModel.Selected, SpotModel.Spots.Count - 1);
+            CanvasState.Touch();
+        });
+        _clearSpots = Develop.SmallButton("Clear", () => { SpotModel.Spots.Clear(); SpotModel.Selected = -1; CanvasState.Touch(); });
         Children.Add(new SectionPlate("Spots",
             "Turn on Place spots, then drag on the photo: press where the dust is and pull to choose what covers it. " +
             "Drag either circle afterwards to move it — solid is the spot, dashed is where the replacement comes from. " +
@@ -52,7 +57,8 @@ public sealed class DetailPanel : StackPanel {
             "invisible on a sky. ⚠ It has one known limit: placed across a hard edge the correction is wrong on both " +
             "sides, because it is a single number for the whole disc.",
             Develop.Row(8, [heal], _spotCount),
-            Develop.LocalSlider("Size", 0.004f, 0.12f, 0.02f, 3),
+            Develop.LocalSlider("Size", 0.004f, 0.12f, (float)SpotModel.Radius, 3, v => SpotModel.Radius = v),
+            // SpotPlacement carries no feather yet (u4): Softness moves nothing.
             Develop.LocalSlider("Softness", 0, 1, 0.5f, 2),
             Develop.Row(8, [new ToolButton(CanvasTool.Spot, "bandage", "Place spots", "Placing — drag on the photo",
                                            help: "Press on the photo to place a spot, then drag out its source")]),
@@ -104,13 +110,21 @@ public sealed class DetailPanel : StackPanel {
             new AdjustmentSlider("Radius", "sharpen_radius", 0.5f, 3, " px", 1),
             new AdjustmentSlider("Masking", "sharpen_masking", 0, 1)));
 
-        Engine.Rendered += ShowSpots;
-        Engine.Opened += () => { _lutName = ""; ShowLut(); };
+        CanvasState.Changed += ShowSpots;   // the overlay places, moves and removes through CanvasState.Touch
+        // A kept session keeps its LUT (#318): coming back to the photo, name it, so Remove is there.
+        // ponytail: a LUT without a TITLE still reads as none here; a facade "is one loaded" call fixes it.
+        Engine.Opened += () => { (_lutName, _lutError.Text) = (LutTitle(), null); ShowLut(); };
         ShowSpots();
         ShowLut();
     }
 
-    static int SpotCount => (int)Engine.Get("spot_count");
+    static int SpotCount => SpotModel.Spots.Count;
+
+    /// The loaded .cube's TITLE, "" when none (or when it has no TITLE).
+    static string LutTitle() {
+        var title = new byte[256];
+        return Engine.Handle != 0 && DevelopFacade.orion_engine_lut_title(Engine.Handle, title, title.Length) == 0 ? DevelopFacade.CString(title) : "";
+    }
 
     void ShowSpots() {
         int n = SpotCount;
@@ -135,9 +149,7 @@ public sealed class DetailPanel : StackPanel {
         if (status != 0) {
             _lutError.Text = DevelopFacade.ErrorText(status);
         } else {
-            var title = new byte[256];
-            DevelopFacade.orion_engine_lut_title(Engine.Handle, title, title.Length);
-            string named = DevelopFacade.CString(title);
+            string named = LutTitle();
             (_lutName, _lutError.Text) = (named.Length > 0 ? named : System.IO.Path.GetFileNameWithoutExtension(path), null);
             Engine.Render(preview: false);
         }

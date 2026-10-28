@@ -74,19 +74,20 @@ public sealed class ColorPanel : StackPanel {
     /// The swatch rail and the three sliders for the chosen band. The tracks
     /// wear the band's own colours: the Hue ends are the shader's ±30° travel.
     void ShowBand() {
-        _swatches.Children.Clear();
-        foreach (var b in Enum.GetValues<HueBand>()) {
-            // The target is the 24 pt square, not the 16 pt dot: no dead strip between eight of them.
-            var cell = new Border {
-                Width = 24, Height = 24, Background = Brushes.Transparent,
-                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
-                Child = new Ellipse { Width = 16, Height = 16, Fill = TargetedAdjust.Swatch(b),
-                                      Stroke = b == _band ? Palette.Text : null, StrokeThickness = 1.5 },
-            };
-            ToolTip.SetTip(cell, TargetedAdjust.Name(b));
-            cell.PointerPressed += (_, _) => { _band = b; ShowBand(); };
-            _swatches.Children.Add(cell);
-        }
+        if (_swatches.Children.Count == 0)
+            foreach (var b in Enum.GetValues<HueBand>()) {
+                // The target is the 24 pt square, not the 16 pt dot: no dead strip between eight of them.
+                // A button, so Tab reaches each band and Space picks it; a pressed Border did neither.
+                // Built once and restroked, so the focus stays on the band just picked.
+                var cell = new StateButton {
+                    Kind = ButtonKind.Bare, Width = 24, Height = 24, MinWidth = 0, Padding = default,
+                    Content = new Ellipse { Width = 16, Height = 16, Fill = TargetedAdjust.Swatch(b), Tag = StateButton.Keep, StrokeThickness = 1.5 },
+                }.Help(TargetedAdjust.Name(b));
+                cell.Click += (_, _) => { _band = b; ShowBand(); };
+                _swatches.Children.Add(cell);
+            }
+        foreach (var b in Enum.GetValues<HueBand>())
+            ((Ellipse)((StateButton)_swatches.Children[(int)b]).Content!).Stroke = b == _band ? Palette.Text : null;
         _bandName.Content = TargetedAdjust.ActiveBand is { } active
             ? Engraved.Label(TargetedAdjust.Name(active), Palette.Accent)
             : Engraved.Label(TargetedAdjust.Name(_band));
