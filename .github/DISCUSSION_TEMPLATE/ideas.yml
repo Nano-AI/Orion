@@ -1,0 +1,14 @@
+title: ""
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What you'd like to do with your photos that Orion doesn't let you do yet.
+    validations:
+      required: true
+  - type: textarea
+    id: elsewhere
+    attributes:
+      label: How another editor does it
+      description: Optional. Lightroom, Capture One, darktable, anything.

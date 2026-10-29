@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Ask a question
+    url: https://github.com/Nano-AI/Orion/discussions/new?category=q-a
+    about: How to do something in Orion. Bugs and camera support stay here as issues.
   - name: Download Orion
     url: https://bankoti.dev/Orion/download/
     about: The newest alpha for your computer.

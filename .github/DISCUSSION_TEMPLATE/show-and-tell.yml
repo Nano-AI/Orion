@@ -1,0 +1,14 @@
+title: ""
+body:
+  - type: textarea
+    id: photo
+    attributes:
+      label: The photo
+      description: Drop in the edit, and the unedited version beside it if you like.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How you got there
+      description: Optional. The camera, and the adjustments that mattered.
