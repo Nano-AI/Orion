@@ -208,10 +208,14 @@ jobs:
           [ -x "$cdb" ] || { echo "no cdb on this image"; exit 0; }
           "$cdb" -lines -c "g; .ecxr; ~*kn 40; q" ./build/apps/tests/orion-tests.exe 2>&1 | tail -300
 
+      # The shell and the packages still run when orion-tests failed (the job stays
+      # red): one run then reports every step, not the first failure.
       - uses: actions/setup-dotnet@v4
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         with: { dotnet-version: '10.0.x' }
 
       - name: Shell selftest (headless)
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: |
           dotnet build "$SHELL_DIR" -c Release
           cp build/shell-native/*.dll "$SHELL_DIR/bin/Release/net10.0/"
@@ -220,11 +224,13 @@ jobs:
             bin/Release/net10.0/Orion.exe "$RUNNER_TEMP/selftest.dng"
 
       - name: Zip and installer
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: |
           choco install innosetup -y --no-progress
           ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe" tools/package-windows.sh "$SHELL_DIR" build dist
 
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         with:
           name: orion-windows
           path: |
