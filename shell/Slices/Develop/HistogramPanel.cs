@@ -88,7 +88,7 @@ public sealed class HistogramPanel : StackPanel {
 
     readonly HistogramPlate _plate = new() { Height = PlateHeight };
     /// What the plate shows while it waits: a flat fill, never a made-up curve.
-    readonly Border _waiting = new() { Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm), IsVisible = false };
+    readonly Border _waiting = new() { Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm - 1), IsVisible = false };   // 1 px inside the plate: concentric
     readonly Border _shadows = new(), _highlights = new() { HorizontalAlignment = HorizontalAlignment.Right };
     readonly CaptureLine _capture = new();
     /// Bumped by each emptying, so only the latest one's wait can start the pulse.

@@ -286,7 +286,7 @@ static partial class SelfTest {
         var library = LibraryModel.Shared;
         var photo = library.Photos[0];
         library.SetRejected(photo, true);
-        var marks = LibraryUi.Marks(photo, Faces.Mark);
+        var marks = LibraryUi.Marks(photo);
         Check(marks is Avalonia.Controls.Shapes.Path && Avalonia.Automation.AutomationProperties.GetName(marks) == "Rejected",
               "a rejected photo's mark is an ✕, named Rejected");
         library.SetRejected(photo, false);

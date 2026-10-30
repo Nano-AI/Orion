@@ -81,7 +81,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         _rotateIcon.IsVisible = shape?.Kind == 2;
         if (shape?.Kind == 2) {
             var at = MaskLayout.HandlePoint(MaskHandle.Rotate, shape, Map);
-            Drawn.At(_rotateIcon, at.X - 3.5, at.Y - 3.5);
+            Drawn.At(_rotateIcon, at.X - IconSize.Sm / 2, at.Y - IconSize.Sm / 2);   // centred on the handle
         }
         ShowPill(Showing && G.Drawing != 0);
         // A newly selected mask's outline fades in (150 ms, ease-out) rather than blinking on.

@@ -63,18 +63,18 @@ static class LibraryUi {
     /// How far a rejected photo's picture fades, in the strip and the gallery alike.
     public const double RejectedOpacity = 0.35;
 
-    /// A photo's marks at a text size: five stars, the rating's in the star
+    /// A photo's marks, at IconSize.Sm in the strip and the gallery alike: five stars, the rating's in the star
     /// colour and the rest faint, so "unrated" is shown rather than inferred;
     /// a rejected photo shows the reject ✕ alone, in the reject colour.
     /// `unearned`: the stars above the rating too, faint; without them an unrated photo shows nothing.
-    public static Control Marks(LibraryModel.Photo photo, double size, bool unearned = true) {
+    public static Control Marks(LibraryModel.Photo photo, bool unearned = true) {
         if (photo.Rejected) {
             var x = Icons.Create("xmark", IconSize.Sm, Palette.Reject);
             x.VerticalAlignment = VerticalAlignment.Center;
             Avalonia.Automation.AutomationProperties.SetName(x, "Rejected");
             return x;
         }
-        var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = size > Faces.Mark ? Space.Xs : 1, VerticalAlignment = VerticalAlignment.Center };
+        var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Xs, VerticalAlignment = VerticalAlignment.Center };
         for (int i = 1; i <= (unearned ? 5 : photo.Rating); i++) stars.Children.Add(Icons.Create("star.fill", IconSize.Sm, i <= photo.Rating ? Palette.Star : Palette.Faint));
         Avalonia.Automation.AutomationProperties.SetName(stars, photo.Rating == 0 ? "Unrated" : $"{photo.Rating} stars");
         return stars;

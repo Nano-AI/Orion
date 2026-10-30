@@ -84,7 +84,7 @@ public sealed class AdjustmentSlider : StackPanel {
     }
 
     static double FigureWidth(string figure) {
-        var text = new FormattedText(figure, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Faces.NumeralFace, Faces.Readout, Brushes.White);
+        var text = new FormattedText(figure, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Faces.NumeralFace, Faces.Readout, Palette.Text);   // measured, never drawn
         text.SetFontFeatures(Faces.Tabular);
         return text.WidthIncludingTrailingWhitespace;
     }

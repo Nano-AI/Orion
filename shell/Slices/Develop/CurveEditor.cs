@@ -131,7 +131,7 @@ sealed class CurveGraph : Control {
                 g.LineTo(new Point(s, s));
                 g.EndFigure(true);
             }
-            c.DrawGeometry(new SolidColorBrush(Colors.White, 0.055), null, hist);
+            c.DrawGeometry(new SolidColorBrush(((ISolidColorBrush)Palette.Text).Color, 0.055), null, hist);
         }
 
         var grid = new Pen(Palette.Line, 0.5);

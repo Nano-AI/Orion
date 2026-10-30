@@ -1,3 +1,6 @@
+// Node Garden pattern © Nikolaj Sokolowski (bookofshapes.com), used under its licence as part of
+// Orion's interface. Not licensed for reuse as a pattern; do not copy it out of this file.
+
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;

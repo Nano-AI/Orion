@@ -136,7 +136,7 @@ public sealed class GalleryPanel : DockPanel {
         var name = new TextBlock { Text = photo.Name, Foreground = isFocused ? Palette.Text : Palette.Dim,
                                    TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         var caption = new DockPanel();
-        var marks = LibraryUi.Marks(photo, Faces.Body);
+        var marks = LibraryUi.Marks(photo);
         SetDock(marks, Dock.Right);
         caption.Children.AddRange([marks, name]);
         var cell = new StackPanel { Spacing = Space.Sm, Background = Brushes.Transparent, Focusable = true, Children = { ring, caption } };

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Draw the social preview card, web/img/og-orion.png (1200 x 630).
+"""Draw the social preview card, web/img/og-orion.jpg or .png (1200 x 630).
 
     ./tools/make-og-card.py [--copy OUT.png]
+
+Writes whichever of JPEG (quality 92, 4:4:4) and PNG is smaller, removing the
+other; the pages' og:image and twitter:image name .jpg, so a switch to .png
+means editing both pages. --copy also saves a PNG of the card at OUT.png.
 
 Book of Shapes' "Node Garden" in the site's greys, three nodes on a rising
 diagonal picked out as Orion's Belt, and the card's words in the site's own
@@ -34,6 +38,8 @@ W, H = 1200, 630
 
 
 def garden():
+    # Node Garden pattern © Nikolaj Sokolowski (bookofshapes.com), used under its licence as part of
+    # Orion's interface. Not licensed for reuse as a pattern; do not copy it out of NodeGarden.cs.
     src = (ROOT / "shell/Slices/Canvas/NodeGarden.cs").read_text()
     nums = lambda name: [int(n) for n in re.findall(r"\d+", re.search(name + r' = """(.*?)"""', src, re.S).group(1))]
     c, l = nums("NodeData"), nums("LinkData")

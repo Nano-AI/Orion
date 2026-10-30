@@ -136,7 +136,7 @@ public sealed class FilmstripPanel : Grid {
         var picture = new Image { Source = photo.Thumbnail, Stretch = Stretch.Uniform, Opacity = photo.Rejected ? LibraryUi.RejectedOpacity : 1 };
         var number = Faces.Figure($"{photo.Index + 1}", Faces.Mark, Palette.Dim);
         // A rejected frame's mark is the cross over it, so the print carries stars only.
-        var marks = photo.Rejected ? new Panel() : LibraryUi.Marks(photo, Faces.Mark, unearned: false);
+        var marks = photo.Rejected ? new Panel() : LibraryUi.Marks(photo, unearned: false);
         // The marks follow their own number: at the frame's right they read as the next frame's.
         var print = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm, VerticalAlignment = VerticalAlignment.Center, Children = { number, marks } };
         var frame = new Frame { Child = picture };
