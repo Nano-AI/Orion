@@ -86,6 +86,7 @@ line in its review):
 | Assistant | `ProposalWatcher`'s Vanished/RestoreSidecar decode outside a try; the NuGet lock file is not enforced in packaging; `Broken` is not reset in `Attach`; approve-after-partial-restore untested |
 | Region | A pan that reloads the window costs ~31 ms; `displayedToFrame` straightens about the crop centre where `geometry.slang` uses the frame centre, so masks and spots sit off on a straightened off-centre crop (wants an issue); many filters still fall back to the whole graph |
 | CI and facade | A stale `createError` for null-handle callers; the GPL regex is case-sensitive (no-rule-fails is the real guard); the PII scan misses UTF-16; a conditional second Undo in `MaskUx`; include order |
+| Display (#386) | The Windows D3D11 share's review minors stay with it until a Windows window has run it (opt-in, `ORION_D3D_SHARE=1`); `orion.h` (~920 lines) and `CApi.cpp` (812) are past the ~800-line guide and want splitting; Metal's synchronous display copy copies twice (slower at level 0 than `read_pixels`, headless only) |
 | Tools | check-modes skips `_PIC8095` and reads only this tree's `samples/`; check-agent needs `npm ci` in `mcp/` in a fresh worktree; `tools/huefit.py` needs a port |
 
 Gaussian splatting, Marigold and Qwen are discussion only (#271). Queueing or
