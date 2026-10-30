@@ -21,10 +21,10 @@
 #include "util/DngWriter.h"
 
 #include "util/Half.h"
+#include "util/Utf8Path.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -304,8 +304,10 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     // Write to a sibling and rename: a throw mid-write must not leave a
     // truncated file that the library scan would then try to open forever.
     const std::string partial = path + ".part";
+    const auto partialPath = utf8Path(partial);
+    const auto drop = [&] { std::error_code ignored; std::filesystem::remove(partialPath, ignored); };
     {
-        std::ofstream out(partial, std::ios::binary | std::ios::trunc);
+        std::ofstream out(partialPath, std::ios::binary | std::ios::trunc);
         if (!out) throw std::runtime_error("DNG write: cannot create " + partial);
         out.write(reinterpret_cast<const char*>(head.data()),
                   static_cast<std::streamsize>(head.size()));
@@ -315,7 +317,7 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
             for (std::size_t i = 0; i < row.size(); ++i) {
                 float v = src[i];
                 if (!std::isfinite(v)) {
-                    std::remove(partial.c_str());
+                    drop();
                     throw std::runtime_error("DNG write: non-finite sample");
                 }
                 row[i] = floatToHalf(std::clamp(v, 0.0f, 1.0f));
@@ -325,16 +327,16 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
         }
         if (!out) {
             out.close();
-            std::remove(partial.c_str());
+            drop();
             throw std::runtime_error("DNG write: write failed for " + path);
         }
     }
     // std::filesystem::rename replaces an existing file on Windows too, where
     // std::rename refuses one (#376).
     std::error_code moved;
-    std::filesystem::rename(partial, path, moved);
+    std::filesystem::rename(partialPath, utf8Path(path), moved);
     if (moved) {
-        std::remove(partial.c_str());
+        drop();
         throw std::runtime_error("DNG write: cannot move into place " + path);
     }
 }

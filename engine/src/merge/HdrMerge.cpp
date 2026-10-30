@@ -17,6 +17,7 @@
 #include "raw/RawImage.h"
 #include "util/DngWriter.h"
 #include "util/Half.h"
+#include "util/Utf8Path.h"
 #include "util/ImageWriter.h"
 
 #include <algorithm>
@@ -214,7 +215,7 @@ float HdrMerge::run(const std::vector<std::string>& paths, int referenceIndex,
     if (referenceIndex < 0 || referenceIndex >= int(paths.size())) {
         throw std::runtime_error("reference index out of range");
     }
-    if (std::filesystem::exists(outputPath)) {
+    if (std::filesystem::exists(util::utf8Path(outputPath))) {
         // Collision policy belongs to the caller (the UI picks fresh names);
         // silently replacing a photograph is not this class's call to make.
         throw std::runtime_error("output already exists: " + outputPath);

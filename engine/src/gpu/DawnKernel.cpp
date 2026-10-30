@@ -8,6 +8,8 @@
 
 #include "gpu/DawnKernel.h"
 
+#include "util/Utf8Path.h"
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -84,7 +86,7 @@ const Shader::Variant& Shader::pipeline(const std::vector<PixelFormat>& formats)
 
 std::unique_ptr<Library::Impl> makeLibrary(std::shared_ptr<Context> ctx, const std::string& path) {
     const std::string file = wgslPath(path);
-    std::ifstream in(file, std::ios::binary);
+    std::ifstream in(util::utf8Path(file), std::ios::binary);
     if (!in) throw std::runtime_error("could not load WGSL at " + file);
     std::ostringstream all;
     all << in.rdbuf();
@@ -110,7 +112,7 @@ std::unique_ptr<Library::Impl> makeLibrary(std::shared_ptr<Context> ctx, const s
     s->source = all.str();
     // One entry point per file, named after it (engine/shaders/CMakeLists.txt).
     // Set here, under the lock, so two threads making kernels never race on it.
-    s->entry  = std::filesystem::path(file).stem().string();
+    s->entry  = util::utf8Path(file).stem().string();
     parseHeader(*s);
     slot = s;
     lib->shader = std::move(s);

@@ -11,6 +11,7 @@
 
 #include "pipe/CubeLut.h"
 #include "util/Half.h"
+#include "util/Utf8Path.h"
 
 #include <fstream>
 #include <iterator>
@@ -536,7 +537,7 @@ OrionStatus orion_engine_auto_enhance(OrionEngine* engine, OrionAdjustments* adj
 OrionStatus orion_engine_load_lut(OrionEngine* engine, const char* path) {
     if (engine == nullptr || path == nullptr) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        std::ifstream in(path, std::ios::binary);
+        std::ifstream in(orion::util::utf8Path(path), std::ios::binary);
         if (!in) throw std::runtime_error(std::string("cannot open ") + path);
 
         std::string text((std::istreambuf_iterator<char>(in)),

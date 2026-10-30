@@ -1,6 +1,7 @@
 #include "raw/RawImage.h"
 
 #include "util/Half.h"
+#include "util/Utf8Path.h"
 
 #include <libraw/libraw.h>
 
@@ -16,6 +17,17 @@ namespace {
 
 [[noreturn]] void fail(const char* what, int code) {
     throw std::runtime_error(std::string(what) + ": " + libraw_strerror(code));
+}
+
+/// LibRaw opens a narrow path in the ANSI code page on Windows, so a UTF-8
+/// `Zoë` became mojibake there and nothing opened; its wide overload takes the
+/// path intact (#376).
+int openFile(LibRaw& proc, const std::string& path) {
+#ifdef _WIN32
+    return proc.open_file(util::utf8Path(path).wstring().c_str());
+#else
+    return proc.open_file(path.c_str());
+#endif
 }
 
 char channelLetter(Channel c) {
@@ -42,7 +54,7 @@ RawInfo readInfo(const std::string& path) {
     auto owned = std::make_unique<LibRaw>();
     LibRaw& proc = *owned;
 
-    if (proc.open_file(path.c_str()) != LIBRAW_SUCCESS) {
+    if (openFile(proc, path) != LIBRAW_SUCCESS) {
         throw std::runtime_error("could not open " + path);
     }
 
@@ -101,7 +113,7 @@ Thumbnail extractThumbnail(const std::string& path) {
     auto owned = std::make_unique<LibRaw>();
     LibRaw& proc = *owned;
 
-    if (proc.open_file(path.c_str()) != LIBRAW_SUCCESS) return {};
+    if (openFile(proc, path) != LIBRAW_SUCCESS) return {};
     if (proc.unpack_thumb() != LIBRAW_SUCCESS) { proc.recycle(); return {}; }
 
     const auto& t = proc.imgdata.thumbnail;
@@ -174,7 +186,7 @@ namespace {
 /// with the default options float3_image stays null and color3_image gets the
 /// quantized copy. Harmless for integer sources, so it is cleared always.
 void openUnpacked(LibRaw& proc, const std::string& path) {
-    if (int rc = proc.open_file(path.c_str()); rc != LIBRAW_SUCCESS) {
+    if (int rc = openFile(proc, path); rc != LIBRAW_SUCCESS) {
         fail("could not open raw file", rc);
     }
     proc.imgdata.rawparams.options &=

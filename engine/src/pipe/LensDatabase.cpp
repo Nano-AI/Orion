@@ -1,5 +1,7 @@
 #include "pipe/LensDatabase.h"
 
+#include "util/Utf8Path.h"
+
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -96,9 +98,10 @@ std::string normalizeLensName(const std::string& s) { return normalize(s); }
 
 LensDatabase::LensDatabase(const std::string& directory) {
     std::error_code ec;
-    if (!std::filesystem::is_directory(directory, ec)) return;
+    const auto dir = util::utf8Path(directory);
+    if (!std::filesystem::is_directory(dir, ec)) return;
 
-    for (const auto& entry : std::filesystem::directory_iterator(directory, ec)) {
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
         if (entry.path().extension() != ".xml") continue;
         std::ifstream in(entry.path());
         if (!in) continue;

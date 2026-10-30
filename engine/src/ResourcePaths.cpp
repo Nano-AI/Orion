@@ -1,5 +1,7 @@
 #include "ResourcePaths.h"
 
+#include "util/Utf8Path.h"
+
 #include <filesystem>
 #include <vector>
 
@@ -79,13 +81,13 @@ std::string resolve(const char* name, const char* fromBuild) {
 #endif
     if (std::filesystem::is_directory(bundled, ec)) {
         auto clean = std::filesystem::weakly_canonical(bundled, ec);
-        return ec ? bundled.string() : clean.string();
+        return util::utf8String(ec ? bundled : clean);
     }
     const auto build = buildDir();
     if (build.empty()) return fromBuild;
     const auto dev = build / fromBuild;
     auto clean = std::filesystem::weakly_canonical(dev, ec);
-    return ec ? dev.string() : clean.string();
+    return util::utf8String(ec ? dev : clean);
 }
 
 }  // namespace

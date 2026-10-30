@@ -16,10 +16,10 @@
 #include "util/ExportOps.h"
 #include "util/ImageWriter.h"
 #include "util/JxlWriter.h"
+#include "util/Utf8Path.h"
 
 #include <opencv2/core.hpp>
 
-#include <cstdio>
 #include <filesystem>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -117,20 +117,21 @@ void writeImage(const std::string& path, const std::uint16_t* rgba,
                 const ExportOptions& options) {
     const auto bytes = encode(prepare(rgba, width, height, bytesPerRow, options), options);
     // A temporary beside it, then a rename: a full disk leaves the old file whole.
-    const std::string partial = path + ".part";
+    const auto partial = utf8Path(path + ".part");
+    const auto drop = [&] { std::error_code ignored; std::filesystem::remove(partial, ignored); };
     {
         std::ofstream file(partial, std::ios::binary | std::ios::trunc);
         file.write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
         if (!file.flush()) {
             file.close();
-            std::remove(partial.c_str());
+            drop();
             throw std::runtime_error("could not write: " + path);
         }
     }
     std::error_code moved;
-    std::filesystem::rename(partial, path, moved);   // replaces on Windows too (#376)
+    std::filesystem::rename(partial, utf8Path(path), moved);   // replaces on Windows too (#376)
     if (moved) {
-        std::remove(partial.c_str());
+        drop();
         throw std::runtime_error("could not move into place: " + path);
     }
 }
