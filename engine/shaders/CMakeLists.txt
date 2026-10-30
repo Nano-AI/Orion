@@ -10,12 +10,12 @@
 # on — while the host binds every dispatch from index 0. Separate modules make
 # each kernel's bindings start at zero, which is the contract the host assumes.
 
-set(SLANGC ${CMAKE_SOURCE_DIR}/third_party/slang/bin/slangc)
+set(SLANGC ${CMAKE_SOURCE_DIR}/third_party/slang/bin/slangc${CMAKE_EXECUTABLE_SUFFIX})
 
 if(NOT EXISTS ${SLANGC})
     message(FATAL_ERROR
         "slangc not found at ${SLANGC}\n"
-        "Download the macOS release from github.com/shader-slang/slang and\n"
+        "Download this system's release from github.com/shader-slang/slang and\n"
         "extract it to third_party/slang/.")
 endif()
 
@@ -118,23 +118,27 @@ foreach(spec IN LISTS ORION_SHADERS)
         VERBATIM
     )
 
-    add_custom_command(
-        OUTPUT ${air}
-        COMMAND xcrun -sdk macosx metal -O3 -ffast-math -c ${msl} -o ${air}
-        DEPENDS ${msl}
-        COMMENT "metal     ${entry}.metal -> ${entry}.air"
-        VERBATIM
-    )
+    # The metallib only where Metal is (#376). The MSL above is still made
+    # everywhere: its reflection is what wgsl_prep.py lays WGSL out against.
+    if(APPLE)
+        add_custom_command(
+            OUTPUT ${air}
+            COMMAND xcrun -sdk macosx metal -O3 -ffast-math -c ${msl} -o ${air}
+            DEPENDS ${msl}
+            COMMENT "metal     ${entry}.metal -> ${entry}.air"
+            VERBATIM
+        )
 
-    add_custom_command(
-        OUTPUT ${lib}
-        COMMAND xcrun -sdk macosx metallib ${air} -o ${lib}
-        DEPENDS ${air}
-        COMMENT "metallib  ${entry}.metallib"
-        VERBATIM
-    )
+        add_custom_command(
+            OUTPUT ${lib}
+            COMMAND xcrun -sdk macosx metallib ${air} -o ${lib}
+            DEPENDS ${air}
+            COMMENT "metallib  ${entry}.metallib"
+            VERBATIM
+        )
 
-    list(APPEND METALLIBS ${lib})
+        list(APPEND METALLIBS ${lib})
+    endif()
 
     # Dawn (#375): the same source as WGSL, then wgsl_prep.py writes the header
     # the backend binds by. See that script for what the header holds.

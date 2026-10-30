@@ -19,9 +19,14 @@ Device::~Device() = default;
 
 std::unique_ptr<Device> Device::create() {
     const char* env = std::getenv("ORION_GPU");
-    if (env == nullptr || *env == '\0' || std::strcmp(env, "metal") == 0) {
+    if (env == nullptr || *env == '\0') {
+#ifdef __APPLE__
         return create(Backend::Metal);
+#else
+        return create(Backend::Dawn);   // the only backend off macOS (#376)
+#endif
     }
+    if (std::strcmp(env, "metal") == 0) return create(Backend::Metal);
     if (std::strcmp(env, "dawn") == 0) return create(Backend::Dawn);
     throw std::runtime_error(std::string("ORION_GPU must be metal or dawn, not ") + env);
 }
@@ -36,6 +41,12 @@ void* Device::rawDevice() const noexcept { return impl_->metalDevice(); }
 #ifndef ORION_HAS_DAWN
 std::unique_ptr<Device::Impl> makeDawnDevice() {
     throw std::runtime_error("this engine was built without Dawn (third_party/dawn-build)");
+}
+#endif
+
+#ifndef __APPLE__
+std::unique_ptr<Device::Impl> makeMetalDevice() {
+    throw std::runtime_error("Metal is macOS only; this system renders through Dawn");
 }
 #endif
 

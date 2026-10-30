@@ -1,5 +1,6 @@
 /*  Alignment — see Align.h. This is the one translation unit that includes
- *  OpenCV; keep it that way.
+ *  OpenCV for alignment, and with util/ImageWriterPortable.cpp (Windows and
+ *  Linux export, #376) one of only two; keep it that way.
  *
  *  Pipeline: exposure-normalized log-luma proxies (~1500 px long edge) -> ORB ->
  *  Hamming brute-force with cross-check -> findHomography(RANSAC) -> ECC
@@ -18,9 +19,16 @@
 // findHomography lives in geometry. The 4.x-compat headers exist but the
 // canonical names say what is actually linked.
 #include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
+// OpenCV 5 renamed features2d and moved findHomography out of calib3d; Windows
+// (vcpkg) and Linux (apt) still ship OpenCV 4 (#376).
+#if __has_include(<opencv2/features.hpp>)
 #include <opencv2/features.hpp>
 #include <opencv2/geometry.hpp>
-#include <opencv2/imgproc.hpp>
+#else
+#include <opencv2/calib3d.hpp>
+#include <opencv2/features2d.hpp>
+#endif
 #include <opencv2/video/tracking.hpp>
 
 #include <algorithm>

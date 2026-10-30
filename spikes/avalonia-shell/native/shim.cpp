@@ -7,9 +7,10 @@
 //  - a picture Avalonia can composite. The facade hands out an id<MTLTexture>;
 //    present.mm copies it on the GPU into an IOSurface that Avalonia's Metal
 //    renderer imports (#317, decision #354), and shim_read copies it to the CPU
-//    for everything that has no GPU interop: headless, OpenGL, a failed import.
-#import <AppKit/AppKit.h>
-#import <Metal/Metal.h>
+//    for everything that has no GPU interop: headless, OpenGL, a failed import,
+//    and Windows and Linux for now (#376).
+// Portable C++; the macOS-only pieces (present.mm's hooks, NSImage SVG) are in
+// shim_mac.mm.
 #include <cstdio>
 #include <algorithm>
 #include <cmath>
@@ -19,44 +20,8 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
-#include "orion/orion.h"
+#include "shim.h"
 
-// A brush stroke as the engine was given it: interleaved x, y and one erase
-// flag per dab. The buffers are shared: a stroke that only grew (every pointer
-// event of a drag) points into its predecessor's buffers with a larger count,
-// so keeping every revision costs the dabs once, not once per event.
-struct Stroke {
-    std::shared_ptr<std::vector<float>> xy, erase;
-    int dabs = 0;
-};
-
-struct Shim {
-    OrionEngine* engine = nullptr;
-    OrionAdjustments adj{};
-    // What each mask row's brush holds in the engine, and its revision.
-    // Revisions are global and never reused (Engine+Brush.swift's
-    // brushRevisions), and every stroke is kept by its revision, so undo can
-    // write an old revision back through shim_set and get its dabs with it.
-    Stroke held[ORION_MAX_MASK_COMPONENTS];
-    unsigned revisions[ORION_MAX_MASK_COMPONENTS]{};
-    std::unordered_map<unsigned, Stroke> kept;
-    unsigned last_revision = 0;
-    // The overlay, applied for one render at a time (shim_render).
-    int overlay = 0, overlay_layer = 0;
-    // present.mm's last copy out of this engine's textures, which may still be
-    // waiting on the GPU for Avalonia: the engine must not render over them first.
-    id<MTLCommandBuffer> reader = nil;
-};
-
-// Waits until present.mm has read this engine's picture. Its copy waits on the
-// GPU only for a hand-off Avalonia has already submitted (SharedPicture keeps
-// one in flight), so this returns within a frame; in practice it is long done.
-// ponytail: an export through orion_engine_export directly does not settle; a
-// copy lands within a frame of its hand-off, long before a click. Route it here if that changes.
-static void settle(Shim* s) {
-    [s->reader waitUntilCompleted];
-    s->reader = nil;
-}
 
 static void defaults(OrionAdjustments& a) {
     // Mirrors Engine.swift's non-zero initial values (lines 132-475).
@@ -198,7 +163,7 @@ Shim* shim_open(const char* path) {
 
 void shim_close(Shim* s) {
     if (!s) return;
-    settle(s);
+    shim_settle(s);
     orion_engine_destroy(s->engine);
     delete s;
 }
@@ -280,7 +245,7 @@ int shim_spots(Shim* s, OrionSpot* out, int capacity) {
 // Engine.swift's autoEnhance: the engine measures and writes exposure, whites,
 // blacks, fusion (lift) and clarity into the block; the rest stays as sent.
 int shim_auto_enhance(Shim* s) {
-    settle(s);
+    shim_settle(s);
     return orion_engine_auto_enhance(s->engine, &s->adj) == ORION_OK &&
            orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
 }
@@ -353,7 +318,7 @@ int shim_mask_commit(Shim* s, int count) {
 // ponytail: costs a develop_linear pass per render while the overlay is up,
 // since the toggle back dirties it; a display-only flag in the engine removes that.
 int shim_render(Shim* s, int preview, double* gpu_ms) {
-    settle(s);
+    shim_settle(s);
     const bool overlay = s->overlay && s->adj.mask_count > 0;
     if (overlay) {
         s->adj.mask_overlay = 1;
@@ -377,63 +342,24 @@ int shim_render(Shim* s, int preview, double* gpu_ms) {
 int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, int out_h, int interacting,
                        double* gpu_ms) {
     if (out_w <= 0 || out_h <= 0) return 0;
-    settle(s);
+    shim_settle(s);
     const bool overlay = s->overlay && s->adj.mask_count > 0;
     if (overlay) return 0;   // a mask is on: the region graph refuses those anyway
     return orion_engine_render_region(s->engine, x, y, w, h, unsigned(out_w), unsigned(out_h), interacting,
                                       gpu_ms) == ORION_OK ? 3 : 0;
 }
 
-// The last render of `which` (what shim_render returned) and the region of it
-// that holds the picture. The texture is square so a straightened frame fits;
-// only the top-left region holds the picture (Engine+Render.swift:286):
-// image_size for the full graph, preview_size for the preview, each its own
-// graph's answer. Null when there is nothing to read. present.mm reads it too.
-void* shim_picture(Shim* s, int which, int* w, int* h) {
-    void* raw = which == 1 ? orion_engine_preview_texture(s->engine)
-              : which == 3 ? orion_engine_region_texture(s->engine)
-                           : orion_engine_output_texture(s->engine);
-    if (!raw) return nullptr;
-    id<MTLTexture> t = (__bridge id<MTLTexture>)raw;
-    unsigned iw = 0, ih = 0;
-    if (which == 1) orion_engine_preview_size(s->engine, &iw, &ih);
-    else if (which == 3) orion_engine_region_size(s->engine, &iw, &ih);
-    else orion_engine_image_size(s->engine, &iw, &ih);
-    *w = int(std::min<NSUInteger>(t.width, iw));
-    *h = int(std::min<NSUInteger>(t.height, ih));
-    return *w > 0 && *h > 0 ? raw : nullptr;
-}
-
-// present.mm hands over the command buffer that reads this engine's picture.
-void shim_hold(Shim* s, void* commandBuffer) { s->reader = (__bridge id<MTLCommandBuffer>)commandBuffer; }
-
 // Copies the last render into `dst` as RGBA8. Call with dst == NULL to get the
-// size. `which` is what shim_render returned.
+// size. `which` is what shim_render returned. Through the facade's readback,
+// which every backend has (#376); present.mm is the zero-copy path on macOS.
 int shim_read(Shim* s, int which, uint8_t* dst, int capacity, int* w, int* h) {
-    void* raw = shim_picture(s, which, w, h);
-    if (!raw) return 0;
+    const int graph = which == 1 ? 1 : which == 3 ? 2 : 0;
+    uint32_t rw = 0, rh = 0;
+    if (orion_engine_read_pixels(s->engine, graph, nullptr, 0, &rw, &rh) != ORION_OK || !rw || !rh) return 0;
+    *w = int(rw);
+    *h = int(rh);
     if (!dst) return 1;
-    if (capacity < *w * *h * 4) return 0;
-    id<MTLTexture> t = (__bridge id<MTLTexture>)raw;
-    const NSUInteger rw = NSUInteger(*w), rh = NSUInteger(*h);
-    const MTLRegion all = MTLRegionMake2D(0, 0, rw, rh);
-    switch (t.pixelFormat) {
-        case MTLPixelFormatRGBA8Unorm:
-            [t getBytes:dst bytesPerRow:rw * 4 fromRegion:all mipmapLevel:0];
-            return 1;
-        case MTLPixelFormatRGBA16Float: {  // the wide path; not the screen default
-            std::vector<__fp16> wide(rw * rh * 4);
-            [t getBytes:wide.data() bytesPerRow:rw * 8 fromRegion:all mipmapLevel:0];
-            for (size_t i = 0; i < wide.size(); ++i) {
-                float v = float(wide[i]);
-                dst[i] = uint8_t(v <= 0 ? 0 : v >= 1 ? 255 : v * 255 + 0.5f);
-            }
-            return 1;
-        }
-        default:
-            std::fprintf(stderr, "shim_read: pixel format %lu\n", (unsigned long)t.pixelFormat);
-            return 0;
-    }
+    return orion_engine_read_pixels(s->engine, graph, dst, uint32_t(std::max(capacity, 0)), &rw, &rh) == ORION_OK;
 }
 
 // The camera's embedded JPEG, for the filmstrip.
@@ -443,65 +369,18 @@ int shim_thumbnail(const char* path, uint8_t* dst, int capacity, int* turns) {
     return int(size);
 }
 
-// An SVG watermark's shape, through NSImage, as WatermarkRaster.swift's Art
-// draws it (SVG is native since macOS 10.15). The only SVG rasterizer .NET has
-// under a licence Orion may ship is none: Svg.Skia rests on SVG.NET, MS-PL.
-// ponytail: macOS only; a Windows or Linux port needs its own rasterizer here.
-static NSImage* svg_image(const uint8_t* bytes, int length) {
-    if (!bytes || length <= 0) return nil;
-    // An Objective-C exception must not cross the C facade: a file that makes AppKit throw is no image.
-    @try {
-        NSImage* image = [[NSImage alloc] initWithData:[NSData dataWithBytes:bytes length:NSUInteger(length)]];
-        return image && image.size.width > 0 && image.size.height > 0 ? image : nil;
-    } @catch (NSException*) {
-        return nil;
-    }
+#ifndef __APPLE__
+// SVG watermarks are drawn by NSImage (shim_mac.mm); Windows and Linux have no
+// rasterizer yet, so an SVG mark is "not an image" there and WatermarkRaster
+// draws none (decision #376).
+int shim_svg_size(const uint8_t*, int, double*, double*) { return 0; }
+int shim_svg_coverage(const uint8_t*, int, uint8_t*, int, int, double, double, double, double, double) {
+    return 0;
 }
-
-// Its natural size. 0 when it is not an image NSImage can read.
-int shim_svg_size(const uint8_t* bytes, int length, double* w, double* h) {
-    @autoreleasepool {
-        NSImage* image = svg_image(bytes, length);
-        if (!image) return 0;
-        *w = image.size.width;
-        *h = image.size.height;
-        return 1;
-    }
-}
-
-// Drawn `w`×`h`, centred at (cx, cy) of a bw×bh tile (y down), turned `angle`
-// radians counter-clockwise as the viewer sees it; its alpha into `alpha`,
-// one byte a pixel, rows top first. RGBA, because NSImage will not draw into
-// an alpha-only context.
-int shim_svg_coverage(const uint8_t* bytes, int length, uint8_t* alpha, int bw, int bh,
-                      double cx, double cy, double w, double h, double angle) {
-    if (!alpha || bw <= 0 || bh <= 0) return 0;
-    @autoreleasepool {
-        NSImage* image = svg_image(bytes, length);
-        if (!image) return 0;
-        std::vector<uint8_t> tile(size_t(bw) * size_t(bh) * 4);
-        CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-        CGContextRef ctx = CGBitmapContextCreate(tile.data(), size_t(bw), size_t(bh), 8, size_t(bw) * 4, space,
-                                                 kCGImageAlphaPremultipliedLast);
-        CGColorSpaceRelease(space);
-        if (!ctx) return 0;
-        // CoreGraphics is y-up and the tile is y-down: flip the centre, then turn.
-        CGContextTranslateCTM(ctx, cx, bh - cy);
-        CGContextRotateCTM(ctx, angle);
-        bool drawn = true;
-        [NSGraphicsContext saveGraphicsState];
-        @try {
-            NSGraphicsContext.currentContext = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:NO];
-            [image drawInRect:NSMakeRect(-w / 2, -h / 2, w, h)];
-        } @catch (NSException*) {
-            drawn = false;   // 0 covers nothing; an exception past here would end the process
-        }
-        [NSGraphicsContext restoreGraphicsState];
-        CGContextRelease(ctx);
-        if (!drawn) return 0;
-        for (size_t i = 0; i < size_t(bw) * size_t(bh); ++i) alpha[i] = tile[i * 4 + 3];
-        return 1;
-    }
-}
+#endif
 
 }  // extern "C"
+
+#ifndef __APPLE__
+void shim_settle(Shim* s) { s->reader.reset(); }
+#endif

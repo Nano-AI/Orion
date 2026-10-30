@@ -1,0 +1,213 @@
+name: Build (macOS, Windows, Linux)
+
+# The engine, its tests, the Avalonia shell and its headless selftest on all
+# three systems, and the Windows and Linux packages as artifacts (decision #376).
+# Never releases or tags: web/js/download.js offers a build only once a release
+# carries it, and making one is the developer's call.
+
+on:
+  push:
+    branches: [main, 'ci/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SHELL_DIR: spikes/avalonia-shell   # the one place this workflow names the shell's path
+  SLANG_VERSION: 2026.14.1           # third_party/slang's version (decision #375)
+  DOTNET_NOLOGO: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04            # pins the apt versions below to the image series
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }     # git describe names the package
+
+      - name: Packages
+        run: |
+          sudo apt-get update
+          # mesa-vulkan-drivers is lavapipe: the runner has no GPU, so Dawn's Vulkan
+          # backend runs on Mesa's CPU driver.
+          sudo apt-get install -y --no-install-recommends ninja-build clang \
+            libraw-dev libopencv-dev libjxl-dev mesa-vulkan-drivers libvulkan1 vulkan-tools
+          vulkaninfo --summary || true
+
+      - name: Slang
+        run: |
+          mkdir -p third_party/slang
+          curl -fsSL "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-linux-x86_64.tar.gz" \
+            | tar -xz -C third_party/slang
+
+      - name: Dawn (cached)
+        id: dawn
+        uses: actions/cache@v4
+        with:
+          path: third_party/dawn-build
+          key: dawn-linux-${{ hashFiles('tools/build-dawn.sh') }}
+      - name: Dawn (build)
+        if: steps.dawn.outputs.cache-hit != 'true'
+        run: tools/build-dawn.sh && rm -rf third_party/dawn-src
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DORION_SHELL_DIR="$SHELL_DIR"
+          cmake --build build
+
+      - name: orion-tests (Dawn on Vulkan, lavapipe)
+        run: ./build/apps/tests/orion-tests
+
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '10.0.x' }
+
+      - name: Shell selftest (headless)
+        run: |
+          dotnet build "$SHELL_DIR" -c Release
+          cp build/shell-native/liborion_shim.so "$SHELL_DIR/bin/Release/net10.0/"
+          ./build/apps/tests/orion-selftest-photo "$RUNNER_TEMP/selftest.dng"
+          cd "$SHELL_DIR" && python3 "$GITHUB_WORKSPACE/tools/ci-selftest.py" linux \
+            bin/Release/net10.0/OrionShell "$RUNNER_TEMP/selftest.dng"
+
+      - name: AppImage
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          APPIMAGETOOL="$RUNNER_TEMP/appimagetool" tools/package-linux.sh "$SHELL_DIR" build dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orion-linux
+          path: dist/*.AppImage
+
+  windows:
+    runs-on: windows-2022
+    defaults:
+      run: { shell: bash }
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/../vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/../vcpkg-cache
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      # MSVC's environment for clang-cl: its headers, libraries and linker.
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: vcpkg at the manifest's baseline
+        run: |
+          git clone --depth 1 --branch 2026.10.16 https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
+          "$VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+      - name: vcpkg packages (cached)
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-win-${{ hashFiles('vcpkg.json') }}
+
+      - name: Slang
+        run: |
+          mkdir -p third_party/slang
+          curl -fsSL -o "$RUNNER_TEMP/slang.zip" \
+            "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-windows-x86_64.zip"
+          7z x -bd -othird_party/slang "$RUNNER_TEMP/slang.zip" >/dev/null
+
+      - name: Dawn (cached)
+        id: dawn
+        uses: actions/cache@v4
+        with:
+          path: third_party/dawn-build
+          key: dawn-windows-${{ hashFiles('tools/build-dawn.sh') }}
+      - name: Dawn (build)
+        if: steps.dawn.outputs.cache-hit != 'true'
+        run: tools/build-dawn.sh && rm -rf third_party/dawn-src
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=x64-windows-release -DORION_SHELL_DIR="$SHELL_DIR"
+          cmake --build build
+
+      - name: orion-tests (Dawn on D3D12, WARP)
+        run: |
+          mkdir -p /d/tmp   # the tests write to /tmp, which Windows reads as the drive's \tmp
+          ./build/apps/tests/orion-tests.exe
+
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '10.0.x' }
+
+      - name: Shell selftest (headless)
+        run: |
+          dotnet build "$SHELL_DIR" -c Release
+          cp build/shell-native/*.dll "$SHELL_DIR/bin/Release/net10.0/"
+          ./build/apps/tests/orion-selftest-photo.exe "$RUNNER_TEMP/selftest.dng"
+          cd "$SHELL_DIR" && python "$GITHUB_WORKSPACE/tools/ci-selftest.py" windows \
+            bin/Release/net10.0/OrionShell.exe "$RUNNER_TEMP/selftest.dng"
+
+      - name: Zip and installer
+        run: |
+          choco install innosetup -y --no-progress
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe" tools/package-windows.sh "$SHELL_DIR" build dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orion-windows
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Packages
+        run: brew install ninja libraw opencv jpeg-xl
+
+      - name: Slang
+        run: |
+          mkdir -p third_party/slang
+          curl -fsSL "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-macos-aarch64.tar.gz" \
+            | tar -xz -C third_party/slang
+
+      - name: Dawn (cached)
+        id: dawn
+        uses: actions/cache@v4
+        with:
+          path: third_party/dawn-build
+          key: dawn-macos-${{ hashFiles('tools/build-dawn.sh') }}
+      - name: Dawn (build)
+        if: steps.dawn.outputs.cache-hit != 'true'
+        run: tools/build-dawn.sh && rm -rf third_party/dawn-src
+
+      # Not the Swift app: the Avalonia shell is the app (#24).
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target orion-tests orion-selftest-photo orion_engine
+
+      - name: orion-tests (Metal, then Dawn on Metal)
+        run: |
+          ./build/apps/tests/orion-tests
+          ORION_GPU=dawn ./build/apps/tests/orion-tests
+
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '10.0.x' }
+
+      - name: Shell selftest (headless)
+        run: |
+          "$SHELL_DIR/native/build.sh"
+          dotnet build "$SHELL_DIR" -c Release
+          ./build/apps/tests/orion-selftest-photo "$RUNNER_TEMP/selftest.dng"
+          cd "$SHELL_DIR" && python3 "$GITHUB_WORKSPACE/tools/ci-selftest.py" macos \
+            bin/Release/net10.0/OrionShell "$RUNNER_TEMP/selftest.dng"

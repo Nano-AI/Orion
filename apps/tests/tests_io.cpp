@@ -6,6 +6,7 @@
 
 #include "gpu/TexturePool.h"
 
+#ifdef __APPLE__   // ImageIO reads the export back; Windows and Linux: tests_export_portable.cpp
 bool readBack(const std::string& path, int& bitsPerComponent, double rgb[3]) {
     CFStringRef p = CFStringCreateWithCString(nullptr, path.c_str(), kCFStringEncodingUTF8);
     if (p == nullptr) return false;
@@ -213,6 +214,8 @@ bool decode16(const std::string& path, std::vector<std::uint16_t>& out,
     CGImageRelease(image);
     return true;
 }
+
+#endif  // __APPLE__
 
 /// Black levels from LibRaw's three sources: a global offset, a per-channel
 /// trim, and a 2D pattern.
@@ -472,6 +475,7 @@ void testBlackLevels() {
     }
 }
 
+#ifdef __APPLE__
 void testExportFormats() {
     section("Export");
 
@@ -812,6 +816,8 @@ void testExportFormats() {
                "the unsharpened edge encodes");
     }
 }
+
+#endif  // __APPLE__
 
 // ── Orientation on the GPU ─────────────────────────────────────────────────
 

@@ -1,8 +1,5 @@
-// The Dawn backend's textures (#375): upload, readback, and the IOSurface
-// that lets a Metal view draw an RGBA8 result with no copy.
-
-#import <IOSurface/IOSurfaceObjC.h>
-#import <Metal/Metal.h>
+// The Dawn backend's textures (#375): upload, readback, and the platform's
+// share that lets a shell draw an RGBA8 result with no copy (Dawn.h).
 
 #include "gpu/Dawn.h"
 
@@ -19,20 +16,9 @@ struct DawnTexture final : Texture::Impl {
     wgpu::TextureView view;
     std::size_t       bpp = 0;
 
-    // The display path, RGBA8 only: the texture lives in `surface`, Dawn
-    // reaches it through `memory`, and `alias` is Metal's view of the same
-    // bytes for a shell to draw (#357's present.mm, the Swift canvas).
-    IOSurfaceRef             surface = nullptr;
-    wgpu::SharedTextureMemory memory;
-    id<MTLTexture>           alias = nil;
-
-    ~DawnTexture() override {
-        if (memory) {
-            wgpu::SharedTextureMemoryEndAccessState end{};
-            memory.EndAccess(tex, &end);
-        }
-        if (surface) CFRelease(surface);
-    }
+    // The display path, RGBA8 only, where the platform has one. After `tex`,
+    // so it goes first: it ends Dawn's access to the texture it shares.
+    std::unique_ptr<DisplayShare> share;
 
     void upload(const void* src, std::size_t bytesPerRow, std::uint32_t width,
                 std::uint32_t height) override {
@@ -86,54 +72,15 @@ struct DawnTexture final : Texture::Impl {
     }
 
     void* raw() const noexcept override { return tex.Get(); }
-    void* displayHandle() const noexcept override { return (__bridge void*)alias; }
+    void* displayHandle() const noexcept override { return share ? share->handle() : nullptr; }
 };
 
 wgpu::TextureUsage usageFor(PixelFormat) {
     // Every format the engine uses is storage-capable once TextureFormatsTier1
-    // is on (DawnDevice.mm refuses a device without it).
+    // is on (DawnDevice.cpp refuses a device without it).
     return wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::StorageBinding |
            wgpu::TextureUsage::CopySrc | wgpu::TextureUsage::CopyDst |
            wgpu::TextureUsage::RenderAttachment;
-}
-
-/// An RGBA8 texture in an IOSurface, as spikes/dawn-avalonia/ does it, held
-/// in access for its whole life. Safe without fences because every engine
-/// submit is waited on the CPU before the engine returns, and a shell reads
-/// only after that and finishes before the next render (`shim_render` waits).
-void shareThroughIOSurface(DawnTexture& t, std::uint32_t width, std::uint32_t height) {
-    @autoreleasepool {
-        NSDictionary* props = @{IOSurfacePropertyKeyWidth: @(width),
-                                IOSurfacePropertyKeyHeight: @(height),
-                                IOSurfacePropertyKeyBytesPerElement: @4,
-                                IOSurfacePropertyKeyPixelFormat: @((uint32_t)'RGBA')};
-        t.surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
-        if (!t.surface) throw std::runtime_error("Dawn: IOSurfaceCreate failed");
-
-        wgpu::SharedTextureMemoryIOSurfaceDescriptor io{};
-        io.ioSurface = t.surface;
-        wgpu::SharedTextureMemoryDescriptor md{.nextInChain = &io};
-        t.memory = t.ctx->device.ImportSharedTextureMemory(&md);
-        wgpu::TextureDescriptor td{.usage = usageFor(PixelFormat::RGBA8Unorm),
-                                   .size = {width, height, 1},
-                                   .format = wgpu::TextureFormat::RGBA8Unorm};
-        t.tex = t.memory.CreateTexture(&td);
-        wgpu::SharedTextureMemoryBeginAccessDescriptor begin{};
-        begin.initialized = false;
-        if (!t.tex || t.memory.BeginAccess(t.tex, &begin) != wgpu::Status::Success) {
-            throw std::runtime_error("Dawn: IOSurface texture could not begin access");
-        }
-
-        id<MTLDevice> mtl = (__bridge id<MTLDevice>)t.ctx->metalDevice;
-        MTLTextureDescriptor* d =
-            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
-                                                               width:width
-                                                              height:height
-                                                           mipmapped:NO];
-        d.usage = MTLTextureUsageShaderRead;
-        d.storageMode = MTLStorageModeShared;
-        t.alias = [mtl newTextureWithDescriptor:d iosurface:t.surface plane:0];
-    }
 }
 
 }  // namespace
@@ -145,8 +92,9 @@ std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context> ctx, std::ui
     ErrorScope scope(*t->ctx);
     t->bpp = bytesPerPixel(format);
     if (format == PixelFormat::RGBA8Unorm) {
-        shareThroughIOSurface(*t, width, height);
-    } else {
+        t->share = shareForDisplay(*t->ctx, width, height, usageFor(format), t->tex);
+    }
+    if (!t->tex) {
         wgpu::TextureDescriptor td{.usage = usageFor(format),
                                    .size = {width, height, 1},
                                    .format = toWgpu(format)};

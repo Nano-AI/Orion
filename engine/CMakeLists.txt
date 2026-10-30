@@ -1,13 +1,22 @@
 # Dawn (#317, #375): the second GPU backend, on whenever tools/build-dawn.sh's
-# output is present. Metal stays the default at runtime (ORION_GPU=dawn picks
-# Dawn), and an engine built without it is the Metal engine exactly.
+# output is present. Metal stays the default at runtime on macOS (ORION_GPU=dawn
+# picks Dawn), and an engine built without it is the Metal engine exactly. On
+# Windows and Linux Dawn is the only backend, so it is required (#376).
 set(ORION_DAWN_DIR ${CMAKE_SOURCE_DIR}/third_party/dawn-build)
-if(EXISTS ${ORION_DAWN_DIR}/lib/libwebgpu_dawn.a)
+if(WIN32)
+    set(ORION_DAWN_LIB ${ORION_DAWN_DIR}/lib/webgpu_dawn.lib)
+else()
+    set(ORION_DAWN_LIB ${ORION_DAWN_DIR}/lib/libwebgpu_dawn.a)
+endif()
+if(EXISTS ${ORION_DAWN_LIB})
     option(ORION_DAWN "Build the Dawn GPU backend" ON)
 else()
     option(ORION_DAWN "Build the Dawn GPU backend" OFF)
 endif()
 message(STATUS "Dawn backend: ${ORION_DAWN}")
+if(NOT APPLE AND NOT ORION_DAWN)
+    message(FATAL_ERROR "Off macOS the engine renders only through Dawn: run tools/build-dawn.sh first.")
+endif()
 
 add_subdirectory(shaders)
 set(ORION_SHADER_DIR ${ORION_SHADER_DIR} PARENT_SCOPE)
@@ -17,10 +26,8 @@ add_library(orion_engine STATIC
     src/Engine.cpp
     src/ResourcePaths.cpp
     src/gpu/Gpu.cpp
-    src/gpu/MetalDevice.mm
     src/raw/RawImage.cpp
     src/raw/NoiseProfile.cpp
-    src/gpu/MetalResources.mm
     src/gpu/TexturePool.cpp
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp
@@ -34,10 +41,9 @@ add_library(orion_engine STATIC
     src/pipe/LensOpcodes.cpp
     src/pipe/ToneCurve.cpp
     src/pipe/WhiteBalance.cpp
-    src/util/ImageWriter.mm
+    src/util/ExportOps.cpp
     src/util/DngWriter.cpp
     src/util/JxlWriter.cpp
-    src/util/JxlMetadata.mm
     src/merge/Merge.cpp
     src/merge/MergeRender.cpp
     src/merge/Align.cpp
@@ -45,6 +51,20 @@ add_library(orion_engine STATIC
 )
 
 add_library(Orion::Engine ALIAS orion_engine)
+
+# The macOS-only files and what replaces each elsewhere (decision #376's table):
+# Metal is the default backend there; export is ImageIO there and OpenCV's
+# imgcodecs plus libjxl elsewhere (ImageWriterPortable.cpp).
+if(APPLE)
+    target_sources(orion_engine PRIVATE
+        src/gpu/MetalDevice.mm
+        src/gpu/MetalResources.mm
+        src/util/ImageWriter.mm
+        src/util/JxlMetadata.mm
+    )
+else()
+    target_sources(orion_engine PRIVATE src/util/ImageWriterPortable.cpp)
+endif()
 
 target_include_directories(orion_engine
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -64,20 +84,24 @@ target_compile_definitions(orion_engine
 
 add_dependencies(orion_engine orion_shaders)
 
-# ARC for the Objective-C++ translation units. The C++ ones never see ObjC.
-set_source_files_properties(
-    src/gpu/MetalDevice.mm
-    src/gpu/MetalResources.mm
-    src/gpu/TexturePool.cpp
-    src/util/ImageWriter.mm
-    src/util/JxlMetadata.mm
-    PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
-)
+if(APPLE)
+    # ARC for the Objective-C++ translation units. The C++ ones never see ObjC.
+    set_source_files_properties(
+        src/gpu/MetalDevice.mm
+        src/gpu/MetalResources.mm
+        src/gpu/TexturePool.cpp
+        src/util/ImageWriter.mm
+        src/util/JxlMetadata.mm
+        PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
+    )
 
-find_library(METAL_FRAMEWORK      Metal      REQUIRED)
-find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
-find_library(COREGRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
-find_library(IMAGEIO_FRAMEWORK    ImageIO    REQUIRED)
+    find_library(METAL_FRAMEWORK      Metal      REQUIRED)
+    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+    find_library(COREGRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
+    find_library(IMAGEIO_FRAMEWORK    ImageIO    REQUIRED)
+    set(ORION_PLATFORM_LIBRARIES ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK}
+        ${COREGRAPHICS_FRAMEWORK} ${IMAGEIO_FRAMEWORK})
+endif()
 
 # LibRaw. Homebrew ships no pkg-config binary by default, so locate it directly.
 # libraw_r is the thread-safe build — we decode off the UI thread.
@@ -96,32 +120,45 @@ set(LIBRAW_LIBRARY ${LIBRAW_LIBRARY} PARENT_SCOPE)
 
 target_include_directories(orion_engine PRIVATE ${LIBRAW_INCLUDE_DIR})
 
-# OpenCV — for HDR-merge alignment ONLY. src/merge/Align.cpp is the single
-# translation unit that includes it, and the include path is scoped to that
+# OpenCV — for HDR-merge alignment, and off macOS for export too
+# (ImageWriterPortable.cpp, #376). Those are the only translation units that
+# include it, and the include path is scoped to that
 # file so the dependency cannot leak into a header by accident. OpenCV 5
 # renamed features2d to features and split calib3d: findHomography is in
 # geometry, ECC refinement in video. Apache-2.0; listed in NOTICE.
-find_path(OPENCV_INCLUDE_DIR
-    NAMES opencv2/core.hpp
-    HINTS /opt/homebrew/opt/opencv/include/opencv5
-          /opt/homebrew/opt/opencv/include/opencv4
-          /usr/local/opt/opencv/include/opencv5
-          /usr/local/opt/opencv/include/opencv4
-    REQUIRED
-)
-set(OPENCV_LIBRARIES "")
-foreach(mod core imgproc features geometry video)
-    find_library(OPENCV_${mod}_LIBRARY
-        NAMES opencv_${mod}
-        HINTS /opt/homebrew/opt/opencv/lib /usr/local/opt/opencv/lib
+if(APPLE)
+    find_path(OPENCV_INCLUDE_DIR
+        NAMES opencv2/core.hpp
+        HINTS /opt/homebrew/opt/opencv/include/opencv5
+              /opt/homebrew/opt/opencv/include/opencv4
+              /usr/local/opt/opencv/include/opencv5
+              /usr/local/opt/opencv/include/opencv4
         REQUIRED
     )
-    list(APPEND OPENCV_LIBRARIES ${OPENCV_${mod}_LIBRARY})
-endforeach()
-message(STATUS "OpenCV: ${OPENCV_core_LIBRARY}")
-set(OPENCV_LIBRARIES ${OPENCV_LIBRARIES} PARENT_SCOPE)
+    set(OPENCV_LIBRARIES "")
+    foreach(mod core imgproc features geometry video)
+        find_library(OPENCV_${mod}_LIBRARY
+            NAMES opencv_${mod}
+            HINTS /opt/homebrew/opt/opencv/lib /usr/local/opt/opencv/lib
+            REQUIRED
+        )
+        list(APPEND OPENCV_LIBRARIES ${OPENCV_${mod}_LIBRARY})
+    endforeach()
+    message(STATUS "OpenCV: ${OPENCV_core_LIBRARY}")
+    set(OPENCV_LIBRARIES ${OPENCV_LIBRARIES} PARENT_SCOPE)
+else()
+    # Windows (vcpkg) and Linux (apt) ship OpenCV 4: features2d and calib3d
+    # under their old names, and imgcodecs for ImageWriterPortable.cpp (#376).
+    find_package(OpenCV REQUIRED GLOBAL COMPONENTS core imgproc features2d calib3d video imgcodecs)
+    set(OPENCV_INCLUDE_DIR ${OpenCV_INCLUDE_DIRS})
+    set(OPENCV_LIBRARIES ${OpenCV_LIBS})
+    message(STATUS "OpenCV: ${OpenCV_VERSION}")
+    set(OPENCV_LIBRARIES ${OPENCV_LIBRARIES} PARENT_SCOPE)
+    set_source_files_properties(src/util/ImageWriterPortable.cpp
+        PROPERTIES INCLUDE_DIRECTORIES "${OPENCV_INCLUDE_DIR}")
+endif()
 set_source_files_properties(src/merge/Align.cpp
-    PROPERTIES INCLUDE_DIRECTORIES ${OPENCV_INCLUDE_DIR})
+    PROPERTIES INCLUDE_DIRECTORIES "${OPENCV_INCLUDE_DIR}")
 
 
 # libjxl — JPEG XL export ONLY (src/util/JxlWriter.cpp, the one file that
@@ -149,28 +186,35 @@ set_source_files_properties(src/util/JxlWriter.cpp
 
 if(ORION_DAWN)
     target_sources(orion_engine PRIVATE
-        src/gpu/DawnDevice.mm
-        src/gpu/DawnTexture.mm
+        src/gpu/DawnDevice.cpp
+        src/gpu/DawnTexture.cpp
         src/gpu/DawnKernel.cpp
         src/gpu/DawnCommands.cpp
     )
-    set_source_files_properties(src/gpu/DawnDevice.mm src/gpu/DawnTexture.mm
-        PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
-    target_include_directories(orion_engine PRIVATE ${ORION_DAWN_DIR}/include)
     target_compile_definitions(orion_engine PRIVATE ORION_HAS_DAWN=1)
-    find_library(IOSURFACE_FRAMEWORK  IOSurface  REQUIRED)
-    find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
-    find_library(IOKIT_FRAMEWORK      IOKit      REQUIRED)
-    find_library(COCOA_FRAMEWORK      Cocoa      REQUIRED)
-    target_link_libraries(orion_engine PRIVATE ${ORION_DAWN_DIR}/lib/libwebgpu_dawn.a
-        ${IOSURFACE_FRAMEWORK} ${QUARTZCORE_FRAMEWORK} ${IOKIT_FRAMEWORK} ${COCOA_FRAMEWORK})
-    # For app/CMakeLists.txt, whose swiftc link names every library itself.
-    set(ORION_DAWN_LINK ${ORION_DAWN_DIR}/lib/libwebgpu_dawn.a
-        -framework IOSurface -framework QuartzCore -framework IOKit PARENT_SCOPE)
+    if(APPLE)
+        target_sources(orion_engine PRIVATE src/gpu/DawnMetal.mm)
+        set_source_files_properties(src/gpu/DawnMetal.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+        target_include_directories(orion_engine PRIVATE ${ORION_DAWN_DIR}/include)
+        find_library(IOSURFACE_FRAMEWORK  IOSurface  REQUIRED)
+        find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+        find_library(IOKIT_FRAMEWORK      IOKit      REQUIRED)
+        find_library(COCOA_FRAMEWORK      Cocoa      REQUIRED)
+        target_link_libraries(orion_engine PRIVATE ${ORION_DAWN_LIB}
+            ${IOSURFACE_FRAMEWORK} ${QUARTZCORE_FRAMEWORK} ${IOKIT_FRAMEWORK} ${COCOA_FRAMEWORK})
+        # For app/CMakeLists.txt, whose swiftc link names every library itself.
+        set(ORION_DAWN_LINK ${ORION_DAWN_LIB}
+            -framework IOSurface -framework QuartzCore -framework IOKit PARENT_SCOPE)
+    else()
+        # D3D12 on Windows, Vulkan on Linux. Dawn's installed package names the
+        # system libraries its backends need.
+        target_sources(orion_engine PRIVATE src/gpu/DawnNative.cpp)
+        find_package(Dawn CONFIG REQUIRED GLOBAL PATHS ${ORION_DAWN_DIR} NO_DEFAULT_PATH)
+        target_link_libraries(orion_engine PRIVATE dawn::webgpu_dawn)
+    endif()
 endif()
 
 target_link_libraries(orion_engine
-    PRIVATE ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK}
-            ${COREGRAPHICS_FRAMEWORK} ${IMAGEIO_FRAMEWORK}
+    PRIVATE ${ORION_PLATFORM_LIBRARIES}
             ${LIBRAW_LIBRARY} ${OPENCV_LIBRARIES} ${JXL_LIBRARIES}
 )

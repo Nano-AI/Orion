@@ -30,7 +30,8 @@ struct DeviceInfo {
 
 class Device {
 public:
-    /// The backend `ORION_GPU` names (`metal` or `dawn`), Metal when unset.
+    /// The backend `ORION_GPU` names (`metal` or `dawn`); when unset, Metal on
+    /// macOS and Dawn everywhere else (#376).
     /// The environment variable is how the whole test suite, the bench and
     /// the app are run on Dawn without a rebuild.
     /// Throws std::runtime_error when no usable GPU is present.

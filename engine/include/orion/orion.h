@@ -605,6 +605,16 @@ void* orion_engine_output_texture(const OrionEngine* engine);
  * See orion_engine_render_preview — the canvas only. */
 void* orion_engine_preview_texture(const OrionEngine* engine);
 
+/* The last render as RGBA8 rows of width * 4 bytes, the picture region only:
+ * graph 0 the full graph (orion_engine_image_size), 1 the preview, 2 the
+ * region. dst NULL asks only the size; capacity is in bytes. The CPU copy a
+ * shell makes where it has no texture it can draw: headless, a renderer with
+ * no interop, and Windows and Linux, which have no zero-copy hand-off yet
+ * (decision #376). The wide RGBA16F output is converted, clamped to 0..1. */
+OrionStatus orion_engine_read_pixels(const OrionEngine* engine, int graph,
+                                     uint8_t* dst, uint32_t capacity,
+                                     uint32_t* out_width, uint32_t* out_height);
+
 /* The engine's id<MTLDevice>, so the view can share it. */
 void* orion_engine_metal_device(const OrionEngine* engine);
 

@@ -10,6 +10,7 @@
 #include "orion/orion.h"
 
 #include "pipe/CubeLut.h"
+#include "util/Half.h"
 
 #include <fstream>
 #include <iterator>
@@ -24,6 +25,7 @@
 #include <new>
 #include <string>
 #include <utility>
+#include <vector>
 
 struct OrionEngine {
     orion::Engine impl;
@@ -612,6 +614,40 @@ void* orion_engine_preview_texture(const OrionEngine* engine) {
     } catch (...) {
         return nullptr;
     }
+}
+
+OrionStatus orion_engine_read_pixels(const OrionEngine* engine, int graph,
+                                     uint8_t* dst, uint32_t capacity,
+                                     uint32_t* out_width, uint32_t* out_height) {
+    if (engine == nullptr || out_width == nullptr || out_height == nullptr) return ORION_ERR_BAD_ARG;
+    auto* e = const_cast<OrionEngine*>(engine);
+    const bool has = graph == 1 ? e->impl.hasPreview() : graph == 2 ? e->impl.hasRegion()
+                                                                    : e->impl.hasImage();
+    if (!has) return ORION_ERR_BAD_ARG;
+    return guard(e, [&]() -> OrionStatus {
+        const auto& d = graph == 1 ? e->impl.previewDevelop()
+                      : graph == 2 ? e->impl.regionDevelop() : e->impl.develop();
+        const orion::gpu::Texture& t = d.output();
+        // The texture is square so a straightened frame fits; the picture is its top left.
+        const std::uint32_t w = std::min(t.width(), d.outputWidth());
+        const std::uint32_t h = std::min(t.height(), d.outputHeight());
+        *out_width = w;
+        *out_height = h;
+        if (dst == nullptr) return ORION_OK;
+        if (w == 0 || h == 0 || std::uint64_t(capacity) < std::uint64_t(w) * h * 4) return ORION_ERR_BAD_ARG;
+        if (t.format() == orion::gpu::PixelFormat::RGBA8Unorm) {
+            t.download(dst, std::size_t(w) * 4, w, h);
+            return ORION_OK;
+        }
+        if (t.format() != orion::gpu::PixelFormat::RGBA16Float) return ORION_ERR_BAD_ARG;
+        std::vector<std::uint16_t> wide(std::size_t(w) * h * 4);
+        t.download(wide.data(), std::size_t(w) * 8, w, h);
+        for (std::size_t i = 0; i < wide.size(); ++i) {
+            const float v = orion::util::halfToFloat(wide[i]);
+            dst[i] = std::uint8_t(v <= 0.0f ? 0 : v >= 1.0f ? 255 : int(v * 255.0f + 0.5f));
+        }
+        return ORION_OK;
+    });
 }
 
 void* orion_engine_metal_device(const OrionEngine* engine) {

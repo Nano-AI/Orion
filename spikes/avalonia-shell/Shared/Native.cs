@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace OrionShell;
 
-/// native/shim.mm, plus the whole engine facade (engine/include/orion/orion.h),
+/// native/shim.cpp (and shim_mac.mm), plus the whole engine facade (engine/include/orion/orion.h),
 /// all exported from one dylib. A slice may add its own [LibraryImport]s for
 /// any orion_* function in its own folder, against EngineModel.Handle.
 public static unsafe partial class Native {

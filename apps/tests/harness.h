@@ -38,8 +38,10 @@
 #include "pipe/Perspective.h"
 #include "util/ImageWriter.h"
 
+#ifdef __APPLE__   // the export tests' second reader; elsewhere tests_export_portable.cpp
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
+#endif
 
 #include <vector>
 

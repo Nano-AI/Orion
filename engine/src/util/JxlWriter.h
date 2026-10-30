@@ -15,7 +15,7 @@ struct JxlInput {
     std::size_t bytesPerRow = 0;
     int bits = 16;                       ///< 8 or 16; 16 is little-endian
     float quality = 0.9f;                ///< 0..1; 1 is mathematically lossless
-    std::vector<std::uint8_t> icc;       ///< the space the pixels are in
+    std::vector<std::uint8_t> icc;       ///< the space the pixels are in; empty is sRGB
     std::vector<std::uint8_t> exif;      ///< TIFF-header EXIF, no "Exif\0\0"; may be empty
     std::vector<std::uint8_t> xmp;       ///< an XMP packet; may be empty
 };

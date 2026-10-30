@@ -1,11 +1,8 @@
 // The Dawn backend's device (#375): instance, adapter, device and queue, the
-// error plumbing every Dawn object shares, and the format table.
-
-#import <Metal/Metal.h>
+// error plumbing every Dawn object shares, and the format table. Which native
+// API it opens, and what it reports about it, is the platform half (Dawn.h).
 
 #include "gpu/Dawn.h"
-
-#include <dawn/native/MetalBackend.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -137,30 +134,40 @@ std::shared_ptr<Context> open() {
     c.instance = wgpu::CreateInstance(&desc);
     if (!c.instance) throw std::runtime_error("Dawn: CreateInstance failed");
 
+    // The platform's native API. Where it offers no hardware adapter (a CI
+    // runner, a VM) Dawn's fallback is a software one: WARP on D3D12, a CPU
+    // Vulkan driver such as lavapipe on Linux. ORION_DAWN_ADAPTER=fallback
+    // asks for it outright.
+    const Platform native = platform();
+    const char* pick = std::getenv("ORION_DAWN_ADAPTER");
+    const bool forced = pick != nullptr && std::strcmp(pick, "fallback") == 0;
     std::string why;
-    wgpu::RequestAdapterOptions ao{.powerPreference = wgpu::PowerPreference::HighPerformance,
-                                   .backendType = wgpu::BackendType::Metal};
-    c.wait(c.instance.RequestAdapter(&ao, wgpu::CallbackMode::WaitAnyOnly,
-        [&](wgpu::RequestAdapterStatus st, wgpu::Adapter a, wgpu::StringView msg) {
-            if (st == wgpu::RequestAdapterStatus::Success) c.adapter = std::move(a);
-            else why = text(msg);
-        }));
-    if (!c.adapter) throw std::runtime_error("Dawn: no Metal adapter: " + why);
+    for (bool fallback : {forced, true}) {
+        wgpu::RequestAdapterOptions ao{.powerPreference = wgpu::PowerPreference::HighPerformance,
+                                       .forceFallbackAdapter = fallback,
+                                       .backendType = native.backend};
+        c.wait(c.instance.RequestAdapter(&ao, wgpu::CallbackMode::WaitAnyOnly,
+            [&](wgpu::RequestAdapterStatus st, wgpu::Adapter a, wgpu::StringView msg) {
+                if (st == wgpu::RequestAdapterStatus::Success) c.adapter = std::move(a);
+                else why = text(msg);
+            }));
+        if (c.adapter || fallback) break;
+    }
+    if (!c.adapter) throw std::runtime_error("Dawn: no adapter: " + why);
 
     // ⚠ Each of these is load-bearing; the engine refuses to run without them
     // rather than render something subtly different.
     //   TextureFormatsTier1      r16float, rg16float, r16uint as storage
     //   Float32Filterable        32-bit float textures bound as texture_2d<f32>
-    //   SharedTextureMemoryIOSurface, SharedFenceMTLSharedEvent  the display hand-off
     //   ImplicitDeviceSynchronization  Metal objects are thread-safe and the
     //                            engine was written against that
+    //   and the platform's own: the display hand-off (Platform::features)
     std::vector<wgpu::FeatureName> features = {
         wgpu::FeatureName::TextureFormatsTier1,
         wgpu::FeatureName::Float32Filterable,
-        wgpu::FeatureName::SharedTextureMemoryIOSurface,
-        wgpu::FeatureName::SharedFenceMTLSharedEvent,
         wgpu::FeatureName::ImplicitDeviceSynchronization,
     };
+    features.insert(features.end(), native.features.begin(), native.features.end());
     for (auto f : features) {
         if (!c.adapter.HasFeature(f)) {
             throw std::runtime_error("Dawn: adapter lacks feature " +
@@ -180,12 +187,14 @@ std::shared_ptr<Context> open() {
     // 1.47 against 0.81). These shaders are ours, they already clamp what they
     // read (`clampToImage`), and Metal has never checked them, so on a Metal
     // device this is the behaviour the engine was written and tested against.
-    // A new platform (D3D12, Vulkan) should come up with the checks ON (#375):
-    // an out-of-bounds access Metal tolerates may not be tolerated there.
+    // A new platform (D3D12, Vulkan) comes up with the checks ON (#375, #376):
+    // an out-of-bounds access Metal tolerates may not be tolerated there, and
+    // ORION_DAWN_ROBUST=0 is how to measure the difference.
     // `skip_validation` was not needed and stays off: validation is what turns
     // a host mistake into an exception.
     const char* robust = std::getenv("ORION_DAWN_ROBUST");
-    const bool checked = robust != nullptr && std::strcmp(robust, "1") == 0;
+    const bool checked = robust != nullptr && *robust != '\0' ? std::strcmp(robust, "1") == 0
+                                                              : native.robust;
     const char* toggleNames[] = {"disable_robustness"};
     wgpu::DawnTogglesDescriptor toggles{};
     toggles.enabledToggleCount = checked ? 0 : 1;
@@ -220,18 +229,7 @@ std::shared_ptr<Context> open() {
     if (!c.device) throw std::runtime_error("Dawn: RequestDevice failed: " + why);
     c.queue = c.device.GetQueue();
 
-    id<MTLDevice> mtl = ::dawn::native::metal::GetMTLDevice(c.device.Get());
-    c.metalDevice = (__bridge void*)mtl;
-
-    wgpu::AdapterInfo ai{};
-    c.adapter.GetInfo(&ai);
-    c.info = DeviceInfo{
-        .name                  = "Dawn on " + text(ai.device),
-        .recommendedWorkingSet = mtl ? mtl.recommendedMaxWorkingSetSize : 0,
-        .maxBufferLength       = limits.maxBufferSize,
-        .unifiedMemory         = mtl ? static_cast<bool>(mtl.hasUnifiedMemory) : false,
-        .supportsApple7        = mtl ? static_cast<bool>([mtl supportsFamily:MTLGPUFamilyApple7]) : false,
-    };
+    describe(c, limits);
     return ctx;
 }
 

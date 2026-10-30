@@ -1,6 +1,7 @@
 #include "util/JxlWriter.h"
 
 #include <jxl/encode_cxx.h>
+#include <jxl/version.h>
 #include <jxl/thread_parallel_runner_cxx.h>
 
 #include <algorithm>
@@ -32,6 +33,16 @@ std::vector<T> packRgb(const JxlInput& in) {
     return out;
 }
 
+#if JPEGXL_MAJOR_VERSION == 0 && JPEGXL_MINOR_VERSION < 9
+/// libjxl before 0.9 (Ubuntu 24.04 ships 0.7) has no JxlEncoderDistanceFromQuality;
+/// this is that function's mapping as libjxl 0.9 publishes it, which is cjxl's.
+float JxlEncoderDistanceFromQuality(float q) {
+    return q >= 100.0f ? 0.0f
+         : q >= 30.0f  ? 0.1f + (100.0f - q) * 0.09f
+                       : 53.0f / 3000.0f * q * q - 23.0f / 20.0f * q + 25.0f;
+}
+#endif
+
 }  // namespace
 
 std::vector<std::uint8_t> encodeJxl(const JxlInput& in) {
@@ -39,7 +50,6 @@ std::vector<std::uint8_t> encodeJxl(const JxlInput& in) {
         (in.bits != 8 && in.bits != 16)) {
         throw std::runtime_error("jxl: bad input");
     }
-    if (in.icc.empty()) throw std::runtime_error("jxl: no ICC profile");
     const bool lossless = in.quality >= 1.0f;
     const bool boxes = !in.exif.empty() || !in.xmp.empty();
 
@@ -61,7 +71,13 @@ std::vector<std::uint8_t> encodeJxl(const JxlInput& in) {
     info.uses_original_profile = lossless ? JXL_TRUE : JXL_FALSE;
     check(JxlEncoderSetBasicInfo(enc.get(), &info), "basic info");
 
-    check(JxlEncoderSetICCProfile(enc.get(), in.icc.data(), in.icc.size()), "ICC profile");
+    if (in.icc.empty()) {   // sRGB, said as an enum: the Windows/Linux writer has no ICC (#376)
+        JxlColorEncoding srgb;
+        JxlColorEncodingSetToSRGB(&srgb, JXL_FALSE);
+        check(JxlEncoderSetColorEncoding(enc.get(), &srgb), "color encoding");
+    } else {
+        check(JxlEncoderSetICCProfile(enc.get(), in.icc.data(), in.icc.size()), "ICC profile");
+    }
 
     if (!in.exif.empty()) {
         // The box opens with the offset of the TIFF header, which follows at once.

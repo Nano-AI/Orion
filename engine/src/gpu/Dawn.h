@@ -1,5 +1,10 @@
 /*  The Dawn backend's shared internals (#375). Included by Dawn*.mm/.cpp only.
  *
+ *  Dawn itself is the same everywhere; what differs per system is which native
+ *  API it sits on and how a finished picture reaches a shell. That half is
+ *  three functions at the bottom, in DawnMetal.mm on macOS and DawnNative.cpp
+ *  on Windows and Linux (#376).
+ *
  *  One `Context` per Dawn device, held by shared_ptr from every object made on
  *  it, so a texture outliving its `gpu::Device` (a test's scope ordering) still
  *  has a queue to read back through.
@@ -15,6 +20,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace orion::gpu::dawn {
 
@@ -76,5 +82,33 @@ std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context>, std::uint32
 std::unique_ptr<Library::Impl> makeLibrary(std::shared_ptr<Context>, const std::string& path);
 std::unique_ptr<Kernel::Impl>  makeKernel(Library&, const std::string& entryPoint);
 std::unique_ptr<CommandBuffer::Impl> makeCommandBuffer(std::shared_ptr<Context>);
+
+// ── The platform half ──────────────────────────────────────────────────────
+
+struct Platform {
+    wgpu::BackendType backend;
+    /// Required on top of the engine's own (DawnDevice.cpp): the display hand-off's.
+    std::vector<wgpu::FeatureName> features;
+    /// Bounds checks on every texture access unless ORION_DAWN_ROBUST says
+    /// otherwise. Off on Metal only, where the engine was measured (#375).
+    bool robust;
+};
+Platform platform();
+
+/// Fills `ctx.info` and `ctx.metalDevice` once the device exists.
+void describe(Context& ctx, const wgpu::Limits& limits);
+
+/// An RGBA8 texture a shell can draw with no copy, and what it draws it with.
+struct DisplayShare {
+    virtual ~DisplayShare() = default;
+    virtual void* handle() const noexcept = 0;
+};
+
+/// Makes `tex` as a shareable RGBA8 texture and returns its share, or returns
+/// null and leaves `tex` alone where the platform has no hand-off yet; the
+/// caller then allocates a plain texture and the shell reads it back.
+std::unique_ptr<DisplayShare> shareForDisplay(Context& ctx, std::uint32_t width,
+                                              std::uint32_t height, wgpu::TextureUsage usage,
+                                              wgpu::Texture& tex);
 
 }  // namespace orion::gpu::dawn

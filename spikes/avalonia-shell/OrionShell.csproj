@@ -10,8 +10,10 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Built by native/build.sh from the engine's static library. -->
-    <None Include="bin-native/liborion_shim.dylib" Link="liborion_shim.dylib" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Built by native/build.sh from the engine's static library on macOS; on Windows and
+         Linux by native/CMakeLists.txt, and the workflow copies it beside the app (#376). -->
+    <None Include="bin-native/liborion_shim.dylib" Link="liborion_shim.dylib" CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('bin-native/liborion_shim.dylib')" />
     <!-- The numeral face (Shared/Design/Type.cs) and the SIL OFL 1.1 it travels with. -->
     <AvaloniaResource Include="Assets/Fonts/**" />
   </ItemGroup>

@@ -1,0 +1,15 @@
+{
+  "name": "orion",
+  "version-string": "0.5.0",
+  "description": "Windows libraries for the engine (decision #376). Linux uses apt, macOS Homebrew.",
+  "builtin-baseline": "9eec002df1cd109f8f104cd966a763daf9751489",
+  "dependencies": [
+    "libraw",
+    "libjxl",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": ["calib3d", "fs", "jpeg", "png", "tiff"]
+    }
+  ]
+}

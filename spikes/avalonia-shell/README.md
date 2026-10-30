@@ -47,7 +47,7 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `native/matte.mm` | Subject and Person selection through Apple's Vision (macOS only; decision #365) |
 | `bin-native/present_test RAW` | its headless check: surface against CPU readback, the GPU wait, timings. No window |
 
-Spike-only, not product code: `native/shim.mm` repeats the default look from
+Spike-only, not product code: `native/shim.cpp` repeats the default look from
 `Engine.swift`; a real port moves it below the facade (#315).
 
 The picture reaches the canvas with no CPU copy (#317, decision #354): on

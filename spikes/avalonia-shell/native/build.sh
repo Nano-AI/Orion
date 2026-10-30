@@ -1,7 +1,9 @@
 #!/bin/zsh
-# Links the whole engine into one dylib C# can load: shim_* for adjustments by
+# macOS: links the whole engine into one dylib C# can load: shim_* for adjustments by
 # name, and every orion_* facade function, exported by -force_load so a slice
 # can call them directly. Needs `cmake --build build --target orion_engine`.
+# Windows and Linux: native/CMakeLists.txt, which the top-level build adds when
+# configured with -DORION_SHELL_DIR=<this shell> (#376).
 set -euo pipefail
 here=${0:A:h}
 root=$here/../../..
@@ -14,13 +16,13 @@ engine=${ORION_ENGINE_LIB:-$root/build/engine/liborion_engine.a}   # override: a
 # The engine's Dawn backend (#375), only when this engine archive was built
 # with it (-DORION_DAWN=OFF leaves DawnDevice out, and needs no Dawn at all).
 dawn=()
-if ar t "$engine" | grep -q '^DawnDevice\.mm\.o$'; then
+if ar t "$engine" | grep -q '^DawnDevice\.cpp\.o$'; then
     dawn=("$root/third_party/dawn-build/lib/libwebgpu_dawn.a" -framework QuartzCore -framework IOKit)
 fi
 python3 "$here/gen_fields.py" "$root/engine/include/orion/orion.h" "$out/fields.inc" "$out/mask_fields.inc"
 clang++ -std=c++20 -fobjc-arc -dynamiclib -O2 \
     -I"$root/engine/include" -I"$out" \
-    "$here/shim.mm" "$here/present.mm" "$here/matte.mm" -Wl,-force_load,"$engine" \
+    "$here/shim.cpp" "$here/shim_mac.mm" "$here/present.mm" "$here/matte.mm" -Wl,-force_load,"$engine" \
     /opt/homebrew/opt/libraw/lib/libraw_r.dylib \
     /opt/homebrew/opt/opencv/lib/libopencv_{core,imgproc,features,geometry,video}.dylib \
     /opt/homebrew/opt/jpeg-xl/lib/libjxl{,_threads}.dylib "${dawn[@]}" \
