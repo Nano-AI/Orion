@@ -1,3 +1,6 @@
+using Avalonia;
+using OrionShell.CanvasSlice;
+
 namespace OrionShell.Develop;
 
 /// A port of app/EditHistory.swift over the session's field values: whole
@@ -35,6 +38,8 @@ static class EditHistory {
     public static string? RedoLabel => CanRedo ? _entries[_position + 1].Label : null;
 
     static EditHistory() {
+        // The spots clear on open before the open is recorded: their handler first, or "Opened" holds the last photo's.
+        System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(SpotModel).TypeHandle);
         E.Opened += Opened;
         E.Rendered += Settle;
         // The shell opens its first photo before it builds the window that first asks.
@@ -52,7 +57,35 @@ static class EditHistory {
 
     /// Every field slot, then the tone curve: it is not an OrionAdjustments field
     /// the table reaches, so without it a curve edit, or a preset's, never undid.
-    public static float[] Snapshot() => [.. Slots.Select(s => E.Get(s.Name, s.Index)), .. Curves()];
+    public static float[] Snapshot() => [.. Slots.Select(s => E.Get(s.Name, s.Index)), .. Curves(), .. Spots()];
+
+    /// The spots, which no field reaches: their count, then up to ORION_MAX_SPOTS rows of
+    /// destination, source, radius and heal. Without them a spot placed or moved never undid (commitSpotEdit).
+    const int MaxSpots = 64, SpotRow = 6;
+
+    static float[] Spots() {
+        var row = new float[1 + MaxSpots * SpotRow];
+        var spots = SpotModel.Spots;
+        row[0] = Math.Min(spots.Count, MaxSpots);
+        for (int i = 0; i < row[0]; i++) {
+            var s = spots[i];
+            float[] values = [(float)s.Destination.X, (float)s.Destination.Y, (float)s.Source.X, (float)s.Source.Y, (float)s.Radius, s.Heal ? 1 : 0];
+            values.CopyTo(row, 1 + i * SpotRow);
+        }
+        return row;
+    }
+
+    static void RestoreSpots(float[] state) {
+        int at = Slots.Length + CurveChannels * CurveRow;
+        var spots = SpotModel.Spots;
+        spots.Clear();
+        for (int i = 0; i < (int)state[at]; i++) {
+            int r = at + 1 + i * SpotRow;
+            spots.Add(new SpotPlacement(new Point(state[r], state[r + 1]), new Point(state[r + 2], state[r + 3]), state[r + 4], state[r + 5] != 0));
+        }
+        SpotModel.Selected = Math.Min(SpotModel.Selected, spots.Count - 1);
+        CanvasState.Touch();
+    }
 
     /// Four channels, each its point count then up to sixteen x, y pairs.
     const int CurveChannels = 4, CurveRow = 1 + 16 * 2;
@@ -73,7 +106,7 @@ static class EditHistory {
         return Enumerable.Range(0, (int)state[at]).Select(i => (state[at + 1 + 2 * i], state[at + 2 + 2 * i])).ToList();
     }
 
-    static string Name(int slot) => slot < Slots.Length ? Slots[slot].Name : "curve";
+    static string Name(int slot) => slot < Slots.Length ? Slots[slot].Name : slot < Slots.Length + CurveChannels * CurveRow ? "curve" : "Spot";
 
     public static void Undo() { if (CanUndo) Restore(_entries[--_position].State); }
     public static void Redo() { if (CanRedo) Restore(_entries[++_position].State); }
@@ -88,6 +121,7 @@ static class EditHistory {
     /// Writes a snapshot back without a render per field, then renders once and
     /// tells the panels their values moved.
     public static void Restore(float[] state) {
+        RestoreSpots(state);   // before the render, whose settle must find history standing on this state
         E.Apply(s => {
             for (int i = 0; i < Slots.Length; i++)
                 if (s.Get(Slots[i].Name, Slots[i].Index) != state[i]) s.Set(Slots[i].Name, state[i], Slots[i].Index);

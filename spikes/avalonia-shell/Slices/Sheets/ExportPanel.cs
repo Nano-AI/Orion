@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using OrionShell.Library;
 
 namespace OrionShell.Sheets;
 
@@ -20,9 +21,9 @@ public sealed class ExportPanel : Border {
     int _token;
     uint _sw, _sh;
 
-    /// How many photographs the selection holds; 0 exports the open one.
-    // stub(#315): Library.swift owns this until the logic moves below the facade
-    static int Selected => 0;
+    /// How many photographs the batch writes (exportSelected): the selection's
+    /// export targets when there is a real selection, 0 to export the open one.
+    static int Selected => LibraryModel.Shared.HasExplicitSelection ? ExportRun.Targets().Count : 0;
     readonly Border _readout;
     /// Closes the sheet. Set by whatever opened it.
     public Action? Dismiss { get; set; }
@@ -49,9 +50,12 @@ public sealed class ExportPanel : Border {
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm + 2, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
-        // exportFile; runBatchExport needs a selection, which is not ported.
-        actions.Children.Add(SheetKit.Button(Selected > 0 ? $"Export {Selected}…" : "Export…",
-            () => { Dismiss?.Invoke(); ExportRun.ExportOpen(); }, prominent: true));
+        // runBatchExport over a selection, else exportFile. The batch reads sidecars: what is owed is written first.
+        actions.Children.Add(SheetKit.Button(Selected > 0 ? $"Export {Selected}…" : "Export…", () => {
+            bool batch = Selected > 0;
+            Dismiss?.Invoke();
+            if (batch) { Autosave.Shared.Flush(); ExportRun.ExportAll(); } else ExportRun.ExportOpen();
+        }, prominent: true));
         Child = new StackPanel {
             Spacing = Space.Lg,
             // The options scroll on a small window; Cancel and Export stay put.

@@ -63,21 +63,24 @@ static class CommandTable {
         Built("rotate-right", "Rotate right", "OemCloseBrackets", "Engine+Geometry.swift", () => Editable, () => Bracket(1)),
 
         // Photo
-        Built("reject", "Reject", "R", "Library.swift", () => Focused != null, () => LibraryModel.Shared.ToggleRejected(Focused!)),
+        // Over the selection when the focus is part of one (cullScope), so the keys and the strip's menu agree.
+        Built("reject", "Reject", "R", "Library.swift", () => Focused != null,
+              () => LibraryModel.Shared.SetRejected(LibraryModel.Shared.CullScope(Focused!), !Focused!.Rejected)),
         .. Enumerable.Range(0, 6).Select(n => Built($"rate-{n}", n == 0 ? "No rating" : $"{n} star{(n == 1 ? "" : "s")}",
                                                     n == 0 ? "OemTilde" : $"D{n}", "Library.swift",
-                                                    () => Focused != null, () => LibraryModel.Shared.SetRating(Focused!, n))),
+                                                    () => Focused != null, () => LibraryModel.Shared.SetRating(LibraryModel.Shared.CullScope(Focused!), n))),
         // In the gallery a step moves the focus ring, never the canvas: two hundred
         // frames must not be two hundred decodes (cullActions.step).
         Built("next-photo", "Next photo", "Cmd+Right, Right", "Library.swift", () => E.Photos.Count > 0,
               () => { if (GalleryMode.On) GalleryMode.Move(GalleryMode.Direction.Right); else E.Next(); }),
         Built("previous-photo", "Previous photo", "Cmd+Left, Left", "Library.swift", () => E.Photos.Count > 0,
               () => { if (GalleryMode.On) GalleryMode.Move(GalleryMode.Direction.Left); else E.Previous(); }),
-        // The multi-photo selection (command/shift-click groups) is not ported; every cull acts on one photo.
-        Stub("select-all", "Select all photos", "Cmd+A", "PhotoSelection.swift", () => Focused != null),
-        Stub("deselect", "Deselect", "Cmd+Shift+A", "PhotoSelection.swift", () => false),   // needs a selection of two
+        Built("select-all", "Select all photos", "Cmd+A", "PhotoSelection.swift", () => Focused != null, LibraryModel.Shared.SelectAll),
+        Built("deselect", "Deselect", "Cmd+Shift+A", "PhotoSelection.swift", () => LibraryModel.Shared.HasExplicitSelection,
+              LibraryModel.Shared.CollapseSelection),   // needs a selection of two
         // Both confirm before touching a file, and the confirmation moves to the Trash, never deletes.
-        Built("trash", "Move to Trash…", "Cmd+Back", "OrionApp+Files.swift", () => Focused != null, () => Trash.Confirm([Focused!])),
+        Built("trash", "Move to Trash…", "Cmd+Back", "OrionApp+Files.swift", () => Focused != null,
+              () => Trash.Confirm(LibraryModel.Shared.CullScope(Focused!))),
         Built("delete-rejected", "Delete rejected photos…", null, "OrionApp+Files.swift", () => LibraryModel.Shared.RejectedCount > 0,
               () => Trash.Confirm(LibraryModel.Shared.Photos.Where(p => p.Rejected).ToList())),
         Built("apply-crop", "Apply crop", "Enter", "OrionApp+Commands.swift", () => Cropping, () => Shell?.Select("Light")),

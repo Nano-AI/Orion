@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Input;
 using Avalonia.Media.Imaging;
 
 namespace OrionShell.Library;
@@ -8,10 +9,10 @@ namespace OrionShell.Library;
 /// The names and rules are Library.swift's, so the three views can never
 /// disagree about what a filter shows or what the count says.
 ///
-/// Ratings and rejections live in memory here; Swift keeps them in XMP
-/// sidecars, and its PhotoSelection (command/shift-click groups) is not ported,
-/// so every cull acts on the one photo clicked.
-// stub(#315): Library.swift owns this until the logic moves below the facade
+/// Ratings, rejections and the colour label live in each photo's XMP sidecar,
+/// merged as Library.persist merges them (Sidecar.Merge keeps the edit), and
+/// read back from it when the folder lists. A cull acts on the group
+/// (PhotoSelection) when the photo is part of a real one, else on that photo.
 public sealed class LibraryModel {
     public static LibraryModel Shared { get; } = new();
 
@@ -30,9 +31,13 @@ public sealed class LibraryModel {
         public string Name { get; } = System.IO.Path.GetFileName(path);
         public int Rating { get; internal set; }
         public bool Rejected { get; internal set; }
-        // CaptureInfo.tooltip adds aperture, shutter and ISO from the index.
-        // stub(#315): Library.swift owns this until the logic moves below the facade
-        public string Tooltip => Name;
+        /// Free text, as XMP has it. Nothing here sets one; it is kept so a write never drops it.
+        public string? Label { get; internal set; }
+
+        /// The file name, and under it the exposure: CaptureInfo.tooltip. Read
+        /// from the file on first ask, not at listing: the shell has no index.
+        public string Tooltip => _tooltip ??= Chrome.CaptureInfo.Tooltip(Name, Chrome.CaptureInfo.ReadFile(Path));
+        string? _tooltip;
 
         Bitmap? _thumbnail;
         bool _tried;
@@ -45,10 +50,31 @@ public sealed class LibraryModel {
         }
     }
 
-    /// A new list (a folder opened, photos trashed) is a change every view shows.
-    LibraryModel() => EngineModel.Shared.PropertyChanged += (_, e) => {
-        if (e.PropertyName == nameof(EngineModel.Photos)) Changed?.Invoke();
-    };
+    /// A new list (a folder opened, photos trashed) is a change every view shows,
+    /// and the selection keeps only what is still in view. The canvas moving to
+    /// another photo collapses the selection onto it (Library.focus); a sort,
+    /// which keeps the same photo open, does not.
+    LibraryModel() {
+        var engine = EngineModel.Shared;
+        Selection.Focus(_canvas = Canvas());   // the first photo may have opened before anything asked for this
+        engine.PropertyChanged += (_, e) => {
+            if (e.PropertyName == nameof(EngineModel.Photos)) {
+                Selection.Confine(VisiblePaths);
+                Changed?.Invoke();
+            } else if (e.PropertyName == nameof(EngineModel.Current)) {
+                string? now = Canvas();
+                if (now == _canvas) return;
+                _canvas = now;
+                bool shown = HasExplicitSelection;
+                Selection.Focus(now);
+                if (shown) SelectionChanged?.Invoke();   // a selection of one draws nothing, so only a group's collapse repaints
+            }
+        };
+    }
+
+    static string? Canvas() => EngineModel.Shared.Current is var i and >= 0 ? EngineModel.Shared.Photos[i] : null;
+
+    string? _canvas;
 
     readonly Dictionary<string, Photo> _byPath = new();
     IReadOnlyList<string>? _source;
@@ -67,7 +93,7 @@ public sealed class LibraryModel {
                 // A photo keeps its marks when the list around it changes (a trash
                 // shifts every index after it); only its position moves.
                 _photos = source.Select((p, i) => {
-                    if (!_byPath.TryGetValue(p, out var photo)) _byPath[p] = photo = new Photo(p, i);
+                    if (!_byPath.TryGetValue(p, out var photo)) _byPath[p] = photo = Listed(p, i);
                     photo.Index = i;
                     return photo;
                 }).ToList();
@@ -78,7 +104,8 @@ public sealed class LibraryModel {
 
     public Filter Current {
         get => _filter;
-        set { if (_filter != value) { _filter = value; Changed?.Invoke(); } }
+        // The one moment a selection can come to hold photos nobody can see.
+        set { if (_filter != value) { _filter = value; Selection.Confine(VisiblePaths); Changed?.Invoke(); } }
     }
 
     /// The photograph on the canvas, if any.
@@ -111,17 +138,103 @@ public sealed class LibraryModel {
         Changed?.Invoke();
     }
 
-    public void SetRating(Photo photo, int stars) {
-        photo.Rating = Math.Clamp(stars, 0, 5);
+    // ── Marks (Library.swift's Ratings), in the sidecar ─────────────────────
+
+    /// Whether a mark reaches the sidecar. Only the app at a window writes: the
+    /// headless flags read sidecars and never write the photographer's (as Autosave).
+    public bool Writes { get; set; }
+
+    /// A photo as the listing finds it: its marks from its sidecar, if it has one.
+    internal static Photo Listed(string path, int index) {
+        var photo = new Photo(path, index);
+        if (Sidecar.Read(path) is { Unreadable: null } s) (photo.Rating, photo.Rejected, photo.Label) = (s.Rating, s.Rejected, s.Label);
+        return photo;
+    }
+
+    /// A rating un-rejects, as Swift's does.
+    public void SetRating(Photo photo, int stars) => SetRating([photo], stars);
+
+    public void SetRating(IEnumerable<Photo> photos, int stars) {
+        foreach (var p in photos) {
+            (p.Rating, p.Rejected) = (Math.Clamp(stars, 0, 5), false);
+            Persist(p);
+        }
         Changed?.Invoke();
     }
 
-    public void SetRejected(Photo photo, bool rejected) {
-        photo.Rejected = rejected;
+    /// Set, never toggled, across a group: the clicked photo decides the
+    /// direction, or a mixed selection would flip into its own negative.
+    /// A rejection clears the rating.
+    public void SetRejected(Photo photo, bool rejected) => SetRejected([photo], rejected);
+
+    public void SetRejected(IEnumerable<Photo> photos, bool rejected) {
+        foreach (var p in photos) {
+            p.Rejected = rejected;
+            if (rejected) p.Rating = 0;
+            Persist(p);
+        }
         Changed?.Invoke();
     }
 
     public void ToggleRejected(Photo photo) => SetRejected(photo, !photo.Rejected);
+
+    /// Merged, not rebuilt: the edit lives in the same file. A mark that did not
+    /// land is said on the status line, and the strip keeps showing it, as Swift's does.
+    void Persist(Photo p) {
+        if (!Writes) return;
+        if (!Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected, s.Label) = (p.Rating, p.Rejected, p.Label)))
+            EngineModel.Shared.Say($"Ratings could not be saved for {p.Name}. The card or folder may be read-only.");
+    }
+
+    // ── Selection (Library.swift over PhotoSelection) ───────────────────────
+
+    public PhotoSelection Selection { get; private set; } = new();
+
+    /// The group changed and nothing else did: views repaint their rings
+    /// rather than rebuild, so the cell under a double-click survives its first click.
+    public event Action? SelectionChanged;
+
+    List<string> VisiblePaths => Visible.Select(p => p.Path).ToList();
+
+    public bool HasExplicitSelection => Selection.IsExplicit;
+    public bool IsSelected(Photo photo) => Selection.Contains(photo.Path);
+
+    /// What a batch acts on, in strip order: the selection when it is real, else everything in view.
+    public List<Photo> Targets => HasExplicitSelection ? Visible.Where(IsSelected).ToList() : Visible.ToList();
+
+    /// What a cull aimed at `photo` covers: the selection when it is part of a real one, else that photo.
+    public List<Photo> CullScope(Photo photo) => HasExplicitSelection && IsSelected(photo) ? Targets : [photo];
+
+    /// "12 selected", or empty for the resting state.
+    public string SelectionSummary => Selection.Summary(VisiblePaths);
+
+    /// A click in the gallery: the photo to focus, or null when it only changed the selection.
+    public Photo? Click(Photo photo, PhotoSelection.Modifiers modifiers) {
+        var focus = Selection.Click(photo.Path, modifiers, VisiblePaths);
+        SelectionChanged?.Invoke();
+        return focus == null ? null : photo;
+    }
+
+    /// A click on the strip: a plain one opens; a modified one only selects,
+    /// unless its shift anchor is out of view, when it falls back to opening.
+    /// Tried on a copy, so an open the canvas refuses (an unsaved edit) leaves the selection as it was.
+    public void ClickStrip(Photo photo, PhotoSelection.Modifiers modifiers) {
+        var trial = Selection.Copy();
+        if (modifiers == PhotoSelection.Modifiers.None || trial.Click(photo.Path, modifiers, VisiblePaths) != null) {
+            EngineModel.Shared.Open(photo.Index);
+            return;
+        }
+        Selection = trial;
+        SelectionChanged?.Invoke();
+    }
+
+    public void SelectAll() { Selection.SelectAll(VisiblePaths); SelectionChanged?.Invoke(); }
+    public void CollapseSelection() { Selection.Collapse(); SelectionChanged?.Invoke(); }
+
+    /// The platform's command key: ⌘ on macOS, Ctrl elsewhere.
+    public static PhotoSelection.Modifiers From(KeyModifiers k) =>
+        (k.HasFlag(OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) ? PhotoSelection.Modifiers.Command : 0)
+        | (k.HasFlag(KeyModifiers.Shift) ? PhotoSelection.Modifiers.Shift : 0);
 }
 
 /// Embedded previews through the facade (orion_read_thumbnail via the shim).

@@ -84,6 +84,7 @@ public sealed class FilmstripPanel : Grid {
 
         var library = LibraryModel.Shared;
         library.Changed += () => { Rebuild(); Reveal(glide: false); };
+        library.SelectionChanged += Rebuild;
         EngineModel.Shared.Opened += () => { Ring(); Reveal(glide: true); };
         Rebuild();
     }
@@ -154,17 +155,20 @@ public sealed class FilmstripPanel : Grid {
         };
         cell.PointerEntered += (_, _) => frame.Hot = true;
         cell.PointerExited += (_, _) => frame.Hot = false;
-        ToolTip.SetTip(cell, photo.Tooltip);
+        LibraryUi.Tip(cell, photo);
         Avalonia.Automation.AutomationProperties.SetName(cell, LibraryUi.Spoken(photo));
-        // Command/shift-click selection, PhotoSelection.
-        // stub(#315): Library.swift owns this until the logic moves below the facade
-        cell.Tapped += (_, _) => EngineModel.Shared.Open(photo.Index);
+        // In the set a batch acts on: a dimmer ring than the open frame's, which, drawn later, covers it.
+        if (LibraryModel.Shared.HasExplicitSelection && LibraryModel.Shared.IsSelected(photo))
+            held.Children.Add(new Border { Margin = new Thickness(-2.5), BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3.5),
+                                           BorderBrush = LibraryUi.SelectedRing, IsHitTestVisible = false });
+        // A plain click opens; command and shift build the selection (Filmstrip.activate).
+        cell.Tapped += (_, e) => LibraryModel.Shared.ClickStrip(photo, LibraryModel.From(e.KeyModifiers));
         cell.KeyDown += (_, e) => {
             if (e.Key is Key.Enter or Key.Space) { EngineModel.Shared.Open(photo.Index); e.Handled = true; }
         };
         // Merge to HDR… and Export… need a group selection.
         // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-        cell.ContextMenu = new ContextMenu { ItemsSource = LibraryUi.CullItems(photo) };
+        cell.ContextMenu = LibraryUi.Menu(() => LibraryUi.CullItems(photo));
         return (cell, held);
     }
 

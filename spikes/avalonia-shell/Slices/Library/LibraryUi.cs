@@ -81,28 +81,53 @@ static class LibraryUi {
     }
 
     /// The cull entries both context menus share: Reject or Keep, then the
-    /// five ratings and No rating. Swift counts the photos when the scope is a
-    /// group; with no PhotoSelection here the scope is always the one clicked.
+    /// five ratings and No rating, over the selection when the photo is part of
+    /// one (Library.cullScope), and counted then: "Reject" over forty and over
+    /// one are different acts, and the menu is the last thing read before either.
     public static List<Control> CullItems(LibraryModel.Photo photo) {
         var library = LibraryModel.Shared;
+        var scope = library.CullScope(photo);
+        string suffix = Suffix(scope);
         var items = new List<Control> {
-            Item(photo.Rejected ? "Keep" : "Reject", () => library.SetRejected(photo, !photo.Rejected)),
+            Item((photo.Rejected ? "Keep" : "Reject") + suffix, () => library.SetRejected(scope, !photo.Rejected)),
             new Separator(),
         };
         for (int n = 1; n <= 5; n++) {
             int stars = n;
-            items.Add(Item($"{n} star{(n == 1 ? "" : "s")}", () => library.SetRating(photo, stars)));
+            items.Add(Item($"{n} star{(n == 1 ? "" : "s")}{suffix}", () => library.SetRating(scope, stars)));
         }
-        items.Add(Item("No rating", () => library.SetRating(photo, 0)));
+        items.Add(Item("No rating" + suffix, () => library.SetRating(scope, 0)));
         return items;
+    }
+
+    /// " (12 photos)" for a group, nothing for one.
+    public static string Suffix(IReadOnlyCollection<LibraryModel.Photo> scope) => scope.Count > 1 ? $" ({scope.Count} photos)" : "";
+
+    /// A context menu built when it opens, so its scope and count are the selection's now, not at the last rebuild.
+    public static ContextMenu Menu(Func<List<Control>> items) {
+        var menu = new ContextMenu { ItemsSource = items() };
+        menu.Opening += (_, _) => menu.ItemsSource = items();
+        return menu;
+    }
+
+    /// The dimmer ring of a photo in the selection but not in focus (Filmstrip.swift: accent at 0.55).
+    public static readonly IBrush SelectedRing = new SolidColorBrush(((ISolidColorBrush)Palette.Accent).Color, 0.55).ToImmutable();
+
+    /// The name now; the exposure under it when the tooltip first opens, so
+    /// listing a folder never reads every file's metadata.
+    public static void Tip(Control cell, LibraryModel.Photo photo) {
+        ToolTip.SetTip(cell, photo.Name);
+        cell.AddHandler(ToolTip.ToolTipOpeningEvent, (_, _) => ToolTip.SetTip(cell, photo.Tooltip));
     }
 
     /// What a screen reader says for one photograph, in both views: the name
     /// first, then the marks that decide whether it stays.
     public static string Spoken(LibraryModel.Photo photo) {
         var parts = new List<string> { photo.Name };
+        if (LibraryModel.Shared.HasExplicitSelection && LibraryModel.Shared.IsSelected(photo)) parts.Add("selected");
         if (photo.Rejected) parts.Add("rejected");
         if (photo.Rating > 0) parts.Add($"{photo.Rating} star{(photo.Rating == 1 ? "" : "s")}");
+        if (!string.IsNullOrEmpty(photo.Label)) parts.Add($"label {photo.Label}");
         return string.Join(", ", parts);
     }
 

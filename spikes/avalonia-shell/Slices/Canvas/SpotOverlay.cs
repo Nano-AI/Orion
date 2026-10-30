@@ -121,7 +121,8 @@ public sealed class SpotOverlay : Control, ICustomHitTest {
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e) {
         if (_dragging == null && !_placing) return;
-        // stub(#315): EditHistory.swift owns this until the logic moves below the facade (commitSpotEdit)
+        // addSpot's "Spot", or commitSpotEdit's "Move spot": one step, recorded at the full render the release settles on.
+        Develop.EditHistory.Label(_placing ? "Spot" : "Move spot");
         (_dragging, _placing) = (null, false);
         e.Pointer.Capture(null);
         EngineModel.Shared.EndInteraction();
