@@ -92,7 +92,7 @@ sealed class VersionsSection {
             // quietly restores an empty mask is the defect this line refuses.
             body.Children.Add(new TextBlock {
                 Text = $"{missing.Count} selection{(missing.Count == 1 ? "" : "s")} missing — {string.Join(", ", missing)}",
-                FontSize = Faces.Mark, Foreground = Palette.Star,
+                FontSize = Faces.Mark, Foreground = Palette.Warn,
             });
         else if (v.Automatic)
             body.Children.Add(new TextBlock { Text = "Kept automatically. Rename it to keep it.", FontSize = Faces.Mark, Foreground = Palette.Dim });
