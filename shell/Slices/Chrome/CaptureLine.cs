@@ -15,18 +15,18 @@ public sealed class CaptureLine : Border {
     public const double LineHeight = 42;
 
     readonly TextBlock _camera = Words(Palette.Label), _lens = Words(Palette.Dim);
-    readonly StackPanel _figures = new() { Orientation = Orientation.Horizontal, Spacing = 12 };
+    readonly StackPanel _figures = new() { Orientation = Orientation.Horizontal, Spacing = Space.Md };
     readonly StateButton _button;
 
     public CaptureLine() {
         Height = LineHeight;
         _camera.MaxWidth = 150;
-        var gear = new Grid { ColumnDefinitions = new("Auto,*"), ColumnSpacing = 8, Children = { _camera, _lens } };
+        var gear = new Grid { ColumnDefinitions = new("Auto,*"), ColumnSpacing = Space.Md, Children = { _camera, _lens } };
         Grid.SetColumn(_lens, 1);
         // The button's padding hangs into the column's margin, so the words line up with the plate's edge.
-        _button = new StateButton { Kind = ButtonKind.Bare, Height = LineHeight, Padding = new Thickness(6, 3), Margin = new Thickness(-6, 0),
+        _button = new StateButton { Kind = ButtonKind.Bare, Height = LineHeight, Padding = new Thickness(Space.Sm, Space.Gap), Margin = new Thickness(-Space.Sm, 0),
                                     HorizontalAlignment = HorizontalAlignment.Left,
-                                    Content = new StackPanel { Spacing = 3, Children = { gear, _figures } } };
+                                    Content = new StackPanel { Spacing = Space.Xs, Children = { gear, _figures } } };
         _button.Help("Capture settings");
     }
 
@@ -69,7 +69,7 @@ static class CapturePopover {
 
     /// Label beside value: words dim, values in numerals (Library.dc.html's info list).
     public static Grid Grid(IReadOnlyList<(string Label, string Value)> rows, double margin = 0) {
-        var grid = new Grid { ColumnDefinitions = new("Auto,*"), ColumnSpacing = Space.Pad, RowSpacing = 8,
+        var grid = new Grid { ColumnDefinitions = new("Auto,*"), ColumnSpacing = Space.Pad, RowSpacing = Space.Md,
                               Margin = new Thickness(margin), MinWidth = 220 };
         for (int i = 0; i < rows.Count; i++) {
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));

@@ -38,21 +38,21 @@
           <Border Grid.Column="2" Background="{x:Static local:Palette.Panel}">
             <!-- OrionApp+Tools.swift: histogram, tab bar, the tab's panels, footer. -->
             <DockPanel x:Name="ToolColumn">
-              <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top" Margin="14,0"/>
+              <StackPanel x:Name="AboveTabsHost" DockPanel.Dock="Top"/>
               <!-- The tool tabs: one segmented well, Segmented.cs's look (ground, no edge, a raised
-                   pill inset 2), lined up with the panels' 14. The pill slides by transform. -->
+                   pill inset 2), lined up with the panels' Space.Pad. Margins and radii: MainWindow.axaml.cs, from tokens. -->
               <Border DockPanel.Dock="Top" BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,1">
-                <Border Margin="14,8" Padding="2" CornerRadius="6" Background="{x:Static local:Palette.Ground}">
+                <Border x:Name="TabWell" Background="{x:Static local:Palette.Ground}">
                   <Grid x:Name="TabBar">
-                    <Border x:Name="TabPill" CornerRadius="4" Background="{x:Static local:Palette.Raised}"
+                    <Border x:Name="TabPill" Background="{x:Static local:Palette.Raised}"
                             IsHitTestVisible="False" RenderTransformOrigin="0%,50%"/>
                   </Grid>
                 </Border>
               </Border>
               <StackPanel x:Name="StatusHost" DockPanel.Dock="Bottom"/>
               <ScrollViewer>
-                <!-- Main.dc.html's panel rhythm: 18 above, 14 at the sides, 24 below. -->
-                <StackPanel x:Name="ToolsHost" Margin="14,18,14,24" Spacing="{x:Static local:SectionPlate.Gap}"/>
+                <!-- Main.dc.html's panel rhythm: Lg above, Pad at the sides, Xl below (MainWindow.axaml.cs). -->
+                <StackPanel x:Name="ToolsHost" Spacing="{x:Static local:SectionPlate.Gap}"/>
               </ScrollViewer>
             </DockPanel>
           </Border>

@@ -6,10 +6,26 @@ namespace OrionShell;
 /// SF Symbols by their Swift names, redrawn on a 24-unit grid. Every symbol the
 /// Swift UI uses is here; a name that is not draws a dot and says so on stderr,
 /// so a slice is never blocked on an icon. A real icon set replaces this table.
+///
+/// One set (tokens.json `icon`): every glyph keeps the grid it was drawn on, so
+/// at one size an X is smaller than a sun, as in SF Symbols, instead of each
+/// being stretched to its own bounds; one stroke at every size; two sizes, `Sm`
+/// for a mark inside a row of text and `Md` for a glyph on a button or a tab.
 public static class Icons {
+    /// The units every path below is drawn in.
+    const double Grid = 24;
+
     static readonly Dictionary<string, string> Paths = new() {
         ["xmark"] = "M6,6 L18,18 M18,6 L6,18",
         ["plus"] = "M12,5 L12,19 M5,12 L19,12",
+        ["minus"] = "M5,12 L19,12",
+        // Three dots as small rings: at the one stroke a round cap alone was a speck.
+        ["ellipsis"] = "M3.5,12 a1.5,1.5 0 1 0 3,0 a1.5,1.5 0 1 0 -3,0 M10.5,12 a1.5,1.5 0 1 0 3,0 a1.5,1.5 0 1 0 -3,0 " +
+                       "M17.5,12 a1.5,1.5 0 1 0 3,0 a1.5,1.5 0 1 0 -3,0",
+        // The mask kinds (MaskControls.KindGlyph): a ring in a ring, ramp lines, a range's step.
+        ["mask.radial"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M8.5,12 A3.5,3.5 0 1 0 15.5,12 A3.5,3.5 0 1 0 8.5,12 Z",
+        ["mask.linear"] = "M4,5 L20,5 M4,12 L20,12 M4,19 L20,19",
+        ["mask.range"] = "M3,18 L9,18 L12,6 L15,18 L21,18",
         ["minus.circle"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M8,12 L16,12",
         ["chevron.down"] = "M6,9 L12,15 L18,9",
         ["chevron.up"] = "M6,15 L12,9 L18,15",
@@ -19,7 +35,7 @@ public static class Icons {
         ["rotate.left"] = "M4,11 H14 V21 H4 Z M19,15 A8,8 0 0 0 10,6 M13,3 L10,6 L13,9",
         ["rotate.right"] = "M20,11 H10 V21 H20 Z M5,15 A8,8 0 0 1 14,6 M11,3 L14,6 L11,9",
         // The tool tabs and section headers (#350). Drawn on the 24 grid, one 1.6 stroke, round ends, and
-        // one weight at the tabs' 14 pt: about 19 units across, rays and handles long enough to read.
+        // one weight at the tabs' IconSize.Md: about 19 units across, rays and handles long enough to read.
         ["sun.max"] = "M12,8 A4,4 0 1 0 12,16 A4,4 0 1 0 12,8 M12,2.5 V5 M12,19 V21.5 M2.5,12 H5 M19,12 H21.5 " +
                       "M5.3,5.3 L7.05,7.05 M16.95,16.95 L18.7,18.7 M5.3,18.7 L7.05,16.95 M16.95,7.05 L18.7,5.3",
         ["circle.3"] = "M12,3.5 A4.5,4.5 0 1 0 12,12.5 A4.5,4.5 0 1 0 12,3.5 M8.5,10 A4.5,4.5 0 1 0 8.5,19 A4.5,4.5 0 1 0 8.5,10 " +
@@ -88,10 +104,14 @@ public static class Icons {
 
     public static bool Has(string sfName) => Paths.ContainsKey(sfName);
 
+    /// The bare drawing in grid units, for a caller that places it itself (CompareOverlay's grip).
+    public static Geometry Shape(string sfName) => Geometry.Parse(Paths[sfName]);
+
     /// Every name Create was asked for and could not draw: the selftest's oracle.
     public static readonly HashSet<string> Missing = [];
 
-    /// The symbol at `size` points in `brush`. ".fill" symbols fill; the rest stroke.
+    /// The symbol in a `size`-point box in `brush`: the 24-unit grid scaled to the
+    /// box, never stretched to the glyph. ".fill" symbols fill; the rest stroke.
     public static Path Create(string sfName, double size, IBrush brush) {
         if (!Paths.TryGetValue(sfName, out var data)) {
             Console.Error.WriteLine($"Icons: no drawing for SF Symbol '{sfName}'");
@@ -99,10 +119,12 @@ public static class Icons {
             data = "M10,12 A2,2 0 1 0 14,12 A2,2 0 1 0 10,12 Z";
         }
         bool fill = sfName.EndsWith(".fill");
+        var geometry = Geometry.Parse(data);
+        geometry.Transform = new ScaleTransform(size / Grid, size / Grid);   // the pen is not scaled: one stroke
         return new Path {
-            Data = Geometry.Parse(data), Width = size, Height = size, Stretch = Stretch.Uniform,
+            Data = geometry, Width = size, Height = size, Stretch = Stretch.None,
             Fill = fill ? brush : null, Stroke = fill ? null : brush,
-            StrokeThickness = 1.6, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round,
+            StrokeThickness = IconSize.Stroke, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round,
         };
     }
 }

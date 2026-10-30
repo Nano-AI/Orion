@@ -22,19 +22,19 @@ public sealed class RatingBarPanel : Border {
     public RatingBarPanel() {
         HorizontalAlignment = HorizontalAlignment.Right;
         VerticalAlignment = VerticalAlignment.Bottom;
-        Margin = new Thickness(16);
+        Margin = new Thickness(Space.Lg);
         for (int i = 0; i < 5; i++) {
             int n = i + 1;
             _stars[i] = new StateButton { Kind = ButtonKind.Bare, Width = 26, Height = 24, MinWidth = 0, Padding = default,
-                                          CornerRadius = new CornerRadius(4) };
+                                          CornerRadius = new CornerRadius(Radius.Md) };
             _stars[i].Click += (_, _) => { if (LibraryModel.Shared.Open is { } p) LibraryModel.Shared.SetRating(p, n == p.Rating ? 0 : n); };
             _stars[i].PointerEntered += (_, _) => { _hovered = n; Refresh(); };
             _stars[i].PointerExited += (_, _) => { if (_hovered == n) { _hovered = null; Refresh(); } };
         }
-        _reject = new StateButton { Kind = ButtonKind.Bare, Height = 24, MinWidth = 0, Padding = new Thickness(8, 0), CornerRadius = new CornerRadius(4) };
+        _reject = new StateButton { Kind = ButtonKind.Bare, Height = 24, MinWidth = 0, Padding = new Thickness(Space.Md, 0), CornerRadius = new CornerRadius(Radius.Md) };
         _reject.Click += (_, _) => { if (LibraryModel.Shared.Open is { } p) LibraryModel.Shared.ToggleRejected(p); };
-        var pill = Pill.Of([.. _stars, new Rectangle { Width = 1, Height = 16, Fill = Ink.White(0.12), Margin = new Thickness(4, 0) }, _reject]);
-        pill.Padding = new Thickness(4, 3);
+        var pill = Pill.Of([.. _stars, new Rectangle { Width = 1, Height = 16, Fill = Ink.White(0.12), Margin = new Thickness(Space.Gap, 0) }, _reject]);
+        pill.Padding = new Thickness(Space.Xs);
         Child = pill;
         LibraryModel.Shared.Changed += Refresh;
         EngineModel.Shared.Opened += Refresh;
@@ -52,14 +52,14 @@ public sealed class RatingBarPanel : Border {
         for (int n = 1; n <= 5; n++) {
             bool filled = n <= (_hovered ?? photo.Rating) && !photo.Rejected;
             var star = _stars[n - 1];
-            star.Content = Icons.Create(filled ? "star.fill" : "star", 15, Palette.Text);
+            star.Content = Icons.Create(filled ? "star.fill" : "star", IconSize.Md, Palette.Text);
             star.Ink = filled ? Palette.Star : Palette.Label;
             star.IsEnabled = !photo.Rejected;
             star.Help(n == photo.Rating ? "Clear the rating" : $"{n} star{(n == 1 ? "" : "s")} ({n})");
         }
 
-        _reject.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = {
-            Icons.Create(photo.Rejected ? "arrow.uturn.backward" : "xmark", 12, Palette.Text),
+        _reject.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm, Children = {
+            Icons.Create(photo.Rejected ? "arrow.uturn.backward" : "xmark", IconSize.Md, Palette.Text),
             new TextBlock { Text = photo.Rejected ? "Keep" : "Reject", VerticalAlignment = VerticalAlignment.Center },
         } };
         _reject.Ink = photo.Rejected ? Palette.Reject : Palette.Label;

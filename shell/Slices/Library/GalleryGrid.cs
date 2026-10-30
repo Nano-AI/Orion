@@ -10,7 +10,7 @@ namespace OrionShell.Library;
 sealed class GalleryGrid : Panel {
     /// The cell-size slider's range: 200 is the smallest cell on which framing
     /// is still judgeable, 400 at 2x is what a 1024-edge thumbnail covers.
-    public const double MinCell = 200, MaxCell = 400, DefaultCell = 260, Spacing = 10, CellAspect = 1.5;
+    public const double MinCell = 200, MaxCell = 400, DefaultCell = 260, Spacing = Space.Md, CellAspect = 1.5;
 
     static GalleryGrid() {
         // ViewportTests+Gallery.swift's cases.

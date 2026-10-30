@@ -93,7 +93,9 @@ sealed class AnalogTrack : Control, ICustomHitTest {
     static readonly IPen Tick = new Pen(Palette.Faint, 1), TickLit = new Pen(Palette.Label, 1);
     static readonly IPen Detent = new Pen(Palette.Accent, 1);
     static readonly IPen Engraving = new Pen(Palette.Line, 1), EngravingLit = new Pen(Palette.Rail, 1), Lip = new Pen(Palette.Rail, 1);
-    static readonly Color Shade = Color.FromArgb(179, 0, 0, 0);
+    /// The one shadow (tokens.json `shadow`): under whatever a hand grabs.
+    public static readonly Color Shade = Color.FromArgb((byte)Math.Round(Shadow.Alpha * 255), 0, 0, 0);
+    public static BoxShadows Lift(double y = Shadow.Y, double blur = Shadow.Blur) => new(new BoxShadow { OffsetY = y, Blur = blur, Color = Shade });
 
     public AnalogTrack() {
         _shown = new Spring(this, Motion.Settle);
@@ -186,7 +188,7 @@ sealed class AnalogTrack : Control, ICustomHitTest {
         }
         // Lifted on hover (a longer, softer shadow), pressed into the groove by a grab (a tight one).
         double lift = _lift.Value, press = _press.Value, s = ThumbScale;
-        var shadow = new BoxShadows(new BoxShadow { OffsetY = 1 + 0.5 * lift - 0.75 * press, Blur = 3 + 2 * lift - 2.5 * press, Color = Shade });
+        var shadow = Lift(Shadow.Y + 0.5 * lift - 0.75 * press, Shadow.Blur + 2 * lift - 2.5 * press);
         var thumb = new Rect(tx - ThumbW / 2, GrooveY - ThumbH / 2, ThumbW, ThumbH);
         using (c.PushTransform(Matrix.CreateTranslation(-tx, -GrooveY) * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(tx, GrooveY)))
             c.DrawRectangle(Palette.Text, null, new RoundedRect(thumb, Radius.Sm), shadow);

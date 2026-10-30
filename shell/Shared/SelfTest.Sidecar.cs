@@ -257,7 +257,7 @@ static partial class SelfTest {
             var footer = new Chrome.StatusPanel();
             var host = Show(footer);
             var said = (TextBlock)((StackPanel)footer.Child!).Children[1];
-            Check(footer.IsVisible && said.IsVisible && said.Text == Autosave.Shared.LastFailure && said.Foreground == Palette.Star,
+            Check(footer.IsVisible && said.IsVisible && said.Text == Autosave.Shared.LastFailure && said.Foreground == Palette.Warn,
                   $"the footer draws the failed write in the warning colour ('{said.Text}')");
             host.Close();
             // Trash, the departure the Swift probe drove that the switch above does not:
@@ -284,7 +284,7 @@ static partial class SelfTest {
             var said = (TextBlock)((StackPanel)footer.Child!).Children[1];
             string timing = engine.Timing;
             engine.SetTiming("render failed: probe");
-            bool drawn = said.IsVisible && said.Text == "Render failed: probe" && said.Foreground == Palette.Star;
+            bool drawn = said.IsVisible && said.Text == "Render failed: probe" && said.Foreground == Palette.Warn;
             engine.SetTiming(timing);
             bool cleared = said.Text != "Render failed: probe";
             host.Close();   // off screen it stops listening to the shared models

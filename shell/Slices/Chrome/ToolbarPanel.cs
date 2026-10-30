@@ -20,20 +20,20 @@ public sealed class ToolbarPanel : Grid {
 
     readonly TextBlock _crumb = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     readonly Segmented _mode = new(["Library", "Develop"], 1, ["square.grid.2x2", "slider.horizontal.3"], words: true);
-    readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right,
+    readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right,
                                            VerticalAlignment = VerticalAlignment.Center };
 
     public ToolbarPanel() {
         ColumnDefinitions = new("*,Auto,*");
-        ColumnSpacing = 12;
+        ColumnSpacing = Space.Pad;
         Margin = new Thickness(Space.Pad, 0);
         Height = Layout.Toolbar;
 
-        var wordmark = new TextBlock { Text = "Orion", FontSize = 14, FontWeight = FontWeight.SemiBold, LetterSpacing = -0.14,
+        var wordmark = new TextBlock { Text = "Orion", FontSize = Faces.Body, FontWeight = FontWeight.SemiBold, LetterSpacing = -0.14,
                                        VerticalAlignment = VerticalAlignment.Center };
         var left = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
         foreach (var c in new Control[] { wordmark, OpenMenu() }) {
-            c.Margin = new Thickness(0, 0, 12, 0);
+            c.Margin = new Thickness(0, 0, Space.Pad, 0);
             DockPanel.SetDock(c, Dock.Left);
             left.Children.Add(c);
         }
@@ -99,7 +99,7 @@ public sealed class ToolbarPanel : Grid {
                 Glyph("arrow.uturn.backward", Keyed(EditHistory.UndoLabel is { } u ? $"Undo {u}" : "Undo", "undo"), () => Commands.Run("undo"), Commands.CanRun("undo")),
                 Glyph("arrow.uturn.forward", Keyed(EditHistory.RedoLabel is { } r ? $"Redo {r}" : "Redo", "redo"), () => Commands.Run("redo"), Commands.CanRun("redo"))));
             // History and geometry are different kinds of thing with look-alike curved arrows: a divider keeps them apart.
-            _actions.Children.Add(new Border { Width = 1, Height = 16, Background = Palette.Line, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center });
+            _actions.Children.Add(new Border { Width = 1, Height = 16, Background = Palette.Line, Margin = new Thickness(Space.Gap, 0), VerticalAlignment = VerticalAlignment.Center });
             _actions.Children.Add(Group(Glyph("rotate.left", Keyed("Rotate left", "rotate-left"), () => Commands.Run("rotate-left"), Commands.CanRun("rotate-left")),
                                         Glyph("rotate.right", Keyed("Rotate right", "rotate-right"), () => Commands.Run("rotate-right"), Commands.CanRun("rotate-right"))));
             var compare = Button("rectangle.split.2x1", "Compare", () => Commands.Run("compare"), Commands.CanRun("compare"), ButtonKind.Standard, "Split the view against the original (\\)");

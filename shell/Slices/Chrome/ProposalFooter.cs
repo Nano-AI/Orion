@@ -14,12 +14,12 @@ sealed class ProposalFooter : StackPanel {
                                        MaxLines = 2, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis };
 
     public ProposalFooter() {
-        Spacing = 7;
-        Margin = new Thickness(0, 4);
+        Spacing = Space.Sm;
+        Margin = new Thickness(0, Space.Gap);
         Children.Add(Engraved.Label("Proposed edit", Palette.Accent));
         Children.Add(_keys);
         Children.Add(Engraved.Note("Approve or reject to keep editing. Both sides use the proposed framing."));
-        Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = {
+        Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm, Children = {
             new StateButton(null, "Approve", () => Commands.Run("approve-proposal"), help: "Approve the proposed edit  (⌘⏎)"),
             new StateButton(null, "Reject", () => Commands.Run("reject-proposal"), help: "Reject the proposed edit  (⌘⎋)"),
         } });

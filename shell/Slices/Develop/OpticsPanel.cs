@@ -41,7 +41,7 @@ public sealed class OpticsPanel : StackPanel {
         if (found) {
             var toggle = new ToggleSwitch {
                 IsChecked = _profileEnabled, OnContent = null, OffContent = null,
-                Content = new StackPanel { Spacing = 1, Children = {
+                Content = new StackPanel { Spacing = Space.Xs, Children = {
                     new TextBlock { Text = "Lens profile", FontSize = Faces.Label },
                     new TextBlock { Text = name, FontSize = Faces.Mark, Foreground = Palette.Dim, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxLines = 2 },
                 } },
@@ -90,15 +90,15 @@ public sealed class OpticsPanel : StackPanel {
     sealed class LensPicker : StackPanel {
         readonly OpticsPanel _panel;
         readonly TextBox _query = new() {
-            PlaceholderText = "Find a lens…", FontSize = Faces.Label, MinHeight = 0, Padding = new Thickness(6, 3),
+            PlaceholderText = "Find a lens…", FontSize = Faces.Label, MinHeight = 0, Padding = new Thickness(Space.Sm, Space.Gap),
             Background = Palette.Panel, BorderBrush = Palette.Raised, CornerRadius = new CornerRadius(Radius.Md),
         };
-        readonly StackPanel _results = new() { Spacing = 6 };
+        readonly StackPanel _results = new() { Spacing = Space.Sm };
         readonly ContentControl _chosen = new();
 
         public LensPicker(OpticsPanel panel) {
             _panel = panel;
-            Spacing = 6;
+            Spacing = Space.Sm;
             Children.Add(_chosen);
             Children.Add(_query);
             Children.Add(_results);

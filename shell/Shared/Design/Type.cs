@@ -25,6 +25,8 @@ public static class Faces {
     public const double Label = TypeSize.Base;   // 12: a control's name, tab names
     public const double Body = TypeSize.Md;      // 13: body text, section titles
     public const double Readout = TypeSize.Md;   // 13: a slider's value
+    public const double Title = TypeSize.Title;  // 17: a sheet's title
+    public const double Display = TypeSize.Display;   // 28: the empty canvas's wordmark
 
     /// A number in the numeral face.
     public static TextBlock Figure(string text, double size = Readout, IBrush? color = null) => new() {

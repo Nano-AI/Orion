@@ -158,7 +158,7 @@ public sealed class PresetsPanel : StackPanel {
     readonly TextBox _name = SheetKit.Field("New preset");
     readonly Button _save, _copy, _paste, _sync, _export;
     readonly TextBlock _copiedNote = SheetKit.Note("Settings copied. Paste puts them on this photo; Sync writes them to every photo in view.");
-    readonly TextBlock _failure = SheetKit.Note("", Palette.Star);
+    readonly TextBlock _failure = SheetKit.Note("", Palette.Warn);
     /// What Copy took: the open photo's look, every group, as Swift's `copiedState`.
     Preset? _copied;
     /// The same look as the sidecar holds it: what Sync patches into the other photos' sidecars.
@@ -266,12 +266,12 @@ public sealed class PresetsPanel : StackPanel {
     Control Row(Preset p) {
         // What it will disturb, before it is pressed.
         var groups = new TextBlock {
-            Text = p.Groups.Count == PresetStore.Groups.Length ? "all" : $"{p.Groups.Count} groups", FontSize = TypeSize.Sm, Foreground = Palette.Faint,
+            Text = p.Groups.Count == PresetStore.Groups.Length ? "all" : $"{p.Groups.Count} groups", FontSize = Faces.Mark, Foreground = Palette.Dim,
             Tag = StateButton.Keep,
         };
         var head = new DockPanel();
         DockPanel.SetDock(groups, Dock.Right);
-        head.Children.AddRange([groups, new TextBlock { Text = p.Name, FontSize = TypeSize.Sm, TextTrimming = TextTrimming.CharacterEllipsis }]);
+        head.Children.AddRange([groups, new TextBlock { Text = p.Name, FontSize = Faces.Mark, TextTrimming = TextTrimming.CharacterEllipsis }]);
         // A button, so Tab reaches it and Space applies it; a tapped Border did neither.
         var apply = new StateButton {
             Content = head, Tag = p, HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(Space.Sm, 0), Height = 26,
@@ -295,7 +295,7 @@ public sealed class PresetsPanel : StackPanel {
         var box = new CheckBox {
             IsChecked = _groups.Contains(i), VerticalContentAlignment = VerticalAlignment.Center,
             Content = new StackPanel {
-                Orientation = Orientation.Horizontal, Spacing = 4,
+                Orientation = Orientation.Horizontal, Spacing = Space.Gap,
                 Children = {
                     new TextBlock { Text = title, FontSize = Faces.Label },
                     new TextBlock { Text = covers, FontSize = Faces.Mark, Foreground = Palette.Dim, TextTrimming = TextTrimming.CharacterEllipsis },

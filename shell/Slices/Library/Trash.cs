@@ -28,7 +28,7 @@ static partial class Trash {
             MinWidth = 96, Height = 28, Ink = destructive ? Palette.Reject : null,
         };
         window.Content = new StackPanel {
-            Width = 320, Margin = new Thickness(22), Spacing = Space.Md,
+            Width = 320, Margin = new Thickness(Space.Lg), Spacing = Space.Md,
             Children = {
                 new TextBlock { Text = Question(photos), FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap },
                 new TextBlock { Text = Message, Foreground = Palette.Dim, TextWrapping = TextWrapping.Wrap },

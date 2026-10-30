@@ -20,8 +20,8 @@ public sealed class StatusPanel : Border {
     public StatusPanel() {
         BorderBrush = Palette.Line;
         BorderThickness = new Thickness(0, 1, 0, 0);
-        Padding = new Thickness(Space.Pad, 8);
-        Child = new StackPanel { Spacing = 8, Children = { new ProposalFooter(), _message, Keys() } };
+        Padding = new Thickness(Space.Pad, Space.Sm);
+        Child = new StackPanel { Spacing = Space.Sm, Children = { new ProposalFooter(), _message, Keys() } };
     }
 
     // Listening only while on screen: a footer that has left its window (a closed
@@ -57,7 +57,7 @@ public sealed class StatusPanel : Border {
               : ChromeStubs.FlatFrame is { } flat ? $"Not a photograph: {flat}" : null)
             ?? (engine.Status.Length > 0 ? engine.Status : null);
         _message.Text = warning ?? Hint(engine);
-        _message.Foreground = warning != null ? Palette.Star : Palette.Dim;
+        _message.Foreground = warning != null ? Palette.Warn : Palette.Dim;
         _message.IsVisible = _message.Text.Length > 0;
         IsVisible = engine.Photos.Count > 0 || warning != null;
     }
@@ -86,9 +86,9 @@ public sealed class StatusPanel : Border {
     }
 
     static StackPanel Group(string word, params Control[] caps) {
-        var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Gap };
         group.Children.AddRange(caps);
-        group.Children.Add(new TextBlock { Text = word, FontSize = Faces.Label, Foreground = Palette.Dim, Margin = new Thickness(2, 0, 0, 0),
+        group.Children.Add(new TextBlock { Text = word, FontSize = Faces.Label, Foreground = Palette.Dim, Margin = new Thickness(Space.Xs, 0, 0, 0),
                                            VerticalAlignment = VerticalAlignment.Center });
         return group;
     }
@@ -98,7 +98,7 @@ public sealed class StatusPanel : Border {
     /// The command's key without modifiers, as a keycap: raised, a hairline, a deeper bottom edge.
     static Control[] Caps(string command) =>
         Commands.Find(command)?.Keys.Where(k => k.KeyModifiers == KeyModifiers.None).Take(1).Select(k => (Control)new Border {
-            MinWidth = 17, Height = 18, Padding = new Thickness(4, 0), CornerRadius = new CornerRadius(Radius.Sm),
+            MinWidth = 17, Height = 18, Padding = new Thickness(Space.Gap, 0), CornerRadius = new CornerRadius(Radius.Sm),
             Background = Palette.Raised, BorderBrush = Palette.Rail, BorderThickness = new Thickness(1, 1, 1, 2),
             VerticalAlignment = VerticalAlignment.Center, Child = Cap(KeyName(k.Key)),
         }).ToArray() ?? [];

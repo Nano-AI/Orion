@@ -22,7 +22,7 @@ sealed class MaskList : StackPanel {
 
     public MaskList(MaskGroup group) {
         _group = group;
-        Spacing = 4;
+        Spacing = Space.Gap;
     }
 
     static IBrush Tinted(IBrush b, double opacity) => new SolidColorBrush(((ISolidColorBrush)b).Color, opacity);
@@ -57,8 +57,8 @@ sealed class MaskList : StackPanel {
     Control Header(int layer, List<int> run, bool holds) {
         int start = run[0];
         bool hidden = _group.LayerHidden(layer);
-        var row = new DockPanel { Margin = new Thickness(4, 3) };
-        var eye = Eye(hidden, 10, 16, hidden ? "Show this mask" : "Hide this mask", () => _group.ToggleLayerHidden(layer));
+        var row = new DockPanel { Margin = new Thickness(Space.Gap) };
+        var eye = Eye(hidden, IconSize.Sm, 16, hidden ? "Show this mask" : "Hide this mask", () => _group.ToggleLayerHidden(layer));
         DockPanel.SetDock(eye, Dock.Left);
         row.Children.Add(eye);
         var menu = CardMenu(layer, start, hidden);
@@ -68,9 +68,9 @@ sealed class MaskList : StackPanel {
             var actions = new StackPanel {
                 Orientation = Orientation.Horizontal, Spacing = 0,
                 Children = {
-                    Menu(Glyph(Plus, 9, Palette.Text), "Add", IntoItems(0), room, "Add a shape to this mask", chevron: false),
-                    Menu(Glyph(Minus, 9, Palette.Text), "Subtract", IntoItems(1), room, "Subtract a shape from this mask", chevron: false),
-                    Menu(Glyph(Ellipsis, 13, Palette.Text), null, menu, true, "Mask actions", chevron: false),
+                    Menu(Icons.Create("plus", IconSize.Sm, Palette.Text), "Add", IntoItems(0), room, "Add a shape to this mask", chevron: false),
+                    Menu(Icons.Create("minus", IconSize.Sm, Palette.Text), "Subtract", IntoItems(1), room, "Subtract a shape from this mask", chevron: false),
+                    Menu(Icons.Create("ellipsis", IconSize.Md, Palette.Text), null, menu, true, "Mask actions", chevron: false),
                 },
             };
             DockPanel.SetDock(actions, Dock.Right);
@@ -113,7 +113,7 @@ sealed class MaskList : StackPanel {
 
     Control NameLabel(int layer, int start) {
         var name = new TextBlock {
-            Text = _group.DisplayName(layer), FontSize = TypeSize.Sm, FontWeight = FontWeight.SemiBold,
+            Text = _group.DisplayName(layer), FontSize = Faces.Mark, FontWeight = FontWeight.SemiBold,
             Foreground = Palette.Text, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(Space.Sm, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -125,7 +125,7 @@ sealed class MaskList : StackPanel {
 
     Control RenameField(int layer, int start) {
         var field = new TextBox {
-            Text = _group.Shapes[start].Name ?? "", FontSize = TypeSize.Sm, FontWeight = FontWeight.SemiBold,
+            Text = _group.Shapes[start].Name ?? "", FontSize = Faces.Mark, FontWeight = FontWeight.SemiBold,
             Padding = new Thickness(0), MinHeight = 0, BorderThickness = new Thickness(0), Background = Brushes.Transparent,
             Margin = new Thickness(Space.Sm, 0, 0, 0),
         };
@@ -149,8 +149,8 @@ sealed class MaskList : StackPanel {
         // ignores would be a label that lies.
         string op = position == 0 ? "circle.dotted" : m.Compose switch { 1 => "minus.circle", 2 => "circle.lefthalf.filled", _ => "plus.circle" };
         Control glyph = position == 0
-            ? new Border { Width = 18, Child = Icons.Create(op, 9, Palette.Faint) }
-            : Menu(Icons.Create(op, 9, Palette.Dim), null, [
+            ? new Border { Width = 18, Child = Icons.Create(op, IconSize.Sm, Palette.Faint) }
+            : Menu(Icons.Create(op, IconSize.Sm, Palette.Dim), null, [
                   Item("Add", () => _group.SetCompose(i, 0)), Item("Subtract", () => _group.SetCompose(i, 1)),
                   Item("Intersect", () => _group.SetCompose(i, 2))],
                   true, m.Compose switch { 1 => "Subtracts: click to change", 2 => "Intersects: click to change", _ => "Adds: click to change" }, chevron: false);
@@ -158,7 +158,7 @@ sealed class MaskList : StackPanel {
         var label = new DockPanel { Children = { glyph } };
         DockPanel.SetDock(glyph, Dock.Left);
         if (selected) {
-            var remove = new StateButton { Kind = ButtonKind.Bare, Content = Glyph(Cross, 8, Palette.Dim), Padding = new Thickness(4, 0),
+            var remove = new StateButton { Kind = ButtonKind.Bare, Content = Icons.Create("xmark", IconSize.Sm, Palette.Dim), Padding = new Thickness(Space.Gap, 0),
                                            MinWidth = 0, Height = 18, VerticalAlignment = VerticalAlignment.Center }.Help("Remove this shape");
             remove.Click += (_, _) => Dispatcher.UIThread.Post(() => _group.Remove(i));
             DockPanel.SetDock(remove, Dock.Right);
@@ -170,12 +170,12 @@ sealed class MaskList : StackPanel {
             label.Children.Add(dabs);
         }
         label.Children.Add(new StackPanel {
-            Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(Space.Xs, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-            Children = { KindGlyph(m.Kind, 10), new TextBlock { Text = MaskGroup.KindName(m.Kind), FontSize = TypeSize.Sm, VerticalAlignment = VerticalAlignment.Center } },
+            Orientation = Orientation.Horizontal, Spacing = Space.Sm, Margin = new Thickness(Space.Xs, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Children = { KindGlyph(m.Kind), new TextBlock { Text = MaskGroup.KindName(m.Kind), FontSize = Faces.Mark, VerticalAlignment = VerticalAlignment.Center } },
         });
 
         var pick = new Border {
-            Padding = new Thickness(3, 2.5), CornerRadius = new CornerRadius(Radius.Sm), Child = label,
+            Padding = new Thickness(Space.Gap, Space.Xs), CornerRadius = new CornerRadius(Radius.Sm), Child = label,
             Background = selected ? SelectedFill : Brushes.Transparent, Opacity = m.Hidden ? 0.45 : 1,
         };
         pick.Tapped += (_, _) => Dispatcher.UIThread.Post(() => _group.Selected = i);
@@ -184,7 +184,7 @@ sealed class MaskList : StackPanel {
         menu.Add(Item("Remove shape", () => _group.Remove(i)));
         pick.ContextMenu = new ContextMenu { ItemsSource = menu };
 
-        var eye = Eye(m.Hidden, 9, 14, m.Hidden ? "Show this shape" : "Hide this shape", () => _group.ToggleHidden(i));
+        var eye = Eye(m.Hidden, IconSize.Sm, 14, m.Hidden ? "Show this shape" : "Hide this shape", () => _group.ToggleHidden(i));
         DockPanel.SetDock(eye, Dock.Left);
         return new DockPanel { Margin = new Thickness(Space.Pad, 0, 0, 0), Children = { eye, pick } };
     }

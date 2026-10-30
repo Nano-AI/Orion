@@ -29,7 +29,7 @@ public static class Palette {
     public static readonly IBrush Dim = new ImmutableSolidColorBrush(Color.FromRgb(138, 138, 144));
     /// A control's name (slider and field labels): a step above dim notes
     public static readonly IBrush Label = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 166));
-    /// Tertiary text, inactive icons, detents
+    /// Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is 5.0:1)
     public static readonly IBrush Faint = new ImmutableSolidColorBrush(Color.FromRgb(90, 90, 96));
     /// Interactive and active states ONLY. Never decorative.
     public static readonly IBrush Accent = new ImmutableSolidColorBrush(Color.FromRgb(77, 182, 196));
@@ -37,6 +37,8 @@ public static class Palette {
     public static readonly IBrush Reject = new ImmutableSolidColorBrush(Color.FromRgb(196, 87, 77));
     /// Star rating marks
     public static readonly IBrush Star = new ImmutableSolidColorBrush(Color.FromRgb(240, 198, 116));
+    /// What a person must see: a failed render or write, clipped highlights, an unreadable file. Star's value today, its own role so either can move
+    public static readonly IBrush Warn = new ImmutableSolidColorBrush(Color.FromRgb(240, 198, 116));
     /// Histogram red channel
     public static readonly IBrush ChanR = new ImmutableSolidColorBrush(Color.FromRgb(196, 67, 58));
     /// Histogram green channel
@@ -51,6 +53,7 @@ public static class Palette {
 
 public static class Space {
     public const double Xs = 2;
+    public const double Gap = 4;
     public const double Sm = 6;
     public const double Md = 10;
     public const double Pad = 14;
@@ -61,6 +64,7 @@ public static class Space {
 public static class Radius {
     public const double Sm = 3;
     public const double Md = 5;
+    public const double Lg = 7;
 }
 
 public static class TypeSize {
@@ -68,9 +72,9 @@ public static class TypeSize {
     public const double Sm = 11;
     public const double Base = 12;
     public const double Md = 13;
+    public const double Title = 17;
+    public const double Display = 28;
     public const string Numeral = "Barlow Semi Condensed";
-    public const string TrackingWide = "0.14em";
-    public const string TrackingLabel = "0.07em";
 }
 
 public static class Layout {
@@ -79,4 +83,16 @@ public static class Layout {
     public const double ToolCol = 322;
     public const double ThumbW = 96;
     public const double ThumbH = 66;
+}
+
+public static class Shadow {
+    public const double Alpha = 0.7;
+    public const double Y = 1;
+    public const double Blur = 3;
+}
+
+public static class IconSize {
+    public const double Stroke = 1.6;
+    public const double Sm = 12;
+    public const double Md = 16;
 }
