@@ -17,8 +17,8 @@ public sealed class Navigator : StackPanel {
     public Navigator() {
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Bottom;
-        Margin = new Thickness(16);
-        Spacing = 8;
+        Margin = new Thickness(Space.Lg);
+        Spacing = Space.Md;
         // A click springs about the view's centre; the keys (0, 9) jump, as keys should.
         var vp = CanvasState.Viewport;
         _fit = Pill.Button("Fit", () => { if (Commands.CanRun("fit")) vp.AnimateZoom(1, new Point(0.5, 0.5)); }, "Fit in window (0)");
@@ -80,14 +80,14 @@ static class Pill {
     public static readonly IBrush Ground = new SolidColorBrush(((ISolidColorBrush)Palette.Ground).Color, 0.72);
 
     public static Border Of(params Control[] items) {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Xs };
         row.Children.AddRange(items);
         return new Border { Background = Ground, BorderBrush = Ink.White(0.08), BorderThickness = new Thickness(1),
-                            CornerRadius = new CornerRadius(7), Padding = new Thickness(3), Child = row };
+                            CornerRadius = new CornerRadius(Radius.Lg), Padding = new Thickness(Space.Xs), Child = row };   // concentric: Md buttons, Xs in
     }
 
     public static StateButton Button(string title, Action click, string help, bool numeral = false) {
-        var b = new StateButton(null, title, click, ButtonKind.Segment, help) { Height = 24, MinWidth = 0, CornerRadius = new CornerRadius(4) };
+        var b = new StateButton(null, title, click, ButtonKind.Segment, help) { Height = 24, MinWidth = 0, CornerRadius = new CornerRadius(Radius.Md) };
         if (numeral && b.Content is TextBlock t) (t.FontFamily, t.FontWeight, t.FontFeatures) = (Faces.Numeral, FontWeight.Medium, Faces.Tabular);
         return b;
     }

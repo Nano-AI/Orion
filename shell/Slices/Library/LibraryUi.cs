@@ -49,10 +49,10 @@ static class LibraryUi {
         // A macOS pop-up button: what it does, the current choice, and the up-down chevrons
         // that say a menu opens in place (a lone down chevron reads as a disclosure).
         var button = new StateButton {
-            Kind = ButtonKind.Standard, Flyout = flyout, MinWidth = 0, Height = 24, Padding = new Thickness(8, 0, 6, 0),
+            Kind = ButtonKind.Standard, Flyout = flyout, MinWidth = 0, Height = 24, Padding = new Thickness(Space.Md, 0, Space.Sm, 0),
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = {
-                Icons.Create("arrow.up.arrow.down", 12, Palette.Dim), label, Icons.Create("chevron.up.chevron.down", 10, Palette.Dim),
+            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm, Children = {
+                Icons.Create("arrow.up.arrow.down", IconSize.Sm, Palette.Dim), label, Icons.Create("chevron.up.chevron.down", IconSize.Sm, Palette.Dim),
             } },
         };
         ToolTip.SetTip(button, "Sort the photos");
@@ -63,19 +63,19 @@ static class LibraryUi {
     /// How far a rejected photo's picture fades, in the strip and the gallery alike.
     public const double RejectedOpacity = 0.35;
 
-    /// A photo's marks at a text size: five stars, the rating's in the star
+    /// A photo's marks, at IconSize.Sm in the strip and the gallery alike: five stars, the rating's in the star
     /// colour and the rest faint, so "unrated" is shown rather than inferred;
     /// a rejected photo shows the reject ✕ alone, in the reject colour.
     /// `unearned`: the stars above the rating too, faint; without them an unrated photo shows nothing.
-    public static Control Marks(LibraryModel.Photo photo, double size, bool unearned = true) {
+    public static Control Marks(LibraryModel.Photo photo, bool unearned = true) {
         if (photo.Rejected) {
-            var x = Icons.Create("xmark", size - 2, Palette.Reject);
+            var x = Icons.Create("xmark", IconSize.Sm, Palette.Reject);
             x.VerticalAlignment = VerticalAlignment.Center;
             Avalonia.Automation.AutomationProperties.SetName(x, "Rejected");
             return x;
         }
-        var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = size > Faces.Mark ? 2 : 1, VerticalAlignment = VerticalAlignment.Center };
-        for (int i = 1; i <= (unearned ? 5 : photo.Rating); i++) stars.Children.Add(Icons.Create("star.fill", size - 2, i <= photo.Rating ? Palette.Star : Palette.Faint));
+        var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Xs, VerticalAlignment = VerticalAlignment.Center };
+        for (int i = 1; i <= (unearned ? 5 : photo.Rating); i++) stars.Children.Add(Icons.Create("star.fill", IconSize.Sm, i <= photo.Rating ? Palette.Star : Palette.Faint));
         Avalonia.Automation.AutomationProperties.SetName(stars, photo.Rating == 0 ? "Unrated" : $"{photo.Rating} stars");
         return stars;
     }

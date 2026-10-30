@@ -59,7 +59,7 @@ public sealed class ColorPanel : StackPanel {
         // Built once per band and shown one band at a time, so each keeps its own detent and readout.
         foreach (var b in Enum.GetValues<HueBand>()) {
             double centre = TargetedAdjust.Centers[(int)b];
-            _bandSliders.Children.Add(new StackPanel { Spacing = 11, Children = {
+            _bandSliders.Children.Add(new StackPanel { Spacing = Space.Md, Children = {
                 new AdjustmentSlider("Hue", "hue_shift", -1, 1, index: (int)b, baseValue: 0, tint: TrackTint.Hue(centre)),
                 new AdjustmentSlider("Saturation", "sat_shift", -1, 1, index: (int)b, baseValue: 0, tint: TrackTint.Saturation(centre)),
                 new AdjustmentSlider("Luminance", "lum_shift", -1, 1, index: (int)b, baseValue: 0, tint: TrackTint.Luminance(centre)),

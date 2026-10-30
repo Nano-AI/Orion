@@ -14,7 +14,7 @@ public sealed class CropTools : StackPanel {
     static readonly (string Name, double? Ratio)[] Ratios =
         [("Original", null), ("1:1", 1), ("4:5", 0.8), ("3:2", 1.5), ("16:9", 16.0 / 9.0)];
 
-    readonly Segmented _aspect = new(Ratios.Select(r => r.Name).ToList(), 0) { CellPadding = new Thickness(2, 0) };
+    readonly Segmented _aspect = new(Ratios.Select(r => r.Name).ToList(), 0) { CellPadding = new Thickness(Space.Xs, 0) };
 
     public CropTools() {
         Spacing = SectionPlate.Gap;
@@ -25,7 +25,7 @@ public sealed class CropTools : StackPanel {
         ShowAspect();
         Children.Add(new SectionPlate("Aspect", null, _aspect));
         Children.Add(Straighten());
-        var rotate = new Grid { ColumnDefinitions = new("*,*"), ColumnSpacing = 6, Children = {
+        var rotate = new Grid { ColumnDefinitions = new("*,*"), ColumnSpacing = Space.Sm, Children = {
             new StateButton("rotate.left", "Rotate left", () => CropEdit.Rotate(-1)) { Height = 28, HorizontalAlignment = HorizontalAlignment.Stretch },
             new StateButton("rotate.right", "Rotate right", () => CropEdit.Rotate(1)) { Height = 28, HorizontalAlignment = HorizontalAlignment.Stretch },
         } };

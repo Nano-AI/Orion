@@ -13,8 +13,8 @@ public sealed class HdrMergePanel : Border {
     internal sealed record Candidate(string Path, string Camera, float Iso, float Shutter, float Aperture);
 
     readonly List<Candidate> _candidates;
-    readonly StackPanel _rows = new() { Spacing = Space.Md + 2 };
-    readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Sm + 2, HorizontalAlignment = HorizontalAlignment.Right };
+    readonly StackPanel _rows = new() { Spacing = Space.Pad };
+    readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right };
     int _reference;
     bool _merging;
 
@@ -23,7 +23,7 @@ public sealed class HdrMergePanel : Border {
 
     public HdrMergePanel() {
         Width = 440;
-        Padding = new Thickness(16);
+        Padding = new Thickness(Space.Lg);
         Background = Palette.Panel;
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
@@ -32,15 +32,15 @@ public sealed class HdrMergePanel : Border {
         // for two or more from one camera (HdrMergeFlow.ineligibility), which is said in place of the rows.
         _candidates = Library.LibraryModel.Shared.Targets.Select(p => Read(p.Path)).ToList();
         _reference = DefaultReference(_candidates);
-        if (Ineligibility(_candidates) is { } why) _rows.Children.Add(SheetKit.Note(why, Palette.Star));
+        if (Ineligibility(_candidates) is { } why) _rows.Children.Add(SheetKit.Note(why, Palette.Warn));
         else Paint();
 
         Idle();
 
         Child = new StackPanel {
-            Spacing = Space.Md + 2,
+            Spacing = Space.Pad,
             Children = {
-                new TextBlock { Text = "Merge to HDR", FontSize = TypeSize.Md, FontWeight = FontWeight.SemiBold },
+                SheetKit.Title("Merge to HDR"),
                 SheetKit.Note("The chosen frame sets the framing; the others are aligned to it and the result is " +
                               "written beside the originals as a new DNG.", Palette.Dim),
                 _rows,
@@ -56,8 +56,8 @@ public sealed class HdrMergePanel : Border {
             var c = _candidates[i];
             var line = Faces.Figure(ExposureLine(c), Faces.Label, Palette.Dim);
             var row = new DockPanel { Background = Brushes.Transparent, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
-            var mark = Icons.Create(i == _reference ? "largecircle.fill.circle" : "circle", Faces.Mark, Palette.Text);
-            mark.Margin = new Thickness(0, 0, Space.Sm + 2, 0);
+            var mark = Icons.Create(i == _reference ? "largecircle.fill.circle" : "circle", IconSize.Sm, Palette.Text);
+            mark.Margin = new Thickness(0, 0, Space.Md, 0);
             DockPanel.SetDock(mark, Dock.Left);
             DockPanel.SetDock(line, Dock.Right);
             row.Children.AddRange([mark, line, new TextBlock {

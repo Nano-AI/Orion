@@ -30,7 +30,7 @@ public sealed class AssistantPanel : DockPanel {
         HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
     };
     readonly ComboBox _picker;
-    readonly TextBlock _notice = new() { FontSize = TypeSize.Sm, Foreground = Palette.Dim, TextTrimming = TextTrimming.CharacterEllipsis,
+    readonly TextBlock _notice = new() { FontSize = Faces.Mark, Foreground = Palette.Dim, TextTrimming = TextTrimming.CharacterEllipsis,
                                          VerticalAlignment = VerticalAlignment.Center };
     readonly Button _allow;
     (string Command, string Directory, int Token)? _launched;
@@ -43,7 +43,7 @@ public sealed class AssistantPanel : DockPanel {
         HorizontalAlignment = HorizontalAlignment.Left;
         _picker = new ComboBox {
             ItemsSource = AssistantModel.Commands, SelectedItem = Model.Command, Width = 110, Height = 22, MinHeight = 0,
-            FontSize = TypeSize.Base, Padding = new Thickness(8, 0), VerticalAlignment = VerticalAlignment.Center,
+            FontSize = Faces.Label, Padding = new Thickness(Space.Md, 0), VerticalAlignment = VerticalAlignment.Center,
             Background = Palette.Raised, BorderBrush = Palette.Line, CornerRadius = new CornerRadius(Radius.Md),
         };
         _picker.SelectionChanged += (_, _) => { if (_picker.SelectedItem is string c) Model.SetCommand(c); };
@@ -154,7 +154,7 @@ public sealed class AssistantPanel : DockPanel {
         DockPanel.SetDock(close, Dock.Right);
         var row = new DockPanel { Height = 28, Margin = new Thickness(Space.Md, 0) };
         row.Children.Add(close);
-        row.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
+        row.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, VerticalAlignment = VerticalAlignment.Center,
             Children = {
                 _picker,
                 Glyph("arrow.clockwise", "Restart", Model.Restart),
@@ -177,7 +177,7 @@ public sealed class AssistantPanel : DockPanel {
     }
 
     /// An icon-only `.plain` button in dim ink.
-    static StateButton Glyph(string symbol, string help, Action action) => StateButton.Glyph(symbol, help, action, size: 13);
+    static StateButton Glyph(string symbol, string help, Action action) => StateButton.Glyph(symbol, help, action, size: IconSize.Md);
 
     /// Wider than the line it draws, for an easier drag target.
     Control Handle() {

@@ -1,73 +1,68 @@
-/*  Orion site: the download page. Tokens, type, nav, buttons and footer come
- *  from base.css; this is only the page's own layout. Teal keeps its one job:
- *  it marks the row the page picked for this computer, and focus.
+/*  Orion site: the download page. Tokens, type, nav, buttons, icons, the star
+ *  field and the footer come from base.css; this is only the page's own
+ *  layout. The accent keeps its one job: it marks the row the page picked for
+ *  this computer, and focus.
  */
 
 [hidden] { display: none !important; }
 
-/* The sky motion.js draws, behind the page (sections.css holds the same two
- * rules for the landing page). With motion Orion stands where the photograph
- * is; without it, the photograph stays. */
-.stars { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; }
-main, .footer { position: relative; z-index: 1; }
+/* With motion Orion stands where the photograph is; without it, the photograph stays. */
 .motion .dl__photo { visibility: hidden; }
 @media (max-width: 900px) { .motion .dl__photo { display: none; } }
 
 /* ---------- the download ---------- */
 .dl {
-  display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 56px 72px; align-items: center;
-  padding-block: calc(var(--nav-h) + clamp(40px, 6vw, 96px)) clamp(64px, 7vw, 120px);
+  display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--s-7) var(--s-8); align-items: center;
+  padding-block: calc(var(--nav-h) + clamp(var(--s-7), 6vw, var(--s-9))) var(--section-tight);
 }
-.dl__copy, .dl__branch { display: flex; flex-direction: column; gap: 28px; }
-.dl__cta { display: flex; flex-wrap: wrap; gap: 12px; }
-.dl__cta .btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.dl__note { max-width: 36rem; padding: 20px 22px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
-.dl__note .small { margin-top: 6px; }
+.dl__copy, .dl__branch { display: flex; flex-direction: column; gap: var(--s-6); }
+.dl__cta { display: flex; flex-wrap: wrap; gap: var(--s-3); }
+.dl__note { max-width: var(--measure); padding: var(--s-5); border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
+.dl__note .small { margin-top: var(--s-2); }
 
 /* What a camera would print: the file, its size and date, what it runs on. */
 .dl__facts {
-  display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 32px; max-width: 36rem; margin: 0;
-  border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--s-6); max-width: var(--measure); margin: 0;
+  border-top: 1px solid var(--line); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.6;
 }
 .dl__facts div { display: contents; }
-.dl__facts dt, .dl__facts dd { margin: 0; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.dl__facts dt, .dl__facts dd { margin: 0; padding: var(--s-3) 0; border-bottom: 1px solid var(--line); }
 .dl__facts dt { color: var(--dim); }
 .dl__facts dd { overflow-wrap: anywhere; }
 .dl__facts [data-fact="sha"] dd { color: var(--dim); }
 
 .dl__photo img { width: 100%; border-radius: var(--r); }
-.dl__photo .caption { margin-top: 12px; }
+.dl__photo .caption { margin-top: var(--s-3); }
 
 /* ---------- the bands below ---------- */
 .band { border-top: 1px solid var(--line); }
-.band__in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 40px 72px; padding-block: clamp(64px, 7vw, 112px); }
-.band__in--wide { grid-template-columns: minmax(0, 1fr); gap: 36px; }
-.band__sub { margin-top: 16px; max-width: 28rem; }
-.band__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 40px; }
+.band__in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--s-6) var(--s-8); padding-block: var(--section-tight); }
+.band__in--wide { grid-template-columns: minmax(0, 1fr); gap: var(--s-6); }
+.band__sub { margin-top: var(--s-4); max-width: var(--measure-sm); }
+.band__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-3) var(--s-7); }
 
 /* A real sequence, so numbered. */
 .steps { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid var(--line); counter-reset: step; }
-.steps li { display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 16px; padding: 24px 0; border-top: 1px solid var(--line); counter-increment: step; }
-.steps li::before { content: counter(step); padding-top: 2px; font-family: var(--mono); font-size: 13px; color: var(--dim); }
-.steps .small { margin-top: 4px; }
-.cmd { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 6px 6px 6px 16px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
-.cmd code { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; }
-.cmd .btn { flex: none; min-height: 36px; padding: 0 14px; font-size: 0.85rem; }
+.steps li { display: grid; grid-template-columns: var(--s-7) minmax(0, 1fr); column-gap: var(--s-4); padding: var(--s-5) 0; border-top: 1px solid var(--line); counter-increment: step; }
+.steps li::before { content: counter(step); padding-top: 2px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--dim); }
+.steps .small { margin-top: var(--s-1); }
+.cmd { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-3); padding: 6px 6px 6px var(--s-4); border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
+.cmd code { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-xs); }
+.cmd .btn { flex: none; min-height: 36px; padding: 0 var(--s-3); font-size: var(--fs-sm); border-radius: var(--r-sm); }
 
 .platforms { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid var(--line); }
 .platforms li {
-  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1.2fr) 140px; gap: 6px 32px; align-items: baseline;
-  min-height: 44px; padding: 22px 0; border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1.2fr) 140px; gap: 6px var(--s-6); align-items: baseline;
+  min-height: 44px; padding: var(--s-5) 0; border-top: 1px solid var(--line);
 }
-.platforms .h3 { font-size: 1.05rem; }
-.platforms .needs { font-family: var(--mono); font-size: 12.5px; color: var(--dim); }
-.platforms .status { font-size: 0.95rem; color: var(--dim); }
+.platforms .needs { font-family: var(--mono); font-size: var(--fs-xs); color: var(--dim); }
+.platforms .status { font-size: var(--fs-md); color: var(--dim); }
 .platforms .is-ready { color: var(--text); }
-.platforms .btn { justify-self: start; min-height: 44px; padding: 0 18px; font-size: 0.9rem; }
-.dl__here { margin-left: 12px; font-family: var(--mono); font-size: 11.5px; font-weight: 400; color: var(--accent); }
+.platforms .btn { justify-self: start; padding: 0 var(--s-4); font-size: var(--fs-md); }
+.dl__here { margin-left: var(--s-3); font-family: var(--mono); font-size: var(--fs-xs); font-weight: 400; color: var(--accent); }
 
-.more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 56px; padding-block: clamp(56px, 6vw, 96px); }
-.more .small { margin-top: 8px; }
+.more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-6) var(--s-8); padding-block: var(--section-tight); }
+.more .small { margin-top: var(--s-2); }
 
 @media (max-width: 900px) {
   .dl, .band__in, .more { grid-template-columns: minmax(0, 1fr); }

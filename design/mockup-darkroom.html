@@ -14,10 +14,13 @@
     --text: #E8E8EA;  /* Primary text, slider thumbs */
     --dim: #8A8A90;  /* Labels, secondary text */
     --label: #A0A0A6;  /* A control's name (slider and field labels): a step above dim notes */
-    --faint: #5A5A60;  /* Tertiary text, inactive icons, detents */
-    --accent: #4DB6C4;  /* Interactive and active states ONLY. Never decorative. */
+    --faint: #5A5A60;  /* Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is 5.0:1) */
+    --accent: #4DB6C4;  /* Interaction ONLY: an edited value, a slider's fill, the focus ring, the primary button, and the current selection (you are here). Never decorative, never status. */
     --reject: #C4574D;  /* Reject flag */
-    --star: #F0C674;  /* Star rating marks */
+    --star: #EEBB58;  /* Star rating marks */
+    --warn: #EEBB58;  /* What a person must see: a failed render or write, clipped highlights, an unreadable file. Star's role today, its own name so either can move */
+    --status: #EEBB58;  /* A section's edited dot: a state, not an action */
+    --on-accent: #141416;  /* Words and glyphs on an accent fill (the primary button) */
     --chanR: #C4433A;  /* Histogram red channel */
     --chanG: #3AA84F;  /* Histogram green channel */
     --chanB: #3A6FC4;  /* Histogram blue channel */
@@ -26,6 +29,7 @@
 
     /* Space */
     --space-xs: 2px;
+    --space-gap: 4px;
     --space-sm: 6px;
     --space-md: 10px;
     --space-pad: 14px;
@@ -35,15 +39,16 @@
     /* Radius */
     --radius-sm: 3px;
     --radius-md: 5px;
+    --radius-lg: 7px;
 
     /* Type */
     --type-xs: 10px;
     --type-sm: 11px;
     --type-base: 12px;
     --type-md: 13px;
+    --type-title: 17px;
+    --type-display: 28px;
     --type-numeral: Barlow Semi Condensed;
-    --type-trackingWide: 0.14em;
-    --type-trackingLabel: 0.07em;
 
     /* Layout */
     --layout-toolbar: 44px;
@@ -51,6 +56,15 @@
     --layout-toolCol: 322px;
     --layout-thumbW: 96px;
     --layout-thumbH: 66px;
+
+
+    /* Shadow: the one lift */
+    --shadow-lift: 0 1px 3px rgba(0, 0, 0, 0.7);
+
+    /* Icon */
+    --icon-stroke: 1.6px;
+    --icon-sm: 12px;
+    --icon-md: 16px;
 
     /* Motion */
     --motion-quick: 0.16s;

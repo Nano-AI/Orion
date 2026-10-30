@@ -106,9 +106,10 @@ vendored unmodified with their license headers.
 MIT License, Copyright (c) 2024 darkroom.engineering. The license text is in the
 file's header.
 
-`web/index.html` inlines thirteen Phosphor icons in the light weight (lightning,
+`web/index.html` inlines fourteen Phosphor icons in the light weight (lightning,
 stack, hard-drives, book-open-text, sparkle, sliders-horizontal, bandaids, crop,
-selection-foreground, images, export, hourglass-medium, file-text;
+selection-foreground, images, export, hourglass-medium, file-text,
+arrows-horizontal), and `web/download/index.html` inlines one (download-simple;
 https://github.com/phosphor-icons/core), MIT License, Copyright (c) 2023 Phosphor Icons.
 
 Self-hosted rather than loaded from a font service, so the page makes no
@@ -136,6 +137,16 @@ Changes: Jupiter, Mars and Saturn resized from 2048x1024 to 1024x512 and
 recompressed; Saturn's ring map reduced to 48 colour samples inside
 `web/js/motion.js`; the maps also travel base64-encoded in `web/js/planet-maps.js`
 (`tools/build-planet-maps.py`). The page's footer carries the attribution.
+
+## Node Garden pattern
+
+Node Garden pattern from bookofshapes.com (Nikolaj Sokolowski)
+
+Used under the Book of Shapes licence (https://bookofshapes.com/license/):
+commercial use as part of a product, no attribution required, no redistribution
+of the pattern as a pattern. It appears only as part of the social preview card
+(`web/img/og-orion.jpg`) and of the app's empty-window drawing
+(`shell/Slices/Canvas/NodeGarden.cs`), never as a file of its own.
 
 ## Dawn (WebGPU)
 

@@ -66,7 +66,7 @@ public static class Panels {
             return new TextBlock {
                 Tag = Failed,
                 Text = $"{type.Name}: {cause.GetType().Name}: {cause.Message}",
-                Foreground = Brushes.OrangeRed, TextWrapping = TextWrapping.Wrap, Margin = new(Space.Pad),
+                Foreground = Palette.Warn, TextWrapping = TextWrapping.Wrap, Margin = new(Space.Pad),
             };
         }
     }

@@ -36,10 +36,10 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
 
     static bool ReduceMotion => OrionShell.Motion.Reduced;
     static readonly Cursor Hand = new(StandardCursorType.Hand), Cross = new(StandardCursorType.Cross), NoCursor = new(StandardCursorType.None);
-    readonly Control _rotateIcon = Icons.Create("arrow.clockwise", 7, Ink.Black(0.75));
+    readonly Control _rotateIcon = Icons.Create("arrow.clockwise", IconSize.Sm, Ink.Black(0.75));
     readonly Drawn _layer;
     readonly Border _pill;
-    readonly TextBlock _pillText = new() { FontSize = TypeSize.Base, Foreground = Palette.Text, VerticalAlignment = VerticalAlignment.Center };
+    readonly TextBlock _pillText = new() { FontSize = Faces.Label, Foreground = Palette.Text, VerticalAlignment = VerticalAlignment.Center };
     readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(16) };
     readonly List<(DateTime At, double Over)> _trail = [];
     Gesture _gesture;
@@ -81,7 +81,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         _rotateIcon.IsVisible = shape?.Kind == 2;
         if (shape?.Kind == 2) {
             var at = MaskLayout.HandlePoint(MaskHandle.Rotate, shape, Map);
-            Drawn.At(_rotateIcon, at.X - 3.5, at.Y - 3.5);
+            Drawn.At(_rotateIcon, at.X - IconSize.Sm / 2, at.Y - IconSize.Sm / 2);   // centred on the handle
         }
         ShowPill(Showing && G.Drawing != 0);
         // A newly selected mask's outline fades in (150 ms, ease-out) rather than blinking on.
@@ -190,7 +190,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         var cancel = new StateButton(null, "Cancel", () => G.Drawing = 0) { Kind = ButtonKind.Quiet, Height = 22, Focusable = false };
         return new Border {
             Background = new SolidColorBrush(((ISolidColorBrush)Palette.Ground).Color, 0.9), BorderBrush = Palette.Line,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(15), Padding = new Thickness(Space.Pad, 4, 4, 4),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(15), Padding = new Thickness(Space.Pad, Space.Gap, Space.Gap, Space.Gap),   // a pill: half its 30 px
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(0, 0, 0, Space.Lg), Opacity = 0, IsHitTestVisible = false,
             RenderTransform = TransformOperations.Parse("translateY(16px)"),

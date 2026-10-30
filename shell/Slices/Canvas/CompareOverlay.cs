@@ -262,10 +262,10 @@ static class CompareState {
 [Panel("canvas-compare", Region.Canvas, 40)]
 public sealed class CompareOverlay : Panel, ICustomHitTest {
     const double Grip = 12, Knob = 8, Reach = 46, GrabWidth = 28;
-    static readonly Geometry Arrows = Icons.Create("arrow.left.and.right", 10, Brushes.Black).Data!;
-    static readonly Geometry Turn = Icons.Create("arrow.clockwise", 10, Brushes.Black).Data!;
+    static readonly Geometry Arrows = Icons.Shape("arrow.left.and.right");
+    static readonly Geometry Turn = Icons.Shape("arrow.clockwise");
     static readonly IPen Rule = new Pen(Ink.White(), 1.5);
-    static readonly BoxShadows Shadow = new(new BoxShadow { Blur = 4, Color = Color.FromArgb(102, 0, 0, 0) });
+    static readonly BoxShadows Shadow = AnalogTrack.Lift();
     static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll), TurnCursor = new(StandardCursorType.Hand);
 
     enum Grab { None, Move, Turn }
@@ -287,7 +287,7 @@ public sealed class CompareOverlay : Panel, ICustomHitTest {
     }
 
     static Border Label() => new() {
-        Background = Pill.Ground, Padding = new Thickness(8, 3), CornerRadius = new CornerRadius(4), IsHitTestVisible = false,
+        Background = Pill.Ground, Padding = new Thickness(Space.Sm, Space.Gap), CornerRadius = new CornerRadius(Radius.Md), IsHitTestVisible = false,
         Child = new TextBlock { FontSize = Faces.Mark, Foreground = Palette.Text },
     };
 
@@ -379,7 +379,7 @@ public sealed class CompareOverlay : Panel, ICustomHitTest {
         var placed = g.Clone();
         placed.Transform = new MatrixTransform(Matrix.CreateTranslation(-b.Center.X, -b.Center.Y) * Matrix.CreateScale(s, s)
             * Matrix.CreateRotation(degrees * Math.PI / 180) * Matrix.CreateTranslation(at.X, at.Y));
-        c.DrawGeometry(null, new Pen(ink, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), placed);
+        c.DrawGeometry(null, new Pen(ink, IconSize.Stroke, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), placed);
     }
 
     Grab HitAt(Point point) {

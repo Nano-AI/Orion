@@ -13,7 +13,7 @@ namespace OrionShell.Sheets;
 [Panel("sheet-watermark", Region.Sheet)]
 public sealed class WatermarkPanel : Border {
     readonly Watermark _mark = Watermark.Shared;
-    readonly StackPanel _options = new() { Spacing = Space.Md + 6 };
+    readonly StackPanel _options = new() { Spacing = Space.Lg };
     readonly Image _preview = new() { Stretch = Stretch.Uniform };
     string _previewed = "";
     int _token;
@@ -23,7 +23,7 @@ public sealed class WatermarkPanel : Border {
 
     public WatermarkPanel() {
         Width = 400;
-        Padding = new Thickness(22);
+        Padding = new Thickness(Space.Lg);
         Background = Palette.Panel;
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
@@ -38,7 +38,7 @@ public sealed class WatermarkPanel : Border {
         else footer.Children.Add(new Control());
 
         Child = new StackPanel {
-            Spacing = Space.Md + 6,
+            Spacing = Space.Lg,
             Children = { SheetKit.Title("Watermark"), Preview(), _options, footer },
         };
         // ponytail: a poll of the mark rather than a hook in every control's setter; a change
@@ -98,13 +98,13 @@ public sealed class WatermarkPanel : Border {
             words.TextChanged += (_, _) => _mark.Words = words.Text ?? "";
             var families = FontManager.Current.SystemFonts.Select(f => f.Name).Distinct().Order().ToList();
             var family = SheetKit.Menu(families, families.IndexOf(_mark.Family), i => _mark.Family = families[i]);
-            var bold = new CheckBox { Content = "Bold", IsChecked = _mark.Bold, FontSize = TypeSize.Sm, MinHeight = 0 };
+            var bold = new CheckBox { Content = "Bold", IsChecked = _mark.Bold, FontSize = Faces.Mark, MinHeight = 0 };
             bold.IsCheckedChanged += (_, _) => _mark.Bold = bold.IsChecked == true;
             return [words, new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, Children = { family, bold } }];
         }
         var choose = SheetKit.Button("Choose SVG…", ChooseSvg);
         var name = new TextBlock {
-            Text = _mark.SvgName.Length == 0 ? "No file chosen" : _mark.SvgName, FontSize = TypeSize.Sm,
+            Text = _mark.SvgName.Length == 0 ? "No file chosen" : _mark.SvgName, FontSize = Faces.Mark,
             Foreground = _mark.SvgName.Length == 0 ? Palette.Dim : Palette.Text,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         };
@@ -133,7 +133,7 @@ public sealed class WatermarkPanel : Border {
         for (int i = 0; i < 9; i++) {
             int a = i;
             var cell = new Border {
-                Width = 18, Height = 14, Margin = new Thickness(1.5), CornerRadius = new CornerRadius(2),
+                Width = 18, Height = 14, Margin = new Thickness(Space.Xs / 2), CornerRadius = new CornerRadius(Radius.Sm),   // Xs between swatches
                 Background = _mark.Anchor == a ? Palette.Accent : Palette.Raised,
                 Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
             };
@@ -158,7 +158,7 @@ public sealed class WatermarkPanel : Border {
         Show();
         var row = new DockPanel();
         DockPanel.SetDock(value, Dock.Right);
-        value.Margin = new Thickness(Space.Sm + 2, 0, 0, 0);
+        value.Margin = new Thickness(Space.Md, 0, 0, 0);
         row.Children.AddRange([value, slider]);
         return SheetKit.Row(label, row);
     }

@@ -88,7 +88,7 @@ public sealed class HistogramPanel : StackPanel {
 
     readonly HistogramPlate _plate = new() { Height = PlateHeight };
     /// What the plate shows while it waits: a flat fill, never a made-up curve.
-    readonly Border _waiting = new() { Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm - 1), IsVisible = false };
+    readonly Border _waiting = new() { Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm - 1), IsVisible = false };   // 1 px inside the plate: concentric
     readonly Border _shadows = new(), _highlights = new() { HorizontalAlignment = HorizontalAlignment.Right };
     readonly CaptureLine _capture = new();
     /// Bumped by each emptying, so only the latest one's wait can start the pulse.
@@ -97,8 +97,8 @@ public sealed class HistogramPanel : StackPanel {
     CancellationTokenSource? _pulsing;
 
     public HistogramPanel() {
-        Spacing = 4;
-        Margin = new Thickness(0, 12, 0, 10);   // Main.dc.html: 12 above, 10 below
+        Spacing = Space.Gap;
+        Margin = new Thickness(0, Space.Md);
         _plate.Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(100), Easing = new CubicEaseOut() }];
         var plate = new Border { BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Background = Palette.FilmBase,
                                  CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(1), Child = new Panel { Children = { _waiting, _plate } } };
@@ -172,8 +172,8 @@ public sealed class HistogramPanel : StackPanel {
     /// not a button: the engine has no clipping overlay to show on the photo.
     static Control Flag(double share, bool pointsLeft) {
         bool lit = share >= ClipThreshold;
-        var ink = lit ? Palette.Star : Palette.Dim;
-        var flag = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, MinWidth = 44, Background = Brushes.Transparent,
+        var ink = lit ? Palette.Warn : Palette.Dim;
+        var flag = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Gap, MinWidth = 44, Background = Brushes.Transparent,
                                     HorizontalAlignment = pointsLeft ? HorizontalAlignment.Left : HorizontalAlignment.Right };
         var triangle = new Path { Data = Geometry.Parse(pointsLeft ? "M7,0 L7,8 L0,4 Z" : "M0,0 L0,8 L7,4 Z"), Fill = ink,
                                   VerticalAlignment = VerticalAlignment.Center };

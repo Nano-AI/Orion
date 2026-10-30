@@ -19,13 +19,13 @@ sealed class CurveEditor : StackPanel {
     internal readonly List<(float X, float Y)>[] Curves = Titles.Select(_ => CurveMath.Identity.ToList()).ToArray();
     internal int Channel;
 
-    readonly StackPanel _channels = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
+    readonly StackPanel _channels = new() { Orientation = Orientation.Horizontal, Spacing = Space.Gap };
     readonly Button _reset;
     readonly CurveGraph _graph;
     readonly TextBlock _footnote = Develop.Note("");
 
     public CurveEditor() {
-        Spacing = 9;
+        Spacing = Space.Md;
         _graph = new CurveGraph(this);
         _reset = Develop.TextButton("Reset", Palette.Dim, () => {
             foreach (var c in Curves) { c.Clear(); c.AddRange(CurveMath.Identity); }
@@ -131,7 +131,7 @@ sealed class CurveGraph : Control {
                 g.LineTo(new Point(s, s));
                 g.EndFigure(true);
             }
-            c.DrawGeometry(new SolidColorBrush(Colors.White, 0.055), null, hist);
+            c.DrawGeometry(new SolidColorBrush(((ISolidColorBrush)Palette.Text).Color, 0.055), null, hist);
         }
 
         var grid = new Pen(Palette.Line, 0.5);

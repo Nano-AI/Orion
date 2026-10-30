@@ -72,6 +72,14 @@
     { per: 16000, r: [0.5, 1], a: [0.3, 0.6], speed: 0.09, color: '#eceef2' },
     { per: 60000, r: [0.9, 1.5], a: [0.5, 0.85], speed: 0.18, color: '#fff4e6' },
   ];
+  // The belt is the mark, so it takes the palette's mark role (web/css/tokens.css), read once when first drawn.
+  let mark;
+  // lift: how far toward white, for a star's glow and its core, which are the mark's colour seen brighter.
+  const markA = (a, lift = 0) => {
+    mark ??= getComputedStyle(document.documentElement).getPropertyValue('--mark').trim();
+    const c = [1, 3, 5].map(i => Math.round(parseInt(mark.slice(i, i + 2), 16) * (1 - lift) + 255 * lift));
+    return `rgba(${c.join(', ')}, ${a})`;
+  };
   const DUST = { per: 30000, r: [0.5, 1.4], a: [0.04, 0.14], speed: 0.4, color: '#dfe6ea' };
   const PLANETS = [
     // Farthest first, so nearer planets pass in front. anchor: the section a planet belongs to; ry: where
@@ -183,11 +191,11 @@
       const core = st => Math.max(0.9, 2.6 - 0.5 * st.mag);   // brighter is bigger
       ctx.save();
       ctx.globalAlpha = e;
-      // the figure: each line stops short of its stars; the belt's two are teal
+      // the figure: each line stops short of its stars; the belt's two are the mark's colour
       for (const [a, b] of FIGURE) {
         const [x0, y0] = pts[a], [x1, y1] = pts[b], len = Math.hypot(x1 - x0, y1 - y0);
         const g0 = (core(ORION[a]) + 6) / len, g1 = (core(ORION[b]) + 6) / len, belt = ORION[a].belt && ORION[b].belt;
-        ctx.strokeStyle = belt ? 'rgba(77, 182, 196, 0.85)' : 'rgba(236, 238, 242, 0.22)';
+        ctx.strokeStyle = belt ? markA(0.85) : 'rgba(236, 238, 242, 0.22)';
         ctx.lineWidth = belt ? 1.4 : 1;
         ctx.beginPath();
         ctx.moveTo(x0 + (x1 - x0) * g0, y0 + (y1 - y0) * g0);
@@ -198,10 +206,10 @@
       ORION.forEach((st, i) => {
         const [x, y] = pts[i], r = core(st), glow = r * (st.belt ? 4.5 : 3.5);
         const g = ctx.createRadialGradient(x, y, 0, x, y, glow);
-        g.addColorStop(0, st.belt ? 'rgba(126, 240, 244, 0.55)' : 'rgba(236, 238, 242, 0.3)');
-        g.addColorStop(1, st.belt ? 'rgba(77, 182, 196, 0)' : 'rgba(236, 238, 242, 0)');
+        g.addColorStop(0, st.belt ? markA(0.55, 0.4) : 'rgba(236, 238, 242, 0.3)');
+        g.addColorStop(1, st.belt ? markA(0) : 'rgba(236, 238, 242, 0)');
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, glow, 0, 6.283); ctx.fill();
-        ctx.fillStyle = st.belt ? '#eafdfe' : st.color || '#e6ecff'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+        ctx.fillStyle = st.belt ? markA(1, 0.88) : st.color || '#e6ecff'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
       });
       // the belt's name carries its line on past Alnitak, clear of the lines that leave that star
       const [ax, ay] = pts[3], [mx, my] = pts[5];
@@ -209,7 +217,7 @@
       ctx.rotate(Math.atan2(my - ay, mx - ax));
       ctx.font = '500 11px "Martian Mono", ui-monospace, monospace';
       if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
-      ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#4db6c4';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillStyle = markA(1);
       ctx.fillText("ORION'S BELT", -14, 0);
       ctx.restore();
     };

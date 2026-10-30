@@ -31,26 +31,26 @@ public static class Engraved {
 
     /// The info mark at a nameplate's right edge; the text shows on hover.
     public static Control Info(string text) {
-        var icon = Icons.Create("info.circle", 10, Palette.Faint);
+        var icon = Icons.Create("info.circle", IconSize.Sm, Palette.Faint);
         var host = new Border { Width = 14, Height = 14, Background = Brushes.Transparent, Child = icon };
-        ToolTip.SetTip(host, new TextBlock { Text = text, MaxWidth = 250, TextWrapping = TextWrapping.Wrap, FontSize = 11 });
+        ToolTip.SetTip(host, new TextBlock { Text = text, MaxWidth = 250, TextWrapping = TextWrapping.Wrap, FontSize = Faces.Mark });
         host.PointerEntered += (_, _) => icon.Stroke = Palette.Text;
         host.PointerExited += (_, _) => icon.Stroke = Palette.Faint;
         return host;
     }
 }
 
-/// Engraved.Plate + SectionPlate: the title, a star-coloured dot when anything
+/// Engraved.Plate + SectionPlate: the title, a status dot when anything
 /// inside is off its default, a hairline, the info mark, the section's one
-/// action (With); then the rows. 14 between the plate and its rows and between
+/// action (With); then the rows. Space.Pad between the plate and its rows and between
 /// rows, `Gap` between sections (Main.dc.html).
 public sealed class SectionPlate : StackPanel {
     /// Between one section and the next in a tool tab.
-    public const double Gap = 24;
+    public const double Gap = Space.Xl;
 
-    readonly Ellipse _dot = new() { Width = 5, Height = 5, Fill = Palette.Star, Opacity = 0, VerticalAlignment = VerticalAlignment.Center };
+    readonly Ellipse _dot = new() { Width = 5, Height = 5, Fill = Palette.Status, Opacity = 0, VerticalAlignment = VerticalAlignment.Center };
     readonly DockPanel _plate = new() { MinHeight = 22 };
-    public StackPanel Rows { get; } = new() { Spacing = 14 };
+    public StackPanel Rows { get; } = new() { Spacing = Space.Pad };
 
     /// A section's icon, beside its name, as Capture One heads its tools (#350). A title missing here has none.
     static readonly Dictionary<string, string> IconFor = new() {
@@ -63,25 +63,25 @@ public sealed class SectionPlate : StackPanel {
     };
 
     public SectionPlate(string title, string? info = null, params Control[] rows) {
-        Spacing = 14;
+        Spacing = Space.Pad;
         var plate = _plate;
         var name = Engraved.Label(title, Palette.Text, Faces.Body);
         name.FontWeight = FontWeight.SemiBold;
         if (IconFor.TryGetValue(title, out var icon)) {
-            var glyph = Icons.Create(icon, 14, Palette.Dim);
-            glyph.Margin = new Thickness(0, 0, 7, 0);
+            var glyph = Icons.Create(icon, IconSize.Md, Palette.Dim);
+            glyph.Margin = new Thickness(0, 0, Space.Sm, 0);
             glyph.VerticalAlignment = VerticalAlignment.Center;
             DockPanel.SetDock(glyph, Dock.Left);
             plate.Children.Add(glyph);
         }
         DockPanel.SetDock(name, Dock.Left);
-        _dot.Margin = new Thickness(8, 0);
+        _dot.Margin = new Thickness(Space.Sm, 0);
         DockPanel.SetDock(_dot, Dock.Left);
         plate.Children.Add(name);
         plate.Children.Add(_dot);
         if (info != null) {
             var mark = Engraved.Info(info);
-            mark.Margin = new Thickness(8, 0, 0, 0);
+            mark.Margin = new Thickness(Space.Sm, 0, 0, 0);
             DockPanel.SetDock(mark, Dock.Right);
             plate.Children.Add(mark);
         }
@@ -111,7 +111,7 @@ public sealed class SectionPlate : StackPanel {
 
     /// The section's action after the hairline (Light's Auto), 24 high to keep the target size.
     public SectionPlate With(Control action) {
-        action.Margin = new Thickness(8, 0, 0, 0);
+        action.Margin = new Thickness(Space.Sm, 0, 0, 0);
         action.Height = 24;
         DockPanel.SetDock(action, Dock.Right);
         _plate.Children.Insert(_plate.Children.Count - 1, action);   // before the hairline, which fills

@@ -30,19 +30,20 @@ public sealed class GalleryPanel : DockPanel {
 
         SetDock(_info, Dock.Right);
         Children.Add(_info);
-        var bar = new DockPanel { Margin = new Thickness(18, 12) };
+        var bar = new DockPanel { Margin = new Thickness(Space.Lg, Space.Md) };
         var size = SizeSlider();
         SetDock(size, Dock.Right);
         var order = LibraryUi.SortMenu();
-        order.Margin = new Thickness(10, 0, 0, 0);
+        order.Margin = new Thickness(Space.Md, 0, 0, 0);
         var count = LibraryUi.SelectionCount();
-        count.Margin = new Thickness(10, 0, 0, 0);
+        count.Margin = new Thickness(Space.Md, 0, 0, 0);
         bar.Children.AddRange([size, new StackPanel { Orientation = Orientation.Horizontal, Children = { _filter, order, count } }]);
         // On the panel tone, as the toolbar above it, so the filter's ground well reads as a well.
         var header = new Border { Background = Palette.Panel, BorderBrush = Palette.Line, BorderThickness = new Thickness(0, 0, 0, 1), Child = bar };
         SetDock(header, Dock.Top);
         Children.Add(header);
-        Children.Add(new ScrollViewer { Content = _grid, Padding = new Thickness(8), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        // The grid adds its own Spacing around the cells: together they make Lg, the bar's margin.
+        Children.Add(new ScrollViewer { Content = _grid, Padding = new Thickness(Space.Lg - GalleryGrid.Spacing), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
 
         LibraryModel.Shared.Changed += Rebuild;
         LibraryModel.Shared.SelectionChanged += () => { foreach (var p in _cells.Keys) Paint(p, p == _ringed); };
@@ -102,7 +103,7 @@ public sealed class GalleryPanel : DockPanel {
             ShellSettings.Set(CellSizeKey, slider.Value);
             foreach (var picture in _pictures) picture.Height = _grid.Cell / GalleryGrid.CellAspect;
         };
-        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, VerticalAlignment = VerticalAlignment.Center,
             Children = { new TextBlock { Text = "Size", Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center }, slider } };
     }
 
@@ -135,10 +136,10 @@ public sealed class GalleryPanel : DockPanel {
         var name = new TextBlock { Text = photo.Name, Foreground = isFocused ? Palette.Text : Palette.Dim,
                                    TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         var caption = new DockPanel();
-        var marks = LibraryUi.Marks(photo, Faces.Body);
+        var marks = LibraryUi.Marks(photo);
         SetDock(marks, Dock.Right);
         caption.Children.AddRange([marks, name]);
-        var cell = new StackPanel { Spacing = 8, Background = Brushes.Transparent, Focusable = true, Children = { ring, caption } };
+        var cell = new StackPanel { Spacing = Space.Sm, Background = Brushes.Transparent, Focusable = true, Children = { ring, caption } };
         LibraryUi.Tip(cell, photo);
         Avalonia.Automation.AutomationProperties.SetName(cell, LibraryUi.Spoken(photo));
         // A plain click focuses; it never decodes. Opening is the double-click's job.
@@ -179,13 +180,13 @@ public sealed class GalleryPanel : DockPanel {
             Background = Palette.Panel;
             BorderBrush = Palette.Line;
             BorderThickness = new Thickness(1, 0, 0, 0);
-            Padding = new Thickness(14, 18);
+            Padding = new Thickness(Space.Pad, Space.Lg);
             var open = new StateButton(null, "Open in Develop", () => { if (_shown != null) GalleryMode.Open(_shown); }) {
                 Height = 32, HorizontalAlignment = HorizontalAlignment.Stretch,
             };
-            Child = new StackPanel { Spacing = 18, Children = {
-                new Border { Background = Palette.Raised, CornerRadius = new CornerRadius(4), ClipToBounds = true, Child = _preview },
-                new StackPanel { Spacing = 4, Children = { _name, _size } },
+            Child = new StackPanel { Spacing = Space.Lg, Children = {
+                new Border { Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Md), ClipToBounds = true, Child = _preview },
+                new StackPanel { Spacing = Space.Gap, Children = { _name, _size } },
                 _capture, open,
             } };
         }

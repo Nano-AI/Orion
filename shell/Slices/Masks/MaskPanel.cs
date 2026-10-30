@@ -61,8 +61,8 @@ public sealed class MaskPanel : Border {
         Control Tool(int kind, Control icon, string name, string help) {
             bool armed = _group.Drawing == kind && _group.DrawInto == null;
             var b = new StateButton {
-                Kind = ButtonKind.Segment, On = armed, IsEnabled = can, Height = 26, Padding = new Thickness(8, 0),
-                Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { icon, new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center } } },
+                Kind = ButtonKind.Segment, On = armed, IsEnabled = can, Height = 26, Padding = new Thickness(Space.Md, 0),
+                Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm, Children = { icon, new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center } } },
             }.Help(help);
             b.Click += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => _group.Arm(armed ? 0 : kind, null));
             return b;
@@ -77,9 +77,9 @@ public sealed class MaskPanel : Border {
         return new WrapPanel {
             Orientation = Orientation.Horizontal,
             Children = {
-                Tool(2, KindGlyph(2), "Radial", "Drag on the photo to draw a radial mask"),
-                Tool(1, KindGlyph(1), "Linear", "Drag on the photo from full effect to none"),
-                Tool(3, KindGlyph(3), "Brush", "Paint a mask on the photo"),
+                Tool(2, KindGlyph(2, IconSize.Md), "Radial", "Drag on the photo to draw a radial mask"),
+                Tool(1, KindGlyph(1, IconSize.Md), "Linear", "Drag on the photo from full effect to none"),
+                Tool(3, KindGlyph(3, IconSize.Md), "Brush", "Paint a mask on the photo"),
                 more,
             },
         };

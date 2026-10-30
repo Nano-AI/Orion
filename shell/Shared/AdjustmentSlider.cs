@@ -42,7 +42,7 @@ public sealed class AdjustmentSlider : StackPanel {
     public AdjustmentSlider(string name, string field, float min, float max, string unit = "", int decimals = 2,
                             int index = 0, float? baseValue = null, IBrush? tint = null, Scale? scale = null) {
         (_name, _field, _unit, _index, _decimals, _fixedBase) = (name, field, unit, index, decimals, baseValue);
-        Spacing = 5;
+        Spacing = Space.Gap;
         _track = new AnalogTrack { Min = min, Max = max, Tint = tint, Scale = scale ?? Scale.For(unit, min, max) };
         _track.Changed += v => Apply(v);
         _track.Interacting += on => { if (on) EngineModel.Shared.BeginInteraction(); else EngineModel.Shared.EndInteraction(); };
@@ -84,7 +84,7 @@ public sealed class AdjustmentSlider : StackPanel {
     }
 
     static double FigureWidth(string figure) {
-        var text = new FormattedText(figure, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Faces.NumeralFace, Faces.Readout, Brushes.White);
+        var text = new FormattedText(figure, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Faces.NumeralFace, Faces.Readout, Palette.Text);   // measured, never drawn
         text.SetFontFeatures(Faces.Tabular);
         return text.WidthIncludingTrailingWhitespace;
     }
