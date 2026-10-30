@@ -39,9 +39,15 @@ void* shim_picture(Shim* s, int which, int* w, int* h) {
 }
 
 // present.mm hands over the command buffer that reads this engine's picture.
+// Out of memory for the shared_ptr's count: wait for the read here instead.
 void shim_hold(Shim* s, void* commandBuffer) {
-    s->reader = commandBuffer ? std::shared_ptr<void>(const_cast<void*>(CFBridgingRetain((__bridge id)commandBuffer)), CFRelease)
-                              : nullptr;
+    const bool held = shim_guard(false, [&] {
+        s->reader = commandBuffer
+                        ? std::shared_ptr<void>(const_cast<void*>(CFBridgingRetain((__bridge id)commandBuffer)), CFRelease)
+                        : nullptr;
+        return true;
+    });
+    if (!held) [(__bridge id<MTLCommandBuffer>)commandBuffer waitUntilCompleted];
 }
 
 // An SVG watermark's shape, through NSImage, as WatermarkRaster.swift's Art
@@ -80,7 +86,8 @@ int shim_svg_coverage(const uint8_t* bytes, int length, uint8_t* alpha, int bw, 
     @autoreleasepool {
         NSImage* image = svg_image(bytes, length);
         if (!image) return 0;
-        std::vector<uint8_t> tile(size_t(bw) * size_t(bh) * 4);
+        std::vector<uint8_t> tile;
+        if (!shim_guard(false, [&] { tile.resize(size_t(bw) * size_t(bh) * 4); return true; })) return 0;
         CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
         CGContextRef ctx = CGBitmapContextCreate(tile.data(), size_t(bw), size_t(bh), 8, size_t(bw) * 4, space,
                                                  kCGImageAlphaPremultipliedLast);

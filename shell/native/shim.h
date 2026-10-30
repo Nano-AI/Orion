@@ -1,5 +1,7 @@
 // The shim's state, shared by shim.cpp (every platform) and shim_mac.mm (#376).
 #pragma once
+#include <cstdio>
+#include <exception>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -36,3 +38,18 @@ struct Shim {
 // Waits until present.mm has read this engine's picture (shim_mac.mm; a no-op
 // where there is no present.mm).
 void shim_settle(Shim* s);
+
+// No C++ exception may cross into C#: P/Invoke cannot catch one, and the process
+// ends (CApi.cpp's guard() is the same rule for the facade). Every shim entry
+// point that can allocate runs its body in this; a throw comes back as `fail`.
+template <class R, class Fn>
+R shim_guard(R fail, Fn&& fn) noexcept {
+    try {
+        return fn();
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "shim: %s\n", e.what());
+    } catch (...) {
+        std::fprintf(stderr, "shim: unknown exception\n");
+    }
+    return fail;
+}

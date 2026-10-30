@@ -2,8 +2,8 @@
  *
  *  This is the ONLY surface the UI shell sees. Deliberately narrow and
  *  plain-old-data: no templates, no C++ types, no ownership subtleties, and
- *  crucially no exceptions — Swift cannot catch a C++ exception, and one that
- *  escapes terminates the process. Every entry point below is noexcept in
+ *  crucially no exceptions — C# (P/Invoke) cannot catch a C++ exception, and
+ *  one that escapes terminates the process. Every entry point below is noexcept in
  *  practice; failures come back as an OrionStatus.
  *
  *  Keeping this boundary stable is what makes the UI replaceable and an
@@ -24,7 +24,8 @@ typedef struct OrionEngine OrionEngine;
 
 typedef enum OrionStatus {
     ORION_OK            = 0,
-    ORION_ERR_NO_GPU    = 1,  /* no Metal device available            */
+    ORION_ERR_NO_GPU    = 1,  /* reserved: never returned. No usable GPU
+                                 is INTERNAL, with orion_last_error()   */
     ORION_ERR_BAD_ARG   = 2,  /* null or malformed argument           */
     ORION_ERR_INTERNAL  = 3   /* see orion_last_error() for detail     */
 } OrionStatus;
@@ -514,13 +515,16 @@ OrionStatus orion_engine_preview_size(const OrionEngine* engine,
  * pixels that part covers. Cost follows the screen, not the sensor, and the
  * result is never softer than the screen. Canvas only, like the preview.
  *
- * Returns ORION_ERR_BAD_ARG when this edit uses something the region graph
- * cannot render exactly (masks, spots, grain, the creative vignette, dehaze,
- * clarity, fusion, highlight recovery, highlights/shadows, the crop tool's
- * canvas) or the photo is not a mosaic: render the whole graph instead.
+ * ORION_ERR_BAD_ARG is this call's "render the whole graph instead", as it is
+ * the preview's "no preview graph": returned when this edit uses something the
+ * region graph cannot render exactly (masks, spots, grain, the creative
+ * vignette, dehaze, clarity, fusion, highlight recovery, highlights/shadows,
+ * the crop tool's canvas) or the photo is not a mosaic.
  * Nonzero `interacting` (a drag) also refuses a denoised edit zoomed out past
  * 100%, which renders at step 1 and would cost more than the preview: render
- * the preview for the drag, and the region again when it ends. */
+ * the preview for the drag, and the region again when it ends. INTERNAL (out
+ * of memory, a lost device) is a failure: the whole graph needs more memory
+ * than the region, so do not answer it with that. */
 OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
                                        float w, float h, unsigned out_w,
                                        unsigned out_h, int interacting,

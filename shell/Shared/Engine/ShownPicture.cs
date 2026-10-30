@@ -4,8 +4,10 @@ using Avalonia.Media.Imaging;
 namespace OrionShell;
 
 /// Which graph made a picture: the shim's 1 and 2 (shim_render), 3 for only
-/// part of the picture (shim_render_region, #22), 0 for none.
-public enum Graph { None = 0, Preview = 1, Full = 2, Region = 3 }
+/// part of the picture (shim_render_region, #22), 0 for none. Failed is a
+/// region render that failed (out of memory, a lost device): no picture, and
+/// not a reason to render the whole graph, which needs far more memory.
+public enum Graph { Failed = -1, None = 0, Preview = 1, Full = 2, Region = 3 }
 
 /// The one picture the canvas shows. Everything that wants a picture on screen
 /// goes through Show or ShowLive; the canvas repaints on Changed. A kept picture

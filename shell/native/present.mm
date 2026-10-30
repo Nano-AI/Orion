@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <new>
 
 struct Shim;
 extern "C" void* shim_picture(Shim*, int which, int* w, int* h);
@@ -113,7 +114,8 @@ void present_destroy(Present* p) {
 // On the system default device, which is the engine's (engine/src/gpu/MetalDevice.mm).
 Present* present_create(void) {
     @autoreleasepool {
-        auto* p = new Present;
+        auto* p = new (std::nothrow) Present;   // no exception may reach C# (shim.h)
+        if (!p) return nullptr;
         p->device = MTLCreateSystemDefaultDevice();
         NSError* error = nil;
         id<MTLLibrary> lib = [p->device newLibraryWithSource:@(kHalve) options:nil error:&error];

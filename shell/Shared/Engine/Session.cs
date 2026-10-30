@@ -64,7 +64,8 @@ public sealed partial class Session : IDisposable {
 
     /// Only `uv` of the displayed picture, at `pixels` (the screen's): the
     /// canvas past fit (#22). Region, or None when the engine needs the whole
-    /// graph for this edit, and the caller renders that instead.
+    /// graph for this edit, and the caller renders that instead; Failed when
+    /// the render failed, and LastError says why.
     public Graph RenderRegion(Avalonia.Rect uv, PixelSize pixels, bool interacting = false) {
         Interlocked.Increment(ref _renders);
         return (Graph)Native.shim_render_region(Shim, (float)uv.X, (float)uv.Y, (float)uv.Width, (float)uv.Height,

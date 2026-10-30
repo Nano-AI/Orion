@@ -1,16 +1,16 @@
-// Spike glue between Orion's C facade and C#. Not product code.
-//
-// Two things the facade does not offer yet, and a second UI needs:
-//  - the default look. contrast 1.45 and friends live in Engine.swift, so this
-//    file has to repeat them. That duplication is the case for moving shared
-//    state below the facade before a real port.
-//  - a picture Avalonia can composite. The facade hands out an id<MTLTexture>;
-//    present.mm copies it on the GPU into an IOSurface that Avalonia's Metal
-//    renderer imports (#317, decision #354), and shim_read copies it to the CPU
-//    for everything that has no GPU interop: headless, OpenGL, a failed import,
-//    and Windows and Linux for now (#376).
-// Portable C++; the macOS-only pieces (present.mm's hooks, NSImage SVG) are in
-// shim_mac.mm.
+// The shell's half of the boundary (#380): C entry points over Orion's C facade
+// (orion.h), for the Avalonia shell's P/Invoke (shell/Shared/Native.cs). It
+// holds what the facade leaves to its UI:
+//  - the look a photo opens with, and the adjustment block set field by field
+//    by C name, through a table generated from orion.h (gen_fields.py);
+//  - brush strokes kept by revision, so undo can write an old stroke back;
+//  - the picture. present.mm copies a render on the GPU into an IOSurface that
+//    Avalonia's Metal renderer imports (#317, #354); shim_read copies it to the
+//    CPU for everything else: headless, a failed import, and Windows and Linux,
+//    which always copy (#376).
+// No exception may leave an entry point: each one that allocates runs in
+// shim_guard (shim.h). Portable C++; the macOS-only pieces (present.mm's hooks,
+// NSImage SVG) are in shim_mac.mm.
 #include <cstdio>
 #include <algorithm>
 #include <cmath>
@@ -24,7 +24,7 @@
 
 
 static void defaults(OrionAdjustments& a) {
-    // Mirrors Engine.swift's non-zero initial values (lines 132-475).
+    // The non-zero initial values the Swift shell opened with, kept (#380).
     a.contrast = 1.45f;
     a.process = 2;
     a.crop_w = 1; a.crop_h = 1;
@@ -148,20 +148,22 @@ extern "C" {
 // `headless`: orion_engine_set_headless before the open, for a process that
 // develops once and exits (`Orion --agent`, `--batch-export`; decision #312).
 Shim* shim_open_mode(const char* path, int headless) {
-    auto* s = new Shim;
-    if (orion_engine_create(&s->engine) != ORION_OK ||
-        (headless && orion_engine_set_headless(s->engine, 1) != ORION_OK) ||
-        orion_engine_open_raw(s->engine, path) != ORION_OK) {
-        std::fprintf(stderr, "shim_open: %s\n",
-                     orion_last_error(s->engine));   // NULL: why there is no engine
-        if (s->engine) orion_engine_destroy(s->engine);
-        delete s;
-        return nullptr;
-    }
-    orion_engine_as_shot(s->engine, &s->adj);
-    defaults(s->adj);
-    orion_engine_set_adjustments(s->engine, &s->adj);
-    return s;
+    return shim_guard<Shim*>(nullptr, [&]() -> Shim* {
+        auto* s = new Shim;   // the only throw: every facade call below is guarded
+        if (orion_engine_create(&s->engine) != ORION_OK ||
+            (headless && orion_engine_set_headless(s->engine, 1) != ORION_OK) ||
+            orion_engine_open_raw(s->engine, path) != ORION_OK) {
+            std::fprintf(stderr, "shim_open: %s\n",
+                         orion_last_error(s->engine));   // NULL: why there is no engine
+            if (s->engine) orion_engine_destroy(s->engine);
+            delete s;
+            return nullptr;
+        }
+        orion_engine_as_shot(s->engine, &s->adj);
+        defaults(s->adj);
+        orion_engine_set_adjustments(s->engine, &s->adj);
+        return s;
+    });
 }
 
 Shim* shim_open(const char* path) { return shim_open_mode(path, 0); }
@@ -274,14 +276,16 @@ int shim_mask_set(Shim* s, int row, const char* name, float value) {
 // its whole stroke.
 int shim_mask_stroke(Shim* s, int row, const float* xy, const float* erase, int dabs) {
     if (row < 0 || row >= ORION_MAX_MASK_COMPONENTS || dabs < 0 || (dabs > 0 && !xy)) return 0;
-    Stroke& held = s->held[row];
-    if (held.dabs == dabs && holds(held, xy, erase, dabs, dabs)) return 1;
-    Stroke st = grown(held, xy, erase, dabs);
-    if (!lay(s, row, st)) return 0;
-    held = st;
-    s->revisions[row] = ++s->last_revision;
-    s->kept[s->last_revision] = st;   // an emptied stroke too: undo may write its revision back
-    return 1;
+    return shim_guard(0, [&] {
+        Stroke& held = s->held[row];
+        if (held.dabs == dabs && holds(held, xy, erase, dabs, dabs)) return 1;
+        Stroke st = grown(held, xy, erase, dabs);
+        if (!lay(s, row, st)) return 0;
+        held = st;
+        s->revisions[row] = ++s->last_revision;
+        s->kept[s->last_revision] = st;   // an emptied stroke too: undo may write its revision back
+        return 1;
+    });
 }
 
 // One row's stroke as the engine holds it, into `xy` (2 per dab) and `erase`
@@ -342,16 +346,18 @@ int shim_render(Shim* s, int preview, double* gpu_ms) {
 
 // Only (x, y, w, h) of the displayed picture, normalized, at out_w x out_h
 // pixels: the canvas's view past fit (#22). 3 on success; 0 when the engine
-// says this edit needs the whole graph, and the caller renders that instead.
-// The overlay is toggled around it as around shim_render.
+// says this edit needs the whole graph (BAD_ARG, orion.h), and the caller
+// renders that instead; -1 when the render failed (out of memory, a lost
+// device), which the whole graph, at 3.3 GB, would only fail harder.
 int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, int out_h, int interacting,
                        double* gpu_ms) {
     if (out_w <= 0 || out_h <= 0) return 0;
     shim_settle(s);
     const bool overlay = s->overlay && s->adj.mask_count > 0;
     if (overlay) return 0;   // a mask is on: the region graph refuses those anyway
-    return orion_engine_render_region(s->engine, x, y, w, h, unsigned(out_w), unsigned(out_h), interacting,
-                                      gpu_ms) == ORION_OK ? 3 : 0;
+    const OrionStatus st = orion_engine_render_region(s->engine, x, y, w, h, unsigned(out_w), unsigned(out_h),
+                                                      interacting, gpu_ms);
+    return st == ORION_OK ? 3 : st == ORION_ERR_BAD_ARG ? 0 : -1;
 }
 
 // Copies the last render into `dst` as RGBA8. Call with dst == NULL to get the
@@ -359,7 +365,9 @@ int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, i
 // which every backend has (#376); present.mm is the zero-copy path on macOS.
 int shim_read(Shim* s, int which, uint8_t* dst, int capacity, int* w, int* h) {
     // shim_render's answer (1 preview, 2 full, 3 region) in the facade's numbering
-    // (0 full, 1 preview, 2 region).
+    // (0 full, 1 preview, 2 region). Two numberings on purpose: the shim's 0 is
+    // "no picture" (Graph.None in C#), which the facade's 0 cannot also mean.
+    if (which < 1 || which > 3) return 0;   // nothing rendered (0), or a failed region (-1)
     const int graph = which == 1 ? 1 : which == 3 ? 2 : 0;
     uint32_t rw = 0, rh = 0;
     if (orion_engine_read_pixels(s->engine, graph, nullptr, 0, &rw, &rh) != ORION_OK || !rw || !rh) return 0;
