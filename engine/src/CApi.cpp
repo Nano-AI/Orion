@@ -792,14 +792,24 @@ const std::vector<std::string>& lensNames() {
 }
 }  // namespace
 
+// No status to return, so a throw while the list is first built (out of memory,
+// an unreadable database) is an empty list; the static retries on the next call.
 int32_t orion_lens_name_count(void) {
-    return static_cast<int32_t>(lensNames().size());
+    try {
+        return static_cast<int32_t>(lensNames().size());
+    } catch (...) {
+        return 0;
+    }
 }
 
 const char* orion_lens_name_at(int32_t index) {
-    const auto& n = lensNames();
-    if (index < 0 || static_cast<std::size_t>(index) >= n.size()) return "";
-    return n[static_cast<std::size_t>(index)].c_str();
+    try {
+        const auto& n = lensNames();
+        if (index < 0 || static_cast<std::size_t>(index) >= n.size()) return "";
+        return n[static_cast<std::size_t>(index)].c_str();
+    } catch (...) {
+        return "";
+    }
 }
 
 OrionStatus orion_engine_set_lens_choice(OrionEngine* engine, const char* name) {
