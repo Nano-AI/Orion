@@ -1,5 +1,12 @@
 # Orion — session history
 
+## Recent-session rows archived 2026-10-30
+
+| Date | What landed |
+|---|---|
+| 2026-10-28c | **Avalonia work merged to `main`, and a download page (#352).** `main` fast-forwarded to `avalonia-port` (everything through #351) at the developer's word, then `web/download` merged on top. `download/` picks the visitor's system and reads GitHub's release list, pre-releases included, for the newest file each system has, so a release carrying a Windows or Linux build turns that download on with no site change; `?os=` previews a system's page. The landing page's three buttons go there. `.gitignore` had hidden `web/download/` since #268, which would have 404'd the page live. check-site (l) and the new (m) pass, and (m) caught four planted faults; engine, app, apps and tools are unchanged since round three's full gate run (3044087). Then the Avalonia version packaged for the Mac (#353: `tools/package-avalonia.sh`, "Orion Avalonia.app", a 77 MB DMG, rendering headless from a copy that cannot read the repo or Homebrew). #317's Dawn spike passed on macOS (#354): Dawn reaches Avalonia with no CPU copy, Windows pairs on paper, Linux waits on the developer's Vulkan call. |
+| 2026-10-28b | **Avalonia shell, round three: the developer's review of round two (#344-#351).** Slider grooves engraved darker than the ground (#344). The filter condensed to icon cells with counts, and rejected marked ✕ (#345). Sort by file name or rating, best first, in the strip and the gallery. It never existed in either app. The engine's list reorders and the cache follows each photo by index, which also stops a trash from closing kept sessions and their edits (#346). The filmstrip is film again (#347), then 135 film to scale after "a little more realistic": eight KS-1870 holes per frame on a film-black base the strip's whole width (#348). The open frame centred with a glide, rejects crossed out, top-bar icons, a pop-up sort, and "not built" in plain words (#349); then the roll back at the left, holes that show the panel through, icons on the tabs and section headers (#350); the tabs then made one segmented control, picked from two worktree variants by screenshot (#351). Shell selftest 254/0, compare.py 31 ok; the C++ engine is untouched. |
+
 ## Recent-session row archived 2026-10-28
 
 | Date | What landed |
