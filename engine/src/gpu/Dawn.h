@@ -57,7 +57,6 @@ const char* wgslFormat(PixelFormat);
 /// The view a Dawn texture binds through. Valid for any texture made on a Dawn
 /// device; anything else is a caller mixing devices, which throws.
 const wgpu::TextureView& viewOf(const Texture&);
-const wgpu::Texture&     textureOf(const Texture&);
 
 std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context>, std::uint32_t width,
                                            std::uint32_t height, PixelFormat);

@@ -595,7 +595,10 @@ OrionStatus orion_engine_frame_size(const OrionEngine* engine,
                                     uint32_t* out_width, uint32_t* out_height);
 
 /* The pipeline's output as an id<MTLTexture>, for zero-copy display.
- * Non-owning; valid until the next open_raw. NULL when no image is open. */
+ * Non-owning; valid until the next open_raw. NULL when no image is open.
+ * Under ORION_GPU=dawn (decision #375) only an RGBA8 output has one, an
+ * IOSurface Dawn renders into; the wide RGBA16F output answers NULL, and a
+ * shell reads it back instead. The other texture getters behave the same. */
 void* orion_engine_output_texture(const OrionEngine* engine);
 
 /* The preview graph's output texture, or NULL when there is no preview graph.

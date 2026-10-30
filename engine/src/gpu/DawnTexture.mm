@@ -160,10 +160,4 @@ const wgpu::TextureView& viewOf(const Texture& t) {
     return d->view;
 }
 
-const wgpu::Texture& textureOf(const Texture& t) {
-    auto* d = dynamic_cast<const DawnTexture*>(&t.impl());
-    if (!d) throw std::runtime_error("a Metal texture was bound on a Dawn device");
-    return d->tex;
-}
-
 }  // namespace orion::gpu::dawn
