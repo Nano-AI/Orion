@@ -214,9 +214,16 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     /// Hands the photo on screen back to the source.
     public void Close() {
-        if (_session != null) _source.Release(_session);
+        if (_session != null) {
+            Leaving?.Invoke();
+            _source.Release(_session);
+        }
         _session = null;
     }
+
+    /// The photo on screen is about to go back to the source: its session is
+    /// still Session, for anything that must be put back on it first.
+    public event Action? Leaving;
 
     public float Get(string field, int index = 0) => _session?.Get(field, index) ?? 0;
 

@@ -39,7 +39,7 @@ public sealed class CropTools : StackPanel {
             new AdjustmentSlider("Aspect", "perspective_aspect", -1, 1, baseValue: 0)));
         // Reset tells the sliders (ValuesChanged), so the Angle slider follows it, from here or from Escape.
         Children.Add(new StateButton(null, "Reset crop", CropEdit.Reset, ButtonKind.Quiet) { HorizontalAlignment = HorizontalAlignment.Left });
-        // stub(#315): ProposalWatcher.swift owns this until the logic moves below the facade (documentEditsLocked disables the panel)
+        // documentEditsLocked disables the panel content: the window's tool column (ProposalLock).
     }
 
     /// handleKey's Return and Escape while the crop tab is up. Swift's key monitor
@@ -59,7 +59,7 @@ public sealed class CropTools : StackPanel {
     }
 
     static void CropKey(object? sender, KeyEventArgs e) {
-        if (e.Handled || e.Source is TextBox || e.KeyModifiers != KeyModifiers.None) return;
+        if (e.Handled || e.Source is TextBox || Chrome.AssistantPanel.Owns(e) || e.KeyModifiers != KeyModifiers.None) return;
         string? command = e.Key switch { Key.Enter => "apply-crop", Key.Escape => "cancel-crop", _ => null };
         if (command == null || !Commands.CanRun(command)) return;
         Commands.Run(command);

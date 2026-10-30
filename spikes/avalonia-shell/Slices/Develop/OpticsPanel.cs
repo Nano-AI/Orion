@@ -17,15 +17,16 @@ public sealed class OpticsPanel : StackPanel {
     SectionPlate? _plate;
 
     /// Engine.lensProfileEnabled: on by default when a profile is found, since a
-    /// correction the lens is known to need is not a creative decision.
-    // stub(#315): Engine.swift owns this until the logic moves below the facade
-    bool _profileEnabled = true;
+    /// correction the lens is known to need is not a creative decision. The
+    /// engine's, not the photo's: the sidecar does not hold it and an open does
+    /// not reset it, so a switch turned off stays off for every photo after.
+    static bool _profileEnabled = true;
 
     static EngineModel Engine => EngineModel.Shared;
 
     public OpticsPanel() {
         _picker = new LensPicker(this);
-        Engine.Opened += () => { _profileEnabled = true; Refresh(); };
+        Engine.Opened += () => Refresh();
         Refresh();
     }
 

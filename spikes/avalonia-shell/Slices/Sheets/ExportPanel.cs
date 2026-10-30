@@ -201,8 +201,7 @@ public sealed class ExportPanel : Border {
     /// UI thread, which owns the develop graph; the encode does not, because a
     /// 24 MP JPEG XL is seconds of it (#6). One encode at a time: a change made
     /// while one runs is measured when it ends, and only the latest lands.
-    // The watermark's coverage mask (WatermarkRaster.mask) is not passed, so the size omits the mark:
-    // stub(#315): Engine+Document.swift owns this until the logic moves below the facade
+    /// The watermark's mask is passed when it is on (the snapshot copies it).
     void Remeasure() {
         ++_token;
         _s.MeasuredBytes = null;
@@ -238,7 +237,8 @@ public sealed class ExportPanel : Border {
         nint engine = EngineModel.Shared.Handle;
         var options = _s.Options(_sw, _sh);
         nint snapshot = 0;
-        if (engine == 0 || SheetsNative.orion_engine_export_snapshot(engine, in options, out snapshot) != 0) {
+        if (engine == 0 || WatermarkRaster.Marked(options, _s.Dimensions(_sw, _sh),
+                                                  o => SheetsNative.orion_engine_export_snapshot(engine, in o, out snapshot)) != 0) {
             Land(token, null);
             return;
         }

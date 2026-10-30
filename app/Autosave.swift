@@ -146,6 +146,13 @@ final class Autosave {
         // the next settle, the next photo switch and the quit each try again —
         // and a disk that comes back finishes the write with nothing asked.
         guard write(job.url, job.state) else {
+            // A sidecar another tool wrote that Orion cannot parse is never
+            // written over (decision #370): say that, not "keep trying".
+            if let why = Sidecar.read(for: job.url)?.unreadable {
+                lastFailure = "The edits to \(job.url.lastPathComponent) could not be saved: "
+                            + "its sidecar is not XMP Orion can change (\(why)), so it is left as it is."
+                return
+            }
             lastFailure = "The edits to \(job.url.lastPathComponent) could not "
                         + "be saved. Orion will keep trying; do not quit yet."
             return

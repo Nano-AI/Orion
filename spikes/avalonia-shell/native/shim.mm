@@ -260,6 +260,23 @@ int shim_set_curve(Shim* s, int c, const float* xy, int count) {
     return orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
 }
 
+// The spots, Engine+Spots.swift's array, in frame coordinates: written and
+// pushed. The whole list every time (SpotModel.Replace and SpotModel's
+// edits); slots past `count` are left as they were and never read.
+int shim_set_spots(Shim* s, const OrionSpot* spots, int count) {
+    if (count < 0 || count > ORION_MAX_SPOTS || (count > 0 && !spots)) return 0;
+    std::copy(spots, spots + count, s->adj.spots);
+    s->adj.spot_count = count;
+    return orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
+}
+
+// Up to `capacity` of the spots the engine holds into `out`; returns how many it holds.
+int shim_spots(Shim* s, OrionSpot* out, int capacity) {
+    const int n = std::clamp(s->adj.spot_count, 0, ORION_MAX_SPOTS);
+    if (out) std::copy(s->adj.spots, s->adj.spots + std::min(n, std::max(capacity, 0)), out);
+    return n;
+}
+
 // Engine.swift's autoEnhance: the engine measures and writes exposure, whites,
 // blacks, fusion (lift) and clarity into the block; the rest stays as sent.
 int shim_auto_enhance(Shim* s) {
@@ -424,6 +441,67 @@ int shim_thumbnail(const char* path, uint8_t* dst, int capacity, int* turns) {
     uint32_t size = 0;
     if (orion_read_thumbnail(path, dst, uint32_t(capacity), &size, turns) != ORION_OK) return 0;
     return int(size);
+}
+
+// An SVG watermark's shape, through NSImage, as WatermarkRaster.swift's Art
+// draws it (SVG is native since macOS 10.15). The only SVG rasterizer .NET has
+// under a licence Orion may ship is none: Svg.Skia rests on SVG.NET, MS-PL.
+// ponytail: macOS only; a Windows or Linux port needs its own rasterizer here.
+static NSImage* svg_image(const uint8_t* bytes, int length) {
+    if (!bytes || length <= 0) return nil;
+    // An Objective-C exception must not cross the C facade: a file that makes AppKit throw is no image.
+    @try {
+        NSImage* image = [[NSImage alloc] initWithData:[NSData dataWithBytes:bytes length:NSUInteger(length)]];
+        return image && image.size.width > 0 && image.size.height > 0 ? image : nil;
+    } @catch (NSException*) {
+        return nil;
+    }
+}
+
+// Its natural size. 0 when it is not an image NSImage can read.
+int shim_svg_size(const uint8_t* bytes, int length, double* w, double* h) {
+    @autoreleasepool {
+        NSImage* image = svg_image(bytes, length);
+        if (!image) return 0;
+        *w = image.size.width;
+        *h = image.size.height;
+        return 1;
+    }
+}
+
+// Drawn `w`×`h`, centred at (cx, cy) of a bw×bh tile (y down), turned `angle`
+// radians counter-clockwise as the viewer sees it; its alpha into `alpha`,
+// one byte a pixel, rows top first. RGBA, because NSImage will not draw into
+// an alpha-only context.
+int shim_svg_coverage(const uint8_t* bytes, int length, uint8_t* alpha, int bw, int bh,
+                      double cx, double cy, double w, double h, double angle) {
+    if (!alpha || bw <= 0 || bh <= 0) return 0;
+    @autoreleasepool {
+        NSImage* image = svg_image(bytes, length);
+        if (!image) return 0;
+        std::vector<uint8_t> tile(size_t(bw) * size_t(bh) * 4);
+        CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+        CGContextRef ctx = CGBitmapContextCreate(tile.data(), size_t(bw), size_t(bh), 8, size_t(bw) * 4, space,
+                                                 kCGImageAlphaPremultipliedLast);
+        CGColorSpaceRelease(space);
+        if (!ctx) return 0;
+        // CoreGraphics is y-up and the tile is y-down: flip the centre, then turn.
+        CGContextTranslateCTM(ctx, cx, bh - cy);
+        CGContextRotateCTM(ctx, angle);
+        bool drawn = true;
+        [NSGraphicsContext saveGraphicsState];
+        @try {
+            NSGraphicsContext.currentContext = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:NO];
+            [image drawInRect:NSMakeRect(-w / 2, -h / 2, w, h)];
+        } @catch (NSException*) {
+            drawn = false;   // 0 covers nothing; an exception past here would end the process
+        }
+        [NSGraphicsContext restoreGraphicsState];
+        CGContextRelease(ctx);
+        if (!drawn) return 0;
+        for (size_t i = 0; i < size_t(bw) * size_t(bh); ++i) alpha[i] = tile[i * 4 + 3];
+        return 1;
+    }
 }
 
 }  // extern "C"

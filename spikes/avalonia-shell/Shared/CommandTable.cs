@@ -93,6 +93,14 @@ static class CommandTable {
         Built("mask-feather-less", "Less mask feather", "Shift+OemOpenBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(-0.1f)),
         Built("mask-feather-more", "More mask feather", "Shift+OemCloseBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(0.1f)),
         Built("delete-mask-shape", "Delete mask shape", "Delete", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Mask.Remove(Mask.Selected)),
+
+        // Assistant (AssistantCommands): ⌘⌥A, since ⌘⇧A is Deselect.
+        Built("toggle-assistant", "Show assistant", "Cmd+Alt+A", "AssistantPanel.swift", () => true, AssistantPanel.Toggle),
+        Built("copy-mcp-setup", "Copy tools setup command", null, "AssistantPanel.swift", () => AssistantModel.BundledServer != null,
+              () => Avalonia.Input.Platform.ClipboardExtensions.SetTextAsync(App.Window!.Clipboard!, AssistantModel.ClaudeAddCommand(AssistantModel.BundledServer!, AppContext.BaseDirectory))),
+        // The proposal footer's two buttons (OrionApp+Chrome.swift), live only while one is up.
+        Built("approve-proposal", "Approve the proposed edit", "Cmd+Enter", "ProposalWatcher.swift", () => ProposalWatcher.Shared.IsLive, ProposalWatcher.Shared.Approve),
+        Built("reject-proposal", "Reject the proposed edit", "Cmd+Escape", "ProposalWatcher.swift", () => ProposalWatcher.Shared.IsLive, ProposalWatcher.Shared.Reject),
     ];
 
     static Command Built(string name, string title, string? keys, string owner, Func<bool> canRun, Action run) =>
@@ -128,7 +136,7 @@ static class CommandTable {
     }
 
     /// `showingExport = true`: a registered sheet panel as a dialog over the window.
-    static void Sheet(string panel, string title) {
+    internal static void Sheet(string panel, string title) {
         if (Panels.Find(panel) is not { } sheet || App.Window is not { } owner) return;
         var content = Panels.Create(sheet.Type);
         var window = new Window { Content = content, Background = Palette.Panel, SizeToContent = SizeToContent.WidthAndHeight, Title = title };

@@ -214,11 +214,16 @@ public sealed class LibraryModel {
         foreach (var p in photos) {
             change(p);
             p.Marked = true;
-            if (Writes && !Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected, s.Label) = (p.Rating, p.Rejected, p.Label))) failed.Add(p);
+            // Only what a mark changes: the label comes from the file at write time,
+            // never from a photo whose marks have not been read yet (decision #370).
+            if (Writes && !Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected) = (p.Rating, p.Rejected))) failed.Add(p);
         }
         if (failed.Count > 0)
             EngineModel.Shared.Say((failed.Count == 1 ? $"Ratings could not be saved for {failed[0].Name}."
-                                                      : $"{failed.Count} ratings could not be saved.") + " The card or folder may be read-only.");
+                                                      : $"{failed.Count} ratings could not be saved.")
+                                   + (failed.Select(p => Sidecar.Read(p.Path)?.Unreadable).FirstOrDefault(w => w != null) is { } why
+                                       ? $" A sidecar is not XMP Orion can change ({why}), so it is left as it is."
+                                       : " The card or folder may be read-only."));
         Changed?.Invoke();
     }
 

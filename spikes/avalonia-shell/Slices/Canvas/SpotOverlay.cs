@@ -6,36 +6,68 @@ using Avalonia.Rendering;
 
 namespace OrionShell.CanvasSlice;
 
-/// The spots the overlay edits, in frame coordinates (dust is on the sensor).
-// stub(#315): Engine+Spots.swift owns this until the logic moves below the facade
-// (OrionAdjustments.spots is a struct array no EngineModel field reaches, so these never render)
+/// A port of Engine+Spots.swift: the photo's spots, in frame coordinates (dust
+/// is on the sensor, so a spot follows the subject through a later crop). Every
+/// change reaches the engine through the session (SessionSpots.cs), which is
+/// what the render heals and what Autosave writes to the sidecar's `spots`.
 static class SpotModel {
+    const int MaxSpots = 64;   // ORION_MAX_SPOTS
     public static readonly List<SpotPlacement> Spots = [];
     public static int Selected = -1;
-    public static double Radius = 0.02;
+    /// What the next spot is placed with (spotRadius, spotFeather, spotHeal).
+    public static double Radius = 0.02, Feather = 0.5;
     public static bool Heal = true;
 
-    static SpotModel() => EngineModel.Shared.Opened += () => { Spots.Clear(); Selected = -1; };
+    static SpotModel() {
+        // An open, an undo or anything else that rewrites the edit under the overlay: read the engine's back.
+        EngineModel.Shared.Opened += () => { Read(); Selected = -1; };
+        EngineModel.Shared.ValuesChanged += Read;
+        Read();
+    }
+
+    static void Read() {
+        Spots.Clear();
+        if (EngineModel.Shared.Session is { } s)
+            Spots.AddRange(s.Spots().Select(p => new SpotPlacement(new Point(p.DestX, p.DestY), new Point(p.SrcX, p.SrcY),
+                                                                    p.Radius, p.Heal != 0, p.Feather)));
+        Selected = Math.Min(Selected, Spots.Count - 1);
+        CanvasState.Touch();
+    }
+
+    /// The whole list at once, into the engine's adjustments, which the session
+    /// saves to the sidecar: the one door undo, redo and a restore set spots by.
+    /// It does not render, so a restore that also writes fields renders once, and
+    /// its settle finds history already standing on the restored step.
+    public static void Replace(IEnumerable<SpotPlacement> spots) {
+        var list = spots.Take(MaxSpots).ToList();
+        Spots.Clear();
+        Spots.AddRange(list);
+        Selected = Math.Min(Selected, Spots.Count - 1);
+        EngineModel.Shared.Session?.SetSpots(Rows());
+        CanvasState.Touch();
+    }
+
+    static List<Session.Spot> Rows() => Spots.Select(p => new Session.Spot(
+        (float)p.Destination.X, (float)p.Destination.Y, (float)p.Source.X, (float)p.Source.Y,
+        (float)p.Radius, (float)p.Feather, p.Heal ? 1 : 0)).ToList();
+
+    /// pushAndRender: the spots into the engine, then the render (the preview graph
+    /// mid-drag). The settled render is what EditHistory records as a step.
+    static void Push() {
+        EngineModel.Shared.Apply(s => s.SetSpots(Rows()));
+        CanvasState.Touch();
+    }
 
     /// `addSpot(atFrame:)`: placed, with a first-guess source a couple of radii aside.
     public static void Add(Point displayed, FrameDisplayMap fd) {
-        if (Spots.Count >= 64) return;
+        if (Spots.Count >= MaxSpots) return;
         var p = fd.Frame(displayed);
         double step = Radius * 2.5, sx = p.X + step, sy = p.Y;
         if (sx > 1 - Radius) sx = p.X - step;
         if (sx < Radius || sx > 1 - Radius) { sx = p.X; sy = p.Y + step; if (sy > 1 - Radius) sy = p.Y - step; }
-        Spots.Add(new SpotPlacement(p, new Point(Math.Clamp(sx, 0, 1), Math.Clamp(sy, 0, 1)), Radius, Heal));
+        Spots.Add(new SpotPlacement(p, new Point(Math.Clamp(sx, 0, 1), Math.Clamp(sy, 0, 1)), Radius, Heal, Feather));
         Selected = Spots.Count - 1;
-        CanvasState.Touch();
-    }
-
-    /// Every spot at once, as undo and redo put them back (EditHistory): the one
-    /// door a restored list comes in by, so pushing spots to the engine is one change here.
-    public static void Replace(IEnumerable<SpotPlacement> spots) {
-        Spots.Clear();
-        Spots.AddRange(spots);
-        Selected = Math.Min(Selected, Spots.Count - 1);
-        CanvasState.Touch();
+        Push();
     }
 
     /// `moveSpot`: either end, given in displayed coordinates.
@@ -44,7 +76,23 @@ static class SpotModel {
         var s = Spots[i];
         Spots[i] = s with { Destination = destination is { } d ? fd.Frame(d) : s.Destination,
                             Source = source is { } src ? fd.Frame(src) : s.Source };
-        CanvasState.Touch();
+        Push();
+    }
+
+    /// `removeLastSpot`: the panel's Undo spot.
+    public static void RemoveLast() {
+        if (Spots.Count == 0) return;
+        Spots.RemoveAt(Spots.Count - 1);
+        Selected = Math.Min(Selected, Spots.Count - 1);
+        Push();
+    }
+
+    /// `clearSpots`.
+    public static void Clear() {
+        if (Spots.Count == 0) return;
+        Spots.Clear();
+        Selected = -1;
+        Push();
     }
 }
 
@@ -64,7 +112,7 @@ public sealed class SpotOverlay : Control, ICustomHitTest {
     }
 
     static bool Armed => EngineModel.Shared.Tool == CanvasTool.Spot;
-    static bool Showing => CanvasState.Tab == "Detail" && (SpotModel.Spots.Count > 0 || Armed);
+    static bool Showing => CanvasState.Tab == "Detail" && (SpotModel.Spots.Count > 0 || Armed) && !Chrome.ChromeStubs.DocumentEditsLocked;
     PictureMap Map => CanvasState.Map(Bounds.Size);
 
     public override void Render(DrawingContext c) {
@@ -110,12 +158,14 @@ public sealed class SpotOverlay : Control, ICustomHitTest {
         if (MaskLayout.SpotHit(p, SpotModel.Spots, map) is { } hit) {
             _dragging = hit;
             SpotModel.Selected = hit.Index;
+            EngineModel.Shared.BeginInteraction();   // decision #84
         } else if (Armed) {
-            // Placed on press, then its source dragged out: one act, one undo.
+            // Placed on press, then its source dragged out: one act, one undo, so
+            // the interaction starts first and the press's render is not a step.
+            EngineModel.Shared.BeginInteraction();
             SpotModel.Add(MaskLayout.SpotDrag(p, map), map.Fd);
             _placing = true;
         } else return;
-        EngineModel.Shared.BeginInteraction();   // decision #84
         e.Pointer.Capture(this);
         e.Handled = true;
     }

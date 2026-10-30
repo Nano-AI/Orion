@@ -3,20 +3,20 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 
 namespace OrionShell.Sheets;
 
 /// A port of app/WatermarkPanel.swift: the watermark editor, a sheet over the
 /// Export sheet. The controls are a fixed set and are not scrolled: a fold
 /// once put Opacity, the one control every mark needs, out of sight.
-///
-/// WatermarkRaster.swift (WatermarkLayout.place and the CoreText/SVG coverage
-/// mask) is not ported: its only callers are the export and this preview.
-// stub(#315): Engine+Document.swift owns this until the logic moves below the facade
 [Panel("sheet-watermark", Region.Sheet)]
 public sealed class WatermarkPanel : Border {
     readonly Watermark _mark = Watermark.Shared;
     readonly StackPanel _options = new() { Spacing = Space.Md + 6 };
+    readonly Image _preview = new() { Stretch = Stretch.Uniform };
+    string _previewed = "";
+    int _token;
 
     /// Closes the sheet. Set by whatever opened it.
     public Action? Dismiss { get; set; }
@@ -41,17 +41,31 @@ public sealed class WatermarkPanel : Border {
             Spacing = Space.Md + 6,
             Children = { SheetKit.Title("Watermark"), Preview(), _options, footer },
         };
+        // ponytail: a poll of the mark rather than a hook in every control's setter; a change
+        // event on Watermark replaces it if the poll ever shows in a profile.
+        IDisposable? poll = null;
+        AttachedToVisualTree += (_, _) => poll = Avalonia.Threading.DispatcherTimer.Run(() => { Rerender(); return true; }, TimeSpan.FromMilliseconds(130));
+        DetachedFromVisualTree += (_, _) => poll?.Dispose();
     }
 
-    /// The preview is the export itself in Swift: the open photo written at
-    /// 1024 px with the mask and read back, so there is no second compositing
-    /// path. Here it is the canvas's render, without the mark.
-    // Engine.watermarkPreview:
-    // stub(#315): Engine+Document.swift owns this until the logic moves below the facade
-    static Control Preview() {
-        var image = new Image { Source = EngineModel.Shared.Picture, Stretch = Stretch.Uniform };
-        RenderOptions.SetBitmapInterpolationMode(image, Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality);
-        return new Border { Height = 200, Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Md), Child = image };
+    /// The preview is the export itself, as Swift's: the open photo written at
+    /// 1024 px with the mask and read back, so there is no second compositing path.
+    Control Preview() {
+        _preview.Source = EngineModel.Shared.Picture;   // the canvas's picture until the first export lands
+        RenderOptions.SetBitmapInterpolationMode(_preview, Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality);
+        return new Border { Height = 200, Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Md), Child = _preview };
+    }
+
+    /// Debounced as the Export sheet's remeasure is: a render and an encode per
+    /// slider tick would make the slider unusable.
+    void Rerender() {
+        string now = _mark.Encode().ToJsonString();
+        if (now == _previewed) return;
+        _previewed = now;
+        int mine = ++_token;
+        Avalonia.Threading.DispatcherTimer.RunOnce(() => {
+            if (mine == _token && WatermarkPreview.Render(_mark) is { } picture) _preview.Source = picture;
+        }, TimeSpan.FromMilliseconds(260));
     }
 
     /// Rebuilt whole when the kind or the placement changes, which swaps rows.
@@ -88,9 +102,7 @@ public sealed class WatermarkPanel : Border {
             bold.IsCheckedChanged += (_, _) => _mark.Bold = bold.IsChecked == true;
             return [words, new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, Children = { family, bold } }];
         }
-        // NSOpenPanel for the SVG:
-        // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-        var choose = SheetKit.Button("Choose SVG…", () => NotBuilt.Say("an SVG watermark", "WatermarkRaster.swift"));
+        var choose = SheetKit.Button("Choose SVG…", ChooseSvg);
         var name = new TextBlock {
             Text = _mark.SvgName.Length == 0 ? "No file chosen" : _mark.SvgName, FontSize = TypeSize.Sm,
             Foreground = _mark.SvgName.Length == 0 ? Palette.Dim : Palette.Text,
@@ -100,6 +112,19 @@ public sealed class WatermarkPanel : Border {
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, Children = { choose, name } },
             SheetKit.Note("Only the shape is used. Its colors become the one gray, and an opaque background becomes a gray box.", Palette.Dim),
         ];
+    }
+
+    /// chooseSVG: the file's bytes copied into the mark, its name kept for the panel.
+    async void ChooseSvg() {
+        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanOpen: true } storage) return;
+        var files = await storage.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions {
+            AllowMultiple = false, FileTypeFilter = [new Avalonia.Platform.Storage.FilePickerFileType("SVG image") { Patterns = ["*.svg"] }],
+        });
+        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
+        try {
+            (_mark.Svg, _mark.SvgName) = (File.ReadAllBytes(path), Path.GetFileName(path));
+        } catch (IOException) { return; }
+        Build();
     }
 
     /// The 3x3 grid, in the order Watermark.Anchors declares.

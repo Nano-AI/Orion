@@ -238,6 +238,7 @@ enum ViewportTests {
         testAgentStatsJSON()
         testAgentCommitPreservesAnExistingRating()
         testSidecarReadHandlesAFileWithNoOrionDevelop()
+        testForeignXmpSurvivesOrionsWrites()
 
         testProposalProposedURLBesideTheRaw()
         testProposalChangedKeysNamesWhatDiffers()

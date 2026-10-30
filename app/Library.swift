@@ -491,14 +491,20 @@ final class Library {
         // sidecar, and the only trace in a log. One sentence, not a dialog per
         // frame — a cull is a hundred keystrokes and a modal on each is its own
         // defect.
+        //
+        // ⚠ Only the fields a mark changes. The label is read from the file at
+        // write time (nothing here sets one): marks load in the background, so
+        // `photo.colorLabel` can still be nil for a star pressed first, and
+        // writing it removed a Lightroom label (decision #370).
         if !Sidecar.merge(into: photo.url, {
             $0.rating = photo.rating
             $0.rejected = photo.rejected
-            $0.label = photo.colorLabel
         }) {
             lastFailure = "Ratings could not be saved for "
-                        + "\(photo.url.lastPathComponent). The card or folder "
-                        + "may be read-only."
+                        + "\(photo.url.lastPathComponent). "
+                        + (Sidecar.read(for: photo.url)?.unreadable.map {
+                              "Its sidecar is not XMP Orion can change (\($0)), so it is left as it is."
+                          } ?? "The card or folder may be read-only.")
         }
         // ⚠ The index is refreshed by **reading the file back**, never from the
         // values above. A merge that failed — a read-only card, a full disk —

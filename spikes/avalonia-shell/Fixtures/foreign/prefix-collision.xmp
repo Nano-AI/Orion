@@ -1,0 +1,12 @@
+<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" xmlns:orion="urn:example:another-orion">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:orion1="urn:example:yet-another">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmp:Rating="2">
+   <orion:Note>a prefix another tool owns</orion:Note>
+   <orion1:Note>and the next one too</orion1:Note>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>
