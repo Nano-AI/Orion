@@ -10,7 +10,7 @@
 // Metal compiler, but by different roads — slangc's MSL compiled with
 // -ffast-math, against slangc's WGSL translated by Tint and compiled without
 // it — so a transcendental or a fused multiply-add may round differently.
-// What counts as passing is stated in `kTolerance` and printed per kernel.
+// What counts as passing is stated per kernel in `kAllowed` and printed.
 
 #include "harness.h"
 
@@ -119,8 +119,12 @@ std::vector<pipe::Adjustments> parityEdits(const pipe::DevelopPipeline& d) {
     global.straightenDeg = 3.0f; global.perspectiveVertical = 0.3f;
     global.cropX = 0.05f; global.cropY = 0.05f; global.cropW = 0.85f; global.cropH = 0.9f;
 
-    auto local = base;    // masks, layers, spots
-    local.maskCount = 4;
+    // Masks, layers, spots. ⚠ **Every component slot and the last layers**:
+    // a repack error hides in what no edit sets — the tail of each per-layer
+    // array is where a wrong stride lands — so all eight components are used,
+    // seven layers, and the last layers set fields the first ones do not.
+    auto local = base;
+    local.maskCount = 8;
     local.maskComponents[0].kind = 1;   // linear
     local.maskComponents[1].kind = 2;   // radial
     local.maskComponents[1].startsLayer = true;
@@ -128,11 +132,32 @@ std::vector<pipe::Adjustments> parityEdits(const pipe::DevelopPipeline& d) {
     local.maskComponents[2].startsLayer = true;
     local.maskComponents[3].kind = 6;   // color
     local.maskComponents[3].compose = 1;
+    local.maskComponents[4].kind = 3;   // brush: the accumulator's path
+    local.maskComponents[4].startsLayer = true;
+    local.maskComponents[4].brushRadius = 0.06f;
+    local.maskComponents[4].brushFlow = 0.6f;
+    local.maskComponents[4].brushRevision = 1;
+    local.maskComponents[5].kind = 2;
+    local.maskComponents[5].startsLayer = true;
+    local.maskComponents[5].center[0] = 0.7f;
+    local.maskComponents[5].invert = true;
+    local.maskComponents[6].kind = 1;
+    local.maskComponents[6].startsLayer = true;
+    local.maskComponents[6].angle = 1.2f;
+    local.maskComponents[7].kind = 6;
+    local.maskComponents[7].startsLayer = true;
+    local.maskComponents[7].color[0] = 0.4f;
     local.maskRefine = 0.5f;
     local.layers[0].exposureEv = 0.7f; local.layers[0].denoiseLuma = 1.5f;
     local.layers[1].contrast = 0.4f; local.layers[1].warmth = 0.3f;
     local.layers[1].denoiseColor = 1.0f;
     local.layers[2].saturation = -0.5f; local.layers[2].shadows = 0.4f;
+    local.layers[3].highlights = -0.6f; local.layers[3].exposureEv = -0.4f;
+    local.layers[4].whites = 0.5f; local.layers[4].tint = -0.3f;
+    local.layers[5].blacks = -0.4f; local.layers[5].denoiseLuma = 2.0f;
+    local.layers[6].tint = 0.4f; local.layers[6].saturation = 0.6f;
+    local.layers[6].denoiseColor = 2.0f; local.layers[6].highlights = 0.3f;
+    local.maskOverlayLayer = 6;
     local.spotCount = 2;
     local.spots[0] = {0.3f, 0.4f, 0.6f, 0.5f};
     local.spots[1] = {0.7f, 0.6f, 0.2f, 0.3f};
@@ -171,6 +196,10 @@ void compareGraph(pipe::DevelopPipeline& d, gpu::Device& dawn, std::map<std::str
                 dawn, std::string(ORION_SHADER_DIR) + "/" + node.kernel + ".metallib");
             kernels[node.kernel] = gpu::Kernel::create(dawn, *lib, node.kernel);
         }
+        // Before the dispatch: a read-write input (the brush accumulator) is
+        // compared against what it held going in, not what Metal left.
+        std::vector<std::vector<float>> before;
+        for (const auto* t : binds) before.push_back(floats(*t));
         const gpu::Texture& out = *binds.back();
         gpu::CommandBuffer cb(dawn);
         cb.dispatch(*kernels[node.kernel], onDawn,
@@ -178,18 +207,38 @@ void compareGraph(pipe::DevelopPipeline& d, gpu::Device& dawn, std::map<std::str
                     node.params.size(), out.width(), out.height());
         cb.commitAndWait();
 
-        const auto a = floats(out), b = floats(*onDawn.back());
+        // ⚠ **Every binding, not only the output.** A kernel may write more
+        // than its last slot (the brush accumulator is an aux texture written
+        // in place). Inputs must come back unchanged; the output must match
+        // Metal's; a read-write aux must match Metal's state after the same
+        // dispatch, which for an accumulator that already holds its dabs is
+        // the state it went in with.
         Seen& s = seen[node.kernel];
         s.nodes++;
-        for (std::size_t i = 0; i < a.size(); ++i) {
-            // NaN in both is agreement; NaN in one is the worst.
-            const bool na = std::isnan(a[i]), nb = std::isnan(b[i]);
-            const double diff = (na || nb) ? (na == nb ? 0.0 : 1e9) : std::fabs(double(a[i]) - b[i]);
-            s.worst = std::max(s.worst, diff);
-            s.differ += diff > 0.0;
+        for (std::size_t k = 0; k < binds.size(); ++k) {
+            const auto a = k + 1 == binds.size() ? floats(out) : before[k];
+            const auto b = floats(*onDawn[k]);
+            if (a.size() != b.size()) { s.worst = 1e9; continue; }
+            for (std::size_t i = 0; i < a.size(); ++i) {
+                // NaN in both is agreement; NaN in one is the worst.
+                const bool na = std::isnan(a[i]), nb = std::isnan(b[i]);
+                const double diff = (na || nb) ? (na == nb ? 0.0 : 1e9) : std::fabs(double(a[i]) - b[i]);
+                s.worst = std::max(s.worst, diff);
+                s.differ += diff > 0.0;
+            }
+            s.samples += a.size();
         }
-        s.samples += a.size();
     }
+}
+
+// The brush component's stroke (component 4 of the local edit).
+void paintBrush(pipe::DevelopPipeline& d) {
+    std::vector<float> xy;
+    for (int i = 0; i < 60; ++i) {
+        xy.push_back(0.2f + 0.01f * float(i));
+        xy.push_back(0.7f - 0.006f * float(i));
+    }
+    d.setBrushStroke(4, xy.data(), nullptr, 60);
 }
 
 raw::LinearImage parityLinear(const raw::BayerImage& like) {
@@ -220,13 +269,14 @@ void testDawnParityGpu() {
     }
     report(dawn->backend() == gpu::Backend::Dawn, "the second device is Dawn", dawn->info().name);
 
-    // ⚠ The bar: one fp16 step at 1.0 is 0.000977, and four of them is what a
-    // kernel may differ by. Measured: one step in colorGrade and developLinear
-    // (8 and 4 samples of a few million), every other kernel bit-identical, and
-    // the whole graph's output bit-identical on all six. (With Dawn's
-    // robustness on, llfRemapH and nlmLuma also moved one step.) An 8-bit
-    // output may move one code (0.0039) on a rounding boundary; this admits it.
-    constexpr double kTolerance = 4.0 / 1024.0;
+    // ⚠ The bar, per kernel: exact unless measured otherwise, so a new
+    // difference anywhere fails instead of hiding under a shared bar. Measured:
+    // colorGrade and developLinear move one fp16 step (0.000977) on a handful
+    // of samples in millions — the two compilers round a transcendental
+    // differently — and every other kernel is bit-identical. (With Dawn's
+    // robustness on, llfRemapH and nlmLuma also moved one step.)
+    const std::map<std::string, double> kAllowed = {
+        {"colorGrade", 1.0 / 1024.0}, {"developLinear", 1.0 / 1024.0}};
 
     std::map<std::string, Seen> seen;
     std::map<std::string, std::unique_ptr<gpu::Library>> libs;
@@ -239,12 +289,14 @@ void testDawnParityGpu() {
             for (bool wide : {false, true}) {
                 pipe::DevelopPipeline d(*metal, ORION_SHADER_DIR, input);
                 d.setWideOutput(wide);
+                paintBrush(d);
                 d.apply(edit);
                 compareGraph(d, *dawn, seen, libs, kernels);
 
                 // And the whole chain on Dawn, end to end: what a user sees.
                 pipe::DevelopPipeline w(*dawn, ORION_SHADER_DIR, input);
                 w.setWideOutput(wide);
+                paintBrush(w);
                 w.apply(edit);
                 w.render();
                 const auto a = floats(d.output()), b = floats(w.output());
@@ -269,15 +321,17 @@ void testDawnParityGpu() {
         std::snprintf(line, sizeof line, "%2d nodes, worst %.6f, %zu of %zu samples differ",
                       s.nodes, s.worst, s.differ, s.samples);
         std::printf("  %-20s %s\n", kernel.c_str(), line);
-        report(s.worst <= kTolerance, kernel, line);
+        const auto allowed = kAllowed.find(kernel);
+        report(s.worst <= (allowed == kAllowed.end() ? 0.0 : allowed->second), kernel, line);
     }
     std::printf("  %zu kernels compared\n", seen.size());
-    // ⚠ The chain's bar is the same: the single-step differences above could
-    // meet downstream. Measured, they do not reach the output at all.
+    // ⚠ The chain's bar is zero: the single-step differences above could meet
+    // downstream, but measured they do not reach the output at all, so any
+    // difference there is new and fails.
     char line[96];
     std::snprintf(line, sizeof line, "worst %.6f over three edits, screen and wide", chain);
     std::printf("  whole graph, Dawn against Metal: %s\n", line);
-    report(chain <= kTolerance, "the whole develop graph on Dawn matches Metal's output", line);
+    report(chain == 0.0, "the whole develop graph on Dawn matches Metal's output exactly", line);
 
     // Every kernel the build makes must at least compile on Dawn, including
     // any no graph above reaches (llfRemapDown has no node today).

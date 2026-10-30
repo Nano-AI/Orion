@@ -35,20 +35,33 @@ struct Context {
     /// Blocks until `future` completes. Throws if the wait itself fails.
     void wait(const wgpu::Future& future) const;
 
-    /// Throws, with Dawn's message, if an error was reported since the last
-    /// call. Dawn reports validation errors through a callback rather than a
-    /// return value, so every call that can fail is followed by this.
-    void check(const char* what);
-
-    /// Records an uncaptured error; called from Dawn's callback.
-    void report(const std::string& message);
-
-    /// Waits for everything submitted so far.
-    void finish();
+    /// Records a lost device; called from Dawn's callback. Device-wide, so
+    /// every thread's next `ErrorScope::check` throws it.
+    void lose(const std::string& message);
+    [[nodiscard]] std::string lost();
 
 private:
-    std::mutex  errorLock_;
-    std::string error_;
+    std::mutex  lostLock_;
+    std::string lost_;
+};
+
+/// Dawn reports a failed call through an error scope rather than a return
+/// value. One of these around each operation that can fail; `check` pops it
+/// and throws Dawn's message. ⚠ Dawn's scopes are per thread, so two threads
+/// rendering at once never read each other's errors — a shared slot did.
+/// The destructor pops an unchecked scope (an exception unwinding past it).
+class ErrorScope {
+public:
+    explicit ErrorScope(Context&);
+    ~ErrorScope();
+    ErrorScope(const ErrorScope&) = delete;
+    ErrorScope& operator=(const ErrorScope&) = delete;
+    void check(const std::string& what);
+
+private:
+    std::string pop();
+    Context& ctx_;
+    bool     open_ = true;
 };
 
 wgpu::TextureFormat toWgpu(PixelFormat);

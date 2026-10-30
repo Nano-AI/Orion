@@ -9,6 +9,7 @@
 #include "gpu/DawnKernel.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -42,7 +43,7 @@ void parseHeader(Shader& s) {
             f >> st.binding >> st.slangFormat >> access;
             s.storage.push_back(st);
         } else if (key == "params") {
-            f >> s.paramBinding >> s.paramBytes;
+            f >> s.paramBinding >> s.paramBytes >> s.hostBytes;
             s.hasParams = true;
         } else if (key == "copy") {
             Shader::Copy c;
@@ -69,13 +70,14 @@ const Shader::Variant& Shader::pipeline(const std::vector<PixelFormat>& formats)
         code.replace(at, token.size(), wgslFormat(formats[i]));
     }
 
+    ErrorScope scope(*ctx);
     wgpu::ShaderSourceWGSL wgsl{};
     wgsl.code = code.c_str();
     wgpu::ShaderModuleDescriptor sd{.nextInChain = &wgsl};
     wgpu::ShaderModule module = ctx->device.CreateShaderModule(&sd);
     wgpu::ComputePipelineDescriptor pd{.compute = {.module = module, .entryPoint = entry.c_str()}};
     wgpu::ComputePipeline pipe = ctx->device.CreateComputePipeline(&pd);
-    ctx->check(("Dawn pipeline for '" + entry + "'").c_str());
+    scope.check("Dawn pipeline for '" + entry + "'");
     variants_.push_back(Variant{formats, pipe, pipe.GetBindGroupLayout(0)});
     return variants_.back();
 }
@@ -106,6 +108,9 @@ std::unique_ptr<Library::Impl> makeLibrary(std::shared_ptr<Context> ctx, const s
     s->ctx    = ctx.get();
     s->path   = file;
     s->source = all.str();
+    // One entry point per file, named after it (engine/shaders/CMakeLists.txt).
+    // Set here, under the lock, so two threads making kernels never race on it.
+    s->entry  = std::filesystem::path(file).stem().string();
     parseHeader(*s);
     slot = s;
     lib->shader = std::move(s);
@@ -116,8 +121,6 @@ std::unique_ptr<Kernel::Impl> makeKernel(Library& library, const std::string& en
     auto* lib = dynamic_cast<DawnLibrary*>(&library.impl());
     if (!lib) throw std::runtime_error("a Metal library was given to a Dawn device");
     Shader& s = *lib->shader;
-    // One entry point per file, named after it (engine/shaders/CMakeLists.txt).
-    if (s.entry.empty()) s.entry = entryPoint;
     if (s.entry != entryPoint) {
         throw std::runtime_error("no kernel named '" + entryPoint + "' in " + s.path);
     }

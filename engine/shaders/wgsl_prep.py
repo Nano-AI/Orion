@@ -28,7 +28,7 @@ Header lines (one per fact, all comments, so the file is still valid WGSL once
 the tokens are filled):
     // orion-texture <metal slot> <binding>
     // orion-storage <binding> <slang's format> <write|read_write>
-    // orion-params <binding> <wgsl struct bytes>
+    // orion-params <binding> <wgsl struct bytes> <metal struct bytes>
     // orion-copy <wgsl offset> <metal offset> <bytes>
 """
 import json
@@ -44,6 +44,7 @@ def leaves(t, wgsl_t, w_off, m_off, out):
     """Walk one type in both layouts; append (w_off, m_off, size) for leaves."""
     kind = t["kind"]
     if kind == "struct":
+        same(t["fields"], wgsl_t["fields"], "fields of " + t.get("name", "a struct"))
         for f, g in zip(t["fields"], wgsl_t["fields"]):
             leaves(f["type"], g["type"], w_off + g["binding"]["offset"],
                    m_off + f["binding"]["offset"], out)
@@ -57,6 +58,14 @@ def leaves(t, wgsl_t, w_off, m_off, out):
         out.append((w_off, m_off, size))
     else:
         raise SystemExit(f"wgsl_prep: unhandled parameter type {kind}")
+
+
+def same(a, b, what):
+    """The two targets' reflections must list the same things in the same
+    order; zip() would silently drop a tail and mis-pair the rest."""
+    names_a, names_b = [x.get("name") for x in a], [x.get("name") for x in b]
+    if names_a != names_b:
+        raise SystemExit(f"wgsl_prep: Metal and WGSL disagree on the {what}: {names_a} vs {names_b}")
 
 
 def uniform_size(t):
@@ -85,6 +94,7 @@ def main(raw_path, metal_json, wgsl_json, out_path):
     metal, wgsl = entry(metal_json), entry(wgsl_json)
     declared = {int(b) for b in re.findall(r"@binding\((\d+)\)", text)}
     header = []
+    same(metal["parameters"], wgsl["parameters"], "entry point parameters")
     for mp, wp in zip(metal["parameters"], wgsl["parameters"]):
         if "binding" not in wp:
             continue   # the thread id
@@ -100,6 +110,11 @@ def main(raw_path, metal_json, wgsl_json, out_path):
                 m = decl.search(text)
                 if not m:
                     raise SystemExit(f"wgsl_prep: no storage declaration for binding {binding}")
+                # ⚠ Matches slangc's spelling of the declaration and of
+                # `textureLoad((name)`. If a slangc update changes either, this
+                # raises above, or leaves `write` on a texture the kernel reads,
+                # which Tint rejects when Kernel::create prewarms the pipeline:
+                # loudly, at graph compile, never as a wrong picture.
                 name, fmt = m.group(2), m.group(3)
                 access = "read_write" if f"textureLoad(({name})" in text else "write"
                 text = text[:m.start()] + f"{m.group(1)}texture_storage_2d<ORION_FMT_{binding}, {access}>" \
@@ -109,8 +124,10 @@ def main(raw_path, metal_json, wgsl_json, out_path):
             mt, wt = mp["type"]["elementType"], wp["type"]["elementType"]
             spans = []
             leaves(mt, wt, 0, 0, spans)
-            size = max(w + n for w, _, n in spans)
-            header.append(f"// orion-params {binding} {(size + 15) // 16 * 16}")
+            wsize = (max(uniform_size(wt), max(w + n for w, _, n in spans)) + 15) // 16 * 16
+            # The Metal size is the C++ struct's sizeof: the backend refuses a
+            # host block of any other size rather than zero-fill or truncate.
+            header.append(f"// orion-params {binding} {wsize} {uniform_size(mt)}")
             header += [f"// orion-copy {w} {m} {n}" for w, m, n in merge(spans)]
         else:
             raise SystemExit(f"wgsl_prep: unhandled parameter kind {kind}")

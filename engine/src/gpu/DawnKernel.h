@@ -35,6 +35,7 @@ struct Shader {
     bool          hasParams    = false;
     std::uint32_t paramBinding = 0;
     std::uint32_t paramBytes   = 0;   // the WGSL struct, rounded to 16
+    std::uint32_t hostBytes    = 0;   // the Metal struct: the C++ sizeof
 
     /// The pipeline for these storage formats, compiled on first request.
     /// ⚠ A deque so the reference survives later variants being added.

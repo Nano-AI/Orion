@@ -7,6 +7,9 @@
 
 #include <dawn/native/MetalBackend.h>
 
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -18,23 +21,47 @@ void Context::wait(const wgpu::Future& future) const {
     }
 }
 
-void Context::report(const std::string& message) {
-    std::lock_guard<std::mutex> lock(errorLock_);
-    if (error_.empty()) error_ = message;   // the first is the cause
+void Context::lose(const std::string& message) {
+    std::lock_guard<std::mutex> lock(lostLock_);
+    if (lost_.empty()) lost_ = message;
 }
 
-void Context::check(const char* what) {
-    std::string why;
-    {
-        std::lock_guard<std::mutex> lock(errorLock_);
-        why.swap(error_);
+std::string Context::lost() {
+    std::lock_guard<std::mutex> lock(lostLock_);
+    return lost_;
+}
+
+namespace {
+std::string text(wgpu::StringView s) { return std::string(s.data ? s.data : "", s.data ? s.length : 0); }
+}  // namespace
+
+ErrorScope::ErrorScope(Context& ctx) : ctx_(ctx) {
+    ctx_.device.PushErrorScope(wgpu::ErrorFilter::Validation);
+    ctx_.device.PushErrorScope(wgpu::ErrorFilter::OutOfMemory);
+}
+
+ErrorScope::~ErrorScope() {
+    if (open_) {
+        try { pop(); } catch (...) {}   // already unwinding; the first error stands
     }
-    if (!why.empty()) throw std::runtime_error(std::string(what) + ": " + why);
 }
 
-void Context::finish() {
-    wait(queue.OnSubmittedWorkDone(wgpu::CallbackMode::WaitAnyOnly,
-                                   [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {}));
+std::string ErrorScope::pop() {
+    open_ = false;
+    std::string why;
+    for (int i = 0; i < 2; ++i) {
+        ctx_.wait(ctx_.device.PopErrorScope(wgpu::CallbackMode::WaitAnyOnly,
+            [&](wgpu::PopErrorScopeStatus, wgpu::ErrorType type, wgpu::StringView msg) {
+                if (type != wgpu::ErrorType::NoError && why.empty()) why = text(msg);
+            }));
+    }
+    return why;
+}
+
+void ErrorScope::check(const std::string& what) {
+    std::string why = pop();
+    if (why.empty()) why = ctx_.lost();
+    if (!why.empty()) throw std::runtime_error(what + ": " + why);
 }
 
 wgpu::TextureFormat toWgpu(PixelFormat f) {
@@ -93,8 +120,6 @@ struct DawnDevice final : Device::Impl {
     // goes when the last Context reference does.
 };
 
-std::string text(wgpu::StringView s) { return std::string(s.data ? s.data : "", s.data ? s.length : 0); }
-
 }  // namespace
 }  // namespace orion::gpu::dawn
 
@@ -148,17 +173,22 @@ std::shared_ptr<Context> open() {
     wgpu::Limits limits{};
     c.adapter.GetLimits(&limits);
 
-    // ⚠ **Robustness off.** Dawn otherwise clamps every texture load and
-    // store against the texture's size, as WebGPU requires of untrusted code;
-    // that doubled the GPU time of a 24 MP frame (settled at fit 18.8 ms
-    // against Metal's 9.0, the drag frame 1.47 against 0.81). These shaders
-    // are ours, they already clamp what they read (`clampToImage`), and Metal
-    // has never checked them, so this is the behaviour the engine was written
-    // and tested against. `skip_validation` was not needed to match Metal and
-    // stays off: validation is what turns a host mistake into an exception.
+    // ⚠ **Robustness off on macOS, unless ORION_DAWN_ROBUST=1.** Dawn
+    // otherwise clamps every texture load and store against the texture's
+    // size, as WebGPU requires of untrusted code; that doubled the GPU time of
+    // a 24 MP frame (settled at fit 18.8 ms against Metal's 9.0, the drag frame
+    // 1.47 against 0.81). These shaders are ours, they already clamp what they
+    // read (`clampToImage`), and Metal has never checked them, so on a Metal
+    // device this is the behaviour the engine was written and tested against.
+    // A new platform (D3D12, Vulkan) should come up with the checks ON (#375):
+    // an out-of-bounds access Metal tolerates may not be tolerated there.
+    // `skip_validation` was not needed and stays off: validation is what turns
+    // a host mistake into an exception.
+    const char* robust = std::getenv("ORION_DAWN_ROBUST");
+    const bool checked = robust != nullptr && std::strcmp(robust, "1") == 0;
     const char* toggleNames[] = {"disable_robustness"};
     wgpu::DawnTogglesDescriptor toggles{};
-    toggles.enabledToggleCount = 1;
+    toggles.enabledToggleCount = checked ? 0 : 1;
     toggles.enabledToggles = toggleNames;
 
     wgpu::DeviceDescriptor dd{};
@@ -167,13 +197,20 @@ std::shared_ptr<Context> open() {
     dd.requiredFeatures     = features.data();
     dd.requiredLimits       = &limits;
     Context* raw = &c;
+    // Every fallible call sits in an ErrorScope, so an uncaptured error is a
+    // call this file forgot to scope: said on stderr rather than lost.
     dd.SetUncapturedErrorCallback(
-        [](const wgpu::Device&, wgpu::ErrorType, wgpu::StringView msg, Context* ctx) {
-            ctx->report(text(msg));
-        }, raw);
+        [](const wgpu::Device&, wgpu::ErrorType, wgpu::StringView msg) {
+            std::fprintf(stderr, "orion: Dawn error outside a scope: %s\n", text(msg).c_str());
+        });
+    // Destroyed and CallbackCancelled are teardown (the last reference going,
+    // the instance before the device), not a loss.
     dd.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
         [](const wgpu::Device&, wgpu::DeviceLostReason r, wgpu::StringView msg, Context* ctx) {
-            if (r != wgpu::DeviceLostReason::Destroyed) ctx->report("device lost: " + text(msg));
+            if (r != wgpu::DeviceLostReason::Destroyed &&
+                r != wgpu::DeviceLostReason::CallbackCancelled) {
+                ctx->lose("device lost: " + text(msg));
+            }
         }, raw);
     c.wait(c.adapter.RequestDevice(&dd, wgpu::CallbackMode::WaitAnyOnly,
         [&](wgpu::RequestDeviceStatus st, wgpu::Device d, wgpu::StringView msg) {

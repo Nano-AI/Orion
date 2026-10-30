@@ -36,6 +36,8 @@ struct DawnTexture final : Texture::Impl {
 
     void upload(const void* src, std::size_t bytesPerRow, std::uint32_t width,
                 std::uint32_t height) override {
+        if (width == 0 || height == 0) throw std::runtime_error("Dawn texture upload: empty");
+        ErrorScope scope(*ctx);
         wgpu::TexelCopyTextureInfo dst{.texture = tex};
         wgpu::TexelCopyBufferLayout layout{.bytesPerRow = static_cast<std::uint32_t>(bytesPerRow),
                                            .rowsPerImage = height};
@@ -43,12 +45,14 @@ struct DawnTexture final : Texture::Impl {
         // The last row need not be padded to bytesPerRow; Metal reads no more.
         const std::size_t bytes = bytesPerRow * (height - 1) + width * bpp;
         ctx->queue.WriteTexture(&dst, src, bytes, &layout, &size);
-        ctx->check("Dawn texture upload");
+        scope.check("Dawn texture upload");
     }
 
     void download(void* dst, std::size_t bytesPerRow, std::uint32_t x, std::uint32_t y,
                   std::uint32_t width, std::uint32_t height) const override {
         // A buffer copy needs rows on 256 bytes; the caller's rows are packed.
+        if (width == 0 || height == 0) return;
+        ErrorScope scope(*ctx);
         const std::size_t row   = width * bpp;
         const std::size_t pitch = (row + 255) / 256 * 256;
         wgpu::BufferDescriptor bd{.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst,
@@ -71,7 +75,7 @@ struct DawnTexture final : Texture::Impl {
                                    [&](wgpu::MapAsyncStatus st, wgpu::StringView) {
                                        mapped = st == wgpu::MapAsyncStatus::Success;
                                    }));
-        ctx->check("Dawn texture readback");
+        scope.check("Dawn texture readback");
         if (!mapped) throw std::runtime_error("Dawn texture readback: map failed");
         const auto* src = static_cast<const std::uint8_t*>(staging.GetConstMappedRange(0, pitch * height));
         auto* out = static_cast<std::uint8_t*>(dst);
@@ -117,7 +121,6 @@ void shareThroughIOSurface(DawnTexture& t, std::uint32_t width, std::uint32_t he
         wgpu::SharedTextureMemoryBeginAccessDescriptor begin{};
         begin.initialized = false;
         if (!t.tex || t.memory.BeginAccess(t.tex, &begin) != wgpu::Status::Success) {
-            t.ctx->check("Dawn: IOSurface texture");
             throw std::runtime_error("Dawn: IOSurface texture could not begin access");
         }
 
@@ -139,6 +142,7 @@ std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context> ctx, std::ui
                                            std::uint32_t height, PixelFormat format) {
     auto t = std::make_unique<DawnTexture>();
     t->ctx = std::move(ctx);
+    ErrorScope scope(*t->ctx);
     t->bpp = bytesPerPixel(format);
     if (format == PixelFormat::RGBA8Unorm) {
         shareThroughIOSurface(*t, width, height);
@@ -148,7 +152,7 @@ std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context> ctx, std::ui
                                    .format = toWgpu(format)};
         t->tex = t->ctx->device.CreateTexture(&td);
     }
-    t->ctx->check("Dawn texture allocation");
+    scope.check("Dawn texture allocation");
     if (!t->tex) throw std::runtime_error("Dawn texture allocation failed");
     t->view = t->tex.CreateView();
     return t;

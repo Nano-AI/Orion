@@ -58,6 +58,15 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         r.variant = &s.pipeline(formats);
 
         if (s.hasParams) {
+            // ⚠ The host's struct must be the shader's, byte for byte: a short
+            // block would otherwise be zero-filled and a long one truncated,
+            // and either renders a plausible wrong picture. Metal's setBytes
+            // never checked this; the facade catches the throw.
+            if (data == nullptr || dataBytes != s.hostBytes) {
+                throw std::runtime_error("kernel '" + s.entry + "' takes a " +
+                                         std::to_string(s.hostBytes) + "-byte parameter block, given " +
+                                         std::to_string(data ? dataBytes : 0));
+            }
             r.hasParams    = true;
             r.paramBinding = s.paramBinding;
             r.paramBytes   = s.paramBytes;
@@ -65,9 +74,7 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
             params.resize(r.paramOffset + r.paramBytes, 0);
             const auto* from = static_cast<const std::uint8_t*>(data);
             for (const auto& c : s.copies) {
-                if (from == nullptr || c.from >= dataBytes) continue;
-                const std::size_t n = std::min<std::size_t>(c.bytes, dataBytes - c.from);
-                std::memcpy(params.data() + r.paramOffset + c.to, from + c.from, n);
+                std::memcpy(params.data() + r.paramOffset + c.to, from + c.from, c.bytes);
             }
         }
 
@@ -79,6 +86,7 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
 
     void commitAndWait() override {
         const auto start = std::chrono::steady_clock::now();
+        ErrorScope scope(*ctx);
         wgpu::Buffer uniforms;
         if (!params.empty()) {
             wgpu::BufferDescriptor bd{.usage = wgpu::BufferUsage::Uniform,
@@ -108,11 +116,17 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         pass.End();
         wgpu::CommandBuffer cmd = enc.Finish();
         ctx->queue.Submit(1, &cmd);
-        ctx->finish();
+        // This submit's own completion: the future is taken straight after it.
+        bool done = false;
+        ctx->wait(ctx->queue.OnSubmittedWorkDone(wgpu::CallbackMode::WaitAnyOnly,
+            [&](wgpu::QueueWorkDoneStatus st, wgpu::StringView) {
+                done = st == wgpu::QueueWorkDoneStatus::Success;
+            }));
         gpuMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
         recorded.clear();
         params.clear();
-        ctx->check("GPU work failed");
+        scope.check("GPU work failed");
+        if (!done) throw std::runtime_error("GPU work failed: the queue did not finish");
     }
 };
 
