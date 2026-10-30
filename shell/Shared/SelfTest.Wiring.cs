@@ -25,8 +25,12 @@ static partial class SelfTest {
         Check(GalleryMode.Moved(0, GalleryMode.Direction.Right, 3, 5) == 1 && GalleryMode.Moved(3, GalleryMode.Direction.Up, 3, 5) == 0
               && GalleryMode.Moved(2, GalleryMode.Direction.Down, 3, 5) == 4 && GalleryMode.Moved(4, GalleryMode.Direction.Down, 3, 5) == 4
               && GalleryMode.Moved(0, GalleryMode.Direction.Left, 3, 5) == 0, "gallery arrows follow GalleryLayout.move");
-        var plan = ExportRun.Plan(["/a/x.arw", "/b/x.arw"], "/out", "jpg", p => p == "/out/x.jpg");
+        var plan = ExportRun.Plan(["/a/x.arw", "/b/x.arw"], "/out", "jpg", p => p == Path.Combine("/out", "x.jpg"));
         Check(plan.Select(j => j.Destination).SequenceEqual([Path.Combine("/out", "x-2.jpg"), Path.Combine("/out", "x-3.jpg")]), "batch names never overwrite (BatchExport.plan)");
+        if (!OperatingSystem.IsLinux())
+            Check(ExportRun.Plan(["/a/X.arw", "/b/x.arw"], "/out", "jpg", _ => false).Select(j => j.Destination)
+                      .SequenceEqual([Path.Combine("/out", "X.jpg"), Path.Combine("/out", "x-2.jpg")]),
+                  "names that differ only in case do not overwrite where the disk ignores case");
 
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;

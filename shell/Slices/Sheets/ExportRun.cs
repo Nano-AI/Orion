@@ -62,7 +62,8 @@ static partial class ExportRun {
     public static List<(string Source, string Destination)> Plan(IEnumerable<string> sources, string folder, string ext,
                                                                  Func<string, bool>? exists = null) {
         exists ??= File.Exists;
-        var taken = new HashSet<string>();
+        // macOS and Windows file names ignore case: X.arw and x.arw must not both become x.jpg.
+        var taken = new HashSet<string>(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
         var jobs = new List<(string, string)>();
         foreach (var source in sources) {
             string stem = Path.GetFileNameWithoutExtension(source), candidate = Path.Combine(folder, $"{stem}.{ext}");
