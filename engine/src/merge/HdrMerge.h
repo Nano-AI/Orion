@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include "gpu/MetalDevice.h"
+#include "gpu/Device.h"
 
 #include <atomic>
 #include <string>

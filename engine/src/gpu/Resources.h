@@ -1,13 +1,13 @@
 /*  Thin GPU abstraction — textures, kernels, command buffers.
  *
- *  Same contract as MetalDevice.h: no Objective-C in the header, all the Metal
- *  API surface behind an opaque Impl. Feature code touches these types and
- *  nothing lower.
+ *  Same contract as Device.h: no Objective-C or WebGPU in the header, each
+ *  backend's API surface behind an abstract Impl (gpu/Backend.h). Feature code
+ *  touches these types and nothing lower.
  */
 
 #pragma once
 
-#include "gpu/MetalDevice.h"
+#include "gpu/Device.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -62,17 +62,29 @@ public:
     [[nodiscard]] std::size_t   sizeBytes() const noexcept {
         return static_cast<std::size_t>(width_) * height_ * bytesPerPixel(format_);
     }
+    /// The backend's own handle: `id<MTLTexture>` on Metal, `WGPUTexture` on
+    /// Dawn. Identity only, outside the backend.
     [[nodiscard]] void* raw() const noexcept;
+
+    /// What a shell can draw with no copy: an `id<MTLTexture>` over the same
+    /// memory. On Metal, `raw()`. On Dawn, an RGBA8 texture is allocated in an
+    /// IOSurface so a Metal view can alias it (#375); any other format answers
+    /// null and a shell falls back to `download`.
+    [[nodiscard]] void* displayHandle() const noexcept;
+
+    struct Impl;   // backend-private
+    [[nodiscard]] Impl& impl() const noexcept { return *impl_; }
 
 private:
     Texture() = default;
-    struct Impl;
     std::unique_ptr<Impl> impl_;
     std::uint32_t width_ = 0, height_ = 0;
     PixelFormat   format_ = PixelFormat::R32Float;
 };
 
-/// A compiled .metallib. Kernels are looked up from it by entry-point name.
+/// A compiled .metallib (Metal) or prepared .wgsl (Dawn, which swaps the
+/// extension of the path it is given, so callers name the .metallib on both).
+/// Kernels are looked up from it by entry-point name.
 class Library {
 public:
     static std::unique_ptr<Library> createFromFile(Device&, const std::string& path);
@@ -82,9 +94,11 @@ public:
 
     [[nodiscard]] void* raw() const noexcept;
 
+    struct Impl;   // backend-private
+    [[nodiscard]] Impl& impl() const noexcept { return *impl_; }
+
 private:
     Library() = default;
-    struct Impl;
     std::unique_ptr<Impl> impl_;
 };
 
@@ -99,8 +113,8 @@ public:
     [[nodiscard]] void* raw() const noexcept;
 
     /// Threadgroup width the hardware prefers for this kernel.
-    [[nodiscard]] std::uint32_t threadExecutionWidth() const noexcept { return execWidth_; }
-    [[nodiscard]] std::uint32_t maxThreadsPerGroup()  const noexcept { return maxThreads_; }
+    [[nodiscard]] std::uint32_t threadExecutionWidth() const noexcept;
+    [[nodiscard]] std::uint32_t maxThreadsPerGroup()  const noexcept;
 
     /// How many texture slots this kernel needs bound: one past the highest
     /// texture index it actually refers to.
@@ -117,16 +131,18 @@ public:
     /// reads them by path — and every mask silently covered zero, for an hour,
     /// with the whole test suite green because the tests ran the matching
     /// binary. `Pipeline::compile` compares this against what it will bind.
-    [[nodiscard]] std::uint32_t textureSlotsUsed() const noexcept { return textureSlots_; }
+    ///
+    /// On Dawn the same question is answered from the bindings the WGSL
+    /// declares, and an auto layout refuses a short bind group outright.
+    [[nodiscard]] std::uint32_t textureSlotsUsed() const noexcept;
+
+    struct Impl;   // backend-private
+    [[nodiscard]] Impl& impl() const noexcept { return *impl_; }
 
 private:
     Kernel() = default;
-    struct Impl;
     std::unique_ptr<Impl> impl_;
     std::string   name_;
-    std::uint32_t execWidth_  = 32;
-    std::uint32_t maxThreads_ = 1024;
-    std::uint32_t textureSlots_ = 0;
 };
 
 /// One batch of work. Encode every dispatch, then commit once — a single
@@ -147,10 +163,13 @@ public:
     void commitAndWait();
 
     /// GPU-side duration of the committed work. Valid after commitAndWait().
+    /// On Dawn, the wall time from submit to completion, which includes the
+    /// wait's own latency (no timestamp queries yet).
     [[nodiscard]] double gpuMilliseconds() const noexcept;
 
+    struct Impl;   // backend-private
+
 private:
-    struct Impl;
     std::unique_ptr<Impl> impl_;
 };
 

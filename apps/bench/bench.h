@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include "gpu/MetalDevice.h"
+#include "gpu/Device.h"
 #include "pipe/DevelopPipeline.h"
 #include "raw/RawImage.h"
 

@@ -347,7 +347,7 @@ OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
 void* orion_engine_region_texture(const OrionEngine* engine) {
     if (engine == nullptr || !engine->impl.hasRegion()) return nullptr;
     try {
-        return engine->impl.regionDevelop().output().raw();
+        return engine->impl.regionDevelop().output().displayHandle();
     } catch (...) {
         return nullptr;
     }
@@ -596,7 +596,7 @@ OrionStatus orion_engine_frame_size(const OrionEngine* engine,
 void* orion_engine_output_texture(const OrionEngine* engine) {
     if (engine == nullptr || !engine->impl.hasImage()) return nullptr;
     try {
-        return engine->impl.develop().output().raw();
+        return engine->impl.develop().output().displayHandle();
     } catch (...) {
         return nullptr;
     }
@@ -608,7 +608,7 @@ void* orion_engine_preview_texture(const OrionEngine* engine) {
     // pipeline that never compiled, and a throw crossing this file terminates
     // the process — the one thing this file exists to stop.
     try {
-        return engine->impl.previewDevelop().output().raw();
+        return engine->impl.previewDevelop().output().displayHandle();
     } catch (...) {
         return nullptr;
     }

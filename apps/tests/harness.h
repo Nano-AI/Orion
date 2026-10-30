@@ -19,7 +19,7 @@
 #include "pipe/WhiteBalance.h"
 #include "raw/NoiseProfile.h"
 #include "raw/RawImage.h"
-#include "gpu/MetalDevice.h"
+#include "gpu/Device.h"
 #include "gpu/Resources.h"
 #include "pipe/ShaderParams.h"
 #include "pipe/DevelopPipeline.h"

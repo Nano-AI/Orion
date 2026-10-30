@@ -5,10 +5,11 @@ add_library(orion_engine STATIC
     src/CApi.cpp
     src/Engine.cpp
     src/ResourcePaths.cpp
+    src/gpu/Gpu.cpp
     src/gpu/MetalDevice.mm
     src/raw/RawImage.cpp
     src/raw/NoiseProfile.cpp
-    src/gpu/Resources.mm
+    src/gpu/MetalResources.mm
     src/gpu/TexturePool.cpp
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp
@@ -56,7 +57,7 @@ add_dependencies(orion_engine orion_shaders)
 # ARC for the Objective-C++ translation units. The C++ ones never see ObjC.
 set_source_files_properties(
     src/gpu/MetalDevice.mm
-    src/gpu/Resources.mm
+    src/gpu/MetalResources.mm
     src/gpu/TexturePool.cpp
     src/util/ImageWriter.mm
     src/util/JxlMetadata.mm

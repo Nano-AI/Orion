@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "gpu/MetalDevice.h"
+#include "gpu/Device.h"
 #include "merge/HdrMerge.h"
 #include "pipe/DevelopPipeline.h"
 #include "pipe/LensDatabase.h"

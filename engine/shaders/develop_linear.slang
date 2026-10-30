@@ -178,7 +178,20 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     c = applyTone(c, guideEv, p.highlights, p.shadows, p.whites, p.blacks,
                   p.toneSigma, p.toneAnchor);
     c = applyColor(c, p.vibrance, p.saturation);
-    c = applyColorMixer(c, p.hueShift, p.satShift, p.lumShift);
+    // ⚠ Copied element by element for the WGSL target: slangc 2026.14.1
+    // segfaults passing a parameter-block array to a function, whole or by
+    // `= p.hueShift`, because WGSL's uniform layout rewrites it (#375).
+    {
+        float hue[8], sat[8], lum[8];
+        [unroll]
+        for (int k = 0; k < 8; ++k)
+        {
+            hue[k] = p.hueShift[k];
+            sat[k] = p.satShift[k];
+            lum[k] = p.lumShift[k];
+        }
+        c = applyColorMixer(c, hue, sat, lum);
+    }
 
     // ── The local adjustments, layer by layer ────────────────────────────
     //
