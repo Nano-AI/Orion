@@ -16,8 +16,11 @@ a failure exits 1 having written nothing:
 
   - each role pair in check() meets its WCAG 2.x contrast bar, against the
     app's greys and against the site's
-  - no palette puts a red or pink within 25 degrees of OKLCH hue of TikTok's
-    red beside a cyan (H-alpha, 656.3 nm, renders #FF4356: that red)
+  - status stands apart from text and dim (OKLab distance >= 0.08): a status
+    mark that reads as a grey word is no signal
+  - no palette puts a red or pink (OKLCH hue >= 320 or <= 45, chroma > 0.08)
+    beside a cyan: TikTok's pair (its #FE2C55 is hue 17.7; H-alpha, 656.3 nm,
+    renders #FF4356, the same red)
 """
 
 import json
@@ -33,10 +36,14 @@ CSHARP = HERE.parent / "shell" / "Shared" / "Palette.g.cs"
 WEB_CSS = HERE.parent / "web" / "css" / "tokens.css"
 WEB_BASE = HERE.parent / "web" / "css" / "base.css"
 PAPER = "#E4E4E1"        # the research pages' paper at its darkest stop (web/css/sections.css .paper)
-TIKTOK_RED_HUE = 18.7    # OKLCH hue of TikTok's #FE2C55
+PINK_BAND = (320, 45)    # OKLCH hues from magenta round through red: never beside a cyan
 
 START = "/* TOKENS:START — generated from tokens.json, do not edit by hand */"
 END = "/* TOKENS:END */"
+
+
+def kebab(s):
+    return re.sub(r"[A-Z]", lambda m: "-" + m.group(0).lower(), s)
 
 
 def strip_comments(d):
@@ -92,6 +99,11 @@ def oklch(hex_):
     return 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, math.hypot(a, bb), math.degrees(math.atan2(bb, a)) % 360
 
 
+def oklab_distance(a, b):
+    lab = lambda L, C, H: (L, C * math.cos(math.radians(H)), C * math.sin(math.radians(H)))
+    return math.dist(lab(*oklch(a)), lab(*oklch(b)))
+
+
 def check(t):
     """Every palette against every bar. The failures, one line each."""
     bad = []
@@ -106,15 +118,19 @@ def check(t):
                 ("status on panel", r["status"], greys["panel"], 4.5),
                 ("mark on ground", r["mark"], greys["ground"], 3),
             ]
+            for k in ("text", "dim"):
+                if (d := oklab_distance(r["status"], greys[k])) < 0.08:
+                    bad.append(f"{name} ({where}): status is {d:.3f} from {k} in OKLab, needs 0.08 to read as a signal")
             if where == "web":
                 pairs.append(("accentInk on the research paper", r["accentInk"], PAPER, 4.5))
             bad += [f"{name} ({where}): {what} is {contrast(fg, bg):.2f}:1, needs {bar}"
                     for what, fg, bg, bar in pairs if contrast(fg, bg) < bar]
         hues = [oklch(h) for h in strip_comments(t["palettes"][name]["slots"]).values()]
         cyan = any(c > 0.05 and 170 <= h <= 230 for _, c, h in hues)
-        red = [h for _, c, h in hues if c > 0.05 and abs((h - TIKTOK_RED_HUE + 180) % 360 - 180) < 25]
-        if cyan and red:
-            bad.append(f"{name}: a red or pink at hue {red[0]:.0f} beside a cyan reads as TikTok's palette")
+        pink = [h for _, c, h in hues if c > 0.08 and (h >= PINK_BAND[0] or h <= PINK_BAND[1])]
+        if cyan and pink:
+            bad.append(f"{name}: a red or pink at hue {pink[0]:.0f} beside a cyan reads as TikTok's palette "
+                       f"(its red is hue {oklch('#FE2C55')[2]:.1f})")
     return bad
 
 
@@ -123,6 +139,7 @@ def css_block(t):
 
     lines.append("    /* Color */")
     for name, spec in strip_comments(t["color"]).items():
+        name = kebab(name) if "role" in spec else name   # a role's colour, named as web/css/tokens.css names it
         lines.append(f"    --{name}: {spec['hex']};  /* {spec['use']} */")
 
     lines.append("")
@@ -205,7 +222,6 @@ def web_css(t):
     role that names a neutral is written as that neutral's variable."""
     name = t["activePalette"]
     p = t["palettes"][name]
-    kebab = lambda s: re.sub(r"[A-Z]", lambda m: "-" + m.group(0).lower(), s)
     value = lambda ref: p["slots"][ref].lower() if ref in p["slots"] else f"var(--{kebab(ref)})"
     out = ["/* GENERATED from design/tokens.json by design/build-tokens.py. Do not edit by hand.",
            f" * Palette: {name}. To swap, set activePalette in tokens.json and run build-tokens.py. */",

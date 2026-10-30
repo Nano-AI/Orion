@@ -20,7 +20,7 @@ Controls and states boards). Committed 2026-10-27.
 | Axis | Choice | Why |
 |---|---|---|
 | Neutrals | `tokens.json` greys unchanged, near-perfectly neutral | A tinted grey is a color cast in a raw editor (tokens.json's own rule) |
-| Accent | `accent` role, cyan #4DB6C4 in both palettes, **interaction only**: edited value, slider fill, focus ring, pressed toggle, primary action. The edited dot is `status` | Cyan sits outside the indigo band and away from skin, and it is Orion's colour: H-beta, the nebula's blue-green line. ⚠ Measured 2026-10-30, it is 18° of OKLCH hue from a clear sky (#381). See Brand palette |
+| Accent | `accent` role, cyan #4DB6C4 in both palettes, **interaction only**: edited value, slider fill, focus ring, pressed toggle, primary action, and the current selection (you are here). The edited dot is `status` | Cyan sits outside the indigo band and away from skin, and it is Orion's colour: H-beta, the nebula's blue-green line. ⚠ Measured 2026-10-30, it is 18° of OKLCH hue from a clear sky (#381). See Brand palette |
 | Words | System face (SF Pro on macOS, Segoe UI on Windows) | Native controls read as native; Apple HIG. Deliberate override of the deslop skill's ban on system type |
 | Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle in a proprietary app |
 | Case | Sentence case everywhere; no tracked all-caps labels | Removes the most common generated-UI tell |
@@ -34,23 +34,23 @@ Controls and states boards). Committed 2026-10-27.
 
 | Slot | Hex | OKLCH | Role in `hubble` | Source |
 |---|---|---|---|---|
-| cyan | #4DB6C4 | 0.721 0.098 207 | `accent`, `mark` | The app's accent since the first tokens; H-beta (486.1 nm) renders #00B9C1, hue 200 |
+| cyan | #4DB6C4 | 0.721 0.098 207 | `accent`, `mark` (`accent` only in `belt`) | The app's accent since the first tokens; H-beta (486.1 nm) renders #00B9C1, hue 200 |
 | gold | #EEBB58 | 0.819 0.130 82 | `status`: ratings, warnings, the edited dot | The warm second colour. ⚠ The app's stars and warnings were #F0C674, ΔE<sub>OK</sub> 3.3 away; one source means they take #EEBB58 now |
-| star-white | #E2EEFF | 0.945 0.026 257 | `gradient` only (`status` in `belt`) | Blackbody colour of the belt stars, 27-29.5 kK (Alnitak O9.5, Alnilam B0, Mintaka O9), CIE 1931 2° observer |
+| star-white | #E2EEFF | 0.945 0.026 257 | `gradient` (and `mark` in `belt`) | Blackbody colour of the belt stars, 27-29.5 kK (Alnitak O9.5, Alnilam B0, Mintaka O9), CIE 1931 2° observer |
 | deep | #166069 | 0.450 0.070 207 | `accentInk` (5.66:1 on the research paper), dark fills | Cyan's hue at L 0.45 |
 
-`belt` is cyan and star-white only: `status` takes star-white where `hubble` has gold, and nothing else changes. Neutrals are in no palette: a tinted grey is a colour cast in a raw editor.
+`belt` is `hubble` with the mark in star-white instead of cyan, and a cyan-to-star-white gradient. Status stays gold in every palette: it is a data signal, not brand colour. Neutrals are in no palette: a tinted grey is a colour cast in a raw editor.
 
 | Role | Means | Bar the build enforces (app greys and site greys, every palette) |
 |---|---|---|
-| `accent` | interaction only: an edited value, a slider's fill, the focus ring, the primary button | 4.5:1 as text on ground, panel, raised; 3:1 as a ring on ground |
-| `status` | ratings, warnings, the edited dot | 4.5:1 on panel (a warning carries words) |
+| `accent` | interaction only: an edited value, a slider's fill, the focus ring, the primary button, and selection / you-are-here (the chosen gallery cell, the mask being edited, the agent's proposal, the download row for this computer, the nav's current section) | 4.5:1 as text on ground, panel, raised; 3:1 as a ring on ground |
+| `status` | ratings, warnings, the edited dot | 4.5:1 on panel (a warning carries words), and ΔE<sub>OK</sub> ≥ 0.08 from `text` and from `dim`, so it reads as a signal and not a grey word |
 | `mark` | the belt logo, the sky's belt, the social card's belt | 3:1 on ground |
 | `onAccent` | words on an accent fill (names a neutral: `ground`) | 4.5:1 on the accent |
 | `accentInk` | the accent on the research pages' paper | 4.5:1 on #E4E4E1 |
 | `gradient` | marketing only; nothing draws one today | none |
 
-**Never pair cyan with red or pink.** H-alpha (656.3 nm), the nebula's other line, renders #FF4356: TikTok's red (#FE2C55, hue 18.7). The build refuses a palette with a slot of chroma > 0.05 within 25° of that hue beside a cyan. The reject flag (#C4574D) and the histogram's red channel are data colours outside the palette and sit beside the cyan in the app; neither is a brand pair.
+**Never pair cyan with red or pink.** H-alpha (656.3 nm), the nebula's other line, renders #FF4356: TikTok's red (#FE2C55, OKLCH hue 17.7). The build refuses a palette with a slot in the red-to-pink band (hue ≥ 320 or ≤ 45, chroma > 0.08) beside a cyan; magenta #EF6DC9, hot pink #FF69B4 and the reverted bubblegum #FF6FB0 all fail it. The reject flag (#C4574D) and the histogram's red channel are data colours outside the palette and sit beside the cyan in the app; neither is a brand pair.
 
 The logo files (`web/img/orion-mark.svg`, `orion-icon.svg`) draw the mark in their own cyan gradients and do not follow `mark`: an SVG favicon cannot read the page's variables.
 
@@ -69,13 +69,17 @@ Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon si
 
 | Axis | Scale | Rule |
 |---|---|---|
-| Space | 2 · 4 · 6 · 10 · 14 · 18 · 26 (`xs gap sm md pad lg xl`) | Tight inside a group (xs–sm), generous between groups (pad–xl). A control's side padding is `md`; icon to word is `sm`; a label to its control is `gap`; sheets and canvas pills sit `lg` in |
+| Space | 2 · 4 · 6 · 10 · 14 · 18 · 26 (`xs gap sm md pad lg xl`) | Tight inside a group (xs–sm), generous between groups (pad–xl). A control's side padding is `md`, a primary button's `pad` (14); icon to word is `sm`; a label to its control is `gap`; sheets and canvas pills sit `lg` in |
 | Type | 11 · 12 · 13, then 17 · 28 (`Faces.Mark Label Body`, `Title`, `Display`) | 1 px steps for the working text; about 1.3× for the two large words |
 | Radius | 3 · 5 · 7 | `lg` = `md` + 2: a well holding `md` controls 2 px in, so corners are concentric. A pill is half its height |
 | Shadow | one: black .7, y 1, blur 3 | Only under what a hand grabs (thumb, puck, compare handle); hover and press move it from there |
 | Icons | 24-unit grid kept, one 1.6 stroke, `sm` 12 / `md` 16 | Never stretched to a glyph's bounds; `sm` in a row of text, `md` on a button, tab or nameplate |
 | Colour roles | `warn` apart from `star`; `faint` not for words | A warning is not a rating; faint is 2.5:1 |
-| Exempt | 1 px hairlines, ring offsets, the 80 px traffic lights, pills, the tab cells' 8 px | The tab padding is pinned by `SelfTest.Design` (8 spare at 322, equal cells at 560) |
+| Exempt | 1 px hairlines, ring offsets and the 2 px focus ring, the 80 px traffic lights, pills, the tab cells' 8 px | The tab padding is pinned by `SelfTest.Design` (8 spare at 322, equal cells at 560) |
+| Exempt, ink | White and black at an opacity, and their stroke widths, wherever they draw over a photograph or a colour wheel (`Ink.White`/`Ink.Black`, the crop, mask, spot and loupe overlays, the navigator, the wheel's cross and puck outline) | They must read on any picture; a UI grey is tuned for the panels and vanishes on a mid-grey sky |
+| Exempt, data | The loupe's sampled colour, a colour mask's swatch, the histogram's channels, the watermark raster (it draws into the exported file) | They show the photograph's values, not the interface's |
+| Exempt, derived | `AccentLift` (accent toward text), `AnalogTrack.Shade` (the shadow token's alpha), the colour wheel's panel fade | Computed from tokens, so they follow them |
+| Exempt, pictures | 2 px corners on a thumbnail frame and the navigator's box, 3.5 on the filmstrip's rings around them | A photograph's corner is nearly square; the token radii are for controls |
 
 ## Craft decisions
 

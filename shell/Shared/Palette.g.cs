@@ -32,7 +32,7 @@ public static class Palette {
     public static readonly IBrush Label = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 166));
     /// Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is 5.0:1)
     public static readonly IBrush Faint = new ImmutableSolidColorBrush(Color.FromRgb(90, 90, 96));
-    /// Interaction ONLY: an edited value, a slider's fill, the focus ring, the primary button. Never decorative, never status.
+    /// Interaction ONLY: an edited value, a slider's fill, the focus ring, the primary button, and the current selection (you are here). Never decorative, never status.
     public static readonly IBrush Accent = new ImmutableSolidColorBrush(Color.FromRgb(77, 182, 196));
     /// Reject flag
     public static readonly IBrush Reject = new ImmutableSolidColorBrush(Color.FromRgb(196, 87, 77));
