@@ -15,8 +15,9 @@
 <header class="nav">
   <div class="wrap nav__in">
     <a class="nav__mark" href="./" aria-label="Orion, home"><img src="img/orion-mark.svg" width="32" height="30" alt="" aria-hidden="true">Orion</a>
-    <nav class="nav__nav" aria-label="Sections"><ul class="nav__links"><li><a href="./#raw">RAW</a></li><li><a href="./#files">Your files</a></li><li><a href="./#build">Features</a></li></ul></nav>
-    <a class="btn nav__cta" href="download/">Download for Mac</a>
+    <nav class="nav__nav" aria-label="Sections"><ul class="nav__links" id="nav-links"><li><a href="./#raw">RAW</a></li><li><a href="./#files">Your files</a></li><li><a href="./#build">Features</a></li></ul></nav>
+    <a class="btn nav__cta" href="download/" data-os-label>Download for Mac</a>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span></button>
   </div>
 </header>
 <main>
@@ -35,5 +36,6 @@
   </div>
 </section>
 </main>
+<script src="js/site.js" defer></script>
 </body>
 </html>
