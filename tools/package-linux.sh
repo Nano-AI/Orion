@@ -27,7 +27,9 @@ ldd "$app/usr/bin/liborion_shim.so" | awk '$3 ~ /^\// {print $1, $3}' | while re
     cp -L "$path" "$app/usr/lib/"
     # The Debian package's copyright file is that library's licence.
     pkg=$(dpkg -S "$path" 2>/dev/null | head -1 | cut -d: -f1) || true
-    [[ -n $pkg && -f /usr/share/doc/$pkg/copyright ]] && cp "/usr/share/doc/$pkg/copyright" "$app/usr/share/doc/orion/licenses/$pkg.txt"
+    if [[ -n $pkg && -f /usr/share/doc/$pkg/copyright ]]; then
+        cp "/usr/share/doc/$pkg/copyright" "$app/usr/share/doc/orion/licenses/$pkg.txt"
+    fi
 done
 cp "$root/LICENSE" "$root/NOTICE" "$app/usr/share/doc/orion/"
 cp "$root"/licenses/* "$app/usr/share/doc/orion/licenses/"
