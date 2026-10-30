@@ -55,6 +55,27 @@ public sealed class EngineModel : INotifyPropertyChanged {
         }
     }
     bool _zoomed;
+
+    /// What the canvas shows of the picture past fit: the part, normalized,
+    /// and the device pixels it covers. Renders past fit ask for only this
+    /// (#22). Set by the canvas as it draws; a change re-renders once the view
+    /// has rested, so a pan draws the last region over the preview meanwhile.
+    public (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? View {
+        get => _view;
+        set {
+            if (_view == value) return;
+            _view = value;
+            if (!ZoomedPastFit || _session == null) return;
+            _viewRest ??= new DispatcherTimer(TimeSpan.FromMilliseconds(150), DispatcherPriority.Background, (t, _) => {
+                ((DispatcherTimer)t!).Stop();
+                if (ZoomedPastFit && !Interacting && _session != null) Render(preview: false);
+            });
+            _viewRest.Stop();
+            _viewRest.Start();
+        }
+    }
+    (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _view;
+    DispatcherTimer? _viewRest;
     static readonly TimeSpan Rest = TimeSpan.FromMilliseconds(300);
     /// The status line's message: a stub saying it is not built, until the next open.
     public string Status { get; private set; } = "";
@@ -242,7 +263,16 @@ public sealed class EngineModel : INotifyPropertyChanged {
     public (double Render, double Copy) Render(bool preview) {
         if (_session is not { } s) return (0, 0);
         var sw = Stopwatch.StartNew();
-        var graph = s.Render(preview);
+        // Past fit, only what is on screen, at the screen's resolution, drag or
+        // rest (#22); the whole graph when the engine says this edit needs it.
+        var view = ZoomedPastFit ? View : null;
+        var graph = view is { } v ? s.RenderRegion(v.Uv, v.Pixels) : Graph.None;
+        if (graph == Graph.Region && !Interacting) {
+            // The small whole-frame pass: what the histogram reads while the
+            // full graph waits, and the picture under a pan until the next region.
+            if (s.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);
+        }
+        if (graph == Graph.None) graph = s.Render(preview);
         double render = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         var bitmap = Shown.OnGpu ? null : s.Read(graph);
@@ -253,9 +283,10 @@ public sealed class EngineModel : INotifyPropertyChanged {
         }
         double copy = sw.Elapsed.TotalMilliseconds;
         Last = (render, copy);
-        if (bitmap != null) Shown.Show(bitmap, graph);
-        else Shown.ShowLive(s, graph);
-        SetTiming($"{(graph == Graph.Preview ? "preview" : "full")} {size.Width}×{size.Height} · engine {render:0.0} ms · " +
+        var uv = graph == Graph.Region ? view!.Value.Uv : (Avalonia.Rect?)null;
+        if (bitmap != null) Shown.Show(bitmap, graph, uv);
+        else Shown.ShowLive(s, graph, uv);
+        SetTiming($"{graph.ToString().ToLowerInvariant()} {size.Width}×{size.Height} · engine {render:0.0} ms · " +
                   (bitmap != null ? $"copy {copy:0.0} ms" : "on the GPU"));
         Changed(nameof(Picture));
         Rendered?.Invoke();

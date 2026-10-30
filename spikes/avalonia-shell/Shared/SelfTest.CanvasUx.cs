@@ -102,7 +102,8 @@ static partial class SelfTest {
         var engine = EngineModel.Shared;
         Check(vp.Live && !engine.ZoomedPastFit, "mid-gesture the full render waits: no 24 MP render under the fingers");
         Frames();
-        Check(!vp.Live && engine.ZoomedPastFit && engine.Shown.Graph == Graph.Full, "at rest past fit, the full graph renders (#318)");
+        Check(!vp.Live && engine.ZoomedPastFit && engine.Shown.Graph is Graph.Full or Graph.Region,
+              $"at rest past fit, the picture renders at full resolution (#318): only what is on screen when the edit allows it (#22), {engine.Shown.Graph}");
 
         // Over the compare divider, which is the canvas's sibling, the pinch still zooms.
         u = CanvasState.Map(size).ToUnit(p);

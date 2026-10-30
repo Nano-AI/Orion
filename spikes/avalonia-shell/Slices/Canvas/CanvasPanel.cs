@@ -113,18 +113,36 @@ public sealed class CanvasPanel : Panel {
         vp.FitScale = CanvasLayout.FrameRect(a, size).Width * scaling / Math.Max(CanvasNative.ImageSize.Width, 1);
         // Past 4× a pixel is a square, not a blur; below it, filtered.
         var mode = vp.FitScale * vp.Zoom > 4 ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality;
-        double pixels = whole.Width * scaling;   // the whole picture's width on screen, in device pixels
+        // Past fit the engine renders only what is on screen (#22): say what that is,
+        // the part of the picture in view and the device pixels it covers.
+        var seen = CanvasState.DrawnFrame(size);
+        if (seen.Width > 0 && seen.Height > 0 && !CropEdit.Previewing) {
+            var view = (new Rect((seen.X - whole.X) / whole.Width, (seen.Y - whole.Y) / whole.Height,
+                                 seen.Width / whole.Width, seen.Height / whole.Height),
+                        new PixelSize((int)Math.Round(seen.Width * scaling), (int)Math.Round(seen.Height * scaling)));
+            if (engine.View != view) Avalonia.Threading.Dispatcher.UIThread.Post(() => engine.View = view);
+        }
+        // A region sits where its part of the picture is, and moves with it until the next.
+        var uv = engine.Shown.Graph == Graph.Region ? engine.Shown.Uv : new Rect(0, 0, 1, 1);
+        var dest = new Rect(whole.X + uv.X * whole.Width, whole.Y + uv.Y * whole.Height,
+                            uv.Width * whole.Width, uv.Height * whole.Height);
+        double pixels = dest.Width * scaling;   // the shown picture's width on screen, in device pixels
         // The render straight from the GPU when the shared surface holds it (#317), else the CPU copy.
         // ponytail: the crop tool's turned clip takes the CPU copy (CompositionVisual.Clip is internal); a mask over the visual lifts that.
-        bool shared = _shared.Place(CropEdit.Previewing ? null : engine.Shown, whole, mode, pixels);
+        bool shared = _shared.Place(CropEdit.Previewing ? null : engine.Shown, dest, mode, pixels);
 
         // The whole picture into its place, clipped to the view (a rubber band shows
         // the surround past its edge), or to the turned frame while the crop tool previews.
         using var clip = c.PushGeometryClip(CropEdit.Previewing ? TurnedFrame(whole) : new RectangleGeometry(new Rect(size)));
         using (c.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = mode })) {
+            // Around a region, the preview: what a pan uncovers until the next region lands.
+            if (dest != whole && engine.Session?.Picture is { } under) {
+                var outside = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(whole), new RectangleGeometry(dest));
+                using (c.PushGeometryClip(outside)) c.DrawImage(under, new Rect(under.Size), whole);
+            }
             if (!shared && engine.Shown.Bitmap is { } picture) {
                 var shown = _shown.For(picture, _version, pixels);
-                c.DrawImage(shown, new Rect(shown.Size), whole);
+                c.DrawImage(shown, new Rect(shown.Size), dest);
             }
             if (CompareState.Showing && CompareState.Original is { } original) {
                 // The split lives in view space: it holds still while the picture pans under it.

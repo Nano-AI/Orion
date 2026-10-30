@@ -353,6 +353,20 @@ int shim_render(Shim* s, int preview, double* gpu_ms) {
     return graph;
 }
 
+// Only (x, y, w, h) of the displayed picture, normalized, at out_w x out_h
+// pixels: the canvas's view past fit (#22). 3 on success; 0 when the engine
+// says this edit needs the whole graph, and the caller renders that instead.
+// The overlay is toggled around it as around shim_render.
+int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, int out_h,
+                       double* gpu_ms) {
+    if (out_w <= 0 || out_h <= 0) return 0;
+    settle(s);
+    const bool overlay = s->overlay && s->adj.mask_count > 0;
+    if (overlay) return 0;   // a mask is on: the region graph refuses those anyway
+    return orion_engine_render_region(s->engine, x, y, w, h, unsigned(out_w), unsigned(out_h),
+                                      gpu_ms) == ORION_OK ? 3 : 0;
+}
+
 // The last render of `which` (what shim_render returned) and the region of it
 // that holds the picture. The texture is square so a straightened frame fits;
 // only the top-left region holds the picture (Engine+Render.swift:286):
@@ -360,11 +374,13 @@ int shim_render(Shim* s, int preview, double* gpu_ms) {
 // graph's answer. Null when there is nothing to read. present.mm reads it too.
 void* shim_picture(Shim* s, int which, int* w, int* h) {
     void* raw = which == 1 ? orion_engine_preview_texture(s->engine)
+              : which == 3 ? orion_engine_region_texture(s->engine)
                            : orion_engine_output_texture(s->engine);
     if (!raw) return nullptr;
     id<MTLTexture> t = (__bridge id<MTLTexture>)raw;
     unsigned iw = 0, ih = 0;
     if (which == 1) orion_engine_preview_size(s->engine, &iw, &ih);
+    else if (which == 3) orion_engine_region_size(s->engine, &iw, &ih);
     else orion_engine_image_size(s->engine, &iw, &ih);
     *w = int(std::min<NSUInteger>(t.width, iw));
     *h = int(std::min<NSUInteger>(t.height, ih));

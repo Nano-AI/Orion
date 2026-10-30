@@ -62,7 +62,7 @@ struct Present {
     id<MTLCommandQueue> queue = nil;
     id<MTLComputePipelineState> halve = nil;
     id<MTLSharedEvent> producer = nil, consumer = nil;
-    Slot slots[3];   // by graph
+    Slot slots[4];   // by graph: none, preview, full, region
     uint64_t frame = 0;
     int generations = 0;
 };
@@ -143,7 +143,7 @@ int present_frame(Present* p, Shim* shim, int which, int level, void** surface, 
                   int* width, int* height, uint64_t* value) {
     @autoreleasepool {
         int iw = 0, ih = 0;
-        if (!p || which < 1 || which > 2) return 0;
+        if (!p || which < 1 || which > 3) return 0;
         id<MTLTexture> src = (__bridge id<MTLTexture>)shim_picture(shim, which, &iw, &ih);
         if (!src || src.pixelFormat != MTLPixelFormatRGBA8Unorm || src.device != p->device) return 0;
         Slot& s = p->slots[which];

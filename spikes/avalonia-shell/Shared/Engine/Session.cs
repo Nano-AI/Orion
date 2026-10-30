@@ -59,6 +59,15 @@ public sealed partial class Session : IDisposable {
         return graph;
     }
 
+    /// Only `uv` of the displayed picture, at `pixels` (the screen's): the
+    /// canvas past fit (#22). Region, or None when the engine needs the whole
+    /// graph for this edit, and the caller renders that instead.
+    public Graph RenderRegion(Avalonia.Rect uv, PixelSize pixels) {
+        Interlocked.Increment(ref _renders);
+        return (Graph)Native.shim_render_region(Shim, (float)uv.X, (float)uv.Y, (float)uv.Width, (float)uv.Height,
+                                                pixels.Width, pixels.Height, out _);
+    }
+
     /// Every engine render in the process, on any session: what a gesture that
     /// must cost none (the compare divider's drag) is measured by.
     public static int Renders => _renders;
