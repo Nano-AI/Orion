@@ -23,22 +23,20 @@
 <link rel="preload" as="font" type="font/woff2" crossorigin href="../fonts/Archivo-var.woff2">
 <link rel="stylesheet" href="../css/tokens.css">
 <link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/home.css">
 <link rel="stylesheet" href="../css/download.css">
 </head>
 <body>
-<!-- The app's own icons (shell/Shared/Icons.cs): one 24 grid, one 1.6 stroke. Download is its share glyph turned over. -->
-<svg class="sprite" aria-hidden="true" focusable="false"><symbol id="i-download" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M12,3 L12,15 M7,10 L12,15 L17,10 M4,15 L4,20 L20,20 L20,15"/></symbol></svg>
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="nav">
-  <div class="nav__in">
+  <div class="wrap nav__in">
     <a class="nav__mark" href="../" aria-label="Orion, home"><img src="../img/orion-mark.svg" width="32" height="30" alt="" aria-hidden="true">Orion</a>
     <nav class="nav__nav" aria-label="Sections">
       <ul class="nav__links" id="nav-links">
-        <li><a href="../#speed">Speed</a></li>
         <li><a href="../#raw">RAW</a></li>
-        <li><a href="../#keep">Your files</a></li>
-        <li><a href="../#register">Features</a></li>
+        <li><a href="../#files">Your files</a></li>
+        <li><a href="../#build">Features</a></li>
       </ul>
     </nav>
     <a class="btn btn--ghost nav__cta" href="./" aria-current="page">Download</a>
@@ -52,12 +50,12 @@
      download.js picks the visitor's system and fills in the newest build. -->
 <section class="wrap dl" aria-labelledby="dl-title">
   <div class="dl__copy">
-    <h1 class="display" id="dl-title" data-title>Orion for macOS</h1>
+    <h1 class="h1" id="dl-title" data-title>Orion for macOS</h1>
 
     <div class="dl__branch" data-for="ready">
       <p class="lede" data-lede>The alpha for Macs with Apple silicon. Free to download, with no account to make.</p>
       <p class="dl__cta">
-        <a class="btn btn--lg" data-file="visitor" href="https://github.com/Nano-AI/Orion/releases"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span data-label>Download for macOS</span></a>
+        <a class="btn btn--lg" data-file="visitor" href="https://github.com/Nano-AI/Orion/releases"><span data-label>Download for macOS</span></a>
         <a class="btn btn--lg btn--ghost" data-notes href="https://github.com/Nano-AI/Orion/releases">Release notes</a>
       </p>
       <p class="small" data-for="ready" hidden>Chosen for <span data-name>macOS</span> from what your browser reports. Other systems are <a class="link" href="#platforms">listed below</a>.</p>
@@ -68,7 +66,7 @@
         <p><strong>This looks like an Intel Mac.</strong></p>
         <p class="small">Orion is built only for Apple silicon (M1 and later), so it won't open here. There is no Intel build.</p>
       </div>
-      <p class="dl__cta"><a class="btn btn--lg btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg>Download for Apple silicon</a></p>
+      <p class="dl__cta"><a class="btn btn--lg btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases">Download for Apple silicon</a></p>
       <p class="small">Downloading for another Mac? That button is the right file.</p>
     </div>
 
@@ -96,20 +94,20 @@
   </div>
 
   <figure class="dl__photo">
-    <img src="../img/app-develop-1200.jpg" srcset="../img/app-develop-1200.jpg 1200w, ../img/app-develop-2400.jpg 2400w"
-         sizes="(max-width: 900px) 100vw, 42vw" width="2400" height="1500" decoding="async"
+    <img src="../img/app-ev3-1200.jpg" srcset="../img/app-ev3-1200.jpg 1200w, ../img/app-ev3-1800.jpg 1800w"
+         sizes="(max-width: 900px) 100vw, 42vw" width="1800" height="1125" decoding="async"
          alt="Orion's window: a night photograph of cars outside a showroom, with the Light panel's sliders beside it.">
-    <figcaption class="caption">The alpha, developing a Sony ARW.</figcaption>
+    <figcaption class="mono">The alpha, developing a Sony ARW.</figcaption>
   </figure>
 </section>
 
 <section class="band" aria-labelledby="first-title" data-steps>
   <div class="wrap band__in">
-    <div data-reveal>
+    <div>
       <h2 class="h2" id="first-title">Opening it the first time</h2>
       <p class="small band__sub">macOS stops the first launch because this alpha is signed ad hoc and isn't notarized. The app is the same either way; the warning is about who vouched for it.</p>
     </div>
-    <ol class="steps" data-reveal>
+    <ol class="steps">
       <li><div>
         <p class="h3">Drag Orion to Applications</p>
         <p class="small">Open the downloaded disk image and drag Orion onto the Applications folder beside it.</p>
@@ -132,11 +130,11 @@
 
 <section class="band" id="platforms" aria-labelledby="platforms-title">
   <div class="wrap band__in band__in--wide">
-    <div class="band__head" data-reveal>
+    <div class="band__head">
       <h2 class="h2" id="platforms-title">Every platform</h2>
       <p class="small" data-only>Orion is Mac only today.</p>
     </div>
-    <ul class="platforms" data-reveal>
+    <ul class="platforms">
       <li data-row="mac">
         <p class="h3">macOS<span class="dl__here" hidden>This computer</span></p>
         <p class="needs">Apple silicon (M1 or later), macOS 14 Sonoma or later</p>
@@ -171,15 +169,15 @@
 
 <section class="band" aria-label="Other downloads and help">
   <div class="wrap more">
-    <div data-reveal>
+    <div>
       <h2 class="h3">Older versions</h2>
       <p class="small">Every build, its notes and its files are on <a class="link" href="https://github.com/Nano-AI/Orion/releases">GitHub Releases</a>.</p>
     </div>
-    <div data-reveal>
+    <div>
       <h2 class="h3">Editing with Claude</h2>
       <p class="small">The MCP server ships inside the app. <a class="link" href="https://github.com/Nano-AI/Orion/tree/main/mcp">How agents use it</a>.</p>
     </div>
-    <div data-reveal>
+    <div>
       <h2 class="h3">Something broke</h2>
       <p class="small">Write to <a class="link" href="mailto:alpha@bankoti.dev?subject=Orion">alpha@bankoti.dev</a> with the photo's camera and what you did.</p>
     </div>
@@ -203,9 +201,7 @@
   </div>
 </footer>
 
-<script src="../js/vendor/anime.umd.min.js?v=4.5.0" defer></script>
 <script src="../js/site.js" defer></script>
-<script src="../js/motion.js" defer></script>
 <script src="../js/download.js" defer></script>
 </body>
 </html>
