@@ -31,7 +31,7 @@
 #
 # Usage:  tools/package-app.sh [output-dir] [label]
 #         label defaults to `git describe --tags`, and goes in the image's name
-#         (Orion-<label>.dmg) and its readme: the plist carries 0.5.0 for every
+#         (Orion-<label>.dmg) and its readme: the plist carries 0.6.0 for every
 #         alpha, and two builds arriving as one name is how somebody debugs the
 #         wrong binary.
 # Needs:  cmake + Xcode's Metal toolchain, Homebrew libraw and opencv, dotnet 10
