@@ -49,8 +49,9 @@ case "$(uname -s)" in
                 -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DCMAKE_OSX_ARCHITECTURES="${ARCHS:-arm64}") ;;
     MINGW*|MSYS*|CYGWIN*)
         # A CI path (D:\a\...) is no one's home directory; clang-cl, as the engine is built.
+        # No module scanning: clang-cl cannot, and Dawn's optional C++ module target asks.
         system=("${off[@]}" -DDAWN_ENABLE_D3D12=ON -DTINT_BUILD_HLSL_WRITER=ON
-                -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl) ;;
+                -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_CXX_SCAN_FOR_MODULES=OFF) ;;
     Linux)
         map="-ffile-prefix-map=$src/=dawn/ -ffile-prefix-map=$obj/=dawn-obj/"
         # Position-independent: the engine, and Dawn in it, link into the shell's .so.
