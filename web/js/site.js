@@ -159,6 +159,75 @@
   const rv = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-in'); rv.unobserve(e.target); } }), { rootMargin: '0px 0px -10% 0px' });
   document.querySelectorAll('.section__head, .cmp, .files > div, .build__group, .build__cite, .facts li').forEach((el, i) => { el.classList.add('reveal'); el.style.transitionDelay = `${(i % 4) * 70}ms`; rv.observe(el); });
 
+  // ---------- copy buttons ----------
+  document.querySelectorAll('[data-copy]').forEach(b => {
+    if (!navigator.clipboard) { b.hidden = true; return; }
+    b.addEventListener('click', () => navigator.clipboard.writeText(b.dataset.copy).then(() => {
+      b.textContent = 'Copied'; b.classList.add('is-done');
+      setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('is-done'); }, 1600);
+    }));
+  });
+
+  // ---------- feature cards: the glow sits under the pointer ----------
+  document.querySelectorAll('.build__group').forEach(c => c.addEventListener('pointermove', e => {
+    const r = c.getBoundingClientRect();
+    c.style.setProperty('--mx', `${e.clientX - r.left}px`);
+    c.style.setProperty('--my', `${e.clientY - r.top}px`);
+  }));
+
+  // ---------- the lights: bodies with momentum in a soft gravity well ----------
+  // Each light orbits the centre of its section, pulls weakly on the others,
+  // and falls toward the pointer while it is over the section. A speed governor
+  // keeps them drifting forever without running away. Positions are in a
+  // normalised square (-1..1) stretched to the section, so it scales freely.
+  if (!still) document.querySelectorAll('.aurora').forEach(au => {
+    const lights = [...au.children];
+    if (!lights.length) return;
+    au.classList.add('is-sim');
+    const host = au.parentElement;
+    const GM = 0.143, SOFT = 0.6, G = 0.006, GSOFT = 0.2, PM = 0.2, PSOFT = 0.3, CRUISE = 0.3, MAXV = 0.9;   // a flat rotation curve: about 0.3 a second at any radius from 0.8 out
+    const bodies = lights.map((el, i) => {
+      const a = (i / lights.length) * Math.PI * 2 + Math.random() * 0.6, r = 0.85 + Math.random() * 0.3;
+      const v = Math.sqrt(GM * r * r / Math.pow(r * r + SOFT * SOFT, 1.5)) * (0.9 + Math.random() * 0.2);   // orbital speed, a little off so the orbits are ellipses
+      return { el, x: Math.cos(a) * r, y: Math.sin(a) * r, vx: -Math.sin(a) * v, vy: Math.cos(a) * v, m: 0.6 + Math.random() * 0.8 };
+    });
+    let W = 0, H = 0, pointer = null, raf = 0, last = 0;
+    const size = () => { W = au.clientWidth; H = au.clientHeight; bodies.forEach(b => { b.w = b.el.offsetWidth; }); };
+    size(); addEventListener('resize', size);
+    host.addEventListener('pointermove', e => {
+      const r = au.getBoundingClientRect();
+      pointer = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: ((e.clientY - r.top) / r.height) * 2 - 1 };
+    });
+    host.addEventListener('pointerleave', () => { pointer = null; });
+    const pull = (b, x, y, gm, soft) => {   // softened inverse-square, so close passes swing instead of snapping
+      const dx = x - b.x, dy = y - b.y, d2 = dx * dx + dy * dy + soft * soft, f = gm / (d2 * Math.sqrt(d2));
+      b.ax += dx * f; b.ay += dy * f;
+    };
+    const step = now => {
+      const dt = Math.min(0.033, (now - (last || now)) / 1000); last = now;
+      for (const b of bodies) {
+        b.ax = 0; b.ay = 0;
+        pull(b, 0, 0, GM, SOFT);
+        for (const o of bodies) if (o !== b) pull(b, o.x, o.y, G * o.m, GSOFT);
+        if (pointer) pull(b, pointer.x, pointer.y, PM, PSOFT);
+      }
+      for (const b of bodies) {
+        b.vx += b.ax * dt; b.vy += b.ay * dt;   // semi-implicit Euler: stable orbits
+        const v = Math.hypot(b.vx, b.vy) || 1e-6;
+        const k = 1 + (CRUISE - v) / CRUISE * 0.25 * dt * (pointer ? 0.3 : 1);   // drift back to cruising speed
+        const s = Math.min(k, MAXV / v);
+        b.vx *= s; b.vy *= s;
+        b.x += b.vx * dt; b.y += b.vy * dt;
+        b.el.style.transform = `translate3d(${(b.x + 1) / 2 * W - b.w / 2}px, ${(b.y + 1) / 2 * H - b.w / 2}px, 0)`;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    new IntersectionObserver(es => {
+      cancelAnimationFrame(raf); last = 0;
+      if (es[0].isIntersecting) raf = requestAnimationFrame(step);
+    }).observe(au);
+  });
+
   // ---------- the plate tilts a little toward the pointer ----------
   const stage = document.querySelector('.stage');
   if (stage && matchMedia('(hover: hover) and (pointer: fine)').matches && !still) {

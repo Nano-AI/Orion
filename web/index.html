@@ -144,9 +144,19 @@
       <h2 class="h2" id="claude-title">Claude can edit with you.</h2>
       <p class="small">An MCP server ships inside the app. Claude proposes an edit, Orion renders it, you approve it or you don't. Nothing is saved until you say so.</p>
     </div>
-    <div class="files mcp">
-      <div><b>claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp</b><span>one line in Terminal links Claude Code to the app</span></div>
-      <div><b>detect_subject &middot; sync_edits &middot; get_stats &middot; propose</b><span>the tools, documented in <a class="link" href="https://github.com/Nano-AI/Orion/tree/main/mcp">mcp/README.md</a></span></div>
+    <div class="mcp">
+      <ol class="mcp__steps">
+        <li><span class="mono">01</span><b>Claude proposes</b><span>"Lift the shadows on the subject, keep the sky."</span></li>
+        <li><span class="mono">02</span><b>Orion renders it</b><span>The real engine, on your photo, in under 20&nbsp;ms.</span></li>
+        <li><span class="mono">03</span><b>You approve</b><span>Or you don't. Nothing touches the sidecar until you do.</span></li>
+      </ol>
+      <figure class="term">
+        <div class="term__bar" aria-hidden="true"><i></i><i></i><i></i><span>Terminal</span></div>
+        <pre class="term__body"><code><span class="term__p">$</span> claude mcp add orion -- \
+    /Applications/Orion.app/Contents/MacOS/orion-mcp</code></pre>
+        <button class="term__copy" type="button" data-copy="claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp" aria-label="Copy the command">Copy</button>
+        <figcaption class="term__tools"><code>detect_subject</code><code>sync_edits</code><code>get_stats</code><code>current_photo</code><a class="link" href="https://github.com/Nano-AI/Orion/tree/main/mcp">All tools</a></figcaption>
+      </figure>
     </div>
   </div>
 </section>

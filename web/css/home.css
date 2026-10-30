@@ -57,6 +57,7 @@
 .aurora span:nth-child(3) { --c: #2f55e0; --t: 17s; left: 30%; top: 30%; animation-delay: -9s; }
 .aurora span:nth-child(4) { --c: color-mix(in srgb, var(--accent) 65%, #fff); --t: 9s; left: 55%; top: -30%; width: 30vw; animation-delay: -3s; }
 .aurora span:nth-child(5) { --c: color-mix(in srgb, var(--status) 60%, #ff7a3d); --t: 13s; left: 10%; top: 45%; width: 32vw; animation-delay: -7s; }
+.aurora.is-sim span { left: 0; right: auto; top: 0; animation: none; }
 @keyframes light { 0% { transform: translate(0, 0) scale(1); } 35% { transform: translate(28vw, 18vh) scale(1.25); } 70% { transform: translate(8vw, 40vh) scale(0.9); } 100% { transform: translate(40vw, -6vh) scale(1.1); } }
 .stage__in { position: relative; z-index: 1; width: min(1200px, 100% - 2 * var(--gutter)); margin-inline: auto; transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 400ms var(--ease-out); transform-style: preserve-3d; }
 .stage__window { position: relative; aspect-ratio: 8 / 5; border-radius: var(--r); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-window), var(--ring); }
@@ -118,8 +119,26 @@ html:not(.js) .stage__grab, html:not(.js) .stage__ctl { display: none; }
 html:not(.js) .cmp__range, html:not(.js) .cmp__grip { display: none; }
 
 /* ---------- your files, and the MCP lines: two cards side by side ---------- */
-.mcp b { font-size: clamp(0.85rem, 1.2vw, 1.05rem); overflow-wrap: anywhere; }
-.mcp div:last-child span { color: var(--dim); }
+/* ---------- Claude: three steps, then the one line in a terminal ---------- */
+.mcp { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--s-5); align-items: center; width: min(1080px, 100%); margin: clamp(var(--s-6), 4vw, var(--s-7)) auto 0; }
+.mcp__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.mcp__steps li { display: grid; grid-template-columns: 2.5rem 1fr; column-gap: var(--s-3); padding: var(--s-4) var(--s-5); border-radius: var(--r); background: var(--panel); box-shadow: var(--ring); }
+.mcp__steps .mono { grid-row: span 2; color: var(--accent); padding-top: 3px; }
+.mcp__steps b { font-weight: 600; }
+.mcp__steps li > span:last-child { font-size: var(--fs-md); color: var(--dim); }
+.term { position: relative; margin: 0; border-radius: var(--r-lg); background: #0e0f11; box-shadow: var(--ring), 0 30px 60px -30px rgba(0, 0, 0, 0.9), 0 0 80px -30px color-mix(in srgb, var(--accent) 40%, transparent); overflow: hidden; }
+.term__bar { display: flex; align-items: center; gap: 7px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.term__bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a3a3e; }
+.term__bar span { margin-left: auto; margin-right: auto; padding-right: 40px; font: 400 var(--fs-xs)/1 var(--mono); color: var(--dim); }
+.term__body { margin: 0; padding: var(--s-5) var(--s-5) var(--s-4); font: 400 clamp(0.75rem, 1.05vw, 0.875rem)/1.7 var(--mono); color: var(--text); white-space: pre; overflow-x: auto; }
+.term__p { color: var(--accent); }
+.term__copy { position: absolute; top: 46px; right: 12px; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--raised); color: var(--text-2); font: 500 var(--fs-xs)/1 var(--sans); cursor: pointer; transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
+.term__copy:active { transform: scale(0.96); }
+.term__copy.is-done { color: var(--accent); border-color: var(--accent); }
+.term__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: var(--s-3) var(--s-5) var(--s-5); }
+.term__tools code { padding: 4px 8px; border-radius: var(--r-sm); background: var(--raised); color: var(--text-2); font-size: var(--fs-xs); }
+.term__tools .link { margin-left: auto; font-size: var(--fs-sm); color: var(--dim); }
+@media (max-width: 860px) { .mcp { grid-template-columns: 1fr; } }
 .files { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); width: min(800px, 100%); margin: clamp(var(--s-6), 4vw, var(--s-7)) auto 0; }
 .files div { padding: var(--s-5) var(--s-6); border-radius: var(--r); background: var(--panel); }
 .files b { display: block; font-family: var(--mono); font-weight: 300; font-size: clamp(1.1rem, 1.8vw, 1.5rem); letter-spacing: -0.03em; line-height: 1.1; }
@@ -131,7 +150,8 @@ html:not(.js) .cmp__range, html:not(.js) .cmp__grip { display: none; }
 .build { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); margin-top: clamp(var(--s-6), 4vw, var(--s-7)); counter-reset: card; }
 .build__group { position: relative; padding: var(--s-5) var(--s-5) var(--s-6); border-radius: var(--r-lg); background: linear-gradient(180deg, var(--raised), var(--panel)); box-shadow: var(--ring); overflow: hidden; transition: box-shadow var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
 .build__group::before { counter-increment: card; content: "0" counter(card); display: block; margin-bottom: var(--s-4); font: 400 var(--fs-xs)/1 var(--mono); letter-spacing: 0.12em; color: var(--accent); }
-.build__group::after { content: ""; position: absolute; inset: auto -30% -60% auto; width: 60%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent), transparent 65%); filter: blur(20px); pointer-events: none; opacity: 0; transition: opacity var(--dur-2) var(--ease-out); }
+.build__group::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity var(--dur-2) var(--ease-out);
+  background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%); }
 @media (hover: hover) and (pointer: fine) { .build__group:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 24px 50px -30px rgba(0, 0, 0, 0.9); } .build__group:hover::after { opacity: 1; } }
 .build__group .h3 { font-size: var(--fs-lg); }
 .build__group ul { list-style: none; margin: var(--s-3) 0 0; padding: 0; }
