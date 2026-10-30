@@ -118,11 +118,13 @@ Pass passFor(Rejection r) noexcept {
 Rejection autoRejection(int frames) noexcept {
     if (frames < 3)  return Rejection::None;
     if (frames <= 6) return Rejection::Percentile;
-    if (frames <= 9) return Rejection::Sigma;
+    // Sigma is manual only: 3σ clipping cannot reject a lone outlier below ~10
+    // frames (σ = d·√(n−1)/n), where winsorizing can. research/stacking.md §2.
     return frames <= 20 ? Rejection::Winsorized : Rejection::LinearFit;
 }
 
 float combine(float* v, float* w, int n, Rejection r) noexcept {
+    if (n < 1) return std::nanf("");
     if (r == Rejection::Auto) r = autoRejection(n);
     if (auto pass = passFor(r); pass && n >= kMinSurvivors) {
         sortPairs(v, w, n);

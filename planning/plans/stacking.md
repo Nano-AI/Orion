@@ -24,7 +24,7 @@
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018f6vEq4BJNKdyU4cfZxrYv
   ```
-- Values pinned by this plan: ≥5 frames for a suggestion; cadence tolerance ±2 s on (gap − shutter); astro = shutter ≥ 5 s and ISO ≥ 800 (and a dark thumbnail when checked); auto rejection n<3 none, 3–6 percentile, 7–9 sigma, 10–20 winsorized, >20 linear fit; winsorization c = 1.5 with consistency factor 1.134 (Huber & Ronchetti); clip at 3σ low/high for sigma, winsorized and linear fit; percentile 0.2 low / 0.1 high of the median; output name `<reference stem>-stack.dng`, then `-stack-2`, …
+- Values pinned by this plan: ≥5 frames for a suggestion; cadence tolerance ±2 s on (gap − shutter); astro = shutter ≥ 5 s and ISO ≥ 800 (and a dark thumbnail when checked); auto rejection n<3 none, 3–6 percentile, 7–20 winsorized, >20 linear fit (sigma stays selectable by hand); winsorization c = 1.5 with consistency factor 1.134 (Huber & Ronchetti); clip at 3σ low/high for sigma, winsorized and linear fit; percentile 0.2 low / 0.1 high of the median; output name `<reference stem>-stack.dng`, then `-stack-2`, …
 
 ## Review Focus
 
@@ -66,7 +66,7 @@ enum class Rejection { Auto = -1, None = 0, Percentile = 1, Sigma = 2, Winsorize
 ```
 
 - [ ] **Step 1: Failing tests** `testStackRejection()` in `tests_stack_rejection.cpp`:
-  - `autoRejection`: 2→None, 3→Percentile, 6→Percentile, 7→Sigma, 9→Sigma, 10→Winsorized, 20→Winsorized, 21→LinearFit.
+  - `autoRejection`: 2→None, 3→Percentile, 6→Percentile, 7→Winsorized, 9→Winsorized, 10→Winsorized, 20→Winsorized, 21→LinearFit.
   - None: `{1,2,3,4}` weights `{1,1,1,1}` → 2.5; weights `{1,1,1,5}` → 3.25.
   - For each of Percentile (n=5), Sigma (n=8), Winsorized (n=16), LinearFit (n=24): values = 1.0 + seeded Gaussian noise σ=0.01, one value set to 10.0 (satellite) → result within 0.01 of 1.0; and one set to −5.0 (dead) → within 0.01 of 1.0.
   - No outliers (n=16, σ=0.01): each method's result within 0.005 of the plain mean.

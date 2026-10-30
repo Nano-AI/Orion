@@ -17,6 +17,8 @@
  *                  least-squares line of value on rank.
  *  Implemented from those descriptions; no GPL source was read.
  *
+ *  Sigma is manual only: autoRejection never picks it (see research/stacking.md §2).
+ *
  *  ⚠ The frame-count thresholds in autoRejection and the percentile bounds
  *  (0.2 low, 0.1 high) are ours, not published — research/UNSOURCED.md §22.
  */
@@ -32,7 +34,7 @@ enum class Rejection { Auto = -1, None = 0, Percentile = 1, Sigma = 2, Winsorize
 [[nodiscard]] Rejection autoRejection(int frames) noexcept;
 
 /// Weighted mean of the values that survive `r` (Auto picks by n). Reorders v
-/// and w together in place. n >= 1; w all > 0. Rejection stops before fewer
+/// and w together in place. n >= 1 (n < 1 returns NaN); w all > 0. Rejection stops before fewer
 /// than 3 values would survive: a pass that would leave fewer is not applied.
 /// With n < 3 every method is the plain weighted mean. Allocation-free.
 [[nodiscard]] float combine(float* v, float* w, int n, Rejection r) noexcept;

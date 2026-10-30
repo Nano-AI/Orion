@@ -67,11 +67,12 @@ CPU, not GPU: per-pixel rejection sorts N values per channel, a divergent loop w
 |---|---|---|
 | < 3 | none | weighted mean |
 | 3–6 | percentile [SIRIL] | m = median; reject v with m − v > 0.2·\|m\| or v − m > 0.1·\|m\|, one pass |
-| 7–9 | sigma [SIRIL] | iterate: m = median, σ = std of survivors; reject beyond m ± 3σ |
-| 10–20 | winsorized [HR09][PI] | σ from clamped values: clamp survivors to m ± 1.5σ, σ' = 1.134·std(clamped), repeat to convergence; reject beyond m ± 3σ' |
+| manual only | sigma [SIRIL] | iterate: m = median, σ = std of survivors; reject beyond m ± 3σ |
+| 7–20 | winsorized [HR09][PI] | σ from clamped values: clamp survivors to m ± 1.5σ, σ' = 1.134·std(clamped), repeat to convergence; reject beyond m ± 3σ' |
 | > 20 | linear fit [PI] | sort survivors; least-squares line of value on rank; σ = mean \|residual\|; reject \|residual\| > 3σ; iterate |
 
 Rejection never leaves fewer than 3 values. A manual override picks any row.
+Auto departs from the forum rule of thumb (sigma below 10 frames): 3σ clipping of n values cannot reject a lone outlier of any size when n ≤ 7 (σ = d·√(n−1)/n, so 3σ ≥ d), and only just at n = 8; winsorizing shrinks σ to the noise floor first, so 7–20 use it.
 The **1.134** is `1 / sqrt(E[min(|z|, 1.5)²])` for z ~ N(0,1) = 1/0.8823 = 1.1334, recomputed for this file (2026-10-30) so the number is checkable and not a remembered constant.
 ⚠ PixInsight's winsorization cutoff was quoted to us as 5σ; that is a different parameter from Huber's c, could not be checked against the documentation text, and is **not** what Orion uses.
 

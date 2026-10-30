@@ -49,8 +49,8 @@ void testStackRejection() {
     CHECK(autoRejection(2)  == Rejection::None);
     CHECK(autoRejection(3)  == Rejection::Percentile);
     CHECK(autoRejection(6)  == Rejection::Percentile);
-    CHECK(autoRejection(7)  == Rejection::Sigma);
-    CHECK(autoRejection(9)  == Rejection::Sigma);
+    CHECK(autoRejection(7)  == Rejection::Winsorized);
+    CHECK(autoRejection(9)  == Rejection::Winsorized);
     CHECK(autoRejection(10) == Rejection::Winsorized);
     CHECK(autoRejection(20) == Rejection::Winsorized);
     CHECK(autoRejection(21) == Rejection::LinearFit);
@@ -65,7 +65,26 @@ void testStackRejection() {
         checkNear(combine(v3, w3, 2, Rejection::Sigma), 2.0, 1e-6, "n=2 degrades to the mean");
         float v4[] = {7}, w4[] = {2};
         checkNear(combine(v4, w4, 1, Rejection::LinearFit), 7.0, 1e-6, "n=1 is the value");
+        float v5[] = {1, 5, 100}, w5[] = {1, 1, 1};
+        checkNear(combine(v5, w5, 3, Rejection::Percentile), 35.3333333, 1e-4,
+                  "a pass that would leave under 3 is not applied");
+        float v6[] = {1}, w6[] = {1};
+        CHECK(std::isnan(combine(v6, w6, 0, Rejection::None)));
     }
+
+    section("stack: weights follow their values through sorting and rejection");
+    for (Rejection r : {Rejection::Sigma, Rejection::Winsorized}) {
+        // Unsorted, distinct weights; the 10.0 carries weight 100 and must be dropped.
+        float v[] = {1.02f, 10.0f, 0.98f, 1.00f, 1.01f, 0.99f, 1.03f, 0.97f};
+        float w[] = {1, 100, 2, 3, 1, 4, 1, 2};
+        // Survivors: sum(w*v) = 13.92 over sum(w) = 14.
+        checkNear(combine(v, w, 8, r), 13.92 / 14.0, 1e-5,
+                  r == Rejection::Sigma ? "sigma keeps weights paired" : "winsorized keeps weights paired");
+    }
+
+    section("stack: one satellite among seven frames");
+    checkNear(run(noisy(7, 7, 10.0f), Rejection::Winsorized), 1.0, 0.01, "winsorized drops a lone outlier at n=7");
+    checkNear(run(noisy(7, 7, 10.0f), Rejection::Auto), 1.0, 0.01, "auto drops it too");
 
     struct Case { Rejection r; int n; const char* name; };
     const Case cases[] = {{Rejection::Percentile, 5, "percentile"},
