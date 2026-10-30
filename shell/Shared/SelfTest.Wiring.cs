@@ -26,7 +26,7 @@ static partial class SelfTest {
               && GalleryMode.Moved(2, GalleryMode.Direction.Down, 3, 5) == 4 && GalleryMode.Moved(4, GalleryMode.Direction.Down, 3, 5) == 4
               && GalleryMode.Moved(0, GalleryMode.Direction.Left, 3, 5) == 0, "gallery arrows follow GalleryLayout.move");
         var plan = ExportRun.Plan(["/a/x.arw", "/b/x.arw"], "/out", "jpg", p => p == "/out/x.jpg");
-        Check(plan.Select(j => j.Destination).SequenceEqual(["/out/x-2.jpg", "/out/x-3.jpg"]), "batch names never overwrite (BatchExport.plan)");
+        Check(plan.Select(j => j.Destination).SequenceEqual([Path.Combine("/out", "x-2.jpg"), Path.Combine("/out", "x-3.jpg")]), "batch names never overwrite (BatchExport.plan)");
 
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;
@@ -188,7 +188,11 @@ static partial class SelfTest {
             while (!jxl.IsCompleted) Dispatcher.UIThread.RunJobs();
             var file = Directory.GetFiles(folder, "*.jxl");
             byte[] head = file.Length == 1 ? File.ReadAllBytes(file[0])[..12] : [];
-            Check(jxl.Result == "Exported 1 photo." && head.AsSpan().SequenceEqual((byte[])[0, 0, 0, 12, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 13, 10, 0x87, 10]),
+            // Off macOS no metadata is written (#376), so the file is the bare codestream, FF 0A.
+            bool signed = OperatingSystem.IsMacOS()
+                ? head.AsSpan().SequenceEqual((byte[])[0, 0, 0, 12, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 13, 10, 0x87, 10])
+                : head.Length == 12 && head[0] == 0xFF && head[1] == 0x0A;
+            Check(jxl.Result == "Exported 1 photo." && signed,
                   $"choosing JPEG XL writes a .jxl through the engine ('{jxl.Result}')");
         } finally {
             settings.Size = size;

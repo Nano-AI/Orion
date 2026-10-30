@@ -1,0 +1,2 @@
+# The selftest rewrites these and compares byte for byte (#376): no CRLF on Windows.
+shell/Fixtures/** -text

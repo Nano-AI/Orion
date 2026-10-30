@@ -115,7 +115,8 @@ static partial class SelfTest {
         string? said = SubjectMatte.Select(SubjectMatte.Kind.Subject, wait: true).GetAwaiter().GetResult();
         Console.WriteLine($"selftest: Subject: {said ?? "found"}");
         if (said != null) {
-            Check(said.StartsWith("Nothing was found") && group.Shapes.Count == 0, $"a Subject refusal is said and adds no row ('{said}')");
+            Check((said.StartsWith("Nothing was found") || (!OperatingSystem.IsMacOS() && said.Contains("not available on this system")))
+                  && group.Shapes.Count == 0, $"a Subject refusal is said and adds no row ('{said}')");
         } else {
             var row = group.Current!;
             var state = engine.Session!.Capture(group.Shapes);

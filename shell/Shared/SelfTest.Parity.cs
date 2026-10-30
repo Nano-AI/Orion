@@ -99,7 +99,8 @@ static partial class SelfTest {
         // A key typed into the terminal is the terminal's; a ⌘ key is still Orion's.
         var terminal = new TerminalControl();
         Check(AssistantPanel.Owns(new KeyEventArgs { Source = terminal, Key = Key.R })
-              && !AssistantPanel.Owns(new KeyEventArgs { Source = terminal, Key = Key.Z, KeyModifiers = KeyModifiers.Meta })
+              && !AssistantPanel.Owns(new KeyEventArgs { Source = terminal, Key = Key.Z,
+                                                     KeyModifiers = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control })
               && !AssistantPanel.Owns(new KeyEventArgs { Source = new Border(), Key = Key.R }),
               "bare keys from the terminal go to the terminal, not to rate or reject");
     }
