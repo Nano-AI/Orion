@@ -48,6 +48,7 @@
       <ul class="nav__links" id="nav-links">
         <li><a href="#raw">RAW</a></li>
         <li><a href="#files">Your files</a></li>
+        <li><a href="#claude">Claude</a></li>
         <li><a href="#build">Features</a></li>
       </ul>
     </nav>
@@ -72,7 +73,7 @@
        dragging Exposure (the app's own slider, or the control under the plate)
        crossfades between them. -->
   <div class="stage">
-    <div class="aurora" aria-hidden="true"></div>
+    <div class="aurora" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
     <div class="stage__in">
       <figure class="stage__window" data-sweep data-evs="-1.5,-1,-0.5,0,0.5,1,1.5">
         <img src="img/app-ev0-1800.jpg" srcset="img/app-ev0-1200.jpg 1200w, img/app-ev0-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
@@ -134,9 +135,22 @@
   </div>
 </section>
 
+<section class="section" id="claude" aria-labelledby="claude-title">
+  <div class="wrap">
+    <div class="section__head">
+      <h2 class="h2" id="claude-title">Claude can edit with you.</h2>
+      <p class="small">An MCP server ships inside the app. Claude proposes an edit, Orion renders it, you approve it or you don't. Nothing is saved until you say so.</p>
+    </div>
+    <div class="files mcp">
+      <div><b>claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp</b><span>one line in Terminal links Claude Code to the app</span></div>
+      <div><b>detect_subject &middot; sync_edits &middot; get_stats &middot; propose</b><span>the tools, documented in <a class="link" href="https://github.com/Nano-AI/Orion/tree/main/mcp">mcp/README.md</a></span></div>
+    </div>
+  </div>
+</section>
+
 <section class="section" id="build" aria-labelledby="build-title">
   <div class="wrap">
-    <div class="section__head"><h2 class="h2" id="build-title">In the current build</h2></div>
+    <div class="section__head"><h2 class="h2" id="build-title">Features</h2><p class="small">Everything in the current build.</p></div>
     <div class="build">
       <div class="build__group"><h3 class="h3">Tone and color</h3><ul>
         <li>Exposure, contrast, highlights, shadows, whites, blacks</li>
@@ -165,6 +179,14 @@
         <li>Saved versions of a photograph, to come back to later</li>
         <li>Presets, and copying settings between photos</li>
       </ul></div>
+      <div class="build__group"><h3 class="h3">Platforms</h3><ul>
+        <li>macOS on Apple silicon</li>
+        <li>Windows and Linux: alpha builds from the same code, looking for testers with real GPUs</li>
+      </ul></div>
+      <div class="build__group"><h3 class="h3">Claude</h3><ul>
+        <li>An MCP server inside the app: Claude proposes, Orion renders, you approve</li>
+        <li>Subject, person and sky mattes, stats and capture data exposed as tools</li>
+      </ul></div>
       <div class="build__group"><h3 class="h3">Export</h3><ul>
         <li>Export at 8 or 16 bits, resized, sharpened for screen or print</li>
         <li>Export with your location stripped by default</li>
@@ -172,16 +194,18 @@
       <div class="build__group build__later"><h3 class="h3">Not yet</h3><ul>
         <li>Highlight reconstruction: the region fill runs and has a slider, but the detail transfer and the edge falloff are not built</li>
         <li>Fujifilm X-Trans sensors</li>
-        <li>Windows</li>
-        <li>An assistant that proposes edits for you to approve</li>
-      </ul></div>
+        <li>Intel Macs</li>
+        <li>Signed installers and in-app updates</li>
+              </ul></div>
     </div>
     <p class="small build__cite">Every filter is built from a published paper. <a class="link" href="https://github.com/Nano-AI/Orion/tree/main/research">Read the sources</a>.</p>
   </div>
 </section>
 
 <section class="close" id="alpha" aria-labelledby="alpha-title">
-  <div class="aurora" aria-hidden="true"></div>
+  <img class="close__photo" src="img/pier-2400.jpg" srcset="img/pier-1200.jpg 1200w, img/pier-2400.jpg 2400w" sizes="100vw" width="2400" height="1602" loading="lazy" decoding="async"
+       alt="Wooden pilings of an old pier in calm water, developed in Orion in a cool, deep blue.">
+  <div class="aurora" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
   <div class="wrap close__copy">
     <h2 class="h1" id="alpha-title">Try the alpha</h2>
     <a class="btn btn--lg" href="download/" data-os-label>Download for Mac</a>

@@ -64,7 +64,7 @@ REGISTER_STRINGS = [
     "Highlight reconstruction: the region fill runs and has a slider, but the "
     "detail transfer and the edge falloff are not built",
     "Fujifilm X-Trans sensors",
-    "Windows",
+    "Intel Macs",
 ]
 
 VOID = {
