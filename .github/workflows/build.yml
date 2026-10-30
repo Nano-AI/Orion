@@ -119,6 +119,18 @@ jobs:
           path: third_party/dawn-build
           key: ${{ steps.dawn.outputs.cache-primary-key }}
 
+      # What of Dawn's third_party/ the static library carries, for NOTICE (#376):
+      # the C++ namespaces it defines and the source directories its asserts name.
+      - name: Dawn third-party audit
+        run: |
+          set +o pipefail
+          lib=$(ls third_party/dawn-build/lib/*webgpu_dawn* | head -1); ls -la third_party/dawn-build/lib
+          nm=nm; command -v llvm-nm >/dev/null && nm=llvm-nm
+          "$nm" -C --defined-only "$lib" 2>/dev/null | awk '{ $1=""; $2=""; print }' \
+            | grep -oE '^ *(\(anonymous namespace\)::)?[A-Za-z_][A-Za-z0-9_]*::' | sort | uniq -c | sort -rn | head -60
+          "$nm" --defined-only "$lib" 2>/dev/null | awk '{print $3}' | grep -E '^_?(vk|spv|D3D|DXGI|dxc)' | cut -c1-40 | sort -u | head -40
+          grep -aoE 'third_party[\\/]+[A-Za-z0-9_.-]+([\\/]+[A-Za-z0-9_.-]+){0,3}' "$lib" | tr '\\' / | sed 's#/\+#/#g' | sort | uniq -c | sort -rn | head -60
+
       - name: Configure and build
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -225,6 +237,18 @@ jobs:
         with:
           path: third_party/dawn-build
           key: ${{ steps.dawn.outputs.cache-primary-key }}
+
+      # What of Dawn's third_party/ the static library carries, for NOTICE (#376):
+      # the C++ namespaces it defines and the source directories its asserts name.
+      - name: Dawn third-party audit
+        run: |
+          set +o pipefail
+          lib=$(ls third_party/dawn-build/lib/*webgpu_dawn* | head -1); ls -la third_party/dawn-build/lib
+          nm=nm; command -v llvm-nm >/dev/null && nm=llvm-nm
+          "$nm" -C --defined-only "$lib" 2>/dev/null | awk '{ $1=""; $2=""; print }' \
+            | grep -oE '^ *(\(anonymous namespace\)::)?[A-Za-z_][A-Za-z0-9_]*::' | sort | uniq -c | sort -rn | head -60
+          "$nm" --defined-only "$lib" 2>/dev/null | awk '{print $3}' | grep -E '^_?(vk|spv|D3D|DXGI|dxc)' | cut -c1-40 | sort -u | head -40
+          grep -aoE 'third_party[\\/]+[A-Za-z0-9_.-]+([\\/]+[A-Za-z0-9_.-]+){0,3}' "$lib" | tr '\\' / | sed 's#/\+#/#g' | sort | uniq -c | sort -rn | head -60
 
       - name: Configure and build
         run: |
