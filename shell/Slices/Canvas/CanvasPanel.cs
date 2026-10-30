@@ -17,6 +17,7 @@ namespace OrionShell.CanvasSlice;
 [Panel("canvas", Region.Canvas, 0)]
 public sealed class CanvasPanel : Panel {
     readonly StackPanel _welcome = Welcome();
+    readonly NodeGarden _garden = new();   // behind the welcome, at near-zero contrast
     readonly TextBlock _note = new() { FontSize = Faces.Label, Foreground = Palette.Dim, TextAlignment = TextAlignment.Center,
                                        TextWrapping = TextWrapping.Wrap, MaxWidth = 360 };
     readonly StackPanel _choices = new() { Orientation = Orientation.Horizontal, Spacing = Space.Sm, HorizontalAlignment = HorizontalAlignment.Center };
@@ -42,7 +43,7 @@ public sealed class CanvasPanel : Panel {
         ]);
         _state = new StackPanel { Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                                   Children = { _note, _choices } };
-        Children.AddRange([_shared, _picture, _welcome, _state]);
+        Children.AddRange([_shared, _picture, _garden, _welcome, _state]);
         _shared.Arrived += _picture.InvalidateVisual;
         CanvasState.Changed += Refresh;
         CompareState.Moved += _picture.InvalidateVisual;   // a divider drag repaints the picture and nothing else
@@ -56,7 +57,7 @@ public sealed class CanvasPanel : Panel {
 
     void Refresh() {
         var scene = CanvasState.Now;
-        _welcome.IsVisible = scene == CanvasState.Scene.Welcome;
+        _garden.IsVisible = _welcome.IsVisible = scene == CanvasState.Scene.Welcome;
         _state.IsVisible = scene is CanvasState.Scene.Loading or CanvasState.Scene.Failed;
         _choices.IsVisible = scene == CanvasState.Scene.Failed;
         var engine = EngineModel.Shared;

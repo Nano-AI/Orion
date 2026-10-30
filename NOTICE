@@ -138,6 +138,16 @@ recompressed; Saturn's ring map reduced to 48 colour samples inside
 `web/js/motion.js`; the maps also travel base64-encoded in `web/js/planet-maps.js`
 (`tools/build-planet-maps.py`). The page's footer carries the attribution.
 
+## Node Garden pattern
+
+Node Garden pattern from bookofshapes.com (Nikolaj Sokolowski)
+
+Used under the Book of Shapes licence (https://bookofshapes.com/license/):
+commercial use as part of a product, no attribution required, no redistribution
+of the pattern as a pattern. It appears only as part of the social preview card
+(`web/img/og-orion.jpg`) and of the app's empty-window drawing
+(`shell/Slices/Canvas/NodeGarden.cs`), never as a file of its own.
+
 ## Dawn (WebGPU)
 
 The cross-platform GPU layer (#317) is Dawn, statically linked as
