@@ -131,6 +131,7 @@ int main() {
     testAlignRefusesFeatureless();
     testHdrMergeFacade();
     testHdrMergeCancelIsAtomic();
+    testStackRejection();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();

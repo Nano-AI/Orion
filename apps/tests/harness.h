@@ -147,6 +147,7 @@ void testAlignRecoversHomography();
 void testAlignRefusesFeatureless();
 void testHdrMergeFacade();
 void testHdrMergeCancelIsAtomic();
+void testStackRejection();
 void testOrientGpu();
 void testDisplayNeutrality();
 void testCropGpu();

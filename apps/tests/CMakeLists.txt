@@ -45,6 +45,7 @@ add_executable(orion-tests
     tests_merge_render.cpp
     tests_align.cpp
     tests_hdr_merge.cpp
+    tests_stack_rejection.cpp
 )
 
 target_include_directories(orion-tests PRIVATE ${CMAKE_SOURCE_DIR}/engine/src ${LIBRAW_INCLUDE_DIR})
