@@ -39,6 +39,7 @@ std::vector<std::uint8_t> encodeJxl(const JxlInput& in) {
         (in.bits != 8 && in.bits != 16)) {
         throw std::runtime_error("jxl: bad input");
     }
+    if (in.icc.empty()) throw std::runtime_error("jxl: no ICC profile");
     const bool lossless = in.quality >= 1.0f;
     const bool boxes = !in.exif.empty() || !in.xmp.empty();
 
@@ -60,7 +61,6 @@ std::vector<std::uint8_t> encodeJxl(const JxlInput& in) {
     info.uses_original_profile = lossless ? JXL_TRUE : JXL_FALSE;
     check(JxlEncoderSetBasicInfo(enc.get(), &info), "basic info");
 
-    if (in.icc.empty()) throw std::runtime_error("jxl: no ICC profile");
     check(JxlEncoderSetICCProfile(enc.get(), in.icc.data(), in.icc.size()), "ICC profile");
 
     if (!in.exif.empty()) {

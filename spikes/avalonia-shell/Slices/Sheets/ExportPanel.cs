@@ -192,21 +192,39 @@ public sealed class ExportPanel : Border {
     }
 
     /// Re-encodes after a pause: a 24 MP JPEG is a sixth of a second, so one
-    /// per slider tick would make the slider unusable. Like `Engine.exportedSize`
-    /// it runs on the UI thread, which owns the develop graph.
+    /// per slider tick would make the slider unusable. The render stays on the
+    /// UI thread, which owns the develop graph; the encode does not, because a
+    /// 24 MP JPEG XL is seconds of it (#6). One encode at a time: a change made
+    /// while one runs is measured when it ends, and only the latest lands.
     // The watermark's coverage mask (WatermarkRaster.mask) is not passed, so the size omits the mark:
     // stub(#315): Engine+Document.swift owns this until the logic moves below the facade
     void Remeasure() {
-        int token = ++_token;
+        ++_token;
         _s.MeasuredBytes = null;
         Paint();
         _pending?.Dispose();
-        _pending = DispatcherTimer.RunOnce(() => {
-            nint engine = EngineModel.Shared.Handle;
-            if (token != _token || engine == 0) return;
-            var options = _s.Options(_sw, _sh);
-            if (SheetsNative.orion_engine_export_size(engine, in options, out ulong bytes) == 0) _s.MeasuredBytes = (long)bytes;
+        _pending = DispatcherTimer.RunOnce(Measure, TimeSpan.FromMilliseconds(260));
+    }
+
+    bool _encoding, _again;
+
+    void Measure() {
+        // ponytail: one in flight, so a dragged slider never stacks 200 MB snapshots and full-core encodes.
+        if (_encoding) { _again = true; return; }
+        nint engine = EngineModel.Shared.Handle;
+        if (engine == 0) return;
+        int token = _token;
+        var options = _s.Options(_sw, _sh);
+        if (SheetsNative.orion_engine_export_snapshot(engine, in options, out nint snapshot) != 0) { Paint(); return; }
+        _encoding = true;
+        Task.Run(() => {
+            try { return SheetsNative.orion_export_snapshot_size(snapshot, out ulong bytes) == 0 ? (long?)bytes : null; }
+            finally { SheetsNative.orion_export_snapshot_free(snapshot); }
+        }).ContinueWith(t => Dispatcher.UIThread.Post(() => {
+            _encoding = false;
+            if (token == _token && t.IsCompletedSuccessfully && t.Result is long bytes) _s.MeasuredBytes = bytes;
             Paint();
-        }, TimeSpan.FromMilliseconds(260));
+            if (_again) { _again = false; Measure(); }
+        }));
     }
 }

@@ -730,6 +730,21 @@ OrionStatus orion_engine_export_size(OrionEngine* engine,
                                      const OrionExportOptions* options,
                                      uint64_t* out_bytes);
 
+/* orion_engine_export_size in two halves, so the slow half can leave the
+ * thread that owns the engine: a 24 MP JPEG XL is seconds of encode.
+ *
+ * The snapshot renders and reads the pixels back, so call it wherever any
+ * other orion_engine_* call is made. The size encodes the snapshot, touches no
+ * engine, and is safe from any thread, even after the engine is destroyed.
+ * The options (the watermark mask included) are copied. Free every snapshot. */
+typedef struct OrionExportSnapshot OrionExportSnapshot;
+OrionStatus orion_engine_export_snapshot(OrionEngine* engine,
+                                         const OrionExportOptions* options,
+                                         OrionExportSnapshot** out);
+OrionStatus orion_export_snapshot_size(const OrionExportSnapshot* snapshot,
+                                       uint64_t* out_bytes);
+void orion_export_snapshot_free(OrionExportSnapshot* snapshot);
+
 /* The lens profile for the open photo, from the vendored lensfun database.
  *
  * `found` is zero when the lens is unknown — which includes every manual lens,

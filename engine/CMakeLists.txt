@@ -24,6 +24,7 @@ add_library(orion_engine STATIC
     src/util/ImageWriter.mm
     src/util/DngWriter.cpp
     src/util/JxlWriter.cpp
+    src/util/JxlMetadata.mm
     src/merge/Merge.cpp
     src/merge/MergeRender.cpp
     src/merge/Align.cpp
@@ -56,6 +57,7 @@ set_source_files_properties(
     src/gpu/Resources.mm
     src/gpu/TexturePool.cpp
     src/util/ImageWriter.mm
+    src/util/JxlMetadata.mm
     PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
 )
 
