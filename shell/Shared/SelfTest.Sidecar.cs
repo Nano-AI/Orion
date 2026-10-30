@@ -121,12 +121,14 @@ static partial class SelfTest {
                   && !Sidecar.Merge(photo, s => s.Develop = [1]) && !label.Write(photo) && File.ReadAllText(Sidecar.PathFor(photo)).Contains("!!"),
                   "-1 reads as rejected; an edit that is not base64 is never written over, by Merge or by Write");
             // Present but unreadable is not absent: a rename would replace it, so Merge must refuse.
-            File.Delete(Sidecar.PathFor(photo));
-            label.Write(photo);
-            File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.None);
-            bool refused = Sidecar.Read(photo) is { Unreadable: not null } && !Sidecar.Merge(photo, s => s.Develop = [1]);
-            File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            Check(refused && Sidecar.Read(photo) is { Rating: 3, Develop: null }, "a sidecar that exists but cannot be read is never written over");
+            if (Posix("a sidecar that exists but cannot be read is never written over")) {
+                File.Delete(Sidecar.PathFor(photo));
+                label.Write(photo);
+                File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.None);
+                bool refused = Sidecar.Read(photo) is { Unreadable: not null } && !Sidecar.Merge(photo, s => s.Develop = [1]);
+                File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                Check(refused && Sidecar.Read(photo) is { Rating: 3, Develop: null }, "a sidecar that exists but cannot be read is never written over");
+            }
         } finally {
             Directory.Delete(dir, recursive: true);
         }
@@ -173,11 +175,13 @@ static partial class SelfTest {
         }
 
         // A sidecar that exists and cannot be read opens unreadable, never as "no edit".
-        File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Develop = "{\"exposureEv\":1}"u8.ToArray() }.Text());
-        File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.None);
-        using (var locked = Session.OpenEdited(photo))
-            Check(locked is { Unreadable: not null, Document: null }, "a sidecar it may not read opens unreadable, so autosave stays off");
-        File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        if (Posix("a sidecar it may not read opens unreadable")) {
+            File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Develop = "{\"exposureEv\":1}"u8.ToArray() }.Text());
+            File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.None);
+            using (var locked = Session.OpenEdited(photo))
+                Check(locked is { Unreadable: not null, Document: null }, "a sidecar it may not read opens unreadable, so autosave stays off");
+            File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
 
         // A newer build's key rides through a save; a legacy key is read and not written back.
         File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Develop = """{"exposureEv":0.5,"futureKnob":{"a":[1,2]},"denoiseColour":2}"""u8.ToArray() }.Text());
@@ -202,6 +206,14 @@ static partial class SelfTest {
         } else if (DevelopJson.Float(a) is { } x && DevelopJson.Float(b) is { } y) {
             if (Math.Abs(x - y) > 1e-4) yield return $"{at} ({x} vs {y})";
         } else if (!JsonNode.DeepEquals(a, b)) yield return $"{at} ({a?.ToJsonString()} vs {b?.ToJsonString()})";
+    }
+
+    /// The checks that make a file or folder unreadable use POSIX modes, which .NET
+    /// refuses on Windows; there they are skipped and said (#376).
+    static bool Posix(string check) {
+        if (!OperatingSystem.IsWindows()) return true;
+        Console.WriteLine($"selftest: skipped on Windows: {check} (POSIX file modes)");
+        return false;
     }
 
     /// Autosave.swift's invariants, then a save and a reopen.
@@ -242,38 +254,40 @@ static partial class SelfTest {
 
         // canLeavePhoto: while the open photo's edit will not write, nothing leaves it.
         var engine = EngineModel.Shared;
-        string locked = Directory.CreateTempSubdirectory("orion-locked-").FullName;
-        try {
-            string owed = Path.Combine(locked, "owed.ARW");
-            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
-            Autosave.Shared.Begin(owed, State(0));
-            Autosave.Shared.Note(State(1));
-            Autosave.Shared.Flush();
-            int at = engine.Current;
-            bool left = engine.Open(at) || engine.Next() || engine.Previous() || engine.Load(engine.Photos.ToList());
-            Check(!left && engine.Current == at && Autosave.Shared.LastFailure != null && engine.Status == Autosave.Shared.LastFailure,
-                  $"a photo whose edit will not save cannot be left, and the status line says why ('{engine.Status}')");
-            // The drawn line, not the model: deleting the footer's failure branch was green everywhere (#125).
-            var footer = new Chrome.StatusPanel();
-            var host = Show(footer);
-            var said = (TextBlock)((StackPanel)footer.Child!).Children[1];
-            Check(footer.IsVisible && said.IsVisible && said.Text == Autosave.Shared.LastFailure && said.Foreground == Palette.Star,
-                  $"the footer draws the failed write in the warning colour ('{said.Text}')");
-            host.Close();
-            // Trash, the departure the Swift probe drove that the switch above does not:
-            // the open photo stays, nothing moves, and the failure is the answer.
-            var moved = new List<string>();
-            string? trashWhy = Library.LibraryFiles.Trash([engine.Photos[at]], p => { moved.Add(p); return null; });
-            Check(trashWhy == Autosave.Shared.LastFailure && moved.Count == 0 && engine.Current == at && engine.Photos.Count > at,
-                  "trashing the open photo while its edit will not save moves nothing and says why");
-            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            Check(Autosave.Shared.FlushBeforeLeaving() && File.Exists(Sidecar.PathFor(owed)) && Autosave.Shared.LastFailure == null,
-                  "once the folder is writable again the owed edit lands");
-            engine.Say("");
-        } finally {
-            Autosave.Shared.Stop();
-            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            Directory.Delete(locked, recursive: true);
+        if (Posix("a photo whose edit will not save cannot be left (a read-only folder)")) {
+            string locked = Directory.CreateTempSubdirectory("orion-locked-").FullName;
+            try {
+                string owed = Path.Combine(locked, "owed.ARW");
+                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+                Autosave.Shared.Begin(owed, State(0));
+                Autosave.Shared.Note(State(1));
+                Autosave.Shared.Flush();
+                int at = engine.Current;
+                bool left = engine.Open(at) || engine.Next() || engine.Previous() || engine.Load(engine.Photos.ToList());
+                Check(!left && engine.Current == at && Autosave.Shared.LastFailure != null && engine.Status == Autosave.Shared.LastFailure,
+                      $"a photo whose edit will not save cannot be left, and the status line says why ('{engine.Status}')");
+                // The drawn line, not the model: deleting the footer's failure branch was green everywhere (#125).
+                var footer = new Chrome.StatusPanel();
+                var host = Show(footer);
+                var said = (TextBlock)((StackPanel)footer.Child!).Children[1];
+                Check(footer.IsVisible && said.IsVisible && said.Text == Autosave.Shared.LastFailure && said.Foreground == Palette.Star,
+                      $"the footer draws the failed write in the warning colour ('{said.Text}')");
+                host.Close();
+                // Trash, the departure the Swift probe drove that the switch above does not:
+                // the open photo stays, nothing moves, and the failure is the answer.
+                var moved = new List<string>();
+                string? trashWhy = Library.LibraryFiles.Trash([engine.Photos[at]], p => { moved.Add(p); return null; });
+                Check(trashWhy == Autosave.Shared.LastFailure && moved.Count == 0 && engine.Current == at && engine.Photos.Count > at,
+                      "trashing the open photo while its edit will not save moves nothing and says why");
+                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                Check(Autosave.Shared.FlushBeforeLeaving() && File.Exists(Sidecar.PathFor(owed)) && Autosave.Shared.LastFailure == null,
+                      "once the folder is writable again the owed edit lands");
+                engine.Say("");
+            } finally {
+                Autosave.Shared.Stop();
+                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                Directory.Delete(locked, recursive: true);
+            }
         }
 
         // A failed render, drawn: the footer names it, and stops when the next render lands.

@@ -373,12 +373,14 @@ static partial class SelfTest {
 
         // An unreadable proposal, or one that is not a DevelopState (a key written twice), is no
         // proposal: it must not take the app down from the dispatcher.
-        File.WriteAllText(proposed, "{}");
-        File.SetUnixFileMode(proposed, UnixFileMode.None);
         bool survived = true;
-        try { w.Check(); } catch (Exception) { survived = false; }
-        Check(survived && !w.IsLive, "a proposal Orion may not read is treated as absent, not thrown");
-        File.Delete(proposed);
+        if (Posix("a proposal Orion may not read is treated as absent")) {
+            File.WriteAllText(proposed, "{}");
+            File.SetUnixFileMode(proposed, UnixFileMode.None);
+            try { w.Check(); } catch (Exception) { survived = false; }
+            Check(survived && !w.IsLive, "a proposal Orion may not read is treated as absent, not thrown");
+            File.Delete(proposed);
+        }
         File.WriteAllText(proposed, "{\"exposureEv\": 1, \"exposureEv\": 2}");
         try { w.Check(); } catch (Exception) { survived = false; }
         Check(survived && !w.IsLive, "a proposal with a duplicate key is treated as absent, not thrown");
