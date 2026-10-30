@@ -67,6 +67,11 @@ RULES = [
 NOT_SHIPPED = ["*.pdb"]                     # debug databases carry build paths
 DIRS_OF_ORION = ("shaders", "data")         # the engine's own; lensfun is in NOTICE
 BUILD_ACCOUNTS = {"runner", "runneradmin"}  # GitHub Actions' Linux and Windows accounts
+# ⚠ One name excused, in one file, as package-app.sh excuses its two: MicroCom.Runtime.dll,
+# prebuilt on NuGet by its author, carries his build machine's /home/kekekeks/ (its
+# PDB path). It names the library's author, as published on nuget.org, not a user of
+# Orion, and nothing here can rebuild it. Any other name, in it or elsewhere, still fails.
+EXCUSED = {("MicroCom.Runtime.dll", "kekekeks")}
 
 GPL = re.compile(r"GNU (AFFERO )?GENERAL PUBLIC LICENSE|^\s*License:\s*A?GPL|SPDX-License-Identifier:\s*A?GPL", re.M)
 LGPL = re.compile(r"GNU (LESSER|LIBRARY) GENERAL PUBLIC LICENSE")
@@ -171,6 +176,7 @@ def check_people(app: Path, errors):
     for f in sorted(p for p in app.rglob("*") if p.is_file()):
         data = f.read_bytes()
         names = {m.group(1).decode(errors="replace") for m in HOME.finditer(data)} - BUILD_ACCOUNTS
+        names -= {name for file, name in EXCUSED if file == f.name}
         found = sorted(names) + [l.decode() for l in literal if l in data]
         if found:
             fail(errors, f"{f.relative_to(app)} names a person: {', '.join(found)}")
