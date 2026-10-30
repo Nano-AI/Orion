@@ -18,6 +18,8 @@ static partial class SelfTest {
     static partial void MotionChecks();
     // GitHub issue 23: sidecars and autosave.
     static partial void SidecarChecks();
+    // GitHub issue 23, items 4-5: subject and sky mattes, sync settings.
+    static partial void MatteChecks();
 
     static void CommandChecks() {
         // Every name a control binds to (Commands.Run/CanRun("…") in this tree) is registered.

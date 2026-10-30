@@ -14,12 +14,12 @@ engine=$root/build/engine/liborion_engine.a
 python3 "$here/gen_fields.py" "$root/engine/include/orion/orion.h" "$out/fields.inc" "$out/mask_fields.inc"
 clang++ -std=c++20 -fobjc-arc -dynamiclib -O2 \
     -I"$root/engine/include" -I"$out" \
-    "$here/shim.mm" "$here/present.mm" -Wl,-force_load,"$engine" \
+    "$here/shim.mm" "$here/present.mm" "$here/matte.mm" -Wl,-force_load,"$engine" \
     /opt/homebrew/opt/libraw/lib/libraw_r.dylib \
     /opt/homebrew/opt/opencv/lib/libopencv_{core,imgproc,features,geometry,video}.dylib \
     /opt/homebrew/opt/jpeg-xl/lib/libjxl{,_threads}.dylib \
     -framework AppKit -framework Metal -framework Foundation -framework CoreGraphics -framework ImageIO \
-    -framework IOSurface -install_name @rpath/liborion_shim.dylib -o "$out/liborion_shim.dylib"
+    -framework IOSurface -framework Vision -framework CoreVideo -install_name @rpath/liborion_shim.dylib -o "$out/liborion_shim.dylib"
 # The shared surface's headless check (present.mm): bin-native/present_test RAW. No window.
 clang++ -std=c++20 -fobjc-arc -O2 "$here/present_test.mm" -L"$out" -lorion_shim -Wl,-rpath,@executable_path \
     -framework Foundation -framework IOSurface -framework Metal -o "$out/present_test"

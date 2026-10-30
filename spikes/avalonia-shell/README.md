@@ -41,6 +41,7 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `SLICES.md` | the brief a slice agent works from |
 | `compare.py` | `check` file ownership, `swift`/`avalonia` screenshots, `page` side by side |
 | `native/present.mm` | the picture to Avalonia on the GPU: an IOSurface per graph, handed over on `MTLSharedEvent`s |
+| `native/matte.mm` | Subject and Person selection through Apple's Vision (macOS only; decision #365) |
 | `bin-native/present_test RAW` | its headless check: surface against CPU readback, the GPU wait, timings. No window |
 
 Spike-only, not product code: `native/shim.mm` repeats the default look from

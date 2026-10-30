@@ -33,6 +33,7 @@ public sealed class MaskGroup {
         // overlay goes into it unrendered: the open renders next anyway, and a
         // render here would cost every arrow-key step (#318).
         engine.Opened += () => {
+            ColorSwatch = null;
             Shapes.Clear();
             _selected = 0;
             Read();
@@ -51,6 +52,9 @@ public sealed class MaskGroup {
     /// cross the facade (#207), so they stay with their position.
     public void Reload() {
         Read();
+        var engine = EngineModel.Shared;
+        // The rows moved under the panel (undo): each matte follows its row's id.
+        if (engine.Session is { } session && MatteStore.Upload(session, Shapes)) engine.Render(preview: false);
         SyncOverlay();
         Changed?.Invoke();
     }
@@ -275,6 +279,29 @@ public sealed class MaskGroup {
         });
     }
 
+    /// What was under the last colour pick, display-referred, for the swatch:
+    /// the stored target is peak-normalized and would draw saturated. Null after an open.
+    public float[]? ColorSwatch { get; private set; }
+
+    /// Engine+Mask.swift's pickMaskColor: the scene-linear colour into the
+    /// selected row, one undo step. Oklab chromaticity ignores the scale, so the
+    /// peak-normalized sample selects what was clicked (research/masking.md §4c).
+    public bool PickColor(float[] scene, float[] display) {
+        if (Current is not { } m) return false;
+        (m.ColorR, m.ColorG, m.ColorB) = (scene[0], scene[1], scene[2]);
+        ColorSwatch = display;
+        Push("Mask color");
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// Engine+Mask.swift's setMaskKind: what an existing row is. A shape is not a
+    /// selection, so leaving kind 4 drops the matte reference with it.
+    public void SetKind(int index, int kind) => Edit(index, "Mask kind", m => {
+        m.Kind = kind;
+        if (kind != 4) (m.MatteId, m.MatteSource) = (null, null);
+    });
+
     public void SetCompose(int index, int compose) => Edit(index, "Mask op", m => m.Compose = compose);
     public void ToggleHidden(int index) => Edit(index, "Hide shape", m => m.Hidden = !m.Hidden);
     public void Rename(int start, string name) => Edit(start, "Rename mask", m => m.Name = name.Trim() is { Length: > 0 } t ? t : null);
@@ -341,7 +368,7 @@ public sealed class MaskGroup {
     /// names the undo step the render settles into (EditHistory.Label).
     public void Push(string label = "Mask", Action<Session>? also = null) {
         EditHistory.Label(label);
-        EngineModel.Shared.Apply(s => { also?.Invoke(s); WriteOverlay(s); s.SetMaskGroup(Shapes); });
+        EngineModel.Shared.Apply(s => { also?.Invoke(s); WriteOverlay(s); s.SetMaskGroup(Shapes); MatteStore.Upload(s, Shapes); });
     }
 
     /// Dabs into the selected brush row, painting or erasing, then pushed.
