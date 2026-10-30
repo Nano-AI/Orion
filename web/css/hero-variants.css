@@ -1,0 +1,62 @@
+/*  Orion site: three hero stagings, drafts for the developer to pick from
+ *  (hero-a.html, hero-b.html, hero-c.html). Tokens, nav and buttons come
+ *  from base.css. Every colour that is not grey is the accent or a tone
+ *  lifted from one of our own photographs.
+ */
+.hv { position: relative; min-height: 100svh; overflow: hidden; padding-top: var(--nav-h); }
+.hv__copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.hv .h1 { font-size: clamp(2.5rem, 1.6rem + 3.6vw, 4.5rem); max-width: 14ch; }
+@media (min-width: 1280px) { .hv .h1 { max-width: none; white-space: nowrap; } }
+.hv .lede { margin-top: var(--s-4); max-width: 30rem; }
+.hv .btn { margin-top: var(--s-5); }
+.hv .mono { margin-top: var(--s-3); }
+.hv__window { position: relative; aspect-ratio: 8 / 5; border-radius: var(--r); overflow: hidden; background: var(--panel); }
+.hv__window img { width: 100%; height: 100%; object-fit: cover; }
+/* a window's light: a 1px edge lit from above, a cyan rim, and a shadow in three layers */
+.hv__lit { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent), 0 2px 6px rgba(0, 0, 0, 0.5), 0 24px 48px -12px rgba(0, 0, 0, 0.7), 0 80px 140px -40px rgba(0, 0, 0, 0.9); }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+.hv__copy > * { animation: rise 700ms var(--ease-out) both; }
+.hv__copy > :nth-child(2) { animation-delay: 70ms; } .hv__copy > :nth-child(3) { animation-delay: 140ms; } .hv__copy > :nth-child(4) { animation-delay: 210ms; }
+
+/* ---------- A: the window on a plate, Screen Studio's staging ---------- */
+.hv--a .hv__copy { padding-top: clamp(16px, 2.5vw, 32px); }
+.hv--a .lede { margin-top: var(--s-3); } .hv--a .btn { margin-top: var(--s-4); }
+.hv--a .hv__plate {
+  position: relative; z-index: 1; width: fit-content; max-width: min(1180px, 100% - 2 * var(--gutter)); margin: clamp(24px, 3vw, 40px) auto 0;
+  padding: clamp(20px, 3vw, 44px); border-radius: 24px;
+  /* the pier's blues and the showroom's warm light, as a gradient */
+  background: radial-gradient(120% 90% at 20% 0%, #2a5f78 0%, transparent 55%), radial-gradient(90% 80% at 85% 100%, #5a4631 0%, transparent 60%), linear-gradient(160deg, #10222e, #0d1218 60%, #0b0b0c);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.hv--a .hv__plate::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(60% 50% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%); }
+.hv--a .hv__window { width: calc((100svh - 470px) * 1.6); max-width: min(1092px, 100vw - 2 * var(--gutter) - 2 * clamp(20px, 3vw, 44px)); min-width: min(100%, 320px); margin-inline: auto; }   /* scaled so the whole window sits above the fold: 420px is the nav, the copy and the plate's padding */
+
+/* ---------- B: the window tilted in a lit scene, Darkroom's staging ---------- */
+.hv--b { display: grid; align-items: center; }
+.hv--b .hv__back { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 55% 50%; filter: blur(18px) brightness(0.45) saturate(1.2); transform: scale(1.08); }
+.hv--b::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(50% 60% at 72% 40%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 70%), linear-gradient(to right, rgba(11, 11, 12, 0.9) 0%, rgba(11, 11, 12, 0.55) 45%, rgba(11, 11, 12, 0.2) 100%), linear-gradient(to bottom, var(--ground) 0%, transparent 18%, transparent 80%, var(--ground) 100%); }
+.hv--b .hv__grid { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; gap: clamp(32px, 4vw, 64px); padding-block: clamp(32px, 5vw, 64px); }
+.hv--b .hv__copy { align-items: flex-start; text-align: left; }
+.hv--b .h1 { max-width: 11ch; white-space: normal; }
+.hv--b .hv__scene { perspective: 1600px; }
+.hv--b .hv__window { transform: rotateY(-8deg) rotateX(4deg); transform-origin: 40% 50%; will-change: transform; }
+@media (max-width: 900px) {
+  .hv--b .hv__grid { grid-template-columns: 1fr; }
+  .hv--b .hv__copy { align-items: center; text-align: center; }
+  .hv--b .h1 { max-width: 14ch; }
+  .hv--b .hv__window { transform: rotateY(-5deg) rotateX(2deg); }
+}
+
+/* ---------- C: a photograph developing behind the headline, Raycast's staging ---------- */
+.hv--c .hv__photo { position: absolute; inset: 0; height: min(78svh, 760px); }
+.hv--c .hv__photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; }
+/* the developed frame shows through a soft wipe from the left: the picture develops across the hero */
+.hv--c .hv__photo img:last-child { -webkit-mask-image: linear-gradient(100deg, transparent 30%, #000 70%); mask-image: linear-gradient(100deg, transparent 30%, #000 70%); }
+.hv--c .hv__photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(11, 11, 12, 0.55) 0%, rgba(11, 11, 12, 0.35) 40%, var(--ground) 100%), radial-gradient(40% 40% at 70% 30%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); }
+.hv--c .hv__copy { padding-top: clamp(48px, 9vh, 112px); }
+.hv--c .hv__copy .lede { color: var(--text-2); }
+.hv--c .hv__window { position: relative; z-index: 2; width: min(1200px, 100% - 2 * var(--gutter)); margin: clamp(32px, 5vh, 56px) auto 0; }
+.hv--c .hv__window::before { content: ""; position: absolute; left: 10%; right: 10%; top: -1px; height: 1px; background: linear-gradient(to right, transparent, var(--accent), transparent); opacity: 0.7; }
+
+@media (prefers-reduced-motion: reduce) { .hv__copy > * { animation: none; } }
