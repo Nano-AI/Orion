@@ -1,6 +1,6 @@
 # Orion
 
-Fast, subscription-free desktop RAW photo editor. Ships on macOS as an Avalonia app; Windows and Linux builds are in progress. Modern minimal UI, capable of dramatic edits. Built by a solo developer. Source-available, never redistributed (#359).
+Fast, subscription-free desktop RAW photo editor. Ships on macOS as an Avalonia app; Windows and Linux build and test in CI (#376), not yet released. Modern minimal UI, capable of dramatic edits. Built by a solo developer. Source-available, never redistributed (#359).
 
 ## Read these first
 Everything lives in `planning/`. On a fresh session, read in this order:
@@ -19,10 +19,11 @@ Everything lives in `planning/`. On a fresh session, read in this order:
     the criticism is as findable as the plan. Read `feedback/README.md` first.
 
 **Work to do is tracked as [GitHub issues](https://github.com/Nano-AI/Orion/issues)**,
-not in the docs: issue 23 parity (done at #380: the Avalonia app replaced the Swift
-one), issue 24 Windows and Linux builds, issue 22
-region-of-interest rendering, issue 5 lens correction, issue 6 JPEG XL export.
-`STATUS.md` points at them. Write them as "issue N": a bare `#N` is a decision.
+not in the docs. Open: issue 24 Windows and Linux builds (packages build in CI;
+zero-copy present and a GPU Linux runner remain), issue 5 lens correction (DNG
+opcodes shipped; Adobe profiles wait on the developer), issue 25 visibility.
+Closed: issue 22 region of interest (#371), issue 23 parity (#380), issue 6 JPEG
+XL (#363). `STATUS.md` points at them. Write them as "issue N": a bare `#N` is a decision.
 One parent issue per piece of work, with a checklist; no sub-issue per item.
 
 ## Algorithm sourcing — non-negotiable
@@ -72,7 +73,7 @@ steps.
   under an open licence is a one-way door: it happened once by mistake (#358).
 
 ## Stack
-C++20 engine · Metal GPU compute (Dawn next, #317) · Slang shaders · LibRaw decode · OpenColorIO + lcms2 color · XMP sidecars as source of truth · **Avalonia 12 / .NET 10 app** (`shell/`, #315, #316).
+C++20 engine · Metal GPU compute on macOS, Dawn on Windows (D3D12) and Linux (Vulkan) (#317, #376) · Slang shaders · LibRaw decode · OpenColorIO + lcms2 color · XMP sidecars as source of truth · **Avalonia 12 / .NET 10 app** (`shell/`, #315, #316).
 
 The app is `shell/`: it ships as `Orion.app` through `tools/package-app.sh` and
 is meant for all three systems (issue 24). The SwiftUI app it replaced was
@@ -80,7 +81,7 @@ retired by decision #380; its history is in git, and its settings carry over on
 first launch (`shell/Shared/SettingsImport.cs`). There is no SQLite index any
 more — that was the Swift app's.
 
-**UI rules:** the engine is reached only through the hand-written C facade `engine/include/orion/orion.h` (the app via `shell/native/` → `liborion_shim.dylib`): POD only, no templates, no move-only types, and **no C++ exception may escape it (it would terminate the process)**. The canvas gets the engine's picture with no CPU copy — an IOSurface on `MTLSharedEvent`s into Avalonia's Metal renderer (#357) — and falls back to a CPU copy headless. Every command is registered with a name (`--commands`), so it can be driven without the UI. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
+**UI rules:** the engine is reached only through two hand-written C surfaces: the facade `engine/include/orion/orion.h`, and the shim over it, `shell/native/shim.h` / `shim.cpp` (`shim_*`, what the shell's P/Invoke calls, built as `liborion_shim`). Both: POD only, no templates, no move-only types, and **no C++ exception may escape either (it would terminate the process)**: the facade's entry points run in `guard()` (`engine/src/CApiGuard.h`), the shim's allocating ones in `shim_guard()`. On macOS the canvas gets the engine's picture with no CPU copy — an IOSurface on `MTLSharedEvent`s into Avalonia's Metal renderer (#357) — and falls back to a CPU copy headless; Windows and Linux always copy through the CPU for now (#376). Every command is registered with a name (`--commands`), so it can be driven without the UI. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
 
 ## Tests
 
@@ -102,6 +103,11 @@ shell/bin-native/present_test RAW              zero-copy surface vs CPU readback
 ./tools/check-site.py              the landing page: links resolve, register unchanged, no dead GitHub URLs, no personal data
 (cd mcp && npm test)               the MCP server against a fake app
 ```
+
+CI (`.github/workflows/build.yml`, #376) builds and runs `orion-tests` and the
+selftest on all three systems for pushes to `main` and `ci/**` and for pull requests, and packages
+Windows and Linux as artifacts. `tools/ci-selftest.py` holds the selftest to a
+stated per-system skip list; the Linux runner has no GPU, so its GPU checks skip.
 
 `check-agent` and the packager use the first of `_PIC8095`, `overexposed-background`,
 `_PIC8220` … found in `ORION_SAMPLES`; every step passes on each of those that is here
@@ -127,7 +133,7 @@ everywhere. It catches the deletion and claims nothing more. It exists because
 a `ROADMAP.md` table asserting four gestures did *not* arm was the premise of a
 performance audit, and all four had been fixed without it being updated.
 
-`check-screens.py` launches the app eight times, so it is the slow one. It
+`check-screens.py` launches the app nine times (seven tabs, then Light twice), so it is the slow one. It
 renders each tool tab through `--screenshot` (Avalonia's headless platform) and
 fails on a tab that does not render, renders blank, draws the same tool column
 as another, or renders differently twice. It cannot say a tab draws the

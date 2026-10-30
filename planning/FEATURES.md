@@ -127,7 +127,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | JPEG/TIFF/PNG, quality, resize, color space | M1 | |
 | Full-res tiled render path | M1 | Separate from preview pipe |
 | Output sharpening, metadata options | M4 | |
-| Export presets + JPEG XL/AVIF probe | M6 | S6.11 (#212) — named export settings; verify ImageIO support before promising either format |
+| Export presets + AVIF probe | M6 | S6.11 (#212) — named export settings; verify AVIF support before promising it. ✅ JPEG XL shipped through libjxl, decision #363 |
 | Watermark | M5 | ✅ **Built 2026-09-27**, decision #284. One saved mark (text or an SVG's shape) in `~/Library/Application Support/Orion/watermark.json`, a switch in the Export panel, 3x3 anchor or diagonal, one neutral gray whose opacity is the only color control. Blended in the writer after the resize and sharpening, so it is crisp at every size; never on `get_proxy` or `--batch-export` |
 
 ## 14. Performance & UI

@@ -96,7 +96,7 @@ Two things turned up while finishing it:
 | Format | Notes |
 |---|---|
 | HEIF | Free via ImageIO — smaller than JPEG at equal quality, and native on Apple platforms |
-| JPEG XL | Better still, but ImageIO support needs verifying before promising it |
+| JPEG XL | ✅ Shipped through libjxl on every system, decision #363 |
 | AVIF | Same caveat |
 | DNG | *Export* as DNG is a different problem — writing a raw container, not an image. Later. |
 
@@ -898,7 +898,7 @@ In order:
 | S6.8 Soft proofing | ~1–2 sessions | lcms2 and OCIO are already in the stack — this is UI plus a proof transform, not new color machinery |
 | S6.9 Live folder watch (FSEvents) | ~1 session | Already costed under *Library index — what is not done*: a rating written by another app appears without reopening |
 | S6.10 Multi-selection | ~1 session | Sync currently applies to every photo in view (FEATURES §11's own ⚠); selection scoping is the missing half |
-| S6.11 Export presets + format probe | small | Named export settings; verify ImageIO's JPEG XL / AVIF support before promising either (the M1 export section's own caveat) |
+| S6.11 Export presets + format probe | small | Named export settings; verify AVIF support before promising it (JPEG XL shipped through libjxl, #363) |
 
 ⚠ **#162 was not in this table on purpose** — it was the only shipped defect and
 outranked all of the above. ✅ **Closed by #219, 2026-09-05**, and none of the

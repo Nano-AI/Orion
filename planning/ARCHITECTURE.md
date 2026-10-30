@@ -1,6 +1,6 @@
 # Orion — Architecture
 
-Constraints driving every choice below: **macOS first** · **no Rust** · **C++/C, Go, Python comfortable** · **speed non-negotiable** · **clean codebase, lean on mature libraries**.
+Constraints driving every choice below: **macOS first, Windows and Linux through Dawn** · **no language required or banned: maintainability and speed decide (#360)** · **speed non-negotiable** · **clean codebase, lean on mature libraries**.
 
 ## Language: C++20
 
@@ -12,22 +12,22 @@ Go and Python are wrong here: no GPU story, GC pauses in a real-time pixel loop,
 
 Metal wins on macOS: native f16, best-in-class tooling (Xcode GPU capture, Instruments), free MPS primitives, direct Core ML/Neural Engine path, and zero translation layers. Vulkan-via-MoltenVK would cost debuggability and add a translation layer for a portability benefit not needed yet.
 
-The lock-in objection is solved by **[Slang](https://github.com/shader-slang/slang)** (Khronos-hosted, Apache-2.0): author each kernel once, compile to MSL today and SPIR-V/HLSL when Windows/Linux land. Pair it with a thin C++ GPU abstraction (`Device` / `Texture` / `Kernel` / `CommandQueue`) so a Vulkan backend slots in behind the same interface.
+The lock-in objection is solved by **[Slang](https://github.com/shader-slang/slang)** (Khronos-hosted, Apache-2.0): author each kernel once, compile to MSL for Metal and WGSL for Dawn. A thin C++ GPU abstraction (`Device` / `Texture` / `Kernel` / `CommandBuffer`) holds both backends behind one interface.
 
-### Two backends during the port to Dawn (issue #24, decisions #317, #375)
+### Two backends: Metal and Dawn (issue 24, decisions #317, #375, #376)
 
-Windows and Linux run the engine on **Dawn** (WebGPU in C++, #317, built from source by `tools/build-dawn.sh`, #361). On macOS Dawn runs on Metal, so the port happens on this machine with Metal as the reference.
+Windows and Linux run the engine on **Dawn** alone (WebGPU in C++, #317, built from source by `tools/build-dawn.sh`, #361): D3D12 on Windows, Vulkan on Linux (#376). On macOS Metal is the default and Dawn runs on Metal behind `ORION_GPU=dawn`, so the port happened on this machine with Metal as the reference.
 
 | Piece | How |
 |---|---|
-| Seam | The existing `gpu::Device / Texture / Library / Kernel / CommandBuffer` *are* the interface; each owns an abstract `Impl` (`gpu/Backend.h`) with a Metal subclass (`Metal*.mm`) and a Dawn subclass (`Dawn*.mm`). No node, graph or call site changes. `Gpu.cpp` holds the neutral half (formats, sizes, forwarding). |
+| Seam | The existing `gpu::Device / Texture / Library / Kernel / CommandBuffer` *are* the interface; each owns an abstract `Impl` (`gpu/Backend.h`) with a Metal subclass (`Metal*.mm`) and a Dawn subclass (`Dawn*.cpp`; `DawnMetal.mm` and `DawnNative.cpp` hold what differs per system). No node, graph or call site changes. `Gpu.cpp` holds the neutral half (formats, sizes, forwarding). |
 | Choosing | `Device::create()` reads `ORION_GPU` (`metal` default, `dawn`); `Device::create(Backend)` for a test that wants both. So the whole suite, the bench and the app run on Dawn with no rebuild. Built without `third_party/dawn-build`, Dawn throws and Metal is unaffected. |
 | Shaders | The same Slang source compiles twice: `.metallib` as before, and `.wgsl` (slangc → `wgsl_prep.py` → `build/shaders/<entry>.wgsl`). The prep script reads both targets' reflection and writes a header the backend reads: each texture's Metal slot → WGSL binding; the parameter block's copies from Metal's packed layout to WGSL's uniform layout (arrays of scalars get a 16-byte stride there); storage textures with a format token and `write` access unless read back. The host keeps writing Metal-layout structs. |
 | Formats | WGSL fixes a storage texture's format in the shader, Metal does not. The Dawn kernel keeps one pipeline per combination of bound storage formats, made on first use, so a node that changes format (`setNodeFormat`) just gets a second pipeline. |
-| Display | `Texture::displayHandle()` is what a shell draws: on Metal the texture; on Dawn an RGBA8 texture lives in an IOSurface (`SharedTextureMemory`, as in `spikes/dawn-avalonia/`) and the handle is an `id<MTLTexture>` over the same memory. The facade's texture getters return it, so `present.mm` and the Swift canvas take it unchanged. |
+| Display | `Texture::displayHandle()` is what a shell draws: on Metal the texture; on Dawn an RGBA8 texture lives in an IOSurface (`SharedTextureMemory`, as in `spikes/dawn-avalonia/`) and the handle is an `id<MTLTexture>` over the same memory. The facade's texture getters return it, so `present.mm` takes it unchanged. On Windows and Linux there is no shared surface yet: the shell reads every render back through the facade (`orion_engine_read_pixels`). |
 | Parity | `tests_dawn_parity.cpp` renders the develop graph on both backends with every node pinned and replays every node's kernel alone on Dawn on Metal's inputs (54 of 56 bit-identical, 2 within one fp16 step), then the whole graph on each (bit-identical output); the whole suite also runs with `ORION_GPU=dawn`. |
 | Dawn settings | One device per process (Metal's system default is one). `disable_robustness` (Metal never bounds-checked these shaders; on, it doubled GPU time). `RenderAttachment` on every texture so Dawn's zero-fill is a cheap clear. Prepared shaders and their pipelines cached per device. |
-| Default | **Metal** until Dawn's first render after an open stops costing more (49 ms against 96-507 ms: WebGPU's zero-fill of new textures). Steady state matches: fit drag, fit settled, 100%, pan all within noise. |
+| Default | On macOS, **Metal** until Dawn's first render after an open stops costing more (49 ms against 96-507 ms: WebGPU's zero-fill of new textures). Steady state matches: fit drag, fit settled, 100%, pan all within noise. |
 
 ## Engine: compute DAG, vkdt-shaped
 
@@ -49,7 +49,7 @@ decode → white balance → demosaic → camera matrix → linear working space
 
 ### Hitting <16 ms
 1. **Preview pipe** runs at screen resolution over the visible ROI only. Full-res tiled pipe reserved for export and 100% zoom.
-   - **Built, partly (issue #22, decision #371).** A third graph, the *region graph*, is the unchanged develop graph built over a **window of the mosaic**: the bounding box of the visible rectangle mapped back through crop, straighten, perspective (the geometry node's own map) and then the lens (`lens::fetchPoint`), plus a 192-pixel halo, origin on a 16-pixel grid, size bucketed to 256 so a pan reloads rather than rebuilds. The window is decimated by a power of two `step` (1–8) chosen so one region pixel ≤ one screen pixel: never softer than the screen, and the cost is the screen's, not the sensor's. Region pixel *i* is exactly pixel *i* + origin of the whole frame decimated by `step` (the preview graph at step 4), so only three places learn the offset: the lens shifts its two centres, the perspective and the geometry node use the whole frame's size, and the geometry node subtracts the origin at its one fetch. Radii in frame pixels (sharpening; grain already) divide by `step`. The noise measurement is the frame's, not the window's. Whatever knows where it is (masks, spots, grain, the creative vignette) or reads more than a halo (dehaze's airlight, the clarity and fusion pyramids, the highlight fill, the guided filter) is **refused** by `DevelopPipeline::regionSupports` and the caller renders the whole graph — each is a follow-up. The preview graph is the small whole-frame pass: the histogram and the eyedropper read it while the full graph is older than the edit.
+   - **Built, partly (issue 22, decision #371).** A third graph, the *region graph*, is the unchanged develop graph built over a **window of the mosaic**: the bounding box of the visible rectangle mapped back through crop, straighten, perspective (the geometry node's own map) and then the lens (`lens::fetchPoint`), plus a 192-pixel halo, origin on a 16-pixel grid, size bucketed to 256 so a pan reloads rather than rebuilds. The window is decimated by a power of two `step` (1–8) chosen so one region pixel ≤ one screen pixel: never softer than the screen, and the cost is the screen's, not the sensor's. Region pixel *i* is exactly pixel *i* + origin of the whole frame decimated by `step` (the preview graph at step 4), so only three places learn the offset: the lens shifts its two centres, the perspective and the geometry node use the whole frame's size, and the geometry node subtracts the origin at its one fetch. Radii in frame pixels (sharpening; grain already) divide by `step`. The noise measurement is the frame's, not the window's. Whatever knows where it is (masks, spots, grain, the creative vignette) or reads more than a halo (dehaze's airlight, the clarity and fusion pyramids, the highlight fill, the guided filter) is **refused** by `DevelopPipeline::regionSupports` and the caller renders the whole graph — each is a follow-up. The preview graph is the small whole-frame pass: the histogram and the eyedropper read it while the full graph is older than the edit.
 2. **Per-node output caching** — moving a slider recomputes only its downstream subgraph.
 3. **Degrade-then-refine** during drags: skip expensive nodes mid-gesture, refine on idle.
 4. Async thumbnail workers + LRU cache at app level.
@@ -59,25 +59,25 @@ decode → white balance → demosaic → camera matrix → linear working space
 | Need | Choice | License |
 |---|---|---|
 | RAW decode | **LibRaw** — Sony ARW well covered, 1000+ cameras | LGPL-2.1 / CDDL / commercial |
-| Shaders | **Slang** → MSL | Apache-2.0 |
+| Shaders | **Slang** → MSL, WGSL | Apache-2.0 |
+| GPU off macOS | **Dawn** (D3D12, Vulkan), statically linked | BSD-3 (third parties in `NOTICE`) |
 | Color management | **OpenColorIO** + **lcms2** for ICC | BSD-3 / MIT |
 | EXIF read | **Apple ImageIO** (native, free on macOS) | — |
 | XMP sidecars | **Adobe XMP Toolkit** | BSD |
 | Lens corrections | **lensfun** (DB is CC-BY-SA) | LGPL-3 |
-| Index/cache | **SQLite** | Public domain |
+| Index/cache | none since #380: the SQLite index was the Swift app's | — |
 | ML inference | **Core ML** (ANE) now; ONNX Runtime when porting | — |
 
-⚠️ **Avoid exiv2** — GPL-2.0, which Apache-2.0 cannot absorb. Not a commercial concern: Orion is open source already (#43, `LICENSE`). Apple's ImageIO covers metadata reads on macOS; revisit when porting.
+⚠️ **Avoid exiv2** — GPL-2.0, which a source-available, never-redistributed work (#359, `LICENSE`) cannot carry. Apple's ImageIO covers metadata reads on macOS; revisit when porting.
 
 ## Library, not catalog — answering "why a DB at all?"
 
 You're right that a catalog is overkill. The design:
 
 - **XMP sidecars are the source of truth.** One `.xmp` next to each RAW holding the edit stack + rating + label. Portable, diffable, survives moves and backups, readable by other tools. Delete Orion and your edits still exist.
-- **SQLite is a disposable index**, not a database of record. It exists purely so that filtering 5,000 photos by rating is instant instead of a 5,000-file disk read. It also caches thumbnails.
-- **Fully rebuildable at any time.** Corrupt it, delete it, move the folder — Orion re-scans the sidecars and reconstructs. No lock-in, no "where did my catalog go" failure mode.
+- **No index of record.** The Swift app kept a disposable SQLite index for filtering large folders; it retired with that app (#380), and the Avalonia app reads the sidecars directly. If one comes back, it stays rebuildable from the sidecars at any time.
 
-So: folder-first browsing exactly as you work now, with an index that makes rating/rejecting/filtering large shoots fast.
+So: folder-first browsing exactly as you work now.
 
 ## Maintainability — a hard constraint, not a preference
 
@@ -97,29 +97,25 @@ Rules the codebase holds to:
 
 ## Engine/UI separation
 
-The engine ships as a standalone C++ library with a narrow C API. The UI is a *client*. This is what makes the UI decision reversible and the eventual Windows port tractable — the hard 80% is already portable.
+The engine ships as a standalone C++ library with a narrow C API. The UI is a *client*. That is what let the SwiftUI app be replaced (#380) without touching the engine.
 
-## UI shell: SwiftUI/AppKit
+## UI shell: Avalonia 12 on .NET 10 (#315, #316, #380)
 
-Decided after evaluating Qt 6/QML, bespoke Skia/Metal, Dear ImGui, and C++ webview shells — full comparison in `UI-DECISION.md`. Chosen because the two stated priorities are **stunning look** and **minimal bloat**, and native wins hardest on both: Apple's materials, vibrancy, typography and animation curves come free, and the bundle is ~5–15 MB against Qt's 40–60 MB.
+`shell/`, one C# app for macOS, Windows and Linux; it replaced the SwiftUI app, whose history is in git (`UI-DECISION.md` has the original evaluation). It ships as `Orion.app` on macOS; Windows and Linux packages are CI artifacts (#376).
 
-- **Canvas:** engine renders into the drawable's texture; `MTKView`/`CAMetalLayer` wrapped in `NSViewRepresentable`. Genuinely zero-copy — Swift never touches pixels. Pass `MTLDevice`/`MTLCommandQueue` across as opaque handles.
-  ⚠️ SwiftUI's `.layerEffect`/`.colorEffect`/`.drawingGroup` **cannot** display an `MTLTexture` — they rasterize SwiftUI's own content. UI garnish only.
-- **HDR:** `wantsExtendedDynamicRangeContent = true`, `pixelFormat = .rgba16Float`, `colorspace = extendedLinearDisplayP3`. Matches the engine's working format exactly; better than 10-bit integer.
-- **State:** view models are plain `@Observable` objects with **zero SwiftUI types inside**, so any panel can be re-hosted in AppKit when SwiftUI hits a density cliff. `@Observable` is mandatory — `ObservableObject` would repaint all 40 panels on every slider tick. Sets a **macOS 14+ floor**.
-- **Expect to fall back to AppKit** for the filmstrip and grid (`NSCollectionView` — SwiftUI has no real cell reuse) and for pinch-zoom (SwiftUI exposes no direct trackpad magnification events).
-- **Debug tooling:** Dear ImGui for the internal pipeline inspector, node graph, and frame timings. Never product UI.
+| Piece | How |
+|---|---|
+| Boundary | Two hand-written C surfaces, POD only: the facade `engine/include/orion/orion.h`, and the shim over it, `shell/native/shim.h` / `shim.cpp` (`shim_*`: adjustments by C name through a table generated from `orion.h`, brush strokes by revision, readback), built with the engine into `liborion_shim` and called by P/Invoke (`shell/Shared/Native.cs`). |
+| Exceptions | **C# cannot catch a C++ exception; an escaped one terminates the process.** Every facade entry point runs in `guard()` (`engine/src/CApiGuard.h`); every shim entry point that allocates runs in `shim_guard()` (`shim.h`). |
+| Canvas, macOS | Zero-copy (#354, #357): `present.mm` copies each render on the GPU into an IOSurface that Avalonia's Metal renderer imports, synchronised by two `MTLSharedEvent`s. Headless, or when the import fails, the shell copies through the CPU. |
+| Canvas, Windows and Linux | A CPU copy of every render (`shim_read` → `orion_engine_read_pixels`) for now; zero-copy there is open (#355 is Linux's allocator). |
+| Commands | Every command is registered by name (`--commands`), so it can be driven without the UI; `--selftest`, `--screenshot`, `--batch-export` and the agent run headless. |
+| Debug tooling | Dear ImGui for internal inspectors only, never product UI. |
 
-### C++ ↔ Swift boundary
-Swift 5.9+ imports C++ headers directly, no shim required — but still hand-author a **narrow POD facade**: plain structs, int/float handles, no templates, no move-only types. It's the only boundary stable across Swift releases.
+## Licence
 
-⚠️ **C++ exceptions cannot be caught by Swift — an uncaught one terminates the process.** The engine must never let one escape the facade.
+Source-available under PolyForm Internal Use 1.0.0 with added permissions for personal use and pull requests (#359): never redistributed or sold. A work under it cannot carry GPL code; LGPL only dynamically linked. Revisions up to `abf3a51` remain Apache-2.0 (`NOTICE`).
 
 ## Open decisions
-
-**License strategy is not one of them — closed 2026-07-28 by #43, reaffirmed
-2026-09-06.** Orion is Apache-2.0 and there is no paid distribution. The
-GPL-avoidance rule outlived the reversibility hedge it was written for and is
-kept for the plain reason that Apache-2.0 and GPL cannot be combined.
 
 - **Distribution** — direct download + notarization assumed; Mac App Store sandboxing complicates folder-based workflow.

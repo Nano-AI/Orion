@@ -68,16 +68,19 @@ interface that stays out of the way of the photograph.
 **Status: M0–M4 complete.** It browses a folder, culls, develops, crops, masks,
 heals and exports with metadata and a color profile. The panel covers white
 balance, tone, a tone curve, three-way color grading, an eight-band color mixer,
-profiled noise reduction, lens corrections from a bundled 2,600-lens database,
-sharpening, highlight recovery, clarity, dehaze, exposure fusion, creative LUTs,
+profiled noise reduction, lens corrections from a bundled 2,600-lens database
+or from a DNG's own opcodes (drones, phones), sharpening, highlight recovery, clarity, dehaze, exposure fusion, creative LUTs,
 film grain, a creative vignette, crop and straighten. Masks come in six kinds:
 linear, radial, brush, subject matte, luminance range and colour range,
 combined as a list and optionally feathered onto the photograph's own edges.
-Undo is unlimited and edits persist per photo in XMP sidecars.
+Undo is unlimited and edits persist per photo in XMP sidecars. Export writes
+JPEG, PNG, TIFF and JPEG XL. Past fit, the canvas renders only what is on
+screen, at the screen's resolution.
 
-**Not there yet:** tethering, X-Trans sensors, and Windows and Linux builds.
-The app is Avalonia on .NET, so it can run on all three; the GPU backend it
-needs off the Mac (Dawn) passed its first spike. See
+**Not there yet:** tethering, X-Trans sensors, and a Windows or Linux release.
+Both build and pass their tests in CI on Dawn (D3D12, Vulkan), and the packages
+are CI artifacts, but none has been released: the canvas there still copies
+through the CPU, and Linux has only been run without a GPU. See
 [`planning/STATUS.md`](planning/STATUS.md), which is the honest list, including
 the one shipped defect: a 24 MP frame allocates more intermediate memory than an
 8 GB Mac has, so it will not open there.
@@ -86,16 +89,17 @@ the one shipped defect: a 24 MP frame allocates more intermediate memory than an
 
 ### Built with
 
-* C++20 engine, Metal compute, shaders in [Slang](https://shader-slang.org/)
+* C++20 engine, Metal compute on macOS and Dawn (D3D12, Vulkan) on Windows and Linux, shaders in [Slang](https://shader-slang.org/)
 * [Avalonia](https://avaloniaui.net/) 12 on .NET 10 for the interface (it replaced a SwiftUI app, decision #380)
 * [LibRaw](https://www.libraw.org/) decode, [OpenColorIO](https://opencolorio.org/) and [lcms2](https://www.littlecms.com/) color
 * [lensfun](https://lensfun.github.io/) lens data, XMP sidecars as the source of truth
 
 ### How it is built
 
-A C++20 engine drives a Metal compute graph; the Avalonia app shows its output
-on the GPU through an IOSurface, with no CPU copy. Shaders are authored in Slang so a D3D or
-WebGPU backend stays reachable.
+A C++20 engine drives a GPU compute graph, on Metal on the Mac and on Dawn
+(WebGPU: D3D12, Vulkan) on Windows and Linux; on the Mac the Avalonia app shows
+its output on the GPU through an IOSurface, with no CPU copy. Shaders are
+authored in Slang and compiled to MSL and WGSL.
 
 Edits form a **DAG, not a chain**, so moving a slider recomputes only what sits
 downstream of it. On an M4, a 24 MP Sony ARW re-renders an exposure change in
@@ -267,8 +271,9 @@ way and fails on one that is blank, unchanged from another, or unstable.
 - [x] An MCP server so agents can propose edits for you to approve
 - [x] The Avalonia interface, shipping as Orion.app in place of the Swift one
 - [x] The Avalonia canvas fed from the GPU with no CPU copy
-- [ ] Region-of-interest rendering: only what is on screen, at screen resolution
-- [ ] Dawn as the GPU backend, for Windows and Linux builds
+- [x] Region-of-interest rendering: only what is on screen, at screen resolution
+- [x] Dawn as the GPU backend, for Windows and Linux builds (in CI, unreleased)
+- [ ] Windows and Linux releases: zero-copy canvas, a GPU Linux runner
 - [ ] X-Trans sensors
 - [ ] Tethering
 
