@@ -52,9 +52,10 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial int shim_share(nint shim, int which, int level, out nint handle, out int generation, out int w, out int h);
 
-    /// The newest copy that has landed: dst null asks its size, dst copies it. Its ticket; 0 = none, or no room.
+    /// The newest copy that has landed: dst null asks its size, dst copies it. Its ticket; 0 = none, or no room;
+    /// -1 = a copy failed and is gone (orion_last_error).
     [LibraryImport(Lib)]
-    public static partial ulong shim_copy_take(nint shim, int wait, byte* dst, int rowBytes, int capacity, out int w, out int h);
+    public static partial long shim_copy_take(nint shim, int wait, byte* dst, int rowBytes, int capacity, out int w, out int h);
 
     // native/present.mm: the picture handed to Avalonia on the GPU (SharedPicture).
     [LibraryImport(Lib)]

@@ -42,14 +42,24 @@ void DisplayCopy::sizeAt(std::uint32_t width, std::uint32_t height, int& level,
 
 const gpu::Texture& DisplayCopy::reduce(const gpu::Texture& src, std::uint32_t width,
                                         std::uint32_t height, int level, bool wait,
+                                        std::unique_ptr<gpu::Texture>& target,
                                         std::uint32_t& outWidth, std::uint32_t& outHeight) {
     sizeAt(width, height, level, outWidth, outHeight);
     if (level == 0 && src.format() == gpu::PixelFormat::RGBA8Unorm) return src;
-    if (!target_ || target_->width() != outWidth || target_->height() != outHeight) {
-        target_ = gpu::Texture::create(device_, outWidth, outHeight, gpu::PixelFormat::RGBA8Unorm);
+    if (!target || target->width() != outWidth || target->height() != outHeight) {
+        target = gpu::Texture::create(device_, outWidth, outHeight, gpu::PixelFormat::RGBA8Unorm);
     }
-    dispatch(src, width, height, level, *target_, wait);
-    return *target_;
+    dispatch(src, width, height, level, *target, wait);
+    return *target;
+}
+
+void DisplayCopy::release() noexcept {
+    target_.reset();
+    readTarget_.reset();
+    shared_.reset();
+    try {
+        readback_.release();
+    } catch (...) {}   // out of memory for three empty slots: the next begin says so
 }
 
 void DisplayCopy::dispatch(const gpu::Texture& src, std::uint32_t width, std::uint32_t height,
@@ -86,14 +96,14 @@ void* DisplayCopy::share(const gpu::Texture& src, std::uint32_t width, std::uint
 
 std::uint64_t DisplayCopy::begin(const gpu::Texture& src, std::uint32_t width, std::uint32_t height,
                                  int level, std::uint32_t& outWidth, std::uint32_t& outHeight) {
-    const gpu::Texture& out = reduce(src, width, height, level, false, outWidth, outHeight);
+    const gpu::Texture& out = reduce(src, width, height, level, false, target_, outWidth, outHeight);
     return readback_.begin(out, outWidth, outHeight);
 }
 
 void DisplayCopy::read(const gpu::Texture& src, std::uint32_t width, std::uint32_t height,
                        std::uint8_t* dst) {
     std::uint32_t w = 0, h = 0;
-    const gpu::Texture& out = reduce(src, width, height, 0, true, w, h);
+    const gpu::Texture& out = reduce(src, width, height, 0, true, readTarget_, w, h);
     out.download(dst, std::size_t(w) * 4, w, h);
 }
 

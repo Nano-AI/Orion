@@ -199,7 +199,12 @@ private:
 /// (present.mm), and only tests and the headless shell read back.
 class Readback {
 public:
+    struct Slot;    // backend-private: one staging buffer (Backend.h)
+    struct Entry;
+
     explicit Readback(Device&);
+    /// These buffers instead of the device's: a test's, one that fails.
+    explicit Readback(std::vector<std::unique_ptr<Slot>> slots);
     ~Readback();
     Readback(const Readback&)            = delete;
     Readback& operator=(const Readback&) = delete;
@@ -209,7 +214,9 @@ public:
 
     /// The newest copy that has landed since the last `take`: its ticket and
     /// size, or 0 when none has. Held for `take`; older landed copies are
-    /// dropped. `wait` first waits for the last begun copy to land.
+    /// dropped. `wait` first waits for the last begun copy to land. A copy
+    /// that failed (a lost device, a map refused) is freed and thrown, once:
+    /// the next call carries on without it.
     std::uint64_t newest(bool wait, std::uint32_t& width, std::uint32_t& height);
 
     /// What `newest` last named and nobody took yet, without looking again.
@@ -219,10 +226,12 @@ public:
     /// False when `newest` named none (or a `begin` since reused it).
     bool take(void* dst, std::size_t bytesPerRow);
 
-    struct Slot;    // backend-private: one staging buffer (Backend.h)
-    struct Entry;
+    /// Frees every buffer and whatever is in flight; tickets keep counting, so a
+    /// copy begun after it is never mistaken for one from before (#386).
+    void release();
 
 private:
+    Device*       device_ = nullptr;   // remakes the buffers after `release`; null for given slots
     std::vector<std::unique_ptr<Entry>> entries_;
     Entry*        held_    = nullptr;   // what `newest` named
     std::uint64_t tickets_ = 0, taken_ = 0;

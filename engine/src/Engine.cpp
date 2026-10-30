@@ -355,7 +355,7 @@ void Engine::releaseRenderMemory() noexcept {
     if (develop_) develop_->graph().releaseOutputs();
     if (preview_) preview_->graph().releaseOutputs();
     if (region_)  region_->graph().releaseOutputs();
-    display_.reset();
+    if (display_) display_->release();   // the kernel stays compiled
 }
 
 pipe::DisplayCopy& Engine::displayCopy() {

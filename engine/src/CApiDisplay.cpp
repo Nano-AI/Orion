@@ -6,9 +6,14 @@
 
 #include "CApiGuard.h"
 
+#include "util/Half.h"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <exception>
+#include <vector>
 
 using orion::capi::guard;
 
@@ -19,6 +24,21 @@ const orion::pipe::DevelopPipeline* graphOf(OrionEngine* e, int graph) {
     if (graph == 1) return e->impl.hasPreview() ? &e->impl.previewDevelop() : nullptr;
     if (graph == 2) return e->impl.hasRegion() ? &e->impl.regionDevelop() : nullptr;
     return graph == 0 && e->impl.hasImage() ? &e->impl.develop() : nullptr;
+}
+
+/// read_pixels without DisplayCopy, as it was before #386: a plain readback, a
+/// wide output converted here. What a driver that refuses display_reduce gets.
+void readOnCpu(const orion::gpu::Texture& t, std::uint32_t w, std::uint32_t h, std::uint8_t* dst) {
+    if (t.format() == orion::gpu::PixelFormat::RGBA8Unorm) {
+        t.download(dst, std::size_t(w) * 4, w, h);
+        return;
+    }
+    std::vector<std::uint16_t> wide(std::size_t(w) * h * 4);
+    t.download(wide.data(), std::size_t(w) * 8, w, h);
+    for (std::size_t i = 0; i < wide.size(); ++i) {
+        const float v = orion::util::halfToFloat(wide[i]);
+        dst[i] = std::uint8_t(v <= 0.0f ? 0 : v >= 1.0f ? 255 : int(v * 255.0f + 0.5f));
+    }
 }
 
 /// The texture is square so a straightened frame fits; the picture is its top left.
@@ -47,7 +67,14 @@ OrionStatus orion_engine_read_pixels(const OrionEngine* engine, int graph,
         const auto f = d.output().format();
         if (f != orion::gpu::PixelFormat::RGBA8Unorm && f != orion::gpu::PixelFormat::RGBA16Float)
             return ORION_ERR_BAD_ARG;
-        e->impl.displayCopy().read(d.output(), w, h, dst);   // a wide output converted on the GPU
+        try {
+            e->impl.displayCopy().read(d.output(), w, h, dst);   // a wide output converted on the GPU
+        } catch (const std::exception& x) {
+            static bool said = false;   // once a process: every readback after would say it again
+            if (!said) std::fprintf(stderr, "orion: the display copy failed (%s); reading back on the CPU\n", x.what());
+            said = true;
+            readOnCpu(d.output(), w, h, dst);
+        }
         return ORION_OK;
     });
 }

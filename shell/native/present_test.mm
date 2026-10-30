@@ -30,7 +30,7 @@ int shim_set(Shim*, const char*, int, float);
 int shim_render(Shim*, int, double*);
 int shim_read(Shim*, int, uint8_t*, int, int*, int*);
 uint64_t shim_copy_begin(Shim*, int, int, int*, int*);
-uint64_t shim_copy_take(Shim*, int, uint8_t*, int, int, int*, int*);
+int64_t shim_copy_take(Shim*, int, uint8_t*, int, int, int*, int*);
 Present* present_create(void);
 void present_destroy(Present*);
 void* present_producer(Present*);
@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
             int w = 0, h = 0;
             const uint64_t t = shim_copy_begin(s, 2, 0, &w, &h);
             Bytes copy(size_t(w) * h * 4);
-            check(t != 0 && shim_copy_take(s, 1, copy.data(), w * 4, int(copy.size()), &w, &h) == t &&
+            check(t != 0 && shim_copy_take(s, 1, copy.data(), w * 4, int(copy.size()), &w, &h) == int64_t(t) &&
                       copy == render(s, 2),
                   "the display copy at level 0 is the CPU readback byte for byte");
         }

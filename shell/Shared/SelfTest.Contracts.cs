@@ -9,6 +9,7 @@ static partial class SelfTest {
     // so three worktrees never edit one file. Unimplemented, they compile away.
     static partial void SpeedChecks();
     static partial void NativeChecks();
+    static partial void CopyChecks();
     static partial void WiringChecks();
     // Round 2 (the developer's UI pass): one hook per stream, each in its own file.
     static partial void LayoutChecks();

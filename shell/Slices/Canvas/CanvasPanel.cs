@@ -46,7 +46,9 @@ public sealed class CanvasPanel : Panel {
                                   Children = { _note, _choices } };
         Children.AddRange([_shared, _picture, _garden, _welcome, _state]);
         _shared.Arrived += _picture.InvalidateVisual;
-        _copied.Arrived += _picture.InvalidateVisual;
+        _copied.Arrived += () => { _version++; _picture.InvalidateVisual(); };
+        // Before the first draw says how wide the picture is: the first copy is not the whole render.
+        SizeChanged += (_, e) => _copied.Seed(e.NewSize.Width * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
         CanvasState.Changed += Refresh;
         CompareState.Moved += _picture.InvalidateVisual;   // a divider drag repaints the picture and nothing else
         EngineModel.Shared.Shown.Changed += () => { _version++; Refresh(); };   // the picture: only through this seam
@@ -144,7 +146,8 @@ public sealed class CanvasPanel : Panel {
                 using (c.PushGeometryClip(outside)) c.DrawImage(under, new Rect(under.Size), whole);
             }
             if (!shared && (_copied.For(engine.Shown, pixels, engine.Interacting) ?? engine.Shown.Bitmap) is { } picture) {
-                var shown = _shown.For(picture, _version, pixels);
+                // A copy taken in this very draw is new pixels in the same bitmap: its version too.
+                var shown = _shown.For(picture, HashCode.Combine(_version, _copied.Version), pixels);
                 c.DrawImage(shown, new Rect(shown.Size), dest);
             }
             if (CompareState.Showing && CompareState.Original is { } original) {

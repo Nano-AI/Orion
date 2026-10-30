@@ -41,6 +41,11 @@ public:
 
     [[nodiscard]] gpu::Readback& readback() noexcept { return readback_; }
 
+    /// Frees the textures and the staging buffers, and keeps the compiled kernel
+    /// and the ticket count: what Engine::releaseRenderMemory does to a photo
+    /// the cache keeps (#318).
+    void release() noexcept;
+
     /// Instead of a readback, into the texture another API draws (Windows,
     /// gpu::Texture::createShared): `src` at `level`, queued behind the render.
     /// Returns the texture's handle, with a generation that changes whenever the
@@ -52,7 +57,8 @@ private:
     /// The texture holding `src` at `level` as RGBA8: `src` itself when there
     /// is nothing to do, else `target_`, its work committed (and `wait`ed for).
     const gpu::Texture& reduce(const gpu::Texture& src, std::uint32_t width, std::uint32_t height,
-                               int level, bool wait, std::uint32_t& outWidth, std::uint32_t& outHeight);
+                               int level, bool wait, std::unique_ptr<gpu::Texture>& target,
+                               std::uint32_t& outWidth, std::uint32_t& outHeight);
     /// display_reduce from `src`'s top-left width x height into all of `dst`, committed.
     void dispatch(const gpu::Texture& src, std::uint32_t width, std::uint32_t height, int level,
                   const gpu::Texture& dst, bool wait);
@@ -61,7 +67,9 @@ private:
     std::unique_ptr<gpu::Library> library_;
     std::unique_ptr<gpu::Kernel>  kernel_;
     /// Reused while the size holds: one per graph switch, not one a frame.
-    std::unique_ptr<gpu::Texture> target_;
+    /// `read`'s is its own, so a full-size read between screen-sized copies
+    /// does not reallocate both ways.
+    std::unique_ptr<gpu::Texture> target_, readTarget_;
     gpu::Readback                 readback_;
     std::unique_ptr<gpu::Texture> shared_;   // `share`'s
     int                           generation_ = 0;

@@ -121,8 +121,8 @@ public:
     /// showing (decision #318). The next render of either rebuilds it.
     void releaseRenderMemory() noexcept;
 
-    /// The canvas's copy of a render (#386), made on first use; released with
-    /// the render memory, its copies in flight with it.
+    /// The canvas's copy of a render (#386), made on first use. Its textures and
+    /// copies in flight go with the render memory; its kernel and tickets stay.
     [[nodiscard]] pipe::DisplayCopy& displayCopy();
 
     // ── State that is not an adjustment ───────────────────────────────────

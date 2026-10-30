@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <stdexcept>
+#include <string>
 
 namespace orion::gpu {
 
@@ -47,12 +49,31 @@ struct Readback::Entry {
     }
 };
 
-Readback::Readback(Device& device) {
+Readback::Readback(Device& device) : device_(&device) {
     for (int i = 0; i < 3; ++i) {
         auto e = std::make_unique<Entry>();
         e->slot = device.impl().staging();
         if (!e->slot) e->slot = std::make_unique<CpuSlot>();
         entries_.push_back(std::move(e));
+    }
+}
+
+Readback::Readback(std::vector<std::unique_ptr<Slot>> slots) {
+    for (auto& s : slots) {
+        auto e = std::make_unique<Entry>();
+        e->slot = std::move(s);
+        entries_.push_back(std::move(e));
+    }
+}
+
+void Readback::release() {
+    held_ = nullptr;
+    for (auto& e : entries_) {
+        try { e->free(); } catch (...) { e->state = Entry::State::Free; }
+        if (device_) {   // the buffers go with the slots; new ones grow on the next begin
+            e->slot = device_->impl().staging();
+            if (!e->slot) e->slot = std::make_unique<CpuSlot>();
+        }
     }
 }
 
@@ -88,9 +109,19 @@ std::uint64_t Readback::newest(bool wait, std::uint32_t& width, std::uint32_t& h
     Entry* last = nullptr;
     for (auto& e : entries_)
         if (e->state == Entry::State::Pending && (!last || e->ticket > last->ticket)) last = e.get();
-    if (wait && last && last->slot->landed(true)) last->state = Entry::State::Landed;
+    std::string failed;
+    auto look = [&](Entry& e, bool block) {
+        try {
+            if (e.slot->landed(block)) e.state = Entry::State::Landed;
+        } catch (const std::exception& x) {   // freed, so it is said once and never waited on again
+            if (failed.empty()) failed = x.what();
+            try { e.free(); } catch (...) { e.state = Entry::State::Free; }
+            e.state = Entry::State::Free;
+        }
+    };
+    if (wait && last) look(*last, true);
     for (auto& e : entries_)
-        if (e->state == Entry::State::Pending && e->slot->landed(false)) e->state = Entry::State::Landed;
+        if (e->state == Entry::State::Pending) look(*e, false);
 
     held_ = nullptr;
     for (auto& e : entries_)
@@ -98,9 +129,8 @@ std::uint64_t Readback::newest(bool wait, std::uint32_t& width, std::uint32_t& h
             held_ = e.get();
     for (auto& e : entries_)   // superseded: nobody will ask for these
         if (e->state == Entry::State::Landed && e.get() != held_) e->free();
-    width  = held_ ? held_->width : 0;
-    height = held_ ? held_->height : 0;
-    return held_ ? held_->ticket : 0;
+    if (!failed.empty() && !held_) throw std::runtime_error(failed);
+    return held(width, height);
 }
 
 std::uint64_t Readback::held(std::uint32_t& width, std::uint32_t& height) const noexcept {

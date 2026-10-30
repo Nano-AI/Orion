@@ -624,8 +624,8 @@ OrionStatus orion_engine_read_pixels(const OrionEngine* engine, int graph,
 /* The display copy (decision #386): the canvas's CPU copy of a render, at the
  * size it shows, without waiting for the GPU. Begin queues one behind the
  * last render of `graph` (as orion_engine_read_pixels) and returns at once
- * with its size and ticket (1, 2, ... per engine; release_render_memory
- * starts them again). On the GPU it is `level` 2x2 halvings of the picture,
+ * with its size and ticket (1, 2, ... per engine, still counting after
+ * release_render_memory, which drops any copy in flight). On the GPU it is `level` 2x2 halvings of the picture,
  * the size present.mm's chain gives: level 0 the picture as it is, level k
  * one halving rounding up then k - 1 rounding down, clamped where a side
  * would reach 1, as RGBA8. Three may be in flight; a fourth waits for the

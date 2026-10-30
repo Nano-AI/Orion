@@ -394,16 +394,20 @@ uint64_t shim_copy_begin(Shim* s, int which, int level, int* w, int* h) {
 }
 
 // The newest copy that has landed, as orion_engine_display_take: dst NULL asks
-// its size, dst copies it. Its ticket; 0 when none has landed or dst had no room.
-uint64_t shim_copy_take(Shim* s, int wait, uint8_t* dst, int row_bytes, int capacity, int* w, int* h) {
+// its size, dst copies it. Its ticket; 0 when none has landed or dst had no
+// room; -1 when a copy failed (a lost device, a refused map): it is gone, and
+// nothing is in flight for it any more. orion_last_error says why.
+int64_t shim_copy_take(Shim* s, int wait, uint8_t* dst, int row_bytes, int capacity, int* w, int* h) {
     uint32_t rw = 0, rh = 0;
     uint64_t ticket = 0;
-    if (row_bytes < 0 || capacity < 0 ||
-        orion_engine_display_take(s->engine, wait, dst, uint32_t(row_bytes), uint32_t(capacity), &rw, &rh,
-                                  &ticket) != ORION_OK) return 0;
+    if (row_bytes < 0 || capacity < 0) return 0;
+    const OrionStatus st = orion_engine_display_take(s->engine, wait, dst, uint32_t(row_bytes), uint32_t(capacity),
+                                                     &rw, &rh, &ticket);
+    if (st == ORION_ERR_INTERNAL) return -1;
+    if (st != ORION_OK) return 0;
     *w = int(rw);
     *h = int(rh);
-    return ticket;
+    return int64_t(ticket);
 }
 
 // Windows (#386): the last render of `which`, `level` halvings down, into the

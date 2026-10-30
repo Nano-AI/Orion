@@ -113,6 +113,7 @@ static partial class SelfTest {
         }
         SpeedChecks();
         NativeChecks();
+        CopyChecks();
         WiringChecks();
         DesignChecks();
         LayoutChecks();

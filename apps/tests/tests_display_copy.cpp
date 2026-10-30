@@ -7,6 +7,7 @@
 #include "harness.h"
 
 #include "orion/orion.h"
+#include "gpu/Backend.h"
 #include "pipe/DisplayCopy.h"
 
 #include <cstring>
@@ -28,6 +29,20 @@ int worst(const std::vector<std::uint8_t>& a, const std::vector<std::uint8_t>& b
     for (std::size_t i = 0; i < a.size(); ++i) d = std::max(d, std::abs(int(a[i]) - int(b[i])));
     return d;
 }
+/// A staging buffer whose copy fails while `fail` says so: a refused map, a GPU reset.
+struct FailingSlot final : orion::gpu::Readback::Slot {
+    const bool* fail;
+    std::uint8_t value = 0;
+    explicit FailingSlot(const bool* f) : fail(f) {}
+    void start(const orion::gpu::Texture&, std::uint32_t, std::uint32_t) override { value = *fail ? 0 : 77; }
+    bool landed(bool) override {
+        if (value == 0) throw std::runtime_error("map refused");
+        return true;
+    }
+    void copy(void* dst, std::size_t) const override { *static_cast<std::uint8_t*>(dst) = value; }
+    void release() override {}
+};
+
 #ifdef _WIN32
 /// The other side of DisplayCopy::share, as ANGLE takes it: the NT handle opened
 /// on a D3D11 device of its own (whichever adapter will open it, WARP in CI),
@@ -156,6 +171,33 @@ void testDisplayCopyGpu() {
         report(fifth, "after five begun, the one handed out is the fifth",
                "ticket " + std::to_string(named) + " of " + std::to_string(last) + ", pixel " + std::to_string(newest[0]));
         report(copy.readback().newest(false, lw, lh) == 0, "and nothing older is left to hand out");
+
+        // ── Tickets keep counting across a release: no copy is mistaken for an older one
+        const auto beforeRelease = copy.begin(*src8, kW, kH, 0, w, h);
+        copy.release();
+        report(copy.readback().newest(false, lw, lh) == 0 && copy.begin(*src8, kW, kH, 0, w, h) > beforeRelease,
+               "a release drops the copy in flight, and the next ticket is still higher");
+        copy.readback().newest(true, lw, lh);
+
+        // ── A copy that fails is said once, freed, and the ring goes on ─────
+        {
+            bool fail = true;
+            std::vector<std::unique_ptr<gpu::Readback::Slot>> slots;
+            for (int i = 0; i < 3; ++i) slots.push_back(std::make_unique<FailingSlot>(&fail));
+            gpu::Readback ring(std::move(slots));
+            ring.begin(*src8, 1, 1);
+            std::string said;
+            try { ring.newest(false, lw, lh); } catch (const std::exception& x) { said = x.what(); }
+            bool again = false;
+            try { again = ring.newest(true, lw, lh) == 0; } catch (...) {}
+            report(said == "map refused" && again, "a failed copy is thrown once, then nothing is left to wait for",
+                   "said '" + said + "'");
+            fail = false;
+            const auto next = ring.begin(*src8, 1, 1);
+            std::uint8_t px = 0;
+            report(ring.newest(true, lw, lh) == next && ring.take(&px, 4) && px == 77,
+                   "and the next copy lands as if nothing failed");
+        }
 
         // ── Windows: the shared D3D11 texture ANGLE imports, read as it reads it ─
         int generation = 0;
