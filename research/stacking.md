@@ -54,7 +54,7 @@ Every constant that is ours is in [`UNSOURCED.md`](UNSOURCED.md) §22, not here.
 ## 1. The pipeline
 
 ```
-decode ─ (calibrate on the mosaic) ─ demosaic ─ normalize ─ register ─ combine with rejection ─ DNG
+decode ─ (calibrate on the mosaic) ─ demosaic ─ register ─ normalize ─ combine with rejection ─ DNG
 ```
 
 Averaging N frames cuts noise by ≈ √N; a median by ≈ 0.8·√N (the median is for dark and flat masters, not the stack).
@@ -102,7 +102,7 @@ A sky mask, where given, restricts stars to the sky.
 
 | Step | Rule | Source |
 |---|---|---|
-| Triangles | for each of the 60 stars, its 4 nearest neighbours → the C(5,3) triangles it sits in, deduplicated | [BCS20] |
+| Triangles | for each of the 60 stars, its 4 nearest neighbours → all C(5,3) = 10 triangles of the star plus its 4 neighbours, deduplicated | [BCS20] |
 | Invariants | sides sorted L2 ≥ L1 ≥ L0; (L2/L1, L1/L0) | [G86][V95][BCS20] |
 | Match | nearest invariant pair in a k-d tree within radius 0.1; vertices ordered by the side they are opposite, giving star-to-star votes | [BCS20] |
 | Fit | similarity by RANSAC: `cv::estimateAffinePartial2D`, reprojection threshold 2 px, ≥ 6 inliers or the frame is refused (identity, `ok = false`) | [FB81] |
@@ -140,7 +140,7 @@ A citation is not clearance, and freedom to operate has not been assessed (CLAUD
 
 | Part | Position |
 |---|---|
-| Registration + averaging, sigma-type rejection, triangle matching | decades-old prior art (1983–1996 papers above); no live-patent concern found |
+| Registration + averaging, sigma-type rejection, triangle matching | decades-old prior art (1983–1996 papers above); none assessed; prior art by age only |
 | Automatic sky/ground segmentation for night photos | the kind of feature phone makers patent; **nothing found either way**, and no patent database was searched. The developer said proceed. Orion takes the least inventive route: its *existing* classical sky detector is only a seed, and the user paints the split |
 | HDR+ style tile merging (Hasinoff et al. 2016) | off the table, as in hdr-merge.md: Google holds patents there |
 
