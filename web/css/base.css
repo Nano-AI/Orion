@@ -17,8 +17,6 @@
  *  printed page. Those say so where they are.
  */
 
-@import url("tokens.css");
-
 @font-face {
   font-family: "Archivo";
   src: url("../fonts/Archivo-var.woff2") format("woff2");
@@ -47,7 +45,7 @@
   --white:   #f9f9fa;   /* a primary button under the pointer, and nothing else; never pure white */
   --dim:     #8d8d93;   /* 5.9:1 on ground: the floor for any readable text */
   --faint:   #55555b;   /* hairline glyphs only, never copy */
-  /* --accent, --accent-ink, --status, --mark, --on-accent: the palette, in tokens.css */
+  /* --accent, --accent-ink, --status, --mark, --on-accent: the palette, in tokens.css (linked before this file) */
 
   --sans: "Archivo", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;

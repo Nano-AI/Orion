@@ -74,9 +74,11 @@
   ];
   // The belt is the mark, so it takes the palette's mark role (web/css/tokens.css), read once when first drawn.
   let mark;
-  const markA = a => {
+  // lift: how far toward white, for a star's glow and its core, which are the mark's colour seen brighter.
+  const markA = (a, lift = 0) => {
     mark ??= getComputedStyle(document.documentElement).getPropertyValue('--mark').trim();
-    return `rgba(${[1, 3, 5].map(i => parseInt(mark.slice(i, i + 2), 16)).join(', ')}, ${a})`;
+    const c = [1, 3, 5].map(i => Math.round(parseInt(mark.slice(i, i + 2), 16) * (1 - lift) + 255 * lift));
+    return `rgba(${c.join(', ')}, ${a})`;
   };
   const DUST = { per: 30000, r: [0.5, 1.4], a: [0.04, 0.14], speed: 0.4, color: '#dfe6ea' };
   const PLANETS = [
@@ -204,10 +206,10 @@
       ORION.forEach((st, i) => {
         const [x, y] = pts[i], r = core(st), glow = r * (st.belt ? 4.5 : 3.5);
         const g = ctx.createRadialGradient(x, y, 0, x, y, glow);
-        g.addColorStop(0, st.belt ? 'rgba(126, 240, 244, 0.55)' : 'rgba(236, 238, 242, 0.3)');
+        g.addColorStop(0, st.belt ? markA(0.55, 0.4) : 'rgba(236, 238, 242, 0.3)');
         g.addColorStop(1, st.belt ? markA(0) : 'rgba(236, 238, 242, 0)');
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, glow, 0, 6.283); ctx.fill();
-        ctx.fillStyle = st.belt ? '#eafdfe' : st.color || '#e6ecff'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+        ctx.fillStyle = st.belt ? markA(1, 0.88) : st.color || '#e6ecff'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
       });
       // the belt's name carries its line on past Alnitak, clear of the lines that leave that star
       const [ax, ay] = pts[3], [mx, my] = pts[5];
