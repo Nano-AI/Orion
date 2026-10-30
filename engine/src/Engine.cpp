@@ -2,9 +2,12 @@
 
 #include "pipe/AutoEnhance.h"
 #include "pipe/LensLcp.h"
+#include "pipe/LensGeometry.h"
 #include "pipe/LensOpcodes.h"
 #include "ResourcePaths.h"
 
+#include <cmath>
+#include <cstring>
 #include <stdexcept>
 #include <algorithm>
 #include <variant>
@@ -72,7 +75,7 @@ void Engine::setHeadless(bool on) noexcept {
 void Engine::openRaw(const std::string& path) {
     // Either a mosaic or a demosaiced linear DNG — a merged HDR frame comes
     // back through this same door, which is the point of writing one.
-    const auto decoded = raw::decode(path);
+    auto decoded = raw::decode(path);
     sourcePath_ = path;
 
     // The lens name lives in the metadata rather than the mosaic, so it takes a
@@ -81,7 +84,10 @@ void Engine::openRaw(const std::string& path) {
     // A choice belongs to the photograph that was open, not to the next one.
     lensChoice_.clear();
     lensProfile_ = automaticLensProfile();
+    openDecoded(std::move(decoded));
+}
 
+void Engine::openDecoded(raw::DecodedImage decoded) {
     // One body for both kinds of source: every operation below — decimate,
     // canReload, reload, the pipeline constructor — is overloaded for the
     // mosaic and the linear image, and a mosaic graph never reloads a linear
@@ -143,6 +149,14 @@ void Engine::openRaw(const std::string& path) {
         preview_ = std::move(smallNext);
         camera_  = image.camera;
     }, decoded);
+
+    // The region graph cuts its windows from this (#22). Kept only for a
+    // mosaic in an interactive engine; the old window is stale either way.
+    auto* mosaic = std::get_if<raw::BayerImage>(&decoded);
+    mosaic_ = mosaic && !headless_
+        ? std::make_shared<const raw::BayerImage>(std::move(*mosaic)) : nullptr;
+    regionLoaded_ = false;
+    fullCurrent_ = previewCurrent_ = regionCurrent_ = false;
 }
 
 float Engine::hdrMerge(const std::vector<std::string>& paths, int referenceIndex,
@@ -184,16 +198,143 @@ void Engine::setAdjustments(const pipe::Adjustments& adj) {
     // ⚠ Both, always. See the note in the header: a preview left stale is the
     // graph that gets read the instant the drag ends.
     if (preview_) preview_->apply(adj);
+    fullCurrent_ = previewCurrent_ = regionCurrent_ = false;
+    // The region graph applies these itself when it renders: it is rebuilt or
+    // reloaded as the view moves, and an apply now could be for a window
+    // nobody will look at.
+    adj_ = adj;
+}
+
+namespace {
+/// Region graph pixels of margin around what the screen shows: the widest
+/// support among the nodes `regionSupports` allows. The four-scale starlet is
+/// 2·(1+2+4+8) = 30 pixels, Smoothness's two scales at a quarter of the size
+/// are 4·2·(16+32)/4 = 96, demosaic, sharpening and the lens's chromatic
+/// aberration a few each. A texel inside this margin is computed from the same
+/// neighbours as in the whole frame; the edge clamp is past it.
+constexpr std::uint32_t kRegionHalo = 128;
+/// The window's origin is a multiple of this many region pixels, so every
+/// downsampled grid in the graph (Smoothness's quarter, the CFA's two) lands
+/// on the same phase as the whole frame's.
+constexpr std::uint32_t kRegionAlign = 16;
+/// The window's size is rounded up to this many region pixels, so a pan
+/// reloads the same graph rather than building a new one.
+constexpr std::uint32_t kRegionBucket = 256;
+}  // namespace
+
+double Engine::renderRegion(const Region& v) {
+    if (!develop_ || !mosaic_ || headless_) return -1.0;
+    if (!pipe::DevelopPipeline::regionSupports(adj_)) return -1.0;
+    if (!(v.w > 0.0f && v.h > 0.0f) || v.outW == 0 || v.outH == 0) return -1.0;
+    const raw::BayerImage& img = *mosaic_;
+
+    // Frame pixels per screen pixel decides the step: the largest power of two
+    // that still gives the screen at least one region pixel per pixel, so the
+    // region is never softer than the screen. Capped at eight.
+    const double ratio = std::min(double(v.w) * develop_->outputWidth() / v.outW,
+                                  double(v.h) * develop_->outputHeight() / v.outH);
+    std::uint32_t step = 1;
+    while (step < 8 && step * 2 <= ratio * 1.001) step *= 2;   // 4.0 computed as 3.9999 is 4
+
+    // What the geometry node samples for the region, then what the lens
+    // fetches for that: the window must cover both, because the nodes before
+    // the lens see its source and the nodes after it see its output. The edge
+    // suffices — both maps are continuous and one-to-one on the picture.
+    const float W = float(img.width), H = float(img.height);
+    float x0 = W, y0 = H, x1 = 0.0f, y1 = 0.0f;
+    const auto grow = [&](float x, float y) {
+        x0 = std::min(x0, x); y0 = std::min(y0, y);
+        x1 = std::max(x1, x); y1 = std::max(y1, y);
+    };
+    const pipe::params::Lens* lens = develop_->lensParams();
+    constexpr int kEdge = 32;
+    for (int i = 0; i <= kEdge; ++i) {
+        const float t = float(i) / kEdge;
+        const float pts[4][2] = {{v.x + t * v.w, v.y}, {v.x + t * v.w, v.y + v.h},
+                                 {v.x, v.y + t * v.h}, {v.x + v.w, v.y + t * v.h}};
+        for (const auto& p : pts) {
+            const auto f = develop_->sampledFrom(p[0], p[1]);
+            const float fx = f.first * W, fy = f.second * H;
+            grow(fx, fy);
+            for (int ch = 0; lens && ch < 3; ++ch) {
+                float sx = 0.0f, sy = 0.0f;
+                pipe::lens::fetchPoint(*lens, ch, fx, fy, sx, sy);
+                grow(sx, sy);
+            }
+        }
+    }
+
+    // In region pixels from here: the whole frame at this step (decimate's
+    // whole cells), the margin, the alignment, then a bucketed size that fits.
+    const std::uint32_t fw = step == 1 ? img.width  : img.width  / (2 * step) * 2;
+    const std::uint32_t fh = step == 1 ? img.height : img.height / (2 * step) * 2;
+    const auto span = [&](float lo, float hi, std::uint32_t whole,
+                          std::uint32_t& origin, std::uint32_t& size) {
+        const float a = std::floor(lo / float(step)) - float(kRegionHalo);
+        const float b = std::ceil(hi / float(step)) + float(kRegionHalo);
+        std::uint32_t o = a <= 0.0f ? 0u : std::uint32_t(a) / kRegionAlign * kRegionAlign;
+        const std::uint32_t e = b <= 0.0f ? 0u : std::min(whole, std::uint32_t(b));
+        size = (std::max(e, o + kRegionAlign) - o + kRegionBucket - 1) / kRegionBucket * kRegionBucket;
+        if (size >= whole) { origin = 0; size = whole; return; }
+        while (o + size > whole) o -= kRegionAlign;   // reaches 0 at worst: size < whole
+        origin = o;
+    };
+    std::uint32_t ox = 0, oy = 0, ww = 0, wh = 0;
+    span(x0, x1, fw, ox, ww);
+    span(y0, y1, fh, oy, wh);
+
+    // Built when the step or the size changes, reloaded when the window moves.
+    // A window is a crop of the mosaic on whole cells, then the preview's own
+    // decimation — so region pixel i is pixel i + origin of the whole frame
+    // decimated by `step`, exactly.
+    const bool fits = region_ && regionStep_ == int(step) &&
+                      region_->width() == ww && region_->height() == wh;
+    if (!fits || !regionLoaded_ || ox != regionX_ || oy != regionY_) {
+        regionLoaded_ = false;   // until the load below has finished
+        auto sub = raw::window(img, ox * step, oy * step, ww * step, wh * step);
+        if (step > 1) sub = raw::decimate(sub, int(step));
+        if (fits && region_->canReload(sub)) {
+            region_->reload(sub);
+        } else {
+            region_ = std::make_unique<pipe::DevelopPipeline>(*device_, res::shaderDir(), sub);
+            region_->setGridStep(float(step));
+            if (lut_) region_->setCreativeLut(*lut_);
+            regionView_ = {};
+        }
+        region_->setFrameWindow({ox, oy, fw, fh});
+        // The frame's noise, not the window's: denoise must not depend on
+        // what is on screen.
+        region_->setNoiseProfile(develop_->noiseProfile());
+        regionStep_ = int(step);
+        regionX_ = ox; regionY_ = oy;
+        regionLoaded_ = true;
+    }
+    if (std::memcmp(&regionView_, &v, sizeof v) != 0) {
+        region_->setOutputRegion({v.x, v.y, v.w, v.h, v.outW, v.outH});
+        regionView_ = v;
+    }
+    region_->apply(adj_);
+    const double ms = region_->render();
+    regionCurrent_ = true;
+    return ms;
+}
+
+const pipe::DevelopPipeline& Engine::regionDevelop() const {
+    if (!region_) throw std::runtime_error("no region graph");
+    return *region_;
 }
 
 double Engine::renderPreview() {
     if (!preview_) return 0.0;
-    return preview_->render();
+    const double ms = preview_->render();
+    previewCurrent_ = true;
+    return ms;
 }
 
 void Engine::releaseRenderMemory() noexcept {
     if (develop_) develop_->graph().releaseOutputs();
     if (preview_) preview_->graph().releaseOutputs();
+    if (region_)  region_->graph().releaseOutputs();
 }
 
 void Engine::setBrushStroke(int component, const float* xy,
@@ -204,6 +345,7 @@ void Engine::setBrushStroke(int component, const float* xy,
     // the displayed picture, so the same stroke means the same thing on a
     // quarter-linear mosaic. Nothing is scaled here on purpose.
     if (preview_) preview_->setBrushStroke(component, xy, erase, count);
+    fullCurrent_ = previewCurrent_ = regionCurrent_ = false;
 }
 
 bool Engine::setMaskMatte(int component, const float* alpha, int width, int height) {
@@ -214,6 +356,7 @@ bool Engine::setMaskMatte(int component, const float* alpha, int width, int heig
     // differently, so a matte it refuses costs the drag its matte and nothing
     // else — the same bargain as building the preview graph at all.
     if (ok && preview_) preview_->setMaskMatte(component, alpha, width, height);
+    fullCurrent_ = previewCurrent_ = regionCurrent_ = false;
     return ok;
 }
 
@@ -221,12 +364,18 @@ void Engine::setCreativeLut(const pipe::CubeLut& lut) {
     if (!develop_) throw std::runtime_error("no image open");
     develop_->setCreativeLut(lut);
     if (preview_) preview_->setCreativeLut(lut);
+    lut_ = std::make_shared<const pipe::CubeLut>(lut);
+    if (region_) region_->setCreativeLut(lut);
+    fullCurrent_ = previewCurrent_ = regionCurrent_ = false;
 }
 
 void Engine::clearCreativeLut() {
     if (!develop_) throw std::runtime_error("no image open");
     develop_->clearCreativeLut();
     if (preview_) preview_->clearCreativeLut();
+    lut_.reset();
+    if (region_) region_->clearCreativeLut();
+    fullCurrent_ = previewCurrent_ = regionCurrent_ = false;
 }
 
 const pipe::DevelopPipeline& Engine::previewDevelop() const {
@@ -236,7 +385,17 @@ const pipe::DevelopPipeline& Engine::previewDevelop() const {
 
 double Engine::render() {
     if (!develop_) throw std::runtime_error("no image open");
-    return develop_->render();
+    const double ms = develop_->render();
+    fullCurrent_ = true;
+    return ms;
+}
+
+const pipe::DevelopPipeline& Engine::measured() const {
+    // The full graph, unless the canvas has been showing regions since the
+    // last edit and only the preview — the small whole-frame pass — has seen
+    // it (#22). A readout a quarter of the size is right; a full-size one of
+    // the previous edit is not.
+    return (!fullCurrent_ && regionCurrent_ && previewCurrent_ && preview_) ? *preview_ : *develop_;
 }
 
 void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) const {
@@ -244,8 +403,9 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
     if (outScene)   outScene[0]   = outScene[1]   = outScene[2]   = 0.0f;
     if (!develop_) return;
 
-    const std::uint32_t w = develop_->outputWidth();
-    const std::uint32_t h = develop_->outputHeight();
+    const pipe::DevelopPipeline& shown = measured();
+    const std::uint32_t w = shown.outputWidth();
+    const std::uint32_t h = shown.outputHeight();
     if (w == 0 || h == 0) return;
 
     const auto clamp01 = [](float x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); };
@@ -266,7 +426,7 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
     // correctly refuses a pixel with no hue to speak of, and NaN reads as no
     // hue. So the eyedropper picked nothing, said nothing, and looked broken.
     if (outDisplay) {
-        const auto& tex = develop_->output();
+        const auto& tex = shown.output();
         if (tex.format() == gpu::PixelFormat::RGBA16Float) {
             __fp16 px[4]{};
             tex.readPixel(x, y, px);
@@ -323,6 +483,8 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     const auto measureNow = [&]() {
         develop_->apply(adj);
         develop_->render();
+        fullCurrent_ = true;
+        previewCurrent_ = false;   // the preview has not had these
         histogram(rgb.data(), kBins);
         ae::combine(rgb.data(), kBins, combined.data());
         return ae::measure(combined.data(), kBins, ae::kClipPerSide);
@@ -378,6 +540,7 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     adj.blacks     = c.blacks;
     adj.whites     = c.whites;
     develop_->apply(adj);
+    adj_ = adj;
     develop_->render();
 }
 
@@ -386,8 +549,9 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
     std::fill_n(out, std::size_t(bins) * 3, 0u);
     if (!develop_) return;
 
-    const std::uint32_t w = develop_->outputWidth();
-    const std::uint32_t h = develop_->outputHeight();
+    const pipe::DevelopPipeline& d = measured();
+    const std::uint32_t w = d.outputWidth();
+    const std::uint32_t h = d.outputHeight();
     if (w == 0 || h == 0) return;
 
     // A prime stride decorrelates from any repeating structure in the image,
@@ -403,16 +567,16 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
 
     // Read only in the output's native format. Expanding every pixel to float
     // used another 16 bytes per pixel even though only one in 31 is sampled.
-    if (develop_->output().format() == gpu::PixelFormat::RGBA16Float) {
+    if (d.output().format() == gpu::PixelFormat::RGBA16Float) {
         std::vector<__fp16> pixels(count * 4);
-        develop_->output().download(pixels.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+        d.output().download(pixels.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
         for (std::size_t i = 0; i < count; i += kStride) {
             for (std::uint32_t c = 0; c < 3; ++c)
                 add(c, static_cast<float>(pixels[i * 4 + c]));
         }
     } else {
         std::vector<std::uint8_t> pixels(count * 4);
-        develop_->output().download(pixels.data(), std::size_t(w) * 4, w, h);
+        d.output().download(pixels.data(), std::size_t(w) * 4, w, h);
         for (std::size_t i = 0; i < count; i += kStride) {
             for (std::uint32_t c = 0; c < 3; ++c)
                 add(c, pixels[i * 4 + c] / 255.0f);

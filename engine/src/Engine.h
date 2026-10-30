@@ -61,6 +61,9 @@ public:
     [[nodiscard]] bool headless() const noexcept { return headless_; }
 
     void openRaw(const std::string& path);
+    /// The graphs half of `openRaw`, for an image already in memory: the tests'
+    /// synthetic mosaics. No file, so no metadata and no lens profile.
+    void openDecoded(raw::DecodedImage image);
     void setAdjustments(const pipe::Adjustments&);
     double render();
 
@@ -84,6 +87,29 @@ public:
 
     /// Renders the preview graph. Returns GPU milliseconds.
     double renderPreview();
+
+    // ── Region of interest (issue #22, decision #364) ─────────────────────
+    //
+    // A third graph, over the part of the mosaic the screen shows, decimated
+    // to the zoom: a drag frame and a settled render at 100% cost what the
+    // screen holds, not what the sensor holds, and are never softer than the
+    // screen. Like the preview it is for the canvas only.
+
+    /// Part of the displayed picture, normalized (0..1 of the cropped, turned
+    /// picture), and the screen pixels it will cover.
+    struct Region { float x = 0, y = 0, w = 1, h = 1; std::uint32_t outW = 0, outH = 0; };
+
+    /// Renders `r`. Returns GPU milliseconds, or a negative number when the
+    /// region graph cannot render this edit exactly
+    /// (`DevelopPipeline::regionSupports`), the source is not a mosaic, or the
+    /// engine is headless: the caller renders the whole graph instead.
+    double renderRegion(const Region& r);
+
+    /// The region graph, once `renderRegion` has built one.
+    [[nodiscard]] bool hasRegion() const noexcept { return region_ != nullptr; }
+    [[nodiscard]] const pipe::DevelopPipeline& regionDevelop() const;
+    /// Frame pixels per region pixel, per axis, that the last region chose.
+    [[nodiscard]] int regionStep() const noexcept { return regionStep_; }
 
     /// Both graphs give their render textures back to Metal and keep the
     /// decoded photo: what a cache does to a photo it holds but is not
@@ -218,6 +244,24 @@ private:
     std::unique_ptr<merge::HdrMerge>       hdrMerge_;
     std::unique_ptr<pipe::DevelopPipeline> develop_;
     std::unique_ptr<pipe::DevelopPipeline> preview_;
+    /// The region graph and what it was last loaded with (#22).
+    std::unique_ptr<pipe::DevelopPipeline> region_;
+    // ponytail: the whole mosaic stays on the CPU for the region graph to cut
+    // windows from (2 bytes a pixel, 48 MB at 24 MP); read windows back from
+    // the full graph's source texture if that ever matters.
+    std::shared_ptr<const raw::BayerImage> mosaic_;
+    int                                    regionStep_ = 0;
+    std::uint32_t                          regionX_ = 0, regionY_ = 0;
+    bool                                   regionLoaded_ = false;
+    /// Whether each graph has rendered the current edit. Decides which one
+    /// the histogram and the eyedropper read (`measured`).
+    bool                                   fullCurrent_ = false, previewCurrent_ = false, regionCurrent_ = false;
+    [[nodiscard]] const pipe::DevelopPipeline& measured() const;
+    Region                                 regionView_{};
+    /// What `setAdjustments` last pushed, for the region graph's own apply.
+    pipe::Adjustments                      adj_{};
+    /// The creative LUT, for a region graph built after it was loaded.
+    std::shared_ptr<const pipe::CubeLut>   lut_;
     std::string                            camera_;
     std::string                            lensChoice_;
     /// ⚠ Kept whole so a hand-chosen lens can be re-interpolated at this

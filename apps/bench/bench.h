@@ -37,6 +37,8 @@ Stats summarise(std::vector<double> v);
 constexpr int kIterations = 60;
 
 bool memoryCycle(const std::string& path);
+/// Issue #22: drag and settled cost at fit and at 100%. `--roi`.
+bool roiBench(const std::string& path);
 
 /// The developed output as 16-bit unsigned; see the definition for why it has
 /// to be format-aware.

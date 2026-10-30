@@ -855,8 +855,15 @@ struct Geometry {
     /// resamples a plausible wrong picture. `.w` is unused and is zero.
     /// The matrix begins at offset 64, which is where the alignment wants it.
     float         perspective[3][4];
+
+    /// The texture actually bound, as a window of the frame `inSize` names:
+    /// where its texel (0, 0) sits and how big it is. Zero and `inSize` for
+    /// every graph but the region graph (#22), which keeps the arithmetic
+    /// above in whole-frame pixels and subtracts once at the fetch.
+    float         srcOrigin[2];
+    std::uint32_t srcSize[2];
 };
-static_assert(sizeof(Geometry) == 112);
+static_assert(sizeof(Geometry) == 128);
 static_assert(offsetof(Geometry, perspective) == 64,
               "the homography must start on a sixteen-byte boundary; "
               "geometry.slang's mirror assumes it");

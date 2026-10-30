@@ -207,4 +207,10 @@ using DecodedImage = std::variant<BayerImage, LinearImage>;
 /// scale x scale blocks. Same contract on `scale` as the mosaic overload.
 [[nodiscard]] LinearImage decimate(const LinearImage& image, int scale);
 
+/// A rectangle of the mosaic, `w` x `h` from (`x`, `y`), clamped to the image.
+/// The region graph's input (#22). ⚠ `x` and `y` are rounded down to even so
+/// the CFA phase, and with it `filters`, is unchanged.
+[[nodiscard]] BayerImage window(const BayerImage& image, std::uint32_t x, std::uint32_t y,
+                                std::uint32_t w, std::uint32_t h);
+
 }  // namespace orion::raw

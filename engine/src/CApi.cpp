@@ -330,6 +330,39 @@ OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms) {
     });
 }
 
+OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
+                                       float w, float h, unsigned out_w,
+                                       unsigned out_h, double* out_ms) {
+    if (engine == nullptr || !engine->impl.hasImage()) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        const double ms = engine->impl.renderRegion({x, y, w, h, out_w, out_h});
+        if (ms < 0.0) return ORION_ERR_BAD_ARG;   // not this edit: render the whole graph
+        if (out_ms) *out_ms = ms;
+        return ORION_OK;
+    });
+}
+
+void* orion_engine_region_texture(const OrionEngine* engine) {
+    if (engine == nullptr || !engine->impl.hasRegion()) return nullptr;
+    try {
+        return engine->impl.regionDevelop().output().raw();
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+OrionStatus orion_engine_region_size(const OrionEngine* engine,
+                                     unsigned* out_w, unsigned* out_h) {
+    if (engine == nullptr || out_w == nullptr || out_h == nullptr ||
+        !engine->impl.hasRegion())
+        return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        *out_w = engine->impl.regionDevelop().outputWidth();
+        *out_h = engine->impl.regionDevelop().outputHeight();
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_engine_release_render_memory(OrionEngine* engine) {
     if (engine == nullptr) return ORION_ERR_BAD_ARG;
     engine->impl.releaseRenderMemory();   // noexcept: nothing to guard

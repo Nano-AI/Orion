@@ -424,18 +424,25 @@ void DevelopPipeline::applyGeometry(const Adjustments& adj,
         adj.cropPreview != lastAdj_.cropPreview ||
         adj.perspectiveVertical   != lastAdj_.perspectiveVertical ||
         adj.perspectiveHorizontal != lastAdj_.perspectiveHorizontal ||
-        adj.perspectiveAspect     != lastAdj_.perspectiveAspect;
+        adj.perspectiveAspect     != lastAdj_.perspectiveAspect ||
+        regionMoved_;
 
     if (geometryMoved) {
+        regionMoved_ = false;
         const int turns = ((exifQuarters_ + adj.rotateQuarters) % 4 + 4) % 4;
         const bool swap = (turns % 2) != 0;
 
-        const float rotW = static_cast<float>(swap ? height_ : width_);
-        const float rotH = static_cast<float>(swap ? width_  : height_);
+        // The whole frame, which a window graph is only part of (#22).
+        const float rotW = static_cast<float>(swap ? wholeH() : wholeW());
+        const float rotH = static_cast<float>(swap ? wholeW() : wholeH());
 
         params::Geometry g{};
-        g.inSize[0] = width_;
-        g.inSize[1] = height_;
+        g.inSize[0] = wholeW();
+        g.inSize[1] = wholeH();
+        g.srcOrigin[0] = float(window_.x);
+        g.srcOrigin[1] = float(window_.y);
+        g.srcSize[0] = width_;
+        g.srcSize[1] = height_;
         g.quarterTurns  = static_cast<std::uint32_t>(turns);
         g.straightenRad = adj.straightenDeg * 3.14159265358979f / 180.0f;
 
@@ -491,6 +498,19 @@ void DevelopPipeline::applyGeometry(const Adjustments& adj,
 
             g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * cw));
             g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * ch));
+
+            // Only part of the picture, at a size of the caller's choosing:
+            // the region graph's view of the screen (#22). Capped at the
+            // texture the graph allocated.
+            if (region_.outW > 0 && region_.outH > 0) {
+                g.cropOrigin[0] = cx + region_.x * cw;
+                g.cropOrigin[1] = cy + region_.y * ch;
+                g.cropSize[0]   = region_.w * cw;
+                g.cropSize[1]   = region_.h * ch;
+                const auto cap = static_cast<std::uint32_t>(std::max(width_, height_) * 1.45f);
+                g.outSize[0] = std::min(region_.outW, cap);
+                g.outSize[1] = std::min(region_.outH, cap);
+            }
         }
 
         pipeline_.setParams(nGeometry_, &g, sizeof g);
@@ -634,6 +654,28 @@ void DevelopPipeline::retargetOutputChain(const Adjustments& adj) {
     // are guarded on values that did not change.
     pushDisplayParams(adj);
     pushGrainParams(adj);
+}
+
+void DevelopPipeline::setFrameWindow(const FrameWindow& w) {
+    window_ = w;
+    primed_ = false;   // the lens, the perspective and the geometry all move
+}
+
+void DevelopPipeline::setOutputRegion(const OutputRegion& r) {
+    region_ = r;
+    regionMoved_ = true;
+}
+
+bool DevelopPipeline::regionSupports(const Adjustments& a) {
+    // Each of these either knows where a pixel sits in the frame (masks and
+    // the local denoise that reads them, spots, grain, the creative vignette)
+    // or reads more of the frame than a bounded halo (the dark channel's
+    // airlight, the clarity pyramid, fusion's plan, the harmonic highlight
+    // fill, the guided filter's radius). Each is a follow-up of #22.
+    return !a.cropPreview && a.maskCount == 0 && a.spotCount == 0 &&
+           a.grainAmount <= 0.0f && a.vignetteAmount == 0.0f &&
+           a.dehaze == 0.0f && a.clarity == 0.0f && a.fusion == 0.0f &&
+           a.highlightRecovery <= 0.0f && !guideNeeded(a);
 }
 
 void DevelopPipeline::setGridStep(float step) {

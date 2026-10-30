@@ -59,6 +59,7 @@ int main() {
     testLensInverseMap();
     testDngLensOpcodesThroughLibRaw();
     testLensSourceOnRealSony();
+    testRegionMatchesCropGpu();
     testLensAutoScale();
     testToneBandsWithoutGuide();
     testHueSatMapGpu();

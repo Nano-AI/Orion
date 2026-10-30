@@ -153,6 +153,7 @@ void testAdobeLensProfile();
 void testLensInverseMap();
 void testDngLensOpcodesThroughLibRaw();
 void testLensSourceOnRealSony();
+void testRegionMatchesCropGpu();
 void testHueSatMapGpu();
 void testColorGradeGpu();
 void testToneBandsWithoutGuide();

@@ -39,6 +39,7 @@ add_executable(orion-tests
     tests_pipeline.cpp
     tests_dng.cpp
     tests_lens_sources.cpp
+    tests_roi.cpp
     tests_merge.cpp
     tests_merge_render.cpp
     tests_align.cpp

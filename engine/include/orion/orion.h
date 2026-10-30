@@ -508,6 +508,27 @@ OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms);
 OrionStatus orion_engine_preview_size(const OrionEngine* engine,
                                       unsigned* out_w, unsigned* out_h);
 
+/* Renders only the part of the picture the canvas shows, at the screen's own
+ * resolution (issue #22, decision #364): x, y, w, h are normalized in the
+ * displayed picture (cropped and turned, 0..1), out_w x out_h the screen
+ * pixels that part covers. Cost follows the screen, not the sensor, and the
+ * result is never softer than the screen. Canvas only, like the preview.
+ *
+ * Returns ORION_ERR_BAD_ARG when this edit uses something the region graph
+ * cannot render exactly (masks, spots, grain, the creative vignette, dehaze,
+ * clarity, fusion, highlight recovery, highlights/shadows, the crop tool's
+ * canvas) or the photo is not a mosaic: render the whole graph instead. */
+OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
+                                       float w, float h, unsigned out_w,
+                                       unsigned out_h, double* out_ms);
+
+/* The region graph's output texture (id<MTLTexture>) and the part of it that
+ * holds the last region: top-left out_w x out_h, as asked, capped at the
+ * texture. NULL / ORION_ERR_BAD_ARG before the first region render. */
+void* orion_engine_region_texture(const OrionEngine* engine);
+OrionStatus orion_engine_region_size(const OrionEngine* engine,
+                                     unsigned* out_w, unsigned* out_h);
+
 /* Renders dirty nodes. *out_ms receives GPU-side milliseconds (may be NULL). */
 OrionStatus orion_engine_render(OrionEngine* engine, double* out_ms);
 
