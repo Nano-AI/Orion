@@ -12,7 +12,7 @@ sealed class ExportSettings {
 
     public sealed record Choice(string Title, int Code, string Note = "");
 
-    public static readonly Choice[] Formats = [new("JPEG", 1), new("PNG", 0), new("TIFF", 2)];
+    public static readonly Choice[] Formats = [new("JPEG", 1), new("PNG", 0), new("TIFF", 2), new("JPEG XL", 3)];
 
     public static readonly Choice[] Spaces = [
         new("sRGB", 0, "The safe choice. What the web and most screens expect."),
@@ -50,9 +50,14 @@ sealed class ExportSettings {
     /// Measured by a real encode, not estimated. null until the first one lands.
     public long? MeasuredBytes;
 
-    public bool IsLossy => Format == 0;
+    int Code => Formats[Format].Code;
+    /// JPEG and JPEG XL take a quality; JPEG XL at 100 is lossless (DECISIONS #363).
+    public bool IsLossy => Code is 1 or 3;
+    public bool IsJxl => Code == 3;
     /// JPEG holds eight bits; the control keeps its value but the file does not.
-    public bool CarriesDepth => Format != 0;
+    public bool CarriesDepth => Code != 1;
+    /// The file's extension, for the save panel and the batch plan.
+    public string Extension => Code switch { 1 => "jpg", 0 => "png", 3 => "jxl", _ => "tiff" };
     public int EffectiveDepth => CarriesDepth ? Depths[Depth].Code : 8;
     bool IsCustom => Sizes[Size].Code < 0;
 
@@ -87,6 +92,7 @@ sealed class ExportSettings {
     /// Rough bytes per pixel. Empirical, replaced by a measurement within a fifth of a second.
     double BytesPerPixel() => Formats[Format].Code switch {
         1 => 0.08 + 0.72 * Math.Pow(Quality, 2.4),
+        3 => Quality >= 1 ? (EffectiveDepth == 16 ? 3.0 : 1.5) : 0.05 + 0.6 * Math.Pow(Quality, 3),
         0 => EffectiveDepth == 16 ? 4.2 : 2.1,
         _ => EffectiveDepth == 16 ? 6.0 : 3.0,
     };

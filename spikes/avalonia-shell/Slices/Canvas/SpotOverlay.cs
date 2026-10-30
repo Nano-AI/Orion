@@ -34,19 +34,27 @@ static class SpotModel {
         CanvasState.Touch();
     }
 
-    /// The whole list at once, pushed: what undo, redo and a restore set the spots with.
-    public static void Replace(IReadOnlyList<SpotPlacement> spots) {
+    /// The whole list at once, into the engine's adjustments, which the session
+    /// saves to the sidecar: the one door undo, redo and a restore set spots by.
+    /// It does not render, so a restore that also writes fields renders once, and
+    /// its settle finds history already standing on the restored step.
+    public static void Replace(IEnumerable<SpotPlacement> spots) {
+        var list = spots.Take(MaxSpots).ToList();
         Spots.Clear();
-        Spots.AddRange(spots.Take(MaxSpots));
+        Spots.AddRange(list);
         Selected = Math.Min(Selected, Spots.Count - 1);
-        Push();
+        EngineModel.Shared.Session?.SetSpots(Rows());
+        CanvasState.Touch();
     }
 
-    /// pushAndRender: the spots into the engine, then the render (the preview graph mid-drag).
+    static List<Session.Spot> Rows() => Spots.Select(p => new Session.Spot(
+        (float)p.Destination.X, (float)p.Destination.Y, (float)p.Source.X, (float)p.Source.Y,
+        (float)p.Radius, (float)p.Feather, p.Heal ? 1 : 0)).ToList();
+
+    /// pushAndRender: the spots into the engine, then the render (the preview graph
+    /// mid-drag). The settled render is what EditHistory records as a step.
     static void Push() {
-        EngineModel.Shared.Apply(s => s.SetSpots(Spots.Select(p => new Session.Spot(
-            (float)p.Destination.X, (float)p.Destination.Y, (float)p.Source.X, (float)p.Source.Y,
-            (float)p.Radius, (float)p.Feather, p.Heal ? 1 : 0)).ToList()));
+        EngineModel.Shared.Apply(s => s.SetSpots(Rows()));
         CanvasState.Touch();
     }
 
@@ -150,12 +158,14 @@ public sealed class SpotOverlay : Control, ICustomHitTest {
         if (MaskLayout.SpotHit(p, SpotModel.Spots, map) is { } hit) {
             _dragging = hit;
             SpotModel.Selected = hit.Index;
+            EngineModel.Shared.BeginInteraction();   // decision #84
         } else if (Armed) {
-            // Placed on press, then its source dragged out: one act, one undo.
+            // Placed on press, then its source dragged out: one act, one undo, so
+            // the interaction starts first and the press's render is not a step.
+            EngineModel.Shared.BeginInteraction();
             SpotModel.Add(MaskLayout.SpotDrag(p, map), map.Fd);
             _placing = true;
         } else return;
-        EngineModel.Shared.BeginInteraction();   // decision #84
         e.Pointer.Capture(this);
         e.Handled = true;
     }
@@ -170,7 +180,8 @@ public sealed class SpotOverlay : Control, ICustomHitTest {
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e) {
         if (_dragging == null && !_placing) return;
-        // stub(#315): EditHistory.swift owns this until the logic moves below the facade (commitSpotEdit)
+        // addSpot's "Spot", or commitSpotEdit's "Move spot": one step, recorded at the full render the release settles on.
+        Develop.EditHistory.Label(_placing ? "Spot" : "Move spot");
         (_dragging, _placing) = (null, false);
         e.Pointer.Capture(null);
         EngineModel.Shared.EndInteraction();

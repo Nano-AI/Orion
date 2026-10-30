@@ -120,9 +120,17 @@ public sealed class AssistantPanel : DockPanel {
     internal static Action<TerminalControl, string, string, string?>? Launcher;
 
     void Terminate() {
-        if (_terminal.IsLive) _terminal.Kill();
+        if (_terminal.IsLive) {
+            // Porta.Pty's kill signals the pid alone. forkpty made it a session and group
+            // leader, so the group takes the agent's own children (its MCP server) with it.
+            if (_terminal.Pid > 0) kill(-_terminal.Pid, SIGHUP);
+            _terminal.Kill();
+        }
         _launched = null;
     }
+
+    const int SIGHUP = 1;
+    [System.Runtime.InteropServices.DllImport("libc")] static extern int kill(int pid, int signal);
 
     static bool FontShortcut(KeyEventArgs e) {
         if (!e.KeyModifiers.HasFlag(OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control)) return false;

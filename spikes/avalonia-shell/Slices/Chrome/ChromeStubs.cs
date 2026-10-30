@@ -12,14 +12,14 @@ namespace OrionShell.Chrome;
 static class ChromeStubs {
     public static bool Culling => GalleryMode.On;                // mode == .cull
     public static (int Done, int Total)? BatchProgress => ExportRun.Progress;
-    // stub(#315): OrionApp+Files.swift owns this until the logic moves below the facade
-    public static int ExportSelected => 0;
+    /// exportSelected: the export targets of a real selection, 0 when Export writes the open photo.
+    public static int ExportSelected => LibraryModel.Shared.HasExplicitSelection ? ExportRun.Targets().Count : 0;
     public static bool CanUndo => EditHistory.CanUndo;
     public static bool CanRedo => EditHistory.CanRedo;
     /// True while an agent's proposal is on the canvas (ProposalWatcher.isLive).
     public static bool DocumentEditsLocked => ProposalWatcher.Shared.IsLive;
     public static string? FlatFrame => FlatFrameCheck.Why;
-    public static string? Complaint => Autosave.Shared.LastFailure;   // autosave ?? library lastFailure (the library writes no sidecar yet)
+    public static string? Complaint => Autosave.Shared.LastFailure;   // a mark that did not save says so on the status line (LibraryModel.Persist)
     public static bool IsFit => CanvasSlice.CanvasState.Viewport.IsFit;
     /// fitScale × zoom, the canvas's numbers: shown while a photo is in develop.
     public static int? Percent => EngineModel.Shared.Handle != 0 && !Culling ? CanvasSlice.CanvasState.Viewport.Percent : null;

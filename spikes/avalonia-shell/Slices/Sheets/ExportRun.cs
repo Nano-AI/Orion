@@ -21,7 +21,7 @@ static partial class ExportRun {
 
     static EngineModel E => EngineModel.Shared;
     static ExportSettings S => ExportSettings.Shared;
-    static string Extension => S.Format switch { 0 => "jpg", 1 => "png", _ => "tiff" };
+    static string Extension => S.Extension;
 
     /// The photo's own options: its rating and the metadata the sheet chose.
     static SheetsNative.ExportOptions Options(nint engine, int rating) {
@@ -50,11 +50,12 @@ static partial class ExportRun {
         if (Write(E.Handle, path, LibraryModel.Shared.Open?.Rating ?? 0) is { } why) E.Say(why);
     }
 
-    /// `exportTargets`: what is in view, without the rejects unless the
-    /// Rejected filter asked for them. (No selection here: PhotoSelection is not ported.)
+    /// `exportTargets`: the selection, or what is in view, without the rejects
+    /// unless they were asked for, by selecting them or by the Rejected filter.
     public static List<LibraryModel.Photo> Targets() {
         var library = LibraryModel.Shared;
-        return library.Visible.Where(p => !p.Rejected || library.Current == LibraryModel.Filter.Rejected).ToList();
+        bool asked = library.HasExplicitSelection || library.Current == LibraryModel.Filter.Rejected;
+        return library.Targets.Where(p => !p.Rejected || asked).ToList();
     }
 
     /// BatchExport.plan: `stem.ext`, then `stem-2.ext`, never over a file already there.
@@ -76,7 +77,7 @@ static partial class ExportRun {
     /// yielding between them so the readout paints and Stop is heard.
     public static async void ExportAll() {
         var targets = Targets();
-        int skipped = LibraryModel.Shared.Visible.Count() - targets.Count;
+        int skipped = LibraryModel.Shared.Targets.Count - targets.Count;
         if (E.Handle == 0 || targets.Count == 0 || Progress != null || App.Window?.StorageProvider is not { CanOpen: true } picker) return;
         // The skipped count is said on the panel that chooses the folder: the last moment before files are written.
         string rejects = skipped == 0 ? "" : skipped == 1 ? " 1 rejected photo is not included." : $" {skipped} rejected photos are not included.";

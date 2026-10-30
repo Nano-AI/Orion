@@ -32,8 +32,10 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `Shared/` | building blocks every slice uses: slider, plates, icons, tokens, commands |
 | `Shared/Engine/` | the engine model and its pieces: session, photo list, session source, shown picture; the XMP sidecar (`Sidecar.cs`, `DevelopJson.cs`, `SessionDocument.cs`, decision #362) |
 | `Shared/Autosave.cs` | edits reach the sidecar 900 ms after the first change, and on switch, deactivate and quit. Only the app at a window writes: the headless flags and `--proof` read sidecars and never write one |
-| `Slices/Chrome/Assistant*.cs`, `Proposal*.cs`, `CurrentPhoto.cs` | the agent's terminal column (⌘⌥A, #363), the MCP proposal watcher with Approve ⌘⏎ / Reject ⌘⎋ (#365), and `current.json`; the headless modes never start the agent nor write `current.json` |
-| `Slices/Sheets/Watermark*.cs`, `HdrMerge.cs` | `watermark.json` in Swift's shape, the coverage mask every export carries (#364), the HDR merge on a worker |
+| `Slices/Chrome/Assistant*.cs`, `Proposal*.cs`, `CurrentPhoto.cs` | the agent's terminal column (⌘⌥A, #366), the MCP proposal watcher with Approve ⌘⏎ / Reject ⌘⎋ (#368), and `current.json`; the headless modes never start the agent nor write `current.json` |
+| `Slices/Sheets/Watermark*.cs`, `HdrMerge.cs` | `watermark.json` in Swift's shape, the coverage mask every export carries (#367), the HDR merge on a worker |
+| `Slices/Library/LibraryModel.cs`, `PhotoSelection.cs` | ratings, rejects and labels merged into the sidecar (window only), and the command/shift-click selection culls and batches act on (decision #363) |
+| `Slices/Sheets/Snapshots.cs` | saved versions in `PHOTO.orion-snapshots.json`, Swift's file shape; `Shared/ShellSettings.cs` is the @AppStorage stand-in |
 | `Fixtures/` | sidecars the Swift app wrote: `--selftest` rewrites them byte for byte and reopens each through the engine |
 | `STREAMS.md` | stage 1's three parallel streams: who owns which file, which contracts they consume |
 | `Shell/` | the window: regions and the tool tab bar |
@@ -41,6 +43,7 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `SLICES.md` | the brief a slice agent works from |
 | `compare.py` | `check` file ownership, `swift`/`avalonia` screenshots, `page` side by side |
 | `native/present.mm` | the picture to Avalonia on the GPU: an IOSurface per graph, handed over on `MTLSharedEvent`s |
+| `native/matte.mm` | Subject and Person selection through Apple's Vision (macOS only; decision #365) |
 | `bin-native/present_test RAW` | its headless check: surface against CPU readback, the GPU wait, timings. No window |
 
 Spike-only, not product code: `native/shim.mm` repeats the default look from

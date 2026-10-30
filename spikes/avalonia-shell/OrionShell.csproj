@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- packages.lock.json pins every transitive package, the terminal's native pty above all (#366). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
     <!-- Built by native/build.sh from the engine's static library. -->
@@ -18,6 +20,6 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Headless" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
-    <PackageReference Include="Iciclecreek.Avalonia.Terminal" Version="4.1.0" />
+    <PackageReference Include="Iciclecreek.Avalonia.Terminal" Version="[4.1.0]" />
   </ItemGroup>
 </Project>

@@ -57,7 +57,7 @@ public sealed class MaskPanel : Border {
 
     /// The draw tools, always in view: a new mask is one press here and one drag on the photo.
     Control Tools() {
-        bool can = _group.Shapes.Count < MaskGroup.Max && EngineModel.Shared.Handle != 0;
+        bool can = _group.Shapes.Count < MaskGroup.Max && EngineModel.Shared.Handle != 0 && !SubjectMatte.Running;
         Control Tool(int kind, Control icon, string name, string help) {
             bool armed = _group.Drawing == kind && _group.DrawInto == null;
             var b = new StateButton {
@@ -70,7 +70,9 @@ public sealed class MaskPanel : Border {
         var more = Menu(null, "More", [
             Item("Brightness range", () => _group.Add(5)), Item("Color range", () => _group.Add(6)),
             new Separator(), Heading("Detect"),
-            Item("Subject", () => Detect("Subject")), Item("Sky (estimated)", () => Detect("Sky")),
+            Item("Subject", () => Detect(SubjectMatte.Kind.Subject)), Item("Person", () => Detect(SubjectMatte.Kind.Person)),
+            // "estimated": not a model, the calm region joined to the top edge (research/sky-detection.md).
+            Item("Sky (estimated)", () => Detect(SubjectMatte.Kind.Sky)),
         ], can);
         return new WrapPanel {
             Orientation = Orientation.Horizontal,
@@ -85,8 +87,20 @@ public sealed class MaskPanel : Border {
 
     /// The placement controls each kind reads, and only those: a slider the
     /// shader ignores is worse than no slider (the Swift comments say which).
-    /// stub(#315): Engine+Mask.swift owns this until the logic moves below the facade
+    /// First, what the row is (Engine+Mask.swift's setMaskKind): the Add menu makes rows, this changes one.
     IEnumerable<Control> KindControls(MaskShape m) {
+        int row = _group.Selected;
+        yield return new StackPanel {
+            Orientation = Orientation.Horizontal, Spacing = Space.Sm,
+            Children = {
+                Caption("Kind"),
+                Menu(null, MaskGroup.KindName(m.Kind), [
+                    Item("Linear", () => _group.SetKind(row, 1)), Item("Radial", () => _group.SetKind(row, 2)),
+                    Item("Brush", () => _group.SetKind(row, 3)), Item("Brightness range", () => _group.SetKind(row, 5)),
+                    Item("Color range", () => _group.SetKind(row, 6)),
+                ]),
+            },
+        };
         switch (m.Kind) {
             case 5:
                 yield return Shape("From", -8, 8, " EV", 1, s => s.RangeLo, (s, v) => s.RangeLo = v);
@@ -94,12 +108,14 @@ public sealed class MaskPanel : Border {
                 yield return Shape("Softness", 0.05f, 4, " EV", 2, s => s.RangeSoft, (s, v) => s.RangeSoft = v);
                 break;
             case 6:
-                // The picked shade as a label, raised to something a screen shows.
-                // stub(#315): Engine+Mask.swift owns this until the logic moves below the facade (maskColorSwatch)
-                byte G(float c) => (byte)Math.Round(255 * Math.Clamp(Math.Pow(Math.Max(c, 0), 1 / 2.2), 0, 1));
+                // What was under the click (maskColorSwatch); before any pick, the stored
+                // target raised to something a screen shows, a label for it, not a rendering.
+                static byte B(double c) => (byte)Math.Round(255 * Math.Clamp(c, 0, 1));
+                static byte G(float c) => B(Math.Pow(Math.Max(c, 0), 1 / 2.2));
+                var shade = _group.ColorSwatch is { } d ? Color.FromRgb(B(d[0]), B(d[1]), B(d[2])) : Color.FromRgb(G(m.ColorR), G(m.ColorG), G(m.ColorB));
                 var swatch = new Border {
                     Width = 26, Height = 18, CornerRadius = new CornerRadius(Radius.Sm), BorderBrush = Palette.Line,
-                    BorderThickness = new Thickness(1), Background = new SolidColorBrush(Color.FromRgb(G(m.ColorR), G(m.ColorG), G(m.ColorB))),
+                    BorderThickness = new Thickness(1), Background = new SolidColorBrush(shade), Tag = "mask-swatch",
                 };
                 yield return new StackPanel {
                     Orientation = Orientation.Horizontal, Spacing = Space.Md,
@@ -157,19 +173,25 @@ public sealed class MaskPanel : Border {
         }, min, max, unit, decimals, get(MaskGroup.Defaults));
     }
 
-    /// The row and the model in one act, so a Subject row never exists unfilled.
-    /// The row is added; the model is not run, and the panel says so rather
-    /// than leave an empty matte that looks like a broken feature.
-    // stub(#315): SubjectMatte.swift owns this until the logic moves below the facade
-    void Detect(string what) {
-        _message = NotBuilt.Text($"{what} detection", "SubjectMatte.swift") + " Radial, Linear, Brush and the range masks work now.";
+    /// The row and the model in one act (SubjectMatte.Select). The row is made
+    /// only once the model has answered, so a Subject row never exists unfilled;
+    /// "nothing was found" is a real answer and is said, not left as an empty matte.
+    async void Detect(SubjectMatte.Kind kind) {
+        _message = "Selecting…";
+        Rebuild();
+        string? said;
+        try { said = await SubjectMatte.Select(kind); }
+        catch (Exception e) { said = $"{kind} selection failed: {e.Message}"; }   // async void: nothing may escape
+        _message = said;
         Rebuild();
     }
 
-    // stub(#315): MatteStore.swift owns this until the logic moves below the facade (the missing-file case)
-    static string MatteCaption(MaskShape m) => m.MatteSource is not { } source
-        ? "Empty. Press Subject, Person or Sky."
-        : m.MatteId == null
-            ? $"{source} selection — not saved yet, so it will not survive reopening."
-            : $"{source} selection, saved with the photo.";
+    /// The missing file and the unsaved selection are news; a saved one names its producer and stops.
+    static string MatteCaption(MaskShape m) => EngineModel.Shared.Session is { } s && MatteStore.IsMissing(s, m.MatteId)
+        ? "Missing file — this row covers nothing. Run it again."
+        : m.MatteSource is not { } source
+            ? "Empty. Press Subject, Person or Sky."
+            : m.MatteId == null
+                ? $"{source} selection — not saved yet, so it will not survive reopening."
+                : $"{source} selection, saved with the photo.";
 }

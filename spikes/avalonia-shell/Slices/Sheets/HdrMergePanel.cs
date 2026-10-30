@@ -10,28 +10,13 @@ namespace OrionShell.Sheets;
 /// the software cannot make: which frame's framing wins.
 [Panel("sheet-hdr-merge", Region.Sheet)]
 public sealed class HdrMergePanel : Border {
-    sealed record Candidate(string Path, float Iso, float Shutter, float Aperture);
+    internal sealed record Candidate(string Path, string Camera, float Iso, float Shutter, float Aperture);
 
     readonly List<Candidate> _candidates;
     readonly StackPanel _rows = new() { Spacing = Space.Md + 2 };
     readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Sm + 2, HorizontalAlignment = HorizontalAlignment.Right };
     int _reference;
     bool _merging;
-
-    /// The group Ask was given, taken by the next sheet; null, the whole list.
-    public static IReadOnlyList<string>? Frames;
-
-    /// askHdrMerge (the filmstrip's group entry): refused on the status line when the
-    /// frames cannot merge, else this sheet over them.
-    public static void Ask(IReadOnlyList<string> frames) {
-        if (HdrMerge.Ineligibility(frames) is { } reason) {
-            Console.Error.WriteLine($"orion merge: refused: {reason}");
-            EngineModel.Shared.Say(reason);
-            return;
-        }
-        Frames = frames;
-        CommandTable.Sheet("sheet-hdr-merge", "Merge to HDR");
-    }
 
     /// Closes the sheet. Set by whatever opened it.
     public Action? Dismiss { get; set; }
@@ -43,13 +28,12 @@ public sealed class HdrMergePanel : Border {
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
         SheetKit.Restyle(this);
-        // The frames ringed on the strip, checked for one camera and two or more.
-        // askHdrMerge, HdrMergeFlow.ineligibility:
-        // stub(#315): Library.swift owns this until the logic moves below the facade
-        _candidates = (Frames ?? EngineModel.Shared.Photos).Select(Read).ToList();
-        Frames = null;
+        // askHdrMerge: the frames ringed on the strip (Library.targets), checked
+        // for two or more from one camera (HdrMergeFlow.ineligibility), which is said in place of the rows.
+        _candidates = Library.LibraryModel.Shared.Targets.Select(p => Read(p.Path)).ToList();
         _reference = DefaultReference(_candidates);
-        Paint();
+        if (Ineligibility(_candidates) is { } why) _rows.Children.Add(SheetKit.Note(why, Palette.Star));
+        else Paint();
 
         Idle();
 
@@ -95,7 +79,7 @@ public sealed class HdrMergePanel : Border {
     /// not the session), a progress bar and Stop while it runs, then the new DNG is
     /// a library photo like any other: its folder rescanned around it, and opened.
     async void Merge() {
-        if (_merging || _candidates.Count < 2) return;
+        if (_merging || Ineligibility(_candidates) != null) return;
         _merging = true;
         var paths = _candidates.Select(c => c.Path).ToList();
         int reference = _reference;
@@ -121,9 +105,16 @@ public sealed class HdrMergePanel : Border {
     }
 
     static Candidate Read(string path) =>
-        SheetsNative.orion_read_info(path, out var info) == 0
-            ? new(path, info.Iso, info.Shutter, info.Aperture)
-            : new(path, 0, 0, 0);
+        Chrome.CaptureInfo.ReadFile(path) is { } info
+            ? new(path, info.Camera, info.Iso, info.Shutter, info.Aperture)
+            : new(path, "", 0, 0, 0);
+
+    /// HdrMergeFlow.ineligibility: why these frames cannot merge, or null.
+    internal static string? Ineligibility(List<Candidate> cs) {
+        if (cs.Count < 2) return "Select at least two exposures to merge.";
+        var cameras = cs.Select(c => c.Camera).Where(c => c.Length > 0).Distinct().Order(StringComparer.Ordinal).ToList();
+        return cameras.Count <= 1 ? null : $"These photos come from different cameras: {string.Join(", ", cameras)}.";
+    }
 
     /// HdrMergeFlow.defaultReference: the middle of the exposure ladder by t·ISO/N².
     static int DefaultReference(List<Candidate> cs) {

@@ -209,7 +209,8 @@ public sealed class CanvasPanel : Panel {
 
         // The mask colour picker consumes the click and disarms: a pick, not a mode.
         if (engine.Tool == CanvasTool.MaskColor) {
-            // stub(#315): Engine+Mask.swift owns this until the logic moves below the facade (pickMaskColor)
+            // Engine+Mask.swift's pickMaskColor: the scene colour under the click, not the edited one.
+            if (Uv(p) is { } at && CanvasNative.Sample(at) is { } picked) Masks.MaskGroup.Shared.PickColor(picked.Scene, picked.Display);
             engine.Tool = CanvasTool.None;
             return;
         }

@@ -188,8 +188,12 @@ sealed partial class AssistantModel {
         public static bool Clear(string root) {
             if (!OperatingSystem.IsMacOS()) return true;
             bool cleared = true;
-            foreach (var path in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories).Prepend(root))
-                if (removexattr(path, Attribute, NoFollow) != 0 && Marshal.GetLastPInvokeError() != NoAttribute) cleared = false;
+            try {
+                foreach (var path in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories).Prepend(root))
+                    if (removexattr(path, Attribute, NoFollow) != 0 && Marshal.GetLastPInvokeError() != NoAttribute) cleared = false;
+            } catch (Exception e) when (e is UnauthorizedAccessException or IOException) {
+                return false;   // a folder it may not list: not cleared, said as such, not thrown at the button
+            }
             return cleared;
         }
     }

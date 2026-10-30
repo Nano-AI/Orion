@@ -41,7 +41,8 @@ public sealed partial class Session {
                 if (stored != null && stored[key] is null) state[key] = Get(field);
             ToFrameSpace(state);
             Apply(state);
-            Document = state;          // the carry for the capture: names, matte ids
+            MatteStore.Upload(this, Rows(state));   // restoreMattes: a file that will not read is recorded, not swallowed
+            Document = state;          // the carry for the capture: names, matte ids, spots
             Document = Capture();
         } catch (Exception e) {
             // Anything at all: this runs on the cache's prefetch task, and a sidecar must never fault it.
@@ -54,6 +55,17 @@ public sealed partial class Session {
             (asShot["temperatureK"], asShot["tint"]) = (asShotK, asShotTint);
             try { Apply(asShot); } catch (Exception reset) { Console.Error.WriteLine("orion: the as-shot reset failed too — " + reset.Message); }
         }
+    }
+
+    /// A whole decoded state in place of the working edit, as Engine.assign
+    /// does for a saved version: a legacy mask converts on the way in (never
+    /// at store), and the state becomes the carry, so the masks' names and the
+    /// spots come with it. Does not render.
+    public void Assign(JsonObject state) {
+        ToFrameSpace(state);
+        Apply(state);
+        Document = state;
+        Document = Capture();
     }
 
     /// Every field of `state` into this session's adjustments. Does not render.

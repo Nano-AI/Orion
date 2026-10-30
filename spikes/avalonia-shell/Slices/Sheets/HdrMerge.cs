@@ -20,13 +20,6 @@ static partial class HdrMerge {
 
     static nint _running;   // the merging engine, while one runs
 
-    /// ineligibility: fewer than two frames, or frames from more than one camera.
-    public static string? Ineligibility(IReadOnlyList<string> paths) {
-        if (paths.Count < 2) return "Select at least two exposures to merge.";
-        var cameras = paths.Select(p => CaptureInfo.ReadFile(p)?.Camera ?? "").Where(c => c.Length > 0)
-                           .Distinct().Order(StringComparer.Ordinal).ToList();
-        return cameras.Count <= 1 ? null : $"These photos come from different cameras: {string.Join(", ", cameras)}.";
-    }
 
     /// outputURL: `<reference stem>-HDR.dng`, then -HDR-2, -HDR-3, never over a file.
     public static string OutputPath(string reference, Func<string, bool>? exists = null) {

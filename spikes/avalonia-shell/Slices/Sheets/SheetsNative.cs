@@ -10,7 +10,7 @@ static partial class SheetsNative {
     /// for one call (WatermarkRaster.With); null means none.
     [StructLayout(LayoutKind.Sequential)]
     public struct ExportOptions {
-        public int Format;        // OrionImageFormat: PNG 0, JPEG 1, TIFF 2
+        public int Format;        // OrionImageFormat: PNG 0, JPEG 1, TIFF 2, JPEG XL 3
         public float Quality;
         public uint MaxDimension; // 0 keeps full resolution
         public int Space, Rating, Metadata, BitDepth, Sharpen;
@@ -37,6 +37,17 @@ static partial class SheetsNative {
     /// A real encode; reports the bytes without writing a file.
     [LibraryImport(Native.Lib)]
     public static partial int orion_engine_export_size(nint engine, in ExportOptions options, out ulong bytes);
+
+    /// The same measurement in two halves: the snapshot renders (engine
+    /// thread), the size encodes it (any thread). Free every snapshot.
+    [LibraryImport(Native.Lib)]
+    public static partial int orion_engine_export_snapshot(nint engine, in ExportOptions options, out nint snapshot);
+
+    [LibraryImport(Native.Lib)]
+    public static partial int orion_export_snapshot_size(nint snapshot, out ulong bytes);
+
+    [LibraryImport(Native.Lib)]
+    public static partial void orion_export_snapshot_free(nint snapshot);
 
     [LibraryImport(Native.Lib, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int orion_read_info(string path, out RawInfo info);

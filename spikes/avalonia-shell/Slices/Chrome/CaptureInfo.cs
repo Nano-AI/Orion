@@ -36,6 +36,14 @@ public sealed partial record CaptureInfo(string Camera, string Lens, float Focal
 
     public static string? IsoText(float iso) => !(iso > 0) || !float.IsFinite(iso) ? null : "ISO " + iso.ToString("0", C);
 
+    /// A browsing tooltip (CaptureInfo.tooltip): the file name, and under it the
+    /// exposure, aperture · shutter · ISO. Swift's index has no focal length, so neither has this.
+    public static string Tooltip(string name, CaptureInfo? info) {
+        var exposure = info == null ? "" : string.Join(" · ", new[] { ApertureText(info.Aperture), ShutterText(info.Shutter), IsoText(info.Iso) }
+            .Where(p => !string.IsNullOrEmpty(p)));
+        return exposure.Length == 0 ? name : name + "\n" + exposure;
+    }
+
     /// The exposure in the order a viewfinder prints it, then the focal length:
     /// 1/640 s, f/4, ISO 800, 24 mm. What the file does not record is left out.
     /// Separate figures, no separator.

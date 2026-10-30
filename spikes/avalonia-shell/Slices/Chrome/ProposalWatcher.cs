@@ -27,6 +27,9 @@ sealed class ProposalWatcher {
     static EngineModel E => EngineModel.Shared;
 
     public bool IsLive => _phase.Previewing;
+    /// The proposal on the canvas is not the file: its restore failed partway, so
+    /// Approve would save a half-applied state. Reject still puts the edit back.
+    public bool Broken { get; private set; }
     /// The keys the footer names while a proposal is up.
     public IReadOnlyList<string> Keys => _phase.Keys ?? [];
     public event Action? Changed;
@@ -85,7 +88,10 @@ sealed class ProposalWatcher {
         _debounce++;
     }
 
-    public void Approve() => Fire(new(Proposal.EventKind.Approved));
+    public void Approve() {
+        if (Broken) { E.Say("This proposal could not be applied in full; reject it or ask for it again."); return; }
+        Fire(new(Proposal.EventKind.Approved));
+    }
     public void Reject() => Fire(new(Proposal.EventKind.Rejected));
 
     /// ~150 ms after the last event, so the several one atomic rename raises settle into one check.
@@ -103,9 +109,14 @@ sealed class ProposalWatcher {
         // A drag finishes its document transaction before the committed reference is taken.
         if (E.Interacting) { Debounced(); return; }
         byte[]? onDisk = null;
-        try { onDisk = File.ReadAllBytes(Proposal.ProposedPath(_photo)); }
-        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { }
-        catch (IOException) { Debounced(); return; }   // mid-write: look again
+        try {
+            onDisk = File.ReadAllBytes(Proposal.ProposedPath(_photo));
+            if (Normal(onDisk) == null) onDisk = null;
+        }
+        catch (IOException e) when (e is not FileNotFoundException and not DirectoryNotFoundException) { Debounced(); return; }   // mid-write: look again
+        // Anything else (no permission, not JSON, a key written twice) is no proposal: this runs
+        // from a dispatcher post, where an exception would take the whole app down.
+        catch (Exception) { onDisk = null; }
 
         if (!IsLive && onDisk != null) {
             _committed = State(s);
@@ -154,7 +165,9 @@ sealed class ProposalWatcher {
                 Autosave.Shared.Stop();
                 break;
             case Proposal.Act.RestoreProposed:
-                if (proposed != null && DevelopJson.Decode(proposed) is { } state) Restore(session, state, leaving);
+                JsonObject? state = null;
+                try { state = proposed == null ? null : DevelopJson.Decode(proposed); } catch (Exception) { }
+                Broken = state == null || !Restore(session, state, leaving);
                 break;
             case Proposal.Act.SetCompare:
                 CompareState.SetSplit(0.5);
@@ -181,6 +194,7 @@ sealed class ProposalWatcher {
                 if (Sidecar.Read(_photo)?.Develop is { } develop && DevelopJson.Decode(develop) is { } saved) Restore(session, saved, leaving);
                 break;
             case Proposal.Act.ClearCompare:
+                Broken = false;
                 CompareState.Reference = null;
                 if (!leaving) CompareState.Clear();
                 break;
@@ -189,18 +203,29 @@ sealed class ProposalWatcher {
 
     /// engine.apply: a whole state, without touching history's past, then one
     /// render and the panels re-read. A sidecar from before frame anchoring is
-    /// converted on the way in, as an open converts it.
-    static void Restore(Session session, JsonObject state, bool leaving) {
+    /// converted on the way in, as an open converts it. The state's own mask
+    /// rows (names, matte ids, sources) go into the group and the session's
+    /// carry first: names live by position, so when a proposal adds, removes or
+    /// reorders rows the old names would land on the wrong ones. False when it
+    /// did not apply in full.
+    static bool Restore(Session session, JsonObject state, bool leaving) {
         var copy = (JsonObject)state.DeepClone();
         if (leaving) {
             try {
-                session.ToFrameSpace(copy);
-                session.Apply(copy);
-            } catch (Exception e) when (e is ArgumentException or InvalidOperationException) {
+                session.Assign(copy);
+                return true;
+            } catch (Exception e) {
                 Console.Error.WriteLine($"orion: the committed edit could not be put back on {Path.GetFileName(session.Path)} ({e.Message})");
+                return false;
             }
-            return;
         }
-        E.Apply(s => { s.ToFrameSpace(copy); s.Apply(copy); }, reread: true);
+        var shapes = MaskGroup.Shared.Shapes;
+        shapes.Clear();
+        shapes.AddRange(Session.Rows(copy));
+        try { return E.Apply(s => s.Assign(copy), reread: true); }
+        catch (Exception e) {   // E.Apply refuses only the engine's own errors; a malformed state is the agent's
+            E.Say($"The proposal could not be applied ({e.Message})");
+            return false;
+        }
     }
 }

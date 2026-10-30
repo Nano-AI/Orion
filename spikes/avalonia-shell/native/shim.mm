@@ -261,8 +261,8 @@ int shim_set_curve(Shim* s, int c, const float* xy, int count) {
 }
 
 // The spots, Engine+Spots.swift's array, in frame coordinates: written and
-// pushed. Slots past `count` keep what they held, so a history step that
-// writes spot_count back by name (EditHistory's snapshot) gets its spots too.
+// pushed. The whole list every time (SpotModel.Replace and SpotModel's
+// edits); slots past `count` are left as they were and never read.
 int shim_set_spots(Shim* s, const OrionSpot* spots, int count) {
     if (count < 0 || count > ORION_MAX_SPOTS || (count > 0 && !spots)) return 0;
     std::copy(spots, spots + count, s->adj.spots);
@@ -433,8 +433,13 @@ int shim_thumbnail(const char* path, uint8_t* dst, int capacity, int* turns) {
 // ponytail: macOS only; a Windows or Linux port needs its own rasterizer here.
 static NSImage* svg_image(const uint8_t* bytes, int length) {
     if (!bytes || length <= 0) return nil;
-    NSImage* image = [[NSImage alloc] initWithData:[NSData dataWithBytes:bytes length:NSUInteger(length)]];
-    return image && image.size.width > 0 && image.size.height > 0 ? image : nil;
+    // An Objective-C exception must not cross the C facade: a file that makes AppKit throw is no image.
+    @try {
+        NSImage* image = [[NSImage alloc] initWithData:[NSData dataWithBytes:bytes length:NSUInteger(length)]];
+        return image && image.size.width > 0 && image.size.height > 0 ? image : nil;
+    } @catch (NSException*) {
+        return nil;
+    }
 }
 
 // Its natural size. 0 when it is not an image NSImage can read.
@@ -467,11 +472,17 @@ int shim_svg_coverage(const uint8_t* bytes, int length, uint8_t* alpha, int bw, 
         // CoreGraphics is y-up and the tile is y-down: flip the centre, then turn.
         CGContextTranslateCTM(ctx, cx, bh - cy);
         CGContextRotateCTM(ctx, angle);
+        bool drawn = true;
         [NSGraphicsContext saveGraphicsState];
-        NSGraphicsContext.currentContext = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:NO];
-        [image drawInRect:NSMakeRect(-w / 2, -h / 2, w, h)];
+        @try {
+            NSGraphicsContext.currentContext = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:NO];
+            [image drawInRect:NSMakeRect(-w / 2, -h / 2, w, h)];
+        } @catch (NSException*) {
+            drawn = false;   // 0 covers nothing; an exception past here would end the process
+        }
         [NSGraphicsContext restoreGraphicsState];
         CGContextRelease(ctx);
+        if (!drawn) return 0;
         for (size_t i = 0; i < size_t(bw) * size_t(bh); ++i) alpha[i] = tile[i * 4 + 3];
         return 1;
     }

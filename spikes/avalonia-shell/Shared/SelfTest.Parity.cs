@@ -10,6 +10,7 @@ using OrionShell.CanvasSlice;
 using OrionShell.Chrome;
 using OrionShell.Develop;
 using OrionShell.Library;
+using OrionShell.Masks;
 using OrionShell.Sheets;
 
 namespace OrionShell;
@@ -49,6 +50,8 @@ static partial class SelfTest {
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [System.Runtime.InteropServices.DllImport("libc")] static extern int kill(int pid, int signal);
 
     static void Pump(Func<bool> done, double seconds = 10) {
         for (var sw = System.Diagnostics.Stopwatch.StartNew(); !done() && sw.Elapsed.TotalSeconds < seconds; Thread.Sleep(2))
@@ -204,16 +207,11 @@ static partial class SelfTest {
         Check(TargetedAdjust.Field(TargetedAdjust.Mode.Hue) == "hue_shift" && TargetedAdjust.Field(TargetedAdjust.Mode.Saturation) == "sat_shift"
               && TargetedAdjust.Field(TargetedAdjust.Mode.Luminance) == "lum_shift", "the targeted tool moves the array its mode names");
 
-        // askHdrMerge refuses a single frame on the status line and opens no sheet.
-        string a = engine.Photos[engine.Current];
-        HdrMergePanel.Ask([a]);
-        Check(engine.Status == "Select at least two exposures to merge." && HdrMergePanel.Frames == null,
-              "Merge to HDR over one frame says why, and opens nothing");
-
         // The assistant column: the command puts it at the window's leading edge, and its terminal
         // runs what it is given (a harmless echo here, never the agent).
         var launcher = AssistantPanel.Launcher;
-        AssistantPanel.Launcher = (t, command, d, _) => t.LaunchProcess(d, "/bin/echo", "orion-assistant-" + command);
+        // The process has a child of its own, as the agent has its MCP server: closing takes both.
+        AssistantPanel.Launcher = (t, command, d, _) => t.LaunchProcess(d, "/bin/sh", "-c", $"echo orion-assistant-{command}; sleep 30 & sleep 30");
         try {
             var host = window.FindControl<Panel>("AssistantHost")!;
             AssistantModel.Shared.Close();   // the command sweep may have left it open
@@ -224,10 +222,14 @@ static partial class SelfTest {
             string Screen() => term == null ? "" : string.Join("\n", Enumerable.Range(0, 5).Select(i => term.Terminal?.GetLine(i) ?? ""));
             Pump(() => Screen().Contains("orion-assistant-"));
             string text = Screen();
+            int pid = term?.Pid ?? 0;
+            bool group = pid > 0 && kill(-pid, 0) == 0;
             Commands.Run("toggle-assistant");
             Settle(window);
             Check(said == "ran toggle-assistant" && panel != null && text.Contains($"orion-assistant-{AssistantModel.Shared.Command}")
                   && host.Children.Count == 0, $"Show assistant opens the column and its terminal runs a process ('{text.Trim()}'); again closes it");
+            Pump(() => kill(-pid, 0) != 0, 3);
+            Check(group && kill(-pid, 0) != 0, $"closing the column ends the agent's whole process group, its children too (pid {pid})");
         } finally {
             AssistantPanel.Launcher = launcher;
         }
@@ -235,8 +237,6 @@ static partial class SelfTest {
     }
 
     static void HdrChecks(string dir, string original) {
-        Check(HdrMerge.Ineligibility([original]) == "Select at least two exposures to merge." && HdrMerge.Ineligibility([original, original]) == null,
-              "a merge needs two frames from one camera");
         var taken = new HashSet<string> { Path.Combine(dir, "a-HDR.dng"), Path.Combine(dir, "a-HDR-2.dng") };
         Check(HdrMerge.OutputPath(Path.Combine(dir, "a.ARW"), taken.Contains) == Path.Combine(dir, "a-HDR-3.dng")
               && HdrMerge.OutputPath(Path.Combine(dir, "b.ARW"), _ => false) == Path.Combine(dir, "b-HDR.dng"), "a merge never writes over a file");
@@ -255,6 +255,7 @@ static partial class SelfTest {
 
     static void SpotChecks(EngineModel engine, string photo) {
         var fd = CanvasNative.DisplayMap();
+        _ = EditHistory.CanUndo;   // history listening before the first spot
         SpotModel.Clear();
         engine.Render(preview: false);
         long before = Fingerprint(engine.Picture);
@@ -273,6 +274,18 @@ static partial class SelfTest {
         Check(Autosave.ToSidecar(photo, engine.Session.Capture()), "the spot is written to the sidecar");
         using (var reopened = Session.OpenEdited(photo))
             Check(reopened?.Spots() is [var s] && Math.Abs(s.SrcX - held[0].SrcX) < 1e-6, "the spot comes back from the sidecar into the engine");
+        // Undo takes the placed spot out of the render and of what the sidecar takes; redo puts it back.
+        string? label = EditHistory.UndoLabel;
+        long spotted = Fingerprint(engine.Picture);
+        EditHistory.Undo();
+        bool undone = engine.Session.Spots().Count == 0 && SpotModel.Spots.Count == 0 && Fingerprint(engine.Picture) == before
+                      && engine.Session.Capture()["spots"] is JsonArray { Count: 0 };
+        Autosave.ToSidecar(photo, engine.Session.Capture());
+        using (var reopened = Session.OpenEdited(photo)) undone &= reopened?.Spots().Count == 0;
+        EditHistory.Redo();
+        Check(undone && engine.Session.Spots() is [var back] && Math.Abs(back.SrcX - held[0].SrcX) < 1e-6 && back.Heal == 0
+              && SpotModel.Spots.Count == 1 && Fingerprint(engine.Picture) == spotted,
+              $"placing a spot is one history step ({label}): undo restores the render and the sidecar, redo the spot");
         SpotModel.RemoveLast();
         Check(engine.Session.Spots().Count == 0, "Undo spot takes it out of the engine");
         (SpotModel.Radius, SpotModel.Heal) = (radius, true);
@@ -326,6 +339,45 @@ static partial class SelfTest {
               && engine.Get("exposure_ev") == committed + 0.5f && EditHistory.UndoLabel == "Agent: exposureEv",
               $"Approve writes the proposal to the sidecar and records one step ({EditHistory.UndoLabel})");
         committed += 0.5f;
+
+        // Mask rows carry names and matte ids the engine never holds, by position. A proposal
+        // that drops the first of two rows must not leave the first's id on the survivor.
+        string idA = "0b5f2a7e-0000-4000-8000-00000000000a", idB = "0b5f2a7e-0000-4000-8000-00000000000b";
+        JsonObject Row(string id, string name) {
+            var m = DevelopJson.DefaultMask();
+            m["kind"] = 4; m["matteId"] = id; m["matteSource"] = "Subject"; m["name"] = name;
+            return m;
+        }
+        void ProposeMasks(params JsonObject[] rows) {
+            var state = engine.Session!.Capture();
+            state["maskComponents"] = new JsonArray(rows);
+            File.WriteAllBytes(proposed, DevelopJson.Encode(state));
+            Pump(() => w.IsLive);
+            Commands.Run("approve-proposal");
+        }
+        JsonArray? SavedRows() => (Sidecar.Read(photo)?.Develop is { } b ? DevelopJson.Decode(b) : null)?["maskComponents"] as JsonArray;
+        ProposeMasks(Row(idA, "Sky"), Row(idB, "Face"));
+        bool both = SavedRows() is [var r0, var r1] && r0!["matteId"]?.GetValue<string>() == idA && r1!["matteId"]?.GetValue<string>() == idB;
+        ProposeMasks(Row(idB, "Face"));
+        var left = SavedRows();
+        Check(both && left is [var only] && only!["matteId"]?.GetValue<string>() == idB && only["name"]?.GetValue<string>() == "Face"
+              && MaskGroup.Shared.Shapes is [{ MatteId: var held }] && held == idB,
+              $"approving a proposal that removes the first mask row keeps the survivor's own matte id and name ({left?.ToJsonString()})");
+        ProposeMasks();
+
+        // An unreadable proposal, or one that is not a DevelopState (a key written twice), is no
+        // proposal: it must not take the app down from the dispatcher.
+        File.WriteAllText(proposed, "{}");
+        File.SetUnixFileMode(proposed, UnixFileMode.None);
+        bool survived = true;
+        try { w.Check(); } catch (Exception) { survived = false; }
+        Check(survived && !w.IsLive, "a proposal Orion may not read is treated as absent, not thrown");
+        File.Delete(proposed);
+        File.WriteAllText(proposed, "{\"exposureEv\": 1, \"exposureEv\": 2}");
+        try { w.Check(); } catch (Exception) { survived = false; }
+        Check(survived && !w.IsLive, "a proposal with a duplicate key is treated as absent, not thrown");
+        File.Delete(proposed);
+        Pump(() => false, 0.4);
 
         // Approved in chat: the file goes and the sidecar moved, so the sidecar is what shows.
         Propose(committed + 1);

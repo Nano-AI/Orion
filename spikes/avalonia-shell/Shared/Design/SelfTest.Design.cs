@@ -128,7 +128,7 @@ static partial class SelfTest {
               && slide is { Duration.TotalMilliseconds: < 200, Easing: SplineEasing },
               $"a click eases the pill from the old tab ({start:0.#} pt over at the first frame, the tab {from:0.#} away; lands at {lands:0.#}) " +
               $"in {slide?.Duration.TotalMilliseconds} ms as the name fades in (from {fade:0.##}); reduced motion jumps ({jumped})");
-        Check(Commands.All.All(c => !Regex.IsMatch(c.Title, @" (?!Finder|Trash)\p{Lu}")), "command titles are sentence case");
+        Check(Commands.All.All(c => !Regex.IsMatch(c.Title, @" (?!Finder|Trash|HDR)\p{Lu}")), "command titles are sentence case (an acronym stays one)");
         window.Close();
 
         // The canvas: a picture made for another photo is never this photo's; no session is a failure only when opening said so.
