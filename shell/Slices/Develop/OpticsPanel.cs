@@ -4,7 +4,7 @@ using Avalonia.Layout;
 
 namespace OrionShell.Develop;
 
-/// A port of app/DevelopPanels+Optics.swift: the lens profile, and the manual
+/// A port of the Swift app's DevelopPanels+Optics.swift: the lens profile, and the manual
 /// corrections it stands in for. Distortion and vignetting are the only
 /// sliders a database can switch off, so they grey out while a profile applies.
 [Panel("develop-optics", Region.Tools, 10, Tab = "Optics")]

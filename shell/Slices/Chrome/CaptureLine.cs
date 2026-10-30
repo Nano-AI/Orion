@@ -5,7 +5,7 @@ using Avalonia.Media;
 
 namespace OrionShell.Chrome;
 
-/// A port of app/OrionApp+Capture.swift, moved under the histogram as
+/// A port of the Swift app's OrionApp+Capture.swift, moved under the histogram as
 /// Main.dc.html draws it, and read as a caption: the camera and the lens,
 /// then the exposure as a viewfinder prints it, in numerals (1/640 s  f/4
 /// ISO 800  24 mm). One button that opens the full list. Always its full

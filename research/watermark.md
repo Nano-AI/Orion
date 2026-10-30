@@ -1,6 +1,6 @@
 # The export watermark - one color through a coverage mask
 
-**Where:** `engine/src/util/ImageWriter.mm` (`drawWatermark`), `app/WatermarkRaster.swift`, `app/Watermark.swift`.
+**Where:** `engine/src/util/ImageWriter.mm` (`drawWatermark`), the Swift app's `WatermarkRaster.swift`, the Swift app's `Watermark.swift`.
 Decision #284.
 
 ## Source

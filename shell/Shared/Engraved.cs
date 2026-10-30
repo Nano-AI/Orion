@@ -10,7 +10,7 @@ using Avalonia.Media.Transformation;
 
 namespace OrionShell;
 
-/// A port of app/Engraved.swift: the type that names controls, and the
+/// A port of the Swift app's Engraved.swift: the type that names controls, and the
 /// nameplate that heads a section. Redrawn for DESIGN.md: sentence case in the
 /// platform face (text is shown as given, never upper-cased), numbers in the
 /// numeral face, nothing under 11 px.

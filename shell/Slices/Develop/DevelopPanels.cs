@@ -6,7 +6,7 @@ using Avalonia.Media;
 
 namespace OrionShell.Develop;
 
-/// A port of app/DevelopPanels.swift: furniture more than one develop tab needs.
+/// A port of the Swift app's DevelopPanels.swift: furniture more than one develop tab needs.
 static class Develop {
     /// PanelButton: a panel button that looks like one (Controls.dc.html's standard button).
     public static StateButton PanelButton(string title, Action action) => new(null, title, action) { HorizontalAlignment = HorizontalAlignment.Left };

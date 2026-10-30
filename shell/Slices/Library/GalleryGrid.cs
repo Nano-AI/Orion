@@ -4,7 +4,7 @@ using Avalonia.Controls;
 
 namespace OrionShell.Library;
 
-/// app/GalleryLayout.swift's column rule as a layout panel: as many flexible
+/// the Swift app's GalleryLayout.swift's column rule as a layout panel: as many flexible
 /// columns as cells of `Cell` points fit, never fewer than one, with
 /// `Spacing` between cells and around the grid (LazyVGrid + .padding).
 sealed class GalleryGrid : Panel {

@@ -3,8 +3,7 @@
 
 Writes:
   design/mockup-darkroom.html   CSS custom properties, between TOKENS markers
-  ../Sources/OrionUI/DesignTokens.swift   Swift constants for the app
-  ../shell/Shared/Palette.g.cs   C# constants for the Avalonia shell (#315)
+  ../shell/Shared/Palette.g.cs   C# constants for the app (#315)
 
 Run after any edit to tokens.json.  Never hand-edit the generated regions.
 """
@@ -17,7 +16,6 @@ import sys
 HERE = pathlib.Path(__file__).parent
 TOKENS = HERE / "tokens.json"
 MOCKUP = HERE / "mockup-darkroom.html"
-SWIFT = HERE.parent / "Sources" / "OrionUI" / "DesignTokens.swift"
 CSHARP = HERE.parent / "shell" / "Shared" / "Palette.g.cs"
 
 START = "/* TOKENS:START — generated from tokens.json, do not edit by hand */"
@@ -71,92 +69,8 @@ def css_block(t):
     return "\n".join(lines)
 
 
-def camel(name):
-    return name[0].lower() + name[1:]
-
-
-def swift_file(t):
-    out = [
-        "// GENERATED from design/tokens.json by design/build-tokens.py.",
-        "// Do not edit by hand — your changes will be overwritten.",
-        "",
-        "import SwiftUI",
-        "",
-        "public enum Orion {",
-        "",
-        "    // MARK: Palette",
-        "    //",
-        "    // Neutrals are deliberately near-perfectly neutral: a tinted interface",
-        "    // reads as a color cast and corrupts the judgment the app exists to support.",
-        "    public enum Palette {",
-    ]
-    components: list[str] = []
-    for name, spec in strip_comments(t["color"]).items():
-        hexv = spec["hex"].lstrip("#")
-        out.append(f"        /// {spec['use']}")
-        out.append(f"        public static let {camel(name)} = Color(hex: 0x{hexv.upper()})")
-        components.append(
-            f"        public static let {camel(name)} = SIMD3<Float>("
-            f"{int(hexv[0:2],16)/255:.4f}, {int(hexv[2:4],16)/255:.4f}, "
-            f"{int(hexv[4:6],16)/255:.4f})")
-    out.append("    }")
-
-    # The same colours as plain numbers, for the consumers that are not SwiftUI:
-    # the canvas clear colour and the shader's surround. They were literals with
-    # a `// --surround` comment, which is a copy with a note attached.
-    out += ["",
-            "    /// The palette as components, for Metal and anything else that",
-            "    /// cannot take a SwiftUI Color. Same source, same numbers.",
-            "    public enum Components {"]
-    out += components
-    out.append("    }")
-
-    out += ["", "    // MARK: Space", "    public enum Space {"]
-    for name, px in strip_comments(t["space"]).items():
-        out.append(f"        public static let {camel(name)}: CGFloat = {px}")
-    out.append("    }")
-
-    out += ["", "    // MARK: Radius", "    public enum Radius {"]
-    for name, px in strip_comments(t["radius"]).items():
-        out.append(f"        public static let {camel(name)}: CGFloat = {px}")
-    out.append("    }")
-
-    out += ["", "    // MARK: Type sizes", "    public enum TypeSize {"]
-    for name, v in strip_comments(t["type"]).items():
-        if isinstance(v, (int, float)):
-            out.append(f"        public static let {camel(name)}: CGFloat = {v}")
-    out.append("    }")
-
-    out += ["", "    // MARK: Layout", "    public enum Layout {"]
-    for name, px in strip_comments(t["layout"]).items():
-        out.append(f"        public static let {camel(name)}: CGFloat = {px}")
-    out.append("    }")
-
-    out += [
-        "}",
-        "",
-        "extension Color {",
-        "    /// 0xRRGGBB literal, in the display-P3 space the app renders in.",
-        "    /// Tokens are authored as sRGB hex — the same numbers the HTML",
-        "    /// mockup renders in a browser, which is where the palette was",
-        "    /// judged. Building them as Display P3 would move every colour in",
-        "    /// the interface off the design it came from.",
-        "    init(hex: UInt32) {",
-        "        self.init(",
-        "            .sRGB,",
-        "            red:   Double((hex >> 16) & 0xFF) / 255,",
-        "            green: Double((hex >>  8) & 0xFF) / 255,",
-        "            blue:  Double( hex        & 0xFF) / 255",
-        "        )",
-        "    }",
-        "}",
-        "",
-    ]
-    return "\n".join(out)
-
-
 def csharp_file(t):
-    """The same tokens for the Avalonia shell (#315), same names as Swift."""
+    """The tokens as C# constants for the app (#315)."""
     out = [
         "// GENERATED from design/tokens.json by design/build-tokens.py.",
         "// Do not edit by hand — your changes will be overwritten.",
@@ -198,10 +112,6 @@ def main():
             sys.exit(f"error: TOKENS markers not found in {MOCKUP.name}")
         MOCKUP.write_text(pattern.sub(lambda _: css_block(t), html))
         print(f"wrote CSS tokens -> {MOCKUP.relative_to(HERE.parent)}")
-
-    SWIFT.parent.mkdir(parents=True, exist_ok=True)
-    SWIFT.write_text(swift_file(t))
-    print(f"wrote Swift tokens -> {SWIFT.relative_to(HERE.parent)}")
 
     CSHARP.parent.mkdir(parents=True, exist_ok=True)
     CSHARP.write_text(csharp_file(t))

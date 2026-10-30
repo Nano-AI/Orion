@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 
 namespace OrionShell;
 
@@ -10,6 +9,25 @@ namespace OrionShell;
 static partial class SelfTest {
     static string Fixtures => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Fixtures"));
     static byte[] FixtureEdit(string fixture) => Sidecar.Read(Path.Combine(Fixtures, Path.ChangeExtension(fixture, ".ARW")))!.Develop!;
+
+    // The sidecar's keys, frozen from the Swift app's EditHistory.swift at #380 (GoldenChecks).
+    static readonly string[] DevelopKeys = [
+        "blacks", "clarity", "contrast", "cropH", "cropW", "cropX", "cropY", "curve", "dehaze", "denoiseColor",
+        "denoiseDetail", "denoiseLuma", "denoiseNlm", "denoiseSmoothness", "exposureEv", "fusion", "gradeBalance",
+        "gradeHighlight", "gradeMidtone", "gradeShadow", "grainAmount", "grainSize", "highlightRecovery",
+        "highlights", "hueShift", "layers", "lensCaBlue", "lensCaRed", "lensChoice", "lensDistortion", "lensVignette",
+        "localTintAxis", "lumShift", "lutStrength", "maskComponents", "maskRefine", "maskSpace", "perspectiveAspect",
+        "perspectiveHorizontal", "perspectiveVertical", "process", "rotateQuarters", "satShift", "saturation",
+        "shadows", "sharpenAmount", "sharpenMasking", "sharpenRadius", "spots", "straightenDeg", "temperatureK",
+        "texture", "tint", "vibrance", "vignetteAmount", "vignetteFieldAngle", "whites"];
+    static readonly string[] MaskKeys = [
+        "angle", "brushErase", "brushFlow", "brushHardness", "brushRadius", "brushStroke", "centerX", "centerY",
+        "colorB", "colorG", "colorR", "colorSoft", "colorTol", "compose", "feather", "hidden", "invert", "kind",
+        "length", "matteId", "matteSource", "name", "radiusX", "radiusY", "rangeHi", "rangeLo", "rangeSoft",
+        "roundness", "startsLayer"];
+    static readonly string[] LayerKeys = [
+        "blacks", "contrast", "denoiseColor", "denoiseLuma", "exposureEv", "highlights", "saturation", "shadows",
+        "tint", "warmth", "whites"];
 
     static partial void SidecarChecks() {
         GoldenChecks();
@@ -70,18 +88,14 @@ static partial class SelfTest {
         Check(DevelopJson.Decode(Encoding.UTF8.GetBytes("not json")) == null && DevelopJson.Decode("[]"u8.ToArray()) is { } blank
               && JsonNode.DeepEquals(blank, DevelopJson.Defaults()), "bytes that are not JSON fail; JSON that is not an object is every default");
 
-        // The keys are Swift's: a field added to DevelopState that this port does not know fails here.
-        var swift = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "..", "app", "EditHistory.swift"));
-        var rosters = Regex.Matches(swift, @"static let fieldRoster: Set<String> = \[(.*?)\]", RegexOptions.Singleline)
-            .Select(m => Regex.Matches(m.Groups[1].Value, "\"(\\w+)\"").Select(k => k.Groups[1].Value).ToHashSet()).ToList();
-        var develop = rosters.FirstOrDefault(r => r.Contains("temperatureK")) ?? [];
-        var mask = rosters.FirstOrDefault(r => r.Contains("centerX")) ?? [];
-        var local = Regex.Match(swift, @"struct LocalAdjustState[^{]*\{(.*?)\n\}", RegexOptions.Singleline).Groups[1].Value;
-        Check(develop.SetEquals(DevelopJson.Defaults().Select(p => p.Key)), $"DevelopJson has DevelopState's {develop.Count} keys");
-        Check(mask.SetEquals(DevelopJson.DefaultMask().Select(p => p.Key).Concat(["matteId", "matteSource", "name"])),
-              $"a mask row has MaskComponentState's {mask.Count} keys");
-        Check(Regex.Matches(local, @"var (\w+)").Select(m => m.Groups[1].Value).ToHashSet().SetEquals(DevelopJson.DefaultLayer().Select(p => p.Key)),
-              "a layer has LocalAdjustState's keys");
+        // The keys are the sidecar format's: a key added or dropped here changes
+        // what every photographer's saved edits mean, so it must change these
+        // lists in the same commit. Frozen from the Swift app's EditHistory.swift
+        // (fieldRoster, LocalAdjustState) when it was retired (#380).
+        Check(DevelopKeys.ToHashSet().SetEquals(DevelopJson.Defaults().Select(p => p.Key)), $"DevelopJson has DevelopState's {DevelopKeys.Length} keys");
+        Check(MaskKeys.ToHashSet().SetEquals(DevelopJson.DefaultMask().Select(p => p.Key).Concat(["matteId", "matteSource", "name"])),
+              $"a mask row has MaskComponentState's {MaskKeys.Length} keys");
+        Check(LayerKeys.ToHashSet().SetEquals(DevelopJson.DefaultLayer().Select(p => p.Key)), "a layer has LocalAdjustState's keys");
 
         // Every number DevelopState holds is an OrionAdjustments field of the same name, at its length.
         var fields = EngineModel.Fields.ToDictionary(f => f.Name, f => f.Length);

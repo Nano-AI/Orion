@@ -8,7 +8,7 @@ using OrionShell.Chrome;
 
 namespace OrionShell.Library;
 
-/// A port of app/GalleryView.swift, laid out as Library.dc.html: a filter bar,
+/// A port of the Swift app's GalleryView.swift, laid out as Library.dc.html: a filter bar,
 /// the contact sheet, and an info column for the photo in focus. A click moves
 /// focus without decoding, and only a double-click opens a raw. Cells are 3:2
 /// and the picture is letterboxed inside, never cropped, because the question

@@ -2,7 +2,7 @@ using Avalonia.Controls;
 
 namespace OrionShell.Develop;
 
-/// A port of app/DevelopPanels+Light.swift: white balance, the tone sliders,
+/// A port of the Swift app's DevelopPanels+Light.swift: white balance, the tone sliders,
 /// highlight recovery and the curve. Ranges and decimals from that file;
 /// a null base is the value the photo opened with (engine.defaults).
 [Panel("develop-light", Region.Tools, 10, Tab = "Light")]

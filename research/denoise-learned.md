@@ -174,7 +174,7 @@ memory expectations — is **not verified here and is the single largest unknown
 in this file.** It is session 2.
 
 The precedent in the repo is the opposite shape and should not be read as
-support for this one. `app/SubjectMatte.swift` runs Vision from **Swift**, on a
+support for this one. the Swift app's `SubjectMatte.swift` runs Vision from **Swift**, on a
 **1024 px long edge** picture that the engine renders and reads back
 (`renderForAnalysis`), and returns a **single-channel alpha** raster. That is a
 ~1 Mpx round trip, on demand, for a mask. A denoiser is a 24 Mpx round trip, of

@@ -7,7 +7,7 @@ using OrionShell.Masks;
 
 namespace OrionShell.Sheets;
 
-/// A port of `versionsPanel` in app/DevelopPanels+Presets.swift. First in the
+/// A port of `versionsPanel` in the Swift app's DevelopPanels+Presets.swift. First in the
 /// tab: the one section about the photograph in front of you. The versions are
 /// SnapshotStore.Shared's; a refusal (no name, a hundred already, a file that
 /// will not write) goes to the status line.

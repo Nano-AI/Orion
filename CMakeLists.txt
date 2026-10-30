@@ -18,7 +18,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_OBJCXX_STANDARD 20)
 set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 
-# macOS 14 floor — @Observable in the SwiftUI shell requires it (decision #26).
+# macOS 14 floor (decision #26; the SwiftUI app that needed it is retired, #380,
+# and the Avalonia app keeps the same floor so an update reaches the same Macs).
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS version" FORCE)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -33,6 +34,4 @@ add_subdirectory(engine)
 add_subdirectory(apps/probe)
 add_subdirectory(apps/bench)
 add_subdirectory(apps/rawstat)
-add_subdirectory(apps/pixstat)
 add_subdirectory(apps/tests)
-add_subdirectory(app)

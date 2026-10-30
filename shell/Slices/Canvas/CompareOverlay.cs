@@ -251,7 +251,7 @@ static class CompareState {
     }
 }
 
-/// A port of app/CompareOverlay.swift: the divider with both sides named, now
+/// A port of the Swift app's CompareOverlay.swift: the divider with both sides named, now
 /// movable and turnable. The split itself is drawn by the canvas, as
 /// ImageCanvas's shader does. The line, the grip and the turn handle are drawn,
 /// not laid out, so a drag repaints this layer and the canvas and nothing else.

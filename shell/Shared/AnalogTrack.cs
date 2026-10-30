@@ -43,7 +43,7 @@ public sealed record Scale(float Step = 0, int LabelEvery = 2, Func<float, strin
     }
 }
 
-/// A port of app/AnalogTrack.swift, redrawn as a meter scale: ticks in the
+/// A port of the Swift app's AnalogTrack.swift, redrawn as a meter scale: ticks in the
 /// slider's unit with numerals under them, the groove engraved in `groove`,
 /// the edit filled in the accent from the default (the detent) to the value,
 /// and a flat thumb. A tinted track shows its tint, and its edited span deeper.

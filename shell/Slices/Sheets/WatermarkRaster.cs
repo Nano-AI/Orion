@@ -3,7 +3,7 @@ using SkiaSharp;
 
 namespace OrionShell.Sheets;
 
-/// A port of app/WatermarkRaster.swift: where the mark goes (Place, pure
+/// A port of the Swift app's WatermarkRaster.swift: where the mark goes (Place, pure
 /// geometry) and the 8-bit coverage mask the engine blends the one gray
 /// through (Mask). The engine never learns what the mark was (#284).
 /// Text is drawn with SkiaSharp, which Avalonia already ships; an SVG through

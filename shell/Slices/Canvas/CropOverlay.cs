@@ -7,7 +7,7 @@ using Handle = OrionShell.CanvasSlice.CanvasLayout.CropHandle;
 
 namespace OrionShell.CanvasSlice;
 
-/// A port of app/CropOverlay.swift: on the Crop tab, everything outside the
+/// A port of the Swift app's CropOverlay.swift: on the Crop tab, everything outside the
 /// crop is darkened rather than hidden, thirds always on, an outline, and four
 /// L-shaped corners. Corners resize (Shift holds the ratio), the interior pans.
 /// Beyond Swift, the developer's ask: each edge moves its one side, marked by a

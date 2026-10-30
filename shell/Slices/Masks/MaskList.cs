@@ -8,7 +8,7 @@ using static OrionShell.Masks.MaskControls;
 
 namespace OrionShell.Masks;
 
-/// A port of app/DevelopPanels+MaskList.swift: one card per mask, its shapes
+/// A port of the Swift app's DevelopPanels+MaskList.swift: one card per mask, its shapes
 /// as rows beneath, and the count with the cap said out loud. The selected
 /// card carries Lightroom's Add and Subtract, each a kind menu, and its menu
 /// button; pointing at a card paints that mask's coverage on the photo. Its own

@@ -9,7 +9,7 @@ using Avalonia.Platform;
 
 namespace OrionShell.CanvasSlice;
 
-/// A port of app/ImageCanvas.swift and the picture slot of OrionApp+Canvas.swift:
+/// A port of the Swift app's ImageCanvas.swift and the picture slot of OrionApp+Canvas.swift:
 /// the photograph at the viewport's zoom and pan, the compare split, and what a
 /// press on the picture does — pan, the targeted tool's drag, the loupe's hover —
 /// and what the wheel and the trackpad do: zoom about the pointer, pan.

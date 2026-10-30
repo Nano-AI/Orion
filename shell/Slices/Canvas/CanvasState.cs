@@ -5,7 +5,7 @@ using Avalonia.Threading;
 
 namespace OrionShell.CanvasSlice;
 
-/// A port of app/Viewport.swift: zoom as a multiple of fit, center in
+/// A port of the Swift app's Viewport.swift: zoom as a multiple of fit, center in
 /// normalized image coordinates so it survives a resize. Past Swift, after
 /// Apple's Designing Fluid Interfaces (WWDC 2018): a hand moves a raw zoom and
 /// center, what shows is the raw state rubber-banded at the limits (§9), and a

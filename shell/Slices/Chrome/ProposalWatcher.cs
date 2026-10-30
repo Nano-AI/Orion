@@ -6,7 +6,7 @@ using OrionShell.Masks;
 
 namespace OrionShell.Chrome;
 
-/// A port of app/ProposalWatcher.swift: watches the open photo's folder for
+/// A port of the Swift app's ProposalWatcher.swift: watches the open photo's folder for
 /// `<stem>.proposed.json` (what the MCP server's propose_edit writes) appearing,
 /// changing or going, and drives the engine, compare and Autosave through
 /// Proposal's phase machine. While a proposal is up the edit is locked

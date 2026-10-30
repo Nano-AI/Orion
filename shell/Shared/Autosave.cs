@@ -5,7 +5,7 @@ using OrionShell.Masks;
 namespace OrionShell;
 
 /// Writes the open photo's edit to its sidecar without being asked: a port of
-/// app/Autosave.swift. Coalesced writes 900 ms after the first unsaved change
+/// the Swift app's Autosave.swift. Coalesced writes 900 ms after the first unsaved change
 /// catch the crash; a flush on quit, on leaving the window, and on every photo
 /// switch catches the rest.
 ///

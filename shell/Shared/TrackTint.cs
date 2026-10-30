@@ -3,7 +3,7 @@ using Avalonia.Media;
 
 namespace OrionShell;
 
-/// A port of app/TrackTint.swift: what each end of a slider would do, painted
+/// A port of the Swift app's TrackTint.swift: what each end of a slider would do, painted
 /// into its groove. Same hues and the same HSB swatch maths.
 public static class TrackTint {
     const double HueTravel = 30, LabelSaturation = 0.55, LabelBrightness = 0.65;

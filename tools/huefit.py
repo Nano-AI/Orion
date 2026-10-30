@@ -29,7 +29,7 @@ import os
 import subprocess
 import sys
 
-ORION = "./build/Orion.app/Contents/MacOS/Orion"
+ORION = "./shell/bin/Release/net10.0/Orion"
 RAW = "samples/_PIC8095.ARW"
 SHOT = "/tmp/orion-huefit.png"
 
@@ -48,6 +48,13 @@ TOLERANCE = 0.02
 
 
 def render(cfg=None):
+    # ⚠ Not ported (decision #380): `--screenshot --scene asshot --measure` was
+    # the retired Swift app's harness, which measured the display-referred
+    # output. The Avalonia app has no such flag; `--agent stats --region` reads
+    # a region, but in its own space, so the targets above would need re-fitting
+    # against it. Until then this says so rather than reporting zero patches.
+    sys.exit("huefit: needs a port to the Avalonia app (decision #380): the Swift "
+             "app's --measure is gone and the targets were fitted against it")
     cmd = [ORION, "--screenshot", SHOT, "--photo", RAW, "--scene", "asshot"]
     for p, _, _ in PATCHES:
         cmd += ["--measure", p]

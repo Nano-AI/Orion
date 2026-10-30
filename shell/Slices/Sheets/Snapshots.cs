@@ -7,7 +7,7 @@ using OrionShell.Masks;
 
 namespace OrionShell.Sheets;
 
-/// A port of app/Snapshots.swift: named versions of one photograph's whole
+/// A port of the Swift app's Snapshots.swift: named versions of one photograph's whole
 /// edit, kept until deleted. Not undo (fifty deep, gone at quit), not a preset
 /// (a patch between photos that leaves out the crop and the masks).
 ///

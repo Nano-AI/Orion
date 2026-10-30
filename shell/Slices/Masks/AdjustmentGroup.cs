@@ -3,7 +3,7 @@ using Avalonia.Media;
 
 namespace OrionShell.Masks;
 
-/// A port of app/AdjustmentGroup.swift, local scope: the adjustments a mask
+/// A port of the Swift app's AdjustmentGroup.swift, local scope: the adjustments a mask
 /// carries, one slider each, bound to the selected layer's slot of the
 /// local_* arrays. These are real fields: they reach the engine.
 ///

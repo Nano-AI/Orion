@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace OrionShell;
 
-/// A raster matte saved with its photo: a port of app/MatteStore.swift, and of
+/// A raster matte saved with its photo: a port of the Swift app's MatteStore.swift, and of
 /// Engine+Mask.swift's restoreMattes. One sibling PNG per matte,
 /// `PHOTO.orion-matte-<uuid>.png`, 16-bit grayscale, linear. Immutable: a new
 /// selection mints a new id and a new file, written before the id reaches the

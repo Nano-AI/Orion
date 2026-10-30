@@ -13,7 +13,7 @@ using Avalonia.Media.Transformation;
 
 namespace OrionShell;
 
-/// app/ToolButton.swift's CanvasTool: what a click on the canvas does.
+/// the Swift app's ToolButton.swift's CanvasTool: what a click on the canvas does.
 /// MaskDraw: a mask shape being drawn on the photo, one armed tool among the rest (#211).
 public enum CanvasTool { None, Targeted, MaskColor, Spot, MaskDraw }
 
@@ -199,7 +199,7 @@ public class StateButton : Button {
     }
 }
 
-/// A port of app/ToolButton.swift: arms one canvas tool, or disarms it.
+/// A port of the Swift app's ToolButton.swift: arms one canvas tool, or disarms it.
 /// The armed tool is EngineModel.Tool, shared by every panel and the canvas.
 public sealed class ToolButton : StateButton {
     readonly CanvasTool _tool;

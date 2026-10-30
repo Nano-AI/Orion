@@ -93,7 +93,7 @@ readonly record struct SpringBack(double Velocity, double Response = 0.3) {
 /// One spot in frame coordinates; radius is a fraction of the frame's width, feather its softness.
 sealed record SpotPlacement(Point Destination, Point Source, double Radius, bool Heal, double Feather = 0.5);
 
-/// The mask, spot and brush half of app/CanvasLayout.swift. No view lives here:
+/// The mask, spot and brush half of the Swift app's CanvasLayout.swift. No view lives here:
 /// where handles are, what a press grabs and what a drag means.
 static class MaskLayout {
     const double HandleBox = 44, RotateStem = 34;

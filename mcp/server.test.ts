@@ -661,17 +661,17 @@ test("server instructions mention current_photo and never ask which file", async
   );
 });
 
-// The same words go into AssistantProcess.orionContext, which is what Orion's
-// own assistant panel appends to Claude's system prompt. Two copies that drift
+// The same words go into AssistantModel.OrionContext, which is what Orion's
+// own assistant column appends to Claude's system prompt. Two copies that drift
 // are two different sets of editing advice depending on which door the model
-// came in by, so the Swift literal is compared here rather than by eye.
-test("the Swift orionContext literal is identical to these instructions", async () => {
-  const swift = await fs.readFile(
-    path.resolve(import.meta.dirname, "../app/AssistantProcess.swift"),
+// came in by, so the app's literal is compared here rather than by eye.
+test("the app's OrionContext literal is identical to these instructions", async () => {
+  const source = await fs.readFile(
+    path.resolve(import.meta.dirname, "../shell/Slices/Chrome/AssistantProcess.cs"),
     "utf8"
   );
-  const match = swift.match(/static let orionContext = "([^"]*)"/);
-  assert.ok(match, "AssistantProcess.swift should hold a orionContext string literal");
+  const match = source.match(/const string OrionContext = "([^"]*)"/);
+  assert.ok(match, "AssistantProcess.cs should hold an OrionContext string literal");
   assert.equal(match[1], client.getInstructions());
 });
 

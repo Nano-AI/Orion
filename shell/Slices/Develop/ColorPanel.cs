@@ -6,7 +6,7 @@ using Avalonia.Media;
 
 namespace OrionShell.Develop;
 
-/// A port of app/DevelopPanels+Color.swift: presence, the three grading wheels
+/// A port of the Swift app's DevelopPanels+Color.swift: presence, the three grading wheels
 /// with their balance, and the eight-band mixer with its targeted picker.
 [Panel("develop-color", Region.Tools, 10, Tab = "Color")]
 public sealed class ColorPanel : StackPanel {

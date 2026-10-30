@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace OrionShell.Chrome;
 
-/// A port of app/Proposal.swift: data in, data out. Where an agent's proposal
+/// A port of the Swift app's Proposal.swift: data in, data out. Where an agent's proposal
 /// lives, what it changes, and the phase machine that turns a filesystem
 /// event into the actions ProposalWatcher performs, so the watcher is a thin
 /// interpreter over the policy written down here.

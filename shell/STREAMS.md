@@ -1,5 +1,8 @@
 # Stage 1 streams (#315)
 
+⚠ **Historical (decision #380):** the streams finished and the Swift app is
+retired. Kept for the ownership rules code still cites.
+
 Stage 0 (`swarm/contracts`) split the shell into contracts so three worktrees
 can work at once. Each stream writes **only** the files it owns below. A file
 in no stream is frozen: need a change, put the diff in your report and the

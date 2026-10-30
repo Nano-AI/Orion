@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace OrionShell;
 
-/// A port of app/AdjustmentMath.swift: the slider rules every panel shares.
+/// A port of the Swift app's AdjustmentMath.swift: the slider rules every panel shares.
 public static class AdjustmentMath {
     /// Changed by more than a tenth of the last shown digit.
     public static bool IsModified(float value, float baseValue, int decimals) =>

@@ -2,7 +2,7 @@ using Avalonia;
 
 namespace OrionShell.CanvasSlice;
 
-/// A port of the picture and crop half of app/CanvasLayout.swift, same maths
+/// A port of the picture and crop half of the Swift app's CanvasLayout.swift, same maths
 /// and names (Rect for CGRect): where the photo sits in the canvas, and how a
 /// straightened frame bounds the crop. The mask and spot half is MaskLayout.cs.
 static class CanvasLayout {

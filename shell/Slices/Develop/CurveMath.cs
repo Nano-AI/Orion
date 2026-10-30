@@ -1,6 +1,6 @@
 namespace OrionShell.Develop;
 
-/// A port of app/CurveMath.swift: the curve the panel draws, evaluated the way
+/// A port of the Swift app's CurveMath.swift: the curve the panel draws, evaluated the way
 /// pipe/ToneCurve.cpp does — Fritsch–Carlson monotone cubic Hermite, so no
 /// wiggle appears between points that nobody asked for.
 static class CurveMath {

@@ -1,6 +1,6 @@
 namespace OrionShell.Library;
 
-/// A port of app/PhotoSelection.swift: which photographs a batch acts on.
+/// A port of the Swift app's PhotoSelection.swift: which photographs a batch acts on.
 /// Pure value logic over paths, so the selftest pins it without a window.
 ///
 /// One selected photo is not a selection: the photo on the canvas is always

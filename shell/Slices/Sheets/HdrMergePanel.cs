@@ -6,7 +6,7 @@ using Avalonia.Media;
 
 namespace OrionShell.Sheets;
 
-/// A port of app/HdrMergePanel.swift's sheet. It exists for the one decision
+/// A port of the Swift app's HdrMergePanel.swift's sheet. It exists for the one decision
 /// the software cannot make: which frame's framing wins.
 [Panel("sheet-hdr-merge", Region.Sheet)]
 public sealed class HdrMergePanel : Border {

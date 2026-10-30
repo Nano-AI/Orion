@@ -9,7 +9,7 @@ using Avalonia.Media;
 
 namespace OrionShell.Library;
 
-/// A port of app/Filmstrip.swift: the filter and the order on the left, a
+/// A port of the Swift app's Filmstrip.swift: the filter and the order on the left, a
 /// hairline, then the film: 135 film to scale (#347). The picture is the 36 mm
 /// gate, so a millimetre is ThumbW / 36 points; frames sit 38 mm apart (ISO 1007),
 /// and eight KS-1870 perforations run along each edge of every frame, on past the

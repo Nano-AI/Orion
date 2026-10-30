@@ -148,7 +148,7 @@ static class PresetStore {
     }
 }
 
-/// A port of `presetsPanel` in app/DevelopPanels+Presets.swift: versions,
+/// A port of `presetsPanel` in the Swift app's DevelopPanels+Presets.swift: versions,
 /// then presets, copy, paste, sync and batch export, on a tab of their own.
 [Panel("presets", Region.Tools, 10, Tab = "Presets")]
 public sealed class PresetsPanel : StackPanel {

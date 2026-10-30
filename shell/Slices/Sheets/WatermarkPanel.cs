@@ -7,7 +7,7 @@ using Avalonia.Platform.Storage;
 
 namespace OrionShell.Sheets;
 
-/// A port of app/WatermarkPanel.swift: the watermark editor, a sheet over the
+/// A port of the Swift app's WatermarkPanel.swift: the watermark editor, a sheet over the
 /// Export sheet. The controls are a fixed set and are not scrolled: a fold
 /// once put Opacity, the one control every mark needs, out of sight.
 [Panel("sheet-watermark", Region.Sheet)]

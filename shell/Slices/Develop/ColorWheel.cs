@@ -6,7 +6,7 @@ using Avalonia.Media;
 
 namespace OrionShell.Develop;
 
-/// A port of app/ColorWheel.swift: one grading wheel bound to a float[3]
+/// A port of the Swift app's ColorWheel.swift: one grading wheel bound to a float[3]
 /// field (grade_shadow, grade_midtone, grade_highlight) — the puck's x and y
 /// in the unit disc, then the zone's luminance on the track underneath. Hue
 /// and strength are one gesture; brightness is deliberately not on the disc.

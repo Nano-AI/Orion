@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 namespace OrionShell;
 
 /// The develop state inside a sidecar's `orion:Develop`: the JSON Swift's
-/// DevelopState encodes (app/EditHistory.swift), read the way its forgiving
+/// DevelopState encodes (the Swift app's EditHistory.swift), read the way its forgiving
 /// decoder reads it. A JsonObject with every key, in DevelopState's order,
 /// rather than a 57-field class: SessionDocument maps it onto the engine by
 /// name, and a key nobody maps (spots, a mask's matte id) rides through untouched.

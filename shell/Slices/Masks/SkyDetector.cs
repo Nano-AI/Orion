@@ -1,6 +1,6 @@
 namespace OrionShell.Masks;
 
-/// Sky detection from one picture, with no model: a port of app/SkyDetector.swift,
+/// Sky detection from one picture, with no model: a port of the Swift app's SkyDetector.swift,
 /// which cites the method: Shen and Wang 2013 (research/sky-detection.md), a
 /// gradient threshold, a fill from the top edge, and the colour-energy score
 /// that picks the threshold. Same constants, same refusals, same sentences.

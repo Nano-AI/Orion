@@ -6,7 +6,7 @@ using OrionShell.CanvasSlice;
 
 namespace OrionShell.Library;
 
-/// A port of app/RatingBar.swift: rating and rejection over the photo, in the
+/// A port of the Swift app's RatingBar.swift: rating and rejection over the photo, in the
 /// canvas's lower-right corner, as Main.dc.html's translucent pill. Culling
 /// happens while looking at the picture, so the mark being set belongs there,
 /// not only as four-pixel dots on a thumbnail nobody is looking at.

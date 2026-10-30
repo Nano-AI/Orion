@@ -1,5 +1,12 @@
 # Reproductions
 
+⚠ **Not runnable since decision #380.** The runner was the SwiftUI app's
+`--scenario`, which drove its view models; that app is retired, and the
+Avalonia app's checks are its `--selftest`. These files stay as the written
+record of each regression and its oracle — engine comments and `research/` cite
+them — and a scenario worth keeping alive is ported into the selftest, not run
+from here. Everything below describes them as they were.
+
 One file per reported bug, run by the app itself:
 
     ./build/Orion.app/Contents/MacOS/Orion --scenario repro/<name>.txt

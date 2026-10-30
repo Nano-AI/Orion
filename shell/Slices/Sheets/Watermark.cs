@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 namespace OrionShell.Sheets;
 
-/// A port of app/Watermark.swift: what the mark is, where it goes, how big and
+/// A port of the Swift app's Watermark.swift: what the mark is, where it goes, how big and
 /// how present, and its one saved copy. One gray, always (#284): the engine
 /// only ever sees a coverage mask (WatermarkRaster).
 sealed class Watermark {

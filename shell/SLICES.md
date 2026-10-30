@@ -1,5 +1,10 @@
 # Slice brief (#315)
 
+⚠ **Historical (decision #380).** The port this briefed is done and the Swift
+app is retired, with `slices.json` and `compare.py`, which existed to compare
+the two. The numbered rules below are still the shape of the code, and
+comments cite them by number.
+
 You are porting one slice of Orion's SwiftUI view layer to Avalonia 12 / .NET 10.
 `slices.json` is the contract: your slice's Swift files, the panel names you
 must register, and the Swift scenes your screenshots are judged against. This

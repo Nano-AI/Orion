@@ -131,7 +131,7 @@ saturation. Predicted relative chroma for the test's wheel is 0.100 against
 
 ## The control surface — why a wheel, and which way it winds
 
-**Where:** `app/ColorWheel.swift`.
+**Where:** the Swift app's `ColorWheel.swift`.
 
 **Source:** Van Hurkman, *Color Correction Handbook*, 2nd ed. (Peachpit, 2014),
 ch. 4 — the three-way color balance control, its history in telecine, and why

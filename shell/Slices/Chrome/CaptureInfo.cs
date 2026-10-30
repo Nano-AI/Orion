@@ -5,7 +5,7 @@ using System.Text;
 
 namespace OrionShell.Chrome;
 
-/// A port of app/CaptureInfo.swift: what the camera recorded, in the spellings
+/// A port of the Swift app's CaptureInfo.swift: what the camera recorded, in the spellings
 /// a photographer reads. Zero means "the file does not say", and every
 /// formatter answers null for it rather than "ISO 0".
 public sealed partial record CaptureInfo(string Camera, string Lens, float FocalLength, float Aperture,

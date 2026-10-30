@@ -6,7 +6,7 @@ using static OrionShell.Masks.MaskControls;
 
 namespace OrionShell.Masks;
 
-/// A port of app/DevelopPanels+Mask.swift, the Mask tab: the draw tools, the
+/// A port of the Swift app's DevelopPanels+Mask.swift, the Mask tab: the draw tools, the
 /// mask cards, the overlay switch, the adjustments the selected mask carries
 /// and the controls its selected shape's kind needs. Rebuilt whenever the
 /// group changes, because which controls exist follows the selected row's kind.

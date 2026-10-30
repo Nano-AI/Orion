@@ -6,7 +6,7 @@ using Avalonia.Media;
 
 namespace OrionShell.Sheets;
 
-/// Copy's look onto every other photo in view: a port of app/SyncSettings.swift
+/// Copy's look onto every other photo in view: a port of the Swift app's SyncSettings.swift
 /// and OrionApp+Files.swift's `runSync`, behind OrionApp.swift's counted alert.
 ///
 /// The photos are not opened. Each sidecar's develop JSON is patched at the

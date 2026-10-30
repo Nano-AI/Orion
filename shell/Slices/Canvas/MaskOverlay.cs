@@ -25,7 +25,7 @@ static class MaskModel {
     }
 }
 
-/// A port of app/MaskOverlay.swift, joined to the rows the engine renders: the
+/// A port of the Swift app's MaskOverlay.swift, joined to the rows the engine renders: the
 /// selected shape's outline and handles, a pin for every other mask, the brush
 /// ring, and the draw tools' press-and-drag. No geometry here: MaskLayout says
 /// where things are and what a drag means; this draws, forwards presses and

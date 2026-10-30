@@ -9,7 +9,7 @@ namespace OrionShell;
 /// The one engine every panel talks to: the open photo, its adjustments by C
 /// field name (OrionAdjustments in orion.h), and the rendered picture.
 ///
-/// It stands in for app/Engine.swift, as a facade over the pieces in this
+/// It stands in for the Swift app's Engine.swift, as a facade over the pieces in this
 /// folder: the PhotoList, the Session for the photo on screen, the source that
 /// supplies sessions, and the ShownPicture the canvas draws. Everything
 /// Engine+*.swift does beyond this (history, spots, sidecars, presets) is not

@@ -65,7 +65,7 @@ import zlib
 
 import numpy as np
 
-ORION = "./build/Orion.app/Contents/MacOS/Orion"
+ORION = "./shell/bin/Release/net10.0/Orion"
 SRC = os.path.expanduser("~/Pictures/sept 5th forks")
 WORK = "/tmp/orion-huesatfit"
 

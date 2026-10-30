@@ -6,7 +6,7 @@ using Avalonia.Layout;
 
 namespace OrionShell.CanvasSlice;
 
-/// A port of the `.crop` tab in app/OrionApp+Tools.swift: the one tab whose
+/// A port of the `.crop` tab in the Swift app's OrionApp+Tools.swift: the one tab whose
 /// controls are the geometry rather than the develop state.
 [Panel("tools-crop", Region.Tools, 10, Tab = "Crop")]
 public sealed class CropTools : StackPanel {

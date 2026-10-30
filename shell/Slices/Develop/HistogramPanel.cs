@@ -59,7 +59,7 @@ static class Levels {
     }
 }
 
-/// A port of app/Histogram.swift as Main.dc.html draws it: the curves in a
+/// A port of the Swift app's Histogram.swift as Main.dc.html draws it: the curves in a
 /// recessed plate; under it the clipping at each end, the shadow share on the
 /// left and the highlight share on the right, star-coloured only when a channel
 /// really clips; then what the camera recorded (CaptureLine).

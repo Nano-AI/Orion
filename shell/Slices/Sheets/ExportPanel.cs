@@ -6,7 +6,7 @@ using OrionShell.Library;
 
 namespace OrionShell.Sheets;
 
-/// A port of app/ExportPanel.swift: the export sheet. Every control moves the
+/// A port of the Swift app's ExportPanel.swift: the export sheet. Every control moves the
 /// byte count, so each one re-measures through a real encode after a pause.
 [Panel("sheet-export", Region.Sheet)]
 public sealed class ExportPanel : Border {

@@ -3,7 +3,7 @@ using Avalonia.Media.Imaging;
 
 namespace OrionShell.Masks;
 
-/// Subject, Person and Sky selection: a port of app/SubjectMatte.swift, its
+/// Subject, Person and Sky selection: a port of the Swift app's SubjectMatte.swift, its
 /// Engine+Render.swift `renderForAnalysis` and MatteGeometry.swift, and the
 /// panel's `findMatte`. research/masking.md §5.
 ///

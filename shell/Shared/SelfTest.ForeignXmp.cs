@@ -6,8 +6,8 @@ namespace OrionShell;
 
 /// Decision #370: `IMG.xmp` is shared with Lightroom, Capture One and darktable,
 /// and Orion writes only its three fields. Fixtures/foreign/ are hand-written
-/// after XMP Part 1 (none copied from those products); app/ViewportTests+ForeignXmp.swift
-/// runs the same fixtures and the same checks through the Swift writer.
+/// after XMP Part 1 (none copied from those products). The Swift writer ran the
+/// same fixtures and checks until it was retired (#380).
 static partial class SelfTest {
     static readonly XNamespace RdfNs = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 

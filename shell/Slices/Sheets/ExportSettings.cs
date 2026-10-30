@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace OrionShell.Sheets;
 
-/// A port of the parts of app/ExportSettings.swift the export sheet reads:
+/// A port of the parts of the Swift app's ExportSettings.swift the export sheet reads:
 /// the choices with their titles and notes, the output dimensions, and the
 /// size estimate that fills the moment before the measured size lands.
 /// `Code` is the orion.h value each choice crosses the facade as.

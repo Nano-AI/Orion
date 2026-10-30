@@ -24,7 +24,7 @@ const float3 y = (xPre - kPivotNorm) * p.contrast + kPivotNorm;
 
 Constants, verified against the file as it stands today: `kPivotNorm = 10.0f /
 16.5f` (0.606061), `kBlackStops = 8.0f`, `kWhiteStops = 6.5f`,
-`Engine.contrast` shipping default **1.45** (`app/Engine.swift:148`).
+`Engine.contrast` shipping default **1.45** (the Swift app's `Engine.swift`).
 
 **Arithmetic, re-derived independently rather than copied from the brief:**
 

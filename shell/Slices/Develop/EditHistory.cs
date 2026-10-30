@@ -3,7 +3,7 @@ using OrionShell.CanvasSlice;
 
 namespace OrionShell.Develop;
 
-/// A port of app/EditHistory.swift over the session's field values: whole
+/// A port of the Swift app's EditHistory.swift over the session's field values: whole
 /// snapshots rather than deltas, a new branch drops the redoable tail, fifty
 /// deep, reset on every open. Swift records where a control calls
 /// `engine.edit(label)`; here every settled render is a candidate, so a panel

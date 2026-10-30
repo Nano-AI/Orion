@@ -5,7 +5,7 @@ using OrionShell.CanvasSlice;
 
 namespace OrionShell.Develop;
 
-/// A port of app/DevelopPanels+Detail.swift: noise reduction, dust spots, the
+/// A port of the Swift app's DevelopPanels+Detail.swift: noise reduction, dust spots, the
 /// creative LUT, and the finishing controls.
 [Panel("develop-detail", Region.Tools, 10, Tab = "Detail")]
 public sealed class DetailPanel : StackPanel {

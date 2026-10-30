@@ -4,7 +4,7 @@
 `UNSOURCED.md` §17, which said the constant was "the usual figure in paint
 engines" — recollection, not a citation.
 
-**Where:** `app/CanvasLayout.swift` (`brushSpacing`),
+**Where:** the Swift app's `CanvasLayout.swift` (`brushSpacing`),
 `engine/shaders/mask_component.slang` (`dabCoverage`).
 
 **Pinned by:** `testBrushSpacingRipple` (`orion-tests`, renders real strokes and

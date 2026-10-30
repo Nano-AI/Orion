@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace OrionShell.Chrome;
 
-/// A port of app/AssistantProcess.swift: the assistant column's state (which
+/// A port of the Swift app's AssistantProcess.swift: the assistant column's state (which
 /// agent, where it runs, how wide, the font) and the command line that starts
 /// it. No Avalonia types: AssistantPanel hosts it.
 ///

@@ -7,7 +7,7 @@ namespace OrionShell.CanvasSlice;
 
 /// The canvas's lower-left corner (Main.dc.html): the zoom as a translucent
 /// pill over the photo, Fit or 100%, and above it, past fit, a port of
-/// app/Navigator.swift: the frame's outline with the visible region inside it.
+/// the Swift app's Navigator.swift: the frame's outline with the visible region inside it.
 [Panel("canvas-navigator", Region.Canvas, 50)]
 public sealed class Navigator : StackPanel {
     readonly Map _map = new();

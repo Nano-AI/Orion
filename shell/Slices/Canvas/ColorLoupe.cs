@@ -4,7 +4,7 @@ using Avalonia.Media;
 
 namespace OrionShell.CanvasSlice;
 
-/// A port of app/ColorLoupe.swift: the colour under the cursor while a picking
+/// A port of the Swift app's ColorLoupe.swift: the colour under the cursor while a picking
 /// tool is armed, so a pick is legible before it is made. Above and left of the
 /// pointer, never under it, and never animated (the reported eyedropper lag).
 [Panel("canvas-loupe", Region.Canvas, 60)]

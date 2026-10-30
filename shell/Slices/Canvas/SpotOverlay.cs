@@ -96,7 +96,7 @@ static class SpotModel {
     }
 }
 
-/// A port of app/SpotOverlay.swift: each spot's source (dashed) linked to its
+/// A port of the Swift app's SpotOverlay.swift: each spot's source (dashed) linked to its
 /// destination (solid), the selected one in accent, a tick on a clone. Drag
 /// either disc; with the tool armed, a press places a spot and drags its source out.
 [Panel("canvas-spots", Region.Canvas, 20)]

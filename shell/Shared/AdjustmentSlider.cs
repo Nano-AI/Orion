@@ -9,7 +9,7 @@ using Avalonia.Threading;
 
 namespace OrionShell;
 
-/// A port of app/AdjustmentSlider.swift bound to one OrionAdjustments field:
+/// A port of the Swift app's AdjustmentSlider.swift bound to one OrionAdjustments field:
 /// a name, a boxed readout in the numeral face that turns accent when the value
 /// is off its default, and an AnalogTrack marked in the slider's unit. Click the
 /// readout, or Tab to it and press Return, to type (Return commits, Escape

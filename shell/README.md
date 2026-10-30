@@ -49,18 +49,17 @@ window.
 | `Slices/Library/LibraryModel.cs`, `PhotoSelection.cs` | ratings, rejects and labels merged into the sidecar (window only), and the command/shift-click selection culls and batches act on (decision #363) |
 | `Slices/Sheets/Snapshots.cs` | saved versions in `PHOTO.orion-snapshots.json`, Swift's file shape; `Shared/ShellSettings.cs` is the @AppStorage stand-in |
 | `Fixtures/` | sidecars the Swift app wrote: `--selftest` rewrites them byte for byte and reopens each through the engine |
-| `Fixtures/foreign/` | hand-written Lightroom-, Capture One- and darktable-style XMP: Orion writes into each and every other node must survive, in this selftest and in `app/ViewportTests+ForeignXmp.swift` (decision #370) |
-| `STREAMS.md` | stage 1's three parallel streams: who owns which file, which contracts they consume |
+| `Fixtures/foreign/` | hand-written Lightroom-, Capture One- and darktable-style XMP: Orion writes into each and every other node must survive, in this selftest (decision #370) |
+| `STREAMS.md` | stage 1's three parallel streams (the port, #315), kept for the ownership rules code still cites |
 | `Shell/` | the window: regions and the tool tab bar |
-| `Slices/<Folder>/` | one per slice in `slices.json`; seeds only, until the swarm |
-| `SLICES.md` | the brief a slice agent works from |
-| `compare.py` | `check` file ownership, `swift`/`avalonia` screenshots, `page` side by side |
+| `Slices/<Folder>/` | one per slice of the port: Canvas, Chrome, Develop, Library, Masks, Sheets |
+| `SLICES.md` | the brief the port's slice agents worked from; its numbered rules are cited in code |
 | `native/present.mm` | the picture to Avalonia on the GPU: an IOSurface per graph, handed over on `MTLSharedEvent`s |
 | `native/matte.mm` | Subject and Person selection through Apple's Vision (macOS only; decision #365) |
 | `bin-native/present_test RAW` | its headless check: surface against CPU readback, the GPU wait, timings. No window |
 
-Spike-only, not product code: `native/shim.mm` repeats the default look from
-`Engine.swift`; a real port moves it below the facade (#315).
+Still open: `native/shim.mm` repeats the default look the Swift app's
+`Engine.swift` set; it belongs below the facade (#315).
 
 The picture reaches the canvas with no CPU copy (#317, decision #354): on
 Avalonia's Metal renderer, `native/present.mm` copies each render on the GPU

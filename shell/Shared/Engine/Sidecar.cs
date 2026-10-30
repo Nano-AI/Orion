@@ -5,7 +5,7 @@ using System.Xml.Linq;
 
 namespace OrionShell;
 
-/// The XMP sidecar beside each raw: a port of app/Sidecar.swift, byte for byte
+/// The XMP sidecar beside each raw: a port of the Swift app's Sidecar.swift, byte for byte
 /// on the way out, so a file either app wrote opens the same in the other
 /// (decision #9: the sidecar is the source of truth, not a catalog).
 ///

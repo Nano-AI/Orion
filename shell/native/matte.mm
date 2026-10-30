@@ -1,5 +1,5 @@
 // Subject and person selection through Apple's Vision framework, for the
-// shell: the inference half of app/SubjectMatte.swift. research/masking.md §5.
+// shell: the inference half of the Swift app's SubjectMatte.swift. research/masking.md §5.
 // Vision is macOS-only; the C# side says "not available on this system" elsewhere.
 //
 // No Objective-C exception or C++ exception leaves this file: a failure is a 0
@@ -93,7 +93,7 @@ int shim_vision_matte(const uint8_t* rgba, int width, int height, int kind,
 }
 
 // Vision's face rectangles on the same kind of picture, for `Orion --agent
-// faces` (app/AgentFaces.swift's detector). `boxes` takes four floats a face,
+// faces` (the Swift app's AgentFaces.swift's detector). `boxes` takes four floats a face,
 // Vision's own normalised x, y, w, h with a bottom-left origin. Returns the
 // number found (it may exceed `capacity`, which caps what is written), or -1
 // with the reason in `why`.
