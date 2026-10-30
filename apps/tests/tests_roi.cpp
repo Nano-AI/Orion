@@ -215,6 +215,68 @@ void testRegionMatchesCropGpu() {
     }
 }
 
+void testRegionDngLensGpu() {
+    section("A region under a DNG opcode warp whose centre is off the frame's (#22, #372)");
+
+    // WarpRectilinear as parseDngLensOpcodes reads it: radii in units of the
+    // farthest pixel from an off-centre centre, a polynomial per plane, and
+    // tangential terms. The window's low side is the tight one (the 192 halo
+    // and the 16-pixel alignment; the high side also gets the 256 bucket), so
+    // the view sits right of the centre and the barrel pulls what it fetches
+    // ~300 pixels left of the view's left edge, past the halo. A window sized
+    // without this lens (Engine::renderRegion's edge sweep) misses those
+    // pixels and this fails: checked by dropping the lens from the sweep.
+    //
+    // No sharpening: on sharpened noise under a warp this strong, the float
+    // ulp in the window-shifted centre moves a hardware bilinear weight by one
+    // quantum between neighbours far apart, measured at up to 5 steps on 4
+    // pixels of 98,304. That is arithmetic, not the coverage this checks.
+    constexpr std::uint32_t kW = 1536, kH = 1024;
+    try {
+        orion::Engine engine;
+        engine.openDecoded(structured(kW, kH));
+        orion::pipe::Adjustments a;
+        a.wb = engine.develop().asShotWhiteBalance();
+        a.contrast = 1.3f;
+        a.lensProfile = true;
+        auto& m = a.lensModel;
+        m.norm = orion::pipe::LensNorm::FarthestPixel;
+        m.center[0] = 0.1f; m.center[1] = 0.5f;
+        const float k0[3] = {1.003f, 1.0f, 0.997f};   // a little lateral CA
+        for (int ch = 0; ch < 3; ++ch) {
+            m.radial[ch][0] = k0[ch];
+            m.radial[ch][2] = -0.6f;    // kr1·r², where the parser puts it
+            m.radial[ch][4] = 0.25f;    // kr2·r⁴: one-to-one out to r = 1
+            m.tangential[ch][0] = 0.002f;
+            m.tangential[ch][1] = -0.001f;
+        }
+        engine.setAdjustments(a);
+        engine.render();
+        const auto& full = engine.develop();
+        const std::uint32_t fw = full.outputWidth(), fh = full.outputHeight();
+
+        // At the right edge, level with the centre: the pull is all leftward.
+        const std::uint32_t rw = 256, rh = 256, rx = (fw - rw) / 16 * 16, ry = (fh - rh) / 32 * 16;
+        const auto fullPx = pixels(full);
+        const double ms = engine.renderRegion({float(rx) / fw, float(ry) / fh, float(rw) / fw, float(rh) / fh,
+                                               rw, rh});
+        const auto& reg = engine.regionDevelop();
+        report(ms >= 0.0 && engine.regionStep() == 1 &&
+                   std::uint64_t(reg.width()) * reg.height() < std::uint64_t(kW) * kH,
+               "the opcode warp renders as a region, at step 1, from a window smaller than the frame",
+               std::to_string(reg.width()) + "x" + std::to_string(reg.height()));
+        const auto want = crop(fullPx, fw, rx, ry, rw, rh);
+        const auto [worst, differing] = difference(pixels(reg), want);
+        std::printf("  opcode warp, %ux%u window: max %d, %zu of %zu differ\n", reg.width(), reg.height(), worst,
+                    differing, want.size());
+        report(worst <= 1 && differing * 1000 < want.size(),
+               "a view the warp pulls from well outside it is the full render's crop",
+               "max " + std::to_string(worst) + ", " + std::to_string(differing) + " differ");
+    } catch (const std::exception& e) {
+        report(false, "region under a DNG opcode warp", e.what());
+    }
+}
+
 void testRegionAtFrameEdgesGpu() {
     section("A region at the frame's far edges, turned and keystoned, at step 2 (#22)");
 

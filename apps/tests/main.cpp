@@ -64,6 +64,7 @@ int main() {
     testLensSourceOnRealSony();
     testRegionMatchesCropGpu();
     testRegionAtFrameEdgesGpu();
+    testRegionDngLensGpu();
     testLensAutoScale();
     testToneBandsWithoutGuide();
     testHueSatMapGpu();
