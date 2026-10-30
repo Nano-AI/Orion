@@ -157,7 +157,7 @@ public class StateButton : Button {
         bool enabled = IsEffectivelyEnabled, lit = enabled && (IsPointerOver || IsPressed);
         (Background, BorderBrush, var ink) = _kind switch {
             _ when !enabled && _kind == ButtonKind.Primary => (Palette.Raised, Palette.Line, Palette.Faint),
-            ButtonKind.Primary => (lit ? AccentLift : Palette.Accent, lit ? AccentLift : Palette.Accent, Palette.Ground),
+            ButtonKind.Primary => (lit ? AccentLift : Palette.Accent, lit ? AccentLift : Palette.Accent, Palette.OnAccent),
             ButtonKind.Segment => (_on ? Palette.Raised : lit ? Palette.Panel : Brushes.Transparent, Brushes.Transparent,
                                    _on ? _ink ?? Palette.Text : lit ? Palette.Text : _ink ?? Palette.Dim),
             _ when _on => (Wash, Palette.Accent, Palette.Accent),

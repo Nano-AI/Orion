@@ -1,0 +1,11 @@
+/* GENERATED from design/tokens.json by design/build-tokens.py. Do not edit by hand.
+ * Palette: hubble. To swap, set activePalette in tokens.json and run build-tokens.py. */
+
+:root {
+  --accent: #4db6c4;
+  --status: #eebb58;
+  --mark: #4db6c4;
+  --on-accent: var(--ground);
+  --accent-ink: #166069;
+  --gradient: linear-gradient(90deg, #166069, #4db6c4, #e2eeff);
+}

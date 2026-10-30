@@ -1,5 +1,6 @@
 // GENERATED from design/tokens.json by design/build-tokens.py.
 // Do not edit by hand — your changes will be overwritten.
+// Palette: hubble.
 
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -31,14 +32,18 @@ public static class Palette {
     public static readonly IBrush Label = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 166));
     /// Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is 5.0:1)
     public static readonly IBrush Faint = new ImmutableSolidColorBrush(Color.FromRgb(90, 90, 96));
-    /// Interactive and active states ONLY. Never decorative.
+    /// Interaction ONLY: an edited value, a slider's fill, the focus ring, the primary button. Never decorative, never status.
     public static readonly IBrush Accent = new ImmutableSolidColorBrush(Color.FromRgb(77, 182, 196));
     /// Reject flag
     public static readonly IBrush Reject = new ImmutableSolidColorBrush(Color.FromRgb(196, 87, 77));
     /// Star rating marks
-    public static readonly IBrush Star = new ImmutableSolidColorBrush(Color.FromRgb(240, 198, 116));
-    /// What a person must see: a failed render or write, clipped highlights, an unreadable file. Star's value today, its own role so either can move
-    public static readonly IBrush Warn = new ImmutableSolidColorBrush(Color.FromRgb(240, 198, 116));
+    public static readonly IBrush Star = new ImmutableSolidColorBrush(Color.FromRgb(238, 187, 88));
+    /// What a person must see: a failed render or write, clipped highlights, an unreadable file. Star's role today, its own name so either can move
+    public static readonly IBrush Warn = new ImmutableSolidColorBrush(Color.FromRgb(238, 187, 88));
+    /// A section's edited dot: a state, not an action
+    public static readonly IBrush Status = new ImmutableSolidColorBrush(Color.FromRgb(238, 187, 88));
+    /// Words and glyphs on an accent fill (the primary button)
+    public static readonly IBrush OnAccent = new ImmutableSolidColorBrush(Color.FromRgb(20, 20, 22));
     /// Histogram red channel
     public static readonly IBrush ChanR = new ImmutableSolidColorBrush(Color.FromRgb(196, 67, 58));
     /// Histogram green channel

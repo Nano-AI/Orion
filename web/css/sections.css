@@ -211,8 +211,6 @@ html:not(.js) .cmp__grip { display: none; }
 }
 .keep__file .ico { font-size: 24px; color: var(--dim); }
 .keep__name { font-family: var(--mono); font-weight: 300; font-size: clamp(1.05rem, 1.7vw, 1.5rem); line-height: 1.1; letter-spacing: -0.03em; }
-/* the sidecar takes the accent: it is the file Orion writes */
-.keep__file + .keep__file .keep__name, .keep__file + .keep__file .ico { color: var(--accent); }
 .keep__meta { font-family: var(--mono); font-size: var(--fs-xs); color: var(--dim); text-align: right; }
 @media (max-width: 900px) { .keep__grid { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .keep__file { grid-template-columns: auto minmax(0, 1fr); } .keep__meta { grid-column: 2; text-align: left; } }

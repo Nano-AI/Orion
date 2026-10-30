@@ -20,11 +20,39 @@ Controls and states boards). Committed 2026-10-27.
 | Axis | Choice | Why |
 |---|---|---|
 | Neutrals | `tokens.json` greys unchanged, near-perfectly neutral | A tinted grey is a color cast in a raw editor (tokens.json's own rule) |
-| Accent | `accent` #4DB6C4, **interaction only**: edited fill and dot, pressed toggle, focus ring, primary action | Cyan sits outside the indigo band and away from skin. ⚠ Measured 2026-10-30, it is 18° of OKLCH hue from a clear sky; three candidates further from every memory colour wait on the developer (#381) |
+| Accent | `accent` role, cyan #4DB6C4 in both palettes, **interaction only**: edited value, slider fill, focus ring, pressed toggle, primary action. The edited dot is `status` | Cyan sits outside the indigo band and away from skin, and it is Orion's colour: H-beta, the nebula's blue-green line. ⚠ Measured 2026-10-30, it is 18° of OKLCH hue from a clear sky (#381). See Brand palette |
 | Words | System face (SF Pro on macOS, Segoe UI on Windows) | Native controls read as native; Apple HIG. Deliberate override of the deslop skill's ban on system type |
 | Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle in a proprietary app |
 | Case | Sentence case everywhere; no tracked all-caps labels | Removes the most common generated-UI tell |
 | Signature move | **Light-meter scale sliders**: tracks marked in real units (stops, Kelvin, degrees), the edit fills from the default rather than from the left end | Says what a slider does in the photographer's units, and shows at a glance what has been edited |
+
+## Brand palette (2026-10-30, #383)
+
+**To swap:** set `activePalette` in `tokens.json` to `hubble` or `belt`, run `design/build-tokens.py`; the app (`Palette.g.cs`) and the site (`web/css/tokens.css`) both follow, and the build fails, writing nothing, if any palette misses a bar below.
+
+"Hubble" is the active palette: Orion's colours as the nebula and its stars give them.
+
+| Slot | Hex | OKLCH | Role in `hubble` | Source |
+|---|---|---|---|---|
+| cyan | #4DB6C4 | 0.721 0.098 207 | `accent`, `mark` | The app's accent since the first tokens; H-beta (486.1 nm) renders #00B9C1, hue 200 |
+| gold | #EEBB58 | 0.819 0.130 82 | `status`: ratings, warnings, the edited dot | The warm second colour. ⚠ The app's stars and warnings were #F0C674, ΔE<sub>OK</sub> 3.3 away; one source means they take #EEBB58 now |
+| star-white | #E2EEFF | 0.945 0.026 257 | `gradient` only (`status` in `belt`) | Blackbody colour of the belt stars, 27-29.5 kK (Alnitak O9.5, Alnilam B0, Mintaka O9), CIE 1931 2° observer |
+| deep | #166069 | 0.450 0.070 207 | `accentInk` (5.66:1 on the research paper), dark fills | Cyan's hue at L 0.45 |
+
+`belt` is cyan and star-white only: `status` takes star-white where `hubble` has gold, and nothing else changes. Neutrals are in no palette: a tinted grey is a colour cast in a raw editor.
+
+| Role | Means | Bar the build enforces (app greys and site greys, every palette) |
+|---|---|---|
+| `accent` | interaction only: an edited value, a slider's fill, the focus ring, the primary button | 4.5:1 as text on ground, panel, raised; 3:1 as a ring on ground |
+| `status` | ratings, warnings, the edited dot | 4.5:1 on panel (a warning carries words) |
+| `mark` | the belt logo, the sky's belt, the social card's belt | 3:1 on ground |
+| `onAccent` | words on an accent fill (names a neutral: `ground`) | 4.5:1 on the accent |
+| `accentInk` | the accent on the research pages' paper | 4.5:1 on #E4E4E1 |
+| `gradient` | marketing only; nothing draws one today | none |
+
+**Never pair cyan with red or pink.** H-alpha (656.3 nm), the nebula's other line, renders #FF4356: TikTok's red (#FE2C55, hue 18.7). The build refuses a palette with a slot of chroma > 0.05 within 25° of that hue beside a cyan. The reject flag (#C4574D) and the histogram's red channel are data colours outside the palette and sit beside the cyan in the app; neither is a brand pair.
+
+The logo files (`web/img/orion-mark.svg`, `orion-icon.svg`) draw the mark in their own cyan gradients and do not follow `mark`: an SVG favicon cannot read the page's variables.
 
 ## Proposed token changes (stage 2 applies these through `build-tokens.py`)
 
@@ -61,7 +89,7 @@ Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon si
 | Focus | Two-ring box-shadow (ground, then accent) on buttons; outline on range thumbs |
 | Motion | Critically damped springs for what the hand moves, ease-out under 200 ms for state marks; a cross-fade under reduced motion; nothing animates on the arrow-key path. See Motion |
 | Shortcuts | Shown as keycaps in the footer, not as tooltips only |
-| Imagery | Only real engine renders of the sample RAWs |
+| Imagery | Only real engine renders of the sample RAWs. The one pattern: Book of Shapes' Node Garden, at near-zero contrast behind the empty window and on the social card (#383) |
 
 ## Motion (2026-10-28)
 
@@ -127,5 +155,5 @@ the buttons animate `RenderTransform` and `Opacity`.
 | Focus by outline on rounded buttons | Fixed: box-shadow rings |
 | No designed error state | Fixed: couldn't-open state added |
 | Caps eyebrows, middle-dot meta strings, `→` links, gradient text, glows | None present |
-| Indigo / cream / acid-green defaults | None: neutral greys plus cyan |
+| Indigo / cream / acid-green defaults | None: neutral greys plus cyan, gold for status |
 | System font as primary face | Kept on purpose, see Commitments |

@@ -40,7 +40,7 @@ public static class Engraved {
     }
 }
 
-/// Engraved.Plate + SectionPlate: the title, an accent dot when anything
+/// Engraved.Plate + SectionPlate: the title, a status dot when anything
 /// inside is off its default, a hairline, the info mark, the section's one
 /// action (With); then the rows. Space.Pad between the plate and its rows and between
 /// rows, `Gap` between sections (Main.dc.html).
@@ -48,7 +48,7 @@ public sealed class SectionPlate : StackPanel {
     /// Between one section and the next in a tool tab.
     public const double Gap = Space.Xl;
 
-    readonly Ellipse _dot = new() { Width = 5, Height = 5, Fill = Palette.Accent, Opacity = 0, VerticalAlignment = VerticalAlignment.Center };
+    readonly Ellipse _dot = new() { Width = 5, Height = 5, Fill = Palette.Status, Opacity = 0, VerticalAlignment = VerticalAlignment.Center };
     readonly DockPanel _plate = new() { MinHeight = 22 };
     public StackPanel Rows { get; } = new() { Spacing = Space.Pad };
 
