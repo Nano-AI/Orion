@@ -6,12 +6,9 @@
  *  values, times. Neutrals stay neutral; a tinted ground reads as a colour
  *  cast next to a photograph.
  *
- *  The accent is bubblegum pink (decision #381). The app and the mark are
- *  cyan, so cyan here would be expected; pink sits opposite the greens of
- *  every photograph on the page and well clear of skin, sky and violet. It
- *  keeps the app accent's one job: it marks a value Orion changed or is
- *  changing, and focus. It is never a fill and never decoration. Buttons
- *  are off-white.
+ *  Cyan is the app's accent and keeps the app's one job here: it marks a
+ *  value Orion changed or is changing, and focus. It is never a fill and
+ *  never decoration. Buttons are off-white.
  *
  *  Every value below the tokens comes from them. What keeps its own numbers
  *  is a drawn replica of something real: the app's slider, the terminal, a
@@ -46,8 +43,8 @@
   --white:   #f9f9fa;   /* a primary button under the pointer, and nothing else; never pure white */
   --dim:     #8d8d93;   /* 5.9:1 on ground: the floor for any readable text */
   --faint:   #55555b;   /* hairline glyphs only, never copy */
-  --accent:  #ff6fb0;   /* a value Orion changed, and focus. never a fill. 7.6:1 on ground, 7.2:1 on panel */
-  --accent-ink: #a73e6f;   /* the accent darkened to 4.5:1 on the research pages' paper */
+  --accent:  #4db6c4;   /* a value Orion changed, and focus. never a fill */
+  --accent-ink: #16707c;   /* the accent darkened to read on the research pages' paper */
 
   --sans: "Archivo", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
