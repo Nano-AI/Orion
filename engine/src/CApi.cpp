@@ -35,6 +35,12 @@ namespace {
 
 /// Runs fn, converting any escaping exception into a status code. When an
 /// engine is available the message is stashed for orion_last_error().
+/// Why the last orion_engine_create on this thread failed; empty after a success.
+std::string& createError() {
+    thread_local std::string why;
+    return why;
+}
+
 template <class Fn>
 OrionStatus guard(OrionEngine* engine, Fn&& fn) noexcept {
     try {
@@ -90,13 +96,18 @@ OrionStatus orion_engine_create(OrionEngine** out) {
     if (out == nullptr) return ORION_ERR_BAD_ARG;
     *out = nullptr;
 
-    // No engine exists yet, so a failure message has nowhere to live; the
-    // status is all the caller gets for this one call.
-    return guard(nullptr, [&]() -> OrionStatus {
-        auto engine = new OrionEngine{};
-        *out = engine;
+    // No engine exists yet, so the reason is kept here, for orion_last_error(NULL):
+    // "no GPU the engine can use" and "out of memory" need different answers (#376).
+    try {
+        *out = new OrionEngine{};
+        createError().clear();
         return ORION_OK;
-    });
+    } catch (const std::exception& e) {
+        createError() = e.what();
+    } catch (...) {
+        createError() = "unknown error";
+    }
+    return ORION_ERR_INTERNAL;
 }
 
 void orion_engine_destroy(OrionEngine* engine) {
@@ -620,6 +631,7 @@ OrionStatus orion_engine_read_pixels(const OrionEngine* engine, int graph,
                                      uint8_t* dst, uint32_t capacity,
                                      uint32_t* out_width, uint32_t* out_height) {
     if (engine == nullptr || out_width == nullptr || out_height == nullptr) return ORION_ERR_BAD_ARG;
+    if (graph < 0 || graph > 2) return ORION_ERR_BAD_ARG;
     auto* e = const_cast<OrionEngine*>(engine);
     const bool has = graph == 1 ? e->impl.hasPreview() : graph == 2 ? e->impl.hasRegion()
                                                                     : e->impl.hasImage();
@@ -974,7 +986,7 @@ const char* orion_status_string(OrionStatus status) {
 }
 
 const char* orion_last_error(const OrionEngine* engine) {
-    return engine ? engine->impl.lastError() : "";
+    return engine ? engine->impl.lastError() : createError().c_str();
 }
 
 const char* orion_version(void) {

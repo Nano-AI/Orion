@@ -301,3 +301,26 @@ The MIT License, identical for each, following each copyright notice above:
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
+
+## The Windows and Linux packages
+
+The Windows and Linux builds (decision #376) take their libraries from vcpkg
+rather than Homebrew, each linked dynamically, each licence copied verbatim from
+the port into `licenses/<port>.txt`, and `tools/package-gates.py` refuses a
+package with a file no licence covers or any GPL text among them. Beyond
+LibRaw, OpenCV, libjxl, Highway, Brotli, Little CMS and libjpeg-turbo, named
+above, they carry:
+
+  libpng — Copyright the PNG Reference Library authors. The PNG Reference Library License v2.
+  LibTIFF — Copyright (c) 1988-1997 Sam Leffler, (c) 1991-1997 Silicon Graphics, Inc. The libtiff licence.
+  XZ Utils' liblzma — 0BSD.
+  zlib — Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler. The zlib licence.
+
+Windows only:
+
+  ANGLE (`av_libglesv2.dll`, through Avalonia.Angle.Windows.Natives) — Copyright
+    The ANGLE Project Authors. BSD 3-Clause; its text travels as `ANGLE-LICENSE.txt`.
+  The Direct3D HLSL compiler, `d3dcompiler_47.dll` — Copyright Microsoft
+    Corporation. Dawn's D3D12 backend loads it beside the program; it is taken
+    unmodified from the Windows SDK's `Redist\D3D\x64` folder, which the Windows
+    SDK licence lets an application redistribute.

@@ -8,7 +8,7 @@
 # Needs: dotnet, and appimagetool on PATH (or $APPIMAGETOOL). Run on the oldest
 # system the AppImage should start on: it carries no glibc of its own.
 set -euo pipefail
-shell=$1 build=$2 out=$3
+shell=$1 build=$(cd "$2" && pwd) out=$3   # build absolute: ldd answers absolute paths
 root=$(cd "$(dirname "$0")/.." && pwd)
 version=$(git -C "$root" describe --tags --always)
 app=$out/AppDir
@@ -20,19 +20,20 @@ cp -R "$build/shaders" "$app/usr/bin/shaders"
 mkdir -p "$app/usr/bin/data"; cp -R "$root/data/lensfun" "$app/usr/bin/data/lensfun"
 
 # Every library the shim needs, except the base system's and the GPU's: the C
-# and C++ runtimes and the Vulkan loader come from the machine it runs on.
-base='^(linux-vdso|ld-linux|libc|libm|libdl|libpthread|librt|libstdc\+\+|libgcc_s|libvulkan|libX|libxcb|libGL|libEGL)\b'
+# and C++ runtimes and the Vulkan loader come from the machine it runs on. The
+# rest is vcpkg's (decision #376), never the distribution's: Ubuntu's OpenCV
+# brought GDAL and with it poppler, which is GPL.
+base='^(linux-vdso|ld-linux|lib(c|m|dl|pthread|rt|stdc\+\+|gcc_s|vulkan|GL|GLX|GLdispatch|EGL|X[A-Za-z0-9]*|xcb[a-z0-9-]*)\.so)'
 ldd "$app/usr/bin/liborion_shim.so" | awk '$3 ~ /^\// {print $1, $3}' | while read -r name path; do
-    [[ $name =~ $base ]] && continue
-    cp -L "$path" "$app/usr/lib/"
-    # The Debian package's copyright file is that library's licence.
-    pkg=$(dpkg -S "$path" 2>/dev/null | head -1 | cut -d: -f1) || true
-    if [[ -n $pkg && -f /usr/share/doc/$pkg/copyright ]]; then
-        cp "/usr/share/doc/$pkg/copyright" "$app/usr/share/doc/orion/licenses/$pkg.txt"
-    fi
+    if [[ $name =~ $base ]]; then continue; fi
+    case $path in
+        "$build"/vcpkg_installed/*) cp -L "$path" "$app/usr/lib/" ;;
+        *) echo "error: $name comes from $path, not from vcpkg; the package takes no distribution library" >&2; exit 1 ;;
+    esac
 done
 cp "$root/LICENSE" "$root/NOTICE" "$app/usr/share/doc/orion/"
 cp "$root"/licenses/* "$app/usr/share/doc/orion/licenses/"
+rm -f "$app"/usr/bin/*.pdb   # debug databases carry build paths; the gate refuses any that remain
 
 cat > "$app/AppRun" <<'EOF'
 #!/bin/sh
@@ -51,6 +52,9 @@ Icon=orion
 Categories=Graphics;Photography;
 EOF
 cp "$root/brand/orion_logo_system_luminous.svg" "$app/orion.svg"
+
+# Every licence text collected and every file mapped to one, no GPL, nobody named.
+python3 "$root/tools/package-gates.py" linux "$app" "$app/usr/share/doc/orion/licenses" "$build" "$shell"
 
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "${APPIMAGETOOL:-appimagetool}" "$app" "$out/Orion-$version-linux-x86_64.AppImage"
 echo "$out/Orion-$version-linux-x86_64.AppImage"

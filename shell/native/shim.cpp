@@ -153,7 +153,7 @@ Shim* shim_open_mode(const char* path, int headless) {
         (headless && orion_engine_set_headless(s->engine, 1) != ORION_OK) ||
         orion_engine_open_raw(s->engine, path) != ORION_OK) {
         std::fprintf(stderr, "shim_open: %s\n",
-                     s->engine ? orion_last_error(s->engine) : "no engine");
+                     orion_last_error(s->engine));   // NULL: why there is no engine
         if (s->engine) orion_engine_destroy(s->engine);
         delete s;
         return nullptr;
@@ -358,6 +358,8 @@ int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, i
 // size. `which` is what shim_render returned. Through the facade's readback,
 // which every backend has (#376); present.mm is the zero-copy path on macOS.
 int shim_read(Shim* s, int which, uint8_t* dst, int capacity, int* w, int* h) {
+    // shim_render's answer (1 preview, 2 full, 3 region) in the facade's numbering
+    // (0 full, 1 preview, 2 region).
     const int graph = which == 1 ? 1 : which == 3 ? 2 : 0;
     uint32_t rw = 0, rh = 0;
     if (orion_engine_read_pixels(s->engine, graph, nullptr, 0, &rw, &rh) != ORION_OK || !rw || !rh) return 0;

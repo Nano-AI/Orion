@@ -20,12 +20,12 @@ cp "$build"/shell-native/*.dll "$app/"
 cp -R "$build/shaders" "$app/shaders"
 mkdir -p "$app/data"; cp -R "$root/data/lensfun" "$app/data/lensfun"
 
+rm -f "$app"/*.pdb   # debug databases carry build paths; the gate refuses any that remain
+
 cp "$root/LICENSE" "$root/NOTICE" "$app/"
 cp "$root"/licenses/* "$app/licenses/"
-for c in "$build"/vcpkg_installed/*/share/*/copyright; do
-    port=$(basename "$(dirname "$c")")
-    cp "$c" "$app/licenses/$port.txt"
-done
+# Every licence text collected and every file mapped to one, no GPL, nobody named.
+python "$root/tools/package-gates.py" windows "$app" "$app/licenses" "$build" "$shell"
 
 zip=$out/Orion-$version-win-x64.zip
 rm -f "$zip"

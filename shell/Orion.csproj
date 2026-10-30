@@ -3,6 +3,8 @@
     <OutputType>WinExe</OutputType>
     <!-- The executable is `Orion`: Orion.app's CFBundleExecutable, and the sibling the bundled orion-mcp runs (#310). -->
     <AssemblyName>Orion</AssemblyName>
+    <!-- UTF-8 as the process code page on Windows, for every char* path the engine opens (#376). -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>OrionShell</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

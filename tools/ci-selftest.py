@@ -29,23 +29,26 @@ SKIP = {
     },
     "macos": {},
     "windows": {
-        # WARP is a CPU rasterizer and these checks time against a clock. Suspected,
-        # not proven: they measure the runner, not Orion. Each wants a real Windows GPU.
+        # Diagnosed: EditHistory folds two edits of one control into one step inside
+        # 0.6 s of wall clock, and WARP (a CPU rasterizer) renders each Set for longer.
         "undo restores a value, and a drag's ticks were one step":
-            "WARP renders slower than the 0.6 s that folds a drag's ticks into one step",
-        "a double-click springs to 100%": "suspected WARP timing: the spring ran 0 frames",
-        "undoing the erase brings the paint back": "suspected WARP timing, not diagnosed (passes on macOS)",
+            "WARP renders each Set for longer than the 0.6 s that folds a drag's ticks into one step",
+        # ⚠ Undiagnosed (#376's open items): the zoom reached 100% with no frame and
+        # Live false, which Motion.Ask does only with no animation clock or Reduce
+        # Motion on, and the selftest forces motion on. Wants a real Windows machine.
+        "a double-click springs to 100%": "UNDIAGNOSED: the spring ran to its end with 0 frames (#376)",
         "ReleaseRenderMemory gives back": "the footprint off macOS is the working set, and WARP's video memory is the process's own",
     },
     "linux": {},
 }
 
 # Where CI has no GPU the engine cannot open (Linux: no CPU Vulkan driver offers
-# TextureFormatsTier1; orion-tests in the same job names the adapter's refusal,
-# since orion_engine_create has nowhere to put a message). Then the selftest runs
-# its photo-free checks and stops, and any FAIL is counted as skipped for that
-# reason; the run must still finish and print its summary.
-NO_GPU = {"linux": "shim_open: no engine"}
+# TextureFormatsTier1). Then the selftest runs its photo-free checks and stops on
+# "needs a photo". That one FAIL, and only it, is a skip, and only when the shim
+# printed Dawn's refusal of the adapter: any other reason the engine did not open
+# (missing shaders, a crash in create) and every photo-free check still fail.
+NO_GPU = {"linux": "adapter lacks feature"}
+NEEDS_PHOTO = "selftest needs a photo"
 
 
 def main() -> int:
@@ -62,8 +65,8 @@ def main() -> int:
     no_gpu = system in NO_GPU and NO_GPU[system] in out
     for f in fails:
         reason = next((r for p, r in skip.items() if f.startswith(p)), None)
-        if not reason and no_gpu:
-            reason = "no usable GPU on this runner, so no engine"
+        if not reason and no_gpu and f.startswith(NEEDS_PHOTO):
+            reason = "no usable GPU on this runner, so no engine: " + NO_GPU[system]
         if reason:
             print(f"skipped on {system}: {f[:90]} ({reason})")
         else:

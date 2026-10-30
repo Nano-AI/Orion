@@ -27,10 +27,10 @@ static partial class SelfTest {
               && GalleryMode.Moved(0, GalleryMode.Direction.Left, 3, 5) == 0, "gallery arrows follow GalleryLayout.move");
         var plan = ExportRun.Plan(["/a/x.arw", "/b/x.arw"], "/out", "jpg", p => p == Path.Combine("/out", "x.jpg"));
         Check(plan.Select(j => j.Destination).SequenceEqual([Path.Combine("/out", "x-2.jpg"), Path.Combine("/out", "x-3.jpg")]), "batch names never overwrite (BatchExport.plan)");
-        if (!OperatingSystem.IsLinux())
-            Check(ExportRun.Plan(["/a/X.arw", "/b/x.arw"], "/out", "jpg", _ => false).Select(j => j.Destination)
-                      .SequenceEqual([Path.Combine("/out", "X.jpg"), Path.Combine("/out", "x-2.jpg")]),
-                  "names that differ only in case do not overwrite where the disk ignores case");
+        Check(ExportRun.Plan(["/a/X.arw", "/b/x.arw", "/c/caf\u00e9.arw", "/d/cafe\u0301.arw"], "/out", "jpg", _ => false).Select(j => j.Destination)
+                  .SequenceEqual([Path.Combine("/out", "X.jpg"), Path.Combine("/out", "x-2.jpg"),
+                                  Path.Combine("/out", "caf\u00e9.jpg"), Path.Combine("/out", "cafe\u0301-2.jpg")]),
+              "names that differ only in case or in how an accent is written never share a file");
 
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;

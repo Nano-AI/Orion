@@ -147,7 +147,7 @@ if(APPLE)
     message(STATUS "OpenCV: ${OPENCV_core_LIBRARY}")
     set(OPENCV_LIBRARIES ${OPENCV_LIBRARIES} PARENT_SCOPE)
 else()
-    # Windows (vcpkg) and Linux (apt) ship OpenCV 4: features2d and calib3d
+    # Windows and Linux take OpenCV 4 from vcpkg: features2d and calib3d
     # under their old names, and imgcodecs for ImageWriterPortable.cpp (#376).
     find_package(OpenCV REQUIRED GLOBAL COMPONENTS core imgproc features2d calib3d video imgcodecs)
     set(OPENCV_INCLUDE_DIR ${OpenCV_INCLUDE_DIRS})

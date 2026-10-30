@@ -861,7 +861,8 @@ OrionStatus orion_engine_device_info(const OrionEngine* engine,
                                      OrionDeviceInfo*   out);
 
 /* Diagnostics. Both return static or engine-owned strings; never free them.
- * orion_last_error returns "" when nothing has failed. */
+ * orion_last_error returns "" when nothing has failed. With NULL it answers
+ * why this thread's last orion_engine_create failed (no usable GPU, say). */
 const char* orion_status_string(OrionStatus status);
 const char* orion_last_error(const OrionEngine* engine);
 const char* orion_version(void);

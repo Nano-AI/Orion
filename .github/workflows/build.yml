@@ -22,21 +22,45 @@ env:
   SHELL_DIR: shell   # the one place this workflow names the shell's path
   SLANG_VERSION: 2026.14.1           # third_party/slang's version (decision #375)
   DAWN_CACHE: 106704a9-1             # Dawn's commit, and a revision: bump it when tools/build-dawn.sh changes
+  # SHA-256 of each download that is run or ships, from the release's own digest.
+  SLANG_SHA256_LINUX: 21f2d7847385a770e569fb61b1507a7794d742d97850bce0432bff0032ca005f
+  SLANG_SHA256_WINDOWS: 5ed0a59d650a0af0aca45d5db4e083b3d8fb5cea05748747dd95dfbe9c580658
+  SLANG_SHA256_MACOS: 92da7ab6226dd951037cd85397f830ae78fe40fbbb8928882e0b2654e468fdd4
+  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0   # 1.9.1
+  INNOSETUP_VERSION: 6.7.1
   DOTNET_NOLOGO: 1
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
 jobs:
   linux:
     runs-on: ubuntu-24.04            # pins the apt versions below to the image series
+    env:
+      ORION_VCPKG: ${{ github.workspace }}/../vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/../vcpkg-cache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
         with: { fetch-depth: 0 }     # git describe names the package
 
       - name: Packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build clang \
-            libraw-dev libopencv-dev libjxl-dev libvulkan1 vulkan-tools
+          # Build tools only. The engine's libraries are vcpkg's, as on Windows: Ubuntu's
+          # OpenCV is built with GDAL, which brings poppler, and poppler is GPL (#243, #376).
+          sudo apt-get install -y --no-install-recommends ninja-build clang nasm pkg-config \
+            autoconf autoconf-archive automake libtool libvulkan1 vulkan-tools
+
+      - name: vcpkg at the manifest's baseline
+        run: |
+          git clone --depth 1 --branch 2026.10.16 https://github.com/microsoft/vcpkg "$ORION_VCPKG"
+          "$ORION_VCPKG/bootstrap-vcpkg.sh" -disableMetrics
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+      - name: vcpkg packages (cached)
+        id: vcpkg
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json', 'tools/vcpkg-triplets/*') }}
+          restore-keys: vcpkg-linux-   # vcpkg's own cache is by package ABI: an older one still serves
 
       # The runner has no GPU, so Dawn's Vulkan backend runs on a CPU driver.
       # SwiftShader, at the commit Dawn's DEPS pins: Mesa's lavapipe (25.2) cannot
@@ -44,7 +68,7 @@ jobs:
       # which the engine requires (r16float/rg16float/r16uint storage).
       - name: SwiftShader (cached)
         id: swiftshader
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: swiftshader
           key: swiftshader-cddb5c91-1
@@ -62,7 +86,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/swiftshader"
           cp "$ss-build"/Linux/libvk_swiftshader.so "$ss-build"/Linux/vk_swiftshader_icd.json "$GITHUB_WORKSPACE/swiftshader/"
       - if: steps.swiftshader.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: swiftshader
           key: ${{ steps.swiftshader.outputs.cache-primary-key }}
@@ -74,13 +98,15 @@ jobs:
       - name: Slang
         run: |
           mkdir -p third_party/slang
-          curl -fsSL "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-linux-x86_64.tar.gz" \
-            | tar -xz -C third_party/slang
+          curl -fsSL -o "$RUNNER_TEMP/slang.tar.gz" \
+            "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-linux-x86_64.tar.gz"
+          echo "$SLANG_SHA256_LINUX  $RUNNER_TEMP/slang.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/slang.tar.gz" -C third_party/slang
 
       # Restore and save apart, so a later failing step still keeps a 40-minute build.
       - name: Dawn (cached)
         id: dawn
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
           key: dawn-linux-${{ env.DAWN_CACHE }}
@@ -88,7 +114,7 @@ jobs:
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
       - if: steps.dawn.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
           key: ${{ steps.dawn.outputs.cache-primary-key }}
@@ -96,8 +122,23 @@ jobs:
       - name: Configure and build
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DORION_SHELL_DIR="$SHELL_DIR"
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DORION_SHELL_DIR="$SHELL_DIR" \
+            -DCMAKE_TOOLCHAIN_FILE="$ORION_VCPKG/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_OVERLAY_TRIPLETS="$GITHUB_WORKSPACE/tools/vcpkg-triplets" \
+            -DVCPKG_TARGET_TRIPLET=x64-linux-dynamic-release
           cmake --build build -- -k 0   # every error in one run, not the first
+      - if: always() && steps.vcpkg.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: ${{ steps.vcpkg.outputs.cache-primary-key }}
+
+      # The libraries the shim loads, and none of the GPL ones a distribution's
+      # OpenCV once brought (package-gates.py checks the licence texts as well).
+      - name: No GPL library in the shim's closure
+        run: |
+          ldd build/shell-native/liborion_shim.so
+          if ldd build/shell-native/liborion_shim.so | grep -Ei 'poppler|gdal|x265|avcodec|gpl'; then exit 1; fi
 
       # ⚠ No CPU Vulkan driver offers TextureFormatsTier1 (lavapipe and SwiftShader
       # both lack blendable SNORM/norm16 targets), so Dawn refuses the adapter here
@@ -107,7 +148,7 @@ jobs:
         env: { ORION_TESTS_GPU_OPTIONAL: '1' }
         run: ./build/apps/tests/orion-tests
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9   # v4
         with: { dotnet-version: '10.0.x' }
 
       - name: Shell selftest (headless)
@@ -125,10 +166,11 @@ jobs:
         run: |
           curl -fsSL -o "$RUNNER_TEMP/appimagetool" \
             https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/appimagetool"
           APPIMAGETOOL="$RUNNER_TEMP/appimagetool" tools/package-linux.sh "$SHELL_DIR" build dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
         with:
           name: orion-linux
           path: dist/*.AppImage
@@ -141,11 +183,11 @@ jobs:
       ORION_VCPKG: ${{ github.workspace }}/../vcpkg   # not VCPKG_ROOT, which msvc-dev-cmd points at Visual Studio's
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/../vcpkg-cache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
         with: { fetch-depth: 0 }
 
       # MSVC's environment for clang-cl: its headers, libraries and linker.
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756   # v1
 
       - name: vcpkg at the manifest's baseline
         run: |
@@ -154,22 +196,24 @@ jobs:
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
       - name: vcpkg packages (cached)
         id: vcpkg
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-win-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-win-   # vcpkg's own cache is by package ABI: an older one still serves
 
       - name: Slang
         run: |
           mkdir -p third_party/slang
           curl -fsSL -o "$RUNNER_TEMP/slang.zip" \
             "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-windows-x86_64.zip"
+          echo "$SLANG_SHA256_WINDOWS  $RUNNER_TEMP/slang.zip" | sha256sum -c -
           7z x -bd -othird_party/slang "$RUNNER_TEMP/slang.zip" >/dev/null
 
       # Restore and save apart, so a later failing step still keeps a 40-minute build.
       - name: Dawn (cached)
         id: dawn
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
           key: dawn-windows-${{ env.DAWN_CACHE }}
@@ -177,7 +221,7 @@ jobs:
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
       - if: steps.dawn.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
           key: ${{ steps.dawn.outputs.cache-primary-key }}
@@ -185,14 +229,16 @@ jobs:
       - name: Configure and build
         run: |
           unset VCPKG_ROOT
-          # RelWithDebInfo: the PDBs give the debugger step below names.
+          # RelWithDebInfo, and so the package: the PDBs give the debugger step below
+          # names, and in Release the brush accumulator's first append took the full
+          # path twice on WARP (correct pixels, fast path refused), undiagnosed (#376).
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
             -DCMAKE_TOOLCHAIN_FILE="$ORION_VCPKG/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows-release -DORION_SHELL_DIR="$SHELL_DIR"
           cmake --build build -- -k 0   # every error in one run, not the first
       - if: always() && steps.vcpkg.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: ${{ steps.vcpkg.outputs.cache-primary-key }}
@@ -213,11 +259,12 @@ jobs:
 
       # The shell and the packages still run when orion-tests failed (the job stays
       # red): one run then reports every step, not the first failure.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9   # v4
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         with: { dotnet-version: '10.0.x' }
 
       - name: Shell selftest (headless)
+        id: selftest
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: |
           env -u Platform dotnet build "$SHELL_DIR" -c Release   # msvc-dev-cmd sets Platform=x64, which moves bin/ under x64/
@@ -232,13 +279,14 @@ jobs:
       - name: Zip and installer
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: |
-          choco install innosetup -y --no-progress
+          choco install innosetup --version="$INNOSETUP_VERSION" --allow-downgrade -y --no-progress
           ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe" tools/package-windows.sh "$SHELL_DIR" build dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         with:
-          name: orion-windows
+          # Uploaded after a failure too, for a look, but never under a green run's name.
+          name: orion-windows${{ (steps.tests.outcome != 'success' || steps.selftest.outcome != 'success') && '-tests-failed' || '' }}
           path: |
             dist/*.zip
             dist/*-setup.exe
@@ -246,7 +294,7 @@ jobs:
   macos:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
 
       - name: Packages
         run: brew install ninja libraw opencv jpeg-xl
@@ -254,13 +302,15 @@ jobs:
       - name: Slang
         run: |
           mkdir -p third_party/slang
-          curl -fsSL "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-macos-aarch64.tar.gz" \
-            | tar -xz -C third_party/slang
+          curl -fsSL -o "$RUNNER_TEMP/slang.tar.gz" \
+            "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-macos-aarch64.tar.gz"
+          echo "$SLANG_SHA256_MACOS  $RUNNER_TEMP/slang.tar.gz" | shasum -a 256 -c -
+          tar -xzf "$RUNNER_TEMP/slang.tar.gz" -C third_party/slang
 
       # Restore and save apart, so a later failing step still keeps a 40-minute build.
       - name: Dawn (cached)
         id: dawn
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
           key: dawn-macos-${{ env.DAWN_CACHE }}
@@ -268,7 +318,7 @@ jobs:
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
       - if: steps.dawn.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
           key: ${{ steps.dawn.outputs.cache-primary-key }}
@@ -284,7 +334,7 @@ jobs:
           ./build/apps/tests/orion-tests
           ORION_GPU=dawn ./build/apps/tests/orion-tests
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9   # v4
         with: { dotnet-version: '10.0.x' }
 
       - name: Shell selftest (headless)

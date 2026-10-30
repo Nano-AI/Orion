@@ -68,7 +68,11 @@ RawInfo readInfo(const std::string& path) {
     info.timestamp   = static_cast<std::int64_t>(other.timestamp);
     // LibRaw reads OpcodeList1/2/3 as-is into rawopcodes[0..2] (0.22). Older
     // LibRaw (Ubuntu 24.04 ships 0.21) has no such field: no file opcodes, so
-    // lens correction falls through to lensfun (#376).
+    // lens correction falls through to lensfun (#376). Every build Orion makes
+    // has 0.22 (Homebrew, vcpkg); one against an older LibRaw says so here.
+#if !LIBRAW_COMPILE_CHECK_VERSION_NOTLESS(0, 22)
+#warning "LibRaw older than 0.22: DNG lens opcodes are dropped and lensfun answers (#376)"
+#endif
 #if LIBRAW_COMPILE_CHECK_VERSION_NOTLESS(0, 22)
     for (int i = 0; i < 3; ++i) {
         const auto& op = proc.imgdata.color.dng_levels.rawopcodes[i];

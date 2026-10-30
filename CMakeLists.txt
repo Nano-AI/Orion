@@ -34,6 +34,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Linux links the static engine into the shell's shared library (#376).
 if(NOT APPLE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    # No builder's path in a shipped binary (#266, #376): __FILE__ relative to
+    # the tree, and on Windows the debug-database path is its bare file name.
+    if(MSVC)
+        add_compile_options("/clang:-ffile-prefix-map=${CMAKE_SOURCE_DIR}/=")
+        add_link_options(/PDBALTPATH:%_PDB%)
+    else()
+        add_compile_options("-ffile-prefix-map=${CMAKE_SOURCE_DIR}/=")
+    endif()
 endif()
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)

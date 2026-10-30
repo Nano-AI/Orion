@@ -100,7 +100,11 @@ static partial class SelfTest {
               $"a brush stroke brightens its mask and Alt-painting over it erases the coverage ({bare:0.0} → {painted:0.0} → {erased:0.0})");
 
         // Undo writes the stroke's old revision back, and the shim lays the dabs it kept for it.
+        // The two erase passes are one step only when they land inside EditHistory's 0.6 s
+        // coalescing window, a wall clock: on a CPU rasterizer (WARP, #376) each pass renders
+        // for longer than that, they are two steps, and one undo leaves the first pass erased.
         EditHistory.Undo();
+        if (group.Current?.BrushErase.Contains(1) == true) EditHistory.Undo();
         double unerased = Luma(engine.Picture, 0.25, 0.80);
         Check(Math.Abs(unerased - painted) < 1 && group.Current?.BrushErase.Contains(1) == false,
               $"undoing the erase brings the paint back ({erased:0.0} → {unerased:0.0}, painted {painted:0.0})");

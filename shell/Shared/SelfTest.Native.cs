@@ -10,6 +10,19 @@ static partial class SelfTest {
         var engine = EngineModel.Shared;
         if (engine.Session is not { } session) return;   // SelfTest.Run already failed for want of a photo
 
+        // A photo in a folder and under a file name that are not ASCII opens (#376): the shim
+        // takes UTF-8, which Windows reads as the ANSI code page unless app.manifest says UTF-8.
+        string unicode = Directory.CreateTempSubdirectory("orion-Zo\u00eb-").FullName;
+        try {
+            string named = Path.Combine(unicode, "caf\u00e9 \u65e5\u672c" + Path.GetExtension(engine.Photos[engine.Current]));
+            File.Copy(engine.Photos[engine.Current], named);
+            nint unicodeShim = Native.shim_open_mode(named, 1);
+            Check(unicodeShim != 0, $"a photo under a non-ASCII folder and file name opens ({Path.GetFileName(unicode)}/{Path.GetFileName(named)})");
+            if (unicodeShim != 0) Native.shim_close(unicodeShim);
+        } finally {
+            Directory.Delete(unicode, recursive: true);
+        }
+
         // Curves: the panel's edit changes the render, identity puts it back.
         double flat = MeanLuma(engine.Picture);
         (float, float)[] lift = [(0, 0), (0.4f, 0.7f), (1, 1)];

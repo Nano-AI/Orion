@@ -62,13 +62,15 @@ static partial class ExportRun {
     public static List<(string Source, string Destination)> Plan(IEnumerable<string> sources, string folder, string ext,
                                                                  Func<string, bool>? exists = null) {
         exists ??= File.Exists;
-        // macOS and Windows file names ignore case: X.arw and x.arw must not both become x.jpg.
-        var taken = new HashSet<string>(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
+        // Names compared as the disk might: ignoring case (macOS, Windows, exFAT and NTFS
+        // under Linux) and composed (macOS folds é written two ways). Costs an occasional
+        // needless -2 on a case-sensitive disk, never an overwrite.
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var jobs = new List<(string, string)>();
         foreach (var source in sources) {
             string stem = Path.GetFileNameWithoutExtension(source), candidate = Path.Combine(folder, $"{stem}.{ext}");
-            for (int n = 2; taken.Contains(candidate) || exists(candidate); n++) candidate = Path.Combine(folder, $"{stem}-{n}.{ext}");
-            taken.Add(candidate);
+            for (int n = 2; taken.Contains(candidate.Normalize()) || exists(candidate); n++) candidate = Path.Combine(folder, $"{stem}-{n}.{ext}");
+            taken.Add(candidate.Normalize());
             jobs.Add((source, candidate));
         }
         return jobs;

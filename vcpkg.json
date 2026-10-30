@@ -1,7 +1,7 @@
 {
   "name": "orion",
   "version-string": "0.5.0",
-  "description": "Windows libraries for the engine (decision #376). Linux uses apt, macOS Homebrew.",
+  "description": "The engine's libraries on Windows and Linux (decision #376); macOS uses Homebrew.",
   "builtin-baseline": "9eec002df1cd109f8f104cd966a763daf9751489",
   "dependencies": [
     "libraw",
