@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using Avalonia.Controls;
 
 namespace OrionShell;
 
@@ -252,6 +253,17 @@ static partial class SelfTest {
             bool left = engine.Open(at) || engine.Next() || engine.Previous() || engine.Load(engine.Photos.ToList());
             Check(!left && engine.Current == at && Autosave.Shared.LastFailure != null && engine.Status == Autosave.Shared.LastFailure,
                   $"a photo whose edit will not save cannot be left, and the status line says why ('{engine.Status}')");
+            // The drawn line, not the model: deleting the footer's failure branch was green everywhere (#125).
+            var footer = new Chrome.StatusPanel();
+            var said = (TextBlock)((StackPanel)footer.Child!).Children[1];
+            Check(footer.IsVisible && said.IsVisible && said.Text == Autosave.Shared.LastFailure && said.Foreground == Palette.Star,
+                  $"the footer draws the failed write in the warning colour ('{said.Text}')");
+            // Trash, the departure the Swift probe drove that the switch above does not:
+            // the open photo stays, nothing moves, and the failure is the answer.
+            var moved = new List<string>();
+            string? trashWhy = Library.LibraryFiles.Trash([engine.Photos[at]], p => { moved.Add(p); return null; });
+            Check(trashWhy == Autosave.Shared.LastFailure && moved.Count == 0 && engine.Current == at && engine.Photos.Count > at,
+                  "trashing the open photo while its edit will not save moves nothing and says why");
             File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             Check(Autosave.Shared.FlushBeforeLeaving() && File.Exists(Sidecar.PathFor(owed)) && Autosave.Shared.LastFailure == null,
                   "once the folder is writable again the owed edit lands");
@@ -260,6 +272,17 @@ static partial class SelfTest {
             Autosave.Shared.Stop();
             File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             Directory.Delete(locked, recursive: true);
+        }
+
+        // A failed render, drawn: the footer names it, and stops when the next render lands.
+        if (engine.Handle != 0) {
+            var footer = new Chrome.StatusPanel();
+            var said = (TextBlock)((StackPanel)footer.Child!).Children[1];
+            string timing = engine.Timing;
+            engine.SetTiming("render failed: probe");
+            bool drawn = said.IsVisible && said.Text == "Render failed: probe" && said.Foreground == Palette.Star;
+            engine.SetTiming(timing);
+            Check(drawn && said.Text != "Render failed: probe", $"the footer draws a failed render and clears it after ('{said.Text}')");
         }
 
         // The real thing: a rated sidecar with no edit, an edit through Autosave, a reopen.

@@ -22,6 +22,7 @@ static partial class SelfTest {
     static partial void MatteChecks();
     // GitHub issue 23, the last item: the Swift app's settings carried over (SettingsImport).
     static partial void ImportChecks();
+    static partial void AgentChecks();
 
     static void CommandChecks() {
         // Every name a control binds to (Commands.Run/CanRun("…") in this tree) is registered.
@@ -43,6 +44,17 @@ static partial class SelfTest {
         Check(Throws<InvalidOperationException>(() => Commands.Index([C("a", "Enter"), C("b", "Return")]), "a and b"),
               "two commands on one key throw, naming both");
         Check(Commands.All.Count >= 35, $"{Commands.All.Count} commands registered");
+        // Frozen at #380, the Swift `menu` scene's job: a deleted command fails
+        // here even when only a key reaches it. A new one is added to the list.
+        string[] registered = ["tab-light", "tab-color", "tab-detail", "tab-optics", "tab-mask", "tab-crop", "tab-presets", "gallery",
+            "compare", "swap-split", "fit", "actual-size", "open-photo", "open-folder", "export", "export-all", "hdr-merge", "stop-batch",
+            "reveal-session-log", "undo", "redo", "reset-adjustments", "rotate-left", "rotate-right", "reject", "rate-0", "rate-1", "rate-2",
+            "rate-3", "rate-4", "rate-5", "next-photo", "previous-photo", "select-all", "deselect", "trash", "delete-rejected", "apply-crop",
+            "cancel-crop", "mask-overlay", "mask-feather-less", "mask-feather-more", "delete-mask-shape", "toggle-assistant",
+            "copy-mcp-setup", "approve-proposal", "reject-proposal"];
+        var gone = registered.Where(n => Commands.Find(n) == null).ToList();
+        var added = Commands.All.Select(c => c.Name).Except(registered).ToList();
+        Check(gone.Count == 0 && added.Count == 0, $"the {registered.Length} commands are the frozen list (gone: {string.Join(", ", gone)}; new: {string.Join(", ", added)})");
 
         // A stub says what it is on the status line instead of doing nothing.
         var stub = Commands.All.First(c => !c.Built);

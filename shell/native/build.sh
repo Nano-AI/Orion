@@ -14,7 +14,8 @@ engine=${ORION_ENGINE_LIB:-$root/build/engine/liborion_engine.a}   # override: a
 # The engine's Dawn backend (#375), only when this engine archive was built
 # with it (-DORION_DAWN=OFF leaves DawnDevice out, and needs no Dawn at all).
 dawn=()
-if ar t "$engine" | grep -q '^DawnDevice\.mm\.o$'; then
+members=$(ar t "$engine")   # not piped into grep -q: under pipefail an early exit reads as "no Dawn"
+if [[ $'\n'$members$'\n' == *$'\n'DawnDevice.mm.o$'\n'* ]]; then
     dawn=("$root/third_party/dawn-build/lib/libwebgpu_dawn.a" -framework QuartzCore -framework IOKit)
 fi
 python3 "$here/gen_fields.py" "$root/engine/include/orion/orion.h" "$out/fields.inc" "$out/mask_fields.inc"

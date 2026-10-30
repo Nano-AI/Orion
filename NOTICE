@@ -245,7 +245,7 @@ section, and the licence files the packages carry are copied verbatim into
   MicroCom.Runtime 0.11.6 — Copyright 2021 © Nikita Tsukanov (https://github.com/kekekeks/MicroCom)
   Tmds.DBus.Protocol 0.94.1 — Copyright Tom Deseyn (https://github.com/tmds/Tmds.DBus)
   SkiaSharp 3.119.4, with libSkiaSharp — Copyright (c) 2015-2016 Xamarin, Inc.; Copyright (c) 2017-2018 Microsoft Corporation (https://github.com/mono/SkiaSharp)
-  HarfBuzzSharp 8.3.1.3, with libHarfBuzzSharp — Copyright (c) 2015-2016 Xamarin, Inc.; Copyright (c) 2017-2018 Microsoft Corporation (https://github.com/mono/SkiaSharp)
+  HarfBuzzSharp 8.3.1.5, with libHarfBuzzSharp — Copyright (c) 2015-2016 Xamarin, Inc.; Copyright (c) 2017-2018 Microsoft Corporation (https://github.com/mono/SkiaSharp)
 
 libSkiaSharp is Skia (BSD 3-Clause, Copyright Google LLC) and the libraries it
 compiles in; libHarfBuzzSharp is HarfBuzz (the "Old MIT" licence). Their notices

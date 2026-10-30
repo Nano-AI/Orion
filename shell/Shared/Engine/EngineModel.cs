@@ -306,7 +306,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
         return (render, copy);
     }
 
-    void SetTiming(string text) { Timing = text; Changed(nameof(Timing)); }
+    internal void SetTiming(string text) { Timing = text; Changed(nameof(Timing)); }
 
     void Changed(params string[] names) {
         foreach (var n in names) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));

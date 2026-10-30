@@ -1,4 +1,4 @@
-# A raster matte is saved with the photograph — `app/MatteStore.swift`.
+# A raster matte is saved with the photograph — the retired Swift app's `MatteStore.swift` (not runnable since #380; planning/repro-retired.md).
 #
 # The gap this closes was the oldest carried-forward entry in STATUS.md: every
 # other mask kind is a handful of numbers and rides in the sidecar, and kind 4

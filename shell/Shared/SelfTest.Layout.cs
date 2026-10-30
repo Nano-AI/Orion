@@ -238,6 +238,8 @@ static partial class SelfTest {
         line.Show(null, null);
         window.UpdateLayout();
         Check(height == CaptureLine.LineHeight && line.Bounds.Height == height, "the capture line keeps its height with nothing to show");
+        var left = line.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text)).Select(t => t.Text).ToList();
+        Check(left.Count == 0, $"with nothing to show the capture line draws no words ({string.Join(" ", left)})");
         window.Close();
     }
 

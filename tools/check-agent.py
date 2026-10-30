@@ -102,7 +102,7 @@ is in play (it works on its own copy and rejects what it proposed):
     and requires current_photo to hand it back unchanged.
 27. high_iso_recipe → describe_edits carries denoiseNlm, denoiseSmoothness and
     texture with their ranges; texture 1.5 is rejected; the research/high-iso.md
-    §5 recipe leaves a flat patch's `noise` no higher than it found it
+    §5 recipe leaves the flattest well-exposed patch's `noise` no higher (#380)
 """
 
 import argparse

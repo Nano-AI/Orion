@@ -56,7 +56,7 @@ static partial class AgentSync {
     static readonly string[] Groups = ["whiteBalance", "light", "color", "curve", "detail", "effects", "masks"];
     static readonly string[] Defaults = ["light", "color", "curve", "effects"];
 
-    static string[] KeysOf(string group) => group == "masks"
+    internal static string[] KeysOf(string group) => group == "masks"
         ? ["maskComponents", "layers", "maskRefine", "maskSpace", "localTintAxis"]
         : SyncSettings.Keys(System.Array.IndexOf(Groups, group));
 
@@ -133,7 +133,7 @@ static partial class AgentSync {
     }
 
     /// A JSON array of absolute paths, in a file: a shoot is three hundred of them.
-    static List<string> ParseTargets(byte[]? data) {
+    internal static List<string> ParseTargets(byte[]? data) {
         JsonArray? list = null;
         try { if (data != null) list = JsonNode.Parse(data) as JsonArray; } catch (JsonException) { }
         if (list == null) throw new AgentCli.Usage("sync --targets must be a JSON array of raw paths");

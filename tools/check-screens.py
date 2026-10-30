@@ -27,13 +27,15 @@ What each check is for, so a red says what broke:
 ⚠ **What this does NOT check**, said plainly:
 
   - what the Swift version's scenes asserted and the selftest now owns: the
-    capture line draws the open photo's capture and nothing for none
-    (`SelfTest.Layout.cs` CaptureChecks), a failed write is named on the status
-    line (`SelfTest.Sidecar.cs`), the tool column scrolls past its fold
-    (`SelfTest.Layout.cs`).
+    capture line draws the open photo's capture and no words for none
+    (`SelfTest.Layout.cs` CaptureChecks); the footer DRAWS a failed render and
+    a failed write in the warning colour, and stops after
+    (`SelfTest.Sidecar.cs`, a real StatusPanel, not the model); the tool column
+    scrolls past its fold (`SelfTest.Layout.cs`).
   - the menu bar. The Swift `menu` scene read `NSApp.mainMenu`; this app has no
     menu bar, its commands are keys and controls, and the selftest's
-    CommandChecks hold every name a control binds to registered.
+    CommandChecks hold every name a control binds to registered, and the
+    registered names to a frozen list, so a key-only command deleted fails.
   - that any tab draws the *right* controls. A wrong panel differs from the
     other tabs and is stable, and passes.
 """

@@ -58,7 +58,7 @@ static partial class SelfTest {
         // Every SF Symbol name written into an Icons.Create call has a drawing
         // (ternaries too). The retired Swift UI's names were the oracle until #380;
         // a name passed through a variable is the end-of-run Icons.Missing check's.
-        var source = Path.Combine(Directory.GetCurrentDirectory(), "..", "shell");
+        var source = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));   // this tree's shell/, not the build dir's
         var symbols = Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")).Select(File.ReadAllText)
             .SelectMany(s => System.Text.RegularExpressions.Regex.Matches(s, @"Icons\.Create\((.*?),\s*[\w.]+,\s*[\w.]+\)"))
@@ -118,6 +118,7 @@ static partial class SelfTest {
         LibraryChecks();
         ParityChecks();
         ImportChecks();
+        AgentChecks();
         // Asked for while every check above built and drove the panels.
         Check(Icons.Missing.Count == 0, "every icon the run asked for has a drawing"
               + (Icons.Missing.Count > 0 ? $"; missing {string.Join(", ", Icons.Missing)}" : ""));

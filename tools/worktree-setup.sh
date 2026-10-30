@@ -74,8 +74,9 @@ fi
 
 # ⚠ samples is DIFFERENT, and symlinking the directory is a bug.
 #
-# The scenarios write into the folder beside the photograph: `save
-# samples/_PIC8220.xmp`, the matte PNGs, `PHOTO.orion-snapshots.json`. If every
+# The gates write into the folder beside the photograph (the retired repro
+# scenarios did too, which is how this was found): sidecars, the matte PNGs,
+# `PHOTO.orion-snapshots.json`. If every
 # worktree's `samples` is one symlink to the main repo's folder, then every
 # agent running `repro/*.txt` at once is writing the *same sidecar* — and on
 # 2026-08-02 that is exactly what happened: `grain-survives-a-reopen.txt` failed

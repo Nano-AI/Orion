@@ -15,8 +15,11 @@ mutations M1/M3/M4; #179). `tools/check-screens.py` closes `--screenshot`,
 
 ⚠ **Ported to the Avalonia app (decision #380), and two modes did not come.**
 The Swift app's `--save-safety` (20 checks of autosave's departure paths) is now
-the selftest's Sidecar checks (`SelfTest.Sidecar.cs`: the owed write lands
-before leaving, a failed write is named, headless never writes). Its
+the selftest's Sidecar checks (`SelfTest.Sidecar.cs`: with a writer that
+fails, Open, Next, Previous and a folder Load all refuse to leave the photo,
+Trash moves nothing, the footer names the failure, and the owed write lands
+once it can). Lost from it: the filmstrip and gallery click paths, which go
+through the same refusal but are not driven. Its
 `--library-open` opened one folder cold, warm and indexless and compared them:
 the Avalonia app has no SQLite index, so there is no warm path to disagree with
 the cold one, and that property is gone with the index rather than lost.

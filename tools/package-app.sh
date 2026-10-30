@@ -234,7 +234,8 @@ cp "$ROOT/licenses/Apache-2.0.txt" "$RES/licenses/Apache-2.0.txt"   # NOTICE ref
 # it (native/build.sh decides the same way), so no file in Frameworks names it
 # and the per-file check below cannot see it: its notices are NOTICE's Dawn
 # section, required here, and Dawn's own LICENSE when the source tree is kept.
-if ar t "$BUILD/engine/liborion_engine.a" | grep -q '^DawnDevice\.mm\.o$'; then
+members=$(ar t "$BUILD/engine/liborion_engine.a")   # not piped into grep -q: pipefail and SIGPIPE
+if [[ $'\n'$members$'\n' == *$'\n'DawnDevice.mm.o$'\n'* ]]; then
     grep -q '^## Dawn (WebGPU)$' "$ROOT/NOTICE" || { echo "error: the shim links Dawn and NOTICE has no Dawn section" >&2; exit 1; }
     DAWN_LICENSE="$ROOT/third_party/dawn-src/LICENSE"
     [[ -f "$DAWN_LICENSE" ]] && copy_license "dawn-BSD-3-Clause.txt" "$DAWN_LICENSE"

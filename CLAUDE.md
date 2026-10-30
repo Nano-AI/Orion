@@ -103,6 +103,10 @@ shell/bin-native/present_test RAW              zero-copy surface vs CPU readback
 (cd mcp && npm test)               the MCP server against a fake app
 ```
 
+`check-agent` and the packager use the first of `_PIC8095`, `overexposed-background`,
+`_PIC8220` … found in `ORION_SAMPLES`; every step passes on each of those that is here
+(#380 changed `high_iso_recipe` to measure grain on the flattest patch, not the centre).
+
 Run all of them before claiming anything works. The GPU tests matter most: pure
 maths tests pass happily on code that renders garbage, because they never touch
 a texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
@@ -144,7 +148,7 @@ gates catch that by timeout rather than by exit code. (It caught a real one at
 comments as holding the picture while a new photo decodes — and its only caller
 was the screenshot harness, so the canvas showed the *previous* photograph for
 the whole 210.9 ms of a cold open (#151, #181). It **sweeps** as well as
-declares (#183): every method in `shell/` whose uses are all in `SelfTest*.cs`
+declares (#183): every method in `shell/` whose uses are all harness (`SelfTest*`, the screenshot scenes, `Unattended.cs`)
 is reported, and a legitimate one has to say why in `HARNESS_ONLY`. ⚠ It is a
 regex, not a compiler: reflection or a name built at run time is invisible to
 it, so triage by hand before believing it.
@@ -154,5 +158,5 @@ it, so triage by hand before believing it.
 - Log any new decision in `DECISIONS.md` with its reason.
 - Benchmark every milestone. Latency regressions block new features.
 - Planning docs stay concise. Dense tables over prose.
-- **Nothing pops up.** The developer tiles windows with AeroSpace: tests run headless (`--selftest`, `--screenshot`, `--command`, headless Chrome for `web/`), never `open` or a visible browser tab. `--proof` and `check-screens.py` open windows; say so and ask first.
+- **Nothing pops up.** The developer tiles windows with AeroSpace: tests run headless (`--selftest`, `--screenshot`, `--command`, headless Chrome for `web/`), never `open` or a visible browser tab. `--proof` opens a window; say so and ask first. Every gate in the Tests list is headless.
 - **Guard heavy runs.** A bench, gate or build that eats memory has crashed the laptop: one heavy run at a time, ≥30% memory free, load under ~8, `nice`d.

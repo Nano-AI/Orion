@@ -64,7 +64,7 @@ static partial class AgentCli {
         }
     }
 
-    static JsonObject Dispatch(string[] args) {
+    internal static JsonObject Dispatch(string[] args) {
         int i = Array.IndexOf(args, "--agent");
         if (i < 0 || i + 1 >= args.Length) throw new Usage(UsageLine);
         string verb = args[i + 1];
@@ -167,7 +167,7 @@ static partial class AgentCli {
         return new JsonObject { ["path"] = raw, ["source"] = source, ["state"] = Normal(data) };
     }
 
-    static JsonObject Commit(string raw, string state) {
+    internal static JsonObject Commit(string raw, string state) {
         var decoded = Normal(File.ReadAllBytes(state));
         if (!Autosave.ToSidecar(raw, decoded)) throw new Failure($"could not write the sidecar for {raw}");
         return new JsonObject { ["sidecar"] = Sidecar.PathFor(raw) };
@@ -238,7 +238,7 @@ static partial class AgentCli {
     }
 
     /// Per-channel clip shares and mean of a channel-major histogram, each 0…1.
-    static (double[] Low, double[] High, double[] Mean) Histogram(uint[] h, int bins) {
+    internal static (double[] Low, double[] High, double[] Mean) Histogram(uint[] h, int bins) {
         double[] low = new double[3], high = new double[3], mean = new double[3];
         for (int c = 0; c < 3; c++) {
             var slice = h.AsSpan(c * bins, bins);

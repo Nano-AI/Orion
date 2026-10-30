@@ -36,7 +36,10 @@ unambiguous enough, because C# requires the modifiers or a return type there.
 A *use* is any mention of the name outside its declaration, not only a call: an
 Avalonia control hands methods around as delegates (`Button("Save", Save)`),
 and counting only `Name(` would call every one of those dead. The harness is
-`SelfTest*.cs` and `SharedProof.cs` (the `--proof` run).
+`SelfTest*.cs`, `SharedProof.cs` (the `--proof` run), the screenshot posing
+scenes (`CanvasScenes.cs`, `MaskScenes.cs`) and `Shared/Unattended.cs` (the
+headless --selftest/--bench/--command/--screenshot runner, moved out of
+Program.cs for this): the screenshot harness is #181's own shape.
 
 ⚠ **What this still does NOT do.** It is a regex, not a compiler: a call made
 through reflection or a name built at run time is invisible to it, and two
@@ -60,7 +63,7 @@ APP = ROOT / "shell"
 
 # Files that are the harness rather than the product. A use from one of these
 # is exactly the evidence that misled everybody the first time.
-HARNESS = re.compile(r"^(SelfTest|SharedProof)")
+HARNESS = re.compile(r"^(SelfTest|SharedProof|CanvasScenes|MaskScenes|Unattended)")
 
 # A regex over the product's source -> why the product must go on calling it.
 EXPECTED = {
@@ -97,13 +100,17 @@ HARNESS_ONLY = {
     "orion_engine_export_size":
         "a facade import the watermark parity check measures with; the product's "
         "export writes the file and never needs its size first",
+    # Found when the screenshot harness and the bench joined HARNESS (2026-10-29).
+    "Print":
+        "CacheReplay is --bench's trace replay of the cache policy; its report is "
+        "for the bench and nothing else (its header says so)",
     "shim_mask_field_count":
         "the shim's count of OrionMaskComponent fields, the oracle the selftest "
         "holds Session.MaskFields to — not a product path",
 }
 
 MODIFIERS = ("public|private|internal|protected|static|override|virtual|sealed|"
-             "async|unsafe|extern|partial|new|abstract|readonly")
+             "async|unsafe|extern|partial|abstract|readonly")
 DECLARATION = re.compile(
     rf"^[ \t]*(?:\[[^\]\n]*\][ \t]*)*(?:(?:{MODIFIERS})[ \t]+)+"
     r"(?:[\w<>\[\],.?()]+(?:[ \t]*[,<>][ \t]*[\w<>\[\],.?()]+)*[ \t]+)?"
