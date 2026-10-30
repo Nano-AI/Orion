@@ -332,7 +332,7 @@ The Inter Project Authors (https://github.com/rsms/inter) — is under the **SIL
 Open Font License 1.1**, the licence of the Barlow numeral face above; its text
 travels as `OFL-1.1.txt`.
 
-## MIT components of the application and the assistant's terminal
+## MIT components of the application, the assistant's terminal and the updater
 
 The assistant column (`shell/Slices/Chrome/AssistantPanel.cs`)
 hosts a terminal built from these NuGet packages, each under the **MIT License**,
@@ -345,6 +345,8 @@ as is every component of the section above:
   Unicode.net 2.0.0 — Copyright (c) 2017 NeoSmart Technologies (https://github.com/neosmart/unicode.net)
   SkiaSharp.HarfBuzz 3.119.4 — Copyright (c) Microsoft Corporation (https://github.com/mono/SkiaSharp)
   Microsoft.Windows.Console.ConPTY 1.24.260710001 — Copyright (c) Microsoft Corporation (Windows only; nothing of it ships on macOS)
+  Velopack 1.2.161 — Copyright © 2021 Caelan Sayler, © 2024 Velopack Ltd. (https://github.com/velopack/velopack): Velopack.dll, and the
+    installer and updater it places beside the app (UpdateMac, Update.exe and Setup.exe, UpdateNix), which install and update Orion (#389)
 
 The MIT License, identical for each, following each copyright notice above:
 

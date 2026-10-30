@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Windows: Orion-<version>-win-x64.zip and Orion-<version>-win-x64-setup.exe from a
-# built tree (decision #376), named so web/js/download.js offers them. The shell
-# self-contained, the shim with the vcpkg DLLs vcpkg copied beside it, the
-# shaders, lensfun, and the licence notices (vcpkg's copyright file per port).
+# Windows: Velopack's Orion-win-Setup.exe and Orion-win-Portable.zip, with the
+# update feed beside them, in OUT_DIR/releases from a built tree (decisions #376,
+# #389); web/js/download.js offers the Setup.exe. The shell self-contained, the
+# shim with the vcpkg DLLs vcpkg copied beside it, the shaders, lensfun, and the
+# licence notices (vcpkg's copyright file per port).
 #
 #   tools/package-windows.sh SHELL_DIR BUILD_DIR OUT_DIR
 #
-# Runs in Git Bash. Needs dotnet, 7z (or zip), and Inno Setup's ISCC.exe on PATH
-# (or $ISCC) for the installer.
+# Runs in Git Bash. Needs dotnet, and vpk on PATH (or $VPK).
 set -euo pipefail
 shell=$1 build=$2 out=$3
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -27,32 +27,10 @@ cp "$root"/licenses/* "$app/licenses/"
 # Every licence text collected and every file mapped to one, no GPL, nobody named.
 python "$root/tools/package-gates.py" windows "$app" "$app/licenses" "$build" "$shell"
 
-zip=$out/Orion-$version-win-x64.zip
-rm -f "$zip"
-(cd "$out" && 7z a -tzip -bd "$(basename "$zip")" Orion >/dev/null)
-
-# Inno Setup: a per-user install, no administrator prompt, an uninstaller.
-cat > "$out/orion.iss" <<EOF
-[Setup]
-AppName=Orion
-AppVersion=$version
-AppPublisher=Orion
-DefaultDirName={localappdata}\\Programs\\Orion
-DefaultGroupName=Orion
-PrivilegesRequired=lowest
-OutputDir=.
-OutputBaseFilename=Orion-$version-win-x64-setup
-Compression=lzma2
-SolidCompression=yes
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
-LicenseFile=Orion\\LICENSE
-
-[Files]
-Source: "Orion\\*"; DestDir: "{app}"; Flags: recursesubdirs
-
-[Icons]
-Name: "{group}\\Orion"; Filename: "{app}\\Orion.exe"
-EOF
-(cd "$out" && "${ISCC:-iscc}" //Q orion.iss)
-ls "$out"/Orion-"$version"-win-x64*
+# Velopack (#389), in place of Inno Setup and the zip: Setup.exe installs per
+# user, with no administrator prompt, into %LocalAppData%\Orion, with Start menu
+# and desktop shortcuts and an uninstaller in Settings; Portable.zip is the zip.
+# The version is the tag without its v, SemVer as vpk needs.
+"${VPK:-vpk}" pack --packId Orion --packVersion "${version#v}" --packDir "$app" --mainExe Orion.exe \
+    --packTitle Orion --outputDir "$out/releases"
+ls "$out/releases"

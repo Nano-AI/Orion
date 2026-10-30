@@ -1,9 +1,10 @@
 name: Build (macOS, Windows, Linux)
 
 # The engine, its tests, the Avalonia shell and its headless selftest on all
-# three systems, and the Windows and Linux packages as artifacts (decision #376).
-# Never releases or tags: web/js/download.js offers a build only once a release
-# carries it, and making one is the developer's call.
+# three systems, and each system's packages as artifacts (decision #376): Velopack's
+# installers and update feed, and the Mac disk image (#389). Never releases or tags:
+# web/js/download.js offers a build, and an installed Orion updates to one, only
+# once a release carries it, and making one is the developer's call.
 
 on:
   push:
@@ -26,8 +27,7 @@ env:
   SLANG_SHA256_LINUX: 21f2d7847385a770e569fb61b1507a7794d742d97850bce0432bff0032ca005f
   SLANG_SHA256_WINDOWS: 5ed0a59d650a0af0aca45d5db4e083b3d8fb5cea05748747dd95dfbe9c580658
   SLANG_SHA256_MACOS: 92da7ab6226dd951037cd85397f830ae78fe40fbbb8928882e0b2654e468fdd4
-  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0   # 1.9.1
-  INNOSETUP_VERSION: 6.7.1
+  VPK_VERSION: 1.2.161               # Velopack's packer, the shell's Velopack package's version (#389)
   DOTNET_NOLOGO: 1
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
@@ -47,7 +47,8 @@ jobs:
           # Build tools only. The engine's libraries are vcpkg's, as on Windows: Ubuntu's
           # OpenCV is built with GDAL, which brings poppler, and poppler is GPL (#243, #376).
           sudo apt-get install -y --no-install-recommends ninja-build clang nasm pkg-config \
-            autoconf autoconf-archive automake libtool libvulkan1 vulkan-tools
+            autoconf autoconf-archive automake libtool libvulkan1 vulkan-tools \
+            squashfs-tools   # mksquashfs, for vpk's AppImage (#389)
 
       - name: vcpkg at the manifest's baseline
         run: |
@@ -174,18 +175,15 @@ jobs:
           cd "$SHELL_DIR" && python3 "$GITHUB_WORKSPACE/tools/ci-selftest.py" linux \
             bin/Release/net10.0/Orion "$RUNNER_TEMP/selftest.dng"
 
-      - name: AppImage
+      - name: AppImage and update feed (Velopack)
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/appimagetool" \
-            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-          echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum -c -
-          chmod +x "$RUNNER_TEMP/appimagetool"
-          APPIMAGETOOL="$RUNNER_TEMP/appimagetool" tools/package-linux.sh "$SHELL_DIR" build dist
+          dotnet tool install -g vpk --version "$VPK_VERSION"
+          VPK="$HOME/.dotnet/tools/vpk" tools/package-linux.sh "$SHELL_DIR" build dist
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
         with:
           name: orion-linux
-          path: dist/*.AppImage
+          path: dist/releases/*
 
   windows:
     runs-on: windows-2022
@@ -300,25 +298,24 @@ jobs:
           cd "$SHELL_DIR" && python "$GITHUB_WORKSPACE/tools/ci-selftest.py" windows \
             bin/Release/net10.0/Orion.exe "$RUNNER_TEMP/selftest.dng"
 
-      - name: Zip and installer
+      - name: Setup.exe, portable zip and update feed (Velopack)
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: |
-          choco install innosetup --version="$INNOSETUP_VERSION" --allow-downgrade -y --no-progress
-          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe" tools/package-windows.sh "$SHELL_DIR" build dist
+          dotnet tool install -g vpk --version "$VPK_VERSION"
+          VPK="$HOME/.dotnet/tools/vpk" tools/package-windows.sh "$SHELL_DIR" build dist
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         with:
           # Uploaded after a failure too, for a look, but never under a green run's name.
           name: orion-windows${{ (steps.tests.outcome != 'success' || steps.selftest.outcome != 'success') && '-tests-failed' || '' }}
-          path: |
-            dist/*.zip
-            dist/*-setup.exe
+          path: dist/releases/*
 
   macos:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+        with: { fetch-depth: 0 }     # git describe names the package
 
       - name: Packages
         run: brew install ninja libraw opencv jpeg-xl
@@ -368,3 +365,20 @@ jobs:
           ./build/apps/tests/orion-selftest-photo "$RUNNER_TEMP/selftest.dng"
           cd "$SHELL_DIR" && python3 "$GITHUB_WORKSPACE/tools/ci-selftest.py" macos \
             bin/Release/net10.0/Orion "$RUNNER_TEMP/selftest.dng"
+
+      # package-app.sh's gates, then Velopack's feed and the disk image made from its app
+      # (#389); check-agent is its one stated skip here, with no sample RAW on CI.
+      - name: Orion.app, disk image and update feed (Velopack)
+        run: |
+          dotnet tool install -g vpk --version "$VPK_VERSION"
+          VPK="$HOME/.dotnet/tools/vpk" tools/package-app.sh "$GITHUB_WORKSPACE/dist"
+          # The app the disk image carries starts, from Velopack's output.
+          dist/Orion.app/Contents/MacOS/Orion "$RUNNER_TEMP/selftest.dng" --screenshot "$RUNNER_TEMP/packaged.png"
+          test -s "$RUNNER_TEMP/packaged.png"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
+        with:
+          name: orion-macos
+          path: |
+            dist/*.dmg
+            dist/releases/*

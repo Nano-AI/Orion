@@ -101,6 +101,10 @@ static class CommandTable {
         // The proposal footer's two buttons (OrionApp+Chrome.swift), live only while one is up.
         Built("approve-proposal", "Approve the proposed edit", "Cmd+Enter", "ProposalWatcher.swift", () => ProposalWatcher.Shared.IsLive, ProposalWatcher.Shared.Approve),
         Built("reject-proposal", "Reject the proposed edit", "Cmd+Escape", "ProposalWatcher.swift", () => ProposalWatcher.Shared.IsLive, ProposalWatcher.Shared.Reject),
+
+        // Updates (#389): no Swift owner, the Swift app never updated itself.
+        Built("check-for-updates", "Check for updates", null, "Updates.cs", () => true, Updates.CheckNow),
+        Built("restart-to-update", "Restart to update", null, "Updates.cs", () => Updates.Ready != null, Updates.Restart),
     ];
 
     static Command Built(string name, string title, string? keys, string owner, Func<bool> canRun, Action run) =>

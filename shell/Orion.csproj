@@ -28,5 +28,7 @@
     <PackageReference Include="Avalonia.Headless" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <PackageReference Include="Iciclecreek.Avalonia.Terminal" Version="[4.1.0]" />
+    <!-- Installers and updates from GitHub Releases (#389). MIT. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 </Project>

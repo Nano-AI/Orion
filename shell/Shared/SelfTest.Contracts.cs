@@ -52,7 +52,7 @@ static partial class SelfTest {
             "reveal-session-log", "undo", "redo", "reset-adjustments", "rotate-left", "rotate-right", "reject", "rate-0", "rate-1", "rate-2",
             "rate-3", "rate-4", "rate-5", "next-photo", "previous-photo", "select-all", "deselect", "trash", "delete-rejected", "apply-crop",
             "cancel-crop", "mask-overlay", "mask-feather-less", "mask-feather-more", "delete-mask-shape", "toggle-assistant",
-            "copy-mcp-setup", "approve-proposal", "reject-proposal"];
+            "copy-mcp-setup", "approve-proposal", "reject-proposal", "check-for-updates", "restart-to-update"];
         var gone = registered.Where(n => Commands.Find(n) == null).ToList();
         var added = Commands.All.Select(c => c.Name).Except(registered).ToList();
         Check(gone.Count == 0 && added.Count == 0, $"the {registered.Length} commands are the frozen list (gone: {string.Join(", ", gone)}; new: {string.Join(", ", added)})");

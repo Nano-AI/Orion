@@ -20,6 +20,8 @@ static class Program {
 
     [STAThread]
     static int Main(string[] args) {
+        // First: Velopack's install, update and uninstall hooks run here and exit (#389).
+        Velopack.VelopackApp.Build().Run();
         // Paths first: the working directory changes below.
         string? Value(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         var panel = Value("--panel");
@@ -112,6 +114,7 @@ sealed partial class App : Application {
                 Autosave.Install();
                 Library.LibraryModel.Shared.Writes = true;   // ratings and labels, as Library.persist
                 ShellSettings.File = ShellSettings.UserFile;  // and the remembered sizes
+                Updates.Start();   // a silent check once the window is up (#389)
             }
             OpenPhotos();   // the first photo arrives from a background decode
             desktop.MainWindow = MakeWindow() ?? throw new ArgumentException($"no panel '{Run.Panel}'");
