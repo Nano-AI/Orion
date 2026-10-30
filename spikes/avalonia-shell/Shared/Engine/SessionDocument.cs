@@ -56,6 +56,17 @@ public sealed partial class Session {
         }
     }
 
+    /// A whole decoded state in place of the working edit, as Engine.assign
+    /// does for a saved version: a legacy mask converts on the way in (never
+    /// at store), and the state becomes the carry, so the masks' names and the
+    /// spots come with it. Does not render.
+    public void Assign(JsonObject state) {
+        ToFrameSpace(state);
+        Apply(state);
+        Document = state;
+        Document = Capture();
+    }
+
     /// Every field of `state` into this session's adjustments. Does not render.
     public void Apply(JsonObject state) {
         foreach (var (key, value) in state) {

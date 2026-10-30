@@ -35,7 +35,9 @@ public sealed class GalleryPanel : DockPanel {
         SetDock(size, Dock.Right);
         var order = LibraryUi.SortMenu();
         order.Margin = new Thickness(10, 0, 0, 0);
-        bar.Children.AddRange([size, new StackPanel { Orientation = Orientation.Horizontal, Children = { _filter, order } }]);
+        var count = LibraryUi.SelectionCount();
+        count.Margin = new Thickness(10, 0, 0, 0);
+        bar.Children.AddRange([size, new StackPanel { Orientation = Orientation.Horizontal, Children = { _filter, order, count } }]);
         // On the panel tone, as the toolbar above it, so the filter's ground well reads as a well.
         var header = new Border { Background = Palette.Panel, BorderBrush = Palette.Line, BorderThickness = new Thickness(0, 0, 0, 1), Child = bar };
         SetDock(header, Dock.Top);
@@ -43,6 +45,7 @@ public sealed class GalleryPanel : DockPanel {
         Children.Add(new ScrollViewer { Content = _grid, Padding = new Thickness(8), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
 
         LibraryModel.Shared.Changed += Rebuild;
+        LibraryModel.Shared.SelectionChanged += () => { foreach (var p in _cells.Keys) Paint(p, p == _ringed); };
         EngineModel.Shared.Opened += Rebuild;
         GalleryMode.Changed += Ring;
         Rebuild();
@@ -67,16 +70,20 @@ public sealed class GalleryPanel : DockPanel {
 
     void Paint(LibraryModel.Photo? photo, bool focused) {
         if (photo == null || !_cells.TryGetValue(photo, out var c)) return;
-        c.Ring.BorderBrush = focused ? Palette.Accent : Brushes.Transparent;
+        // Two marks, two questions: the accent says the keys act here, the dimmer ring says a batch includes it.
+        bool selected = !focused && LibraryModel.Shared.HasExplicitSelection && LibraryModel.Shared.IsSelected(photo);
+        c.Ring.BorderBrush = focused ? Palette.Accent : selected ? LibraryUi.SelectedRing : Brushes.Transparent;
         c.Name.Foreground = focused ? Palette.Text : Palette.Dim;
     }
 
     /// Trades photos per screen against the detail a framing judgement needs.
-    /// The size is not remembered: Swift keeps it in @AppStorage("galleryCellSize").
-    // stub(#315): GalleryView.swift owns this until the logic moves below the facade
+    /// Remembered across launches under Swift's @AppStorage key.
+    public const string CellSizeKey = "galleryCellSize";
+
     Control SizeSlider() {
+        _grid.Cell = Math.Clamp(ShellSettings.Get(CellSizeKey, GalleryGrid.DefaultCell), GalleryGrid.MinCell, GalleryGrid.MaxCell);
         var slider = new Slider {
-            Minimum = GalleryGrid.MinCell, Maximum = GalleryGrid.MaxCell, Value = GalleryGrid.DefaultCell,
+            Minimum = GalleryGrid.MinCell, Maximum = GalleryGrid.MaxCell, Value = _grid.Cell,
             Width = 120, VerticalAlignment = VerticalAlignment.Center,
         };
         var r = slider.Resources;
@@ -92,6 +99,7 @@ public sealed class GalleryPanel : DockPanel {
         }
         slider.PropertyChanged += (_, e) => { if (e.Property != RangeBase.ValueProperty) return;
             _grid.Cell = slider.Value;
+            ShellSettings.Set(CellSizeKey, slider.Value);
             foreach (var picture in _pictures) picture.Height = _grid.Cell / GalleryGrid.CellAspect;
         };
         return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
@@ -109,6 +117,7 @@ public sealed class GalleryPanel : DockPanel {
             _grid.Children.Add(cell.Cell);
         }
         _ringed = GalleryMode.Focus;
+        foreach (var photo in _cells.Keys) Paint(photo, photo == _ringed);
         _info.Show(_ringed);
     }
 
@@ -130,24 +139,28 @@ public sealed class GalleryPanel : DockPanel {
         SetDock(marks, Dock.Right);
         caption.Children.AddRange([marks, name]);
         var cell = new StackPanel { Spacing = 8, Background = Brushes.Transparent, Focusable = true, Children = { ring, caption } };
-        ToolTip.SetTip(cell, photo.Tooltip);
+        LibraryUi.Tip(cell, photo);
         Avalonia.Automation.AutomationProperties.SetName(cell, LibraryUi.Spoken(photo));
         // A plain click focuses; it never decodes. Opening is the double-click's job.
-        // Command/shift-click selection, PhotoSelection.
-        // stub(#315): Library.swift owns this until the logic moves below the facade
-        cell.Tapped += (_, _) => GalleryMode.SetFocus(photo);
+        // Command and shift build the selection without moving the focus (PhotoSelection).
+        cell.Tapped += (_, e) => {
+            if (LibraryModel.Shared.Click(photo, LibraryModel.From(e.KeyModifiers)) is { } focus) GalleryMode.SetFocus(focus);
+        };
         // Return is the gallery's key map (GalleryMode.Handle), wherever focus is.
         cell.DoubleTapped += (_, _) => GalleryMode.Open(photo);
-        cell.ContextMenu = new ContextMenu { ItemsSource = Menu(photo) };
+        cell.ContextMenu = LibraryUi.Menu(() => Menu(photo));
         return (cell, ring, name);
     }
 
+    /// Over the selection when the photo is part of one, counted (GalleryView.menu).
     static List<Control> Menu(LibraryModel.Photo photo) {
+        var scope = LibraryModel.Shared.CullScope(photo);
         var items = new List<Control> { LibraryUi.Item("Open in Develop", () => GalleryMode.Open(photo)), new Separator() };
         items.AddRange(LibraryUi.CullItems(photo));
+        if (scope.Count > 1) items.AddRange([new Separator(), LibraryUi.Item("Export…" + LibraryUi.Suffix(scope), () => Commands.Run("export"))]);
         items.Add(new Separator());
-        // Editor.confirmTrash over the photo right-clicked, which takes the focus first.
-        items.Add(LibraryUi.Item("Move to Trash…", () => { GalleryMode.SetFocus(photo); Commands.Run("trash"); }));
+        // Editor.confirmTrash over the scope; the photo right-clicked takes the focus first.
+        items.Add(LibraryUi.Item("Move to Trash…" + LibraryUi.Suffix(scope), () => { GalleryMode.SetFocus(photo); Trash.Confirm(scope); }));
         return items;
     }
 

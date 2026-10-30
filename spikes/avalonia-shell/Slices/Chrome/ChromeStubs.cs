@@ -12,15 +12,15 @@ namespace OrionShell.Chrome;
 static class ChromeStubs {
     public static bool Culling => GalleryMode.On;                // mode == .cull
     public static (int Done, int Total)? BatchProgress => ExportRun.Progress;
-    // stub(#315): OrionApp+Files.swift owns this until the logic moves below the facade
-    public static int ExportSelected => 0;
+    /// exportSelected: the export targets of a real selection, 0 when Export writes the open photo.
+    public static int ExportSelected => LibraryModel.Shared.HasExplicitSelection ? ExportRun.Targets().Count : 0;
     public static bool CanUndo => EditHistory.CanUndo;
     public static bool CanRedo => EditHistory.CanRedo;
     // stub(#315): Engine.swift owns this until the logic moves below the facade
     public static bool DocumentEditsLocked => false;
     // stub(#315): Engine.swift owns this until the logic moves below the facade
     public static string? FlatFrame => null;
-    public static string? Complaint => Autosave.Shared.LastFailure;   // autosave ?? library lastFailure (the library writes no sidecar yet)
+    public static string? Complaint => Autosave.Shared.LastFailure;   // a mark that did not save says so on the status line (LibraryModel.Persist)
     // stub(#315): Viewport.swift owns this until the logic moves below the facade
     public static bool IsFit => true;
     // stub(#315): Viewport.swift owns this until the logic moves below the facade
