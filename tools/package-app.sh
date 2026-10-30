@@ -335,6 +335,7 @@ done
 cp "$NODE_CACHE/node-$NODE_VERSION-darwin-arm64/LICENSE" "$RES/licenses/node-MIT-and-bundled.txt"
 "$ROOT/tools/mcp-licenses.py" "$SEA/meta.json" "$ROOT/mcp" "$RES/licenses/orion-mcp-npm-packages.txt"
 cp "$ROOT/NOTICE" "$RES/licenses/NOTICE.txt"
+cp "$ROOT/licenses/Apache-2.0.txt" "$RES/licenses/Apache-2.0.txt"   # NOTICE refers to it (Abseil, OpenCV)
 echo "  licenses  $(ls "$RES/licenses" | wc -l | tr -d ' ') files"
 
 # ── Sign, after rewriting ───────────────────────────────────────────────────

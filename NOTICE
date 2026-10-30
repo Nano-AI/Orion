@@ -46,6 +46,7 @@ translation unit (`engine/src/merge/Align.cpp`): ORB feature detection,
 Hamming matching, RANSAC homography estimation and ECC refinement.
 
 Copyright the OpenCV team and contributors — <https://opencv.org>.
+The full Apache License 2.0 text travels with Orion as `licenses/Apache-2.0.txt`.
 
 ## Lens correction database
 
@@ -157,15 +158,23 @@ The cross-platform GPU layer (#317) is Dawn, statically linked as
 backend only. The library contains code from three projects; nothing else from
 Dawn's `third_party/` is compiled in (checked with `nm` on the built archive).
 
-- **Dawn and Tint**: Copyright 2017-2026 The Dawn & Tint Authors. BSD 3-Clause
-  License, text below. Includes Dawn's own `partition_alloc` pointer shim.
-- **webgpu-headers** (`webgpu.h`): Copyright (c) 2019, "WebGPU native"
-  developers. BSD 3-Clause License, text below.
-- **Abseil** (abseil-cpp, commit `3ac1241bcd2b9dd66fe734fe963d583f3f1044a8`):
-  Copyright The Abseil Authors. **Apache License 2.0**
-  (https://www.apache.org/licenses/LICENSE-2.0). Abseil ships no NOTICE file.
+- **Dawn and Tint**: BSD 3-Clause License. Includes Dawn's own
+  `partition_alloc` pointer shim. Notice from Dawn's `LICENSE` at the pinned commit:
 
-BSD 3-Clause License, as it applies to both BSD entries above:
+      Copyright 2017-2026 The Dawn & Tint Authors
+
+- **webgpu-headers** (`webgpu.h`, commit `a1dc77409bb2b8bd80540cbf4b8db219e123e909`):
+  BSD 3-Clause License. Notice from its `LICENSE` at that commit:
+
+      Copyright (c) 2019, "WebGPU native" developers
+      All rights reserved.
+
+- **Abseil** (abseil-cpp, commit `3ac1241bcd2b9dd66fe734fe963d583f3f1044a8`):
+  Copyright The Abseil Authors. **Apache License 2.0**; the full text travels
+  with Orion as `licenses/Apache-2.0.txt`. Abseil ships no NOTICE file.
+
+Conditions and disclaimer of the BSD 3-Clause License, identical in both
+projects' `LICENSE` files, following each copyright notice above:
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions are met:

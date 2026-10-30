@@ -12,6 +12,7 @@
 # The source tree stays in third_party/dawn-src/ (licence texts, rebuilds); the object
 # tree is deleted after install.
 set -euo pipefail
+for t in cmake ninja python3 git; do command -v $t >/dev/null || { echo "need $t" >&2; exit 1; }; done
 root=${0:A:h:h}
 commit=106704a9ac3fc21b1580ea85aea302ac17d416f1   # same commit the spike validated (#354)
 src=$root/third_party/dawn-src
@@ -51,7 +52,9 @@ cmake -S "$src" -B "$obj" -G Ninja \
     -DTINT_BUILD_GLSL_WRITER=OFF -DTINT_BUILD_GLSL_VALIDATOR=OFF -DTINT_BUILD_HLSL_WRITER=OFF \
     -DTINT_BUILD_MSL_WRITER=ON -DTINT_BUILD_WGSL_READER=ON -DTINT_BUILD_WGSL_WRITER=ON
 cmake --build "$obj"
-rm -rf "$out"
-cmake --install "$obj"
+# Install beside the old output and swap, so a failed install leaves the previous build.
+rm -rf "$out.new"
+cmake --install "$obj" --prefix "$out.new"
+rm -rf "$out"; mv "$out.new" "$out"
 rm -rf "$obj"
 echo "dawn: $out ($(du -sh "$out" | cut -f1)), commit $commit"
