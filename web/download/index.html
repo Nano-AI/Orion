@@ -29,16 +29,15 @@
 <svg class="sprite" aria-hidden="true" focusable="false"><symbol id="i-download" viewBox="0 0 256 256"><path d="M222,144v64a6,6,0,0,1-6,6H40a6,6,0,0,1-6-6V144a6,6,0,0,1,12,0v58H210V144a6,6,0,0,1,12,0Zm-98.24,4.24a6,6,0,0,0,8.48,0l40-40a6,6,0,0,0-8.48-8.48L134,129.51V32a6,6,0,0,0-12,0v97.51L92.24,99.76a6,6,0,0,0-8.48,8.48Z"/></symbol></svg>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="nav is-solid">
+<header class="nav">
   <div class="nav__in">
     <a class="nav__mark" href="../" aria-label="Orion, home"><img src="../img/orion-mark.svg" width="32" height="30" alt="" aria-hidden="true">Orion</a>
     <nav class="nav__nav" aria-label="Sections">
       <ul class="nav__links" id="nav-links">
         <li><a href="../#speed">Speed</a></li>
-        <li><a href="../#register">Build</a></li>
-        <li><a href="../#keep">Keep</a></li>
-        <li><a href="../#research">Research</a></li>
-        <li><a href="../#assistant">MCP</a></li>
+        <li><a href="../#raw">RAW</a></li>
+        <li><a href="../#keep">Your files</a></li>
+        <li><a href="../#register">Features</a></li>
       </ul>
     </nav>
     <a class="btn btn--ghost nav__cta" href="./" aria-current="page">Download</a>
@@ -73,7 +72,7 @@
     </div>
 
     <div class="dl__branch" data-for="soon" hidden>
-      <p class="lede">Not yet. Orion runs on Macs today. The <span data-name>Windows</span> version is in progress and has no download.</p>
+      <p class="lede">Not yet. Orion runs on Macs today. The <span data-name>Windows</span> version is in testing and has no download yet.</p>
       <p class="dl__cta">
         <a class="btn btn--lg" href="https://github.com/Nano-AI/Orion">Watch Orion on GitHub</a>
         <a class="btn btn--lg btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases">Download for macOS</a>
@@ -96,10 +95,10 @@
   </div>
 
   <figure class="dl__photo">
-    <img src="../img/hero-edit-1200.jpg" srcset="../img/hero-edit-1200.jpg 1200w, ../img/hero-edit-2400.jpg 2400w"
-         sizes="(max-width: 900px) 100vw, 42vw" width="2400" height="1987" decoding="async"
-         alt="Fir trees and a cliff face under low fog, the firs and the rock lifted out of the shadow in Orion.">
-    <figcaption class="caption">Finished in Orion: the firs and the rock face lifted out of the shadow under the fog.</figcaption>
+    <img src="../img/app-develop-1200.jpg" srcset="../img/app-develop-1200.jpg 1200w, ../img/app-develop-2400.jpg 2400w"
+         sizes="(max-width: 900px) 100vw, 42vw" width="2400" height="1500" decoding="async"
+         alt="Orion's window: a night photograph of cars outside a showroom, with the Light panel's sliders beside it.">
+    <figcaption class="caption">The alpha, developing a Sony ARW.</figcaption>
   </figure>
 </section>
 
@@ -146,13 +145,13 @@
       <li data-row="windows">
         <p class="h3">Windows<span class="dl__here" hidden>This computer</span></p>
         <p class="needs">Requirements not announced</p>
-        <p class="status">In progress: the interface is being ported</p>
+        <p class="status">In testing, not released yet</p>
         <a class="btn btn--ghost" data-file="windows" href="https://github.com/Nano-AI/Orion/releases" hidden>Download</a>
       </li>
       <li data-row="linux">
         <p class="h3">Linux<span class="dl__here" hidden>This computer</span></p>
         <p class="needs">Requirements not announced</p>
-        <p class="status">In progress, with the Windows port</p>
+        <p class="status">In testing, not released yet</p>
         <a class="btn btn--ghost" data-file="linux" href="https://github.com/Nano-AI/Orion/releases" hidden>Download</a>
       </li>
       <li data-row="intel">
@@ -177,7 +176,7 @@
     </div>
     <div data-reveal>
       <h2 class="h3">Editing with Claude</h2>
-      <p class="small">The MCP server ships inside the app. <a class="link" href="../#assistant">How agents use it</a>.</p>
+      <p class="small">The MCP server ships inside the app. <a class="link" href="https://github.com/Nano-AI/Orion/tree/main/mcp">How agents use it</a>.</p>
     </div>
     <div data-reveal>
       <h2 class="h3">Something broke</h2>
@@ -203,10 +202,6 @@
   </div>
 </footer>
 
-<!-- ?v= is each library's version, as on the landing page (#267) -->
-<script src="../js/vendor/gsap.js?v=3.15.0" defer></script>
-<script src="../js/vendor/ScrollTrigger.js?v=3.15.0" defer></script>
-<script src="../js/vendor/lenis.js?v=1.3.26" defer></script>
 <script src="../js/site.js" defer></script>
 <script src="../js/motion.js" defer></script>
 <script src="../js/download.js" defer></script>

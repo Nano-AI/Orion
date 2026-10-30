@@ -1,14 +1,11 @@
-/*  Orion site: the download page. Tokens, type, nav, buttons, icons, the star
- *  field and the footer come from base.css; this is only the page's own
- *  layout. The accent keeps its one job: it marks the row the page picked for
- *  this computer, and focus.
+/*  Orion site: the download page. Tokens, type, nav, buttons, icons
+ *  and the footer come from base.css; this is only the page's own
+ *  layout. The accent marks what you can act on (the primary button, a link
+ *  under the pointer, focus) and the row the page picked for this computer.
  */
 
 [hidden] { display: none !important; }
 
-/* With motion Orion stands where the photograph is; without it, the photograph stays. */
-.motion .dl__photo { visibility: hidden; }
-@media (max-width: 900px) { .motion .dl__photo { display: none; } }
 
 /* ---------- the download ---------- */
 .dl {
@@ -30,8 +27,13 @@
 .dl__facts dt { color: var(--dim); }
 .dl__facts dd { overflow-wrap: anywhere; }
 .dl__facts [data-fact="sha"] dd { color: var(--dim); }
+/* The one moment that moves on this page: the file's name, size, date and
+ * hash arrive from GitHub after the page has drawn, so they fade in rather
+ * than pop, which says they were just looked up. */
+.dl__facts dt, .dl__facts dd { transition: opacity var(--dur-2) var(--ease-out); }
+@starting-style { .dl__facts dt, .dl__facts dd { opacity: 0; } }
 
-.dl__photo img { width: 100%; border-radius: var(--r); }
+.dl__photo img { width: 100%; border-radius: var(--r-lg); outline: 1px solid rgba(255, 255, 255, 0.1); outline-offset: -1px; }
 .dl__photo .caption { margin-top: var(--s-3); }
 
 /* ---------- the bands below ---------- */
@@ -46,13 +48,13 @@
 .steps li { display: grid; grid-template-columns: var(--s-7) minmax(0, 1fr); column-gap: var(--s-4); padding: var(--s-5) 0; border-top: 1px solid var(--line); counter-increment: step; }
 .steps li::before { content: counter(step); padding-top: 2px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--dim); }
 .steps .small { margin-top: var(--s-1); }
-.cmd { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-3); padding: 6px 6px 6px var(--s-4); border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
+.cmd { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-3); padding: var(--s-1) var(--s-1) var(--s-1) var(--s-4); border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
 .cmd code { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-xs); }
 .cmd .btn { flex: none; min-height: 36px; padding: 0 var(--s-3); font-size: var(--fs-sm); border-radius: var(--r-sm); }
 
 .platforms { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid var(--line); }
 .platforms li {
-  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1.2fr) 140px; gap: 6px var(--s-6); align-items: baseline;
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1.2fr) 140px; gap: var(--s-2) var(--s-6); align-items: baseline;
   min-height: 44px; padding: var(--s-5) 0; border-top: 1px solid var(--line);
 }
 .platforms .needs { font-family: var(--mono); font-size: var(--fs-xs); color: var(--dim); }

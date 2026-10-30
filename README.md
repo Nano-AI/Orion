@@ -337,7 +337,6 @@ Project: [github.com/Nano-AI/Orion](https://github.com/Nano-AI/Orion)
 * [LibRaw](https://www.libraw.org/), [lensfun](https://lensfun.github.io/), [OpenColorIO](https://opencolorio.org/) and [Little CMS](https://www.littlecms.com/)
 * Troy Sobotka's [AgX](https://github.com/sobotka/AgX) display transform
 * The papers cited in [`research/`](research/), which every filter is built from
-* Planet maps on the website by [Solar System Scope](https://www.solarsystemscope.com/textures/), CC BY 4.0
 * [Best-README-Template](https://github.com/othneildrew/Best-README-Template), which this README follows
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
