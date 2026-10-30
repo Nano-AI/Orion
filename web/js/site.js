@@ -1,16 +1,9 @@
 /*  Orion site: the behaviour that has to work without the motion layer.
- *  The nav, the section in view, the compares and the exposure sweep. motion.js is optional on top of this:
- *  if GSAP never loads, this file alone leaves a complete, usable page.
+ *  The phone menu, the section in view, the download buttons' label, the
+ *  compares and the exposure sweep. motion.js only fades blocks in on top.
  */
 (() => {
   'use strict';
-
-  // A hand on a slider wins: motion.js stops steering a figure once touched.
-  const touchable = (fig, input) => {
-    const touch = () => { fig.dataset.touched = '1'; };
-    input.addEventListener('pointerdown', touch);
-    input.addEventListener('keydown', touch);
-  };
 
   // ---------- nav: phone menu ----------
   const nav = document.querySelector('.nav');
@@ -31,39 +24,28 @@
     document.documentElement.classList.add('js');
   }
 
-  if ('IntersectionObserver' in window) {
-    // ---------- nav: solid once the hero has scrolled under it ----------
-    const hero = document.getElementById('top');
-    if (nav && hero) {
-      new IntersectionObserver(([e]) => nav.classList.toggle('is-solid', !e.isIntersecting),
-        { rootMargin: '-72px 0px 0px 0px' }).observe(hero);
-    }
+  // ---------- the download buttons name this computer's system ----------
+  // Only a Mac has a build today; anyone else gets a plain "Download" and the
+  // download page says what exists for them. iPadOS reports a Mac, with touch.
+  const ua = navigator.userAgentData;
+  const platform = (ua && ua.platform) || navigator.platform || '';
+  const mac = /Mac/i.test(platform) && navigator.maxTouchPoints < 2 && !/iPhone|iPad|Android/i.test(navigator.userAgent);
+  if (!mac) document.querySelectorAll('[data-os-label]').forEach(a => { a.textContent = 'Download'; });
 
-    // ---------- nav: aria-current on the section in view ----------
+  // ---------- nav: aria-current, and the accent, on the section in view ----------
+  if ('IntersectionObserver' in window) {
     const links = new Map([...document.querySelectorAll('.nav__links a[href^="#"]')]
       .map(a => [a.hash.slice(1), a]));
-    const bar = document.querySelector('.nav__nav');
     let current = null;
-    // the lit pill slides to the link for the section in view
-    const glow = () => {
-      if (!bar) return;
-      bar.classList.toggle('has-current', !!current);
-      if (!current) return;
-      bar.style.setProperty('--ix', `${current.offsetLeft}px`);
-      bar.style.setProperty('--iw', `${current.offsetWidth}px`);
-    };
     const spy = new IntersectionObserver(entries => {
       for (const e of entries) {
         if (!e.isIntersecting) continue;
         if (current) current.removeAttribute('aria-current');
         current = links.get(e.target.id) || null;
         if (current) current.setAttribute('aria-current', 'true');
-        glow();
       }
     }, { rootMargin: '-45% 0px -50% 0px' });
     document.querySelectorAll('main section[id]').forEach(s => spy.observe(s));
-    addEventListener('resize', glow);
-    if (document.fonts) document.fonts.ready.then(glow);
   }
 
   // ---------- compare: a native range drives --pos ----------
@@ -74,7 +56,6 @@
     const set = () => {
       const v = Number(input.value);
       fig.style.setProperty('--pos', `${v}%`);
-      fig.classList.toggle('is-end', v <= 0.5 || v >= 99.5);
       fig.classList.toggle('is-low', v < 12);
       fig.classList.toggle('is-high', v > 88);
       input.setAttribute('aria-valuetext', `${Math.round(v)}% ${unit}`.trim());
@@ -87,7 +68,6 @@
       input.value = Number(input.value) + direction * (e.shiftKey ? 10 : 1);
       set();
     });
-    touchable(fig, input);
     set();
   });
 
@@ -119,7 +99,6 @@
       fig.style.setProperty('--hi', Math.max(v / last, zero));
     };
     input.addEventListener('input', set);
-    touchable(fig, input);
     set();
   });
 })();
