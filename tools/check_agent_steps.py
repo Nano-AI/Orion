@@ -457,7 +457,9 @@ def _write_matte(path: Path, width: int = 512, height: int = 512) -> None:
 def _propose_matte(s, raw: Path, exposure: float) -> str:
     """A kind-4 row naming a matte saved beside `raw`, under one layer at
     `exposure`. Returns the matte's file name."""
-    matte_id = "check-agent-matte"
+    # A UUID, as MatteStore mints: the app refuses any other id, because an id
+    # read from a sidecar must never be a path (`../x`).
+    matte_id = "6f9c2d0e-4c1a-4b7e-9d1f-0000c4ecca9e"
     _write_matte(raw.with_name(f"{raw.stem}.orion-matte-{matte_id}.png"))
     examples = {k["name"]: k.get("example") for k in s.ask("describe_edits").get("keys", [])}
     component = dict(examples["maskComponents"][0])
@@ -581,9 +583,16 @@ def denoise_region(s, ctx):
 def high_iso_recipe(s, ctx):
     """The high-ISO recipe from research/high-iso.md section 5 through the
     tools: the three keys this pass added validate with their ranges, and
-    the recipe as a whole leaves a flat patch no noisier than it found it.
+    the recipe as a whole takes a flat patch's noise below 90% of what it found.
     Not asserted: that the sample is noisy enough for any of it to show; the
-    before and after are in the note so a reader can tell."""
+    before and after are in the note so a reader can tell.
+
+    ⚠ "A flat patch" is measured, not assumed (decision #380). `noise` is luma
+    against its 3x3 mean, so on a detailed patch it reads texture: CENTRE on
+    _PIC8095 (ISO 800, a lit facade) went 0.0190 -> 0.0226 under the recipe,
+    texture 0.5 alone to 0.0219, while its sky went 0.0063 -> 0.0016. So the
+    step reads several patches and uses the one with the least `noise` that is
+    neither crushed nor blown: the claim is about grain, not detail."""
     raw = ctx.copy("highiso")
     keys = {k["name"]: k for k in s.ask("describe_edits").get("keys", [])}
     for name, lo, hi in (("denoiseNlm", 0, 1), ("denoiseSmoothness", 0, 1), ("texture", -1, 1)):
@@ -592,9 +601,16 @@ def high_iso_recipe(s, ctx):
             return f"describe_edits has no {name}"
         if spec.get("min") != lo or spec.get("max") != hi:
             return f"{name} range is {spec.get('min')}..{spec.get('max')}, expected {lo}..{hi}"
-    stats = s.ask("get_stats", path=str(raw), region=CENTRE)
+    measured = []
+    for patch in (CENTRE, CORNER, [0.2, 0.05, 0.15, 0.08], [0.6, 0.6, 0.15, 0.15]):
+        stats = s.ask("get_stats", path=str(raw), region=patch)
+        r = stats.get("region", {})
+        if isinstance(r.get("noise"), (int, float)) and 0.08 < r.get("luma", 0) < 0.92:
+            measured.append((r["noise"], patch, stats))
+    if not measured:
+        return "no patch between crushed and blown to measure grain on"
+    before, flat, stats = min(measured, key=lambda m: m[0])
     iso = (stats.get("capture") or {}).get("iso")
-    before = stats.get("region", {}).get("noise")
     if not isinstance(before, (int, float)):
         return f"region noise is {before!r}"
     try:
@@ -605,12 +621,14 @@ def high_iso_recipe(s, ctx):
               edits={"denoiseNlm": 0.4, "denoiseLuma": 1.5, "denoiseColor": 3,
                      "denoiseSmoothness": 0.7, "denoiseDetail": 0.5, "texture": 0.5})
         after = s.ask("get_stats", path=str(raw), state="proposed",
-                      region=CENTRE).get("region", {}).get("noise")
+                      region=flat).get("region", {}).get("noise")
         if not isinstance(after, (int, float)):
             return f"proposed region noise is {after!r}"
-        if after > before:
-            return f"the recipe raised the patch's noise from {before:.5f} to {after:.5f}"
-        ctx.note = f"ISO {iso}, noise {before:.5f} -> {after:.5f}"
+        # A real reduction, not "no noisier": a recipe that does nothing passes a <=.
+        # Measured 2026-10-29 on the flattest patch: _PIC8095's sky 0.0063 -> 0.0016.
+        if not after < 0.9 * before:
+            return f"the recipe left the flattest patch's noise ({flat}) at {after:.5f} from {before:.5f}, not under 90%"
+        ctx.note = f"ISO {iso}, noise {before:.5f} -> {after:.5f} at {flat}"
     finally:
         s.ask("reject_edit", path=str(raw))
 

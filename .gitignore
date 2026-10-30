@@ -46,10 +46,6 @@ xcuserdata/
 *.xccheckout
 *.moved-aside
 
-# --- Swift -----------------------------------------------------------------
-.build/
-.swiftpm/
-
 # --- Compiled shaders ------------------------------------------------------
 *.metallib
 *.air
@@ -70,9 +66,6 @@ vendor/
 # directory, which `third_party/*/` would not match (tools/worktree-setup.sh).
 third_party/*
 !third_party/CMakeLists.txt
-# SwiftTerm (MIT) backs the assistant drawer's terminal — vendored source,
-# not fetched at build time, so it is checked in. See third_party/SwiftTerm/VERSION.
-!third_party/SwiftTerm/
 
 # --- macOS -----------------------------------------------------------------
 .DS_Store
@@ -102,7 +95,7 @@ Samples/
 # tools/package-app.sh output. A .dmg is a build artifact; releases carry it as
 # an attachment, which lives outside git objects.
 dist/
-dist-avalonia/
+
 
 # --- Editor and tool indexes -----------------------------------------------
 # clangd writes its index here whenever anything opens the compile database.

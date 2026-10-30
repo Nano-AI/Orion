@@ -12,7 +12,7 @@ ORION_BIN=/path/to/Orion.app/Contents/MacOS/Orion node server.ts
 ```
 
 `ORION_BIN` wins when set.
-Otherwise the server uses the `Orion` beside its own executable, which exists only in the compiled one, and then `<repo>/build/Orion.app/Contents/MacOS/Orion`.
+Otherwise the server uses the `Orion` beside its own executable, which exists only in the compiled one, and then the development build, `<repo>/shell/bin/Release/net10.0/Orion` (`dotnet build -c Release shell`). That one is framework-dependent and needs `DOTNET_ROOT` in the environment (Homebrew's is `/opt/homebrew/opt/dotnet/libexec`; the repository's `.mcp.json` sets it).
 
 `ORION_MCP_CONCURRENCY` caps how many `Orion --agent` processes the server runs at once; every other tool call waits its turn in order (#311).
 Each one decodes a 42 MP RAW and renders it on the GPU at 4 to 14 GB, and about ten agents driving one server in parallel once took a 36 GB Mac to about 70 GB and froze it.

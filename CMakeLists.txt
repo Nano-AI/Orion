@@ -24,7 +24,8 @@ if(APPLE)
     set(CMAKE_OBJCXX_STANDARD 20)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 
-    # macOS 14 floor — @Observable in the SwiftUI shell requires it (decision #26).
+    # macOS 14 floor (decision #26; the SwiftUI app that needed it is retired, #380,
+    # and the Avalonia app keeps the same floor so an update reaches the same Macs).
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS version" FORCE)
 endif()
 
@@ -51,12 +52,8 @@ if(APPLE)
     add_subdirectory(apps/probe)
     add_subdirectory(apps/bench)
     add_subdirectory(apps/rawstat)
-    add_subdirectory(apps/pixstat)
 endif()
 add_subdirectory(apps/tests)
-if(APPLE)
-    add_subdirectory(app)
-endif()
 
 # The Avalonia shell's native library on Windows and Linux (macOS builds it
 # with its native/build.sh). Named by the caller, so moving the shell is a

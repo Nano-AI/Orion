@@ -36,7 +36,7 @@ cat > "$app/AppRun" <<'EOF'
 #!/bin/sh
 here="$(dirname "$(readlink -f "$0")")"
 export LD_LIBRARY_PATH="$here/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-exec "$here/usr/bin/OrionShell" "$@"
+exec "$here/usr/bin/Orion" "$@"
 EOF
 chmod +x "$app/AppRun"
 cat > "$app/orion.desktop" <<'EOF'
@@ -44,7 +44,7 @@ cat > "$app/orion.desktop" <<'EOF'
 Type=Application
 Name=Orion
 Comment=Fast, subscription-free RAW photo editor
-Exec=OrionShell %F
+Exec=Orion %F
 Icon=orion
 Categories=Graphics;Photography;
 EOF

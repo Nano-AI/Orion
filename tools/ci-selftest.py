@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Runs the Avalonia shell's --selftest in CI and holds it to a stated skip list.
 
-    tools/ci-selftest.py SYSTEM OrionShell PHOTO.dng
+    tools/ci-selftest.py SYSTEM Orion PHOTO.dng
 
 SYSTEM is macos, windows or linux. The selftest prints `FAIL <check>` per failed
 check and `selftest: N checks passed, M failed` last. This passes when every

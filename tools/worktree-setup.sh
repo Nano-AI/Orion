@@ -40,12 +40,12 @@ main=$(dirname "$main")
 # third_party is read-only to a build, so a symlink per entry is right: the
 # toolchain is large and nothing writes into it.
 #
-# ⚠ Per ENTRY, not one link to the whole directory. SwiftTerm has been checked
-# in under third_party since #266, so a fresh worktree already has a real
-# third_party directory holding it, and the whole-directory link this used to
-# make can no longer be made at all - the script refused every worktree from
-# that commit on (found 2026-10-10). Only the gitignored entries (the Slang
-# toolchain) need linking, and `git ls-files` is what says which those are.
+# ⚠ Per ENTRY, not one link to the whole directory. While SwiftTerm was checked
+# in under third_party (#266 to #380), a fresh worktree already had a real
+# third_party directory holding it, so the whole-directory link this used to
+# make could not be made at all - the script refused every worktree (found
+# 2026-10-10). Only the gitignored entries (the Slang toolchain) need linking,
+# and `git ls-files` says which those are, so anything vendored later is safe.
 src="$main/third_party"
 dst="$top/third_party"
 if [ ! -d "$src" ]; then
@@ -74,8 +74,9 @@ fi
 
 # ⚠ samples is DIFFERENT, and symlinking the directory is a bug.
 #
-# The scenarios write into the folder beside the photograph: `save
-# samples/_PIC8220.xmp`, the matte PNGs, `PHOTO.orion-snapshots.json`. If every
+# The gates write into the folder beside the photograph (the retired repro
+# scenarios did too, which is how this was found): sidecars, the matte PNGs,
+# `PHOTO.orion-snapshots.json`. If every
 # worktree's `samples` is one symlink to the main repo's folder, then every
 # agent running `repro/*.txt` at once is writing the *same sidecar* — and on
 # 2026-08-02 that is exactly what happened: `grain-survives-a-reopen.txt` failed

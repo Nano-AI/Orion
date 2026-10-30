@@ -1,4 +1,4 @@
-# Presets — `app/Presets.swift`.
+# Presets — the retired Swift app's `Presets.swift` (not runnable since #380; planning/repro-retired.md).
 #
 # ⚠ A preset is a **patch**, not a state. It copies only the groups it carries
 # and leaves everything else alone. The alternative — assigning a whole

@@ -4,6 +4,11 @@
 **Purpose:** Verify proprietary binary distribution compatibility  
 **Transition:** From Apache-2.0 (commit abf3a51) to closed-source  
 
+⚠ **Written against the SwiftUI app, retired by decision #380.** Its `app/`
+paths are as of the audit. What the shipping bundle carries is now enumerated
+by `tools/package-app.sh`, which fails on any file with no licence mapped, and
+listed in `NOTICE`.
+
 ---
 
 ## What relicensing does NOT do

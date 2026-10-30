@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- The executable is `Orion`: Orion.app's CFBundleExecutable, and the sibling the bundled orion-mcp runs (#310). -->
+    <AssemblyName>Orion</AssemblyName>
+    <RootNamespace>OrionShell</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- packages.lock.json pins every transitive package, the terminal's native pty above all (#366). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Built by native/build.sh from the engine's static library on macOS; on Windows and
+         Linux by native/CMakeLists.txt, and the workflow copies it beside the app (#376). -->
+    <None Include="bin-native/liborion_shim.dylib" Link="liborion_shim.dylib" CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('bin-native/liborion_shim.dylib')" />
+    <!-- The numeral face (Shared/Design/Type.cs) and the SIL OFL 1.1 it travels with. -->
+    <AvaloniaResource Include="Assets/Fonts/**" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Iciclecreek.Avalonia.Terminal" Version="[4.1.0]" />
+  </ItemGroup>
+</Project>

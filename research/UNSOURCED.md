@@ -579,7 +579,7 @@ out" reads like a bug and points straight at the search.
 
 ## 17. Brush masks — the nib is entirely Orion's own
 
-**Where:** `shaders/mask_brush.slang`, `app/CanvasLayout.swift`.
+**Where:** `shaders/mask_brush.slang`, the Swift app's `CanvasLayout.swift`.
 
 `research/masking.md` §1 sources the *shape* of a brush mask — a stroke is a
 list of dab centres with one radius for the whole mask, accumulated in R16F —
@@ -1455,7 +1455,7 @@ better or worse relative to the others.
 
 ## 19. The inspection verbs' constants - added 2026-09-14
 
-Decision #278, `app/RegionStats.swift` and `app/Scenario+Report.swift`.
+Decision #278, the Swift app's `RegionStats.swift` and the Swift app's `Scenario+Report.swift`.
 Three numbers are chosen, not sourced:
 - **`shading`'s block, a twelfth of the patch's shorter side.**
   The measure is the standard deviation over the mean of block means, which is

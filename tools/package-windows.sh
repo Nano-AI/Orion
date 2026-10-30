@@ -52,7 +52,7 @@ LicenseFile=Orion\\LICENSE
 Source: "Orion\\*"; DestDir: "{app}"; Flags: recursesubdirs
 
 [Icons]
-Name: "{group}\\Orion"; Filename: "{app}\\OrionShell.exe"
+Name: "{group}\\Orion"; Filename: "{app}\\Orion.exe"
 EOF
 (cd "$out" && "${ISCC:-iscc}" //Q orion.iss)
 ls "$out"/Orion-"$version"-win-x64*

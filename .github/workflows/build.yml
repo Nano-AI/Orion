@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SHELL_DIR: spikes/avalonia-shell   # the one place this workflow names the shell's path
+  SHELL_DIR: shell   # the one place this workflow names the shell's path
   SLANG_VERSION: 2026.14.1           # third_party/slang's version (decision #375)
   DAWN_CACHE: 106704a9-1             # Dawn's commit, and a revision: bump it when tools/build-dawn.sh changes
   DOTNET_NOLOGO: 1
@@ -81,7 +81,7 @@ jobs:
           cp build/shell-native/liborion_shim.so "$SHELL_DIR/bin/Release/net10.0/"
           ./build/apps/tests/orion-selftest-photo "$RUNNER_TEMP/selftest.dng"
           cd "$SHELL_DIR" && python3 "$GITHUB_WORKSPACE/tools/ci-selftest.py" linux \
-            bin/Release/net10.0/OrionShell "$RUNNER_TEMP/selftest.dng"
+            bin/Release/net10.0/Orion "$RUNNER_TEMP/selftest.dng"
 
       - name: AppImage
         run: |
@@ -172,7 +172,7 @@ jobs:
           cp build/shell-native/*.dll "$SHELL_DIR/bin/Release/net10.0/"
           ./build/apps/tests/orion-selftest-photo.exe "$RUNNER_TEMP/selftest.dng"
           cd "$SHELL_DIR" && python "$GITHUB_WORKSPACE/tools/ci-selftest.py" windows \
-            bin/Release/net10.0/OrionShell.exe "$RUNNER_TEMP/selftest.dng"
+            bin/Release/net10.0/Orion.exe "$RUNNER_TEMP/selftest.dng"
 
       - name: Zip and installer
         run: |
@@ -236,4 +236,4 @@ jobs:
           dotnet build "$SHELL_DIR" -c Release
           ./build/apps/tests/orion-selftest-photo "$RUNNER_TEMP/selftest.dng"
           cd "$SHELL_DIR" && python3 "$GITHUB_WORKSPACE/tools/ci-selftest.py" macos \
-            bin/Release/net10.0/OrionShell "$RUNNER_TEMP/selftest.dng"
+            bin/Release/net10.0/Orion "$RUNNER_TEMP/selftest.dng"

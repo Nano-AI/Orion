@@ -372,7 +372,7 @@ void testAgxLatitudeIsAnAnchoredRescale() {
     // `kBlackStops` are the ones that matter; the rest are there so a failure
     // says *where* the curve went wrong rather than only that it did.
     const float kBlackStops = 8.0f;   // must match develop_display.slang
-    const float kShipContrast = 1.45f;   // app/Engine.swift's default
+    const float kShipContrast = 1.45f;   // the Swift app's Engine.swift's default
     // The contrast slope's `saturate` (develop_display.slang:238) hard-clips
     // the normalized axis *before* the sigmoid runs, and that clip is not at
     // kBlackStops once contrast != 1 -- it lands at kBlackStops/contrast
@@ -464,7 +464,7 @@ void testAgxLatitudeIsAnAnchoredRescale() {
     // ── The same walk, at the contrast the product actually opens with ──────
     //
     // ⚠ **Everything above runs at `contrast = 1.0`, which nothing ships.**
-    // `Engine.contrast` opens at **1.45** (app/Engine.swift), and the slope
+    // `Engine.contrast` opens at **1.45** (the Swift app's Engine.swift), and the slope
     // pivots about gray on the normalized axis, so it multiplies the distance
     // to the black end: the render reaches zero at about **5.5** stops under
     // gray, not at `kBlackStops`. Every assertion this file had was therefore
@@ -549,7 +549,7 @@ void testDisplayRollOffIsInjective() {
         *device, std::string(ORION_SHADER_DIR) + "/developDisplay.metallib");
     auto kernel = orion::gpu::Kernel::create(*device, *library, "developDisplay");
 
-    const float kShipContrast = 1.45f;   // app/Engine.swift's default
+    const float kShipContrast = 1.45f;   // the Swift app's Engine.swift's default
     const std::vector<float> stops{-6.0f, -7.5f};
     const auto kN = static_cast<std::uint32_t>(stops.size());
 

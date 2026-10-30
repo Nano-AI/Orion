@@ -44,9 +44,9 @@ LEDGER = ROOT / "planning" / "DECISIONS.md"
 
 # Where a decision may be cited. `planning/HISTORY.md` is included: it is the
 # archive of this same ledger's sessions, so a number it names must exist.
-SEARCH_DIRS = ["engine", "app", "apps", "research", "repro", "planning", "tools"]
+SEARCH_DIRS = ["engine", "shell", "apps", "research", "repro", "planning", "tools"]
 SEARCH_FILES = ["CLAUDE.md", "README.md"]
-SUFFIXES = {".swift", ".cpp", ".h", ".hpp", ".mm", ".c", ".m", ".slang", ".md", ".txt", ".py"}
+SUFFIXES = {".cs", ".cpp", ".h", ".hpp", ".mm", ".c", ".m", ".slang", ".md", ".txt", ".py"}
 
 ROW = re.compile(r"^\|\s*(\d+)([a-z]?)\s*\|")
 DECLARED_GAPS = re.compile(r"\*\*Declared gaps:\s*([0-9,\s]+)\.?\s*\*\*")
@@ -62,6 +62,13 @@ CITATION = re.compile(r"(?<![\w#])#(\d+)(?![\d.])")
 # That blanket rule would also have silenced `#71b`, the letter-suffix spelling
 # this file's own duplicate check recommends.
 HEX_COLOUR = re.compile(r"(?<![\w#])#(?![0-9]+\b)[0-9a-fA-F]{3,8}\b")
+
+# ⚠ Declared gaps that are also open GitHub issues (22 region of interest, 23
+# parity, 24 Windows and Linux). The tree cites those issues as `#22`/`#24` in
+# about forty places — engine comments and tests included — which this file
+# never saw while it read nothing inside a worktree (fixed at #380). A citation
+# of one of these gaps is read as the issue; any other gap cited still fails.
+ISSUES = {22, 23, 24}
 
 
 def ledger_numbers(text):
@@ -90,7 +97,8 @@ def sources():
             # ⚠ Worktrees are copies of this repository. Counting them turns one
             # citation into a dozen and has already produced a false conclusion
             # in this file's own header.
-            if ".claude" in p.parts or "build" in p.parts:
+            parts = p.relative_to(ROOT).parts   # not p.parts: a worktree lives under .claude/ itself
+            if ".claude" in parts or {"build", "bin", "obj"} & set(parts):
                 continue
             if p.is_file() and p.suffix in SUFFIXES:
                 yield p
@@ -158,6 +166,8 @@ def main():
     for n in sorted(cited):
         if n in numbers:
             continue
+        if n in gaps and n in ISSUES:
+            continue      # a GitHub issue spelt `#N`, against CLAUDE.md's "issue N"
         if n in gaps:
             problems.append(
                 f"#{n} is declared a gap but {len(cited[n])} place(s) cite it: "

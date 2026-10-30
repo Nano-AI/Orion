@@ -41,8 +41,9 @@ Rule: every milestone ends with something you can actually shoot with. No milest
   **SQLite index + persistent thumbnail cache landed 2026-08-01**, decision #91.
   300 frames, page cache warm: **454–688 ms cold against 28–54 ms warm, 12.9–17.2×**,
   and an indexless open lands on the cold number, so the win is the index rather
-  than the disk. `Orion --library-open <folder>` is the paired measurement and
-  the wiring check
+  than the disk. `Orion --library-open <folder>` was the paired measurement and
+  the wiring check. ⚠ Both the index and that mode went with the Swift app
+  (#380); the Avalonia app has no index
 - **Epic: Core develop** — exposure, contrast, highlights/shadows, whites/blacks, WB (temp/tint + eyedropper), vibrance/saturation
 - **Epic: Geometry** — crop, rotate, straighten
 - **Epic: Edit model** — op stack → XMP sidecar, undo/redo, history panel
@@ -872,7 +873,7 @@ demosaic-first, camera-native RGB, an fp16 LinearRaw DNG beside the sources.
 - User-loadable DCP profiles
 - X-Trans support (Markesteijn)
 - Customizable tool panels / saved workspaces
-- Windows/Linux port (#315). Shell: Avalonia, spiked in `spikes/avalonia-shell/`. ⚠ The engine is *not* already portable: it also needs a non-Metal GPU backend (Dawn spike) and an export writer to replace ImageIO. Order: shared Swift logic moves below the C facade first, then Windows, then Linux
+- Windows/Linux port (#315). Shell: Avalonia, spiked in `shell/`. ⚠ The engine is *not* already portable: it also needs a non-Metal GPU backend (Dawn spike) and an export writer to replace ImageIO. Order: shared Swift logic moves below the C facade first, then Windows, then Linux
 
 ---
 
