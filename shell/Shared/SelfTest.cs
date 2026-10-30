@@ -79,8 +79,12 @@ static partial class SelfTest {
 
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) {
+            // Every check below drives the photo; without one they would crash, not
+            // report (#376: Linux CI, where no CPU Vulkan driver gives the engine a GPU).
             Console.Error.WriteLine("FAIL selftest needs a photo: OrionShell <raw> --selftest");
             _failed++;
+            Console.WriteLine($"selftest: {_passed} checks passed, {_failed} failed (stopped: no photo)");
+            return _failed;
         } else {
             Check(Throws<ArgumentException>(() => engine.Set("exposre_ev", 1), "exposre_ev"),
                   "a misspelt field throws and names it");

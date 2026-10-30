@@ -33,10 +33,11 @@ SKIP = {
 }
 
 # Where CI has no GPU the engine cannot open (Linux: no CPU Vulkan driver offers
-# TextureFormatsTier1, see orion-tests' ORION_TESTS_GPU_OPTIONAL). Then the shell
-# runs without a picture, and any FAIL is counted as skipped for that reason; the
-# run must still finish and print its summary, which is what this still asserts.
-NO_GPU = {"linux": "adapter lacks feature"}
+# TextureFormatsTier1; orion-tests in the same job names the adapter's refusal,
+# since orion_engine_create has nowhere to put a message). Then the selftest runs
+# its photo-free checks and stops, and any FAIL is counted as skipped for that
+# reason; the run must still finish and print its summary.
+NO_GPU = {"linux": "shim_open: no engine"}
 
 
 def main() -> int:
@@ -53,7 +54,7 @@ def main() -> int:
     for f in fails:
         reason = next((r for p, r in skip.items() if f.startswith(p)), None)
         if not reason and no_gpu:
-            reason = "no usable GPU on this runner, so no engine: " + NO_GPU[system]
+            reason = "no usable GPU on this runner, so no engine"
         if reason:
             print(f"skipped on {system}: {f[:90]} ({reason})")
         else:
