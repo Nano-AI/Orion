@@ -47,6 +47,20 @@ static class CompareState {
         set { Hold(); TurnTo(value ? 0 : 90, free: true); }
     }
     public static WriteableBitmap? Original { get; private set; }
+
+    /// comparisonReference: while an agent's proposal is up, the original side is
+    /// the committed edit at the displayed framing, not the photo as shot. Null
+    /// is ordinary Compare.
+    public static System.Text.Json.Nodes.JsonObject? Reference {
+        get => _reference;
+        set {
+            _reference = value;
+            _referenceKey = value?.ToJsonString() ?? "";
+            if (Comparing) Make();
+        }
+    }
+    static System.Text.Json.Nodes.JsonObject? _reference;
+    static string _referenceKey = "";
     /// The divider moved or turned, or the original changed: the canvas and the
     /// overlay repaint, and nothing else does (CanvasState.Changed reaches every overlay).
     public static event Action? Moved;
@@ -156,7 +170,7 @@ static class CompareState {
         return new PolylineGeometry([p + t * l, p + t * l - n * l, p - t * l - n * l, p - t * l], true);
     }
 
-    static string GeometryKey() => string.Join(",", Geometry.Select(f => EngineModel.Shared.Get(f)));
+    static string GeometryKey() => string.Join(",", Geometry.Select(f => EngineModel.Shared.Get(f))) + _referenceKey;
 
     /// Shows the best original there is for this photo and geometry, and starts
     /// the sharp one if nobody has.
@@ -167,7 +181,8 @@ static class CompareState {
         WriteableBitmap? dropped = null;
         if (_sharp is not { } s || s.Path != path || s.Key != key) (dropped, _sharp) = (_sharp?.Picture, (path, key, null));
         bool kept = Kept.TryGetValue(path, out var k) && k.Key == key;
-        if (_sharp.Value.Picture == null && !_working) Sharpen(path, key, Geometry.Select(f => (f, e.Get(f))).ToArray(), small: !kept);
+        if (_sharp.Value.Picture == null && !_working)
+            Sharpen(path, key, Geometry.Select(f => (f, e.Get(f))).ToArray(), small: !kept, (System.Text.Json.Nodes.JsonObject?)_reference?.DeepClone());
         Original = _sharp.Value.Picture ?? (kept ? k.Picture : null);
         dropped?.Dispose();   // ~97 MB of pixels, freed now: the memory a finalizer would hold is the laptop's
         Moved?.Invoke();
@@ -177,13 +192,15 @@ static class CompareState {
     /// size. `small`: a preview render first, posted the moment it exists, so a
     /// photo with nothing kept still shows its split in a decode's time.
     /// A foreground thread, so a process quitting mid-render waits for it to close its engine.
-    static void Sharpen(string path, string key, (string Field, float Value)[] geometry, bool small) {
+    static void Sharpen(string path, string key, (string Field, float Value)[] geometry, bool small,
+                        System.Text.Json.Nodes.JsonObject? reference = null) {
         _working = true;
         new Thread(() => {
             WriteableBitmap? sharp = null;
             try {
                 using var s = Session.Open(path);
                 if (s != null) {
+                    if (reference != null) { s.ToFrameSpace(reference); s.Apply(reference); }   // the committed edit, then this framing
                     foreach (var (f, v) in geometry) s.Set(f, v);
                     if (small && s.Copy(s.Render(preview: true)) is { } preview) Dispatcher.UIThread.Post(() => { Keep(path, key, preview); Arrived(path, key); });
                     sharp = s.Copy(s.Render(preview: false));
@@ -293,9 +310,9 @@ public sealed class CompareOverlay : Panel, ICustomHitTest {
         if (!Showing) return;
         var f = Frame;
         var (p, n, _) = CompareState.Line(f);
-        // stub(#315): Proposal.swift owns this until the logic moves below the facade ("Current edit"/"Proposed")
-        Put(_before, "Original", f, p, n, -1);
-        Put(_after, "Edited", f, p, n, 1);
+        // Proposal review names its sides for what they are: the committed edit and the agent's.
+        Put(_before, CompareState.Reference != null ? "Current edit" : "Original", f, p, n, -1);
+        Put(_after, CompareState.Reference != null ? "Proposed" : "Edited", f, p, n, 1);
     }
 
     void Put(Border label, string text, Rect f, Point p, Vector n, int side) {

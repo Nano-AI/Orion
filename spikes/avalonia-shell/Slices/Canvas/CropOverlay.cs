@@ -35,7 +35,7 @@ public sealed class CropOverlay : Control, ICustomHitTest {
         if (CanvasState.Alone("canvas-crop")) CanvasScenes.Crop();
     }
 
-    bool Showing => CanvasState.Tab == "Crop" && Frame.Width > 0;
+    bool Showing => CanvasState.Tab == "Crop" && Frame.Width > 0 && !Chrome.ChromeStubs.DocumentEditsLocked;
 
     /// The rendered canvas's rectangle: while the tool is open, the preview canvas.
     Rect Frame => CanvasState.PhotoFrame(Bounds.Size);

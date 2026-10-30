@@ -11,8 +11,8 @@ namespace OrionShell;
 /// real field.
 public sealed partial class Session {
     /// The edit as of the open, kept current by every capture Autosave takes.
-    /// What the shell does not model rides here untouched: the spots (no
-    /// OrionSpot crosses the shim yet), a mask's name and matte id (#207).
+    /// What the shell does not model rides here untouched: a mask's name and
+    /// matte id (#207).
     public JsonObject? Document { get; private set; }
 
     /// Why the sidecar's edit could not be read, or null. Nothing may write to
@@ -41,7 +41,7 @@ public sealed partial class Session {
                 if (stored != null && stored[key] is null) state[key] = Get(field);
             ToFrameSpace(state);
             Apply(state);
-            Document = state;          // the carry for the capture: names, matte ids, spots
+            Document = state;          // the carry for the capture: names, matte ids
             Document = Capture();
         } catch (Exception e) {
             // Anything at all: this runs on the cache's prefetch task, and a sidecar must never fault it.
@@ -72,6 +72,7 @@ public sealed partial class Session {
             SetCurve(c, ((JsonArray)state["curve"]![Channels[c]]!)
                 .Select(p => (DevelopJson.Float(p!["x"])!.Value, DevelopJson.Float(p["y"])!.Value)).ToList());
         SetMaskGroup(((JsonArray)state["maskComponents"]!).Take(MaxMaskComponents).Select(m => Shape((JsonObject)m!)).ToList());
+        SetSpots(DecodeSpots(state["spots"]));
         // A name the lens database no longer has leaves the engine's own; Capture reads back what it settled on.
         Native.orion_engine_set_lens_choice(Handle, state["lensChoice"]?.GetValue<string>() ?? "");
     }
@@ -123,7 +124,7 @@ public sealed partial class Session {
         }
         s["layers"] = layers;
         // Engine.assign keeps ORION_MAX_SPOTS, as it keeps eight mask rows (ReadMaskGroup's cap).
-        s["spots"] = new JsonArray(((JsonArray)carry["spots"]!).Take(MaxSpots).Select(p => p!.DeepClone()).ToArray());
+        s["spots"] = EncodeSpots(Spots());
         // A newer build's keys ride through: Swift's own encoder would drop them, this does not.
         foreach (var (key, value) in carry) if (!DevelopJson.Known.Contains(key)) s[key] = value?.DeepClone();
 

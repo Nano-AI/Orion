@@ -191,9 +191,8 @@ public sealed class ExportPanel : Border {
 
     /// Re-encodes after a pause: a 24 MP JPEG is a sixth of a second, so one
     /// per slider tick would make the slider unusable. Like `Engine.exportedSize`
-    /// it runs on the UI thread, which owns the develop graph.
-    // The watermark's coverage mask (WatermarkRaster.mask) is not passed, so the size omits the mark:
-    // stub(#315): Engine+Document.swift owns this until the logic moves below the facade
+    /// it runs on the UI thread, which owns the develop graph. The watermark is
+    /// passed when it is on: it is not below the estimate's resolution.
     void Remeasure() {
         int token = ++_token;
         _s.MeasuredBytes = null;
@@ -202,8 +201,9 @@ public sealed class ExportPanel : Border {
         _pending = DispatcherTimer.RunOnce(() => {
             nint engine = EngineModel.Shared.Handle;
             if (token != _token || engine == 0) return;
-            var options = _s.Options(_sw, _sh);
-            if (SheetsNative.orion_engine_export_size(engine, in options, out ulong bytes) == 0) _s.MeasuredBytes = (long)bytes;
+            ulong bytes = 0;
+            if (WatermarkRaster.Marked(_s.Options(_sw, _sh), _s.Dimensions(_sw, _sh),
+                                       o => SheetsNative.orion_engine_export_size(engine, in o, out bytes)) == 0) _s.MeasuredBytes = (long)bytes;
             Paint();
         }, TimeSpan.FromMilliseconds(260));
     }

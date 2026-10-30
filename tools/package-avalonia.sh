@@ -110,6 +110,11 @@ do
     src="$(ls -d /opt/homebrew/Cellar/"$pkg"/*/"$file" 2>/dev/null | tail -1 || true)"
     copy_license "$out" "${src:-/nonexistent}"
 done
+# The assistant terminal's NuGet packages (NOTICE carries the MIT text for all
+# of them); the two that ship a licence file get it copied verbatim too.
+NUGET="${NUGET_PACKAGES:-$HOME/.nuget/packages}"
+copy_license "Unicode.net-MIT.txt" "$NUGET/unicode.net/2.0.0/LICENSE"
+copy_license "SkiaSharp.HarfBuzz-MIT.txt" "$NUGET/skiasharp.harfbuzz/3.119.4/LICENSE.txt"
 cp "$ROOT/NOTICE" "$RES/licenses/NOTICE.txt"
 cp "$ROOT/licenses/Apache-2.0.txt" "$RES/licenses/Apache-2.0.txt"   # NOTICE refers to it (Abseil, OpenCV)
 echo "  licenses  $(ls "$RES/licenses" | wc -l | tr -d ' ') files"

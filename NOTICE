@@ -200,3 +200,36 @@ projects' `LICENSE` files, following each copyright notice above:
     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
     OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## Terminal in the Avalonia shell's assistant column
+
+The assistant column of the Avalonia shell (`spikes/avalonia-shell/Slices/Chrome/AssistantPanel.cs`)
+hosts a terminal built from these NuGet packages, each under the **MIT License**:
+
+  Iciclecreek.Avalonia.Terminal 4.1.0 — Copyright (c) Tom Laird-McConnell (https://github.com/tomlm/Iciclecreek.Avalonia.Terminal)
+  XTerm.NET 3.0.0 — Copyright (c) Tom Laird-McConnell (https://github.com/tomlm/XTerm.NET)
+  Porta.Pty 2.2.3 — Copyright (c) Tom Laird-McConnell (https://github.com/tomlm/Porta.Pty), including its native libporta_pty.dylib
+  Wcwidth 4.0.1 — Copyright (c) Spectre Console contributors (https://github.com/spectreconsole/wcwidth)
+  Unicode.net 2.0.0 — Copyright (c) 2017 NeoSmart Technologies (https://github.com/neosmart/unicode.net)
+  SkiaSharp.HarfBuzz 3.119.4 — Copyright (c) Microsoft Corporation (https://github.com/mono/SkiaSharp)
+  Microsoft.Windows.Console.ConPTY 1.24.260710001 — Copyright (c) Microsoft Corporation (Windows only; nothing of it ships on macOS)
+
+The MIT License, identical for each, following each copyright notice above:
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.

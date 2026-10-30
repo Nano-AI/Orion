@@ -216,6 +216,7 @@ public sealed class CanvasPanel : Panel {
         if (engine.Tool == CanvasTool.Targeted && Uv(p) is { } uv && CanvasNative.Sample(uv) is { } s
             && ColorLoupe.Hue(s.Scene) is { } hue) {
             _band = ColorLoupe.Band(hue);
+            Develop.TargetedAdjust.Begin((Develop.HueBand)_band);   // the mixer follows the pick
             engine.BeginInteraction();
         } else if (e.ClickCount == 2) {
             // A double-click: 1:1 about the point clicked, or back to fit, by spring.
@@ -240,9 +241,10 @@ public sealed class CanvasPanel : Panel {
 
         // Armed, a vertical drag adjusts the band under the cursor; up increases.
         if (_band is { } band) {
-            // stub(#315): TargetedAdjust.swift owns this until the logic moves below the facade (the hue/sat/lum mode; saturation is its default)
+            // The mode the Color panel chose: hue, saturation (the default) or luminance.
             var engine = EngineModel.Shared;
-            engine.Set("sat_shift", Math.Clamp(engine.Get("sat_shift", band) - (float)dy * 2, -1, 1), band);
+            string field = Develop.TargetedAdjust.Field(Develop.TargetedAdjust.Current);
+            engine.Set(field, Math.Clamp(engine.Get(field, band) - (float)dy * 2, -1, 1), band);
             return;
         }
         // The picture follows the hand 1:1, and past an edge with growing resistance.
@@ -264,6 +266,7 @@ public sealed class CanvasPanel : Panel {
         pointer?.Capture(null);
         if (_band != null) {
             _band = null;
+            Develop.TargetedAdjust.End();
             EngineModel.Shared.EndInteraction();
             return;
         }

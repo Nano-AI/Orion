@@ -6,8 +6,8 @@ namespace OrionShell.Sheets;
 /// The orion_* calls the sheets need that EngineModel does not wrap (SLICES.md
 /// rule 10). Layouts mirror engine/include/orion/orion.h field for field.
 static partial class SheetsNative {
-    /// OrionExportOptions. The watermark mask is always null here: the raster
-    /// that fills it (WatermarkRaster.swift) is reached only through export.
+    /// OrionExportOptions. The watermark mask is WatermarkRaster's, pointed at
+    /// for one call (WatermarkRaster.With); null means none.
     [StructLayout(LayoutKind.Sequential)]
     public struct ExportOptions {
         public int Format;        // OrionImageFormat: PNG 0, JPEG 1, TIFF 2

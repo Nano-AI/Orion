@@ -54,7 +54,7 @@ public static class Commands {
     /// or any key typed into a text box, is not a command; nor is one whose
     /// command cannot run now, so it reaches whoever else wants it.
     public static void Key(KeyEventArgs e) {
-        if (e.Handled || e.Source is TextBox) return;
+        if (e.Handled || e.Source is TextBox || Chrome.AssistantPanel.Owns(e)) return;
         if (All.FirstOrDefault(c => c.Keys.Any(k => k.Matches(e))) is not { } c || !c.CanRun()) return;
         Run(c.Name);
         e.Handled = true;

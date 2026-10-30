@@ -30,6 +30,11 @@ public static class TargetedAdjust {
 
     public static string Name(HueBand band) => band.ToString();
 
+    /// The OrionAdjustments array a drag in `mode` moves, one slot per band.
+    public static string Field(Mode mode) => mode switch {
+        Mode.Hue => "hue_shift", Mode.Luminance => "lum_shift", _ => "sat_shift",
+    };
+
     public static IBrush Swatch(HueBand band) =>
         new SolidColorBrush(HsvColor.ToRgb(Centers[(int)band], SwatchSaturation, SwatchBrightness));
 

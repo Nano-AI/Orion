@@ -32,6 +32,8 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `Shared/` | building blocks every slice uses: slider, plates, icons, tokens, commands |
 | `Shared/Engine/` | the engine model and its pieces: session, photo list, session source, shown picture; the XMP sidecar (`Sidecar.cs`, `DevelopJson.cs`, `SessionDocument.cs`, decision #362) |
 | `Shared/Autosave.cs` | edits reach the sidecar 900 ms after the first change, and on switch, deactivate and quit. Only the app at a window writes: the headless flags and `--proof` read sidecars and never write one |
+| `Slices/Chrome/Assistant*.cs`, `Proposal*.cs`, `CurrentPhoto.cs` | the agent's terminal column (⌘⌥A, #363), the MCP proposal watcher with Approve ⌘⏎ / Reject ⌘⎋ (#365), and `current.json`; the headless modes never start the agent nor write `current.json` |
+| `Slices/Sheets/Watermark*.cs`, `HdrMerge.cs` | `watermark.json` in Swift's shape, the coverage mask every export carries (#364), the HDR merge on a worker |
 | `Fixtures/` | sidecars the Swift app wrote: `--selftest` rewrites them byte for byte and reopens each through the engine |
 | `STREAMS.md` | stage 1's three parallel streams: who owns which file, which contracts they consume |
 | `Shell/` | the window: regions and the tool tab bar |

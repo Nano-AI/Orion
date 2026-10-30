@@ -16,17 +16,14 @@ static class ChromeStubs {
     public static int ExportSelected => 0;
     public static bool CanUndo => EditHistory.CanUndo;
     public static bool CanRedo => EditHistory.CanRedo;
-    // stub(#315): Engine.swift owns this until the logic moves below the facade
-    public static bool DocumentEditsLocked => false;
-    // stub(#315): Engine.swift owns this until the logic moves below the facade
-    public static string? FlatFrame => null;
+    /// True while an agent's proposal is on the canvas (ProposalWatcher.isLive).
+    public static bool DocumentEditsLocked => ProposalWatcher.Shared.IsLive;
+    public static string? FlatFrame => FlatFrameCheck.Why;
     public static string? Complaint => Autosave.Shared.LastFailure;   // autosave ?? library lastFailure (the library writes no sidecar yet)
-    // stub(#315): Viewport.swift owns this until the logic moves below the facade
-    public static bool IsFit => true;
-    // stub(#315): Viewport.swift owns this until the logic moves below the facade
-    public static int? Percent => null;                          // fitScale × zoom: the canvas's numbers
-    // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-    public static bool CropTab => false;                         // the shell keeps the selected tab private
+    public static bool IsFit => CanvasSlice.CanvasState.Viewport.IsFit;
+    /// fitScale × zoom, the canvas's numbers: shown while a photo is in develop.
+    public static int? Percent => EngineModel.Shared.Handle != 0 && !Culling ? CanvasSlice.CanvasState.Viewport.Percent : null;
+    public static bool CropTab => (App.Window as MainWindow)?.Tab == "Crop";
 
     // What the toolbar's buttons do is a command each (Shared/CommandTable.cs).
 }

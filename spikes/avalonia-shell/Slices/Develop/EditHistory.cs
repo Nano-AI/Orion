@@ -107,7 +107,8 @@ static class EditHistory {
 
     /// A render settled: if the state is not the one history is standing on, record it.
     static void Settle() {
-        if (E.Interacting || E.Handle == 0) return;
+        // A proposal on the canvas is engine.apply, which never records (ProposalWatcher).
+        if (E.Interacting || E.Handle == 0 || Chrome.ChromeStubs.DocumentEditsLocked) return;
         var state = Snapshot();
         if (_position < 0) { Reset(state); return; }
         var here = _entries[_position].State;
