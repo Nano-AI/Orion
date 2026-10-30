@@ -747,14 +747,24 @@ extension ViewportTests {
     /// every rating change, so a label written as `R&amp;D` and read back as
     /// `R&amp;D` is escaped again on the next save. One save per gained layer,
     /// and the field is read from foreign sidecars — Lightroom writes labels.
+    ///
+    /// Since decision #370 the reading half is the XML parser, so this goes
+    /// through the file: `write` escapes, `read` unescapes, three times over.
     static func testSidecarEscapingDoesNotCompound() {
         let cases = ["R&D", "a < b", "a > b", "say \"hi\"", "&amp;", "plain",
                      "&lt;not a tag&gt;"]
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orion-escape-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let photo = dir.appendingPathComponent("photo.ARW")
         for original in cases {
             var text = original
             // Three round trips: one save is not enough to show compounding.
             for _ in 0..<3 {
-                text = Sidecar.unescape(Sidecar.escapeForTests(text))
+                var s = Sidecar()
+                s.label = text
+                text = s.write(for: photo) ? Sidecar.read(for: photo)?.label ?? "" : ""
             }
             report(text == original,
                    "\(original) survives three save/load cycles unchanged",

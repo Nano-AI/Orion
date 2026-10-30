@@ -35,6 +35,7 @@ dotnet run -c Release --project spikes/avalonia-shell -- <RAWs or folders>
 | `Slices/Library/LibraryModel.cs`, `PhotoSelection.cs` | ratings, rejects and labels merged into the sidecar (window only), and the command/shift-click selection culls and batches act on (decision #363) |
 | `Slices/Sheets/Snapshots.cs` | saved versions in `PHOTO.orion-snapshots.json`, Swift's file shape; `Shared/ShellSettings.cs` is the @AppStorage stand-in |
 | `Fixtures/` | sidecars the Swift app wrote: `--selftest` rewrites them byte for byte and reopens each through the engine |
+| `Fixtures/foreign/` | hand-written Lightroom-, Capture One- and darktable-style XMP: Orion writes into each and every other node must survive, in this selftest and in `app/ViewportTests+ForeignXmp.swift` (decision #370) |
 | `STREAMS.md` | stage 1's three parallel streams: who owns which file, which contracts they consume |
 | `Shell/` | the window: regions and the tool tab bar |
 | `Slices/<Folder>/` | one per slice in `slices.json`; seeds only, until the swarm |

@@ -497,8 +497,10 @@ final class Library {
             $0.label = photo.colorLabel
         }) {
             lastFailure = "Ratings could not be saved for "
-                        + "\(photo.url.lastPathComponent). The card or folder "
-                        + "may be read-only."
+                        + "\(photo.url.lastPathComponent). "
+                        + (Sidecar.read(for: photo.url)?.unreadable.map {
+                              "Its sidecar is not XMP Orion can change (\($0)), so it is left as it is."
+                          } ?? "The card or folder may be read-only.")
         }
         // ⚠ The index is refreshed by **reading the file back**, never from the
         // values above. A merge that failed — a read-only card, a full disk —

@@ -13,6 +13,7 @@ static partial class SelfTest {
 
     static partial void SidecarChecks() {
         GoldenChecks();
+        ForeignXmpChecks();
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;   // Run already failed for want of a photo
         string dir = Directory.CreateTempSubdirectory("orion-sidecar-").FullName;
@@ -100,7 +101,7 @@ static partial class SelfTest {
                       { Rating: 3, Rejected: false, Label: "R&D <\"x\">", Develop: [123, 125] }
                   && !File.Exists(Sidecar.PathFor(photo) + ".orion-tmp"),
                   "writing the edit keeps the rating and the escaped label, and leaves no temporary file");
-            File.WriteAllText(Sidecar.PathFor(photo), "<x xmp:Rating=\"-1\" orion:Develop=\"!!\"/>");
+            File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Rejected = true }.Text().Replace("xmp:Rating", "orion:Develop=\"!!\" xmp:Rating"));
             Check(Sidecar.Read(photo) is { Rejected: true, Rating: 0, Unreadable: not null }
                   && !Sidecar.Merge(photo, s => s.Develop = [1]) && File.ReadAllText(Sidecar.PathFor(photo)).Contains("!!"),
                   "-1 reads as rejected; an edit that is not base64 is never written over");

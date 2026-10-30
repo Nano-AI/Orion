@@ -307,6 +307,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Snapshot.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Selection.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+ForeignXmp.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Spot.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Catalogue.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sky.swift
@@ -378,6 +379,7 @@ add_custom_command(
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Preset.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Snapshot.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Selection.swift
+            ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+ForeignXmp.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Spot.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Catalogue.swift
             ${CMAKE_CURRENT_SOURCE_DIR}/ViewportTests+Sky.swift

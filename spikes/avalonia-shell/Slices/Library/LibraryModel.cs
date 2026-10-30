@@ -218,7 +218,10 @@ public sealed class LibraryModel {
         }
         if (failed.Count > 0)
             EngineModel.Shared.Say((failed.Count == 1 ? $"Ratings could not be saved for {failed[0].Name}."
-                                                      : $"{failed.Count} ratings could not be saved.") + " The card or folder may be read-only.");
+                                                      : $"{failed.Count} ratings could not be saved.")
+                                   + (failed.Select(p => Sidecar.Read(p.Path)?.Unreadable).FirstOrDefault(w => w != null) is { } why
+                                       ? $" A sidecar is not XMP Orion can change ({why}), so it is left as it is."
+                                       : " The card or folder may be read-only."));
         Changed?.Invoke();
     }
 
