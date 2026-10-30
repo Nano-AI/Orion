@@ -229,7 +229,7 @@ after clearing the download's quarantine (#310).
 
 ### The Avalonia interface
 
-The cross-platform interface lives in [`spikes/avalonia-shell/`](spikes/avalonia-shell/);
+The cross-platform interface lives in [`shell/`](shell/);
 its README has the build, the flags and the headless selftest.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

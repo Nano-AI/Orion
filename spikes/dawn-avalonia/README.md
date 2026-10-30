@@ -121,7 +121,7 @@ All lines are cited at Dawn commit `106704a9` and Avalonia tag `12.1.4`. Avaloni
 3. ~~**The prebuilt is `minos 26.0`, arm64 only, unsigned, and has no notices.**~~ Closed by `tools/build-dawn.sh` (#361): source build, `minos 14.0`, notices in `NOTICE`. Still arm64 only; x86_64 is untested (`ARCHS="arm64;x86_64"`).
 4. **The shell would move to Avalonia's Metal renderer.** Its UI under Skia-Metal is untested.
 5. **Resizing is not handled.** The demo fixes the texture size per phase; a real canvas re-creates the IOSurface when the view changes size.
-6. **The engine is still Metal-only, and Dawn would replace it.** But this spike also shows that the **current Metal engine could feed Avalonia without a copy today** if its output texture were IOSurface-backed. The shim's comment that "C# can't draw that on macOS" (`spikes/avalonia-shell/native/shim.mm:7-9`) no longer holds.
+6. **The engine is still Metal-only, and Dawn would replace it.** But this spike also shows that the **current Metal engine could feed Avalonia without a copy today** if its output texture were IOSurface-backed. The shim's comment that "C# can't draw that on macOS" (`shell/native/shim.mm:7-9`) no longer holds.
 7. The dropped frames in the first Metal run were not explained.
 
 ## Proposed decision row

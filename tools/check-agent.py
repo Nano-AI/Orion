@@ -106,6 +106,7 @@ is in play (it works on its own copy and rejects what it proposed):
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -116,13 +117,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_agent_steps import STEPS, Context, Session, spawn   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-ORION = ROOT / "build" / "Orion.app" / "Contents" / "MacOS" / "Orion"
-SAMPLES = ROOT / "samples"
+# The development build of the app (`dotnet build -c Release shell`), which is
+# framework-dependent: it needs DOTNET_ROOT, defaulted below to Homebrew's.
+ORION = ROOT / "shell" / "bin" / "Release" / "net10.0" / "Orion"
+# ORION_SAMPLES names another folder of RAWs: a worktree's `samples/` link can
+# dangle, and the gate copies its photograph out either way.
+SAMPLES = Path(os.environ.get("ORION_SAMPLES", ROOT / "samples"))
+os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
 # The first of these that exists: `samples/` is not the same folder on every
 # machine.
 SAMPLE_CANDIDATES = ["_PIC8095.ARW", "overexposed-background.ARW", "_PIC8220.ARW",
                      "_PIC8148.ARW", "underexposedsubject.ARW"]
 SAMPLE_RAW = next((c for c in SAMPLE_CANDIDATES if (SAMPLES / c).is_file()), SAMPLE_CANDIDATES[0])
+
+
+def listing(folder: Path) -> dict:
+    """Every file in the samples folder, with its size and modification time."""
+    return {p.name: (p.stat().st_size, p.stat().st_mtime_ns) for p in folder.iterdir() if p.is_file()}
 
 
 def run_steps(ctx: Context, problems: list, server: Path | None) -> int:
@@ -169,13 +180,14 @@ def main():
 
     if not orion.is_file():
         print(f"check-agent: no binary at {orion}\n"
-              f"  Build first: cmake --build build", file=sys.stderr)
+              f"  Build first: shell/native/build.sh && dotnet build -c Release shell", file=sys.stderr)
         return 2
     if not (SAMPLES / SAMPLE_RAW).is_file():
         print(f"check-agent: no sample at {SAMPLES / SAMPLE_RAW}", file=sys.stderr)
         return 2
 
     problems: list[str] = []
+    before = listing(SAMPLES)
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
         # The photograph and its sidecar are COPIED: a gate that writes a
@@ -189,11 +201,10 @@ def main():
         ctx.server = server
         passed = run_steps(ctx, problems, server)
 
-    # ...and that copying is asserted rather than trusted.
-    status = subprocess.run(["git", "status", "--porcelain", str(SAMPLES)],
-                            cwd=str(ROOT), capture_output=True, text=True)
-    if status.stdout.strip():
-        problems.append(f"samples/ modified:\n{status.stdout}")
+    # ...and that copying is asserted rather than trusted: nothing in the
+    # samples folder was added, removed or rewritten.
+    if listing(SAMPLES) != before:
+        problems.append(f"{SAMPLES} modified: the gate wrote beside the originals")
 
     if problems:
         print(f"check-agent: {len(problems)} problem(s)\n", file=sys.stderr)

@@ -2,7 +2,8 @@
   "mcpServers": {
     "orion": {
       "command": "node",
-      "args": ["--no-warnings", "--experimental-strip-types", "mcp/server.ts"]
+      "args": ["--no-warnings", "--experimental-strip-types", "mcp/server.ts"],
+      "env": { "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec" }
     }
   }
 }

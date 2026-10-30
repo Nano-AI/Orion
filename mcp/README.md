@@ -12,7 +12,7 @@ ORION_BIN=/path/to/Orion.app/Contents/MacOS/Orion node server.ts
 ```
 
 `ORION_BIN` wins when set.
-Otherwise the server uses the `Orion` beside its own executable, which exists only in the compiled one, and then `<repo>/build/Orion.app/Contents/MacOS/Orion`.
+Otherwise the server uses the `Orion` beside its own executable, which exists only in the compiled one, and then the development build, `<repo>/shell/bin/Release/net10.0/Orion` (`dotnet build -c Release shell`). That one is framework-dependent and needs `DOTNET_ROOT` in the environment (Homebrew's is `/opt/homebrew/opt/dotnet/libexec`; the repository's `.mcp.json` sets it).
 
 `ORION_MCP_CONCURRENCY` caps how many `Orion --agent` processes the server runs at once; every other tool call waits its turn in order (#311).
 Each one decodes a 42 MP RAW and renders it on the GPU at 4 to 14 GB, and about ten agents driving one server in parallel once took a 36 GB Mac to about 70 GB and froze it.
@@ -36,7 +36,7 @@ claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp
 Claude Desktop takes `"orion": {"command": "/Applications/Orion.app/Contents/MacOS/orion-mcp"}` under `mcpServers`.
 The Assistant menu's **Copy MCP Setup Command** puts the `claude mcp add` line on the clipboard, and Orion's own Assistant panel passes the bundled server to `claude` or `codex` on its command line when its working folder has no `.mcp.json`.
 
-`tools/package-app.sh` builds it from the lockfile (`npm ci`), signs it with the app, scans it for home paths like every other file in the bundle, and runs all of `tools/check-agent.py --server` against it before it makes the disk image.
+`tools/package-avalonia.sh` builds it from the lockfile (`npm ci`), signs it with the app, scans it for home paths like every other file in the bundle, and runs all of `tools/check-agent.py --server` against it before it makes the disk image.
 
 ## Test
 

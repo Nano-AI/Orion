@@ -13,12 +13,13 @@ import { agentRunner, installProcessGuards, type OrionError } from "./limits.ts"
 const RAW_EXT = new Set([".arw", ".nef", ".cr2", ".cr3", ".dng", ".raf", ".orf", ".rw2"]);
 // ORION_BIN wins; then the `Orion` beside this executable, which is where the
 // compiled `orion-mcp` sits inside a packaged Orion.app (Contents/MacOS/), so a
-// downloaded app needs no configuration; then the development build. Under
+// downloaded app needs no configuration; then the development build (`dotnet
+// build -c Release shell`, which needs DOTNET_ROOT in the environment). Under
 // node, execPath is node itself and the sibling never exists.
 const sibling = path.join(path.dirname(process.execPath), "Orion");
 const bin = () =>
   process.env.ORION_BIN ??
-  (existsSync(sibling) ? sibling : path.resolve(import.meta.dirname, "../build/Orion.app/Contents/MacOS/Orion"));
+  (existsSync(sibling) ? sibling : path.resolve(import.meta.dirname, "../shell/bin/Release/net10.0/Orion"));
 const proposedPath = (raw: string) => raw.replace(/\.[^.]+$/, ".proposed.json");
 
 // `orion()` lives in limits.ts with the concurrency cap, the timeout and the

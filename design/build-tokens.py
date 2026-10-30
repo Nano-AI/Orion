@@ -4,7 +4,7 @@
 Writes:
   design/mockup-darkroom.html   CSS custom properties, between TOKENS markers
   ../Sources/OrionUI/DesignTokens.swift   Swift constants for the app
-  ../spikes/avalonia-shell/Shared/Palette.g.cs   C# constants for the Avalonia shell (#315)
+  ../shell/Shared/Palette.g.cs   C# constants for the Avalonia shell (#315)
 
 Run after any edit to tokens.json.  Never hand-edit the generated regions.
 """
@@ -18,7 +18,7 @@ HERE = pathlib.Path(__file__).parent
 TOKENS = HERE / "tokens.json"
 MOCKUP = HERE / "mockup-darkroom.html"
 SWIFT = HERE.parent / "Sources" / "OrionUI" / "DesignTokens.swift"
-CSHARP = HERE.parent / "spikes" / "avalonia-shell" / "Shared" / "Palette.g.cs"
+CSHARP = HERE.parent / "shell" / "Shared" / "Palette.g.cs"
 
 START = "/* TOKENS:START — generated from tokens.json, do not edit by hand */"
 END = "/* TOKENS:END */"

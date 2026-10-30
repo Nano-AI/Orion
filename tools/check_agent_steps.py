@@ -457,7 +457,9 @@ def _write_matte(path: Path, width: int = 512, height: int = 512) -> None:
 def _propose_matte(s, raw: Path, exposure: float) -> str:
     """A kind-4 row naming a matte saved beside `raw`, under one layer at
     `exposure`. Returns the matte's file name."""
-    matte_id = "check-agent-matte"
+    # A UUID, as MatteStore mints: the app refuses any other id, because an id
+    # read from a sidecar must never be a path (`../x`).
+    matte_id = "6f9c2d0e-4c1a-4b7e-9d1f-0000c4ecca9e"
     _write_matte(raw.with_name(f"{raw.stem}.orion-matte-{matte_id}.png"))
     examples = {k["name"]: k.get("example") for k in s.ask("describe_edits").get("keys", [])}
     component = dict(examples["maskComponents"][0])

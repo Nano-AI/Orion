@@ -1,11 +1,12 @@
 #!/bin/bash
 #
-# Packages the Avalonia shell (spikes/avalonia-shell) as a Mac app a stranger
-# can run: "Orion Avalonia.app" and a disk image, ad-hoc signed, not notarized.
+# Packages Orion (the Avalonia app in shell/) as a Mac app a stranger can run:
+# Orion.app and Orion-<label>.dmg, ad-hoc signed, not notarized.
 #
-# tools/package-app.sh solved every one of these problems for the Swift app
-# first, and its ⚠ notes are why the steps below look the way they do. Read it
-# before changing this. What is different here:
+# It replaced tools/package-app.sh, which packaged the SwiftUI app until that
+# was retired (decision #380); that script solved most of these problems first
+# and its ⚠ notes, kept here where they still apply, are why the steps look the
+# way they do. Its full history: `git log --follow -- tools/package-app.sh`.
 #
 #   1. It builds from a clean tree: the engine (CMake), the shim
 #      (native/build.sh), then a self-contained `dotnet publish` whose whole
@@ -18,26 +19,34 @@
 #      build links it statically. So the walk starts from every Mach-O in
 #      Contents/MacOS, and each one that reached Homebrew gets the rpath to
 #      Contents/Frameworks.
-#   3. Its own name and bundle id, "Orion Avalonia" / com.nanoai.orion.avalonia.
-#      The Swift app is Orion.app / com.nanoai.orion: the two install side by
-#      side in /Applications, and macOS keeps their defaults, saved window state
-#      and permissions apart because those are keyed by bundle id.
+#   3. The Swift app's identity, so an update is an update: Orion.app,
+#      com.nanoai.orion, the executable `Orion`, the version CMake carries, and
+#      the disk image name the download page and the releases use. macOS keys
+#      defaults, window state and permissions by bundle id, and the app reads
+#      the Swift app's Application Support folder (SettingsImport).
+#   4. The MCP server ships inside, as Contents/MacOS/orion-mcp, a Node
+#      single-executable application that runs the `Orion` beside it (#310),
+#      and every step of tools/check-agent.py runs against it before the disk
+#      image is made.
 #
 # Usage:  tools/package-avalonia.sh [output-dir] [label]
-#         label defaults to `git describe --tags`; the image is
-#         Orion-<label>-avalonia.dmg.
-# Needs:  cmake + Xcode's Metal toolchain, Homebrew libraw and opencv, and
-#         dotnet 10 (DOTNET_ROOT defaults to Homebrew's).
+#         label defaults to `git describe --tags`, and goes in the image's name
+#         (Orion-<label>.dmg) and its readme: the plist carries 0.5.0 for every
+#         alpha, and two builds arriving as one name is how somebody debugs the
+#         wrong binary.
+# Needs:  cmake + Xcode's Metal toolchain, Homebrew libraw and opencv, dotnet 10
+#         (DOTNET_ROOT defaults to Homebrew's), node and npm, and a sample RAW
+#         for the check-agent run (ORION_SAMPLES, see tools/check-agent.py).
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$ROOT/build"
-SRC="$ROOT/spikes/avalonia-shell"
-OUT="${1:-$ROOT/dist-avalonia}"
+SRC="$ROOT/shell"
+OUT="${1:-$ROOT/dist}"
 LABEL="${2:-$(git -C "$ROOT" describe --tags)}"
-NAME="Orion Avalonia"
-BUNDLE_ID="com.nanoai.orion.avalonia"
+NAME="Orion"
+BUNDLE_ID="com.nanoai.orion"
 export DOTNET_ROOT="${DOTNET_ROOT:-/opt/homebrew/opt/dotnet/libexec}"
 
 APP="$OUT/$NAME.app"
@@ -57,7 +66,7 @@ cmake --build "$BUILD" --target orion_engine -j4
 
 # No PDBs: a PDB, and the debug directory entry that points at it, is an
 # absolute path into the checkout, which is the builder's home directory.
-dotnet publish "$SRC/OrionShell.csproj" -c Release -r osx-arm64 --self-contained \
+dotnet publish "$SRC/Orion.csproj" -c Release -r osx-arm64 --self-contained \
     -p:DebugType=None -p:DebugSymbols=false --nologo -v quiet -o "$MACOS"
 echo "  publish   $(ls "$MACOS" | wc -l | tr -d ' ') files, .NET $(dotnet --version)"
 
@@ -66,6 +75,68 @@ mkdir -p "$RES/data" "$FW"
 cp -R "$BUILD/shaders" "$RES/shaders"
 cp -R "$ROOT/data/lensfun" "$RES/data/lensfun"
 echo "  shaders   $(ls "$RES/shaders" | wc -l | tr -d ' ') metallibs, data lensfun"
+
+# ── The MCP server ──────────────────────────────────────────────────────────
+#
+# A Node single-executable application: esbuild bundles mcp/sea.ts and
+# everything it imports into one CommonJS file, Node turns that into a blob, and
+# postject injects the blob into a copy of the Node binary.
+#
+# ⚠ **Node, not Bun, and for the license.** Bun's `--compile` statically links
+# JavaScriptCore (LGPL-2) and tinycc (LGPL-2.1), and CLAUDE.md allows LGPL only
+# when it is dynamically linked or relinkable. Node and everything it links are
+# permissive.
+#
+# ⚠ **nodejs.org's build, never Homebrew's.** Homebrew's node links libuv, ICU
+# and OpenSSL out of /opt/homebrew, so a copy of it runs only where Homebrew
+# does. The official one links system frameworks alone. Pinned by version and
+# SHA-256 - the hash nodejs.org publishes in SHASUMS256.txt.
+#
+# `npm ci`, not whatever node_modules happens to hold: the lockfile is what was
+# tested. ⚠ Never `strip` this one: the blob lives in a segment of its own.
+NODE_VERSION="v24.22.0"
+NODE_SHA256="6a9724d9b50a5f22b4816cded441b5a8d9ddae546191a5e5b7efa5a5e2ee26d5"
+NODE_CACHE="$BUILD/node-sea"
+NODE_TGZ="$NODE_CACHE/node-$NODE_VERSION-darwin-arm64.tar.gz"
+NODE="$NODE_CACHE/node-$NODE_VERSION-darwin-arm64/bin/node"
+mkdir -p "$NODE_CACHE"
+if [[ ! -f "$NODE_TGZ" ]]; then
+    curl -sfL -o "$NODE_TGZ.part" \
+        "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-darwin-arm64.tar.gz"
+    mv "$NODE_TGZ.part" "$NODE_TGZ"
+fi
+echo "$NODE_SHA256  $NODE_TGZ" | shasum -a 256 -c --status \
+    || { echo "error: $NODE_TGZ does not match its pinned SHA-256" >&2; exit 1; }
+rm -rf "$NODE_CACHE/node-$NODE_VERSION-darwin-arm64"
+tar -xzf "$NODE_TGZ" -C "$NODE_CACHE"
+
+MCP="$MACOS/orion-mcp"
+SEA="$NODE_CACHE/sea"
+rm -rf "$SEA" && mkdir -p "$SEA"
+(cd "$ROOT/mcp" && npm ci --silent --no-audit --no-fund)
+# import.meta is empty in CommonJS: dirname becomes the CommonJS one, and url
+# undefined, which turns off server.ts's own `node server.ts` entry. From mcp/,
+# because tools/mcp-licenses.py reads the metafile's paths against mcp/.
+(cd "$ROOT/mcp" && node_modules/.bin/esbuild sea.ts --bundle --platform=node \
+    --format=cjs --target=node24 --log-level=warning \
+    --define:import.meta.dirname=__dirname --define:import.meta.url=undefined \
+    --metafile="$SEA/meta.json" --outfile="$SEA/orion-mcp.cjs")
+# ⚠ **Relative paths, run from inside $SEA.** The blob records `main` as
+# written, and an absolute one put the checkout's path, home directory and all,
+# into every orion-mcp; the scan below is what said so.
+cat > "$SEA/sea-config.json" <<JSON
+{ "main": "orion-mcp.cjs", "output": "orion-mcp.blob",
+  "disableExperimentalSEAWarning": true, "useCodeCache": true }
+JSON
+(cd "$SEA" && "$NODE" --experimental-sea-config sea-config.json >/dev/null 2>&1) \
+    || { echo "error: node could not make the SEA blob" >&2; exit 1; }
+cp "$NODE" "$MCP"
+chmod u+w "$MCP"
+codesign --remove-signature "$MCP"
+"$ROOT/mcp/node_modules/.bin/postject" "$MCP" NODE_SEA_BLOB "$SEA/orion-mcp.blob" \
+    --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+    --macho-segment-name NODE_SEA >/dev/null
+echo "  mcp       orion-mcp $(du -h "$MCP" | cut -f1), node $NODE_VERSION"
 
 VERSION="$(sed -n 's/^CMAKE_PROJECT_VERSION:STATIC=//p' "$BUILD/CMakeCache.txt")"
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -76,7 +147,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key><string>$NAME</string>
     <key>CFBundleDisplayName</key><string>$NAME</string>
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-    <key>CFBundleExecutable</key><string>OrionShell</string>
+    <key>CFBundleExecutable</key><string>Orion</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>
@@ -154,6 +225,9 @@ ILC="$(ls "$DOTNET_ROOT"/library-packs/Microsoft.DotNet.ILCompiler.*.nupkg 2>/de
 unzip -p "$ILC" THIRD-PARTY-NOTICES.TXT > "$RES/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt"
 [[ -s "$RES/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt" ]] || { echo "error: $ILC has no THIRD-PARTY-NOTICES.TXT" >&2; exit 1; }
 copy_license "OFL-1.1.txt" "$SRC/Assets/Fonts/OFL.txt"   # Barlow, and Inter inside Avalonia.Fonts.Inter
+# orion-mcp is Node, and carries the MCP SDK's npm tree inside its bundle.
+copy_license "node-MIT-and-bundled.txt" "$NODE_CACHE/node-$NODE_VERSION-darwin-arm64/LICENSE"
+"$ROOT/tools/mcp-licenses.py" "$SEA/meta.json" "$ROOT/mcp" "$RES/licenses/orion-mcp-npm-packages.txt"
 cp "$ROOT/NOTICE" "$RES/licenses/NOTICE.txt"
 cp "$ROOT/licenses/Apache-2.0.txt" "$RES/licenses/Apache-2.0.txt"   # NOTICE refers to it (Abseil, OpenCV)
 echo "  licenses  $(ls "$RES/licenses" | wc -l | tr -d ' ') files"
@@ -336,7 +410,7 @@ while IFS= read -r f; do
 done < <(find "$MACOS" "$FW" -type f)
 while IFS= read -r f; do
     err="$(codesign --force --sign - "$f" 2>&1)" || { echo "error: $err" >&2; exit 1; }
-done < <(find "$MACOS" "$FW" -type f ! -path "$MACOS/OrionShell")
+done < <(find "$MACOS" "$FW" -type f ! -path "$MACOS/Orion")
 codesign --force --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "  signed    ad-hoc, ${#MACHOS[@]} Mach-O files"
@@ -362,14 +436,21 @@ echo "  verified  no paths outside the bundle, and none searched"
 # The gate of tools/package-app.sh (#266): no home directory of anyone, the
 # builder's home and git email by literal.
 #
-# ⚠ One name excused, in one file: libAvaloniaNative.dylib, prebuilt on NuGet,
-# carries /Users/runner/, the GitHub Actions macOS build account that compiled
-# it. It names a CI machine, not a person, as /Users/admin/ does in Node.
+# ⚠ **Anyone's home directory, not only the builder's**: vendored code once
+# carried its author's /Users/<name>/Downloads/Logs, which a check for this
+# machine's user name passes without a word.
+#
+# ⚠ Two names excused, each in one file. libAvaloniaNative.dylib, prebuilt on
+# NuGet, carries /Users/runner/, the GitHub Actions macOS build account that
+# compiled it; orion-mcp carries /Users/admin/ some three thousand times,
+# nodejs.org's release machine's paths, in every official macOS Node. Both name
+# a build account, not a person. The builder's home and git email are still
+# searched in both like anywhere else.
 literal=( -e "$HOME/" )
 email="$(git -C "$ROOT" config user.email 2>/dev/null || true)"
 if [[ -n "$email" ]]; then literal+=( -e "$email" ); fi
 leaks="$( { grep -raoE '/Users/[^/[:space:]]+/' "$APP" | sort -u \
-                | grep -vxF "$MACOS/libAvaloniaNative.dylib:/Users/runner/" | cut -d: -f1
+                | grep -vxF -e "$MACOS/libAvaloniaNative.dylib:/Users/runner/" -e "$MCP:/Users/admin/" | cut -d: -f1
             grep -rlaF "${literal[@]}" "$APP"; } | sort -u || true)"
 if [[ -n "$leaks" ]]; then
     echo "error: the bundle names a person, in:" >&2
@@ -378,6 +459,16 @@ if [[ -n "$leaks" ]]; then
 fi
 echo "  verified  no home directory, user name or git email inside"
 
+# ── Verify the packaged MCP server drives the packaged app ─────────────────
+#
+# Every step of check-agent, against this bundle's orion-mcp with ORION_BIN
+# unset: a real render, a real approve, and the sibling lookup that makes a
+# downloaded app need no configuration. The `.ts` passing in the checkout says
+# nothing about what was bundled.
+"$ROOT/tools/check-agent.py" --server "$MCP" >/dev/null \
+    || { echo "error: check-agent --server failed on the packaged orion-mcp" >&2; exit 1; }
+echo "  verified  check-agent green against the packaged orion-mcp"
+
 # ── The disk image ──────────────────────────────────────────────────────────
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -385,33 +476,50 @@ cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 
 cat > "$STAGE/README-FIRST.txt" <<TXT
-$NAME $LABEL — unofficial alpha build
+Orion $LABEL — unofficial alpha build
 
-Orion's cross-platform interface (Avalonia) on the same engine as Orion. It
-installs beside Orion.app and keeps its own settings.
+Drag Orion to Applications, then open it ONCE from the right-click menu:
 
-Drag $NAME to Applications, then open it ONCE from the right-click menu:
-
-    right-click $NAME.app  ->  Open  ->  Open
+    right-click Orion.app  ->  Open  ->  Open
 
 macOS blocks it on a normal double-click because this build is signed ad-hoc
 rather than with a paid Apple Developer certificate, and is not notarized. It is
 the same binary either way; the warning is about who vouched for it, not what it
 does. If the dialog gives you no Open button, run:
 
-    xattr -dr com.apple.quarantine "/Applications/$NAME.app"
+    xattr -dr com.apple.quarantine /Applications/Orion.app
 
 Requires an Apple silicon Mac running macOS 14 or later. Intel is not built.
 
 This is an alpha. It opens Sony ARW files; other Bayer cameras via LibRaw are
 less tested. Edits are saved to XMP sidecars beside your photos and never modify
-the raw file.
+the raw file. It replaces the earlier Orion.app in place and keeps its presets,
+watermark and assistant settings.
+
+Claude and other AI agents can edit through Orion's MCP server, which is inside
+the app. Nothing is saved to your photos until you approve it in Orion.
+
+macOS will not run the server for an agent while the download's quarantine is
+on it, even after you have opened Orion, so with Orion in Applications run:
+
+    xattr -dr com.apple.quarantine /Applications/Orion.app
+
+Then, for Claude Code:
+
+    claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp
+
+For Claude Desktop, add this under "mcpServers" in its config file:
+
+    "orion": { "command": "/Applications/Orion.app/Contents/MacOS/orion-mcp" }
+
+Orion's own Assistant column (Command-Option-A) loads it with no setup, and
+offers an Allow button if the quarantine is still on.
 
 Third-party licenses are inside the app, at
-$NAME.app/Contents/Resources/licenses.
+Orion.app/Contents/Resources/licenses.
 TXT
 
-DMG="$OUT/Orion-$LABEL-avalonia.dmg"
+DMG="$OUT/Orion-$LABEL.dmg"
 hdiutil create -volname "$NAME $LABEL" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 echo
 echo "$DMG"

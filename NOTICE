@@ -129,7 +129,7 @@ third-party request.
 
 ## Numeral typeface in the Avalonia shell
 
-`spikes/avalonia-shell/Assets/Fonts/BarlowSemiCondensed-Medium.ttf` is Barlow
+`shell/Assets/Fonts/BarlowSemiCondensed-Medium.ttf` is Barlow
 Semi Condensed Medium, unmodified from github.com/google/fonts
 (`ofl/barlowsemicondensed/`). The shell sets every number in it. It is under
 the **SIL Open Font License 1.1**, which permits bundling it with proprietary
@@ -264,7 +264,7 @@ travels as `OFL-1.1.txt`.
 
 ## MIT components of the application and the assistant's terminal
 
-The assistant column (`spikes/avalonia-shell/Slices/Chrome/AssistantPanel.cs`)
+The assistant column (`shell/Slices/Chrome/AssistantPanel.cs`)
 hosts a terminal built from these NuGet packages, each under the **MIT License**,
 as is every component of the section above:
 

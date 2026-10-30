@@ -10,7 +10,7 @@ extension ViewportTests {
     /// hand-written after XMP Part 1; none is copied from those products.
     static func testForeignXmpSurvivesOrionsWrites() {
         let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .appendingPathComponent("../spikes/avalonia-shell/Fixtures/foreign")
+            .appendingPathComponent("../shell/Fixtures/foreign")
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("orion-foreign-xmp-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

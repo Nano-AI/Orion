@@ -78,7 +78,7 @@ Two front ends over one engine:
 
 | | Where | State |
 |---|---|---|
-| **Avalonia 12 / .NET 10** (#315, #316) | `spikes/avalonia-shell/` | the future of the app on all three systems; Mac DMG via `tools/package-avalonia.sh` (#353); about 44 commands still `stub(#315)`, waiting on their Swift code to be ported (issue 23) |
+| **Avalonia 12 / .NET 10** (#315, #316) | `shell/` | the future of the app on all three systems; Mac DMG via `tools/package-avalonia.sh` (#353); about 44 commands still `stub(#315)`, waiting on their Swift code to be ported (issue 23) |
 | SwiftUI/AppKit | `app/` | the shipping Mac app (`tools/package-app.sh`); retired once issue 23 lands |
 
 **UI rules:** the engine is reached only through the hand-written C facade `engine/include/orion/orion.h` (the shell via `native/` → `liborion_shim.dylib`): POD only, no templates, no move-only types, and **no C++ exception may escape it (it would terminate the process)**. The canvas gets the engine's picture with no CPU copy — an IOSurface on `MTLSharedEvent`s into Avalonia's Metal renderer (#357) — and falls back to a CPU copy headless. Every command is registered with a name (`--commands`), so it can be driven without the UI. In the Swift app, view models are plain `@Observable` objects with zero SwiftUI types inside. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
@@ -97,12 +97,12 @@ Two front ends over one engine:
 ./tools/check-site.py              the landing page: links resolve, register unchanged, no dead GitHub URLs, no personal data
 ```
 
-For the Avalonia shell (`spikes/avalonia-shell/README.md` has the build):
+For the Avalonia shell (`shell/README.md` has the build):
 
 ```
-dotnet run -c Release --project spikes/avalonia-shell -- --selftest RAW   the shell's invariants, headless
-spikes/avalonia-shell/bin-native/present_test RAW                          zero-copy surface vs CPU readback
-python3 spikes/avalonia-shell/compare.py check                             slice file ownership
+dotnet run -c Release --project shell -- --selftest RAW   the shell's invariants, headless
+shell/bin-native/present_test RAW                          zero-copy surface vs CPU readback
+python3 shell/compare.py check                             slice file ownership
 ```
 
 Run all of them before claiming anything works. The GPU tests matter most: pure
