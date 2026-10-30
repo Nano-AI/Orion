@@ -76,8 +76,8 @@ combined as a list and optionally feathered onto the photograph's own edges.
 Undo is unlimited and edits persist per photo in XMP sidecars.
 
 **Not there yet:** tethering, X-Trans sensors, and Windows and Linux builds.
-The cross-platform interface (Avalonia) is on `main` beside the Swift app, and
-the GPU backend it needs off the Mac (Dawn) passed its first spike. See
+The app is Avalonia on .NET, so it can run on all three; the GPU backend it
+needs off the Mac (Dawn) passed its first spike. See
 [`planning/STATUS.md`](planning/STATUS.md), which is the honest list, including
 the one shipped defect: a 24 MP frame allocates more intermediate memory than an
 8 GB Mac has, so it will not open there.
@@ -87,14 +87,14 @@ the one shipped defect: a 24 MP frame allocates more intermediate memory than an
 ### Built with
 
 * C++20 engine, Metal compute, shaders in [Slang](https://shader-slang.org/)
-* SwiftUI and AppKit (the shipping app); [Avalonia](https://avaloniaui.net/) on .NET (the cross-platform interface)
+* [Avalonia](https://avaloniaui.net/) 12 on .NET 10 for the interface (it replaced a SwiftUI app, decision #380)
 * [LibRaw](https://www.libraw.org/) decode, [OpenColorIO](https://opencolorio.org/) and [lcms2](https://www.littlecms.com/) color
-* [lensfun](https://lensfun.github.io/) lens data, SQLite index, XMP sidecars as the source of truth
+* [lensfun](https://lensfun.github.io/) lens data, XMP sidecars as the source of truth
 
 ### How it is built
 
-A C++20 engine drives a Metal compute graph; a SwiftUI shell displays its output
-texture directly, with no readback. Shaders are authored in Slang so a D3D or
+A C++20 engine drives a Metal compute graph; the Avalonia app shows its output
+on the GPU through an IOSurface, with no CPU copy. Shaders are authored in Slang so a D3D or
 WebGPU backend stays reachable.
 
 Edits form a **DAG, not a chain**, so moving a slider recomputes only what sits
@@ -156,9 +156,9 @@ silicon Mac on macOS 14 or later. To build it yourself, read on.
 ### Prerequisites
 
 * macOS 14 or later, Xcode with the Metal toolchain, and [Homebrew](https://brew.sh/)
-* The libraries:
+* The libraries and .NET:
   ```sh
-  brew install cmake ninja libraw little-cms2
+  brew install cmake ninja libraw little-cms2 dotnet
   ```
 * Slang: extract a macOS release from
   [shader-slang/slang](https://github.com/shader-slang/slang/releases) into `third_party/slang/`
@@ -175,12 +175,14 @@ silicon Mac on macOS 14 or later. To build it yourself, read on.
    cmake -S . -B build -G Ninja
    cmake --build build
    ```
-3. Run it
+3. Build the app and run it
    ```sh
-   open build/Orion.app
+   shell/native/build.sh
+   export DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec
+   dotnet build -c Release shell
+   shell/bin/Release/net10.0/Orion ~/Pictures/some-shoot
    ```
-4. Package a disk image a stranger can run: `tools/package-app.sh` for the Swift
-   app, `tools/package-avalonia.sh` for the Avalonia one.
+4. Package `Orion.app` and a disk image a stranger can run: `tools/package-app.sh`.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -188,22 +190,21 @@ silicon Mac on macOS 14 or later. To build it yourself, read on.
 
 ### Opening a folder or photo from the shell
 
-`Orion --open <folder|file>` opens a folder as the library, or a photo with its
-parent folder as the library.
-A convenient wrapper (this is the whole feature; see decision #193):
+`Orion <folders or photos>` opens them as the library. A convenient wrapper
+(this is the whole feature; see decision #193):
 
 ```sh
 # ~/.zshrc - `orion` opens the cwd; `orion pic.ARW` opens that photo.
 orion() {
-  local app="$HOME/Documents/Orion/build/Orion.app"
+  local app="/Applications/Orion.app"
   if [[ ! -d "$app" ]]; then
-    echo "orion: $app not built" >&2
+    echo "orion: $app not installed" >&2
     return 1
   fi
   local -a paths
   local p
   for p in "${@:-$PWD}"; do paths+=("${p:A}"); done
-  open -n -a "$app" --args --open "${paths[@]}"
+  open -n -a "$app" --args "${paths[@]}"
 }
 ```
 
@@ -227,10 +228,10 @@ registers it with
 `claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp`
 after clearing the download's quarantine (#310).
 
-### The Avalonia interface
+### The app's own flags
 
-The cross-platform interface lives in [`shell/`](shell/);
-its README has the build, the flags and the headless selftest.
+The app lives in [`shell/`](shell/); its README has the build, every flag and
+the headless selftest.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -238,30 +239,25 @@ its README has the build, the flags and the headless selftest.
 
 ```sh
 ./build/apps/tests/orion-tests      # engine maths, plus real GPU renders
-./build/orion-viewport-tests        # canvas geometry
+shell/bin/Release/net10.0/Orion x.ARW --selftest   # the app's invariants, headless
 ./build/apps/bench/orion-bench file.ARW   # latency gate and per-control checks
 ./tools/check-agent.py              # the agent surface: a real render and a real approve
 ```
 
-`CLAUDE.md` lists all nine gates to run before claiming anything works. The GPU
+`CLAUDE.md` lists every gate to run before claiming anything works; none opens
+a window, and the ones that render read their photographs from `ORION_SAMPLES`. The GPU
 tests matter most: pure maths tests pass happily on code that renders garbage,
 because they never touch a texture. Two shipped bugs proved it.
 
 ### The screenshot harness
 
 ```sh
-./build/Orion.app/Contents/MacOS/Orion --screenshot out.png --photo x.ARW \
-    --scene light [--measure x,y,w,h] [--size 1680x1050]
+shell/bin/Release/net10.0/Orion x.ARW --tab Light --screenshot out.png
 ```
 
-Renders the real view hierarchy offscreen, so no Screen Recording permission is
-needed. `--measure` prints per-channel mean, standard deviation, saturation and
-luma over a region of the engine's output, which is how "there is purple in my
-photo" became a number that could be watched going down.
-
-**What it cannot see:** the Metal canvas (AppKit cannot capture a Metal layer,
-so it draws a still), and any 3D transform (`cacheDisplay` skips them). Both
-limits are recorded in `planning/STATUS.md` rather than left to be rediscovered.
+Renders the real window through Avalonia's headless platform: no window, no
+Screen Recording permission. `tools/check-screens.py` renders every tab this
+way and fails on one that is blank, unchanged from another, or unstable.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -269,7 +265,7 @@ limits are recorded in `planning/STATUS.md` rather than left to be rediscovered.
 
 - [x] M0–M4: library, culling, develop, crop, masks, healing, export
 - [x] An MCP server so agents can propose edits for you to approve
-- [x] The cross-platform interface (Avalonia) beside the Swift app
+- [x] The Avalonia interface, shipping as Orion.app in place of the Swift one
 - [x] The Avalonia canvas fed from the GPU with no CPU copy
 - [ ] Region-of-interest rendering: only what is on screen, at screen resolution
 - [ ] Dawn as the GPU backend, for Windows and Linux builds

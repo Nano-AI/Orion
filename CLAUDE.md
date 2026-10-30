@@ -1,6 +1,6 @@
 # Orion
 
-Fast, subscription-free desktop RAW photo editor. Ships on macOS; Windows and Linux are in progress through the Avalonia shell. Modern minimal UI, capable of dramatic edits. Built by a solo developer. Source-available, never redistributed (#359).
+Fast, subscription-free desktop RAW photo editor. Ships on macOS as an Avalonia app; Windows and Linux builds are in progress. Modern minimal UI, capable of dramatic edits. Built by a solo developer. Source-available, never redistributed (#359).
 
 ## Read these first
 Everything lives in `planning/`. On a fresh session, read in this order:
@@ -19,8 +19,8 @@ Everything lives in `planning/`. On a fresh session, read in this order:
     the criticism is as findable as the plan. Read `feedback/README.md` first.
 
 **Work to do is tracked as [GitHub issues](https://github.com/Nano-AI/Orion/issues)**,
-not in the docs: issue 23 parity (the Avalonia shell catching up with the Swift
-app, then the Swift app retired), issue 24 Windows and Linux builds, issue 22
+not in the docs: issue 23 parity (done at #380: the Avalonia app replaced the Swift
+one), issue 24 Windows and Linux builds, issue 22
 region-of-interest rendering, issue 5 lens correction, issue 6 JPEG XL export.
 `STATUS.md` points at them. Write them as "issue N": a bare `#N` is a decision.
 One parent issue per piece of work, with a checklist; no sub-issue per item.
@@ -72,37 +72,35 @@ steps.
   under an open licence is a one-way door: it happened once by mistake (#358).
 
 ## Stack
-C++20 engine · Metal GPU compute (Dawn next, #317) · Slang shaders · LibRaw decode · OpenColorIO + lcms2 color · SQLite index · XMP sidecars as source of truth.
+C++20 engine · Metal GPU compute (Dawn next, #317) · Slang shaders · LibRaw decode · OpenColorIO + lcms2 color · XMP sidecars as source of truth · **Avalonia 12 / .NET 10 app** (`shell/`, #315, #316).
 
-Two front ends over one engine:
+The app is `shell/`: it ships as `Orion.app` through `tools/package-app.sh` and
+is meant for all three systems (issue 24). The SwiftUI app it replaced was
+retired by decision #380; its history is in git, and its settings carry over on
+first launch (`shell/Shared/SettingsImport.cs`). There is no SQLite index any
+more — that was the Swift app's.
 
-| | Where | State |
-|---|---|---|
-| **Avalonia 12 / .NET 10** (#315, #316) | `shell/` | the future of the app on all three systems; Mac DMG via `tools/package-avalonia.sh` (#353); about 44 commands still `stub(#315)`, waiting on their Swift code to be ported (issue 23) |
-| SwiftUI/AppKit | `app/` | the shipping Mac app (`tools/package-app.sh`); retired once issue 23 lands |
-
-**UI rules:** the engine is reached only through the hand-written C facade `engine/include/orion/orion.h` (the shell via `native/` → `liborion_shim.dylib`): POD only, no templates, no move-only types, and **no C++ exception may escape it (it would terminate the process)**. The canvas gets the engine's picture with no CPU copy — an IOSurface on `MTLSharedEvent`s into Avalonia's Metal renderer (#357) — and falls back to a CPU copy headless. Every command is registered with a name (`--commands`), so it can be driven without the UI. In the Swift app, view models are plain `@Observable` objects with zero SwiftUI types inside. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
+**UI rules:** the engine is reached only through the hand-written C facade `engine/include/orion/orion.h` (the app via `shell/native/` → `liborion_shim.dylib`): POD only, no templates, no move-only types, and **no C++ exception may escape it (it would terminate the process)**. The canvas gets the engine's picture with no CPU copy — an IOSurface on `MTLSharedEvent`s into Avalonia's Metal renderer (#357) — and falls back to a CPU copy headless. Every command is registered with a name (`--commands`), so it can be driven without the UI. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
 
 ## Tests
 
+Build first: `cmake --build build`, then `shell/native/build.sh` and
+`dotnet build -c Release shell` (`shell/README.md`). The gates that render take
+their photographs from `ORION_SAMPLES` (a folder of RAWs; default `samples/`).
+**None of them opens a window.**
+
 ```
-./build/apps/tests/orion-tests     engine maths + real GPU renders
-./build/orion-viewport-tests       canvas geometry
+./build/apps/tests/orion-tests                 engine maths + real GPU renders
+shell/bin/Release/net10.0/Orion RAW --selftest the app's invariants, headless
+shell/bin-native/present_test RAW              zero-copy surface vs CPU readback
 ./tools/check-decisions.py         the decision ledger indexes the tree
 ./tools/check-gestures.py          every gesture still arms the preview graph
-./tools/check-screens.py           the three interface scenes that assert
-./tools/check-modes.py             --library-open and --batch-export still run
+./tools/check-screens.py           every tool tab renders headless, distinct and stable
+./tools/check-modes.py             --batch-export and --hdr-merge still run
 ./tools/check-wiring.py            mechanisms the product must actually call
 ./tools/check-agent.py             the MCP server drives a real render and a real approve
 ./tools/check-site.py              the landing page: links resolve, register unchanged, no dead GitHub URLs, no personal data
-```
-
-For the Avalonia shell (`shell/README.md` has the build):
-
-```
-dotnet run -c Release --project shell -- --selftest RAW   the shell's invariants, headless
-shell/bin-native/present_test RAW                          zero-copy surface vs CPU readback
-python3 shell/compare.py check                             slice file ownership
+(cd mcp && npm test)               the MCP server against a fake app
 ```
 
 Run all of them before claiming anything works. The GPU tests matter most: pure
@@ -116,44 +114,40 @@ already-shipped work as the next story three times.** The third time, the
 decision that closed the queue item had never been written down at all, so a
 session that trusted the queue would have re-run a schema migration over the
 photographer's sidecars. It fails on a duplicate number, on a `#N` the tree
-cites that has no row, and on a gap nobody declared.
+cites that has no row, and on a gap nobody declared. ⚠ Until #380 it read
+nothing at all inside a worktree, because a worktree lives under `.claude/`.
 
-`check-gestures.py` is a grep and says so: a SwiftUI `DragGesture` closure
-cannot be driven from either suite (#110.3), so deleting a `beginInteraction`
-call is green everywhere. It catches the deletion and claims nothing more. It
-exists because a `ROADMAP.md` table asserting four gestures did *not* arm was
-the premise of a performance audit, and all four had been fixed without it
-being updated.
+`check-gestures.py` is a grep and says so: a drag handler cannot be driven
+from any suite (#110.3), so deleting a `BeginInteraction()` call is green
+everywhere. It catches the deletion and claims nothing more. It exists because
+a `ROADMAP.md` table asserting four gestures did *not* arm was the premise of a
+performance audit, and all four had been fixed without it being updated.
 
-`check-screens.py` launches the application three times, so it is the slow one.
-It runs the `--screenshot` scenes that *assert* — the menu bar AppKit really
-builds, the Detail panel's controls below the fold, and the footer's failure
-line. **The other ~35 scenes pose rather than assert and this cannot run them**:
-their oracle is a person looking at a PNG. ⚠ It exists because those three
-checks were written against named mutations (#125) and then invoked by nobody:
-`--scenario` is what the repro sweep drives, and `--screenshot` had no gate at
-all (#121, #177).
+`check-screens.py` launches the app eight times, so it is the slow one. It
+renders each tool tab through `--screenshot` (Avalonia's headless platform) and
+fails on a tab that does not render, renders blank, draws the same tool column
+as another, or renders differently twice. It cannot say a tab draws the
+*right* controls: that oracle is a person looking at a PNG. ⚠ It exists because
+the Swift app's asserting scenes were written against named mutations (#125)
+and then invoked by nobody (#121, #177).
 
-`check-modes.py` is the same story for the last two command-line modes. Both
-already assert — `--library-open` opens one folder cold, warm and indexless in
-one process and fails when they disagree; `--batch-export` exits 1 when a
-photograph fails — and neither was run by anything, so deleting either
-four-line dispatch in `OrionApp.init` was green everywhere (#121, #179).
-⚠ A deleted dispatch does not make Orion exit; it makes Orion **open a window**,
-so both gates catch that by timeout rather than by exit code.
+`check-modes.py` is the same story for `--batch-export` and `--hdr-merge`: each
+asserts in its exit code, and neither was run by anything, so deleting either
+dispatch in `Program.cs` was green everywhere (#121, #179). ⚠ A deleted
+dispatch does not make Orion exit; it makes Orion **open a window**, so both
+gates catch that by timeout rather than by exit code. (It caught a real one at
+#380: `--hdr-merge` deadlocked on Avalonia's dispatcher.)
 
 `check-wiring.py` is the third grep, and its rule is worth knowing on its own:
-**a call from the harness does not count.** `Engine.showPlaceholder` was built,
-drawn by the canvas, described by two comments as holding the picture while a
-new photo decodes — and its only caller in the tree was the screenshot harness,
-so the canvas showed the *previous* photograph for the whole 210.9 ms of a cold
-open (#151, #181). A mechanism that looks used because a test uses it is the
-shape this catches. It **sweeps** as well as declares (#183): every `func` in a
-product file whose callers are all harness is reported, and a legitimate one has
-to say why in `HARNESS_ONLY`. That found `SyncSettings.pasted` on its first
-run — a second spelling of the paste path that only a test called. ⚠ It is a
-regex, not a compiler: a call through a closure, selector or key path is
-invisible to it, so triage by hand before believing it.
+**a call from the harness does not count.** The Swift app's
+`Engine.showPlaceholder` was built, drawn by the canvas, described by two
+comments as holding the picture while a new photo decodes — and its only caller
+was the screenshot harness, so the canvas showed the *previous* photograph for
+the whole 210.9 ms of a cold open (#151, #181). It **sweeps** as well as
+declares (#183): every method in `shell/` whose uses are all in `SelfTest*.cs`
+is reported, and a legitimate one has to say why in `HARNESS_ONLY`. ⚠ It is a
+regex, not a compiler: reflection or a name built at run time is invisible to
+it, so triage by hand before believing it.
 
 ## Working agreement
 - One roadmap story per coding session. Update `STATUS.md` at the end of every session — this is what makes context loss survivable. **Prune it in the same breath:** it reached 4,643 lines over 56 sessions before anyone noticed that a recovery point nobody can read is not one. Six or so recent sessions is plenty; the rest belongs in `HISTORY.md`.
