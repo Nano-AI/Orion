@@ -21,7 +21,7 @@ static partial class ExportRun {
 
     static EngineModel E => EngineModel.Shared;
     static ExportSettings S => ExportSettings.Shared;
-    static string Extension => S.Format switch { 0 => "jpg", 1 => "png", _ => "tiff" };
+    static string Extension => S.Extension;
 
     /// The photo's own options: its rating and the metadata the sheet chose.
     static SheetsNative.ExportOptions Options(nint engine, int rating) {

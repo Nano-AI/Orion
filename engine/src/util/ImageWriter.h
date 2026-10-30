@@ -6,7 +6,8 @@
 
 namespace orion::util {
 
-enum class ImageFormat { Png, Jpeg, Tiff };
+/// Jxl is encoded by libjxl (JxlWriter), the rest by ImageIO. DECISIONS #363.
+enum class ImageFormat { Png, Jpeg, Tiff, Jxl };
 
 /// What the written file is tagged as, and converted to.
 ///
@@ -32,7 +33,7 @@ enum class Metadata {
 
 /// Bits per component in the written file.
 ///
-/// PNG and TIFF carry either. JPEG is an eight-bit container, so the choice
+/// PNG, TIFF and JPEG XL carry either. JPEG is an eight-bit container, so the choice
 /// does not reach the file — the interface greys the control out rather than
 /// offering a setting that does nothing.
 enum class BitDepth { Eight, Sixteen };
@@ -61,7 +62,8 @@ struct Watermark {
 
 struct ExportOptions {
     ImageFormat format = ImageFormat::Jpeg;
-    /// JPEG only, 0..1. Ignored by PNG and TIFF, which are lossless.
+    /// JPEG and JPEG XL, 0..1. Ignored by PNG and TIFF, which are lossless.
+    /// JPEG XL at 1.0 is lossless, as `cjxl -q 100` is (DECISIONS #363).
     float quality = 0.9f;
     /// Longest edge in pixels; 0 keeps full resolution.
     std::uint32_t maxDimension = 0;

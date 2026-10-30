@@ -450,6 +450,14 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
 }
 
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {
+    std::uint32_t w = 0, h = 0;
+    const auto pixels = exportPixels(options, w, h);
+    return util::encodedSize(pixels.data(), w, h,
+                             static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t), options);
+}
+
+std::vector<std::uint16_t> Engine::exportPixels(const util::ExportOptions& options,
+                                                std::uint32_t& w, std::uint32_t& h) {
     if (!develop_) throw std::runtime_error("no image open");
 
     // The estimate has to encode the same pixels the real write will — which
@@ -457,15 +465,11 @@ std::size_t Engine::exportedSize(const util::ExportOptions& options) {
     WideOutputFor wide(*develop_, options.depth == util::BitDepth::Sixteen);
     develop_->render();
 
-    const std::uint32_t w = develop_->outputWidth();
-    const std::uint32_t h = develop_->outputHeight();
-
-    const auto pixels = readOutput16(w, h);
-    const auto size = util::encodedSize(pixels.data(), w, h,
-                                        static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t),
-                                        options);
+    w = develop_->outputWidth();
+    h = develop_->outputHeight();
+    auto pixels = readOutput16(w, h);
     wide.restore();
-    return size;
+    return pixels;
 }
 
 /// The output as 16-bit unsigned, which is what the image formats want.

@@ -135,6 +135,12 @@ public:
     /// is the whole reason the number is worth showing.
     [[nodiscard]] std::size_t exportedSize(const util::ExportOptions&);
 
+    /// The first half of `exportedSize`: renders at the export's depth and
+    /// reads the pixels back (16-bit RGBA, tightly packed). Touches the graph,
+    /// so it stays on the graph's thread; encoding what it returns does not.
+    [[nodiscard]] std::vector<std::uint16_t> exportPixels(const util::ExportOptions&,
+                                                          std::uint32_t& w, std::uint32_t& h);
+
 private:
     /// The developed output as 16-bit unsigned, which is what the image
     /// formats want. Wide export reads half float; narrow export reads bytes.
