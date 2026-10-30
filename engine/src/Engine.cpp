@@ -1,6 +1,8 @@
 #include "Engine.h"
 
 #include "pipe/AutoEnhance.h"
+#include "pipe/LensLcp.h"
+#include "pipe/LensOpcodes.h"
 #include "ResourcePaths.h"
 
 #include <stdexcept>
@@ -26,6 +28,34 @@ const pipe::LensDatabase& Engine::lensDatabase() {
     return db;
 }
 
+const pipe::AdobeLensProfiles& Engine::adobeProfiles() {
+    // Same shape as the lensfun database: parsed once, on the first open that
+    // asks. Read from the user's own Adobe folders and never bundled.
+    static const pipe::AdobeLensProfiles profiles(pipe::AdobeLensProfiles::defaultDirectories());
+    return profiles;
+}
+
+pipe::LensProfile Engine::automaticLensProfile() const {
+    // Precedence: the file's own DNG opcodes, then an installed Adobe
+    // profile, then lensfun. The opcodes are the manufacturer's correction for
+    // this exact frame, written knowing its focal length and crop, so nothing
+    // measured elsewhere outranks them.
+    const auto dng = pipe::parseDngLensOpcodes(info_.dngOpcodes);
+    if (dng.hasWarp || dng.hasVignette) {
+        pipe::LensProfile p;
+        p.found = true;
+        p.source = pipe::LensSource::DngOpcode;
+        p.model = dng.model;
+        p.lens = dng.hasWarp && dng.hasVignette ? "Embedded in the file"
+               : dng.hasWarp ? "Embedded in the file (distortion)"
+                             : "Embedded in the file (vignetting)";
+        return p;
+    }
+    auto lcp = adobeProfiles().lookup(info_.camera, info_.lens, info_.focalLength, info_.aperture);
+    if (lcp.found) return lcp;
+    return lensDatabase().lookup(info_.lens, info_.focalLength, info_.aperture);
+}
+
 void Engine::setHeadless(bool on) noexcept {
     headless_ = on;
     // The release policy can follow an open graph; the preview cannot be
@@ -44,7 +74,7 @@ void Engine::openRaw(const std::string& path) {
     info_ = raw::readInfo(path);
     // A choice belongs to the photograph that was open, not to the next one.
     lensChoice_.clear();
-    lensProfile_ = lensDatabase().lookup(info_.lens, info_.focalLength, info_.aperture);
+    lensProfile_ = automaticLensProfile();
 
     // One body for both kinds of source: every operation below — decimate,
     // canReload, reload, the pipeline constructor — is overloaded for the
@@ -130,7 +160,7 @@ bool Engine::setLensChoice(const std::string& makerModel) {
     if (makerModel.empty()) {
         // Back to what the file says, which may be nothing at all.
         lensChoice_.clear();
-        lensProfile_ = lensDatabase().lookup(info_.lens, info_.focalLength, info_.aperture);
+        lensProfile_ = automaticLensProfile();
         return true;
     }
 

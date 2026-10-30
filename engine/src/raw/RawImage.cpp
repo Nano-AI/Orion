@@ -64,6 +64,14 @@ RawInfo readInfo(const std::string& path) {
     info.aperture    = other.aperture;
     info.focalLength = other.focal_len;
     info.timestamp   = static_cast<std::int64_t>(other.timestamp);
+    // LibRaw reads OpcodeList1/2/3 as-is into rawopcodes[0..2] (0.22).
+    for (int i = 0; i < 3; ++i) {
+        const auto& op = proc.imgdata.color.dng_levels.rawopcodes[i];
+        if (op.data != nullptr && op.len > 0) {
+            const auto* bytes = static_cast<const std::uint8_t*>(op.data);
+            info.dngOpcodes[i].assign(bytes, bytes + op.len);
+        }
+    }
 
     proc.recycle();
     return info;

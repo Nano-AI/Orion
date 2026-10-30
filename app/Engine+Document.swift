@@ -358,6 +358,7 @@ extension Engine {
         guard let handle else {
             lensProfileName = ""
             lensProfileApproximate = false
+            lensProfileSource = 0
             return
         }
         var profile = OrionLensProfile()
@@ -371,9 +372,11 @@ extension Engine {
             lensProfileName = name.hasPrefix(maker) || maker.isEmpty
                 ? name : "\(maker) \(name)"
             lensProfileApproximate = profile.approximate != 0
+            lensProfileSource = profile.source
         } else {
             lensProfileName = ""
             lensProfileApproximate = false
+            lensProfileSource = 0
         }
     }
 

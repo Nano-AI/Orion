@@ -92,6 +92,8 @@ void interpolate(const std::vector<LensDatabase::Calibration>& points, float x,
 
 }  // namespace
 
+std::string normalizeLensName(const std::string& s) { return normalize(s); }
+
 LensDatabase::LensDatabase(const std::string& directory) {
     std::error_code ec;
     if (!std::filesystem::is_directory(directory, ec)) return;
@@ -309,6 +311,7 @@ LensProfile LensDatabase::lookupExact(const std::string& makerModel,
 
     interpolate(found->distortion, focalLength, profile.poly);
     vignetteAt(*found, focalLength, aperture, profile.vignette);
+    profile.fillModel();
     return profile;
 }
 
@@ -367,7 +370,7 @@ LensProfile LensDatabase::lookup(const std::string& lensName,
     // linearly between the two bracketing apertures, which is the same thing in
     // one dimension. Focus distance stays at infinity — see the note above.
     vignetteAt(*best, focalLength, aperture, profile.vignette);
-
+    profile.fillModel();
     return profile;
 }
 

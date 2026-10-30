@@ -15,6 +15,8 @@
 
 namespace orion {
 
+namespace pipe { class AdobeLensProfiles; }
+
 /// The engine proper. C++ with exceptions, RAII, the lot — all of which stops
 /// at the C facade in CApi.cpp.
 class Engine {
@@ -170,8 +172,7 @@ public:
     ///
     /// ⚠ **Not part of `Adjustments`, deliberately.** A lens choice is not a
     /// per-frame render parameter — it *selects* a profile, and that profile's
-    /// coefficients already reach the shader through `Adjustments::lensPoly`
-    /// and `lensVignettePa`. Putting a string in the POD block would push it
+    /// coefficients already reach the shader through `Adjustments::lensModel`. Putting a string in the POD block would push it
     /// across the facade on every slider tick to say a thing that changes once
     /// a photograph. It belongs beside the profile it picks.
     ///
@@ -233,6 +234,11 @@ private:
     /// One copy for the process. Five megabytes of XML, parsed once — a
     /// per-photo parse would put a tenth of a second in front of every open.
     static const pipe::LensDatabase& lensDatabase();
+    /// The Adobe `.lcp` profiles already installed on this machine, if any.
+    static const pipe::AdobeLensProfiles& adobeProfiles();
+    /// The profile the open file gets without a hand choice: DNG opcodes,
+    /// then Adobe, then lensfun.
+    [[nodiscard]] pipe::LensProfile automaticLensProfile() const;
     pipe::LensProfile                      lensProfile_;
 };
 

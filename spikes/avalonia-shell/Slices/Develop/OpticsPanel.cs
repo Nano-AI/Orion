@@ -31,7 +31,7 @@ public sealed class OpticsPanel : StackPanel {
 
     /// Engine.swift:779 — lens_profile is (enabled && found), pushed whenever either changes.
     internal void Refresh(bool render = false) {
-        var (name, approximate) = DevelopFacade.LensProfile();
+        var (name, approximate, source) = DevelopFacade.LensProfile();
         bool found = name.Length > 0, profiled = found && _profileEnabled;
         if (Engine.Handle != 0 && (render || Engine.Get("lens_profile") != (profiled ? 1 : 0)))
             Engine.Set("lens_profile", profiled ? 1 : 0);
@@ -47,7 +47,13 @@ public sealed class OpticsPanel : StackPanel {
             };
             toggle.IsCheckedChanged += (_, _) => { _profileEnabled = toggle.IsChecked == true; Refresh(render: true); };
             rows.Add(toggle);
-            rows.Add(Develop.Note(approximate
+            rows.Add(Develop.Note(source == DevelopFacade.LensSource.Dng
+                ? "The camera's own correction, written into this DNG. It takes precedence over any profile. " +
+                  "The two sliders below are what you would use instead."
+                : source == DevelopFacade.LensSource.Adobe
+                ? "From an Adobe lens profile installed on this Mac, at this focal length. " +
+                  "The two sliders below are what you would use instead."
+                : approximate
                 ? "Measured for a lens the database spells differently, so this is the nearest match rather than your " +
                   "exact copy. Turn it off to correct by hand."
                 : "Distortion and vignetting measured for this lens at this focal length, from the lensfun database. " +

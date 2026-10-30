@@ -160,13 +160,7 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.lensDistortion = adj->lens_distortion;
     a.lensVignette   = adj->lens_vignette;
     a.lensProfile    = adj->lens_profile != 0;
-    if (a.lensProfile) {
-        const auto& p = engine->impl.lensProfile();
-        for (int i = 0; i < 3; ++i) {
-            a.lensPoly[i]       = p.poly[i];
-            a.lensVignettePa[i] = p.vignette[i];
-        }
-    }
+    if (a.lensProfile) a.lensModel = engine->impl.lensProfile().model;
     a.lensCaRed      = adj->lens_ca_red;
     a.lensCaBlue     = adj->lens_ca_blue;
     a.highlightRecovery = adj->highlight_recovery;
@@ -798,6 +792,7 @@ OrionStatus orion_engine_lens_profile(const OrionEngine* engine,
     const auto& p = engine->impl.lensProfile();
     out->found = p.found ? 1 : 0;
     out->approximate = p.approximate ? 1 : 0;
+    out->source = p.found ? static_cast<int32_t>(p.source) : 0;
     std::strncpy(out->lens, p.lens.c_str(), sizeof out->lens - 1);
     std::strncpy(out->maker, p.maker.c_str(), sizeof out->maker - 1);
     return ORION_OK;

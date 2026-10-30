@@ -729,17 +729,31 @@ OrionStatus orion_engine_export_size(OrionEngine* engine,
                                      const OrionExportOptions* options,
                                      uint64_t* out_bytes);
 
-/* The lens profile for the open photo, from the vendored lensfun database.
+/* The lens profile for the open photo.
  *
- * `found` is zero when the lens is unknown — which includes every manual lens,
- * since those write no lens name at all. `approximate` is nonzero when the
- * match came from a name the database spells differently, so the interface can
- * say so rather than implying a measurement of this exact copy. */
+ * `found` is zero when no correction is known — which includes every manual
+ * lens, since those write no lens name at all. `approximate` is nonzero when
+ * the match came from a name the lensfun database spells differently, so the
+ * interface can say so rather than implying a measurement of this exact copy.
+ *
+ * `source` says where the correction came from, in order of precedence:
+ * ORION_LENS_SOURCE_DNG (the file's own DNG opcodes), ORION_LENS_SOURCE_ADOBE
+ * (an Adobe .lcp profile installed on this machine), ORION_LENS_SOURCE_LENSFUN
+ * (the bundled database, or a lens chosen by hand). Zero when nothing found.
+ * Appended last so the earlier fields keep their offsets. */
+enum {
+    ORION_LENS_SOURCE_NONE    = 0,
+    ORION_LENS_SOURCE_LENSFUN = 1,
+    ORION_LENS_SOURCE_ADOBE   = 2,
+    ORION_LENS_SOURCE_DNG     = 3
+};
+
 typedef struct OrionLensProfile {
     int32_t found;
     int32_t approximate;
     char    lens[128];
     char    maker[64];
+    int32_t source;
 } OrionLensProfile;
 
 OrionStatus orion_engine_lens_profile(const OrionEngine* engine,

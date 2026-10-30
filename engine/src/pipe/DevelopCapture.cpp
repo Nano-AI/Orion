@@ -640,41 +640,26 @@ void DevelopPipeline::applyLens(const Adjustments& adj,
     // cover the enable and disable transitions.
     if (first ||
         adj.lensProfile != lastAdj_.lensProfile ||
-        adj.lensPoly[0] != lastAdj_.lensPoly[0] ||
-        adj.lensPoly[1] != lastAdj_.lensPoly[1] ||
-        adj.lensPoly[2] != lastAdj_.lensPoly[2] ||
-        adj.lensVignettePa[0] != lastAdj_.lensVignettePa[0] ||
-        adj.lensVignettePa[1] != lastAdj_.lensVignettePa[1] ||
-        adj.lensVignettePa[2] != lastAdj_.lensVignettePa[2] ||
+        adj.lensModel != lastAdj_.lensModel ||
         adj.lensDistortion != lastAdj_.lensDistortion ||
         adj.lensVignette != lastAdj_.lensVignette ||
         adj.lensCaRed != lastAdj_.lensCaRed ||
         adj.lensCaBlue != lastAdj_.lensCaBlue) {
         pipeline_.setEnabled(nLens_, correctingLens);
 
-        params::Lens lens{};
-        lens.size[0] = width_;
-        lens.size[1] = height_;
-        lens.centerX = 0.5f;
-        lens.centerY = 0.5f;
-        // The sliders run -1..1; the coefficients they drive are much smaller.
-        // These ranges cover what a real lens needs without letting the control
-        // fold the picture through itself at the extremes.
         // A measured profile replaces the sliders rather than adding to them.
         // Two sources for one coefficient is a control that fights the data:
         // the profile knows what this lens does at this focal length, and a
         // slider on top of it would be undoing a correction by feel.
-        if (adj.lensProfile) {
-            lens.distA     = adj.lensPoly[0];
-            lens.distB     = adj.lensPoly[1];
-            lens.distC     = adj.lensPoly[2];
-            lens.vignetteA = adj.lensVignettePa[0];
-            lens.vignetteB = adj.lensVignettePa[1];
-            lens.vignetteC = adj.lensVignettePa[2];
-        } else {
-            lens.distB     = adj.lensDistortion * 0.35f;
-            lens.vignetteA = adj.lensVignette * 0.6f;
-        }
+        //
+        // The sliders run -1..1; the coefficients they drive are much smaller.
+        // These ranges cover what a real lens needs without letting the control
+        // fold the picture through itself at the extremes.
+        const LensModel model = adj.lensProfile
+            ? adj.lensModel
+            : lens::ptlens(0.0f, adj.lensDistortion * 0.35f, 0.0f, adj.lensVignette * 0.6f);
+        params::Lens lens = lens::resolve(model, width_, height_);
+
         // At full slider this is about seven pixels of radial shift at the
         // corner of a 24 MP frame, which is well past any real lateral
         // aberration and still short of obviously wrong.
@@ -683,10 +668,7 @@ void DevelopPipeline::applyLens(const Adjustments& adj,
 
         // Keep the picture in the frame. Without this a barrel correction
         // reaches past the border and the clamp smears the edge column.
-        lens.scale = lens::autoScale(width_, height_,
-                                     lens.centerX, lens.centerY,
-                                     lens.distA, lens.distB, lens.distC,
-                                     lens.caRed, lens.caBlue);
+        lens.scale = lens::autoScale(lens);
         pipeline_.setParams(nLens_, &lens, sizeof lens);
     }
 }

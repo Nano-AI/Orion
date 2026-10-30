@@ -19,6 +19,8 @@ add_library(orion_engine STATIC
     src/pipe/DevelopOutput.cpp
     src/pipe/CubeLut.cpp
     src/pipe/LensDatabase.cpp
+    src/pipe/LensLcp.cpp
+    src/pipe/LensOpcodes.cpp
     src/pipe/ToneCurve.cpp
     src/pipe/WhiteBalance.cpp
     src/util/ImageWriter.mm

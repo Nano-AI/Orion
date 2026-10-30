@@ -11,7 +11,7 @@ static partial class DevelopFacade {
     [LibraryImport(Lib)]
     public static partial int orion_engine_histogram(nint engine, [Out] uint[] outBins, uint bins);
 
-    /// OrionLensProfile: int32 found, int32 approximate, char lens[128], char maker[64].
+    /// OrionLensProfile: int32 found, int32 approximate, char lens[128], char maker[64], int32 source.
     [LibraryImport(Lib)]
     public static partial int orion_engine_lens_profile(nint engine, [Out] byte[] profile);
 
@@ -50,13 +50,18 @@ static partial class DevelopFacade {
         return detail.Length > 0 ? detail : Text(orion_status_string(status));
     }
 
-    /// Engine.refreshLensProfile: the matched database entry, "" when none.
-    public static (string Name, bool Approximate) LensProfile() {
+    /// orion.h ORION_LENS_SOURCE_*: where a lens profile came from.
+    public enum LensSource { None = 0, Lensfun = 1, Adobe = 2, Dng = 3 }
+
+    /// Engine.refreshLensProfile: the matched profile, "" when none.
+    /// ⚠ 204 bytes, the whole struct: the engine writes all of it, `source` included.
+    public static (string Name, bool Approximate, LensSource Source) LensProfile() {
         var engine = EngineModel.Shared.Handle;
-        var raw = new byte[200];
-        if (engine == 0 || orion_engine_lens_profile(engine, raw) != 0 || BitConverter.ToInt32(raw, 0) == 0) return ("", false);
+        var raw = new byte[204];
+        if (engine == 0 || orion_engine_lens_profile(engine, raw) != 0 || BitConverter.ToInt32(raw, 0) == 0) return ("", false, LensSource.None);
         string lens = CString(raw.AsSpan(8, 128)), maker = CString(raw.AsSpan(136, 64));
-        return (lens.StartsWith(maker) || maker.Length == 0 ? lens : $"{maker} {lens}", BitConverter.ToInt32(raw, 4) != 0);
+        return (lens.StartsWith(maker) || maker.Length == 0 ? lens : $"{maker} {lens}", BitConverter.ToInt32(raw, 4) != 0,
+                (LensSource)BitConverter.ToInt32(raw, 200));
     }
 
     public static string CString(ReadOnlySpan<byte> bytes) {

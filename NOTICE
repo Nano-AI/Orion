@@ -148,3 +148,17 @@ Changes: Jupiter, Mars and Saturn resized from 2048x1024 to 1024x512 and
 recompressed; Saturn's ring map reduced to 48 colour samples inside
 `web/js/motion.js`; the maps also travel base64-encoded in `web/js/planet-maps.js`
 (`tools/build-planet-maps.py`). The page's footer carries the attribution.
+
+## Lens corrections from DNG opcodes and Adobe lens profiles
+
+Orion reads the lens correction a DNG file carries in its own opcode lists —
+`WarpRectilinear` (opcode 1) and `FixVignetteRadial` (opcode 3), implemented
+from Adobe's *Digital Negative (DNG) Specification* 1.6.0.0, chapter 7, under
+the DNG notice above.
+
+Orion also reads Adobe lens profiles (`.lcp`) that Adobe Camera Raw or
+Lightroom have already installed on the user's own machine. **No Adobe profile
+is bundled or redistributed.** The format is read from its published
+description (the Adobe Camera Model, as documented by Adobe and by the lensfun
+project's manual); no other program's LCP reader was used as a source. See
+`research/lens-corrections.md` and `planning/DECISIONS.md` #361 and #362.

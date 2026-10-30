@@ -39,6 +39,7 @@ constexpr std::uint16_t kAscii     = 2;
 constexpr std::uint16_t kShort     = 3;
 constexpr std::uint16_t kLong      = 4;
 constexpr std::uint16_t kRational  = 5;
+constexpr std::uint16_t kUndefined = 7;
 constexpr std::uint16_t kSRational = 10;
 
 void put16(std::vector<std::uint8_t>& out, std::uint16_t v) {
@@ -162,6 +163,11 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     raw.push_back(longEntry(279, stripBytes));              // StripByteCounts
     raw.push_back(shortEntry(284, {1}));                    // PlanarConfiguration: chunky
     raw.push_back(shortEntry(339, {3, 3, 3}));              // SampleFormat: IEEE float
+    if (!image.opcodeList3.empty()) {                        // OpcodeList3, carried verbatim
+        Entry e{51022, kUndefined, static_cast<std::uint32_t>(image.opcodeList3.size()), {}};
+        e.data = image.opcodeList3;
+        raw.push_back(std::move(e));
+    }
 
     // The camera metadata, which belongs in IFD0 whichever shape is written.
     std::vector<Entry> meta;

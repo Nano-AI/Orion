@@ -54,6 +54,10 @@ int main() {
     testHighlightRecoveryGpu();
     testGradeOffsets();
     testLensGpu();
+    testDngLensOpcodes();
+    testAdobeLensProfile();
+    testLensInverseMap();
+    testDngLensOpcodesThroughLibRaw();
     testLensAutoScale();
     testToneBandsWithoutGuide();
     testHueSatMapGpu();

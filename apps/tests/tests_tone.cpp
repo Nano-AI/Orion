@@ -665,9 +665,12 @@ void testLensGpu() {
     }
     src->upload(input.data(), std::size_t(kW) * 4 * sizeof(__fp16));
 
-    orion::pipe::params::Lens lens{};
-    lens.size[0] = kW; lens.size[1] = kH;
-    lens.centerX = 0.5f; lens.centerY = 0.5f;
+    // Built through `resolve`, as the pipeline builds it: a zeroed block has
+    // zero radial terms and is a collapse to the center, not an identity.
+    const auto ptl = [&](float a, float b, float c, float k1 = 0, float k2 = 0, float k3 = 0) {
+        return orion::pipe::lens::resolve(orion::pipe::lens::ptlens(a, b, c, k1, k2, k3), kW, kH);
+    };
+    auto lens = ptl(0, 0, 0);
 
     const auto run = [&](std::vector<__fp16>& out) {
         orion::gpu::CommandBuffer cb(*device);
@@ -697,7 +700,7 @@ void testLensGpu() {
     // Distortion. The (1 - k1) term pins r_d(1) = 1, so a pixel on the frame's
     // diagonal at r = 1 must not move: without that term the whole picture
     // scales and the control reads as a zoom.
-    lens.distB = 0.3f;
+    lens = ptl(0, 0.3f, 0);
     run(out);
 
     // The corner is at r = 1 by construction (R_norm is half the diagonal).
@@ -717,15 +720,14 @@ void testLensGpu() {
     report(std::abs(double(out[mid]) - double(input[mid])) > 0.005,
            "distortion moves the interior",
            "delta " + std::to_string(double(out[mid]) - double(input[mid])));
-    lens.distB = 0.0f;
+    lens = ptl(0, 0, 0);
 
     // ptlens carries three coefficients, and a profile can put weight on any of
     // them. `b` alone is poly3 and is what the manual slider drives, so `a` and
     // `c` would be the two that ship untested — and a profile that sets them
     // would then correct nothing while the interface said it had.
     for (int which = 0; which < 2; ++which) {
-        lens.distA = (which == 0) ? 0.25f : 0.0f;
-        lens.distC = (which == 0) ? 0.0f  : 0.25f;
+        lens = ptl(which == 0 ? 0.25f : 0.0f, 0, which == 0 ? 0.0f : 0.25f);
         run(out);
         checkNear(double(out[corner + 0]), double(input[corner + 0]), 0.01,
                   which == 0 ? "ptlens a still pins the corner"
@@ -734,29 +736,27 @@ void testLensGpu() {
                which == 0 ? "ptlens a moves the interior" : "ptlens c moves the interior",
                "delta " + std::to_string(double(out[mid]) - double(input[mid])));
     }
-    lens.distA = 0.0f;
-    lens.distC = 0.0f;
+    lens = ptl(0, 0, 0);
 
     // The higher vignetting terms, for the same reason: a manual control only
     // ever sets p_a, so p_b and p_c arrive with the first real profile.
-    lens.vignetteB = -0.3f;
+    lens = ptl(0, 0, 0, 0, -0.3f);
     run(out);
     report(std::abs(double(out[corner + 2]) - 0.5) > 1e-3,
            "the r^4 vignetting term reaches the corner",
            "corner " + std::to_string(double(out[corner + 2])));
-    lens.vignetteB = 0.0f;
-    lens.vignetteC = -0.3f;
+    lens = ptl(0, 0, 0, 0, 0, -0.3f);
     run(out);
     report(std::abs(double(out[corner + 2]) - 0.5) > 1e-3,
            "the r^6 vignetting term reaches the corner",
            "corner " + std::to_string(double(out[corner + 2])));
-    lens.vignetteC = 0.0f;
+    lens = ptl(0, 0, 0);
 
     // Vignetting divides, so a negative coefficient must *brighten* the corner
     // — that is the correction for a lens that darkens it. Getting the sign
     // backwards doubles the vignette instead of removing it, which looks
     // plausible enough to ship.
-    lens.vignetteA = -0.4f;
+    lens = ptl(0, 0, 0, -0.4f);
     run(out);
     const double cornerBlue = double(out[corner + 2]);
     const double centerBlue = double(out[center + 2]);
@@ -766,7 +766,7 @@ void testLensGpu() {
 
     // 1 + p_a·r² at r = 1 is 0.6, and 0.5 / 0.6 = 0.8333.
     checkNear(cornerBlue, 0.5 / 0.6, 0.02, "the vignette follows 1 + p_a·r²");
-    lens.vignetteA = 0.0f;
+    lens = ptl(0, 0, 0);
 
     // Chromatic aberration moves red and blue against green. Green is the
     // reference and must not move at all.
@@ -799,7 +799,7 @@ void testLensGpu() {
     //
     // R still carries the source x, so a smear is directly readable: two output
     // columns that came from the same place report the same number.
-    lens.distB = -0.3f;
+    lens = ptl(0, -0.3f, 0);
     lens.scale = 0.0f;   // the shader reads 0 as 1 — i.e. the old behavior
     run(out);
 
