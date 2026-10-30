@@ -100,8 +100,9 @@ static partial class SelfTest {
             foreach (var tab in Panels.Tabs) {
                 window.Select(tab);
                 window.UpdateLayout();
-                if (width == Layout.ToolCol)
-                    narrowest = Math.Min(narrowest, tabs.Min(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width));
+                if (width == Layout.ToolCol)   // the icon-only cells: the chosen one sizes itself to its name
+                    narrowest = Math.Min(narrowest, tabs.Where((b, i) => Panels.Tabs[i] != tab)
+                                                        .Min(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width));
                 cramped.AddRange(tabs.Where(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width < 15.5)
                                      .Select(b => $"{Spoken(b)} at {width} with {tab} chosen ({b.Bounds.Width:0.#} pt)"));
                 if (width == MainWindow.ToolColMax && tabs.Max(b => b.Bounds.Width) - tabs.Min(b => b.Bounds.Width) > 1)
@@ -110,7 +111,7 @@ static partial class SelfTest {
         }
         column.Width = new GridLength(Layout.ToolCol);
         // The measurement itself, so a reviewer can see how close 322 is without a failure to read it from.
-        Console.WriteLine($"selftest: tab fit at {Layout.ToolCol}: narrowest cell has {narrowest:0.0} pt beside its content (bar 15.5)");
+        Console.WriteLine($"selftest: tab fit at {Layout.ToolCol}: narrowest icon-only cell has {narrowest:0.0} pt beside its icon (bar 15.5)");
         Check(cramped.Count == 0, "the tabs fit 322 and 560 with room in every cell, and are equal at 560" + (cramped.Count > 0 ? ": " + string.Join("; ", cramped.Take(4)) : ""));
 
         // A click: the pill's first frame is exactly where the old tab's was, it lands under the new one, and it gets
