@@ -1,15 +1,14 @@
 // Lens corrections — distortion, transverse chromatic aberration, vignetting.
 //
-// One general warp that three published sources all fit (research/
+// One general warp that both published sources fit (research/
 // lens-corrections.md):
 //
 //     lensfun ptlens/poly3   f = (1 − a − b − c) + c·r + b·r² + a·r³
 //     DNG WarpRectilinear    f = kr0 + kr1·r² + kr2·r⁴ + kr3·r⁶, plus tangential
 //                            (Adobe DNG Specification 1.6, chapter 7, opcode 1)
-//     Adobe Camera Model     f = 1 + k1·r² + k2·r⁴ + k3·r⁶, plus tangential
 //
 //     source = c + f·(q − c) + norm·t,  d = (q − c) / norm
-//     vig:   V(r) = 1 + v1·r² + … + v5·r¹⁰, divided out (lensfun, Adobe) or
+//     vig:   V(r) = 1 + v1·r² + … + v5·r¹⁰, divided out (lensfun) or
 //            multiplied in (DNG FixVignetteRadial, opcode 3)
 //
 // Each source normalizes r its own way; pipe/LensGeometry.h `resolve` turns
@@ -121,7 +120,7 @@ void lensCorrect(uint3 tid : SV_DispatchThreadID,
     c.g = sampleClamped(src, sg - 0.5f, p.size).g;
     c.b = sampleClamped(src, sb - 0.5f, p.size).b;
 
-    // Vignetting. lensfun and Adobe measure it where the light fell — the
+    // Vignetting. lensfun measures it where the light fell — the
     // source position — and publish a falloff to divide out. A DNG
     // FixVignetteRadial publishes a gain to multiply, and lands on the output
     // position when it follows the warp in the opcode list.

@@ -51,7 +51,7 @@ static partial class DevelopFacade {
     }
 
     /// orion.h ORION_LENS_SOURCE_*: where a lens profile came from.
-    public enum LensSource { None = 0, Lensfun = 1, Adobe = 2, Dng = 3 }
+    public enum LensSource { None = 0, Lensfun = 1, Dng = 3 }
 
     /// Engine.refreshLensProfile: the matched profile, "" when none.
     /// ⚠ 204 bytes, the whole struct: the engine writes all of it, `source` included.

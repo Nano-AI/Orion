@@ -201,22 +201,13 @@ projects' `LICENSE` files, following each copyright notice above:
     OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## Lens corrections from DNG opcodes and Adobe lens profiles
+## Lens corrections from DNG opcodes
 
 Orion reads the lens correction a DNG file carries in its own opcode lists —
 `WarpRectilinear` (opcode 1) and `FixVignetteRadial` (opcode 3), implemented
 from Adobe's *Digital Negative (DNG) Specification* 1.6.0.0, chapter 7, under
-the DNG notice above.
-
-Orion also reads Adobe lens profiles (`.lcp`) that Adobe Camera Raw or
-Lightroom have already installed on the user's own machine. **No Adobe profile
-is bundled or redistributed.** The format is read from its published
-description (the Adobe Camera Model, as documented by Adobe and by the lensfun
-project's manual); no other program's LCP reader was used as a source. See
-`research/lens-corrections.md` and `planning/DECISIONS.md` #372 and #373.
-
-Adobe lens profiles are parsed with libxml2 (MIT licence), the copy the
-operating system provides; Orion does not ship it. See decision #374.
+the DNG notice above. See `research/lens-corrections.md` and
+`planning/DECISIONS.md` #372.
 
 ## JPEG XL
 

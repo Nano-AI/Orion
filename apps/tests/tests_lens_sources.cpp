@@ -1,23 +1,19 @@
-// Lens corrections from the two sources that are not lensfun: the DNG opcodes a
-// file carries (DJI drones, phones — issue #5) and an installed Adobe `.lcp`.
+// Lens corrections from the source that is not lensfun: the DNG opcodes a
+// file carries (DJI drones, phones — issue #5).
 //
 // Every expected value below is computed **from the published formula, written
 // out again here in double precision** — never through LensGeometry.h — so a
 // mistake in the shared geometry cannot agree with itself. The DNG warp is
-// DNG 1.6 chapter 7 as printed; the Adobe model is the form lensfun's manual
-// gives for LF_DIST_MODEL_ACM, which spells the tangential terms differently
-// from DNG and so also checks that the two are the same terms.
+// DNG 1.6 chapter 7 as printed.
 
 #include "harness.h"
 
 #include "Engine.h"
-#include "pipe/LensLcp.h"
 #include "pipe/LensOpcodes.h"
 #include "util/DngWriter.h"
 
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 
 namespace {
 
@@ -85,21 +81,6 @@ void dngWarp(const double k[6], double chx, double chy, double x, double y,
     const double yt = k[5] * (2 * dx * dy) + k[4] * (r2 + 2 * dy * dy);
     xs = cx + m * (f * dx + xt);
     ys = cy + m * (f * dy + yt);
-}
-
-/// The Adobe Camera Model as lensfun's manual writes LF_DIST_MODEL_ACM, with
-/// the LCP's normalization (fractions of the larger image dimension). Orion
-/// coordinates: pixel i is centered at i + ½.
-struct Acm { double fx, fy, cx, cy, k1, k2, k3, k4, k5; };
-void acmWarp(const Acm& a, double u, double v, double& us, double& vs) {
-    const double d = std::max(kW, kH);
-    const double x = (u - a.cx * d) / (a.fx * d), y = (v - a.cy * d) / (a.fy * d);
-    const double r2 = x * x + y * y;
-    const double radial = 1 + a.k1 * r2 + a.k2 * r2 * r2 + a.k3 * r2 * r2 * r2;
-    const double xd = x * radial + 2 * x * (a.k4 * y + a.k5 * x) + a.k5 * r2;
-    const double yd = y * radial + 2 * y * (a.k4 * y + a.k5 * x) + a.k4 * r2;
-    us = a.cx * d + a.fx * d * xd;
-    vs = a.cy * d + a.fy * d * yd;
 }
 
 // ── The GPU ─────────────────────────────────────────────────────────────────
@@ -179,103 +160,6 @@ double worstFetch(Gpu& g, const orion::pipe::params::Lens& p, F want) {
     }
     return worst;
 }
-
-const char* kLcpFixture = R"(<?xml version="1.0" encoding="UTF-8"?>
-<!-- Written by hand for orion-tests from the published format; not an Adobe profile. -->
-<x:xmpmeta xmlns:x="adobe:ns:meta/">
- <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-  <rdf:Description rdf:about=""
-    xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
-    xmlns:stCamera="http://ns.adobe.com/photoshop/1.0/camera-profile">
-   <photoshop:CameraProfiles>
-    <rdf:Seq>
-     <rdf:li>
-      <rdf:Description
-        stCamera:Author="orion-tests"
-        stCamera:Make="DJI"
-        stCamera:Model="FC8482"
-        stCamera:LensPrettyName="Fixture Drone Lens"
-        stCamera:CameraRawProfile="True"
-        stCamera:FocalLength="6.72"
-        stCamera:FocusDistance="1000"
-        stCamera:ApertureValue="1.531">
-       <stCamera:PerspectiveModel>
-        <rdf:Description
-          stCamera:Version="2"
-          stCamera:FocalLengthX="0.72"
-          stCamera:FocalLengthY="0.72"
-          stCamera:ImageXCenter="0.51"
-          stCamera:ImageYCenter="0.36"
-          stCamera:RadialDistortParam1="-0.08"
-          stCamera:RadialDistortParam2="0.02"
-          stCamera:RadialDistortParam3="-0.004"
-          stCamera:TangentialDistortParam1="0.0015"
-          stCamera:TangentialDistortParam2="-0.001">
-         <stCamera:VignetteModel
-           stCamera:FocalLengthX="0.74"
-           stCamera:FocalLengthY="0.74"
-           stCamera:VignetteModelParam1="-0.3"
-           stCamera:VignetteModelParam2="0.05"
-           stCamera:VignetteModelParam3="-0.01"/>
-        </rdf:Description>
-       </stCamera:PerspectiveModel>
-      </rdf:Description>
-     </rdf:li>
-     <rdf:li rdf:parseType="Resource">
-      <stCamera:Make>DJI</stCamera:Make>
-      <stCamera:Model>FC8482</stCamera:Model>
-      <stCamera:LensPrettyName>Fixture Drone Lens</stCamera:LensPrettyName>
-      <stCamera:CameraRawProfile>True</stCamera:CameraRawProfile>
-      <stCamera:FocalLength>8.0</stCamera:FocalLength>
-      <stCamera:FocusDistance>1000</stCamera:FocusDistance>
-      <stCamera:ApertureValue>1.531</stCamera:ApertureValue>
-      <stCamera:PerspectiveModel rdf:parseType="Resource">
-       <stCamera:FocalLengthX>0.88</stCamera:FocalLengthX>
-       <stCamera:FocalLengthY>0.88</stCamera:FocalLengthY>
-       <stCamera:ImageXCenter>0.51</stCamera:ImageXCenter>
-       <stCamera:ImageYCenter>0.36</stCamera:ImageYCenter>
-       <stCamera:RadialDistortParam1>-0.04</stCamera:RadialDistortParam1>
-       <stCamera:RadialDistortParam2>0.01</stCamera:RadialDistortParam2>
-       <stCamera:RadialDistortParam3>0</stCamera:RadialDistortParam3>
-       <stCamera:VignetteModel rdf:parseType="Resource">
-        <stCamera:VignetteModelParam1>-0.2</stCamera:VignetteModelParam1>
-       </stCamera:VignetteModel>
-      </stCamera:PerspectiveModel>
-     </rdf:li>
-     <rdf:li>
-      <rdf:Description stCamera:Make="DJI" stCamera:Model="FC8482"
-        stCamera:CameraRawProfile="False" stCamera:FocalLength="6.72">
-       <stCamera:PerspectiveModel>
-        <rdf:Description stCamera:FocalLengthX="0.72" stCamera:RadialDistortParam1="0.9"/>
-       </stCamera:PerspectiveModel>
-      </rdf:Description>
-     </rdf:li>
-    </rdf:Seq>
-   </photoshop:CameraProfiles>
-  </rdf:Description>
- </rdf:RDF>
-</x:xmpmeta>
-)";
-
-/// A minimal element-form profile: one sub-profile at 50 mm.
-std::string lcpFile(const char* make, const char* model, const char* lens, double k1) {
-    return std::string(R"(<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF
- xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about=""
- xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
- xmlns:stCamera="http://ns.adobe.com/photoshop/1.0/camera-profile">
-<photoshop:CameraProfiles><rdf:Seq><rdf:li rdf:parseType="Resource">
-<stCamera:Make>)") + make + "</stCamera:Make><stCamera:Model>" + model +
-           "</stCamera:Model><stCamera:Lens>" + lens + R"(</stCamera:Lens>
-<stCamera:FocalLength>50</stCamera:FocalLength>
-<stCamera:PerspectiveModel rdf:parseType="Resource">
-<stCamera:FocalLengthX>1.39</stCamera:FocalLengthX>
-<stCamera:RadialDistortParam1>)" + std::to_string(k1) + R"(</stCamera:RadialDistortParam1>
-</stCamera:PerspectiveModel></rdf:li></rdf:Seq></photoshop:CameraProfiles>
-</rdf:Description></rdf:RDF></x:xmpmeta>
-)";
-}
-
-const Acm kFixture672{0.72, 0.72, 0.51, 0.36, -0.08, 0.02, -0.004, 0.0015, -0.001};
 
 }  // namespace
 
@@ -375,111 +259,16 @@ void testDngLensOpcodes() {
            "worst " + std::to_string(worstGain));
 }
 
-void testAdobeLensProfile() {
-    section("Lens correction from an Adobe .lcp profile");
-
-    using orion::pipe::AdobeLensProfiles;
-
-    // Bodies as LibRaw spells them against bodies as an LCP spells them.
-    const auto key = &AdobeLensProfiles::bodyKey;
-    report(key("Canon", "EOS 5D Mark IV") == key("Canon", "Canon EOS 5D Mark IV"),
-           "Canon: an LCP model that repeats the make is the same body");
-    report(key("Nikon", "D850") == key("NIKON CORPORATION", "NIKON D850"),
-           "Nikon: a corporate make and a repeated brand are the same body");
-    report(key("Sony", "ILCE-7RM3") == key("SONY", "ILCE-7RM3"), "Sony: case does not matter");
-    report(key("DJI", "FC8482") == key("DJI", "FC8482"), "DJI: identical names match");
-    report(key("Canon", "EOS R5") != key("Canon", "Canon EOS R6") &&
-           key("Nikon", "D850") != key("SONY", "D850"),
-           "different models, or one model name under two makes, do not");
-
-    const auto root = std::filesystem::temp_directory_path() / "orion-lcp-fixture";
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "DJI");
-    std::filesystem::create_directories(root / "Canon");
-    { std::ofstream(root / "DJI" / "fixture.LCP") << kLcpFixture; }
-    { std::ofstream(root / "Canon" / "a.lcp") << lcpFile("Canon", "Canon EOS R5", "RF24-70mm F2.8 L IS USM", -0.11); }
-    { std::ofstream(root / "Canon" / "b.lcp") << lcpFile("Canon", "Canon EOS R5", "RF50mm F1.2 L USM", -0.02); }
-    { std::ofstream(root / "Canon" / "broken.lcp") << "<x:xmpmeta><rdf:RDF><rdf:Description"; }
-    AdobeLensProfiles lcp({root.string(), "/nonexistent/orion"});
-    lcp.waitUntilReady();
-    report(lcp.ready(), "the background index finishes over nested, mixed-case and broken files");
-
-    const auto at = lcp.lookup("DJI", "FC8482", "", 6.72f, 1.7f);
-    report(at.found && at.source == orion::pipe::LensSource::AdobeLcp,
-           "the body matches and the source says Adobe");
-    report(at.lens == "Fixture Drone Lens", "the interface is given LensPrettyName", at.lens);
-    checkNear(at.model.radial[1][2], -0.08, 1e-6, "k1 at the calibrated focal length, not the JPEG profile's");
-    checkNear(at.model.tangential[0][1], -0.001, 1e-6, "k5 is DNG's kt1");
-    checkNear(at.model.center[1], 0.36, 1e-6, "ImageYCenter is a fraction of the larger dimension");
-    checkNear(at.model.vig[2], -0.01, 1e-6, "the vignette model's third parameter, from a self-closed element");
-    checkNear(at.model.focal[0], 0.72, 1e-6, "the vignette model's own FocalLengthX is not read as the camera's");
-    checkNear(at.model.vigFocal[0], 0.74, 1e-6, "and the vignette keeps its own");
-
-    const auto mid = lcp.lookup("DJI", "FC8482", "", 7.36f, 1.7f);
-    checkNear(mid.model.focal[0], 0.80, 1e-5, "halfway in focal length is halfway between calibrations");
-    checkNear(mid.model.vig[0], -0.25, 1e-5, "and so is the vignette, element form included");
-
-    report(!lcp.lookup("Sony", "ILCE-7RM3", "", 6.72f, 1.7f).found, "another body is not matched");
-    report(lcp.lookup("DJI", "FC8482", "Some Other Lens 50mm", 6.72f, 1.7f).found,
-           "a profile with no lens name still matches a fixed-lens body that records one");
-
-    // A body with two lenses in two files, and a photo that names no lens.
-    report(!lcp.lookup("Canon", "EOS R5", "", 50.0f, 1.2f).found,
-           "no lens name and two lenses for the body: no Adobe profile, not the first file");
-    const auto rf50 = lcp.lookup("Canon", "EOS R5", "RF50mm F1.2 L USM", 50.0f, 1.2f);
-    checkNear(rf50.found ? rf50.model.radial[1][2] : 0.0, -0.02, 1e-6,
-              "the named lens picks its own file, the second in sorted order");
-    // ── It applies: the kernel's fetch is the Adobe Camera Model ────────
-    Gpu g = makeGpu();
-    if (!g.ok()) return;
-    auto geometryOnly = at.model;
-    std::fill(std::begin(geometryOnly.vig), std::end(geometryOnly.vig), 0.0f);
-    const double worst = worstFetch(g, lens::resolve(geometryOnly, kW, kH),
-                                    [&](int, double x, double y, double& sx, double& sy) {
-        acmWarp(kFixture672, x + 0.5, y + 0.5, sx, sy);
-        sx -= 0.5;
-        sy -= 0.5;
-    });
-    report(worst < 0.15, "the LCP perspective model on the GPU matches the Adobe Camera Model",
-           "worst " + std::to_string(worst) + " px");
-
-    // Vignetting is divided out where the light fell: at the source position,
-    // normalized by the vignette model's own focal length.
-    const auto p = lens::resolve(at.model, kW, kH);
-    std::vector<__fp16> flat(std::size_t(kW) * kH * 4, __fp16(0.25));
-    const auto out = g.run(p, flat);
-    double worstVig = 0.0;
-    for (const auto& [x, y] : {std::pair{0u, 0u}, {kW - 1, kH - 1}, {200u, 30u}}) {
-        double us = 0, vs = 0;
-        acmWarp(kFixture672, x + 0.5, y + 0.5, us, vs);
-        const double d = std::max(kW, kH);
-        const double vx = (us - 0.51 * d) / (0.74 * d), vy = (vs - 0.36 * d) / (0.74 * d);
-        const double r2 = vx * vx + vy * vy;
-        const double falloff = 1 - 0.3 * r2 + 0.05 * r2 * r2 - 0.01 * r2 * r2 * r2;
-        worstVig = std::max(worstVig,
-                            std::abs(double(out[(std::size_t(y) * kW + x) * 4 + 1]) - 0.25 / falloff));
-    }
-    report(worstVig < 2e-3, "the LCP vignette is divided out at the source position",
-           "worst " + std::to_string(worstVig));
-    std::filesystem::remove_all(root);
-}
-
 void testLensInverseMap() {
     section("Lens geometry: the inverse map undoes the forward map");
 
     const double outward[1][6] = {{1.02, 0.05, -0.01, 0.002, 0.001, -0.0007}};
     std::vector<std::uint8_t> lists[3];
     lists[2] = opList({warpOp(1, outward, 0.45, 0.55)});
-    const auto root = std::filesystem::temp_directory_path() / "orion-lcp-inverse";
-    std::filesystem::create_directories(root);
-    { std::ofstream(root / "fixture.lcp") << kLcpFixture; }
-    orion::pipe::AdobeLensProfiles lcp({root.string()});
-    lcp.waitUntilReady();
 
     struct Case { const char* name; LensModel model; float ca; };
     const Case cases[] = {
         {"DNG", orion::pipe::parseDngLensOpcodes(lists).model, 0.0f},
-        {"Adobe", lcp.lookup("DJI", "FC8482", "", 6.72f, 1.7f).model, 0.0f},
         {"lensfun with manual fringing", lens::ptlens(0.01f, -0.2f, 0.02f), 0.002f},
     };
     for (const auto& c : cases) {
@@ -501,7 +290,6 @@ void testLensInverseMap() {
                std::string(c.name) + ": outputPoint(fetchPoint(q)) is q on a 24 MP frame",
                "worst " + std::to_string(worst) + " px, scale " + std::to_string(p.scale));
     }
-    std::filesystem::remove_all(root);
 }
 
 void testDngLensOpcodesThroughLibRaw() {
@@ -581,7 +369,7 @@ void testLensSourceOnRealSony() {
         const orion::pipe::LensDatabase db(std::string(ORION_DATA_DIR) + "/lensfun");
         const auto want = db.lookup(info.lens, info.focalLength, info.aperture);
         const auto& got = engine.lensProfile();
-        // No Adobe folders on this machine, so the answer is lensfun's, found or not.
+        // No opcodes in an ARW, so the answer is lensfun's, found or not.
         report(got.found == want.found && got.lens == want.lens &&
                got.source == (want.found ? orion::pipe::LensSource::Lensfun : orion::pipe::LensSource::None),
                "the engine's profile is the lensfun database's own answer",

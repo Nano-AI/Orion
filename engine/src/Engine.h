@@ -15,7 +15,6 @@
 
 namespace orion {
 
-namespace pipe { class AdobeLensProfiles; }
 
 /// The engine proper. C++ with exceptions, RAII, the lot — all of which stops
 /// at the C facade in CApi.cpp.
@@ -296,10 +295,8 @@ private:
     /// One copy for the process. Five megabytes of XML, parsed once — a
     /// per-photo parse would put a tenth of a second in front of every open.
     static const pipe::LensDatabase& lensDatabase();
-    /// The Adobe `.lcp` profiles already installed on this machine, if any.
-    static const pipe::AdobeLensProfiles& adobeProfiles();
     /// The profile the open file gets without a hand choice: DNG opcodes,
-    /// then Adobe, then lensfun.
+    /// then lensfun.
     [[nodiscard]] pipe::LensProfile automaticLensProfile() const;
     pipe::LensProfile                      lensProfile_;
 };

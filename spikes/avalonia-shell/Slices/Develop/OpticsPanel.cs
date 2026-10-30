@@ -50,9 +50,6 @@ public sealed class OpticsPanel : StackPanel {
             rows.Add(Develop.Note(source == DevelopFacade.LensSource.Dng
                 ? "The camera's own correction, written into this DNG. It takes precedence over any profile. " +
                   "The two sliders below are what you would use instead."
-                : source == DevelopFacade.LensSource.Adobe
-                ? "From an Adobe lens profile installed on this Mac, at this focal length. " +
-                  "The two sliders below are what you would use instead."
                 : approximate
                 ? "Measured for a lens the database spells differently, so this is the nearest match rather than your " +
                   "exact copy. Turn it off to correct by hand."

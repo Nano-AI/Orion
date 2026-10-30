@@ -239,7 +239,7 @@ final class Engine {
     var lensProfileName = ""
     var lensProfileApproximate = false
     /// Where the profile came from: ORION_LENS_SOURCE_DNG (the file's own
-    /// opcodes), _ADOBE (an installed .lcp), _LENSFUN, or _NONE.
+    /// opcodes), _LENSFUN, or _NONE.
     var lensProfileSource: Int32 = 0
     var hasLensProfile: Bool { !lensProfileName.isEmpty }
     var lensCaRed: Float = 0      { didSet { pushAndRender() } }

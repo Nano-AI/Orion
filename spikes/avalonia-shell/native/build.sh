@@ -21,7 +21,7 @@ python3 "$here/gen_fields.py" "$root/engine/include/orion/orion.h" "$out/fields.
 clang++ -std=c++20 -fobjc-arc -dynamiclib -O2 \
     -I"$root/engine/include" -I"$out" \
     "$here/shim.mm" "$here/present.mm" "$here/matte.mm" -Wl,-force_load,"$engine" \
-    /opt/homebrew/opt/libraw/lib/libraw_r.dylib -lxml2 \
+    /opt/homebrew/opt/libraw/lib/libraw_r.dylib \
     /opt/homebrew/opt/opencv/lib/libopencv_{core,imgproc,features,geometry,video}.dylib \
     /opt/homebrew/opt/jpeg-xl/lib/libjxl{,_threads}.dylib "${dawn[@]}" \
     -framework AppKit -framework Metal -framework Foundation -framework CoreGraphics -framework ImageIO \

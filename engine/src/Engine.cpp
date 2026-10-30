@@ -1,7 +1,6 @@
 #include "Engine.h"
 
 #include "pipe/AutoEnhance.h"
-#include "pipe/LensLcp.h"
 #include "pipe/LensGeometry.h"
 #include "pipe/LensOpcodes.h"
 #include "ResourcePaths.h"
@@ -19,9 +18,6 @@ Engine::Engine() : device_(gpu::Device::create()) {
     // Eager, so hdrMergeProgress/hdrMergeCancel from another thread never
     // race a lazy construction inside run().
     hdrMerge_ = std::make_unique<merge::HdrMerge>(*device_, res::shaderDir());
-    // Start indexing installed Adobe lens profiles now, off this thread, so
-    // the index is usually ready by the time a photograph is opened.
-    (void)adobeProfiles();
 }
 
 Engine::~Engine() = default;
@@ -34,16 +30,10 @@ const pipe::LensDatabase& Engine::lensDatabase() {
     return db;
 }
 
-const pipe::AdobeLensProfiles& Engine::adobeProfiles() {
-    // Read from the user's own Adobe folders and never bundled. Constructing
-    // it only starts the background index; see LensLcp.h.
-    static const pipe::AdobeLensProfiles profiles(pipe::AdobeLensProfiles::defaultDirectories());
-    return profiles;
-}
-
 pipe::LensProfile Engine::automaticLensProfile() const {
-    // Precedence: the file's own DNG opcodes, then an installed Adobe
-    // profile, then lensfun. The opcodes are the manufacturer's correction for
+    // Precedence: the file's own DNG opcodes, then lensfun (#372-#374; Adobe
+    // .lcp support was withdrawn pending a patent decision, branch
+    // lcp-adobe-profiles). The opcodes are the manufacturer's correction for
     // this exact frame, written knowing its focal length and crop, so nothing
     // measured elsewhere outranks them.
     const auto dng = pipe::parseDngLensOpcodes(info_.dngOpcodes);
@@ -57,11 +47,6 @@ pipe::LensProfile Engine::automaticLensProfile() const {
                              : "Embedded in the file (vignetting)";
         return p;
     }
-    // Nothing found while the profile index is still being built in the
-    // background: this photo gets lensfun rather than waiting for it.
-    auto lcp = adobeProfiles().lookup(info_.make, info_.model, info_.lens,
-                                      info_.focalLength, info_.aperture);
-    if (lcp.found) return lcp;
     return lensDatabase().lookup(info_.lens, info_.focalLength, info_.aperture);
 }
 

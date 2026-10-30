@@ -784,14 +784,13 @@ void orion_export_snapshot_free(OrionExportSnapshot* snapshot);
  * interface can say so rather than implying a measurement of this exact copy.
  *
  * `source` says where the correction came from, in order of precedence:
- * ORION_LENS_SOURCE_DNG (the file's own DNG opcodes), ORION_LENS_SOURCE_ADOBE
- * (an Adobe .lcp profile installed on this machine), ORION_LENS_SOURCE_LENSFUN
+ * ORION_LENS_SOURCE_DNG (the file's own DNG opcodes), ORION_LENS_SOURCE_LENSFUN
  * (the bundled database, or a lens chosen by hand). Zero when nothing found.
+ * 2 is unused: it was an Adobe .lcp profile, withdrawn (#372).
  * Appended last so the earlier fields keep their offsets. */
 enum {
     ORION_LENS_SOURCE_NONE    = 0,
     ORION_LENS_SOURCE_LENSFUN = 1,
-    ORION_LENS_SOURCE_ADOBE   = 2,
     ORION_LENS_SOURCE_DNG     = 3
 };
 

@@ -675,7 +675,7 @@ bool DevelopPipeline::regionSupports(const Adjustments& a) {
     // ⚠ A deny-list: a new field is allowed until someone says otherwise, so
     // the size check makes them say. Decide whether it knows its position or
     // reads past the halo, refuse it here if so, then update the number.
-    static_assert(sizeof(Adjustments) == 3480, "classify the new Adjustments field for regions");
+    static_assert(sizeof(Adjustments) == 3464, "classify the new Adjustments field for regions");
     return !a.cropPreview && a.maskCount == 0 && a.spotCount == 0 &&
            a.grainAmount <= 0.0f && a.vignetteAmount == 0.0f &&
            a.dehaze == 0.0f && a.clarity == 0.0f && a.fusion == 0.0f &&

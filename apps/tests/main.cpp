@@ -56,7 +56,6 @@ int main() {
     testGradeOffsets();
     testLensGpu();
     testDngLensOpcodes();
-    testAdobeLensProfile();
     testLensInverseMap();
     testDngLensOpcodesThroughLibRaw();
     testLensSourceOnRealSony();

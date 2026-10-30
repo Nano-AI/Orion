@@ -219,8 +219,6 @@ add_custom_command(
             ${LIBRAW_LIBRARY}
             # OpenCV, for the HDR-merge aligner (engine/src/merge/Align.cpp).
             ${OPENCV_LIBRARIES}
-            # libxml2, for Adobe lens profiles; the system copy.
-            -lxml2
             # libjxl, for JPEG XL export (engine/src/util/JxlWriter.cpp).
             ${JXL_LIBRARIES}
             # Dawn, the engine's second GPU backend (#375); empty without it.

@@ -40,15 +40,11 @@ extension Editor {
                 .tint(Palette.accent)
 
                 // Which source answered is the first thing to know about a
-                // correction: the camera's own, Adobe's, or lensfun's (#5).
+                // correction: the camera's own or lensfun's (#5).
                 Text(engine.lensProfileSource == Int32(ORION_LENS_SOURCE_DNG)
                      ? "The camera's own correction, written into this DNG. "
                        + "It takes precedence over any profile. The two sliders "
                        + "below are what you would use instead."
-                     : engine.lensProfileSource == Int32(ORION_LENS_SOURCE_ADOBE)
-                     ? "From an Adobe lens profile installed on this Mac, at this "
-                       + "focal length. The two sliders below are what you would "
-                       + "use instead."
                      : engine.lensProfileApproximate
                      ? "Measured for a lens the database spells differently, so "
                        + "this is the nearest match rather than your exact copy. "

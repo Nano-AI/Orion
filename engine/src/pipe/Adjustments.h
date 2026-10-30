@@ -201,8 +201,7 @@ struct Adjustments {
     float lensCaBlue     = 0.0f;   // -1..1
 
     /// A measured profile, in place of the distortion and vignetting sliders:
-    /// from the file's own DNG opcodes, an installed Adobe profile, or the
-    /// lensfun database, at this frame's focal length and aperture.
+    /// from the file's own DNG opcodes or the lensfun database, at this frame's focal length and aperture.
     /// Resolution-independent — see pipe/LensGeometry.h.
     bool      lensProfile = false;
     LensModel lensModel{};

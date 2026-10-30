@@ -2,13 +2,11 @@
 
 /*  Lens correction geometry — the one place it lives.
  *
- *  Three sources describe a lens correction, in three coordinate systems:
+ *  Two sources describe a lens correction, in two coordinate systems:
  *
  *    lensfun   ptlens/poly3, r normalized by half the frame diagonal
  *    DNG       WarpRectilinear / FixVignetteRadial (DNG 1.6 ch. 7), r by the
  *              distance from the optical center to the farthest pixel
- *    Adobe LCP the Adobe Camera Model, r in units of the focal length, which
- *              the file stores as a fraction of the larger image dimension
  *
  *  `LensModel` holds any of them **without pixels**: the full-resolution graph
  *  and the decimated preview graph receive the same `Adjustments` and must
@@ -33,37 +31,34 @@ namespace orion::pipe {
 enum class LensNorm : std::uint32_t {
     HalfDiagonal  = 0,   // lensfun: ½·√(w² + h²), center = ĉ·size
     FarthestPixel = 1,   // DNG: distance from the center to the farthest pixel
-    MaxDimension  = 2,   // Adobe: focal × max(w, h), center = ĉ·max(w, h)
 };
 
-/// Where a correction came from. Precedence is DNG, then LCP, then lensfun;
-/// a lens the photographer picked by hand is lensfun and overrides all three.
-enum class LensSource : std::int32_t { None = 0, Lensfun = 1, AdobeLcp = 2, DngOpcode = 3 };
+/// Where a correction came from. Precedence is DNG, then lensfun; a lens the
+/// photographer picked by hand is lensfun and overrides both. 2 was an Adobe
+/// .lcp profile, withdrawn (branch lcp-adobe-profiles) and kept unused.
+enum class LensSource : std::int32_t { None = 0, Lensfun = 1, DngOpcode = 3 };
 
 /// A lens correction, resolution-independent.
 ///
 /// The warp maps an **output** position to the **source** position it reads —
-/// the direction all three published models are written in.
+/// the direction both published models are written in.
 ///
 ///     d = (q − c) / norm,  r² = |d|²
 ///     f = k0 + k1·r + k2·r² + k3·r³ + k4·r⁴ + k6·r⁶
 ///     t = ( t0·2dxdy + t1·(r² + 2dx²),  t1·2dxdy + t0·(r² + 2dy²) )
 ///     source = c + f·(q − c) + norm·t      (= c + norm·(f·d + t))
 ///
-/// ptlens fills k0..k3; DNG and Adobe fill k0, k2, k4, k6 and the tangential
-/// pair (Adobe's k4, k5 are DNG's kt0, kt1 — the same Brown–Conrady terms).
+/// ptlens fills k0..k3; DNG fills k0, k2, k4, k6 and the tangential pair.
 struct LensModel {
     LensNorm norm = LensNorm::HalfDiagonal;
     float center[2]{0.5f, 0.5f};
-    float focal[2]{1.0f, 1.0f};          // MaxDimension only
     float radial[3][6]{{1.0f}, {1.0f}, {1.0f}};   // per channel R, G, B
     float tangential[3][2]{};
 
-    /// V(r) = 1 + v1·r² + v2·r⁴ + v3·r⁶ + v4·r⁸ + v5·r¹⁰. lensfun and Adobe
-    /// publish a falloff (divide); DNG publishes a gain (multiply).
+    /// V(r) = 1 + v1·r² + v2·r⁴ + v3·r⁶ + v4·r⁸ + v5·r¹⁰. lensfun
+    /// publishes a falloff (divide); DNG publishes a gain (multiply).
     LensNorm vigNorm = LensNorm::HalfDiagonal;
     float vigCenter[2]{0.5f, 0.5f};
-    float vigFocal[2]{1.0f, 1.0f};
     float vig[5]{};
     bool  vigGain = false;
     /// Evaluated where the light fell (the source position) unless a DNG
@@ -94,7 +89,7 @@ inline LensModel ptlens(float a, float b, float c, float k1 = 0.0f, float k2 = 0
 
 namespace detail {
 /// Center and per-axis norm in pixels for one normalization convention.
-inline void place(LensNorm kind, const float c[2], const float focal[2],
+inline void place(LensNorm kind, const float c[2],
                   float w, float h, float outCenter[2], float outNorm[2]) {
     switch (kind) {
         case LensNorm::FarthestPixel: {
@@ -106,14 +101,6 @@ inline void place(LensNorm kind, const float c[2], const float focal[2],
             outCenter[0] = cx + 0.5f;
             outCenter[1] = cy + 0.5f;
             outNorm[0] = outNorm[1] = std::max(std::sqrt(mx * mx + my * my), 1.0f);
-            return;
-        }
-        case LensNorm::MaxDimension: {
-            const float d = std::max(w, h);
-            outCenter[0] = c[0] * d;
-            outCenter[1] = c[1] * d;
-            outNorm[0] = std::max(focal[0] * d, 1.0f);
-            outNorm[1] = std::max(focal[1] * d, 1.0f);
             return;
         }
         case LensNorm::HalfDiagonal:
@@ -133,8 +120,8 @@ inline params::Lens resolve(const LensModel& m, std::uint32_t width, std::uint32
     params::Lens p{};
     p.size[0] = width;
     p.size[1] = height;
-    detail::place(m.norm, m.center, m.focal, w, h, p.center, p.norm);
-    detail::place(m.vigNorm, m.vigCenter, m.vigFocal, w, h, p.vigCenter, p.vigNorm);
+    detail::place(m.norm, m.center, w, h, p.center, p.norm);
+    detail::place(m.vigNorm, m.vigCenter, w, h, p.vigCenter, p.vigNorm);
     for (int ch = 0; ch < 3; ++ch) {
         for (int i = 0; i < 4; ++i) p.radialLo[ch][i] = m.radial[ch][i];
         p.radialHi[ch][0] = m.radial[ch][4];
@@ -231,7 +218,7 @@ inline bool outputPoint(const params::Lens& p, int ch, float fx, float fy, float
 /// 3:2 frame, where a negative k₁ reaches past the border. At the shipped
 /// maximum that was 325 px past a 6024 px frame on `_PIC8148.ARW`, and the
 /// sampler's clamp turned it into a band of one column smeared sideways. The
-/// same is true of every DNG and Adobe warp, which pin nothing at all.
+/// same is true of every DNG warp, which pin nothing at all.
 ///
 /// **What it does.** Bisects for the zoom at which the outermost fetch lands
 /// exactly on the frame edge — what lensfun's `lf_modifier_get_auto_scale`,

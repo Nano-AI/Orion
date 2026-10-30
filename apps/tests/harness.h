@@ -157,7 +157,6 @@ void testLinearizeClipsToWhite();
 void testGradeOffsets();
 void testLensGpu();
 void testDngLensOpcodes();
-void testAdobeLensProfile();
 void testLensInverseMap();
 void testDngLensOpcodesThroughLibRaw();
 void testLensSourceOnRealSony();
