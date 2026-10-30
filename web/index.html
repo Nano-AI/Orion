@@ -39,16 +39,26 @@
 </script>
 </head>
 <body>
+<!-- The app's own icons (shell/Shared/Icons.cs): one 24 grid, one 1.6 stroke. -->
 <svg class="sprite" aria-hidden="true" focusable="false">
-  <symbol id="i-tone" viewBox="0 0 256 256"><path d="M40,86H74.6a30,30,0,0,0,58.8,0H216a6,6,0,0,0,0-12H133.4a30,30,0,0,0-58.8,0H40a6,6,0,0,0,0,12Zm64-24A18,18,0,1,1,86,80,18,18,0,0,1,104,62ZM216,170H197.4a30,30,0,0,0-58.8,0H40a6,6,0,0,0,0,12h98.6a30,30,0,0,0,58.8,0H216a6,6,0,0,0,0-12Zm-48,24a18,18,0,1,1,18-18A18,18,0,0,1,168,194Z"/></symbol>
-  <symbol id="i-repair" viewBox="0 0 256 256"><path d="M181.74,128l29.13-29.13a38,38,0,1,0-53.74-53.74L128,74.26,98.87,45.13A38,38,0,1,0,45.13,98.87L74.26,128,45.13,157.13a38,38,0,1,0,53.74,53.74L128,181.74l29.13,29.13a38,38,0,1,0,53.74-53.74ZM165.62,53.62h0a26,26,0,1,1,36.76,36.77l-29.13,29.13L136.49,82.75ZM164.77,128,128,164.77,91.23,128,128,91.23ZM53.62,90.38A26,26,0,1,1,90.38,53.62l29.13,29.13L82.75,119.52Zm36.76,112a26,26,0,1,1-36.76-36.76l29.13-29.13,36.76,36.76Zm112,0a26,26,0,0,1-36.76,0l-29.14-29.13,36.77-36.77,29.13,29.14a26,26,0,0,1,0,36.76ZM118,128a10,10,0,1,1,10,10A10,10,0,0,1,118,128Z"/></symbol>
-  <symbol id="i-geo" viewBox="0 0 256 256"><path d="M238,192a6,6,0,0,1-6,6H198v34a6,6,0,0,1-12,0V198H64a6,6,0,0,1-6-6V70H24a6,6,0,0,1,0-12H58V24a6,6,0,0,1,12,0V186H232A6,6,0,0,1,238,192ZM96,70h90v90a6,6,0,0,0,12,0V64a6,6,0,0,0-6-6H96a6,6,0,0,0,0,12Z"/></symbol>
-  <symbol id="i-mask" viewBox="0 0 256 256"><path d="M62,216a6,6,0,0,1-6,6H48a14,14,0,0,1-14-14v-8a6,6,0,0,1,12,0v8a2,2,0,0,0,2,2h8A6,6,0,0,1,62,216Zm50-6H96a6,6,0,0,0,0,12h16a6,6,0,0,0,0-12ZM40,166a6,6,0,0,0,6-6V144a6,6,0,0,0-12,0v16A6,6,0,0,0,40,166Zm128,28a6,6,0,0,0-6,6v8a2,2,0,0,1-2,2h-8a6,6,0,0,0,0,12h8a14,14,0,0,0,14-14v-8A6,6,0,0,0,168,194Zm0-84a6,6,0,0,0,6-6V96a14,14,0,0,0-14-14h-8a6,6,0,0,0,0,12h8a2,2,0,0,1,2,2v8A6,6,0,0,0,168,110ZM56,82H48A14,14,0,0,0,34,96v8a6,6,0,0,0,12,0V96a2,2,0,0,1,2-2h8a6,6,0,0,0,0-12ZM208,34H96A14,14,0,0,0,82,48V88h0a6,6,0,0,0,6,6h24a6,6,0,0,0,0-12H94V48a2,2,0,0,1,2-2H208a2,2,0,0,1,2,2V160a2,2,0,0,1-2,2H174V144a6,6,0,0,0-12,0v24a6,6,0,0,0,6,6h40a14,14,0,0,0,14-14V48A14,14,0,0,0,208,34Z"/></symbol>
-  <symbol id="i-lib" viewBox="0 0 256 256"><path d="M216,42H72A14,14,0,0,0,58,56V74H40A14,14,0,0,0,26,88V200a14,14,0,0,0,14,14H184a14,14,0,0,0,14-14V182h18a14,14,0,0,0,14-14V56A14,14,0,0,0,216,42ZM70,56a2,2,0,0,1,2-2H216a2,2,0,0,1,2,2v67.57L204.53,110.1a14,14,0,0,0-19.8,0l-21.42,21.41L117.9,86.1a14,14,0,0,0-19.8,0L70,114.2ZM186,200a2,2,0,0,1-2,2H40a2,2,0,0,1-2-2V88a2,2,0,0,1,2-2H58v82a14,14,0,0,0,14,14H186Zm30-30H72a2,2,0,0,1-2-2V131.17l36.58-36.58a2,2,0,0,1,2.83,0l49.66,49.66a6,6,0,0,0,8.49,0l25.65-25.66a2,2,0,0,1,2.83,0l22,22V168A2,2,0,0,1,216,170ZM162,84a10,10,0,1,1,10,10A10,10,0,0,1,162,84Z"/></symbol>
-  <symbol id="i-export" viewBox="0 0 256 256"><path d="M214,112v96a14,14,0,0,1-14,14H56a14,14,0,0,1-14-14V112A14,14,0,0,1,56,98H80a6,6,0,0,1,0,12H56a2,2,0,0,0-2,2v96a2,2,0,0,0,2,2H200a2,2,0,0,0,2-2V112a2,2,0,0,0-2-2H176a6,6,0,0,1,0-12h24A14,14,0,0,1,214,112ZM92.24,68.24,122,38.49V136a6,6,0,0,0,12,0V38.49l29.76,29.75a6,6,0,1,0,8.48-8.48l-40-40a6,6,0,0,0-8.48,0l-40,40a6,6,0,1,0,8.48,8.48Z"/></symbol>
-  <symbol id="i-later" viewBox="0 0 256 256"><path d="M198,75.64V40a14,14,0,0,0-14-14H72A14,14,0,0,0,58,40V76a14.06,14.06,0,0,0,5.6,11.2L118,128,63.6,168.8A14.06,14.06,0,0,0,58,180v36a14,14,0,0,0,14,14H184a14,14,0,0,0,14-14V180.36a14.08,14.08,0,0,0-5.56-11.17L138,128l54.49-41.19A14.08,14.08,0,0,0,198,75.64ZM70,40a2,2,0,0,1,2-2H184a2,2,0,0,1,2,2V75.64a2,2,0,0,1-.79,1.6L178.9,82H76.67L70.8,77.6A2,2,0,0,1,70,76Zm58,80.49L92.67,94H163Zm58,59.87V216a2,2,0,0,1-2,2H72a2,2,0,0,1-2-2V180a2,2,0,0,1,.8-1.6L122,140v28a6,6,0,0,0,12,0V140.06l51.21,38.7A2,2,0,0,1,186,180.36Z"/></symbol>
-  <symbol id="i-file" viewBox="0 0 256 256"><path d="M212.24,83.76l-56-56A6,6,0,0,0,152,26H56A14,14,0,0,0,42,40V216a14,14,0,0,0,14,14H200a14,14,0,0,0,14-14V88A6,6,0,0,0,212.24,83.76ZM158,46.48,193.52,82H158ZM200,218H56a2,2,0,0,1-2-2V40a2,2,0,0,1,2-2h90V88a6,6,0,0,0,6,6h50V216A2,2,0,0,1,200,218Zm-34-82a6,6,0,0,1-6,6H96a6,6,0,0,1,0-12h64A6,6,0,0,1,166,136Zm0,32a6,6,0,0,1-6,6H96a6,6,0,0,1,0-12h64A6,6,0,0,1,166,168Z"/></symbol>
-  <symbol id="i-grip" viewBox="0 0 256 256"><path d="M236.24,132.24l-32,32a6,6,0,0,1-8.48-8.48L217.51,134h-179l21.75,21.76a6,6,0,1,1-8.48,8.48l-32-32a6,6,0,0,1,0-8.48l32-32a6,6,0,0,1,8.48,8.48L38.49,122h179l-21.75-21.76a6,6,0,0,1,8.48-8.48l32,32A6,6,0,0,1,236.24,132.24Z"/></symbol>
+  <symbol id="i-aperture" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M12,3 A9,9 0 1 0 12,21 A9,9 0 1 0 12,3 M12,7.5 L15.9,9.75 L15.9,14.25 L12,16.5 L8.1,14.25 L8.1,9.75 Z"/></symbol>
+  <symbol id="i-tone" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M3,6 H12.5 M17.5,6 H21 M12.5,6 A2.5,2.5 0 1 0 17.5,6 A2.5,2.5 0 1 0 12.5,6 M3,12 H5.5 M10.5,12 H21 M5.5,12 A2.5,2.5 0 1 0 10.5,12 A2.5,2.5 0 1 0 5.5,12 M3,18 H13.5 M18.5,18 H21 M13.5,18 A2.5,2.5 0 1 0 18.5,18 A2.5,2.5 0 1 0 13.5,18"/></symbol>
+  <symbol id="i-repair" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M4,14 L14,4 A3,3 0 0 1 20,10 L10,20 A3,3 0 0 1 4,14 Z M10.5,10.5 L13.5,13.5"/></symbol>
+  <symbol id="i-geo" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M6,2.5 V18 H21.5 M2.5,6 H18 V21.5"/></symbol>
+  <symbol id="i-mask" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M12,3 L12,21 M12,6 L6.5,6 M12,9 L4,9 M12,12 L3,12 M12,15 L4,15 M12,18 L6.5,18"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M4,4 H10 V10 H4 Z M14,4 H20 V10 H14 Z M4,14 H10 V20 H4 Z M14,14 H20 V20 H14 Z"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M12,15 L12,3 M7,8 L12,3 L17,8 M4,15 L4,20 L20,20 L20,15"/></symbol>
+  <symbol id="i-later" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M21,12 l0,0.01 M19.8,16.5 l0,0.01 M16.5,19.8 l0,0.01 M12,21 l0,0.01 M7.5,19.8 l0,0.01 M4.2,16.5 l0,0.01 M3,12 l0,0.01 M4.2,7.5 l0,0.01 M7.5,4.2 l0,0.01 M12,3 l0,0.01 M16.5,4.2 l0,0.01 M19.8,7.5 l0,0.01"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M3,8 H7 L9,5 H15 L17,8 H21 V19 H3 Z M12,10 A3.5,3.5 0 1 0 12,17 A3.5,3.5 0 1 0 12,10"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M4,20 L8,19 L19,8 L16,5 L5,16 Z M14,7 L17,10"/></symbol>
+  <symbol id="i-dial" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M12,3 A9,9 0 1 0 12,21 A9,9 0 1 0 12,3 M12,12 L17,8 M12,12 h0.01"/></symbol>
+  <symbol id="i-none" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M8,12 L16,12"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M3,12 H4.5 M7,8.5 V15.5 M10,5 V19 M13,9 V15 M16,6.5 V17.5 M19,10.5 V13.5 M21,12 H21.5"/></symbol>
+  <symbol id="i-light" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M12,8 A4,4 0 1 0 12,16 A4,4 0 1 0 12,8 M12,2.5 V5 M12,19 V21.5 M2.5,12 H5 M19,12 H21.5 M5.3,5.3 L7.05,7.05 M16.95,16.95 L18.7,18.7 M5.3,18.7 L7.05,16.95 M16.95,7.05 L18.7,5.3"/></symbol>
+  <symbol id="i-compare" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M3,5 H21 V19 H3 Z M12,5 L12,19"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M3,12 L21,12 M7,8 L3,12 L7,16 M17,8 L21,12 L17,16"/></symbol>
+  <symbol id="i-lens" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M12,1 L12,6 M12,18 L12,23 M1,12 L6,12 M18,12 L23,12"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path vector-effect="non-scaling-stroke" d="M12,3 L12,15 M7,10 L12,15 L17,10 M4,15 L4,20 L20,20 L20,15"/></symbol>
 </svg>
 
 <a class="skip" href="#main">Skip to content</a>
@@ -71,24 +81,44 @@
 
 <main id="main">
 
-<!-- The launch: what it is, the one thing to do, and the real app. -->
+<!-- The launch: what it is, the one thing to do, and the real app, whose parts you can point at. -->
 <section class="hero" id="top" aria-labelledby="hero-title">
   <div class="wrap hero__copy">
-    <h1 class="display" id="hero-title">Fast RAW editing. No&nbsp;subscription.</h1>
-    <p class="hero__sub">A photo editor for Apple silicon Macs that shows every slider move at full resolution. Windows and Linux to follow.</p>
+    <p class="pill"><svg class="ico" aria-hidden="true"><use href="#i-aperture"/></svg>Alpha · macOS</p>
+    <h1 class="display" id="hero-title">Fast RAW editing for free</h1>
+    <p class="hero__sub">A photo editor for Apple silicon Macs that renders every slider move at full resolution. No subscription, no account.</p>
     <p class="hero__cta"><a class="btn btn--lg" href="download/" data-os-label>Download for macOS</a><a class="hero__alt link" href="https://github.com/Nano-AI/Orion">View the source on GitHub</a></p>
   </div>
-  <figure class="hero__shot">
+  <figure class="shot" data-shot>
     <img src="img/app-develop-2400.jpg" srcset="img/app-develop-1200.jpg 1200w, img/app-develop-2400.jpg 2400w"
          sizes="(max-width: 1360px) 94vw, 1280px" width="2400" height="1500" fetchpriority="high" decoding="async"
          alt="Orion's window: a night photograph of cars outside a showroom, with the Light panel's white balance and exposure sliders beside it.">
+    <!-- Points on the real window. --x and --y are where each part sits in the capture. -->
+    <ul class="spots" aria-label="Parts of the window">
+      <li class="spot" style="--x: 88.6%; --y: 11%" data-side="left"><button type="button" aria-labelledby="spot-hist"><svg class="ico" aria-hidden="true"><use href="#i-hist"/></svg></button><span class="spot__label" id="spot-hist">Histogram with clipping warnings</span></li>
+      <li class="spot" style="--x: 80.8%; --y: 28%" data-side="left"><button type="button" aria-labelledby="spot-light"><svg class="ico" aria-hidden="true"><use href="#i-light"/></svg></button><span class="spot__label" id="spot-light">Light: exposure, contrast, white balance</span></li>
+      <li class="spot" style="--x: 92.3%; --y: 28%" data-side="down"><button type="button" aria-labelledby="spot-mask"><svg class="ico" aria-hidden="true"><use href="#i-mask"/></svg></button><span class="spot__label" id="spot-mask">Masks: radial, linear, brush, subject, sky</span></li>
+      <li class="spot spot--wide" style="--x: 82%; --y: 2.4%" data-side="down"><button type="button" aria-labelledby="spot-compare"><svg class="ico" aria-hidden="true"><use href="#i-compare"/></svg></button><span class="spot__label" id="spot-compare">Compare with the frame as shot</span></li>
+      <li class="spot spot--wide" style="--x: 95%; --y: 2.4%" data-side="down"><button type="button" aria-labelledby="spot-export"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg></button><span class="spot__label" id="spot-export">Export to JPEG, TIFF or PNG</span></li>
+      <li class="spot" style="--x: 16.6%; --y: 93%" data-side="right"><button type="button" aria-labelledby="spot-film"><svg class="ico" aria-hidden="true"><use href="#i-lib"/></svg></button><span class="spot__label" id="spot-film">Filmstrip: the whole folder, rated</span></li>
+    </ul>
   </figure>
+  <p class="wrap shot__readout" aria-hidden="true" data-readout>Tap a point on the window.</p>
+</section>
+
+<section class="stats" aria-label="Orion in numbers">
+  <ul class="wrap stats__list">
+    <li class="stat"><svg class="ico" aria-hidden="true"><use href="#i-dial"/></svg><b>18.9&nbsp;ms</b><span>per slider move, at 42&nbsp;MP</span></li>
+    <li class="stat"><svg class="ico" aria-hidden="true"><use href="#i-lens"/></svg><b>1,558</b><span>lenses corrected</span></li>
+    <li class="stat"><svg class="ico" aria-hidden="true"><use href="#i-none"/></svg><b>0</b><span>subscriptions or accounts</span></li>
+    <li class="stat"><svg class="ico" aria-hidden="true"><use href="#i-edit"/></svg><b>2&nbsp;KB</b><span>sidecar of edits per photo</span></li>
+  </ul>
 </section>
 
 <section class="section speed" id="speed" aria-labelledby="speed-title">
   <div class="wrap speed__grid">
     <div class="speed__copy" data-reveal>
-      <p class="speed__num" aria-hidden="true">18<span class="dot">.</span>9<small>ms</small></p>
+      <p class="speed__num" aria-hidden="true" data-lcd>18<span class="lcd__cell--dot">.</span>9<small>ms</small></p>
       <h2 class="h2" id="speed-title">Every slider move, at full resolution</h2>
       <p class="small">95th percentile over an exposure drag on a 42&nbsp;MP Sony A7R&nbsp;III raw file, on a MacBook Air&nbsp;M4.</p>
     </div>
@@ -103,6 +133,7 @@
           <img src="img/sweep-6.jpg" width="1400" height="935" loading="lazy" decoding="async" alt="" aria-hidden="true">
       </div>
       <div class="sweep__panel">
+        <div class="hist" data-hist aria-hidden="true"></div>
         <div class="sweep__head">
           <span class="sweep__name">Exposure</span>
           <output class="sweep__val is-changed" data-sweep-val>+0.40 EV</output>
@@ -112,7 +143,7 @@
           <input class="sweep__range" type="range" min="0" max="6" step="0.01" value="4" aria-label="Exposure">
         </div>
       </div>
-      <figcaption class="caption">Drag it: seven real renders, −2.0 to +1.6&nbsp;EV.</figcaption>
+      <figcaption class="caption">Drag it: seven real renders, −2.0 to +1.6&nbsp;EV, and their histogram.</figcaption>
     </figure>
   </div>
 </section>
@@ -123,7 +154,7 @@
       <h2 class="h2" id="raw-title">Everything your camera caught</h2>
       <p class="small">Opens raw files from most cameras and corrects 1,558 lenses. Exports JPEG, TIFF and PNG.</p>
     </div>
-    <figure class="cmp raw__cmp" data-compare style="--pos: 50%" data-reveal>
+    <figure class="cmp raw__cmp" data-compare data-develop style="--pos: 50%" data-reveal>
       <img class="cmp__before" src="img/hero-asshot-2400.jpg"
            srcset="img/hero-asshot-1200.jpg 1200w, img/hero-asshot-2400.jpg 2400w" sizes="(max-width: 1360px) 94vw, 1360px"
            width="2400" height="1987" loading="lazy" decoding="async"
@@ -150,12 +181,12 @@
     </div>
     <div class="keep__files" data-reveal>
       <div class="keep__file">
-        <svg class="ico" aria-hidden="true"><use href="#i-lib"/></svg>
+        <svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg>
         <span class="keep__name">DSC09787.ARW</span>
         <span class="keep__meta">85.5&nbsp;MB, never changed</span>
       </div>
       <div class="keep__file">
-        <svg class="ico" aria-hidden="true"><use href="#i-file"/></svg>
+        <svg class="ico" aria-hidden="true"><use href="#i-edit"/></svg>
         <span class="keep__name">DSC09787.xmp</span>
         <span class="keep__meta">2&nbsp;KB, your edits</span>
       </div>
@@ -235,8 +266,8 @@
        width="2400" height="1602" loading="lazy" decoding="async"
        alt="Wooden pilings of an old pier in calm water, developed in Orion in a cool, deep blue.">
   <div class="wrap close__copy" data-reveal>
-    <h2 class="display" id="alpha-title">Free. No account.</h2>
-    <p class="close__sub">The alpha is free to download, and the source is on GitHub.</p>
+    <h2 class="display" id="alpha-title">Try the alpha</h2>
+    <p class="close__sub">Free to download, no account to make, and the source is on GitHub.</p>
     <p class="hero__cta"><a class="btn btn--lg" href="download/" data-os-label>Download for macOS</a><a class="btn btn--lg btn--ghost" href="mailto:alpha@bankoti.dev?subject=Orion">Contact</a></p>
   </div>
 </section>
@@ -258,7 +289,12 @@
   </div>
 </footer>
 
+<!-- anime.js 4.5.0, vendored (NOTICE). Every moment below works out to its final state without it. -->
+<script src="js/vendor/anime.umd.min.js?v=4.5.0" defer></script>
 <script src="js/site.js" defer></script>
 <script src="js/motion.js" defer></script>
+<script src="js/aperture.js" defer></script>
+<script src="js/spots.js" defer></script>
+<script src="js/histogram.js" defer></script>
 </body>
 </html>

@@ -60,6 +60,8 @@ thumbnail-cache/
 
 # --- Third-party -----------------------------------------------------------
 vendor/
+# ...except the website's vendored anime.js, which Pages deploys (#267, #385)
+!web/js/vendor/
 # No trailing slash: a worktree links the toolchain in as a symlink to a
 # directory, which `third_party/*/` would not match (tools/worktree-setup.sh).
 third_party/*
