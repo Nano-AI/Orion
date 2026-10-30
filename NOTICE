@@ -210,15 +210,15 @@ Orion links it dynamically and confines it to one translation unit
 BSD-3-Clause, Copyright Google LLC) and Brotli (MIT, Copyright the Brotli
 Authors). BSD-3-Clause requires the copyright notice, the conditions and the
 disclaimer to travel with a binary: the three license texts are copied verbatim
-from the installed packages into `Contents/Resources/licenses/` of both
-packaged apps (`tools/package-app.sh`, `tools/package-avalonia.sh`). See
+from the installed packages into `Contents/Resources/licenses/` of the
+packaged app (`tools/package-app.sh`). See
 `planning/DECISIONS.md` #363.
 
 ## Libraries OpenCV and libjxl bring with them
 
 The packaged app carries every Homebrew library the engine reaches, found by
 walking the dependency graph rather than listed by hand
-(`tools/package-avalonia.sh`). Beyond LibRaw, OpenCV, libjxl, Highway, Brotli,
+(`tools/package-app.sh`). Beyond LibRaw, OpenCV, libjxl, Highway, Brotli,
 Little CMS, libjpeg-turbo and libomp, named elsewhere here, OpenCV's `dnn`
 module brings these, each linked dynamically and each licence copied verbatim
 from the installed package into `Contents/Resources/licenses/`:

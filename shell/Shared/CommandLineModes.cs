@@ -41,7 +41,9 @@ static partial class CommandLineModes {
         if (i < 0 || i + 3 >= args.Length) { Console.Error.WriteLine("usage: Orion --hdr-merge <output.dng> <frame> <frame> [frame...]"); return 2; }
         string output = Path.GetFullPath(args[i + 1]);
         var frames = args[(i + 2)..].Select(Path.GetFullPath).ToList();
-        if (HdrMerge.Run(frames, 0, output).GetAwaiter().GetResult() is { } why) { Console.Error.WriteLine($"orion: merge failed: {why}"); return 1; }
+        // Started from the pool: awaited on this thread, Run's continuation would
+        // queue to Avalonia's dispatcher, which nothing pumps here — a deadlock.
+        if (Task.Run(() => HdrMerge.Run(frames, 0, output)).GetAwaiter().GetResult() is { } why) { Console.Error.WriteLine($"orion: merge failed: {why}"); return 1; }
         using var merged = Session.Open(output, headless: true);
         if (merged == null || merged.Render(preview: false) != Graph.Full) {
             Console.Error.WriteLine($"orion: merged file does not open: {merged?.LastError ?? output}");

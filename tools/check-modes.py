@@ -1,57 +1,49 @@
 #!/usr/bin/env python3
 """Run the two command-line modes that nothing else runs.
 
-    ./tools/check-modes.py
+    ./tools/check-modes.py            (ORION_SAMPLES names a folder of RAWs)
 
-⚠ **Why this exists.** Orion has four command-line modes, each a four-line
-dispatch in `OrionApp.init`, and **deleting any one of them used to be green on
-every gate** (#121, mutations M1/M3/M4). Only `--scenario` was exercised,
-because only it is what the 42-file repro sweep runs. `tools/check-screens.py`
-closed `--screenshot` (#177). These are the other two.
+⚠ **Why this exists.** Each command-line mode is a short dispatch in
+`Program.cs`, and **deleting one used to be green on every gate** (#121,
+mutations M1/M3/M4; #179). `tools/check-screens.py` closes `--screenshot`,
+`tools/check-agent.py` closes `--agent`. These are the other two:
 
-Both already assert — that was checked before writing this, not assumed:
-
-  --library-open   opens one folder **three ways in one process** — cold, warm,
-                   and with no database at all — and fails when the warm pass
-                   missed, or when any of the three disagree about a field.
-                   13 checks on `samples/`. It uses a throwaway database in the
-                   temporary directory, so it does not disturb the
-                   photographer's own index.
   --batch-export   exports a list of photographs into a folder and exits 1 if
-                   any of them failed. Verified against a file that is not
-                   there: `FAILED … Input/output error`, exit 1.
+                   any of them failed (each with its sidecar's edit).
+  --hdr-merge      merges frames into one DNG, then opens and renders that DNG
+                   and exits 1 if it will not.
+
+⚠ **Ported to the Avalonia app (decision #380), and two modes did not come.**
+The Swift app's `--save-safety` (20 checks of autosave's departure paths) is now
+the selftest's Sidecar checks (`SelfTest.Sidecar.cs`: the owed write lands
+before leaving, a failed write is named, headless never writes). Its
+`--library-open` opened one folder cold, warm and indexless and compared them:
+the Avalonia app has no SQLite index, so there is no warm path to disagree with
+the cold one, and that property is gone with the index rather than lost.
 
 ⚠ **What this does NOT check:**
 
-  - that the exported pixels are *right*. The size floor below catches a blank
-    frame and nothing subtler; the export path's correctness is `orion-tests`
-    and the repro sweep's job.
-  - that a warm open is *faster*. `LibraryProbe` deliberately refuses to assert
-    that — the same binary has measured 8.97 and 44.53 ms an hour apart on this
-    machine — and asserts the hit count and the field agreement instead, both
-    of which are load-independent.
-  - `--scenario` (the repro sweep) or `--screenshot` (`check-screens.py`).
+  - that the exported pixels are *right*. The size floor catches a blank frame
+    and nothing subtler; the export path's correctness is `orion-tests` and the
+    selftest's.
+  - `--screenshot` (`check-screens.py`) or `--agent` (`check-agent.py`).
 
-⚠ **How each guard here was verified, because the two are not the same
-strength.** Deleting either dispatch from `OrionApp.init` was run, and both are
-caught — **by the timeout**, not by an exit code, because a deleted dispatch
-makes Orion open a window rather than exit. The two *floors* were proved only by
-raising their constants and watching the branch fire: no product mutation was
-run that takes `LibraryProbe` below ten checks or makes an export blank. So the
-floors are known to work and are **not** known to have ever been needed, which
-is a weaker claim and is written here rather than left to be assumed.
+⚠ **How each guard here was verified.** Deleting either dispatch from
+`Program.cs` is caught — **by the timeout**, not an exit code, because a
+deleted dispatch makes Orion open a window rather than exit. The floors were
+proved only by raising their constants and watching the branch fire.
 """
 
 import os
-import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ORION = ROOT / "build" / "Orion.app" / "Contents" / "MacOS" / "Orion"
-SAMPLES = ROOT / "samples"
+ORION = ROOT / "shell" / "bin" / "Release" / "net10.0" / "Orion"
+SAMPLES = Path(os.environ.get("ORION_SAMPLES", ROOT / "samples"))
+os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
 
 # ⚠ `_PIC8095.ARW` is deliberately not in this list. It has people in the plaza
 # at its base, and while an export into a temporary directory is not a
@@ -67,15 +59,6 @@ EXPORTS = [c for c in EXPORT_CANDIDATES if (SAMPLES / c).is_file()][:2]
 if len(EXPORTS) < 2:
     EXPORTS = EXPORT_CANDIDATES[:2]
 
-# ⚠ **A floor, so a mode that stops asserting cannot pass by exiting 0.** This
-# is #124's lesson in another place: 39 of 40 repro scenarios once exited 0
-# while running *zero* checks. `LibraryProbe` prints one line per check, and if
-# it ever prints none the exit code alone would still be 0. Set below the 13 it
-# prints today, so adding a check does not break the gate and deleting most of
-# them does.
-MIN_LIBRARY_CHECKS = 10
-MIN_SAVE_CHECKS = 20
-
 # A JPEG of a 24 MP photograph is megabytes. A blank or single-colour frame
 # compresses to tens of kilobytes, which is the failure this catches — an export
 # that "succeeded" and wrote nothing worth having. It is a floor and not an
@@ -86,17 +69,15 @@ MIN_EXPORT_BYTES = 500_000
 # kilobytes. Same floor-not-oracle reasoning as MIN_EXPORT_BYTES.
 MIN_MERGE_BYTES = 10_000_000
 
-# Measured 2026-08-07: --library-open 0.08s, --batch-export 1.55s for two
-# frames. ⚠ Generous by a wide margin on purpose — deleting a dispatch does not
-# make the process exit, it makes Orion **open a real window and wait for a
+# Measured 2026-08-07 on the Swift app: --batch-export 1.55s for two frames.
+# ⚠ Generous by a wide margin on purpose — deleting a dispatch does not make
+# the process exit, it makes Orion **open a real window and wait for a
 # person**, and this timeout is the only thing that ends it. Keep it well above
 # the real cost and well below anybody's patience.
 # (--hdr-merge decodes and demosaics every frame and runs a CPU merge; on two
 # 24 MP frames it is the slowest mode here, and still far inside a minute
 # twice over.)
 TIMEOUT = 120
-
-CHECK_LINE = re.compile(r"^\s+(ok|FAIL)\b", re.M)
 
 
 def run(args, problems, what):
@@ -107,7 +88,7 @@ def run(args, problems, what):
     except subprocess.TimeoutExpired:
         problems.append(
             f"{what} did not finish in {TIMEOUT}s — it is likely waiting in a "
-            f"window rather than doing the work. Check that OrionApp.init "
+            f"window rather than doing the work. Check that Program.cs "
             f"still dispatches on it")
         return None
 
@@ -115,45 +96,17 @@ def run(args, problems, what):
 def main():
     if not ORION.is_file():
         print(f"check-modes: no binary at {ORION}\n"
-              f"  Build first: cmake --build build", file=sys.stderr)
+              f"  Build first: shell/native/build.sh && dotnet build -c Release shell", file=sys.stderr)
         return 2
     missing = [p for p in EXPORTS if not (SAMPLES / p).is_file()]
     if missing:
-        print(f"check-modes: no sample photograph(s): {', '.join(missing)}",
+        print(f"check-modes: no sample photograph(s): {', '.join(missing)} "
+              f"in {SAMPLES} (set ORION_SAMPLES)",
               file=sys.stderr)
         return 2
 
     problems = []
     notes = []
-
-    r = run(["--save-safety"], problems, "--save-safety")
-    if r is not None:
-        out = (r.stderr or "") + (r.stdout or "")
-        checks = len(CHECK_LINE.findall(out))
-        if r.returncode != 0 or checks < MIN_SAVE_CHECKS:
-            problems.append(f"--save-safety exited {r.returncode} with {checks} "
-                            f"checks; required {MIN_SAVE_CHECKS}\n      {out[-1000:]}")
-        else:
-            notes.append(f"--save-safety {checks} checks")
-
-    # --library-open
-    r = run(["--library-open", str(SAMPLES)], problems, "--library-open")
-    if r is not None:
-        out = (r.stderr or "") + (r.stdout or "")
-        checks = len(CHECK_LINE.findall(out))
-        if r.returncode != 0:
-            failed = [ln.strip() for ln in out.splitlines()
-                      if ln.strip().startswith("FAIL")]
-            detail = "\n      ".join(failed) or out.strip()[-500:] or "(no output)"
-            problems.append(f"--library-open exited {r.returncode}\n"
-                            f"      {detail}")
-        elif checks < MIN_LIBRARY_CHECKS:
-            problems.append(
-                f"--library-open exited 0 having run {checks} check(s), fewer "
-                f"than the {MIN_LIBRARY_CHECKS} this gate requires. A mode that "
-                f"asserts nothing exits 0 exactly like one that passes")
-        else:
-            notes.append(f"--library-open {checks} checks")
 
     # --batch-export
     with tempfile.TemporaryDirectory() as tmp:

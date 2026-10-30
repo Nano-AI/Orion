@@ -36,7 +36,7 @@ claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp
 Claude Desktop takes `"orion": {"command": "/Applications/Orion.app/Contents/MacOS/orion-mcp"}` under `mcpServers`.
 The Assistant menu's **Copy MCP Setup Command** puts the `claude mcp add` line on the clipboard, and Orion's own Assistant panel passes the bundled server to `claude` or `codex` on its command line when its working folder has no `.mcp.json`.
 
-`tools/package-avalonia.sh` builds it from the lockfile (`npm ci`), signs it with the app, scans it for home paths like every other file in the bundle, and runs all of `tools/check-agent.py --server` against it before it makes the disk image.
+`tools/package-app.sh` builds it from the lockfile (`npm ci`), signs it with the app, scans it for home paths like every other file in the bundle, and runs all of `tools/check-agent.py --server` against it before it makes the disk image.
 
 ## Test
 

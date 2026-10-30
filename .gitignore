@@ -99,7 +99,7 @@ Samples/
 !web/img/orion-*.jpg
 
 # --- Packaged builds ---------------------------------------------------------
-# tools/package-avalonia.sh output. A .dmg is a build artifact; releases carry it as
+# tools/package-app.sh output. A .dmg is a build artifact; releases carry it as
 # an attachment, which lives outside git objects.
 dist/
 

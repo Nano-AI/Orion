@@ -3,66 +3,52 @@
 
     ./tools/check-wiring.py
 
-⚠ **Why this exists.** `Engine.showPlaceholder` was written, drawn by
-`OrionApp+Canvas` under a comment reading *"held while a new photo decodes"*,
-and referred to by a second comment in `OrionApp+Files` promising *"one runloop
-turn, so the placeholder actually paints before the synchronous decode
-begins"*. **Its only caller in the tree was the screenshot harness**, and
-`clearPlaceholder` had no caller at all. So for every one of the 210.9 ms a raw
-file takes to decode (#151) the canvas went on showing the *previous*
-photograph, while two comments described the opposite.
-
-Nothing could catch it. Both suites are green on the mechanism being dead —
-`apps/tests` and `apps/bench` are pure C++, and `orion-viewport-tests` compiles
-a Swift list with **zero** `OrionApp*` files (#121), so no test in the
-repository can drive the open path at all.
+⚠ **Why this exists.** In the SwiftUI app, `Engine.showPlaceholder` was
+written, drawn by the canvas under a comment reading *"held while a new photo
+decodes"*, and promised by a second comment — and **its only caller in the tree
+was the screenshot harness**. So for every one of the 210.9 ms a raw file takes
+to decode (#151) the canvas went on showing the *previous* photograph, while
+two comments described the opposite (#181). Every suite was green on the
+mechanism being dead.
 
 ⚠ **This is a grep, and it says so** — the same standing as
-`tools/check-gestures.py`, which exists for the same structural reason (#110.3).
-It cannot check that the call is on the right branch, in the right order, or
-with the right argument. It checks that a mechanism with a *product* caller
-still has one, which is the regression that actually happened.
+`tools/check-gestures.py` (#110.3). It cannot check that the call is on the
+right branch, in the right order, or with the right argument. It checks that a
+mechanism with a *product* caller still has one.
 
 ⚠ **A harness caller does not count, and that is the whole idea.** The failure
-here was not a missing function — it was a function that looked used because a
-test used it. So `Screenshot*.swift`, `Scenario*.swift`, `ViewportTests*.swift`
-and `LibraryProbe.swift` are excluded from the count on purpose.
+was not a missing function — it was a function that looked used because a test
+used it. So the harness files are excluded from the count on purpose.
 
-**The sweep is the second half, added 2026-08-07 (#183).** The list above is
-declared; this file now also *discovers*. It walks every `func` declared in a
-product file, counts calls from product files and from harness files, and
-reports any whose callers are **all** harness. That is `showPlaceholder`'s exact
-shape, and running it the first time found **nine**: eight defensible, each now
-carrying its reason in `HARNESS_ONLY` below, and one real — `SyncSettings.pasted`,
-a wrapper around `Preset.applied(to:)` whose only caller was a test while the
-product went through `Engine.apply(preset:)`. It looked like the paste path and
-was not one. Deleted.
+**The sweep is the second half (#183).** It walks every method declared in a
+product file, counts uses from product files and from harness files, and
+reports any whose uses are **all** harness. Its first run over Swift found
+nine: eight defensible and one real (`SyncSettings.pasted`, deleted).
 
-⚠ **The allowlist is the point, not a suppression.** A function that is
-legitimately harness-only has to say *why* here, so the next one that appears is
-a line somebody has to write a justification for rather than a silent pass.
+⚠ **The allowlist is the point, not a suppression.** A method that is
+legitimately harness-only has to say *why* in `HARNESS_ONLY`, so the next one is
+a line somebody has to justify rather than a silent pass.
 
-⚠ **What this still does NOT do.** It is a regex over Swift source, not a
-compiler: a call made through a stored closure, a selector, a protocol witness
-or a SwiftUI key path is invisible to it, so it can call a *used* function
-unused. Every entry below was checked by hand.
+**It reads the Avalonia app's C# now** (`shell/`, decision #380): the Swift app
+it was written for is retired. C# has no `func`, so a declaration is a line of
+modifiers (`public static …`, `internal …`) then a name and a parenthesis —
+unambiguous enough, because C# requires the modifiers or a return type there.
+A *use* is any mention of the name outside its declaration, not only a call: an
+Avalonia control hands methods around as delegates (`Button("Save", Save)`),
+and counting only `Name(` would call every one of those dead. The harness is
+`SelfTest*.cs` and `SharedProof.cs` (the `--proof` run).
 
-⚠⚠ **And it stays Swift-only on purpose, which was decided by trying the other
-thing (#184).** The same sweep was run by hand over `engine/src`: 401 candidate
-functions, **52 flagged, and most of them noise.** Swift has `func`, so a
-declaration is unambiguous; C++ has no such marker, and the pattern that finds a
-function also finds `in`, `src`, `rng`, `db` and `fprintf`. Worse, the C facade
-— `orion_engine_destroy`, `orion_status_string` — is called from **Swift**, so a
-sweep confined to C++ calls it dead. A gate whose allowlist is mostly
-suppressing its own false positives reads as coverage while providing none,
-which is the standing of the AppKit tooltip walk that was written, run, shown to
-be worthless and deleted (#143).
+⚠ **What this still does NOT do.** It is a regex, not a compiler: a call made
+through reflection or a name built at run time is invisible to it, and two
+methods sharing a name count as one (a product use of either hides the other).
+Every allowlisted entry was checked by hand.
 
-**The one-off run was still worth doing**, and it found three: `radiusToFrame`,
-`lengthToFrame` and `lengthAlong` have had **no product caller since #138** and
-their headers still described rendering behaviour in the present tense. They are
-annotated now, not deleted — `testPerspectiveMaskExtent` observes live Jacobian
-maths *through* them.
+⚠⚠ **It stays away from C++ on purpose (#184).** The same sweep run by hand over
+`engine/src` flagged 52 of 401 functions, mostly noise: C++ has no declaration
+marker, and the C facade is called from the app, so a C++-only sweep calls it
+dead. That one-off run found `radiusToFrame`, `lengthToFrame` and
+`lengthAlong` without a product caller since #138; they are annotated, not
+deleted.
 """
 
 import re
@@ -70,85 +56,69 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-APP = ROOT / "app"
+APP = ROOT / "shell"
 
-# Files that are the harness rather than the product. A call from one of these
+# Files that are the harness rather than the product. A use from one of these
 # is exactly the evidence that misled everybody the first time.
-HARNESS = re.compile(r"^(Screenshot|Scenario|ViewportTests|LibraryProbe)")
+HARNESS = re.compile(r"^(SelfTest|SharedProof)")
 
-# symbol -> why the product must go on calling it.
+# A regex over the product's source -> why the product must go on calling it.
 EXPECTED = {
-    # ⚠ `--open` is the **fifth** command-line mode, and #177 and #179 both
-    # called them four while closing the others. It is the only one that cannot
-    # be a gate: it opens a real window, steps a list with a dwell, and never
-    # exits — it exists so a person can reproduce a fault visible only on
-    # screen, which is how the flat brown rectangle was found. So there is no
-    # exit code to check and no oracle to write, and this is what is left: the
-    # dispatch must still be there. Deleting it is otherwise green everywhere.
-    "openFromCommandLine":
-        "`--open` is the only path that drives the real MTKView, and the bug it "
-        "was built for was reproducible no other way. It cannot be gated — it "
-        "never exits — so a grep on its wiring is the whole of the coverage",
+    # Run once at a window, never headless. Deleted, every photographer who
+    # updates from the Swift app silently loses their presets and assistant
+    # settings, and no test opens a window to notice.
+    r"\bSettingsImport\.Run\s*\(":
+        "the Swift app's presets and assistant settings reach this app only "
+        "through it (decision #380)",
+    # The selftest builds an Autosave of its own, so deleting the product's
+    # install is green there.
+    r"\bAutosave\.Install\s*\(":
+        "edits reach the sidecar only once autosave is armed at the window",
+    r"\bCurrentPhoto\.Install\s*\(":
+        "current.json is how the MCP server's current_photo learns which photo "
+        "is open; nothing headless writes it",
 }
 
-
-# Product functions the harness alone may call, and why each is allowed to be.
-# ⚠ Adding a name here is a claim, and the claim is checked by hand: that the
-# function is a deliberate test hook or a deliberately offscreen path, not a
-# mechanism the product forgot to call. Nine were triaged when the sweep was
-# written; the ninth was not defensible and was deleted rather than listed.
+# Product methods the harness alone may use, and why each is allowed to be.
+# ⚠ Adding a name here is a claim, checked by hand: a deliberate test hook or
+# an offscreen path, not a mechanism the product forgot to call.
 HARNESS_ONLY = {
-    # ⚠ `stats` was here, as a promise rather than a fact: RegionStats.stats
-    # had no product caller, only `measure`. It has one now - `Orion --agent
-    # stats --region` reaches it through AgentInspect.regionJSON, and
-    # `get_stats`'s `region` is what an agent reads a cheek's shading with -
-    # so the entry came out rather than being re-argued. If it comes back,
-    # something deleted that path.
-    "escapeForTests":
-        "named for what it is — reaches Sidecar's escaping without a file",
-    "executeForTests":
-        "named for what it is — drives one SQL statement against PhotoIndex",
-    "resetStats":
-        "zeroes PhotoIndex's hit and miss counters so a test can measure one "
-        "open rather than every open since launch",
-    "setWideOutput":
-        "its own docstring says so: the screen path is 8-bit and widening it "
-        "costs 3.5 ms of a 16 ms budget, so this exists for the screenshot "
-        "harness, which reads the output texture and measures to four decimals",
-    "composite":
-        "the offscreen render the scenario runner goes through, deliberately "
-        "sharing the canvas's pipeline rather than a second one that happens "
-        "to agree — CanvasBlit's header says as much",
-    "generateBlocking":
-        "the synchronous spelling of the subject matte, so a check does not "
-        "have to drive an async inference to assert what it produced",
-    "maskAlpha":
-        "a model of the mask kernel's falloff, used as the oracle a rendered "
-        "mask is graded against — it is not meant to be in the product path",
-    "spec":
-        "AdjustmentCatalogue's per-id lookup, which exists so a check can "
-        "assert the catalogue covers every adjustment; the interface iterates "
-        "`specs` instead",
-    # ⚠ **Moved here from EXPECTED on 2026-09-08 (#233), and this is the
-    # opposite direction from every other entry in this dict.** These two used
-    # to be the textbook case EXPECTED existed to catch — built, drawn,
-    # documented, wired to nothing (#181). The product call #181 added is now
-    # gone on purpose: it showed the arriving photo's own library thumbnail
-    # over the canvas while it decoded, and that thumbnail is the camera's own
-    # punchier JPEG (#226/#229), so the photographer watched a flattering
-    # preview get replaced by Orion's flatter one. `Engine.isOpening` blanks
-    # the canvas to `Palette.surround` instead, and does not touch `placeholder`
-    # at all, so both functions' only remaining caller is the screenshot
-    # harness — legitimately, this time, not by omission.
-    "showPlaceholder":
-        "AppKit cannot capture a Metal layer, so `Screenshot.run` renders the "
-        "developed image and hands it here to draw as a still — the harness's "
-        "only way to photograph the interface at all",
-    "clearPlaceholder":
-        "the other half of the mechanism above; nothing sets `placeholder` "
-        "outside the harness any more, so nothing outside it needs to clear "
-        "it either",
+    # The five the first C# run found (2026-10-29, #380), each read by hand.
+    "Advance":
+        "AnalogTrack steps its springs a frame at a time so the motion checks do "
+        "not wait on the clock; its docstring says it is for tests",
+    "Listed":
+        "the synchronous spelling of the library's background mark read — the "
+        "same Sidecar.Read and Apply the listing goes through, so a check can "
+        "assert marks without waiting on a Task",
+    "Has":
+        "Icons' coverage question, asked by the selftest of every symbol the "
+        "interface names; the product draws through Icons' paths directly",
+    "orion_engine_export_size":
+        "a facade import the watermark parity check measures with; the product's "
+        "export writes the file and never needs its size first",
+    "shim_mask_field_count":
+        "the shim's count of OrionMaskComponent fields, the oracle the selftest "
+        "holds Session.MaskFields to — not a product path",
 }
+
+MODIFIERS = ("public|private|internal|protected|static|override|virtual|sealed|"
+             "async|unsafe|extern|partial|new|abstract|readonly")
+DECLARATION = re.compile(
+    rf"^[ \t]*(?:\[[^\]\n]*\][ \t]*)*(?:(?:{MODIFIERS})[ \t]+)+"
+    r"(?:[\w<>\[\],.?()]+(?:[ \t]*[,<>][ \t]*[\w<>\[\],.?()]+)*[ \t]+)?"
+    r"(\w+)[ \t]*(?:<[^<>()\n]*>)?[ \t]*\(", re.M)
+KEYWORDS = {"if", "while", "for", "foreach", "switch", "return", "new", "using",
+            "catch", "lock", "operator", "get", "set", "nameof", "typeof", "sizeof"}
+
+
+def uncommented(text):
+    """The source with comments removed and string literals blanked: a name in
+    a comment or a message is not a use. Verbatim and raw strings are left; a
+    method name inside one would be a false use, which errs green-side only."""
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    text = re.sub(r'"(?:[^"\\\n]|\\.)*"', '""', text)
+    return "\n".join(re.sub(r"//.*$", "", line) for line in text.splitlines())
 
 
 def main():
@@ -156,80 +126,56 @@ def main():
         print(f"check-wiring: no app directory at {APP}", file=sys.stderr)
         return 2
 
-    # Strip comments before counting. `check-gestures.py`'s first version did
-    # not, and a call named in the prose above it kept the gate green after the
-    # real call was deleted.
-    #
-    # ⚠ **Defensive here rather than load-bearing, checked rather than assumed.**
-    # Both symbols *are* named in comments in `OrionApp+Files`, but in backticks
-    # and without parentheses, so the pattern below misses them anyway — with
-    # this stripping removed and the real call deleted the gate still goes red.
-    # It earns its place against the comment somebody writes next: a line like
-    # `// call clearPlaceholder() when the render lands` would otherwise be a
-    # caller.
-    def uncommented(text):
-        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
-        return "\n".join(re.sub(r"//.*$", "", line) for line in text.splitlines())
-
     sources = {}
-    for path in sorted(APP.glob("*.swift")):
-        sources[path.name] = uncommented(
-            path.read_text(encoding="utf-8", errors="ignore"))
+    for path in sorted(APP.rglob("*.cs")):
+        rel = path.relative_to(APP)
+        if rel.parts[0] in ("bin", "obj"):
+            continue
+        sources[str(rel)] = uncommented(path.read_text(encoding="utf-8", errors="ignore"))
+
+    def harness(name):
+        return bool(HARNESS.match(Path(name).name))
 
     problems = []
-    for symbol, why in sorted(EXPECTED.items()):
-        product = []
-        for name, body in sources.items():
-            # The declaration is not a call. Count uses that are not `func x(`.
-            calls = len(re.findall(rf"\b{symbol}\s*\(", body))
-            calls -= len(re.findall(rf"\bfunc\s+{symbol}\s*\(", body))
-            if calls <= 0:
-                continue
-            if HARNESS.match(name):
-                continue
-            product.append(f"{name}×{calls}")
+    for pattern, why in sorted(EXPECTED.items()):
+        if not any(re.search(pattern, body) for name, body in sources.items() if not harness(name)):
+            problems.append(f"{pattern} matches no product file — {why}.\n"
+                            f"      A call from the harness does not count: that is what made this look wired the first time.")
 
-        if not product:
-            problems.append(
-                f"{symbol}() is called by no product file — {why}.\n"
-                f"      A call from the harness does not count: that is what "
-                f"made this look wired the first time.")
-
-    # The sweep. Every `func` declared in a product file, and who calls it.
-    declared = {}
+    # The sweep: every method declared in a product file, and who mentions it.
+    declared, declarations = {}, {}
     for name, body in sources.items():
-        if HARNESS.match(name):
-            continue
-        for m in re.finditer(r"\bfunc\s+([A-Za-z_]\w*)\s*[\(<]", body):
-            declared.setdefault(m.group(1), set()).add(name)
+        for m in DECLARATION.finditer(body):
+            symbol = m.group(1)
+            if symbol in KEYWORDS:
+                continue
+            declarations[(name, symbol)] = declarations.get((name, symbol), 0) + 1
+            if not harness(name):
+                declared.setdefault(symbol, set()).add(name)
 
     found = []
     for symbol, where in sorted(declared.items()):
-        product = harness = 0
+        product = harness_uses = 0
+        mention = re.compile(rf"\b{re.escape(symbol)}\b")
         for name, body in sources.items():
-            calls = len(re.findall(rf"\b{re.escape(symbol)}\s*\(", body))
-            calls -= len(re.findall(rf"\bfunc\s+{re.escape(symbol)}\s*\(", body))
-            if calls <= 0:
+            uses = len(mention.findall(body)) - declarations.get((name, symbol), 0)
+            if uses <= 0:
                 continue
-            if HARNESS.match(name):
-                harness += calls
+            if harness(name):
+                harness_uses += uses
             else:
-                product += calls
-        if harness > 0 and product == 0:
-            found.append((symbol, sorted(where), harness))
+                product += uses
+        if harness_uses > 0 and product == 0:
+            found.append((symbol, sorted(where), harness_uses))
 
-    for symbol, where, harness in found:
+    for symbol, where, uses in found:
         if symbol in HARNESS_ONLY:
             continue
         problems.append(
-            f"{symbol}() is declared in {', '.join(where)} and called only by "
-            f"the harness ({harness} call(s)).\n"
-            f"      Either the product forgot to call it — which is how the "
-            f"canvas spent 210.9 ms showing the wrong photograph (#181) — or "
-            f"it is a deliberate test hook, in which case add it to "
-            f"HARNESS_ONLY with the reason.\n"
-            f"      ⚠ Check by hand first: this is a regex, and a call through "
-            f"a closure, a selector or a key path is invisible to it.")
+            f"{symbol}() is declared in {', '.join(where)} and used only by the harness ({uses} use(s)).\n"
+            f"      Either the product forgot to call it — which is how the canvas spent 210.9 ms showing the wrong "
+            f"photograph (#181) — or it is a deliberate test hook: add it to HARNESS_ONLY with the reason.\n"
+            f"      ⚠ Check by hand first: this is a regex, and reflection or a name built at run time is invisible to it.")
 
     if problems:
         print(f"check-wiring: {len(problems)} problem(s)\n")
@@ -237,9 +183,8 @@ def main():
             print(f"  {p}\n")
         return 1
 
-    print(f"check-wiring: {len(EXPECTED)} declared mechanism(s) still called by "
-          f"the product; swept {len(declared)} product function(s), "
-          f"{len(found)} harness-only and all accounted for.")
+    print(f"check-wiring: {len(EXPECTED)} declared mechanism(s) still called by the product; swept "
+          f"{len(declared)} product method(s), {len(found)} harness-only and all accounted for.")
     return 0
 
 

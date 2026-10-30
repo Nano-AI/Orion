@@ -44,9 +44,9 @@ LEDGER = ROOT / "planning" / "DECISIONS.md"
 
 # Where a decision may be cited. `planning/HISTORY.md` is included: it is the
 # archive of this same ledger's sessions, so a number it names must exist.
-SEARCH_DIRS = ["engine", "app", "apps", "research", "repro", "planning", "tools"]
+SEARCH_DIRS = ["engine", "app", "shell", "apps", "research", "repro", "planning", "tools"]
 SEARCH_FILES = ["CLAUDE.md", "README.md"]
-SUFFIXES = {".swift", ".cpp", ".h", ".hpp", ".mm", ".c", ".m", ".slang", ".md", ".txt", ".py"}
+SUFFIXES = {".swift", ".cs", ".cpp", ".h", ".hpp", ".mm", ".c", ".m", ".slang", ".md", ".txt", ".py"}
 
 ROW = re.compile(r"^\|\s*(\d+)([a-z]?)\s*\|")
 DECLARED_GAPS = re.compile(r"\*\*Declared gaps:\s*([0-9,\s]+)\.?\s*\*\*")
@@ -90,7 +90,8 @@ def sources():
             # ⚠ Worktrees are copies of this repository. Counting them turns one
             # citation into a dozen and has already produced a false conclusion
             # in this file's own header.
-            if ".claude" in p.parts or "build" in p.parts:
+            parts = p.relative_to(ROOT).parts   # not p.parts: a worktree lives under .claude/ itself
+            if ".claude" in parts or {"build", "bin", "obj"} & set(parts):
                 continue
             if p.is_file() and p.suffix in SUFFIXES:
                 yield p

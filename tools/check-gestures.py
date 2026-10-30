@@ -7,18 +7,16 @@ Run it with the other gates:
 
 Exits nonzero and names the file that stopped arming.
 
-⚠ **Why this is a grep and not a test, which is the uncomfortable part.**
-A gesture arms by calling `engine.beginInteraction()` inside a SwiftUI
-`DragGesture` closure, and *nothing in this repository can drive one*. That was
-attempted and written up in decision #110.3: an off-screen `NSHostingView` lays
-the control out and hit-tests it, but `NSEvent.mouseEvent` through
-`NSApplication.sendEvent` never reaches the recognizer, and CGEvent-backed
-events need a real on-screen window and the real cursor. Deleting `ColorWheel`'s
-call was measured green across the whole suite.
-
-So the choice is a grep or nothing, and nothing is what there was. This cannot
-prove a gesture arms *correctly* — it proves the call has not been deleted,
-which is the regression that actually happened twice.
+⚠ **Why this is a grep and not a test.** In the SwiftUI app a gesture armed
+inside a `DragGesture` closure, which nothing in the repository could drive
+(decision #110.3), and deleting `ColorWheel`'s call was measured green across
+the whole suite. That app was retired (decision #380); this is the same grep
+over the Avalonia app's C# files. Avalonia's headless platform *can* drive a
+pointer (the selftest's CropOverlay and slider drags do), but most of these six
+are not driven there, so the grep is still what stands between a deleted call
+and a soft, slow canvas. It cannot prove a gesture arms *correctly* — it proves
+the call has not been deleted, which is the regression that actually happened
+twice.
 
 ⚠ **The reason it exists now.** `ROADMAP.md` carried a table saying four of
 these did not arm — `CropOverlay`, `SpotOverlay`, `CurveEditor`, `ColorWheel` —
@@ -33,7 +31,7 @@ run than is there:
   - that `endInteraction` is always reached, including on cancel
   - that the preview graph is actually cheaper, which is `orion-bench`'s job
   - anything at all about `AnalogTrack`, which arms via `AdjustmentSlider`
-    rather than itself
+    (its `Interacting` event) rather than itself
 """
 
 import re
@@ -41,29 +39,29 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-APP = ROOT / "app"
+APP = ROOT / "shell"
 
 # Each entry: the file, and why it is expected to arm. The reason is carried so
 # a failure says what the gesture costs, not merely that a string is missing.
 EXPECTED = {
-    "AdjustmentSlider.swift":
+    "Shared/AdjustmentSlider.cs":
         "every slider in the application drags through it",
-    "ColorWheel.swift":
+    "Slices/Develop/ColorWheel.cs":
         "a grading wheel drag re-renders the full graph per tick otherwise "
         "(9.6 ms against 1.2 ms armed, decision #110.2)",
-    "CurveEditor.swift":
+    "Slices/Develop/CurveEditor.cs":
         "dragging a curve point is a full-resolution render per tick otherwise",
-    "CropOverlay.swift":
+    "Slices/Canvas/CropOverlay.cs":
         "the crop rectangle is the geometry being changed, so every tick "
         "rebuilds it",
-    "SpotOverlay.swift":
+    "Slices/Canvas/SpotOverlay.cs":
         "placing and dragging a spot re-renders the heal pass per tick",
-    "MaskOverlay.swift":
+    "Slices/Canvas/MaskOverlay.cs":
         "painting and placing a mask re-renders the mask chain per tick",
 }
 
-BEGIN = "beginInteraction"
-END = "endInteraction"
+BEGIN = "BeginInteraction"
+END = "EndInteraction"
 
 
 def uncommented(text):

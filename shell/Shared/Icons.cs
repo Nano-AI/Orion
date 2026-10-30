@@ -88,10 +88,14 @@ public static class Icons {
 
     public static bool Has(string sfName) => Paths.ContainsKey(sfName);
 
+    /// Every name Create was asked for and could not draw: the selftest's oracle.
+    public static readonly HashSet<string> Missing = [];
+
     /// The symbol at `size` points in `brush`. ".fill" symbols fill; the rest stroke.
     public static Path Create(string sfName, double size, IBrush brush) {
         if (!Paths.TryGetValue(sfName, out var data)) {
             Console.Error.WriteLine($"Icons: no drawing for SF Symbol '{sfName}'");
+            Missing.Add(sfName);
             data = "M10,12 A2,2 0 1 0 14,12 A2,2 0 1 0 10,12 Z";
         }
         bool fill = sfName.EndsWith(".fill");

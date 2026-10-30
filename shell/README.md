@@ -13,7 +13,7 @@ dotnet build -c Release shell                         # -> shell/bin/Release/net
 shell/bin/Release/net10.0/Orion <RAWs or folders>     # opens a window
 ```
 
-`tools/package-avalonia.sh` builds all of that from a clean tree into
+`tools/package-app.sh` builds all of that from a clean tree into
 `dist/Orion.app` (`com.nanoai.orion`, the executable `Orion`, the MCP server as
 `Contents/MacOS/orion-mcp`) and `Orion-<git describe>.dmg`, ad-hoc signed.
 

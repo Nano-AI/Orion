@@ -55,20 +55,18 @@ static partial class SelfTest {
         Check(AdjustmentMath.Detented(0.01f, 0, -1, 1, departing: false) == 0 &&
               AdjustmentMath.Detented(0.01f, 0, -1, 1, departing: true) == 0.01f, "the detent snaps unless departing");
 
-        // Every SF Symbol the Swift UI names has a drawing here: every literal in a
-        // systemName:/systemImage: expression (ternaries too), and iconChip's first argument.
-        var swift = Path.Combine(Directory.GetCurrentDirectory(), "..", "app");
-        static IEnumerable<string> Literals(string s, string pattern) =>
-            System.Text.RegularExpressions.Regex.Matches(s, pattern).SelectMany(m =>
-                System.Text.RegularExpressions.Regex.Matches(m.Groups[1].Value, "\"([a-z0-9.]+)\"").Select(l => l.Groups[1].Value));
-        var symbols = Directory.EnumerateFiles(swift, "*.swift").Select(File.ReadAllText)
-            .SelectMany(s => Literals(s, "(?:systemName|systemImage):([^)]*)")
-                .Concat(Literals(s, "(?:icon|armedIcon):\\s*(\"[a-z0-9.]+\")"))
-                .Concat(Literals(s, "iconChip\\((\"[a-z0-9.]+\")")))
+        // Every SF Symbol name written into an Icons.Create call has a drawing
+        // (ternaries too). The retired Swift UI's names were the oracle until #380;
+        // a name passed through a variable is the end-of-run Icons.Missing check's.
+        var source = Path.Combine(Directory.GetCurrentDirectory(), "..", "shell");
+        var symbols = Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")).Select(File.ReadAllText)
+            .SelectMany(s => System.Text.RegularExpressions.Regex.Matches(s, @"Icons\.Create\((.*?),\s*[\w.]+,\s*[\w.]+\)"))
+            .SelectMany(m => System.Text.RegularExpressions.Regex.Matches(m.Groups[1].Value, "\"([a-z0-9.]+)\"").Select(l => l.Groups[1].Value))
             .Distinct().ToList();
         var missing = symbols.Where(s => !Icons.Has(s)).ToList();
-        Check(symbols.Count > 10 && missing.Count == 0,
-              $"Icons draws all {symbols.Count} SF Symbols the Swift UI uses" + (missing.Count > 0 ? $"; missing {string.Join(", ", missing)}" : ""));
+        Check(symbols.Count >= 10 && missing.Count == 0,
+              $"Icons draws all {symbols.Count} SF Symbols the app names" + (missing.Count > 0 ? $"; missing {string.Join(", ", missing)}" : ""));
 
         CommandChecks();
         PhotoListNavigation();
@@ -120,6 +118,9 @@ static partial class SelfTest {
         LibraryChecks();
         ParityChecks();
         ImportChecks();
+        // Asked for while every check above built and drove the panels.
+        Check(Icons.Missing.Count == 0, "every icon the run asked for has a drawing"
+              + (Icons.Missing.Count > 0 ? $"; missing {string.Join(", ", Icons.Missing)}" : ""));
         if (_stubs.Count > 0) Console.WriteLine($"selftest: session seams not built yet (stage 1b): {string.Join(", ", _stubs)}");
 
         Console.WriteLine($"selftest: {_passed} checks passed, {_failed} failed");
