@@ -89,12 +89,19 @@ PLIST
 
 # ── Licenses ────────────────────────────────────────────────────────────────
 #
-# Copied verbatim from the installed packages, as tools/package-app.sh does.
+# Copied verbatim from the installed packages, as tools/package-app.sh did, and
+# ⚠ **a licence that is not found stops the build.** It was a warning, which
+# ships a bundle without the text its licence requires and says so in a line
+# nobody reads. NOTICE names every component; `licence_of` below maps every
+# file in the finished bundle to the licence files it needs, after the dylib
+# walk, so a component that arrives with a new dependency fails here rather
+# than shipping unlicensed.
 mkdir -p "$RES/licenses"
 copy_license() {
-    if [[ -f "$2" ]]; then cp "$2" "$RES/licenses/$1"
-    else echo "warning: license for $1 not found at $2" >&2; fi
+    [[ -f "$2" ]] || { echo "error: license for $1 not found at $2" >&2; exit 1; }
+    cp "$2" "$RES/licenses/$1"
 }
+cellar() { ls -d /opt/homebrew/Cellar/"$1"/*/$2 2>/dev/null | tail -1 || true; }
 LIBRAW_DIR="$(dirname "$(dirname "$(readlink -f /opt/homebrew/opt/libraw/lib/libraw_r.dylib)")")"
 copy_license "LibRaw-LGPL-2.1.txt" "$LIBRAW_DIR/LICENSE.LGPL"
 copy_license "LibRaw-CDDL-1.0.txt" "$LIBRAW_DIR/LICENSE.CDDL"
@@ -106,17 +113,47 @@ for spec in \
     "opencv-Apache-2.0.txt:opencv:LICENSE" \
     "libjxl-BSD-3-Clause.txt:jpeg-xl:LICENSE" \
     "highway-Apache-2.0-or-BSD-3-Clause.txt:highway:LICENSE" \
-    "brotli-MIT.txt:brotli:LICENSE"
+    "brotli-MIT.txt:brotli:LICENSE" \
+    "abseil-Apache-2.0.txt:abseil:LICENSE" \
+    "openvino-Apache-2.0.txt:openvino:LICENSE" \
+    "oneTBB-Apache-2.0.txt:tbb:LICENSE.txt" \
+    "protobuf-BSD-3-Clause.txt:protobuf:LICENSE" \
+    "openblas-BSD-3-Clause.txt:openblas:LICENSE" \
+    "pugixml-MIT.md:pugixml:LICENSE.md" \
+    "gcc-COPYING.RUNTIME.txt:gcc:COPYING.RUNTIME" \
+    "gcc-libquadmath-LGPL-2.1.txt:gcc:COPYING.LIB"
 do
     IFS=: read -r out pkg file <<< "$spec"
-    src="$(ls -d /opt/homebrew/Cellar/"$pkg"/*/"$file" 2>/dev/null | tail -1 || true)"
-    copy_license "$out" "${src:-/nonexistent}"
+    src="$(cellar "$pkg" "$file")"
+    copy_license "$out" "${src:-/nonexistent/$pkg/$file}"
 done
-# The assistant terminal's NuGet packages (NOTICE carries the MIT text for all
-# of them); the two that ship a licence file get it copied verbatim too.
+# GCC ships GPL-3.0 only as its gpl(7) page; libgcc_s and libgfortran are under
+# it, with the runtime exception above.
+GPL7="$(cellar gcc 'share/man/man7/gpl-*.7')"
+[[ -f "$GPL7" ]] || { echo "error: GCC's gpl(7) page not found" >&2; exit 1; }
+mandoc -T utf8 "$GPL7" | col -b > "$RES/licenses/gcc-GPL-3.0.txt"
+
+# The .NET runtime, the framework and the assistant terminal's NuGet packages.
+# NOTICE carries the MIT text for each; a package that ships a licence or a
+# notices file gets it copied verbatim too. Versions from packages.lock.json,
+# so a bumped package is a missing file here rather than an old text.
 NUGET="${NUGET_PACKAGES:-$HOME/.nuget/packages}"
-copy_license "Unicode.net-MIT.txt" "$NUGET/unicode.net/2.0.0/LICENSE"
-copy_license "SkiaSharp.HarfBuzz-MIT.txt" "$NUGET/skiasharp.harfbuzz/3.119.4/LICENSE.txt"
+locked() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["dependencies"]; print(next(v["resolved"] for t in d.values() for k,v in t.items() if k==sys.argv[2]))' "$SRC/packages.lock.json" "$1"; }
+SKIA="$(locked SkiaSharp)"; HB="$(locked HarfBuzzSharp)"
+copy_license "SkiaSharp-MIT.txt" "$NUGET/skiasharp/$SKIA/LICENSE.txt"
+copy_license "libSkiaSharp-THIRD-PARTY-NOTICES.txt" "$NUGET/skiasharp.nativeassets.macos/$SKIA/THIRD-PARTY-NOTICES.txt"
+copy_license "HarfBuzzSharp-MIT.txt" "$NUGET/harfbuzzsharp/$HB/LICENSE.txt"
+copy_license "libHarfBuzzSharp-THIRD-PARTY-NOTICES.txt" "$NUGET/harfbuzzsharp.nativeassets.macos/$HB/THIRD-PARTY-NOTICES.txt"
+copy_license "Unicode.net-MIT.txt" "$NUGET/unicode.net/$(locked Unicode.net)/LICENSE"
+copy_license "SkiaSharp.HarfBuzz-MIT.txt" "$NUGET/skiasharp.harfbuzz/$(locked SkiaSharp.HarfBuzz)/LICENSE.txt"
+# dotnet/runtime's own notices. Homebrew's source-built SDK unpacks the runtime
+# pack without them; the ILCompiler package beside it is built from the same
+# repository and carries the file.
+ILC="$(ls "$DOTNET_ROOT"/library-packs/Microsoft.DotNet.ILCompiler.*.nupkg 2>/dev/null | tail -1 || true)"
+[[ -f "$ILC" ]] || { echo "error: no Microsoft.DotNet.ILCompiler package under $DOTNET_ROOT for the runtime's notices" >&2; exit 1; }
+unzip -p "$ILC" THIRD-PARTY-NOTICES.TXT > "$RES/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt"
+[[ -s "$RES/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt" ]] || { echo "error: $ILC has no THIRD-PARTY-NOTICES.TXT" >&2; exit 1; }
+copy_license "OFL-1.1.txt" "$SRC/Assets/Fonts/OFL.txt"   # Barlow, and Inter inside Avalonia.Fonts.Inter
 cp "$ROOT/NOTICE" "$RES/licenses/NOTICE.txt"
 cp "$ROOT/licenses/Apache-2.0.txt" "$RES/licenses/Apache-2.0.txt"   # NOTICE refers to it (Abseil, OpenCV)
 echo "  licenses  $(ls "$RES/licenses" | wc -l | tr -d ' ') files"
@@ -187,6 +224,60 @@ while [[ -n "${PENDING// /}" ]]; do
     enqueue $(collect "$FW/$base" "$(dirname "$dep")")
 done
 echo "  dylibs    $(ls "$FW" | wc -l | tr -d ' ') from Homebrew"
+
+# ── Verify every file is licensed ───────────────────────────────────────────
+#
+# Each file in Contents/MacOS and Contents/Frameworks, mapped to the licence
+# files it needs. ⚠ A file no pattern knows is an error, not a pass: the walk
+# above adds whatever Homebrew's OpenCV links this month, and the bundle once
+# carried thirty-odd libraries NOTICE had never named (Abseil, OpenVINO,
+# oneTBB, protobuf, OpenBLAS, the GCC runtime). A list of names goes stale in
+# silence, the dependency walk's own lesson.
+licence_of() {
+    case "$1" in
+        Orion|OrionShell|Orion.dll|OrionShell.dll|*.deps.json|*.runtimeconfig.json|liborion_shim.dylib)
+                                    echo NOTICE.txt ;;   # Orion's own, and the apphost's .NET MIT
+        System.*|Microsoft.*|mscorlib.dll|netstandard.dll|WindowsBase.dll|createdump|libSystem.*.dylib|\
+        libcoreclr.dylib|libclrjit.dylib|libclrgc*.dylib|libhostfxr.dylib|libhostpolicy.dylib|libmscordaccore.dylib|libmscordbi.dylib)
+                                    echo NOTICE.txt dotnet-runtime-THIRD-PARTY-NOTICES.txt ;;
+        Avalonia.Fonts.Inter.dll)   echo NOTICE.txt OFL-1.1.txt ;;
+        Avalonia*.dll|libAvaloniaNative.dylib|MicroCom.Runtime.dll|Tmds.DBus.Protocol.dll)
+                                    echo NOTICE.txt ;;
+        SkiaSharp.HarfBuzz.dll)     echo SkiaSharp.HarfBuzz-MIT.txt ;;
+        SkiaSharp.dll|libSkiaSharp.dylib) echo SkiaSharp-MIT.txt libSkiaSharp-THIRD-PARTY-NOTICES.txt ;;
+        HarfBuzzSharp.dll|libHarfBuzzSharp.dylib) echo HarfBuzzSharp-MIT.txt libHarfBuzzSharp-THIRD-PARTY-NOTICES.txt ;;
+        Iciclecreek.Avalonia.Terminal.dll|XTerm.NET.dll|Porta.Pty.dll|libporta_pty.dylib|Wcwidth.dll)
+                                    echo NOTICE.txt ;;
+        NeoSmart.Unicode.dll)       echo Unicode.net-MIT.txt ;;
+        orion-mcp)                  echo node-MIT-and-bundled.txt orion-mcp-npm-packages.txt ;;
+        libraw_r.*)                 echo LibRaw-LGPL-2.1.txt LibRaw-CDDL-1.0.txt LibRaw-COPYRIGHT.txt ;;
+        libomp.*)                   echo libomp-Apache-2.0-LLVM.txt ;;
+        libjpeg.*)                  echo libjpeg-turbo.md ;;
+        liblcms2.*)                 echo little-cms2-MIT.txt ;;
+        libopencv_*)                echo opencv-Apache-2.0.txt ;;
+        libjxl*)                    echo libjxl-BSD-3-Clause.txt ;;
+        libhwy.*)                   echo highway-Apache-2.0-or-BSD-3-Clause.txt ;;
+        libbrotli*)                 echo brotli-MIT.txt ;;
+        libabsl_*)                  echo abseil-Apache-2.0.txt Apache-2.0.txt ;;
+        libopenvino*)               echo openvino-Apache-2.0.txt ;;
+        libtbb*)                    echo oneTBB-Apache-2.0.txt ;;
+        libprotobuf*|libutf8_validity*) echo protobuf-BSD-3-Clause.txt ;;
+        libopenblas*)               echo openblas-BSD-3-Clause.txt ;;
+        libpugixml*)                echo pugixml-MIT.md ;;
+        libgcc_s.*|libgfortran.*)   echo gcc-COPYING.RUNTIME.txt gcc-GPL-3.0.txt ;;
+        libquadmath.*)              echo gcc-libquadmath-LGPL-2.1.txt ;;
+    esac
+}
+unlicensed=0
+while IFS= read -r f; do
+    need="$(licence_of "${f##*/}")"
+    [[ -n "$need" ]] || { echo "error: ${f#$APP/} has no licence mapping; name it in NOTICE and licence_of" >&2; unlicensed=1; continue; }
+    for l in $need; do
+        [[ -f "$RES/licenses/$l" ]] || { echo "error: ${f#$APP/} needs licenses/$l, which is not there" >&2; unlicensed=1; }
+    done
+done < <(find "$MACOS" "$FW" -type f)
+((unlicensed == 0)) || exit 1
+echo "  verified  every file in MacOS and Frameworks maps to its licence"
 
 # install_name_tool, without the warning it prints on every signed file it
 # touches: they are all re-signed below, and hundreds of those buried real errors.

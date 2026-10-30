@@ -214,10 +214,59 @@ from the installed packages into `Contents/Resources/licenses/` of both
 packaged apps (`tools/package-app.sh`, `tools/package-avalonia.sh`). See
 `planning/DECISIONS.md` #363.
 
-## Terminal in the Avalonia shell's assistant column
+## Libraries OpenCV and libjxl bring with them
 
-The assistant column of the Avalonia shell (`spikes/avalonia-shell/Slices/Chrome/AssistantPanel.cs`)
-hosts a terminal built from these NuGet packages, each under the **MIT License**:
+The packaged app carries every Homebrew library the engine reaches, found by
+walking the dependency graph rather than listed by hand
+(`tools/package-avalonia.sh`). Beyond LibRaw, OpenCV, libjxl, Highway, Brotli,
+Little CMS, libjpeg-turbo and libomp, named elsewhere here, OpenCV's `dnn`
+module brings these, each linked dynamically and each licence copied verbatim
+from the installed package into `Contents/Resources/licenses/`:
+
+  Abseil (abseil-cpp) — Copyright The Abseil Authors. Apache License 2.0.
+  OpenVINO — Copyright Intel Corporation. Apache License 2.0.
+  oneTBB — Copyright Intel Corporation. Apache License 2.0.
+  Protocol Buffers, with its utf8_range — Copyright 2008 Google Inc. BSD 3-Clause.
+  OpenBLAS — Copyright (c) 2011-2014, The OpenBLAS Project. BSD 3-Clause.
+  pugixml — Copyright (c) 2006-2026 Arseny Kapoulkine. MIT.
+  GCC runtime libraries (libgcc_s, libgfortran, libquadmath), through OpenBLAS —
+    Copyright (C) Free Software Foundation, Inc. libgcc_s and libgfortran are
+    GPL-3.0 with the GCC Runtime Library Exception, which permits shipping them
+    with a program under any licence; libquadmath is LGPL-2.1, dynamically
+    linked as CLAUDE.md requires. COPYING.RUNTIME, the GPL-3.0 text (rendered
+    from GCC's own gpl(7) page) and COPYING.LIB travel with the app.
+
+## The application: .NET, Avalonia, Skia and HarfBuzz
+
+The Orion app is C# on .NET 10 with the Avalonia user-interface framework,
+published self-contained, so the runtime and the framework ship inside it. Each
+of these is under the **MIT License**; the text follows the list in the next
+section, and the licence files the packages carry are copied verbatim into
+`Contents/Resources/licenses/`:
+
+  .NET runtime 10 (CoreCLR, the base class library, the apphost) — Copyright (c) .NET Foundation and Contributors (https://github.com/dotnet/runtime).
+    Its own third-party notices travel as `dotnet-runtime-THIRD-PARTY-NOTICES.txt`.
+  Avalonia 12.1.4, with libAvaloniaNative and its Inter font loader — Copyright 2013-2026 © The AvaloniaUI Project (https://github.com/AvaloniaUI/Avalonia)
+  MicroCom.Runtime 0.11.6 — Copyright 2021 © Nikita Tsukanov (https://github.com/kekekeks/MicroCom)
+  Tmds.DBus.Protocol 0.94.1 — Copyright Tom Deseyn (https://github.com/tmds/Tmds.DBus)
+  SkiaSharp 3.119.4, with libSkiaSharp — Copyright (c) 2015-2016 Xamarin, Inc.; Copyright (c) 2017-2018 Microsoft Corporation (https://github.com/mono/SkiaSharp)
+  HarfBuzzSharp 8.3.1.3, with libHarfBuzzSharp — Copyright (c) 2015-2016 Xamarin, Inc.; Copyright (c) 2017-2018 Microsoft Corporation (https://github.com/mono/SkiaSharp)
+
+libSkiaSharp is Skia (BSD 3-Clause, Copyright Google LLC) and the libraries it
+compiles in; libHarfBuzzSharp is HarfBuzz (the "Old MIT" licence). Their notices
+travel verbatim as `libSkiaSharp-THIRD-PARTY-NOTICES.txt` and
+`libHarfBuzzSharp-THIRD-PARTY-NOTICES.txt`.
+
+The Inter typeface, embedded in `Avalonia.Fonts.Inter.dll` — Copyright (c) 2016
+The Inter Project Authors (https://github.com/rsms/inter) — is under the **SIL
+Open Font License 1.1**, the licence of the Barlow numeral face above; its text
+travels as `OFL-1.1.txt`.
+
+## MIT components of the application and the assistant's terminal
+
+The assistant column (`spikes/avalonia-shell/Slices/Chrome/AssistantPanel.cs`)
+hosts a terminal built from these NuGet packages, each under the **MIT License**,
+as is every component of the section above:
 
   Iciclecreek.Avalonia.Terminal 4.1.0 — Copyright (c) Tom Laird-McConnell (https://github.com/tomlm/Iciclecreek.Avalonia.Terminal)
   XTerm.NET 3.0.0 — Copyright (c) Tom Laird-McConnell (https://github.com/tomlm/XTerm.NET)
