@@ -74,6 +74,9 @@ struct DawnTexture final : Texture::Impl {
 
     void* raw() const noexcept override { return tex.Get(); }
     void* displayHandle() const noexcept override { return share ? share->handle() : nullptr; }
+    void* sharedHandle() const noexcept override { return share ? share->ntHandle() : nullptr; }
+    void beginShared() override { if (share) share->begin(); }
+    void endShared() override { if (share) share->end(); }
 };
 
 wgpu::TextureUsage usageFor(PixelFormat) {
@@ -178,6 +181,19 @@ std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context> ctx, std::ui
     }
     scope.check("Dawn texture allocation");
     if (!t->tex) throw std::runtime_error("Dawn texture allocation failed");
+    t->view = t->tex.CreateView();
+    return t;
+}
+
+std::unique_ptr<Texture::Impl> makeSharedTexture(std::shared_ptr<Context> ctx, std::uint32_t width,
+                                                 std::uint32_t height) {
+    auto t = std::make_unique<DawnTexture>();
+    t->ctx = std::move(ctx);
+    ErrorScope scope(*t->ctx);
+    t->bpp = 4;
+    t->share = shareForInterop(*t->ctx, width, height, usageFor(PixelFormat::RGBA8Unorm), t->tex);
+    scope.check("Dawn shared texture");
+    if (!t->share || !t->tex) return nullptr;
     t->view = t->tex.CreateView();
     return t;
 }

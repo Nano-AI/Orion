@@ -92,3 +92,23 @@ OrionStatus orion_engine_display_take(OrionEngine* engine, int wait, uint8_t* ds
         return ORION_OK;
     });
 }
+
+OrionStatus orion_engine_display_share(OrionEngine* engine, int graph, int level, void** out_handle,
+                                       int* out_generation, uint32_t* out_width, uint32_t* out_height) {
+    if (engine == nullptr || out_handle == nullptr || out_generation == nullptr || out_width == nullptr ||
+        out_height == nullptr)
+        return ORION_ERR_BAD_ARG;
+    if (graph < 0 || graph > 2 || level < 0 || !graphOf(engine, graph)) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        const auto& d = *graphOf(engine, graph);
+        std::uint32_t w = 0, h = 0;
+        pictureSize(d, w, h);
+        if (w == 0 || h == 0) return ORION_ERR_BAD_ARG;
+        *out_handle = engine->impl.displayCopy().share(d.output(), w, h, level, *out_generation,
+                                                       *out_width, *out_height);
+        if (*out_handle != nullptr) return ORION_OK;
+        engine->impl.setError("no shared texture on this system: the D3D11 share is Windows only, "
+                              "and needs Dawn's DXGI shared-handle feature");
+        return ORION_ERR_INTERNAL;
+    });
+}

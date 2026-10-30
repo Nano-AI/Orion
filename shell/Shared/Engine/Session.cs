@@ -144,6 +144,11 @@ public sealed partial class Session : IDisposable {
         return Native.shim_copy_take(_shim, 0, (byte*)fb.Address, fb.RowBytes, fb.RowBytes * h, out _, out _);
     }
 
+    /// Windows: the last render of `graph`, `level` halvings down, into the D3D11
+    /// texture SharedPicture's ANGLE import reads (#386). 0 where there is none.
+    public int Share(Graph graph, int level, out nint handle, out int generation, out int w, out int h) =>
+        Native.shim_share(Shim, (int)graph, level, out handle, out generation, out w, out h);
+
     /// The last render of `graph` as tightly packed RGBA bytes, with no bitmap
     /// and so no Avalonia platform: what `Orion --agent` measures and crops.
     public unsafe byte[]? Rgba(Graph graph, out int w, out int h) {

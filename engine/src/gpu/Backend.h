@@ -29,6 +29,9 @@ struct Texture::Impl {
                           std::uint32_t height) const = 0;
     virtual void* raw() const noexcept = 0;
     virtual void* displayHandle() const noexcept = 0;
+    virtual void* sharedHandle() const noexcept { return nullptr; }
+    virtual void beginShared() {}
+    virtual void endShared() {}
 };
 
 struct Library::Impl {
@@ -68,6 +71,8 @@ struct Device::Impl {
     virtual std::unique_ptr<CommandBuffer::Impl> commandBuffer() = 0;
     /// A staging buffer for `Readback`, or null for a synchronous copy (Metal).
     virtual std::unique_ptr<Readback::Slot> staging() { return nullptr; }
+    /// Texture::createShared's, or null where the backend has none (Metal).
+    virtual std::unique_ptr<Texture::Impl> sharedTexture(std::uint32_t, std::uint32_t) { return nullptr; }
 };
 
 /// One staging buffer of a `Readback` (#386).

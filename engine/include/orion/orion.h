@@ -646,6 +646,19 @@ OrionStatus orion_engine_display_take(OrionEngine* engine, int wait, uint8_t* ds
                                       uint32_t* out_width, uint32_t* out_height,
                                       uint64_t* out_ticket);
 
+/* Windows only (decision #386): the same copy, not read back but written into
+ * a D3D11 texture behind a DXGI NT handle and a keyed mutex, which a
+ * compositor on the same adapter opens (Avalonia's ANGLE, D3D11TextureNtHandle)
+ * and reads while holding key 0, as Orion writes it holding key 0. Queued
+ * behind the render; the call itself waits only while the reader holds the
+ * mutex. out_handle is the engine's (never close it), valid until a later
+ * call answers a new out_generation: import that one again. INTERNAL, with
+ * orion_last_error saying why, where there is no such texture (macOS, Linux,
+ * an adapter without the feature): read back instead. BAD_ARG as
+ * orion_engine_display_begin. */
+OrionStatus orion_engine_display_share(OrionEngine* engine, int graph, int level, void** out_handle,
+                                       int* out_generation, uint32_t* out_width, uint32_t* out_height);
+
 /* The engine's id<MTLDevice>, so the view can share it. */
 void* orion_engine_metal_device(const OrionEngine* engine);
 

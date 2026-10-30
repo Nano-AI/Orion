@@ -40,6 +40,12 @@ public:
     static std::unique_ptr<Texture> create(Device&, std::uint32_t width,
                                            std::uint32_t height, PixelFormat,
                                            bool linear = false);
+    /// An RGBA8 texture another graphics API on this machine opens by handle
+    /// (#386): on Windows a D3D11 texture behind a DXGI NT handle and a keyed
+    /// mutex, which Avalonia's ANGLE imports. Null where there is none: macOS
+    /// shares every RGBA8 texture through an IOSurface instead, Linux not yet.
+    static std::unique_ptr<Texture> createShared(Device&, std::uint32_t width,
+                                                 std::uint32_t height);
     ~Texture();
     Texture(const Texture&)            = delete;
     Texture& operator=(const Texture&) = delete;
@@ -71,6 +77,13 @@ public:
     /// IOSurface so a Metal view can alias it (#375); any other format answers
     /// null and a shell falls back to `download`.
     [[nodiscard]] void* displayHandle() const noexcept;
+
+    /// A `createShared` texture's handle (a Windows HANDLE); null for any other.
+    [[nodiscard]] void* sharedHandle() const noexcept;
+    /// Around this device's use of a `createShared` texture: between them the
+    /// keyed mutex is Orion's, outside them the other API's. No-ops on any other.
+    void beginShared();
+    void endShared();
 
     struct Impl;   // backend-private
     [[nodiscard]] Impl& impl() const noexcept { return *impl_; }

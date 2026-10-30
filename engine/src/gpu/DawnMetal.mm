@@ -102,4 +102,10 @@ std::unique_ptr<DisplayShare> shareForDisplay(Context& ctx, std::uint32_t width,
     return s;
 }
 
+// Every RGBA8 texture is already an IOSurface here (shareForDisplay).
+std::unique_ptr<DisplayShare> shareForInterop(Context&, std::uint32_t, std::uint32_t,
+                                              wgpu::TextureUsage, wgpu::Texture&) {
+    return nullptr;
+}
+
 }  // namespace orion::gpu::dawn

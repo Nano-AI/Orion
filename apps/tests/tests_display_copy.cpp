@@ -9,6 +9,14 @@
 #include "orion/orion.h"
 #include "pipe/DisplayCopy.h"
 
+#include <cstring>
+
+#ifdef _WIN32
+#include <d3d11_1.h>
+#include <dxgi1_2.h>
+#include <wrl/client.h>
+#endif
+
 namespace {
 constexpr std::uint32_t kW = 37, kH = 23;   // odd both ways: the halving's clamped edge
 
@@ -20,6 +28,53 @@ int worst(const std::vector<std::uint8_t>& a, const std::vector<std::uint8_t>& b
     for (std::size_t i = 0; i < a.size(); ++i) d = std::max(d, std::abs(int(a[i]) - int(b[i])));
     return d;
 }
+#ifdef _WIN32
+/// The other side of DisplayCopy::share, as ANGLE takes it: the NT handle opened
+/// on a D3D11 device of its own (whichever adapter will open it, WARP in CI),
+/// copied out while holding the keyed mutex with key 0, then mapped.
+bool readShared(void* handle, std::vector<std::uint8_t>& out, std::uint32_t& w, std::uint32_t& h,
+                std::string& why) {
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IDXGIFactory1> factory;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) { why = "no DXGI factory"; return false; }
+    ComPtr<IDXGIAdapter1> adapter;
+    for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+        ComPtr<ID3D11Device> device;
+        ComPtr<ID3D11Device1> device1;
+        ComPtr<ID3D11DeviceContext> context;
+        ComPtr<ID3D11Texture2D> shared, staging;
+        ComPtr<IDXGIKeyedMutex> mutex;
+        if (FAILED(D3D11CreateDevice(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, nullptr, 0,
+                                     D3D11_SDK_VERSION, &device, nullptr, &context)) ||
+            FAILED(device.As(&device1)) || FAILED(device1->OpenSharedResource1(handle, IID_PPV_ARGS(&shared))))
+            continue;   // another adapter's handle
+        D3D11_TEXTURE2D_DESC d{};
+        shared->GetDesc(&d);
+        w = d.Width;
+        h = d.Height;
+        d.Usage = D3D11_USAGE_STAGING;
+        d.BindFlags = 0;
+        d.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        d.MiscFlags = 0;
+        if (FAILED(device->CreateTexture2D(&d, nullptr, &staging)) || FAILED(shared.As(&mutex))) {
+            why = "no staging texture or no keyed mutex";
+            return false;
+        }
+        if (mutex->AcquireSync(0, 5000) != S_OK) { why = "the keyed mutex was not released in 5 s"; return false; }
+        context->CopyResource(staging.Get(), shared.Get());
+        mutex->ReleaseSync(0);
+        D3D11_MAPPED_SUBRESOURCE m{};
+        if (FAILED(context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &m))) { why = "map failed"; return false; }
+        out.resize(std::size_t(w) * h * 4);
+        for (std::uint32_t y = 0; y < h; ++y)
+            std::memcpy(out.data() + std::size_t(y) * w * 4, static_cast<const std::uint8_t*>(m.pData) + y * m.RowPitch, w * 4);
+        context->Unmap(staging.Get(), 0);
+        return true;
+    }
+    why = "no D3D11 adapter opened the handle";
+    return false;
+}
+#endif
 }  // namespace
 
 void testDisplayCopyGpu() {
@@ -101,6 +156,28 @@ void testDisplayCopyGpu() {
         report(fifth, "after five begun, the one handed out is the fifth",
                "ticket " + std::to_string(named) + " of " + std::to_string(last) + ", pixel " + std::to_string(newest[0]));
         report(copy.readback().newest(false, lw, lh) == 0, "and nothing older is left to hand out");
+
+        // ── Windows: the shared D3D11 texture ANGLE imports, read as it reads it ─
+        int generation = 0;
+        void* handle = copy.share(*src16, kW, kH, 0, generation, w, h);
+#ifdef _WIN32
+        if (!handle) {
+            std::printf("  NOTE  no shared D3D11 texture on this adapter (no DXGISharedHandle feature): not exercised\n");
+        } else {
+            std::vector<std::uint8_t> seen;
+            std::string why;
+            std::uint32_t dw = 0, dh = 0;
+            report(readShared(handle, seen, dw, dh, why) && dw == kW && dh == kH && seen == got,
+                   "D3D11 reads the shared texture as the readback, byte for byte", why);
+            const int first = generation;
+            void* again = copy.share(*src16, kW, kH, 2, generation, w, h);   // another size: a new texture
+            report(again && generation != first && readShared(again, seen, dw, dh, why) && dw == w && dh == h &&
+                       seen == small,
+                   "and at level 2, a new texture of a new generation, as the readback again", why);
+        }
+#else
+        report(handle == nullptr && generation == 0, "no shared D3D11 texture off Windows");
+#endif
     } catch (const std::exception& e) {
         report(false, "display copy runs", e.what());
     }

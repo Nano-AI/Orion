@@ -214,6 +214,8 @@ if(ORION_DAWN)
         find_package(Dawn CONFIG REQUIRED GLOBAL PATHS ${ORION_DAWN_DIR} NO_DEFAULT_PATH)
         target_link_libraries(orion_engine PRIVATE dawn::webgpu_dawn)
         if(WIN32)
+            # DawnNative.cpp's shared texture for Avalonia's ANGLE (#386): one D3D11 device.
+            target_link_libraries(orion_engine PRIVATE d3d11)
             # Dawn's D3D12 backend loads the HLSL compiler from beside the module
             # and will not take System32's (Windows error 87). The Windows SDK's
             # redistributable copy goes next to every program that links the engine.

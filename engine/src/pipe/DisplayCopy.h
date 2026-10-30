@@ -41,11 +41,21 @@ public:
 
     [[nodiscard]] gpu::Readback& readback() noexcept { return readback_; }
 
+    /// Instead of a readback, into the texture another API draws (Windows,
+    /// gpu::Texture::createShared): `src` at `level`, queued behind the render.
+    /// Returns the texture's handle, with a generation that changes whenever the
+    /// texture does (import it again); null where this system has none.
+    void* share(const gpu::Texture& src, std::uint32_t width, std::uint32_t height, int level,
+                int& generation, std::uint32_t& outWidth, std::uint32_t& outHeight);
+
 private:
     /// The texture holding `src` at `level` as RGBA8: `src` itself when there
     /// is nothing to do, else `target_`, its work committed (and `wait`ed for).
     const gpu::Texture& reduce(const gpu::Texture& src, std::uint32_t width, std::uint32_t height,
                                int level, bool wait, std::uint32_t& outWidth, std::uint32_t& outHeight);
+    /// display_reduce from `src`'s top-left width x height into all of `dst`, committed.
+    void dispatch(const gpu::Texture& src, std::uint32_t width, std::uint32_t height, int level,
+                  const gpu::Texture& dst, bool wait);
 
     gpu::Device&                  device_;
     std::unique_ptr<gpu::Library> library_;
@@ -53,6 +63,8 @@ private:
     /// Reused while the size holds: one per graph switch, not one a frame.
     std::unique_ptr<gpu::Texture> target_;
     gpu::Readback                 readback_;
+    std::unique_ptr<gpu::Texture> shared_;   // `share`'s
+    int                           generation_ = 0;
 };
 
 }  // namespace orion::pipe

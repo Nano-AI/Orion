@@ -96,6 +96,19 @@ std::unique_ptr<Texture> Texture::create(Device& device, std::uint32_t width,
     return t;
 }
 
+std::unique_ptr<Texture> Texture::createShared(Device& device, std::uint32_t width,
+                                               std::uint32_t height) {
+    if (width == 0 || height == 0) throw std::runtime_error("zero-sized texture");
+    auto impl = device.impl().sharedTexture(width, height);
+    if (!impl) return nullptr;
+    auto t = std::unique_ptr<Texture>(new Texture());
+    t->width_  = width;
+    t->height_ = height;
+    t->format_ = PixelFormat::RGBA8Unorm;
+    t->impl_   = std::move(impl);
+    return t;
+}
+
 void Texture::upload(const void* src, std::size_t bytesPerRow) {
     impl_->upload(src, bytesPerRow, width_, height_);
 }
@@ -117,6 +130,9 @@ void Texture::readPixel(std::uint32_t x, std::uint32_t y, void* dst) const {
 
 void* Texture::raw() const noexcept { return impl_->raw(); }
 void* Texture::displayHandle() const noexcept { return impl_->displayHandle(); }
+void* Texture::sharedHandle() const noexcept { return impl_->sharedHandle(); }
+void Texture::beginShared() { impl_->beginShared(); }
+void Texture::endShared() { impl_->endShared(); }
 
 // ── Library, Kernel ────────────────────────────────────────────────────────
 

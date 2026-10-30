@@ -19,18 +19,27 @@ namespace OrionShell.CanvasSlice;
 /// Avalonia's Metal renderer only. Headless has no GPU interop, and the OpenGL
 /// importer refuses an RGBA surface (AvaloniaNativeGlPlatformGraphics.cs), so
 /// those keep the CPU copy, as does any import that fails: Shown.OnGpu stays false.
+///
+/// On Windows, with ORION_D3D_SHARE=1 (#386), the same over ANGLE: the engine
+/// writes each render into a D3D11 texture behind a DXGI NT handle and a keyed
+/// mutex (orion_engine_display_share), imported as D3D11TextureNtHandle and taken
+/// in turns with UpdateWithKeyedMutexAsync, key 0 both ways. Opt-in until a
+/// Windows machine has run it in a window: CI checks the engine's half (WARP),
+/// nothing here. Any refusal is said once and the canvas copies (CopiedPicture).
 /// It sits under the canvas's own drawing (CanvasPanel.Draw), which still draws
 /// the compare original over it, and a CPU copy whenever this does not hold the
 /// shown picture.
 sealed class SharedPicture : Control {
     const string IOSurface = KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef;
     const string SharedEvent = KnownPlatformGraphicsExternalSemaphoreHandleTypes.MetalSharedEvent;
+    const string D3D11Nt = KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureNtHandle;
 
     ICompositionGpuInterop? _interop;
     CompositionDrawingSurface? _surface;
     CompositionSurfaceVisual? _visual;
     ICompositionImportedGpuSemaphore? _producer, _consumer;
     nint _presenter;
+    bool _d3d;   // Windows: the engine's D3D11 texture and its keyed mutex, no presenter
     /// Per graph, the shim's surface generation and Avalonia's import of it.
     readonly Dictionary<Graph, (int Generation, ICompositionImportedGpuImage Image)> _images = [];
     /// The last hand-off: whose render, which graph, how many halvings, after which Shown change, its shape.
@@ -58,19 +67,26 @@ sealed class SharedPicture : Control {
 
     protected override async void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
         base.OnAttachedToVisualTree(e);
-        if (_presenter != 0) { if (!Failed) Enable(true); return; }
+        if (_surface != null) { if (!Failed) Enable(true); return; }
         if (_starting || Failed || ElementComposition.GetElementVisual(this)?.Compositor is not { } compositor) return;
         _starting = true;
         try {
             _interop = await compositor.TryGetCompositionGpuInterop();
-            if (_interop == null || !_interop.SupportedImageHandleTypes.Contains(IOSurface)
-                || !_interop.SupportedSemaphoreTypes.Contains(SharedEvent)) return;   // headless, software
-            _presenter = Native.present_create();
-            if (_presenter == 0) return;
-            _producer = _interop.ImportSemaphore(new PlatformHandle(Native.present_producer(_presenter), SharedEvent));
-            _consumer = _interop.ImportSemaphore(new PlatformHandle(Native.present_consumer(_presenter), SharedEvent));
-            await _producer.ImportCompleted;
-            await _consumer.ImportCompleted;
+            if (OperatingSystem.IsWindows()) {
+                if (Environment.GetEnvironmentVariable("ORION_D3D_SHARE") != "1") return;   // opt-in (#386)
+                if (_interop == null || !_interop.SupportedImageHandleTypes.Contains(D3D11Nt))
+                    throw new NotSupportedException($"this renderer imports no {D3D11Nt} (ANGLE on D3D11 does).");
+                _d3d = true;
+            } else {
+                if (_interop == null || !_interop.SupportedImageHandleTypes.Contains(IOSurface)
+                    || !_interop.SupportedSemaphoreTypes.Contains(SharedEvent)) return;   // headless, software
+                _presenter = Native.present_create();
+                if (_presenter == 0) return;
+                _producer = _interop.ImportSemaphore(new PlatformHandle(Native.present_producer(_presenter), SharedEvent));
+                _consumer = _interop.ImportSemaphore(new PlatformHandle(Native.present_consumer(_presenter), SharedEvent));
+                await _producer.ImportCompleted;
+                await _consumer.ImportCompleted;
+            }
             _surface = compositor.CreateDrawingSurface();
             _visual = compositor.CreateSurfaceVisual();
             _visual.Surface = _surface;
@@ -135,13 +151,17 @@ sealed class SharedPicture : Control {
                 var graph = shown.Graph;
                 int level = Level(s.Size(graph).Width, _pixels), version = _version;
                 if (_holds.Session == s && _holds.Graph == graph && _holds.Level == level && _holds.Version == version) break;
-                if (s.Present(_presenter, graph, level, out nint io, out int generation, out int w, out int h, out ulong n) == 0)
-                    throw new InvalidOperationException($"the shim has no RGBA8 {graph} render to hand over");
+                ulong n = 0;
+                if ((_d3d ? s.Share(graph, level, out nint io, out int generation, out int w, out int h)
+                          : s.Present(_presenter, graph, level, out io, out generation, out w, out h, out n)) == 0)
+                    throw new InvalidOperationException(_d3d ? $"the engine shared no texture: {s.LastError}"
+                                                             : $"the shim has no RGBA8 {graph} render to hand over");
                 Presented++;
                 try {
                     Stage = "importing";
                     var image = await Image(graph, io, generation, w, h);
-                    var update = _surface!.UpdateWithTimelineSemaphoresAsync(image, _producer!, n, _consumer!, n);
+                    var update = _d3d ? _surface!.UpdateWithKeyedMutexAsync(image, 0, 0)
+                                      : _surface!.UpdateWithTimelineSemaphoresAsync(image, _producer!, n, _consumer!, n);
                     _holds = (s, graph, level, version, (double)w / h);
                     Arrived?.Invoke();
                     Stage = "updating";
@@ -149,7 +169,7 @@ sealed class SharedPicture : Control {
                     Taken++;
                     Behind = _version - (_taken = version);
                 } catch {
-                    Native.present_release(_presenter, n);
+                    if (!_d3d) Native.present_release(_presenter, n);
                     throw;
                 }
             } while (_again);
@@ -165,7 +185,7 @@ sealed class SharedPicture : Control {
     async Task<ICompositionImportedGpuImage> Image(Graph graph, nint io, int generation, int w, int h) {
         if (_images.TryGetValue(graph, out var had) && had.Generation == generation) return had.Image;
         if (had.Image != null) await had.Image.DisposeAsync();
-        var image = _interop!.ImportImage(new PlatformHandle(io, IOSurface), new PlatformGraphicsExternalImageProperties {
+        var image = _interop!.ImportImage(new PlatformHandle(io, _d3d ? D3D11Nt : IOSurface), new PlatformGraphicsExternalImageProperties {
             Width = w, Height = h, Format = PlatformGraphicsExternalImageFormat.R8G8B8A8UNorm, TopLeftOrigin = true,
         });
         _images[graph] = (generation, image);

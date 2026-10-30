@@ -48,14 +48,40 @@ const gpu::Texture& DisplayCopy::reduce(const gpu::Texture& src, std::uint32_t w
     if (!target_ || target_->width() != outWidth || target_->height() != outHeight) {
         target_ = gpu::Texture::create(device_, outWidth, outHeight, gpu::PixelFormat::RGBA8Unorm);
     }
+    dispatch(src, width, height, level, *target_, wait);
+    return *target_;
+}
+
+void DisplayCopy::dispatch(const gpu::Texture& src, std::uint32_t width, std::uint32_t height,
+                           int level, const gpu::Texture& dst, bool wait) {
     const std::uint32_t block = 1u << level;
-    const DisplayReduceParams p{{outWidth, outHeight}, {width, height}, {block, block}};
+    const DisplayReduceParams p{{dst.width(), dst.height()}, {width, height}, {block, block}};
     // Made only when there is work: Metal will not release an encoder never ended.
     gpu::CommandBuffer cb(device_);
-    cb.dispatch(*kernel_, {&src, target_.get()}, &p, sizeof p, outWidth, outHeight);
+    cb.dispatch(*kernel_, {&src, &dst}, &p, sizeof p, dst.width(), dst.height());
     if (wait) cb.commitAndWait();
-    else cb.commit();   // the readback is queued behind it
-    return *target_;
+    else cb.commit();   // what reads it next is queued behind it
+}
+
+void* DisplayCopy::share(const gpu::Texture& src, std::uint32_t width, std::uint32_t height, int level,
+                         int& generation, std::uint32_t& outWidth, std::uint32_t& outHeight) {
+    sizeAt(width, height, level, outWidth, outHeight);
+    if (!shared_ || shared_->width() != outWidth || shared_->height() != outHeight) {
+        shared_.reset();   // its handle goes with it; the shell imports the new one
+        shared_ = gpu::Texture::createShared(device_, outWidth, outHeight);
+        if (!shared_) return nullptr;
+        ++generation_;
+    }
+    shared_->beginShared();   // takes the keyed mutex: waits while the other API reads
+    try {
+        dispatch(src, width, height, level, *shared_, false);
+    } catch (...) {
+        shared_->endShared();
+        throw;
+    }
+    shared_->endShared();
+    generation = generation_;
+    return shared_->sharedHandle();
 }
 
 std::uint64_t DisplayCopy::begin(const gpu::Texture& src, std::uint32_t width, std::uint32_t height,

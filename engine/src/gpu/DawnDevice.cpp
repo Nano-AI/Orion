@@ -114,6 +114,9 @@ struct DawnDevice final : Device::Impl {
         return makeCommandBuffer(ctx);
     }
     std::unique_ptr<Readback::Slot> staging() override { return makeStaging(ctx); }
+    std::unique_ptr<Texture::Impl> sharedTexture(std::uint32_t w, std::uint32_t h) override {
+        return makeSharedTexture(ctx, w, h);
+    }
     // No explicit Destroy(): a texture may outlive this object, and the device
     // goes when the last Context reference does.
 };
@@ -169,6 +172,9 @@ std::shared_ptr<Context> open() {
         wgpu::FeatureName::ImplicitDeviceSynchronization,
     };
     features.insert(features.end(), native.features.begin(), native.features.end());
+    for (auto f : native.optional) {
+        if (c.adapter.HasFeature(f)) features.push_back(f);   // checked again where used
+    }
     for (auto f : features) {
         if (!c.adapter.HasFeature(f)) {
             throw std::runtime_error("Dawn: adapter lacks feature " +

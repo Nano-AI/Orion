@@ -406,6 +406,20 @@ uint64_t shim_copy_take(Shim* s, int wait, uint8_t* dst, int row_bytes, int capa
     return ticket;
 }
 
+// Windows (#386): the last render of `which`, `level` halvings down, into the
+// D3D11 texture Avalonia's ANGLE imports by NT handle (orion_engine_display_share).
+// 1 with the handle, its generation (new whenever the texture is: import it
+// again) and size; 0 where there is none, and orion_last_error says why.
+int shim_share(Shim* s, int which, int level, void** handle, int* generation, int* w, int* h) {
+    const int graph = facade_graph(which);
+    uint32_t rw = 0, rh = 0;
+    if (graph < 0 || orion_engine_display_share(s->engine, graph, level, handle, generation, &rw, &rh) != ORION_OK)
+        return 0;
+    *w = int(rw);
+    *h = int(rh);
+    return 1;
+}
+
 // The camera's embedded JPEG, for the filmstrip.
 int shim_thumbnail(const char* path, uint8_t* dst, int capacity, int* turns) {
     uint32_t size = 0;
