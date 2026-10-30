@@ -3,6 +3,8 @@
 #include "harness.h"
 #include "Engine.h"
 
+#include <filesystem>
+
 namespace {
 // A noisy mosaic with edges in it, so demosaic, denoise, sharpening, the lens
 // and the straighten all have something to move: rings and a diagonal step.
@@ -166,6 +168,28 @@ void testRegionMatchesCropGpu() {
                "after a region and the preview, the histogram reads the preview");
         engine.render();
         report(samples() == sampled(std::uint64_t(fw) * fh), "after a full render, the full graph");
+
+        // Mid-drag at 100%: a region, no preview, the full graph released. The
+        // readouts render the small pass themselves rather than read nothing.
+        a.exposureEv = 0.6f;
+        engine.setAdjustments(a);
+        engine.renderRegion(view, true);
+        report(samples() == sampled(std::uint64_t(pw) * ph),
+               "a region alone, the full graph released: the histogram renders and reads the preview");
+        float shownRgb[3] = {-1, -1, -1}, sceneRgb[3] = {-1, -1, -1};
+        engine.sampleAt(0.5f, 0.5f, shownRgb, sceneRgb);
+        report(shownRgb[0] >= 0.0f && sceneRgb[0] >= 0.0f, "and the eyedropper reads a colour, no throw");
+
+        // An export past fit rebuilds the full graph to read it, then gives it back.
+        const auto& fg = full.graph();
+        const auto released = fg.intermediateBytes();
+        report(released == fg.sourceTexture().sizeBytes(), "past fit the full graph holds only its source");
+        const auto out = (std::filesystem::temp_directory_path() / "orion-roi-export.jpg").string();
+        engine.exportImage(out, orion::util::ExportOptions{});
+        report(std::filesystem::file_size(out) > 0 && fg.intermediateBytes() == released,
+               "an export past fit writes the file and leaves the full graph released again",
+               std::to_string(fg.intermediateBytes()) + " vs " + std::to_string(released));
+        std::filesystem::remove(out);
 
         // ── Denoise renders at step 1 whatever the zoom ─────────────────────
         // Its supports are fixed in graph pixels; a coarser step would change the look.

@@ -426,17 +426,24 @@ double Engine::render() {
     return ms;
 }
 
-const pipe::DevelopPipeline& Engine::measured() const {
+const pipe::DevelopPipeline& Engine::measured() {
     // The full graph, unless the canvas has been showing regions since the
     // last edit and only the preview — the small whole-frame pass — has seen
     // it (#22). A readout a quarter of the size is right; a full-size one of
     // the previous edit is not.
-    // Released past fit, the full graph has no output to read at all.
-    return ((!fullCurrent_ && regionCurrent_) || fullReleased_) && previewCurrent_ && preview_
-        ? *preview_ : *develop_;
+    if (((!fullCurrent_ && regionCurrent_) || fullReleased_) && preview_) {
+        // Mid-drag at 100% the region renders and the preview does not; the
+        // released full graph has no output at all. Render the small pass now
+        // (~1 ms for a tick, 7 ms from the mosaic) rather than hand that out.
+        if (!previewCurrent_) renderPreview();
+        return *preview_;
+    }
+    // No preview graph (it could not be built): the full one, rebuilt if released.
+    if (fullReleased_) render();
+    return *develop_;
 }
 
-void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) const {
+void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) {
     if (outDisplay) outDisplay[0] = outDisplay[1] = outDisplay[2] = 0.0f;
     if (outScene)   outScene[0]   = outScene[1]   = outScene[2]   = 0.0f;
     if (!develop_) return;
@@ -585,7 +592,7 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     develop_->render();
 }
 
-void Engine::histogram(std::uint32_t* out, std::uint32_t bins) const {
+void Engine::histogram(std::uint32_t* out, std::uint32_t bins) {
     if (out == nullptr || bins == 0) return;
     std::fill_n(out, std::size_t(bins) * 3, 0u);
     if (!develop_) return;
@@ -688,6 +695,13 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     util::writeImage(path, pixels.data(), w, h,
                      static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t), o);
     wide.restore();
+    rereleaseFull();
+}
+
+void Engine::rereleaseFull() noexcept {
+    // An export past fit renders the full graph directly; give its ~3.3 GB
+    // back again, as the region did (#22). The next export rebuilds them.
+    if (fullReleased_ && develop_) develop_->graph().releaseOutputs();
 }
 
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {
@@ -710,6 +724,7 @@ std::vector<std::uint16_t> Engine::exportPixels(const util::ExportOptions& optio
     h = develop_->outputHeight();
     auto pixels = readOutput16(w, h);
     wide.restore();
+    rereleaseFull();
     return pixels;
 }
 

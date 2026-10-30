@@ -150,12 +150,13 @@ public:
     /// hue band must be derived from — reading the edited result would mean
     /// adjusting a band changes which band you would pick next time.
     /// Either pointer may be null.
-    void sampleAt(float u, float v, float* outDisplay, float* outScene) const;
+    void sampleAt(float u, float v, float* outDisplay, float* outScene);
 
     /// Per-channel histogram of the rendered image, `bins` entries each,
     /// packed R then G then B. Sampled on a stride: this drives a 90-pixel-tall
     /// readout, not a measurement, and 24 million samples would be waste.
-    void histogram(std::uint32_t* out, std::uint32_t bins) const;
+    /// ⚠ Not const: past fit it may render the preview first (`measured`).
+    void histogram(std::uint32_t* out, std::uint32_t bins);
 
     /// Measures the picture and writes the sliders auto-enhance is allowed to
     /// move, in place. Renders several times — it is a one-click action, not
@@ -269,7 +270,11 @@ private:
     bool                                   fullCurrent_ = false, previewCurrent_ = false, regionCurrent_ = false;
     /// The full graph's outputs were given back once a region was shown (#22).
     bool                                   fullReleased_ = false;
-    [[nodiscard]] const pipe::DevelopPipeline& measured() const;
+    /// Never a released graph: renders the preview (or the full graph, with
+    /// no preview) first when it has to.
+    [[nodiscard]] const pipe::DevelopPipeline& measured();
+    /// After an export past fit, the full graph's outputs go back again.
+    void rereleaseFull() noexcept;
     Region                                 regionView_{};
     /// What `setAdjustments` last pushed, for the region graph's own apply.
     pipe::Adjustments                      adj_{};
