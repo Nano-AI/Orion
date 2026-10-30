@@ -621,7 +621,8 @@ OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
 typedef enum OrionImageFormat {
     ORION_FORMAT_PNG  = 0,
     ORION_FORMAT_JPEG = 1,
-    ORION_FORMAT_TIFF = 2
+    ORION_FORMAT_TIFF = 2,
+    ORION_FORMAT_JXL  = 3   /* JPEG XL, via libjxl; quality 1.0 is lossless */
 } OrionImageFormat;
 
 /* What the file is tagged as, and converted to.
@@ -647,8 +648,8 @@ typedef enum OrionMetadata {
     ORION_METADATA_NONE        = 2
 } OrionMetadata;
 
-/* Bits per component in the file. PNG and TIFF carry either; JPEG is an
- * eight-bit container and ignores it.
+/* Bits per component in the file. PNG, TIFF and JPEG XL carry either; JPEG is
+ * an eight-bit container and ignores it.
  *
  * An eight-bit export renders through the narrow graph, which is the path that
  * dithers — so it is byte-for-byte what the screen shows. Sixteen renders wide.
@@ -676,7 +677,7 @@ typedef enum OrionSharpen {
 
 typedef struct OrionExportOptions {
     int32_t  format;         /* OrionImageFormat; -1 picks from the extension */
-    float    quality;        /* JPEG only, 0..1                               */
+    float    quality;        /* JPEG and JPEG XL, 0..1; JXL at 1 is lossless  */
     uint32_t max_dimension;  /* longest edge; 0 keeps full resolution         */
     int32_t  space;          /* OrionColorSpace                               */
     int32_t  rating;         /* 0-5 written as the star rating; -1 writes none */

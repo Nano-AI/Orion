@@ -148,3 +148,16 @@ Changes: Jupiter, Mars and Saturn resized from 2048x1024 to 1024x512 and
 recompressed; Saturn's ring map reduced to 48 colour samples inside
 `web/js/motion.js`; the maps also travel base64-encoded in `web/js/planet-maps.js`
 (`tools/build-planet-maps.py`). The page's footer carries the attribution.
+
+## JPEG XL
+
+JPEG XL export uses libjxl (0.12), licensed under the **BSD 3-Clause License**,
+Copyright (c) the JPEG XL Project Authors (https://github.com/libjxl/libjxl).
+Orion links it dynamically and confines it to one translation unit
+(`engine/src/util/JxlWriter.cpp`). libjxl in turn links Highway (Apache-2.0 or
+BSD-3-Clause, Copyright Google LLC) and Brotli (MIT, Copyright the Brotli
+Authors). BSD-3-Clause requires the copyright notice, the conditions and the
+disclaimer to travel with a binary: the three license texts are copied verbatim
+from the installed packages into `Contents/Resources/licenses/` of both
+packaged apps (`tools/package-app.sh`, `tools/package-avalonia.sh`). See
+`planning/DECISIONS.md` #361.

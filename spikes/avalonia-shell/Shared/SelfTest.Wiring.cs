@@ -171,7 +171,7 @@ static partial class SelfTest {
 
     static void ExportChecks(EngineModel engine) {
         var settings = ExportSettings.Shared;
-        int size = settings.Size;
+        int size = settings.Size, format = settings.Format;
         settings.Size = Array.FindIndex(ExportSettings.Sizes, s => s.Code == 1024);
         string folder = Directory.CreateTempSubdirectory("orion-selftest-").FullName;
         try {
@@ -180,8 +180,19 @@ static partial class SelfTest {
             var written = Directory.GetFiles(folder);
             Check(run.Result == "Exported 1 photo." && written.Length == 1 && new FileInfo(written[0]).Length > 10_000 && ExportRun.Progress == null,
                   $"a batch writes through the engine and says so ('{run.Result}')");
+
+            // JPEG XL (#6): the format choice reaches the engine. With metadata the
+            // file is the ISO BMFF container, which opens with a 12-byte "JXL " box.
+            settings.Format = Array.FindIndex(ExportSettings.Formats, f => f.Code == 3);
+            var jxl = ExportRun.Run(ExportRun.Plan([engine.Photos[engine.Current]], folder, settings.Extension));
+            while (!jxl.IsCompleted) Dispatcher.UIThread.RunJobs();
+            var file = Directory.GetFiles(folder, "*.jxl");
+            byte[] head = file.Length == 1 ? File.ReadAllBytes(file[0])[..12] : [];
+            Check(jxl.Result == "Exported 1 photo." && head.AsSpan().SequenceEqual((byte[])[0, 0, 0, 12, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 13, 10, 0x87, 10]),
+                  $"choosing JPEG XL writes a .jxl through the engine ('{jxl.Result}')");
         } finally {
             settings.Size = size;
+            settings.Format = format;
             Directory.Delete(folder, true);
         }
     }

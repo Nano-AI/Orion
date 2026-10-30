@@ -101,7 +101,7 @@ public sealed class ExportPanel : Border {
     Control QualityControl() {
         var slider = new Slider { Minimum = 0.3, Maximum = 1, Value = _s.Quality, Foreground = Palette.Accent, MinHeight = 0 };
         var value = Faces.Figure("", Faces.Mark, Palette.Dim);
-        void Show() => value.Text = ((int)(_s.Quality * 100)).ToString();
+        void Show() => value.Text = _s.IsJxl && _s.Quality >= 1 ? "Lossless" : ((int)(_s.Quality * 100)).ToString();
         slider.ValueChanged += (_, e) => { _s.Quality = e.NewValue; Show(); Remeasure(); };
         Show();
         var scale = new Grid { ColumnDefinitions = new("Auto,*,Auto,*,Auto") };
@@ -110,7 +110,9 @@ public sealed class ExportPanel : Border {
         Grid.SetColumn(smaller, 2);
         Grid.SetColumn(better, 4);
         scale.Children.AddRange([value, smaller, better]);
-        return new StackPanel { Spacing = 3, Children = { slider, scale } };
+        var panel = new StackPanel { Spacing = 3, Children = { slider, scale } };
+        if (_s.IsJxl) panel.Children.Add(SheetKit.Note("At 100 the file is lossless: every pixel kept exactly.", Palette.Dim));
+        return panel;
     }
 
     /// A menu with the chosen item's note under it.
@@ -120,7 +122,7 @@ public sealed class ExportPanel : Border {
         return new StackPanel { Spacing = 5, Children = { menu, note } };
     }
 
-    string DepthNote() => _s.CarriesDepth ? ExportSettings.Depths[_s.Depth].Note : "JPEG holds eight bits. Choose PNG or TIFF for more.";
+    string DepthNote() => _s.CarriesDepth ? ExportSettings.Depths[_s.Depth].Note : "JPEG holds eight bits. Choose PNG, TIFF or JPEG XL for more.";
 
     /// Commits on Return or on leaving the field, not per keystroke: three
     /// wasted encodes and a jumping number while you type "2048".

@@ -10,7 +10,7 @@ static partial class SheetsNative {
     /// that fills it (WatermarkRaster.swift) is reached only through export.
     [StructLayout(LayoutKind.Sequential)]
     public struct ExportOptions {
-        public int Format;        // OrionImageFormat: PNG 0, JPEG 1, TIFF 2
+        public int Format;        // OrionImageFormat: PNG 0, JPEG 1, TIFF 2, JPEG XL 3
         public float Quality;
         public uint MaxDimension; // 0 keeps full resolution
         public int Space, Rating, Metadata, BitDepth, Sharpen;

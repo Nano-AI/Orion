@@ -104,6 +104,8 @@ for spec in \
     "libjpeg-turbo.md:jpeg-turbo:LICENSE.md" \
     "little-cms2-MIT.txt:little-cms2:LICENSE" \
     "opencv-Apache-2.0.txt:opencv:LICENSE" \
+    "libjxl-BSD-3-Clause.txt:jpeg-xl:LICENSE" \
+    "highway-Apache-2.0-or-BSD-3-Clause.txt:highway:LICENSE" \
     "brotli-MIT.txt:brotli:LICENSE"
 do
     IFS=: read -r out pkg file <<< "$spec"

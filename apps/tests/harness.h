@@ -67,6 +67,12 @@ void section(const char* name);
 bool decode16(const std::string& path, std::vector<std::uint16_t>& out,
               std::size_t& width, std::size_t& height);
 
+/// A stand-in camera file with GPS, an EXIF FNumber and IPTC place names, and
+/// the reader for the first two. In `tests_io.cpp`; JPEG XL reuses them.
+bool writeJpegWithGps(const std::string& path, const std::uint16_t* rgba,
+                      std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow);
+bool metadataBlocks(const std::string& path, bool& gps, bool& exif);
+
 /// A scratch brush accumulator, for the tests that dispatch `maskComponent`
 /// directly. Decision #108 gave that kernel a seventh binding — the persistent
 /// coverage it continues a stroke from — and an unbound slot in Metal is nil
@@ -104,6 +110,7 @@ void testLensDatabase();
 void testBlackLevels();
 void testExportFormats();
 void testExportWatermark();
+void testExportJxl();
 void testFloatToHalf();
 void testDngRoundTrip();
 void testLinearDngOpens();
